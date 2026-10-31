@@ -2,8 +2,8 @@
 //! clock, randomness or Harness protocol. IDs come in from the caller.
 
 use crate::model::{
-    Body, Choice, Fact, Failure, Field, FieldValue, Input, ItemId, Mode, QuestionState, ToolKind,
-    TurnId, TurnState, Values,
+    Body, Choice, Fact, Failure, Field, FieldValue, Input, ItemId, Mode, QuestionState,
+    ToolContent, ToolKind, TurnId, TurnState, Values,
 };
 use bandaso_kernel::{Participant, Refusal};
 
@@ -352,6 +352,47 @@ pub fn title(text: &str) -> String {
     short
 }
 
+/// The most of a command's output, or of a tool call's text, a Thread
+/// keeps, in bytes.
+pub const OUTPUT_KEPT: usize = 64 * 1024;
+/// The largest diff a Thread keeps, its texts before and after together,
+/// in bytes.
+pub const DIFF_KEPT: usize = 256 * 1024;
+
+/// The start of `text` that fits in `room` bytes, ending where a character
+/// ends.
+pub fn fit(text: &str, room: usize) -> &str {
+    if text.len() <= room {
+        return text;
+    }
+    let mut end = room;
+    while !text.is_char_boundary(end) {
+        end -= 1;
+    }
+    &text[..end]
+}
+
+/// A tool call's content as a Thread keeps it: a long text is cut, and a
+/// diff too large to keep says so instead.
+pub fn kept(content: Vec<ToolContent>) -> Vec<ToolContent> {
+    content
+        .into_iter()
+        .map(|shown| match shown {
+            ToolContent::Text { text } if text.len() > OUTPUT_KEPT => ToolContent::Text {
+                text: format!("{}…", fit(&text, OUTPUT_KEPT)),
+            },
+            ToolContent::Diff { path, old, new }
+                if old.as_ref().map_or(0, String::len) + new.len() > DIFF_KEPT =>
+            {
+                ToolContent::Text {
+                    text: format!("{path} changed too much to show here."),
+                }
+            }
+            shown => shown,
+        })
+        .collect()
+}
+
 /// The two kinds of text an Agent sends in pieces.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Text {
@@ -434,6 +475,30 @@ impl Pieces {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_thread_keeps_tool_content_within_bounds() {
+        assert_eq!(fit("héllo", 2), "h", "never half a character");
+        assert_eq!(fit("hello", 9), "hello");
+        let big = "x".repeat(DIFF_KEPT);
+        let content = kept(vec![
+            ToolContent::Diff {
+                path: "a.rs".into(),
+                old: Some("a".into()),
+                new: big,
+            },
+            ToolContent::Text { text: "ok".into() },
+        ]);
+        assert_eq!(
+            content,
+            [
+                ToolContent::Text {
+                    text: "a.rs changed too much to show here.".into()
+                },
+                ToolContent::Text { text: "ok".into() },
+            ]
+        );
+    }
 
     #[test]
     fn a_turn_starts_once_and_stops_by_its_state() {

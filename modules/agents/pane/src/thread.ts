@@ -69,6 +69,18 @@ function changeItem(
   return state.items.map((item) => (item.id === id ? change(item) : item))
 }
 
+type Tool = Extract<Body, { kind: "tool" }>
+
+function changeTool(
+  state: ThreadState,
+  id: string,
+  change: (tool: Tool) => Tool
+): Item[] {
+  return changeItem(state, id, (item) =>
+    item.body.kind === "tool" ? { ...item, body: change(item.body) } : item
+  )
+}
+
 function changeTurn(
   state: ThreadState,
   id: string,
@@ -150,31 +162,38 @@ export function apply(state: ThreadState, event: Event): ThreadState {
       }
     }
     case "tool.started": {
-      const { item: id, turn, title, tool, status } = fact.payload
-      return {
-        ...next,
-        items: [
-          ...state.items,
-          item(id, { kind: "tool", title, tool, status }, turn),
-        ],
-      }
+      const { item: id, turn, title, tool, status, content } = fact.payload
+      const body: Body = { kind: "tool", title, tool, status, content }
+      return { ...next, items: [...state.items, item(id, body, turn)] }
     }
     case "tool.changed": {
-      const { item: id, title, status } = fact.payload
+      const { item: id, title, status, content, exit } = fact.payload
       return {
         ...next,
-        items: changeItem(state, id, (i) =>
-          i.body.kind === "tool"
-            ? {
-                ...i,
-                body: {
-                  ...i.body,
-                  title: title ?? i.body.title,
-                  status: status ?? i.body.status,
-                },
-              }
-            : i
-        ),
+        items: changeTool(state, id, (tool) => ({
+          ...tool,
+          title: title ?? tool.title,
+          status: status ?? tool.status,
+          content: content ?? tool.content,
+          output:
+            exit === undefined
+              ? tool.output
+              : { text: "", cut: false, ...tool.output, exit },
+        })),
+      }
+    }
+    case "tool.output": {
+      const { item: id, text, cut } = fact.payload
+      return {
+        ...next,
+        items: changeTool(state, id, (tool) => ({
+          ...tool,
+          output: {
+            ...tool.output,
+            text: (tool.output?.text ?? "") + text,
+            cut: cut || (tool.output?.cut ?? false),
+          },
+        })),
       }
     }
     case "question.asked": {

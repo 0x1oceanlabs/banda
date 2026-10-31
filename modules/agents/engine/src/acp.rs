@@ -23,7 +23,7 @@
 
 use crate::model::{
     Failure, Field, FieldValue, HarnessOption, Input, Mode, Offer, OptionChoice, OptionValue,
-    Settings, TextFormat, ThreadId, ToolKind, ToolStatus, TurnState, Values,
+    Settings, TextFormat, ThreadId, ToolContent, ToolKind, ToolStatus, TurnState, Values,
 };
 use crate::rules::{Ending, Offered};
 use crate::settings::Harness;
@@ -54,11 +54,17 @@ pub enum Said {
         title: String,
         tool: ToolKind,
         status: ToolStatus,
+        content: Vec<ToolContent>,
     },
+    /// Each field given replaces the tool call's; `output` follows what the
+    /// command printed before.
     ToolChanged {
         call: String,
         title: Option<String>,
         status: Option<ToolStatus>,
+        content: Option<Vec<ToolContent>>,
+        output: Option<String>,
+        exit: Option<i32>,
     },
     /// The Harness asks a Person to decide, and waits for `answer`.
     Asks {
@@ -154,6 +160,12 @@ const MODES: [(Mode, [&str; 2]); 4] = [
     (Mode::Auto, ["auto", "agent"]),
     (Mode::FullAccess, ["bypassPermissions", "agent-full-access"]),
 ];
+/// Where Claude Code's and Codex's adapters put what a command prints, for a
+/// client that declares it, and how the command exited (their Zed
+/// conventions).
+const OUTPUT: &str = "terminal_output_delta";
+const EXIT: &str = "terminal_exit";
+
 /// Planning: one of Claude Code's modes, and Codex's collaboration mode.
 const PLAN: &str = "plan";
 const WORKING: &str = "default";
@@ -631,11 +643,16 @@ async fn drive(
                 .boolean(acp::BooleanConfigOptionCapabilities::new());
             let forms =
                 acp::ElicitationCapabilities::new().form(acp::ElicitationFormCapabilities::new());
-            let shows = acp::ClientCapabilities::new().elicitation(forms).session(
-                acp::ClientSessionCapabilities::new()
-                    .notices(acp::NoticeCapabilities::new())
-                    .config_options(options),
-            );
+            let mut output = acp::Meta::new();
+            output.insert(OUTPUT.to_owned(), true.into());
+            let shows = acp::ClientCapabilities::new()
+                .elicitation(forms)
+                .session(
+                    acp::ClientSessionCapabilities::new()
+                        .notices(acp::NoticeCapabilities::new())
+                        .config_options(options),
+                )
+                .meta(output);
             let hello = acp::InitializeRequest::new(ProtocolVersion::V1)
                 .client_capabilities(shows)
                 .client_info(acp::Implementation::new(
@@ -691,12 +708,23 @@ fn said(update: acp::SessionUpdate) -> Option<Said> {
             title: call.title,
             tool: tool_kind(call.kind),
             status: tool_status(call.status),
+            content: tool_content(&call.content),
         }),
-        acp::SessionUpdate::ToolCallUpdate(update) => Some(Said::ToolChanged {
-            call: update.tool_call_id.0.to_string(),
-            title: update.fields.title,
-            status: update.fields.status.map(tool_status),
-        }),
+        acp::SessionUpdate::ToolCallUpdate(update) => {
+            let terminal = |key: &str| update.meta.as_ref()?.get(key);
+            Some(Said::ToolChanged {
+                call: update.tool_call_id.0.to_string(),
+                title: update.fields.title,
+                status: update.fields.status.map(tool_status),
+                content: update.fields.content.as_deref().map(tool_content),
+                output: terminal(OUTPUT)
+                    .and_then(|o| o.get("data")?.as_str())
+                    .map(str::to_owned),
+                exit: terminal(EXIT)
+                    .and_then(|e| e.get("exit_code")?.as_i64())
+                    .and_then(|code| i32::try_from(code).ok()),
+            })
+        }
         acp::SessionUpdate::Notice(notice) => Some(Said::Notice(match notice.description {
             Some(more) if !more.trim().is_empty() => format!("{} {more}", notice.title),
             _ => notice.title,
@@ -704,6 +732,28 @@ fn said(update: acp::SessionUpdate) -> Option<Said> {
         acp::SessionUpdate::UsageUpdate(usage) => resets(usage.meta.as_ref()).map(Said::Resets),
         _ => None,
     }
+}
+
+/// What a tool call shows: its text and its diffs. A terminal's output
+/// comes apart, in [`OUTPUT`].
+fn tool_content(content: &[acp::ToolCallContent]) -> Vec<ToolContent> {
+    content
+        .iter()
+        .filter_map(|shown| match shown {
+            acp::ToolCallContent::Content(acp::Content {
+                content: acp::ContentBlock::Text(text),
+                ..
+            }) => Some(ToolContent::Text {
+                text: text.text.clone(),
+            }),
+            acp::ToolCallContent::Diff(diff) => Some(ToolContent::Diff {
+                path: diff.path.display().to_string(),
+                old: diff.old_text.clone(),
+                new: diff.new_text.clone(),
+            }),
+            _ => None,
+        })
+        .collect()
 }
 
 /// The values a choice option offers; none for any other.

@@ -8,6 +8,7 @@ import type { ItemId } from "./ItemId";
 import type { Offer } from "./Offer";
 import type { Settings } from "./Settings";
 import type { ThreadId } from "./ThreadId";
+import type { ToolContent } from "./ToolContent";
 import type { ToolKind } from "./ToolKind";
 import type { ToolStatus } from "./ToolStatus";
 import type { TurnId } from "./TurnId";
@@ -19,4 +20,12 @@ import type { TurnState } from "./TurnState";
  * copies no view: the Event around it carries who and when. A Thread's
  * facts have the Thread as their subject, so a Pane follows one Thread.
  */
-export type Fact = { "kind": "agent.created", "payload": { agent: AgentId, name: string, harness: string, } } | { "kind": "thread.started", "payload": { thread: ThreadId, agent: AgentId, title: string, } } | { "kind": "message.posted", "payload": { item: ItemId, turn: TurnId, text: string, } } | { "kind": "turn.started", "payload": { turn: TurnId, } } | { "kind": "turn.ended", "payload": { turn: TurnId, state: TurnState, reason?: string, failure?: Failure, } } | { "kind": "turn.queued", "payload": { turn: TurnId, message: ItemId, } } | { "kind": "thread.configured", "payload": { thread: ThreadId, settings: Settings, } } | { "kind": "thread.offered", "payload": { thread: ThreadId, offer: Offer, } } | { "kind": "reply.grew", "payload": { item: ItemId, turn: TurnId, text: string, } } | { "kind": "thought.grew", "payload": { item: ItemId, turn: TurnId, text: string, } } | { "kind": "tool.started", "payload": { item: ItemId, turn: TurnId, title: string, tool: ToolKind, status: ToolStatus, } } | { "kind": "tool.changed", "payload": { item: ItemId, title?: string, status?: ToolStatus, } } | { "kind": "question.asked", "payload": { item: ItemId, turn: TurnId, title: string, choices: Array<Choice>, form?: Array<Field>, } } | { "kind": "question.answered", "payload": { item: ItemId, choice: string, values?: { [key in string]: FieldValue }, } } | { "kind": "question.closed", "payload": { item: ItemId, } } | { "kind": "notice.posted", "payload": { item: ItemId, turn: TurnId, text: string, } };
+export type Fact = { "kind": "agent.created", "payload": { agent: AgentId, name: string, harness: string, } } | { "kind": "thread.started", "payload": { thread: ThreadId, agent: AgentId, title: string, } } | { "kind": "message.posted", "payload": { item: ItemId, turn: TurnId, text: string, } } | { "kind": "turn.started", "payload": { turn: TurnId, } } | { "kind": "turn.ended", "payload": { turn: TurnId, state: TurnState, reason?: string, failure?: Failure, } } | { "kind": "turn.queued", "payload": { turn: TurnId, message: ItemId, } } | { "kind": "thread.configured", "payload": { thread: ThreadId, settings: Settings, } } | { "kind": "thread.offered", "payload": { thread: ThreadId, offer: Offer, } } | { "kind": "reply.grew", "payload": { item: ItemId, turn: TurnId, text: string, } } | { "kind": "thought.grew", "payload": { item: ItemId, turn: TurnId, text: string, } } | { "kind": "tool.started", "payload": { item: ItemId, turn: TurnId, title: string, tool: ToolKind, status: ToolStatus, content: Array<ToolContent>, } } | { "kind": "tool.changed", "payload": { item: ItemId, title?: string, status?: ToolStatus, content?: Array<ToolContent>, 
+/**
+ * The command exited so.
+ */
+exit?: number, } } | { "kind": "tool.output", "payload": { item: ItemId, text: string, 
+/**
+ * Bandaso keeps no more of its output.
+ */
+cut: boolean, } } | { "kind": "question.asked", "payload": { item: ItemId, turn: TurnId, title: string, choices: Array<Choice>, form?: Array<Field>, } } | { "kind": "question.answered", "payload": { item: ItemId, choice: string, values?: { [key in string]: FieldValue }, } } | { "kind": "question.closed", "payload": { item: ItemId, } } | { "kind": "notice.posted", "payload": { item: ItemId, turn: TurnId, text: string, } };

@@ -22,6 +22,9 @@
 //! - `warn`: sends a notice, if the client shows them, then answers.
 //! - `crash`: exits at once, as a Harness that dies would.
 //! - `which session`: replies with the session's ID and its own process ID.
+//! - `edit`: edits a file, and shows the change as a diff.
+//! - `run`: runs the tests, printing as Codex does, and `loud` far more than
+//!   a Thread keeps.
 //! - anything else: a short thought, then a reply that quotes the prompt.
 //!
 //! Its sessions can be resumed or loaded after a restart, as a real
@@ -36,16 +39,17 @@
 use agent_client_protocol::schema::ProtocolVersion;
 use agent_client_protocol::schema::v1::{
     AgentCapabilities, CancelNotification, ConfigOptionUpdate, ContentBlock, ContentChunk,
-    CreateElicitationRequest, ElicitationAction, ElicitationContentValue, ElicitationFormMode,
-    ElicitationSchema, ElicitationSessionScope, EnumOption, Implementation, InitializeRequest,
-    InitializeResponse, LoadSessionRequest, LoadSessionResponse, NewSessionRequest,
-    NewSessionResponse, Notice, NoticeSeverity, PermissionOption, PermissionOptionKind,
-    PromptRequest, PromptResponse, RequestPermissionOutcome, RequestPermissionRequest,
-    ResumeSessionRequest, ResumeSessionResponse, SessionCapabilities, SessionConfigOption,
-    SessionConfigOptionCategory, SessionConfigOptionValue, SessionConfigSelectOption, SessionId,
-    SessionNotification, SessionResumeCapabilities, SessionUpdate, SetSessionConfigOptionRequest,
-    SetSessionConfigOptionResponse, StopReason, StringPropertySchema, TextContent, ToolCall,
-    ToolCallStatus, ToolCallUpdate, ToolCallUpdateFields, ToolKind, UsageUpdate,
+    CreateElicitationRequest, Diff, ElicitationAction, ElicitationContentValue,
+    ElicitationFormMode, ElicitationSchema, ElicitationSessionScope, EnumOption, Implementation,
+    InitializeRequest, InitializeResponse, LoadSessionRequest, LoadSessionResponse,
+    NewSessionRequest, NewSessionResponse, Notice, NoticeSeverity, PermissionOption,
+    PermissionOptionKind, PromptRequest, PromptResponse, RequestPermissionOutcome,
+    RequestPermissionRequest, ResumeSessionRequest, ResumeSessionResponse, SessionCapabilities,
+    SessionConfigOption, SessionConfigOptionCategory, SessionConfigOptionValue,
+    SessionConfigSelectOption, SessionId, SessionNotification, SessionResumeCapabilities,
+    SessionUpdate, SetSessionConfigOptionRequest, SetSessionConfigOptionResponse, StopReason,
+    StringPropertySchema, Terminal, TextContent, ToolCall, ToolCallContent, ToolCallStatus,
+    ToolCallUpdate, ToolCallUpdateFields, ToolKind, UsageUpdate,
 };
 use agent_client_protocol::{Agent, Client, ConnectionTo, Error, Responder, Stdio};
 use serde_json::json;
@@ -66,6 +70,8 @@ struct Fake {
     toggles: Arc<AtomicBool>,
     /// The client shows forms.
     forms: Arc<AtomicBool>,
+    /// The client takes what a command prints in pieces.
+    output: Arc<AtomicBool>,
     setups: Arc<Mutex<HashMap<SessionId, Setup>>>,
 }
 
@@ -280,6 +286,25 @@ async fn turn(
         say(&cx, &session, SessionUpdate::AgentMessageChunk(text(reply)))?;
         return Ok(StopReason::EndTurn);
     }
+    if words.contains("edit") {
+        let diff = Diff::new("/work/notes.md", "one\n2\nthree\nfour\n")
+            .old_text("one\ntwo\nthree\n".to_owned());
+        let call = ToolCall::new("edit-1", "Edit notes.md")
+            .kind(ToolKind::Edit)
+            .status(ToolCallStatus::Completed)
+            .content(vec![ToolCallContent::Diff(diff)]);
+        say(&cx, &session, SessionUpdate::ToolCall(call))?;
+        say(
+            &cx,
+            &session,
+            SessionUpdate::AgentMessageChunk(text("I edited notes.md.")),
+        )?;
+        return Ok(StopReason::EndTurn);
+    }
+    if words.contains("run") {
+        run(&fake, &cx, &session, words.contains("loud")).await?;
+        return Ok(StopReason::EndTurn);
+    }
     if words.contains("which session") {
         let reply = format!("Session {} in process {}", session.0, std::process::id());
         say(
@@ -343,6 +368,55 @@ async fn turn(
         say(&cx, &session, SessionUpdate::AgentMessageChunk(text(piece)))?;
     }
     Ok(StopReason::EndTurn)
+}
+
+/// Runs the tests as Codex shows a command: its output in pieces, then how
+/// it exited; as one block of text at the end for a client that does not
+/// take pieces. Loud, it prints far more than a Thread keeps.
+async fn run(
+    fake: &Fake,
+    cx: &ConnectionTo<Client>,
+    session: &SessionId,
+    loud: bool,
+) -> Result<(), Error> {
+    let id = "run-1";
+    let call = ToolCall::new(id, "Run the tests")
+        .kind(ToolKind::Execute)
+        .status(ToolCallStatus::InProgress)
+        .content(vec![ToolCallContent::Terminal(Terminal::new(id))]);
+    say(cx, session, SessionUpdate::ToolCall(call))?;
+    let lines: Vec<String> = if loud {
+        (0..2000)
+            .map(|n| format!("{n:>4} {}\n", "x".repeat(60)))
+            .collect()
+    } else {
+        vec!["test one ... ok\n".into(), "test two ... ok\n".into()]
+    };
+    let pieces = fake.output.load(Ordering::Relaxed);
+    if pieces {
+        for line in &lines {
+            let meta = json!({ "terminal_output_delta": { "terminal_id": id, "data": line } });
+            let update = ToolCallUpdate::new(id, ToolCallUpdateFields::new())
+                .meta(meta.as_object().cloned());
+            say(cx, session, SessionUpdate::ToolCallUpdate(update))?;
+        }
+    }
+    let ended = ToolCallUpdateFields::new().status(ToolCallStatus::Completed);
+    let ended = if pieces {
+        ended
+    } else {
+        let block = format!("```console\n{}```", lines.concat());
+        ended.content(vec![block.into()])
+    };
+    let exit = json!({ "terminal_exit": { "terminal_id": id, "exit_code": 0, "signal": null } });
+    let update = ToolCallUpdate::new(id, ended).meta(exit.as_object().cloned());
+    say(cx, session, SessionUpdate::ToolCallUpdate(update))?;
+    say(
+        cx,
+        session,
+        SessionUpdate::AgentMessageChunk(text("The tests passed.")),
+    )?;
+    Ok(())
 }
 
 /// Asks a colour as Claude Code asks its questions: the choice, and an
@@ -415,6 +489,10 @@ async fn main() -> Result<(), Error> {
                     let elicitation = request.client_capabilities.elicitation.as_ref();
                     let forms = elicitation.is_some_and(|e| e.form.is_some());
                     fake.forms.store(forms, Ordering::Relaxed);
+                    let meta = request.client_capabilities.meta.as_ref();
+                    let output = meta.and_then(|m| m.get("terminal_output_delta"));
+                    fake.output
+                        .store(output == Some(&json!(true)), Ordering::Relaxed);
                     let protocol = if request.protocol_version >= ProtocolVersion::V1 {
                         ProtocolVersion::V1
                     } else {

@@ -214,6 +214,10 @@ If Chat is removed, Agents still works through its own Thread.
   form Bandaso cannot show goes unanswered, with a notice.
 - **A Question closes** when the Harness stops waiting for it, as when it
   times out.
+- **A tool call shows what it did:** a file change as its diff, and what
+  a command printed as it prints, with how it exited. The Thread keeps the
+  first 64 KB of a command's output and diffs up to 256 KB; a larger
+  change says so instead.
 - **A restart interrupts** the turn it cut short and closes that turn's
   open Questions.
 - Its methods and their rights are listed in
@@ -244,7 +248,8 @@ module reaches a Harness through an adapter:
   something users need; a native Codex adapter comes later, for its rate
   limits.
 - **Capabilities.** The engine declares what the window can show (notices,
-  options that are on or off, and forms), and the adapter reads what the
+  options that are on or off, forms, and a command's output as it comes),
+  and the adapter reads what the
   Harness declares (sessions that resume or load, and their options). The
   rest of the engine reads those capabilities and never the Harness's
   name. A failure's class comes from ACP's error codes

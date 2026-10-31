@@ -11,8 +11,6 @@ import type {
   ThreadId,
   Sent,
   ThreadView,
-  ToolKind,
-  ToolStatus,
   TurnView,
 } from "@bandaso/contract/agents"
 import { Bubble, BubbleContent } from "@bandaso/ui/components/bubble"
@@ -58,20 +56,11 @@ import {
   BrainIcon,
   CircleAlertIcon,
   CircleSlashIcon,
-  FilePenIcon,
-  FileTextIcon,
-  GlobeIcon,
   InfoIcon,
   MessageSquareIcon,
-  MoveRightIcon,
   RotateCcwIcon,
-  SearchIcon,
   ShieldQuestionIcon,
   SquareIcon,
-  TerminalIcon,
-  Trash2Icon,
-  WrenchIcon,
-  type LucideIcon,
 } from "lucide-react"
 import {
   apply,
@@ -84,6 +73,7 @@ import {
 } from "./thread"
 import { summary, type Values } from "./form"
 import { QuestionForm } from "./QuestionForm"
+import { ToolCall } from "./ToolCall"
 import { SettingsBar } from "./ThreadSettings"
 
 /** One Thread with an Agent; without `thread`, the next message starts one. */
@@ -401,19 +391,8 @@ function Entry({
           </TraceCollapsible>
         </Trace>
       )
-    case "tool": {
-      const Icon = TOOL_ICONS[body.tool]
-      return (
-        <Trace>
-          <TraceLine status={TOOL_STATUS[body.status]}>
-            <TraceIcon>
-              <Icon />
-            </TraceIcon>
-            <TraceTitle>{body.title}</TraceTitle>
-          </TraceLine>
-        </Trace>
-      )
-    }
+    case "tool":
+      return <ToolCall tool={body} />
     case "question":
       return (
         <Question
@@ -434,28 +413,6 @@ function Entry({
         </Trace>
       )
   }
-}
-
-const TOOL_ICONS: Record<ToolKind, LucideIcon> = {
-  read: FileTextIcon,
-  edit: FilePenIcon,
-  delete: Trash2Icon,
-  move: MoveRightIcon,
-  search: SearchIcon,
-  execute: TerminalIcon,
-  think: BrainIcon,
-  fetch: GlobeIcon,
-  other: WrenchIcon,
-}
-
-const TOOL_STATUS: Record<
-  ToolStatus,
-  "running" | "error" | "pending" | undefined
-> = {
-  pending: "pending",
-  running: "running",
-  done: undefined,
-  failed: "error",
 }
 
 function Question({
