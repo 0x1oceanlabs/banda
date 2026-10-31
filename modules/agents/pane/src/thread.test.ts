@@ -19,7 +19,7 @@ test("a turn's facts build the Thread a Person reads", () => {
   const state = play(
     event(
       "message.posted",
-      { item: "m", turn: "u", text: "hi" },
+      { item: "m", turn: "u", text: "hi", images: [] },
       { author: person }
     ),
     event("turn.started", { turn: "u" }),
@@ -37,9 +37,9 @@ test("a turn's facts build the Thread a Person reads", () => {
     event("turn.ended", { turn: "u", state: "done" })
   )
   expect(state.items.map((i) => [i.id, i.author.kind, i.body])).toEqual([
-    ["m", "person", { kind: "message", text: "hi" }],
+    ["m", "person", { kind: "message", text: "hi", images: [] }],
     ["t", "agent", { kind: "thought", text: "Hm" }],
-    ["r", "agent", { kind: "message", text: "Hello" }],
+    ["r", "agent", { kind: "message", text: "Hello", images: [] }],
     [
       "x",
       "agent",
@@ -161,7 +161,7 @@ test("an event already in the view, or one this window does not know, changes no
   const state = play(
     event(
       "message.posted",
-      { item: "m", turn: "u", text: "hi" },
+      { item: "m", turn: "u", text: "hi", images: [] },
       { author: person }
     )
   )

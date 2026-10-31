@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useRef, useState } from "react"
+import { Fragment, useEffect, useMemo, useState } from "react"
 import type { AgentId } from "@bandaso/contract"
 import type {
   Body,
@@ -12,7 +12,7 @@ import type {
   Sent,
   ThreadView,
   TurnView,
-  Usage,
+  Image,
 } from "@bandaso/contract/agents"
 import { Bubble, BubbleContent } from "@bandaso/ui/components/bubble"
 import { Button } from "@bandaso/ui/components/button"
@@ -23,12 +23,6 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@bandaso/ui/components/empty"
-import {
-  InputGroup,
-  InputGroupAddon,
-  InputGroupButton,
-  InputGroupTextarea,
-} from "@bandaso/ui/components/input-group"
 import { Message, MessageContent } from "@bandaso/ui/components/message"
 import {
   MessageScroller,
@@ -38,7 +32,6 @@ import {
   MessageScrollerProvider,
   MessageScrollerViewport,
 } from "@bandaso/ui/components/message-scroller"
-import { RingMeter } from "@bandaso/ui/components/ring-meter"
 import { Spinner } from "@bandaso/ui/components/spinner"
 import {
   Trace,
@@ -53,7 +46,6 @@ import { useAct } from "@bandaso/ui/hooks/use-act"
 import { useLive } from "@bandaso/ui/hooks/use-live"
 import { definePane, type PaneProps } from "@bandaso/ui/pane"
 import {
-  ArrowUpIcon,
   BotIcon,
   BrainIcon,
   CircleAlertIcon,
@@ -62,7 +54,6 @@ import {
   MessageSquareIcon,
   RotateCcwIcon,
   ShieldQuestionIcon,
-  SquareIcon,
 } from "lucide-react"
 import {
   apply,
@@ -73,8 +64,14 @@ import {
   type ThreadState,
   working,
 } from "./thread"
-import { ownCommand, type Suggested, suggested } from "./slash"
-import { useSlashMenu } from "./SlashMenu"
+import { suggested } from "./slash"
+import type { Adding, Kept } from "./Attachments"
+import { Composer } from "./Composer"
+import {
+  type ImageReader,
+  MessageImages,
+  useImageReader,
+} from "./MessageImages"
 import { summary, type Values } from "./form"
 import { QuestionForm } from "./QuestionForm"
 import { Plan } from "./Plan"
@@ -127,6 +124,7 @@ function ThreadPane({
   const turn = state && working(state)
   const sending = useAct()
   const acting = useAct()
+  const reader = useImageReader(engine, space)
 
   // A Thread not yet started keeps its settings here until its first
   // message, starting from the Agent's.
@@ -157,7 +155,10 @@ function ThreadPane({
     )
   }
 
-  const send = async (text: string) => {
+  const attach = (image: Adding) =>
+    engine.command<Image>("agents.attach", image, space)
+  const send = async (text: string, images: Kept[]) => {
+    for (const { image, url } of images) reader.keep(image.id, url)
     const sent = await sending.act(() =>
       engine.command<Sent>(
         "agents.send",
@@ -167,6 +168,7 @@ function ThreadPane({
           agent: args.agent,
           thread,
           text,
+          images: images.map(({ image }) => image.id),
           settings: thread === null ? (settings ?? null) : null,
         },
         space
@@ -211,6 +213,7 @@ function ThreadPane({
           <Transcript
             state={live.view}
             name={args.name}
+            reader={reader}
             answering={acting.busy}
             onAnswer={answer}
             onRetry={retry}
@@ -230,6 +233,7 @@ function ThreadPane({
           working={turn}
           usage={state?.usage}
           commands={suggested(offer)}
+          onAttach={attach}
           onPlanMode={(plan) => settings && configure({ ...settings, plan })}
           onSend={send}
           onStop={stop}
@@ -245,40 +249,6 @@ function ThreadPane({
         </Composer>
       </div>
     </div>
-  )
-}
-
-/** From this share of its context used, an Agent is near the point where
- * its Harness compacts or stops: the share shows as a warning. */
-const NEARLY_FULL = 80
-
-/** How full the Agent's context is: a ring, and the share; what it cost
- * so far on hover, when the Harness says. */
-function ContextUsed({ usage: { used, size, cost } }: { usage: Usage }) {
-  const share = size > 0 ? Math.round((used / size) * 100) : 0
-  const tokens = new Intl.NumberFormat("en", { notation: "compact" })
-  const spent =
-    cost &&
-    new Intl.NumberFormat("en", {
-      style: "currency",
-      currency: cost.currency,
-    }).format(cost.amount)
-  const words =
-    `${share}% of the context used: ${tokens.format(used)} of ${tokens.format(size)} tokens` +
-    (spent ? `. ${spent} so far.` : ".")
-  return (
-    <span
-      title={words}
-      data-full={share >= NEARLY_FULL || undefined}
-      className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground tabular-nums data-full:text-destructive"
-    >
-      <RingMeter
-        value={share}
-        aria-label="Context used"
-        getAriaValueText={() => words}
-      />
-      {share}%
-    </span>
   )
 }
 
@@ -316,11 +286,13 @@ type Answering = {
 function Transcript({
   state,
   name,
+  reader,
   onRetry,
   ...answers
 }: Answering & {
   state: ThreadState
   name: string
+  reader: ImageReader
   onRetry: (turn: TurnView) => void
 }) {
   const turn = working(state)
@@ -340,6 +312,7 @@ function Transcript({
                   <Entry
                     item={line.item}
                     live={turn?.state === "running" && line.item === last}
+                    reader={reader}
                     {...answers}
                   />
                 </MessageScrollerItem>
@@ -384,12 +357,14 @@ function Transcript({
 function Entry({
   item,
   live,
+  reader,
   answering,
   onAnswer,
 }: Answering & {
   item: Item
   /** Whether the Agent is still writing it. */
   live: boolean
+  reader: ImageReader
 }) {
   const body = item.body
   switch (body.kind) {
@@ -397,11 +372,14 @@ function Entry({
       return item.author.kind === "person" ? (
         <Message align="end">
           <MessageContent>
-            <Bubble variant="muted" align="end">
-              <BubbleContent className="whitespace-pre-wrap">
-                {body.text}
-              </BubbleContent>
-            </Bubble>
+            <MessageImages images={body.images} reader={reader} />
+            {body.text && (
+              <Bubble variant="muted" align="end">
+                <BubbleContent className="whitespace-pre-wrap">
+                  {body.text}
+                </BubbleContent>
+              </Bubble>
+            )}
           </MessageContent>
         </Message>
       ) : (
@@ -594,122 +572,4 @@ function moment(at: number): string {
     hour: "2-digit",
     minute: "2-digit",
   }).format(at)
-}
-
-function Composer({
-  name,
-  focused,
-  busy,
-  working,
-  usage,
-  commands,
-  onPlanMode,
-  onSend,
-  onStop,
-  children,
-}: {
-  name: string
-  focused: boolean
-  busy: boolean
-  working: TurnView | undefined
-  /** How full the Agent's context is, once its Harness has said. */
-  usage?: Usage
-  /** The slash commands a message can start with, suggested as it is
-   * typed. */
-  commands: Suggested[]
-  /** Switches the Thread's plan mode, for `/plan` and `/default`. */
-  onPlanMode: (on: boolean) => void
-  /** Sends the text; resolves whether it went. */
-  onSend: (text: string) => Promise<boolean>
-  onStop: (turn: TurnView) => void
-  /** What the Thread runs with, beside the send button. */
-  children?: React.ReactNode
-}) {
-  const [text, setText] = useState("")
-  const field = useRef<HTMLTextAreaElement>(null)
-  useEffect(() => {
-    if (focused) field.current?.focus()
-  }, [focused])
-
-  const pick = (command: Suggested) => {
-    if (command.planMode === undefined) {
-      setText(`/${command.name} `)
-    } else {
-      onPlanMode(command.planMode)
-      setText("")
-    }
-  }
-  const slash = useSlashMenu({ text, commands, name, onPick: pick })
-
-  const ready = text.trim() !== "" && !busy
-  const send = async () => {
-    if (!ready) return
-    // A message that is only `/plan` or `/default` switches plan mode.
-    const own = ownCommand(text, commands)
-    if (own) {
-      pick(own)
-      return
-    }
-    if (await onSend(text)) setText("")
-  }
-
-  return (
-    <form
-      className="relative"
-      onSubmit={(event) => {
-        event.preventDefault()
-        void send()
-      }}
-    >
-      {slash.menu}
-      <InputGroup>
-        <InputGroupTextarea
-          ref={field}
-          value={text}
-          rows={1}
-          placeholder={`Write to ${name}`}
-          aria-label={`Message to ${name}`}
-          {...slash.field}
-          className="max-h-48 min-h-10"
-          onChange={(event) => setText(event.target.value)}
-          onKeyDown={(event) => {
-            if (slash.onKeyDown(event)) return
-            if (
-              event.key === "Enter" &&
-              !event.shiftKey &&
-              !event.nativeEvent.isComposing
-            ) {
-              event.preventDefault()
-              void send()
-            }
-          }}
-        />
-        <InputGroupAddon align="block-end" className="justify-between gap-2">
-          <div className="min-w-0 flex-1">{children}</div>
-          {usage && <ContextUsed usage={usage} />}
-          {working && text.trim() === "" ? (
-            <InputGroupButton
-              type="button"
-              variant="secondary"
-              size="icon-sm"
-              aria-label="Stop"
-              onClick={() => onStop(working)}
-            >
-              <SquareIcon className="fill-current" />
-            </InputGroupButton>
-          ) : (
-            <InputGroupButton
-              type="submit"
-              variant="default"
-              size="icon-sm"
-              aria-label="Send"
-              disabled={!ready}
-            >
-              {busy ? <Spinner /> : <ArrowUpIcon />}
-            </InputGroupButton>
-          )}
-        </InputGroupAddon>
-      </InputGroup>
-    </form>
-  )
 }

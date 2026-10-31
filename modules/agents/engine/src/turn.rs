@@ -15,7 +15,7 @@
 //! turn answers the Harness's Questions by the mode where the mode allows,
 //! and asks the Person otherwise.
 
-use crate::acp::{Answer, Opened, Running, Said, ToolChange};
+use crate::acp::{Answer, Opened, Prompt, Running, Said, ToolChange};
 use crate::live::Live;
 use crate::model::{
     Body, Fact, Failure, Item, ItemId, Mode, Offer, PlanStep, QuestionState, Settings, ThreadId,
@@ -212,28 +212,39 @@ pub async fn start(
                 return Ok(None);
             }
             store::set_turn(tx.sql(), turn.id, TurnState::Running, None, None)?;
-            let text = match store::item(tx.sql(), turn.message)? {
+            let (text, images) = match store::item(tx.sql(), turn.message)? {
                 Some((
                     _,
                     Item {
-                        body: Body::Message { text },
+                        body: Body::Message { text, images },
                         ..
                     },
-                )) => text,
-                _ => String::new(),
+                )) => (text, images),
+                _ => (String::new(), Vec::new()),
             };
+            let files = images
+                .iter()
+                .filter_map(|image| store::image_file(tx.sql(), image.id).transpose())
+                .collect::<Result<Vec<_>, _>>()?;
             let settings = store::turn_settings(tx.sql(), &turn)?;
             let started = Fact::TurnStarted { turn: turn.id };
             emit(tx, Participant::Agent(turn.agent), turn.thread, &started)?;
-            Ok(Some((turn, text, settings)))
+            Ok(Some((
+                turn,
+                Prompt {
+                    text,
+                    images: files,
+                },
+                settings,
+            )))
         })
         .await;
-    let (turn, text, settings) = match begun {
+    let (turn, prompt, settings) = match begun {
         Ok(Some(begun)) => begun,
         Ok(None) => return Outcome::Done,
         Err(error) => return Outcome::Retry(error.to_string()),
     };
-    let ending = work(live, harnesses, &space, &turn, &text, settings).await;
+    let ending = work(live, harnesses, &space, &turn, prompt, settings).await;
     let ending = ending.stop_asked(live.end(turn.id));
     match space.write(move |tx| end(tx, &turn, ending)).await {
         Ok(()) => Outcome::Done,
@@ -248,20 +259,20 @@ async fn work(
     harnesses: &Harnesses,
     space: &ModuleSpace,
     turn: &store::Turn,
-    text: &str,
+    prompt: Prompt,
     settings: Settings,
 ) -> Ending {
-    match prompt(live, harnesses, space, turn, text, settings).await {
+    match run(live, harnesses, space, turn, prompt, settings).await {
         Ok(ending) | Err(ending) => ending,
     }
 }
 
-async fn prompt(
+async fn run(
     live: &Live,
     harnesses: &Harnesses,
     space: &ModuleSpace,
     turn: &store::Turn,
-    text: &str,
+    mut prompt: Prompt,
     settings: Settings,
 ) -> Result<Ending, Ending> {
     let unplanned = |reason: String| Ending::failed(reason, None);
@@ -302,7 +313,20 @@ async fn prompt(
             .await
             .map_err(|e| unplanned(plain(e)))?;
     }
-    let (running, refused) = connection.settle(&session, &settings).await;
+    let (running, mut refused) = connection.settle(&session, &settings).await;
+    if !prompt.images.is_empty() && !connection.takes_images() {
+        if prompt.text.trim().is_empty() {
+            return Err(unplanned(format!(
+                "{} does not take images, and this message holds nothing else.",
+                harness.name
+            )));
+        }
+        refused.push(format!(
+            "{} does not take images, so it got the text alone.",
+            harness.name
+        ));
+        prompt.images.clear();
+    }
     let (id, agent, now) = (turn.id, Participant::Agent(turn.agent), running.clone());
     // What the Agent used, as it last said, between turns too.
     let usage = connection.usage(&session);
@@ -319,7 +343,7 @@ async fn prompt(
         })
         .await
         .map_err(|e| unplanned(plain(e)))?;
-    let (mut hear, mut done) = connection.prompt(&session, text);
+    let (mut hear, mut done) = connection.prompt(&session, &prompt);
     live.begin(turn.id, connection.clone(), session.clone());
     let mut writer = Writer::new(space.clone(), turn, harness.name.clone(), settings, running);
     if let Err(reason) = writer.listen(live, &mut hear).await {

@@ -238,6 +238,14 @@ If Chat is removed, Agents still works through its own Thread.
   turn, like what the Agent has used. The window suggests them as a
   message starts with `/`, and adds `/plan` and `/default`, as T3 Code
   does: they switch plan mode and send nothing.
+- **A message can carry images**: up to 10 PNG, JPEG, GIF or WebP files,
+  each at most 10 MB, as in T3 Code. Each goes to the engine as the Person
+  adds it (`agents.attach`), in a call of its own, since one WebSocket
+  message holds at most 16 MiB; the message then names them. The Space
+  keeps their bytes, and the window reads them back with `agents.image`.
+  An image not sent within a day goes when the next one is added. A
+  Harness that takes no images (ACP's `promptCapabilities.image`) gets the
+  text alone, with a notice; a message of images alone fails its turn.
 - **A restart interrupts** the turn it cut short and closes that turn's
   open Questions.
 - Its methods and their rights are listed in
