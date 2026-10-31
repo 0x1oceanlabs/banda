@@ -39,6 +39,17 @@ pub use store::Tx;
 /// version is refused before anything else (ADR 0002, decision 8).
 pub const PROTOCOL: u32 = 1;
 
+/// A name that works as one file or folder name: 1 to 64 characters, with
+/// no slashes and no leading dot. Returns it without surrounding spaces.
+pub fn plain_name(name: &str) -> Option<&str> {
+    let name = name.trim();
+    let plain = !name.is_empty()
+        && name.chars().count() <= 64
+        && !name.starts_with('.')
+        && !name.contains(['/', '\\', '\0']);
+    plain.then_some(name)
+}
+
 /// Milliseconds since the Unix epoch: the one clock reading the kernel uses.
 pub fn now_ms() -> i64 {
     use std::time::{SystemTime, UNIX_EPOCH};

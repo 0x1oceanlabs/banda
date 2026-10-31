@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["kernel"]
+members = ["kernel", "modules/agents/engine", "tools/fake-agent"]
 
 [workspace.package]
 version = "0.1.0"
@@ -10,6 +10,7 @@ license = "UNLICENSED"
 publish = false
 
 [workspace.dependencies]
+agent-client-protocol = "3.6.0"
 async-trait = "0.1"
 axum = { version = "0.8.9", features = ["ws"] }
 futures = "0.3"
@@ -18,6 +19,7 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tempfile = "3"
 thiserror = "2"
+toml = "1.1"
 tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "net", "signal", "process", "io-util"] }
 tracing = "0.1"
 tokio-tungstenite = "0.29"

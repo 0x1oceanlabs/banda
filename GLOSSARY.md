@@ -33,8 +33,8 @@ engine reaches it through an adapter, ACP first. It reads what a Harness can
 do from the Harness's declared capabilities.
 
 **Thread**:
-One conversation between a Person and an Agent, kept as a log of events:
-messages, tool calls, Questions and answers.
+One conversation between a Person and an Agent. It shows items: messages, the
+Agent's thoughts, tool calls and Questions.
 _Avoid_: chat, session.
 
 **Turn**:
@@ -43,7 +43,7 @@ Agent and ends when the Agent stops or is stopped.
 
 **Question**:
 An Agent's request for the Person to decide something. Most often it asks for
-permission to run an action. The Harness writes the options, and the Person's
+permission to run an action. The Harness writes the choices, and the Person's
 answer goes back to the Harness unchanged.
 _Avoid_: prompt, approval request.
 

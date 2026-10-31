@@ -1,22 +1,28 @@
 //! Our IDs are the identity, and a Harness's IDs are evidence (ADR 0002,
 //! decision 7). Every ID here is a UUIDv7 made by Bandaso.
 
-use rusqlite::types::{FromSql, FromSqlError, FromSqlResult, ToSql, ToSqlOutput, ValueRef};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
-use uuid::Uuid;
 
+/// Defines an ID type: a UUIDv7 that is text in SQLite and a string on the
+/// wire. A module uses it for its own IDs. The crate that uses it depends on
+/// `serde`, `ts-rs`, `uuid` and `rusqlite`. Pass `export_to = "<dir>/"` to
+/// put its TypeScript type in a module's folder.
+#[macro_export]
 macro_rules! id {
-    ($(#[$doc:meta])* $name:ident) => {
+    ($(#[$doc:meta])* $name:ident $(, export_to = $dir:literal)?) => {
         $(#[$doc])*
-        #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize, TS)]
-        #[ts(export, type = "string")]
-        pub struct $name(Uuid);
+        #[derive(
+            Clone, Copy, Debug, PartialEq, Eq, Hash, PartialOrd, Ord,
+            ::serde::Serialize, ::serde::Deserialize, ::ts_rs::TS,
+        )]
+        #[ts(export, type = "string" $(, export_to = $dir)?)]
+        pub struct $name(::uuid::Uuid);
 
         impl $name {
             /// A new ID, ordered by the time it was made.
             pub fn new() -> Self {
-                Self(Uuid::now_v7())
+                Self(::uuid::Uuid::now_v7())
             }
         }
 
@@ -33,22 +39,25 @@ macro_rules! id {
         }
 
         impl std::str::FromStr for $name {
-            type Err = uuid::Error;
+            type Err = ::uuid::Error;
             fn from_str(s: &str) -> Result<Self, Self::Err> {
-                Uuid::parse_str(s).map(Self)
+                ::uuid::Uuid::parse_str(s).map(Self)
             }
         }
 
-        impl ToSql for $name {
-            fn to_sql(&self) -> rusqlite::Result<ToSqlOutput<'_>> {
-                Ok(ToSqlOutput::from(self.0.to_string()))
+        impl ::rusqlite::types::ToSql for $name {
+            fn to_sql(&self) -> ::rusqlite::Result<::rusqlite::types::ToSqlOutput<'_>> {
+                Ok(::rusqlite::types::ToSqlOutput::from(self.0.to_string()))
             }
         }
 
-        impl FromSql for $name {
-            fn column_result(value: ValueRef<'_>) -> FromSqlResult<Self> {
+        impl ::rusqlite::types::FromSql for $name {
+            fn column_result(
+                value: ::rusqlite::types::ValueRef<'_>,
+            ) -> ::rusqlite::types::FromSqlResult<Self> {
                 let text = value.as_str()?;
-                text.parse().map_err(|e| FromSqlError::Other(Box::new(e)))
+                text.parse()
+                    .map_err(|e| ::rusqlite::types::FromSqlError::Other(Box::new(e)))
             }
         }
     };

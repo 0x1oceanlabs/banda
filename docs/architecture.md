@@ -46,9 +46,9 @@ The kernel holds only what every module needs, and it names no module.
 - **Access decision.** One function decides whether a Participant may perform
   an action on a target. Every method and every subscription passes through
   it, before any module code runs. On one computer it answers: the owner may
-  do everything, an Agent may read and change the work but not the Space
-  itself, and nobody else may do anything. Members and roles arrive here
-  later.
+  do everything; an Agent may read and change the work, but neither change
+  the Space itself nor decide what an Agent asked a Person; nobody else may
+  do anything. Members and roles arrive here later.
 - **Identity.** A port: it says which Participant a connection's token names.
   On one computer, whoever holds the engine's secret is the owner. Later it
   is OIDC, or our accounts, and Agents get tokens of their own.
@@ -85,7 +85,7 @@ command (with its ID)
 |---|---|
 | The Space's folder | the files of the work |
 | Text files | Agents, layouts, keys, themes, module settings |
-| The Harness | its session, context and sign-in. We keep only its session ID |
+| The Harness | its session, context and sign-in. We keep only its session ID, as evidence |
 | The OS keychain | secrets. Bandaso's database never holds them |
 | The window | focus, scroll, open Panes |
 | `.bandaso/` SQLite | Threads, Questions and answers, the Agents' queue, Databases' records, receipts, events, outbox |
@@ -105,6 +105,9 @@ modules/<name>/
   pane/        React package: its Panes
   module.toml  name, commands, events, tables, tools, Panes
 ```
+
+`module.toml` arrives with third-party modules. Until then a first-party
+module's `Module` implementation is its manifest.
 
 **Its contract** is everything it shows outward:
 
@@ -135,6 +138,29 @@ If Chat is removed, Agents still works through its own Thread.
 | files | the Space's files | soon |
 | chat | Room, Message, Mention | later |
 | databases | Database, Field, Record, View | later |
+
+### agents
+
+- **An Agent is a text file** in its Space: `.bandaso/agents/<name>.toml`,
+  holding its ID and its Harness. The file's name is the Agent's name.
+- **The Harness list is a text file** of the machine. It says how to start
+  each Harness. Without one, the engine knows Claude Code and Codex through
+  their ACP adapters on npm. Reading the ACP Registry comes next.
+- **A message queues a turn.** The outbox runs one Agent's turns one at a
+  time, in order (`turn.start`, keyed by the Agent). A stop (`turn.stop`)
+  and an answer (`question.reply`) have keys of their own, so neither waits
+  behind the turn it is for.
+- **A turn runs until its Harness ends it or a Person stops it.** Starting
+  a Harness and opening a session have time limits; a turn has none. A turn
+  the Harness cancels when no Person asked fails, so nobody reads a stop
+  that no Person made.
+- **A Question is answered only by a Person.** It shows the Harness's own
+  choices, without the Harness's "always" answers. A Question that offers
+  nothing else fails its turn: a Person decides each time.
+- **A restart interrupts** the turn it cut short and closes that turn's
+  open Questions.
+- Its methods and their rights are listed in
+  `modules/agents/engine/src/lib.rs`, and its facts in `model.rs`.
 
 ## Inside a module
 
@@ -178,13 +204,18 @@ platform        electron | web: the same React code in a browser later
 
 ```
 bandaso/
-  kernel/          Rust: Space, event log, access, registry, API
+  kernel/             Rust: Space, event log, access, registry, API
   modules/
-    agents/
-    browser/
-  app/             Electron: the window, tiling, platform
-  cli/
-  docs/            adr/ · architecture.md
+    agents/engine/    Rust: Agents, Threads, turns, Questions, the ACP adapter
+    agents/pane/      React: the Thread Pane (next)
+    browser/pane/     React: the browser Pane (next)
+  engine/             the engine's binary: the kernel and its modules (next)
+  cli/                the CLI, over the same API (next)
+  app/web/            React: the tiling shell and the Pane registry (next)
+  app/desktop/        Electron: the window, the engine's start, browser views (next)
+  contract/           TypeScript types generated from the Rust
+  tools/fake-agent/   a scripted ACP agent for tests and window checks
+  docs/               adr/ · architecture.md · research/
   GLOSSARY.md
 ```
 

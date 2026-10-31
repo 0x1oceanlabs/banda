@@ -7,8 +7,8 @@ use serde_json::Value;
 /// A bounded context: its own words, data and contract (ADR 0001, decision
 /// 3). The kernel knows a module only through this trait.
 ///
-/// A module's name prefixes its methods (`agents.send`), its events and its
-/// tables (`agents_threads`). It writes only its own tables and reads no
+/// A module's name prefixes its methods (`notes.add`) and its tables
+/// (`notes_items`), and its events carry it. It writes only its own tables and reads no
 /// other module's. Modules reach each other only by commands and events.
 #[async_trait::async_trait]
 pub trait Module: Send + Sync + 'static {
