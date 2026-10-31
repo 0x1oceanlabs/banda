@@ -19,3 +19,8 @@ UNIX composition + deep modules + explicit contracts.
 ## Workflow
 
 One change, one branch, one PR. Nothing is pushed straight to `main`.
+
+## Research
+
+`docs/research/` keeps dated evidence with its source and limits. It is
+not a decision; ADRs are.
