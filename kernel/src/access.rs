@@ -15,11 +15,14 @@ pub enum Right {
     Write,
     /// Change the Space itself: its Agents, its settings, who is in it.
     Manage,
+    /// Decide what an Agent asked a Person to decide. An Agent never
+    /// answers in a Person's place (ADR 0002, decision 9).
+    Decide,
 }
 
 /// On one computer the owner may do everything, and Agents may read and
-/// write the Space's work but not manage it. Members and roles arrive here
-/// when teams do.
+/// write the Space's work but neither manage it nor decide for a Person.
+/// Members and roles arrive here when teams do.
 pub fn decide(participant: &Participant, right: Right, owner: PersonId) -> Result<(), Refusal> {
     match (participant, right) {
         (Participant::Person(person), _) if *person == owner => Ok(()),
@@ -29,6 +32,9 @@ pub fn decide(participant: &Participant, right: Right, owner: PersonId) -> Resul
         (Participant::Agent(_), Right::Read | Right::Write) => Ok(()),
         (Participant::Agent(_), Right::Manage) => Err(Refusal::forbidden(
             "An Agent may not change the Space itself.",
+        )),
+        (Participant::Agent(_), Right::Decide) => Err(Refusal::forbidden(
+            "Only a Person decides what an Agent asked.",
         )),
     }
 }
@@ -41,7 +47,7 @@ mod tests {
     #[test]
     fn the_owner_may_do_everything() {
         let owner = PersonId::new();
-        for right in [Right::Read, Right::Write, Right::Manage] {
+        for right in [Right::Read, Right::Write, Right::Manage, Right::Decide] {
             assert_eq!(decide(&Participant::Person(owner), right, owner), Ok(()));
         }
     }
@@ -55,14 +61,16 @@ mod tests {
     }
 
     #[test]
-    fn an_agent_works_in_the_space_but_does_not_manage_it() {
+    fn an_agent_works_in_the_space_but_neither_manages_nor_decides() {
         let owner = PersonId::new();
         let agent = Participant::Agent(AgentId::new());
         assert_eq!(decide(&agent, Right::Read, owner), Ok(()));
         assert_eq!(decide(&agent, Right::Write, owner), Ok(()));
-        assert_eq!(
-            decide(&agent, Right::Manage, owner).unwrap_err().code,
-            Code::Forbidden
-        );
+        for right in [Right::Manage, Right::Decide] {
+            assert_eq!(
+                decide(&agent, right, owner).unwrap_err().code,
+                Code::Forbidden
+            );
+        }
     }
 }

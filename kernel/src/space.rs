@@ -50,21 +50,13 @@ pub struct Space {
 }
 
 impl Space {
-    /// The name as a Space's folder takes it: 1 to 64 characters, with no
-    /// slashes and no leading dot.
+    /// The name as a Space's folder takes it.
     pub(crate) fn plain_name(name: &str) -> Result<&str, Refusal> {
-        let name = name.trim();
-        let plain = !name.is_empty()
-            && name.chars().count() <= 64
-            && !name.starts_with('.')
-            && !name.contains(['/', '\\', '\0']);
-        if plain {
-            Ok(name)
-        } else {
-            Err(Refusal::invalid(
+        crate::plain_name(name).ok_or_else(|| {
+            Refusal::invalid(
                 "A Space's name is 1 to 64 characters, with no slashes and no leading dot.",
-            ))
-        }
+            )
+        })
     }
 
     /// Makes a new Space's folder, which must not exist yet. When it exists
