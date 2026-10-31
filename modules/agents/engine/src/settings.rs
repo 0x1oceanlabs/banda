@@ -4,8 +4,11 @@
 //! - the Harness list, one per machine: which agent programs it can start;
 //! - one file per Agent, in the Space: `.bandaso/agents/<name>.toml`, with
 //!   the Agent's ID and its Harness. The file's name is the Agent's name.
+//!   It may also hold what the Agent's new Threads start with: `mode`
+//!   (`supervised`, `accept_edits`, `auto` or `full_access`), `plan`, and
+//!   the Harness's options by their IDs in `[options]`, such as `model`.
 
-use crate::model::{AgentView, HarnessView};
+use crate::model::{AgentView, HarnessView, Settings};
 use bandaso_kernel::{AgentId, Error, Refusal};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -96,6 +99,8 @@ impl Harnesses {
 struct AgentFile {
     id: AgentId,
     harness: String,
+    #[serde(flatten)]
+    settings: Settings,
 }
 
 fn folder(space: &Path) -> PathBuf {
@@ -129,6 +134,7 @@ pub fn agents(space: &Path) -> Result<Vec<AgentView>, Error> {
                 id: file.id,
                 name: name.to_owned(),
                 harness: file.harness,
+                settings: file.settings,
             }),
             Err(error) => {
                 tracing::warn!(file = %path.display(), %error, "an Agent's file does not parse")
@@ -155,11 +161,15 @@ pub fn create(space: &Path, name: &str, harness: &str) -> Result<AgentView, Erro
         )
     })?;
     let id = AgentId::new();
-    let text = toml::to_string(&AgentFile {
-        id,
-        harness: harness.to_owned(),
-    })
-    .map_err(|e| Error::Io(std::io::Error::other(e)))?;
+    // A new Agent's file names only what it must: its Threads start as
+    // every Thread does until someone writes otherwise.
+    #[derive(Serialize)]
+    struct NewFile<'a> {
+        id: AgentId,
+        harness: &'a str,
+    }
+    let text = toml::to_string(&NewFile { id, harness })
+        .map_err(|e| Error::Io(std::io::Error::other(e)))?;
     std::fs::create_dir_all(folder(space))?;
     let path = folder(space).join(format!("{name}.toml"));
     let mut file = match std::fs::File::create_new(&path) {
@@ -177,6 +187,7 @@ pub fn create(space: &Path, name: &str, harness: &str) -> Result<AgentView, Erro
         id,
         name: name.to_owned(),
         harness: harness.to_owned(),
+        settings: Settings::default(),
     })
 }
 
@@ -210,6 +221,23 @@ mod tests {
         assert!(space.path().join(".bandaso/agents/Writer.toml").is_file());
         assert_eq!(agents(space.path()).unwrap(), vec![made.clone()]);
         assert_eq!(agent(space.path(), made.id).unwrap(), made);
+
+        let path = space.path().join(".bandaso/agents/Writer.toml");
+        let text = std::fs::read_to_string(&path).unwrap();
+        let more =
+            "mode = \"supervised\"\nplan = true\n\n[options]\nmodel = \"smart\"\nbrief = true\n";
+        std::fs::write(&path, format!("{text}{more}")).unwrap();
+        let settings = agent(space.path(), made.id).unwrap().settings;
+        assert_eq!(settings.mode, crate::model::Mode::Supervised);
+        assert!(settings.plan);
+        assert_eq!(
+            settings.options.get("model"),
+            Some(&crate::model::OptionValue::Choice("smart".into()))
+        );
+        assert_eq!(
+            settings.options.get("brief"),
+            Some(&crate::model::OptionValue::Toggle(true))
+        );
 
         let twin = create(space.path(), "Writer", "codex").unwrap_err();
         assert!(matches!(twin, Error::Refused(r) if r.code == bandaso_kernel::Code::Conflict));

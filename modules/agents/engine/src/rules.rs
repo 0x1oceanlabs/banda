@@ -1,7 +1,9 @@
 //! The agents module's decisions and state machines. Pure: no database,
 //! clock, randomness or Harness protocol. IDs come in from the caller.
 
-use crate::model::{Body, Choice, Fact, Failure, ItemId, QuestionState, TurnId, TurnState};
+use crate::model::{
+    Body, Choice, Fact, Failure, ItemId, Mode, QuestionState, ToolKind, TurnId, TurnState,
+};
 use bandaso_kernel::Refusal;
 
 /// Whether a turn may start now: it waits, and nobody stopped it.
@@ -111,19 +113,51 @@ pub struct Offered {
     pub always: bool,
 }
 
-/// The choices a Question shows: the Harness's own, unchanged, without its
-/// "always" answers. A Harness writes those to files the Agent itself can
-/// change (ADR 0001, decision 7).
+/// The choices a Question shows: all of the Harness's own, unchanged, its
+/// "always" answers too (ADR 0003, decision 9).
 pub fn choices(offered: Vec<Offered>) -> Vec<Choice> {
     offered
         .into_iter()
-        .filter(|o| !o.always)
         .map(|o| Choice {
             id: o.id,
             name: o.name,
             allows: o.allows,
+            always: o.always,
         })
         .collect()
+}
+
+/// What the engine does with a Harness's Question when the Harness has no
+/// modes of its own: answers it by the Thread's mode, as T3 Code does, or
+/// asks the Person.
+#[derive(Debug, PartialEq, Eq)]
+pub enum Disposition {
+    Allow,
+    Ask,
+}
+
+pub fn disposition(mode: Mode, tool: ToolKind) -> Disposition {
+    let reads = matches!(tool, ToolKind::Read | ToolKind::Search | ToolKind::Think);
+    let edits = matches!(tool, ToolKind::Edit | ToolKind::Delete | ToolKind::Move);
+    let allowed = match mode {
+        Mode::Supervised => reads,
+        Mode::AcceptEdits => reads || edits,
+        Mode::Auto | Mode::FullAccess => true,
+    };
+    if allowed {
+        Disposition::Allow
+    } else {
+        Disposition::Ask
+    }
+}
+
+/// The answer that allows this once, if the Harness offers one. The
+/// engine never picks an answer the Harness would keep for next time.
+pub fn allow_once(offered: &[Offered]) -> Option<&str> {
+    offered
+        .iter()
+        .find(|o| o.allows && !o.always)
+        .map(|o| o.id.as_str())
 }
 
 /// Answers a Question with one of its choices.
@@ -335,18 +369,50 @@ mod tests {
     }
 
     #[test]
-    fn a_question_never_offers_the_harness_always_answers() {
+    fn a_question_offers_every_answer_of_the_harness() {
         let Body::Question { choices, .. } = question() else {
             unreachable!()
         };
-        let ids: Vec<_> = choices.iter().map(|c| c.id.as_str()).collect();
-        assert_eq!(ids, ["allow", "reject"]);
+        let ids: Vec<_> = choices.iter().map(|c| (c.id.as_str(), c.always)).collect();
+        assert_eq!(
+            ids,
+            [
+                ("allow", false),
+                ("always", true),
+                ("reject", false),
+                ("never", true)
+            ]
+        );
+    }
+
+    #[test]
+    fn without_modes_of_its_own_a_harness_is_answered_by_the_mode() {
+        use Disposition::{Allow, Ask};
+        for (mode, read, run, edit) in [
+            (Mode::Supervised, Allow, Ask, Ask),
+            (Mode::AcceptEdits, Allow, Ask, Allow),
+            (Mode::Auto, Allow, Allow, Allow),
+            (Mode::FullAccess, Allow, Allow, Allow),
+        ] {
+            assert_eq!(disposition(mode, ToolKind::Read), read, "{mode:?}");
+            assert_eq!(disposition(mode, ToolKind::Execute), run, "{mode:?}");
+            assert_eq!(disposition(mode, ToolKind::Edit), edit, "{mode:?}");
+        }
+        let offer = |id: &str, allows, always| Offered {
+            id: id.into(),
+            name: id.into(),
+            allows,
+            always,
+        };
+        let offered = [offer("always", true, true), offer("once", true, false)];
+        assert_eq!(allow_once(&offered), Some("once"));
+        assert_eq!(allow_once(&offered[..1]), None, "never an always answer");
     }
 
     #[test]
     fn only_an_open_question_takes_one_of_its_choices() {
         let mut body = question();
-        assert!(answer(&mut body, "always").is_err());
+        assert!(answer(&mut body, "maybe").is_err());
         assert!(answer(&mut body, "allow").is_ok());
         assert!(
             matches!(&body, Body::Question { state: QuestionState::Answered, answer: Some(a), .. } if a == "allow")

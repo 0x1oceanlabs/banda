@@ -1,6 +1,7 @@
 import { expect, test } from "vitest"
 import { type AgentsState, applyAgents, threadsOf } from "./agents"
 import { event, person } from "./testing"
+import { DEFAULT_SETTINGS } from "./thread"
 
 const empty: AgentsState = { at: 0, agents: [], threads: [] }
 
@@ -16,7 +17,9 @@ test("a new Agent and its first Thread join the lists once", () => {
     { subject: "t1" }
   )
   const state = [created, started, created, started].reduce(applyAgents, empty)
-  expect(state.agents).toEqual([{ id: "a1", name: "Writer", harness: "fake" }])
+  expect(state.agents).toEqual([
+    { id: "a1", name: "Writer", harness: "fake", settings: DEFAULT_SETTINGS },
+  ])
   expect(threadsOf(state, "a1").map((t) => t.title)).toEqual(["Hello"])
 })
 

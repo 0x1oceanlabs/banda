@@ -146,3 +146,67 @@ test("a failed turn says what to do, and Try again sends its message again", asy
   await expect(retry).toHaveCount(0)
   await page.screenshot({ path: "test-results/5-tried-again.png" })
 })
+
+test("a Person chooses the model and the mode under the message box", async () => {
+  window = await startWindow()
+  const { page } = window
+  await page.getByLabel("Name").fill("Work")
+  await page.getByRole("button", { name: "Create Space" }).click()
+  await page.getByRole("button", { name: "New Agent" }).click()
+  const dialog = page.getByRole("dialog", { name: "New Agent" })
+  await dialog.getByLabel("Name").fill("Writer")
+  await dialog.getByRole("button", { name: "Create Agent" }).click()
+  const thread = page.getByRole("region", { name: "Writer" })
+  const composer = thread.getByRole("textbox", { name: "Message to Writer" })
+
+  await expect(
+    thread.getByRole("button", { name: "Mode: Full access" })
+  ).toBeVisible()
+  await composer.fill("which settings")
+  await composer.press("Enter")
+  await expect(
+    thread.getByText("Mode bypassPermissions, model fast, brief false")
+  ).toBeVisible()
+
+  // The Harness offered its options with its first turn.
+  await thread.getByRole("button", { name: "Model: Fast" }).click()
+  await page.getByRole("menuitemradio", { name: "Smart" }).click()
+  await expect(
+    thread.getByRole("button", { name: "Model: Smart" })
+  ).toBeVisible()
+  await thread.getByRole("button", { name: "Mode: Full access" }).click()
+  await expect(
+    page.getByRole("menuitemradio", { name: /Supervised/ })
+  ).toBeVisible()
+  await page.screenshot({ path: "test-results/6-modes.png" })
+  await page.getByRole("menuitemradio", { name: /Supervised/ }).click()
+  await thread.getByRole("button", { name: "Brief" }).click()
+  await expect(thread.getByRole("button", { name: "Brief" })).toHaveAttribute(
+    "aria-pressed",
+    "true"
+  )
+  await composer.fill("which settings now")
+  await composer.press("Enter")
+  await expect(
+    thread.getByText("Mode default, model smart, brief true")
+  ).toBeVisible()
+
+  await thread.getByRole("button", { name: "Plan" }).click()
+  await composer.fill("which settings in a plan")
+  await composer.press("Enter")
+  await expect(
+    thread.getByText("Mode plan, model smart, brief true")
+  ).toBeVisible()
+  await composer.fill("plan done")
+  await composer.press("Enter")
+  await expect(thread.getByText("The plan is ready.")).toBeVisible()
+  await expect(
+    thread.getByRole("button", { name: "Mode: Auto-accept edits" })
+  ).toBeVisible()
+  await expect(thread.getByRole("button", { name: "Plan" })).toHaveAttribute(
+    "aria-pressed",
+    "false"
+  )
+  await page.mouse.move(0, 0)
+  await page.screenshot({ path: "test-results/7-after-the-plan.png" })
+})

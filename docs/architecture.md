@@ -159,7 +159,9 @@ If Chat is removed, Agents still works through its own Thread.
 ### agents
 
 - **An Agent is a text file** in its Space: `.bandaso/agents/<name>.toml`,
-  holding its ID and its Harness. The file's name is the Agent's name.
+  holding its ID and its Harness. The file's name is the Agent's name. It
+  may also say what its new Threads start with: a mode, Plan, and the
+  Harness's options such as its model.
 - **The Harness list is a text file** of the machine. It says how to start
   each Harness. Without one, the engine knows Claude Code and Codex through
   their ACP adapters on npm. Reading the ACP Registry comes next.
@@ -188,9 +190,17 @@ If Chat is removed, Agents still works through its own Thread.
   in a new turn, and the failed one stays as it ended.
 - **The Harness's notices**, such as warnings, join the Thread as lines of
   their own.
-- **A Question is answered only by a Person.** It shows the Harness's own
-  choices, without the Harness's "always" answers. A Question that offers
-  nothing else fails its turn: a Person decides each time.
+- **A Thread has settings: a mode, Plan, and the Harness's options.** The
+  modes are Supervised, Auto-accept edits, Auto and Full access, the
+  default. A Person changes them under the message box
+  (`agents.configure`), and a turn sets them on the session when it
+  starts. The options come from the Harness, as it last offered them in
+  the Thread (`thread.offered`); Bandaso keeps no model list of its own.
+  When the Harness leaves a plan by itself, the Thread's settings follow.
+- **A Question is answered by a Person.** It shows every answer the
+  Harness offers, its "always" answers too. A Harness without modes of its
+  own does not ask: the engine answers its Questions by the Thread's mode,
+  allowing once where the mode allows, and asks the Person otherwise.
 - **A restart interrupts** the turn it cut short and closes that turn's
   open Questions.
 - Its methods and their rights are listed in
@@ -220,14 +230,16 @@ module reaches a Harness through an adapter:
   adapters (ADR 0003). A native adapter is added only where ACP blocks
   something users need; a native Codex adapter comes later, for its rate
   limits.
-- **Capabilities.** The engine declares what the window can show (notices
-  so far), and the adapter reads what the Harness declares (sessions that
-  resume or load). The rest of the engine reads those capabilities and
+- **Capabilities.** The engine declares what the window can show (notices,
+  and options that are on or off), and the adapter reads what the Harness
+  declares (sessions that resume or load, and their options). The rest of the engine reads those capabilities and
   never the Harness's name. A failure's class comes from ACP's error codes
   and the data the adapters attach to an error.
-- **Permissions.** The Harness decides when to ask, by its own settings.
-  Bandaso shows the Question, passes the Harness's options through unchanged,
-  and returns the answer.
+- **Modes.** Each mode becomes the Harness's own where it has Claude
+  Code's or Codex's modes, never freer than the one chosen when the Harness
+  lacks it; the Harness then decides when to ask. Plan is Claude Code's
+  plan mode and Codex's collaboration mode. Any other Harness's modes are
+  options like the rest. The table is in `acp.rs`.
 
 ## Window
 

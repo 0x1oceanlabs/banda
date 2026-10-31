@@ -2,9 +2,12 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import type { AgentId } from "@bandaso/contract"
 import type {
   Body,
+  Defaults,
   Failure,
   Item,
   ItemId,
+  Offer,
+  Settings,
   ThreadId,
   Sent,
   ThreadView,
@@ -73,11 +76,13 @@ import {
 import {
   apply,
   fromView,
+  NO_OFFER,
   retryable,
   rows,
   type ThreadState,
   working,
 } from "./thread"
+import { SettingsBar } from "./ThreadSettings"
 
 /** One Thread with an Agent; without `thread`, the next message starts one. */
 export type ThreadArgs = {
@@ -126,11 +131,40 @@ function ThreadPane({
   const sending = useAct()
   const acting = useAct()
 
+  // A Thread not yet started keeps its settings here until its first
+  // message, starting from the Agent's.
+  const [defaults, setDefaults] = useState<Defaults>()
+  const [draft, setDraft] = useState<Settings>()
+  useEffect(() => {
+    if (thread !== null) return
+    let current = true
+    engine
+      .call<Defaults>("agents.defaults", { agent: args.agent }, { space })
+      .then((found) => current && setDefaults(found))
+      .catch(() => current && setDefaults(undefined))
+    return () => {
+      current = false
+    }
+  }, [engine, space, args.agent, thread])
+  const settings =
+    thread === null ? (draft ?? defaults?.settings) : state?.settings
+  const offer: Offer =
+    (thread === null ? defaults?.offer : state?.offer) ?? NO_OFFER
+  const configure = (next: Settings) => {
+    if (thread === null) {
+      setDraft(next)
+      return
+    }
+    void acting.act(() =>
+      engine.command("agents.configure", { thread, settings: next }, space)
+    )
+  }
+
   const send = async (text: string) => {
     const sent = await sending.act(() =>
       engine.command<Sent>(
         "agents.send",
-        { agent: args.agent, thread, text },
+        { agent: args.agent, thread, text, settings: draft ?? null },
         space
       )
     )
@@ -188,7 +222,16 @@ function ThreadPane({
           working={turn}
           onSend={send}
           onStop={stop}
-        />
+        >
+          {settings && (
+            <SettingsBar
+              settings={settings}
+              offer={offer}
+              disabled={acting.busy}
+              onChange={configure}
+            />
+          )}
+        </Composer>
       </div>
     </div>
   )
@@ -524,6 +567,7 @@ function Composer({
   working,
   onSend,
   onStop,
+  children,
 }: {
   name: string
   focused: boolean
@@ -532,6 +576,8 @@ function Composer({
   /** Sends the text; resolves whether it went. */
   onSend: (text: string) => Promise<boolean>
   onStop: (turn: TurnView) => void
+  /** What the Thread runs with, beside the send button. */
+  children?: React.ReactNode
 }) {
   const [text, setText] = useState("")
   const field = useRef<HTMLTextAreaElement>(null)
@@ -572,7 +618,8 @@ function Composer({
             }
           }}
         />
-        <InputGroupAddon align="block-end" className="justify-end">
+        <InputGroupAddon align="block-end" className="justify-between gap-2">
+          <div className="min-w-0 flex-1">{children}</div>
           {working && text.trim() === "" ? (
             <InputGroupButton
               type="button"

@@ -5,7 +5,11 @@
 import type { Event } from "@bandaso/contract"
 import {
   decodeFact,
+  type HarnessOption,
   type Item,
+  type Offer,
+  type OptionValue,
+  type Settings,
   type ThreadView,
   type TurnView,
 } from "@bandaso/contract/agents"
@@ -15,12 +19,45 @@ export type ThreadState = {
   at: number
   items: Item[]
   turns: TurnView[]
+  settings: Settings
+  offer: Offer
 }
 
-export const EMPTY: ThreadState = { at: 0, items: [], turns: [] }
+/** What a Thread runs with when nobody chose otherwise, as the engine has it. */
+export const DEFAULT_SETTINGS: Settings = {
+  mode: "full_access",
+  plan: false,
+  options: {},
+}
+
+export const NO_OFFER: Offer = { options: [], plans: false }
+
+export const EMPTY: ThreadState = {
+  at: 0,
+  items: [],
+  turns: [],
+  settings: DEFAULT_SETTINGS,
+  offer: NO_OFFER,
+}
 
 export function fromView(view: ThreadView): ThreadState {
-  return { at: view.at, items: view.items, turns: view.turns }
+  const { at, items, turns, settings, offer } = view
+  return { at, items, turns, settings, offer }
+}
+
+/** The value a Thread runs `option` with: its own choice, or else the
+ * Harness's. */
+export function chosen(settings: Settings, option: HarnessOption): OptionValue {
+  return settings.options[option.id] ?? option.value
+}
+
+/** `settings` with `option` set to `value`. */
+export function choose(
+  settings: Settings,
+  option: string,
+  value: OptionValue
+): Settings {
+  return { ...settings, options: { ...settings.options, [option]: value } }
 }
 
 function changeItem(
@@ -176,6 +213,10 @@ export function apply(state: ThreadState, event: Event): ThreadState {
         items: [...state.items, item(id, { kind: "notice", text }, turn)],
       }
     }
+    case "thread.configured":
+      return { ...next, settings: fact.payload.settings }
+    case "thread.offered":
+      return { ...next, offer: fact.payload.offer }
     case "agent.created":
     case "thread.started":
       return next

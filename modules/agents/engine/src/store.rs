@@ -2,8 +2,8 @@
 //! through these functions.
 
 use crate::model::{
-    Body, Failure, Item, ItemId, QuestionState, ThreadId, ThreadSummary, TurnId, TurnState,
-    TurnView,
+    Body, Failure, Item, ItemId, Offer, QuestionState, Settings, ThreadId, ThreadSummary, TurnId,
+    TurnState, TurnView,
 };
 use bandaso_kernel::{AgentId, Error, Participant, Refusal};
 use rusqlite::{Connection, OptionalExtension, Row, params};
@@ -54,6 +54,11 @@ CREATE INDEX agents_items_by_thread ON agents_items (thread);
 -- What kind of failure ended the turn, as JSON.
 ALTER TABLE agents_turns ADD COLUMN failure TEXT;
 "#,
+    r#"
+-- What the Thread runs with, and what its Harness last offered, as JSON.
+ALTER TABLE agents_threads ADD COLUMN settings TEXT;
+ALTER TABLE agents_threads ADD COLUMN offer TEXT;
+"#,
 ];
 
 fn json<T: Serialize>(value: &T) -> Result<String, Error> {
@@ -86,19 +91,78 @@ pub fn insert_thread(
     sql: &Connection,
     thread: &ThreadSummary,
     author: Participant,
+    settings: &Settings,
 ) -> Result<(), Error> {
     sql.execute(
-        "INSERT INTO agents_threads (id, agent, author, title, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?5)",
+        "INSERT INTO agents_threads (id, agent, author, title, settings, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?6)",
         params![
             thread.id,
             thread.agent,
             json(&author)?,
             thread.title,
+            json(settings)?,
             thread.updated_at
         ],
     )?;
     Ok(())
+}
+
+/// A JSON column of a Thread; its default where it holds nothing.
+fn thread_json<T: DeserializeOwned + Default>(
+    sql: &Connection,
+    thread: ThreadId,
+    column: &str,
+) -> Result<T, Error> {
+    let text: Option<String> = sql
+        .query_row(
+            &format!("SELECT {column} FROM agents_threads WHERE id = ?1"),
+            params![thread],
+            |row| row.get(0),
+        )
+        .optional()?
+        .flatten();
+    Ok(match text {
+        Some(text) => serde_json::from_str(&text)?,
+        None => T::default(),
+    })
+}
+
+pub fn settings(sql: &Connection, thread: ThreadId) -> Result<Settings, Error> {
+    thread_json(sql, thread, "settings")
+}
+
+pub fn set_settings(sql: &Connection, thread: ThreadId, settings: &Settings) -> Result<(), Error> {
+    sql.execute(
+        "UPDATE agents_threads SET settings = ?2 WHERE id = ?1",
+        params![thread, json(settings)?],
+    )?;
+    Ok(())
+}
+
+pub fn offer(sql: &Connection, thread: ThreadId) -> Result<Offer, Error> {
+    thread_json(sql, thread, "offer")
+}
+
+pub fn set_offer(sql: &Connection, thread: ThreadId, offer: &Offer) -> Result<(), Error> {
+    sql.execute(
+        "UPDATE agents_threads SET offer = ?2 WHERE id = ?1",
+        params![thread, json(offer)?],
+    )?;
+    Ok(())
+}
+
+/// What a Harness last offered in a Thread of `agent`.
+pub fn latest_offer(sql: &Connection, agent: AgentId) -> Result<Option<Offer>, Error> {
+    let text: Option<String> = sql
+        .query_row(
+            "SELECT offer FROM agents_threads WHERE agent = ?1 AND offer IS NOT NULL
+             ORDER BY updated_at DESC, id DESC LIMIT 1",
+            params![agent],
+            |row| row.get(0),
+        )
+        .optional()?;
+    Ok(text.map(|text| serde_json::from_str(&text)).transpose()?)
 }
 
 pub fn touch_thread(sql: &Connection, thread: ThreadId, at: i64) -> Result<(), Error> {
