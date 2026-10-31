@@ -2,10 +2,11 @@
 //! clock, randomness or Harness protocol. IDs come in from the caller.
 
 use crate::model::{
-    Body, Choice, Fact, Failure, Field, FieldValue, Image, Input, ItemId, Mode, QuestionState,
-    ToolContent, ToolKind, TurnId, TurnState, Values,
+    Body, Choice, Fact, Failure, Field, FieldValue, Image, ImageId, Input, ItemId, Mode,
+    QuestionState, ToolContent, ToolKind, TurnId, TurnState, Values,
 };
 use bandaso_kernel::{Participant, Refusal};
+use std::collections::HashSet;
 
 /// How freely an Agent acts is a Person's choice: an Agent sends a message
 /// with the settings its Thread has, and changes none.
@@ -366,20 +367,25 @@ const IMAGE_KINDS: [(&str, &[u8]); 4] = [
     ("image/gif", b"GIF8"),
     ("image/webp", b"RIFF"),
 ];
-/// The largest image a message can carry, in bytes, as in T3 Code.
-pub const LARGEST_IMAGE: usize = 10 * 1024 * 1024;
-/// The most images one message carries.
-pub const MOST_IMAGES: usize = 10;
+const MB: usize = 1024 * 1024;
+/// The largest image, the most images and the most of their bytes one
+/// message carries, as in T3 Code.
+pub const LARGEST_IMAGE: usize = 10 * MB;
+pub const MOST_IMAGES: usize = 100;
+const MOST_IMAGE_BYTES: usize = 80 * MB;
 
-/// Why `bytes` cannot go with a message as an image of kind `mime`.
-pub fn image(mime: &str, bytes: &[u8]) -> Result<(), Refusal> {
+/// Whether `bytes` can go with a message as an image of kind `mime`.
+pub fn may_attach(mime: &str, bytes: &[u8]) -> Result<(), Refusal> {
     let Some((_, starts)) = IMAGE_KINDS.iter().find(|(kind, _)| *kind == mime) else {
         return Err(Refusal::invalid(
             "A message can carry PNG, JPEG, GIF and WebP images.",
         ));
     };
     if bytes.len() > LARGEST_IMAGE {
-        return Err(Refusal::invalid("An image can be at most 10 MB."));
+        return Err(Refusal::invalid(format!(
+            "An image can be at most {} MB.",
+            LARGEST_IMAGE / MB
+        )));
     }
     let webp = mime != "image/webp" || bytes.get(8..12) == Some(b"WEBP");
     if !bytes.starts_with(starts) || !webp {
@@ -388,6 +394,49 @@ pub fn image(mime: &str, bytes: &[u8]) -> Result<(), Refusal> {
         )));
     }
     Ok(())
+}
+
+/// Whether a message of `text` can carry the images it names.
+pub fn may_send(text: &str, images: &[ImageId]) -> Result<(), Refusal> {
+    if text.trim().is_empty() && images.is_empty() {
+        return Err(Refusal::invalid("A message needs some text or an image."));
+    }
+    if images.len() > MOST_IMAGES {
+        return Err(Refusal::invalid(format!(
+            "A message can carry at most {MOST_IMAGES} images."
+        )));
+    }
+    let named: HashSet<_> = images.iter().collect();
+    if named.len() < images.len() {
+        return Err(Refusal::invalid("A message carries each image once."));
+    }
+    Ok(())
+}
+
+/// Whether the images a message carries fit in it together.
+pub fn may_carry(images: &[Image]) -> Result<(), Refusal> {
+    let bytes: usize = images.iter().map(|image| image.size as usize).sum();
+    if bytes > MOST_IMAGE_BYTES {
+        return Err(Refusal::invalid(format!(
+            "A message's images can be at most {} MB together.",
+            MOST_IMAGE_BYTES / MB
+        )));
+    }
+    Ok(())
+}
+
+/// What becomes of a message's images when `harness` takes none: it gets
+/// the text alone, which a notice says; a message of images alone cannot
+/// go, which the error says.
+pub fn without_images(harness: &str, text: &str) -> Result<String, String> {
+    if text.trim().is_empty() {
+        return Err(format!(
+            "{harness} does not take images, and this message holds nothing else."
+        ));
+    }
+    Ok(format!(
+        "{harness} does not take images, so it got the text alone."
+    ))
 }
 
 /// The most of one command's output, one text or one diff (its texts
@@ -874,7 +923,7 @@ mod tests {
         let image = |name: Option<&str>| Image {
             id: crate::model::ImageId::new(),
             mime: "image/png".to_owned(),
-            bytes: 1,
+            size: 1,
             name: name.map(str::to_owned),
         };
         assert_eq!(title(" ", &[image(Some("shot.png"))]), "shot.png");
@@ -886,15 +935,40 @@ mod tests {
     #[test]
     fn an_image_is_one_of_four_kinds_its_bytes_bear_out() {
         let png = b"\x89PNG\r\n\x1a\n....";
-        assert_eq!(image("image/png", png), Ok(()));
-        assert_eq!(image("image/jpeg", b"\xff\xd8\xff\xe0"), Ok(()));
-        assert_eq!(image("image/gif", b"GIF89a"), Ok(()));
-        assert_eq!(image("image/webp", b"RIFF\0\0\0\0WEBPVP8 "), Ok(()));
-        assert!(image("image/webp", b"RIFF\0\0\0\0WAVEfmt ").is_err());
-        assert!(image("image/jpeg", png).is_err(), "a PNG named a JPEG");
-        assert!(image("image/svg+xml", b"<svg/>").is_err());
+        assert_eq!(may_attach("image/png", png), Ok(()));
+        assert_eq!(may_attach("image/jpeg", b"\xff\xd8\xff\xe0"), Ok(()));
+        assert_eq!(may_attach("image/gif", b"GIF89a"), Ok(()));
+        assert_eq!(may_attach("image/webp", b"RIFF\0\0\0\0WEBPVP8 "), Ok(()));
+        assert!(may_attach("image/webp", b"RIFF\0\0\0\0WAVEfmt ").is_err());
+        assert!(may_attach("image/jpeg", png).is_err(), "a PNG named a JPEG");
+        assert!(may_attach("image/svg+xml", b"<svg/>").is_err());
         let large = [png.as_slice(), &vec![0; LARGEST_IMAGE]].concat();
-        assert!(image("image/png", &large).is_err());
+        assert_eq!(
+            may_attach("image/png", &large).unwrap_err().message,
+            "An image can be at most 10 MB."
+        );
+    }
+
+    #[test]
+    fn a_message_carries_some_text_or_images_each_once_and_not_too_many() {
+        let one = ImageId::new();
+        assert!(may_send(" ", &[]).is_err());
+        assert_eq!(may_send("", &[one]), Ok(()));
+        assert!(may_send("look", &[one, one]).is_err());
+        let many: Vec<_> = (0..=MOST_IMAGES).map(|_| ImageId::new()).collect();
+        assert!(may_send("look", &many).is_err());
+        assert_eq!(may_send("look", &many[1..]), Ok(()));
+
+        let image = |size| Image {
+            id: ImageId::new(),
+            mime: "image/png".to_owned(),
+            size,
+            name: None,
+        };
+        let full = (LARGEST_IMAGE as u32, MOST_IMAGE_BYTES as u32);
+        assert_eq!(may_carry(&vec![image(full.0); 8]), Ok(()));
+        assert!(may_carry(&[vec![image(full.0); 8], vec![image(1)]].concat()).is_err());
+        assert_eq!(may_carry(&[image(full.1)]), Ok(()));
     }
 
     #[test]

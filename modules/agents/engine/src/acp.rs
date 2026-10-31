@@ -22,9 +22,9 @@
 //! runs until the Harness ends it or a Person stops it.
 
 use crate::model::{
-    Cost, Exit, Failure, Field, FieldValue, HarnessOption, ImageFile, Input, Mode, Offer,
-    OptionChoice, OptionValue, PlanStep, Settings, SlashCommand, StepState, TextFormat, ThreadId,
-    ToolContent, ToolKind, ToolStatus, TurnState, Usage, Values,
+    Cost, Exit, Failure, Field, FieldValue, HarnessOption, Input, Mode, Offer, OptionChoice,
+    OptionValue, PlanStep, Settings, SlashCommand, StepState, TextFormat, ThreadId, ToolContent,
+    ToolKind, ToolStatus, TurnState, Usage, Values,
 };
 use crate::rules::{Ending, Offered};
 use crate::settings::Harness;
@@ -173,7 +173,13 @@ enum Lasts {
 /// What a turn sends the Harness: its message's text and images.
 pub struct Prompt {
     pub text: String,
-    pub images: Vec<ImageFile>,
+    pub images: Vec<PromptImage>,
+}
+
+/// An image as a Harness gets it: its kind and its bytes.
+pub struct PromptImage {
+    pub mime: String,
+    pub bytes: Vec<u8>,
 }
 
 /// What a session runs with, as the Harness last said.
@@ -494,7 +500,7 @@ impl Connection {
                 )),
             }
         };
-        let running = running(&known);
+        let running = self.runs(&known);
         let mode_set = known
             .options
             .iter()
@@ -509,11 +515,6 @@ impl Connection {
             ));
         }
         (running, refused)
-    }
-
-    /// Whether the Harness takes images in a prompt.
-    pub fn takes_images(&self) -> bool {
-        self.agreed.images
     }
 
     /// Sends a prompt: its text, then its images. What the Harness says
@@ -563,7 +564,15 @@ impl Connection {
 
     /// What the session runs with, as it last said.
     pub fn running(&self, Session(session): &Session) -> Running {
-        update(&self.learned, session, |known| running(known))
+        update(&self.learned, session, |known| self.runs(known))
+    }
+
+    /// What a session runs with, as `known` holds it, with what the
+    /// Harness agreed to take.
+    fn runs(&self, known: &Known) -> Running {
+        let mut running = running(known);
+        running.offer.no_images = !self.agreed.images;
+        running
     }
 
     /// Asks the Harness to stop the session's turn.
@@ -986,6 +995,7 @@ fn running(known: &Known) -> Running {
             options: offered,
             plans: native && plans,
             slash_commands: Vec::new(),
+            no_images: false,
         },
         slash_commands: known.slash_commands.clone(),
     }

@@ -65,7 +65,7 @@ import {
   working,
 } from "./thread"
 import { suggested } from "./slash"
-import type { Adding, Kept } from "./Attachments"
+import { type Attached, type Attaching, useAttachments } from "./Attachments"
 import { Composer } from "./Composer"
 import {
   type ImageReader,
@@ -155,10 +155,14 @@ function ThreadPane({
     )
   }
 
-  const attach = (image: Adding) =>
-    engine.command<Image>("agents.attach", image, space)
-  const send = async (text: string, images: Kept[]) => {
-    for (const { image, url } of images) reader.keep(image.id, url)
+  const images = useAttachments({
+    attach: (image: Attaching) =>
+      engine.command<Image>("agents.attach", image, space),
+    closed: offer.no_images ? `${args.name} does not take images.` : undefined,
+  })
+  const [dropping, setDropping] = useState(false)
+  const send = async (text: string, images: Attached[]) => {
+    for (const { image, url } of images) reader.remember(image.id, url)
     const sent = await sending.act(() =>
       engine.command<Sent>(
         "agents.send",
@@ -195,7 +199,25 @@ function ThreadPane({
     )
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    // Images dropped anywhere on the Pane join the message.
+    <div
+      className="flex h-full min-h-0 flex-col"
+      onDragOver={(event) => {
+        if (!event.dataTransfer.types.includes("Files")) return
+        event.preventDefault()
+        setDropping(true)
+      }}
+      onDragLeave={(event) => {
+        if (!event.currentTarget.contains(event.relatedTarget as Node | null))
+          setDropping(false)
+      }}
+      onDrop={(event) => {
+        if (!event.dataTransfer.types.includes("Files")) return
+        event.preventDefault()
+        setDropping(false)
+        images.add([...event.dataTransfer.files])
+      }}
+    >
       <div className="min-h-0 flex-1">
         {thread === null ? (
           <Start name={args.name} />
@@ -233,7 +255,8 @@ function ThreadPane({
           working={turn}
           usage={state?.usage}
           commands={suggested(offer)}
-          onAttach={attach}
+          images={images}
+          dropping={dropping}
           onPlanMode={(plan) => settings && configure({ ...settings, plan })}
           onSend={send}
           onStop={stop}

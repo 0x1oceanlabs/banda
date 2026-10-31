@@ -2,8 +2,8 @@
 import type { ImageId } from "./ImageId";
 
 /**
- * An image a Person sends with a message. Its bytes are kept apart and
- * read with `agents.image`.
+ * An image a Person sends with a message. Its bytes are kept apart, in
+ * the Space's `.bandaso/images/`, and read with `agents.image`.
  */
 export type Image = { id: ImageId, 
 /**
@@ -13,7 +13,7 @@ mime: string,
 /**
  * How large it is, in bytes.
  */
-bytes: number, 
+size: number, 
 /**
  * The name of the file it came from, if it had one.
  */

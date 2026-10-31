@@ -14,6 +14,7 @@ const OFFER: Offer = {
     { name: "compact", description: "Make room in the context" },
     { name: "plan", description: "The Harness's own plan" },
   ],
+  no_images: false,
 }
 
 const names = (commands: { name: string }[]) => commands.map((c) => c.name)

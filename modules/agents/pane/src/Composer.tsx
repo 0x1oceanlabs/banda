@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react"
-import type { Image, TurnView, Usage } from "@bandaso/contract/agents"
+import type { TurnView, Usage } from "@bandaso/contract/agents"
 import {
   InputGroup,
   InputGroupAddon,
@@ -9,21 +9,16 @@ import {
 import { RingMeter } from "@bandaso/ui/components/ring-meter"
 import { Spinner } from "@bandaso/ui/components/spinner"
 import { ArrowUpIcon, ImagePlusIcon, SquareIcon } from "lucide-react"
-import {
-  type Adding,
-  Attachments,
-  type Kept,
-  useAttachments,
-} from "./Attachments"
+import { AttachmentList, type Attached, type Attachments } from "./Attachments"
 import { imagesAmong, KINDS } from "./images"
 import { ownCommand, type Suggested } from "./slash"
 import { useSlashMenu } from "./SlashMenu"
 
 /**
  * Where a Person writes to the Agent: the text, with the slash commands
- * it can start with; the images it carries, added with the button, by
- * pasting or by dropping them; and Send, or Stop while the Agent works
- * and nothing is written.
+ * it can start with; the images it carries, added with the button or by
+ * pasting them; and Send, or Stop while the Agent works and nothing is
+ * written.
  */
 export function Composer({
   name,
@@ -32,7 +27,8 @@ export function Composer({
   working,
   usage,
   commands,
-  onAttach,
+  images,
+  dropping,
   onPlanMode,
   onSend,
   onStop,
@@ -47,25 +43,25 @@ export function Composer({
   /** The slash commands a message can start with, suggested as it is
    * typed. */
   commands: Suggested[]
-  /** Keeps an image for the message being written. */
-  onAttach: (image: Adding) => Promise<Image>
+  /** The images the message carries. */
+  images: Attachments
+  /** Images are dragged over the Pane, to drop them here. */
+  dropping: boolean
   /** Switches the Thread's plan mode, for `/plan` and `/default`. */
   onPlanMode: (on: boolean) => void
   /** Sends the text and the images; resolves whether it went. */
-  onSend: (text: string, images: Kept[]) => Promise<boolean>
+  onSend: (text: string, images: Attached[]) => Promise<boolean>
   onStop: (turn: TurnView) => void
   /** What the Thread runs with, beside the send button. */
   children?: React.ReactNode
 }) {
   const [text, setText] = useState("")
-  const [dropping, setDropping] = useState(false)
   const field = useRef<HTMLTextAreaElement>(null)
   const files = useRef<HTMLInputElement>(null)
   useEffect(() => {
     if (focused) field.current?.focus()
   }, [focused])
 
-  const images = useAttachments(onAttach)
   const pick = (command: Suggested) => {
     if (command.planMode === undefined) {
       setText(`/${command.name} `)
@@ -76,19 +72,20 @@ export function Composer({
   }
   const slash = useSlashMenu({ text, commands, name, onPick: pick })
 
-  const written = text.trim() !== "" || images.attached.length > 0
+  const written = text.trim() !== "" || images.adding.length > 0
   const ready = written && !busy && !images.busy
   const send = async () => {
     if (!ready) return
     // A message that is only `/plan` or `/default` switches plan mode.
-    const own = images.attached.length === 0 && ownCommand(text, commands)
+    const own = images.adding.length === 0 && ownCommand(text, commands)
     if (own) {
       pick(own)
       return
     }
-    if (await onSend(text, images.kept)) {
+    const sending = images.attached
+    if (await onSend(text, sending)) {
       setText("")
-      images.clear()
+      images.sent(sending)
     }
   }
 
@@ -98,21 +95,6 @@ export function Composer({
       onSubmit={(event) => {
         event.preventDefault()
         void send()
-      }}
-      onDragOver={(event) => {
-        if (!event.dataTransfer.types.includes("Files")) return
-        event.preventDefault()
-        setDropping(true)
-      }}
-      onDragLeave={(event) => {
-        if (!event.currentTarget.contains(event.relatedTarget as Node | null))
-          setDropping(false)
-      }}
-      onDrop={(event) => {
-        if (!event.dataTransfer.types.includes("Files")) return
-        event.preventDefault()
-        setDropping(false)
-        images.add(imagesAmong(event.dataTransfer.files))
       }}
     >
       {images.problem && (
@@ -137,9 +119,9 @@ export function Composer({
         data-dropping={dropping || undefined}
         className="data-dropping:border-ring data-dropping:ring-3 data-dropping:ring-ring/50"
       >
-        {images.attached.length > 0 && (
+        {images.adding.length > 0 && (
           <InputGroupAddon align="block-start">
-            <Attachments attached={images.attached} onRemove={images.remove} />
+            <AttachmentList adding={images.adding} onRemove={images.remove} />
           </InputGroupAddon>
         )}
         <InputGroupTextarea
@@ -170,16 +152,18 @@ export function Composer({
           }}
         />
         <InputGroupAddon align="block-end" className="justify-between gap-2">
-          <InputGroupButton
-            type="button"
-            variant="ghost"
-            size="icon-sm"
-            aria-label="Add images"
-            title="Add images"
-            onClick={() => files.current?.click()}
-          >
-            <ImagePlusIcon />
-          </InputGroupButton>
+          {!images.closed && (
+            <InputGroupButton
+              type="button"
+              variant="ghost"
+              size="icon-sm"
+              aria-label="Add images"
+              title="Add images"
+              onClick={() => files.current?.click()}
+            >
+              <ImagePlusIcon />
+            </InputGroupButton>
+          )}
           <div className="min-w-0 flex-1">{children}</div>
           {usage && <ContextUsed usage={usage} />}
           {working && !written ? (
