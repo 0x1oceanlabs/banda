@@ -1,11 +1,11 @@
 import type { Offer } from "@bandaso/contract/agents"
 import { expect, test } from "vitest"
-import { matching, suggested, typed } from "./commands"
+import { matching, ownCommand, suggested, typed } from "./slash"
 
 const OFFER: Offer = {
   options: [],
   plans: true,
-  commands: [
+  slash_commands: [
     {
       name: "review",
       description: "Review the changes so far",
@@ -18,14 +18,14 @@ const OFFER: Offer = {
 
 const names = (commands: { name: string }[]) => commands.map((c) => c.name)
 
-test("the Thread's own commands come first, and only where it can plan", () => {
+test("the window's own come first, and only where the Harness can plan", () => {
   expect(names(suggested(OFFER))).toEqual([
     "plan",
     "default",
     "review",
     "compact",
   ])
-  expect(suggested(OFFER)[0].plan).toBe(true)
+  expect(suggested(OFFER)[0].planMode).toBe(true)
   expect(names(suggested({ ...OFFER, plans: false }))).toEqual([
     "review",
     "compact",
@@ -33,12 +33,24 @@ test("the Thread's own commands come first, and only where it can plan", () => {
   ])
 })
 
-test("a command is typed while the message is `/` and one word", () => {
+test("a slash command is typed while the message is `/` and one word", () => {
   expect(typed("/")).toBe("")
   expect(typed("/rev")).toBe("rev")
   expect(typed("/review ")).toBeUndefined()
   expect(typed("say /review")).toBeUndefined()
   expect(typed("/home/roma")).toBeUndefined()
+})
+
+test("a whole message of the window's own switches plan mode", () => {
+  const all = suggested(OFFER)
+  expect(ownCommand(" /plan ", all)?.planMode).toBe(true)
+  expect(ownCommand("/default", all)?.planMode).toBe(false)
+  expect(ownCommand("/plan the work", all)).toBeUndefined()
+  expect(ownCommand("/review", all)).toBeUndefined()
+  // Where the Harness cannot plan, `/plan` is the Harness's to run.
+  expect(ownCommand("/plan", suggested({ ...OFFER, plans: false }))).toBe(
+    undefined
+  )
 })
 
 test("names that fit best come first, then descriptions", () => {

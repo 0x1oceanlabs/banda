@@ -34,7 +34,7 @@ export const DEFAULT_SETTINGS: Settings = {
   options: {},
 }
 
-export const NO_OFFER: Offer = { options: [], plans: false, commands: [] }
+export const NO_OFFER: Offer = { options: [], plans: false, slash_commands: [] }
 
 export const EMPTY: ThreadState = {
   at: 0,

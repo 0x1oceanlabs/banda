@@ -22,8 +22,8 @@
 //! runs until the Harness ends it or a Person stops it.
 
 use crate::model::{
-    Command, Cost, Exit, Failure, Field, FieldValue, HarnessOption, Input, Mode, Offer,
-    OptionChoice, OptionValue, PlanStep, Settings, StepState, TextFormat, ThreadId, ToolContent,
+    Cost, Exit, Failure, Field, FieldValue, HarnessOption, Input, Mode, Offer, OptionChoice,
+    OptionValue, PlanStep, Settings, SlashCommand, StepState, TextFormat, ThreadId, ToolContent,
     ToolKind, ToolStatus, TurnState, Usage, Values,
 };
 use crate::rules::{Ending, Offered};
@@ -177,7 +177,12 @@ pub struct Running {
     pub mode: Option<Mode>,
     /// It plans before it changes anything.
     pub plan: bool,
+    /// Its options, and whether it can plan. Its slash commands are not
+    /// here: see `slash_commands`.
     pub offer: Offer,
+    /// The slash commands it said, or `None` before it has: a session that
+    /// has not said them yet leaves the Thread's.
+    pub slash_commands: Option<Vec<SlashCommand>>,
 }
 
 /// Each mode as the Harnesses with modes of their own name it, Claude
@@ -203,20 +208,21 @@ const SUBMIT: &str = "accept";
 const SKIP: &str = "decline";
 
 type Routes = Arc<Mutex<HashMap<acp::SessionId, mpsc::UnboundedSender<Said>>>>;
-/// Each session's options, as the Harness last said.
-type Options = Arc<Mutex<HashMap<acp::SessionId, Known>>>;
+/// What each session has said of itself.
+type Learned = Arc<Mutex<HashMap<acp::SessionId, Known>>>;
 
 /// A session's options, and whether its modes are Claude Code's or Codex's:
 /// decided by the list it opened with, so a later list that leaves the modes
 /// out does not change who keeps to the Thread's mode. And what it last
-/// said it has used and which commands it takes, which may come between
-/// turns: Claude Code sends its commands just after the session opens.
+/// said it has used and which slash commands it takes, which may come
+/// between turns: Claude Code sends its slash commands just after the
+/// session opens.
 #[derive(Clone, Default)]
 struct Known {
     native: bool,
     options: Vec<acp::SessionConfigOption>,
     usage: Option<Usage>,
-    commands: Vec<Command>,
+    slash_commands: Option<Vec<SlashCommand>>,
 }
 
 impl Known {
@@ -229,18 +235,27 @@ impl Known {
     }
 }
 
+/// Changes what is known of `session`, from nothing if it is new.
+fn update<R>(
+    learned: &Learned,
+    session: &acp::SessionId,
+    change: impl FnOnce(&mut Known) -> R,
+) -> R {
+    change(learned.lock().unwrap().entry(session.clone()).or_default())
+}
+
 /// Keeps the options a session opened with.
-fn opened(options: &Options, session: &acp::SessionId, now: Vec<acp::SessionConfigOption>) {
-    let mut all = options.lock().unwrap();
-    let known = all.entry(session.clone()).or_default();
-    known.native = native(&now);
-    known.options = now;
+fn opened(learned: &Learned, session: &acp::SessionId, now: Vec<acp::SessionConfigOption>) {
+    update(learned, session, |known| {
+        known.native = native(&now);
+        known.options = now;
+    });
 }
 
 /// Keeps a session's newest options. An empty list, which is what an update
 /// that cannot be read becomes, keeps the last.
-fn learn(options: &Options, session: &acp::SessionId, now: Vec<acp::SessionConfigOption>) -> Known {
-    let mut all = options.lock().unwrap();
+fn learn(learned: &Learned, session: &acp::SessionId, now: Vec<acp::SessionConfigOption>) -> Known {
+    let mut all = learned.lock().unwrap();
     match all.get_mut(session) {
         Some(known) => {
             if !now.is_empty() {
@@ -271,7 +286,7 @@ pub struct Connection {
     name: String,
     agreed: Agreed,
     routes: Routes,
-    options: Options,
+    learned: Learned,
     /// When a turn last began or ended here.
     active: Arc<Mutex<Instant>>,
     /// The Harness's session for each Thread, in this process.
@@ -301,9 +316,9 @@ impl Connection {
                 tracing::debug!(harness = %name, "{line}");
             }
         });
-        let (routes, options) = (Routes::default(), Options::default());
+        let (routes, learned) = (Routes::default(), Learned::default());
         let (ready, started) = oneshot::channel();
-        let driver = tokio::spawn(drive(process, routes.clone(), options.clone(), ready));
+        let driver = tokio::spawn(drive(process, routes.clone(), learned.clone(), ready));
         let (cx, agreed) = match timeout(STARTING, started).await {
             Ok(Ok(Ok(agreed))) => agreed,
             Ok(Ok(Err(error))) => return Err(error),
@@ -319,7 +334,7 @@ impl Connection {
             name: harness.name.clone(),
             agreed,
             routes,
-            options,
+            learned,
             active: Arc::new(Mutex::new(Instant::now())),
             sessions: Default::default(),
             driver,
@@ -358,7 +373,7 @@ impl Connection {
         if let Some(session) = earlier.and_then(|e| e.continued_by(&self.harness))
             && let Some(options) = self.continue_session(&session, folder).await
         {
-            opened(&self.options, &session, options);
+            opened(&self.learned, &session, options);
             sessions.insert(thread, session.clone());
             return Ok((Session(session), Opened::Continued));
         }
@@ -376,7 +391,7 @@ impl Connection {
             }
         };
         let options = made.config_options.unwrap_or_default();
-        opened(&self.options, &made.session_id, options);
+        opened(&self.learned, &made.session_id, options);
         sessions.insert(thread, made.session_id.clone());
         let evidence = Evidence {
             harness: self.harness.clone(),
@@ -438,7 +453,7 @@ impl Connection {
         let (mut tried, mut refused) = (Vec::new(), Vec::new());
         let known = loop {
             // Read again each time: an update may have come since.
-            let known = self.options.lock().unwrap().get(session).cloned();
+            let known = self.learned.lock().unwrap().get(session).cloned();
             let known = known.unwrap_or_default();
             let Some((id, value)) = next_change(&known, wanted, &tried) else {
                 break known;
@@ -457,7 +472,7 @@ impl Connection {
             let asked = self.cx.send_request(set).block_task();
             match timeout(OPENING, asked).await {
                 Ok(Ok(answer)) => {
-                    learn(&self.options, session, answer.config_options);
+                    learn(&self.learned, session, answer.config_options);
                 }
                 Ok(Err(error)) => refused.push(format!(
                     "{} did not take the setting {name}: {}",
@@ -523,7 +538,12 @@ impl Connection {
 
     /// What the session last said it has used, if it has.
     pub fn usage(&self, Session(session): &Session) -> Option<Usage> {
-        self.options.lock().unwrap().get(session)?.usage.clone()
+        self.learned.lock().unwrap().get(session)?.usage.clone()
+    }
+
+    /// What the session runs with, as it last said.
+    pub fn running(&self, Session(session): &Session) -> Running {
+        update(&self.learned, session, |known| running(known))
     }
 
     /// Asks the Harness to stop the session's turn.
@@ -537,7 +557,7 @@ impl Connection {
 async fn drive(
     process: AcpAgent,
     routes: Routes,
-    options: Options,
+    learned: Learned,
     ready: oneshot::Sender<Result<(ConnectionTo<Agent>, Agreed), String>>,
 ) {
     let heard = routes.clone();
@@ -549,23 +569,25 @@ async fn drive(
         .on_receive_notification(
             async move |note: acp::SessionNotification, _cx: ConnectionTo<Agent>| {
                 let said = match note.update {
-                    acp::SessionUpdate::ConfigOptionUpdate(update) => {
-                        let known = learn(&options, &note.session_id, update.config_options);
+                    acp::SessionUpdate::ConfigOptionUpdate(now) => {
+                        let known = learn(&learned, &note.session_id, now.config_options);
                         Some(Said::Runs(running(&known)))
                     }
-                    acp::SessionUpdate::AvailableCommandsUpdate(update) => {
-                        let mut all = options.lock().unwrap();
-                        let known = all.entry(note.session_id.clone()).or_default();
-                        known.commands = update.available_commands.iter().map(command).collect();
-                        Some(Said::Runs(running(known)))
+                    acp::SessionUpdate::AvailableCommandsUpdate(now) => {
+                        let commands = now.available_commands.iter().map(slash_command);
+                        Some(Said::Runs(update(&learned, &note.session_id, |known| {
+                            known.slash_commands = Some(commands.collect());
+                            running(known)
+                        })))
                     }
-                    update => said(update),
+                    now => said(now),
                 };
                 // What it has used may come between turns: the next turn
                 // writes what it last said.
                 if let Some(Said::Used { usage, .. }) = &said {
-                    let mut all = options.lock().unwrap();
-                    all.entry(note.session_id.clone()).or_default().usage = Some(usage.clone());
+                    update(&learned, &note.session_id, |known| {
+                        known.usage = Some(usage.clone());
+                    });
                 }
                 if let Some(said) = said
                     && let Some(route) = heard.lock().unwrap().get(&note.session_id)
@@ -942,13 +964,14 @@ fn running(known: &Known) -> Running {
         offer: Offer {
             options: offered,
             plans: native && plans,
-            commands: known.commands.clone(),
+            slash_commands: Vec::new(),
         },
+        slash_commands: known.slash_commands.clone(),
     }
 }
 
-fn command(command: &acp::AvailableCommand) -> Command {
-    Command {
+fn slash_command(command: &acp::AvailableCommand) -> SlashCommand {
+    SlashCommand {
         name: command.name.clone(),
         description: command.description.clone(),
         hint: match &command.input {
@@ -1531,17 +1554,17 @@ mod tests {
 
     #[test]
     fn a_session_keeps_who_enforces_its_mode_and_its_last_options() {
-        let options = Options::default();
+        let learned = Learned::default();
         let session = acp::SessionId::new("s");
-        assert!(learn(&options, &session, codex()).native);
-        let kept = learn(&options, &session, Vec::new());
+        assert!(learn(&learned, &session, codex()).native);
+        let kept = learn(&learned, &session, Vec::new());
         assert_eq!(
             kept.options.len(),
             codex().len(),
             "an empty list keeps the last"
         );
         let model = vec![codex().remove(2)];
-        let now = learn(&options, &session, model);
+        let now = learn(&learned, &session, model);
         assert!(
             now.native,
             "a list without the modes changes nothing about them"
