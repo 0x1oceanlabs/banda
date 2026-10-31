@@ -9,6 +9,7 @@ import { VERSION } from "./generated/agents/VERSION"
 export type { AgentView } from "./generated/agents/AgentView"
 export type { Body } from "./generated/agents/Body"
 export type { Choice } from "./generated/agents/Choice"
+export type { Failure } from "./generated/agents/Failure"
 export type { Fact } from "./generated/agents/Fact"
 export type { HarnessView } from "./generated/agents/HarnessView"
 export type { Item } from "./generated/agents/Item"
@@ -35,6 +36,7 @@ const KINDS: ReadonlySet<string> = new Set(
     "message.posted": true,
     "turn.started": true,
     "turn.ended": true,
+    "turn.queued": true,
     "reply.grew": true,
     "thought.grew": true,
     "tool.started": true,

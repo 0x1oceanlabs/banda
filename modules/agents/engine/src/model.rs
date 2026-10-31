@@ -57,6 +57,28 @@ pub enum TurnState {
     Interrupted,
 }
 
+/// Why a turn failed, so the Thread can offer what to do about it (ADR 0003,
+/// decision 12). A Person's stop is a state of its own, not a failure.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(tag = "class", rename_all = "snake_case")]
+#[ts(export, export_to = "agents/")]
+pub enum Failure {
+    /// The Harness needs its Person to sign in.
+    SignIn,
+    /// The account has used up what it may use for now.
+    UsageLimit {
+        /// When it may be used again, in milliseconds since the epoch, if
+        /// the Harness said.
+        #[ts(optional, type = "number")]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        until: Option<i64>,
+    },
+    /// The Harness's process stopped, or could not start.
+    HarnessStopped,
+    /// The model's provider, or the Harness, reported an error.
+    Provider,
+}
+
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "agents/")]
 pub struct TurnView {
@@ -68,6 +90,10 @@ pub struct TurnView {
     #[ts(optional)]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reason: Option<String>,
+    /// What kind of failure it was, when the turn failed and that is known.
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub failure: Option<Failure>,
 }
 
 /// What kind of action a tool call is, as the Harness says.
@@ -227,7 +253,13 @@ pub enum Fact {
         #[ts(optional)]
         #[serde(default, skip_serializing_if = "Option::is_none")]
         reason: Option<String>,
+        #[ts(optional)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        failure: Option<Failure>,
     },
+    /// A Person tries a failed turn's message again, in a new turn.
+    #[serde(rename = "turn.queued")]
+    TurnQueued { turn: TurnId, message: ItemId },
     /// More of the Agent's reply. The first piece of an item starts it.
     #[serde(rename = "reply.grew")]
     ReplyGrew {

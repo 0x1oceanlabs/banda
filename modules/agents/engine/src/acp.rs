@@ -1,6 +1,13 @@
-//! The ACP adapter: one Harness process per Agent, spoken to over ACP v1 on
-//! its stdio. ACP's words stop here: the rest of the module hears what the
-//! Harness [`Said`], in the module's own words.
+//! The ACP adapter: one Harness process, spoken to over ACP v1 on its
+//! stdio. ACP's words stop here: the rest of the module hears what the
+//! Harness [`Said`], and how a turn ended, in the module's own words.
+//!
+//! The engine declares what it can show: notices. A failure's class comes
+//! from ACP's error codes and the data the adapters attach to an error
+//! (`errorKind` from Claude Code's, `codexErrorInfo` from Codex's), and a
+//! usage limit's reset from Claude Code's rate limit updates. The JetBrains
+//! AIR extension would say more, but a client that declares it must render
+//! the rest of AIR too.
 //!
 //! The connection's handlers run on its dispatch loop, so none of them
 //! waits there. A permission request is routed to its turn, and a task off
@@ -9,8 +16,8 @@
 //! Starting a Harness and opening a session are bounded; a turn is not: it
 //! runs until the Harness ends it or a Person stops it.
 
-use crate::model::{ThreadId, ToolKind, ToolStatus, TurnState};
-use crate::rules::Offered;
+use crate::model::{Failure, ThreadId, ToolKind, ToolStatus, TurnState};
+use crate::rules::{Ending, Offered};
 use crate::settings::Harness;
 use agent_client_protocol::schema::ProtocolVersion;
 use agent_client_protocol::schema::v1 as acp;
@@ -52,6 +59,11 @@ pub enum Said {
         offered: Vec<Offered>,
         answer: oneshot::Sender<Answer>,
     },
+    /// A line for the Person, such as a warning.
+    Notice(String),
+    /// The account may be used again at this time, in milliseconds since
+    /// the epoch: it has reached its limit.
+    Resets(i64),
 }
 
 /// What goes back to a Harness that asked.
@@ -104,13 +116,6 @@ enum Lasts {
     Harness,
 }
 
-/// How a turn ended, as the Harness reported it. A cancelled turn comes back
-/// as stopped; whether a Person stopped it is for the module to say.
-pub struct Ending {
-    pub state: TurnState,
-    pub reason: Option<String>,
-}
-
 type Routes = Arc<Mutex<HashMap<acp::SessionId, mpsc::UnboundedSender<Said>>>>;
 
 /// What the Harness said it can do with sessions.
@@ -125,6 +130,8 @@ struct Agreed {
 pub struct Connection {
     cx: ConnectionTo<Agent>,
     harness: String,
+    /// The Harness's name, for plain words.
+    name: String,
     agreed: Agreed,
     routes: Routes,
     /// When a turn last began or ended here.
@@ -171,6 +178,7 @@ impl Connection {
         Ok(Arc::new(Connection {
             cx,
             harness: harness.id.clone(),
+            name: harness.name.clone(),
             agreed,
             routes,
             active: Arc::new(Mutex::new(Instant::now())),
@@ -203,7 +211,7 @@ impl Connection {
         thread: ThreadId,
         folder: &Path,
         earlier: Option<&Evidence>,
-    ) -> Result<(Session, Opened), String> {
+    ) -> Result<(Session, Opened), Ending> {
         let mut sessions = self.sessions.lock().await;
         if let Some(session) = sessions.get(&thread) {
             return Ok((Session(session.clone()), Opened::Known));
@@ -219,8 +227,13 @@ impl Connection {
             .send_request(acp::NewSessionRequest::new(folder))
             .block_task();
         let made = match timeout(OPENING, opening).await {
-            Ok(made) => made.map_err(plain)?,
-            Err(_) => return Err("The Harness did not open a session within a minute.".to_owned()),
+            Ok(made) => made.map_err(|error| failed(&self.name, &error))?,
+            Err(_) => {
+                return Err(Ending::failed(
+                    format!("{} did not open a session within a minute.", self.name),
+                    Some(Failure::HarnessStopped),
+                ));
+            }
         };
         sessions.insert(thread, made.session_id.clone());
         let evidence = Evidence {
@@ -270,10 +283,7 @@ impl Connection {
         &self,
         Session(session): &Session,
         text: &str,
-    ) -> (
-        mpsc::UnboundedReceiver<Said>,
-        JoinHandle<Result<Ending, String>>,
-    ) {
+    ) -> (mpsc::UnboundedReceiver<Said>, JoinHandle<Ending>) {
         let (said, hear) = mpsc::unbounded_channel();
         self.touch();
         self.routes.lock().unwrap().insert(session.clone(), said);
@@ -285,12 +295,19 @@ impl Connection {
         // Harness after the prompt it stops.
         let sent = self.cx.send_request(request);
         let (routes, active) = (self.routes.clone(), self.active.clone());
-        let session = session.clone();
+        let (session, name) = (session.clone(), self.name.clone());
         let done = tokio::spawn(async move {
             let answer = sent.block_task().await;
             *active.lock().unwrap() = Instant::now();
             routes.lock().unwrap().remove(&session);
-            answer.map(|r| ending(&r.stop_reason)).map_err(plain)
+            match answer {
+                Ok(answer) => ending(&answer.stop_reason),
+                Err(error) if gone(&error) => Ending::failed(
+                    format!("{name} stopped while it worked."),
+                    Some(Failure::HarnessStopped),
+                ),
+                Err(error) => failed(&name, &error),
+            }
         });
         (hear, done)
     }
@@ -361,9 +378,15 @@ async fn drive(
             agent_client_protocol::on_receive_request!(),
         )
         .connect_with(process, async move |cx: ConnectionTo<Agent>| {
-            let hello = acp::InitializeRequest::new(ProtocolVersion::V1).client_info(
-                acp::Implementation::new("bandaso", env!("CARGO_PKG_VERSION")),
+            let shows = acp::ClientCapabilities::new().session(
+                acp::ClientSessionCapabilities::new().notices(acp::NoticeCapabilities::new()),
             );
+            let hello = acp::InitializeRequest::new(ProtocolVersion::V1)
+                .client_capabilities(shows)
+                .client_info(acp::Implementation::new(
+                    "bandaso",
+                    env!("CARGO_PKG_VERSION"),
+                ));
             let agreed = cx.send_request(hello).block_task().await;
             match agreed {
                 Ok(answer) if answer.protocol_version == ProtocolVersion::V1 => {
@@ -419,8 +442,63 @@ fn said(update: acp::SessionUpdate) -> Option<Said> {
             title: update.fields.title,
             status: update.fields.status.map(tool_status),
         }),
+        acp::SessionUpdate::Notice(notice) => Some(Said::Notice(match notice.description {
+            Some(more) if !more.trim().is_empty() => format!("{} {more}", notice.title),
+            _ => notice.title,
+        })),
+        acp::SessionUpdate::UsageUpdate(usage) => resets(usage.meta.as_ref()).map(Said::Resets),
         _ => None,
     }
+}
+
+/// When a rejected account may be used again, from Claude Code's rate
+/// limit update: `{status, resetsAt}` in seconds.
+fn resets(meta: Option<&acp::Meta>) -> Option<i64> {
+    let limit = meta?.get("_claude/rateLimit")?;
+    let rejected = limit.get("status")?.as_str()? == "rejected";
+    let at = limit.get("resetsAt")?.as_i64()?;
+    rejected.then_some(at.saturating_mul(1000))
+}
+
+/// Whether the request failed because the Harness's process went away.
+fn gone(error: &acp::Error) -> bool {
+    agent_client_protocol::is_connection_terminated(error)
+        || agent_client_protocol::is_incoming_transport_closed(error)
+}
+
+/// How a turn ends on an error from its Harness: the class from ACP's code
+/// and the data the adapter attached, in the Harness's own words when it
+/// gave some.
+fn failed(name: &str, error: &acp::Error) -> Ending {
+    let data = error.data.as_ref();
+    let said = |key: &str| data.and_then(|d| d.get(key)).and_then(|v| v.as_str());
+    let failure = if error.code == acp::ErrorCode::AuthRequired {
+        Failure::SignIn
+    } else {
+        match said("errorKind").or_else(|| said("codexErrorInfo")) {
+            Some("authentication_failed" | "oauth_org_not_allowed" | "unauthorized") => {
+                Failure::SignIn
+            }
+            Some(
+                "rate_limit" | "billing_error" | "account_on_hold" | "usageLimitExceeded"
+                | "rateLimitExceeded",
+            ) => Failure::UsageLimit { until: None },
+            _ => Failure::Provider,
+        }
+    };
+    let words = said("message").map(str::to_owned).or_else(|| {
+        let message = error.message.trim();
+        let message = message.strip_prefix("Internal error").unwrap_or(message);
+        let message = message.trim_start_matches(':').trim();
+        (!message.is_empty()).then(|| message.to_owned())
+    });
+    let reason = match (failure, words) {
+        (Failure::SignIn, _) => format!("{name} needs you to sign in."),
+        (_, Some(words)) => words,
+        (Failure::UsageLimit { .. }, None) => format!("{name} has reached its usage limit."),
+        (_, None) => format!("{name} reported an error."),
+    };
+    Ending::failed(reason, Some(failure))
 }
 
 fn offered(option: &acp::PermissionOption) -> Offered {
@@ -472,8 +550,5 @@ fn ending(reason: &acp::StopReason) -> Ending {
         acp::StopReason::Refusal => (TurnState::Done, Some("The Agent declined to go on.")),
         _ => (TurnState::Done, None),
     };
-    Ending {
-        state,
-        reason: reason.map(str::to_owned),
-    }
+    Ending::new(state, reason)
 }

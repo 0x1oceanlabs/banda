@@ -115,3 +115,34 @@ test("the engine dies mid-work, comes back, and the Thread goes on", async () =>
   await expect(thread.getByText("You said: after the break")).toBeVisible()
   await expect(thread.getByText("You said: hello")).toBeVisible()
 })
+
+test("a failed turn says what to do, and Try again sends its message again", async () => {
+  window = await startWindow()
+  const { page } = window
+  await page.getByLabel("Name").fill("Work")
+  await page.getByRole("button", { name: "Create Space" }).click()
+  await page.getByRole("button", { name: "New Agent" }).click()
+  const dialog = page.getByRole("dialog", { name: "New Agent" })
+  await dialog.getByLabel("Name").fill("Writer")
+  await dialog.getByRole("button", { name: "Create Agent" }).click()
+  const thread = page.getByRole("region", { name: "Writer" })
+  const composer = thread.getByRole("textbox", { name: "Message to Writer" })
+
+  await composer.fill("sign in please")
+  await composer.press("Enter")
+  await expect(thread.getByText("needs you to sign in.")).toBeVisible()
+  await expect(
+    thread.getByText("Sign in from a terminal, then try again.")
+  ).toBeVisible()
+
+  await composer.fill("a flaky one")
+  await composer.press("Enter")
+  await expect(thread.getByText("reported an error.")).toBeVisible()
+  const retry = thread.getByRole("button", { name: "Try again" })
+  await expect(retry).toHaveCount(1)
+  await page.screenshot({ path: "test-results/4-failed.png" })
+  await retry.click()
+  await expect(thread.getByText("You said: a flaky one")).toBeVisible()
+  await expect(retry).toHaveCount(0)
+  await page.screenshot({ path: "test-results/5-tried-again.png" })
+})

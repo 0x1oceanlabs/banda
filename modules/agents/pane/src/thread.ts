@@ -82,8 +82,16 @@ export function apply(state: ThreadState, event: Event): ThreadState {
         turns: changeTurn(state, fact.payload.turn, {
           state: fact.payload.state,
           reason: fact.payload.reason,
+          failure: fact.payload.failure,
         }),
       }
+    case "turn.queued": {
+      const { turn, message } = fact.payload
+      return {
+        ...next,
+        turns: [...state.turns, { id: turn, message, state: "queued" }],
+      }
+    }
     case "reply.grew":
     case "thought.grew": {
       const { item: id, turn, text } = fact.payload
@@ -181,26 +189,42 @@ export function working(state: ThreadState): TurnView | undefined {
   )
 }
 
+/** Whether a Person can try `turn`'s message again: it failed or was cut
+ * short, and nothing came after it. */
+export function retryable(state: ThreadState, turn: TurnView): boolean {
+  const latest = state.turns.at(-1)?.id === turn.id
+  return latest && (turn.state === "failed" || turn.state === "interrupted")
+}
+
 /** One line of a Thread as a Pane shows it. */
 export type Row =
   | { kind: "item"; item: Item }
-  /** A turn that failed or was stopped, after the last thing it wrote. */
+  /** A turn that did not finish, after the last thing it wrote. */
   | { kind: "ended"; turn: TurnView }
 
-/** The Thread's items, each unfinished turn's outcome after its last one. */
+const UNFINISHED: ReadonlySet<TurnView["state"]> = new Set([
+  "failed",
+  "stopped",
+  "interrupted",
+])
+
+/** The Thread's items, each unfinished turn's outcome after its last one:
+ * what it wrote, or else the message that asked for it. */
 export function rows(state: ThreadState): Row[] {
-  const asked = new Map(state.turns.map((turn) => [turn.message, turn.id]))
+  const index = new Map(state.items.map((item, at) => [item.id, at]))
   const last = new Map<string, number>()
-  state.items.forEach((item, index) => {
-    const turn = item.turn ?? asked.get(item.id)
-    if (turn) last.set(turn, index)
+  for (const turn of state.turns) {
+    const at = index.get(turn.message)
+    if (at !== undefined) last.set(turn.id, at)
+  }
+  state.items.forEach((item, at) => {
+    if (item.turn) last.set(item.turn, at)
   })
   const after = new Map<number, TurnView[]>()
   for (const turn of state.turns) {
-    const index = last.get(turn.id)
-    if (index === undefined) continue
-    if (turn.state !== "failed" && turn.state !== "stopped") continue
-    after.set(index, [...(after.get(index) ?? []), turn])
+    const at = last.get(turn.id)
+    if (at === undefined || !UNFINISHED.has(turn.state)) continue
+    after.set(at, [...(after.get(at) ?? []), turn])
   }
   return state.items.flatMap((item, index): Row[] => [
     { kind: "item", item },

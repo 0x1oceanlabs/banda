@@ -2,14 +2,16 @@
 //! through these functions.
 
 use crate::model::{
-    Body, Item, ItemId, QuestionState, ThreadId, ThreadSummary, TurnId, TurnState, TurnView,
+    Body, Failure, Item, ItemId, QuestionState, ThreadId, ThreadSummary, TurnId, TurnState,
+    TurnView,
 };
 use bandaso_kernel::{AgentId, Error, Participant, Refusal};
 use rusqlite::{Connection, OptionalExtension, Row, params};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 
-pub const MIGRATIONS: &[&str] = &[r#"
+pub const MIGRATIONS: &[&str] = &[
+    r#"
 CREATE TABLE agents_threads (
     id TEXT PRIMARY KEY,
     agent TEXT NOT NULL,
@@ -47,7 +49,12 @@ CREATE TABLE agents_items (
     body TEXT NOT NULL
 );
 CREATE INDEX agents_items_by_thread ON agents_items (thread);
-"#];
+"#,
+    r#"
+-- What kind of failure ended the turn, as JSON.
+ALTER TABLE agents_turns ADD COLUMN failure TEXT;
+"#,
+];
 
 fn json<T: Serialize>(value: &T) -> Result<String, Error> {
     Ok(serde_json::to_string(value)?)
@@ -211,25 +218,43 @@ pub fn set_turn(
     turn: TurnId,
     state: TurnState,
     reason: Option<&str>,
+    failure: Option<Failure>,
 ) -> Result<(), Error> {
+    let failure = failure.as_ref().map(json).transpose()?;
     sql.execute(
-        "UPDATE agents_turns SET state = ?2, reason = ?3 WHERE id = ?1",
-        params![turn, state_word(state), reason],
+        "UPDATE agents_turns SET state = ?2, reason = ?3, failure = ?4 WHERE id = ?1",
+        params![turn, state_word(state), reason, failure],
     )?;
     Ok(())
 }
 
+/// The Thread's latest turn.
+pub fn last_turn(sql: &Connection, thread: ThreadId) -> Result<Option<TurnId>, Error> {
+    Ok(sql
+        .query_row(
+            "SELECT id FROM agents_turns WHERE thread = ?1
+             ORDER BY created_at DESC, id DESC LIMIT 1",
+            params![thread],
+            |row| row.get(0),
+        )
+        .optional()?)
+}
+
 pub fn turns(sql: &Connection, thread: ThreadId) -> Result<Vec<TurnView>, Error> {
     let mut statement = sql.prepare(
-        "SELECT id, message, state, reason FROM agents_turns
+        "SELECT id, message, state, reason, failure FROM agents_turns
          WHERE thread = ?1 ORDER BY created_at, id",
     )?;
     let rows = statement.query_map(params![thread], |row| {
+        let failure: Option<String> = row.get(4)?;
         Ok(TurnView {
             id: row.get(0)?,
             message: row.get(1)?,
             state: state_of(row, 2)?,
             reason: row.get(3)?,
+            failure: failure
+                .map(|text| serde_json::from_str(&text).map_err(|e| unreadable(4, e)))
+                .transpose()?,
         })
     })?;
     Ok(rows.collect::<rusqlite::Result<_>>()?)

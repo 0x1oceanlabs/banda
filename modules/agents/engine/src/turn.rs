@@ -10,12 +10,13 @@
 //! Each one dies with the Harness's process, so a restart abandons it and
 //! [`settle`] writes what that means.
 
-use crate::acp::{Answer, Ending, Opened, Said};
+use crate::acp::{Answer, Opened, Said};
 use crate::live::Live;
 use crate::model::{
-    Body, Fact, Item, ItemId, QuestionState, ThreadId, ToolKind, ToolStatus, TurnId, TurnState,
+    Body, Fact, Failure, Item, ItemId, QuestionState, ThreadId, ToolKind, ToolStatus, TurnId,
+    TurnState,
 };
-use crate::rules::{self, Piece, Pieces, Text};
+use crate::rules::{self, Ending, Piece, Pieces, Text};
 use crate::settings::{self, Harnesses};
 use crate::{emit, store};
 use bandaso_kernel::{AgentId, Effect, Error, ModuleSpace, Outcome, Participant, Settled, Tx};
@@ -51,12 +52,12 @@ fn plain(error: impl std::fmt::Display) -> String {
 
 /// Ends a turn: its state, its Questions that never got an answer, and the
 /// fact that it ended.
-pub fn end(
-    tx: &mut Tx<'_>,
-    turn: &store::Turn,
-    state: TurnState,
-    reason: Option<String>,
-) -> Result<(), Error> {
+pub fn end(tx: &mut Tx<'_>, turn: &store::Turn, ending: Ending) -> Result<(), Error> {
+    let Ending {
+        state,
+        reason,
+        failure,
+    } = ending;
     let agent = Participant::Agent(turn.agent);
     for mut item in store::open_questions(tx.sql(), turn.id)? {
         rules::close(&mut item.body);
@@ -68,12 +69,13 @@ pub fn end(
             &Fact::QuestionClosed { item: item.id },
         )?;
     }
-    store::set_turn(tx.sql(), turn.id, state, reason.as_deref())?;
+    store::set_turn(tx.sql(), turn.id, state, reason.as_deref(), failure)?;
     store::touch_thread(tx.sql(), turn.thread, tx.now())?;
     let ended = Fact::TurnEnded {
         turn: turn.id,
         state,
         reason,
+        failure,
     };
     emit(tx, agent, turn.thread, &ended)
 }
@@ -114,14 +116,14 @@ pub fn settle(tx: &mut Tx<'_>, effect: &Effect, settled: &Settled) -> Result<(),
             if !rules::ongoing(turn.state) {
                 return Ok(());
             }
-            let (state, reason) = match settled {
-                Settled::Abandoned => (
+            let ending = match settled {
+                Settled::Abandoned => Ending::new(
                     TurnState::Interrupted,
-                    "Bandaso stopped while the Agent worked.".to_owned(),
+                    Some("Bandaso stopped while the Agent worked."),
                 ),
-                Settled::Failed(reason) => (TurnState::Failed, reason.clone()),
+                Settled::Failed(reason) => Ending::failed(reason.clone(), None),
             };
-            end(tx, &turn, state, Some(reason))
+            end(tx, &turn, ending)
         }
         REPLY => {
             let reply: ReplyEffect = serde_json::from_value(effect.payload.clone())?;
@@ -189,7 +191,7 @@ pub async fn start(
             if !rules::may_start(turn.state) {
                 return Ok(None);
             }
-            store::set_turn(tx.sql(), turn.id, TurnState::Running, None)?;
+            store::set_turn(tx.sql(), turn.id, TurnState::Running, None, None)?;
             let text = match store::item(tx.sql(), turn.message)? {
                 Some((
                     _,
@@ -211,39 +213,51 @@ pub async fn start(
         Err(error) => return Outcome::Retry(error.to_string()),
     };
     let ending = work(live, harnesses, &space, &turn, &text).await;
-    let stopped = live.end(turn.id);
-    let (state, reason) = match ending {
-        Ok(Ending {
-            state: TurnState::Stopped,
-            ..
-        }) => rules::cancelled(stopped),
-        Ok(Ending { state, reason }) => (state, reason),
-        Err(reason) => (TurnState::Failed, Some(reason)),
-    };
-    match space.write(move |tx| end(tx, &turn, state, reason)).await {
+    let ending = ending.stop_asked(live.end(turn.id));
+    match space.write(move |tx| end(tx, &turn, ending)).await {
         Ok(()) => Outcome::Done,
         // The outbox settles it as failed.
         Err(error) => Outcome::Fail(error.to_string()),
     }
 }
 
+/// Runs the turn's prompt; how it ended, or why it could not run.
 async fn work(
     live: &Live,
     harnesses: &Harnesses,
     space: &ModuleSpace,
     turn: &store::Turn,
     text: &str,
-) -> Result<Ending, String> {
-    let agent = settings::agent(space.folder(), turn.agent).map_err(|r| r.message)?;
-    let harness = harnesses
-        .find(&agent.harness)
-        .ok_or_else(|| format!("This computer has no Harness named \"{}\".", agent.harness))?;
-    let connection = live.connection(space.id(), harness).await?;
+) -> Ending {
+    match prompt(live, harnesses, space, turn, text).await {
+        Ok(ending) | Err(ending) => ending,
+    }
+}
+
+async fn prompt(
+    live: &Live,
+    harnesses: &Harnesses,
+    space: &ModuleSpace,
+    turn: &store::Turn,
+    text: &str,
+) -> Result<Ending, Ending> {
+    let unplanned = |reason: String| Ending::failed(reason, None);
+    let agent = settings::agent(space.folder(), turn.agent).map_err(|r| unplanned(r.message))?;
+    let harness = harnesses.find(&agent.harness).ok_or_else(|| {
+        unplanned(format!(
+            "This computer has no Harness named \"{}\".",
+            agent.harness
+        ))
+    })?;
+    let connection = live
+        .connection(space.id(), harness)
+        .await
+        .map_err(|reason| Ending::failed(reason, Some(Failure::HarnessStopped)))?;
     let thread = turn.thread;
     let earlier = space
         .read(move |sql| store::evidence(sql, thread))
         .await
-        .map_err(plain)?;
+        .map_err(|e| unplanned(plain(e)))?;
     let (session, opened) = connection
         .session(thread, space.folder(), earlier.as_ref())
         .await?;
@@ -263,7 +277,7 @@ async fn work(
                 Ok(())
             })
             .await
-            .map_err(plain)?;
+            .map_err(|e| unplanned(plain(e)))?;
     }
     let (mut hear, mut done) = connection.prompt(&session, text);
     live.begin(turn.id, connection.clone(), session.clone());
@@ -274,12 +288,12 @@ async fn work(
         if tokio::time::timeout(STOPPING, &mut done).await.is_err() {
             done.abort();
         }
-        return Err(reason);
+        return Err(unplanned(reason));
     }
-    match done.await {
-        Ok(ending) => ending.map_err(|error| format!("The Harness stopped the turn: {error}")),
-        Err(_) => Err("The turn's task ended.".to_owned()),
-    }
+    let ending = done
+        .await
+        .unwrap_or_else(|_| unplanned("The turn's task ended.".to_owned()));
+    Ok(ending.resets(writer.resets))
 }
 
 /// Writes what the Harness says into the Thread.
@@ -292,6 +306,9 @@ struct Writer {
     /// The Harness's tool call IDs and the items that show them.
     tools: HashMap<String, (ItemId, String)>,
     due: Option<Instant>,
+    /// When the account may be used again, if the Harness said it reached
+    /// its limit.
+    resets: Option<i64>,
 }
 
 impl Writer {
@@ -304,6 +321,7 @@ impl Writer {
             pieces: Pieces::default(),
             tools: HashMap::new(),
             due: None,
+            resets: None,
         }
     }
 
@@ -404,6 +422,20 @@ impl Writer {
                     live.forget(id);
                 }
                 written
+            }
+            Said::Notice(text) => {
+                self.close().await?;
+                let id = ItemId::new();
+                let posted = Fact::NoticePosted {
+                    item: id,
+                    turn: self.turn,
+                    text: text.clone(),
+                };
+                self.put(id, Body::Notice { text }, posted).await
+            }
+            Said::Resets(at) => {
+                self.resets = Some(at);
+                Ok(())
             }
         }
     }

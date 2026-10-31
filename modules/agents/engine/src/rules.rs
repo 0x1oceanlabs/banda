@@ -1,7 +1,7 @@
 //! The agents module's decisions and state machines. Pure: no database,
 //! clock, randomness or Harness protocol. IDs come in from the caller.
 
-use crate::model::{Body, Choice, Fact, ItemId, QuestionState, TurnId, TurnState};
+use crate::model::{Body, Choice, Fact, Failure, ItemId, QuestionState, TurnId, TurnState};
 use bandaso_kernel::Refusal;
 
 /// Whether a turn may start now: it waits, and nobody stopped it.
@@ -35,18 +35,71 @@ pub fn stop(state: TurnState) -> Stop {
     }
 }
 
-/// How a turn that the Harness ended as cancelled ends: stopped when a
-/// Person asked for it, failed otherwise, so nobody reads a stop that no
-/// Person made.
-pub fn cancelled(stop_asked: bool) -> (TurnState, Option<String>) {
-    if stop_asked {
-        (TurnState::Stopped, None)
-    } else {
-        (
-            TurnState::Failed,
-            Some("The Harness ended the turn by itself.".to_owned()),
-        )
+/// How a turn ended: its state, in plain words why, and what kind of
+/// failure it was.
+#[derive(Debug, PartialEq, Eq)]
+pub struct Ending {
+    pub state: TurnState,
+    pub reason: Option<String>,
+    pub failure: Option<Failure>,
+}
+
+impl Ending {
+    pub fn new(state: TurnState, reason: Option<&str>) -> Ending {
+        Ending {
+            state,
+            reason: reason.map(str::to_owned),
+            failure: None,
+        }
     }
+
+    pub fn failed(reason: impl Into<String>, failure: Option<Failure>) -> Ending {
+        Ending {
+            state: TurnState::Failed,
+            reason: Some(reason.into()),
+            failure,
+        }
+    }
+
+    /// A usage limit learns when it resets, `at`, if it does not know.
+    pub fn resets(mut self, at: Option<i64>) -> Ending {
+        if let Some(Failure::UsageLimit {
+            until: until @ None,
+        }) = &mut self.failure
+        {
+            *until = at;
+        }
+        self
+    }
+
+    /// A turn the Harness ended as cancelled stopped when a Person asked
+    /// for it, and failed otherwise, so nobody reads a stop that no Person
+    /// made.
+    pub fn stop_asked(self, asked: bool) -> Ending {
+        match self.state {
+            TurnState::Stopped if !asked => Ending::failed(
+                "The Harness ended the turn by itself.",
+                Some(Failure::Provider),
+            ),
+            _ => self,
+        }
+    }
+}
+
+/// Whether a turn may be tried again: it failed or was cut short, and
+/// nothing came after it in its Thread.
+pub fn retry(state: TurnState, latest: bool) -> Result<(), Refusal> {
+    if !matches!(state, TurnState::Failed | TurnState::Interrupted) {
+        return Err(Refusal::invalid(
+            "Only a turn that failed or was cut short can be tried again.",
+        ));
+    }
+    if !latest {
+        return Err(Refusal::invalid(
+            "Only the Thread's latest turn can be tried again.",
+        ));
+    }
+    Ok(())
 }
 
 /// An answer as the Harness offers it.
@@ -221,12 +274,44 @@ mod tests {
             assert_eq!(stop(ended), Stop::Nothing);
             assert!(!ongoing(ended));
         }
-        assert_eq!(cancelled(true).0, TurnState::Stopped);
+        let cancelled = || Ending::new(TurnState::Stopped, None);
+        assert_eq!(cancelled().stop_asked(true).state, TurnState::Stopped);
         assert_eq!(
-            cancelled(false).0,
+            cancelled().stop_asked(false).state,
             TurnState::Failed,
             "no Person stopped it"
         );
+    }
+
+    #[test]
+    fn a_usage_limit_learns_when_it_resets_and_nothing_else_does() {
+        let limit = |until| Ending::failed("Limit.", Some(Failure::UsageLimit { until }));
+        assert_eq!(
+            limit(None).resets(Some(5)).failure,
+            Some(Failure::UsageLimit { until: Some(5) })
+        );
+        assert_eq!(
+            limit(Some(3)).resets(Some(5)).failure,
+            Some(Failure::UsageLimit { until: Some(3) }),
+            "what the failure itself says wins"
+        );
+        let other = Ending::failed("Down.", Some(Failure::Provider)).resets(Some(5));
+        assert_eq!(other.failure, Some(Failure::Provider));
+    }
+
+    #[test]
+    fn only_the_latest_turn_that_failed_or_was_cut_short_is_tried_again() {
+        assert!(retry(TurnState::Failed, true).is_ok());
+        assert!(retry(TurnState::Interrupted, true).is_ok());
+        assert!(retry(TurnState::Failed, false).is_err());
+        for state in [
+            TurnState::Queued,
+            TurnState::Running,
+            TurnState::Done,
+            TurnState::Stopped,
+        ] {
+            assert!(retry(state, true).is_err(), "{state:?}");
+        }
     }
 
     fn question() -> Body {
