@@ -19,4 +19,8 @@ plans: boolean,
  * What a message can start with to have the Harness run a command,
  * such as `/compact`.
  */
-slash_commands: Array<SlashCommand>, };
+slash_commands: Array<SlashCommand>, 
+/**
+ * The Harness takes no images: a message to it carries text alone.
+ */
+no_images: boolean, };

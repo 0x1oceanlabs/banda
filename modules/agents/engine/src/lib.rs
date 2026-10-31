@@ -25,6 +25,7 @@
 
 mod acp;
 mod hosts;
+mod images;
 mod live;
 pub mod model;
 mod rules;
@@ -38,6 +39,7 @@ use bandaso_kernel::{
 };
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as BASE64;
+use images::Images;
 use live::Live;
 use model::{
     Body, Fact, Image, ImageId, Item, ItemId, Offer, Settings, ThreadId, ThreadList, ThreadSummary,
@@ -354,15 +356,7 @@ impl Module for Agents {
                     images,
                     settings,
                 } = decode(params)?;
-                if text.trim().is_empty() && images.is_empty() {
-                    return Err(Refusal::invalid("A message needs some text or an image."));
-                }
-                if images.len() > rules::MOST_IMAGES {
-                    return Err(Refusal::invalid(format!(
-                        "A message can carry at most {} images.",
-                        rules::MOST_IMAGES
-                    )));
-                }
+                rules::may_send(&text, &images)?;
                 let found = settings::agent(space.folder(), agent)?;
                 let author = call.participant();
                 if settings.is_some() {
@@ -412,27 +406,39 @@ impl Module for Agents {
                 let bytes = BASE64
                     .decode(data.as_bytes())
                     .map_err(|_| Refusal::invalid("The image's bytes are not base64."))?;
-                rules::image(&mime, &bytes)?;
+                rules::may_attach(&mime, &bytes)?;
                 let image = Image {
                     id: ImageId::new(),
                     mime,
-                    bytes: u32::try_from(bytes.len()).unwrap_or(u32::MAX),
+                    size: u32::try_from(bytes.len()).unwrap_or(u32::MAX),
                     name,
                 };
+                let images = Images::of(space.folder());
+                // The file first: a row never names bytes that are not
+                // there. A file left without a row goes with the sweep.
+                images.keep(image.id, bytes).await.map_err(Error::from)?;
                 let author = call.participant();
-                call.command(move |tx| {
-                    store::add_image(tx.sql(), &image, &bytes, author, tx.now())?;
-                    Ok(serde_json::to_value(&image)?)
-                })
-                .await
+                let kept = call
+                    .command(move |tx| {
+                        store::attach_image(tx.sql(), &image, author, tx.now())?;
+                        Ok(serde_json::to_value(&image)?)
+                    })
+                    .await;
+                tokio::spawn(sweep(space.clone(), images));
+                kept
             }
             Method::Image => {
                 let OneImage { image } = decode(params)?;
-                let found = space.read(move |sql| store::image_file(sql, image)).await?;
-                let file = found.ok_or_else(|| Refusal::not_found("There is no such image."))?;
+                let kind = space.read(move |sql| store::image_kind(sql, image)).await?;
+                let gone = || Refusal::not_found("There is no such image.");
+                let mime = kind.ok_or_else(gone)?;
+                let bytes = Images::of(space.folder())
+                    .read(image)
+                    .await
+                    .map_err(|_| gone())?;
                 value(ImageData {
-                    mime: file.mime,
-                    data: BASE64.encode(file.bytes),
+                    mime,
+                    data: BASE64.encode(bytes),
                 })
             }
         }
@@ -477,6 +483,25 @@ fn configure(
 }
 
 /// What a Person writes to an Agent: text, images, or both.
+/// Lets go of the images no message took within a day: their rows, then
+/// their files. A file whose row went first is swept the next time.
+async fn sweep(space: ModuleSpace, images: Images) {
+    let found = space
+        .write(|tx| {
+            let last = images::UNSENT_LAST.as_millis() as i64;
+            let gone = store::drop_unsent_images(tx.sql(), tx.now() - last)?;
+            Ok((gone, store::image_ids(tx.sql())?))
+        })
+        .await;
+    let swept = match found {
+        Ok((gone, known)) => images.sweep(gone, known).await.map_err(Error::from),
+        Err(error) => Err(error),
+    };
+    if let Err(error) = swept {
+        tracing::warn!(%error, "could not sweep the images no message took");
+    }
+}
+
 struct Message {
     text: String,
     images: Vec<ImageId>,
@@ -495,6 +520,7 @@ fn send(
 ) -> Result<Value, Error> {
     let now = tx.now();
     let images = store::unsent_images(tx.sql(), &images, author)?;
+    rules::may_carry(&images)?;
     let thread = match thread {
         Some(id) => {
             let found = store::thread(tx.sql(), id)?

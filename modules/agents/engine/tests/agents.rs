@@ -8,6 +8,8 @@ use bandaso_agents::model::{
 };
 use bandaso_agents::settings::{Harness, Harnesses};
 use bandaso_kernel::{AgentId, Code, CommandId, Kernel, Participant, PersonId, SpaceId};
+use base64::Engine as _;
+use base64::engine::general_purpose::STANDARD as BASE64;
 use serde_json::{Value, json};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, OnceLock};
@@ -1221,6 +1223,12 @@ async fn a_slash_command_learned_mid_reply_leaves_the_reply_whole() {
 /// The start of a PNG file, as `agents.attach` checks it.
 const PNG: &[u8] = b"\x89PNG\r\n\x1a\n a picture";
 
+/// Where the Space keeps an image's bytes.
+fn image_file(root: &Path, image: &Value) -> PathBuf {
+    let id = image["id"].as_str().unwrap();
+    root.join("Work/.bandaso/images").join(id)
+}
+
 impl World {
     /// Adds an image of `who`'s for a message; the image as the engine
     /// keeps it, or why it would not.
@@ -1231,8 +1239,7 @@ impl World {
         bytes: &[u8],
         name: Option<&str>,
     ) -> Result<Value, bandaso_kernel::Refusal> {
-        use base64::Engine as _;
-        let data = base64::engine::general_purpose::STANDARD.encode(bytes);
+        let data = BASE64.encode(bytes);
         let params = json!({ "mime": mime, "data": data, "name": name });
         self.call(who, "agents.attach", params).await
     }
@@ -1262,7 +1269,9 @@ async fn a_message_carries_its_images_to_the_harness() {
         .attach(world.person(), "image/png", PNG, Some("shot.png"))
         .await
         .unwrap();
-    assert_eq!(shot["bytes"], PNG.len());
+    assert_eq!(shot["size"], PNG.len());
+    // Its bytes are a file in the Space, not a row in its database.
+    assert_eq!(std::fs::read(image_file(root.path(), &shot)).unwrap(), PNG);
     let sent = world.send_images("what is this", &[&shot]).await;
     let view = world.ended(&sent).await;
     assert_eq!(
@@ -1286,10 +1295,7 @@ async fn a_message_carries_its_images_to_the_harness() {
         )
         .await
         .unwrap();
-    use base64::Engine as _;
-    let bytes = base64::engine::general_purpose::STANDARD
-        .decode(read["data"].as_str().unwrap())
-        .unwrap();
+    let bytes = BASE64.decode(read["data"].as_str().unwrap()).unwrap();
     assert_eq!(
         (read["mime"].as_str(), bytes.as_slice()),
         (Some("image/png"), PNG)
@@ -1330,6 +1336,12 @@ async fn an_image_goes_only_as_what_it_is_and_with_one_message() {
         .attach(world.person(), "image/png", PNG, None)
         .await
         .unwrap();
+    let twice = json!({ "agent": world.agent, "text": "one", "images": [shot["id"], shot["id"]] });
+    let refused = world
+        .call(world.person(), "agents.send", twice)
+        .await
+        .unwrap_err();
+    assert_eq!(refused.message, "A message carries each image once.");
     world.send_images("one", &[&shot]).await;
     let again = json!({ "agent": world.agent, "text": "two", "images": [shot["id"]] });
     let refused = world
@@ -1370,6 +1382,7 @@ async fn a_harness_without_images_gets_the_text_alone_and_says_so() {
         texts(&view)
     );
     assert_eq!(last_reply(&view), "message: You said: look");
+    assert!(view.offer.no_images, "the window offers it no images");
 
     let alone = world
         .attach(world.person(), "image/png", PNG, None)
@@ -1378,4 +1391,24 @@ async fn a_harness_without_images_gets_the_text_alone_and_says_so() {
     let sent = world.send_images("", &[&alone]).await;
     let view = world.ended(&sent).await;
     assert_eq!(state(&view, &sent["turn"]), Some(TurnState::Failed));
+}
+
+#[tokio::test]
+async fn an_image_whose_file_is_gone_is_left_out_and_said() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let shot = world
+        .attach(world.person(), "image/png", PNG, Some("shot.png"))
+        .await
+        .unwrap();
+    std::fs::remove_file(image_file(root.path(), &shot)).unwrap();
+    let sent = world.send_images("look", &[&shot]).await;
+    let view = world.ended(&sent).await;
+    assert!(
+        texts(&view)
+            .contains(&"notice: shot.png is gone, so Fake got the message without it.".to_owned()),
+        "{:?}",
+        texts(&view)
+    );
+    assert_eq!(last_reply(&view), "message: You said: look");
 }

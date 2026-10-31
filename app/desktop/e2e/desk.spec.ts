@@ -425,4 +425,32 @@ test("a message carries images to its Agent", async () => {
   await expect(
     thread.getByRole("button", { name: "Open shot.png" })
   ).toHaveCount(2)
+
+  // An image dropped anywhere on the Thread joins the message, and one
+  // wider than 2000 pixels goes 2000 wide, as in T3 Code.
+  const wide = await page.evaluateHandle(async () => {
+    const canvas = new OffscreenCanvas(3000, 1000)
+    const context = canvas.getContext("2d")!
+    context.fillStyle = "#3b82f6"
+    context.fillRect(0, 0, 3000, 1000)
+    const blob = await canvas.convertToBlob({ type: "image/png" })
+    const dragged = new DataTransfer()
+    dragged.items.add(new File([blob], "wide.png", { type: "image/png" }))
+    return dragged
+  })
+  const transcript = thread.getByRole("region", { name: "Thread with Writer" })
+  await transcript.dispatchEvent("dragover", { dataTransfer: wide })
+  await transcript.dispatchEvent("drop", { dataTransfer: wide })
+  await expect(waiting.getByRole("img", { name: "wide.png" })).toBeVisible()
+  await waiting.getByRole("button", { name: "Open wide.png" }).click()
+  await expect(page.getByRole("dialog", { name: "wide.png" })).toBeVisible()
+  await page.keyboard.press("Escape")
+  await composer.fill("wide")
+  await composer.press("Enter")
+  await expect(thread.getByText("You said: wide")).toBeVisible()
+  await thread.getByRole("button", { name: "Open wide.png" }).click()
+  const shown = page.getByRole("dialog", { name: "wide.png" }).getByRole("img")
+  await expect
+    .poll(() => shown.evaluate((img: HTMLImageElement) => img.naturalWidth))
+    .toBe(2000)
 })

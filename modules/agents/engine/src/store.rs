@@ -2,13 +2,14 @@
 //! through these functions.
 
 use crate::model::{
-    Body, Failure, Image, ImageFile, ImageId, Item, ItemId, Offer, QuestionState, Settings,
-    ThreadId, ThreadSummary, TurnId, TurnState, TurnView, Usage,
+    Body, Failure, Image, ImageId, Item, ItemId, Offer, QuestionState, Settings, ThreadId,
+    ThreadSummary, TurnId, TurnState, TurnView, Usage,
 };
 use bandaso_kernel::{AgentId, Error, Participant, Refusal};
 use rusqlite::{Connection, OptionalExtension, Row, params};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
+use std::collections::HashSet;
 
 pub const MIGRATIONS: &[&str] = &[
     r#"
@@ -68,13 +69,14 @@ UPDATE agents_threads SET settings = '{"mode":"supervised"}';
 ALTER TABLE agents_threads ADD COLUMN usage TEXT;
 "#,
     r#"
--- The images messages carry. One is added before its message is sent,
--- and belongs to that message once it is.
+-- The images messages carry; their bytes are files in .bandaso/images/.
+-- One is added before its message is sent, and belongs to that message
+-- once it is.
 CREATE TABLE agents_images (
     id TEXT PRIMARY KEY,
     mime TEXT NOT NULL,
     name TEXT,
-    data BLOB NOT NULL,
+    size INTEGER NOT NULL,
     -- Who added it, as JSON.
     author TEXT NOT NULL,
     added_at INTEGER NOT NULL,
@@ -83,9 +85,6 @@ CREATE TABLE agents_images (
 CREATE INDEX agents_images_by_item ON agents_images (item);
 "#,
 ];
-
-/// How long an image waits for the message it was added for.
-const UNSENT_IMAGES_LAST: i64 = 24 * 60 * 60 * 1000;
 
 fn json<T: Serialize>(value: &T) -> Result<String, Error> {
     Ok(serde_json::to_string(value)?)
@@ -204,25 +203,42 @@ pub fn latest_offer(sql: &Connection, agent: AgentId) -> Result<Option<Offer>, E
     Ok(text.map(|text| serde_json::from_str(&text)).transpose()?)
 }
 
-/// Keeps an image a message will carry, and lets go of those added more
-/// than a day ago that no message carried.
-pub fn add_image(
+/// Keeps what an image a message will carry is, and who added it.
+pub fn attach_image(
     sql: &Connection,
     image: &Image,
-    data: &[u8],
     author: Participant,
     at: i64,
 ) -> Result<(), Error> {
     sql.execute(
-        "DELETE FROM agents_images WHERE item IS NULL AND added_at < ?1",
-        params![at - UNSENT_IMAGES_LAST],
-    )?;
-    sql.execute(
-        "INSERT INTO agents_images (id, mime, name, data, author, added_at)
+        "INSERT INTO agents_images (id, mime, name, size, author, added_at)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-        params![image.id, image.mime, image.name, data, json(&author)?, at],
+        params![
+            image.id,
+            image.mime,
+            image.name,
+            image.size,
+            json(&author)?,
+            at
+        ],
     )?;
     Ok(())
+}
+
+/// Lets go of the images added before `before` that no message carried,
+/// and answers which they were.
+pub fn drop_unsent_images(sql: &Connection, before: i64) -> Result<Vec<ImageId>, Error> {
+    let mut dropped =
+        sql.prepare("DELETE FROM agents_images WHERE item IS NULL AND added_at < ?1 RETURNING id")?;
+    let ids = dropped.query_map(params![before], |row| row.get(0))?;
+    Ok(ids.collect::<Result<_, _>>()?)
+}
+
+/// Every image the Space keeps.
+pub fn image_ids(sql: &Connection) -> Result<HashSet<ImageId>, Error> {
+    let mut all = sql.prepare("SELECT id FROM agents_images")?;
+    let ids = all.query_map([], |row| row.get(0))?;
+    Ok(ids.collect::<Result<_, _>>()?)
 }
 
 /// The images `author` added for a message and no message carries yet, in
@@ -236,20 +252,23 @@ pub fn unsent_images(
     for id in ids {
         let found = sql
             .query_row(
-                "SELECT mime, name, length(data), author, item FROM agents_images WHERE id = ?1",
+                "SELECT mime, name, size, author, item FROM agents_images WHERE id = ?1",
                 params![id],
                 |row| {
                     Ok((
-                        row.get::<_, String>(0)?,
-                        row.get::<_, Option<String>>(1)?,
-                        row.get::<_, u32>(2)?,
+                        Image {
+                            id: *id,
+                            mime: row.get(0)?,
+                            name: row.get(1)?,
+                            size: row.get(2)?,
+                        },
                         column::<Participant>(row, 3)?,
                         row.get::<_, Option<ItemId>>(4)?,
                     ))
                 },
             )
             .optional()?;
-        let Some((mime, name, bytes, added_by, carried)) = found else {
+        let Some((image, added_by, carried)) = found else {
             return Err(
                 Refusal::not_found("An image this message carries is gone. Add it again.").into(),
             );
@@ -257,12 +276,7 @@ pub fn unsent_images(
         if added_by != author || carried.is_some() {
             return Err(Refusal::invalid("This message cannot carry that image.").into());
         }
-        images.push(Image {
-            id: *id,
-            mime,
-            bytes,
-            name,
-        });
+        images.push(image);
     }
     Ok(images)
 }
@@ -278,17 +292,13 @@ pub fn carry_images(sql: &Connection, images: &[Image], item: ItemId) -> Result<
     Ok(())
 }
 
-pub fn image_file(sql: &Connection, id: ImageId) -> Result<Option<ImageFile>, Error> {
+/// An image's kind, if the Space keeps it.
+pub fn image_kind(sql: &Connection, id: ImageId) -> Result<Option<String>, Error> {
     Ok(sql
         .query_row(
-            "SELECT mime, data FROM agents_images WHERE id = ?1",
+            "SELECT mime FROM agents_images WHERE id = ?1",
             params![id],
-            |row| {
-                Ok(ImageFile {
-                    mime: row.get(0)?,
-                    bytes: row.get(1)?,
-                })
-            },
+            |row| row.get(0),
         )
         .optional()?)
 }

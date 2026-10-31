@@ -15,11 +15,12 @@
 //! turn answers the Harness's Questions by the mode where the mode allows,
 //! and asks the Person otherwise.
 
-use crate::acp::{Answer, Opened, Prompt, Running, Said, ToolChange};
+use crate::acp::{Answer, Opened, Prompt, PromptImage, Running, Said, ToolChange};
+use crate::images::Images;
 use crate::live::Live;
 use crate::model::{
-    Body, Fact, Failure, Item, ItemId, Mode, Offer, PlanStep, QuestionState, Settings, ThreadId,
-    ToolContent, ToolKind, ToolStatus, TurnId, TurnState, Usage,
+    Body, Fact, Failure, Image, Item, ItemId, Mode, Offer, PlanStep, QuestionState, Settings,
+    ThreadId, ToolContent, ToolKind, ToolStatus, TurnId, TurnState, Usage,
 };
 use crate::rules::{self, Ending, Piece, Pieces, Text};
 use crate::settings::{self, Harnesses};
@@ -222,29 +223,18 @@ pub async fn start(
                 )) => (text, images),
                 _ => (String::new(), Vec::new()),
             };
-            let files = images
-                .iter()
-                .filter_map(|image| store::image_file(tx.sql(), image.id).transpose())
-                .collect::<Result<Vec<_>, _>>()?;
             let settings = store::turn_settings(tx.sql(), &turn)?;
             let started = Fact::TurnStarted { turn: turn.id };
             emit(tx, Participant::Agent(turn.agent), turn.thread, &started)?;
-            Ok(Some((
-                turn,
-                Prompt {
-                    text,
-                    images: files,
-                },
-                settings,
-            )))
+            Ok(Some((turn, Message { text, images }, settings)))
         })
         .await;
-    let (turn, prompt, settings) = match begun {
+    let (turn, message, settings) = match begun {
         Ok(Some(begun)) => begun,
         Ok(None) => return Outcome::Done,
         Err(error) => return Outcome::Retry(error.to_string()),
     };
-    let ending = work(live, harnesses, &space, &turn, prompt, settings).await;
+    let ending = work(live, harnesses, &space, &turn, message, settings).await;
     let ending = ending.stop_asked(live.end(turn.id));
     match space.write(move |tx| end(tx, &turn, ending)).await {
         Ok(()) => Outcome::Done,
@@ -254,15 +244,21 @@ pub async fn start(
 }
 
 /// Runs the turn's prompt; how it ended, or why it could not run.
+/// The message a turn sends: its text and the images it carries.
+struct Message {
+    text: String,
+    images: Vec<Image>,
+}
+
 async fn work(
     live: &Live,
     harnesses: &Harnesses,
     space: &ModuleSpace,
     turn: &store::Turn,
-    prompt: Prompt,
+    message: Message,
     settings: Settings,
 ) -> Ending {
-    match run(live, harnesses, space, turn, prompt, settings).await {
+    match run(live, harnesses, space, turn, message, settings).await {
         Ok(ending) | Err(ending) => ending,
     }
 }
@@ -272,7 +268,7 @@ async fn run(
     harnesses: &Harnesses,
     space: &ModuleSpace,
     turn: &store::Turn,
-    mut prompt: Prompt,
+    Message { text, images }: Message,
     settings: Settings,
 ) -> Result<Ending, Ending> {
     let unplanned = |reason: String| Ending::failed(reason, None);
@@ -314,18 +310,27 @@ async fn run(
             .map_err(|e| unplanned(plain(e)))?;
     }
     let (running, mut refused) = connection.settle(&session, &settings).await;
-    if !prompt.images.is_empty() && !connection.takes_images() {
-        if prompt.text.trim().is_empty() {
-            return Err(unplanned(format!(
-                "{} does not take images, and this message holds nothing else.",
-                harness.name
-            )));
+    let mut prompt = Prompt {
+        text,
+        images: Vec::new(),
+    };
+    if running.offer.no_images && !images.is_empty() {
+        refused.push(rules::without_images(&harness.name, &prompt.text).map_err(unplanned)?);
+    } else {
+        let files = Images::of(space.folder());
+        for image in images {
+            match files.read(image.id).await {
+                Ok(bytes) => prompt.images.push(PromptImage {
+                    mime: image.mime,
+                    bytes,
+                }),
+                Err(_) => refused.push(format!(
+                    "{} is gone, so {} got the message without it.",
+                    image.name.as_deref().unwrap_or("An image"),
+                    harness.name
+                )),
+            }
         }
-        refused.push(format!(
-            "{} does not take images, so it got the text alone.",
-            harness.name
-        ));
-        prompt.images.clear();
     }
     let (id, agent, now) = (turn.id, Participant::Agent(turn.agent), running.clone());
     // What the Agent used, as it last said, between turns too.

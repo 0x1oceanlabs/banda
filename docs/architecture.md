@@ -106,6 +106,7 @@ command (with its ID)
 | The engine's state folder | the owner's ID; while the engine runs, its port and per-run secret |
 | The window's storage | each Space's Desk: its tiles, their Panes and the focus |
 | `.bandaso/` SQLite | Threads, Questions and answers, the Agents' queue, Databases' records, receipts, events, outbox |
+| `.bandaso/images/` | the bytes of the images messages carry, one file per image; the SQLite says what each is and which message carries it |
 
 Events are facts with a version, and the log is never rewritten. Each module
 keeps its own ledger of migrations. Our IDs are UUIDv7. A Harness's IDs are
@@ -238,14 +239,17 @@ If Chat is removed, Agents still works through its own Thread.
   turn, like what the Agent has used. The window suggests them as a
   message starts with `/`, and adds `/plan` and `/default`, as T3 Code
   does: they switch plan mode and send nothing.
-- **A message can carry images**: up to 10 PNG, JPEG, GIF or WebP files,
-  each at most 10 MB, as in T3 Code. Each goes to the engine as the Person
-  adds it (`agents.attach`), in a call of its own, since one WebSocket
-  message holds at most 16 MiB; the message then names them. The Space
-  keeps their bytes, and the window reads them back with `agents.image`.
-  An image not sent within a day goes when the next one is added. A
-  Harness that takes no images (ACP's `promptCapabilities.image`) gets the
-  text alone, with a notice; a message of images alone fails its turn.
+- **A message can carry images**, as in T3 Code: PNG, JPEG, GIF or
+  WebP, at most 10 MB each, 100 per message and 80 MB together. The window
+  makes a PNG or JPEG with a side longer than 2000 pixels smaller first.
+  Each image goes to the engine as the Person adds it (`agents.attach`),
+  in a call of its own, since one WebSocket message holds at most 16 MiB;
+  the message then names them. The engine keeps the bytes as a file in
+  the Space, and the window reads them back with `agents.image`. An image
+  no message took within a day goes when the next one is added. A Harness
+  that takes no images (ACP's `promptCapabilities.image`) says so in what
+  it offers, and the window offers no images; a message with images gets
+  the text alone, with a notice, and one of images alone fails its turn.
 - **A restart interrupts** the turn it cut short and closes that turn's
   open Questions.
 - Its methods and their rights are listed in

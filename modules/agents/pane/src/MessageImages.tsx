@@ -1,12 +1,7 @@
 import { useEffect, useMemo, useState } from "react"
 import type { Engine, SpaceId } from "@bandaso/contract"
 import type { Image, ImageData, ImageId } from "@bandaso/contract/agents"
-import {
-  Dialog,
-  DialogContent,
-  DialogTitle,
-  DialogTrigger,
-} from "@bandaso/ui/components/dialog"
+import { DialogTrigger } from "@bandaso/ui/components/dialog"
 import { Spinner } from "@bandaso/ui/components/spinner"
 import {
   Thumbnail,
@@ -14,14 +9,16 @@ import {
   ThumbnailImage,
 } from "@bandaso/ui/components/thumbnail"
 import { ImageOffIcon } from "lucide-react"
-import { urlOf } from "./images"
+import { UNNAMED, urlOf } from "./images"
+import { Preview } from "./Preview"
 
 /** Shows the images a Thread's messages carry. */
 export type ImageReader = {
   /** An image as a `data:` URL, read once while the Pane is open. */
   read: (image: ImageId) => Promise<string>
-  /** Keeps a URL the window already has, such as for an image just sent. */
-  keep: (image: ImageId, url: string) => void
+  /** Remembers a URL the window already has, such as for an image just
+   * sent. */
+  remember: (image: ImageId, url: string) => void
 }
 
 export function useImageReader(engine: Engine, space: SpaceId): ImageReader {
@@ -40,7 +37,7 @@ export function useImageReader(engine: Engine, space: SpaceId): ImageReader {
         }
         return url
       },
-      keep: (image, url) => urls.set(image, Promise.resolve(url)),
+      remember: (image, url) => urls.set(image, Promise.resolve(url)),
     }
   }, [engine, space])
 }
@@ -74,7 +71,7 @@ function MessageImage({
   reader: ImageReader
 }) {
   const url = useUrl(reader, image.id)
-  const name = image.name ?? "Image"
+  const name = image.name ?? UNNAMED
   if (url === null)
     return (
       <Thumbnail
@@ -84,33 +81,25 @@ function MessageImage({
         <ImageOffIcon className="size-5" />
       </Thumbnail>
     )
+  if (url === undefined)
+    return (
+      <Thumbnail title={name} className="size-24">
+        <ThumbnailBusy>
+          <Spinner />
+        </ThumbnailBusy>
+      </Thumbnail>
+    )
   return (
-    <Dialog>
+    <Preview name={name} url={url}>
       <Thumbnail
         render={<DialogTrigger />}
         aria-label={`Open ${name}`}
         title={name}
         className="size-24 cursor-zoom-in"
       >
-        {url ? (
-          <ThumbnailImage src={url} alt={name} />
-        ) : (
-          <ThumbnailBusy>
-            <Spinner />
-          </ThumbnailBusy>
-        )}
+        <ThumbnailImage src={url} alt={name} />
       </Thumbnail>
-      <DialogContent className="max-h-[calc(100%-2rem)] w-auto sm:max-w-[calc(100%-4rem)]">
-        <DialogTitle className="pr-8">{name}</DialogTitle>
-        {url && (
-          <img
-            src={url}
-            alt={name}
-            className="max-h-[calc(100vh-8rem)] min-h-0 rounded-md object-contain"
-          />
-        )}
-      </DialogContent>
-    </Dialog>
+    </Preview>
   )
 }
 

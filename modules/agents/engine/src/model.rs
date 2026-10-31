@@ -28,15 +28,8 @@ bandaso_kernel::id!(
     export_to = "agents/"
 );
 
-/// An image's kind and bytes, as the module keeps them and sends them to a
-/// Harness.
-pub struct ImageFile {
-    pub mime: String,
-    pub bytes: Vec<u8>,
-}
-
-/// An image a Person sends with a message. Its bytes are kept apart and
-/// read with `agents.image`.
+/// An image a Person sends with a message. Its bytes are kept apart, in
+/// the Space's `.bandaso/images/`, and read with `agents.image`.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "agents/")]
 pub struct Image {
@@ -44,7 +37,7 @@ pub struct Image {
     /// Its kind: `image/png`, `image/jpeg`, `image/gif` or `image/webp`.
     pub mime: String,
     /// How large it is, in bytes.
-    pub bytes: u32,
+    pub size: u32,
     /// The name of the file it came from, if it had one.
     #[ts(optional)]
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -152,6 +145,9 @@ pub struct Offer {
     /// such as `/compact`.
     #[serde(default)]
     pub slash_commands: Vec<SlashCommand>,
+    /// The Harness takes no images: a message to it carries text alone.
+    #[serde(default)]
+    pub no_images: bool,
 }
 
 /// What the Harness runs when a message starts with `/` and its name.
