@@ -9,6 +9,12 @@
 //! - `slow`: replies in forty pieces, fifty milliseconds apart, and stops
 //!   early when cancelled.
 //! - `fail`: answers the prompt with an error.
+//! - `flaky`: fails the first time this process sees the prompt, and
+//!   answers as anything else does after that.
+//! - `sign in`: answers the prompt as a Harness whose Person signed out.
+//! - `limit`: says the account's limit resets in an hour, as Claude Code
+//!   does, then fails the prompt as one over its limit.
+//! - `warn`: sends a notice, if the client shows them, then answers.
 //! - `crash`: exits at once, as a Harness that dies would.
 //! - `which session`: replies with the session's ID and its own process ID.
 //! - anything else: a short thought, then a reply that quotes the prompt.
@@ -21,22 +27,28 @@ use agent_client_protocol::schema::ProtocolVersion;
 use agent_client_protocol::schema::v1::{
     AgentCapabilities, CancelNotification, ContentBlock, ContentChunk, Implementation,
     InitializeRequest, InitializeResponse, LoadSessionRequest, LoadSessionResponse,
-    NewSessionRequest, NewSessionResponse, PermissionOption, PermissionOptionKind, PromptRequest,
-    PromptResponse, RequestPermissionOutcome, RequestPermissionRequest, ResumeSessionRequest,
-    ResumeSessionResponse, SessionCapabilities, SessionId, SessionNotification,
-    SessionResumeCapabilities, SessionUpdate, StopReason, TextContent, ToolCall, ToolCallStatus,
-    ToolCallUpdate, ToolCallUpdateFields, ToolKind,
+    NewSessionRequest, NewSessionResponse, Notice, NoticeSeverity, PermissionOption,
+    PermissionOptionKind, PromptRequest, PromptResponse, RequestPermissionOutcome,
+    RequestPermissionRequest, ResumeSessionRequest, ResumeSessionResponse, SessionCapabilities,
+    SessionId, SessionNotification, SessionResumeCapabilities, SessionUpdate, StopReason,
+    TextContent, ToolCall, ToolCallStatus, ToolCallUpdate, ToolCallUpdateFields, ToolKind,
+    UsageUpdate,
 };
 use agent_client_protocol::{Agent, Client, ConnectionTo, Error, Responder, Stdio};
+use serde_json::json;
 use std::collections::HashSet;
-use std::sync::atomic::{AtomicU64, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 #[derive(Clone, Default)]
 struct Fake {
     sessions: Arc<AtomicU64>,
     cancelled: Arc<Mutex<HashSet<SessionId>>>,
+    /// The client declared that it shows notices.
+    notices: Arc<AtomicBool>,
+    /// The `flaky` prompts that have failed once.
+    failed_once: Arc<Mutex<HashSet<String>>>,
 }
 
 impl Fake {
@@ -76,6 +88,26 @@ async fn turn(
     }
     if words.contains("fail") {
         return Err(Error::internal_error().data("the fake agent was told to fail"));
+    }
+    if words.contains("flaky") && fake.failed_once.lock().unwrap().insert(words.clone()) {
+        return Err(Error::internal_error().data("the fake agent fails this once"));
+    }
+    if words.contains("sign in") {
+        return Err(Error::auth_required());
+    }
+    if words.contains("limit") {
+        let now = SystemTime::now().duration_since(UNIX_EPOCH).unwrap();
+        let limit = json!({ "status": "rejected", "resetsAt": now.as_secs() + 3600 });
+        let meta = json!({ "_claude/rateLimit": limit });
+        let usage = UsageUpdate::new(1000, 200_000).meta(meta.as_object().cloned());
+        say(&cx, &session, SessionUpdate::UsageUpdate(usage))?;
+        return Err(Error::new(-32603, "Internal error: You've hit your limit.")
+            .data(json!({ "errorKind": "rate_limit" })));
+    }
+    if words.contains("warn") && fake.notices.load(Ordering::Relaxed) {
+        let notice = Notice::new(NoticeSeverity::Warning, "The model is busy.")
+            .description("The Harness tries again.");
+        say(&cx, &session, SessionUpdate::Notice(notice))?;
     }
     if words.contains("slow") {
         for piece in 0..40 {
@@ -181,27 +213,33 @@ async fn main() -> Result<(), Error> {
         .builder()
         .name("bandaso-fake-agent")
         .on_receive_request(
-            async |request: InitializeRequest,
-                   responder: Responder<InitializeResponse>,
-                   _cx: ConnectionTo<Client>| {
-                let protocol = if request.protocol_version >= ProtocolVersion::V1 {
-                    ProtocolVersion::V1
-                } else {
-                    request.protocol_version
-                };
-                let capabilities = AgentCapabilities::new()
-                    .load_session(true)
-                    .session_capabilities(
-                        SessionCapabilities::new().resume(SessionResumeCapabilities::new()),
-                    );
-                responder.respond(
-                    InitializeResponse::new(protocol)
-                        .agent_capabilities(capabilities)
-                        .agent_info(Implementation::new(
-                            "bandaso-fake-agent",
-                            env!("CARGO_PKG_VERSION"),
-                        )),
-                )
+            {
+                let fake = fake.clone();
+                async move |request: InitializeRequest,
+                            responder: Responder<InitializeResponse>,
+                            _cx: ConnectionTo<Client>| {
+                    let shows = request.client_capabilities.session.as_ref();
+                    let notices = shows.is_some_and(|s| s.notices.is_some());
+                    fake.notices.store(notices, Ordering::Relaxed);
+                    let protocol = if request.protocol_version >= ProtocolVersion::V1 {
+                        ProtocolVersion::V1
+                    } else {
+                        request.protocol_version
+                    };
+                    let capabilities = AgentCapabilities::new()
+                        .load_session(true)
+                        .session_capabilities(
+                            SessionCapabilities::new().resume(SessionResumeCapabilities::new()),
+                        );
+                    responder.respond(
+                        InitializeResponse::new(protocol)
+                            .agent_capabilities(capabilities)
+                            .agent_info(Implementation::new(
+                                "bandaso-fake-agent",
+                                env!("CARGO_PKG_VERSION"),
+                            )),
+                    )
+                }
             },
             agent_client_protocol::on_receive_request!(),
         )

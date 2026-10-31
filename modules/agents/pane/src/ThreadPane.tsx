@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import type { AgentId } from "@bandaso/contract"
 import type {
   Body,
+  Failure,
   Item,
   ItemId,
   ThreadId,
@@ -60,6 +61,7 @@ import {
   InfoIcon,
   MessageSquareIcon,
   MoveRightIcon,
+  RotateCcwIcon,
   SearchIcon,
   ShieldQuestionIcon,
   SquareIcon,
@@ -68,7 +70,14 @@ import {
   WrenchIcon,
   type LucideIcon,
 } from "lucide-react"
-import { apply, fromView, rows, type ThreadState, working } from "./thread"
+import {
+  apply,
+  fromView,
+  retryable,
+  rows,
+  type ThreadState,
+  working,
+} from "./thread"
 
 /** One Thread with an Agent; without `thread`, the next message starts one. */
 export type ThreadArgs = {
@@ -136,6 +145,10 @@ function ThreadPane({
     void acting.act(() =>
       engine.command("agents.answer", { item, choice }, space)
     )
+  const retry = (turn: TurnView) =>
+    void acting.act(() =>
+      engine.command("agents.retry", { turn: turn.id }, space)
+    )
 
   return (
     <div className="flex h-full min-h-0 flex-col">
@@ -158,6 +171,7 @@ function ThreadPane({
             name={args.name}
             answering={acting.busy}
             onAnswer={answer}
+            onRetry={retry}
           />
         )}
       </div>
@@ -214,10 +228,12 @@ type Answering = {
 function Transcript({
   state,
   name,
+  onRetry,
   ...answers
 }: Answering & {
   state: ThreadState
   name: string
+  onRetry: (turn: TurnView) => void
 }) {
   const turn = working(state)
   const lines = rows(state)
@@ -241,7 +257,15 @@ function Transcript({
                 </MessageScrollerItem>
               ) : (
                 <MessageScrollerItem key={`ended-${line.turn.id}`}>
-                  <Ended turn={line.turn} />
+                  <Ended
+                    turn={line.turn}
+                    busy={answers.answering}
+                    onRetry={
+                      retryable(state, line.turn)
+                        ? () => onRetry(line.turn)
+                        : undefined
+                    }
+                  />
                 </MessageScrollerItem>
               )
             )}
@@ -423,20 +447,74 @@ function Question({
   )
 }
 
-function Ended({ turn }: { turn: TurnView }) {
+/** A turn that did not finish: why, what to do about it, and Try again
+ * when its message can be sent again. */
+function Ended({
+  turn,
+  busy,
+  onRetry,
+}: {
+  turn: TurnView
+  busy: boolean
+  onRetry?: () => void
+}) {
   const failed = turn.state === "failed"
+  const advice = turn.failure && adviceFor(turn.failure)
   return (
     <Trace>
       <TraceLine status={failed ? "error" : undefined}>
         <TraceIcon>
-          {failed ? <CircleAlertIcon /> : <CircleSlashIcon />}
+          {turn.state === "stopped" ? <CircleSlashIcon /> : <CircleAlertIcon />}
         </TraceIcon>
         <TraceTitle className="whitespace-normal">
           {turn.reason ?? (failed ? "This turn failed." : "Stopped.")}
         </TraceTitle>
       </TraceLine>
+      {(advice || onRetry) && (
+        <div className="flex flex-wrap items-center gap-2 pl-6">
+          {advice && (
+            <span className="text-xs text-muted-foreground">{advice}</span>
+          )}
+          {onRetry && (
+            <Button
+              variant="outline"
+              size="xs"
+              disabled={busy}
+              onClick={onRetry}
+            >
+              <RotateCcwIcon data-icon="inline-start" />
+              Try again
+            </Button>
+          )}
+        </div>
+      )}
     </Trace>
   )
+}
+
+/** What a Person can do about a failure, beyond trying again. */
+function adviceFor(failure: Failure): string | undefined {
+  switch (failure.class) {
+    case "sign_in":
+      return "Sign in from a terminal, then try again."
+    case "usage_limit":
+      return failure.until === undefined
+        ? undefined
+        : `You can try again after ${moment(failure.until)}.`
+    case "harness_stopped":
+    case "provider":
+      return undefined
+  }
+}
+
+/** A time as a Person reads it: the hour today, the day too otherwise. */
+function moment(at: number): string {
+  const today = new Date().toDateString() === new Date(at).toDateString()
+  return new Intl.DateTimeFormat(undefined, {
+    weekday: today ? undefined : "short",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(at)
 }
 
 function Composer({

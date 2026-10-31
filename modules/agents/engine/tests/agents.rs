@@ -2,7 +2,7 @@
 //! from `tools/fake-agent` as the Harness: a real process speaking ACP.
 
 use bandaso_agents::Agents;
-use bandaso_agents::model::{Body, QuestionState, ThreadView, TurnState};
+use bandaso_agents::model::{Body, Failure, QuestionState, ThreadView, TurnState};
 use bandaso_agents::settings::{Harness, Harnesses};
 use bandaso_kernel::{AgentId, Code, CommandId, Kernel, Participant, PersonId, SpaceId};
 use serde_json::{Value, json};
@@ -416,7 +416,11 @@ async fn a_harness_that_dies_fails_its_turn_and_the_next_turn_starts_it_again() 
             state(v, &crash["turn"]) == Some(TurnState::Failed)
         })
         .await;
-    assert!(view.turns[0].reason.is_some());
+    assert_eq!(view.turns[0].failure, Some(Failure::HarnessStopped));
+    assert_eq!(
+        view.turns[0].reason.as_deref(),
+        Some("Fake stopped while it worked.")
+    );
 
     let again = world.send(Some(&crash["thread"]), "hello again").await;
     let view = world
@@ -616,4 +620,115 @@ async fn an_idle_harness_is_let_go_and_its_threads_resume() {
     let (_, (again, other)) = ask_session(&world, Some(&thread)).await;
     assert_ne!(process, other, "the idle process was let go");
     assert_eq!(session, again, "and the Thread resumed its session");
+}
+
+/// Sends `text` in a new Thread and waits for its turn to fail.
+async fn failing(world: &World, text: &str) -> (Value, ThreadView) {
+    let sent = world.send(None, text).await;
+    let view = world
+        .until(&sent["thread"], |v| {
+            state(v, &sent["turn"]) == Some(TurnState::Failed)
+        })
+        .await;
+    (sent, view)
+}
+
+#[tokio::test]
+async fn a_failed_turn_says_what_kind_of_failure_it_was() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    for (text, failure, reason) in [
+        (
+            "sign in please",
+            Failure::SignIn,
+            "Fake needs you to sign in.",
+        ),
+        ("fail now", Failure::Provider, "Fake reported an error."),
+        (
+            "quit now",
+            Failure::Provider,
+            "The Harness ended the turn by itself.",
+        ),
+    ] {
+        let (_, view) = failing(&world, text).await;
+        assert_eq!(view.turns[0].failure, Some(failure), "{text}");
+        assert_eq!(view.turns[0].reason.as_deref(), Some(reason), "{text}");
+    }
+}
+
+#[tokio::test]
+async fn a_usage_limit_says_when_it_resets() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let (_, view) = failing(&world, "over the limit").await;
+    let Some(Failure::UsageLimit { until: Some(until) }) = view.turns[0].failure else {
+        panic!("a usage limit with its reset: {:?}", view.turns[0]);
+    };
+    let in_an_hour = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as i64
+        + 3_600_000;
+    assert!((until - in_an_hour).abs() < 60_000, "{until}");
+    assert_eq!(
+        view.turns[0].reason.as_deref(),
+        Some("You've hit your limit."),
+        "in the Harness's own words"
+    );
+}
+
+#[tokio::test]
+async fn a_notice_from_the_harness_joins_the_thread() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let sent = world.send(None, "warn me").await;
+    let view = world
+        .until(&sent["thread"], |v| {
+            state(v, &sent["turn"]) == Some(TurnState::Done)
+        })
+        .await;
+    assert_eq!(
+        texts(&view)[1..],
+        [
+            "notice: The model is busy. The Harness tries again.",
+            "thought: Reading the request.",
+            "message: You said: warn me",
+        ]
+    );
+}
+
+#[tokio::test]
+async fn a_failed_turn_can_be_tried_again_once_it_is_the_latest() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let (sent, _) = failing(&world, "flaky one").await;
+    let retry = |turn: &Value| {
+        world.call(
+            world.person(),
+            "agents.retry",
+            json!({ "turn": turn.clone() }),
+        )
+    };
+    let again = retry(&sent["turn"]).await.unwrap();
+    assert_eq!(again["item"], sent["item"], "the same message");
+    let view = world
+        .until(&sent["thread"], |v| {
+            state(v, &again["turn"]) == Some(TurnState::Done)
+        })
+        .await;
+    assert_eq!(state(&view, &sent["turn"]), Some(TurnState::Failed));
+    assert_eq!(texts(&view).last().unwrap(), "message: You said: flaky one");
+    assert_eq!(
+        view.items
+            .iter()
+            .filter(|i| matches!(i.body, Body::Message { .. }) && i.turn.is_none())
+            .count(),
+        1,
+        "the message is not posted twice"
+    );
+
+    let refused = retry(&sent["turn"]).await.unwrap_err();
+    assert!(refused.message.contains("latest"), "{}", refused.message);
+    let refused = retry(&again["turn"]).await.unwrap_err();
+    assert!(refused.message.contains("failed"), "{}", refused.message);
 }

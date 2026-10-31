@@ -181,6 +181,13 @@ If Chat is removed, Agents still works through its own Thread.
   a Harness and opening a session have time limits; a turn has none. A turn
   the Harness cancels when no Person asked fails, so nobody reads a stop
   that no Person made.
+- **A failed turn says why, and what can be done.** Its class is one of:
+  sign-in needed, usage limit (with when it resets, if the Harness says),
+  Harness stopped, or provider error. The Thread's latest turn that failed
+  or was cut short can be tried again (`agents.retry`): its message goes
+  in a new turn, and the failed one stays as it ended.
+- **The Harness's notices**, such as warnings, join the Thread as lines of
+  their own.
 - **A Question is answered only by a Person.** It shows the Harness's own
   choices, without the Harness's "always" answers. A Question that offers
   nothing else fails its turn: a Person decides each time.
@@ -213,8 +220,11 @@ module reaches a Harness through an adapter:
   adapters (ADR 0003). A native adapter is added only where ACP blocks
   something users need; a native Codex adapter comes later, for its rate
   limits.
-- **Capabilities.** An adapter declares what its Harness can do. The rest of
-  the engine reads those capabilities and never the Harness's name.
+- **Capabilities.** The engine declares what the window can show (notices
+  so far), and the adapter reads what the Harness declares (sessions that
+  resume or load). The rest of the engine reads those capabilities and
+  never the Harness's name. A failure's class comes from ACP's error codes
+  and the data the adapters attach to an error.
 - **Permissions.** The Harness decides when to ask, by its own settings.
   Bandaso shows the Question, passes the Harness's options through unchanged,
   and returns the answer.

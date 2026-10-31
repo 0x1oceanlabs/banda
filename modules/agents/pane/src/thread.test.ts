@@ -1,7 +1,7 @@
 import type { Event } from "@bandaso/contract"
 import { expect, test } from "vitest"
 import { agent, event, person } from "./testing"
-import { EMPTY, apply, rows, working } from "./thread"
+import { EMPTY, apply, retryable, rows, working } from "./thread"
 
 function play(...events: Event[]) {
   return events.reduce(apply, EMPTY)
@@ -131,4 +131,39 @@ test("a failed turn's outcome follows the last thing it wrote", () => {
   expect(
     rows(state).map((row) => (row.kind === "item" ? row.item.id : row.turn.id))
   ).toEqual(["m1", "m2", "u2", "r", "u1"])
+})
+
+test("a failed turn is tried again in a new turn, and only the latest can be", () => {
+  const failed = play(
+    event(
+      "message.posted",
+      { item: "m", turn: "u1", text: "go" },
+      { author: person }
+    ),
+    event("turn.started", { turn: "u1" }),
+    event("turn.ended", {
+      turn: "u1",
+      state: "failed",
+      reason: "Fake needs you to sign in.",
+      failure: { class: "sign_in" },
+    })
+  )
+  expect(failed.turns[0].failure).toEqual({ class: "sign_in" })
+  expect(retryable(failed, failed.turns[0])).toBe(true)
+
+  const again = apply(
+    failed,
+    event("turn.queued", { turn: "u2", message: "m" }, { author: person })
+  )
+  expect(working(again)?.id).toBe("u2")
+  expect(retryable(again, again.turns[0])).toBe(false)
+  const state = [
+    event("turn.started", { turn: "u2" }),
+    event("reply.grew", { item: "r", turn: "u2", text: "Done." }),
+    event("turn.ended", { turn: "u2", state: "done" }),
+  ].reduce(apply, again)
+  expect(
+    rows(state).map((row) => (row.kind === "item" ? row.item.id : row.turn.id))
+  ).toEqual(["m", "u1", "r"])
+  expect(retryable(state, state.turns[1])).toBe(false)
 })

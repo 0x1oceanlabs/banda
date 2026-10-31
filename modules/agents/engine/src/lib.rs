@@ -18,6 +18,7 @@
 //! | `agents.thread` | read | one Thread as a view: `{thread}` |
 //! | `agents.send` | write | a message that queues a turn: `{agent, thread?, text}` |
 //! | `agents.stop` | write | stops a turn: `{turn}` |
+//! | `agents.retry` | write | tries a failed turn's message again: `{turn}` |
 //! | `agents.answer` | decide | answers a Question: `{item, choice}` |
 
 mod acp;
@@ -76,6 +77,7 @@ enum Method {
     Thread,
     Send,
     Stop,
+    Retry,
     Answer,
 }
 
@@ -89,6 +91,7 @@ impl Method {
             "thread" => Method::Thread,
             "send" => Method::Send,
             "stop" => Method::Stop,
+            "retry" => Method::Retry,
             "answer" => Method::Answer,
             _ => return None,
         })
@@ -98,7 +101,7 @@ impl Method {
         match self {
             Method::Harnesses | Method::List | Method::Threads | Method::Thread => Right::Read,
             Method::Create => Right::Manage,
-            Method::Send | Method::Stop => Right::Write,
+            Method::Send | Method::Stop | Method::Retry => Right::Write,
             Method::Answer => Right::Decide,
         }
     }
@@ -139,7 +142,7 @@ pub struct Sent {
 }
 
 #[derive(Deserialize)]
-struct Stop {
+struct OneTurn {
     turn: TurnId,
 }
 
@@ -250,8 +253,13 @@ impl Module for Agents {
                     .await
             }
             Method::Stop => {
-                let Stop { turn } = decode(params)?;
+                let OneTurn { turn } = decode(params)?;
                 call.command(move |tx| stop(tx, turn)).await
+            }
+            Method::Retry => {
+                let OneTurn { turn } = decode(params)?;
+                let author = call.participant();
+                call.command(move |tx| retry(tx, author, turn)).await
             }
             Method::Answer => {
                 let Answer { item, choice } = decode(params)?;
@@ -359,7 +367,7 @@ fn stop(tx: &mut Tx<'_>, turn: TurnId) -> Result<Value, Error> {
         store::turn(tx.sql(), turn)?.ok_or_else(|| Refusal::not_found("There is no such turn."))?;
     match rules::stop(found.state) {
         rules::Stop::Now => {
-            turn::end(tx, &found, TurnState::Stopped, None)?;
+            turn::end(tx, &found, rules::Ending::new(TurnState::Stopped, None))?;
         }
         rules::Stop::AskHarness => {
             tx.enqueue(turn::STOP, &turn.to_string(), &TurnEffect { turn })?;
@@ -367,6 +375,39 @@ fn stop(tx: &mut Tx<'_>, turn: TurnId) -> Result<Value, Error> {
         rules::Stop::Nothing => {}
     }
     Ok(Value::Null)
+}
+
+/// Tries a failed turn's message again, in a new turn that waits behind the
+/// Thread's earlier turns. The failed turn stays as it ended.
+fn retry(tx: &mut Tx<'_>, author: Participant, turn: TurnId) -> Result<Value, Error> {
+    let found =
+        store::turn(tx.sql(), turn)?.ok_or_else(|| Refusal::not_found("There is no such turn."))?;
+    let latest = store::last_turn(tx.sql(), found.thread)? == Some(found.id);
+    rules::retry(found.state, latest)?;
+    let again = store::Turn {
+        id: TurnId::new(),
+        state: TurnState::Queued,
+        ..found
+    };
+    let now = tx.now();
+    store::insert_turn(tx.sql(), &again, author, now)?;
+    store::touch_thread(tx.sql(), again.thread, now)?;
+    let queued = Fact::TurnQueued {
+        turn: again.id,
+        message: again.message,
+    };
+    emit(tx, author, again.thread, &queued)?;
+    tx.enqueue(
+        turn::START,
+        &again.thread.to_string(),
+        &TurnEffect { turn: again.id },
+    )?;
+    value(Sent {
+        thread: again.thread,
+        turn: again.id,
+        item: again.message,
+    })
+    .map_err(Error::from)
 }
 
 /// A Person's answer to a Question. It goes to the Harness from the outbox.
