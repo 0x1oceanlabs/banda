@@ -9,12 +9,17 @@
 //!
 //! Each one dies with the Harness's process, so a restart abandons it and
 //! [`settle`] writes what that means.
+//!
+//! A turn starts by setting the session's options to the Thread's settings.
+//! A Harness with modes of its own enforces the mode; for any other, the
+//! turn answers the Harness's Questions by the mode where the mode allows,
+//! and asks the Person otherwise.
 
-use crate::acp::{Answer, Opened, Said};
+use crate::acp::{Answer, Opened, Running, Said};
 use crate::live::Live;
 use crate::model::{
-    Body, Fact, Failure, Item, ItemId, QuestionState, ThreadId, ToolKind, ToolStatus, TurnId,
-    TurnState,
+    Body, Fact, Failure, Item, ItemId, QuestionState, Settings, ThreadId, ToolKind, ToolStatus,
+    TurnId, TurnState,
 };
 use crate::rules::{self, Ending, Piece, Pieces, Text};
 use crate::settings::{self, Harnesses};
@@ -202,17 +207,18 @@ pub async fn start(
                 )) => text,
                 _ => String::new(),
             };
+            let settings = store::settings(tx.sql(), turn.thread)?;
             let started = Fact::TurnStarted { turn: turn.id };
             emit(tx, Participant::Agent(turn.agent), turn.thread, &started)?;
-            Ok(Some((turn, text)))
+            Ok(Some((turn, text, settings)))
         })
         .await;
-    let (turn, text) = match begun {
+    let (turn, text, settings) = match begun {
         Ok(Some(begun)) => begun,
         Ok(None) => return Outcome::Done,
         Err(error) => return Outcome::Retry(error.to_string()),
     };
-    let ending = work(live, harnesses, &space, &turn, &text).await;
+    let ending = work(live, harnesses, &space, &turn, &text, settings).await;
     let ending = ending.stop_asked(live.end(turn.id));
     match space.write(move |tx| end(tx, &turn, ending)).await {
         Ok(()) => Outcome::Done,
@@ -228,8 +234,9 @@ async fn work(
     space: &ModuleSpace,
     turn: &store::Turn,
     text: &str,
+    settings: Settings,
 ) -> Ending {
-    match prompt(live, harnesses, space, turn, text).await {
+    match prompt(live, harnesses, space, turn, text, settings).await {
         Ok(ending) | Err(ending) => ending,
     }
 }
@@ -240,6 +247,7 @@ async fn prompt(
     space: &ModuleSpace,
     turn: &store::Turn,
     text: &str,
+    settings: Settings,
 ) -> Result<Ending, Ending> {
     let unplanned = |reason: String| Ending::failed(reason, None);
     let agent = settings::agent(space.folder(), turn.agent).map_err(|r| unplanned(r.message))?;
@@ -279,9 +287,25 @@ async fn prompt(
             .await
             .map_err(|e| unplanned(plain(e)))?;
     }
+    let (running, refused) = connection.settle(&session, &settings).await;
+    let (id, agent, offer) = (
+        turn.id,
+        Participant::Agent(turn.agent),
+        running.offer.clone(),
+    );
+    space
+        .write(move |tx| {
+            offered(tx, agent, thread, offer)?;
+            for text in refused {
+                notice(tx, agent, thread, id, text)?;
+            }
+            Ok(())
+        })
+        .await
+        .map_err(|e| unplanned(plain(e)))?;
     let (mut hear, mut done) = connection.prompt(&session, text);
     live.begin(turn.id, connection.clone(), session.clone());
-    let mut writer = Writer::new(space.clone(), turn);
+    let mut writer = Writer::new(space.clone(), turn, settings, running);
     if let Err(reason) = writer.listen(live, &mut hear).await {
         // What the Harness says cannot be written: the turn stops and fails.
         let _ = connection.cancel(&session);
@@ -296,15 +320,59 @@ async fn prompt(
     Ok(ending.resets(writer.resets))
 }
 
+/// Writes what the Harness offers in the Thread, when that changed.
+fn offered(
+    tx: &mut Tx<'_>,
+    agent: Participant,
+    thread: ThreadId,
+    offer: crate::model::Offer,
+) -> Result<(), Error> {
+    if store::offer(tx.sql(), thread)? == offer {
+        return Ok(());
+    }
+    store::set_offer(tx.sql(), thread, &offer)?;
+    emit(tx, agent, thread, &Fact::ThreadOffered { thread, offer })
+}
+
+/// The Harness switched its mode or its plan by itself, as Claude Code
+/// does when a plan is accepted: the Thread's settings follow.
+fn switched(
+    tx: &mut Tx<'_>,
+    agent: Participant,
+    thread: ThreadId,
+    now: &Running,
+) -> Result<(), Error> {
+    let before = store::settings(tx.sql(), thread)?;
+    let mut settings = before.clone();
+    settings.plan = now.plan;
+    if let Some(mode) = now.mode {
+        settings.mode = mode;
+    }
+    if settings == before {
+        return Ok(());
+    }
+    store::set_settings(tx.sql(), thread, &settings)?;
+    emit(
+        tx,
+        agent,
+        thread,
+        &Fact::ThreadConfigured { thread, settings },
+    )
+}
+
 /// Writes what the Harness says into the Thread.
 struct Writer {
     space: ModuleSpace,
     thread: ThreadId,
     turn: TurnId,
     agent: AgentId,
+    /// What the turn started with, and what the session runs with now.
+    settings: Settings,
+    running: Running,
     pieces: Pieces,
-    /// The Harness's tool call IDs and the items that show them.
-    tools: HashMap<String, (ItemId, String)>,
+    /// The Harness's tool call IDs, the items that show them, their titles
+    /// and kinds.
+    tools: HashMap<String, (ItemId, String, ToolKind)>,
     due: Option<Instant>,
     /// When the account may be used again, if the Harness said it reached
     /// its limit.
@@ -312,12 +380,14 @@ struct Writer {
 }
 
 impl Writer {
-    fn new(space: ModuleSpace, turn: &store::Turn) -> Writer {
+    fn new(space: ModuleSpace, turn: &store::Turn, settings: Settings, running: Running) -> Writer {
         Writer {
             space,
             thread: turn.thread,
             turn: turn.id,
             agent: turn.agent,
+            settings,
+            running,
             pieces: Pieces::default(),
             tools: HashMap::new(),
             due: None,
@@ -370,7 +440,7 @@ impl Writer {
                 status,
             } => {
                 self.close().await?;
-                let Some((id, known)) = self.tools.get_mut(&call) else {
+                let Some((id, known, _)) = self.tools.get_mut(&call) else {
                     let title = title.unwrap_or_else(|| "A tool".to_owned());
                     let status = status.unwrap_or(ToolStatus::Running);
                     return self.start_tool(call, title, ToolKind::Other, status).await;
@@ -384,22 +454,29 @@ impl Writer {
             Said::Asks {
                 call,
                 title,
+                tool,
                 offered,
                 answer,
             } => {
                 self.close().await?;
+                let known = self.tools.get(&call);
+                let tool = tool.or(known.map(|(_, _, kind)| *kind));
+                if !self.running.native
+                    && rules::disposition(self.settings.mode, tool.unwrap_or(ToolKind::Other))
+                        == rules::Disposition::Allow
+                    && let Some(once) = rules::allow_once(&offered)
+                {
+                    let _ = answer.send(Answer::Chose(once.to_owned()));
+                    return Ok(());
+                }
+                let title = title
+                    .or_else(|| known.map(|(_, t, _)| t.clone()))
+                    .unwrap_or_else(|| "The Agent asks before it goes on.".to_owned());
                 let choices = rules::choices(offered);
                 if choices.is_empty() {
                     let _ = answer.send(Answer::Cancelled);
-                    return Err(
-                        "The Harness offered only answers it would keep for next time; \
-                         a Person decides each time."
-                            .to_owned(),
-                    );
+                    return Err("The Harness asked without offering any answer.".to_owned());
                 }
-                let title = title
-                    .or_else(|| self.tools.get(&call).map(|(_, t)| t.clone()))
-                    .unwrap_or_else(|| "The Agent asks before it goes on.".to_owned());
                 let id = ItemId::new();
                 // Held before it is written, so an answer finds it.
                 if !live.ask(self.turn, id, answer) {
@@ -437,6 +514,20 @@ impl Writer {
                 self.resets = Some(at);
                 Ok(())
             }
+            Said::Runs(now) => {
+                let ran = std::mem::replace(&mut self.running, now.clone());
+                let moved = now.native && (now.mode, now.plan) != (ran.mode, ran.plan);
+                let (thread, agent) = (self.thread, Participant::Agent(self.agent));
+                self.space
+                    .write(move |tx| {
+                        if moved {
+                            switched(tx, agent, thread, &now)?;
+                        }
+                        offered(tx, agent, thread, now.offer)
+                    })
+                    .await
+                    .map_err(plain)
+            }
         }
     }
 
@@ -448,7 +539,7 @@ impl Writer {
         status: ToolStatus,
     ) -> Result<(), String> {
         let id = ItemId::new();
-        self.tools.insert(call, (id, title.clone()));
+        self.tools.insert(call, (id, title.clone(), tool));
         let started = Fact::ToolStarted {
             item: id,
             turn: self.turn,

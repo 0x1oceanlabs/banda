@@ -9,13 +9,20 @@ import { VERSION } from "./generated/agents/VERSION"
 export type { AgentView } from "./generated/agents/AgentView"
 export type { Body } from "./generated/agents/Body"
 export type { Choice } from "./generated/agents/Choice"
+export type { Defaults } from "./generated/agents/Defaults"
 export type { Failure } from "./generated/agents/Failure"
 export type { Fact } from "./generated/agents/Fact"
+export type { HarnessOption } from "./generated/agents/HarnessOption"
 export type { HarnessView } from "./generated/agents/HarnessView"
 export type { Item } from "./generated/agents/Item"
 export type { ItemId } from "./generated/agents/ItemId"
+export type { Mode } from "./generated/agents/Mode"
+export type { Offer } from "./generated/agents/Offer"
+export type { OptionChoice } from "./generated/agents/OptionChoice"
+export type { OptionValue } from "./generated/agents/OptionValue"
 export type { QuestionState } from "./generated/agents/QuestionState"
 export type { Sent } from "./generated/agents/Sent"
+export type { Settings } from "./generated/agents/Settings"
 export type { ThreadId } from "./generated/agents/ThreadId"
 export type { ThreadList } from "./generated/agents/ThreadList"
 export type { ThreadSummary } from "./generated/agents/ThreadSummary"
@@ -37,6 +44,8 @@ const KINDS: ReadonlySet<string> = new Set(
     "turn.started": true,
     "turn.ended": true,
     "turn.queued": true,
+    "thread.configured": true,
+    "thread.offered": true,
     "reply.grew": true,
     "thought.grew": true,
     "tool.started": true,

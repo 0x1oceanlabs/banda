@@ -141,6 +141,7 @@ test("a window calls, follows and sees refusals by their code", async () => {
     "thread.started",
     "message.posted",
     "turn.started",
+    "thread.offered",
     "thought.grew",
     "reply.grew",
     "turn.ended",

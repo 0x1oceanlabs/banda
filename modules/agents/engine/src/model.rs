@@ -3,6 +3,7 @@
 
 use bandaso_kernel::{AgentId, Participant};
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use ts_rs::TS;
 
 bandaso_kernel::id!(
@@ -30,6 +31,93 @@ pub struct AgentView {
     pub name: String,
     /// The Harness it runs on, by its ID in the Harness list.
     pub harness: String,
+    /// What its new Threads start with.
+    pub settings: Settings,
+}
+
+/// How freely an Agent acts in a Thread (ADR 0003, decision 9). A Harness
+/// that has modes of its own enforces the mode; for any other, the engine
+/// answers the Harness's Questions by it.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export, export_to = "agents/")]
+pub enum Mode {
+    /// It asks before it changes anything.
+    Supervised,
+    /// It edits files without asking, and asks before anything else.
+    AcceptEdits,
+    /// It decides itself what to ask about.
+    Auto,
+    /// It never asks.
+    #[default]
+    FullAccess,
+}
+
+/// A value of one of the Harness's options: a choice's ID, or on or off.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(untagged)]
+#[ts(export, export_to = "agents/")]
+pub enum OptionValue {
+    Choice(String),
+    Toggle(bool),
+}
+
+/// What a Thread runs with. A Person chooses it; the Harness gets it when
+/// a turn starts.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "agents/")]
+pub struct Settings {
+    #[serde(default)]
+    pub mode: Mode,
+    /// The Agent makes a plan before it changes anything.
+    #[serde(default)]
+    pub plan: bool,
+    /// The Harness's options by their IDs, such as its model.
+    #[serde(default)]
+    pub options: BTreeMap<String, OptionValue>,
+}
+
+/// One of the Harness's options for a session, such as its model or
+/// effort, as the Harness offers it.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "agents/")]
+pub struct HarnessOption {
+    pub id: String,
+    pub name: String,
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    /// What kind of option it is, such as `model` or `thought_level`.
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub category: Option<String>,
+    pub value: OptionValue,
+    /// The values to choose from; none for an option that is on or off.
+    #[serde(default)]
+    pub choices: Vec<OptionChoice>,
+}
+
+/// What the Harness offers a Person to choose in a Thread.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "agents/")]
+pub struct Offer {
+    /// Its options, the model first. A Harness with modes of its own keeps
+    /// them out of this list: the Thread's mode and plan stand for them.
+    #[serde(default)]
+    pub options: Vec<HarnessOption>,
+    /// The Harness can plan before it changes anything.
+    #[serde(default)]
+    pub plans: bool,
+}
+
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "agents/")]
+pub struct OptionChoice {
+    pub value: String,
+    pub name: String,
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
 }
 
 /// A Harness this machine can run.
@@ -130,6 +218,9 @@ pub struct Choice {
     pub id: String,
     pub name: String,
     pub allows: bool,
+    /// The Harness keeps this answer for next time.
+    #[serde(default)]
+    pub always: bool,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -207,6 +298,9 @@ pub struct ThreadView {
     pub thread: ThreadSummary,
     pub items: Vec<Item>,
     pub turns: Vec<TurnView>,
+    pub settings: Settings,
+    /// What the Harness last offered in this Thread.
+    pub offer: Offer,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -260,6 +354,15 @@ pub enum Fact {
     /// A Person tries a failed turn's message again, in a new turn.
     #[serde(rename = "turn.queued")]
     TurnQueued { turn: TurnId, message: ItemId },
+    /// The Thread's settings changed, by a Person or by the Harness.
+    #[serde(rename = "thread.configured")]
+    ThreadConfigured {
+        thread: ThreadId,
+        settings: Settings,
+    },
+    /// The Harness offers this in the Thread now.
+    #[serde(rename = "thread.offered")]
+    ThreadOffered { thread: ThreadId, offer: Offer },
     /// More of the Agent's reply. The first piece of an item starts it.
     #[serde(rename = "reply.grew")]
     ReplyGrew {

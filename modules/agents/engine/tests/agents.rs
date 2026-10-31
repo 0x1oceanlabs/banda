@@ -2,7 +2,9 @@
 //! from `tools/fake-agent` as the Harness: a real process speaking ACP.
 
 use bandaso_agents::Agents;
-use bandaso_agents::model::{Body, Failure, QuestionState, ThreadView, TurnState};
+use bandaso_agents::model::{
+    Body, Failure, Mode, OptionValue, QuestionState, Settings, ThreadView, TurnState,
+};
 use bandaso_agents::settings::{Harness, Harnesses};
 use bandaso_kernel::{AgentId, Code, CommandId, Kernel, Participant, PersonId, SpaceId};
 use serde_json::{Value, json};
@@ -243,6 +245,7 @@ async fn a_message_gets_the_agents_reply() {
             "thread.started",
             "message.posted",
             "turn.started",
+            "thread.offered",
             "thought.grew",
             "reply.grew",
             "turn.ended",
@@ -251,7 +254,7 @@ async fn a_message_gets_the_agents_reply() {
 }
 
 #[tokio::test]
-async fn a_question_waits_for_a_person_and_never_offers_always() {
+async fn a_question_waits_for_a_person_and_offers_every_answer_of_the_harness() {
     let root = tempfile::tempdir().unwrap();
     let world = World::new(root.path()).await;
     let sent = world.send(None, "please ask first").await;
@@ -273,8 +276,8 @@ async fn a_question_waits_for_a_person_and_never_offers_always() {
         panic!("a Question")
     };
     assert_eq!(title, "Run a check");
-    let ids: Vec<_> = choices.iter().map(|c| c.id.as_str()).collect();
-    assert_eq!(ids, ["allow", "reject"]);
+    let ids: Vec<_> = choices.iter().map(|c| (c.id.as_str(), c.always)).collect();
+    assert_eq!(ids, [("allow", false), ("always", true), ("reject", false)]);
 
     let by_agent = world
         .call(
@@ -284,19 +287,19 @@ async fn a_question_waits_for_a_person_and_never_offers_always() {
         )
         .await;
     assert_eq!(by_agent.unwrap_err().code, Code::Forbidden);
-    let always = world
+    let unknown = world
         .call(
             world.person(),
             "agents.answer",
-            json!({ "item": question.id, "choice": "always" }),
+            json!({ "item": question.id, "choice": "maybe" }),
         )
         .await;
-    assert_eq!(always.unwrap_err().code, Code::Invalid);
+    assert_eq!(unknown.unwrap_err().code, Code::Invalid);
     world
         .call(
             world.person(),
             "agents.answer",
-            json!({ "item": question.id, "choice": "allow" }),
+            json!({ "item": question.id, "choice": "always" }),
         )
         .await
         .unwrap();
@@ -314,26 +317,6 @@ async fn a_question_waits_for_a_person_and_never_offers_always() {
             "question: Run a check (Answered)",
             "message: The check passed.",
         ]
-    );
-}
-
-#[tokio::test]
-async fn a_question_that_offers_only_always_answers_fails_its_turn() {
-    let root = tempfile::tempdir().unwrap();
-    let world = World::new(root.path()).await;
-    let sent = world.send(None, "remember my answer").await;
-    let view = world
-        .until(&sent["thread"], |v| {
-            state(v, &sent["turn"]) == Some(TurnState::Failed)
-        })
-        .await;
-    let reason = view.turns[0].reason.as_deref().unwrap_or_default();
-    assert!(reason.contains("a Person decides each time"), "{reason}");
-    assert!(
-        view.items
-            .iter()
-            .all(|i| !matches!(i.body, Body::Question { .. })),
-        "a Question with nothing to choose is never shown"
     );
 }
 
@@ -731,4 +714,159 @@ async fn a_failed_turn_can_be_tried_again_once_it_is_the_latest() {
     assert!(refused.message.contains("latest"), "{}", refused.message);
     let refused = retry(&again["turn"]).await.unwrap_err();
     assert!(refused.message.contains("failed"), "{}", refused.message);
+}
+
+impl World {
+    async fn defaults(&self) -> Value {
+        let params = json!({ "agent": self.agent });
+        self.call(self.person(), "agents.defaults", params)
+            .await
+            .unwrap()
+    }
+
+    async fn configure(&self, thread: &Value, settings: Value) {
+        self.call(
+            self.person(),
+            "agents.configure",
+            json!({ "thread": thread, "settings": settings }),
+        )
+        .await
+        .unwrap();
+    }
+
+    /// Sends `text` and waits for its turn to end as it did.
+    async fn finish(&self, thread: Option<&Value>, text: &str) -> (Value, ThreadView) {
+        let sent = self.send(thread, text).await;
+        let view = self
+            .until(&sent["thread"], |v| {
+                state(v, &sent["turn"])
+                    .is_some_and(|s| s != TurnState::Queued && s != TurnState::Running)
+            })
+            .await;
+        (sent["thread"].clone(), view)
+    }
+}
+
+fn last_reply(view: &ThreadView) -> String {
+    texts(view).last().cloned().unwrap_or_default()
+}
+
+#[tokio::test]
+async fn a_threads_settings_become_its_harnesss_options() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let (thread, view) = world.finish(None, "which settings").await;
+    assert_eq!(
+        last_reply(&view),
+        "message: Mode bypassPermissions, model fast, brief false",
+        "full access is the default"
+    );
+    assert_eq!(view.settings, Settings::default());
+    let offered: Vec<_> = view.offer.options.iter().map(|o| o.id.as_str()).collect();
+    assert_eq!(
+        offered,
+        ["model", "brief"],
+        "the mode stands for the Harness's own"
+    );
+    assert!(view.offer.plans);
+
+    world
+        .configure(
+            &thread,
+            json!({ "mode": "supervised", "options": { "model": "smart", "brief": true } }),
+        )
+        .await;
+    let (_, view) = world.finish(Some(&thread), "which settings").await;
+    assert_eq!(
+        last_reply(&view),
+        "message: Mode default, model smart, brief true"
+    );
+    assert_eq!(view.settings.mode, Mode::Supervised);
+    let model = &view.offer.options[0];
+    assert_eq!(model.value, OptionValue::Choice("smart".into()));
+
+    world
+        .configure(&thread, json!({ "mode": "full_access", "plan": true }))
+        .await;
+    let (_, view) = world.finish(Some(&thread), "which settings").await;
+    assert_eq!(
+        last_reply(&view),
+        "message: Mode plan, model smart, brief true"
+    );
+
+    let (_, view) = world.finish(Some(&thread), "plan done").await;
+    assert_eq!(last_reply(&view), "message: The plan is ready.");
+    assert_eq!(
+        (view.settings.mode, view.settings.plan),
+        (Mode::AcceptEdits, false),
+        "the Thread follows the Harness out of its plan"
+    );
+}
+
+#[tokio::test]
+async fn without_modes_of_its_own_a_harness_is_answered_by_the_threads_mode() {
+    let root = tempfile::tempdir().unwrap();
+    let agents = Agents::new(harnesses_with(&[("FAKE_AGENT_NO_MODES", "1")]));
+    let world = World::new_with(root.path(), agents).await;
+    let (thread, view) = world.finish(None, "please ask first").await;
+    assert_eq!(
+        texts(&view),
+        [
+            "message: please ask first",
+            "tool: Run a check (Done)",
+            "message: The check passed.",
+        ],
+        "full access allows it without a Question"
+    );
+    assert!(!view.offer.plans);
+
+    world
+        .configure(&thread, json!({ "mode": "supervised" }))
+        .await;
+    let sent = world.send(Some(&thread), "please ask first").await;
+    let view = world
+        .until(&thread, |v| {
+            v.items.iter().any(|i| {
+                matches!(
+                    i.body,
+                    Body::Question {
+                        state: QuestionState::Open,
+                        ..
+                    }
+                )
+            })
+        })
+        .await;
+    assert_eq!(state(&view, &sent["turn"]), Some(TurnState::Running));
+}
+
+#[tokio::test]
+async fn an_agents_file_holds_what_its_new_threads_start_with() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let first = world.defaults().await;
+    assert_eq!(first["settings"]["mode"], "full_access");
+    assert_eq!(first["offer"]["options"], json!([]), "nothing offered yet");
+
+    let space = world.kernel.space(world.space).await.unwrap();
+    let file = space.folder().join(".bandaso/agents/Writer.toml");
+    let text = std::fs::read_to_string(&file).unwrap();
+    std::fs::write(
+        &file,
+        format!("{text}mode = \"auto\"\n\n[options]\nmodel = \"smart\"\n"),
+    )
+    .unwrap();
+    let (_, view) = world.finish(None, "which settings").await;
+    assert_eq!(view.settings.mode, Mode::Auto);
+    assert_eq!(
+        last_reply(&view),
+        "message: Mode auto, model smart, brief false"
+    );
+
+    let after = world.defaults().await;
+    assert_eq!(after["settings"]["mode"], "auto");
+    assert_eq!(
+        after["offer"]["options"][0]["id"], "model",
+        "what the Harness offered"
+    );
 }

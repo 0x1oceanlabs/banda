@@ -3,8 +3,9 @@
 //!
 //! - `ask`: starts a tool call and asks permission to run it. An allow runs
 //!   it, a reject skips it, and a cancel ends the turn.
-//! - `remember`: asks as `ask` does, offering only answers to keep for next
-//!   time.
+//! - `which settings`: replies with the session's mode, model and brevity.
+//! - `plan done`: in the plan mode, switches to accepting edits, as Claude
+//!   Code does when a Person accepts its plan.
 //! - `quit`: ends the turn as cancelled, though nobody stopped it.
 //! - `slow`: replies in forty pieces, fifty milliseconds apart, and stops
 //!   early when cancelled.
@@ -22,21 +23,28 @@
 //! Its sessions can be resumed or loaded after a restart, as a real
 //! Harness keeps them on disk. With `FAKE_AGENT_FORGETS` set it refuses
 //! both, as a Harness that lost them would.
+//!
+//! Each session has options as Claude Code's do: a `mode` with Claude
+//! Code's modes, a `model`, and `brief`, on or off, for a client that shows
+//! such options. With `FAKE_AGENT_NO_MODES` set it has no modes, as an ACP
+//! agent other than Claude Code and Codex.
 
 use agent_client_protocol::schema::ProtocolVersion;
 use agent_client_protocol::schema::v1::{
-    AgentCapabilities, CancelNotification, ContentBlock, ContentChunk, Implementation,
-    InitializeRequest, InitializeResponse, LoadSessionRequest, LoadSessionResponse,
+    AgentCapabilities, CancelNotification, ConfigOptionUpdate, ContentBlock, ContentChunk,
+    Implementation, InitializeRequest, InitializeResponse, LoadSessionRequest, LoadSessionResponse,
     NewSessionRequest, NewSessionResponse, Notice, NoticeSeverity, PermissionOption,
     PermissionOptionKind, PromptRequest, PromptResponse, RequestPermissionOutcome,
     RequestPermissionRequest, ResumeSessionRequest, ResumeSessionResponse, SessionCapabilities,
-    SessionId, SessionNotification, SessionResumeCapabilities, SessionUpdate, StopReason,
+    SessionConfigOption, SessionConfigOptionCategory, SessionConfigOptionValue,
+    SessionConfigSelectOption, SessionId, SessionNotification, SessionResumeCapabilities,
+    SessionUpdate, SetSessionConfigOptionRequest, SetSessionConfigOptionResponse, StopReason,
     TextContent, ToolCall, ToolCallStatus, ToolCallUpdate, ToolCallUpdateFields, ToolKind,
     UsageUpdate,
 };
 use agent_client_protocol::{Agent, Client, ConnectionTo, Error, Responder, Stdio};
 use serde_json::json;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
@@ -49,11 +57,102 @@ struct Fake {
     notices: Arc<AtomicBool>,
     /// The `flaky` prompts that have failed once.
     failed_once: Arc<Mutex<HashSet<String>>>,
+    /// The client shows options that are on or off.
+    toggles: Arc<AtomicBool>,
+    setups: Arc<Mutex<HashMap<SessionId, Setup>>>,
+}
+
+/// What a session runs with.
+#[derive(Clone)]
+struct Setup {
+    mode: String,
+    model: String,
+    brief: bool,
+}
+
+impl Default for Setup {
+    fn default() -> Self {
+        Setup {
+            mode: "default".into(),
+            model: "fast".into(),
+            brief: false,
+        }
+    }
+}
+
+const MODES: [(&str, &str); 5] = [
+    ("default", "Manual"),
+    ("acceptEdits", "Accept edits"),
+    ("plan", "Plan"),
+    ("auto", "Auto"),
+    ("bypassPermissions", "Bypass permissions"),
+];
+const MODELS: [(&str, &str); 2] = [("fast", "Fast"), ("smart", "Smart")];
+
+fn select(values: &[(&str, &str)]) -> Vec<SessionConfigSelectOption> {
+    values
+        .iter()
+        .map(|(value, name)| SessionConfigSelectOption::new(value.to_string(), *name))
+        .collect()
 }
 
 impl Fake {
     fn cancelled(&self, session: &SessionId) -> bool {
         self.cancelled.lock().unwrap().contains(session)
+    }
+
+    fn setup(&self, session: &SessionId) -> Setup {
+        let mut setups = self.setups.lock().unwrap();
+        setups.entry(session.clone()).or_default().clone()
+    }
+
+    /// The session's options, as the Harness offers them.
+    fn options(&self, session: &SessionId) -> Vec<SessionConfigOption> {
+        let setup = self.setup(session);
+        let mut options = Vec::new();
+        if std::env::var_os("FAKE_AGENT_NO_MODES").is_none() {
+            options.push(
+                SessionConfigOption::select("mode", "Mode", setup.mode, select(&MODES))
+                    .category(SessionConfigOptionCategory::Mode),
+            );
+        }
+        options.push(
+            SessionConfigOption::select("model", "Model", setup.model, select(&MODELS))
+                .category(SessionConfigOptionCategory::Model),
+        );
+        if self.toggles.load(Ordering::Relaxed) {
+            options.push(SessionConfigOption::boolean("brief", "Brief", setup.brief));
+        }
+        options
+    }
+
+    /// Sets one option, if the session offers it and the value is one of
+    /// its own.
+    fn set(&self, request: &SetSessionConfigOptionRequest) -> Result<(), Error> {
+        let offered = self.options(&request.session_id);
+        let option = offered
+            .iter()
+            .find(|o| o.id == request.config_id)
+            .ok_or_else(|| Error::invalid_params().data("no such option"))?;
+        let mut setups = self.setups.lock().unwrap();
+        let setup = setups.entry(request.session_id.clone()).or_default();
+        let choose = |values: &[(&str, &str)], value: &SessionConfigOptionValue| {
+            let value = value.as_value_id().map(|v| v.0.to_string());
+            value
+                .filter(|v| values.iter().any(|(id, _)| id == v))
+                .ok_or_else(|| Error::invalid_params().data("no such value"))
+        };
+        match &*option.id.0 {
+            "mode" => setup.mode = choose(&MODES, &request.value)?,
+            "model" => setup.model = choose(&MODELS, &request.value)?,
+            _ => {
+                setup.brief = request
+                    .value
+                    .as_bool()
+                    .ok_or_else(|| Error::invalid_params().data("on or off"))?
+            }
+        }
+        Ok(())
     }
 }
 
@@ -126,6 +225,41 @@ async fn turn(
     if words.contains("quit") {
         return Ok(StopReason::Cancelled);
     }
+    if words.contains("which settings") {
+        let setup = fake.setup(&session);
+        let reply = format!(
+            "Mode {}, model {}, brief {}",
+            setup.mode, setup.model, setup.brief
+        );
+        say(
+            &cx,
+            &session,
+            SessionUpdate::AgentMessageChunk(text(&reply)),
+        )?;
+        return Ok(StopReason::EndTurn);
+    }
+    if words.contains("plan done") {
+        let planned = {
+            let mut setups = fake.setups.lock().unwrap();
+            let setup = setups.entry(session.clone()).or_default();
+            let planned = setup.mode == "plan";
+            if planned {
+                setup.mode = "acceptEdits".into();
+            }
+            planned
+        };
+        if planned {
+            let update = ConfigOptionUpdate::new(fake.options(&session));
+            say(&cx, &session, SessionUpdate::ConfigOptionUpdate(update))?;
+        }
+        let reply = if planned {
+            "The plan is ready."
+        } else {
+            "There was no plan."
+        };
+        say(&cx, &session, SessionUpdate::AgentMessageChunk(text(reply)))?;
+        return Ok(StopReason::EndTurn);
+    }
     if words.contains("which session") {
         let reply = format!("Session {} in process {}", session.0, std::process::id());
         say(
@@ -135,8 +269,7 @@ async fn turn(
         )?;
         return Ok(StopReason::EndTurn);
     }
-    let remember = words.contains("remember");
-    if remember || words.contains("ask") {
+    if words.contains("ask") {
         let tool = "check-1";
         say(
             &cx,
@@ -147,20 +280,11 @@ async fn turn(
                     .status(ToolCallStatus::Pending),
             ),
         )?;
-        let always =
-            PermissionOption::new("always", "Always allow", PermissionOptionKind::AllowAlways);
-        let options = if remember {
-            vec![
-                always,
-                PermissionOption::new("never", "Never allow", PermissionOptionKind::RejectAlways),
-            ]
-        } else {
-            vec![
-                PermissionOption::new("allow", "Allow", PermissionOptionKind::AllowOnce),
-                always,
-                PermissionOption::new("reject", "Reject", PermissionOptionKind::RejectOnce),
-            ]
-        };
+        let options = vec![
+            PermissionOption::new("allow", "Allow", PermissionOptionKind::AllowOnce),
+            PermissionOption::new("always", "Always allow", PermissionOptionKind::AllowAlways),
+            PermissionOption::new("reject", "Reject", PermissionOptionKind::RejectOnce),
+        ];
         let question = RequestPermissionRequest::new(
             session.clone(),
             ToolCallUpdate::new(tool, ToolCallUpdateFields::new().title("Run a check")),
@@ -221,6 +345,9 @@ async fn main() -> Result<(), Error> {
                     let shows = request.client_capabilities.session.as_ref();
                     let notices = shows.is_some_and(|s| s.notices.is_some());
                     fake.notices.store(notices, Ordering::Relaxed);
+                    let options = shows.and_then(|s| s.config_options.as_ref());
+                    let toggles = options.is_some_and(|o| o.boolean.is_some());
+                    fake.toggles.store(toggles, Ordering::Relaxed);
                     let protocol = if request.protocol_version >= ProtocolVersion::V1 {
                         ProtocolVersion::V1
                     } else {
@@ -251,31 +378,55 @@ async fn main() -> Result<(), Error> {
                             _cx: ConnectionTo<Client>| {
                     let number = fake.sessions.fetch_add(1, Ordering::Relaxed) + 1;
                     // Unique across processes, so a resumed session shows.
-                    let id = format!("fake-{}-{number}", std::process::id());
-                    responder.respond(NewSessionResponse::new(id))
+                    let id = SessionId::new(format!("fake-{}-{number}", std::process::id()));
+                    let options = fake.options(&id);
+                    responder.respond(NewSessionResponse::new(id).config_options(options))
                 }
             },
             agent_client_protocol::on_receive_request!(),
         )
         .on_receive_request(
-            async |_request: ResumeSessionRequest,
-                   responder: Responder<ResumeSessionResponse>,
-                   _cx: ConnectionTo<Client>| {
-                if forgets() {
-                    return responder.respond_with_error(Error::resource_not_found(None));
+            {
+                let fake = fake.clone();
+                async move |request: ResumeSessionRequest,
+                            responder: Responder<ResumeSessionResponse>,
+                            _cx: ConnectionTo<Client>| {
+                    if forgets() {
+                        return responder.respond_with_error(Error::resource_not_found(None));
+                    }
+                    let options = fake.options(&request.session_id);
+                    responder.respond(ResumeSessionResponse::new().config_options(options))
                 }
-                responder.respond(ResumeSessionResponse::new())
             },
             agent_client_protocol::on_receive_request!(),
         )
         .on_receive_request(
-            async |_request: LoadSessionRequest,
-                   responder: Responder<LoadSessionResponse>,
-                   _cx: ConnectionTo<Client>| {
-                if forgets() {
-                    return responder.respond_with_error(Error::resource_not_found(None));
+            {
+                let fake = fake.clone();
+                async move |request: LoadSessionRequest,
+                            responder: Responder<LoadSessionResponse>,
+                            _cx: ConnectionTo<Client>| {
+                    if forgets() {
+                        return responder.respond_with_error(Error::resource_not_found(None));
+                    }
+                    let options = fake.options(&request.session_id);
+                    responder.respond(LoadSessionResponse::new().config_options(options))
                 }
-                responder.respond(LoadSessionResponse::new())
+            },
+            agent_client_protocol::on_receive_request!(),
+        )
+        .on_receive_request(
+            {
+                let fake = fake.clone();
+                async move |request: SetSessionConfigOptionRequest,
+                            responder: Responder<SetSessionConfigOptionResponse>,
+                            _cx: ConnectionTo<Client>| {
+                    if let Err(error) = fake.set(&request) {
+                        return responder.respond_with_error(error);
+                    }
+                    let options = fake.options(&request.session_id);
+                    responder.respond(SetSessionConfigOptionResponse::new(options))
+                }
             },
             agent_client_protocol::on_receive_request!(),
         )

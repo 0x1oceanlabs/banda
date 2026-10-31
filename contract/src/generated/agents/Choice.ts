@@ -4,4 +4,8 @@
  * One answer a Question offers. The Harness wrote it; Bandaso passes it on
  * unchanged.
  */
-export type Choice = { id: string, name: string, allows: boolean, };
+export type Choice = { id: string, name: string, allows: boolean, 
+/**
+ * The Harness keeps this answer for next time.
+ */
+always: boolean, };

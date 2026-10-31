@@ -16,7 +16,9 @@
 //! | `agents.create` | manage | a new Agent: `{name, harness}` |
 //! | `agents.threads` | read | Threads, the latest first: `{agent?}` |
 //! | `agents.thread` | read | one Thread as a view: `{thread}` |
-//! | `agents.send` | write | a message that queues a turn: `{agent, thread?, text}` |
+//! | `agents.defaults` | read | what an Agent's new Threads start with: `{agent}` |
+//! | `agents.send` | write | a message that queues a turn: `{agent, thread?, text, settings?}` |
+//! | `agents.configure` | write | the Thread's settings, from its next turn on: `{thread, settings}` |
 //! | `agents.stop` | write | stops a turn: `{turn}` |
 //! | `agents.retry` | write | tries a failed turn's message again: `{turn}` |
 //! | `agents.answer` | decide | answers a Question: `{item, choice}` |
@@ -36,8 +38,8 @@ use bandaso_kernel::{
 };
 use live::Live;
 use model::{
-    Body, Fact, Item, ItemId, ThreadId, ThreadList, ThreadSummary, ThreadView, TurnId, TurnState,
-    VERSION,
+    Body, Fact, Item, ItemId, Offer, Settings, ThreadId, ThreadList, ThreadSummary, ThreadView,
+    TurnId, TurnState, VERSION,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -75,7 +77,9 @@ enum Method {
     Create,
     Threads,
     Thread,
+    Defaults,
     Send,
+    Configure,
     Stop,
     Retry,
     Answer,
@@ -89,7 +93,9 @@ impl Method {
             "create" => Method::Create,
             "threads" => Method::Threads,
             "thread" => Method::Thread,
+            "defaults" => Method::Defaults,
             "send" => Method::Send,
+            "configure" => Method::Configure,
             "stop" => Method::Stop,
             "retry" => Method::Retry,
             "answer" => Method::Answer,
@@ -99,9 +105,13 @@ impl Method {
 
     fn right(&self) -> Right {
         match self {
-            Method::Harnesses | Method::List | Method::Threads | Method::Thread => Right::Read,
+            Method::Harnesses
+            | Method::List
+            | Method::Threads
+            | Method::Thread
+            | Method::Defaults => Right::Read,
             Method::Create => Right::Manage,
-            Method::Send | Method::Stop | Method::Retry => Right::Write,
+            Method::Send | Method::Configure | Method::Stop | Method::Retry => Right::Write,
             Method::Answer => Right::Decide,
         }
     }
@@ -125,11 +135,35 @@ struct OneThread {
 }
 
 #[derive(Deserialize)]
+struct OneAgent {
+    agent: AgentId,
+}
+
+#[derive(Deserialize)]
 struct Send {
     agent: AgentId,
     #[serde(default)]
     thread: Option<ThreadId>,
     text: String,
+    /// What a new Thread starts with, instead of the Agent's defaults; or
+    /// the Thread's settings from this turn on.
+    #[serde(default)]
+    settings: Option<Settings>,
+}
+
+#[derive(Deserialize)]
+struct Configure {
+    thread: ThreadId,
+    settings: Settings,
+}
+
+/// What `agents.defaults` answers: what an Agent's new Threads start with,
+/// and what its Harness last offered.
+#[derive(Clone, Debug, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "agents/")]
+pub struct Defaults {
+    pub settings: Settings,
+    pub offer: Offer,
 }
 
 /// What `agents.send` answers.
@@ -225,17 +259,47 @@ impl Module for Agents {
                         let Some(summary) = store::thread(sql, thread)? else {
                             return Ok(None);
                         };
-                        let items = store::items(sql, thread)?;
-                        Ok(Some((summary, items, store::turns(sql, thread)?)))
+                        Ok(Some(ThreadView {
+                            at: 0,
+                            items: store::items(sql, thread)?,
+                            turns: store::turns(sql, thread)?,
+                            settings: store::settings(sql, thread)?,
+                            offer: store::offer(sql, thread)?,
+                            thread: summary,
+                        }))
                     })
                     .await?;
-                let (thread, items, turns) =
-                    found.ok_or_else(|| Refusal::not_found("There is no such Thread."))?;
-                value(ThreadView {
-                    at,
-                    thread,
-                    items,
-                    turns,
+                let view = found.ok_or_else(|| Refusal::not_found("There is no such Thread."))?;
+                value(ThreadView { at, ..view })
+            }
+            Method::Defaults => {
+                let OneAgent { agent } = decode(params)?;
+                let agents = settings::agents(space.folder())?;
+                let found = agents
+                    .iter()
+                    .find(|a| a.id == agent)
+                    .ok_or_else(|| Refusal::not_found("There is no such Agent in this Space."))?;
+                // What this Agent's Harness offered, in its own Threads first.
+                let mut asked = vec![found.id];
+                asked.extend(
+                    agents
+                        .iter()
+                        .filter(|a| a.harness == found.harness && a.id != found.id)
+                        .map(|a| a.id),
+                );
+                let offer = space
+                    .read(move |sql| {
+                        for agent in asked {
+                            if let Some(offer) = store::latest_offer(sql, agent)? {
+                                return Ok(offer);
+                            }
+                        }
+                        Ok(Offer::default())
+                    })
+                    .await?;
+                value(Defaults {
+                    settings: found.settings.clone(),
+                    offer,
                 })
             }
             Method::Send => {
@@ -243,14 +307,30 @@ impl Module for Agents {
                     agent,
                     thread,
                     text,
+                    settings,
                 } = decode(params)?;
                 if text.trim().is_empty() {
                     return Err(Refusal::invalid("A message needs some text."));
                 }
-                settings::agent(space.folder(), agent)?;
+                let found = settings::agent(space.folder(), agent)?;
                 let author = call.participant();
-                call.command(move |tx| send(tx, author, agent, thread, text))
+                let settings = match (thread, settings) {
+                    (None, None) => Some(found.settings),
+                    (_, settings) => settings,
+                };
+                call.command(move |tx| send(tx, author, agent, thread, text, settings))
                     .await
+            }
+            Method::Configure => {
+                let Configure { thread, settings } = decode(params)?;
+                let author = call.participant();
+                call.command(move |tx| {
+                    store::thread(tx.sql(), thread)?
+                        .ok_or_else(|| Refusal::not_found("There is no such Thread."))?;
+                    configure(tx, author, thread, settings)?;
+                    Ok(Value::Null)
+                })
+                .await
             }
             Method::Stop => {
                 let OneTurn { turn } = decode(params)?;
@@ -289,14 +369,35 @@ impl Module for Agents {
     }
 }
 
+/// Changes a Thread's settings, if they differ. Its next turn runs with them.
+fn configure(
+    tx: &mut Tx<'_>,
+    author: Participant,
+    thread: ThreadId,
+    settings: Settings,
+) -> Result<(), Error> {
+    if store::settings(tx.sql(), thread)? == settings {
+        return Ok(());
+    }
+    store::set_settings(tx.sql(), thread, &settings)?;
+    emit(
+        tx,
+        author,
+        thread,
+        &Fact::ThreadConfigured { thread, settings },
+    )
+}
+
 /// A message to an Agent, in its Thread or in a new one, and a turn that
-/// waits behind the Thread's earlier turns.
+/// waits behind the Thread's earlier turns. A new Thread starts with
+/// `settings`; an existing one changes to them, if they are given.
 fn send(
     tx: &mut Tx<'_>,
     author: Participant,
     agent: AgentId,
     thread: Option<ThreadId>,
     text: String,
+    settings: Option<Settings>,
 ) -> Result<Value, Error> {
     let now = tx.now();
     let thread = match thread {
@@ -305,6 +406,9 @@ fn send(
                 .ok_or_else(|| Refusal::not_found("There is no such Thread."))?;
             if found.agent != agent {
                 return Err(Refusal::invalid("This Thread belongs to another Agent.").into());
+            }
+            if let Some(settings) = settings {
+                configure(tx, author, id, settings)?;
             }
             id
         }
@@ -315,7 +419,8 @@ fn send(
                 title: rules::title(&text),
                 updated_at: now,
             };
-            store::insert_thread(tx.sql(), &summary, author)?;
+            let settings = settings.unwrap_or_default();
+            store::insert_thread(tx.sql(), &summary, author, &settings)?;
             let fact = Fact::ThreadStarted {
                 thread: summary.id,
                 agent,

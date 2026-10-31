@@ -10,6 +10,7 @@ import {
   type ThreadList,
   type ThreadSummary,
 } from "@bandaso/contract/agents"
+import { DEFAULT_SETTINGS } from "./thread"
 
 export type AgentsState = {
   at: number
@@ -49,7 +50,9 @@ export function applyAgents(state: AgentsState, event: Event): AgentsState {
     case "agent.created": {
       const { agent: id, name, harness } = fact.payload
       if (state.agents.some((agent) => agent.id === id)) return state
-      return { ...state, agents: [...state.agents, { id, name, harness }] }
+      // A new Agent's file names no settings of its own.
+      const made = { id, name, harness, settings: DEFAULT_SETTINGS }
+      return { ...state, agents: [...state.agents, made] }
     }
     case "thread.started": {
       const { thread: id, agent, title } = fact.payload

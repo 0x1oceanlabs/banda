@@ -170,6 +170,7 @@ fn a_script_drives_an_agent_through_the_engine_a_window_started() {
             "thread.started",
             "message.posted",
             "turn.started",
+            "thread.offered",
             "thought.grew",
             "reply.grew",
             "turn.ended",

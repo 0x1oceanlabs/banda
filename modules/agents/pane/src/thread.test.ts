@@ -1,7 +1,15 @@
 import type { Event } from "@bandaso/contract"
 import { expect, test } from "vitest"
 import { agent, event, person } from "./testing"
-import { EMPTY, apply, retryable, rows, working } from "./thread"
+import {
+  EMPTY,
+  apply,
+  choose,
+  chosen,
+  retryable,
+  rows,
+  working,
+} from "./thread"
 
 function play(...events: Event[]) {
   return events.reduce(apply, EMPTY)
@@ -166,4 +174,33 @@ test("a failed turn is tried again in a new turn, and only the latest can be", (
     rows(state).map((row) => (row.kind === "item" ? row.item.id : row.turn.id))
   ).toEqual(["m", "u1", "r"])
   expect(retryable(state, state.turns[1])).toBe(false)
+})
+
+test("the Thread's settings and the Harness's offer follow their facts", () => {
+  const model = {
+    id: "model",
+    name: "Model",
+    category: "model",
+    value: "fast",
+    choices: [
+      { value: "fast", name: "Fast" },
+      { value: "smart", name: "Smart" },
+    ],
+  }
+  const state = play(
+    event("thread.offered", {
+      thread: "t",
+      offer: { options: [model], plans: true },
+    }),
+    event("thread.configured", {
+      thread: "t",
+      settings: { mode: "supervised", plan: true, options: {} },
+    })
+  )
+  expect(state.offer.plans).toBe(true)
+  expect(state.settings.mode).toBe("supervised")
+  expect(chosen(state.settings, model)).toBe("fast")
+  const smart = choose(state.settings, "model", "smart")
+  expect(chosen(smart, model)).toBe("smart")
+  expect(smart.mode).toBe("supervised")
 })
