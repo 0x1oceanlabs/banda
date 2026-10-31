@@ -22,7 +22,7 @@
 //! runs until the Harness ends it or a Person stops it.
 
 use crate::model::{
-    Failure, Field, FieldValue, HarnessOption, Input, Mode, Offer, OptionChoice, OptionValue,
+    Exit, Failure, Field, FieldValue, HarnessOption, Input, Mode, Offer, OptionChoice, OptionValue,
     Settings, TextFormat, ThreadId, ToolContent, ToolKind, ToolStatus, TurnState, Values,
 };
 use crate::rules::{Ending, Offered};
@@ -56,15 +56,11 @@ pub enum Said {
         status: ToolStatus,
         content: Vec<ToolContent>,
     },
-    /// Each field given replaces the tool call's; `output` follows what the
-    /// command printed before.
+    /// `output` follows what the command printed before.
     ToolChanged {
         call: String,
-        title: Option<String>,
-        status: Option<ToolStatus>,
-        content: Option<Vec<ToolContent>>,
+        change: ToolChange,
         output: Option<String>,
-        exit: Option<i32>,
     },
     /// The Harness asks a Person to decide, and waits for `answer`.
     Asks {
@@ -86,6 +82,27 @@ pub enum Said {
     /// The account may be used again at this time, in milliseconds since
     /// the epoch: it has reached its limit.
     Resets(i64),
+}
+
+/// What an update changes in a tool call: each field given replaces its
+/// own.
+#[derive(Debug, Default)]
+pub struct ToolChange {
+    pub title: Option<String>,
+    pub status: Option<ToolStatus>,
+    pub content: Option<Vec<ToolContent>>,
+    /// How its command ended.
+    pub exit: Option<Exit>,
+}
+
+impl ToolChange {
+    /// Whether it changes nothing.
+    pub fn is_empty(&self) -> bool {
+        self.title.is_none()
+            && self.status.is_none()
+            && self.content.is_none()
+            && self.exit.is_none()
+    }
 }
 
 /// What goes back to a Harness that asked.
@@ -160,11 +177,11 @@ const MODES: [(Mode, [&str; 2]); 4] = [
     (Mode::Auto, ["auto", "agent"]),
     (Mode::FullAccess, ["bypassPermissions", "agent-full-access"]),
 ];
-/// Where Claude Code's and Codex's adapters put what a command prints, for a
-/// client that declares it, and how the command exited (their Zed
-/// conventions).
-const OUTPUT: &str = "terminal_output_delta";
-const EXIT: &str = "terminal_exit";
+/// The `_meta` keys where Claude Code's and Codex's adapters put what a
+/// command prints, for a client that declares the first, and how the
+/// command ended (their Zed conventions).
+const OUTPUT_META: &str = "terminal_output_delta";
+const EXIT_META: &str = "terminal_exit";
 
 /// Planning: one of Claude Code's modes, and Codex's collaboration mode.
 const PLAN: &str = "plan";
@@ -644,7 +661,7 @@ async fn drive(
             let forms =
                 acp::ElicitationCapabilities::new().form(acp::ElicitationFormCapabilities::new());
             let mut output = acp::Meta::new();
-            output.insert(OUTPUT.to_owned(), true.into());
+            output.insert(OUTPUT_META.to_owned(), true.into());
             let shows = acp::ClientCapabilities::new()
                 .elicitation(forms)
                 .session(
@@ -712,17 +729,27 @@ fn said(update: acp::SessionUpdate) -> Option<Said> {
         }),
         acp::SessionUpdate::ToolCallUpdate(update) => {
             let terminal = |key: &str| update.meta.as_ref()?.get(key);
+            let exit = terminal(EXIT_META).map(|ended| Exit {
+                code: ended
+                    .get("exit_code")
+                    .and_then(serde_json::Value::as_i64)
+                    .and_then(|code| i32::try_from(code).ok()),
+                signal: ended
+                    .get("signal")
+                    .and_then(serde_json::Value::as_str)
+                    .map(str::to_owned),
+            });
             Some(Said::ToolChanged {
                 call: update.tool_call_id.0.to_string(),
-                title: update.fields.title,
-                status: update.fields.status.map(tool_status),
-                content: update.fields.content.as_deref().map(tool_content),
-                output: terminal(OUTPUT)
+                change: ToolChange {
+                    title: update.fields.title,
+                    status: update.fields.status.map(tool_status),
+                    content: update.fields.content.as_deref().map(tool_content),
+                    exit,
+                },
+                output: terminal(OUTPUT_META)
                     .and_then(|o| o.get("data")?.as_str())
                     .map(str::to_owned),
-                exit: terminal(EXIT)
-                    .and_then(|e| e.get("exit_code")?.as_i64())
-                    .and_then(|code| i32::try_from(code).ok()),
             })
         }
         acp::SessionUpdate::Notice(notice) => Some(Said::Notice(match notice.description {
@@ -734,8 +761,8 @@ fn said(update: acp::SessionUpdate) -> Option<Said> {
     }
 }
 
-/// What a tool call shows: its text and its diffs. A terminal's output
-/// comes apart, in [`OUTPUT`].
+/// What a tool call shows: its text, its diffs, and where its command's
+/// output goes, which comes apart, in [`OUTPUT_META`].
 fn tool_content(content: &[acp::ToolCallContent]) -> Vec<ToolContent> {
     content
         .iter()
@@ -751,6 +778,7 @@ fn tool_content(content: &[acp::ToolCallContent]) -> Vec<ToolContent> {
                 old: diff.old_text.clone(),
                 new: diff.new_text.clone(),
             }),
+            acp::ToolCallContent::Terminal(_) => Some(ToolContent::Terminal),
             _ => None,
         })
         .collect()

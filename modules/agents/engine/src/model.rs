@@ -367,6 +367,8 @@ pub enum ToolContent {
         old: Option<String>,
         new: String,
     },
+    /// Where what its command prints shows: the tool call's output.
+    Terminal,
 }
 
 /// What a command printed, as far as Bandaso keeps it.
@@ -374,13 +376,26 @@ pub enum ToolContent {
 #[ts(export, export_to = "agents/")]
 pub struct Output {
     pub text: String,
-    /// How the command exited, once it has.
+    /// How the command ended, once it has.
     #[ts(optional)]
     #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub exit: Option<i32>,
+    pub exit: Option<Exit>,
     /// It printed more than Bandaso keeps.
     #[serde(default)]
     pub cut: bool,
+}
+
+/// How a command ended: its exit code, or the signal that stopped it;
+/// neither when the Harness does not know.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "agents/")]
+pub struct Exit {
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub code: Option<i32>,
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub signal: Option<String>,
 }
 
 /// What one Thread entry holds.
@@ -565,10 +580,10 @@ pub enum Fact {
         #[ts(optional)]
         #[serde(default, skip_serializing_if = "Option::is_none")]
         content: Option<Vec<ToolContent>>,
-        /// The command exited so.
+        /// The command ended so.
         #[ts(optional)]
         #[serde(default, skip_serializing_if = "Option::is_none")]
-        exit: Option<i32>,
+        exit: Option<Exit>,
     },
     /// The command printed more: `text` follows what it printed before.
     #[serde(rename = "tool.output")]

@@ -23,8 +23,8 @@
 //! - `crash`: exits at once, as a Harness that dies would.
 //! - `which session`: replies with the session's ID and its own process ID.
 //! - `edit`: edits a file, and shows the change as a diff.
-//! - `run`: runs the tests, printing as Codex does, and `loud` far more than
-//!   a Thread keeps.
+//! - `run`: runs the tests, printing as Codex does; `loud` far more than a
+//!   Thread keeps; `at once` as Claude Code does, all at the end.
 //! - anything else: a short thought, then a reply that quotes the prompt.
 //!
 //! Its sessions can be resumed or loaded after a restart, as a real
@@ -302,7 +302,14 @@ async fn turn(
         return Ok(StopReason::EndTurn);
     }
     if words.contains("run") {
-        run(&fake, &cx, &session, words.contains("loud")).await?;
+        let how = if words.contains("loud") {
+            Run::Loud
+        } else if words.contains("at once") {
+            Run::AtOnce
+        } else {
+            Run::Quiet
+        };
+        run(&fake, &cx, &session, how).await?;
         return Ok(StopReason::EndTurn);
     }
     if words.contains("which session") {
@@ -373,24 +380,46 @@ async fn turn(
 /// Runs the tests as Codex shows a command: its output in pieces, then how
 /// it exited; as one block of text at the end for a client that does not
 /// take pieces. Loud, it prints far more than a Thread keeps.
+/// How the fake runs a command.
+#[derive(Clone, Copy, PartialEq)]
+enum Run {
+    /// Two lines, sent as they are printed, as Codex sends them.
+    Quiet,
+    /// More than Bandaso keeps, in large pieces.
+    Loud,
+    /// As Claude Code sends it: all it printed once it is done, then the
+    /// terminal; here with an exit it does not know.
+    AtOnce,
+}
+
 async fn run(
     fake: &Fake,
     cx: &ConnectionTo<Client>,
     session: &SessionId,
-    loud: bool,
+    how: Run,
 ) -> Result<(), Error> {
     let id = "run-1";
+    let terminal = || vec![ToolCallContent::Terminal(Terminal::new(id))];
     let call = ToolCall::new(id, "Run the tests")
         .kind(ToolKind::Execute)
-        .status(ToolCallStatus::InProgress)
-        .content(vec![ToolCallContent::Terminal(Terminal::new(id))]);
-    say(cx, session, SessionUpdate::ToolCall(call))?;
-    let lines: Vec<String> = if loud {
-        (0..2000)
-            .map(|n| format!("{n:>4} {}\n", "x".repeat(60)))
-            .collect()
+        .status(ToolCallStatus::InProgress);
+    let call = if how == Run::AtOnce {
+        call
     } else {
-        vec!["test one ... ok\n".into(), "test two ... ok\n".into()]
+        call.content(terminal())
+    };
+    say(cx, session, SessionUpdate::ToolCall(call))?;
+    let lines: Vec<String> = match how {
+        // Seventy pieces of a thousand lines: over 4 MB.
+        Run::Loud => (0..70)
+            .map(|piece| {
+                (0..1000)
+                    .map(|n| format!("{:>6} {}\n", piece * 1000 + n, "x".repeat(60)))
+                    .collect()
+            })
+            .collect(),
+        Run::Quiet => vec!["test one ... ok\n".into(), "test two ... ok\n".into()],
+        Run::AtOnce => vec!["test one ... ok\ntest two ... ok\n".into()],
     };
     let pieces = fake.output.load(Ordering::Relaxed);
     if pieces {
@@ -402,13 +431,20 @@ async fn run(
         }
     }
     let ended = ToolCallUpdateFields::new().status(ToolCallStatus::Completed);
-    let ended = if pieces {
-        ended
-    } else {
+    let ended = if !pieces {
         let block = format!("```console\n{}```", lines.concat());
         ended.content(vec![block.into()])
+    } else if how == Run::AtOnce {
+        ended.content(terminal())
+    } else {
+        ended
     };
-    let exit = json!({ "terminal_exit": { "terminal_id": id, "exit_code": 0, "signal": null } });
+    let code = if how == Run::AtOnce {
+        json!(null)
+    } else {
+        json!(0)
+    };
+    let exit = json!({ "terminal_exit": { "terminal_id": id, "exit_code": code, "signal": null } });
     let update = ToolCallUpdate::new(id, ended).meta(exit.as_object().cloned());
     say(cx, session, SessionUpdate::ToolCallUpdate(update))?;
     say(

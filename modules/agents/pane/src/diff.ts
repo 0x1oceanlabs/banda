@@ -8,9 +8,11 @@ export type Line = { kind: "same" | "added" | "removed"; text: string }
 /** Lines left out between two parts of a change. */
 export type Gap = { kind: "gap"; lines: number }
 
-/** Beyond this many changed lines the change shows as all removed, then
- * all added: finding the fewest would take too long. */
+/** Beyond this many changed lines, or this many steps of looking, the
+ * change shows as all removed, then all added: finding the fewest would
+ * take too long. */
 const MOST_CHANGES = 1000
+const MOST_STEPS = 2_000_000
 
 function lines(text: string): string[] {
   if (text === "") return []
@@ -52,8 +54,10 @@ function myers(a: string[], b: string[]): Line[] | null {
   const v = new Int32Array(2 * offset + 1)
   // After each step d, the furthest x on each diagonal k in -d..d.
   const steps: Int32Array[] = []
+  let looked = 0
   for (let d = 0; d <= Math.min(n + m, MOST_CHANGES); d++) {
     for (let k = -d; k <= d; k += 2) {
+      if (++looked > MOST_STEPS) return null
       let x =
         k === -d || (k !== d && v[offset + k - 1] < v[offset + k + 1])
           ? v[offset + k + 1]
@@ -62,6 +66,7 @@ function myers(a: string[], b: string[]): Line[] | null {
       while (x < n && y < m && a[x] === b[y]) {
         x++
         y++
+        looked++
       }
       v[offset + k] = x
       if (x >= n && y >= m) {

@@ -352,12 +352,10 @@ pub fn title(text: &str) -> String {
     short
 }
 
-/// The most of a command's output, or of a tool call's text, a Thread
-/// keeps, in bytes.
-pub const OUTPUT_KEPT: usize = 64 * 1024;
-/// The largest diff a Thread keeps, its texts before and after together,
-/// in bytes.
-pub const DIFF_KEPT: usize = 256 * 1024;
+/// The most of one command's output, one text or one diff (its texts
+/// before and after together) a Thread keeps, in bytes. The Thread keeps
+/// everything the Harness says; only a runaway command reaches this.
+pub const KEPT: usize = 4 * 1024 * 1024;
 
 /// The start of `text` that fits in `room` bytes, ending where a character
 /// ends.
@@ -378,11 +376,11 @@ pub fn kept(content: Vec<ToolContent>) -> Vec<ToolContent> {
     content
         .into_iter()
         .map(|shown| match shown {
-            ToolContent::Text { text } if text.len() > OUTPUT_KEPT => ToolContent::Text {
-                text: format!("{}…", fit(&text, OUTPUT_KEPT)),
+            ToolContent::Text { text } if text.len() > KEPT => ToolContent::Text {
+                text: format!("{}…", fit(&text, KEPT)),
             },
             ToolContent::Diff { path, old, new }
-                if old.as_ref().map_or(0, String::len) + new.len() > DIFF_KEPT =>
+                if old.as_ref().map_or(0, String::len) + new.len() > KEPT =>
             {
                 ToolContent::Text {
                     text: format!("{path} changed too much to show here."),
@@ -391,6 +389,39 @@ pub fn kept(content: Vec<ToolContent>) -> Vec<ToolContent> {
             shown => shown,
         })
         .collect()
+}
+
+/// One command's output on its way into the Thread: what it printed that
+/// is not written yet, within what the Thread keeps.
+#[derive(Debug, Default)]
+pub struct Printed {
+    /// What the Thread holds of it already.
+    kept: usize,
+    waiting: String,
+    /// It printed more than the Thread keeps; `told` once the Thread knows.
+    cut: bool,
+    told: bool,
+}
+
+impl Printed {
+    /// Adds what the command printed since.
+    pub fn add(&mut self, text: &str) {
+        let fits = fit(text, KEPT - self.kept - self.waiting.len());
+        self.waiting.push_str(fits);
+        self.cut |= fits.len() < text.len();
+    }
+
+    /// What to write now, and whether the Thread keeps no more after it;
+    /// none when there is nothing new.
+    pub fn take(&mut self) -> Option<(String, bool)> {
+        if self.waiting.is_empty() && self.cut == self.told {
+            return None;
+        }
+        let text = std::mem::take(&mut self.waiting);
+        self.kept += text.len();
+        self.told = self.cut;
+        Some((text, self.cut))
+    }
 }
 
 /// The two kinds of text an Agent sends in pieces.
@@ -480,7 +511,7 @@ mod tests {
     fn a_thread_keeps_tool_content_within_bounds() {
         assert_eq!(fit("héllo", 2), "h", "never half a character");
         assert_eq!(fit("hello", 9), "hello");
-        let big = "x".repeat(DIFF_KEPT);
+        let big = "x".repeat(KEPT);
         let content = kept(vec![
             ToolContent::Diff {
                 path: "a.rs".into(),
@@ -498,6 +529,28 @@ mod tests {
                 ToolContent::Text { text: "ok".into() },
             ]
         );
+    }
+
+    #[test]
+    fn a_thread_keeps_a_commands_output_up_to_a_runaway() {
+        let mut printed = Printed::default();
+        assert_eq!(printed.take(), None);
+        printed.add("one\n");
+        printed.add("two\n");
+        assert_eq!(printed.take(), Some(("one\ntwo\n".into(), false)));
+        assert_eq!(printed.take(), None, "written once");
+
+        printed.add(&"x".repeat(KEPT));
+        let (text, cut) = printed.take().expect("the rest that fits");
+        assert_eq!((text.len(), cut), (KEPT - 8, true));
+        printed.add("more");
+        assert_eq!(printed.take(), None, "nothing past the limit");
+
+        let mut exact = Printed::default();
+        exact.add(&"x".repeat(KEPT));
+        assert_eq!(exact.take().map(|(_, cut)| cut), Some(false));
+        exact.add("more");
+        assert_eq!(exact.take(), Some((String::new(), true)), "told it is cut");
     }
 
     #[test]
