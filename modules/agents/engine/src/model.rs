@@ -22,6 +22,34 @@ bandaso_kernel::id!(
     ItemId,
     export_to = "agents/"
 );
+bandaso_kernel::id!(
+    /// An image a message carries.
+    ImageId,
+    export_to = "agents/"
+);
+
+/// An image's kind and bytes, as the module keeps them and sends them to a
+/// Harness.
+pub struct ImageFile {
+    pub mime: String,
+    pub bytes: Vec<u8>,
+}
+
+/// An image a Person sends with a message. Its bytes are kept apart and
+/// read with `agents.image`.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "agents/")]
+pub struct Image {
+    pub id: ImageId,
+    /// Its kind: `image/png`, `image/jpeg`, `image/gif` or `image/webp`.
+    pub mime: String,
+    /// How large it is, in bytes.
+    pub bytes: u32,
+    /// The name of the file it came from, if it had one.
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+}
 
 /// An Agent, as its text file describes it.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -460,6 +488,8 @@ pub struct Exit {
 pub enum Body {
     Message {
         text: String,
+        #[serde(default)]
+        images: Vec<Image>,
     },
     Thought {
         text: String,
@@ -581,6 +611,8 @@ pub enum Fact {
         item: ItemId,
         turn: TurnId,
         text: String,
+        #[serde(default)]
+        images: Vec<Image>,
     },
     #[serde(rename = "turn.started")]
     TurnStarted { turn: TurnId },

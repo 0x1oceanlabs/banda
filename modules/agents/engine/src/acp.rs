@@ -22,15 +22,17 @@
 //! runs until the Harness ends it or a Person stops it.
 
 use crate::model::{
-    Cost, Exit, Failure, Field, FieldValue, HarnessOption, Input, Mode, Offer, OptionChoice,
-    OptionValue, PlanStep, Settings, SlashCommand, StepState, TextFormat, ThreadId, ToolContent,
-    ToolKind, ToolStatus, TurnState, Usage, Values,
+    Cost, Exit, Failure, Field, FieldValue, HarnessOption, ImageFile, Input, Mode, Offer,
+    OptionChoice, OptionValue, PlanStep, Settings, SlashCommand, StepState, TextFormat, ThreadId,
+    ToolContent, ToolKind, ToolStatus, TurnState, Usage, Values,
 };
 use crate::rules::{Ending, Offered};
 use crate::settings::Harness;
 use agent_client_protocol::schema::ProtocolVersion;
 use agent_client_protocol::schema::v1 as acp;
 use agent_client_protocol::{AcpAgent, AcpAgentConfig, Agent, Client, ConnectionTo, LineDirection};
+use base64::Engine as _;
+use base64::engine::general_purpose::STANDARD as BASE64;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
@@ -168,6 +170,12 @@ enum Lasts {
     Harness,
 }
 
+/// What a turn sends the Harness: its message's text and images.
+pub struct Prompt {
+    pub text: String,
+    pub images: Vec<ImageFile>,
+}
+
 /// What a session runs with, as the Harness last said.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Running {
@@ -275,6 +283,8 @@ fn learn(learned: &Learned, session: &acp::SessionId, now: Vec<acp::SessionConfi
 struct Agreed {
     loads: bool,
     resumes: bool,
+    /// It takes images in a prompt.
+    images: bool,
 }
 
 /// One Harness process and its ACP connection. Dropping it stops the
@@ -501,20 +511,30 @@ impl Connection {
         (running, refused)
     }
 
-    /// Sends a prompt. What the Harness says comes on the receiver; the
-    /// returned task ends with the turn.
+    /// Whether the Harness takes images in a prompt.
+    pub fn takes_images(&self) -> bool {
+        self.agreed.images
+    }
+
+    /// Sends a prompt: its text, then its images. What the Harness says
+    /// comes on the receiver; the returned task ends with the turn.
     pub fn prompt(
         &self,
         Session(session): &Session,
-        text: &str,
+        Prompt { text, images }: &Prompt,
     ) -> (mpsc::UnboundedReceiver<Said>, JoinHandle<Ending>) {
         let (said, hear) = mpsc::unbounded_channel();
         self.touch();
         self.routes.lock().unwrap().insert(session.clone(), said);
-        let request = acp::PromptRequest::new(
-            session.clone(),
-            vec![acp::ContentBlock::Text(acp::TextContent::new(text))],
-        );
+        let text = (!text.is_empty()).then(|| acp::ContentBlock::Text(acp::TextContent::new(text)));
+        let images = images.iter().map(|image| {
+            acp::ContentBlock::Image(acp::ImageContent::new(
+                BASE64.encode(&image.bytes),
+                image.mime.clone(),
+            ))
+        });
+        let request =
+            acp::PromptRequest::new(session.clone(), text.into_iter().chain(images).collect());
         // Sent here, not in the task: a stop that follows must reach the
         // Harness after the prompt it stops.
         let sent = self.cx.send_request(request);
@@ -740,6 +760,7 @@ async fn drive(
                     let agreed = Agreed {
                         loads: capabilities.load_session,
                         resumes: capabilities.session_capabilities.resume.is_some(),
+                        images: capabilities.prompt_capabilities.image,
                     };
                     let _ = ready.send(Ok((cx.clone(), agreed)));
                 }

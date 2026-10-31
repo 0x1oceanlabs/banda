@@ -2,8 +2,8 @@
 //! through these functions.
 
 use crate::model::{
-    Body, Failure, Item, ItemId, Offer, QuestionState, Settings, ThreadId, ThreadSummary, TurnId,
-    TurnState, TurnView, Usage,
+    Body, Failure, Image, ImageFile, ImageId, Item, ItemId, Offer, QuestionState, Settings,
+    ThreadId, ThreadSummary, TurnId, TurnState, TurnView, Usage,
 };
 use bandaso_kernel::{AgentId, Error, Participant, Refusal};
 use rusqlite::{Connection, OptionalExtension, Row, params};
@@ -67,7 +67,25 @@ UPDATE agents_threads SET settings = '{"mode":"supervised"}';
 -- How full the Agent's context in the Thread is, as JSON.
 ALTER TABLE agents_threads ADD COLUMN usage TEXT;
 "#,
+    r#"
+-- The images messages carry. One is added before its message is sent,
+-- and belongs to that message once it is.
+CREATE TABLE agents_images (
+    id TEXT PRIMARY KEY,
+    mime TEXT NOT NULL,
+    name TEXT,
+    data BLOB NOT NULL,
+    -- Who added it, as JSON.
+    author TEXT NOT NULL,
+    added_at INTEGER NOT NULL,
+    item TEXT REFERENCES agents_items (id)
+);
+CREATE INDEX agents_images_by_item ON agents_images (item);
+"#,
 ];
+
+/// How long an image waits for the message it was added for.
+const UNSENT_IMAGES_LAST: i64 = 24 * 60 * 60 * 1000;
 
 fn json<T: Serialize>(value: &T) -> Result<String, Error> {
     Ok(serde_json::to_string(value)?)
@@ -184,6 +202,95 @@ pub fn latest_offer(sql: &Connection, agent: AgentId) -> Result<Option<Offer>, E
         )
         .optional()?;
     Ok(text.map(|text| serde_json::from_str(&text)).transpose()?)
+}
+
+/// Keeps an image a message will carry, and lets go of those added more
+/// than a day ago that no message carried.
+pub fn add_image(
+    sql: &Connection,
+    image: &Image,
+    data: &[u8],
+    author: Participant,
+    at: i64,
+) -> Result<(), Error> {
+    sql.execute(
+        "DELETE FROM agents_images WHERE item IS NULL AND added_at < ?1",
+        params![at - UNSENT_IMAGES_LAST],
+    )?;
+    sql.execute(
+        "INSERT INTO agents_images (id, mime, name, data, author, added_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
+        params![image.id, image.mime, image.name, data, json(&author)?, at],
+    )?;
+    Ok(())
+}
+
+/// The images `author` added for a message and no message carries yet, in
+/// the order given.
+pub fn unsent_images(
+    sql: &Connection,
+    ids: &[ImageId],
+    author: Participant,
+) -> Result<Vec<Image>, Error> {
+    let mut images = Vec::with_capacity(ids.len());
+    for id in ids {
+        let found = sql
+            .query_row(
+                "SELECT mime, name, length(data), author, item FROM agents_images WHERE id = ?1",
+                params![id],
+                |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, Option<String>>(1)?,
+                        row.get::<_, u32>(2)?,
+                        column::<Participant>(row, 3)?,
+                        row.get::<_, Option<ItemId>>(4)?,
+                    ))
+                },
+            )
+            .optional()?;
+        let Some((mime, name, bytes, added_by, carried)) = found else {
+            return Err(
+                Refusal::not_found("An image this message carries is gone. Add it again.").into(),
+            );
+        };
+        if added_by != author || carried.is_some() {
+            return Err(Refusal::invalid("This message cannot carry that image.").into());
+        }
+        images.push(Image {
+            id: *id,
+            mime,
+            bytes,
+            name,
+        });
+    }
+    Ok(images)
+}
+
+/// Gives `item` its images.
+pub fn carry_images(sql: &Connection, images: &[Image], item: ItemId) -> Result<(), Error> {
+    for image in images {
+        sql.execute(
+            "UPDATE agents_images SET item = ?2 WHERE id = ?1",
+            params![image.id, item],
+        )?;
+    }
+    Ok(())
+}
+
+pub fn image_file(sql: &Connection, id: ImageId) -> Result<Option<ImageFile>, Error> {
+    Ok(sql
+        .query_row(
+            "SELECT mime, data FROM agents_images WHERE id = ?1",
+            params![id],
+            |row| {
+                Ok(ImageFile {
+                    mime: row.get(0)?,
+                    bytes: row.get(1)?,
+                })
+            },
+        )
+        .optional()?)
 }
 
 pub fn touch_thread(sql: &Connection, thread: ThreadId, at: i64) -> Result<(), Error> {
@@ -413,7 +520,7 @@ pub fn put(sql: &Connection, thread: ThreadId, item: &Item) -> Result<(), Error>
         return insert_item(sql, thread, item);
     };
     match (&mut stored.body, &item.body) {
-        (Body::Message { text }, Body::Message { text: more })
+        (Body::Message { text, .. }, Body::Message { text: more, .. })
         | (Body::Thought { text }, Body::Thought { text: more }) => text.push_str(more),
         _ => return Err(Refusal::conflict(format!("Item {} is written already.", item.id)).into()),
     }

@@ -1,3 +1,4 @@
+import { resolve } from "node:path"
 import { expect, test } from "@playwright/test"
 import { startWindow, type Window } from "./window"
 
@@ -367,4 +368,61 @@ test("a message starts with a slash command its Agent offers", async () => {
     "false"
   )
   await expect(thread.getByText("You said: /default")).toBeHidden()
+})
+
+test("a message carries images to its Agent", async () => {
+  window = await startWindow()
+  const { page } = window
+  await page.getByLabel("Name").fill("Work")
+  await page.getByRole("button", { name: "Create Space" }).click()
+  await page.getByRole("button", { name: "New Agent" }).click()
+  const dialog = page.getByRole("dialog", { name: "New Agent" })
+  await dialog.getByLabel("Name").fill("Writer")
+  await dialog.getByRole("button", { name: "Create Agent" }).click()
+  const thread = page.getByRole("region", { name: "Writer" })
+  const composer = thread.getByRole("textbox", { name: "Message to Writer" })
+  const shot = resolve(import.meta.dirname, "shot.png")
+  const files = thread.locator('input[type="file"]')
+
+  // An image goes to the engine as it is added, and can be taken back.
+  await files.setInputFiles(shot)
+  const waiting = thread.getByRole("list", { name: "Images to send" })
+  await expect(waiting.getByRole("img", { name: "shot.png" })).toBeVisible()
+  await waiting.getByRole("button", { name: "Remove shot.png" }).click()
+  await expect(waiting).toBeHidden()
+
+  // A file that is not an image of the four kinds stays out.
+  await files.setInputFiles({
+    name: "notes.txt",
+    mimeType: "text/plain",
+    buffer: Buffer.from("notes"),
+  })
+  await expect(thread.getByRole("alert")).toHaveText(/PNG, JPEG, GIF and WebP/)
+
+  await files.setInputFiles(shot)
+  await expect(waiting.getByRole("img", { name: "shot.png" })).toBeVisible()
+  await composer.fill("look")
+  await page.screenshot({ path: "test-results/13-images-to-send.png" })
+  await composer.press("Enter")
+  await expect(thread.getByText("I see 1 image: image/png.")).toBeVisible()
+  await expect(thread.getByText("You said: look")).toBeVisible()
+  await expect(waiting).toBeHidden()
+  const sent = thread.getByRole("button", { name: "Open shot.png" })
+  await expect(sent.getByRole("img", { name: "shot.png" })).toBeVisible()
+  await page.screenshot({ path: "test-results/14-images.png" })
+
+  // A press shows the image whole.
+  await sent.click()
+  const whole = page.getByRole("dialog", { name: "shot.png" })
+  await expect(whole.getByRole("img", { name: "shot.png" })).toBeVisible()
+  await page.keyboard.press("Escape")
+  await expect(whole).toBeHidden()
+
+  // An image alone is a message too.
+  await files.setInputFiles(shot)
+  await expect(waiting.getByRole("img", { name: "shot.png" })).toBeVisible()
+  await thread.getByRole("button", { name: "Send" }).click()
+  await expect(
+    thread.getByRole("button", { name: "Open shot.png" })
+  ).toHaveCount(2)
 })

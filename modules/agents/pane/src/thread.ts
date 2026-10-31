@@ -114,7 +114,11 @@ export function apply(state: ThreadState, event: Event): ThreadState {
         ...next,
         items: [
           ...state.items,
-          item(fact.payload.item, { kind: "message", text: fact.payload.text }),
+          item(fact.payload.item, {
+            kind: "message",
+            text: fact.payload.text,
+            images: fact.payload.images,
+          }),
         ],
         turns: [
           ...state.turns,
@@ -149,18 +153,19 @@ export function apply(state: ThreadState, event: Event): ThreadState {
     case "reply.grew":
     case "thought.grew": {
       const { item: id, turn, text } = fact.payload
-      const kind = fact.kind === "reply.grew" ? "message" : "thought"
+      const body: Body =
+        fact.kind === "reply.grew"
+          ? { kind: "message", text, images: [] }
+          : { kind: "thought", text }
       if (!state.items.some((i) => i.id === id)) {
-        return {
-          ...next,
-          items: [...state.items, item(id, { kind, text }, turn)],
-        }
+        return { ...next, items: [...state.items, item(id, body, turn)] }
       }
       return {
         ...next,
         items: changeItem(state, id, (i) =>
-          i.body.kind === kind
-            ? { ...i, body: { kind, text: i.body.text + text } }
+          (i.body.kind === "message" || i.body.kind === "thought") &&
+          i.body.kind === body.kind
+            ? { ...i, body: { ...i.body, text: i.body.text + text } }
             : i
         ),
       }

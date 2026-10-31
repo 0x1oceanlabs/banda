@@ -179,7 +179,10 @@ fn texts(view: &ThreadView) -> Vec<String> {
     view.items
         .iter()
         .map(|item| match &item.body {
-            Body::Message { text } => format!("message: {text}"),
+            Body::Message { text, images } if images.is_empty() => format!("message: {text}"),
+            Body::Message { text, images } => {
+                format!("message: {text} + {} image(s)", images.len())
+            }
             Body::Thought { text } => format!("thought: {text}"),
             Body::Tool { title, status, .. } => format!("tool: {title} ({status:?})"),
             Body::Question { title, state, .. } => format!("question: {title} ({state:?})"),
@@ -922,7 +925,7 @@ async fn a_message_runs_with_the_settings_it_was_sent_with() {
         .filter(|i| [&supervised["turn"], &full["turn"]].contains(&&json!(i.turn)))
         .filter(|i| matches!(i.author, Participant::Agent(_)))
         .map(|i| match &i.body {
-            Body::Message { text } => text.split(',').next().unwrap(),
+            Body::Message { text, .. } => text.split(',').next().unwrap(),
             _ => "",
         })
         .collect();
@@ -1109,7 +1112,7 @@ async fn a_tool_call_shows_its_diff_and_what_its_command_printed() {
     assert_eq!(output.exit, Some(Exit::default()));
     let reply = view.items.last().expect("the reply");
     assert!(
-        matches!(&reply.body, Body::Message { text } if text == "The tests passed."),
+        matches!(&reply.body, Body::Message { text, .. } if text == "The tests passed."),
         "the reply after a tool call is a message of its own: {reply:?}"
     );
 
@@ -1213,4 +1216,166 @@ async fn a_slash_command_learned_mid_reply_leaves_the_reply_whole() {
     let (_, view) = world.finish(None, "learn a new command").await;
     assert_eq!(texts(&view)[1..], ["message: Before and after."]);
     assert_eq!(slash_commands(&view), ["review", "compact", "init"]);
+}
+
+/// The start of a PNG file, as `agents.attach` checks it.
+const PNG: &[u8] = b"\x89PNG\r\n\x1a\n a picture";
+
+impl World {
+    /// Adds an image of `who`'s for a message; the image as the engine
+    /// keeps it, or why it would not.
+    async fn attach(
+        &self,
+        who: Participant,
+        mime: &str,
+        bytes: &[u8],
+        name: Option<&str>,
+    ) -> Result<Value, bandaso_kernel::Refusal> {
+        use base64::Engine as _;
+        let data = base64::engine::general_purpose::STANDARD.encode(bytes);
+        let params = json!({ "mime": mime, "data": data, "name": name });
+        self.call(who, "agents.attach", params).await
+    }
+
+    async fn send_images(&self, text: &str, images: &[&Value]) -> Value {
+        let ids: Vec<&Value> = images.iter().map(|image| &image["id"]).collect();
+        let params = json!({ "agent": self.agent, "text": text, "images": ids });
+        self.call(self.person(), "agents.send", params)
+            .await
+            .unwrap()
+    }
+
+    async fn ended(&self, sent: &Value) -> ThreadView {
+        self.until(&sent["thread"], |v| {
+            state(v, &sent["turn"])
+                .is_some_and(|s| s != TurnState::Queued && s != TurnState::Running)
+        })
+        .await
+    }
+}
+
+#[tokio::test]
+async fn a_message_carries_its_images_to_the_harness() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let shot = world
+        .attach(world.person(), "image/png", PNG, Some("shot.png"))
+        .await
+        .unwrap();
+    assert_eq!(shot["bytes"], PNG.len());
+    let sent = world.send_images("what is this", &[&shot]).await;
+    let view = world.ended(&sent).await;
+    assert_eq!(
+        texts(&view)[..2],
+        [
+            "message: what is this + 1 image(s)",
+            "message: I see 1 image: image/png. "
+        ]
+    );
+    let Body::Message { images, .. } = &view.items[0].body else {
+        panic!("a message first");
+    };
+    assert_eq!(images[0].name.as_deref(), Some("shot.png"));
+
+    // The window reads it back to show it.
+    let read = world
+        .call(
+            world.person(),
+            "agents.image",
+            json!({ "image": shot["id"] }),
+        )
+        .await
+        .unwrap();
+    use base64::Engine as _;
+    let bytes = base64::engine::general_purpose::STANDARD
+        .decode(read["data"].as_str().unwrap())
+        .unwrap();
+    assert_eq!(
+        (read["mime"].as_str(), bytes.as_slice()),
+        (Some("image/png"), PNG)
+    );
+}
+
+#[tokio::test]
+async fn a_message_of_an_image_alone_is_named_after_it() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let shot = world
+        .attach(world.person(), "image/png", PNG, Some("shot.png"))
+        .await
+        .unwrap();
+    let sent = world.send_images("", &[&shot]).await;
+    let view = world.ended(&sent).await;
+    assert_eq!(view.thread.title, "shot.png");
+    assert_eq!(state(&view, &sent["turn"]), Some(TurnState::Done));
+}
+
+#[tokio::test]
+async fn an_image_goes_only_as_what_it_is_and_with_one_message() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let refused = world
+        .attach(world.person(), "image/jpeg", PNG, None)
+        .await
+        .unwrap_err();
+    assert_eq!(refused.code, Code::Invalid);
+    assert!(
+        world
+            .attach(world.person(), "image/svg+xml", b"<svg/>", None)
+            .await
+            .is_err()
+    );
+
+    let shot = world
+        .attach(world.person(), "image/png", PNG, None)
+        .await
+        .unwrap();
+    world.send_images("one", &[&shot]).await;
+    let again = json!({ "agent": world.agent, "text": "two", "images": [shot["id"]] });
+    let refused = world
+        .call(world.person(), "agents.send", again)
+        .await
+        .unwrap_err();
+    assert_eq!(refused.code, Code::Invalid, "{refused:?}");
+
+    // An image someone else added is not this Person's to send.
+    let theirs = world
+        .attach(Participant::Agent(world.agent), "image/png", PNG, None)
+        .await
+        .unwrap();
+    let send = json!({ "agent": world.agent, "text": "three", "images": [theirs["id"]] });
+    assert!(
+        world
+            .call(world.person(), "agents.send", send)
+            .await
+            .is_err()
+    );
+}
+
+#[tokio::test]
+async fn a_harness_without_images_gets_the_text_alone_and_says_so() {
+    let root = tempfile::tempdir().unwrap();
+    let agents = Agents::new(harnesses_with(&[("FAKE_AGENT_NO_IMAGES", "1")]));
+    let world = World::new_with(root.path(), agents).await;
+    let shot = world
+        .attach(world.person(), "image/png", PNG, None)
+        .await
+        .unwrap();
+    let sent = world.send_images("look", &[&shot]).await;
+    let view = world.ended(&sent).await;
+    assert!(
+        texts(&view)
+            .contains(&"notice: Fake does not take images, so it got the text alone.".to_owned()),
+        "{:?}",
+        texts(&view)
+    );
+    assert_eq!(last_reply(&view), "message: You said: look");
+
+    let alone = world
+        .attach(world.person(), "image/png", PNG, None)
+        .await
+        .unwrap();
+    let sent = world.send_images("", &[&alone]).await;
+    let view = world.ended(&sent).await;
+    assert_eq!(state(&view, &sent["turn"]), Some(TurnState::Failed));
 }

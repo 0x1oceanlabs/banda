@@ -36,10 +36,12 @@ use bandaso_kernel::{
     AgentId, Call, Effect, Error, Module, ModuleSpace, OnRestart, Outcome, Participant, Refusal,
     Right, Settled, Tx, decode,
 };
+use base64::Engine as _;
+use base64::engine::general_purpose::STANDARD as BASE64;
 use live::Live;
 use model::{
-    Body, Fact, Item, ItemId, Offer, Settings, ThreadId, ThreadList, ThreadSummary, ThreadView,
-    TurnId, TurnState, VERSION,
+    Body, Fact, Image, ImageId, Item, ItemId, Offer, Settings, ThreadId, ThreadList, ThreadSummary,
+    ThreadView, TurnId, TurnState, VERSION,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -83,6 +85,8 @@ enum Method {
     Stop,
     Retry,
     Answer,
+    Attach,
+    Image,
 }
 
 impl Method {
@@ -99,6 +103,8 @@ impl Method {
             "stop" => Method::Stop,
             "retry" => Method::Retry,
             "answer" => Method::Answer,
+            "attach" => Method::Attach,
+            "image" => Method::Image,
             _ => return None,
         })
     }
@@ -109,9 +115,10 @@ impl Method {
             | Method::List
             | Method::Threads
             | Method::Thread
-            | Method::Defaults => Right::Read,
+            | Method::Defaults
+            | Method::Image => Right::Read,
             Method::Create => Right::Manage,
-            Method::Send | Method::Stop | Method::Retry => Right::Write,
+            Method::Send | Method::Stop | Method::Retry | Method::Attach => Right::Write,
             // How freely an Agent acts decides what it asks a Person.
             Method::Configure | Method::Answer => Right::Decide,
         }
@@ -145,11 +152,38 @@ struct Send {
     agent: AgentId,
     #[serde(default)]
     thread: Option<ThreadId>,
+    #[serde(default)]
     text: String,
+    /// The images it carries, each added with `agents.attach` first.
+    #[serde(default)]
+    images: Vec<ImageId>,
     /// What a new Thread starts with, instead of the Agent's defaults; or
     /// the Thread's settings from this turn on.
     #[serde(default)]
     settings: Option<Settings>,
+}
+
+/// An image a message will carry: its kind, its bytes in base64, and the
+/// name of its file.
+#[derive(Deserialize)]
+struct Attach {
+    mime: String,
+    data: String,
+    #[serde(default)]
+    name: Option<String>,
+}
+
+#[derive(Deserialize)]
+struct OneImage {
+    image: ImageId,
+}
+
+/// What `agents.image` answers: an image's kind and its bytes in base64.
+#[derive(Clone, Debug, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "agents/")]
+pub struct ImageData {
+    pub mime: String,
+    pub data: String,
 }
 
 #[derive(Deserialize)]
@@ -317,10 +351,17 @@ impl Module for Agents {
                     agent,
                     thread,
                     text,
+                    images,
                     settings,
                 } = decode(params)?;
-                if text.trim().is_empty() {
-                    return Err(Refusal::invalid("A message needs some text."));
+                if text.trim().is_empty() && images.is_empty() {
+                    return Err(Refusal::invalid("A message needs some text or an image."));
+                }
+                if images.len() > rules::MOST_IMAGES {
+                    return Err(Refusal::invalid(format!(
+                        "A message can carry at most {} images.",
+                        rules::MOST_IMAGES
+                    )));
                 }
                 let found = settings::agent(space.folder(), agent)?;
                 let author = call.participant();
@@ -331,7 +372,8 @@ impl Module for Agents {
                     (None, None) => Some(found.settings),
                     (_, settings) => settings,
                 };
-                call.command(move |tx| send(tx, author, agent, thread, text, settings))
+                let message = Message { text, images };
+                call.command(move |tx| send(tx, author, agent, thread, message, settings))
                     .await
             }
             Method::Configure => {
@@ -364,6 +406,34 @@ impl Module for Agents {
                 let live = self.live.clone();
                 call.command(move |tx| answer(tx, &live, author, item, choice, values))
                     .await
+            }
+            Method::Attach => {
+                let Attach { mime, data, name } = decode(params)?;
+                let bytes = BASE64
+                    .decode(data.as_bytes())
+                    .map_err(|_| Refusal::invalid("The image's bytes are not base64."))?;
+                rules::image(&mime, &bytes)?;
+                let image = Image {
+                    id: ImageId::new(),
+                    mime,
+                    bytes: u32::try_from(bytes.len()).unwrap_or(u32::MAX),
+                    name,
+                };
+                let author = call.participant();
+                call.command(move |tx| {
+                    store::add_image(tx.sql(), &image, &bytes, author, tx.now())?;
+                    Ok(serde_json::to_value(&image)?)
+                })
+                .await
+            }
+            Method::Image => {
+                let OneImage { image } = decode(params)?;
+                let found = space.read(move |sql| store::image_file(sql, image)).await?;
+                let file = found.ok_or_else(|| Refusal::not_found("There is no such image."))?;
+                value(ImageData {
+                    mime: file.mime,
+                    data: BASE64.encode(file.bytes),
+                })
             }
         }
     }
@@ -406,6 +476,12 @@ fn configure(
     )
 }
 
+/// What a Person writes to an Agent: text, images, or both.
+struct Message {
+    text: String,
+    images: Vec<ImageId>,
+}
+
 /// A message to an Agent, in its Thread or in a new one, and a turn that
 /// waits behind the Thread's earlier turns. A new Thread starts with
 /// `settings`; an existing one changes to them, if they are given.
@@ -414,10 +490,11 @@ fn send(
     author: Participant,
     agent: AgentId,
     thread: Option<ThreadId>,
-    text: String,
+    Message { text, images }: Message,
     settings: Option<Settings>,
 ) -> Result<Value, Error> {
     let now = tx.now();
+    let images = store::unsent_images(tx.sql(), &images, author)?;
     let thread = match thread {
         Some(id) => {
             let found = store::thread(tx.sql(), id)?
@@ -434,7 +511,7 @@ fn send(
             let summary = ThreadSummary {
                 id: ThreadId::new(),
                 agent,
-                title: rules::title(&text),
+                title: rules::title(&text, &images),
                 updated_at: now,
             };
             let settings = settings.unwrap_or_default();
@@ -453,7 +530,10 @@ fn send(
         turn: None,
         author,
         at: now,
-        body: Body::Message { text: text.clone() },
+        body: Body::Message {
+            text: text.clone(),
+            images: images.clone(),
+        },
     };
     let turn = store::Turn {
         id: TurnId::new(),
@@ -463,6 +543,7 @@ fn send(
         state: TurnState::Queued,
     };
     store::insert_item(tx.sql(), thread, &item)?;
+    store::carry_images(tx.sql(), &images, item.id)?;
     let settings = store::settings(tx.sql(), thread)?;
     store::insert_turn(tx.sql(), &turn, author, now, &settings)?;
     store::touch_thread(tx.sql(), thread, now)?;
@@ -475,6 +556,7 @@ fn send(
         item: item.id,
         turn: turn.id,
         text,
+        images,
     };
     emit(tx, author, thread, &fact)?;
     tx.enqueue(

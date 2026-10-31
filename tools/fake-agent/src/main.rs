@@ -32,6 +32,8 @@
 //!   Thread keeps; `at once` as Claude Code does, all at the end.
 //! - `new command`: starts its reply, learns the command `/init`, and ends
 //!   the reply.
+//! - images: it says how many it was shown and of what kinds, then does
+//!   what the words ask.
 //! - anything else: a short thought, then a reply that quotes the prompt.
 //!
 //! Just after a session opens it says its commands, `/review` and
@@ -44,7 +46,8 @@
 //! Each session has options as Claude Code's do: a `mode` with Claude
 //! Code's modes, a `model`, and `brief`, on or off, for a client that shows
 //! such options. With `FAKE_AGENT_NO_MODES` set it has no modes, as an ACP
-//! agent other than Claude Code and Codex.
+//! agent other than Claude Code and Codex. With `FAKE_AGENT_NO_IMAGES` set
+//! it takes no images.
 
 use agent_client_protocol::schema::ProtocolVersion;
 use agent_client_protocol::schema::v1::{
@@ -54,11 +57,11 @@ use agent_client_protocol::schema::v1::{
     ElicitationFormMode, ElicitationSchema, ElicitationSessionScope, EnumOption, Implementation,
     InitializeRequest, InitializeResponse, LoadSessionRequest, LoadSessionResponse, MessageId,
     NewSessionRequest, NewSessionResponse, Notice, NoticeSeverity, PermissionOption,
-    PermissionOptionKind, Plan, PlanEntry, PlanEntryPriority, PlanEntryStatus, PromptRequest,
-    PromptResponse, RequestPermissionOutcome, RequestPermissionRequest, ResumeSessionRequest,
-    ResumeSessionResponse, SessionCapabilities, SessionConfigOption, SessionConfigOptionCategory,
-    SessionConfigOptionValue, SessionConfigSelectOption, SessionId, SessionNotification,
-    SessionResumeCapabilities, SessionUpdate, SetSessionConfigOptionRequest,
+    PermissionOptionKind, Plan, PlanEntry, PlanEntryPriority, PlanEntryStatus, PromptCapabilities,
+    PromptRequest, PromptResponse, RequestPermissionOutcome, RequestPermissionRequest,
+    ResumeSessionRequest, ResumeSessionResponse, SessionCapabilities, SessionConfigOption,
+    SessionConfigOptionCategory, SessionConfigOptionValue, SessionConfigSelectOption, SessionId,
+    SessionNotification, SessionResumeCapabilities, SessionUpdate, SetSessionConfigOptionRequest,
     SetSessionConfigOptionResponse, StopReason, StringPropertySchema, Terminal, TextContent,
     ToolCall, ToolCallContent, ToolCallStatus, ToolCallUpdate, ToolCallUpdateFields, ToolKind,
     UnstructuredCommandInput, UsageUpdate,
@@ -217,12 +220,31 @@ fn words_of(prompt: &[ContentBlock]) -> String {
         .join(" ")
 }
 
+/// What it says of the images it was shown, if it was shown any.
+fn seen(prompt: &[ContentBlock]) -> Option<String> {
+    let kinds: Vec<&str> = prompt
+        .iter()
+        .filter_map(|block| match block {
+            ContentBlock::Image(image) => Some(image.mime_type.as_str()),
+            _ => None,
+        })
+        .collect();
+    match kinds.len() {
+        0 => None,
+        1 => Some(format!("I see 1 image: {}. ", kinds[0])),
+        n => Some(format!("I see {n} images: {}. ", kinds.join(", "))),
+    }
+}
+
 async fn turn(
     fake: Fake,
     cx: ConnectionTo<Client>,
     prompt: PromptRequest,
 ) -> Result<StopReason, Error> {
     let session = prompt.session_id.clone();
+    if let Some(seen) = seen(&prompt.prompt) {
+        say(&cx, &session, SessionUpdate::AgentMessageChunk(text(&seen)))?;
+    }
     let words = words_of(&prompt.prompt);
     if words.contains("crash") {
         std::process::exit(1);
@@ -641,7 +663,9 @@ async fn main() -> Result<(), Error> {
                     } else {
                         request.protocol_version
                     };
+                    let images = std::env::var_os("FAKE_AGENT_NO_IMAGES").is_none();
                     let capabilities = AgentCapabilities::new()
+                        .prompt_capabilities(PromptCapabilities::new().image(images))
                         .load_session(true)
                         .session_capabilities(
                             SessionCapabilities::new().resume(SessionResumeCapabilities::new()),

@@ -2,6 +2,7 @@
 import type { Choice } from "./Choice";
 import type { Field } from "./Field";
 import type { FieldValue } from "./FieldValue";
+import type { Image } from "./Image";
 import type { Output } from "./Output";
 import type { PlanStep } from "./PlanStep";
 import type { QuestionState } from "./QuestionState";
@@ -12,7 +13,7 @@ import type { ToolStatus } from "./ToolStatus";
 /**
  * What one Thread entry holds.
  */
-export type Body = { "kind": "message", text: string, } | { "kind": "thought", text: string, } | { "kind": "tool", title: string, tool: ToolKind, status: ToolStatus, 
+export type Body = { "kind": "message", text: string, images: Array<Image>, } | { "kind": "thought", text: string, } | { "kind": "tool", title: string, tool: ToolKind, status: ToolStatus, 
 /**
  * What it shows besides its title, as the Harness last said.
  */

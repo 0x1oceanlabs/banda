@@ -2,7 +2,7 @@
 //! clock, randomness or Harness protocol. IDs come in from the caller.
 
 use crate::model::{
-    Body, Choice, Fact, Failure, Field, FieldValue, Input, ItemId, Mode, QuestionState,
+    Body, Choice, Fact, Failure, Field, FieldValue, Image, Input, ItemId, Mode, QuestionState,
     ToolContent, ToolKind, TurnId, TurnState, Values,
 };
 use bandaso_kernel::{Participant, Refusal};
@@ -341,15 +341,53 @@ pub fn close(body: &mut Body) -> bool {
 }
 
 /// A Thread's title: the start of its first message, on one line.
-pub fn title(text: &str) -> String {
+pub fn title(text: &str, images: &[Image]) -> String {
     const LONGEST: usize = 60;
     let line = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    if line.is_empty() {
+        return match images {
+            [one] => one.name.clone().unwrap_or_else(|| "An image".to_owned()),
+            _ => format!("{} images", images.len()),
+        };
+    }
     if line.chars().count() <= LONGEST {
         return line;
     }
     let mut short: String = line.chars().take(LONGEST - 1).collect();
     short.push('…');
     short
+}
+
+/// The kinds of image a message can carry, as T3 Code takes them, and the
+/// first bytes each kind's file starts with.
+const IMAGE_KINDS: [(&str, &[u8]); 4] = [
+    ("image/png", b"\x89PNG\r\n\x1a\n"),
+    ("image/jpeg", b"\xff\xd8\xff"),
+    ("image/gif", b"GIF8"),
+    ("image/webp", b"RIFF"),
+];
+/// The largest image a message can carry, in bytes, as in T3 Code.
+pub const LARGEST_IMAGE: usize = 10 * 1024 * 1024;
+/// The most images one message carries.
+pub const MOST_IMAGES: usize = 10;
+
+/// Why `bytes` cannot go with a message as an image of kind `mime`.
+pub fn image(mime: &str, bytes: &[u8]) -> Result<(), Refusal> {
+    let Some((_, starts)) = IMAGE_KINDS.iter().find(|(kind, _)| *kind == mime) else {
+        return Err(Refusal::invalid(
+            "A message can carry PNG, JPEG, GIF and WebP images.",
+        ));
+    };
+    if bytes.len() > LARGEST_IMAGE {
+        return Err(Refusal::invalid("An image can be at most 10 MB."));
+    }
+    let webp = mime != "image/webp" || bytes.get(8..12) == Some(b"WEBP");
+    if !bytes.starts_with(starts) || !webp {
+        return Err(Refusal::invalid(format!(
+            "This file is not a {mime} image."
+        )));
+    }
+    Ok(())
 }
 
 /// The most of one command's output, one text or one diff (its texts
@@ -434,7 +472,10 @@ pub enum Text {
 impl Text {
     pub fn body(self, text: String) -> Body {
         match self {
-            Text::Reply => Body::Message { text },
+            Text::Reply => Body::Message {
+                text,
+                images: Vec::new(),
+            },
             Text::Thought => Body::Thought { text },
         }
     }
@@ -822,10 +863,38 @@ mod tests {
 
     #[test]
     fn a_title_is_one_short_line() {
-        assert_eq!(title("  Fix\nthe   report "), "Fix the report");
-        let long = title(&"word ".repeat(30));
+        assert_eq!(title("  Fix\nthe   report ", &[]), "Fix the report");
+        let long = title(&"word ".repeat(30), &[]);
         assert_eq!(long.chars().count(), 60);
         assert!(long.ends_with('…'));
+    }
+
+    #[test]
+    fn a_message_of_images_alone_is_named_after_them() {
+        let image = |name: Option<&str>| Image {
+            id: crate::model::ImageId::new(),
+            mime: "image/png".to_owned(),
+            bytes: 1,
+            name: name.map(str::to_owned),
+        };
+        assert_eq!(title(" ", &[image(Some("shot.png"))]), "shot.png");
+        assert_eq!(title("", &[image(None)]), "An image");
+        assert_eq!(title("", &[image(None), image(None)]), "2 images");
+        assert_eq!(title("Look", &[image(None)]), "Look");
+    }
+
+    #[test]
+    fn an_image_is_one_of_four_kinds_its_bytes_bear_out() {
+        let png = b"\x89PNG\r\n\x1a\n....";
+        assert_eq!(image("image/png", png), Ok(()));
+        assert_eq!(image("image/jpeg", b"\xff\xd8\xff\xe0"), Ok(()));
+        assert_eq!(image("image/gif", b"GIF89a"), Ok(()));
+        assert_eq!(image("image/webp", b"RIFF\0\0\0\0WEBPVP8 "), Ok(()));
+        assert!(image("image/webp", b"RIFF\0\0\0\0WAVEfmt ").is_err());
+        assert!(image("image/jpeg", png).is_err(), "a PNG named a JPEG");
+        assert!(image("image/svg+xml", b"<svg/>").is_err());
+        let large = [png.as_slice(), &vec![0; LARGEST_IMAGE]].concat();
+        assert!(image("image/png", &large).is_err());
     }
 
     #[test]
