@@ -33,6 +33,7 @@
 //! | `agents.image` | read | an image's bytes: `{image}` |
 
 mod acp;
+mod between;
 mod hosts;
 mod images;
 mod live;
@@ -230,10 +231,13 @@ struct Configure {
 }
 
 /// What `agents.defaults` answers: what an Agent's new Threads start with,
-/// and what its Harness last offered.
+/// and what its Harness last offered. `at` is where the Space's log stood,
+/// so a window hears when a Thread learns more of what the Harness offers.
 #[derive(Clone, Debug, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "agents/")]
 pub struct Defaults {
+    #[ts(type = "number")]
+    pub at: i64,
     pub settings: Settings,
     pub offer: Offer,
 }
@@ -364,8 +368,8 @@ impl Module for Agents {
                         .filter(|a| a.harness == found.harness && a.id != found.id)
                         .map(|a| a.id),
                 );
-                let offer = space
-                    .read(move |sql| {
+                let (at, offer) = space
+                    .view(move |sql| {
                         for agent in asked {
                             if let Some(offer) = store::latest_offer(sql, agent)? {
                                 return Ok(offer);
@@ -383,7 +387,11 @@ impl Module for Agents {
                         .entry(option.id.clone())
                         .or_insert_with(|| option.value.clone());
                 }
-                value(Defaults { settings, offer })
+                value(Defaults {
+                    at,
+                    settings,
+                    offer,
+                })
             }
             Method::Send => {
                 let Send {
@@ -519,6 +527,10 @@ impl Module for Agents {
         }
     }
 
+    async fn opened(&self, space: ModuleSpace) -> Result<(), Error> {
+        space.write(between::cut_short).await
+    }
+
     /// Every effect of this module dies with the Harness's process.
     fn on_restart(&self, _kind: &str) -> OnRestart {
         OnRestart::Abandon
@@ -620,10 +632,8 @@ fn send(
             summary.id
         }
     };
-    // A turn a Person stopped takes nothing more: the message waits, and
-    // the queue goes on.
-    let running = match steer && !store::held(tx.sql(), thread)? {
-        true => store::running(tx.sql(), thread)?,
+    let running = match steer {
+        true => steerable(tx, thread)?,
         false => None,
     };
     let item = Item {
@@ -703,6 +713,19 @@ fn stop(tx: &mut Tx<'_>, author: Participant, turn: TurnId) -> Result<Value, Err
     Ok(Value::Null)
 }
 
+/// The Thread's turn a message can go into. A turn a Person stopped takes
+/// nothing more, and one the Agent went on with by itself takes a message
+/// as a turn of its own, whose prompt the Harness takes into what it does.
+fn steerable(tx: &mut Tx<'_>, thread: ThreadId) -> Result<Option<store::Turn>, Error> {
+    if store::held(tx.sql(), thread)? {
+        return Ok(None);
+    }
+    let Some(running) = store::running(tx.sql(), thread)? else {
+        return Ok(None);
+    };
+    Ok((!turn::by_itself(tx.sql(), &running)?).then_some(running))
+}
+
 fn turn_of(tx: &mut Tx<'_>, turn: TurnId) -> Result<store::Turn, Error> {
     Ok(store::turn(tx.sql(), turn)?.ok_or_else(|| Refusal::not_found("There is no such turn."))?)
 }
@@ -753,11 +776,7 @@ fn withdraw(tx: &mut Tx<'_>, author: Participant, turn: TurnId) -> Result<Value,
 /// stopped, it waits its turn, and a held queue goes on.
 fn send_now(tx: &mut Tx<'_>, author: Participant, turn: TurnId) -> Result<Value, Error> {
     let found = waiting(tx, turn)?;
-    let running = match store::held(tx.sql(), found.thread)? {
-        true => None,
-        false => store::running(tx.sql(), found.thread)?,
-    };
-    let Some(running) = running else {
+    let Some(running) = steerable(tx, found.thread)? else {
         turn::resume(tx, author, found.thread)?;
         return Ok(Value::Null);
     };
@@ -776,6 +795,9 @@ fn send_now(tx: &mut Tx<'_>, author: Participant, turn: TurnId) -> Result<Value,
 /// it ended.
 fn retry(tx: &mut Tx<'_>, author: Participant, turn: TurnId) -> Result<Value, Error> {
     let found = turn_of(tx, turn)?;
+    if turn::by_itself(tx.sql(), &found)? {
+        return Err(Refusal::invalid("Only a turn a Person asked for can be tried again.").into());
+    }
     let latest = store::last_begun(tx.sql(), found.thread)? == Some(found.id)
         && store::turns_of(tx.sql(), found.message)?
             .last()

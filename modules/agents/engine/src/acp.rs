@@ -271,7 +271,54 @@ const COLLABORATION: &str = "collaboration_mode";
 const SUBMIT: &str = "accept";
 const SKIP: &str = "decline";
 
-type Routes = Arc<Mutex<HashMap<acp::SessionId, mpsc::UnboundedSender<Said>>>>;
+/// What a session says while none of the engine's turns runs in it.
+pub enum Between {
+    /// The Harness said it by itself, as Claude Code does when it goes on
+    /// with what a background task it started found.
+    Said(Said),
+    /// A turn's prompt went to the session: what it says now is the turn's.
+    Prompted,
+}
+
+/// Where what each session says goes: to the turn whose prompt it
+/// answers, or else to whoever hears the session between turns.
+#[derive(Clone, Default)]
+struct Routes {
+    turns: Arc<Mutex<HashMap<acp::SessionId, mpsc::UnboundedSender<Said>>>>,
+    between: Arc<Mutex<HashMap<acp::SessionId, mpsc::UnboundedSender<Between>>>>,
+}
+
+#[derive(Clone)]
+enum Route {
+    Turn(mpsc::UnboundedSender<Said>),
+    Between(mpsc::UnboundedSender<Between>),
+}
+
+impl Routes {
+    fn of(&self, session: &acp::SessionId) -> Option<Route> {
+        if let Some(turn) = self.turns.lock().unwrap().get(session) {
+            return Some(Route::Turn(turn.clone()));
+        }
+        let between = self.between.lock().unwrap();
+        between.get(session).cloned().map(Route::Between)
+    }
+
+    /// Everyone who listens hears that the Harness is gone.
+    fn clear(&self) {
+        self.turns.lock().unwrap().clear();
+        self.between.lock().unwrap().clear();
+    }
+}
+
+impl Route {
+    /// False when nobody listens any more.
+    fn send(&self, said: Said) -> bool {
+        match self {
+            Route::Turn(turn) => turn.send(said).is_ok(),
+            Route::Between(between) => between.send(Between::Said(said)).is_ok(),
+        }
+    }
+}
 /// What each session has said of itself.
 type Learned = Arc<Mutex<HashMap<acp::SessionId, Known>>>;
 
@@ -416,13 +463,26 @@ impl Connection {
 
     /// Since when no turn runs here, or `None` while one does.
     pub fn idle_since(&self) -> Option<Instant> {
-        let busy = !self.routes.lock().unwrap().is_empty();
+        let busy = !self.routes.turns.lock().unwrap().is_empty();
         (!busy).then(|| *self.active.lock().unwrap())
     }
 
     /// Marks the host as just used, so it is not let go as idle.
     pub fn touch(&self) {
         *self.active.lock().unwrap() = Instant::now();
+    }
+
+    /// Hears what `session` says between the engine's turns, from now on;
+    /// `None` while someone already hears it. Nobody hears it any more once
+    /// the Harness is gone.
+    pub fn between(&self, Session(session): &Session) -> Option<mpsc::UnboundedReceiver<Between>> {
+        let mut between = self.routes.between.lock().unwrap();
+        if between.get(session).is_some_and(|heard| !heard.is_closed()) {
+            return None;
+        }
+        let (said, hear) = mpsc::unbounded_channel();
+        between.insert(session.clone(), said);
+        Some(hear)
     }
 
     /// The Harness's session for `thread`, opened in `folder` on first use.
@@ -578,7 +638,14 @@ impl Connection {
     ) -> (mpsc::UnboundedReceiver<Said>, JoinHandle<Ending>) {
         let (said, hear) = mpsc::unbounded_channel();
         self.touch();
-        self.routes.lock().unwrap().insert(session.clone(), said);
+        self.routes
+            .turns
+            .lock()
+            .unwrap()
+            .insert(session.clone(), said);
+        if let Some(between) = self.routes.between.lock().unwrap().get(session) {
+            let _ = between.send(Between::Prompted);
+        }
         let request = acp::PromptRequest::new(session.clone(), blocks(prompt));
         // Sent here, not in the task: a stop that follows must reach the
         // Harness after the prompt it stops.
@@ -588,7 +655,7 @@ impl Connection {
         let done = tokio::spawn(async move {
             let answer = sent.block_task().await;
             *active.lock().unwrap() = Instant::now();
-            routes.lock().unwrap().remove(&session);
+            routes.turns.lock().unwrap().remove(&session);
             match answer {
                 Ok(answer) => ending(&answer.stop_reason),
                 Err(error) if gone(&error) => Ending::failed(
@@ -700,9 +767,9 @@ async fn drive(
                     });
                 }
                 if let Some(said) = said
-                    && let Some(route) = heard.lock().unwrap().get(&note.session_id)
+                    && let Some(route) = heard.of(&note.session_id)
                 {
-                    let _ = route.send(said);
+                    route.send(said);
                 }
                 Ok(())
             },
@@ -725,8 +792,8 @@ async fn drive(
                     form: None,
                     answer,
                 };
-                let route = asked.lock().unwrap().get(&request.session_id).cloned();
-                let Some(route) = route.filter(|route| route.send(question).is_ok()) else {
+                let route = asked.of(&request.session_id);
+                let Some(route) = route.filter(|route| route.send(question)) else {
                     return responder.respond(acp::RequestPermissionResponse::new(
                         acp::RequestPermissionOutcome::Cancelled,
                     ));
@@ -767,7 +834,7 @@ async fn drive(
                 let acp::ElicitationScope::Session(scope) = &form.scope else {
                     return responder.respond(cancel());
                 };
-                let Some(route) = filling.lock().unwrap().get(&scope.session_id).cloned() else {
+                let Some(route) = filling.of(&scope.session_id) else {
                     return responder.respond(cancel());
                 };
                 let Some(fields) = form_fields(&form.requested_schema) else {
@@ -796,7 +863,7 @@ async fn drive(
                     form: Some(fields.clone()),
                     answer,
                 };
-                if route.send(question).is_err() {
+                if !route.send(question) {
                     return responder.respond(cancel());
                 }
                 let withdrawn = responder.cancellation();
@@ -881,8 +948,7 @@ async fn drive(
     if let Err(error) = served {
         tracing::warn!(%error, "a Harness connection ended with an error");
     }
-    // Every turn still listening hears that the Harness is gone.
-    routes.lock().unwrap().clear();
+    routes.clear();
 }
 
 /// A prompt as ACP content: its text, then its images.

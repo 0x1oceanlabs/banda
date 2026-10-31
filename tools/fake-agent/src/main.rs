@@ -29,6 +29,9 @@
 //!   context is then a quarter full. With `clear`, it clears the plan.
 //! - `clear`: clears a plan it never made.
 //! - `twice`: says two messages, told apart only by their IDs.
+//! - `background`: starts a task, ends the turn, and goes on by itself when
+//!   the task ends, as Claude Code does; `long`, until it is stopped or a
+//!   prompt takes it in.
 //! - `later`: says what it used after the turn has ended.
 //! - `edit`: edits a file, and shows the change as a diff.
 //! - `run`: runs the tests, printing as Codex does; `loud` far more than a
@@ -430,6 +433,41 @@ async fn turn(
             let chunk = text(words).message_id(MessageId::new(id));
             say(&cx, &session, SessionUpdate::AgentMessageChunk(chunk))?;
         }
+        return Ok(StopReason::EndTurn);
+    }
+    if words.contains("background") {
+        // A task it started ends after the turn, and it goes on by itself
+        // with what the task found, as Claude Code does. `long`, it goes on
+        // until it is stopped or a prompt takes it in.
+        let (after, its, fake) = (cx.clone(), session.clone(), fake.clone());
+        let long = words.contains("long");
+        tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(100)).await;
+            let found = SessionUpdate::AgentMessageChunk(text("The task finished."));
+            let _ = say(&after, &its, found);
+            // What the cycle cost ends it, as Claude Code's result does.
+            let cost = UsageUpdate::new(60_000, 200_000).cost(Cost::new(0.5, "USD"));
+            let ended = SessionUpdate::UsageUpdate(cost);
+            if !long {
+                let _ = say(&after, &its, ended);
+                return;
+            }
+            loop {
+                tokio::time::sleep(Duration::from_millis(50)).await;
+                if fake.running.lock().unwrap().contains_key(&its) {
+                    return;
+                }
+                if fake.cancelled(&its) {
+                    let _ = say(&after, &its, ended);
+                    return;
+                }
+            }
+        });
+        say(
+            &cx,
+            &session,
+            SessionUpdate::AgentMessageChunk(text("Started a task.")),
+        )?;
         return Ok(StopReason::EndTurn);
     }
     if words.contains("later") {

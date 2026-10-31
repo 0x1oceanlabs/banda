@@ -25,6 +25,7 @@ use crate::acp::{
     self, Answer, Connection, Opened, Prompt, PromptImage, Running, Said, Session, Steered,
     ToolChange,
 };
+use crate::between;
 use crate::images::Images;
 use crate::live::Live;
 use crate::model::{
@@ -119,7 +120,7 @@ pub fn end(
 }
 
 /// Writes a line from Bandaso into the Thread.
-fn notice(
+pub fn notice(
     tx: &mut Tx<'_>,
     agent: Participant,
     thread: ThreadId,
@@ -354,7 +355,7 @@ pub async fn stop(live: &Live, space: ModuleSpace, effect: &Effect) -> Outcome {
 
 /// Runs one turn to its end, and writes how it ended.
 pub async fn start(
-    live: &Live,
+    live: &Arc<Live>,
     harnesses: &Harnesses,
     space: ModuleSpace,
     effect: &Effect,
@@ -419,6 +420,12 @@ pub async fn start(
 pub struct Message {
     pub text: String,
     pub images: Vec<Image>,
+}
+
+/// Whether the Agent started `turn` by itself: its message is a notice
+/// from Bandaso, not a Person's.
+pub fn by_itself(sql: &rusqlite::Connection, turn: &store::Turn) -> Result<bool, Error> {
+    Ok(Message::read(sql, turn.message)?.is_none())
 }
 
 impl Message {
@@ -568,7 +575,7 @@ async fn begun(
 }
 
 async fn work(
-    live: &Live,
+    live: &Arc<Live>,
     harnesses: &Harnesses,
     space: &ModuleSpace,
     turn: &store::Turn,
@@ -581,7 +588,7 @@ async fn work(
 }
 
 async fn run(
-    live: &Live,
+    live: &Arc<Live>,
     harnesses: &Harnesses,
     space: &ModuleSpace,
     turn: &store::Turn,
@@ -590,6 +597,7 @@ async fn run(
 ) -> Result<Ending, Ending> {
     let unplanned = |reason: String| Ending::failed(reason, None);
     let agent = settings::agent(space.folder(), turn.agent).map_err(|r| unplanned(r.message))?;
+    let called = agent.name.clone();
     let harness = harnesses.find(&agent.harness).ok_or_else(|| {
         unplanned(format!(
             "This computer has no Harness named \"{}\".",
@@ -649,6 +657,16 @@ async fn run(
         .map_err(|e| unplanned(plain(e)))?;
     let (mut hear, mut done) = connection.prompt(&session, &prompt);
     live.begin(turn.id, connection.clone(), session.clone());
+    // What the session says once the turn ends is the Agent's own.
+    let listener = between::Listener {
+        live: live.clone(),
+        space: space.clone(),
+        thread,
+        agent: turn.agent,
+        name: called,
+        harness: harness.name.clone(),
+    };
+    listener.hear(&connection, &session);
     let mut writer = Writer::new(space.clone(), turn, harness.name.clone(), settings, running);
     if let Err(reason) = writer.listen(live, &mut hear).await {
         // What the Harness says cannot be written: the turn stops and fails.
@@ -676,7 +694,7 @@ async fn run(
 
 /// Writes what the Harness offers in the Thread, when that changed. A
 /// session that has not said its slash commands yet leaves the Thread's.
-fn offered(
+pub fn offered(
     tx: &mut Tx<'_>,
     agent: Participant,
     thread: ThreadId,
@@ -696,7 +714,12 @@ fn offered(
 }
 
 /// Writes what the Agent has used in the Thread, when that changed.
-fn used(tx: &mut Tx<'_>, agent: Participant, thread: ThreadId, usage: Usage) -> Result<(), Error> {
+pub fn used(
+    tx: &mut Tx<'_>,
+    agent: Participant,
+    thread: ThreadId,
+    usage: Usage,
+) -> Result<(), Error> {
     if store::usage(tx.sql(), thread)?.as_ref() == Some(&usage) {
         return Ok(());
     }
@@ -743,7 +766,7 @@ struct Shown {
 }
 
 /// Writes what the Harness says into the Thread.
-struct Writer {
+pub struct Writer {
     space: ModuleSpace,
     thread: ThreadId,
     turn: TurnId,
@@ -769,7 +792,7 @@ struct Writer {
 }
 
 impl Writer {
-    fn new(
+    pub fn new(
         space: ModuleSpace,
         turn: &store::Turn,
         harness: String,
@@ -795,7 +818,7 @@ impl Writer {
     }
 
     /// Writes what the Harness says until it ends the turn.
-    async fn listen(
+    pub async fn listen(
         &mut self,
         live: &Live,
         hear: &mut mpsc::UnboundedReceiver<Said>,

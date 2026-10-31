@@ -61,7 +61,7 @@ import {
   NO_OFFER,
   retryable,
   rows,
-  running,
+  steerable,
   type ThreadState,
   waiting,
   working,
@@ -136,12 +136,32 @@ function ThreadPane({
   useEffect(() => {
     if (thread !== null) return
     let current = true
-    engine
-      .call<Defaults>("agents.defaults", { agent: args.agent }, { space })
-      .then((found) => current && setDefaults(found))
-      .catch(() => current && setDefaults(undefined))
+    let unfollow = () => {}
+    const read = () =>
+      engine.call<Defaults>("agents.defaults", { agent: args.agent }, { space })
+    read().then(
+      (found) => {
+        if (!current) return
+        setDefaults(found)
+        // A Thread learns what the Harness offers, such as its models: a
+        // new Thread offers it too.
+        unfollow = engine.follow(
+          space,
+          found.at,
+          OFFERED,
+          () =>
+            void read().then(
+              (again) => current && setDefaults(again),
+              () => {}
+            ),
+          () => {}
+        )
+      },
+      () => current && setDefaults(undefined)
+    )
     return () => {
       current = false
+      unfollow()
     }
   }, [engine, space, args.agent, thread])
   const settings =
@@ -276,12 +296,7 @@ function ThreadPane({
           focused={focused}
           busy={sending.busy}
           working={turn}
-          steering={
-            state !== undefined &&
-            running(state) !== undefined &&
-            // A turn a Person stopped takes nothing more.
-            !state.held
-          }
+          steering={state !== undefined && steerable(state)}
           usage={state?.usage}
           commands={suggested(offer)}
           images={images}
@@ -328,6 +343,9 @@ function Start({ name }: { name: string }) {
     </Empty>
   )
 }
+
+/** The facts that say a Harness offers something new. */
+const OFFERED = { module: "agents", kinds: ["thread.offered"] }
 
 type Answering = {
   /** Whether an answer is on its way; the choices wait for it. */
@@ -406,7 +424,7 @@ function Transcript({
                 <Queue
                   waiting={waits}
                   held={state.held}
-                  running={running(state) !== undefined}
+                  running={steerable(state)}
                   name={name}
                   busy={answers.answering}
                   reader={reader}

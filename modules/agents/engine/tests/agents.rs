@@ -1187,13 +1187,16 @@ async fn a_new_message_id_starts_a_new_message() {
 }
 
 #[tokio::test]
-async fn what_the_agent_used_between_turns_reaches_the_thread_with_the_next() {
+async fn what_the_agent_used_between_turns_reaches_the_thread_at_once() {
     let root = tempfile::tempdir().unwrap();
     let world = World::new(root.path()).await;
     let (thread, _) = world.finish(None, "stop for later").await;
-    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
-    let (_, view) = world.finish(Some(&thread), "hello").await;
-    assert_eq!(view.usage.map(|u| u.used), Some(150_000));
+    let view = world
+        .until(&thread, |v| {
+            v.usage.as_ref().map(|u| u.used) == Some(150_000)
+        })
+        .await;
+    assert_eq!(view.turns.len(), 1, "what it used opens no turn");
 }
 
 fn slash_commands(view: &ThreadView) -> Vec<&str> {
@@ -1701,6 +1704,94 @@ fn a_restart_holds_the_queue_until_a_person_sends_again() {
             assert_eq!(state(&view, &second["turn"]), Some(TurnState::Done));
             assert_eq!(last_reply(&view), "message: You said: third");
             assert!(!view.held);
+        },
+    );
+}
+
+/// The Agent's own turn after `sent`'s, once it shows `what`.
+async fn went_on(world: &World, sent: &Value, what: &str) -> ThreadView {
+    world
+        .until(&sent["thread"], |v| {
+            v.turns.len() == 2 && texts(v).contains(&format!("message: {what}"))
+        })
+        .await
+}
+
+#[tokio::test]
+async fn what_a_harness_does_by_itself_shows_in_a_turn_of_the_agents_own() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let sent = world.send(None, "background").await;
+    went_on(&world, &sent, "The task finished.").await;
+    let view = world
+        .until(&sent["thread"], |v| v.turns[1].state == TurnState::Done)
+        .await;
+    assert_eq!(
+        texts(&view),
+        [
+            "message: background",
+            "message: Started a task.",
+            "notice: Writer went on by itself.",
+            "message: The task finished.",
+        ]
+    );
+    let own = view.turns[1].id.to_string();
+    assert_eq!(view.usage.map(|u| u.used), Some(60_000));
+    let refused = world
+        .on_turn("agents.retry", &json!(own))
+        .await
+        .unwrap_err();
+    assert_eq!(refused.code, Code::Invalid);
+}
+
+#[tokio::test]
+async fn a_message_sent_while_the_agent_goes_on_by_itself_goes_at_once() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let sent = world.send(None, "background long").await;
+    let view = went_on(&world, &sent, "The task finished.").await;
+    let own = json!(view.turns[1].id);
+    assert_eq!(state(&view, &own), Some(TurnState::Running));
+    let next = world.steer(&sent["thread"], "and this").await;
+    assert_ne!(next["turn"], own, "it gets a turn of its own");
+    let view = world.ended(&next).await;
+    assert_eq!(state(&view, &own), Some(TurnState::Done));
+    assert_eq!(last_reply(&view), "message: You said: and this");
+}
+
+#[tokio::test]
+async fn a_person_stops_what_the_agent_does_by_itself() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let sent = world.send(None, "background long").await;
+    let view = went_on(&world, &sent, "The task finished.").await;
+    let own = json!(view.turns[1].id);
+    world.on_turn("agents.stop", &own).await.unwrap();
+    world
+        .until(&sent["thread"], |v| {
+            state(v, &own) == Some(TurnState::Stopped)
+        })
+        .await;
+}
+
+#[test]
+fn a_restart_ends_what_the_agent_did_by_itself() {
+    let root = tempfile::tempdir().unwrap();
+    across_a_restart(
+        root.path(),
+        || Agents::new(harnesses()),
+        async |world| {
+            let sent = world.send(None, "background long").await;
+            let view = went_on(world, &sent, "The task finished.").await;
+            (sent, json!(view.turns[1].id))
+        },
+        async |world, (sent, own)| {
+            let view = world
+                .until(&sent["thread"], |v| {
+                    state(v, &own) == Some(TurnState::Interrupted)
+                })
+                .await;
+            assert!(!view.held, "nothing a Person sent waits");
         },
     );
 }
