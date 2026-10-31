@@ -164,7 +164,14 @@ function ThreadPane({
     const sent = await sending.act(() =>
       engine.command<Sent>(
         "agents.send",
-        { agent: args.agent, thread, text, settings: draft ?? null },
+        // A new Thread starts as its composer shows; an existing one runs
+        // with its own settings, which the bar changes as it goes.
+        {
+          agent: args.agent,
+          thread,
+          text,
+          settings: thread === null ? (settings ?? null) : null,
+        },
         space
       )
     )

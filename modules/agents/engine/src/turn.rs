@@ -18,8 +18,8 @@
 use crate::acp::{Answer, Opened, Running, Said};
 use crate::live::Live;
 use crate::model::{
-    Body, Fact, Failure, Item, ItemId, QuestionState, Settings, ThreadId, ToolKind, ToolStatus,
-    TurnId, TurnState,
+    Body, Fact, Failure, Item, ItemId, Mode, QuestionState, Settings, ThreadId, ToolKind,
+    ToolStatus, TurnId, TurnState,
 };
 use crate::rules::{self, Ending, Piece, Pieces, Text};
 use crate::settings::{self, Harnesses};
@@ -207,7 +207,7 @@ pub async fn start(
                 )) => text,
                 _ => String::new(),
             };
-            let settings = store::settings(tx.sql(), turn.thread)?;
+            let settings = store::turn_settings(tx.sql(), &turn)?;
             let started = Fact::TurnStarted { turn: turn.id };
             emit(tx, Participant::Agent(turn.agent), turn.thread, &started)?;
             Ok(Some((turn, text, settings)))
@@ -305,7 +305,7 @@ async fn prompt(
         .map_err(|e| unplanned(plain(e)))?;
     let (mut hear, mut done) = connection.prompt(&session, text);
     live.begin(turn.id, connection.clone(), session.clone());
-    let mut writer = Writer::new(space.clone(), turn, settings, running);
+    let mut writer = Writer::new(space.clone(), turn, harness.name.clone(), settings, running);
     if let Err(reason) = writer.listen(live, &mut hear).await {
         // What the Harness says cannot be written: the turn stops and fails.
         let _ = connection.cancel(&session);
@@ -334,18 +334,22 @@ fn offered(
     emit(tx, agent, thread, &Fact::ThreadOffered { thread, offer })
 }
 
-/// The Harness switched its mode or its plan by itself, as Claude Code
-/// does when a plan is accepted: the Thread's settings follow.
+/// The Harness started or left its plan by itself, as Claude Code does
+/// when a plan is accepted: the Thread's settings follow, and its mode
+/// only if the Harness moved that too.
 fn switched(
     tx: &mut Tx<'_>,
     agent: Participant,
     thread: ThreadId,
+    ran: &Running,
     now: &Running,
 ) -> Result<(), Error> {
     let before = store::settings(tx.sql(), thread)?;
     let mut settings = before.clone();
     settings.plan = now.plan;
-    if let Some(mode) = now.mode {
+    if now.mode != ran.mode
+        && let Some(mode) = now.mode
+    {
         settings.mode = mode;
     }
     if settings == before {
@@ -366,6 +370,8 @@ struct Writer {
     thread: ThreadId,
     turn: TurnId,
     agent: AgentId,
+    /// The Harness's name, for plain words.
+    harness: String,
     /// What the turn started with, and what the session runs with now.
     settings: Settings,
     running: Running,
@@ -380,12 +386,19 @@ struct Writer {
 }
 
 impl Writer {
-    fn new(space: ModuleSpace, turn: &store::Turn, settings: Settings, running: Running) -> Writer {
+    fn new(
+        space: ModuleSpace,
+        turn: &store::Turn,
+        harness: String,
+        settings: Settings,
+        running: Running,
+    ) -> Writer {
         Writer {
             space,
             thread: turn.thread,
             turn: turn.id,
             agent: turn.agent,
+            harness,
             settings,
             running,
             pieces: Pieces::default(),
@@ -515,13 +528,24 @@ impl Writer {
                 Ok(())
             }
             Said::Runs(now) => {
+                self.close().await?;
                 let ran = std::mem::replace(&mut self.running, now.clone());
-                let moved = now.native && (now.mode, now.plan) != (ran.mode, ran.plan);
-                let (thread, agent) = (self.thread, Participant::Agent(self.agent));
+                let planned = now.native && now.plan != ran.plan;
+                // A mode it moved to by itself, not leaving a plan, is not
+                // the Person's choice: the Thread keeps theirs, and says so.
+                let moved = (now.native && !planned && now.mode != ran.mode).then(|| {
+                    let runs = now.mode.map_or("a mode of its own", Mode::name);
+                    format!("{} switched itself to {runs} for this turn.", self.harness)
+                });
+                let (thread, agent, turn) =
+                    (self.thread, Participant::Agent(self.agent), self.turn);
                 self.space
                     .write(move |tx| {
-                        if moved {
-                            switched(tx, agent, thread, &now)?;
+                        if planned {
+                            switched(tx, agent, thread, &ran, &now)?;
+                        }
+                        if let Some(text) = moved {
+                            notice(tx, agent, thread, turn, text)?;
                         }
                         offered(tx, agent, thread, now.offer)
                     })

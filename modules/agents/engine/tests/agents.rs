@@ -869,4 +869,82 @@ async fn an_agents_file_holds_what_its_new_threads_start_with() {
         after["offer"]["options"][0]["id"], "model",
         "what the Harness offered"
     );
+    assert_eq!(
+        after["settings"]["options"],
+        json!({ "model": "smart", "brief": false }),
+        "what the composer shows is what a new Thread gets"
+    );
+}
+
+#[tokio::test]
+async fn a_message_runs_with_the_settings_it_was_sent_with() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let slow = world.send(None, "slow please").await;
+    let thread = slow["thread"].clone();
+    world
+        .configure(&thread, json!({ "mode": "supervised" }))
+        .await;
+    let supervised = world.send(Some(&thread), "which settings").await;
+    let params = json!({
+        "agent": world.agent,
+        "thread": thread,
+        "text": "which settings",
+        "settings": { "mode": "full_access" },
+    });
+    let full = world
+        .call(world.person(), "agents.send", params)
+        .await
+        .unwrap();
+    world
+        .call(
+            world.person(),
+            "agents.stop",
+            json!({ "turn": slow["turn"] }),
+        )
+        .await
+        .unwrap();
+    let view = world
+        .until(&thread, |v| {
+            state(v, &full["turn"]) == Some(TurnState::Done)
+        })
+        .await;
+    let replies: Vec<_> = view
+        .items
+        .iter()
+        .filter(|i| [&supervised["turn"], &full["turn"]].contains(&&json!(i.turn)))
+        .filter(|i| matches!(i.author, Participant::Agent(_)))
+        .map(|i| match &i.body {
+            Body::Message { text } => text.split(',').next().unwrap(),
+            _ => "",
+        })
+        .collect();
+    assert_eq!(replies, ["Mode default", "Mode bypassPermissions"]);
+}
+
+#[tokio::test]
+async fn only_a_person_chooses_how_freely_an_agent_acts() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let (thread, _) = world.finish(None, "hello").await;
+    let agent = Participant::Agent(world.agent);
+    let settings = json!({ "mode": "full_access" });
+    let configured = world
+        .call(
+            agent,
+            "agents.configure",
+            json!({ "thread": thread, "settings": settings }),
+        )
+        .await;
+    assert_eq!(configured.unwrap_err().code, Code::Forbidden);
+    let params = json!({
+        "agent": world.agent,
+        "thread": thread,
+        "text": "go on",
+        "settings": settings,
+    });
+    let sent = world.call(agent, "agents.send", params).await;
+    assert_eq!(sent.unwrap_err().code, Code::Forbidden);
+    let params = json!({ "agent": world.agent, "thread": thread, "text": "go on" });
+    world.call(agent, "agents.send", params).await.unwrap();
 }
