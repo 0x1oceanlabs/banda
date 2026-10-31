@@ -21,7 +21,10 @@
 //! turn answers the Harness's Questions by the mode where the mode allows,
 //! and asks the Person otherwise.
 
-use crate::acp::{Answer, Opened, Prompt, PromptImage, Running, Said, Steered, ToolChange};
+use crate::acp::{
+    self, Answer, Connection, Opened, Prompt, PromptImage, Running, Said, Session, Steered,
+    ToolChange,
+};
 use crate::images::Images;
 use crate::live::Live;
 use crate::model::{
@@ -34,6 +37,7 @@ use crate::{emit, store};
 use bandaso_kernel::{AgentId, Effect, Error, ModuleSpace, Outcome, Participant, Settled, Tx};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio::time::Instant;
@@ -47,6 +51,10 @@ pub const STEER: &str = "turn.steer";
 const GATHER: Duration = Duration::from_millis(80);
 /// How long a Harness may take to stop a turn that cannot go on.
 const STOPPING: Duration = Duration::from_secs(10);
+/// How long a message sent into a turn waits for the turn's Harness to
+/// start and take its prompt, and how often it looks.
+const BEGINNING: Duration = Duration::from_secs(acp::STARTING.as_secs() + acp::OPENING.as_secs());
+const LOOK_AGAIN: Duration = Duration::from_millis(100);
 
 #[derive(Serialize, Deserialize)]
 pub struct TurnEffect {
@@ -77,20 +85,24 @@ fn plain(error: impl std::fmt::Display) -> String {
 }
 
 /// Ends a turn: its state, its Questions that never got an answer, and the
-/// fact that it ended.
-pub fn end(tx: &mut Tx<'_>, turn: &store::Turn, ending: Ending) -> Result<(), Error> {
+/// fact that it ended, which `author` brought about.
+pub fn end(
+    tx: &mut Tx<'_>,
+    author: Participant,
+    turn: &store::Turn,
+    ending: Ending,
+) -> Result<(), Error> {
     let Ending {
         state,
         reason,
         failure,
     } = ending;
-    let agent = Participant::Agent(turn.agent);
     for mut item in store::open_questions(tx.sql(), turn.id)? {
         rules::close(&mut item.body);
         store::set_body(tx.sql(), item.id, &item.body)?;
         emit(
             tx,
-            agent,
+            author,
             turn.thread,
             &Fact::QuestionClosed { item: item.id },
         )?;
@@ -103,7 +115,7 @@ pub fn end(tx: &mut Tx<'_>, turn: &store::Turn, ending: Ending) -> Result<(), Er
         reason,
         failure,
     };
-    emit(tx, agent, turn.thread, &ended)
+    emit(tx, author, turn.thread, &ended)
 }
 
 /// Writes a line from Bandaso into the Thread.
@@ -133,35 +145,35 @@ fn notice(
 /// Holds the Thread's queue: its waiting turns start once a Person lets
 /// it go.
 pub fn hold(tx: &mut Tx<'_>, author: Participant, thread: ThreadId) -> Result<(), Error> {
-    if store::held(tx.sql(), thread)? {
-        return Ok(());
-    }
-    store::set_held(tx.sql(), thread, true)?;
-    let held = Fact::ThreadHeld { thread, held: true };
-    emit(tx, author, thread, &held)
+    held_to(tx, author, thread, true).map(drop)
 }
 
 /// Lets a held queue go on: its waiting turns start in the order they were
-/// sent.
+/// sent, after any turn that was queued before.
 pub fn resume(tx: &mut Tx<'_>, author: Participant, thread: ThreadId) -> Result<(), Error> {
-    if !store::held(tx.sql(), thread)? {
+    if !held_to(tx, author, thread, false)? {
         return Ok(());
     }
-    store::set_held(tx.sql(), thread, false)?;
-    emit(
-        tx,
-        author,
-        thread,
-        &Fact::ThreadHeld {
-            thread,
-            held: false,
-        },
-    )?;
     for waiting in store::turns_in(tx.sql(), thread, TurnState::Queued)? {
         let start = TurnEffect { turn: waiting.id };
         tx.enqueue(START, &thread.to_string(), &start)?;
     }
     Ok(())
+}
+
+/// Whether the Thread's queue was not `held` before.
+fn held_to(
+    tx: &mut Tx<'_>,
+    author: Participant,
+    thread: ThreadId,
+    held: bool,
+) -> Result<bool, Error> {
+    if store::held(tx.sql(), thread)? == held {
+        return Ok(false);
+    }
+    store::set_held(tx.sql(), thread, held)?;
+    emit(tx, author, thread, &Fact::ThreadHeld { thread, held })?;
+    Ok(true)
 }
 
 /// A new turn for `message`, which waits behind the Thread's earlier turns
@@ -200,8 +212,7 @@ pub fn steer_into(
     author: Participant,
     running: &store::Turn,
     item: ItemId,
-    text: String,
-    images: Vec<Image>,
+    Message { text, images }: Message,
 ) -> Result<(), Error> {
     let steered = Fact::MessageSteered {
         item,
@@ -278,7 +289,7 @@ pub fn settle(tx: &mut Tx<'_>, effect: &Effect, settled: &Settled) -> Result<(),
                 }
                 Settled::Failed(reason) => Ending::failed(reason.clone(), None),
             };
-            end(tx, &turn, ending)
+            end(tx, Participant::Agent(turn.agent), &turn, ending)
         }
         // A message that never reached its turn is not lost.
         STEER => {
@@ -371,20 +382,14 @@ pub async fn start(
             if first == Some(turn.id) {
                 store::move_last(tx.sql(), turn.message)?;
             }
-            let (text, images) = match store::item(tx.sql(), turn.message)? {
-                Some((
-                    _,
-                    Item {
-                        body: Body::Message { text, images },
-                        ..
-                    },
-                )) => (text, images),
-                _ => (String::new(), Vec::new()),
-            };
+            let message = Message::read(tx.sql(), turn.message)?.unwrap_or(Message {
+                text: String::new(),
+                images: Vec::new(),
+            });
             let settings = store::turn_settings(tx.sql(), &turn)?;
             let started = Fact::TurnStarted { turn: turn.id };
             emit(tx, Participant::Agent(turn.agent), turn.thread, &started)?;
-            Ok(Some((turn, Message { text, images }, settings)))
+            Ok(Some((turn, message, settings)))
         })
         .await;
     let (turn, message, settings) = match begun {
@@ -394,7 +399,16 @@ pub async fn start(
     };
     let ending = work(live, harnesses, &space, &turn, message, settings).await;
     let ending = ending.stop_asked(live.end(turn.id));
-    match space.write(move |tx| end(tx, &turn, ending)).await {
+    let written = space.write(move |tx| {
+        let agent = Participant::Agent(turn.agent);
+        // A Harness that stopped holds the queue, as a restart does: the
+        // turn can be tried again before the next one runs.
+        if rules::holds_queue(&ending) {
+            hold(tx, agent, turn.thread)?;
+        }
+        end(tx, agent, &turn, ending)
+    });
+    match written.await {
         Ok(()) => Outcome::Done,
         // The outbox settles it as failed.
         Err(error) => Outcome::Fail(error.to_string()),
@@ -402,9 +416,25 @@ pub async fn start(
 }
 
 /// The message a turn sends: its text and the images it carries.
-struct Message {
-    text: String,
-    images: Vec<Image>,
+pub struct Message {
+    pub text: String,
+    pub images: Vec<Image>,
+}
+
+impl Message {
+    /// `item`'s message, if it is one.
+    pub fn read(sql: &rusqlite::Connection, item: ItemId) -> Result<Option<Message>, Error> {
+        Ok(match store::item(sql, item)? {
+            Some((
+                _,
+                Item {
+                    body: Body::Message { text, images },
+                    ..
+                },
+            )) => Some(Message { text, images }),
+            _ => None,
+        })
+    }
 }
 
 /// What `message` sends `harness`, and what Bandaso tells the Person it
@@ -453,13 +483,7 @@ pub async fn steer(live: &Live, space: ModuleSpace, effect: &Effect) -> Outcome 
             let Some(turn) = store::turn(sql, turn)? else {
                 return Ok(None);
             };
-            let Some((_, found)) = store::item(sql, item)? else {
-                return Ok(None);
-            };
-            let Body::Message { text, images } = found.body else {
-                return Ok(None);
-            };
-            Ok(Some((turn, Message { text, images })))
+            Ok(Message::read(sql, item)?.map(|message| (turn, message)))
         })
         .await;
     let (turn, message) = match found {
@@ -473,14 +497,13 @@ pub async fn steer(live: &Live, space: ModuleSpace, effect: &Effect) -> Outcome 
             Err(error) => Outcome::Retry(error.to_string()),
         }
     };
-    if turn.state != TurnState::Running {
+    let Some((connection, session)) = begun(live, &space, &turn).await else {
+        return requeued(space).await;
+    };
+    // A turn a Person stopped takes nothing more.
+    if live.stopping(turn.id) {
         return requeued(space).await;
     }
-    // It runs, but its prompt has yet to reach the Harness: the outbox
-    // tries again, and the message gets a turn of its own if it never does.
-    let Some((connection, session)) = live.running(turn.id) else {
-        return Outcome::Retry("The turn has not begun yet.".to_owned());
-    };
     if !connection.steers() {
         let text = format!(
             "{} cannot take a message while it works, so Bandaso stopped it to send yours.",
@@ -503,7 +526,7 @@ pub async fn steer(live: &Live, space: ModuleSpace, effect: &Effect) -> Outcome 
         return Outcome::Retry(error.to_string());
     }
     // Marked first: what the Agent says of the message reads after it.
-    live.steered(turn.id);
+    live.mark_steered(turn.id);
     match connection.steer(&session, &prompt).await {
         Ok(Steered::Joined) => Outcome::Done,
         Ok(Steered::NotNow) => requeued(space).await,
@@ -511,6 +534,36 @@ pub async fn steer(live: &Live, space: ModuleSpace, effect: &Effect) -> Outcome 
             tracing::warn!(%error, "a message could not join its turn");
             requeued(space).await
         }
+    }
+}
+
+/// The Harness and session of a turn that runs, once its prompt reached
+/// them, which takes a while for a Harness that starts; `None` when the
+/// turn ended first, or never began.
+async fn begun(
+    live: &Live,
+    space: &ModuleSpace,
+    turn: &store::Turn,
+) -> Option<(Arc<Connection>, Session)> {
+    let given_up = Instant::now() + BEGINNING;
+    let mut state = turn.state;
+    loop {
+        if state != TurnState::Running {
+            return None;
+        }
+        if let Some(begun) = live.running(turn.id) {
+            return Some(begun);
+        }
+        if Instant::now() >= given_up {
+            return None;
+        }
+        tokio::time::sleep(LOOK_AGAIN).await;
+        let id = turn.id;
+        state = space
+            .read(move |sql| Ok(store::turn(sql, id)?.map(|turn| turn.state)))
+            .await
+            .ok()
+            .flatten()?;
     }
 }
 

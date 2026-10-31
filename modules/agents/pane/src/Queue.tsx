@@ -37,7 +37,7 @@ export type QueueActions = {
 export function Queue({
   waiting,
   held,
-  working,
+  running,
   name,
   busy,
   reader,
@@ -46,7 +46,7 @@ export function Queue({
   waiting: Waiting[]
   held: boolean
   /** A turn runs, so a message can go into it now. */
-  working: boolean
+  running: boolean
   name: string
   busy: boolean
   reader: ImageReader
@@ -87,7 +87,7 @@ export function Queue({
             <WaitingMessage
               waiting={one}
               name={name}
-              working={working && !held}
+              running={running && !held}
               busy={busy}
               reader={reader}
               {...actions}
@@ -102,7 +102,7 @@ export function Queue({
 function WaitingMessage({
   waiting,
   name,
-  working,
+  running,
   busy,
   reader,
   onSendNow,
@@ -111,7 +111,7 @@ function WaitingMessage({
 }: Omit<QueueActions, "onContinue"> & {
   waiting: Waiting
   name: string
-  working: boolean
+  running: boolean
   busy: boolean
   reader: ImageReader
 }) {
@@ -177,7 +177,7 @@ function WaitingMessage({
         )}
         {editing === undefined && (
           <div className="flex justify-end gap-1">
-            {working && (
+            {running && (
               <Button
                 variant="ghost"
                 size="xs"

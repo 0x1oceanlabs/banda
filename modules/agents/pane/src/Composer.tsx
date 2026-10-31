@@ -95,7 +95,8 @@ export function Composer({
     }
     const sending = images.attached
     if (await onSend(text, sending, steer && steering)) {
-      setText("")
+      // What the Person wrote while it went stays.
+      setText((now) => (now === text ? "" : now))
       images.sent(sending)
     }
   }

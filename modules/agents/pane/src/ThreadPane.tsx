@@ -206,9 +206,9 @@ function ThreadPane({
       void acting.act(() =>
         engine.command("agents.steer", { turn: turn.id }, space)
       ),
-    onEdit: async ({ item }, text) =>
+    onEdit: async ({ turn }, text) =>
       (await acting.act(() =>
-        engine.command("agents.edit", { item: item.id, text }, space)
+        engine.command("agents.edit", { turn: turn.id, text }, space)
       )) !== undefined,
     onRemove: ({ turn }) =>
       void acting.act(() =>
@@ -276,7 +276,12 @@ function ThreadPane({
           focused={focused}
           busy={sending.busy}
           working={turn}
-          steering={state !== undefined && running(state) !== undefined}
+          steering={
+            state !== undefined &&
+            running(state) !== undefined &&
+            // A turn a Person stopped takes nothing more.
+            !state.held
+          }
           usage={state?.usage}
           commands={suggested(offer)}
           images={images}
@@ -401,7 +406,7 @@ function Transcript({
                 <Queue
                   waiting={waits}
                   held={state.held}
-                  working={running(state) !== undefined}
+                  running={running(state) !== undefined}
                   name={name}
                   busy={answers.answering}
                   reader={reader}

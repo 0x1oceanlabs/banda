@@ -1514,21 +1514,21 @@ async fn a_waiting_message_changes_goes_and_waits_after_a_stop() {
     let second = world.send(Some(&thread), "second").await;
     let third = world.send(Some(&thread), "third").await;
 
-    let edit = |item: &Value, text: &str| {
+    let edit = |turn: &Value, text: &str| {
         world.call(
             world.person(),
             "agents.edit",
-            json!({ "item": item.clone(), "text": text }),
+            json!({ "turn": turn.clone(), "text": text }),
         )
     };
-    edit(&second["item"], "second, changed").await.unwrap();
+    edit(&second["turn"], "second, changed").await.unwrap();
     world
         .on_turn("agents.withdraw", &third["turn"])
         .await
         .unwrap();
-    let refused = edit(&wait["item"], "no").await.unwrap_err();
+    let refused = edit(&wait["turn"], "no").await.unwrap_err();
     assert!(refused.message.contains("taken"), "{}", refused.message);
-    let refused = edit(&second["item"], "").await.unwrap_err();
+    let refused = edit(&second["turn"], "").await.unwrap_err();
     assert_eq!(
         refused.code,
         Code::Invalid,
@@ -1583,6 +1583,98 @@ async fn a_waiting_message_sent_now_joins_the_running_turn() {
         .await
         .unwrap_err();
     assert!(refused.message.contains("taken"), "{}", refused.message);
+}
+
+#[tokio::test]
+async fn a_waiting_message_sent_now_without_steering_gets_a_turn_of_its_own() {
+    let root = tempfile::tempdir().unwrap();
+    let harnesses = harnesses_with(&[("FAKE_AGENT_NO_STEERING", "1")]);
+    let world = World::new_with(root.path(), Agents::new(harnesses)).await;
+    let wait = world.waiting(None).await;
+    let later = world.send(Some(&wait["thread"]), "now this").await;
+    world.on_turn("agents.steer", &later["turn"]).await.unwrap();
+    let view = world
+        .until(&wait["thread"], |v| {
+            v.turns.len() == 3 && v.turns[2].state == TurnState::Done
+        })
+        .await;
+    assert_eq!(state(&view, &wait["turn"]), Some(TurnState::Stopped));
+    assert_eq!(state(&view, &later["turn"]), Some(TurnState::Withdrawn));
+    assert_eq!(last_reply(&view), "message: You said: now this");
+}
+
+#[tokio::test]
+async fn a_message_sent_after_a_stop_waits_and_lets_the_queue_go_on() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let wait = world.waiting(None).await;
+    let thread = wait["thread"].clone();
+    let second = world.send(Some(&thread), "second").await;
+    world.on_turn("agents.stop", &wait["turn"]).await.unwrap();
+    let third = world.steer(&thread, "third").await;
+    assert_ne!(
+        third["turn"], wait["turn"],
+        "a stopped turn takes no message"
+    );
+    let view = world.ended(&third).await;
+    assert_eq!(state(&view, &wait["turn"]), Some(TurnState::Stopped));
+    assert_eq!(state(&view, &second["turn"]), Some(TurnState::Done));
+    assert_eq!(last_reply(&view), "message: You said: third");
+    assert!(!view.held);
+}
+
+#[tokio::test]
+async fn a_waiting_message_sent_now_after_a_stop_lets_the_queue_go_on() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let wait = world.waiting(None).await;
+    let thread = wait["thread"].clone();
+    let second = world.send(Some(&thread), "second").await;
+    let third = world.send(Some(&thread), "third").await;
+    world.on_turn("agents.stop", &wait["turn"]).await.unwrap();
+    world.on_turn("agents.steer", &third["turn"]).await.unwrap();
+    let view = world.ended(&third).await;
+    assert_eq!(state(&view, &second["turn"]), Some(TurnState::Done));
+    assert_eq!(state(&view, &third["turn"]), Some(TurnState::Done));
+    assert!(!view.held);
+}
+
+#[tokio::test]
+async fn a_harness_that_stops_holds_the_queue_and_its_turn_goes_again_first() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let wait = world.waiting(None).await;
+    let thread = wait["thread"].clone();
+    let crash = world.send(Some(&thread), "crash").await;
+    let after = world.send(Some(&thread), "after").await;
+    let taken = world.send(Some(&thread), "taken back").await;
+    world.steer(&thread, "go on").await;
+    world.ended(&crash).await;
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    let view = world.thread(&thread).await;
+    assert_eq!(state(&view, &crash["turn"]), Some(TurnState::Failed));
+    assert_eq!(state(&view, &after["turn"]), Some(TurnState::Queued));
+    assert!(view.held, "a Harness that stops holds the queue");
+
+    // A message taken back is no turn of the Thread's: the failed one is
+    // still its latest, and goes again before the queue.
+    world
+        .on_turn("agents.withdraw", &taken["turn"])
+        .await
+        .unwrap();
+    let again = world.on_turn("agents.retry", &crash["turn"]).await.unwrap();
+    let twice = world.on_turn("agents.retry", &crash["turn"]).await;
+    assert!(twice.is_err(), "a message goes again once at a time");
+    let view = world.ended(&again).await;
+    assert_eq!(state(&view, &again["turn"]), Some(TurnState::Failed));
+    assert_eq!(state(&view, &after["turn"]), Some(TurnState::Queued));
+
+    world
+        .call(world.person(), "agents.resume", json!({ "thread": thread }))
+        .await
+        .unwrap();
+    let view = world.ended(&after).await;
+    assert_eq!(last_reply(&view), "message: You said: after");
 }
 
 #[test]

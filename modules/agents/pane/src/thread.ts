@@ -94,19 +94,18 @@ function changeTool(
 }
 
 /** The items with `id` after every other, changed by `change`. */
-function moveLast(
-  items: Item[],
-  id: string,
-  change: (item: Item) => Item = (item) => item
-): Item[] {
-  const moved = items.find((item) => item.id === id)
-  if (!moved) return items
-  return [...items.filter((item) => item !== moved), change(moved)]
+/** `items` with `moved` after every other, in place of the item it
+ * replaces, if there is one. */
+function moveLast(items: Item[], moved: Item): Item[] {
+  return [...items.filter((item) => item.id !== moved.id), moved]
 }
 
-/** The turn that first ran or will run `message`. */
+/** The turn that first ran or will run `message`. A turn a Person took
+ * back never ran it. */
 function firstTurnOf(turns: TurnView[], message: string): TurnView | undefined {
-  return turns.find((turn) => turn.message === message)
+  return turns.find(
+    (turn) => turn.message === message && turn.state !== "withdrawn"
+  )
 }
 
 function changeTurn(
@@ -156,10 +155,7 @@ export function apply(state: ThreadState, event: Event): ThreadState {
     case "message.steered": {
       const { item: id, turn, text, images } = fact.payload
       const steered = item(id, { kind: "message", text, images }, turn)
-      return {
-        ...next,
-        items: [...state.items.filter((i) => i.id !== id), steered],
-      }
+      return { ...next, items: moveLast(state.items, steered) }
     }
     case "message.edited": {
       const { item: id, text } = fact.payload
@@ -175,12 +171,10 @@ export function apply(state: ThreadState, event: Event): ThreadState {
       // A message reads where its turn starts, unless an earlier turn ran it.
       const first =
         started && firstTurnOf(state.turns, started.message)?.id === started.id
+      const message = first && state.items.find((i) => i.id === started.message)
       return {
         ...next,
-        items:
-          started && first
-            ? moveLast(state.items, started.message)
-            : state.items,
+        items: message ? moveLast(state.items, message) : state.items,
         turns: changeTurn(state, fact.payload.turn, { state: "running" }),
       }
     }
@@ -375,9 +369,13 @@ function withdrawn(state: ThreadState): Set<string> {
 }
 
 /** Whether a Person can try `turn`'s message again: it failed or was cut
- * short, and nothing came after it. */
+ * short, no turn began after it, and its message waits for no other. */
 export function retryable(state: ThreadState, turn: TurnView): boolean {
-  const latest = state.turns.at(-1)?.id === turn.id
+  const last = (turns: TurnView[]) => turns.at(-1)?.id === turn.id
+  const counted = state.turns.filter((t) => t.state !== "withdrawn")
+  const latest =
+    last(counted.filter((t) => t.state !== "queued")) &&
+    last(counted.filter((t) => t.message === turn.message))
   return latest && (turn.state === "failed" || turn.state === "interrupted")
 }
 

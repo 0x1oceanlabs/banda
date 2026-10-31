@@ -177,14 +177,16 @@ If Chat is removed, Agents still works through its own Thread.
   Claude Code's and Codex's adapters share (`turn.steer`, keyed by the
   Thread's steering), and what the Agent says of it follows it in the
   Thread. Queue, or Ctrl+Enter, has it wait for a turn of its own. A
-  message the turn cannot take, as when it just ended, waits for its own
-  turn instead; a Harness that cannot steer stops its turn for it, and
-  says so.
+  message the turn cannot take, as when it just ended or a Person stopped
+  it, waits for its own turn instead; a Harness that cannot steer stops its
+  turn for it, and says so. A message sent into a turn whose Harness still
+  starts waits for the turn to begin.
 - **The queue shows after the Thread.** A waiting message can be changed
   (`agents.edit`), taken back (`agents.withdraw`) or sent now into the
   running turn (`agents.steer`). It reads where its turn starts. A Person's
-  stop and a restart hold the queue (`thread.held`) until the Person
-  continues (`agents.resume`) or sends another message.
+  stop, a restart and a Harness that stopped hold the queue
+  (`thread.held`) until the Person continues (`agents.resume`), sends
+  another message or tries the failed turn again, which goes first.
 - **One Harness process per Space and Harness entry.** Every Thread on it is
   a session in that process. The engine starts it on the first turn, one
   start at a time; starts it again after a growing pause if it keeps dying;
@@ -297,7 +299,8 @@ module reaches a Harness through an adapter:
 - **Capabilities.** The engine declares what the window can show (notices,
   options that are on or off, forms, and a command's output as it comes),
   and the adapter reads what the
-  Harness declares (sessions that resume or load, and their options). The
+  Harness declares (sessions that resume or load, their options, and
+  steering, which each message sent into a turn opts into). The
   rest of the engine reads those capabilities and never the Harness's
   name. A failure's class comes from ACP's error codes
   and the data the adapters attach to an error.

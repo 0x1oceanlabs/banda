@@ -89,8 +89,8 @@ impl Live {
         self.turns.lock().unwrap().running.get(&turn).cloned()
     }
 
-    /// A message goes into the running turn.
-    pub fn steered(&self, turn: TurnId) {
+    /// Marks that a message goes into the running turn.
+    pub fn mark_steered(&self, turn: TurnId) {
         self.turns.lock().unwrap().steered.insert(turn);
     }
 
@@ -109,6 +109,11 @@ impl Live {
         }
         turns.release(turn);
         Ok(())
+    }
+
+    /// Whether the turn was asked to stop.
+    pub fn stopping(&self, turn: TurnId) -> bool {
+        self.turns.lock().unwrap().stopping.contains(&turn)
     }
 
     /// Holds a Question until a Person answers it. False when the turn is

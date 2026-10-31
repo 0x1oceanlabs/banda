@@ -21,7 +21,7 @@
 //! | `agents.thread` | read | one Thread as a view: `{thread}` |
 //! | `agents.defaults` | read | what an Agent's new Threads start with: `{agent}` |
 //! | `agents.send` | write | a message that queues a turn, or with `steer` joins the one that runs: `{agent, thread?, text, images?, settings?, steer?}` |
-//! | `agents.edit` | write | a waiting message's new text: `{item, text}` |
+//! | `agents.edit` | write | a waiting message's new text: `{turn, text}` |
 //! | `agents.withdraw` | write | takes a waiting message back: `{turn}` |
 //! | `agents.steer` | write | sends a waiting message into the turn that runs: `{turn}` |
 //! | `agents.resume` | write | lets a held queue go on: `{thread}` |
@@ -193,9 +193,10 @@ struct Send {
     steer: bool,
 }
 
+/// A waiting message's new text, by the turn it waits for.
 #[derive(Deserialize)]
 struct Edit {
-    item: ItemId,
+    turn: TurnId,
     text: String,
 }
 
@@ -408,13 +409,14 @@ impl Module for Agents {
                     .await
             }
             Method::Edit => {
-                let Edit { item, text } = decode(params)?;
+                let Edit { turn, text } = decode(params)?;
                 let author = call.participant();
-                call.command(move |tx| edit(tx, author, item, text)).await
+                call.command(move |tx| edit(tx, author, turn, text)).await
             }
             Method::Withdraw => {
                 let OneTurn { turn } = decode(params)?;
-                call.command(move |tx| withdraw(tx, turn)).await
+                let author = call.participant();
+                call.command(move |tx| withdraw(tx, author, turn)).await
             }
             Method::Steer => {
                 let OneTurn { turn } = decode(params)?;
@@ -618,8 +620,10 @@ fn send(
             summary.id
         }
     };
-    let running = match steer {
-        true => store::turns_in(tx.sql(), thread, TurnState::Running)?.pop(),
+    // A turn a Person stopped takes nothing more: the message waits, and
+    // the queue goes on.
+    let running = match steer && !store::held(tx.sql(), thread)? {
+        true => store::running(tx.sql(), thread)?,
         false => None,
     };
     let item = Item {
@@ -636,7 +640,13 @@ fn send(
     store::carry_images(tx.sql(), &images, item.id)?;
     if let Some(running) = running {
         store::touch_thread(tx.sql(), thread, now)?;
-        turn::steer_into(tx, author, &running, item.id, text, images)?;
+        turn::steer_into(
+            tx,
+            author,
+            &running,
+            item.id,
+            turn::Message { text, images },
+        )?;
         let sent = Sent {
             thread,
             turn: running.id,
@@ -678,11 +688,11 @@ fn send(
 /// Stops a turn: at once if it waits, through the Harness if it runs. A
 /// stop of the turn that runs holds the queue behind it.
 fn stop(tx: &mut Tx<'_>, author: Participant, turn: TurnId) -> Result<Value, Error> {
-    let found =
-        store::turn(tx.sql(), turn)?.ok_or_else(|| Refusal::not_found("There is no such turn."))?;
+    let found = turn_of(tx, turn)?;
     match rules::stop(found.state) {
         rules::Stop::Now => {
-            turn::end(tx, &found, rules::Ending::new(TurnState::Stopped, None))?;
+            let stopped = rules::Ending::new(TurnState::Stopped, None);
+            turn::end(tx, author, &found, stopped)?;
         }
         rules::Stop::AskHarness => {
             turn::hold(tx, author, found.thread)?;
@@ -693,26 +703,29 @@ fn stop(tx: &mut Tx<'_>, author: Participant, turn: TurnId) -> Result<Value, Err
     Ok(Value::Null)
 }
 
+fn turn_of(tx: &mut Tx<'_>, turn: TurnId) -> Result<store::Turn, Error> {
+    Ok(store::turn(tx.sql(), turn)?.ok_or_else(|| Refusal::not_found("There is no such turn."))?)
+}
+
 /// The turn that waits for `turn`, as the methods that change it need it.
 fn waiting(tx: &mut Tx<'_>, turn: TurnId) -> Result<store::Turn, Error> {
-    let found =
-        store::turn(tx.sql(), turn)?.ok_or_else(|| Refusal::not_found("There is no such turn."))?;
+    let found = turn_of(tx, turn)?;
     rules::waits(found.state)?;
     Ok(found)
 }
 
-/// Changes a waiting message's text. Its images stay.
-fn edit(tx: &mut Tx<'_>, author: Participant, item: ItemId, text: String) -> Result<Value, Error> {
-    let (thread, mut found) = store::item(tx.sql(), item)?
-        .ok_or_else(|| Refusal::not_found("There is no such message."))?;
-    let turns = store::turns_of(tx.sql(), item)?;
-    let [turn] = turns.as_slice() else {
-        return Err(
-            Refusal::invalid("Only a message that waits for its turn can be changed.").into(),
-        );
+/// Changes the text of the message that waits for `turn`. Its images stay.
+fn edit(tx: &mut Tx<'_>, author: Participant, turn: TurnId, text: String) -> Result<Value, Error> {
+    let found = waiting(tx, turn)?;
+    let first = store::turns_of(tx.sql(), found.message)?
+        .first()
+        .map(|t| t.id);
+    rules::may_change(first == Some(turn))?;
+    let item = found.message;
+    let Some((thread, mut message)) = store::item(tx.sql(), item)? else {
+        return Err(Refusal::not_found("There is no such message.").into());
     };
-    rules::waits(turn.state)?;
-    let Body::Message { text: was, images } = &mut found.body else {
+    let Body::Message { text: was, images } = &mut message.body else {
         return Err(Refusal::invalid("Only a message can be changed.").into());
     };
     let carried: Vec<ImageId> = images.iter().map(|image| image.id).collect();
@@ -721,51 +734,57 @@ fn edit(tx: &mut Tx<'_>, author: Participant, item: ItemId, text: String) -> Res
         return Ok(Value::Null);
     }
     was.clone_from(&text);
-    store::set_body(tx.sql(), item, &found.body)?;
+    store::set_body(tx.sql(), item, &message.body)?;
     emit(tx, author, thread, &Fact::MessageEdited { item, text })?;
     Ok(Value::Null)
 }
 
 /// Takes a waiting message back: its turn never runs, and the Thread no
 /// longer shows it.
-fn withdraw(tx: &mut Tx<'_>, turn: TurnId) -> Result<Value, Error> {
+fn withdraw(tx: &mut Tx<'_>, author: Participant, turn: TurnId) -> Result<Value, Error> {
     let found = waiting(tx, turn)?;
-    turn::end(tx, &found, rules::Ending::new(TurnState::Withdrawn, None))?;
+    let withdrawn = rules::Ending::new(TurnState::Withdrawn, None);
+    turn::end(tx, author, &found, withdrawn)?;
     Ok(Value::Null)
 }
 
 /// Sends a waiting message now: into the turn that runs, whose Harness
-/// takes it as it works; or, with nothing running, by letting a held queue
-/// go on.
+/// takes it as it works. With no turn that can take it, as one a Person
+/// stopped, it waits its turn, and a held queue goes on.
 fn send_now(tx: &mut Tx<'_>, author: Participant, turn: TurnId) -> Result<Value, Error> {
     let found = waiting(tx, turn)?;
-    let Some(running) = store::turns_in(tx.sql(), found.thread, TurnState::Running)?.pop() else {
+    let running = match store::held(tx.sql(), found.thread)? {
+        true => None,
+        false => store::running(tx.sql(), found.thread)?,
+    };
+    let Some(running) = running else {
         turn::resume(tx, author, found.thread)?;
         return Ok(Value::Null);
     };
-    let Some((_, message)) = store::item(tx.sql(), found.message)? else {
-        return Err(Refusal::not_found("There is no such message.").into());
-    };
-    let Body::Message { text, images } = message.body else {
-        return Err(Refusal::invalid("Only a message can be sent.").into());
-    };
-    turn::end(tx, &found, rules::Ending::new(TurnState::Withdrawn, None))?;
+    let message = turn::Message::read(tx.sql(), found.message)?
+        .ok_or_else(|| Refusal::invalid("Only a message can be sent."))?;
+    let withdrawn = rules::Ending::new(TurnState::Withdrawn, None);
+    turn::end(tx, author, &found, withdrawn)?;
     store::set_item_turn(tx.sql(), found.message, Some(running.id))?;
     store::move_last(tx.sql(), found.message)?;
-    turn::steer_into(tx, author, &running, found.message, text, images)?;
+    turn::steer_into(tx, author, &running, found.message, message)?;
     Ok(Value::Null)
 }
 
-/// Tries a failed turn's message again, in a new turn that waits behind the
-/// Thread's earlier turns, with the Thread's settings now. The failed turn
-/// stays as it ended.
+/// Tries a failed turn's message again, in a new turn with the Thread's
+/// settings now; a held queue goes on after it. The failed turn stays as
+/// it ended.
 fn retry(tx: &mut Tx<'_>, author: Participant, turn: TurnId) -> Result<Value, Error> {
-    let found =
-        store::turn(tx.sql(), turn)?.ok_or_else(|| Refusal::not_found("There is no such turn."))?;
-    let latest = store::last_turn(tx.sql(), found.thread)? == Some(found.id);
+    let found = turn_of(tx, turn)?;
+    let latest = store::last_begun(tx.sql(), found.thread)? == Some(found.id)
+        && store::turns_of(tx.sql(), found.message)?
+            .last()
+            .map(|t| t.id)
+            == Some(found.id);
     rules::retry(found.state, latest)?;
-    turn::resume(tx, author, found.thread)?;
+    // Queued first, it starts before a held queue goes on.
     let again = turn::queue(tx, author, found.thread, found.agent, found.message)?;
+    turn::resume(tx, author, found.thread)?;
     value(Sent {
         thread: found.thread,
         turn: again,
