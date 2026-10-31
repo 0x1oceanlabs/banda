@@ -34,8 +34,14 @@ do from the Harness's declared capabilities.
 
 **Thread**:
 One conversation between a Person and an Agent. It shows items: messages, the
-Agent's thoughts, tool calls and Questions.
+Agent's thoughts, tool calls, its plans, notices and Questions.
 _Avoid_: chat, session.
+
+**Plan**:
+The steps an Agent means to take in a turn, each to do, doing now or done.
+Plan mode is something else: a setting under which the Agent only plans and
+changes nothing.
+_Avoid_: todos.
 
 **Turn**:
 One stretch of an Agent's work in a Thread. It begins at a message to the

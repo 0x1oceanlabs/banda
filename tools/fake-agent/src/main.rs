@@ -23,7 +23,10 @@
 //! - `crash`: exits at once, as a Harness that dies would.
 //! - `which session`: replies with the session's ID and its own process ID.
 //! - `steps`: makes a plan of three steps and does them one by one; the
-//!   context is then a quarter full.
+//!   context is then a quarter full. With `clear`, it clears the plan.
+//! - `clear`: clears a plan it never made.
+//! - `twice`: says two messages, told apart only by their IDs.
+//! - `later`: says what it used after the turn has ended.
 //! - `edit`: edits a file, and shows the change as a diff.
 //! - `run`: runs the tests, printing as Codex does; `loud` far more than a
 //!   Thread keeps; `at once` as Claude Code does, all at the end.
@@ -40,10 +43,10 @@
 
 use agent_client_protocol::schema::ProtocolVersion;
 use agent_client_protocol::schema::v1::{
-    AgentCapabilities, CancelNotification, ConfigOptionUpdate, ContentBlock, ContentChunk,
+    AgentCapabilities, CancelNotification, ConfigOptionUpdate, ContentBlock, ContentChunk, Cost,
     CreateElicitationRequest, Diff, ElicitationAction, ElicitationContentValue,
     ElicitationFormMode, ElicitationSchema, ElicitationSessionScope, EnumOption, Implementation,
-    InitializeRequest, InitializeResponse, LoadSessionRequest, LoadSessionResponse,
+    InitializeRequest, InitializeResponse, LoadSessionRequest, LoadSessionResponse, MessageId,
     NewSessionRequest, NewSessionResponse, Notice, NoticeSeverity, PermissionOption,
     PermissionOptionKind, Plan, PlanEntry, PlanEntryPriority, PlanEntryStatus, PromptRequest,
     PromptResponse, RequestPermissionOutcome, RequestPermissionRequest, ResumeSessionRequest,
@@ -307,12 +310,49 @@ async fn turn(
                 .collect();
             say(&cx, &session, SessionUpdate::Plan(Plan::new(entries)))?;
         }
-        let usage = UsageUpdate::new(52_000, 200_000);
+        if words.contains("clear") {
+            say(&cx, &session, SessionUpdate::Plan(Plan::new(vec![])))?;
+        }
+        let usage = UsageUpdate::new(52_000, 200_000).cost(Cost::new(0.25, "USD"));
         say(&cx, &session, SessionUpdate::UsageUpdate(usage))?;
         say(
             &cx,
             &session,
             SessionUpdate::AgentMessageChunk(text("All three steps are done.")),
+        )?;
+        return Ok(StopReason::EndTurn);
+    }
+    if words.contains("clear") {
+        say(&cx, &session, SessionUpdate::Plan(Plan::new(vec![])))?;
+        say(
+            &cx,
+            &session,
+            SessionUpdate::AgentMessageChunk(text("Nothing to plan.")),
+        )?;
+        return Ok(StopReason::EndTurn);
+    }
+    if words.contains("twice") {
+        // Two messages, told apart only by their IDs, as Codex's plan and
+        // the reply after it.
+        for (id, words) in [("m1", "First."), ("m1", " Still first."), ("m2", "Second.")] {
+            let chunk = text(words).message_id(MessageId::new(id));
+            say(&cx, &session, SessionUpdate::AgentMessageChunk(chunk))?;
+        }
+        return Ok(StopReason::EndTurn);
+    }
+    if words.contains("later") {
+        // What it used, said after the turn ended, as Claude Code does
+        // between turns.
+        let (after, its) = (cx.clone(), session.clone());
+        tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(100)).await;
+            let usage = UsageUpdate::new(150_000, 200_000);
+            let _ = say(&after, &its, SessionUpdate::UsageUpdate(usage));
+        });
+        say(
+            &cx,
+            &session,
+            SessionUpdate::AgentMessageChunk(text("Done for now.")),
         )?;
         return Ok(StopReason::EndTurn);
     }

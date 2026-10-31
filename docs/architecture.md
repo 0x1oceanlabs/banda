@@ -220,11 +220,15 @@ If Chat is removed, Agents still works through its own Thread.
   up to 4 MB for one command's output, text or diff, which only a runaway
   command reaches; a diff past it says so instead.
 - **An Agent's plan** for its turn is one entry whose steps follow the
-  Harness: each plan it sends replaces the steps. A new turn's plan is a
-  new entry.
-- **How full the Agent's context is** belongs to the Thread
-  (`thread.used`), as the Harness last said, and shows under the message
-  box.
+  Harness: each plan it sends replaces the steps, and an empty one clears
+  them. A new turn's plan is a new entry. Codex in plan mode writes its
+  plan as a message instead.
+- **What the Agent has used**, its context and what it cost when the
+  Harness says, belongs to the Thread (`thread.used`) and shows under the
+  message box. What it says between turns reaches the Thread with the next
+  turn.
+- **A message the Harness names anew** (ACP's `messageId`) starts a new
+  entry.
 - **A restart interrupts** the turn it cut short and closes that turn's
   open Questions.
 - Its methods and their rights are listed in

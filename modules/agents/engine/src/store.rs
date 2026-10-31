@@ -136,16 +136,25 @@ fn thread_json<T: DeserializeOwned + Default>(
     })
 }
 
+fn set_thread_json<T: Serialize>(
+    sql: &Connection,
+    thread: ThreadId,
+    column: &str,
+    value: &T,
+) -> Result<(), Error> {
+    sql.execute(
+        &format!("UPDATE agents_threads SET {column} = ?2 WHERE id = ?1"),
+        params![thread, json(value)?],
+    )?;
+    Ok(())
+}
+
 pub fn settings(sql: &Connection, thread: ThreadId) -> Result<Settings, Error> {
     thread_json(sql, thread, "settings")
 }
 
 pub fn set_settings(sql: &Connection, thread: ThreadId, settings: &Settings) -> Result<(), Error> {
-    sql.execute(
-        "UPDATE agents_threads SET settings = ?2 WHERE id = ?1",
-        params![thread, json(settings)?],
-    )?;
-    Ok(())
+    set_thread_json(sql, thread, "settings", settings)
 }
 
 pub fn offer(sql: &Connection, thread: ThreadId) -> Result<Offer, Error> {
@@ -153,11 +162,7 @@ pub fn offer(sql: &Connection, thread: ThreadId) -> Result<Offer, Error> {
 }
 
 pub fn set_offer(sql: &Connection, thread: ThreadId, offer: &Offer) -> Result<(), Error> {
-    sql.execute(
-        "UPDATE agents_threads SET offer = ?2 WHERE id = ?1",
-        params![thread, json(offer)?],
-    )?;
-    Ok(())
+    set_thread_json(sql, thread, "offer", offer)
 }
 
 pub fn usage(sql: &Connection, thread: ThreadId) -> Result<Option<Usage>, Error> {
@@ -165,11 +170,7 @@ pub fn usage(sql: &Connection, thread: ThreadId) -> Result<Option<Usage>, Error>
 }
 
 pub fn set_usage(sql: &Connection, thread: ThreadId, usage: &Usage) -> Result<(), Error> {
-    sql.execute(
-        "UPDATE agents_threads SET usage = ?2 WHERE id = ?1",
-        params![thread, json(usage)?],
-    )?;
-    Ok(())
+    set_thread_json(sql, thread, "usage", usage)
 }
 
 /// What a Harness last offered in a Thread of `agent`.

@@ -9,6 +9,8 @@ import {
 
 /** What an Agent means to do in its turn, step by step, as far as it got. */
 export function Plan({ steps }: { steps: PlanStep[] }) {
+  // A plan the Agent cleared shows nothing.
+  if (steps.length === 0) return null
   const done = steps.filter((step) => step.state === "done").length
   return (
     <section

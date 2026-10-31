@@ -388,12 +388,24 @@ pub enum StepState {
     Done,
 }
 
-/// How full the Agent's context is, in tokens: `used` of `size`.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+/// What the Agent has used in its session: its context window, in tokens,
+/// `used` of `size`; and what it cost so far, when the Harness says.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "agents/")]
 pub struct Usage {
     pub used: u32,
     pub size: u32,
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cost: Option<Cost>,
+}
+
+/// An amount of money, in a currency's ISO 4217 code.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "agents/")]
+pub struct Cost {
+    pub amount: serde_json::Number,
+    pub currency: String,
 }
 
 /// What a command printed, as far as Bandaso keeps it.
