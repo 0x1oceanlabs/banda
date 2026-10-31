@@ -8,8 +8,10 @@
 //! 2. `call` runs a method and gets one `result` with the same `id`.
 //! 3. `subscribe` follows a Space's events after a position. The window first
 //!    reads a view with its position, then subscribes after it (ADR 0002,
-//!    decision 5). A subscriber that falls too far behind gets `resync` and
-//!    reads the view again.
+//!    decision 5). The log is replayed a page at a time, then live events
+//!    follow; a subscriber that falls behind catches up from the log.
+//!    `resync` ends a subscription the engine cannot go on with: read the
+//!    view again.
 //!
 //! Unknown fields are ignored on both sides, so either side can be newer.
 
@@ -32,9 +34,8 @@ use tokio::sync::{broadcast, mpsc};
 use tokio::task::JoinHandle;
 use ts_rs::TS;
 
-/// The most stored events one subscription replays before it asks the
-/// window to read its view again.
-const BACKLOG: usize = 5000;
+/// How many stored events a subscription reads at a time.
+const PAGE: usize = 500;
 
 const HELLO_WITHIN: Duration = Duration::from_secs(10);
 
@@ -141,7 +142,7 @@ struct Api {
 /// The API's routes: one WebSocket at `/ws`.
 pub fn router(kernel: Arc<Kernel>, identity: impl Identity, engine: impl Into<String>) -> Router {
     Router::new()
-        .route("/ws", get(upgrade))
+        .route(PATH, get(upgrade))
         .with_state(Arc::new(Api {
             kernel,
             identity: Box::new(identity),
@@ -161,12 +162,18 @@ async fn upgrade(
     ws.on_upgrade(move |socket| serve(api, socket))
 }
 
-/// A web page elsewhere must not reach the engine. The engine's own
-/// windows, the CLI (no origin) and pages on this machine may try, and
-/// still need the token.
+/// Where the API listens on the engine's address.
+pub const PATH: &str = "/ws";
+
+/// The origin of Bandaso's own window.
+pub const APP_ORIGIN: &str = "app://bandaso";
+
+/// A web page elsewhere must not reach the engine. Bandaso's window, the
+/// CLI (no origin) and pages served from this machine may try, and still
+/// need the token. An opaque origin (`null`) could be any page.
 fn origin_allowed(origin: Option<&str>) -> bool {
     let Some(origin) = origin else { return true };
-    if origin == "null" || origin.starts_with("file://") {
+    if origin == APP_ORIGIN {
         return true;
     }
     match origin.split_once("://") {
@@ -178,8 +185,7 @@ fn origin_allowed(origin: Option<&str>) -> bool {
             };
             matches!(host, "localhost" | "127.0.0.1" | "[::1]")
         }
-        Some((_app_scheme, _)) => true,
-        None => false,
+        _ => false,
     }
 }
 
@@ -346,7 +352,7 @@ async fn serve(api: Arc<Api>, socket: WebSocket) {
 
 /// Replays the stored events after `after`, then forwards live ones, with no
 /// gap and no repeat: it listens before it reads, and skips what it already
-/// sent.
+/// sent. When it falls behind the live events, it reads the log again.
 async fn follow(
     space: Arc<crate::Space>,
     subscription: u64,
@@ -354,51 +360,48 @@ async fn follow(
     filter: EventFilter,
     out: mpsc::Sender<EngineFrame>,
 ) {
-    let mut live = space.subscribe();
-    let backlog = match space.events_after(after, filter.clone(), BACKLOG + 1).await {
-        Ok(backlog) if backlog.len() <= BACKLOG => backlog,
-        _ => {
-            let _ = out.send(EngineFrame::Resync { subscription }).await;
-            return;
-        }
+    let send = |event| {
+        out.send(EngineFrame::Event {
+            subscription,
+            event,
+        })
     };
-    let mut last = backlog.last().map_or(after, |e| e.seq);
-    for event in backlog {
-        if out
-            .send(EngineFrame::Event {
-                subscription,
-                event,
-            })
-            .await
-            .is_err()
-        {
-            return;
-        }
-    }
+    let mut live = space.subscribe();
+    let mut last = after;
     loop {
-        match live.recv().await {
-            Ok(event) if event.seq > last => {
+        loop {
+            let page = match space.events_after(last, filter.clone(), PAGE).await {
+                Ok(page) => page,
+                Err(error) => {
+                    tracing::error!(%error, "a subscription could not read the log");
+                    let _ = out.send(EngineFrame::Resync { subscription }).await;
+                    return;
+                }
+            };
+            let full = page.len() == PAGE;
+            for event in page {
                 last = event.seq;
-                if filter.matches(&event) {
-                    let event = Event::clone(&event);
-                    if out
-                        .send(EngineFrame::Event {
-                            subscription,
-                            event,
-                        })
-                        .await
-                        .is_err()
-                    {
+                if send(event).await.is_err() {
+                    return;
+                }
+            }
+            if !full {
+                break;
+            }
+        }
+        loop {
+            match live.recv().await {
+                Ok(event) if event.seq > last => {
+                    last = event.seq;
+                    if filter.matches(&event) && send(Event::clone(&event)).await.is_err() {
                         return;
                     }
                 }
+                Ok(_) => {}
+                // Back to the log for what went by.
+                Err(broadcast::error::RecvError::Lagged(_)) => break,
+                Err(broadcast::error::RecvError::Closed) => return,
             }
-            Ok(_) => {}
-            Err(broadcast::error::RecvError::Lagged(_)) => {
-                let _ = out.send(EngineFrame::Resync { subscription }).await;
-                return;
-            }
-            Err(broadcast::error::RecvError::Closed) => return,
         }
     }
 }
@@ -408,15 +411,13 @@ mod tests {
     use super::*;
 
     #[test]
-    fn only_this_machine_and_app_schemes_pass_the_origin_check() {
+    fn only_this_machine_and_the_app_pass_the_origin_check() {
         for allowed in [
             None,
-            Some("null"),
-            Some("file://"),
             Some("http://localhost:5173"),
             Some("http://127.0.0.1:4000"),
             Some("http://[::1]:80"),
-            Some("app://bandaso"),
+            Some(APP_ORIGIN),
         ] {
             assert!(origin_allowed(allowed), "{allowed:?}");
         }
@@ -424,6 +425,10 @@ mod tests {
             Some("https://example.com"),
             Some("http://localhost.example.com"),
             Some("http://127.0.0.1.example.com"),
+            Some("null"),
+            Some("file://"),
+            Some("chrome-extension://abc"),
+            Some("app://elsewhere"),
             Some("garbage"),
         ] {
             assert!(!origin_allowed(refused), "{refused:?}");

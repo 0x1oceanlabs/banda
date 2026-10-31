@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["kernel", "modules/agents/engine", "tools/fake-agent"]
+members = ["engine", "kernel", "modules/agents/engine", "tools/fake-agent"]
 
 [workspace.package]
 version = "0.1.0"
@@ -13,15 +13,19 @@ publish = false
 agent-client-protocol = "3.6.0"
 async-trait = "0.1"
 axum = { version = "0.8.9", features = ["ws"] }
+clap = { version = "4.6.7", features = ["derive"] }
+dirs = "6"
 futures = "0.3"
+getrandom = "0.4.3"
 rusqlite = { version = "0.41.1", features = ["bundled"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 tempfile = "3"
 thiserror = "2"
 toml = "1.1"
-tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "net", "signal", "process", "io-util"] }
+tokio = { version = "1", features = ["rt-multi-thread", "macros", "sync", "time", "net", "signal", "process", "io-util", "io-std"] }
 tracing = "0.1"
+tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 tokio-tungstenite = "0.29"
 ts-rs = { version = "12.0.1", features = ["uuid-impl", "serde-json-impl"] }
 uuid = { version = "1.29.0", features = ["v7", "serde"] }

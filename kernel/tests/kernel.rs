@@ -236,7 +236,17 @@ async fn a_space_is_a_folder_and_opens_again_after_a_restart() {
     drop(second);
     drop(kernel);
 
-    let again = open(root.path(), owner, &notes).await;
+    // An effect still running holds the Space a moment longer; a real
+    // restart ends the process, and the lock with it.
+    let mut again = open(root.path(), owner, &notes).await;
+    for _ in 0..500 {
+        if !again.spaces().await.is_empty() {
+            break;
+        }
+        drop(again);
+        tokio::time::sleep(Duration::from_millis(10)).await;
+        again = open(root.path(), owner, &notes).await;
+    }
     assert_eq!(again.spaces().await, vec![space.clone()]);
     let listed = again
         .call(
@@ -299,6 +309,31 @@ async fn a_command_runs_once_and_its_effect_runs_after_commit() {
         listed["at"], first["seq"],
         "the view is current at the log's head"
     );
+}
+
+#[tokio::test]
+async fn a_read_keeps_no_receipt_so_its_id_stays_free() {
+    let root = tempfile::tempdir().unwrap();
+    let owner = PersonId::new();
+    let notes = Notes::default();
+    let kernel = open(root.path(), owner, &notes).await;
+    let space = create(&kernel, owner, "Work").await;
+    let person = Participant::Person(owner);
+    let id = CommandId::new();
+    kernel
+        .call(person, "notes.list", Some(space.id), Some(id), Value::Null)
+        .await
+        .unwrap();
+    kernel
+        .call(
+            person,
+            "notes.add",
+            Some(space.id),
+            Some(id),
+            json!({ "text": "later" }),
+        )
+        .await
+        .expect("the ID was never a command's");
 }
 
 #[tokio::test]
@@ -561,4 +596,45 @@ async fn the_api_refuses_strangers_and_follows_events_without_gaps() {
         .await
         .unwrap();
     assert_eq!(next(&mut socket).await["error"]["code"], "invalid");
+}
+
+#[tokio::test]
+async fn a_subscription_replays_a_long_log_a_page_at_a_time() {
+    let root = tempfile::tempdir().unwrap();
+    let owner = PersonId::new();
+    let notes = Notes::default();
+    let kernel = open(root.path(), owner, &notes).await;
+    let space = create(&kernel, owner, "Work").await;
+    let person = Participant::Person(owner);
+    const MANY: usize = 1200;
+    for n in 0..MANY {
+        add(&kernel, person, &space, &n.to_string()).await.unwrap();
+    }
+
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let app = bandaso_kernel::api::router(kernel.clone(), Tokens { owner }, "test");
+    tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    let (mut socket, _) = connect(
+        address,
+        json!({ "type": "hello", "protocol": 1, "token": "secret" }),
+    )
+    .await;
+    let follow = json!({ "type": "subscribe", "id": 1, "space": space.id, "after": 0, "filter": { "module": "notes" } });
+    socket
+        .send(Message::text(follow.to_string()))
+        .await
+        .unwrap();
+    assert_eq!(next(&mut socket).await["type"], "result");
+    let mut seq = 0;
+    for n in 0..MANY {
+        let frame = next(&mut socket).await;
+        assert_eq!(frame["type"], "event", "event {n}");
+        assert_eq!(frame["event"]["payload"]["text"], n.to_string());
+        let now = frame["event"]["seq"].as_i64().unwrap();
+        assert!(now > seq, "in order, none twice");
+        seq = now;
+    }
+    add(&kernel, person, &space, "live").await.unwrap();
+    assert_eq!(next(&mut socket).await["event"]["payload"]["text"], "live");
 }

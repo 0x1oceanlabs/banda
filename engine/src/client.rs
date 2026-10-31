@@ -1,0 +1,148 @@
+//! The CLI's side of the API: it connects as the window does, so people,
+//! scripts and Agents can do whatever the window can (ADR 0001, decision 1).
+
+use crate::Failure;
+use crate::places::Places;
+use bandaso_kernel::api::{ClientFrame, EngineFrame};
+use bandaso_kernel::{CommandId, Event, EventFilter, PROTOCOL, SpaceId};
+use futures::{SinkExt, StreamExt};
+use serde_json::Value;
+use tokio_tungstenite::tungstenite::Message;
+
+type Socket =
+    tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
+
+pub struct Client {
+    socket: Socket,
+    next_id: u64,
+}
+
+impl Client {
+    /// Connects to this machine's engine and says hello.
+    pub async fn connect(places: &Places) -> Result<Client, Failure> {
+        let running = places.running()?;
+        let (socket, _) = tokio_tungstenite::connect_async(running.url())
+            .await
+            .map_err(|_| {
+                Failure::broken("Bandaso's engine does not answer. Start it with: bandaso serve")
+            })?;
+        let mut client = Client { socket, next_id: 1 };
+        client
+            .send(&ClientFrame::Hello {
+                protocol: PROTOCOL,
+                token: running.secret,
+            })
+            .await?;
+        match client.receive().await? {
+            EngineFrame::Welcome { .. } => Ok(client),
+            EngineFrame::Goodbye { reason } => Err(Failure::Refused(reason)),
+            _ => Err(Failure::broken("The engine did not say welcome.")),
+        }
+    }
+
+    fn next_id(&mut self) -> u64 {
+        let id = self.next_id;
+        self.next_id += 1;
+        id
+    }
+
+    async fn send(&mut self, frame: &ClientFrame) -> Result<(), Failure> {
+        let text = serde_json::to_string(frame).map_err(Failure::broken)?;
+        self.socket
+            .send(Message::text(text))
+            .await
+            .map_err(Failure::broken)
+    }
+
+    async fn receive(&mut self) -> Result<EngineFrame, Failure> {
+        loop {
+            match self.socket.next().await {
+                Some(Ok(Message::Text(text))) => {
+                    return serde_json::from_str(&text).map_err(Failure::broken);
+                }
+                Some(Ok(Message::Close(_))) | None => {
+                    return Err(Failure::broken("The engine closed the connection."));
+                }
+                Some(Ok(_)) => {}
+                Some(Err(error)) => return Err(Failure::broken(error)),
+            }
+        }
+    }
+
+    /// Calls one method. A command runs once per `command`, so a call that
+    /// broke off can be repeated safely with the same ID; the failure says
+    /// which.
+    pub async fn call(
+        &mut self,
+        method: &str,
+        space: Option<SpaceId>,
+        command: CommandId,
+        params: Value,
+    ) -> Result<Value, Failure> {
+        let id = self.next_id();
+        let answer = async {
+            self.send(&ClientFrame::Call {
+                id,
+                method: method.to_owned(),
+                space,
+                command: Some(command),
+                params,
+            })
+            .await?;
+            loop {
+                if let EngineFrame::Result {
+                    id: answered,
+                    ok,
+                    error,
+                } = self.receive().await?
+                    && answered == id
+                {
+                    return match error {
+                        Some(refusal) => Err(Failure::Refused(refusal)),
+                        None => Ok(ok.unwrap_or(Value::Null)),
+                    };
+                }
+            }
+        };
+        answer.await.map_err(|failure| failure.cut_short(command))
+    }
+
+    /// Hands each event of `space` after `after` to `each`, until the
+    /// engine closes the connection.
+    pub async fn follow(
+        &mut self,
+        space: SpaceId,
+        after: i64,
+        filter: EventFilter,
+        mut each: impl FnMut(&Event),
+    ) -> Result<(), Failure> {
+        let id = self.next_id();
+        self.send(&ClientFrame::Subscribe {
+            id,
+            space,
+            after,
+            filter,
+        })
+        .await?;
+        let mut last = after;
+        loop {
+            match self.receive().await? {
+                EngineFrame::Result {
+                    id: answered,
+                    error: Some(refusal),
+                    ..
+                } if answered == id => return Err(Failure::Refused(refusal)),
+                EngineFrame::Event { event, .. } => {
+                    last = event.seq;
+                    each(&event);
+                }
+                EngineFrame::Resync { .. } => {
+                    return Err(Failure::broken(format!(
+                        "The engine could not go on. Follow again with --after {last}."
+                    )));
+                }
+                _ => {}
+            }
+        }
+    }
+}
