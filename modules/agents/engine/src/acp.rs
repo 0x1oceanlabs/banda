@@ -23,7 +23,8 @@
 
 use crate::model::{
     Exit, Failure, Field, FieldValue, HarnessOption, Input, Mode, Offer, OptionChoice, OptionValue,
-    Settings, TextFormat, ThreadId, ToolContent, ToolKind, ToolStatus, TurnState, Values,
+    PlanStep, Settings, StepState, TextFormat, ThreadId, ToolContent, ToolKind, ToolStatus,
+    TurnState, Usage, Values,
 };
 use crate::rules::{Ending, Offered};
 use crate::settings::Harness;
@@ -56,6 +57,15 @@ pub enum Said {
         status: ToolStatus,
         content: Vec<ToolContent>,
     },
+    /// The Agent's plan now, all its steps.
+    Planned(Vec<PlanStep>),
+    /// How full its context is now, and, when the account reached its
+    /// limit, the time it may be used again, in milliseconds since the
+    /// epoch.
+    Used {
+        usage: Usage,
+        resets: Option<i64>,
+    },
     /// `output` follows what the command printed before.
     ToolChanged {
         call: String,
@@ -79,9 +89,6 @@ pub enum Said {
     Runs(Running),
     /// A line for the Person, such as a warning.
     Notice(String),
-    /// The account may be used again at this time, in milliseconds since
-    /// the epoch: it has reached its limit.
-    Resets(i64),
 }
 
 /// What an update changes in a tool call: each field given replaces its
@@ -752,11 +759,33 @@ fn said(update: acp::SessionUpdate) -> Option<Said> {
                     .map(str::to_owned),
             })
         }
+        acp::SessionUpdate::Plan(plan) => Some(Said::Planned(
+            plan.entries
+                .into_iter()
+                .map(|entry| PlanStep {
+                    text: entry.content,
+                    state: match entry.status {
+                        acp::PlanEntryStatus::InProgress => StepState::InProgress,
+                        acp::PlanEntryStatus::Completed => StepState::Done,
+                        _ => StepState::Pending,
+                    },
+                })
+                .collect(),
+        )),
+        acp::SessionUpdate::UsageUpdate(usage) => {
+            let tokens = |n: u64| u32::try_from(n).unwrap_or(u32::MAX);
+            Some(Said::Used {
+                usage: Usage {
+                    used: tokens(usage.used),
+                    size: tokens(usage.size),
+                },
+                resets: resets(usage.meta.as_ref()),
+            })
+        }
         acp::SessionUpdate::Notice(notice) => Some(Said::Notice(match notice.description {
             Some(more) if !more.trim().is_empty() => format!("{} {more}", notice.title),
             _ => notice.title,
         })),
-        acp::SessionUpdate::UsageUpdate(usage) => resets(usage.meta.as_ref()).map(Said::Resets),
         _ => None,
     }
 }

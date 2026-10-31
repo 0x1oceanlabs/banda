@@ -12,6 +12,7 @@ import type {
   Sent,
   ThreadView,
   TurnView,
+  Usage,
 } from "@bandaso/contract/agents"
 import { Bubble, BubbleContent } from "@bandaso/ui/components/bubble"
 import { Button } from "@bandaso/ui/components/button"
@@ -37,6 +38,7 @@ import {
   MessageScrollerProvider,
   MessageScrollerViewport,
 } from "@bandaso/ui/components/message-scroller"
+import { RingMeter } from "@bandaso/ui/components/meter"
 import { Spinner } from "@bandaso/ui/components/spinner"
 import {
   Trace,
@@ -73,6 +75,7 @@ import {
 } from "./thread"
 import { summary, type Values } from "./form"
 import { QuestionForm } from "./QuestionForm"
+import { Plan } from "./Plan"
 import { ToolCall } from "./ToolCall"
 import { SettingsBar } from "./ThreadSettings"
 
@@ -223,6 +226,7 @@ function ThreadPane({
           focused={focused}
           busy={sending.busy}
           working={turn}
+          usage={state?.usage}
           onSend={send}
           onStop={stop}
         >
@@ -237,6 +241,28 @@ function ThreadPane({
         </Composer>
       </div>
     </div>
+  )
+}
+
+/** How full the Agent's context is: a ring, and the share. */
+function ContextUsed({ usage: { used, size } }: { usage: Usage }) {
+  const share = size > 0 ? Math.round((used / size) * 100) : 0
+  const tokens = new Intl.NumberFormat("en", { notation: "compact" })
+  const words = `${share}% of the context used: ${tokens.format(used)} of ${tokens.format(size)} tokens`
+  return (
+    <span
+      title={words}
+      data-full={share >= 80 || undefined}
+      className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground tabular-nums data-full:text-destructive"
+    >
+      <RingMeter
+        value={used}
+        max={Math.max(size, 1)}
+        aria-label="Context used"
+        getAriaValueText={() => words}
+      />
+      {share}%
+    </span>
   )
 }
 
@@ -393,6 +419,8 @@ function Entry({
       )
     case "tool":
       return <ToolCall tool={body} />
+    case "plan":
+      return <Plan steps={body.steps} />
     case "question":
       return (
         <Question
@@ -557,6 +585,7 @@ function Composer({
   focused,
   busy,
   working,
+  usage,
   onSend,
   onStop,
   children,
@@ -565,6 +594,8 @@ function Composer({
   focused: boolean
   busy: boolean
   working: TurnView | undefined
+  /** How full the Agent's context is, once its Harness has said. */
+  usage?: Usage
   /** Sends the text; resolves whether it went. */
   onSend: (text: string) => Promise<boolean>
   onStop: (turn: TurnView) => void
@@ -612,6 +643,7 @@ function Composer({
         />
         <InputGroupAddon align="block-end" className="justify-between gap-2">
           <div className="min-w-0 flex-1">{children}</div>
+          {usage && <ContextUsed usage={usage} />}
           {working && text.trim() === "" ? (
             <InputGroupButton
               type="button"

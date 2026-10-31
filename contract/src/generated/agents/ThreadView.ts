@@ -4,6 +4,7 @@ import type { Offer } from "./Offer";
 import type { Settings } from "./Settings";
 import type { ThreadSummary } from "./ThreadSummary";
 import type { TurnView } from "./TurnView";
+import type { Usage } from "./Usage";
 
 /**
  * A Thread as a window first loads it. It is current at `at`; the window
@@ -13,4 +14,8 @@ export type ThreadView = { at: number, thread: ThreadSummary, items: Array<Item>
 /**
  * What the Harness last offered in this Thread.
  */
-offer: Offer, };
+offer: Offer, 
+/**
+ * How full the Agent's context is, as the Harness last said.
+ */
+usage?: Usage, };

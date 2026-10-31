@@ -7,6 +7,7 @@ import type { Field } from "./Field";
 import type { FieldValue } from "./FieldValue";
 import type { ItemId } from "./ItemId";
 import type { Offer } from "./Offer";
+import type { PlanStep } from "./PlanStep";
 import type { Settings } from "./Settings";
 import type { ThreadId } from "./ThreadId";
 import type { ToolContent } from "./ToolContent";
@@ -14,6 +15,7 @@ import type { ToolKind } from "./ToolKind";
 import type { ToolStatus } from "./ToolStatus";
 import type { TurnId } from "./TurnId";
 import type { TurnState } from "./TurnState";
+import type { Usage } from "./Usage";
 
 /**
  * What the agents module publishes, version 1: each fact is an Event's
@@ -29,4 +31,4 @@ exit?: Exit, } } | { "kind": "tool.output", "payload": { item: ItemId, text: str
 /**
  * Bandaso keeps no more of its output.
  */
-cut: boolean, } } | { "kind": "question.asked", "payload": { item: ItemId, turn: TurnId, title: string, choices: Array<Choice>, form?: Array<Field>, } } | { "kind": "question.answered", "payload": { item: ItemId, choice: string, values?: { [key in string]: FieldValue }, } } | { "kind": "question.closed", "payload": { item: ItemId, } } | { "kind": "notice.posted", "payload": { item: ItemId, turn: TurnId, text: string, } };
+cut: boolean, } } | { "kind": "plan.made", "payload": { item: ItemId, turn: TurnId, steps: Array<PlanStep>, } } | { "kind": "plan.changed", "payload": { item: ItemId, steps: Array<PlanStep>, } } | { "kind": "thread.used", "payload": { thread: ThreadId, usage: Usage, } } | { "kind": "question.asked", "payload": { item: ItemId, turn: TurnId, title: string, choices: Array<Choice>, form?: Array<Field>, } } | { "kind": "question.answered", "payload": { item: ItemId, choice: string, values?: { [key in string]: FieldValue }, } } | { "kind": "question.closed", "payload": { item: ItemId, } } | { "kind": "notice.posted", "payload": { item: ItemId, turn: TurnId, text: string, } };

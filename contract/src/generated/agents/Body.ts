@@ -3,6 +3,7 @@ import type { Choice } from "./Choice";
 import type { Field } from "./Field";
 import type { FieldValue } from "./FieldValue";
 import type { Output } from "./Output";
+import type { PlanStep } from "./PlanStep";
 import type { QuestionState } from "./QuestionState";
 import type { ToolContent } from "./ToolContent";
 import type { ToolKind } from "./ToolKind";
@@ -19,7 +20,7 @@ content: Array<ToolContent>,
 /**
  * What the command printed.
  */
-output?: Output, } | { "kind": "question", title: string, choices: Array<Choice>, 
+output?: Output, } | { "kind": "plan", steps: Array<PlanStep>, } | { "kind": "question", title: string, choices: Array<Choice>, 
 /**
  * A form to fill in, when the Harness asks for more than a choice.
  * Its choices then submit it or skip it.

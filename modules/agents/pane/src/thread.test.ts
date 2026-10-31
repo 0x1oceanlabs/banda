@@ -263,3 +263,21 @@ test("the Thread's settings and the Harness's offer follow their facts", () => {
   expect(chosen(smart, model)).toBe("smart")
   expect(smart.mode).toBe("supervised")
 })
+
+test("an Agent's plan is one item its steps change, and the context follows", () => {
+  const steps = (...states: string[]) =>
+    states.map((state, at) => ({ text: `Step ${at}`, state }))
+  const state = play(
+    event("plan.made", {
+      item: "p",
+      turn: "u",
+      steps: steps("in_progress", "pending"),
+    }),
+    event("plan.changed", { item: "p", steps: steps("done", "in_progress") }),
+    event("thread.used", { thread: "t", usage: { used: 500, size: 1000 } })
+  )
+  expect(state.items.map((i) => i.body)).toEqual([
+    { kind: "plan", steps: steps("done", "in_progress") },
+  ])
+  expect(state.usage).toEqual({ used: 500, size: 1000 })
+})

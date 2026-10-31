@@ -22,6 +22,8 @@
 //! - `warn`: sends a notice, if the client shows them, then answers.
 //! - `crash`: exits at once, as a Harness that dies would.
 //! - `which session`: replies with the session's ID and its own process ID.
+//! - `steps`: makes a plan of three steps and does them one by one; the
+//!   context is then a quarter full.
 //! - `edit`: edits a file, and shows the change as a diff.
 //! - `run`: runs the tests, printing as Codex does; `loud` far more than a
 //!   Thread keeps; `at once` as Claude Code does, all at the end.
@@ -43,13 +45,14 @@ use agent_client_protocol::schema::v1::{
     ElicitationFormMode, ElicitationSchema, ElicitationSessionScope, EnumOption, Implementation,
     InitializeRequest, InitializeResponse, LoadSessionRequest, LoadSessionResponse,
     NewSessionRequest, NewSessionResponse, Notice, NoticeSeverity, PermissionOption,
-    PermissionOptionKind, PromptRequest, PromptResponse, RequestPermissionOutcome,
-    RequestPermissionRequest, ResumeSessionRequest, ResumeSessionResponse, SessionCapabilities,
-    SessionConfigOption, SessionConfigOptionCategory, SessionConfigOptionValue,
-    SessionConfigSelectOption, SessionId, SessionNotification, SessionResumeCapabilities,
-    SessionUpdate, SetSessionConfigOptionRequest, SetSessionConfigOptionResponse, StopReason,
-    StringPropertySchema, Terminal, TextContent, ToolCall, ToolCallContent, ToolCallStatus,
-    ToolCallUpdate, ToolCallUpdateFields, ToolKind, UsageUpdate,
+    PermissionOptionKind, Plan, PlanEntry, PlanEntryPriority, PlanEntryStatus, PromptRequest,
+    PromptResponse, RequestPermissionOutcome, RequestPermissionRequest, ResumeSessionRequest,
+    ResumeSessionResponse, SessionCapabilities, SessionConfigOption, SessionConfigOptionCategory,
+    SessionConfigOptionValue, SessionConfigSelectOption, SessionId, SessionNotification,
+    SessionResumeCapabilities, SessionUpdate, SetSessionConfigOptionRequest,
+    SetSessionConfigOptionResponse, StopReason, StringPropertySchema, Terminal, TextContent,
+    ToolCall, ToolCallContent, ToolCallStatus, ToolCallUpdate, ToolCallUpdateFields, ToolKind,
+    UsageUpdate,
 };
 use agent_client_protocol::{Agent, Client, ConnectionTo, Error, Responder, Stdio};
 use serde_json::json;
@@ -284,6 +287,33 @@ async fn turn(
             "There was no plan."
         };
         say(&cx, &session, SessionUpdate::AgentMessageChunk(text(reply)))?;
+        return Ok(StopReason::EndTurn);
+    }
+    if words.contains("steps") {
+        // A plan of three steps, done one by one, as Claude Code's todos.
+        let steps = ["Read the notes", "Fix the typo", "Check the result"];
+        for done in 0..=steps.len() {
+            let entries = steps
+                .iter()
+                .enumerate()
+                .map(|(at, step)| {
+                    let status = match at.cmp(&done) {
+                        std::cmp::Ordering::Less => PlanEntryStatus::Completed,
+                        std::cmp::Ordering::Equal => PlanEntryStatus::InProgress,
+                        std::cmp::Ordering::Greater => PlanEntryStatus::Pending,
+                    };
+                    PlanEntry::new(*step, PlanEntryPriority::Medium, status)
+                })
+                .collect();
+            say(&cx, &session, SessionUpdate::Plan(Plan::new(entries)))?;
+        }
+        let usage = UsageUpdate::new(52_000, 200_000);
+        say(&cx, &session, SessionUpdate::UsageUpdate(usage))?;
+        say(
+            &cx,
+            &session,
+            SessionUpdate::AgentMessageChunk(text("All three steps are done.")),
+        )?;
         return Ok(StopReason::EndTurn);
     }
     if words.contains("edit") {

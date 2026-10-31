@@ -371,6 +371,31 @@ pub enum ToolContent {
     Terminal,
 }
 
+/// One step of an Agent's plan.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "agents/")]
+pub struct PlanStep {
+    pub text: String,
+    pub state: StepState,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export, export_to = "agents/")]
+pub enum StepState {
+    Pending,
+    InProgress,
+    Done,
+}
+
+/// How full the Agent's context is, in tokens: `used` of `size`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "agents/")]
+pub struct Usage {
+    pub used: u32,
+    pub size: u32,
+}
+
 /// What a command printed, as far as Bandaso keeps it.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "agents/")]
@@ -420,6 +445,10 @@ pub enum Body {
         #[ts(optional)]
         #[serde(default, skip_serializing_if = "Option::is_none")]
         output: Option<Output>,
+    },
+    /// What the Agent means to do in this turn, step by step.
+    Plan {
+        steps: Vec<PlanStep>,
     },
     Question {
         title: String,
@@ -482,6 +511,10 @@ pub struct ThreadView {
     pub settings: Settings,
     /// What the Harness last offered in this Thread.
     pub offer: Offer,
+    /// How full the Agent's context is, as the Harness last said.
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub usage: Option<Usage>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -594,6 +627,19 @@ pub enum Fact {
         #[serde(default)]
         cut: bool,
     },
+    /// The Agent made a plan for its turn.
+    #[serde(rename = "plan.made")]
+    PlanMade {
+        item: ItemId,
+        turn: TurnId,
+        steps: Vec<PlanStep>,
+    },
+    /// The plan's steps now, all of them.
+    #[serde(rename = "plan.changed")]
+    PlanChanged { item: ItemId, steps: Vec<PlanStep> },
+    /// How full the Agent's context in the Thread is now.
+    #[serde(rename = "thread.used")]
+    ThreadUsed { thread: ThreadId, usage: Usage },
     #[serde(rename = "question.asked")]
     QuestionAsked {
         item: ItemId,
