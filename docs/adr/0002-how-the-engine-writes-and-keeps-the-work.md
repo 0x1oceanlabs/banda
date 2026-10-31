@@ -92,7 +92,7 @@ calls, approvals and agent sessions were lost.
 11. **Tests run the real engine and replay only the Harness.** The adapter,
     the rules, the store and the outbox are real. The Harness's transport
     replays a recorded conversation. Our own recordings are joined by
-    T3 Code's 91 recorded scenarios (background subagents, compaction,
+    T3 Code's 89 recorded scenarios (background subagents, compaction,
     resume after a restart, interrupts, MCP tools), used as test input under
     their MIT licence and with its notice.
 
