@@ -49,9 +49,12 @@ pub struct TurnEffect {
 pub struct ReplyEffect {
     pub item: ItemId,
     pub choice: String,
-    /// What the Person filled in, for a form Question.
+    /// What the Person filled in, for a form Question, but its secret
+    /// fields: [`Live`] holds those.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub values: Option<crate::model::Values>,
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub secret: bool,
 }
 
 fn plain(error: impl std::fmt::Display) -> String {
@@ -155,7 +158,16 @@ pub fn reply(live: &Live, effect: &Effect) -> Outcome {
     let Ok(reply) = serde_json::from_value::<ReplyEffect>(effect.payload.clone()) else {
         return Outcome::Fail("The answer could not be read.".to_owned());
     };
-    if live.answer(reply.item, reply.choice, reply.values) {
+    let mut values = reply.values;
+    if reply.secret {
+        // Only memory held the secret: after a restart it is gone, and
+        // so is the turn that asked.
+        let Some(secret) = live.take_secret(reply.item) else {
+            return Outcome::Fail("The turn that asked has ended.".to_owned());
+        };
+        values.get_or_insert_default().extend(secret);
+    }
+    if live.answer(reply.item, reply.choice, values) {
         Outcome::Done
     } else {
         Outcome::Fail("The turn that asked has ended.".to_owned())
@@ -382,6 +394,8 @@ struct Writer {
     /// The Harness's tool call IDs, the items that show them, their titles
     /// and kinds.
     tools: HashMap<String, (ItemId, String, ToolKind)>,
+    /// The open Questions it asked, by the Harness's IDs for them.
+    asked: HashMap<String, ItemId>,
     due: Option<Instant>,
     /// When the account may be used again, if the Harness said it reached
     /// its limit.
@@ -406,6 +420,7 @@ impl Writer {
             running,
             pieces: Pieces::default(),
             tools: HashMap::new(),
+            asked: HashMap::new(),
             due: None,
             resets: None,
         }
@@ -519,8 +534,30 @@ impl Writer {
                 let written = self.put(id, body, asked).await;
                 if written.is_err() {
                     live.forget(id);
+                } else {
+                    self.asked.insert(call, id);
                 }
                 written
+            }
+            Said::Withdrawn(call) => {
+                let Some(id) = self.asked.remove(&call) else {
+                    return Ok(());
+                };
+                live.forget(id);
+                let (thread, agent) = (self.thread, Participant::Agent(self.agent));
+                self.space
+                    .write(move |tx| {
+                        let Some((_, mut item)) = store::item(tx.sql(), id)? else {
+                            return Ok(());
+                        };
+                        if !rules::close(&mut item.body) {
+                            return Ok(());
+                        }
+                        store::set_body(tx.sql(), id, &item.body)?;
+                        emit(tx, agent, thread, &Fact::QuestionClosed { item: id })
+                    })
+                    .await
+                    .map_err(plain)
             }
             Said::Notice(text) => {
                 self.close().await?;

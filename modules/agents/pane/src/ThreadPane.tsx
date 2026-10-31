@@ -468,7 +468,8 @@ function Question({
   onAnswer: (choice: string, values?: Values) => void
 }) {
   const first = choices.find((choice) => choice.allows)
-  const filledIn = form && values ? summary(form, values) : []
+  const filledIn =
+    state === "answered" && form && values ? summary(form, values) : []
   const answered =
     state !== "answered"
       ? "No longer asked."
@@ -510,8 +511,8 @@ function Question({
         </div>
       ) : filledIn.length > 0 ? (
         <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
-          {filledIn.map(({ title, value }) => (
-            <Fragment key={title}>
+          {filledIn.map(({ id, title, value }) => (
+            <Fragment key={id}>
               <dt className="text-muted-foreground">{title}</dt>
               <dd className="min-w-0 wrap-break-word">{value}</dd>
             </Fragment>

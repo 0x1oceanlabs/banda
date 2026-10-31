@@ -1019,3 +1019,22 @@ async fn a_form_question_takes_what_the_person_fills_in() {
         .await;
     assert_eq!(last_reply(&view), "message: You skipped the question.");
 }
+
+#[tokio::test]
+async fn a_question_the_harness_stops_waiting_for_closes() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let (_, view) = world.finish(None, "choose quickly").await;
+    assert!(
+        matches!(
+            view.items[1].body,
+            Body::Question {
+                state: QuestionState::Closed,
+                ..
+            }
+        ),
+        "{:?}",
+        view.items[1]
+    );
+    assert_eq!(last_reply(&view), "message: The question was cancelled.");
+}

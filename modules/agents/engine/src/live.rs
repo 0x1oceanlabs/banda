@@ -27,6 +27,9 @@ struct Turns {
     /// when it begins.
     stopping: HashSet<TurnId>,
     questions: HashMap<ItemId, (TurnId, oneshot::Sender<Answer>)>,
+    /// What Persons typed in secret fields, until it goes to the Harness.
+    /// Only memory holds it.
+    secrets: HashMap<ItemId, Values>,
 }
 
 impl Turns {
@@ -118,6 +121,17 @@ impl Live {
             None => Answer::Chose(choice),
         };
         waiting.is_some_and(|(_, answer)| answer.send(given).is_ok())
+    }
+
+    /// Holds what a Person typed in a Question's secret fields until its
+    /// answer goes to the Harness.
+    pub fn keep_secret(&self, item: ItemId, secret: Values) {
+        self.turns.lock().unwrap().secrets.insert(item, secret);
+    }
+
+    /// What a Person typed in a Question's secret fields, once.
+    pub fn take_secret(&self, item: ItemId) -> Option<Values> {
+        self.turns.lock().unwrap().secrets.remove(&item)
     }
 
     /// The turn ended: lets go of it and its Questions. Whether a Person

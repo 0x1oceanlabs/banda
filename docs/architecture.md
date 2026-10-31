@@ -209,7 +209,11 @@ If Chat is removed, Agents still works through its own Thread.
   choice, as Claude Code does for its own questions and Codex in a plan
   (ACP's form elicitation). Submit sends what the Person filled in, which
   the engine checks against the form first; Skip declines. No mode answers
-  a form.
+  a form. What a Person types in a field the Harness marks secret reaches
+  the Harness from memory only: the Thread and the outbox keep a mask. A
+  form Bandaso cannot show goes unanswered, with a notice.
+- **A Question closes** when the Harness stops waiting for it, as when it
+  times out.
 - **A restart interrupts** the turn it cut short and closes that turn's
   open Questions.
 - Its methods and their rights are listed in
