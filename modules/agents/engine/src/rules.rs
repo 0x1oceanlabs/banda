@@ -25,6 +25,12 @@ pub fn may_start(state: TurnState, held: bool) -> bool {
     state == TurnState::Queued && !held
 }
 
+/// Whether a turn that ended so holds the Thread's queue: one whose
+/// Harness stopped, as after a restart.
+pub fn holds_queue(ending: &Ending) -> bool {
+    ending.failure == Some(Failure::HarnessStopped)
+}
+
 /// Whether a turn has yet to end.
 pub fn ongoing(state: TurnState) -> bool {
     matches!(state, TurnState::Queued | TurnState::Running)
@@ -61,6 +67,18 @@ pub fn waits(state: TurnState) -> Result<(), Refusal> {
     } else {
         Err(Refusal::invalid(
             "The Agent has taken this message, so it can no longer be changed.",
+        ))
+    }
+}
+
+/// Whether a waiting message can be changed: one tried again cannot,
+/// since a turn already ran it.
+pub fn may_change(first: bool) -> Result<(), Refusal> {
+    if first {
+        Ok(())
+    } else {
+        Err(Refusal::invalid(
+            "The Agent has read this message, so it can no longer be changed.",
         ))
     }
 }
@@ -678,6 +696,14 @@ mod tests {
         }
         assert!(waits(TurnState::Queued).is_ok());
         assert!(waits(TurnState::Running).is_err(), "the Agent has it");
+        assert!(may_change(true).is_ok());
+        assert!(may_change(false).is_err(), "a turn already ran it");
+        let stopped = Ending::failed("Gone.", Some(Failure::HarnessStopped));
+        assert!(holds_queue(&stopped));
+        assert!(!holds_queue(&Ending::failed(
+            "Down.",
+            Some(Failure::Provider)
+        )));
         let cancelled = || Ending::new(TurnState::Stopped, None);
         assert_eq!(cancelled().stop_asked(true).state, TurnState::Stopped);
         assert_eq!(

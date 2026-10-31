@@ -46,10 +46,11 @@ ADR 0002, decision 9, as decision 9 below says.
      - terminal sign-in;
      - boolean options;
      - notices and compaction;
-     - streamed command output;
-     - steering.
-   - It reads what the Harness declares. A window shows a control only
-     when the Harness has the capability.
+     - streamed command output.
+   - It reads what the Harness declares, steering among it: the adapters
+     declare steering in their answer to `initialize`, and each message
+     sent into a turn opts into it. A window shows a control only when
+     the Harness has the capability.
    - Each missing capability has a fallback. For example, a session that
      cannot be resumed is opened fresh, and the Thread says so.
    - A capability that is declared but fails at runtime is a bug.

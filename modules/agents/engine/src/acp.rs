@@ -44,9 +44,9 @@ use tokio::time::timeout;
 
 /// How long a Harness may take to start and agree on ACP. The first start
 /// may download it.
-const STARTING: Duration = Duration::from_secs(120);
+pub const STARTING: Duration = Duration::from_secs(120);
 /// How long a Harness may take to open a session.
-const OPENING: Duration = Duration::from_secs(60);
+pub const OPENING: Duration = Duration::from_secs(60);
 /// How long a Harness may take to say whether a message joins its turn.
 const STEERING: Duration = Duration::from_secs(30);
 
@@ -209,8 +209,28 @@ struct SteeringRequest {
 
 #[derive(Debug, Clone, Serialize, Deserialize, agent_client_protocol::JsonRpcResponse)]
 struct SteeringResponse {
-    outcome: String,
+    outcome: SteeringOutcome,
 }
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+enum SteeringOutcome {
+    Injected,
+    /// No turn runs, so none took it.
+    PromptRequired,
+    /// Only without `promptRequired`: the adapter ran the message as a
+    /// turn of its own, whose words reach no turn here.
+    StartedNewTurn,
+    /// It failed, or the adapter answered what this engine does not know.
+    #[serde(other)]
+    Other,
+}
+
+/// Where a Harness declares that it takes messages into a running turn,
+/// and where each such message says what an idle session does with it.
+const STEERING_META: &str = "steering";
+/// An idle session leaves the message to the engine.
+const LEAVE_IT: &str = "promptRequired";
 
 /// What a session runs with, as the Harness last said.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -618,26 +638,21 @@ impl Connection {
         let request = SteeringRequest {
             session_id: session.clone(),
             prompt: blocks(prompt),
-            meta: serde_json::json!({ "steering": { "idleBehavior": "promptRequired" } }),
+            meta: serde_json::json!({ STEERING_META: { "idleBehavior": LEAVE_IT } }),
         };
         let sent = self.cx.send_request(request).block_task();
         let answer = timeout(STEERING, sent)
             .await
             .map_err(|_| format!("{} did not take the message in time.", self.name))?
             .map_err(plain)?;
-        match answer.outcome.as_str() {
-            "injected" => Ok(Steered::Joined),
-            "promptRequired" => Ok(Steered::NotNow),
-            // Only without `promptRequired`: the adapter ran the message as
-            // a turn of its own, whose words reach no turn here.
-            "startedNewTurn" => {
+        match answer.outcome {
+            SteeringOutcome::Injected => Ok(Steered::Joined),
+            SteeringOutcome::PromptRequired => Ok(Steered::NotNow),
+            SteeringOutcome::StartedNewTurn => {
                 tracing::warn!(harness = %self.harness, "a steered message started a turn of its own");
                 Ok(Steered::Joined)
             }
-            other => Err(format!(
-                "{} could not take the message ({other}).",
-                self.name
-            )),
+            SteeringOutcome::Other => Err(format!("{} could not take the message.", self.name)),
         }
     }
 
@@ -832,7 +847,10 @@ async fn drive(
             match agreed {
                 Ok(answer) if answer.protocol_version == ProtocolVersion::V1 => {
                     let capabilities = &answer.agent_capabilities;
-                    let steering = answer.meta.as_ref().and_then(|meta| meta.get("steering"));
+                    let steering = answer
+                        .meta
+                        .as_ref()
+                        .and_then(|meta| meta.get(STEERING_META));
                     let agreed = Agreed {
                         loads: capabilities.load_session,
                         resumes: capabilities.session_capabilities.resume.is_some(),

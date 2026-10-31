@@ -465,12 +465,19 @@ pub fn turns_in(sql: &Connection, thread: ThreadId, state: TurnState) -> Result<
     Ok(rows.collect::<rusqlite::Result<_>>()?)
 }
 
-/// The turns that ran or will run `message`, the first first.
+/// The Thread's turn that runs, if one does.
+pub fn running(sql: &Connection, thread: ThreadId) -> Result<Option<Turn>, Error> {
+    Ok(turns_in(sql, thread, TurnState::Running)?.pop())
+}
+
+/// The turns that ran or will run `message`, the first first. A turn a
+/// Person took back never ran it.
 pub fn turns_of(sql: &Connection, message: ItemId) -> Result<Vec<Turn>, Error> {
     let mut statement = sql.prepare(&format!(
-        "{TURN} WHERE message = ?1 ORDER BY created_at, id"
+        "{TURN} WHERE message = ?1 AND state != ?2 ORDER BY created_at, id"
     ))?;
-    let rows = statement.query_map(params![message], read_turn)?;
+    let withdrawn = state_word(TurnState::Withdrawn);
+    let rows = statement.query_map(params![message, withdrawn], read_turn)?;
     Ok(rows.collect::<rusqlite::Result<_>>()?)
 }
 
@@ -489,13 +496,18 @@ pub fn set_turn(
     Ok(())
 }
 
-/// The Thread's latest turn.
-pub fn last_turn(sql: &Connection, thread: ThreadId) -> Result<Option<TurnId>, Error> {
+/// The Thread's latest turn that began: one that waits, or that a Person
+/// took back, never did.
+pub fn last_begun(sql: &Connection, thread: ThreadId) -> Result<Option<TurnId>, Error> {
     Ok(sql
         .query_row(
-            "SELECT id FROM agents_turns WHERE thread = ?1
+            "SELECT id FROM agents_turns WHERE thread = ?1 AND state NOT IN (?2, ?3)
              ORDER BY created_at DESC, id DESC LIMIT 1",
-            params![thread],
+            params![
+                thread,
+                state_word(TurnState::Queued),
+                state_word(TurnState::Withdrawn)
+            ],
             |row| row.get(0),
         )
         .optional()?)

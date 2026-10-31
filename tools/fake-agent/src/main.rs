@@ -86,6 +86,8 @@ use tokio::sync::mpsc;
 struct SteeringRequest {
     session_id: SessionId,
     prompt: Vec<ContentBlock>,
+    #[serde(rename = "_meta", default)]
+    meta: serde_json::Value,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize, agent_client_protocol::JsonRpcResponse)]
@@ -825,9 +827,13 @@ async fn main() -> Result<(), Error> {
                             responder: Responder<SteeringResponse>,
                             _cx: ConnectionTo<Client>| {
                     let running = fake.running.lock().unwrap();
+                    // As Claude Code's adapter: an idle session leaves the
+                    // message to the client only when the client asks it to.
+                    let leaves = request.meta["steering"]["idleBehavior"] == "promptRequired";
                     let outcome = match running.get(&request.session_id) {
                         Some(turn) if turn.send(words_of(&request.prompt)).is_ok() => "injected",
-                        _ => "promptRequired",
+                        _ if leaves => "promptRequired",
+                        _ => "startedNewTurn",
                     };
                     responder.respond(SteeringResponse {
                         outcome: outcome.to_owned(),

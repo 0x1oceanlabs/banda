@@ -294,7 +294,7 @@ const ids = (state: ReturnType<typeof play>) =>
 
 /** A Thread whose turn `u1` runs and has said "Waiting.", then `more`,
  * made after it so the log's order holds. */
-function working1(more: () => Event[] = () => []) {
+function aTurnRuns(more: () => Event[] = () => []) {
   const base = play(
     event(
       "message.posted",
@@ -308,7 +308,7 @@ function working1(more: () => Event[] = () => []) {
 }
 
 test("a message sent into a running turn reads where it was sent", () => {
-  const state = working1(() => [
+  const state = aTurnRuns(() => [
     event(
       "message.steered",
       { item: "s", turn: "u1", text: "also this", images: [] },
@@ -323,7 +323,7 @@ test("a message sent into a running turn reads where it was sent", () => {
 })
 
 test("a waiting message shows after the Thread until its turn starts", () => {
-  const queued = working1(() => [
+  const queued = aTurnRuns(() => [
     event(
       "message.posted",
       { item: "m2", turn: "u2", text: "second" },
@@ -361,7 +361,7 @@ test("a waiting message shows after the Thread until its turn starts", () => {
 })
 
 test("a held queue works on nothing until a Person lets it go", () => {
-  const stopped = working1(() => [
+  const stopped = aTurnRuns(() => [
     event(
       "message.posted",
       { item: "m2", turn: "u2", text: "second" },
@@ -381,7 +381,7 @@ test("a held queue works on nothing until a Person lets it go", () => {
 })
 
 test("a waiting message sent now joins the running turn", () => {
-  const state = working1(() => [
+  const state = aTurnRuns(() => [
     event(
       "message.posted",
       { item: "m2", turn: "u2", text: "now this" },
@@ -400,7 +400,7 @@ test("a waiting message sent now joins the running turn", () => {
 })
 
 test("a message its turn could not take waits for a turn of its own", () => {
-  const state = working1(() => [
+  const state = aTurnRuns(() => [
     event(
       "message.steered",
       { item: "s", turn: "u1", text: "late", images: [] },
@@ -412,4 +412,55 @@ test("a message its turn could not take waits for a turn of its own", () => {
   expect(state.items.find((i) => i.id === "s")?.turn).toBeUndefined()
   expect(waiting(state).map(({ item }) => item.id)).toEqual(["s"])
   expect(ids(state)).toEqual(["m1", "r1"])
+})
+
+test("a message sent now that its turn could not take waits again", () => {
+  const state = aTurnRuns(() => [
+    event(
+      "message.posted",
+      { item: "m2", turn: "u2", text: "now this" },
+      { author: person }
+    ),
+    event("turn.ended", { turn: "u2", state: "withdrawn" }),
+    event(
+      "message.steered",
+      { item: "m2", turn: "u1", text: "now this", images: [] },
+      { author: person }
+    ),
+    event("turn.ended", { turn: "u1", state: "done" }),
+    event("turn.queued", { turn: "u3", message: "m2" }, { author: person }),
+  ])
+  expect(waiting(state).map(({ turn }) => turn.id)).toEqual(["u3"])
+  expect(ids(state)).toEqual(["m1", "r1"])
+})
+
+test("a failed turn can go again past messages that wait or were taken back", () => {
+  const failed = play(
+    event(
+      "message.posted",
+      { item: "m1", turn: "u1", text: "first" },
+      { author: person }
+    ),
+    event(
+      "message.posted",
+      { item: "m2", turn: "u2", text: "second" },
+      { author: person }
+    ),
+    event(
+      "message.posted",
+      { item: "m3", turn: "u3", text: "third" },
+      { author: person }
+    ),
+    event("turn.started", { turn: "u1" }),
+    event("turn.ended", { turn: "u1", state: "failed" }),
+    event("thread.held", { thread: "t", held: true }),
+    event("turn.ended", { turn: "u3", state: "withdrawn" })
+  )
+  const u1 = failed.turns[0]
+  expect(retryable(failed, u1)).toBe(true)
+  const again = apply(
+    failed,
+    event("turn.queued", { turn: "u4", message: "m1" }, { author: person })
+  )
+  expect(retryable(again, u1)).toBe(false)
 })
