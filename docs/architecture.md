@@ -1,8 +1,10 @@
 # Architecture
 
 This is the shape Bandaso is built to. The decisions and their reasons are in
-[ADR 0001](adr/0001-one-engine-a-small-kernel-and-modules.md), and the words
-are in [`GLOSSARY.md`](../GLOSSARY.md). This page changes when the code does.
+[ADR 0001](adr/0001-one-engine-a-small-kernel-and-modules.md) and
+[ADR 0002](adr/0002-how-the-engine-writes-and-keeps-the-work.md), and the
+words are in [`GLOSSARY.md`](../GLOSSARY.md). This page changes when the code
+does.
 
 ## Three levels
 
@@ -46,6 +48,37 @@ The kernel holds only what every module needs, and it names no module.
   Later it is OIDC, or our accounts.
 - **Module registry and API.** The registry routes commands to their
   module, delivers events to subscribers, and serves the API.
+- **Receipts and outbox.** These carry every command along one path (below).
+
+### The command path
+
+```
+command (with its ID)
+  → access decision (one exhaustive map: method → right)
+  → module operation: rules decide, store writes
+  → one transaction: receipt · events · view tables · outbox rows
+  → publish: one ordered lane per Space
+  → outbox worker: side effects in order per target, leased, retried
+```
+
+- A repeated command returns its first result.
+- A side effect never starts from a live subscription.
+- A window loads a snapshot at sequence N, then streams the events after N.
+
+## Where data lives
+
+| Where | What |
+|---|---|
+| The Space's folder | the files of the work |
+| Text files | Agents, layouts, keys, themes, module settings |
+| The Harness | its session, context and sign-in. We keep only its session ID |
+| The OS keychain | secrets. Bandaso's database never holds them |
+| The window | focus, scroll, open Panes |
+| `.bandaso/` SQLite | Threads, Questions and answers, the Agents' queue, Databases' records, receipts, events, outbox |
+
+Events are facts with a version, and the log is never rewritten. Each module
+keeps its own ledger of migrations. Our IDs are UUIDv7. A Harness's IDs are
+stored as references.
 
 ## Modules
 
@@ -110,6 +143,9 @@ module reaches a Harness through an adapter:
 - **ACP** is the first and default adapter. It covers any agent in the ACP
   Registry.
 - **A native adapter** is added only where ACP blocks something users need.
+  Claude Code (through its Agent SDK) and Codex (through its app-server) are
+  expected early: ACP lacks rollback, Questions that survive a restart,
+  subagents and usage figures.
 - **Capabilities.** An adapter declares what its Harness can do. The rest of
   the engine reads those capabilities and never the Harness's name.
 - **Permissions.** The Harness decides when to ask, by its own settings.
@@ -144,6 +180,9 @@ bandaso/
   another's tables, and a Pane imports only the API and the shell.
 - **Module tests** run through the module's interface: commands go in and
   events come out. Nothing past the interface is mocked.
+- **Adapter tests** run the real engine. Only the Harness's transport is
+  replayed, from recorded conversations: ours, and T3 Code's recorded
+  scenarios (MIT, with their notice).
 - **End to end.** Playwright drives the Electron window against a scripted
   fake ACP agent. Screenshots let Agents check the UI themselves.
 - **Speed budget.** Tests check start-up time, memory and input latency.
