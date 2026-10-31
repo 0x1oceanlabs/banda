@@ -43,6 +43,11 @@ Plan mode is something else: a setting under which the Agent only plans and
 changes nothing.
 _Avoid_: todos.
 
+**Command**:
+What a Harness runs when a message starts with `/` and its name, such as
+`/compact`. Each Harness has its own; the Thread adds `/plan` and `/default`,
+which switch plan mode.
+
 **Turn**:
 One stretch of an Agent's work in a Thread. It begins at a message to the
 Agent and ends when the Agent stops or is stopped.

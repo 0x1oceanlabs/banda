@@ -644,7 +644,6 @@ impl Writer {
                     .map_err(plain)
             }
             Said::Runs(now) => {
-                self.close().await?;
                 let ran = std::mem::replace(&mut self.running, now.clone());
                 let planned = now.native && now.plan != ran.plan;
                 // A mode it moved to by itself, not leaving a plan, is not
@@ -653,6 +652,11 @@ impl Writer {
                     let runs = now.mode.map_or("a mode of its own", Mode::name);
                     format!("{} switched itself to {runs} for this turn.", self.harness)
                 });
+                // What it says after a switch reads after it; a new list of
+                // options or commands leaves its text whole.
+                if planned || moved.is_some() {
+                    self.close().await?;
+                }
                 let (thread, agent, turn) =
                     (self.thread, Participant::Agent(self.agent), self.turn);
                 self.space

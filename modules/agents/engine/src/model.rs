@@ -120,6 +120,22 @@ pub struct Offer {
     /// The Harness can plan before it changes anything.
     #[serde(default)]
     pub plans: bool,
+    /// The commands a message can start with, such as `/compact`.
+    #[serde(default)]
+    pub commands: Vec<Command>,
+}
+
+/// A command the Harness runs when a message starts with `/` and its name.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "agents/")]
+pub struct Command {
+    /// Its name, without the `/`.
+    pub name: String,
+    pub description: String,
+    /// What to write after it, when it takes something.
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hint: Option<String>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]

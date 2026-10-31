@@ -22,9 +22,9 @@
 //! runs until the Harness ends it or a Person stops it.
 
 use crate::model::{
-    Cost, Exit, Failure, Field, FieldValue, HarnessOption, Input, Mode, Offer, OptionChoice,
-    OptionValue, PlanStep, Settings, StepState, TextFormat, ThreadId, ToolContent, ToolKind,
-    ToolStatus, TurnState, Usage, Values,
+    Command, Cost, Exit, Failure, Field, FieldValue, HarnessOption, Input, Mode, Offer,
+    OptionChoice, OptionValue, PlanStep, Settings, StepState, TextFormat, ThreadId, ToolContent,
+    ToolKind, ToolStatus, TurnState, Usage, Values,
 };
 use crate::rules::{Ending, Offered};
 use crate::settings::Harness;
@@ -209,12 +209,14 @@ type Options = Arc<Mutex<HashMap<acp::SessionId, Known>>>;
 /// A session's options, and whether its modes are Claude Code's or Codex's:
 /// decided by the list it opened with, so a later list that leaves the modes
 /// out does not change who keeps to the Thread's mode. And what it last
-/// said it has used, which may come between turns.
+/// said it has used and which commands it takes, which may come between
+/// turns: Claude Code sends its commands just after the session opens.
 #[derive(Clone, Default)]
 struct Known {
     native: bool,
     options: Vec<acp::SessionConfigOption>,
     usage: Option<Usage>,
+    commands: Vec<Command>,
 }
 
 impl Known {
@@ -222,7 +224,7 @@ impl Known {
         Known {
             native: native(&options),
             options,
-            usage: None,
+            ..Known::default()
         }
     }
 }
@@ -550,6 +552,12 @@ async fn drive(
                     acp::SessionUpdate::ConfigOptionUpdate(update) => {
                         let known = learn(&options, &note.session_id, update.config_options);
                         Some(Said::Runs(running(&known)))
+                    }
+                    acp::SessionUpdate::AvailableCommandsUpdate(update) => {
+                        let mut all = options.lock().unwrap();
+                        let known = all.entry(note.session_id.clone()).or_default();
+                        known.commands = update.available_commands.iter().map(command).collect();
+                        Some(Said::Runs(running(known)))
                     }
                     update => said(update),
                 };
@@ -934,6 +942,18 @@ fn running(known: &Known) -> Running {
         offer: Offer {
             options: offered,
             plans: native && plans,
+            commands: known.commands.clone(),
+        },
+    }
+}
+
+fn command(command: &acp::AvailableCommand) -> Command {
+    Command {
+        name: command.name.clone(),
+        description: command.description.clone(),
+        hint: match &command.input {
+            Some(acp::AvailableCommandInput::Unstructured(input)) => Some(input.hint.clone()),
+            _ => None,
         },
     }
 }
