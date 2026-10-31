@@ -78,8 +78,11 @@ calls, approvals and agent sessions were lost.
    What an Agent does inside its Harness is enforced by the Harness (ADR
    0001, decision 7). Bandaso never fakes a mode a Harness lacks by
    answering its Questions for it: the Harness's own check is stronger.
+   _Changed by ADR 0003, decision 9: for an ACP agent other than Claude Code
+   and Codex, the engine answers by the Thread's mode._
 
-10. **Native adapters for Claude Code and Codex come early.** T3 Code reaches
+10. **Native adapters for Claude Code and Codex come early.** _Superseded by
+    ADR 0003, decision 1: both go through ACP, and native Codex comes later._ T3 Code reaches
     neither through ACP. Claude runs on its official Agent SDK, and Codex on
     its app-server. ACP lacks conversation rollback, Questions that survive
     a restart, subagents and usage figures. The first step uses ACP, because
