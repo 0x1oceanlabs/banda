@@ -306,3 +306,56 @@ test("an Agent's plan shows its steps, and the context how full it is", async ()
   await page.mouse.move(0, 0)
   await page.screenshot({ path: "test-results/11-plan.png" })
 })
+
+test("a message starts with a command its Agent offers", async () => {
+  window = await startWindow()
+  const { page } = window
+  await page.getByLabel("Name").fill("Work")
+  await page.getByRole("button", { name: "Create Space" }).click()
+  await page.getByRole("button", { name: "New Agent" }).click()
+  const dialog = page.getByRole("dialog", { name: "New Agent" })
+  await dialog.getByLabel("Name").fill("Writer")
+  await dialog.getByRole("button", { name: "Create Agent" }).click()
+  const thread = page.getByRole("region", { name: "Writer" })
+  const composer = thread.getByRole("textbox", { name: "Message to Writer" })
+  const commands = thread.getByRole("listbox", { name: "Commands" })
+
+  // Its Harness says its commands once its session opens.
+  await composer.fill("/")
+  await expect(thread.getByText("No commands from Writer yet.")).toBeVisible()
+  await composer.fill("hello")
+  await composer.press("Enter")
+  await expect(thread.getByText("You said: hello")).toBeVisible()
+
+  await composer.fill("/re")
+  await expect(commands.getByRole("option")).toHaveText([
+    /^\/review/,
+    /^\/plan/,
+  ])
+  await expect(composer).toHaveAttribute(
+    "aria-activedescendant",
+    (await commands.getByRole("option").first().getAttribute("id"))!
+  )
+  await page.screenshot({ path: "test-results/12-commands.png" })
+  await composer.press("Enter")
+  await expect(composer).toHaveValue("/review ")
+  await expect(commands).toBeHidden()
+  await composer.pressSequentially("the notes")
+  await composer.press("Enter")
+  await expect(thread.getByText("You said: /review the notes")).toBeVisible()
+
+  // The Thread's own commands switch its plan and send nothing.
+  await composer.fill("/pl")
+  await commands.getByRole("option", { name: /^\/plan/ }).click()
+  await expect(composer).toHaveValue("")
+  await expect(thread.getByRole("button", { name: "Plan" })).toHaveAttribute(
+    "aria-pressed",
+    "true"
+  )
+  await expect(composer).toBeFocused()
+
+  await composer.fill("/")
+  await expect(commands).toBeVisible()
+  await composer.press("Escape")
+  await expect(commands).toBeHidden()
+})

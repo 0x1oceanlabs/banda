@@ -30,7 +30,12 @@
 //! - `edit`: edits a file, and shows the change as a diff.
 //! - `run`: runs the tests, printing as Codex does; `loud` far more than a
 //!   Thread keeps; `at once` as Claude Code does, all at the end.
+//! - `new command`: starts its reply, learns the command `/init`, and ends
+//!   the reply.
 //! - anything else: a short thought, then a reply that quotes the prompt.
+//!
+//! Just after a session opens it says its commands, `/review` and
+//! `/compact`, as Claude Code does.
 //!
 //! Its sessions can be resumed or loaded after a restart, as a real
 //! Harness keeps them on disk. With `FAKE_AGENT_FORGETS` set it refuses
@@ -43,7 +48,8 @@
 
 use agent_client_protocol::schema::ProtocolVersion;
 use agent_client_protocol::schema::v1::{
-    AgentCapabilities, CancelNotification, ConfigOptionUpdate, ContentBlock, ContentChunk, Cost,
+    AgentCapabilities, AvailableCommand, AvailableCommandInput, AvailableCommandsUpdate,
+    CancelNotification, ConfigOptionUpdate, ContentBlock, ContentChunk, Cost,
     CreateElicitationRequest, Diff, ElicitationAction, ElicitationContentValue,
     ElicitationFormMode, ElicitationSchema, ElicitationSessionScope, EnumOption, Implementation,
     InitializeRequest, InitializeResponse, LoadSessionRequest, LoadSessionResponse, MessageId,
@@ -55,7 +61,7 @@ use agent_client_protocol::schema::v1::{
     SessionResumeCapabilities, SessionUpdate, SetSessionConfigOptionRequest,
     SetSessionConfigOptionResponse, StopReason, StringPropertySchema, Terminal, TextContent,
     ToolCall, ToolCallContent, ToolCallStatus, ToolCallUpdate, ToolCallUpdateFields, ToolKind,
-    UsageUpdate,
+    UnstructuredCommandInput, UsageUpdate,
 };
 use agent_client_protocol::{Agent, Client, ConnectionTo, Error, Responder, Stdio};
 use serde_json::json;
@@ -177,6 +183,23 @@ impl Fake {
 
 fn say(cx: &ConnectionTo<Client>, session: &SessionId, update: SessionUpdate) -> Result<(), Error> {
     cx.send_notification(SessionNotification::new(session.clone(), update))
+}
+
+/// Its commands; with `/init` once it has learned that.
+fn commands(learned: bool) -> SessionUpdate {
+    let mut all = vec![
+        AvailableCommand::new("review", "Review the changes so far").input(
+            AvailableCommandInput::Unstructured(UnstructuredCommandInput::new("what to look at")),
+        ),
+        AvailableCommand::new("compact", "Make room in the context"),
+    ];
+    if learned {
+        all.push(AvailableCommand::new(
+            "init",
+            "Write notes about this folder",
+        ));
+    }
+    SessionUpdate::AvailableCommandsUpdate(AvailableCommandsUpdate::new(all))
 }
 
 fn text(words: &str) -> ContentChunk {
@@ -353,6 +376,20 @@ async fn turn(
             &cx,
             &session,
             SessionUpdate::AgentMessageChunk(text("Done for now.")),
+        )?;
+        return Ok(StopReason::EndTurn);
+    }
+    if words.contains("new command") {
+        say(
+            &cx,
+            &session,
+            SessionUpdate::AgentMessageChunk(text("Before")),
+        )?;
+        say(&cx, &session, commands(true))?;
+        say(
+            &cx,
+            &session,
+            SessionUpdate::AgentMessageChunk(text(" and after.")),
         )?;
         return Ok(StopReason::EndTurn);
     }
@@ -626,12 +663,15 @@ async fn main() -> Result<(), Error> {
                 let fake = fake.clone();
                 async move |_request: NewSessionRequest,
                             responder: Responder<NewSessionResponse>,
-                            _cx: ConnectionTo<Client>| {
+                            cx: ConnectionTo<Client>| {
                     let number = fake.sessions.fetch_add(1, Ordering::Relaxed) + 1;
                     // Unique across processes, so a resumed session shows.
                     let id = SessionId::new(format!("fake-{}-{number}", std::process::id()));
                     let options = fake.options(&id);
-                    responder.respond(NewSessionResponse::new(id).config_options(options))
+                    responder
+                        .respond(NewSessionResponse::new(id.clone()).config_options(options))?;
+                    // Before any prompt, as Claude Code does.
+                    say(&cx, &id, commands(false))
                 }
             },
             agent_client_protocol::on_receive_request!(),

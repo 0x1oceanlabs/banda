@@ -249,7 +249,7 @@ test("the Thread's settings and the Harness's offer follow their facts", () => {
   const state = play(
     event("thread.offered", {
       thread: "t",
-      offer: { options: [model], plans: true },
+      offer: { options: [model], plans: true, commands: [] },
     }),
     event("thread.configured", {
       thread: "t",
