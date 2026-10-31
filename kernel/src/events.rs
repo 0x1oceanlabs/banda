@@ -36,6 +36,9 @@ pub struct EventFilter {
     pub module: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub subject: Option<String>,
+    /// Only these kinds, so a view hears just the facts it shows.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kinds: Option<Vec<String>>,
 }
 
 impl EventFilter {
@@ -45,6 +48,7 @@ impl EventFilter {
                 .subject
                 .as_ref()
                 .is_none_or(|s| event.subject.as_deref() == Some(s.as_str()))
+            && self.kinds.as_ref().is_none_or(|k| k.contains(&event.kind))
     }
 }
 
@@ -114,14 +118,20 @@ pub(crate) fn after(
     let mut statement = sql.prepare_cached(&format!(
         "SELECT {COLUMNS} FROM kernel_events
          WHERE seq > ?1 AND (?2 IS NULL OR module = ?2) AND (?3 IS NULL OR subject = ?3)
+           AND (?5 IS NULL OR kind IN (SELECT value FROM json_each(?5)))
          ORDER BY seq LIMIT ?4"
     ))?;
+    let kinds = filter
+        .kinds
+        .as_ref()
+        .map(|kinds| serde_json::json!(kinds).to_string());
     let rows = statement.query_map(
         params![
             after,
             filter.module,
             filter.subject,
-            i64::try_from(limit).unwrap_or(i64::MAX)
+            i64::try_from(limit).unwrap_or(i64::MAX),
+            kinds
         ],
         from_row,
     )?;

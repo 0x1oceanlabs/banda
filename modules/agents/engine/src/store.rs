@@ -189,23 +189,30 @@ pub fn turn(sql: &Connection, id: TurnId) -> Result<Option<Turn>, Error> {
         .optional()?)
 }
 
-pub fn set_turn(sql: &Connection, turn: &TurnView) -> Result<(), Error> {
+pub fn set_turn(
+    sql: &Connection,
+    turn: TurnId,
+    state: TurnState,
+    reason: Option<&str>,
+) -> Result<(), Error> {
     sql.execute(
         "UPDATE agents_turns SET state = ?2, reason = ?3 WHERE id = ?1",
-        params![turn.id, state_word(turn.state), turn.reason],
+        params![turn, state_word(state), reason],
     )?;
     Ok(())
 }
 
 pub fn turns(sql: &Connection, thread: ThreadId) -> Result<Vec<TurnView>, Error> {
     let mut statement = sql.prepare(
-        "SELECT id, state, reason FROM agents_turns WHERE thread = ?1 ORDER BY created_at, id",
+        "SELECT id, message, state, reason FROM agents_turns
+         WHERE thread = ?1 ORDER BY created_at, id",
     )?;
     let rows = statement.query_map(params![thread], |row| {
         Ok(TurnView {
             id: row.get(0)?,
-            state: state_of(row, 1)?,
-            reason: row.get(2)?,
+            message: row.get(1)?,
+            state: state_of(row, 2)?,
+            reason: row.get(3)?,
         })
     })?;
     Ok(rows.collect::<rusqlite::Result<_>>()?)
