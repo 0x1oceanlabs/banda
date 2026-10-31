@@ -2,7 +2,8 @@
 //! clock, randomness or Harness protocol. IDs come in from the caller.
 
 use crate::model::{
-    Body, Choice, Fact, Failure, ItemId, Mode, QuestionState, ToolKind, TurnId, TurnState,
+    Body, Choice, Fact, Failure, Field, FieldValue, Input, ItemId, Mode, QuestionState, ToolKind,
+    TurnId, TurnState, Values,
 };
 use bandaso_kernel::{Participant, Refusal};
 
@@ -171,31 +172,114 @@ pub fn allow_once(offered: &[Offered]) -> Option<&str> {
         .map(|o| o.id.as_str())
 }
 
-/// Answers a Question with one of its choices.
-pub fn answer(body: &mut Body, choice: &str) -> Result<(), Refusal> {
+/// Answers a Question with one of its choices. A choice that submits a
+/// form takes what the Person filled in, which must fit the form; it comes
+/// back as the Question keeps it.
+pub fn answer(
+    body: &mut Body,
+    choice: &str,
+    given: Option<Values>,
+) -> Result<Option<Values>, Refusal> {
     let Body::Question {
         state,
         choices,
+        form,
         answer,
+        values,
         ..
     } = body
     else {
         return Err(Refusal::invalid("This item is not a Question."));
     };
     match state {
-        QuestionState::Open if choices.iter().any(|c| c.id == choice) => {
+        QuestionState::Open => {
+            let chosen = choices
+                .iter()
+                .find(|c| c.id == choice)
+                .ok_or_else(|| Refusal::invalid("This Question does not offer that answer."))?;
+            let filled = match form {
+                Some(fields) if chosen.allows => {
+                    let given = given.unwrap_or_default();
+                    fits(fields, &given)?;
+                    Some(given)
+                }
+                _ if given.is_some_and(|g| !g.is_empty()) => {
+                    return Err(Refusal::invalid("This answer takes nothing filled in."));
+                }
+                _ => None,
+            };
             *state = QuestionState::Answered;
             *answer = Some(choice.to_owned());
-            Ok(())
+            values.clone_from(&filled);
+            Ok(filled)
         }
-        QuestionState::Open => Err(Refusal::invalid(
-            "This Question does not offer that answer.",
-        )),
         QuestionState::Answered => Err(Refusal::conflict("This Question has its answer.")),
         QuestionState::Closed => Err(Refusal::conflict(
             "This Question closed: its turn ended before an answer.",
         )),
     }
+}
+
+/// Whether `given` fits the form: only its fields, each of the kind it
+/// takes, and every required one filled in.
+fn fits(fields: &[Field], given: &Values) -> Result<(), Refusal> {
+    let wrong =
+        |field: &Field| Refusal::invalid(format!("\"{}\" does not take that answer.", field.title));
+    for id in given.keys() {
+        if !fields.iter().any(|f| f.id == *id) {
+            return Err(Refusal::invalid(format!("The form has no field \"{id}\".")));
+        }
+    }
+    for field in fields {
+        let Some(value) = given.get(&field.id) else {
+            if field.required {
+                return Err(Refusal::invalid(format!(
+                    "\"{}\" needs an answer.",
+                    field.title
+                )));
+            }
+            continue;
+        };
+        let offered = |choices: &[crate::model::OptionChoice], value: &str| {
+            choices.iter().any(|c| c.value == value)
+        };
+        let fits = match (&field.input, value) {
+            (Input::Text { .. }, FieldValue::Text(text)) => {
+                !field.required || !text.trim().is_empty()
+            }
+            (Input::Choice { choices, .. }, FieldValue::Text(value)) => offered(choices, value),
+            (Input::Choices { choices, .. }, FieldValue::Choices(values)) => {
+                values.iter().all(|v| offered(choices, v)) && !(field.required && values.is_empty())
+            }
+            (
+                Input::Number {
+                    integer,
+                    minimum,
+                    maximum,
+                    ..
+                },
+                FieldValue::Number(number),
+            ) => {
+                let at = number.as_f64().unwrap_or(f64::NAN);
+                let whole = number.is_i64() || number.is_u64();
+                (!integer || whole)
+                    && minimum
+                        .as_ref()
+                        .and_then(|m| m.as_f64())
+                        .is_none_or(|m| at >= m)
+                    && maximum
+                        .as_ref()
+                        .and_then(|m| m.as_f64())
+                        .is_none_or(|m| at <= m)
+            }
+            (Input::Toggle { .. }, FieldValue::Toggle(_)) => true,
+            _ => false,
+        };
+        if !fits {
+            return Err(wrong(field));
+        }
+    }
+    Ok(())
 }
 
 /// Closes a Question that can no longer be answered. Whether it changed.
@@ -374,8 +458,10 @@ mod tests {
                 offer("reject", false, false),
                 offer("never", false, true),
             ]),
+            form: None,
             state: QuestionState::Open,
             answer: None,
+            values: None,
         }
     }
 
@@ -423,15 +509,118 @@ mod tests {
     #[test]
     fn only_an_open_question_takes_one_of_its_choices() {
         let mut body = question();
-        assert!(answer(&mut body, "maybe").is_err());
-        assert!(answer(&mut body, "allow").is_ok());
+        assert!(answer(&mut body, "maybe", None).is_err());
+        let filled = Values::from([("x".to_owned(), FieldValue::Toggle(true))]);
+        assert!(answer(&mut body, "allow", Some(filled)).is_err(), "no form");
+        assert!(answer(&mut body, "allow", None).is_ok());
         assert!(
             matches!(&body, Body::Question { state: QuestionState::Answered, answer: Some(a), .. } if a == "allow")
         );
-        assert!(answer(&mut body, "reject").is_err(), "it has its answer");
+        assert!(
+            answer(&mut body, "reject", None).is_err(),
+            "it has its answer"
+        );
         assert!(close(&mut body));
         assert!(!close(&mut body), "closed once");
-        assert!(answer(&mut body, "allow").is_err());
+        assert!(answer(&mut body, "allow", None).is_err());
+    }
+
+    fn form() -> Body {
+        use crate::model::OptionChoice;
+        let colours = ["Red", "Blue"]
+            .map(|c| OptionChoice {
+                value: c.into(),
+                name: c.into(),
+                description: None,
+            })
+            .to_vec();
+        let field = |id: &str, required, input| Field {
+            id: id.into(),
+            title: id.into(),
+            description: None,
+            required,
+            input,
+        };
+        Body::Question {
+            title: "Which colour?".into(),
+            choices: vec![
+                Choice {
+                    id: "accept".into(),
+                    name: "Submit".into(),
+                    allows: true,
+                    always: false,
+                },
+                Choice {
+                    id: "decline".into(),
+                    name: "Skip".into(),
+                    allows: false,
+                    always: false,
+                },
+            ],
+            form: Some(vec![
+                field(
+                    "colour",
+                    true,
+                    Input::Choice {
+                        choices: colours,
+                        default: None,
+                    },
+                ),
+                field("note", false, Input::Text { default: None }),
+                field(
+                    "count",
+                    false,
+                    Input::Number {
+                        integer: true,
+                        minimum: Some(1.into()),
+                        maximum: Some(3.into()),
+                        default: None,
+                    },
+                ),
+            ]),
+            state: QuestionState::Open,
+            answer: None,
+            values: None,
+        }
+    }
+
+    #[test]
+    fn a_form_takes_only_what_fits_it() {
+        let text = |t: &str| FieldValue::Text(t.into());
+        let given = |pairs: &[(&str, FieldValue)]| {
+            Some(
+                pairs
+                    .iter()
+                    .map(|(k, v)| (k.to_string(), v.clone()))
+                    .collect::<Values>(),
+            )
+        };
+        for wrong in [
+            given(&[]),
+            given(&[("colour", text("Green"))]),
+            given(&[("colour", text("Red")), ("size", text("L"))]),
+            given(&[
+                ("colour", text("Red")),
+                ("count", FieldValue::Number(5.into())),
+            ]),
+            given(&[("colour", FieldValue::Toggle(true))]),
+        ] {
+            assert!(
+                answer(&mut form(), "accept", wrong.clone()).is_err(),
+                "{wrong:?}"
+            );
+        }
+        let mut body = form();
+        let right = given(&[
+            ("colour", text("Blue")),
+            ("count", FieldValue::Number(2.into())),
+        ]);
+        answer(&mut body, "accept", right.clone()).unwrap();
+        assert!(matches!(&body, Body::Question { values, .. } if *values == right));
+
+        let mut skipped = form();
+        answer(&mut skipped, "decline", None).unwrap();
+        assert!(matches!(&skipped, Body::Question { values: None, .. }));
     }
 
     #[test]

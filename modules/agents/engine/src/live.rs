@@ -7,7 +7,7 @@
 
 use crate::acp::{Answer, Connection, Session};
 use crate::hosts::Hosts;
-use crate::model::{ItemId, TurnId};
+use crate::model::{ItemId, TurnId, Values};
 use crate::settings::Harness;
 use bandaso_kernel::SpaceId;
 use std::collections::{HashMap, HashSet};
@@ -109,10 +109,15 @@ impl Live {
         }
     }
 
-    /// Hands a Person's answer to the Harness. Whether it still waited.
-    pub fn answer(&self, item: ItemId, choice: String) -> bool {
+    /// Hands a Person's answer to the Harness: a choice, or a form's
+    /// values. Whether it still waited.
+    pub fn answer(&self, item: ItemId, choice: String, values: Option<Values>) -> bool {
         let waiting = self.turns.lock().unwrap().questions.remove(&item);
-        waiting.is_some_and(|(_, answer)| answer.send(Answer::Chose(choice)).is_ok())
+        let given = match values {
+            Some(values) => Answer::Filled(values),
+            None => Answer::Chose(choice),
+        };
+        waiting.is_some_and(|(_, answer)| answer.send(given).is_ok())
     }
 
     /// The turn ended: lets go of it and its Questions. Whether a Person

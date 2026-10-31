@@ -5,6 +5,7 @@
 import type { Event } from "@bandaso/contract"
 import {
   decodeFact,
+  type Body,
   type HarnessOption,
   type Item,
   type Offer,
@@ -177,19 +178,20 @@ export function apply(state: ThreadState, event: Event): ThreadState {
       }
     }
     case "question.asked": {
-      const { item: id, turn, title, choices } = fact.payload
-      return {
-        ...next,
-        items: [
-          ...state.items,
-          item(id, { kind: "question", title, choices, state: "open" }, turn),
-        ],
+      const { item: id, turn, title, choices, form } = fact.payload
+      const body: Body = {
+        kind: "question",
+        title,
+        choices,
+        form,
+        state: "open",
       }
+      return { ...next, items: [...state.items, item(id, body, turn)] }
     }
     case "question.answered":
     case "question.closed": {
       const answered = fact.kind === "question.answered"
-      const choice = answered ? fact.payload.choice : undefined
+      const { choice, values } = answered ? fact.payload : {}
       return {
         ...next,
         items: changeItem(state, fact.payload.item, (i) =>
@@ -200,6 +202,7 @@ export function apply(state: ThreadState, event: Event): ThreadState {
                   ...i.body,
                   state: answered ? "answered" : "closed",
                   answer: choice ?? i.body.answer,
+                  values: values ?? i.body.values,
                 },
               }
             : i

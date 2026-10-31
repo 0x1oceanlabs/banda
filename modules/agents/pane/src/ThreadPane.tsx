@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react"
+import { Fragment, useEffect, useMemo, useRef, useState } from "react"
 import type { AgentId } from "@bandaso/contract"
 import type {
   Body,
@@ -82,6 +82,8 @@ import {
   type ThreadState,
   working,
 } from "./thread"
+import { summary, type Values } from "./form"
+import { QuestionForm } from "./QuestionForm"
 import { SettingsBar } from "./ThreadSettings"
 
 /** One Thread with an Agent; without `thread`, the next message starts one. */
@@ -182,9 +184,13 @@ function ThreadPane({
     void acting.act(() =>
       engine.command("agents.stop", { turn: turn.id }, space)
     )
-  const answer = (item: ItemId, choice: string) =>
+  const answer = (item: ItemId, choice: string, values?: Values) =>
     void acting.act(() =>
-      engine.command("agents.answer", { item, choice }, space)
+      engine.command(
+        "agents.answer",
+        { item, choice, ...(values && { values }) },
+        space
+      )
     )
   const retry = (turn: TurnView) =>
     void acting.act(() =>
@@ -272,7 +278,7 @@ function Start({ name }: { name: string }) {
 type Answering = {
   /** Whether an answer is on its way; the choices wait for it. */
   answering: boolean
-  onAnswer: (item: ItemId, choice: string) => void
+  onAnswer: (item: ItemId, choice: string, values?: Values) => void
 }
 
 function Transcript({
@@ -413,7 +419,7 @@ function Entry({
         <Question
           question={body}
           answering={answering}
-          onChoose={(choice) => onAnswer(item.id, choice)}
+          onAnswer={(choice, values) => onAnswer(item.id, choice, values)}
         />
       )
     case "notice":
@@ -453,15 +459,24 @@ const TOOL_STATUS: Record<
 }
 
 function Question({
-  question: { title, choices, state, answer },
+  question: { title, choices, form, state, answer, values },
   answering,
-  onChoose,
+  onAnswer,
 }: {
   question: Extract<Body, { kind: "question" }>
   answering: boolean
-  onChoose: (choice: string) => void
+  onAnswer: (choice: string, values?: Values) => void
 }) {
   const first = choices.find((choice) => choice.allows)
+  const filledIn = form && values ? summary(form, values) : []
+  const answered =
+    state !== "answered"
+      ? "No longer asked."
+      : !form
+        ? `You chose: ${choices.find((c) => c.id === answer)?.name ?? answer}`
+        : values
+          ? "You sent it without filling anything in."
+          : "You skipped it."
   return (
     <div
       role="group"
@@ -472,7 +487,14 @@ function Question({
         <ShieldQuestionIcon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
         <span className="min-w-0 wrap-break-word">{title}</span>
       </div>
-      {state === "open" ? (
+      {state === "open" && form ? (
+        <QuestionForm
+          form={form}
+          choices={choices}
+          answering={answering}
+          onAnswer={onAnswer}
+        />
+      ) : state === "open" ? (
         <div className="flex flex-wrap gap-2">
           {choices.map((choice) => (
             <Button
@@ -480,18 +502,23 @@ function Question({
               size="sm"
               variant={choice === first ? "default" : "outline"}
               disabled={answering}
-              onClick={() => onChoose(choice.id)}
+              onClick={() => onAnswer(choice.id)}
             >
               {choice.name}
             </Button>
           ))}
         </div>
+      ) : filledIn.length > 0 ? (
+        <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
+          {filledIn.map(({ title, value }) => (
+            <Fragment key={title}>
+              <dt className="text-muted-foreground">{title}</dt>
+              <dd className="min-w-0 wrap-break-word">{value}</dd>
+            </Fragment>
+          ))}
+        </dl>
       ) : (
-        <p className="text-xs text-muted-foreground">
-          {state === "answered"
-            ? `You chose: ${choices.find((c) => c.id === answer)?.name ?? answer}`
-            : "No longer asked."}
-        </p>
+        <p className="text-xs text-muted-foreground">{answered}</p>
       )}
     </div>
   )

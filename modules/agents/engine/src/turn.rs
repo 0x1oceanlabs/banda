@@ -49,6 +49,9 @@ pub struct TurnEffect {
 pub struct ReplyEffect {
     pub item: ItemId,
     pub choice: String,
+    /// What the Person filled in, for a form Question.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub values: Option<crate::model::Values>,
 }
 
 fn plain(error: impl std::fmt::Display) -> String {
@@ -152,7 +155,7 @@ pub fn reply(live: &Live, effect: &Effect) -> Outcome {
     let Ok(reply) = serde_json::from_value::<ReplyEffect>(effect.payload.clone()) else {
         return Outcome::Fail("The answer could not be read.".to_owned());
     };
-    if live.answer(reply.item, reply.choice) {
+    if live.answer(reply.item, reply.choice, reply.values) {
         Outcome::Done
     } else {
         Outcome::Fail("The turn that asked has ended.".to_owned())
@@ -469,12 +472,15 @@ impl Writer {
                 title,
                 tool,
                 offered,
+                form,
                 answer,
             } => {
                 self.close().await?;
                 let known = self.tools.get(&call);
                 let tool = tool.or(known.map(|(_, _, kind)| *kind));
-                if !self.running.native
+                // A form asks what only the Person knows: no mode answers it.
+                if form.is_none()
+                    && !self.running.native
                     && rules::disposition(self.settings.mode, tool.unwrap_or(ToolKind::Other))
                         == rules::Disposition::Allow
                     && let Some(once) = rules::allow_once(&offered)
@@ -500,12 +506,15 @@ impl Writer {
                     turn: self.turn,
                     title: title.clone(),
                     choices: choices.clone(),
+                    form: form.clone(),
                 };
                 let body = Body::Question {
                     title,
                     choices,
+                    form,
                     state: QuestionState::Open,
                     answer: None,
+                    values: None,
                 };
                 let written = self.put(id, body, asked).await;
                 if written.is_err() {
