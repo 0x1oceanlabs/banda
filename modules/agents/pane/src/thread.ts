@@ -327,6 +327,21 @@ export function running(state: ThreadState): TurnView | undefined {
   return state.turns.find((turn) => turn.state === "running")
 }
 
+/** Whether the Agent started `turn` by itself: its message is a notice
+ * from Bandaso, not a Person's. */
+export function byItself(state: ThreadState, turn: TurnView): boolean {
+  const message = state.items.find((item) => item.id === turn.message)
+  return message?.body.kind === "notice"
+}
+
+/** Whether a message sent now goes into the turn that runs. One a Person
+ * stopped takes nothing more, and one the Agent went on with by itself
+ * takes a message as a turn of its own, which the Harness takes in. */
+export function steerable(state: ThreadState): boolean {
+  const turn = running(state)
+  return turn !== undefined && !state.held && !byItself(state, turn)
+}
+
 /** The turn the Agent works on, or the next one it will, unless a Person
  * holds the queue. */
 export function working(state: ThreadState): TurnView | undefined {
@@ -376,7 +391,8 @@ export function retryable(state: ThreadState, turn: TurnView): boolean {
   const latest =
     last(counted.filter((t) => t.state !== "queued")) &&
     last(counted.filter((t) => t.message === turn.message))
-  return latest && (turn.state === "failed" || turn.state === "interrupted")
+  const failed = turn.state === "failed" || turn.state === "interrupted"
+  return latest && failed && !byItself(state, turn)
 }
 
 /** One line of a Thread as a Pane shows it. */

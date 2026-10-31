@@ -51,7 +51,8 @@ _Avoid_: command (that is a request to a module).
 
 **Turn**:
 One stretch of an Agent's work in a Thread. It begins at a message to the
-Agent and ends when the Agent stops or is stopped.
+Agent, or when the Agent goes on by itself, and ends when the Agent stops
+or is stopped.
 
 **Queue**:
 The messages of a Thread that wait for their turns, in order, after the

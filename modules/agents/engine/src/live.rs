@@ -111,6 +111,12 @@ impl Live {
         Ok(())
     }
 
+    /// Whether the turn waits for a Person's answer.
+    pub fn asking(&self, turn: TurnId) -> bool {
+        let turns = self.turns.lock().unwrap();
+        turns.questions.values().any(|(of, _)| *of == turn)
+    }
+
     /// Whether the turn was asked to stop.
     pub fn stopping(&self, turn: TurnId) -> bool {
         self.turns.lock().unwrap().stopping.contains(&turn)

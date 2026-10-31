@@ -465,6 +465,13 @@ pub fn turns_in(sql: &Connection, thread: ThreadId, state: TurnState) -> Result<
     Ok(rows.collect::<rusqlite::Result<_>>()?)
 }
 
+/// Every Thread's turns that run.
+pub fn every_running(sql: &Connection) -> Result<Vec<Turn>, Error> {
+    let mut statement = sql.prepare(&format!("{TURN} WHERE state = ?1"))?;
+    let rows = statement.query_map(params![state_word(TurnState::Running)], read_turn)?;
+    Ok(rows.collect::<rusqlite::Result<_>>()?)
+}
+
 /// The Thread's turn that runs, if one does.
 pub fn running(sql: &Connection, thread: ThreadId) -> Result<Option<Turn>, Error> {
     Ok(turns_in(sql, thread, TurnState::Running)?.pop())

@@ -187,6 +187,15 @@ If Chat is removed, Agents still works through its own Thread.
   stop, a restart and a Harness that stopped hold the queue
   (`thread.held`) until the Person continues (`agents.resume`), sends
   another message or tries the failed turn again, which goes first.
+- **The Agent can go on by itself between turns**, as Claude Code does when
+  a background task it started ends or a wakeup fires. Each session that
+  ran a turn has a listener (`between.rs`): what the session says then
+  opens a turn of the Agent's own, whose message is a notice from Bandaso.
+  The turn ends with the cycle, when the Harness says what it cost; when a
+  Person's message goes, which the Harness takes into what it does; when a
+  Person stops it; or after a minute with nothing said or asked. A message
+  sent meanwhile gets a turn of its own, and a turn the Agent started is
+  not tried again. A restart interrupts it (`opened`).
 - **One Harness process per Space and Harness entry.** Every Thread on it is
   a session in that process. The engine starts it on the first turn, one
   start at a time; starts it again after a growing pause if it keeps dying;
@@ -242,8 +251,7 @@ If Chat is removed, Agents still works through its own Thread.
   plan as a message instead.
 - **What the Agent has used**, its context and what it cost when the
   Harness says, belongs to the Thread (`thread.used`) and shows under the
-  message box. What it says between turns reaches the Thread with the next
-  turn.
+  message box. What it says between turns reaches the Thread at once.
 - **A message the Harness names anew** (ACP's `messageId`) starts a new
   entry.
 - **Slash commands** come from the Harness with what it offers the
@@ -251,8 +259,9 @@ If Chat is removed, Agents still works through its own Thread.
   is sent as it is, and the Harness runs it. Claude Code says them just
   after a session opens: the session keeps them, and the turn writes them
   as it starts or ends. A session that has not said them yet leaves the
-  Thread's. A list said between turns reaches the Thread with the next
-  turn, like what the Agent has used. The window suggests them as a
+  Thread's. A list said between turns reaches the Thread at once, like
+  what the Agent has used, and a new Thread's message box offers what the
+  Agent's Threads last learned. The window suggests them as a
   message starts with `/`, and adds `/plan` and `/default`, as T3 Code
   does: they switch plan mode and send nothing.
 - **A message can carry images**, as in T3 Code: PNG, JPEG, GIF or

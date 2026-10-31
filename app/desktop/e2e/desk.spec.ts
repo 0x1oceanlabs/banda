@@ -525,3 +525,30 @@ test("a message goes into the turn that runs, or waits its turn in the queue", a
   await expect(thread.getByText("Steered: now this.")).toBeVisible()
   await expect(queue).toBeHidden()
 })
+
+test("what the Agent does by itself shows in a turn of its own", async () => {
+  window = await startWindow()
+  const { page } = window
+  await page.getByLabel("Name").fill("Work")
+  await page.getByRole("button", { name: "Create Space" }).click()
+  await page.getByRole("button", { name: "New Agent" }).click()
+  const dialog = page.getByRole("dialog", { name: "New Agent" })
+  await dialog.getByLabel("Name").fill("Writer")
+  await dialog.getByRole("button", { name: "Create Agent" }).click()
+  const thread = page.getByRole("region", { name: "Writer" })
+  const composer = thread.getByRole("textbox", { name: "Message to Writer" })
+
+  // The turn ends; the task it started ends later, and the Agent goes on.
+  await composer.fill("background long")
+  await composer.press("Enter")
+  await expect(thread.getByText("Writer went on by itself.")).toBeVisible()
+  await expect(thread.getByText("The task finished.")).toBeVisible()
+  await expect(thread.getByText("Writer is working…")).toBeVisible()
+  await composer.fill("and this")
+  // Its own turn takes no message: one goes as a turn of its own.
+  await expect(thread.getByRole("button", { name: "Queue" })).toBeHidden()
+  await page.screenshot({ path: "test-results/18-by-itself.png" })
+  await composer.press("Enter")
+  await expect(thread.getByText("You said: and this")).toBeVisible()
+  await expect(thread.getByText("Writer is working…")).toBeHidden()
+})

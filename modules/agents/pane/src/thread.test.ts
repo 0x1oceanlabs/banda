@@ -9,6 +9,7 @@ import {
   retryable,
   rows,
   running,
+  steerable,
   waiting,
   working,
 } from "./thread"
@@ -463,4 +464,32 @@ test("a failed turn can go again past messages that wait or were taken back", ()
     event("turn.queued", { turn: "u4", message: "m1" }, { author: person })
   )
   expect(retryable(again, u1)).toBe(false)
+})
+
+test("what the Agent does by itself is a turn its notice starts", () => {
+  const goes = play(
+    event(
+      "message.posted",
+      { item: "m1", turn: "u1", text: "start a task" },
+      { author: person }
+    ),
+    event("turn.started", { turn: "u1" }),
+    event("reply.grew", { item: "r1", turn: "u1", text: "Started." }),
+    event("turn.ended", { turn: "u1", state: "done" }),
+    event("notice.posted", { item: "n", turn: "u2", text: "Writer went on." }),
+    event("turn.queued", { turn: "u2", message: "n" }),
+    event("turn.started", { turn: "u2" }),
+    event("reply.grew", { item: "r2", turn: "u2", text: "Found it." })
+  )
+  const own = goes.turns[1]
+  expect(ids(goes)).toEqual(["m1", "r1", "n", "r2"])
+  expect(waiting(goes)).toEqual([])
+  expect(running(goes)?.id).toBe("u2")
+  expect(steerable(goes)).toBe(false)
+  const cut = apply(
+    goes,
+    event("turn.ended", { turn: "u2", state: "interrupted" })
+  )
+  expect(retryable(cut, cut.turns[1])).toBe(false)
+  expect(own.message).toBe("n")
 })
