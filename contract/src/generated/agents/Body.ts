@@ -7,4 +7,4 @@ import type { ToolStatus } from "./ToolStatus";
 /**
  * What one Thread entry holds.
  */
-export type Body = { "kind": "message", text: string, } | { "kind": "thought", text: string, } | { "kind": "tool", title: string, tool: ToolKind, status: ToolStatus, } | { "kind": "question", title: string, choices: Array<Choice>, state: QuestionState, answer?: string, };
+export type Body = { "kind": "message", text: string, } | { "kind": "thought", text: string, } | { "kind": "tool", title: string, tool: ToolKind, status: ToolStatus, } | { "kind": "question", title: string, choices: Array<Choice>, state: QuestionState, answer?: string, } | { "kind": "notice", text: string, };

@@ -1,7 +1,8 @@
 //! Running turns. Each of the module's effects is here:
 //!
-//! - `turn.start`, keyed by the Agent, so one Agent works through one turn
-//!   at a time and the rest wait in order: the outbox is the Agent's queue.
+//! - `turn.start`, keyed by the Thread, so a Thread's turns run one at a
+//!   time and in order, while Threads run side by side: the outbox is each
+//!   Thread's queue.
 //! - `turn.stop`, keyed by the turn: it asks the Harness to stop.
 //! - `question.reply`, keyed by the Question, so an answer never waits
 //!   behind the turn that asked.
@@ -9,7 +10,7 @@
 //! Each one dies with the Harness's process, so a restart abandons it and
 //! [`settle`] writes what that means.
 
-use crate::acp::{Answer, Ending, Said};
+use crate::acp::{Answer, Ending, Opened, Said};
 use crate::live::Live;
 use crate::model::{
     Body, Fact, Item, ItemId, QuestionState, ThreadId, ToolKind, ToolStatus, TurnId, TurnState,
@@ -75,6 +76,30 @@ pub fn end(
         reason,
     };
     emit(tx, agent, turn.thread, &ended)
+}
+
+/// Writes a line from Bandaso into the Thread.
+fn notice(
+    tx: &mut Tx<'_>,
+    agent: Participant,
+    thread: ThreadId,
+    turn: TurnId,
+    text: String,
+) -> Result<(), Error> {
+    let item = Item {
+        id: ItemId::new(),
+        turn: Some(turn),
+        author: agent,
+        at: tx.now(),
+        body: Body::Notice { text: text.clone() },
+    };
+    store::put(tx.sql(), thread, &item)?;
+    let fact = Fact::NoticePosted {
+        item: item.id,
+        turn,
+        text,
+    };
+    emit(tx, agent, thread, &fact)
 }
 
 /// Writes what it means that one of the module's effects will not run to
@@ -213,12 +238,30 @@ async fn work(
     let harness = harnesses
         .find(&agent.harness)
         .ok_or_else(|| format!("This computer has no Harness named \"{}\".", agent.harness))?;
-    let connection = live.connection(agent.id, harness).await?;
-    let (session, opened) = connection.session(turn.thread, space.folder()).await?;
-    if let Some(evidence) = opened {
-        let thread = turn.thread;
+    let connection = live.connection(space.id(), harness).await?;
+    let thread = turn.thread;
+    let earlier = space
+        .read(move |sql| store::evidence(sql, thread))
+        .await
+        .map_err(plain)?;
+    let (session, opened) = connection
+        .session(thread, space.folder(), earlier.as_ref())
+        .await?;
+    if let Opened::New { evidence, lost } = opened {
+        let (id, agent) = (turn.id, Participant::Agent(turn.agent));
+        let name = harness.name.clone();
         space
-            .write(move |tx| store::set_evidence(tx.sql(), thread, &evidence))
+            .write(move |tx| {
+                store::set_evidence(tx.sql(), thread, &evidence)?;
+                if lost {
+                    let text = format!(
+                        "{name} could not pick up this Thread's earlier conversation, \
+                         so it starts afresh and does not remember what was said before."
+                    );
+                    notice(tx, agent, thread, id, text)?;
+                }
+                Ok(())
+            })
             .await
             .map_err(plain)?;
     }

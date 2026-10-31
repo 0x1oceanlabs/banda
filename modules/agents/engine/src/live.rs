@@ -1,21 +1,22 @@
-//! What runs now, in memory: the Harness processes, the turns they run and
-//! the Questions they wait on. A restart loses it, and the outbox settles
-//! what that cut short.
+//! What runs now, in memory: the Harness processes ([`Hosts`]), the turns
+//! they run and the Questions they wait on. A restart loses it, and the
+//! outbox settles what that cut short.
 //!
 //! One lock holds the running turns, the stops and the Questions together,
 //! so a stop that comes while a turn starts, or while it asks, is never lost.
 
 use crate::acp::{Answer, Connection, Session};
+use crate::hosts::Hosts;
 use crate::model::{ItemId, TurnId};
 use crate::settings::Harness;
-use bandaso_kernel::AgentId;
+use bandaso_kernel::SpaceId;
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 use tokio::sync::oneshot;
 
-#[derive(Default)]
 pub struct Live {
-    connections: Mutex<HashMap<AgentId, (String, Arc<Connection>)>>,
+    hosts: Arc<Hosts>,
     turns: Mutex<Turns>,
 }
 
@@ -46,24 +47,22 @@ impl Turns {
 }
 
 impl Live {
-    /// The Agent's Harness process, started if it is not running. Turns of
-    /// one Agent run one at a time, so two never start it together.
+    /// Hosts let go after `idle` with nothing to do.
+    pub fn new(idle: Duration) -> Live {
+        Live {
+            hosts: Hosts::new(idle),
+            turns: Mutex::default(),
+        }
+    }
+
+    /// The process of `harness` for `space`, started if it is not running.
     pub async fn connection(
         &self,
-        agent: AgentId,
+        space: SpaceId,
         harness: &Harness,
     ) -> Result<Arc<Connection>, String> {
-        if let Some((id, connection)) = self.connections.lock().unwrap().get(&agent)
-            && *id == harness.id
-            && connection.alive()
-        {
-            return Ok(connection.clone());
-        }
-        let connection = Connection::start(harness).await?;
-        self.connections
-            .lock()
-            .unwrap()
-            .insert(agent, (harness.id.clone(), connection.clone()));
+        let connection = self.hosts.get(space, harness).await?;
+        connection.touch();
         Ok(connection)
     }
 

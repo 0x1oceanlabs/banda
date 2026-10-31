@@ -28,12 +28,20 @@ fn fake_agent() -> PathBuf {
 }
 
 fn harnesses() -> Harnesses {
+    harnesses_with(&[])
+}
+
+/// The fake agent as the only Harness, started with `env`.
+fn harnesses_with(env: &[(&str, &str)]) -> Harnesses {
     Harnesses::new(vec![Harness {
         id: "fake".into(),
         name: "Fake".into(),
         command: fake_agent().display().to_string(),
         args: Vec::new(),
-        env: Default::default(),
+        env: env
+            .iter()
+            .map(|(k, v)| (k.to_string(), v.to_string()))
+            .collect(),
     }])
 }
 
@@ -46,16 +54,24 @@ struct World {
 
 impl World {
     async fn open(root: &Path, owner: PersonId) -> Arc<Kernel> {
+        World::open_with(root, owner, Agents::new(harnesses())).await
+    }
+
+    async fn open_with(root: &Path, owner: PersonId, agents: Agents) -> Arc<Kernel> {
         Kernel::builder(root, owner)
-            .module(Agents::new(harnesses()))
+            .module(agents)
             .open()
             .await
             .unwrap()
     }
 
     async fn new(root: &Path) -> World {
+        World::new_with(root, Agents::new(harnesses())).await
+    }
+
+    async fn new_with(root: &Path, agents: Agents) -> World {
         let owner = PersonId::new();
-        let kernel = World::open(root, owner).await;
+        let kernel = World::open_with(root, owner, agents).await;
         let person = Participant::Person(owner);
         let space = kernel
             .call(
@@ -164,8 +180,31 @@ fn texts(view: &ThreadView) -> Vec<String> {
             Body::Thought { text } => format!("thought: {text}"),
             Body::Tool { title, status, .. } => format!("tool: {title} ({status:?})"),
             Body::Question { title, state, .. } => format!("question: {title} ({state:?})"),
+            Body::Notice { text } => format!("notice: {text}"),
         })
         .collect()
+}
+
+/// The fake agent's answer to "which session": its session and process.
+fn session_of(view: &ThreadView) -> (String, String) {
+    let reply = texts(view)
+        .into_iter()
+        .rev()
+        .find_map(|t| t.strip_prefix("message: Session ").map(str::to_owned))
+        .expect("the agent named its session");
+    let (session, process) = reply.split_once(" in process ").unwrap();
+    (session.to_owned(), process.to_owned())
+}
+
+/// Sends "which session" in `thread` and waits for the answer.
+async fn ask_session(world: &World, thread: Option<&Value>) -> (Value, (String, String)) {
+    let sent = world.send(thread, "which session").await;
+    let view = world
+        .until(&sent["thread"], |v| {
+            state(v, &sent["turn"]) == Some(TurnState::Done)
+        })
+        .await;
+    (sent["thread"].clone(), session_of(&view))
 }
 
 #[tokio::test]
@@ -343,6 +382,11 @@ async fn turns_wait_in_order_and_stop_before_or_while_they_run() {
     );
 
     world
+        .until(&slow["thread"], |v| {
+            texts(v).iter().any(|t| t.starts_with("message: 0 "))
+        })
+        .await;
+    world
         .call(
             world.person(),
             "agents.stop",
@@ -359,10 +403,6 @@ async fn turns_wait_in_order_and_stop_before_or_while_they_run() {
     assert!(
         replies.iter().all(|t| !t.contains("You said")),
         "the stopped turn never ran: {replies:?}"
-    );
-    assert!(
-        replies.iter().any(|t| t.starts_with("message: 0 ")),
-        "the running turn had begun: {replies:?}"
     );
 }
 
@@ -459,4 +499,121 @@ fn a_restart_interrupts_the_turn_it_cut_short_and_closes_its_question() {
             }
         ));
     });
+}
+
+#[tokio::test]
+async fn threads_of_one_agent_run_side_by_side() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let slow = world.send(None, "slow please").await;
+    world
+        .until(&slow["thread"], |v| {
+            state(v, &slow["turn"]) == Some(TurnState::Running)
+        })
+        .await;
+    let other = world.send(None, "hello").await;
+    world
+        .until(&other["thread"], |v| {
+            state(v, &other["turn"]) == Some(TurnState::Done)
+        })
+        .await;
+    let view = world.thread(&slow["thread"]).await;
+    assert_eq!(
+        state(&view, &slow["turn"]),
+        Some(TurnState::Running),
+        "the other Thread did not wait for the slow one"
+    );
+}
+
+#[tokio::test]
+async fn threads_on_one_harness_share_its_process() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let (_, (first, process)) = ask_session(&world, None).await;
+    let (_, (second, same)) = ask_session(&world, None).await;
+    assert_ne!(first, second, "each Thread has its own session");
+    assert_eq!(process, same, "in one process");
+}
+
+/// Restarts the engine between `before` and `after`, as the restart test
+/// does: the first runtime's tasks end and the Harness's process goes.
+fn across_a_restart<T>(
+    root: &Path,
+    agents: impl Fn() -> Agents,
+    before: impl AsyncFnOnce(&World) -> T,
+    after: impl AsyncFnOnce(&World, T),
+) {
+    let runtime = || tokio::runtime::Runtime::new().unwrap();
+    let first = runtime();
+    let (owner, space, agent, kept) = first.block_on(async {
+        let world = World::new_with(root, agents()).await;
+        let kept = before(&world).await;
+        (world.owner, world.space, world.agent, kept)
+    });
+    first.shutdown_timeout(Duration::from_secs(5));
+    runtime().block_on(async {
+        let kernel = World::open_with(root, owner, agents()).await;
+        let world = World {
+            kernel,
+            owner,
+            space,
+            agent,
+        };
+        after(&world, kept).await;
+    });
+}
+
+#[test]
+fn a_thread_continues_its_session_after_a_restart() {
+    let root = tempfile::tempdir().unwrap();
+    across_a_restart(
+        root.path(),
+        || Agents::new(harnesses()),
+        async |world| ask_session(world, None).await,
+        async |world, (thread, (session, process))| {
+            let (_, (again, other)) = ask_session(world, Some(&thread)).await;
+            assert_ne!(process, other, "a new process");
+            assert_eq!(session, again, "continues the Thread's session");
+            let view = world.thread(&thread).await;
+            assert!(
+                texts(&view).iter().all(|t| !t.starts_with("notice:")),
+                "and says nothing about it: {:?}",
+                texts(&view)
+            );
+        },
+    );
+}
+
+#[test]
+fn a_harness_that_lost_the_session_starts_afresh_and_says_so() {
+    let root = tempfile::tempdir().unwrap();
+    across_a_restart(
+        root.path(),
+        || Agents::new(harnesses_with(&[("FAKE_AGENT_FORGETS", "1")])),
+        async |world| ask_session(world, None).await,
+        async |world, (thread, (session, _))| {
+            let (_, (again, _)) = ask_session(world, Some(&thread)).await;
+            assert_ne!(session, again, "a new session");
+            let view = world.thread(&thread).await;
+            assert!(
+                texts(&view).iter().any(|t| t
+                    == "notice: Fake could not pick up this Thread's earlier conversation, \
+                        so it starts afresh and does not remember what was said before."),
+                "and the Thread says so: {:?}",
+                texts(&view)
+            );
+        },
+    );
+}
+
+#[tokio::test]
+async fn an_idle_harness_is_let_go_and_its_threads_resume() {
+    let root = tempfile::tempdir().unwrap();
+    let agents = Agents::new(harnesses()).idle_after(Duration::from_millis(100));
+    let world = World::new_with(root.path(), agents).await;
+    let (thread, (session, process)) = ask_session(&world, None).await;
+    tokio::time::sleep(Duration::from_millis(600)).await;
+    let (_, (again, other)) = ask_session(&world, Some(&thread)).await;
+    assert_ne!(process, other, "the idle process was let go");
+    assert_eq!(session, again, "and the Thread resumed its session");
 }

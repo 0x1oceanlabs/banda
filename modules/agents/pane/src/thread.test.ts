@@ -75,6 +75,21 @@ test("a Question opens, then is answered or closed", () => {
   expect(closed.items[1].body).toMatchObject({ state: "closed" })
 })
 
+test("a notice joins the Thread as its own line", () => {
+  const state = play(
+    event(
+      "message.posted",
+      { item: "m", turn: "u", text: "go" },
+      { author: person }
+    ),
+    event("notice.posted", { item: "n", turn: "u", text: "Starts afresh." })
+  )
+  expect(state.items.map((i) => i.body)).toEqual([
+    { kind: "message", text: "go" },
+    { kind: "notice", text: "Starts afresh." },
+  ])
+})
+
 test("an event already in the view, or one this window does not know, changes nothing", () => {
   const state = play(
     event(

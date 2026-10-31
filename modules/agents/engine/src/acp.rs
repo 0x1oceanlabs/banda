@@ -15,11 +15,11 @@ use crate::settings::Harness;
 use agent_client_protocol::schema::ProtocolVersion;
 use agent_client_protocol::schema::v1 as acp;
 use agent_client_protocol::{AcpAgent, AcpAgentConfig, Agent, Client, ConnectionTo, LineDirection};
-use serde::Serialize;
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
 use tokio::time::timeout;
@@ -68,15 +68,34 @@ pub struct Session(acp::SessionId);
 
 /// What a Thread keeps of its session: evidence, not identity (ADR 0002,
 /// decision 7).
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 pub struct Evidence {
     harness: String,
     session: String,
     lasts: Lasts,
 }
 
+impl Evidence {
+    /// The session a new process of `harness` may continue.
+    fn continued_by(&self, harness: &str) -> Option<acp::SessionId> {
+        let lasts = matches!(self.lasts, Lasts::Harness);
+        (lasts && self.harness == harness).then(|| acp::SessionId::new(self.session.as_str()))
+    }
+}
+
+/// How a Thread's session came to be open in this process.
+pub enum Opened {
+    /// It was open already.
+    Known,
+    /// The Harness continued the session the Thread had before.
+    Continued,
+    /// A new session. `lost` when the Thread had one the Harness could not
+    /// continue.
+    New { evidence: Evidence, lost: bool },
+}
+
 /// How long a session outlives its Harness process.
-#[derive(Serialize)]
+#[derive(Serialize, Deserialize)]
 #[serde(rename_all = "snake_case")]
 enum Lasts {
     /// It ends with the process.
@@ -94,14 +113,22 @@ pub struct Ending {
 
 type Routes = Arc<Mutex<HashMap<acp::SessionId, mpsc::UnboundedSender<Said>>>>;
 
+/// What the Harness said it can do with sessions.
+#[derive(Clone, Copy)]
+struct Agreed {
+    loads: bool,
+    resumes: bool,
+}
+
 /// One Harness process and its ACP connection. Dropping it stops the
 /// process and everything it started.
 pub struct Connection {
     cx: ConnectionTo<Agent>,
     harness: String,
-    /// The Harness can load its sessions again.
-    loads: bool,
+    agreed: Agreed,
     routes: Routes,
+    /// When a turn last began or ended here.
+    active: Arc<Mutex<Instant>>,
     /// The Harness's session for each Thread, in this process.
     sessions: tokio::sync::Mutex<HashMap<ThreadId, acp::SessionId>>,
     driver: JoinHandle<()>,
@@ -132,7 +159,7 @@ impl Connection {
         let routes = Routes::default();
         let (ready, started) = oneshot::channel();
         let driver = tokio::spawn(drive(process, routes.clone(), ready));
-        let (cx, loads) = match timeout(STARTING, started).await {
+        let (cx, agreed) = match timeout(STARTING, started).await {
             Ok(Ok(Ok(agreed))) => agreed,
             Ok(Ok(Err(error))) => return Err(error),
             Ok(Err(_)) => return Err("The Harness stopped while it started.".to_owned()),
@@ -144,8 +171,9 @@ impl Connection {
         Ok(Arc::new(Connection {
             cx,
             harness: harness.id.clone(),
-            loads,
+            agreed,
             routes,
+            active: Arc::new(Mutex::new(Instant::now())),
             sessions: Default::default(),
             driver,
         }))
@@ -156,16 +184,35 @@ impl Connection {
         !self.driver.is_finished() && !self.cx.is_incoming_closed()
     }
 
+    /// Since when no turn runs here, or `None` while one does.
+    pub fn idle_since(&self) -> Option<Instant> {
+        let busy = !self.routes.lock().unwrap().is_empty();
+        (!busy).then(|| *self.active.lock().unwrap())
+    }
+
+    /// Marks the host as just used, so it is not let go as idle.
+    pub fn touch(&self) {
+        *self.active.lock().unwrap() = Instant::now();
+    }
+
     /// The Harness's session for `thread`, opened in `folder` on first use.
-    /// A session opened now comes with the evidence its Thread keeps.
+    /// A Thread that had a session continues it when the Harness can, by
+    /// resuming it or else by loading it; otherwise a new one opens.
     pub async fn session(
         &self,
         thread: ThreadId,
         folder: &Path,
-    ) -> Result<(Session, Option<Evidence>), String> {
+        earlier: Option<&Evidence>,
+    ) -> Result<(Session, Opened), String> {
         let mut sessions = self.sessions.lock().await;
         if let Some(session) = sessions.get(&thread) {
-            return Ok((Session(session.clone()), None));
+            return Ok((Session(session.clone()), Opened::Known));
+        }
+        if let Some(session) = earlier.and_then(|e| e.continued_by(&self.harness))
+            && self.continue_session(&session, folder).await
+        {
+            sessions.insert(thread, session.clone());
+            return Ok((Session(session), Opened::Continued));
         }
         let opening = self
             .cx
@@ -179,13 +226,42 @@ impl Connection {
         let evidence = Evidence {
             harness: self.harness.clone(),
             session: made.session_id.0.to_string(),
-            lasts: if self.loads {
+            lasts: if self.agreed.loads || self.agreed.resumes {
                 Lasts::Harness
             } else {
                 Lasts::Process
             },
         };
-        Ok((Session(made.session_id), Some(evidence)))
+        let lost = earlier.is_some();
+        Ok((Session(made.session_id), Opened::New { evidence, lost }))
+    }
+
+    /// Asks the Harness to continue `session`: resumed if it can, else
+    /// loaded. A load replays the conversation, which nobody hears: the
+    /// Thread already shows it. Whether the session is open again.
+    async fn continue_session(&self, session: &acp::SessionId, folder: &Path) -> bool {
+        let answer = if self.agreed.resumes {
+            let resume = acp::ResumeSessionRequest::new(session.clone(), folder);
+            let asked = self.cx.send_request(resume).block_task();
+            timeout(OPENING, asked).await.map(|a| a.map(drop))
+        } else if self.agreed.loads {
+            let load = acp::LoadSessionRequest::new(session.clone(), folder);
+            let asked = self.cx.send_request(load).block_task();
+            timeout(OPENING, asked).await.map(|a| a.map(drop))
+        } else {
+            return false;
+        };
+        match answer {
+            Ok(Ok(())) => true,
+            Ok(Err(error)) => {
+                tracing::info!(%error, "the Harness could not continue a session");
+                false
+            }
+            Err(_) => {
+                tracing::info!("the Harness took too long to continue a session");
+                false
+            }
+        }
     }
 
     /// Sends a prompt. What the Harness says comes on the receiver; the
@@ -199,16 +275,20 @@ impl Connection {
         JoinHandle<Result<Ending, String>>,
     ) {
         let (said, hear) = mpsc::unbounded_channel();
+        self.touch();
         self.routes.lock().unwrap().insert(session.clone(), said);
         let request = acp::PromptRequest::new(
             session.clone(),
             vec![acp::ContentBlock::Text(acp::TextContent::new(text))],
         );
-        let cx = self.cx.clone();
-        let routes = self.routes.clone();
+        // Sent here, not in the task: a stop that follows must reach the
+        // Harness after the prompt it stops.
+        let sent = self.cx.send_request(request);
+        let (routes, active) = (self.routes.clone(), self.active.clone());
         let session = session.clone();
         let done = tokio::spawn(async move {
-            let answer = cx.send_request(request).block_task().await;
+            let answer = sent.block_task().await;
+            *active.lock().unwrap() = Instant::now();
             routes.lock().unwrap().remove(&session);
             answer.map(|r| ending(&r.stop_reason)).map_err(plain)
         });
@@ -226,7 +306,7 @@ impl Connection {
 async fn drive(
     process: AcpAgent,
     routes: Routes,
-    ready: oneshot::Sender<Result<(ConnectionTo<Agent>, bool), String>>,
+    ready: oneshot::Sender<Result<(ConnectionTo<Agent>, Agreed), String>>,
 ) {
     let heard = routes.clone();
     let asked = routes.clone();
@@ -287,8 +367,12 @@ async fn drive(
             let agreed = cx.send_request(hello).block_task().await;
             match agreed {
                 Ok(answer) if answer.protocol_version == ProtocolVersion::V1 => {
-                    let loads = answer.agent_capabilities.load_session;
-                    let _ = ready.send(Ok((cx.clone(), loads)));
+                    let capabilities = &answer.agent_capabilities;
+                    let agreed = Agreed {
+                        loads: capabilities.load_session,
+                        resumes: capabilities.session_capabilities.resume.is_some(),
+                    };
+                    let _ = ready.send(Ok((cx.clone(), agreed)));
                 }
                 Ok(answer) => {
                     let _ = ready.send(Err(format!(

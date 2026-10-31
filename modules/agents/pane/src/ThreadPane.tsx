@@ -57,6 +57,7 @@ import {
   FilePenIcon,
   FileTextIcon,
   GlobeIcon,
+  InfoIcon,
   MessageSquareIcon,
   MoveRightIcon,
   SearchIcon,
@@ -340,6 +341,17 @@ function Entry({
           answering={answering}
           onChoose={(choice) => onAnswer(item.id, choice)}
         />
+      )
+    case "notice":
+      return (
+        <Trace>
+          <TraceLine>
+            <TraceIcon>
+              <InfoIcon />
+            </TraceIcon>
+            <TraceTitle className="whitespace-normal">{body.text}</TraceTitle>
+          </TraceLine>
+        </Trace>
       )
   }
 }

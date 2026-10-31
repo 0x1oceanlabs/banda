@@ -4,9 +4,10 @@
 //! - **Agents** are text files in the Space, and the **Harness list** is a
 //!   text file of the machine ([`settings`]).
 //! - **Threads, turns and Questions** are this module's tables and facts
-//!   ([`model`]). A message queues a turn; the outbox runs an Agent's turns
-//!   one at a time.
-//! - **Harnesses** are reached through ACP. Its words stop in `acp.rs`.
+//!   ([`model`]). A message queues a turn; the outbox runs a Thread's turns
+//!   one at a time, and Threads run side by side.
+//! - **Harnesses** are reached through ACP, one process per Space and
+//!   Harness entry (`hosts.rs`). ACP's words stop in `acp.rs`.
 //!
 //! | Method | Right | What it does |
 //! |---|---|---|
@@ -20,6 +21,7 @@
 //! | `agents.answer` | decide | answers a Question: `{item, choice}` |
 
 mod acp;
+mod hosts;
 mod live;
 pub mod model;
 mod rules;
@@ -41,6 +43,7 @@ use serde_json::Value;
 use settings::Harnesses;
 use std::fmt::Display;
 use std::sync::Arc;
+use std::time::Duration;
 use ts_rs::TS;
 use turn::{ReplyEffect, TurnEffect};
 
@@ -53,8 +56,15 @@ impl Agents {
     pub fn new(harnesses: Harnesses) -> Self {
         Self {
             harnesses,
-            live: Arc::default(),
+            live: Arc::new(Live::new(hosts::IDLE)),
         }
+    }
+
+    /// Lets a Harness process go after `idle` with nothing to do, instead
+    /// of half an hour.
+    pub fn idle_after(mut self, idle: Duration) -> Self {
+        self.live = Arc::new(Live::new(idle));
+        self
     }
 }
 
@@ -272,7 +282,7 @@ impl Module for Agents {
 }
 
 /// A message to an Agent, in its Thread or in a new one, and a turn that
-/// waits behind the Agent's earlier turns.
+/// waits behind the Thread's earlier turns.
 fn send(
     tx: &mut Tx<'_>,
     author: Participant,
@@ -337,7 +347,7 @@ fn send(
     emit(tx, author, thread, &fact)?;
     tx.enqueue(
         turn::START,
-        &agent.to_string(),
+        &thread.to_string(),
         &TurnEffect { turn: turn.id },
     )?;
     Ok(serde_json::to_value(sent)?)

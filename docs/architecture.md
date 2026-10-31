@@ -163,10 +163,20 @@ If Chat is removed, Agents still works through its own Thread.
 - **The Harness list is a text file** of the machine. It says how to start
   each Harness. Without one, the engine knows Claude Code and Codex through
   their ACP adapters on npm. Reading the ACP Registry comes next.
-- **A message queues a turn.** The outbox runs one Agent's turns one at a
-  time, in order (`turn.start`, keyed by the Agent). A stop (`turn.stop`)
-  and an answer (`question.reply`) have keys of their own, so neither waits
-  behind the turn it is for.
+- **A message queues a turn.** The outbox runs one Thread's turns one at a
+  time, in order (`turn.start`, keyed by the Thread). Threads run side by
+  side, an Agent's own Threads too. A stop (`turn.stop`) and an answer
+  (`question.reply`) have keys of their own, so neither waits behind the
+  turn it is for.
+- **One Harness process per Space and Harness entry.** Every Thread on it is
+  a session in that process. The engine starts it on the first turn, one
+  start at a time; starts it again after a growing pause if it keeps dying;
+  and lets it go after 30 minutes with nothing to do. It runs in its own
+  process group and dies with the engine.
+- **A session belongs to its Thread.** The Thread keeps the Harness's
+  session ID as evidence. A Thread whose process went resumes its session,
+  or loads it; when the Harness can do neither, the Thread starts a new one
+  and says so.
 - **A turn runs until its Harness ends it or a Person stops it.** Starting
   a Harness and opening a session have time limits; a turn has none. A turn
   the Harness cancels when no Person asked fails, so nobody reads a stop
@@ -199,10 +209,10 @@ module reaches a Harness through an adapter:
 
 - **ACP** is the first and default adapter. It covers any agent in the ACP
   Registry.
-- **A native adapter** is added only where ACP blocks something users need.
-  Claude Code (through its Agent SDK) and Codex (through its app-server) are
-  expected early: ACP lacks rollback, Questions that survive a restart,
-  subagents and usage figures.
+- **Claude Code and Codex go through ACP too**, through their official
+  adapters (ADR 0003). A native adapter is added only where ACP blocks
+  something users need; a native Codex adapter comes later, for its rate
+  limits.
 - **Capabilities.** An adapter declares what its Harness can do. The rest of
   the engine reads those capabilities and never the Harness's name.
 - **Permissions.** The Harness decides when to ask, by its own settings.
