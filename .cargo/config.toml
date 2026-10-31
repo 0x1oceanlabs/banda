@@ -1,0 +1,4 @@
+[env]
+# ts-rs writes the API's TypeScript types here when the tests run
+# (ADR 0001, decision 1: one source of truth for the contract).
+TS_RS_EXPORT_DIR = { value = "contract/src/generated", relative = true }

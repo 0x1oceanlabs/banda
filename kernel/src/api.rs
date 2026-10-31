@@ -1,0 +1,400 @@
+//! The engine's API: JSON frames over one WebSocket (ADR 0001, decision 1).
+//!
+//! 1. The client's first frame is `hello`, with the protocol version and the
+//!    engine's token. A wrong version or token gets `goodbye` (ADR 0002,
+//!    decision 8).
+//! 2. `call` runs a method and gets one `result` with the same `id`.
+//! 3. `subscribe` follows a Space's events after a position. The window first
+//!    reads a view with its position, then subscribes after it (ADR 0002,
+//!    decision 5). A subscriber that falls too far behind gets `resync` and
+//!    reads the view again.
+//!
+//! Unknown fields are ignored on both sides, so either side can be newer.
+
+use crate::events::{Event, EventFilter};
+use crate::{Actor, CommandId, Kernel, PROTOCOL, Refusal, SpaceId};
+use axum::Router;
+use axum::extract::State;
+use axum::extract::ws::{Message, Utf8Bytes, WebSocket, WebSocketUpgrade};
+use axum::http::{HeaderMap, StatusCode, header};
+use axum::response::{IntoResponse, Response};
+use axum::routing::get;
+use futures::{SinkExt, StreamExt};
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use std::collections::HashMap;
+use std::sync::Arc;
+use std::time::Duration;
+use tokio::sync::{broadcast, mpsc};
+use tokio::task::JoinHandle;
+use ts_rs::TS;
+
+/// The most stored events one subscription replays before it asks the
+/// window to read its view again.
+const BACKLOG: usize = 5000;
+
+const HELLO_WITHIN: Duration = Duration::from_secs(10);
+
+#[derive(Clone, Debug, Deserialize, Serialize, TS)]
+#[serde(tag = "type", rename_all = "snake_case")]
+#[ts(export)]
+pub enum ClientFrame {
+    Hello {
+        protocol: u32,
+        token: String,
+    },
+    Call {
+        #[ts(type = "number")]
+        id: u64,
+        method: String,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        space: Option<SpaceId>,
+        /// Makes a command run once (ADR 0002, decision 2).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        command: Option<CommandId>,
+        #[serde(default)]
+        params: Value,
+    },
+    Subscribe {
+        #[ts(type = "number")]
+        id: u64,
+        space: SpaceId,
+        #[ts(type = "number")]
+        after: i64,
+        #[serde(default)]
+        filter: EventFilter,
+    },
+    Unsubscribe {
+        #[ts(type = "number")]
+        id: u64,
+        #[ts(type = "number")]
+        subscription: u64,
+    },
+}
+
+#[derive(Clone, Debug, Deserialize, Serialize, TS)]
+#[serde(tag = "type", rename_all = "snake_case")]
+#[ts(export)]
+pub enum EngineFrame {
+    Welcome {
+        protocol: u32,
+        engine: String,
+    },
+    Result {
+        #[ts(type = "number")]
+        id: u64,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        ok: Option<Value>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        error: Option<Refusal>,
+    },
+    Event {
+        #[ts(type = "number")]
+        subscription: u64,
+        event: Event,
+    },
+    /// The subscription ended because it fell behind: read the view again.
+    Resync {
+        #[ts(type = "number")]
+        subscription: u64,
+    },
+    Goodbye {
+        reason: Refusal,
+    },
+}
+
+struct Api {
+    kernel: Arc<Kernel>,
+    token: String,
+    engine: String,
+}
+
+/// The API's routes: one WebSocket at `/ws`. Only a caller with `token`
+/// gets past `hello`. That caller is the owner.
+pub fn router(kernel: Arc<Kernel>, token: String, engine: impl Into<String>) -> Router {
+    Router::new()
+        .route("/ws", get(upgrade))
+        .with_state(Arc::new(Api {
+            kernel,
+            token,
+            engine: engine.into(),
+        }))
+}
+
+async fn upgrade(
+    State(api): State<Arc<Api>>,
+    headers: HeaderMap,
+    ws: WebSocketUpgrade,
+) -> Response {
+    let origin = headers.get(header::ORIGIN).and_then(|o| o.to_str().ok());
+    if !origin_allowed(origin) {
+        return StatusCode::FORBIDDEN.into_response();
+    }
+    ws.on_upgrade(move |socket| serve(api, socket))
+}
+
+/// A web page elsewhere must not reach the engine. The engine's own
+/// windows, the CLI (no origin) and pages on this machine may try, and
+/// still need the token.
+fn origin_allowed(origin: Option<&str>) -> bool {
+    let Some(origin) = origin else { return true };
+    if origin == "null" || origin.starts_with("file://") {
+        return true;
+    }
+    match origin.split_once("://") {
+        Some(("http" | "https", rest)) => {
+            let host = if rest.starts_with("[::1]") {
+                "[::1]"
+            } else {
+                rest.split([':', '/']).next().unwrap_or_default()
+            };
+            matches!(host, "localhost" | "127.0.0.1" | "[::1]")
+        }
+        Some((_app_scheme, _)) => true,
+        None => false,
+    }
+}
+
+fn same_secret(a: &str, b: &str) -> bool {
+    a.len() == b.len()
+        && a.bytes()
+            .zip(b.bytes())
+            .fold(0u8, |acc, (x, y)| acc | (x ^ y))
+            == 0
+}
+
+fn text(frame: &EngineFrame) -> Message {
+    Message::Text(Utf8Bytes::from(
+        serde_json::to_string(frame).expect("frames serialize"),
+    ))
+}
+
+async fn serve(api: Arc<Api>, socket: WebSocket) {
+    let (mut sink, mut stream) = socket.split();
+    let refusal = match tokio::time::timeout(HELLO_WITHIN, stream.next()).await {
+        Ok(Some(Ok(Message::Text(first)))) => match serde_json::from_str::<ClientFrame>(&first) {
+            Ok(ClientFrame::Hello { protocol, .. }) if protocol != PROTOCOL => Some(Refusal::new(
+                "protocol",
+                format!(
+                    "This engine speaks protocol {PROTOCOL}, the window speaks {protocol}. Update Bandaso."
+                ),
+            )),
+            Ok(ClientFrame::Hello { token, .. }) if same_secret(&token, &api.token) => None,
+            _ => Some(Refusal::forbidden(
+                "The first frame must be hello with this engine's token.",
+            )),
+        },
+        _ => Some(Refusal::forbidden(
+            "The first frame must be hello with this engine's token.",
+        )),
+    };
+    if let Some(reason) = refusal {
+        let _ = sink.send(text(&EngineFrame::Goodbye { reason })).await;
+        let _ = sink.close().await;
+        return;
+    }
+    let welcome = EngineFrame::Welcome {
+        protocol: PROTOCOL,
+        engine: api.engine.clone(),
+    };
+    if sink.send(text(&welcome)).await.is_err() {
+        return;
+    }
+
+    let (out, mut outgoing) = mpsc::channel::<EngineFrame>(1024);
+    let writer = tokio::spawn(async move {
+        while let Some(frame) = outgoing.recv().await {
+            if sink.send(text(&frame)).await.is_err() {
+                break;
+            }
+        }
+    });
+    let actor = Actor::Person(api.kernel.owner());
+    let mut subscriptions: HashMap<u64, JoinHandle<()>> = HashMap::new();
+
+    while let Some(Ok(message)) = stream.next().await {
+        let Message::Text(body) = message else {
+            if matches!(message, Message::Close(_)) {
+                break;
+            }
+            continue;
+        };
+        let frame = match serde_json::from_str::<ClientFrame>(&body) {
+            Ok(frame) => frame,
+            Err(error) => {
+                if let Some(id) = serde_json::from_str::<Value>(&body)
+                    .ok()
+                    .and_then(|v| v["id"].as_u64())
+                {
+                    let error = Some(Refusal::invalid(format!(
+                        "This frame does not fit: {error}."
+                    )));
+                    let _ = out
+                        .send(EngineFrame::Result {
+                            id,
+                            ok: None,
+                            error,
+                        })
+                        .await;
+                }
+                continue;
+            }
+        };
+        match frame {
+            ClientFrame::Hello { .. } => {}
+            ClientFrame::Call {
+                id,
+                method,
+                space,
+                command,
+                params,
+            } => {
+                let kernel = api.kernel.clone();
+                let out = out.clone();
+                tokio::spawn(async move {
+                    let (ok, error) =
+                        match kernel.call(actor, &method, space, command, params).await {
+                            Ok(value) => (Some(value), None),
+                            Err(refusal) => (None, Some(refusal)),
+                        };
+                    let _ = out.send(EngineFrame::Result { id, ok, error }).await;
+                });
+            }
+            ClientFrame::Subscribe {
+                id,
+                space,
+                after,
+                filter,
+            } => {
+                let (ok, error) = match api.kernel.space(space).await {
+                    Ok(space) => {
+                        if let Some(old) = subscriptions.insert(
+                            id,
+                            tokio::spawn(follow(space, id, after, filter, out.clone())),
+                        ) {
+                            old.abort();
+                        }
+                        (Some(serde_json::json!({ "subscription": id })), None)
+                    }
+                    Err(refusal) => (None, Some(refusal)),
+                };
+                let _ = out.send(EngineFrame::Result { id, ok, error }).await;
+            }
+            ClientFrame::Unsubscribe { id, subscription } => {
+                if let Some(task) = subscriptions.remove(&subscription) {
+                    task.abort();
+                }
+                let _ = out
+                    .send(EngineFrame::Result {
+                        id,
+                        ok: Some(Value::Null),
+                        error: None,
+                    })
+                    .await;
+            }
+        }
+    }
+    for task in subscriptions.into_values() {
+        task.abort();
+    }
+    drop(out);
+    let _ = writer.await;
+}
+
+/// Replays the stored events after `after`, then forwards live ones, with no
+/// gap and no repeat: it listens before it reads, and skips what it already
+/// sent.
+async fn follow(
+    space: Arc<crate::Space>,
+    subscription: u64,
+    after: i64,
+    filter: EventFilter,
+    out: mpsc::Sender<EngineFrame>,
+) {
+    let mut live = space.subscribe();
+    let backlog = match space.events_after(after, filter.clone(), BACKLOG + 1).await {
+        Ok(backlog) if backlog.len() <= BACKLOG => backlog,
+        _ => {
+            let _ = out.send(EngineFrame::Resync { subscription }).await;
+            return;
+        }
+    };
+    let mut last = backlog.last().map_or(after, |e| e.seq);
+    for event in backlog {
+        if out
+            .send(EngineFrame::Event {
+                subscription,
+                event,
+            })
+            .await
+            .is_err()
+        {
+            return;
+        }
+    }
+    loop {
+        match live.recv().await {
+            Ok(event) if event.seq > last => {
+                last = event.seq;
+                if filter.matches(&event) {
+                    let event = Event::clone(&event);
+                    if out
+                        .send(EngineFrame::Event {
+                            subscription,
+                            event,
+                        })
+                        .await
+                        .is_err()
+                    {
+                        return;
+                    }
+                }
+            }
+            Ok(_) => {}
+            Err(broadcast::error::RecvError::Lagged(_)) => {
+                let _ = out.send(EngineFrame::Resync { subscription }).await;
+                return;
+            }
+            Err(broadcast::error::RecvError::Closed) => return,
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn only_this_machine_and_app_schemes_pass_the_origin_check() {
+        for allowed in [
+            None,
+            Some("null"),
+            Some("file://"),
+            Some("http://localhost:5173"),
+            Some("http://127.0.0.1:4000"),
+            Some("http://[::1]:80"),
+            Some("app://bandaso"),
+        ] {
+            assert!(origin_allowed(allowed), "{allowed:?}");
+        }
+        for refused in [
+            Some("https://example.com"),
+            Some("http://localhost.example.com"),
+            Some("http://127.0.0.1.example.com"),
+            Some("garbage"),
+        ] {
+            assert!(!origin_allowed(refused), "{refused:?}");
+        }
+    }
+
+    #[test]
+    fn secrets_match_only_exactly() {
+        assert!(same_secret("abc", "abc"));
+        assert!(!same_secret("abc", "abd"));
+        assert!(!same_secret("abc", "abcd"));
+    }
+}
