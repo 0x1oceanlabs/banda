@@ -10,15 +10,22 @@
 //!   early when cancelled.
 //! - `fail`: answers the prompt with an error.
 //! - `crash`: exits at once, as a Harness that dies would.
+//! - `which session`: replies with the session's ID and its own process ID.
 //! - anything else: a short thought, then a reply that quotes the prompt.
+//!
+//! Its sessions can be resumed or loaded after a restart, as a real
+//! Harness keeps them on disk. With `FAKE_AGENT_FORGETS` set it refuses
+//! both, as a Harness that lost them would.
 
 use agent_client_protocol::schema::ProtocolVersion;
 use agent_client_protocol::schema::v1::{
-    CancelNotification, ContentBlock, ContentChunk, Implementation, InitializeRequest,
-    InitializeResponse, NewSessionRequest, NewSessionResponse, PermissionOption,
-    PermissionOptionKind, PromptRequest, PromptResponse, RequestPermissionOutcome,
-    RequestPermissionRequest, SessionId, SessionNotification, SessionUpdate, StopReason,
-    TextContent, ToolCall, ToolCallStatus, ToolCallUpdate, ToolCallUpdateFields, ToolKind,
+    AgentCapabilities, CancelNotification, ContentBlock, ContentChunk, Implementation,
+    InitializeRequest, InitializeResponse, LoadSessionRequest, LoadSessionResponse,
+    NewSessionRequest, NewSessionResponse, PermissionOption, PermissionOptionKind, PromptRequest,
+    PromptResponse, RequestPermissionOutcome, RequestPermissionRequest, ResumeSessionRequest,
+    ResumeSessionResponse, SessionCapabilities, SessionId, SessionNotification,
+    SessionResumeCapabilities, SessionUpdate, StopReason, TextContent, ToolCall, ToolCallStatus,
+    ToolCallUpdate, ToolCallUpdateFields, ToolKind,
 };
 use agent_client_protocol::{Agent, Client, ConnectionTo, Error, Responder, Stdio};
 use std::collections::HashSet;
@@ -87,6 +94,15 @@ async fn turn(
     if words.contains("quit") {
         return Ok(StopReason::Cancelled);
     }
+    if words.contains("which session") {
+        let reply = format!("Session {} in process {}", session.0, std::process::id());
+        say(
+            &cx,
+            &session,
+            SessionUpdate::AgentMessageChunk(text(&reply)),
+        )?;
+        return Ok(StopReason::EndTurn);
+    }
     let remember = words.contains("remember");
     if remember || words.contains("ask") {
         let tool = "check-1";
@@ -153,6 +169,11 @@ async fn turn(
     Ok(StopReason::EndTurn)
 }
 
+/// Whether this run lost the sessions of earlier runs.
+fn forgets() -> bool {
+    std::env::var_os("FAKE_AGENT_FORGETS").is_some()
+}
+
 #[tokio::main]
 async fn main() -> Result<(), Error> {
     let fake = Fake::default();
@@ -168,9 +189,19 @@ async fn main() -> Result<(), Error> {
                 } else {
                     request.protocol_version
                 };
-                responder.respond(InitializeResponse::new(protocol).agent_info(
-                    Implementation::new("bandaso-fake-agent", env!("CARGO_PKG_VERSION")),
-                ))
+                let capabilities = AgentCapabilities::new()
+                    .load_session(true)
+                    .session_capabilities(
+                        SessionCapabilities::new().resume(SessionResumeCapabilities::new()),
+                    );
+                responder.respond(
+                    InitializeResponse::new(protocol)
+                        .agent_capabilities(capabilities)
+                        .agent_info(Implementation::new(
+                            "bandaso-fake-agent",
+                            env!("CARGO_PKG_VERSION"),
+                        )),
+                )
             },
             agent_client_protocol::on_receive_request!(),
         )
@@ -181,8 +212,32 @@ async fn main() -> Result<(), Error> {
                             responder: Responder<NewSessionResponse>,
                             _cx: ConnectionTo<Client>| {
                     let number = fake.sessions.fetch_add(1, Ordering::Relaxed) + 1;
-                    responder.respond(NewSessionResponse::new(format!("fake-{number}")))
+                    // Unique across processes, so a resumed session shows.
+                    let id = format!("fake-{}-{number}", std::process::id());
+                    responder.respond(NewSessionResponse::new(id))
                 }
+            },
+            agent_client_protocol::on_receive_request!(),
+        )
+        .on_receive_request(
+            async |_request: ResumeSessionRequest,
+                   responder: Responder<ResumeSessionResponse>,
+                   _cx: ConnectionTo<Client>| {
+                if forgets() {
+                    return responder.respond_with_error(Error::resource_not_found(None));
+                }
+                responder.respond(ResumeSessionResponse::new())
+            },
+            agent_client_protocol::on_receive_request!(),
+        )
+        .on_receive_request(
+            async |_request: LoadSessionRequest,
+                   responder: Responder<LoadSessionResponse>,
+                   _cx: ConnectionTo<Client>| {
+                if forgets() {
+                    return responder.respond_with_error(Error::resource_not_found(None));
+                }
+                responder.respond(LoadSessionResponse::new())
             },
             agent_client_protocol::on_receive_request!(),
         )

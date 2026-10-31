@@ -114,6 +114,23 @@ pub fn set_evidence(
     Ok(())
 }
 
+/// The Harness's session the Thread had, if it had one.
+pub fn evidence<T: DeserializeOwned>(
+    sql: &Connection,
+    thread: ThreadId,
+) -> Result<Option<T>, Error> {
+    let text: Option<String> = sql
+        .query_row(
+            "SELECT evidence FROM agents_threads WHERE id = ?1",
+            params![thread],
+            |row| row.get(0),
+        )
+        .optional()?
+        .flatten();
+    // Evidence a newer engine wrote in another shape is no evidence.
+    Ok(text.and_then(|text| serde_json::from_str(&text).ok()))
+}
+
 const THREAD: &str = "SELECT id, agent, title, updated_at FROM agents_threads";
 
 fn read_thread(row: &Row<'_>) -> rusqlite::Result<ThreadSummary> {

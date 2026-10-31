@@ -140,6 +140,11 @@ pub enum Body {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         answer: Option<String>,
     },
+    /// A line from Bandaso about the Thread, such as a session the
+    /// Harness could not continue.
+    Notice {
+        text: String,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -266,6 +271,12 @@ pub enum Fact {
     /// It can no longer be answered.
     #[serde(rename = "question.closed")]
     QuestionClosed { item: ItemId },
+    #[serde(rename = "notice.posted")]
+    NoticePosted {
+        item: ItemId,
+        turn: TurnId,
+        text: String,
+    },
 }
 
 /// The version of every fact's payload today.

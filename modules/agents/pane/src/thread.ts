@@ -161,6 +161,13 @@ export function apply(state: ThreadState, event: Event): ThreadState {
         ),
       }
     }
+    case "notice.posted": {
+      const { item: id, turn, text } = fact.payload
+      return {
+        ...next,
+        items: [...state.items, item(id, { kind: "notice", text }, turn)],
+      }
+    }
     case "agent.created":
     case "thread.started":
       return next
