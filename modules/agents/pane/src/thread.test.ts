@@ -83,6 +83,39 @@ test("a Question opens, then is answered or closed", () => {
   expect(closed.items[1].body).toMatchObject({ state: "closed" })
 })
 
+test("a Question with a form keeps what the Person filled in", () => {
+  const form = [
+    {
+      id: "colour",
+      title: "Colour",
+      required: false,
+      input: { kind: "text" },
+    },
+  ]
+  const asked = play(
+    event("question.asked", {
+      item: "q",
+      turn: "u",
+      title: "Which colour?",
+      choices: [{ id: "accept", name: "Submit", allows: true }],
+      form,
+    })
+  )
+  expect(asked.items[0].body).toMatchObject({ form, state: "open" })
+  const answered = apply(
+    asked,
+    event(
+      "question.answered",
+      { item: "q", choice: "accept", values: { colour: "Blue" } },
+      { author: person }
+    )
+  )
+  expect(answered.items[0].body).toMatchObject({
+    state: "answered",
+    values: { colour: "Blue" },
+  })
+})
+
 test("a notice joins the Thread as its own line", () => {
   const state = play(
     event(

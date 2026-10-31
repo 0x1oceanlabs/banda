@@ -2,12 +2,13 @@
 //! stdio. ACP's words stop here: the rest of the module hears what the
 //! Harness [`Said`], and how a turn ended, in the module's own words.
 //!
-//! The engine declares what it can show: notices and options that are on
-//! or off. A Thread's settings become the session's options when a turn
-//! starts ([`Connection::settle`]): the mode maps onto the Harness's own
-//! modes where it has Claude Code's or Codex's, never freer than the one
-//! chosen. A failure's class comes
-//! from ACP's error codes and the data the adapters attach to an error
+//! The engine declares what it can show: notices, options that are on or
+//! off, and forms, which Claude Code needs to ask a Person its own
+//! questions and Codex to ask in a plan. A Thread's settings become the
+//! session's options when a turn starts ([`Connection::settle`]): the mode
+//! maps onto the Harness's own modes where it has Claude Code's or Codex's,
+//! never freer than the one chosen. A failure's class comes from ACP's
+//! error codes and the data the adapters attach to an error
 //! (`errorKind` from Claude Code's, `codexErrorInfo` from Codex's), and a
 //! usage limit's reset from Claude Code's rate limit updates. The JetBrains
 //! AIR extension would say more, but a client that declares it must render
@@ -21,8 +22,8 @@
 //! runs until the Harness ends it or a Person stops it.
 
 use crate::model::{
-    Failure, HarnessOption, Mode, Offer, OptionChoice, OptionValue, Settings, ThreadId, ToolKind,
-    ToolStatus, TurnState,
+    Failure, Field, FieldValue, HarnessOption, Input, Mode, Offer, OptionChoice, OptionValue,
+    Settings, ThreadId, ToolKind, ToolStatus, TurnState, Values,
 };
 use crate::rules::{Ending, Offered};
 use crate::settings::Harness;
@@ -30,7 +31,7 @@ use agent_client_protocol::schema::ProtocolVersion;
 use agent_client_protocol::schema::v1 as acp;
 use agent_client_protocol::{AcpAgent, AcpAgentConfig, Agent, Client, ConnectionTo, LineDirection};
 use serde::{Deserialize, Serialize};
-use std::collections::HashMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -66,6 +67,8 @@ pub enum Said {
         /// What the tool call would do, if the Harness says here.
         tool: Option<ToolKind>,
         offered: Vec<Offered>,
+        /// A form to fill in, for a Question that asks more than a choice.
+        form: Option<Vec<Field>>,
         answer: oneshot::Sender<Answer>,
     },
     /// The session's options changed during the turn.
@@ -81,6 +84,8 @@ pub enum Said {
 #[derive(Debug)]
 pub enum Answer {
     Chose(String),
+    /// The Person submitted the form with these values.
+    Filled(Values),
     /// The turn is stopping: the Harness must not wait any longer.
     Cancelled,
 }
@@ -151,6 +156,9 @@ const MODES: [(Mode, [&str; 2]); 4] = [
 const PLAN: &str = "plan";
 const WORKING: &str = "default";
 const COLLABORATION: &str = "collaboration_mode";
+/// A form Question's answers: submit it, or skip it.
+const SUBMIT: &str = "accept";
+const SKIP: &str = "decline";
 
 type Routes = Arc<Mutex<HashMap<acp::SessionId, mpsc::UnboundedSender<Said>>>>;
 /// Each session's options, as the Harness last said.
@@ -480,6 +488,7 @@ async fn drive(
 ) {
     let heard = routes.clone();
     let asked = routes.clone();
+    let filling = routes.clone();
     let served = Client
         .builder()
         .name("bandaso")
@@ -514,6 +523,7 @@ async fn drive(
                     title: fields.title.clone(),
                     tool: fields.kind.map(tool_kind),
                     offered: request.options.iter().map(offered).collect(),
+                    form: None,
                     answer,
                 };
                 let routed = asked
@@ -531,9 +541,65 @@ async fn drive(
                         Ok(Answer::Chose(option)) => acp::RequestPermissionOutcome::Selected(
                             acp::SelectedPermissionOutcome::new(option),
                         ),
-                        Ok(Answer::Cancelled) | Err(_) => acp::RequestPermissionOutcome::Cancelled,
+                        Ok(Answer::Filled(_) | Answer::Cancelled) | Err(_) => {
+                            acp::RequestPermissionOutcome::Cancelled
+                        }
                     };
                     responder.respond(acp::RequestPermissionResponse::new(outcome))
+                })
+            },
+            agent_client_protocol::on_receive_request!(),
+        )
+        .on_receive_request(
+            async move |request: acp::CreateElicitationRequest,
+                        responder: agent_client_protocol::Responder<
+                acp::CreateElicitationResponse,
+            >,
+                        cx: ConnectionTo<Agent>| {
+                let cancel = || acp::CreateElicitationResponse::new(acp::ElicitationAction::Cancel);
+                // Only a form in a session can be asked in a Thread.
+                let acp::ElicitationMode::Form(form) = &request.mode else {
+                    return responder.respond(cancel());
+                };
+                let acp::ElicitationScope::Session(scope) = &form.scope else {
+                    return responder.respond(cancel());
+                };
+                let fields = form_fields(&form.requested_schema);
+                let (answer, decided) = oneshot::channel();
+                let choice = |id: &str, name: &str, allows| Offered {
+                    id: id.to_owned(),
+                    name: name.to_owned(),
+                    allows,
+                    always: false,
+                };
+                let question = Said::Asks {
+                    call: scope.tool_call_id.as_ref().map_or_else(
+                        || format!("form-{}", uuid::Uuid::now_v7()),
+                        |id| id.0.to_string(),
+                    ),
+                    title: Some(request.message.clone()),
+                    tool: None,
+                    offered: vec![choice(SUBMIT, "Submit", true), choice(SKIP, "Skip", false)],
+                    form: Some(fields.clone()),
+                    answer,
+                };
+                let routed = filling
+                    .lock()
+                    .unwrap()
+                    .get(&scope.session_id)
+                    .is_some_and(|route| route.send(question).is_ok());
+                if !routed {
+                    return responder.respond(cancel());
+                }
+                cx.spawn(async move {
+                    let action = match decided.await {
+                        Ok(Answer::Filled(values)) => acp::ElicitationAction::Accept(
+                            acp::ElicitationAcceptAction::new().content(content(&fields, values)),
+                        ),
+                        Ok(Answer::Chose(_)) => acp::ElicitationAction::Decline,
+                        Ok(Answer::Cancelled) | Err(_) => acp::ElicitationAction::Cancel,
+                    };
+                    responder.respond(acp::CreateElicitationResponse::new(action))
                 })
             },
             agent_client_protocol::on_receive_request!(),
@@ -541,7 +607,9 @@ async fn drive(
         .connect_with(process, async move |cx: ConnectionTo<Agent>| {
             let options = acp::SessionConfigOptionsCapabilities::new()
                 .boolean(acp::BooleanConfigOptionCapabilities::new());
-            let shows = acp::ClientCapabilities::new().session(
+            let forms =
+                acp::ElicitationCapabilities::new().form(acp::ElicitationFormCapabilities::new());
+            let shows = acp::ClientCapabilities::new().elicitation(forms).session(
                 acp::ClientSessionCapabilities::new()
                     .notices(acp::NoticeCapabilities::new())
                     .config_options(options),
@@ -871,6 +939,126 @@ fn failed(name: &str, error: &acp::Error) -> Ending {
         (_, None) => format!("{name} reported an error."),
     };
     Ending::failed(reason, Some(failure))
+}
+
+/// A form's fields, from the JSON Schema the Harness asks with. A field of
+/// a kind Bandaso cannot show is left out.
+fn form_fields(schema: &acp::ElicitationSchema) -> Vec<Field> {
+    let required = schema.required.as_deref().unwrap_or_default();
+    let choices = |options: &[acp::EnumOption]| {
+        options
+            .iter()
+            .map(|o| OptionChoice {
+                value: o.value.clone(),
+                name: o.title.clone(),
+                description: o.description.clone(),
+            })
+            .collect::<Vec<_>>()
+    };
+    let named = |values: &[String]| {
+        values
+            .iter()
+            .map(|v| OptionChoice {
+                value: v.clone(),
+                name: v.clone(),
+                description: None,
+            })
+            .collect::<Vec<_>>()
+    };
+    let number = |n: Option<f64>| n.and_then(serde_json::Number::from_f64);
+    schema
+        .properties
+        .iter()
+        .filter_map(|(id, property)| {
+            use acp::ElicitationPropertySchema as Property;
+            let (title, description, input) = match property {
+                Property::String(text) => {
+                    let input = match (&text.one_of, &text.enum_values) {
+                        (Some(options), _) => Input::Choice {
+                            choices: choices(options),
+                            default: text.default.clone(),
+                        },
+                        (None, Some(values)) => Input::Choice {
+                            choices: named(values),
+                            default: text.default.clone(),
+                        },
+                        (None, None) => Input::Text {
+                            default: text.default.clone(),
+                        },
+                    };
+                    (&text.title, &text.description, input)
+                }
+                Property::Number(n) => (
+                    &n.title,
+                    &n.description,
+                    Input::Number {
+                        integer: false,
+                        minimum: number(n.minimum),
+                        maximum: number(n.maximum),
+                        default: number(n.default),
+                    },
+                ),
+                Property::Integer(n) => (
+                    &n.title,
+                    &n.description,
+                    Input::Number {
+                        integer: true,
+                        minimum: n.minimum.map(Into::into),
+                        maximum: n.maximum.map(Into::into),
+                        default: n.default.map(Into::into),
+                    },
+                ),
+                Property::Boolean(toggle) => (
+                    &toggle.title,
+                    &toggle.description,
+                    Input::Toggle {
+                        default: toggle.default,
+                    },
+                ),
+                Property::Array(many) => {
+                    let options = match &many.items {
+                        acp::MultiSelectItems::String(items) => named(&items.values),
+                        acp::MultiSelectItems::Titled(items) => choices(&items.options),
+                        _ => return None,
+                    };
+                    let input = Input::Choices {
+                        choices: options,
+                        default: many.default.clone().unwrap_or_default(),
+                    };
+                    (&many.title, &many.description, input)
+                }
+                _ => return None,
+            };
+            Some(Field {
+                id: id.clone(),
+                title: title.clone().unwrap_or_else(|| id.clone()),
+                description: description.clone(),
+                required: required.contains(id),
+                input,
+            })
+        })
+        .collect()
+}
+
+/// What a Person filled in, as the Harness takes it.
+fn content(fields: &[Field], values: Values) -> BTreeMap<String, acp::ElicitationContentValue> {
+    use acp::ElicitationContentValue as Content;
+    values
+        .into_iter()
+        .filter_map(|(id, value)| {
+            let integer = fields
+                .iter()
+                .any(|f| f.id == id && matches!(f.input, Input::Number { integer: true, .. }));
+            let value = match value {
+                FieldValue::Text(text) => Content::String(text),
+                FieldValue::Toggle(on) => Content::Boolean(on),
+                FieldValue::Number(n) if integer => Content::Integer(n.as_i64()?),
+                FieldValue::Number(n) => Content::Number(n.as_f64()?),
+                FieldValue::Choices(values) => Content::StringArray(values),
+            };
+            Some((id, value))
+        })
+        .collect()
 }
 
 fn offered(option: &acp::PermissionOption) -> Offered {

@@ -948,3 +948,74 @@ async fn only_a_person_chooses_how_freely_an_agent_acts() {
     let params = json!({ "agent": world.agent, "thread": thread, "text": "go on" });
     world.call(agent, "agents.send", params).await.unwrap();
 }
+
+/// Whether the Thread waits on an open Question.
+fn asking(view: &ThreadView) -> bool {
+    view.items.iter().any(|i| {
+        matches!(
+            i.body,
+            Body::Question {
+                state: QuestionState::Open,
+                ..
+            }
+        )
+    })
+}
+
+#[tokio::test]
+async fn a_form_question_takes_what_the_person_fills_in() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let sent = world.send(None, "choose a colour").await;
+    let thread = sent["thread"].clone();
+    let view = world.until(&thread, asking).await;
+    let question = view.items.last().unwrap();
+    let Body::Question {
+        title,
+        choices,
+        form: Some(form),
+        ..
+    } = &question.body
+    else {
+        panic!("a Question with a form: {question:?}")
+    };
+    assert_eq!(title, "Which colour?");
+    let answers: Vec<_> = choices.iter().map(|c| c.name.as_str()).collect();
+    assert_eq!(answers, ["Submit", "Skip"]);
+    let fields: Vec<_> = form.iter().map(|f| f.title.as_str()).collect();
+    assert_eq!(fields, ["Colour", "Other"]);
+
+    let answer = |choice: &str, values: Value| {
+        let params = json!({ "item": question.id, "choice": choice, "values": values });
+        world.call(world.person(), "agents.answer", params)
+    };
+    let green = answer("accept", json!({ "question_0": "Green" })).await;
+    assert_eq!(
+        green.unwrap_err().code,
+        Code::Invalid,
+        "not one of its colours"
+    );
+    answer("accept", json!({ "question_0": "Blue" }))
+        .await
+        .unwrap();
+    let view = world
+        .until(&thread, |v| {
+            state(v, &sent["turn"]) == Some(TurnState::Done)
+        })
+        .await;
+    assert_eq!(last_reply(&view), "message: You chose Blue.");
+
+    let again = world.send(Some(&thread), "choose once more").await;
+    let view = world.until(&thread, asking).await;
+    let skip = json!({ "item": view.items.last().unwrap().id, "choice": "decline" });
+    world
+        .call(world.person(), "agents.answer", skip)
+        .await
+        .unwrap();
+    let view = world
+        .until(&thread, |v| {
+            state(v, &again["turn"]) == Some(TurnState::Done)
+        })
+        .await;
+    assert_eq!(last_reply(&view), "message: You skipped the question.");
+}

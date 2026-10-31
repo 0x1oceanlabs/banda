@@ -3,6 +3,8 @@
 //!
 //! - `ask`: starts a tool call and asks permission to run it. An allow runs
 //!   it, a reject skips it, and a cancel ends the turn.
+//! - `choose`: asks for a colour with a form, as Claude Code asks its own
+//!   questions, and replies with the answer, or that the Person skipped.
 //! - `which settings`: replies with the session's mode, model and brevity.
 //! - `plan done`: in the plan mode, switches to accepting edits, as Claude
 //!   Code does when a Person accepts its plan.
@@ -32,15 +34,16 @@
 use agent_client_protocol::schema::ProtocolVersion;
 use agent_client_protocol::schema::v1::{
     AgentCapabilities, CancelNotification, ConfigOptionUpdate, ContentBlock, ContentChunk,
-    Implementation, InitializeRequest, InitializeResponse, LoadSessionRequest, LoadSessionResponse,
-    NewSessionRequest, NewSessionResponse, Notice, NoticeSeverity, PermissionOption,
-    PermissionOptionKind, PromptRequest, PromptResponse, RequestPermissionOutcome,
-    RequestPermissionRequest, ResumeSessionRequest, ResumeSessionResponse, SessionCapabilities,
-    SessionConfigOption, SessionConfigOptionCategory, SessionConfigOptionValue,
-    SessionConfigSelectOption, SessionId, SessionNotification, SessionResumeCapabilities,
-    SessionUpdate, SetSessionConfigOptionRequest, SetSessionConfigOptionResponse, StopReason,
-    TextContent, ToolCall, ToolCallStatus, ToolCallUpdate, ToolCallUpdateFields, ToolKind,
-    UsageUpdate,
+    CreateElicitationRequest, ElicitationAction, ElicitationContentValue, ElicitationFormMode,
+    ElicitationSchema, ElicitationSessionScope, EnumOption, Implementation, InitializeRequest,
+    InitializeResponse, LoadSessionRequest, LoadSessionResponse, NewSessionRequest,
+    NewSessionResponse, Notice, NoticeSeverity, PermissionOption, PermissionOptionKind,
+    PromptRequest, PromptResponse, RequestPermissionOutcome, RequestPermissionRequest,
+    ResumeSessionRequest, ResumeSessionResponse, SessionCapabilities, SessionConfigOption,
+    SessionConfigOptionCategory, SessionConfigOptionValue, SessionConfigSelectOption, SessionId,
+    SessionNotification, SessionResumeCapabilities, SessionUpdate, SetSessionConfigOptionRequest,
+    SetSessionConfigOptionResponse, StopReason, StringPropertySchema, TextContent, ToolCall,
+    ToolCallStatus, ToolCallUpdate, ToolCallUpdateFields, ToolKind, UsageUpdate,
 };
 use agent_client_protocol::{Agent, Client, ConnectionTo, Error, Responder, Stdio};
 use serde_json::json;
@@ -59,6 +62,8 @@ struct Fake {
     failed_once: Arc<Mutex<HashSet<String>>>,
     /// The client shows options that are on or off.
     toggles: Arc<AtomicBool>,
+    /// The client shows forms.
+    forms: Arc<AtomicBool>,
     setups: Arc<Mutex<HashMap<SessionId, Setup>>>,
 }
 
@@ -225,6 +230,19 @@ async fn turn(
     if words.contains("quit") {
         return Ok(StopReason::Cancelled);
     }
+    if words.contains("choose") {
+        let reply = if fake.forms.load(Ordering::Relaxed) {
+            choose(&cx, &session).await?
+        } else {
+            "I cannot ask you here.".to_owned()
+        };
+        say(
+            &cx,
+            &session,
+            SessionUpdate::AgentMessageChunk(text(&reply)),
+        )?;
+        return Ok(StopReason::EndTurn);
+    }
     if words.contains("which settings") {
         let setup = fake.setup(&session);
         let reply = format!(
@@ -325,6 +343,38 @@ async fn turn(
     Ok(StopReason::EndTurn)
 }
 
+/// Asks a colour as Claude Code asks its questions: the choice, and an
+/// "Other" answer beside it. What to reply.
+async fn choose(cx: &ConnectionTo<Client>, session: &SessionId) -> Result<String, Error> {
+    let colour = StringPropertySchema::new().title("Colour").one_of(vec![
+        EnumOption::new("Red", "Red"),
+        EnumOption::new("Blue", "Blue").description("Like the sea"),
+    ]);
+    let other = StringPropertySchema::new().title("Other");
+    let schema = ElicitationSchema::new()
+        .property("question_0", colour, false)
+        .property("question_0_custom", other, false);
+    let scope = ElicitationSessionScope::new(session.clone()).tool_call_id("ask-1");
+    let form = ElicitationFormMode::new(scope, schema);
+    let request = CreateElicitationRequest::new(form, "Which colour?");
+    let answer = cx.send_request(request).block_task().await?;
+    Ok(match answer.action {
+        ElicitationAction::Accept(accepted) => {
+            let content = accepted.content.unwrap_or_default();
+            let said = |key: &str| match content.get(key) {
+                Some(ElicitationContentValue::String(s)) if !s.is_empty() => Some(s.clone()),
+                _ => None,
+            };
+            match said("question_0_custom").or_else(|| said("question_0")) {
+                Some(colour) => format!("You chose {colour}."),
+                None => "You chose nothing.".to_owned(),
+            }
+        }
+        ElicitationAction::Decline => "You skipped the question.".to_owned(),
+        _ => "The question was cancelled.".to_owned(),
+    })
+}
+
 /// Whether this run lost the sessions of earlier runs.
 fn forgets() -> bool {
     std::env::var_os("FAKE_AGENT_FORGETS").is_some()
@@ -348,6 +398,9 @@ async fn main() -> Result<(), Error> {
                     let options = shows.and_then(|s| s.config_options.as_ref());
                     let toggles = options.is_some_and(|o| o.boolean.is_some());
                     fake.toggles.store(toggles, Ordering::Relaxed);
+                    let elicitation = request.client_capabilities.elicitation.as_ref();
+                    let forms = elicitation.is_some_and(|e| e.form.is_some());
+                    fake.forms.store(forms, Ordering::Relaxed);
                     let protocol = if request.protocol_version >= ProtocolVersion::V1 {
                         ProtocolVersion::V1
                     } else {

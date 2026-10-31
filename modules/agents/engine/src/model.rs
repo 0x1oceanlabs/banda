@@ -235,6 +235,79 @@ pub struct Choice {
     pub always: bool,
 }
 
+/// One field of a Question's form. The Harness wrote it; Bandaso shows it.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "agents/")]
+pub struct Field {
+    pub id: String,
+    /// Its label: the Harness's title, or else its ID.
+    pub title: String,
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    /// A Person must fill it in to submit the form.
+    #[serde(default)]
+    pub required: bool,
+    pub input: Input,
+}
+
+/// What a field takes.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+#[ts(export, export_to = "agents/")]
+pub enum Input {
+    Text {
+        #[ts(optional)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        default: Option<String>,
+    },
+    /// One of the choices.
+    Choice {
+        choices: Vec<OptionChoice>,
+        #[ts(optional)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        default: Option<String>,
+    },
+    /// Any of the choices.
+    Choices {
+        choices: Vec<OptionChoice>,
+        #[serde(default)]
+        default: Vec<String>,
+    },
+    Number {
+        /// Only whole numbers.
+        integer: bool,
+        #[ts(optional, type = "number")]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        minimum: Option<serde_json::Number>,
+        #[ts(optional, type = "number")]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        maximum: Option<serde_json::Number>,
+        #[ts(optional, type = "number")]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        default: Option<serde_json::Number>,
+    },
+    Toggle {
+        #[ts(optional)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        default: Option<bool>,
+    },
+}
+
+/// What a Person filled in one field.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(untagged)]
+#[ts(export, export_to = "agents/")]
+pub enum FieldValue {
+    Text(String),
+    Toggle(bool),
+    Number(#[ts(type = "number")] serde_json::Number),
+    Choices(Vec<String>),
+}
+
+/// What a Person filled in a form, by the fields' IDs.
+pub type Values = BTreeMap<String, FieldValue>;
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case")]
 #[ts(export, export_to = "agents/")]
@@ -264,10 +337,19 @@ pub enum Body {
     Question {
         title: String,
         choices: Vec<Choice>,
+        /// A form to fill in, when the Harness asks for more than a choice.
+        /// Its choices then submit it or skip it.
+        #[ts(optional)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        form: Option<Vec<Field>>,
         state: QuestionState,
         #[ts(optional)]
         #[serde(default, skip_serializing_if = "Option::is_none")]
         answer: Option<String>,
+        /// What the Person filled in the form.
+        #[ts(optional)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        values: Option<Values>,
     },
     /// A line from Bandaso about the Thread, such as a session the
     /// Harness could not continue.
@@ -412,9 +494,18 @@ pub enum Fact {
         turn: TurnId,
         title: String,
         choices: Vec<Choice>,
+        #[ts(optional)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        form: Option<Vec<Field>>,
     },
     #[serde(rename = "question.answered")]
-    QuestionAnswered { item: ItemId, choice: String },
+    QuestionAnswered {
+        item: ItemId,
+        choice: String,
+        #[ts(optional)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        values: Option<Values>,
+    },
     /// It can no longer be answered.
     #[serde(rename = "question.closed")]
     QuestionClosed { item: ItemId },

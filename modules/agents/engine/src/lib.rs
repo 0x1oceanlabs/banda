@@ -21,7 +21,7 @@
 //! | `agents.configure` | write | the Thread's settings, from its next turn on: `{thread, settings}` |
 //! | `agents.stop` | write | stops a turn: `{turn}` |
 //! | `agents.retry` | write | tries a failed turn's message again: `{turn}` |
-//! | `agents.answer` | decide | answers a Question: `{item, choice}` |
+//! | `agents.answer` | decide | answers a Question: `{item, choice, values?}`; `values` fill its form |
 
 mod acp;
 mod hosts;
@@ -185,6 +185,8 @@ struct OneTurn {
 struct Answer {
     item: ItemId,
     choice: String,
+    #[serde(default)]
+    values: Option<model::Values>,
 }
 
 fn value(answer: impl Serialize) -> Result<Value, Refusal> {
@@ -352,9 +354,13 @@ impl Module for Agents {
                 call.command(move |tx| retry(tx, author, turn)).await
             }
             Method::Answer => {
-                let Answer { item, choice } = decode(params)?;
+                let Answer {
+                    item,
+                    choice,
+                    values,
+                } = decode(params)?;
                 let author = call.participant();
-                call.command(move |tx| answer(tx, author, item, choice))
+                call.command(move |tx| answer(tx, author, item, choice, values))
                     .await
             }
         }
@@ -534,20 +540,23 @@ fn answer(
     author: Participant,
     item: ItemId,
     choice: String,
+    values: Option<model::Values>,
 ) -> Result<Value, Error> {
     let (thread, mut found) = store::item(tx.sql(), item)?
         .ok_or_else(|| Refusal::not_found("There is no such Question."))?;
-    rules::answer(&mut found.body, &choice)?;
+    let values = rules::answer(&mut found.body, &choice, values)?;
     store::set_body(tx.sql(), item, &found.body)?;
     let fact = Fact::QuestionAnswered {
         item,
         choice: choice.clone(),
+        values: values.clone(),
     };
     emit(tx, author, thread, &fact)?;
-    tx.enqueue(
-        turn::REPLY,
-        &item.to_string(),
-        &ReplyEffect { item, choice },
-    )?;
+    let reply = ReplyEffect {
+        item,
+        choice,
+        values,
+    };
+    tx.enqueue(turn::REPLY, &item.to_string(), &reply)?;
     Ok(Value::Null)
 }

@@ -205,6 +205,11 @@ If Chat is removed, Agents still works through its own Thread.
   Harness offers, its "always" answers too. A Harness without modes of its
   own does not ask: the engine answers its Questions by the Thread's mode,
   allowing once where the mode allows, and asks the Person otherwise.
+- **A Question may hold a form** when the Harness asks for more than a
+  choice, as Claude Code does for its own questions and Codex in a plan
+  (ACP's form elicitation). Submit sends what the Person filled in, which
+  the engine checks against the form first; Skip declines. No mode answers
+  a form.
 - **A restart interrupts** the turn it cut short and closes that turn's
   open Questions.
 - Its methods and their rights are listed in
@@ -235,9 +240,10 @@ module reaches a Harness through an adapter:
   something users need; a native Codex adapter comes later, for its rate
   limits.
 - **Capabilities.** The engine declares what the window can show (notices,
-  and options that are on or off), and the adapter reads what the Harness
-  declares (sessions that resume or load, and their options). The rest of the engine reads those capabilities and
-  never the Harness's name. A failure's class comes from ACP's error codes
+  options that are on or off, and forms), and the adapter reads what the
+  Harness declares (sessions that resume or load, and their options). The
+  rest of the engine reads those capabilities and never the Harness's
+  name. A failure's class comes from ACP's error codes
   and the data the adapters attach to an error.
 - **Modes.** Each mode becomes the Harness's own where it has Claude
   Code's or Codex's modes, told by their two strictest values when the
