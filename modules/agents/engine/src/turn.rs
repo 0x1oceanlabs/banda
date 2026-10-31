@@ -18,7 +18,7 @@
 use crate::acp::{Answer, Opened, Running, Said, ToolChange};
 use crate::live::Live;
 use crate::model::{
-    Body, Fact, Failure, Item, ItemId, Mode, PlanStep, QuestionState, Settings, ThreadId,
+    Body, Fact, Failure, Item, ItemId, Mode, Offer, PlanStep, QuestionState, Settings, ThreadId,
     ToolContent, ToolKind, ToolStatus, TurnId, TurnState, Usage,
 };
 use crate::rules::{self, Ending, Piece, Pieces, Text};
@@ -303,16 +303,12 @@ async fn prompt(
             .map_err(|e| unplanned(plain(e)))?;
     }
     let (running, refused) = connection.settle(&session, &settings).await;
-    let (id, agent, offer) = (
-        turn.id,
-        Participant::Agent(turn.agent),
-        running.offer.clone(),
-    );
+    let (id, agent, now) = (turn.id, Participant::Agent(turn.agent), running.clone());
     // What the Agent used, as it last said, between turns too.
     let usage = connection.usage(&session);
     space
         .write(move |tx| {
-            offered(tx, agent, thread, offer)?;
+            offered(tx, agent, thread, &now)?;
             if let Some(usage) = usage {
                 used(tx, agent, thread, usage)?;
             }
@@ -337,17 +333,34 @@ async fn prompt(
     let ending = done
         .await
         .unwrap_or_else(|_| unplanned("The turn's task ended.".to_owned()));
+    // What it said while the turn began but heard nothing yet, such as
+    // Claude Code's slash commands just after its session opened.
+    // The turn ended as it did, whether or not this is written.
+    let now = connection.running(&session);
+    if let Err(error) = space
+        .write(move |tx| offered(tx, agent, thread, &now))
+        .await
+    {
+        tracing::warn!(%error, "what the Harness offers could not be written");
+    }
     Ok(ending.resets(writer.resets))
 }
 
-/// Writes what the Harness offers in the Thread, when that changed.
+/// Writes what the Harness offers in the Thread, when that changed. A
+/// session that has not said its slash commands yet leaves the Thread's.
 fn offered(
     tx: &mut Tx<'_>,
     agent: Participant,
     thread: ThreadId,
-    offer: crate::model::Offer,
+    running: &Running,
 ) -> Result<(), Error> {
-    if store::offer(tx.sql(), thread)? == offer {
+    let before = store::offer(tx.sql(), thread)?;
+    let offer = Offer {
+        slash_commands: (running.slash_commands.clone())
+            .unwrap_or_else(|| before.slash_commands.clone()),
+        ..running.offer.clone()
+    };
+    if before == offer {
         return Ok(());
     }
     store::set_offer(tx.sql(), thread, &offer)?;
@@ -653,7 +666,7 @@ impl Writer {
                     format!("{} switched itself to {runs} for this turn.", self.harness)
                 });
                 // What it says after a switch reads after it; a new list of
-                // options or commands leaves its text whole.
+                // options or slash commands leaves its text whole.
                 if planned || moved.is_some() {
                     self.close().await?;
                 }
@@ -667,7 +680,7 @@ impl Writer {
                         if let Some(text) = moved {
                             notice(tx, agent, thread, turn, text)?;
                         }
-                        offered(tx, agent, thread, now.offer)
+                        offered(tx, agent, thread, &now)
                     })
                     .await
                     .map_err(plain)

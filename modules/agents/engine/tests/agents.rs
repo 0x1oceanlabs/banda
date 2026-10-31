@@ -569,6 +569,11 @@ fn a_thread_continues_its_session_after_a_restart() {
                 "and says nothing about it: {:?}",
                 texts(&view)
             );
+            assert_eq!(
+                slash_commands(&view),
+                ["review", "compact"],
+                "a resumed session, which has not said its slash commands, keeps the Thread's"
+            );
         },
     );
 }
@@ -1181,31 +1186,31 @@ async fn what_the_agent_used_between_turns_reaches_the_thread_with_the_next() {
     assert_eq!(view.usage.map(|u| u.used), Some(150_000));
 }
 
-fn commands(view: &ThreadView) -> Vec<&str> {
+fn slash_commands(view: &ThreadView) -> Vec<&str> {
     view.offer
-        .commands
+        .slash_commands
         .iter()
         .map(|c| c.name.as_str())
         .collect()
 }
 
 #[tokio::test]
-async fn the_commands_a_harness_says_on_opening_reach_its_thread() {
+async fn the_slash_commands_a_harness_says_on_opening_reach_its_thread() {
     let root = tempfile::tempdir().unwrap();
     let world = World::new(root.path()).await;
     let (_, view) = world.finish(None, "hello").await;
-    assert_eq!(commands(&view), ["review", "compact"]);
-    let review = &view.offer.commands[0];
+    assert_eq!(slash_commands(&view), ["review", "compact"]);
+    let review = &view.offer.slash_commands[0];
     assert_eq!(review.description, "Review the changes so far");
     assert_eq!(review.hint.as_deref(), Some("what to look at"));
-    assert_eq!(view.offer.commands[1].hint, None);
+    assert_eq!(view.offer.slash_commands[1].hint, None);
 }
 
 #[tokio::test]
-async fn a_command_learned_mid_reply_leaves_the_reply_whole() {
+async fn a_slash_command_learned_mid_reply_leaves_the_reply_whole() {
     let root = tempfile::tempdir().unwrap();
     let world = World::new(root.path()).await;
     let (_, view) = world.finish(None, "learn a new command").await;
     assert_eq!(texts(&view)[1..], ["message: Before and after."]);
-    assert_eq!(commands(&view), ["review", "compact", "init"]);
+    assert_eq!(slash_commands(&view), ["review", "compact", "init"]);
 }

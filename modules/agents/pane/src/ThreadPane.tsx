@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useId, useMemo, useRef, useState } from "react"
+import { Fragment, useEffect, useMemo, useRef, useState } from "react"
 import type { AgentId } from "@bandaso/contract"
 import type {
   Body,
@@ -41,14 +41,6 @@ import {
 import { RingMeter } from "@bandaso/ui/components/ring-meter"
 import { Spinner } from "@bandaso/ui/components/spinner"
 import {
-  Suggestion,
-  SuggestionDescription,
-  SuggestionList,
-  Suggestions,
-  SuggestionsEmpty,
-  SuggestionTitle,
-} from "@bandaso/ui/components/suggestions"
-import {
   Trace,
   TraceCollapsible,
   TraceCollapsibleContent,
@@ -81,7 +73,8 @@ import {
   type ThreadState,
   working,
 } from "./thread"
-import { matching, type Suggested, suggested, typed } from "./commands"
+import { ownCommand, type Suggested, suggested } from "./slash"
+import { useSlashMenu } from "./SlashMenu"
 import { summary, type Values } from "./form"
 import { QuestionForm } from "./QuestionForm"
 import { Plan } from "./Plan"
@@ -237,7 +230,7 @@ function ThreadPane({
           working={turn}
           usage={state?.usage}
           commands={suggested(offer)}
-          onPlan={(plan) => settings && configure({ ...settings, plan })}
+          onPlanMode={(plan) => settings && configure({ ...settings, plan })}
           onSend={send}
           onStop={stop}
         >
@@ -610,7 +603,7 @@ function Composer({
   working,
   usage,
   commands,
-  onPlan,
+  onPlanMode,
   onSend,
   onStop,
   children,
@@ -621,10 +614,11 @@ function Composer({
   working: TurnView | undefined
   /** How full the Agent's context is, once its Harness has said. */
   usage?: Usage
-  /** What a message can start with, suggested as it is typed. */
+  /** The slash commands a message can start with, suggested as it is
+   * typed. */
   commands: Suggested[]
-  /** Switches the Thread's plan on or off, for `/plan` and `/default`. */
-  onPlan: (plan: boolean) => void
+  /** Switches the Thread's plan mode, for `/plan` and `/default`. */
+  onPlanMode: (on: boolean) => void
   /** Sends the text; resolves whether it went. */
   onSend: (text: string) => Promise<boolean>
   onStop: (turn: TurnView) => void
@@ -637,58 +631,26 @@ function Composer({
     if (focused) field.current?.focus()
   }, [focused])
 
-  // The commands open while the message is `/` and a word, until Escape
-  // shuts them for that text.
-  const list = useId()
-  const [shut, setShut] = useState<string>()
-  const [at, setAt] = useState(0)
-  const word = typed(text)
-  const open = word !== undefined && shut !== text
-  const fits = open ? matching(commands, word) : []
-  const chosen = Math.min(at, fits.length - 1)
-  const write = (next: string) => {
-    setText(next)
-    setAt(0)
-  }
   const pick = (command: Suggested) => {
-    if (command.plan === undefined) {
-      write(`/${command.name} `)
+    if (command.planMode === undefined) {
+      setText(`/${command.name} `)
     } else {
-      onPlan(command.plan)
-      write("")
+      onPlanMode(command.planMode)
+      setText("")
     }
   }
+  const slash = useSlashMenu({ text, commands, name, onPick: pick })
 
   const ready = text.trim() !== "" && !busy
   const send = async () => {
     if (!ready) return
-    if (await onSend(text)) write("")
-  }
-  const keyed = (event: React.KeyboardEvent) => {
-    const enter =
-      event.key === "Enter" && !event.shiftKey && !event.nativeEvent.isComposing
-    if (fits.length > 0) {
-      const step = { ArrowDown: 1, ArrowUp: -1 }[event.key]
-      if (step !== undefined) {
-        event.preventDefault()
-        setAt((chosen + step + fits.length) % fits.length)
-        return
-      }
-      if (enter || event.key === "Tab") {
-        event.preventDefault()
-        pick(fits[chosen])
-        return
-      }
-    }
-    if (open && event.key === "Escape") {
-      event.preventDefault()
-      setShut(text)
+    // A message that is only `/plan` or `/default` switches plan mode.
+    const own = ownCommand(text, commands)
+    if (own) {
+      pick(own)
       return
     }
-    if (enter) {
-      event.preventDefault()
-      void send()
-    }
+    if (await onSend(text)) setText("")
   }
 
   return (
@@ -699,34 +661,7 @@ function Composer({
         void send()
       }}
     >
-      {open && (
-        <Suggestions className="absolute inset-x-0 bottom-full mb-1.5">
-          {fits.length > 0 ? (
-            <SuggestionList id={list} aria-label="Commands">
-              {fits.map((command, index) => (
-                <Suggestion
-                  key={command.name}
-                  id={`${list}-${index}`}
-                  selected={index === chosen}
-                  onMouseMove={() => index !== chosen && setAt(index)}
-                  onClick={() => pick(command)}
-                >
-                  <SuggestionTitle>/{command.name}</SuggestionTitle>
-                  <SuggestionDescription>
-                    {command.description || command.hint}
-                  </SuggestionDescription>
-                </Suggestion>
-              ))}
-            </SuggestionList>
-          ) : (
-            <SuggestionsEmpty>
-              {commands.length === 0
-                ? `No commands from ${name} yet.`
-                : "No matching command."}
-            </SuggestionsEmpty>
-          )}
-        </Suggestions>
-      )}
+      {slash.menu}
       <InputGroup>
         <InputGroupTextarea
           ref={field}
@@ -734,14 +669,20 @@ function Composer({
           rows={1}
           placeholder={`Write to ${name}`}
           aria-label={`Message to ${name}`}
-          aria-autocomplete="list"
-          aria-controls={fits.length > 0 ? list : undefined}
-          aria-activedescendant={
-            fits.length > 0 ? `${list}-${chosen}` : undefined
-          }
+          {...slash.field}
           className="max-h-48 min-h-10"
-          onChange={(event) => write(event.target.value)}
-          onKeyDown={keyed}
+          onChange={(event) => setText(event.target.value)}
+          onKeyDown={(event) => {
+            if (slash.onKeyDown(event)) return
+            if (
+              event.key === "Enter" &&
+              !event.shiftKey &&
+              !event.nativeEvent.isComposing
+            ) {
+              event.preventDefault()
+              void send()
+            }
+          }}
         />
         <InputGroupAddon align="block-end" className="justify-between gap-2">
           <div className="min-w-0 flex-1">{children}</div>

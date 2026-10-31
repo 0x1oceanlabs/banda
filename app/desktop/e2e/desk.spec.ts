@@ -307,7 +307,7 @@ test("an Agent's plan shows its steps, and the context how full it is", async ()
   await page.screenshot({ path: "test-results/11-plan.png" })
 })
 
-test("a message starts with a command its Agent offers", async () => {
+test("a message starts with a slash command its Agent offers", async () => {
   window = await startWindow()
   const { page } = window
   await page.getByLabel("Name").fill("Work")
@@ -318,11 +318,13 @@ test("a message starts with a command its Agent offers", async () => {
   await dialog.getByRole("button", { name: "Create Agent" }).click()
   const thread = page.getByRole("region", { name: "Writer" })
   const composer = thread.getByRole("textbox", { name: "Message to Writer" })
-  const commands = thread.getByRole("listbox", { name: "Commands" })
+  const commands = thread.getByRole("listbox", { name: "Slash commands" })
 
-  // Its Harness says its commands once its session opens.
+  // Its Harness says its slash commands once its session opens.
   await composer.fill("/")
-  await expect(thread.getByText("No commands from Writer yet.")).toBeVisible()
+  await expect(
+    thread.getByText("No slash commands from Writer yet.")
+  ).toHaveAttribute("role", "status")
   await composer.fill("hello")
   await composer.press("Enter")
   await expect(thread.getByText("You said: hello")).toBeVisible()
@@ -344,7 +346,7 @@ test("a message starts with a command its Agent offers", async () => {
   await composer.press("Enter")
   await expect(thread.getByText("You said: /review the notes")).toBeVisible()
 
-  // The Thread's own commands switch its plan and send nothing.
+  // The window's own switch plan mode and send nothing.
   await composer.fill("/pl")
   await commands.getByRole("option", { name: /^\/plan/ }).click()
   await expect(composer).toHaveValue("")
@@ -354,8 +356,15 @@ test("a message starts with a command its Agent offers", async () => {
   )
   await expect(composer).toBeFocused()
 
-  await composer.fill("/")
+  await composer.fill("/default")
   await expect(commands).toBeVisible()
   await composer.press("Escape")
   await expect(commands).toBeHidden()
+  await composer.press("Enter")
+  await expect(composer).toHaveValue("")
+  await expect(thread.getByRole("button", { name: "Plan" })).toHaveAttribute(
+    "aria-pressed",
+    "false"
+  )
+  await expect(thread.getByText("You said: /default")).toBeHidden()
 })

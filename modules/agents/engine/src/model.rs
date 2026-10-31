@@ -120,17 +120,19 @@ pub struct Offer {
     /// The Harness can plan before it changes anything.
     #[serde(default)]
     pub plans: bool,
-    /// The commands a message can start with, such as `/compact`.
+    /// What a message can start with to have the Harness run a command,
+    /// such as `/compact`.
     #[serde(default)]
-    pub commands: Vec<Command>,
+    pub slash_commands: Vec<SlashCommand>,
 }
 
-/// A command the Harness runs when a message starts with `/` and its name.
+/// What the Harness runs when a message starts with `/` and its name.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "agents/")]
-pub struct Command {
+pub struct SlashCommand {
     /// Its name, without the `/`.
     pub name: String,
+    /// What it does, in the Harness's words.
     pub description: String,
     /// What to write after it, when it takes something.
     #[ts(optional)]
