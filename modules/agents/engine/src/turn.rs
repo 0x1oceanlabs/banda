@@ -19,7 +19,7 @@ use crate::acp::{Answer, Opened, Running, Said, ToolChange};
 use crate::live::Live;
 use crate::model::{
     Body, Fact, Failure, Item, ItemId, Mode, PlanStep, QuestionState, Settings, ThreadId,
-    ToolContent, ToolKind, ToolStatus, TurnId, TurnState,
+    ToolContent, ToolKind, ToolStatus, TurnId, TurnState, Usage,
 };
 use crate::rules::{self, Ending, Piece, Pieces, Text};
 use crate::settings::{self, Harnesses};
@@ -308,9 +308,14 @@ async fn prompt(
         Participant::Agent(turn.agent),
         running.offer.clone(),
     );
+    // What the Agent used, as it last said, between turns too.
+    let usage = connection.usage(&session);
     space
         .write(move |tx| {
             offered(tx, agent, thread, offer)?;
+            if let Some(usage) = usage {
+                used(tx, agent, thread, usage)?;
+            }
             for text in refused {
                 notice(tx, agent, thread, id, text)?;
             }
@@ -347,6 +352,15 @@ fn offered(
     }
     store::set_offer(tx.sql(), thread, &offer)?;
     emit(tx, agent, thread, &Fact::ThreadOffered { thread, offer })
+}
+
+/// Writes what the Agent has used in the Thread, when that changed.
+fn used(tx: &mut Tx<'_>, agent: Participant, thread: ThreadId, usage: Usage) -> Result<(), Error> {
+    if store::usage(tx.sql(), thread)?.as_ref() == Some(&usage) {
+        return Ok(());
+    }
+    store::set_usage(tx.sql(), thread, &usage)?;
+    emit(tx, agent, thread, &Fact::ThreadUsed { thread, usage })
 }
 
 /// The Harness started or left its plan by itself, as Claude Code does
@@ -405,6 +419,8 @@ struct Writer {
     asked: HashMap<String, ItemId>,
     /// The item that shows the Agent's plan for this turn, once it made one.
     plan: Option<ItemId>,
+    /// The Harness's ID for the message it says now, when it gives one.
+    message: Option<String>,
     due: Option<Instant>,
     /// When the account may be used again, if the Harness said it reached
     /// its limit.
@@ -431,6 +447,7 @@ impl Writer {
             tools: HashMap::new(),
             asked: HashMap::new(),
             plan: None,
+            message: None,
             due: None,
             resets: None,
         }
@@ -464,8 +481,14 @@ impl Writer {
 
     async fn hear(&mut self, live: &Live, said: Said) -> Result<(), String> {
         match said {
-            Said::Reply(text) => self.gather(Text::Reply, &text).await,
-            Said::Thought(text) => self.gather(Text::Thought, &text).await,
+            Said::Reply { text, message } => {
+                self.next_message(message).await?;
+                self.gather(Text::Reply, &text).await
+            }
+            Said::Thought { text, message } => {
+                self.next_message(message).await?;
+                self.gather(Text::Thought, &text).await
+            }
             Said::ToolStarted {
                 call,
                 title,
@@ -594,8 +617,10 @@ impl Writer {
                 };
                 self.put(id, Body::Notice { text }, posted).await
             }
-            Said::Planned(steps) => match self.plan {
+            Said::Steps(steps) => match self.plan {
                 Some(id) => self.change_plan(id, steps).await,
+                // A plan cleared before there was one shows nothing.
+                None if steps.is_empty() => Ok(()),
                 None => {
                     self.end_text().await?;
                     let id = ItemId::new();
@@ -614,13 +639,7 @@ impl Writer {
                 }
                 let (thread, agent) = (self.thread, Participant::Agent(self.agent));
                 self.space
-                    .write(move |tx| {
-                        if store::usage(tx.sql(), thread)? == Some(usage) {
-                            return Ok(());
-                        }
-                        store::set_usage(tx.sql(), thread, &usage)?;
-                        emit(tx, agent, thread, &Fact::ThreadUsed { thread, usage })
-                    })
+                    .write(move |tx| used(tx, agent, thread, usage))
                     .await
                     .map_err(plain)
             }
@@ -813,6 +832,18 @@ impl Writer {
         self.due = None;
         self.end_text().await?;
         self.write_output().await
+    }
+
+    /// A message the Harness names anew ends the one it said before.
+    async fn next_message(&mut self, message: Option<String>) -> Result<(), String> {
+        if message.is_none() {
+            return Ok(());
+        }
+        if self.message.is_some() && message != self.message {
+            self.end_text().await?;
+        }
+        self.message = message;
+        Ok(())
     }
 
     /// Ends the open message or thought: what the Agent says next starts a

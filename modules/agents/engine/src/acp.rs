@@ -22,9 +22,9 @@
 //! runs until the Harness ends it or a Person stops it.
 
 use crate::model::{
-    Exit, Failure, Field, FieldValue, HarnessOption, Input, Mode, Offer, OptionChoice, OptionValue,
-    PlanStep, Settings, StepState, TextFormat, ThreadId, ToolContent, ToolKind, ToolStatus,
-    TurnState, Usage, Values,
+    Cost, Exit, Failure, Field, FieldValue, HarnessOption, Input, Mode, Offer, OptionChoice,
+    OptionValue, PlanStep, Settings, StepState, TextFormat, ThreadId, ToolContent, ToolKind,
+    ToolStatus, TurnState, Usage, Values,
 };
 use crate::rules::{Ending, Offered};
 use crate::settings::Harness;
@@ -48,8 +48,16 @@ const OPENING: Duration = Duration::from_secs(60);
 
 /// What a Harness said during a turn.
 pub enum Said {
-    Reply(String),
-    Thought(String),
+    /// A piece of the Agent's reply, or of its thinking: `message` names
+    /// the message it belongs to, when the Harness says.
+    Reply {
+        text: String,
+        message: Option<String>,
+    },
+    Thought {
+        text: String,
+        message: Option<String>,
+    },
     ToolStarted {
         call: String,
         title: String,
@@ -57,21 +65,17 @@ pub enum Said {
         status: ToolStatus,
         content: Vec<ToolContent>,
     },
-    /// The Agent's plan now, all its steps.
-    Planned(Vec<PlanStep>),
-    /// How full its context is now, and, when the account reached its
-    /// limit, the time it may be used again, in milliseconds since the
-    /// epoch.
-    Used {
-        usage: Usage,
-        resets: Option<i64>,
-    },
     /// `output` follows what the command printed before.
     ToolChanged {
         call: String,
         change: ToolChange,
         output: Option<String>,
     },
+    /// The steps of the Agent's plan now, all of them.
+    Steps(Vec<PlanStep>),
+    /// What it has used now, and, when the account reached its limit, the
+    /// time it may be used again, in milliseconds since the epoch.
+    Used { usage: Usage, resets: Option<i64> },
     /// The Harness asks a Person to decide, and waits for `answer`.
     Asks {
         call: String,
@@ -204,11 +208,13 @@ type Options = Arc<Mutex<HashMap<acp::SessionId, Known>>>;
 
 /// A session's options, and whether its modes are Claude Code's or Codex's:
 /// decided by the list it opened with, so a later list that leaves the modes
-/// out does not change who keeps to the Thread's mode.
+/// out does not change who keeps to the Thread's mode. And what it last
+/// said it has used, which may come between turns.
 #[derive(Clone, Default)]
 struct Known {
     native: bool,
     options: Vec<acp::SessionConfigOption>,
+    usage: Option<Usage>,
 }
 
 impl Known {
@@ -216,8 +222,17 @@ impl Known {
         Known {
             native: native(&options),
             options,
+            usage: None,
         }
     }
+}
+
+/// Keeps the options a session opened with.
+fn opened(options: &Options, session: &acp::SessionId, now: Vec<acp::SessionConfigOption>) {
+    let mut all = options.lock().unwrap();
+    let known = all.entry(session.clone()).or_default();
+    known.native = native(&now);
+    known.options = now;
 }
 
 /// Keeps a session's newest options. An empty list, which is what an update
@@ -341,10 +356,7 @@ impl Connection {
         if let Some(session) = earlier.and_then(|e| e.continued_by(&self.harness))
             && let Some(options) = self.continue_session(&session, folder).await
         {
-            self.options
-                .lock()
-                .unwrap()
-                .insert(session.clone(), Known::new(options));
+            opened(&self.options, &session, options);
             sessions.insert(thread, session.clone());
             return Ok((Session(session), Opened::Continued));
         }
@@ -362,10 +374,7 @@ impl Connection {
             }
         };
         let options = made.config_options.unwrap_or_default();
-        self.options
-            .lock()
-            .unwrap()
-            .insert(made.session_id.clone(), Known::new(options));
+        opened(&self.options, &made.session_id, options);
         sessions.insert(thread, made.session_id.clone());
         let evidence = Evidence {
             harness: self.harness.clone(),
@@ -510,6 +519,11 @@ impl Connection {
         (hear, done)
     }
 
+    /// What the session last said it has used, if it has.
+    pub fn usage(&self, Session(session): &Session) -> Option<Usage> {
+        self.options.lock().unwrap().get(session)?.usage.clone()
+    }
+
     /// Asks the Harness to stop the session's turn.
     pub fn cancel(&self, Session(session): &Session) -> Result<(), String> {
         self.cx
@@ -539,6 +553,12 @@ async fn drive(
                     }
                     update => said(update),
                 };
+                // What it has used may come between turns: the next turn
+                // writes what it last said.
+                if let Some(Said::Used { usage, .. }) = &said {
+                    let mut all = options.lock().unwrap();
+                    all.entry(note.session_id.clone()).or_default().usage = Some(usage.clone());
+                }
                 if let Some(said) = said
                     && let Some(route) = heard.lock().unwrap().get(&note.session_id)
                 {
@@ -716,6 +736,10 @@ async fn drive(
     routes.lock().unwrap().clear();
 }
 
+fn message_of(chunk: &acp::ContentChunk) -> Option<String> {
+    chunk.message_id.as_ref().map(|id| id.0.to_string())
+}
+
 fn text_of(chunk: &acp::ContentChunk) -> Option<String> {
     match &chunk.content {
         acp::ContentBlock::Text(text) => Some(text.text.clone()),
@@ -725,8 +749,14 @@ fn text_of(chunk: &acp::ContentChunk) -> Option<String> {
 
 fn said(update: acp::SessionUpdate) -> Option<Said> {
     match update {
-        acp::SessionUpdate::AgentMessageChunk(chunk) => text_of(&chunk).map(Said::Reply),
-        acp::SessionUpdate::AgentThoughtChunk(chunk) => text_of(&chunk).map(Said::Thought),
+        acp::SessionUpdate::AgentMessageChunk(chunk) => {
+            let message = message_of(&chunk);
+            text_of(&chunk).map(|text| Said::Reply { text, message })
+        }
+        acp::SessionUpdate::AgentThoughtChunk(chunk) => {
+            let message = message_of(&chunk);
+            text_of(&chunk).map(|text| Said::Thought { text, message })
+        }
         acp::SessionUpdate::ToolCall(call) => Some(Said::ToolStarted {
             call: call.tool_call_id.0.to_string(),
             title: call.title,
@@ -759,29 +789,19 @@ fn said(update: acp::SessionUpdate) -> Option<Said> {
                     .map(str::to_owned),
             })
         }
-        acp::SessionUpdate::Plan(plan) => Some(Said::Planned(
+        acp::SessionUpdate::Plan(plan) => Some(Said::Steps(
             plan.entries
                 .into_iter()
                 .map(|entry| PlanStep {
                     text: entry.content,
-                    state: match entry.status {
-                        acp::PlanEntryStatus::InProgress => StepState::InProgress,
-                        acp::PlanEntryStatus::Completed => StepState::Done,
-                        _ => StepState::Pending,
-                    },
+                    state: step_state(&entry.status),
                 })
                 .collect(),
         )),
-        acp::SessionUpdate::UsageUpdate(usage) => {
-            let tokens = |n: u64| u32::try_from(n).unwrap_or(u32::MAX);
-            Some(Said::Used {
-                usage: Usage {
-                    used: tokens(usage.used),
-                    size: tokens(usage.size),
-                },
-                resets: resets(usage.meta.as_ref()),
-            })
-        }
+        acp::SessionUpdate::UsageUpdate(update) => Some(Said::Used {
+            resets: resets(update.meta.as_ref()),
+            usage: usage(update),
+        }),
         acp::SessionUpdate::Notice(notice) => Some(Said::Notice(match notice.description {
             Some(more) if !more.trim().is_empty() => format!("{} {more}", notice.title),
             _ => notice.title,
@@ -1260,6 +1280,28 @@ fn tool_kind(kind: acp::ToolKind) -> ToolKind {
         acp::ToolKind::Think => ToolKind::Think,
         acp::ToolKind::Fetch => ToolKind::Fetch,
         _ => ToolKind::Other,
+    }
+}
+
+fn step_state(status: &acp::PlanEntryStatus) -> StepState {
+    match status {
+        acp::PlanEntryStatus::InProgress => StepState::InProgress,
+        acp::PlanEntryStatus::Completed => StepState::Done,
+        _ => StepState::Pending,
+    }
+}
+
+fn usage(update: acp::UsageUpdate) -> Usage {
+    let tokens = |n: u64| u32::try_from(n).unwrap_or(u32::MAX);
+    Usage {
+        used: tokens(update.used),
+        size: tokens(update.size),
+        cost: update.cost.and_then(|cost| {
+            Some(Cost {
+                amount: serde_json::Number::from_f64(cost.amount)?,
+                currency: cost.currency,
+            })
+        }),
     }
 }
 

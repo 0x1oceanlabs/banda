@@ -38,7 +38,7 @@ import {
   MessageScrollerProvider,
   MessageScrollerViewport,
 } from "@bandaso/ui/components/message-scroller"
-import { RingMeter } from "@bandaso/ui/components/meter"
+import { RingMeter } from "@bandaso/ui/components/ring-meter"
 import { Spinner } from "@bandaso/ui/components/spinner"
 import {
   Trace,
@@ -244,20 +244,32 @@ function ThreadPane({
   )
 }
 
-/** How full the Agent's context is: a ring, and the share. */
-function ContextUsed({ usage: { used, size } }: { usage: Usage }) {
+/** From this share of its context used, an Agent is near the point where
+ * its Harness compacts or stops: the share shows as a warning. */
+const NEARLY_FULL = 80
+
+/** How full the Agent's context is: a ring, and the share; what it cost
+ * so far on hover, when the Harness says. */
+function ContextUsed({ usage: { used, size, cost } }: { usage: Usage }) {
   const share = size > 0 ? Math.round((used / size) * 100) : 0
   const tokens = new Intl.NumberFormat("en", { notation: "compact" })
-  const words = `${share}% of the context used: ${tokens.format(used)} of ${tokens.format(size)} tokens`
+  const spent =
+    cost &&
+    new Intl.NumberFormat("en", {
+      style: "currency",
+      currency: cost.currency,
+    }).format(cost.amount)
+  const words =
+    `${share}% of the context used: ${tokens.format(used)} of ${tokens.format(size)} tokens` +
+    (spent ? `. ${spent} so far.` : ".")
   return (
     <span
       title={words}
-      data-full={share >= 80 || undefined}
+      data-full={share >= NEARLY_FULL || undefined}
       className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground tabular-nums data-full:text-destructive"
     >
       <RingMeter
-        value={used}
-        max={Math.max(size, 1)}
+        value={share}
         aria-label="Context used"
         getAriaValueText={() => words}
       />

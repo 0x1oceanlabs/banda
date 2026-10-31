@@ -4,7 +4,7 @@
 use bandaso_agents::Agents;
 use bandaso_agents::model::{
     Body, Exit, Failure, Mode, OptionValue, QuestionState, Settings, StepState, ThreadView,
-    ToolContent, ToolStatus, TurnState, Usage,
+    ToolContent, ToolStatus, TurnState,
 };
 use bandaso_agents::settings::{Harness, Harnesses};
 use bandaso_kernel::{AgentId, Code, CommandId, Kernel, Participant, PersonId, SpaceId};
@@ -1134,12 +1134,12 @@ async fn an_agents_plan_is_one_item_that_follows_its_steps() {
         steps.iter().all(|s| s.state == StepState::Done),
         "{steps:?}"
     );
+    let usage = view.usage.expect("what it used");
+    assert_eq!((usage.used, usage.size), (52_000, 200_000));
+    let cost = usage.cost.expect("what it cost");
     assert_eq!(
-        view.usage,
-        Some(Usage {
-            used: 52_000,
-            size: 200_000
-        })
+        (cost.amount.as_f64(), cost.currency.as_str()),
+        (Some(0.25), "USD")
     );
 
     let (_, view) = world.finish(Some(&thread), "work in steps again").await;
@@ -1148,4 +1148,35 @@ async fn an_agents_plan_is_one_item_that_follows_its_steps() {
         .filter(|t| t.starts_with("plan"))
         .count();
     assert_eq!(plans, 2, "each turn's plan is its own");
+}
+
+#[tokio::test]
+async fn a_cleared_plan_shows_no_steps_and_none_is_made_for_it() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let (thread, view) = world.finish(None, "work in steps, then clear").await;
+    assert_eq!(texts(&view)[1], "plan: 0 steps");
+    let (_, view) = world.finish(Some(&thread), "clear the plan").await;
+    assert_eq!(texts(&view)[4..], ["message: Nothing to plan."]);
+}
+
+#[tokio::test]
+async fn a_new_message_id_starts_a_new_message() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let (_, view) = world.finish(None, "say it twice").await;
+    assert_eq!(
+        texts(&view)[1..],
+        ["message: First. Still first.", "message: Second."]
+    );
+}
+
+#[tokio::test]
+async fn what_the_agent_used_between_turns_reaches_the_thread_with_the_next() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let (thread, _) = world.finish(None, "stop for later").await;
+    tokio::time::sleep(std::time::Duration::from_millis(300)).await;
+    let (_, view) = world.finish(Some(&thread), "hello").await;
+    assert_eq!(view.usage.map(|u| u.used), Some(150_000));
 }

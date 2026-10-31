@@ -4,21 +4,18 @@ import { cn } from "cn"
 const RADIUS = 6
 const AROUND = 2 * Math.PI * RADIUS
 
-/** How full something is, as a small ring that fills clockwise. */
+/** How full something is, in percent, as a small ring that fills
+ * clockwise. */
 function RingMeter({
   className,
   value,
-  min = 0,
-  max = 100,
   ...props
-}: MeterPrimitive.Root.Props) {
-  const share = Math.min(1, Math.max(0, (value - min) / (max - min || 1)))
+}: Omit<MeterPrimitive.Root.Props, "min" | "max">) {
+  const share = Math.min(100, Math.max(0, value)) / 100
   return (
     <MeterPrimitive.Root
       data-slot="ring-meter"
       value={value}
-      min={min}
-      max={max}
       className={cn("inline-flex size-4 shrink-0", className)}
       {...props}
     >
