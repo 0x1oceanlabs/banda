@@ -111,8 +111,9 @@ impl Method {
             | Method::Thread
             | Method::Defaults => Right::Read,
             Method::Create => Right::Manage,
-            Method::Send | Method::Configure | Method::Stop | Method::Retry => Right::Write,
-            Method::Answer => Right::Decide,
+            Method::Send | Method::Stop | Method::Retry => Right::Write,
+            // How freely an Agent acts decides what it asks a Person.
+            Method::Configure | Method::Answer => Right::Decide,
         }
     }
 }
@@ -297,10 +298,16 @@ impl Module for Agents {
                         Ok(Offer::default())
                     })
                     .await?;
-                value(Defaults {
-                    settings: found.settings.clone(),
-                    offer,
-                })
+                // What the composer shows is what the new Thread gets: the
+                // Agent's settings, and the Harness's values where it has none.
+                let mut settings = found.settings.clone();
+                for option in &offer.options {
+                    settings
+                        .options
+                        .entry(option.id.clone())
+                        .or_insert_with(|| option.value.clone());
+                }
+                value(Defaults { settings, offer })
             }
             Method::Send => {
                 let Send {
@@ -314,6 +321,9 @@ impl Module for Agents {
                 }
                 let found = settings::agent(space.folder(), agent)?;
                 let author = call.participant();
+                if settings.is_some() {
+                    rules::may_choose(author)?;
+                }
                 let settings = match (thread, settings) {
                     (None, None) => Some(found.settings),
                     (_, settings) => settings,
@@ -445,7 +455,8 @@ fn send(
         state: TurnState::Queued,
     };
     store::insert_item(tx.sql(), thread, &item)?;
-    store::insert_turn(tx.sql(), &turn, author, now)?;
+    let settings = store::settings(tx.sql(), thread)?;
+    store::insert_turn(tx.sql(), &turn, author, now, &settings)?;
     store::touch_thread(tx.sql(), thread, now)?;
     let sent = Sent {
         thread,
@@ -483,7 +494,8 @@ fn stop(tx: &mut Tx<'_>, turn: TurnId) -> Result<Value, Error> {
 }
 
 /// Tries a failed turn's message again, in a new turn that waits behind the
-/// Thread's earlier turns. The failed turn stays as it ended.
+/// Thread's earlier turns, with the Thread's settings now. The failed turn
+/// stays as it ended.
 fn retry(tx: &mut Tx<'_>, author: Participant, turn: TurnId) -> Result<Value, Error> {
     let found =
         store::turn(tx.sql(), turn)?.ok_or_else(|| Refusal::not_found("There is no such turn."))?;
@@ -495,7 +507,8 @@ fn retry(tx: &mut Tx<'_>, author: Participant, turn: TurnId) -> Result<Value, Er
         ..found
     };
     let now = tx.now();
-    store::insert_turn(tx.sql(), &again, author, now)?;
+    let settings = store::settings(tx.sql(), again.thread)?;
+    store::insert_turn(tx.sql(), &again, author, now, &settings)?;
     store::touch_thread(tx.sql(), again.thread, now)?;
     let queued = Fact::TurnQueued {
         turn: again.id,

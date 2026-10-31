@@ -154,7 +154,43 @@ const COLLABORATION: &str = "collaboration_mode";
 
 type Routes = Arc<Mutex<HashMap<acp::SessionId, mpsc::UnboundedSender<Said>>>>;
 /// Each session's options, as the Harness last said.
-type Options = Arc<Mutex<HashMap<acp::SessionId, Vec<acp::SessionConfigOption>>>>;
+type Options = Arc<Mutex<HashMap<acp::SessionId, Known>>>;
+
+/// A session's options, and whether its modes are Claude Code's or Codex's:
+/// decided by the list it opened with, so a later list that leaves the modes
+/// out does not change who keeps to the Thread's mode.
+#[derive(Clone, Default)]
+struct Known {
+    native: bool,
+    options: Vec<acp::SessionConfigOption>,
+}
+
+impl Known {
+    fn new(options: Vec<acp::SessionConfigOption>) -> Known {
+        Known {
+            native: native(&options),
+            options,
+        }
+    }
+}
+
+/// Keeps a session's newest options. An empty list, which is what an update
+/// that cannot be read becomes, keeps the last.
+fn learn(options: &Options, session: &acp::SessionId, now: Vec<acp::SessionConfigOption>) -> Known {
+    let mut all = options.lock().unwrap();
+    match all.get_mut(session) {
+        Some(known) => {
+            if !now.is_empty() {
+                known.options = now;
+            }
+            known.clone()
+        }
+        None => all
+            .entry(session.clone())
+            .or_insert(Known::new(now))
+            .clone(),
+    }
+}
 
 /// What the Harness said it can do with sessions.
 #[derive(Clone, Copy)]
@@ -262,7 +298,7 @@ impl Connection {
             self.options
                 .lock()
                 .unwrap()
-                .insert(session.clone(), options);
+                .insert(session.clone(), Known::new(options));
             sessions.insert(thread, session.clone());
             return Ok((Session(session), Opened::Continued));
         }
@@ -283,7 +319,7 @@ impl Connection {
         self.options
             .lock()
             .unwrap()
-            .insert(made.session_id.clone(), options);
+            .insert(made.session_id.clone(), Known::new(options));
         sessions.insert(thread, made.session_id.clone());
         let evidence = Evidence {
             harness: self.harness.clone(),
@@ -342,11 +378,16 @@ impl Connection {
         Session(session): &Session,
         wanted: &Settings,
     ) -> (Running, Vec<String>) {
-        let known = self.options.lock().unwrap().get(session).cloned();
-        let mut options = known.unwrap_or_default();
         let (mut tried, mut refused) = (Vec::new(), Vec::new());
-        while let Some((id, value)) = next_change(&options, wanted, &tried) {
-            let name = options
+        let known = loop {
+            // Read again each time: an update may have come since.
+            let known = self.options.lock().unwrap().get(session).cloned();
+            let known = known.unwrap_or_default();
+            let Some((id, value)) = next_change(&known, wanted, &tried) else {
+                break known;
+            };
+            let name = known
+                .options
                 .iter()
                 .find(|o| *o.id.0 == *id)
                 .map_or_else(|| id.clone(), |o| o.name.clone());
@@ -358,7 +399,9 @@ impl Connection {
             tried.push(id);
             let asked = self.cx.send_request(set).block_task();
             match timeout(OPENING, asked).await {
-                Ok(Ok(answer)) => options = answer.config_options,
+                Ok(Ok(answer)) => {
+                    learn(&self.options, session, answer.config_options);
+                }
                 Ok(Err(error)) => refused.push(format!(
                     "{} did not take the setting {name}: {}",
                     self.name, error.message
@@ -368,12 +411,21 @@ impl Connection {
                     self.name
                 )),
             }
+        };
+        let running = running(&known);
+        let mode_set = known
+            .options
+            .iter()
+            .any(|o| is_mode(o) && tried.iter().any(|t| **t == *o.id.0));
+        let planning = wanted.plan && running.plan;
+        if running.native && mode_set && !planning && running.mode != Some(wanted.mode) {
+            let runs = running.mode.map_or("a mode of its own", Mode::name);
+            refused.push(format!(
+                "{} offers no {} here, so it runs in {runs}.",
+                self.name,
+                wanted.mode.name()
+            ));
         }
-        let running = running(&options);
-        self.options
-            .lock()
-            .unwrap()
-            .insert(session.clone(), options);
         (running, refused)
     }
 
@@ -433,11 +485,14 @@ async fn drive(
         .name("bandaso")
         .on_receive_notification(
             async move |note: acp::SessionNotification, _cx: ConnectionTo<Agent>| {
-                if let acp::SessionUpdate::ConfigOptionUpdate(update) = &note.update {
-                    let now = update.config_options.clone();
-                    options.lock().unwrap().insert(note.session_id.clone(), now);
-                }
-                if let Some(said) = said(note.update)
+                let said = match note.update {
+                    acp::SessionUpdate::ConfigOptionUpdate(update) => {
+                        let known = learn(&options, &note.session_id, update.config_options);
+                        Some(Said::Runs(running(&known)))
+                    }
+                    update => said(update),
+                };
+                if let Some(said) = said
                     && let Some(route) = heard.lock().unwrap().get(&note.session_id)
                 {
                     let _ = route.send(said);
@@ -557,9 +612,6 @@ fn said(update: acp::SessionUpdate) -> Option<Said> {
             _ => notice.title,
         })),
         acp::SessionUpdate::UsageUpdate(usage) => resets(usage.meta.as_ref()).map(Said::Resets),
-        acp::SessionUpdate::ConfigOptionUpdate(update) => {
-            Some(Said::Runs(running(&update.config_options)))
-        }
         _ => None,
     }
 }
@@ -614,15 +666,24 @@ fn mode_of(value: &str) -> Option<Mode> {
         .map(|(mode, _)| *mode)
 }
 
-/// Whether the Harness has modes Bandaso knows: Claude Code's or Codex's.
+/// Whether the Harness has modes Bandaso knows: Claude Code's or Codex's,
+/// told by the two strictest, which each offers always. Another Harness's
+/// mode named `default` is not enough.
 fn native(options: &[acp::SessionConfigOption]) -> bool {
-    let modes = options.iter().find(|o| is_mode(o));
-    modes.is_some_and(|o| values(o).into_iter().any(|v| mode_of(v).is_some()))
+    let Some(modes) = options.iter().find(|o| is_mode(o)) else {
+        return false;
+    };
+    let offers = values(modes);
+    (0..2).any(|harness| {
+        MODES[..2]
+            .iter()
+            .all(|(_, names)| offers.contains(&names[harness]))
+    })
 }
 
 /// What a session runs with, from its options.
-fn running(options: &[acp::SessionConfigOption]) -> Running {
-    let native = native(options);
+fn running(known: &Known) -> Running {
+    let (native, options) = (known.native, &known.options);
     let modes = options.iter().find(|o| is_mode(o));
     let collaboration = options.iter().find(|o| is_collaboration(o));
     let now = |option: Option<&acp::SessionConfigOption>| match option.and_then(current) {
@@ -729,11 +790,11 @@ fn wanted_value(
 /// plan, the model, then the rest in the Harness's order. `tried` are the
 /// options set already this time.
 fn next_change(
-    options: &[acp::SessionConfigOption],
+    known: &Known,
     wanted: &Settings,
     tried: &[String],
 ) -> Option<(String, acp::SessionConfigOptionValue)> {
-    let native = native(options);
+    let (native, options) = (known.native, &known.options);
     let order = |o: &acp::SessionConfigOption| {
         if native && is_mode(o) {
             0
@@ -894,13 +955,14 @@ mod tests {
     }
 
     /// Sets each next change in turn, as the Harness would take it.
-    fn settle(mut options: Vec<acp::SessionConfigOption>, wanted: &Settings) -> Vec<String> {
+    fn settle(options: Vec<acp::SessionConfigOption>, wanted: &Settings) -> Vec<String> {
+        let mut known = Known::new(options);
         let mut tried = Vec::new();
         let mut set = Vec::new();
-        while let Some((id, value)) = next_change(&options, wanted, &tried) {
+        while let Some((id, value)) = next_change(&known, wanted, &tried) {
             let value = value.as_value_id().unwrap().0.to_string();
             set.push(format!("{id}={value}"));
-            let option = options.iter_mut().find(|o| *o.id.0 == *id).unwrap();
+            let option = known.options.iter_mut().find(|o| *o.id.0 == *id).unwrap();
             if let acp::SessionConfigKind::Select(select) = &mut option.kind {
                 select.current_value = acp::SessionConfigValueId::new(value);
             }
@@ -919,7 +981,7 @@ mod tests {
             settle(codex(), &wanted),
             ["mode=agent-full-access", "collaboration_mode=plan"]
         );
-        let running = running(&codex());
+        let running = running(&Known::new(codex()));
         assert!(running.native && running.offer.plans);
         assert_eq!(running.mode, Some(Mode::Auto));
         let offered: Vec<_> = running
@@ -961,12 +1023,42 @@ mod tests {
     }
 
     #[test]
+    fn a_mode_named_default_alone_is_not_claude_codes() {
+        let other = vec![
+            select("mode", "default", &["default", "autoEdit", "yolo"])
+                .category(acp::SessionConfigOptionCategory::Mode),
+        ];
+        assert!(!native(&other));
+        assert!(native(&codex()));
+    }
+
+    #[test]
+    fn a_session_keeps_who_enforces_its_mode_and_its_last_options() {
+        let options = Options::default();
+        let session = acp::SessionId::new("s");
+        assert!(learn(&options, &session, codex()).native);
+        let kept = learn(&options, &session, Vec::new());
+        assert_eq!(
+            kept.options.len(),
+            codex().len(),
+            "an empty list keeps the last"
+        );
+        let model = vec![codex().remove(2)];
+        let now = learn(&options, &session, model);
+        assert!(
+            now.native,
+            "a list without the modes changes nothing about them"
+        );
+        assert_eq!(now.options.len(), 1);
+    }
+
+    #[test]
     fn modes_bandaso_does_not_know_are_options_like_any_other() {
         let other = vec![
             select("mode", "ask", &["ask", "code"])
                 .category(acp::SessionConfigOptionCategory::Mode),
         ];
-        let running = running(&other);
+        let running = running(&Known::new(other.clone()));
         assert!(!running.native && !running.offer.plans);
         assert_eq!(running.offer.options[0].id, "mode");
         let mut wanted = Settings::default();

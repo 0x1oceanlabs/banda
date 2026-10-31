@@ -4,7 +4,18 @@
 use crate::model::{
     Body, Choice, Fact, Failure, ItemId, Mode, QuestionState, ToolKind, TurnId, TurnState,
 };
-use bandaso_kernel::Refusal;
+use bandaso_kernel::{Participant, Refusal};
+
+/// How freely an Agent acts is a Person's choice: an Agent sends a message
+/// with the settings its Thread has, and changes none.
+pub fn may_choose(author: Participant) -> Result<(), Refusal> {
+    match author {
+        Participant::Person(_) => Ok(()),
+        Participant::Agent(_) => Err(Refusal::forbidden(
+            "Only a Person chooses how freely an Agent acts.",
+        )),
+    }
+}
 
 /// Whether a turn may start now: it waits, and nobody stopped it.
 pub fn may_start(state: TurnState) -> bool {

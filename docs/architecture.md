@@ -192,11 +192,15 @@ If Chat is removed, Agents still works through its own Thread.
   their own.
 - **A Thread has settings: a mode, Plan, and the Harness's options.** The
   modes are Supervised, Auto-accept edits, Auto and Full access, the
-  default. A Person changes them under the message box
-  (`agents.configure`), and a turn sets them on the session when it
+  default. Only a Person changes them, under the message box
+  (`agents.configure`, which needs the Decide right): how freely an Agent
+  acts decides what it asks. Each message keeps the settings its Thread
+  had when it was sent, and its turn sets them on the session when it
   starts. The options come from the Harness, as it last offered them in
   the Thread (`thread.offered`); Bandaso keeps no model list of its own.
-  When the Harness leaves a plan by itself, the Thread's settings follow.
+  When the Harness starts or leaves a plan by itself, the Thread's settings
+  follow; a mode it moves to otherwise, or a stricter one it runs in
+  because it lacks the chosen one, is a notice.
 - **A Question is answered by a Person.** It shows every answer the
   Harness offers, its "always" answers too. A Harness without modes of its
   own does not ask: the engine answers its Questions by the Thread's mode,
@@ -236,8 +240,9 @@ module reaches a Harness through an adapter:
   never the Harness's name. A failure's class comes from ACP's error codes
   and the data the adapters attach to an error.
 - **Modes.** Each mode becomes the Harness's own where it has Claude
-  Code's or Codex's modes, never freer than the one chosen when the Harness
-  lacks it; the Harness then decides when to ask. Plan is Claude Code's
+  Code's or Codex's modes, told by their two strictest values when the
+  session opens; never freer than the one chosen when the Harness lacks
+  it; the Harness then decides when to ask. Plan is Claude Code's
   plan mode and Codex's collaboration mode. Any other Harness's modes are
   options like the rest. The table is in `acp.rs`.
 

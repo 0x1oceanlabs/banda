@@ -55,9 +55,13 @@ CREATE INDEX agents_items_by_thread ON agents_items (thread);
 ALTER TABLE agents_turns ADD COLUMN failure TEXT;
 "#,
     r#"
--- What the Thread runs with, and what its Harness last offered, as JSON.
+-- What the Thread runs with, and what its Harness last offered, as JSON;
+-- and what each turn was sent with. Threads from before ran in their
+-- Harness's own mode and asked a Person, so they stay Supervised.
 ALTER TABLE agents_threads ADD COLUMN settings TEXT;
 ALTER TABLE agents_threads ADD COLUMN offer TEXT;
+ALTER TABLE agents_turns ADD COLUMN settings TEXT;
+UPDATE agents_threads SET settings = '{"mode":"supervised"}';
 "#,
 ];
 
@@ -237,15 +241,17 @@ pub struct Turn {
     pub state: TurnState,
 }
 
+/// A turn, with the settings it runs with: its Thread's when it was sent.
 pub fn insert_turn(
     sql: &Connection,
     turn: &Turn,
     author: Participant,
     at: i64,
+    settings: &Settings,
 ) -> Result<(), Error> {
     sql.execute(
-        "INSERT INTO agents_turns (id, thread, agent, author, message, state, created_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)",
+        "INSERT INTO agents_turns (id, thread, agent, author, message, state, settings, created_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
         params![
             turn.id,
             turn.thread,
@@ -253,10 +259,25 @@ pub fn insert_turn(
             json(&author)?,
             turn.message,
             state_word(turn.state),
+            json(settings)?,
             at
         ],
     )?;
     Ok(())
+}
+
+/// What a turn runs with; a turn from before turns kept it runs with its
+/// Thread's.
+pub fn turn_settings(sql: &Connection, turn: &Turn) -> Result<Settings, Error> {
+    let text: Option<String> = sql.query_row(
+        "SELECT settings FROM agents_turns WHERE id = ?1",
+        params![turn.id],
+        |row| row.get(0),
+    )?;
+    match text {
+        Some(text) => Ok(serde_json::from_str(&text)?),
+        None => settings(sql, turn.thread),
+    }
 }
 
 pub fn turn(sql: &Connection, id: TurnId) -> Result<Option<Turn>, Error> {

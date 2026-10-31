@@ -53,6 +53,18 @@ pub enum Mode {
     FullAccess,
 }
 
+impl Mode {
+    /// Its name, as the window shows it.
+    pub fn name(self) -> &'static str {
+        match self {
+            Mode::Supervised => "Supervised",
+            Mode::AcceptEdits => "Auto-accept edits",
+            Mode::Auto => "Auto",
+            Mode::FullAccess => "Full access",
+        }
+    }
+}
+
 /// A value of one of the Harness's options: a choice's ID, or on or off.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(untagged)]
