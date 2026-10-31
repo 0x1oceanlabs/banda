@@ -8,7 +8,12 @@ import {
 } from "@bandaso/ui/components/input-group"
 import { RingMeter } from "@bandaso/ui/components/ring-meter"
 import { Spinner } from "@bandaso/ui/components/spinner"
-import { ArrowUpIcon, ImagePlusIcon, SquareIcon } from "lucide-react"
+import {
+  ArrowUpIcon,
+  ImagePlusIcon,
+  ListPlusIcon,
+  SquareIcon,
+} from "lucide-react"
 import { AttachmentList, type Attached, type Attachments } from "./Attachments"
 import { imagesAmong, KINDS } from "./images"
 import { ownCommand, type Suggested } from "./slash"
@@ -18,13 +23,15 @@ import { useSlashMenu } from "./SlashMenu"
  * Where a Person writes to the Agent: the text, with the slash commands
  * it can start with; the images it carries, added with the button or by
  * pasting them; and Send, or Stop while the Agent works and nothing is
- * written.
+ * written. While the Agent works, a message goes into its turn (Enter, as
+ * T3 Code's default) or waits for the turn to end (Queue, Ctrl+Enter).
  */
 export function Composer({
   name,
   focused,
   busy,
   working,
+  steering,
   usage,
   commands,
   images,
@@ -37,7 +44,10 @@ export function Composer({
   name: string
   focused: boolean
   busy: boolean
+  /** The turn Stop stops: the one that runs, or the next. */
   working: TurnView | undefined
+  /** A turn runs, so a message can go into it. */
+  steering: boolean
   /** How full the Agent's context is, once its Harness has said. */
   usage?: Usage
   /** The slash commands a message can start with, suggested as it is
@@ -49,8 +59,9 @@ export function Composer({
   dropping: boolean
   /** Switches the Thread's plan mode, for `/plan` and `/default`. */
   onPlanMode: (on: boolean) => void
-  /** Sends the text and the images; resolves whether it went. */
-  onSend: (text: string, images: Attached[]) => Promise<boolean>
+  /** Sends the text and the images, into the turn that runs if `steer`;
+   * resolves whether it went. */
+  onSend: (text: string, images: Attached[], steer: boolean) => Promise<boolean>
   onStop: (turn: TurnView) => void
   /** What the Thread runs with, beside the send button. */
   children?: React.ReactNode
@@ -74,7 +85,7 @@ export function Composer({
 
   const written = text.trim() !== "" || images.adding.length > 0
   const ready = written && !busy && !images.busy
-  const send = async () => {
+  const send = async (steer: boolean) => {
     if (!ready) return
     // A message that is only `/plan` or `/default` switches plan mode.
     const own = images.adding.length === 0 && ownCommand(text, commands)
@@ -83,7 +94,7 @@ export function Composer({
       return
     }
     const sending = images.attached
-    if (await onSend(text, sending)) {
+    if (await onSend(text, sending, steer && steering)) {
       setText("")
       images.sent(sending)
     }
@@ -94,7 +105,7 @@ export function Composer({
       className="relative flex flex-col gap-1.5"
       onSubmit={(event) => {
         event.preventDefault()
-        void send()
+        void send(true)
       }}
     >
       {images.problem && (
@@ -147,7 +158,8 @@ export function Composer({
               !event.nativeEvent.isComposing
             ) {
               event.preventDefault()
-              void send()
+              // Ctrl (⌘ on a Mac) does the other thing: it queues.
+              void send(!(event.ctrlKey || event.metaKey))
             }
           }}
         />
@@ -177,15 +189,35 @@ export function Composer({
               <SquareIcon className="fill-current" />
             </InputGroupButton>
           ) : (
-            <InputGroupButton
-              type="submit"
-              variant="default"
-              size="icon-sm"
-              aria-label="Send"
-              disabled={!ready}
-            >
-              {busy ? <Spinner /> : <ArrowUpIcon />}
-            </InputGroupButton>
+            <>
+              {steering && (
+                <InputGroupButton
+                  type="button"
+                  variant="ghost"
+                  size="icon-sm"
+                  aria-label="Queue"
+                  title={`Queue it: it goes once ${name} is done (Ctrl+Enter).`}
+                  disabled={!ready}
+                  onClick={() => void send(false)}
+                >
+                  <ListPlusIcon />
+                </InputGroupButton>
+              )}
+              <InputGroupButton
+                type="submit"
+                variant="default"
+                size="icon-sm"
+                aria-label={steering ? "Send now" : "Send"}
+                title={
+                  steering
+                    ? `Send it now: ${name} reads it as it works (Enter).`
+                    : undefined
+                }
+                disabled={!ready}
+              >
+                {busy ? <Spinner /> : <ArrowUpIcon />}
+              </InputGroupButton>
+            </>
           )}
         </InputGroupAddon>
       </InputGroup>

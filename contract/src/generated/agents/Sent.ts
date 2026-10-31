@@ -4,6 +4,7 @@ import type { ThreadId } from "./ThreadId";
 import type { TurnId } from "./TurnId";
 
 /**
- * What `agents.send` answers.
+ * What `agents.send` answers: the turn that will run the message, or
+ * the running one it went into.
  */
 export type Sent = { thread: ThreadId, turn: TurnId, item: ItemId, };

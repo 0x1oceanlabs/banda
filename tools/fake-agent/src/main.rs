@@ -13,6 +13,9 @@
 //! - `quit`: ends the turn as cancelled, though nobody stopped it.
 //! - `slow`: replies in forty pieces, fifty milliseconds apart, and stops
 //!   early when cancelled.
+//! - `wait`: says it waits, then waits for a message sent into its turn
+//!   (`_session/steering`) and replies to that, or stops when cancelled.
+//!   A message sent into any other turn is taken and goes unanswered.
 //! - `fail`: answers the prompt with an error.
 //! - `flaky`: fails the first time this process sees the prompt, and
 //!   answers as anything else does after that.
@@ -47,7 +50,8 @@
 //! Code's modes, a `model`, and `brief`, on or off, for a client that shows
 //! such options. With `FAKE_AGENT_NO_MODES` set it has no modes, as an ACP
 //! agent other than Claude Code and Codex. With `FAKE_AGENT_NO_IMAGES` set
-//! it takes no images.
+//! it takes no images, and with `FAKE_AGENT_NO_STEERING` no message into a
+//! running turn.
 
 use agent_client_protocol::schema::ProtocolVersion;
 use agent_client_protocol::schema::v1::{
@@ -67,11 +71,27 @@ use agent_client_protocol::schema::v1::{
     UnstructuredCommandInput, UsageUpdate,
 };
 use agent_client_protocol::{Agent, Client, ConnectionTo, Error, Responder, Stdio};
+use serde::{Deserialize, Serialize};
 use serde_json::json;
 use std::collections::{HashMap, HashSet};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use tokio::sync::mpsc;
+
+/// `_session/steering`, as Claude Code's and Codex's adapters take it.
+#[derive(Debug, Clone, Serialize, Deserialize, agent_client_protocol::JsonRpcRequest)]
+#[request(method = "_session/steering", response = SteeringResponse)]
+#[serde(rename_all = "camelCase")]
+struct SteeringRequest {
+    session_id: SessionId,
+    prompt: Vec<ContentBlock>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, agent_client_protocol::JsonRpcResponse)]
+struct SteeringResponse {
+    outcome: String,
+}
 
 #[derive(Clone, Default)]
 struct Fake {
@@ -87,6 +107,8 @@ struct Fake {
     forms: Arc<AtomicBool>,
     /// The client takes what a command prints in pieces.
     output: Arc<AtomicBool>,
+    /// The turn each session runs, by where a message sent into it goes.
+    running: Arc<Mutex<HashMap<SessionId, mpsc::UnboundedSender<String>>>>,
     setups: Arc<Mutex<HashMap<SessionId, Setup>>>,
 }
 
@@ -240,6 +262,7 @@ async fn turn(
     fake: Fake,
     cx: ConnectionTo<Client>,
     prompt: PromptRequest,
+    mut steered: mpsc::UnboundedReceiver<String>,
 ) -> Result<StopReason, Error> {
     let session = prompt.session_id.clone();
     if let Some(seen) = seen(&prompt.prompt) {
@@ -288,6 +311,28 @@ async fn turn(
     }
     if words.contains("quit") {
         return Ok(StopReason::Cancelled);
+    }
+    if words.contains("wait") {
+        say(
+            &cx,
+            &session,
+            SessionUpdate::AgentMessageChunk(text("Waiting.")),
+        )?;
+        loop {
+            if fake.cancelled(&session) {
+                return Ok(StopReason::Cancelled);
+            }
+            let heard = tokio::time::timeout(Duration::from_millis(50), steered.recv()).await;
+            if let Ok(Some(words)) = heard {
+                let reply = format!("Steered: {words}.");
+                say(
+                    &cx,
+                    &session,
+                    SessionUpdate::AgentMessageChunk(text(&reply)),
+                )?;
+                return Ok(StopReason::EndTurn);
+            }
+        }
     }
     if words.contains("choose") {
         let reply = if fake.forms.load(Ordering::Relaxed) {
@@ -664,6 +709,8 @@ async fn main() -> Result<(), Error> {
                         request.protocol_version
                     };
                     let images = std::env::var_os("FAKE_AGENT_NO_IMAGES").is_none();
+                    let steers = std::env::var_os("FAKE_AGENT_NO_STEERING").is_none();
+                    let meta = json!({ "steering": { "supported": steers } });
                     let capabilities = AgentCapabilities::new()
                         .prompt_capabilities(PromptCapabilities::new().image(images))
                         .load_session(true)
@@ -673,6 +720,7 @@ async fn main() -> Result<(), Error> {
                     responder.respond(
                         InitializeResponse::new(protocol)
                             .agent_capabilities(capabilities)
+                            .meta(meta.as_object().cloned())
                             .agent_info(Implementation::new(
                                 "bandaso-fake-agent",
                                 env!("CARGO_PKG_VERSION"),
@@ -751,15 +799,38 @@ async fn main() -> Result<(), Error> {
                 async move |request: PromptRequest,
                             responder: Responder<PromptResponse>,
                             cx: ConnectionTo<Client>| {
-                    fake.cancelled.lock().unwrap().remove(&request.session_id);
+                    let session = request.session_id.clone();
+                    fake.cancelled.lock().unwrap().remove(&session);
+                    let (steer, steered) = mpsc::unbounded_channel();
+                    fake.running.lock().unwrap().insert(session.clone(), steer);
                     let (fake, turn_cx) = (fake.clone(), cx.clone());
                     // The turn waits on the client, so it runs off the
                     // dispatch loop.
                     cx.spawn(async move {
-                        match turn(fake, turn_cx, request).await {
+                        let ended = turn(fake.clone(), turn_cx, request, steered).await;
+                        fake.running.lock().unwrap().remove(&session);
+                        match ended {
                             Ok(stop) => responder.respond(PromptResponse::new(stop)),
                             Err(error) => responder.respond_with_error(error),
                         }
+                    })
+                }
+            },
+            agent_client_protocol::on_receive_request!(),
+        )
+        .on_receive_request(
+            {
+                let fake = fake.clone();
+                async move |request: SteeringRequest,
+                            responder: Responder<SteeringResponse>,
+                            _cx: ConnectionTo<Client>| {
+                    let running = fake.running.lock().unwrap();
+                    let outcome = match running.get(&request.session_id) {
+                        Some(turn) if turn.send(words_of(&request.prompt)).is_ok() => "injected",
+                        _ => "promptRequired",
+                    };
+                    responder.respond(SteeringResponse {
+                        outcome: outcome.to_owned(),
                     })
                 }
             },

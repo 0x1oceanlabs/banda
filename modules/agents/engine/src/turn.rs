@@ -6,6 +6,12 @@
 //! - `turn.stop`, keyed by the turn: it asks the Harness to stop.
 //! - `question.reply`, keyed by the Question, so an answer never waits
 //!   behind the turn that asked.
+//! - `turn.steer`, keyed by the Thread's steering, so messages sent into a
+//!   running turn reach it in order and never wait behind it. A message
+//!   the turn cannot take waits for a turn of its own instead ([`requeue`]).
+//!
+//! A Person's stop and a restart hold the Thread's queue: its waiting
+//! turns start once a Person lets it go ([`resume`]), as in T3 Code.
 //!
 //! Each one dies with the Harness's process, so a restart abandons it and
 //! [`settle`] writes what that means.
@@ -15,7 +21,7 @@
 //! turn answers the Harness's Questions by the mode where the mode allows,
 //! and asks the Person otherwise.
 
-use crate::acp::{Answer, Opened, Prompt, PromptImage, Running, Said, ToolChange};
+use crate::acp::{Answer, Opened, Prompt, PromptImage, Running, Said, Steered, ToolChange};
 use crate::images::Images;
 use crate::live::Live;
 use crate::model::{
@@ -35,6 +41,7 @@ use tokio::time::Instant;
 pub const START: &str = "turn.start";
 pub const STOP: &str = "turn.stop";
 pub const REPLY: &str = "question.reply";
+pub const STEER: &str = "turn.steer";
 
 /// How long pieces of a reply gather before they are written together.
 const GATHER: Duration = Duration::from_millis(80);
@@ -43,6 +50,13 @@ const STOPPING: Duration = Duration::from_secs(10);
 
 #[derive(Serialize, Deserialize)]
 pub struct TurnEffect {
+    pub turn: TurnId,
+}
+
+/// A message sent into a running turn.
+#[derive(Serialize, Deserialize)]
+pub struct SteerEffect {
+    pub item: ItemId,
     pub turn: TurnId,
 }
 
@@ -116,6 +130,127 @@ fn notice(
     emit(tx, agent, thread, &fact)
 }
 
+/// Holds the Thread's queue: its waiting turns start once a Person lets
+/// it go.
+pub fn hold(tx: &mut Tx<'_>, author: Participant, thread: ThreadId) -> Result<(), Error> {
+    if store::held(tx.sql(), thread)? {
+        return Ok(());
+    }
+    store::set_held(tx.sql(), thread, true)?;
+    let held = Fact::ThreadHeld { thread, held: true };
+    emit(tx, author, thread, &held)
+}
+
+/// Lets a held queue go on: its waiting turns start in the order they were
+/// sent.
+pub fn resume(tx: &mut Tx<'_>, author: Participant, thread: ThreadId) -> Result<(), Error> {
+    if !store::held(tx.sql(), thread)? {
+        return Ok(());
+    }
+    store::set_held(tx.sql(), thread, false)?;
+    emit(
+        tx,
+        author,
+        thread,
+        &Fact::ThreadHeld {
+            thread,
+            held: false,
+        },
+    )?;
+    for waiting in store::turns_in(tx.sql(), thread, TurnState::Queued)? {
+        let start = TurnEffect { turn: waiting.id };
+        tx.enqueue(START, &thread.to_string(), &start)?;
+    }
+    Ok(())
+}
+
+/// A new turn for `message`, which waits behind the Thread's earlier turns
+/// and runs with the Thread's settings now.
+pub fn queue(
+    tx: &mut Tx<'_>,
+    author: Participant,
+    thread: ThreadId,
+    agent: AgentId,
+    message: ItemId,
+) -> Result<TurnId, Error> {
+    let turn = store::Turn {
+        id: TurnId::new(),
+        thread,
+        agent,
+        message,
+        state: TurnState::Queued,
+    };
+    let now = tx.now();
+    let settings = store::settings(tx.sql(), thread)?;
+    store::insert_turn(tx.sql(), &turn, author, now, &settings)?;
+    store::touch_thread(tx.sql(), thread, now)?;
+    let queued = Fact::TurnQueued {
+        turn: turn.id,
+        message,
+    };
+    emit(tx, author, thread, &queued)?;
+    tx.enqueue(START, &thread.to_string(), &TurnEffect { turn: turn.id })?;
+    Ok(turn.id)
+}
+
+/// Sends a message into the turn that runs: the Thread shows it there, and
+/// the outbox hands it to the Harness. The message's item is written.
+pub fn steer_into(
+    tx: &mut Tx<'_>,
+    author: Participant,
+    running: &store::Turn,
+    item: ItemId,
+    text: String,
+    images: Vec<Image>,
+) -> Result<(), Error> {
+    let steered = Fact::MessageSteered {
+        item,
+        turn: running.id,
+        text,
+        images,
+    };
+    emit(tx, author, running.thread, &steered)?;
+    let key = format!("{}/steer", running.thread);
+    let steer = SteerEffect {
+        item,
+        turn: running.id,
+    };
+    tx.enqueue(STEER, &key, &steer)?;
+    Ok(())
+}
+
+/// A message its turn could not take waits for a turn of its own, once.
+pub fn requeue(tx: &mut Tx<'_>, item: ItemId) -> Result<(), Error> {
+    let Some((thread, found)) = store::item(tx.sql(), item)? else {
+        return Ok(());
+    };
+    if !store::turns_of(tx.sql(), item)?.is_empty() {
+        return Ok(());
+    }
+    let Some(agent) = store::agent_of(tx.sql(), thread)? else {
+        return Ok(());
+    };
+    store::set_item_turn(tx.sql(), item, None)?;
+    queue(tx, found.author, thread, agent, item)?;
+    Ok(())
+}
+
+/// Writes lines from Bandaso into the turn.
+async fn notices(space: &ModuleSpace, turn: &store::Turn, texts: Vec<String>) -> Result<(), Error> {
+    if texts.is_empty() {
+        return Ok(());
+    }
+    let (thread, id, agent) = (turn.thread, turn.id, Participant::Agent(turn.agent));
+    space
+        .write(move |tx| {
+            for text in texts {
+                notice(tx, agent, thread, id, text)?;
+            }
+            Ok(())
+        })
+        .await
+}
+
 /// Writes what it means that one of the module's effects will not run to
 /// its end.
 pub fn settle(tx: &mut Tx<'_>, effect: &Effect, settled: &Settled) -> Result<(), Error> {
@@ -129,13 +264,26 @@ pub fn settle(tx: &mut Tx<'_>, effect: &Effect, settled: &Settled) -> Result<(),
                 return Ok(());
             }
             let ending = match settled {
-                Settled::Abandoned => Ending::new(
-                    TurnState::Interrupted,
-                    Some("Bandaso stopped while the Agent worked."),
-                ),
+                Settled::Abandoned => {
+                    // After a restart the queue waits for a Person, and a
+                    // turn that never began waits in it.
+                    hold(tx, Participant::Agent(turn.agent), turn.thread)?;
+                    if turn.state == TurnState::Queued {
+                        return Ok(());
+                    }
+                    Ending::new(
+                        TurnState::Interrupted,
+                        Some("Bandaso stopped while the Agent worked."),
+                    )
+                }
                 Settled::Failed(reason) => Ending::failed(reason.clone(), None),
             };
             end(tx, &turn, ending)
+        }
+        // A message that never reached its turn is not lost.
+        STEER => {
+            let steer: SteerEffect = serde_json::from_value(effect.payload.clone())?;
+            requeue(tx, steer.item)
         }
         REPLY => {
             let reply: ReplyEffect = serde_json::from_value(effect.payload.clone())?;
@@ -208,11 +356,21 @@ pub async fn start(
             let Some(turn) = store::turn(tx.sql(), start.turn)? else {
                 return Ok(None);
             };
-            // A turn stopped while it waited never runs.
-            if !rules::may_start(turn.state) {
+            // A turn stopped while it waited never runs; one in a held
+            // queue waits until a Person lets the queue go.
+            let held = store::held(tx.sql(), turn.thread)?;
+            if !rules::may_start(turn.state, held) {
                 return Ok(None);
             }
             store::set_turn(tx.sql(), turn.id, TurnState::Running, None, None)?;
+            // A message reads where its turn starts, after what came while
+            // it waited; a message tried again stays where it was.
+            let first = store::turns_of(tx.sql(), turn.message)?
+                .first()
+                .map(|t| t.id);
+            if first == Some(turn.id) {
+                store::move_last(tx.sql(), turn.message)?;
+            }
             let (text, images) = match store::item(tx.sql(), turn.message)? {
                 Some((
                     _,
@@ -243,11 +401,117 @@ pub async fn start(
     }
 }
 
-/// Runs the turn's prompt; how it ended, or why it could not run.
 /// The message a turn sends: its text and the images it carries.
 struct Message {
     text: String,
     images: Vec<Image>,
+}
+
+/// What `message` sends `harness`, and what Bandaso tells the Person it
+/// left out; why nothing of it can go, if nothing can.
+async fn prompt_of(
+    space: &ModuleSpace,
+    harness: &str,
+    running: &Running,
+    Message { text, images }: Message,
+) -> Result<(Prompt, Vec<String>), String> {
+    let mut refused = Vec::new();
+    let mut prompt = Prompt {
+        text,
+        images: Vec::new(),
+    };
+    if running.offer.no_images && !images.is_empty() {
+        refused.push(rules::without_images(harness, &prompt.text)?);
+        return Ok((prompt, refused));
+    }
+    let files = Images::of(space.folder());
+    for image in images {
+        match files.read(image.id).await {
+            Ok(bytes) => prompt.images.push(PromptImage {
+                mime: image.mime,
+                bytes,
+            }),
+            Err(_) => refused.push(format!(
+                "{} is gone, so {harness} got the message without it.",
+                image.name.as_deref().unwrap_or("An image"),
+            )),
+        }
+    }
+    Ok((prompt, refused))
+}
+
+/// Sends a message into the turn it was sent to. A turn that cannot take
+/// it leaves it to a turn of its own: one that ended or never began, one
+/// whose Harness says no turn runs, and one whose Harness cannot take a
+/// message while it works, which stops for it, as in T3 Code.
+pub async fn steer(live: &Live, space: ModuleSpace, effect: &Effect) -> Outcome {
+    let Ok(SteerEffect { item, turn }) = serde_json::from_value(effect.payload.clone()) else {
+        return Outcome::Fail("The message could not be read.".to_owned());
+    };
+    let found = space
+        .read(move |sql| {
+            let Some(turn) = store::turn(sql, turn)? else {
+                return Ok(None);
+            };
+            let Some((_, found)) = store::item(sql, item)? else {
+                return Ok(None);
+            };
+            let Body::Message { text, images } = found.body else {
+                return Ok(None);
+            };
+            Ok(Some((turn, Message { text, images })))
+        })
+        .await;
+    let (turn, message) = match found {
+        Ok(Some(found)) => found,
+        Ok(None) => return Outcome::Done,
+        Err(error) => return Outcome::Retry(error.to_string()),
+    };
+    let requeued = |space: ModuleSpace| async move {
+        match space.write(move |tx| requeue(tx, item)).await {
+            Ok(()) => Outcome::Done,
+            Err(error) => Outcome::Retry(error.to_string()),
+        }
+    };
+    if turn.state != TurnState::Running {
+        return requeued(space).await;
+    }
+    // It runs, but its prompt has yet to reach the Harness: the outbox
+    // tries again, and the message gets a turn of its own if it never does.
+    let Some((connection, session)) = live.running(turn.id) else {
+        return Outcome::Retry("The turn has not begun yet.".to_owned());
+    };
+    if !connection.steers() {
+        let text = format!(
+            "{} cannot take a message while it works, so Bandaso stopped it to send yours.",
+            connection.name()
+        );
+        if let Err(error) = notices(&space, &turn, vec![text]).await {
+            return Outcome::Retry(error.to_string());
+        }
+        if let Err(error) = live.stop(turn.id) {
+            tracing::warn!(%error, "a turn could not be stopped for a new message");
+        }
+        return requeued(space).await;
+    }
+    let running = connection.running(&session);
+    let Ok((prompt, refused)) = prompt_of(&space, connection.name(), &running, message).await
+    else {
+        return requeued(space).await;
+    };
+    if let Err(error) = notices(&space, &turn, refused).await {
+        return Outcome::Retry(error.to_string());
+    }
+    // Marked first: what the Agent says of the message reads after it.
+    live.steered(turn.id);
+    match connection.steer(&session, &prompt).await {
+        Ok(Steered::Joined) => Outcome::Done,
+        Ok(Steered::NotNow) => requeued(space).await,
+        Err(error) => {
+            tracing::warn!(%error, "a message could not join its turn");
+            requeued(space).await
+        }
+    }
 }
 
 async fn work(
@@ -268,7 +532,7 @@ async fn run(
     harnesses: &Harnesses,
     space: &ModuleSpace,
     turn: &store::Turn,
-    Message { text, images }: Message,
+    message: Message,
     settings: Settings,
 ) -> Result<Ending, Ending> {
     let unplanned = |reason: String| Ending::failed(reason, None);
@@ -310,28 +574,10 @@ async fn run(
             .map_err(|e| unplanned(plain(e)))?;
     }
     let (running, mut refused) = connection.settle(&session, &settings).await;
-    let mut prompt = Prompt {
-        text,
-        images: Vec::new(),
-    };
-    if running.offer.no_images && !images.is_empty() {
-        refused.push(rules::without_images(&harness.name, &prompt.text).map_err(unplanned)?);
-    } else {
-        let files = Images::of(space.folder());
-        for image in images {
-            match files.read(image.id).await {
-                Ok(bytes) => prompt.images.push(PromptImage {
-                    mime: image.mime,
-                    bytes,
-                }),
-                Err(_) => refused.push(format!(
-                    "{} is gone, so {} got the message without it.",
-                    image.name.as_deref().unwrap_or("An image"),
-                    harness.name
-                )),
-            }
-        }
-    }
+    let (prompt, left_out) = prompt_of(space, &harness.name, &running, message)
+        .await
+        .map_err(unplanned)?;
+    refused.extend(left_out);
     let (id, agent, now) = (turn.id, Participant::Agent(turn.agent), running.clone());
     // What the Agent used, as it last said, between turns too.
     let usage = connection.usage(&session);
@@ -524,10 +770,12 @@ impl Writer {
     async fn hear(&mut self, live: &Live, said: Said) -> Result<(), String> {
         match said {
             Said::Reply { text, message } => {
+                self.after_steer(live).await?;
                 self.next_message(message).await?;
                 self.gather(Text::Reply, &text).await
             }
             Said::Thought { text, message } => {
+                self.after_steer(live).await?;
                 self.next_message(message).await?;
                 self.gather(Text::Thought, &text).await
             }
@@ -878,6 +1126,15 @@ impl Writer {
         self.due = None;
         self.end_text().await?;
         self.write_output().await
+    }
+
+    /// A message a Person sent into the turn ends what the Agent said
+    /// before it, for a Harness that does not name its messages.
+    async fn after_steer(&mut self, live: &Live) -> Result<(), String> {
+        if live.take_steered(self.turn) {
+            self.end_text().await?;
+        }
+        Ok(())
     }
 
     /// A message the Harness names anew ends the one it said before.

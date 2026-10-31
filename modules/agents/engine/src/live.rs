@@ -26,6 +26,9 @@ struct Turns {
     /// Turns a Person stopped. A turn that is still starting sees its stop
     /// when it begins.
     stopping: HashSet<TurnId>,
+    /// Turns a message was just sent into: what the Agent says next reads
+    /// after it.
+    steered: HashSet<TurnId>,
     questions: HashMap<ItemId, (TurnId, oneshot::Sender<Answer>)>,
     /// What Persons typed in secret fields, until it goes to the Harness.
     /// Only memory holds it.
@@ -79,6 +82,21 @@ impl Live {
             tracing::warn!(%error, "a stopped turn could not be cancelled");
         }
         turns.running.insert(turn, (connection, session));
+    }
+
+    /// The Harness and session that run the turn, once its prompt went.
+    pub fn running(&self, turn: TurnId) -> Option<(Arc<Connection>, Session)> {
+        self.turns.lock().unwrap().running.get(&turn).cloned()
+    }
+
+    /// A message goes into the running turn.
+    pub fn steered(&self, turn: TurnId) {
+        self.turns.lock().unwrap().steered.insert(turn);
+    }
+
+    /// Whether a message went into the turn since the last time asked.
+    pub fn take_steered(&self, turn: TurnId) -> bool {
+        self.turns.lock().unwrap().steered.remove(&turn)
     }
 
     /// A Person stops a turn the engine runs: its Harness hears the stop
@@ -139,6 +157,7 @@ impl Live {
     pub fn end(&self, turn: TurnId) -> bool {
         let mut turns = self.turns.lock().unwrap();
         turns.running.remove(&turn);
+        turns.steered.remove(&turn);
         turns.release(turn);
         turns.stopping.remove(&turn)
     }

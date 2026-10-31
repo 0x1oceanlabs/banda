@@ -197,6 +197,8 @@ pub enum TurnState {
     Failed,
     /// The engine stopped while it ran.
     Interrupted,
+    /// A Person took its message back before it ran.
+    Withdrawn,
 }
 
 /// Why a turn failed, so the Thread can offer what to do about it (ADR 0003,
@@ -571,6 +573,10 @@ pub struct ThreadView {
     #[ts(optional)]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub usage: Option<Usage>,
+    /// Its queue waits for a Person: a stop or a restart held it, and
+    /// sending or going on lets it go.
+    #[serde(default)]
+    pub held: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -610,6 +616,22 @@ pub enum Fact {
         #[serde(default)]
         images: Vec<Image>,
     },
+    /// A message into the turn that runs, which it joins instead of
+    /// queuing one; or a waiting message a Person sent now. It reads after
+    /// what the Thread showed before it.
+    #[serde(rename = "message.steered")]
+    MessageSteered {
+        item: ItemId,
+        turn: TurnId,
+        text: String,
+        #[serde(default)]
+        images: Vec<Image>,
+    },
+    /// A waiting message's text, changed before its turn ran.
+    #[serde(rename = "message.edited")]
+    MessageEdited { item: ItemId, text: String },
+    /// The turn runs. Its message reads after what the Thread showed
+    /// before, unless an earlier turn ran it.
     #[serde(rename = "turn.started")]
     TurnStarted { turn: TurnId },
     #[serde(rename = "turn.ended")]
@@ -623,9 +645,13 @@ pub enum Fact {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         failure: Option<Failure>,
     },
-    /// A Person tries a failed turn's message again, in a new turn.
+    /// A message waits for a turn of its own: a failed turn's, tried
+    /// again, or one that could not join the turn it was sent into.
     #[serde(rename = "turn.queued")]
     TurnQueued { turn: TurnId, message: ItemId },
+    /// The Thread's queue waits for a Person, or goes on.
+    #[serde(rename = "thread.held")]
+    ThreadHeld { thread: ThreadId, held: bool },
     /// The Thread's settings changed, by a Person or by the Harness.
     #[serde(rename = "thread.configured")]
     ThreadConfigured {

@@ -8,6 +8,8 @@ import {
   chosen,
   retryable,
   rows,
+  running,
+  waiting,
   working,
 } from "./thread"
 
@@ -177,7 +179,7 @@ test("an event already in the view, or one this window does not know, changes no
   expect(unknown.items).toBe(state.items)
 })
 
-test("a failed turn's outcome follows the last thing it wrote", () => {
+test("a failed turn's outcome follows the last thing it wrote, and a message reads where its turn started", () => {
   const state = play(
     event(
       "message.posted",
@@ -197,7 +199,7 @@ test("a failed turn's outcome follows the last thing it wrote", () => {
   )
   expect(
     rows(state).map((row) => (row.kind === "item" ? row.item.id : row.turn.id))
-  ).toEqual(["m1", "m2", "u2", "r", "u1"])
+  ).toEqual(["m1", "r", "u1", "m2", "u2"])
 })
 
 test("a failed turn is tried again in a new turn, and only the latest can be", () => {
@@ -285,4 +287,129 @@ test("an Agent's plan is one item its steps change, and the context follows", ()
     { kind: "plan", steps: steps("done", "in_progress") },
   ])
   expect(state.usage).toEqual({ used: 500, size: 1000 })
+})
+
+const ids = (state: ReturnType<typeof play>) =>
+  rows(state).map((row) => (row.kind === "item" ? row.item.id : row.turn.id))
+
+/** A Thread whose turn `u1` runs and has said "Waiting.", then `more`,
+ * made after it so the log's order holds. */
+function working1(more: () => Event[] = () => []) {
+  const base = play(
+    event(
+      "message.posted",
+      { item: "m1", turn: "u1", text: "wait" },
+      { author: person }
+    ),
+    event("turn.started", { turn: "u1" }),
+    event("reply.grew", { item: "r1", turn: "u1", text: "Waiting." })
+  )
+  return more().reduce(apply, base)
+}
+
+test("a message sent into a running turn reads where it was sent", () => {
+  const state = working1(() => [
+    event(
+      "message.steered",
+      { item: "s", turn: "u1", text: "also this", images: [] },
+      { author: person }
+    ),
+    event("reply.grew", { item: "r2", turn: "u1", text: "Steered." }),
+    event("turn.ended", { turn: "u1", state: "done" }),
+  ])
+  expect(ids(state)).toEqual(["m1", "r1", "s", "r2"])
+  expect(state.items.find((i) => i.id === "s")?.turn).toBe("u1")
+  expect(state.turns).toHaveLength(1)
+})
+
+test("a waiting message shows after the Thread until its turn starts", () => {
+  const queued = working1(() => [
+    event(
+      "message.posted",
+      { item: "m2", turn: "u2", text: "second" },
+      { author: person }
+    ),
+    event(
+      "message.posted",
+      { item: "m3", turn: "u3", text: "third" },
+      { author: person }
+    ),
+  ])
+  expect(running(queued)?.id).toBe("u1")
+  expect(waiting(queued).map(({ item }) => item.id)).toEqual(["m2", "m3"])
+  expect(ids(queued)).toEqual(["m1", "r1"])
+
+  const changed = [
+    event(
+      "message.edited",
+      { item: "m2", text: "second, changed" },
+      { author: person }
+    ),
+    event("turn.ended", { turn: "u3", state: "withdrawn" }),
+  ].reduce(apply, queued)
+  expect(waiting(changed).map(({ item }) => item.body)).toEqual([
+    { kind: "message", text: "second, changed" },
+  ])
+  expect(ids(changed)).toEqual(["m1", "r1"])
+
+  const started = [
+    event("turn.ended", { turn: "u1", state: "done" }),
+    event("turn.started", { turn: "u2" }),
+  ].reduce(apply, changed)
+  expect(waiting(started)).toEqual([])
+  expect(ids(started)).toEqual(["m1", "r1", "m2"])
+})
+
+test("a held queue works on nothing until a Person lets it go", () => {
+  const stopped = working1(() => [
+    event(
+      "message.posted",
+      { item: "m2", turn: "u2", text: "second" },
+      { author: person }
+    ),
+    event("thread.held", { thread: "t", held: true }, { author: person }),
+    event("turn.ended", { turn: "u1", state: "stopped" }),
+  ])
+  expect(stopped.held).toBe(true)
+  expect(working(stopped)).toBeUndefined()
+  expect(waiting(stopped).map(({ turn }) => turn.id)).toEqual(["u2"])
+  const resumed = apply(
+    stopped,
+    event("thread.held", { thread: "t", held: false }, { author: person })
+  )
+  expect(working(resumed)?.id).toBe("u2")
+})
+
+test("a waiting message sent now joins the running turn", () => {
+  const state = working1(() => [
+    event(
+      "message.posted",
+      { item: "m2", turn: "u2", text: "now this" },
+      { author: person }
+    ),
+    event("reply.grew", { item: "r1", turn: "u1", text: " Still." }),
+    event("turn.ended", { turn: "u2", state: "withdrawn" }),
+    event(
+      "message.steered",
+      { item: "m2", turn: "u1", text: "now this", images: [] },
+      { author: person }
+    ),
+  ])
+  expect(waiting(state)).toEqual([])
+  expect(ids(state)).toEqual(["m1", "r1", "m2"])
+})
+
+test("a message its turn could not take waits for a turn of its own", () => {
+  const state = working1(() => [
+    event(
+      "message.steered",
+      { item: "s", turn: "u1", text: "late", images: [] },
+      { author: person }
+    ),
+    event("turn.ended", { turn: "u1", state: "done" }),
+    event("turn.queued", { turn: "u2", message: "s" }, { author: person }),
+  ])
+  expect(state.items.find((i) => i.id === "s")?.turn).toBeUndefined()
+  expect(waiting(state).map(({ item }) => item.id)).toEqual(["s"])
+  expect(ids(state)).toEqual(["m1", "r1"])
 })

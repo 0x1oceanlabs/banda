@@ -84,6 +84,10 @@ CREATE TABLE agents_images (
 );
 CREATE INDEX agents_images_by_item ON agents_images (item);
 "#,
+    r#"
+-- The Thread's queue waits for a Person: a stop or a restart held it.
+ALTER TABLE agents_threads ADD COLUMN held INTEGER NOT NULL DEFAULT 0;
+"#,
 ];
 
 fn json<T: Serialize>(value: &T) -> Result<String, Error> {
@@ -303,6 +307,26 @@ pub fn image_kind(sql: &Connection, id: ImageId) -> Result<Option<String>, Error
         .optional()?)
 }
 
+/// Whether the Thread's queue waits for a Person.
+pub fn held(sql: &Connection, thread: ThreadId) -> Result<bool, Error> {
+    Ok(sql
+        .query_row(
+            "SELECT held FROM agents_threads WHERE id = ?1",
+            params![thread],
+            |row| row.get(0),
+        )
+        .optional()?
+        .unwrap_or(false))
+}
+
+pub fn set_held(sql: &Connection, thread: ThreadId, held: bool) -> Result<(), Error> {
+    sql.execute(
+        "UPDATE agents_threads SET held = ?2 WHERE id = ?1",
+        params![thread, held],
+    )?;
+    Ok(())
+}
+
 pub fn touch_thread(sql: &Connection, thread: ThreadId, at: i64) -> Result<(), Error> {
     sql.execute(
         "UPDATE agents_threads SET updated_at = ?2 WHERE id = ?1",
@@ -414,22 +438,40 @@ pub fn turn_settings(sql: &Connection, turn: &Turn) -> Result<Settings, Error> {
     }
 }
 
+const TURN: &str = "SELECT id, thread, agent, message, state FROM agents_turns";
+
+fn read_turn(row: &Row<'_>) -> rusqlite::Result<Turn> {
+    Ok(Turn {
+        id: row.get(0)?,
+        thread: row.get(1)?,
+        agent: row.get(2)?,
+        message: row.get(3)?,
+        state: state_of(row, 4)?,
+    })
+}
+
 pub fn turn(sql: &Connection, id: TurnId) -> Result<Option<Turn>, Error> {
     Ok(sql
-        .query_row(
-            "SELECT id, thread, agent, message, state FROM agents_turns WHERE id = ?1",
-            params![id],
-            |row| {
-                Ok(Turn {
-                    id: row.get(0)?,
-                    thread: row.get(1)?,
-                    agent: row.get(2)?,
-                    message: row.get(3)?,
-                    state: state_of(row, 4)?,
-                })
-            },
-        )
+        .query_row(&format!("{TURN} WHERE id = ?1"), params![id], read_turn)
         .optional()?)
+}
+
+/// The Thread's turns in `state`, in the order they were sent.
+pub fn turns_in(sql: &Connection, thread: ThreadId, state: TurnState) -> Result<Vec<Turn>, Error> {
+    let mut statement = sql.prepare(&format!(
+        "{TURN} WHERE thread = ?1 AND state = ?2 ORDER BY created_at, id"
+    ))?;
+    let rows = statement.query_map(params![thread, state_word(state)], read_turn)?;
+    Ok(rows.collect::<rusqlite::Result<_>>()?)
+}
+
+/// The turns that ran or will run `message`, the first first.
+pub fn turns_of(sql: &Connection, message: ItemId) -> Result<Vec<Turn>, Error> {
+    let mut statement = sql.prepare(&format!(
+        "{TURN} WHERE message = ?1 ORDER BY created_at, id"
+    ))?;
+    let rows = statement.query_map(params![message], read_turn)?;
+    Ok(rows.collect::<rusqlite::Result<_>>()?)
 }
 
 pub fn set_turn(
@@ -513,6 +555,24 @@ pub fn item(sql: &Connection, id: ItemId) -> Result<Option<(ThreadId, Item)>, Er
             Ok((row.get(5)?, read_item(row)?))
         })
         .optional()?)
+}
+
+/// Which turn an item belongs to, if any.
+pub fn set_item_turn(sql: &Connection, id: ItemId, turn: Option<TurnId>) -> Result<(), Error> {
+    sql.execute(
+        "UPDATE agents_items SET turn = ?2 WHERE id = ?1",
+        params![id, turn],
+    )?;
+    Ok(())
+}
+
+/// Moves an item after every other: the Thread shows it there now.
+pub fn move_last(sql: &Connection, id: ItemId) -> Result<(), Error> {
+    sql.execute(
+        "UPDATE agents_items SET rowid = (SELECT MAX(rowid) + 1 FROM agents_items) WHERE id = ?1",
+        params![id],
+    )?;
+    Ok(())
 }
 
 pub fn set_body(sql: &Connection, id: ItemId, body: &Body) -> Result<(), Error> {
