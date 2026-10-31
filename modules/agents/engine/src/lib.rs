@@ -67,20 +67,34 @@ use turn::{ReplyEffect, TurnEffect};
 pub struct Agents {
     harnesses: Harnesses,
     live: Arc<Live>,
+    idle: Duration,
+    quiet: Duration,
 }
 
 impl Agents {
     pub fn new(harnesses: Harnesses) -> Self {
         Self {
             harnesses,
-            live: Arc::new(Live::new(hosts::IDLE)),
+            live: Arc::new(Live::new(hosts::IDLE, between::QUIET)),
+            idle: hosts::IDLE,
+            quiet: between::QUIET,
         }
     }
 
     /// Lets a Harness process go after `idle` with nothing to do, instead
     /// of half an hour.
-    pub fn idle_after(mut self, idle: Duration) -> Self {
-        self.live = Arc::new(Live::new(idle));
+    pub fn idle_after(self, idle: Duration) -> Self {
+        Self { idle, ..self }.live_again()
+    }
+
+    /// Ends a turn the Agent went on with by itself after `quiet` with
+    /// nothing said, instead of a minute.
+    pub fn quiet_after(self, quiet: Duration) -> Self {
+        Self { quiet, ..self }.live_again()
+    }
+
+    fn live_again(mut self) -> Self {
+        self.live = Arc::new(Live::new(self.idle, self.quiet));
         self
     }
 }

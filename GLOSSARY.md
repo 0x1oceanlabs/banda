@@ -64,7 +64,10 @@ _Avoid_: backlog, pending.
 **Steering**:
 Sending a message into the turn that runs, which the Agent reads as it
 works, instead of queuing it. A Harness that cannot take one stops its turn,
-and the message waits for a turn of its own.
+and the message waits for a turn of its own. A turn the Agent went on with
+by itself takes none: the message goes at once in a turn of its own, which
+the Harness takes into what it does, or once the Person answers what the
+Agent asks.
 _Avoid_: interrupt (that is a stop), injection.
 
 **Question**:

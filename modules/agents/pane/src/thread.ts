@@ -322,9 +322,9 @@ export function apply(state: ThreadState, event: Event): ThreadState {
   }
 }
 
-/** The turn the Agent works on, if any. */
+/** The turn the Agent works on, if any: the latest, as the engine says. */
 export function running(state: ThreadState): TurnView | undefined {
-  return state.turns.find((turn) => turn.state === "running")
+  return state.turns.findLast((turn) => turn.state === "running")
 }
 
 /** Whether the Agent started `turn` by itself: its message is a notice

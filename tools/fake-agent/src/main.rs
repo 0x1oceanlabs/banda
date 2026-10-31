@@ -31,7 +31,9 @@
 //! - `twice`: says two messages, told apart only by their IDs.
 //! - `background`: starts a task, ends the turn, and goes on by itself when
 //!   the task ends, as Claude Code does; `long`, until it is stopped or a
-//!   prompt takes it in.
+//!   prompt takes it in; `asks`, asking to run a check; `quiet`, never
+//!   saying what that cost; `dies`, ending its process. `background
+//!   detached` runs a command that ends after the turn, and nothing more.
 //! - `later`: says what it used after the turn has ended.
 //! - `edit`: edits a file, and shows the change as a diff.
 //! - `run`: runs the tests, printing as Codex does; `loud` far more than a
@@ -438,13 +440,86 @@ async fn turn(
     if words.contains("background") {
         // A task it started ends after the turn, and it goes on by itself
         // with what the task found, as Claude Code does. `long`, it goes on
-        // until it is stopped or a prompt takes it in.
+        // until it is stopped or a prompt takes it in; `asks`, it asks to
+        // run a check first; `quiet`, it never says what that cost, as
+        // Codex; `dies`, its process ends. `detached` runs a command in the
+        // background, which ends after the turn, and nothing more.
         let (after, its, fake) = (cx.clone(), session.clone(), fake.clone());
         let long = words.contains("long");
+        let (asks, quiet, dies) = (
+            words.contains("asks"),
+            words.contains("quiet"),
+            words.contains("dies"),
+        );
+        if words.contains("detached") {
+            let tool = "detached-1";
+            say(
+                &cx,
+                &session,
+                SessionUpdate::ToolCall(
+                    ToolCall::new(tool, "Run the server")
+                        .kind(ToolKind::Execute)
+                        .status(ToolCallStatus::Completed),
+                ),
+            )?;
+            tokio::spawn(async move {
+                tokio::time::sleep(Duration::from_millis(100)).await;
+                let mut meta = serde_json::Map::new();
+                meta.insert(
+                    "terminal_exit".to_owned(),
+                    serde_json::json!({ "terminal_id": tool, "exit_code": null, "signal": null }),
+                );
+                let exit = ToolCallUpdate::new(tool, ToolCallUpdateFields::new()).meta(meta);
+                let _ = say(&after, &its, SessionUpdate::ToolCallUpdate(exit));
+                let used = SessionUpdate::UsageUpdate(UsageUpdate::new(70_000, 200_000));
+                let _ = say(&after, &its, used);
+            });
+            return Ok(StopReason::EndTurn);
+        }
         tokio::spawn(async move {
             tokio::time::sleep(Duration::from_millis(100)).await;
             let found = SessionUpdate::AgentMessageChunk(text("The task finished."));
             let _ = say(&after, &its, found);
+            if dies {
+                // What it said gets out first.
+                tokio::time::sleep(Duration::from_millis(200)).await;
+                std::process::exit(3);
+            }
+            if asks {
+                let tool = "check-2";
+                let check = ToolCall::new(tool, "Run a check")
+                    .kind(ToolKind::Execute)
+                    .status(ToolCallStatus::Pending);
+                let _ = say(&after, &its, SessionUpdate::ToolCall(check));
+                let options = vec![
+                    PermissionOption::new("allow", "Allow", PermissionOptionKind::AllowOnce),
+                    PermissionOption::new("reject", "Reject", PermissionOptionKind::RejectOnce),
+                ];
+                let question = RequestPermissionRequest::new(
+                    its.clone(),
+                    ToolCallUpdate::new(tool, ToolCallUpdateFields::new().title("Run a check")),
+                    options,
+                );
+                let allowed = match after.send_request(question).block_task().await {
+                    Ok(answer) => matches!(
+                        answer.outcome,
+                        RequestPermissionOutcome::Selected(selected)
+                            if selected.option_id.0.as_ref() == "allow"
+                    ),
+                    Err(_) => false,
+                };
+                let (status, reply) = if allowed {
+                    (ToolCallStatus::Completed, "The check passed.")
+                } else {
+                    (ToolCallStatus::Failed, "I did not run the check.")
+                };
+                let ran = ToolCallUpdate::new(tool, ToolCallUpdateFields::new().status(status));
+                let _ = say(&after, &its, SessionUpdate::ToolCallUpdate(ran));
+                let _ = say(&after, &its, SessionUpdate::AgentMessageChunk(text(reply)));
+            }
+            if quiet {
+                return;
+            }
             // What the cycle cost ends it, as Claude Code's result does.
             let cost = UsageUpdate::new(60_000, 200_000).cost(Cost::new(0.5, "USD"));
             let ended = SessionUpdate::UsageUpdate(cost);

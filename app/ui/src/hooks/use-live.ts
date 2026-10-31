@@ -16,9 +16,15 @@ export type Source<S extends { at: number }> = {
   /** Reads the view; its `at` is where following starts. */
   read: () => Promise<S>
   filter: EventFilter
-  /** The view after one event. Return the same object when nothing changed. */
-  apply: (state: S, event: Event) => S
+  /**
+   * The view after one event. Return the same object when nothing changed,
+   * and `READ_AGAIN` when only a fresh read can tell.
+   */
+  apply: (state: S, event: Event) => S | typeof READ_AGAIN
 }
+
+/** What `apply` returns when the view must be read again. */
+export const READ_AGAIN = Symbol("read again")
 
 export type Live<S> =
   | { state: "loading" }
@@ -78,6 +84,11 @@ export function useLive<S extends { at: number }>(
         source.filter,
         (event) => {
           const next = source.apply(view, event)
+          if (next === READ_AGAIN) {
+            unfollow()
+            void start()
+            return
+          }
           if (next === view) return
           view = next
           frame ||= requestAnimationFrame(() => {

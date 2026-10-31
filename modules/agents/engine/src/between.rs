@@ -3,27 +3,31 @@
 //! Claude Code goes on by itself when a background task it started ends,
 //! or when a wakeup fires, and its adapter says what it does then as it
 //! says a turn's. Here that opens a turn of the Agent's own, whose message
-//! is a notice from Bandaso. The turn ends with the cycle, when the Harness
-//! says what the cycle cost; when a turn's prompt goes to the session,
-//! which takes the prompt into what it does; when a Person stops it; or
-//! after a minute in which it says nothing and asks nothing.
+//! is a notice from Bandaso. The turn ends when the Harness says what that
+//! cost; when a turn's prompt goes to the session, which takes the prompt
+//! into what it does; when a Person stops it; or after a minute in which it
+//! says nothing and asks nothing.
 //!
 //! What the Harness used, and what it offers, are written at once between
 //! turns too.
 
 use crate::acp::{Between, Connection, Said, Session};
 use crate::live::Live;
-use crate::model::{Body, Fact, Failure, Item, ItemId, Settings, ThreadId, TurnId, TurnState};
+use crate::model::{
+    Body, Fact, Failure, Item, ItemId, Settings, ThreadId, ToolStatus, TurnId, TurnState,
+};
 use crate::rules::{self, Ending};
-use crate::turn::{self, Writer};
+use crate::turn::{self, Writer, plain};
 use crate::{emit, store};
 use bandaso_kernel::{AgentId, Error, ModuleSpace, Participant, Tx};
+use std::collections::HashSet;
 use std::sync::{Arc, Weak};
 use std::time::Duration;
 use tokio::sync::mpsc;
 
-/// How long a turn the Agent started waits for more before it ends.
-const QUIET: Duration = Duration::from_secs(60);
+/// How long a turn the Agent went on with by itself waits for more before
+/// it ends, unless a tool call of it still runs or it asks a Person.
+pub const QUIET: Duration = Duration::from_secs(60);
 
 /// Who hears a Thread's session between its turns.
 pub struct Listener {
@@ -73,8 +77,11 @@ impl Listener {
                     .write(move |tx| turn::offered(tx, agent, thread, &now))
                     .await
                     .map_err(plain),
-                // Nothing it asked is open between turns.
-                Said::Withdrawn(_) => Ok(()),
+                // Nothing it asked is open between turns, and a tool call
+                // that changes now belongs to a turn that ended, which shows
+                // how it went: Claude Code ends a command it sent to the
+                // background so.
+                Said::Withdrawn(_) | Said::ToolChanged { .. } => Ok(()),
                 said => self.went_on(connection, &session, said, &mut hear).await,
             };
             if let Err(error) = written {
@@ -84,7 +91,7 @@ impl Listener {
     }
 
     /// The Harness went on by itself, starting with `first`: a turn of the
-    /// Agent's own shows what it does, until the cycle ends.
+    /// Agent's own shows what it does, until it is done.
     async fn went_on(
         &self,
         connection: Arc<Connection>,
@@ -99,33 +106,42 @@ impl Listener {
             .write(move |tx| open(tx, thread, agent, text))
             .await
             .map_err(plain)?;
-        let Some((turn, settings)) = opened else {
+        let Some(Opened { turn, settings }) = opened else {
             return Ok(());
         };
-        self.live
-            .begin(turn.id, connection.clone(), session.clone());
-        let running = connection.running(session);
+        let id = turn.id;
+        let _kept = connection.keep();
+        self.live.begin(id, connection.clone(), session.clone());
         let mut writer = Writer::new(
             self.space.clone(),
             &turn,
             self.harness.clone(),
             settings,
-            running,
+            connection.running(session),
         );
-        let (said, mut heard) = mpsc::unbounded_channel();
-        let _ = said.send(first);
-        let (live, id, harness) = (&self.live, turn.id, &self.harness);
+        let (to_writer, mut written) = mpsc::unbounded_channel();
+        let mut calls = Calls::default();
+        calls.hear(&first);
+        let _ = to_writer.send(first);
+        let (live, harness) = (&self.live, &self.harness);
         let forward = async move {
             loop {
                 tokio::select! {
-                    heard = hear.recv() => match heard {
+                    next = hear.recv() => match next {
                         // The session's words are a turn's now, and the
                         // Harness takes that turn's prompt into what it does.
-                        Some(Between::Prompted) => break Ending::new(TurnState::Done, None),
-                        Some(Between::Said(now)) => {
-                            let ended = matches!(&now, Said::Used { usage, .. } if usage.cost.is_some());
-                            let _ = said.send(now);
-                            if ended {
+                        Some(Between::Prompted) => {
+                            live.hand_over(id);
+                            break Ending::new(TurnState::Done, None);
+                        }
+                        Some(Between::Said(said)) => {
+                            if !calls.hear(&said) {
+                                continue;
+                            }
+                            // Each time it goes on, it ends with what that cost.
+                            let done = matches!(&said, Said::Used { usage, .. } if usage.cost.is_some());
+                            let _ = to_writer.send(said);
+                            if done {
                                 break Ending::new(TurnState::Done, None);
                             }
                         }
@@ -134,30 +150,81 @@ impl Listener {
                             Some(Failure::HarnessStopped),
                         ),
                     },
-                    () = tokio::time::sleep(QUIET) => if !live.asking(id) {
+                    () = tokio::time::sleep(live.quiet()) => if !calls.running() && !live.asking(id) {
                         break Ending::new(TurnState::Done, None);
                     },
                 }
             }
         };
-        let (ending, written) = tokio::join!(forward, writer.listen(live, &mut heard));
-        let ending = match written {
+        let (ending, listened) = tokio::join!(forward, writer.listen(live, &mut written));
+        let ending = match listened {
             Ok(()) => ending,
-            // What the Harness says cannot be written: it stops.
+            // What the Harness says cannot be written: it stops, unless a
+            // turn's prompt took the session over.
             Err(reason) => {
-                let _ = connection.cancel(session);
+                if !connection.prompting(session) {
+                    let _ = connection.cancel(session);
+                }
                 Ending::failed(reason, None)
             }
         };
-        let ending = match self.live.end(id) {
-            true => Ending::new(TurnState::Stopped, None),
-            false => ending,
-        };
+        let ending = ending.stopped_if_asked(self.live.end(id));
         self.space
             .write(move |tx| close(tx, agent, &turn, ending))
             .await
             .map_err(plain)
     }
+}
+
+/// The tool calls of a turn the Agent went on with by itself.
+#[derive(Default)]
+struct Calls {
+    made: HashSet<String>,
+    running: HashSet<String>,
+}
+
+impl Calls {
+    /// Whether `said` belongs to the turn: a tool call changes in it only
+    /// when it started in it.
+    fn hear(&mut self, said: &Said) -> bool {
+        match said {
+            Said::ToolStarted { call, status, .. } => {
+                self.made.insert(call.clone());
+                self.track(call, *status);
+            }
+            Said::Asks { call, .. } => {
+                self.made.insert(call.clone());
+            }
+            Said::ToolChanged { call, change, .. } => {
+                if !self.made.contains(call) {
+                    return false;
+                }
+                if let Some(status) = change.status {
+                    self.track(call, status);
+                }
+            }
+            _ => {}
+        }
+        true
+    }
+
+    fn track(&mut self, call: &str, status: ToolStatus) {
+        match status {
+            ToolStatus::Pending | ToolStatus::Running => self.running.insert(call.to_owned()),
+            ToolStatus::Done | ToolStatus::Failed => self.running.remove(call),
+        };
+    }
+
+    /// Whether one of them still runs.
+    fn running(&self) -> bool {
+        !self.running.is_empty()
+    }
+}
+
+/// A turn of the Agent's own, as it opened.
+struct Opened {
+    turn: store::Turn,
+    settings: Settings,
 }
 
 /// Opens a turn of the Agent's own in the Thread: its message is a notice
@@ -167,11 +234,11 @@ fn open(
     thread: ThreadId,
     agent: AgentId,
     text: String,
-) -> Result<Option<(store::Turn, Settings)>, Error> {
+) -> Result<Option<Opened>, Error> {
     if store::thread(tx.sql(), thread)?.is_none() {
         return Ok(None);
     }
-    let (by, now) = (Participant::Agent(agent), tx.now());
+    let by = Participant::Agent(agent);
     let turn = store::Turn {
         id: TurnId::new(),
         thread,
@@ -183,35 +250,19 @@ fn open(
         id: turn.message,
         turn: None,
         author: by,
-        at: now,
+        at: tx.now(),
         body: Body::Notice { text: text.clone() },
     };
     store::insert_item(tx.sql(), thread, &item)?;
-    let settings = store::settings(tx.sql(), thread)?;
-    store::insert_turn(tx.sql(), &turn, by, now, &settings)?;
-    store::touch_thread(tx.sql(), thread, now)?;
-    let (item, id) = (item.id, turn.id);
-    emit(
-        tx,
-        by,
-        thread,
-        &Fact::NoticePosted {
-            item,
-            turn: id,
-            text,
-        },
-    )?;
-    emit(
-        tx,
-        by,
-        thread,
-        &Fact::TurnQueued {
-            turn: id,
-            message: item,
-        },
-    )?;
-    emit(tx, by, thread, &Fact::TurnStarted { turn: id })?;
-    Ok(Some((turn, settings)))
+    let posted = Fact::NoticePosted {
+        item: item.id,
+        turn: turn.id,
+        text,
+    };
+    emit(tx, by, thread, &posted)?;
+    let settings = turn::add(tx, by, &turn)?;
+    emit(tx, by, thread, &Fact::TurnStarted { turn: turn.id })?;
+    Ok(Some(Opened { turn, settings }))
 }
 
 /// Ends each turn the Agent went on with by itself that a restart cut
@@ -234,8 +285,4 @@ fn close(tx: &mut Tx<'_>, agent: AgentId, turn: &store::Turn, ending: Ending) ->
         return Ok(());
     }
     turn::end(tx, Participant::Agent(agent), turn, ending)
-}
-
-fn plain(error: impl std::fmt::Display) -> String {
-    error.to_string()
 }

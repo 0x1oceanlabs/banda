@@ -1,5 +1,5 @@
-import { Fragment, useEffect, useMemo, useState } from "react"
-import type { AgentId } from "@bandaso/contract"
+import { Fragment, useMemo, useState } from "react"
+import type { AgentId, Engine, SpaceId } from "@bandaso/contract"
 import type {
   Body,
   Defaults,
@@ -43,7 +43,7 @@ import {
   TraceTitle,
 } from "@bandaso/ui/components/trace"
 import { useAct } from "@bandaso/ui/hooks/use-act"
-import { useLive } from "@bandaso/ui/hooks/use-live"
+import { READ_AGAIN, type Source, useLive } from "@bandaso/ui/hooks/use-live"
 import { definePane, type PaneProps } from "@bandaso/ui/pane"
 import {
   BotIcon,
@@ -131,39 +131,12 @@ function ThreadPane({
 
   // A Thread not yet started keeps its settings here until its first
   // message, starting from the Agent's.
-  const [defaults, setDefaults] = useState<Defaults>()
+  const defaults = useAgentDefaults(
+    engine,
+    space,
+    thread === null ? args.agent : null
+  )
   const [draft, setDraft] = useState<Settings>()
-  useEffect(() => {
-    if (thread !== null) return
-    let current = true
-    let unfollow = () => {}
-    const read = () =>
-      engine.call<Defaults>("agents.defaults", { agent: args.agent }, { space })
-    read().then(
-      (found) => {
-        if (!current) return
-        setDefaults(found)
-        // A Thread learns what the Harness offers, such as its models: a
-        // new Thread offers it too.
-        unfollow = engine.follow(
-          space,
-          found.at,
-          OFFERED,
-          () =>
-            void read().then(
-              (again) => current && setDefaults(again),
-              () => {}
-            ),
-          () => {}
-        )
-      },
-      () => current && setDefaults(undefined)
-    )
-    return () => {
-      current = false
-      unfollow()
-    }
-  }, [engine, space, args.agent, thread])
   const settings =
     thread === null ? (draft ?? defaults?.settings) : state?.settings
   const offer: Offer =
@@ -347,6 +320,31 @@ function Start({ name }: { name: string }) {
 /** The facts that say a Harness offers something new. */
 const OFFERED = { module: "agents", kinds: ["thread.offered"] }
 
+/**
+ * What a new Thread of `agent` starts with. A Thread learns what the
+ * Harness offers, such as its models: a new Thread offers it too.
+ */
+function useAgentDefaults(
+  engine: Engine,
+  space: SpaceId,
+  agent: AgentId | null
+): Defaults | undefined {
+  const source = useMemo<Source<Defaults> | null>(
+    () =>
+      agent === null
+        ? null
+        : {
+            read: () =>
+              engine.call<Defaults>("agents.defaults", { agent }, { space }),
+            filter: OFFERED,
+            apply: () => READ_AGAIN,
+          },
+    [engine, space, agent]
+  )
+  const live = useLive(engine, space, source)
+  return live.state === "ready" ? live.view : undefined
+}
+
 type Answering = {
   /** Whether an answer is on its way; the choices wait for it. */
   answering: boolean
@@ -424,7 +422,7 @@ function Transcript({
                 <Queue
                   waiting={waits}
                   held={state.held}
-                  running={steerable(state)}
+                  steerable={steerable(state)}
                   name={name}
                   busy={answers.answering}
                   reader={reader}

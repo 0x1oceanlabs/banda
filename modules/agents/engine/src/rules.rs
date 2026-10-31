@@ -132,6 +132,15 @@ impl Ending {
             _ => self,
         }
     }
+
+    /// A turn the Agent went on with by itself stopped when a Person
+    /// asked, however the Harness ended what it did.
+    pub fn stopped_if_asked(self, asked: bool) -> Ending {
+        match asked {
+            true => Ending::new(TurnState::Stopped, None),
+            false => self,
+        }
+    }
 }
 
 /// Whether a turn may be tried again: it failed or was cut short, and
@@ -711,6 +720,9 @@ mod tests {
             TurnState::Failed,
             "no Person stopped it"
         );
+        let done = || Ending::new(TurnState::Done, None);
+        assert_eq!(done().stopped_if_asked(true).state, TurnState::Stopped);
+        assert_eq!(done().stopped_if_asked(false).state, TurnState::Done);
     }
 
     #[test]

@@ -18,6 +18,8 @@ use tokio::sync::oneshot;
 pub struct Live {
     hosts: Arc<Hosts>,
     turns: Mutex<Turns>,
+    /// How long a turn the Agent went on with by itself waits for more.
+    quiet: Duration,
 }
 
 #[derive(Default)]
@@ -53,12 +55,19 @@ impl Turns {
 }
 
 impl Live {
-    /// Hosts let go after `idle` with nothing to do.
-    pub fn new(idle: Duration) -> Live {
+    /// Hosts let go after `idle` with nothing to do; a turn the Agent
+    /// went on with by itself ends after `quiet` with nothing said.
+    pub fn new(idle: Duration, quiet: Duration) -> Live {
         Live {
             hosts: Hosts::new(idle),
             turns: Mutex::default(),
+            quiet,
         }
+    }
+
+    /// How long a turn the Agent went on with by itself waits for more.
+    pub fn quiet(&self) -> Duration {
+        self.quiet
     }
 
     /// The process of `harness` for `space`, started if it is not running.
@@ -87,6 +96,12 @@ impl Live {
     /// The Harness and session that run the turn, once its prompt went.
     pub fn running(&self, turn: TurnId) -> Option<(Arc<Connection>, Session)> {
         self.turns.lock().unwrap().running.get(&turn).cloned()
+    }
+
+    /// The turn's session went on with another turn: a stop of this one
+    /// no longer reaches the session.
+    pub fn hand_over(&self, turn: TurnId) {
+        self.turns.lock().unwrap().running.remove(&turn);
     }
 
     /// Marks that a message goes into the running turn.
