@@ -1,0 +1,27 @@
+{
+  "name": "@bandaso/agents-pane",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "The agents module's Panes: the Agents of a Space, and one Thread with an Agent.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@bandaso/contract": "workspace:*",
+    "@bandaso/ui": "workspace:*",
+    "lucide-react": "^1.65.0",
+    "react": "^19.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "typescript": "~6.0.2",
+    "vitest": "^5"
+  }
+}

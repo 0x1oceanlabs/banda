@@ -1,0 +1,134 @@
+/**
+ * The client's promises without an engine: a scripted socket stands in,
+ * so a test can break the connection exactly where it wants to.
+ */
+import { afterEach, beforeEach, expect, test, vi } from "vitest"
+import { Engine, Lost, PROTOCOL } from "../src/index"
+
+type Frame = { [key: string]: unknown }
+
+/** A WebSocket the test drives: it records what the client sends. */
+class Socket {
+  static made: Socket[] = []
+  sent: Frame[] = []
+  onopen: (() => void) | null = null
+  onmessage: ((message: { data: string }) => void) | null = null
+  onclose: (() => void) | null = null
+  readonly url: string
+  constructor(url: string) {
+    this.url = url
+    Socket.made.push(this)
+  }
+  send(text: string) {
+    this.sent.push(JSON.parse(text))
+  }
+  close() {
+    this.onclose?.()
+  }
+  /** The engine's side: answer the hello. */
+  welcome() {
+    this.onopen?.()
+    this.say({ type: "welcome", engine: "test", modules: ["agents"] })
+  }
+  say(frame: Frame) {
+    this.onmessage?.({ data: JSON.stringify(frame) })
+  }
+}
+
+const address = async () => ({ url: "ws://engine", secret: "s" })
+
+beforeEach(() => {
+  Socket.made = []
+  vi.useFakeTimers()
+  vi.stubGlobal("WebSocket", Socket)
+})
+
+afterEach(() => {
+  vi.useRealTimers()
+  vi.unstubAllGlobals()
+})
+
+const flush = () => vi.advanceTimersByTimeAsync(0)
+
+test("a command that broke off goes again with the same command ID", async () => {
+  const engine = new Engine(address)
+  await flush()
+  const first = Socket.made[0]
+  first.welcome()
+  expect(first.sent[0]).toEqual({
+    type: "hello",
+    protocol: PROTOCOL,
+    token: "s",
+  })
+
+  const answer = engine.command("agents.send", { text: "hi" }, "space")
+  await flush()
+  const call = first.sent[1]
+  expect(call).toMatchObject({ type: "call", method: "agents.send" })
+  first.close()
+
+  await vi.advanceTimersByTimeAsync(250)
+  const second = Socket.made[1]
+  second.welcome()
+  await flush()
+  const again = second.sent[1]
+  expect(again).toMatchObject({ type: "call", method: "agents.send" })
+  expect(again.command).toBe(call.command)
+  second.say({ type: "result", id: again.id, ok: { done: true } })
+  await expect(answer).resolves.toEqual({ done: true })
+  engine.close()
+})
+
+test("a command gives up after three tries, and says the engine is away", async () => {
+  const engine = new Engine(address)
+  const answer = engine.command("agents.send", {}, "space")
+  answer.catch(() => {})
+  for (let attempt = 0; attempt < 3; attempt++) {
+    await vi.advanceTimersByTimeAsync(5_000)
+    const socket = Socket.made.at(-1)!
+    socket.welcome()
+    await flush()
+    socket.close()
+  }
+  await expect(answer).rejects.toBeInstanceOf(Lost)
+  engine.close()
+})
+
+test("a subscription follows on after a reconnect from the last event it heard", async () => {
+  const engine = new Engine(address)
+  await flush()
+  Socket.made[0].welcome()
+  const heard: number[] = []
+  engine.follow(
+    "space",
+    4,
+    {},
+    (event) => heard.push(event.seq),
+    () => {}
+  )
+  const subscribe = Socket.made[0].sent[1]
+  expect(subscribe).toMatchObject({ type: "subscribe", after: 4 })
+  for (const seq of [5, 6, 6]) {
+    Socket.made[0].say({
+      type: "event",
+      subscription: subscribe.id,
+      event: { seq },
+    })
+  }
+  Socket.made[0].close()
+
+  await vi.advanceTimersByTimeAsync(250)
+  Socket.made[1].welcome()
+  expect(Socket.made[1].sent[1]).toMatchObject({
+    type: "subscribe",
+    id: subscribe.id,
+    after: 6,
+  })
+  Socket.made[1].say({
+    type: "event",
+    subscription: subscribe.id,
+    event: { seq: 7 },
+  })
+  expect(heard).toEqual([5, 6, 7])
+  engine.close()
+})

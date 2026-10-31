@@ -87,3 +87,7 @@ the Electron app.
 **Pane**:
 One tile in the window that shows a module's view, such as a Thread or a
 browser page. A Pane reaches the engine only through the API.
+
+**Desk**:
+A Space's Panes in the window, and how they split it. Each Space keeps its
+own Desk on this computer.

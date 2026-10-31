@@ -1,0 +1,20 @@
+{
+  "name": "@bandaso/contract",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "The engine's API for TypeScript: the types generated from Rust, the modules' decoders and the client a window uses.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./agents": "./src/agents.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "^24",
+    "typescript": "~6.0.2",
+    "vitest": "^5"
+  }
+}

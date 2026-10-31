@@ -1,0 +1,8 @@
+packages:
+  - contract
+  - app/*
+  - modules/*/pane
+
+allowBuilds:
+  electron: true
+  esbuild: true

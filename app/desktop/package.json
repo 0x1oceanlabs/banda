@@ -1,0 +1,24 @@
+{
+  "name": "@bandaso/desktop",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "The desktop window: Electron runs the engine and shows the page.",
+  "main": "out/main.mjs",
+  "scripts": {
+    "build": "pnpm --filter @bandaso/web build && node build.mjs",
+    "dev": "node build.mjs && BANDASO_PAGE=http://localhost:5173/ electron .",
+    "start": "node build.mjs && electron .",
+    "e2e": "pnpm build && playwright test",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@bandaso/contract": "workspace:*",
+    "@bandaso/web": "workspace:*",
+    "@playwright/test": "1.64.1",
+    "@types/node": "^24",
+    "electron": "45.1.0",
+    "esbuild": "^0.28.2",
+    "typescript": "~6.0.2"
+  }
+}

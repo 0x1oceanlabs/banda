@@ -91,6 +91,7 @@ command (with its ID)
 - Outbox rows are the kernel's bookkeeping, not records of the work. What a
   Person sees of an effect is the events its module writes.
 - A window loads a snapshot at sequence N, then streams the events after N.
+  It names the module, subject and kinds it shows, so it hears only those.
   The engine replays the log a page at a time, and a subscriber that falls
   behind catches up from the log.
 
@@ -99,11 +100,11 @@ command (with its ID)
 | Where | What |
 |---|---|
 | The Space's folder | the files of the work |
-| Text files | Agents, layouts, keys, themes, module settings |
+| Text files | Agents, in the Space's `.bandaso/agents/`; the Harnesses, in the config folder. Layouts, keys and themes join them later |
 | The Harness | its session, context and sign-in. We keep only its session ID, as evidence |
 | The OS keychain | secrets you give Bandaso. Its database never holds them |
 | The engine's state folder | the owner's ID; while the engine runs, its port and per-run secret |
-| The window | focus, scroll, open Panes |
+| The window's storage | each Space's Desk: its tiles, their Panes and the focus |
 | `.bandaso/` SQLite | Threads, Questions and answers, the Agents' queue, Databases' records, receipts, events, outbox |
 
 Events are facts with a version, and the log is never rewritten. Each module
@@ -211,10 +212,41 @@ module reaches a Harness through an adapter:
 ## Window
 
 ```
-Electron main   the window, updates, starting the engine, browser views
-renderer        React: the tiling shell · the Pane registry · the API client · shadcn/ui
-platform        electron | web: the same React code in a browser later
+app/desktop      Electron main: starts the engine, serves the page, hands it the address
+app/web          the page: Spaces, the Desk and its keys, the Pane registry
+app/ui           shadcn/ui (preset b0, on Base UI) and the Pane contract
+modules/*/pane   each module's Panes
 ```
+
+- **The page reaches the engine only through the API.** Electron main gives
+  it one thing: the engine's address, through `window.bandaso.engine()` in
+  a sandboxed preload. The page is served from `app://bandaso` with a
+  strict Content Security Policy. It cannot navigate, open windows or get
+  permissions, and links open in the browser.
+- **The engine is the window's child.** Main starts
+  `bandaso serve --with-parent`, starts it again when it dies (waiting up
+  to 10 s between tries), and closes its stdin on quit. The client then
+  reconnects and follows on from the last event it delivered, so a Pane
+  sees no gap.
+- **A Pane** is a `PaneKind`: a kind, the module it needs, a title, an
+  icon, optional start args, and a component. The component gets the
+  engine, the Space, its args, whether it has the focus, `open` and
+  `update`. A Pane's args are all its state; the Desk keeps them.
+- **A Pane reads a view, then follows.** `useLive` reads the view once,
+  applies each event after its `at`, and reads again when the engine says
+  so. Events that arrive within one frame render once.
+- **The Desk** is a tree of splits whose leaves are tiles
+  (`app/web/src/layout.ts`); every change to it is a pure function.
+  - Opening a Pane that is already shown focuses it.
+  - Opened with no place, a Pane takes the tile that last showed its kind,
+    or splits to the right. Ctrl-click (⌘ on a Mac) always splits.
+  - Keys: Alt+Arrows move the focus, Ctrl+\ splits right, Ctrl+Shift+\
+    splits down, Ctrl+W closes.
+  - Each Space keeps its own Desk in the window's storage
+    (`$BANDASO_STATE/window` when that is set).
+- **Only `window.bandaso` ties the page to the desktop.** It names no
+  Electron API, so a browser can host it later; for now the engine lets in
+  only `app://bandaso` and pages on localhost.
 
 ## Repository
 
@@ -223,13 +255,15 @@ bandaso/
   kernel/             Rust: Space, event log, access, registry, API
   modules/
     agents/engine/    Rust: Agents, Threads, turns, Questions, the ACP adapter
-    agents/pane/      React: the Thread Pane (next)
+    agents/pane/      React: the Agents list and the Thread
     browser/pane/     React: the browser Pane (next)
   engine/             the bandaso program: serve (the kernel and its modules), call, follow
-  app/web/            React: the tiling shell and the Pane registry (next)
-  app/desktop/        Electron: the window, the engine's start, browser views (next)
-  contract/           TypeScript types generated from the Rust
+  app/ui/             shadcn/ui and the Pane contract
+  app/web/            React: the Desk, the Space picker, the Pane registry
+  app/desktop/        Electron: the window and the engine's start; e2e tests
+  contract/           the engine's API for TypeScript: generated types and the client
   tools/fake-agent/   a scripted ACP agent for tests and window checks
+  scripts/check.sh    every check a change must pass
   docs/               adr/ · architecture.md · research/
   GLOSSARY.md
 ```
@@ -237,7 +271,8 @@ bandaso/
 ## Checks that hold the shape
 
 - **Architecture tests.** The kernel names no module, no module reads
-  another's tables, and a Pane imports only the API and the shell.
+  another's tables, and a Pane imports only the API, `@bandaso/ui`, React
+  and its icons.
 - **Module tests** run through the module's interface: commands go in and
   events come out. Nothing past the interface is mocked.
 - **Adapter tests** run the real engine. Only the Harness's transport is
@@ -245,4 +280,9 @@ bandaso/
   scenarios (MIT, with their notice).
 - **End to end.** Playwright drives the Electron window against a scripted
   fake ACP agent. Screenshots let Agents check the UI themselves.
-- **Speed budget.** Tests check start-up time, memory and input latency.
+- **Speed budget.** A window test measures start-up time, memory and input
+  latency, and writes them to `app/desktop/test-results/speed.json`. Its
+  budgets are loose: they catch a regression.
+- **`scripts/check.sh`** runs every check in the order a failure is
+  cheapest to find. It also fails when `cargo test` rewrites the generated
+  TypeScript types, so the window never builds against stale ones.

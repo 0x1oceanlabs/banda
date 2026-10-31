@@ -514,6 +514,69 @@ mod tests {
     }
 
     #[tokio::test]
+    async fn a_filter_picks_events_by_module_subject_and_kind() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = store(&dir);
+        let who = author();
+        store
+            .write("notes", move |tx| {
+                tx.emit("added", 1, Some("a"), who, &"one")?;
+                tx.emit("grew", 1, Some("a"), who, &"two")?;
+                tx.emit("added", 1, Some("b"), who, &"three")?;
+                Ok(())
+            })
+            .await
+            .unwrap();
+        let filters = [
+            (EventFilter::default(), vec!["one", "two", "three"]),
+            (
+                EventFilter {
+                    kinds: Some(vec!["added".into()]),
+                    ..EventFilter::default()
+                },
+                vec!["one", "three"],
+            ),
+            (
+                EventFilter {
+                    subject: Some("a".into()),
+                    kinds: Some(vec!["grew".into(), "gone".into()]),
+                    ..EventFilter::default()
+                },
+                vec!["two"],
+            ),
+            (
+                EventFilter {
+                    module: Some("other".into()),
+                    ..EventFilter::default()
+                },
+                vec![],
+            ),
+        ];
+        let all = store
+            .read(|sql| Ok(events::after(sql, 0, &EventFilter::default(), 10)?))
+            .await
+            .unwrap();
+        for (filter, expected) in filters {
+            let stored = store
+                .read({
+                    let filter = filter.clone();
+                    move |sql| Ok(events::after(sql, 0, &filter, 10)?)
+                })
+                .await
+                .unwrap();
+            let texts: Vec<_> = stored.iter().map(|e| e.payload.clone()).collect();
+            assert_eq!(texts, expected, "the log, {filter:?}");
+            // A live event passes the same filter as a stored one.
+            let live: Vec<_> = all
+                .iter()
+                .filter(|e| filter.matches(e))
+                .map(|e| e.payload.clone())
+                .collect();
+            assert_eq!(live, expected, "live, {filter:?}");
+        }
+    }
+
+    #[tokio::test]
     async fn a_repeated_command_returns_its_first_result_and_changes_nothing() {
         let dir = tempfile::tempdir().unwrap();
         let store = store(&dir);

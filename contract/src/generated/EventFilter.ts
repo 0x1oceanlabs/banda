@@ -3,4 +3,8 @@
 /**
  * Which events a subscriber wants. Empty fields match everything.
  */
-export type EventFilter = { module?: string | null, subject?: string | null, };
+export type EventFilter = { module?: string | null, subject?: string | null, 
+/**
+ * Only these kinds, so a view hears just the facts it shows.
+ */
+kinds?: Array<string> | null, };

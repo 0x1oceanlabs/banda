@@ -34,7 +34,7 @@ use bandaso_kernel::{
 use live::Live;
 use model::{
     Body, Fact, Item, ItemId, ThreadId, ThreadList, ThreadSummary, ThreadView, TurnId, TurnState,
-    TurnView, VERSION,
+    VERSION,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -349,12 +349,7 @@ fn stop(tx: &mut Tx<'_>, turn: TurnId) -> Result<Value, Error> {
         store::turn(tx.sql(), turn)?.ok_or_else(|| Refusal::not_found("There is no such turn."))?;
     match rules::stop(found.state) {
         rules::Stop::Now => {
-            let stopped = TurnView {
-                id: turn,
-                state: TurnState::Stopped,
-                reason: None,
-            };
-            turn::end(tx, &found, stopped)?;
+            turn::end(tx, &found, TurnState::Stopped, None)?;
         }
         rules::Stop::AskHarness => {
             tx.enqueue(turn::STOP, &turn.to_string(), &TurnEffect { turn })?;

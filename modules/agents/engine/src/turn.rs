@@ -13,7 +13,6 @@ use crate::acp::{Answer, Ending, Said};
 use crate::live::Live;
 use crate::model::{
     Body, Fact, Item, ItemId, QuestionState, ThreadId, ToolKind, ToolStatus, TurnId, TurnState,
-    TurnView,
 };
 use crate::rules::{self, Piece, Pieces, Text};
 use crate::settings::{self, Harnesses};
@@ -51,7 +50,12 @@ fn plain(error: impl std::fmt::Display) -> String {
 
 /// Ends a turn: its state, its Questions that never got an answer, and the
 /// fact that it ended.
-pub fn end(tx: &mut Tx<'_>, turn: &store::Turn, view: TurnView) -> Result<(), Error> {
+pub fn end(
+    tx: &mut Tx<'_>,
+    turn: &store::Turn,
+    state: TurnState,
+    reason: Option<String>,
+) -> Result<(), Error> {
     let agent = Participant::Agent(turn.agent);
     for mut item in store::open_questions(tx.sql(), turn.id)? {
         rules::close(&mut item.body);
@@ -63,12 +67,12 @@ pub fn end(tx: &mut Tx<'_>, turn: &store::Turn, view: TurnView) -> Result<(), Er
             &Fact::QuestionClosed { item: item.id },
         )?;
     }
-    store::set_turn(tx.sql(), &view)?;
+    store::set_turn(tx.sql(), turn.id, state, reason.as_deref())?;
     store::touch_thread(tx.sql(), turn.thread, tx.now())?;
     let ended = Fact::TurnEnded {
-        turn: view.id,
-        state: view.state,
-        reason: view.reason,
+        turn: turn.id,
+        state,
+        reason,
     };
     emit(tx, agent, turn.thread, &ended)
 }
@@ -92,12 +96,7 @@ pub fn settle(tx: &mut Tx<'_>, effect: &Effect, settled: &Settled) -> Result<(),
                 ),
                 Settled::Failed(reason) => (TurnState::Failed, reason.clone()),
             };
-            let view = TurnView {
-                id: turn.id,
-                state,
-                reason: Some(reason),
-            };
-            end(tx, &turn, view)
+            end(tx, &turn, state, Some(reason))
         }
         REPLY => {
             let reply: ReplyEffect = serde_json::from_value(effect.payload.clone())?;
@@ -165,12 +164,7 @@ pub async fn start(
             if !rules::may_start(turn.state) {
                 return Ok(None);
             }
-            let running = TurnView {
-                id: turn.id,
-                state: TurnState::Running,
-                reason: None,
-            };
-            store::set_turn(tx.sql(), &running)?;
+            store::set_turn(tx.sql(), turn.id, TurnState::Running, None)?;
             let text = match store::item(tx.sql(), turn.message)? {
                 Some((
                     _,
@@ -201,12 +195,7 @@ pub async fn start(
         Ok(Ending { state, reason }) => (state, reason),
         Err(reason) => (TurnState::Failed, Some(reason)),
     };
-    let view = TurnView {
-        id: turn.id,
-        state,
-        reason,
-    };
-    match space.write(move |tx| end(tx, &turn, view)).await {
+    match space.write(move |tx| end(tx, &turn, state, reason)).await {
         Ok(()) => Outcome::Done,
         // The outbox settles it as failed.
         Err(error) => Outcome::Fail(error.to_string()),

@@ -69,6 +69,9 @@ enum Command {
         module: Option<String>,
         #[arg(long)]
         subject: Option<String>,
+        /// Only events of this kind; give it more than once for more kinds.
+        #[arg(long = "kind")]
+        kinds: Vec<String>,
     },
 }
 
@@ -153,8 +156,14 @@ async fn run(command: Command, places: Places) -> Result<(), Failure> {
             after,
             module,
             subject,
+            kinds,
         } => {
-            let filter = EventFilter { module, subject };
+            let kinds = (!kinds.is_empty()).then_some(kinds);
+            let filter = EventFilter {
+                module,
+                subject,
+                kinds,
+            };
             Client::connect(&places)
                 .await?
                 .follow(space, after, filter, |event| println!("{}", json!(event)))
