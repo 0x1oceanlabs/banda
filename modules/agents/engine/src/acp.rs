@@ -23,7 +23,7 @@
 
 use crate::model::{
     Failure, Field, FieldValue, HarnessOption, Input, Mode, Offer, OptionChoice, OptionValue,
-    Settings, ThreadId, ToolKind, ToolStatus, TurnState, Values,
+    Settings, TextFormat, ThreadId, ToolKind, ToolStatus, TurnState, Values,
 };
 use crate::rules::{Ending, Offered};
 use crate::settings::Harness;
@@ -71,6 +71,8 @@ pub enum Said {
         form: Option<Vec<Field>>,
         answer: oneshot::Sender<Answer>,
     },
+    /// The Harness no longer waits for the answer to what it asked.
+    Withdrawn(String),
     /// The session's options changed during the turn.
     Runs(Running),
     /// A line for the Person, such as a warning.
@@ -518,26 +520,31 @@ async fn drive(
                         cx: ConnectionTo<Agent>| {
                 let (answer, decided) = oneshot::channel();
                 let fields = &request.tool_call.fields;
+                let call = request.tool_call.tool_call_id.0.to_string();
                 let question = Said::Asks {
-                    call: request.tool_call.tool_call_id.0.to_string(),
+                    call: call.clone(),
                     title: fields.title.clone(),
                     tool: fields.kind.map(tool_kind),
                     offered: request.options.iter().map(offered).collect(),
                     form: None,
                     answer,
                 };
-                let routed = asked
-                    .lock()
-                    .unwrap()
-                    .get(&request.session_id)
-                    .is_some_and(|route| route.send(question).is_ok());
-                if !routed {
+                let route = asked.lock().unwrap().get(&request.session_id).cloned();
+                let Some(route) = route.filter(|route| route.send(question).is_ok()) else {
                     return responder.respond(acp::RequestPermissionResponse::new(
                         acp::RequestPermissionOutcome::Cancelled,
                     ));
-                }
+                };
+                let withdrawn = responder.cancellation();
                 cx.spawn(async move {
-                    let outcome = match decided.await {
+                    let decided = tokio::select! {
+                        decided = decided => decided,
+                        () = withdrawn.cancelled() => {
+                            let _ = route.send(Said::Withdrawn(call));
+                            Ok(Answer::Cancelled)
+                        }
+                    };
+                    let outcome = match decided {
                         Ok(Answer::Chose(option)) => acp::RequestPermissionOutcome::Selected(
                             acp::SelectedPermissionOutcome::new(option),
                         ),
@@ -564,7 +571,20 @@ async fn drive(
                 let acp::ElicitationScope::Session(scope) = &form.scope else {
                     return responder.respond(cancel());
                 };
-                let fields = form_fields(&form.requested_schema);
+                let Some(route) = filling.lock().unwrap().get(&scope.session_id).cloned() else {
+                    return responder.respond(cancel());
+                };
+                let Some(fields) = form_fields(&form.requested_schema) else {
+                    let _ = route.send(Said::Notice(
+                        "The Agent asked with a form Bandaso cannot show, so it went unanswered."
+                            .to_owned(),
+                    ));
+                    return responder.respond(cancel());
+                };
+                let call = scope.tool_call_id.as_ref().map_or_else(
+                    || format!("form-{}", uuid::Uuid::now_v7()),
+                    |id| id.0.to_string(),
+                );
                 let (answer, decided) = oneshot::channel();
                 let choice = |id: &str, name: &str, allows| Offered {
                     id: id.to_owned(),
@@ -573,26 +593,28 @@ async fn drive(
                     always: false,
                 };
                 let question = Said::Asks {
-                    call: scope.tool_call_id.as_ref().map_or_else(
-                        || format!("form-{}", uuid::Uuid::now_v7()),
-                        |id| id.0.to_string(),
-                    ),
+                    call: call.clone(),
                     title: Some(request.message.clone()),
                     tool: None,
                     offered: vec![choice(SUBMIT, "Submit", true), choice(SKIP, "Skip", false)],
                     form: Some(fields.clone()),
                     answer,
                 };
-                let routed = filling
-                    .lock()
-                    .unwrap()
-                    .get(&scope.session_id)
-                    .is_some_and(|route| route.send(question).is_ok());
-                if !routed {
+                if route.send(question).is_err() {
                     return responder.respond(cancel());
                 }
+                let withdrawn = responder.cancellation();
                 cx.spawn(async move {
-                    let action = match decided.await {
+                    let decided = tokio::select! {
+                        decided = decided => decided,
+                        // The Harness stopped waiting, as Codex does when
+                        // its question times out: the Question closes.
+                        () = withdrawn.cancelled() => {
+                            let _ = route.send(Said::Withdrawn(call));
+                            Ok(Answer::Cancelled)
+                        }
+                    };
+                    let action = match decided {
                         Ok(Answer::Filled(values)) => acp::ElicitationAction::Accept(
                             acp::ElicitationAcceptAction::new().content(content(&fields, values)),
                         ),
@@ -943,7 +965,7 @@ fn failed(name: &str, error: &acp::Error) -> Ending {
 
 /// A form's fields, from the JSON Schema the Harness asks with. A field of
 /// a kind Bandaso cannot show is left out.
-fn form_fields(schema: &acp::ElicitationSchema) -> Vec<Field> {
+fn form_fields(schema: &acp::ElicitationSchema) -> Option<Vec<Field>> {
     let required = schema.required.as_deref().unwrap_or_default();
     let choices = |options: &[acp::EnumOption]| {
         options
@@ -966,78 +988,127 @@ fn form_fields(schema: &acp::ElicitationSchema) -> Vec<Field> {
             .collect::<Vec<_>>()
     };
     let number = |n: Option<f64>| n.and_then(serde_json::Number::from_f64);
-    schema
-        .properties
-        .iter()
-        .filter_map(|(id, property)| {
-            use acp::ElicitationPropertySchema as Property;
-            let (title, description, input) = match property {
-                Property::String(text) => {
-                    let input = match (&text.one_of, &text.enum_values) {
-                        (Some(options), _) => Input::Choice {
-                            choices: choices(options),
-                            default: text.default.clone(),
-                        },
-                        (None, Some(values)) => Input::Choice {
-                            choices: named(values),
-                            default: text.default.clone(),
-                        },
-                        (None, None) => Input::Text {
-                            default: text.default.clone(),
-                        },
-                    };
-                    (&text.title, &text.description, input)
-                }
-                Property::Number(n) => (
-                    &n.title,
-                    &n.description,
-                    Input::Number {
-                        integer: false,
-                        minimum: number(n.minimum),
-                        maximum: number(n.maximum),
-                        default: number(n.default),
+    let count = |n: Option<u64>| n.map(|n| u32::try_from(n).unwrap_or(u32::MAX));
+    let mut fields = Vec::new();
+    for (id, property) in &schema.properties {
+        use acp::ElicitationPropertySchema as Property;
+        let mut secret = false;
+        let shown = match property {
+            Property::String(text) => {
+                // Codex marks a question whose answer is a secret.
+                secret = text
+                    .meta
+                    .as_ref()
+                    .and_then(|m| m.get("codex")?.get("isSecret")?.as_bool())
+                    .unwrap_or(false);
+                let input = match (&text.one_of, &text.enum_values) {
+                    (Some(options), _) => Input::Choice {
+                        choices: choices(options),
+                        default: text.default.clone(),
                     },
-                ),
-                Property::Integer(n) => (
-                    &n.title,
-                    &n.description,
-                    Input::Number {
-                        integer: true,
-                        minimum: n.minimum.map(Into::into),
-                        maximum: n.maximum.map(Into::into),
-                        default: n.default.map(Into::into),
+                    (None, Some(values)) => Input::Choice {
+                        choices: named(values),
+                        default: text.default.clone(),
                     },
-                ),
-                Property::Boolean(toggle) => (
-                    &toggle.title,
-                    &toggle.description,
-                    Input::Toggle {
-                        default: toggle.default,
+                    (None, None) => Input::Text {
+                        default: text.default.clone(),
+                        shortest: text.min_length,
+                        longest: text.max_length,
+                        format: text.format.and_then(|f| match f {
+                            acp::StringFormat::Email => Some(TextFormat::Email),
+                            acp::StringFormat::Uri => Some(TextFormat::Uri),
+                            acp::StringFormat::Date => Some(TextFormat::Date),
+                            acp::StringFormat::DateTime => Some(TextFormat::DateTime),
+                            _ => None,
+                        }),
                     },
-                ),
-                Property::Array(many) => {
-                    let options = match &many.items {
-                        acp::MultiSelectItems::String(items) => named(&items.values),
-                        acp::MultiSelectItems::Titled(items) => choices(&items.options),
-                        _ => return None,
-                    };
+                };
+                Some((&text.title, &text.description, input))
+            }
+            Property::Number(n) => Some((
+                &n.title,
+                &n.description,
+                Input::Number {
+                    integer: false,
+                    minimum: number(n.minimum),
+                    maximum: number(n.maximum),
+                    default: number(n.default),
+                },
+            )),
+            Property::Integer(n) => Some((
+                &n.title,
+                &n.description,
+                Input::Number {
+                    integer: true,
+                    minimum: n.minimum.map(Into::into),
+                    maximum: n.maximum.map(Into::into),
+                    default: n.default.map(Into::into),
+                },
+            )),
+            Property::Boolean(toggle) => Some((
+                &toggle.title,
+                &toggle.description,
+                Input::Toggle {
+                    default: toggle.default,
+                },
+            )),
+            Property::Array(many) => {
+                let options = match &many.items {
+                    acp::MultiSelectItems::String(items) => Some(named(&items.values)),
+                    acp::MultiSelectItems::Titled(items) => Some(choices(&items.options)),
+                    _ => None,
+                };
+                options.map(|options| {
                     let input = Input::Choices {
                         choices: options,
                         default: many.default.clone().unwrap_or_default(),
+                        fewest: count(many.min_items),
+                        most: count(many.max_items),
                     };
                     (&many.title, &many.description, input)
-                }
-                _ => return None,
-            };
-            Some(Field {
+                })
+            }
+            _ => None,
+        };
+        let required = required.contains(id);
+        match shown {
+            Some((title, description, input)) => fields.push(Field {
                 id: id.clone(),
                 title: title.clone().unwrap_or_else(|| id.clone()),
                 description: description.clone(),
-                required: required.contains(id),
+                required,
+                secret,
                 input,
-            })
-        })
-        .collect()
+            }),
+            // A field the Person cannot fill in: the form cannot be
+            // submitted without it.
+            None if required => return None,
+            None => {}
+        }
+    }
+    // The schema keeps no order; Claude Code's and Codex's IDs number
+    // their questions, so `question_2` comes before `question_10`.
+    fields.sort_by_cached_key(|f| natural(&f.id));
+    Some(fields)
+}
+
+/// An ID's words and numbers, so numbers sort as numbers.
+fn natural(id: &str) -> Vec<(String, u64)> {
+    let mut parts = Vec::new();
+    let mut rest = id;
+    while !rest.is_empty() {
+        let digits = rest
+            .find(|c: char| c.is_ascii_digit())
+            .unwrap_or(rest.len());
+        let (word, after) = rest.split_at(digits);
+        let end = after
+            .find(|c: char| !c.is_ascii_digit())
+            .unwrap_or(after.len());
+        let (number, after) = after.split_at(end);
+        parts.push((word.to_owned(), number.parse().unwrap_or(0)));
+        rest = after;
+    }
+    parts
 }
 
 /// What a Person filled in, as the Harness takes it.
@@ -1208,6 +1279,75 @@ mod tests {
             ..Settings::default()
         };
         assert!(settle(claude, &supervised).is_empty(), "it runs so already");
+    }
+
+    fn schema(properties: serde_json::Value, required: &[&str]) -> acp::ElicitationSchema {
+        let schema = serde_json::json!({
+            "type": "object",
+            "properties": properties,
+            "required": required,
+        });
+        serde_json::from_value(schema).unwrap()
+    }
+
+    #[test]
+    fn a_form_keeps_its_questions_in_order_and_its_secrets_marked() {
+        let text = serde_json::json!({ "type": "string" });
+        let secret = serde_json::json!({
+            "type": "string",
+            "_meta": { "codex": { "isSecret": true } },
+        });
+        let form = schema(
+            serde_json::json!({
+                "question_10": text,
+                "question_2": text,
+                "question_2_custom": text,
+                "key": secret,
+            }),
+            &[],
+        );
+        let fields = form_fields(&form).unwrap();
+        let ids: Vec<_> = fields.iter().map(|f| (f.id.as_str(), f.secret)).collect();
+        assert_eq!(
+            ids,
+            [
+                ("key", true),
+                ("question_2", false),
+                ("question_2_custom", false),
+                ("question_10", false),
+            ]
+        );
+    }
+
+    #[test]
+    fn a_form_with_a_required_field_bandaso_cannot_show_is_not_asked() {
+        let future = serde_json::json!({ "type": "colour" });
+        let optional = schema(serde_json::json!({ "shade": future }), &[]);
+        assert_eq!(form_fields(&optional).unwrap(), []);
+        let required = schema(serde_json::json!({ "shade": future }), &["shade"]);
+        assert_eq!(form_fields(&required), None);
+    }
+
+    #[test]
+    fn what_a_person_filled_in_goes_back_as_each_field_takes_it() {
+        let form = schema(
+            serde_json::json!({
+                "count": { "type": "integer" },
+                "share": { "type": "number" },
+                "tags": { "type": "array", "items": { "type": "string", "enum": ["a", "b"] } },
+            }),
+            &[],
+        );
+        let fields = form_fields(&form).unwrap();
+        let values: Values = serde_json::from_value(serde_json::json!({
+            "count": 3, "share": 0.5, "tags": ["b"],
+        }))
+        .unwrap();
+        let sent = serde_json::to_value(content(&fields, values)).unwrap();
+        assert_eq!(
+            sent,
+            serde_json::json!({ "count": 3, "share": 0.5, "tags": ["b"] })
+        );
     }
 
     #[test]

@@ -360,7 +360,8 @@ impl Module for Agents {
                     values,
                 } = decode(params)?;
                 let author = call.participant();
-                call.command(move |tx| answer(tx, author, item, choice, values))
+                let live = self.live.clone();
+                call.command(move |tx| answer(tx, &live, author, item, choice, values))
                     .await
             }
         }
@@ -537,6 +538,7 @@ fn retry(tx: &mut Tx<'_>, author: Participant, turn: TurnId) -> Result<Value, Er
 /// A Person's answer to a Question. It goes to the Harness from the outbox.
 fn answer(
     tx: &mut Tx<'_>,
+    live: &Live,
     author: Participant,
     item: ItemId,
     choice: String,
@@ -544,18 +546,31 @@ fn answer(
 ) -> Result<Value, Error> {
     let (thread, mut found) = store::item(tx.sql(), item)?
         .ok_or_else(|| Refusal::not_found("There is no such Question."))?;
-    let values = rules::answer(&mut found.body, &choice, values)?;
+    let filled = rules::answer(&mut found.body, &choice, values)?;
     store::set_body(tx.sql(), item, &found.body)?;
     let fact = Fact::QuestionAnswered {
         item,
         choice: choice.clone(),
-        values: values.clone(),
+        values: filled.as_ref().map(|f| f.kept.clone()),
     };
     emit(tx, author, thread, &fact)?;
+    // Neither the log nor the outbox holds a secret: memory does.
+    let (values, secret) = match filled {
+        Some(rules::Filled { mut kept, secret }) => {
+            kept.retain(|id, _| !secret.contains_key(id));
+            (Some(kept), secret)
+        }
+        None => (None, model::Values::new()),
+    };
+    let kept_secret = !secret.is_empty();
+    if kept_secret {
+        live.keep_secret(item, secret);
+    }
     let reply = ReplyEffect {
         item,
         choice,
         values,
+        secret: kept_secret,
     };
     tx.enqueue(turn::REPLY, &item.to_string(), &reply)?;
     Ok(Value::Null)

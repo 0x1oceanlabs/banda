@@ -12,4 +12,9 @@ title: string, description?: string,
 /**
  * A Person must fill it in to submit the form.
  */
-required: boolean, input: Input, };
+required: boolean, 
+/**
+ * What a Person types in it reaches the Harness and nothing else: the
+ * Thread keeps a mask.
+ */
+secret: boolean, input: Input, };

@@ -5,6 +5,8 @@
 //!   it, a reject skips it, and a cancel ends the turn.
 //! - `choose`: asks for a colour with a form, as Claude Code asks its own
 //!   questions, and replies with the answer, or that the Person skipped.
+//!   `quickly`, it stops waiting after 300 milliseconds, as Codex does when
+//!   a question times out.
 //! - `which settings`: replies with the session's mode, model and brevity.
 //! - `plan done`: in the plan mode, switches to accepting edits, as Claude
 //!   Code does when a Person accepts its plan.
@@ -232,7 +234,7 @@ async fn turn(
     }
     if words.contains("choose") {
         let reply = if fake.forms.load(Ordering::Relaxed) {
-            choose(&cx, &session).await?
+            choose(&cx, &session, words.contains("quickly")).await?
         } else {
             "I cannot ask you here.".to_owned()
         };
@@ -345,7 +347,11 @@ async fn turn(
 
 /// Asks a colour as Claude Code asks its questions: the choice, and an
 /// "Other" answer beside it. What to reply.
-async fn choose(cx: &ConnectionTo<Client>, session: &SessionId) -> Result<String, Error> {
+async fn choose(
+    cx: &ConnectionTo<Client>,
+    session: &SessionId,
+    quickly: bool,
+) -> Result<String, Error> {
     let colour = StringPropertySchema::new().title("Colour").one_of(vec![
         EnumOption::new("Red", "Red"),
         EnumOption::new("Blue", "Blue").description("Like the sea"),
@@ -357,7 +363,15 @@ async fn choose(cx: &ConnectionTo<Client>, session: &SessionId) -> Result<String
     let scope = ElicitationSessionScope::new(session.clone()).tool_call_id("ask-1");
     let form = ElicitationFormMode::new(scope, schema);
     let request = CreateElicitationRequest::new(form, "Which colour?");
-    let answer = cx.send_request(request).block_task().await?;
+    let asked = cx.send_request(request);
+    if quickly {
+        let give_up = asked.cancellation_handle();
+        tokio::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(300)).await;
+            let _ = give_up.cancel();
+        });
+    }
+    let answer = asked.block_task().await?;
     Ok(match answer.action {
         ElicitationAction::Accept(accepted) => {
             let content = accepted.content.unwrap_or_default();

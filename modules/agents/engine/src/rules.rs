@@ -179,7 +179,7 @@ pub fn answer(
     body: &mut Body,
     choice: &str,
     given: Option<Values>,
-) -> Result<Option<Values>, Refusal> {
+) -> Result<Option<Filled>, Refusal> {
     let Body::Question {
         state,
         choices,
@@ -201,7 +201,7 @@ pub fn answer(
                 Some(fields) if chosen.allows => {
                     let given = given.unwrap_or_default();
                     fits(fields, &given)?;
-                    Some(given)
+                    Some(Filled::new(fields, given))
                 }
                 _ if given.is_some_and(|g| !g.is_empty()) => {
                     return Err(Refusal::invalid("This answer takes nothing filled in."));
@@ -210,13 +210,40 @@ pub fn answer(
             };
             *state = QuestionState::Answered;
             *answer = Some(choice.to_owned());
-            values.clone_from(&filled);
+            *values = filled.as_ref().map(|f| f.kept.clone());
             Ok(filled)
         }
         QuestionState::Answered => Err(Refusal::conflict("This Question has its answer.")),
         QuestionState::Closed => Err(Refusal::conflict(
             "This Question closed: its turn ended before an answer.",
         )),
+    }
+}
+
+/// What the Thread keeps in a secret field instead of what was typed.
+pub const MASK: &str = "••••••";
+
+/// What a Person filled in a form: what the Thread keeps, with a mask in
+/// each secret field, and the secrets, which only the Harness gets.
+#[derive(Debug, Default, PartialEq)]
+pub struct Filled {
+    pub kept: Values,
+    pub secret: Values,
+}
+
+impl Filled {
+    fn new(fields: &[Field], mut given: Values) -> Filled {
+        let mut secret = Values::new();
+        for field in fields.iter().filter(|f| f.secret) {
+            if let Some(value) = given.remove(&field.id) {
+                given.insert(field.id.clone(), FieldValue::Text(MASK.to_owned()));
+                secret.insert(field.id.clone(), value);
+            }
+        }
+        Filled {
+            kept: given,
+            secret,
+        }
     }
 }
 
@@ -243,13 +270,33 @@ fn fits(fields: &[Field], given: &Values) -> Result<(), Refusal> {
         let offered = |choices: &[crate::model::OptionChoice], value: &str| {
             choices.iter().any(|c| c.value == value)
         };
+        let within = |count: usize, least: &Option<u32>, most: &Option<u32>| {
+            let count = u32::try_from(count).unwrap_or(u32::MAX);
+            least.is_none_or(|l| count >= l) && most.is_none_or(|m| count <= m)
+        };
         let fits = match (&field.input, value) {
-            (Input::Text { .. }, FieldValue::Text(text)) => {
-                !field.required || !text.trim().is_empty()
+            (
+                Input::Text {
+                    shortest, longest, ..
+                },
+                FieldValue::Text(text),
+            ) => {
+                (!field.required || !text.trim().is_empty())
+                    && within(text.chars().count(), shortest, longest)
             }
             (Input::Choice { choices, .. }, FieldValue::Text(value)) => offered(choices, value),
-            (Input::Choices { choices, .. }, FieldValue::Choices(values)) => {
-                values.iter().all(|v| offered(choices, v)) && !(field.required && values.is_empty())
+            (
+                Input::Choices {
+                    choices,
+                    fewest,
+                    most,
+                    ..
+                },
+                FieldValue::Choices(values),
+            ) => {
+                values.iter().all(|v| offered(choices, v))
+                    && !(field.required && values.is_empty())
+                    && within(values.len(), fewest, most)
             }
             (
                 Input::Number {
@@ -539,6 +586,7 @@ mod tests {
             title: id.into(),
             description: None,
             required,
+            secret: id == "key",
             input,
         };
         Body::Question {
@@ -566,7 +614,26 @@ mod tests {
                         default: None,
                     },
                 ),
-                field("note", false, Input::Text { default: None }),
+                field(
+                    "note",
+                    false,
+                    Input::Text {
+                        default: None,
+                        shortest: None,
+                        longest: Some(5),
+                        format: None,
+                    },
+                ),
+                field(
+                    "key",
+                    false,
+                    Input::Text {
+                        default: None,
+                        shortest: None,
+                        longest: None,
+                        format: None,
+                    },
+                ),
                 field(
                     "count",
                     false,
@@ -604,6 +671,7 @@ mod tests {
                 ("count", FieldValue::Number(5.into())),
             ]),
             given(&[("colour", FieldValue::Toggle(true))]),
+            given(&[("colour", text("Red")), ("note", text("too long"))]),
         ] {
             assert!(
                 answer(&mut form(), "accept", wrong.clone()).is_err(),
@@ -617,6 +685,17 @@ mod tests {
         ]);
         answer(&mut body, "accept", right.clone()).unwrap();
         assert!(matches!(&body, Body::Question { values, .. } if *values == right));
+
+        let mut body = form();
+        let with_key = given(&[("colour", text("Red")), ("key", text("s3cret"))]);
+        let filled = answer(&mut body, "accept", with_key).unwrap().unwrap();
+        assert_eq!(filled.secret, given(&[("key", text("s3cret"))]).unwrap());
+        let kept = given(&[("colour", text("Red")), ("key", text(MASK))]);
+        assert_eq!(Some(filled.kept), kept);
+        assert!(
+            matches!(&body, Body::Question { values, .. } if *values == kept),
+            "the Thread never holds a secret"
+        );
 
         let mut skipped = form();
         answer(&mut skipped, "decline", None).unwrap();

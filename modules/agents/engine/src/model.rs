@@ -248,7 +248,22 @@ pub struct Field {
     /// A Person must fill it in to submit the form.
     #[serde(default)]
     pub required: bool,
+    /// What a Person types in it reaches the Harness and nothing else: the
+    /// Thread keeps a mask.
+    #[serde(default)]
+    pub secret: bool,
     pub input: Input,
+}
+
+/// What text a field takes, when the Harness says.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export, export_to = "agents/")]
+pub enum TextFormat {
+    Email,
+    Uri,
+    Date,
+    DateTime,
 }
 
 /// What a field takes.
@@ -260,6 +275,16 @@ pub enum Input {
         #[ts(optional)]
         #[serde(default, skip_serializing_if = "Option::is_none")]
         default: Option<String>,
+        /// The fewest and the most characters it takes.
+        #[ts(optional)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        shortest: Option<u32>,
+        #[ts(optional)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        longest: Option<u32>,
+        #[ts(optional)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        format: Option<TextFormat>,
     },
     /// One of the choices.
     Choice {
@@ -273,6 +298,13 @@ pub enum Input {
         choices: Vec<OptionChoice>,
         #[serde(default)]
         default: Vec<String>,
+        /// The fewest and the most it takes.
+        #[ts(optional)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        fewest: Option<u32>,
+        #[ts(optional)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        most: Option<u32>,
     },
     Number {
         /// Only whole numbers.
