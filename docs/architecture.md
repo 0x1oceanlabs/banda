@@ -19,10 +19,10 @@ Inside a module      rules · store · operation           tactical DDD where in
 ```
 bandaso (Electron)    window: tiling, Panes (React + shadcn/ui)
       │ engine API: JSON over WebSocket, types generated from Rust
-bandaso-engine        one process per machine; owns the data
+bandaso serve         the engine: one process per machine; owns the data
       │ ACP over stdio              ▲ MCP: modules' tools for Agents
 Harness (Claude Code, Codex, …) ────┘
-bandaso CLI           the same API, for people, scripts and Agents
+bandaso call/follow   the CLI: the same API, for people, scripts and Agents
 ```
 
 - Each process does one job, speaks an explicit protocol, and can be
@@ -31,6 +31,18 @@ bandaso CLI           the same API, for people, scripts and Agents
 - Everything the window can do, the CLI can do.
 - Inside the engine there are no services: it is one process, with one
   SQLite writer per Space. Modules are crates in one binary.
+- **One program, `bandaso`.** `bandaso serve` runs the engine. It listens
+  on 127.0.0.1 only, and writes its port and a fresh secret to
+  `engine.json` in its state folder, a file only this user can read. A
+  window starts it with `--with-parent`: the engine then prints the same
+  JSON as its first line, and stops when its stdin closes. A second
+  engine with the same state folder refuses to start.
+- **The CLI prints JSON.** `bandaso call <method>` prints `{"ok": …}`.
+  `bandaso follow` prints events, one per line. When the engine refuses
+  the call, the hello or the follow, the CLI prints
+  `{"error": {"code", "message"}}` and exits 1. When no engine answers,
+  or the CLI cannot do its part, it says so on stderr and exits 2; a call
+  that broke off names the command ID that repeats it safely.
 
 ## Kernel
 
@@ -70,7 +82,8 @@ command (with its ID)
 
 - A repeated command returns its first result, a refusal included. A
   receipt names its author: the same command ID from someone else, or for
-  another method, is a conflict.
+  another method, is a conflict. A read is not a command and keeps no
+  receipt.
 - A side effect never starts from a live subscription.
 - An effect holds its key while it runs, so its module bounds how long a run
   takes. A restart that cuts an effect short counts as a try: after five,
@@ -78,6 +91,8 @@ command (with its ID)
 - Outbox rows are the kernel's bookkeeping, not records of the work. What a
   Person sees of an effect is the events its module writes.
 - A window loads a snapshot at sequence N, then streams the events after N.
+  The engine replays the log a page at a time, and a subscriber that falls
+  behind catches up from the log.
 
 ## Where data lives
 
@@ -86,7 +101,8 @@ command (with its ID)
 | The Space's folder | the files of the work |
 | Text files | Agents, layouts, keys, themes, module settings |
 | The Harness | its session, context and sign-in. We keep only its session ID, as evidence |
-| The OS keychain | secrets. Bandaso's database never holds them |
+| The OS keychain | secrets you give Bandaso. Its database never holds them |
+| The engine's state folder | the owner's ID; while the engine runs, its port and per-run secret |
 | The window | focus, scroll, open Panes |
 | `.bandaso/` SQLite | Threads, Questions and answers, the Agents' queue, Databases' records, receipts, events, outbox |
 
@@ -209,8 +225,7 @@ bandaso/
     agents/engine/    Rust: Agents, Threads, turns, Questions, the ACP adapter
     agents/pane/      React: the Thread Pane (next)
     browser/pane/     React: the browser Pane (next)
-  engine/             the engine's binary: the kernel and its modules (next)
-  cli/                the CLI, over the same API (next)
+  engine/             the bandaso program: serve (the kernel and its modules), call, follow
   app/web/            React: the tiling shell and the Pane registry (next)
   app/desktop/        Electron: the window, the engine's start, browser views (next)
   contract/           TypeScript types generated from the Rust

@@ -183,6 +183,8 @@ impl Kernel {
             .space(space.ok_or_else(|| Refusal::invalid(format!("{method} needs a Space.")))?)
             .await?;
         let scope = space.module(module.name());
+        // A read is not a command: it keeps no receipt, so its ID is free.
+        let command = command.filter(|_| right != Right::Read);
         let receipt = command.map(|command| scope.receipt(command, method, participant));
         if let Some(receipt) = &receipt {
             let earlier = space.store().answered(receipt.clone()).await?;

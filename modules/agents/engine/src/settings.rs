@@ -67,6 +67,16 @@ impl Harnesses {
         Ok(Self::new(file.harness))
     }
 
+    /// Reads the machine's Harness list from `path`. A machine with no list
+    /// gets the [`known`](Self::known) Harnesses.
+    pub fn load(path: &Path) -> Result<Self, String> {
+        match std::fs::read_to_string(path) {
+            Ok(text) => Self::parse(&text).map_err(|e| format!("{}: {e}", path.display())),
+            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(Self::known()),
+            Err(error) => Err(format!("{}: {error}", path.display())),
+        }
+    }
+
     pub fn find(&self, id: &str) -> Option<&Harness> {
         self.0.iter().find(|h| h.id == id)
     }
