@@ -15,7 +15,7 @@
 //! turn answers the Harness's Questions by the mode where the mode allows,
 //! and asks the Person otherwise.
 
-use crate::acp::{Answer, Opened, Running, Said};
+use crate::acp::{Answer, Opened, Running, Said, ToolChange};
 use crate::live::Live;
 use crate::model::{
     Body, Fact, Failure, Item, ItemId, Mode, QuestionState, Settings, ThreadId, ToolContent,
@@ -384,12 +384,7 @@ struct Shown {
     item: ItemId,
     title: String,
     kind: ToolKind,
-    /// How much of what it printed the Thread holds, and whether it holds
-    /// no more.
-    kept: usize,
-    cut: bool,
-    /// What it printed that is not written yet.
-    waiting: String,
+    printed: rules::Printed,
 }
 
 /// Writes what the Harness says into the Thread.
@@ -480,36 +475,34 @@ impl Writer {
             }
             Said::ToolChanged {
                 call,
-                title,
-                status,
-                content,
+                mut change,
                 output,
-                exit,
             } => {
-                let (mut title, mut status, mut content) = (title, status, content);
+                // What the Agent says after a tool call moves on is a new
+                // message; what the command prints is gathered still.
+                self.end_text().await?;
                 if !self.tools.contains_key(&call) {
-                    self.close().await?;
-                    let started = title.take().unwrap_or_else(|| "A tool".to_owned());
-                    let now = status.take().unwrap_or(ToolStatus::Running);
-                    let shows = content.take().unwrap_or_default();
-                    self.start_tool(call.clone(), started, ToolKind::Other, now, shows)
+                    let title = change.title.take().unwrap_or_else(|| "A tool".to_owned());
+                    let status = change.status.take().unwrap_or(ToolStatus::Running);
+                    let content = change.content.take().unwrap_or_default();
+                    self.start_tool(call.clone(), title, ToolKind::Other, status, content)
                         .await?;
                 }
                 let shown = self.tools.get_mut(&call).expect("started above");
                 if let Some(text) = output {
-                    shown.waiting.push_str(&text);
+                    shown.printed.add(&text);
                     self.due.get_or_insert_with(|| Instant::now() + GATHER);
                 }
-                if title.is_none() && status.is_none() && content.is_none() && exit.is_none() {
+                if change.is_empty() {
                     return Ok(());
                 }
-                if let Some(title) = &title {
+                if let Some(title) = &change.title {
                     shown.title.clone_from(title);
                 }
                 let id = shown.item;
                 // What it printed comes before how it ended.
                 self.write_output().await?;
-                self.change_tool(id, title, status, content, exit).await
+                self.change_tool(id, change).await
             }
             Said::Asks {
                 call,
@@ -643,9 +636,7 @@ impl Writer {
             item: id,
             title: title.clone(),
             kind: tool,
-            kept: 0,
-            cut: false,
-            waiting: String::new(),
+            printed: rules::Printed::default(),
         };
         self.tools.insert(call, shown);
         let content = rules::kept(content);
@@ -667,15 +658,14 @@ impl Writer {
         self.put(id, body, started).await
     }
 
-    async fn change_tool(
-        &self,
-        id: ItemId,
-        title: Option<String>,
-        status: Option<ToolStatus>,
-        content: Option<Vec<ToolContent>>,
-        exit: Option<i32>,
-    ) -> Result<(), String> {
+    async fn change_tool(&self, id: ItemId, change: ToolChange) -> Result<(), String> {
         let (thread, agent) = (self.thread, Participant::Agent(self.agent));
+        let ToolChange {
+            title,
+            status,
+            content,
+            exit,
+        } = change;
         let content = content.map(rules::kept);
         self.space
             .write(move |tx| {
@@ -698,7 +688,7 @@ impl Writer {
                         shows.clone_from(content);
                     }
                     if exit.is_some() {
-                        output.get_or_insert_default().exit = exit;
+                        output.get_or_insert_default().exit.clone_from(&exit);
                     }
                     store::set_body(tx.sql(), id, &item.body)?;
                 }
@@ -718,20 +708,14 @@ impl Writer {
     /// Writes what each command printed since the last time, as far as the
     /// Thread keeps it.
     async fn write_output(&mut self) -> Result<(), String> {
-        let mut printed = Vec::new();
-        for shown in self.tools.values_mut() {
-            if shown.waiting.is_empty() {
-                continue;
-            }
-            let waiting = std::mem::take(&mut shown.waiting);
-            if shown.cut {
-                continue;
-            }
-            let text = rules::fit(&waiting, rules::OUTPUT_KEPT - shown.kept).to_owned();
-            shown.kept += text.len();
-            shown.cut = text.len() < waiting.len();
-            printed.push((shown.item, text, shown.cut));
-        }
+        let printed: Vec<_> = self
+            .tools
+            .values_mut()
+            .filter_map(|shown| {
+                let (text, cut) = shown.printed.take()?;
+                Some((shown.item, text, cut))
+            })
+            .collect();
         if printed.is_empty() {
             return Ok(());
         }
@@ -781,10 +765,17 @@ impl Writer {
     /// Writes what is gathered and ends the open item.
     async fn close(&mut self) -> Result<(), String> {
         self.due = None;
-        if let Some(piece) = self.pieces.close() {
-            self.write(piece).await?;
-        }
+        self.end_text().await?;
         self.write_output().await
+    }
+
+    /// Ends the open message or thought: what the Agent says next starts a
+    /// new one.
+    async fn end_text(&mut self) -> Result<(), String> {
+        match self.pieces.close() {
+            Some(piece) => self.write(piece).await,
+            None => Ok(()),
+        }
     }
 
     async fn write(&self, Piece { item, kind, text }: Piece) -> Result<(), String> {

@@ -3,4 +3,4 @@
 /**
  * What a tool call shows besides its title.
  */
-export type ToolContent = { "kind": "text", text: string, } | { "kind": "diff", path: string, old?: string, new: string, };
+export type ToolContent = { "kind": "text", text: string, } | { "kind": "diff", path: string, old?: string, new: string, } | { "kind": "terminal" };

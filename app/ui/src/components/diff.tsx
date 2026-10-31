@@ -56,7 +56,7 @@ function DiffLines({
   )
 }
 
-const SIGNS = { same: " ", added: "+", removed: "-" } as const
+const SIGNS = { same: " ", added: "+", removed: "−" } as const
 
 /** One line: kept, added or removed, with its sign. */
 function DiffLine({

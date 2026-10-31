@@ -129,7 +129,7 @@ test("a tool call shows its content and what its command printed", () => {
     }),
     event("tool.output", { item: "x", text: "one\n", cut: false }),
     event("tool.output", { item: "x", text: "two\n", cut: true }),
-    event("tool.changed", { item: "x", status: "done", exit: 0 }),
+    event("tool.changed", { item: "x", status: "done", exit: { code: 0 } }),
     event("tool.changed", { item: "x", content: [diff] })
   )
   expect(state.items[0].body).toEqual({
@@ -138,7 +138,7 @@ test("a tool call shows its content and what its command printed", () => {
     tool: "execute",
     status: "done",
     content: [diff],
-    output: { text: "one\ntwo\n", cut: true, exit: 0 },
+    output: { text: "one\ntwo\n", cut: true, exit: { code: 0 } },
   })
 })
 

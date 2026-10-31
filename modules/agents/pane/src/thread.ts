@@ -69,7 +69,8 @@ function changeItem(
   return state.items.map((item) => (item.id === id ? change(item) : item))
 }
 
-type Tool = Extract<Body, { kind: "tool" }>
+/** A tool call as the Thread shows it. */
+export type Tool = Extract<Body, { kind: "tool" }>
 
 function changeTool(
   state: ThreadState,

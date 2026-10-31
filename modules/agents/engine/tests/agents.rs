@@ -3,8 +3,8 @@
 
 use bandaso_agents::Agents;
 use bandaso_agents::model::{
-    Body, Failure, Mode, OptionValue, QuestionState, Settings, ThreadView, ToolContent, ToolStatus,
-    TurnState,
+    Body, Exit, Failure, Mode, OptionValue, QuestionState, Settings, ThreadView, ToolContent,
+    ToolStatus, TurnState,
 };
 use bandaso_agents::settings::{Harness, Harnesses};
 use bandaso_kernel::{AgentId, Code, CommandId, Kernel, Participant, PersonId, SpaceId};
@@ -1068,20 +1068,51 @@ async fn a_tool_call_shows_its_diff_and_what_its_command_printed() {
     );
 
     let (_, view) = world.finish(Some(&thread), "run the tests").await;
-    let Body::Tool { status, output, .. } = last_tool(&view) else {
+    let Body::Tool {
+        status,
+        content,
+        output,
+        ..
+    } = last_tool(&view)
+    else {
         unreachable!()
     };
-    assert_eq!(*status, ToolStatus::Done);
+    assert_eq!(
+        (*status, content.as_slice()),
+        (ToolStatus::Done, &[ToolContent::Terminal][..])
+    );
     let output = output.as_ref().expect("what it printed");
     assert_eq!(output.text, "test one ... ok\ntest two ... ok\n");
-    assert_eq!((output.exit, output.cut), (Some(0), false));
+    let exited = Exit {
+        code: Some(0),
+        signal: None,
+    };
+    assert_eq!((output.exit.as_ref(), output.cut), (Some(&exited), false));
+
+    // Claude Code sends it all at the end, and may not know how it ended.
+    let (_, view) = world.finish(Some(&thread), "run them at once").await;
+    let Body::Tool {
+        content, output, ..
+    } = last_tool(&view)
+    else {
+        unreachable!()
+    };
+    assert_eq!(content, &[ToolContent::Terminal]);
+    let output = output.as_ref().expect("what it printed");
+    assert_eq!(output.text, "test one ... ok\ntest two ... ok\n");
+    assert_eq!(output.exit, Some(Exit::default()));
+    let reply = view.items.last().expect("the reply");
+    assert!(
+        matches!(&reply.body, Body::Message { text } if text == "The tests passed."),
+        "the reply after a tool call is a message of its own: {reply:?}"
+    );
 
     let (_, view) = world.finish(Some(&thread), "run them loud").await;
     let Body::Tool { output, .. } = last_tool(&view) else {
         unreachable!()
     };
     let output = output.as_ref().expect("what it printed");
-    assert_eq!(output.text.len(), 64 * 1024, "the Thread keeps the start");
-    assert!(output.cut && output.text.starts_with("   0 "));
-    assert_eq!(output.exit, Some(0));
+    assert_eq!(output.text.len(), 4 << 20, "the Thread keeps the start");
+    assert!(output.cut && output.text.starts_with("     0 "));
+    assert_eq!(output.exit.as_ref().and_then(|e| e.code), Some(0));
 }

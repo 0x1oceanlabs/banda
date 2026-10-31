@@ -264,7 +264,7 @@ test("a tool call opens on what it changed and what it printed", async () => {
   await edit.click()
   const change = thread.locator("[data-slot=diff]")
   await expect(change).toBeVisible()
-  await expect(change.locator("[data-kind=removed]")).toHaveText("-two")
+  await expect(change.locator("[data-kind=removed]")).toHaveText("−two")
   await expect(change.locator("[data-kind=added]")).toHaveText(["+2", "+four"])
 
   await composer.fill("run the tests")
