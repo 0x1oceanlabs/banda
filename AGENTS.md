@@ -20,6 +20,11 @@ UNIX composition + deep modules + explicit contracts.
 
 One change, one branch, one PR. Nothing is pushed straight to `main`.
 
+Each branch has its own worktree in `../bandaso-worktrees/<slug>`, never
+loose beside the main checkout:
+`git worktree add -b <kind>/<slug> ../bandaso-worktrees/<slug> origin/main`.
+Remove it once its PR is merged.
+
 ## Research
 
 `docs/research/` keeps dated evidence with its source and limits. It is
