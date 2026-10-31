@@ -268,6 +268,7 @@ impl Module for Agents {
                             turns: store::turns(sql, thread)?,
                             settings: store::settings(sql, thread)?,
                             offer: store::offer(sql, thread)?,
+                            usage: store::usage(sql, thread)?,
                             thread: summary,
                         }))
                     })

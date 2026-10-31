@@ -3,7 +3,7 @@
 
 use crate::model::{
     Body, Failure, Item, ItemId, Offer, QuestionState, Settings, ThreadId, ThreadSummary, TurnId,
-    TurnState, TurnView,
+    TurnState, TurnView, Usage,
 };
 use bandaso_kernel::{AgentId, Error, Participant, Refusal};
 use rusqlite::{Connection, OptionalExtension, Row, params};
@@ -62,6 +62,10 @@ ALTER TABLE agents_threads ADD COLUMN settings TEXT;
 ALTER TABLE agents_threads ADD COLUMN offer TEXT;
 ALTER TABLE agents_turns ADD COLUMN settings TEXT;
 UPDATE agents_threads SET settings = '{"mode":"supervised"}';
+"#,
+    r#"
+-- How full the Agent's context in the Thread is, as JSON.
+ALTER TABLE agents_threads ADD COLUMN usage TEXT;
 "#,
 ];
 
@@ -152,6 +156,18 @@ pub fn set_offer(sql: &Connection, thread: ThreadId, offer: &Offer) -> Result<()
     sql.execute(
         "UPDATE agents_threads SET offer = ?2 WHERE id = ?1",
         params![thread, json(offer)?],
+    )?;
+    Ok(())
+}
+
+pub fn usage(sql: &Connection, thread: ThreadId) -> Result<Option<Usage>, Error> {
+    thread_json(sql, thread, "usage")
+}
+
+pub fn set_usage(sql: &Connection, thread: ThreadId, usage: &Usage) -> Result<(), Error> {
+    sql.execute(
+        "UPDATE agents_threads SET usage = ?2 WHERE id = ?1",
+        params![thread, json(usage)?],
     )?;
     Ok(())
 }

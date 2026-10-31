@@ -3,8 +3,8 @@
 
 use bandaso_agents::Agents;
 use bandaso_agents::model::{
-    Body, Exit, Failure, Mode, OptionValue, QuestionState, Settings, ThreadView, ToolContent,
-    ToolStatus, TurnState,
+    Body, Exit, Failure, Mode, OptionValue, QuestionState, Settings, StepState, ThreadView,
+    ToolContent, ToolStatus, TurnState, Usage,
 };
 use bandaso_agents::settings::{Harness, Harnesses};
 use bandaso_kernel::{AgentId, Code, CommandId, Kernel, Participant, PersonId, SpaceId};
@@ -184,6 +184,7 @@ fn texts(view: &ThreadView) -> Vec<String> {
             Body::Tool { title, status, .. } => format!("tool: {title} ({status:?})"),
             Body::Question { title, state, .. } => format!("question: {title} ({state:?})"),
             Body::Notice { text } => format!("notice: {text}"),
+            Body::Plan { steps } => format!("plan: {} steps", steps.len()),
         })
         .collect()
 }
@@ -1115,4 +1116,36 @@ async fn a_tool_call_shows_its_diff_and_what_its_command_printed() {
     assert_eq!(output.text.len(), 4 << 20, "the Thread keeps the start");
     assert!(output.cut && output.text.starts_with("     0 "));
     assert_eq!(output.exit.as_ref().and_then(|e| e.code), Some(0));
+}
+
+#[tokio::test]
+async fn an_agents_plan_is_one_item_that_follows_its_steps() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let (thread, view) = world.finish(None, "work in steps").await;
+    assert_eq!(
+        texts(&view)[1..],
+        ["plan: 3 steps", "message: All three steps are done."]
+    );
+    let Body::Plan { steps } = &view.items[1].body else {
+        unreachable!()
+    };
+    assert!(
+        steps.iter().all(|s| s.state == StepState::Done),
+        "{steps:?}"
+    );
+    assert_eq!(
+        view.usage,
+        Some(Usage {
+            used: 52_000,
+            size: 200_000
+        })
+    );
+
+    let (_, view) = world.finish(Some(&thread), "work in steps again").await;
+    let plans = texts(&view)
+        .iter()
+        .filter(|t| t.starts_with("plan"))
+        .count();
+    assert_eq!(plans, 2, "each turn's plan is its own");
 }

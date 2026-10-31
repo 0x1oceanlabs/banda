@@ -25,9 +25,11 @@ export type { OptionChoice } from "./generated/agents/OptionChoice"
 export type { OptionValue } from "./generated/agents/OptionValue"
 export type { Exit } from "./generated/agents/Exit"
 export type { Output } from "./generated/agents/Output"
+export type { PlanStep } from "./generated/agents/PlanStep"
 export type { QuestionState } from "./generated/agents/QuestionState"
 export type { Sent } from "./generated/agents/Sent"
 export type { Settings } from "./generated/agents/Settings"
+export type { StepState } from "./generated/agents/StepState"
 export type { ThreadId } from "./generated/agents/ThreadId"
 export type { ThreadList } from "./generated/agents/ThreadList"
 export type { ThreadSummary } from "./generated/agents/ThreadSummary"
@@ -38,6 +40,7 @@ export type { ToolStatus } from "./generated/agents/ToolStatus"
 export type { TurnId } from "./generated/agents/TurnId"
 export type { TurnState } from "./generated/agents/TurnState"
 export type { TurnView } from "./generated/agents/TurnView"
+export type { Usage } from "./generated/agents/Usage"
 
 export { VERSION }
 
@@ -52,11 +55,14 @@ const KINDS: ReadonlySet<string> = new Set(
     "turn.queued": true,
     "thread.configured": true,
     "thread.offered": true,
+    "thread.used": true,
     "reply.grew": true,
     "thought.grew": true,
     "tool.started": true,
     "tool.changed": true,
     "tool.output": true,
+    "plan.made": true,
+    "plan.changed": true,
     "question.asked": true,
     "question.answered": true,
     "question.closed": true,

@@ -278,3 +278,31 @@ test("a tool call opens on what it changed and what it printed", async () => {
   await page.mouse.move(0, 0)
   await page.screenshot({ path: "test-results/10-tool-calls.png" })
 })
+
+test("an Agent's plan shows its steps, and the context how full it is", async () => {
+  window = await startWindow()
+  const { page } = window
+  await page.getByLabel("Name").fill("Work")
+  await page.getByRole("button", { name: "Create Space" }).click()
+  await page.getByRole("button", { name: "New Agent" }).click()
+  const dialog = page.getByRole("dialog", { name: "New Agent" })
+  await dialog.getByLabel("Name").fill("Writer")
+  await dialog.getByRole("button", { name: "Create Agent" }).click()
+  const thread = page.getByRole("region", { name: "Writer" })
+  const composer = thread.getByRole("textbox", { name: "Message to Writer" })
+
+  await composer.fill("work in steps")
+  await composer.press("Enter")
+  await expect(thread.getByText("All three steps are done.")).toBeVisible()
+  const plan = thread.getByRole("region", { name: "Plan" })
+  await expect(plan.getByText("3 of 3 done")).toBeVisible()
+  await expect(plan.getByRole("listitem")).toHaveText([
+    /Read the notes/,
+    /Fix the typo/,
+    /Check the result/,
+  ])
+  const meter = thread.getByRole("meter", { name: "Context used" })
+  await expect(meter).toHaveAttribute("aria-valuetext", /^26% of the context/)
+  await page.mouse.move(0, 0)
+  await page.screenshot({ path: "test-results/11-plan.png" })
+})

@@ -18,8 +18,8 @@
 use crate::acp::{Answer, Opened, Running, Said, ToolChange};
 use crate::live::Live;
 use crate::model::{
-    Body, Fact, Failure, Item, ItemId, Mode, QuestionState, Settings, ThreadId, ToolContent,
-    ToolKind, ToolStatus, TurnId, TurnState,
+    Body, Fact, Failure, Item, ItemId, Mode, PlanStep, QuestionState, Settings, ThreadId,
+    ToolContent, ToolKind, ToolStatus, TurnId, TurnState,
 };
 use crate::rules::{self, Ending, Piece, Pieces, Text};
 use crate::settings::{self, Harnesses};
@@ -403,6 +403,8 @@ struct Writer {
     tools: HashMap<String, Shown>,
     /// The open Questions it asked, by the Harness's IDs for them.
     asked: HashMap<String, ItemId>,
+    /// The item that shows the Agent's plan for this turn, once it made one.
+    plan: Option<ItemId>,
     due: Option<Instant>,
     /// When the account may be used again, if the Harness said it reached
     /// its limit.
@@ -428,6 +430,7 @@ impl Writer {
             pieces: Pieces::default(),
             tools: HashMap::new(),
             asked: HashMap::new(),
+            plan: None,
             due: None,
             resets: None,
         }
@@ -591,9 +594,35 @@ impl Writer {
                 };
                 self.put(id, Body::Notice { text }, posted).await
             }
-            Said::Resets(at) => {
-                self.resets = Some(at);
-                Ok(())
+            Said::Planned(steps) => match self.plan {
+                Some(id) => self.change_plan(id, steps).await,
+                None => {
+                    self.end_text().await?;
+                    let id = ItemId::new();
+                    self.plan = Some(id);
+                    let made = Fact::PlanMade {
+                        item: id,
+                        turn: self.turn,
+                        steps: steps.clone(),
+                    };
+                    self.put(id, Body::Plan { steps }, made).await
+                }
+            },
+            Said::Used { usage, resets } => {
+                if resets.is_some() {
+                    self.resets = resets;
+                }
+                let (thread, agent) = (self.thread, Participant::Agent(self.agent));
+                self.space
+                    .write(move |tx| {
+                        if store::usage(tx.sql(), thread)? == Some(usage) {
+                            return Ok(());
+                        }
+                        store::set_usage(tx.sql(), thread, &usage)?;
+                        emit(tx, agent, thread, &Fact::ThreadUsed { thread, usage })
+                    })
+                    .await
+                    .map_err(plain)
             }
             Said::Runs(now) => {
                 self.close().await?;
@@ -700,6 +729,23 @@ impl Writer {
                     exit,
                 };
                 emit(tx, agent, thread, &changed)
+            })
+            .await
+            .map_err(plain)
+    }
+
+    async fn change_plan(&self, id: ItemId, steps: Vec<PlanStep>) -> Result<(), String> {
+        let (thread, agent) = (self.thread, Participant::Agent(self.agent));
+        self.space
+            .write(move |tx| {
+                store::set_body(
+                    tx.sql(),
+                    id,
+                    &Body::Plan {
+                        steps: steps.clone(),
+                    },
+                )?;
+                emit(tx, agent, thread, &Fact::PlanChanged { item: id, steps })
             })
             .await
             .map_err(plain)

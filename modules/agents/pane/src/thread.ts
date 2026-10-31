@@ -13,6 +13,7 @@ import {
   type Settings,
   type ThreadView,
   type TurnView,
+  type Usage,
 } from "@bandaso/contract/agents"
 
 export type ThreadState = {
@@ -22,6 +23,8 @@ export type ThreadState = {
   turns: TurnView[]
   settings: Settings
   offer: Offer
+  /** How full the Agent's context is, once the Harness has said. */
+  usage?: Usage
 }
 
 /** What a Thread runs with when nobody chose otherwise, as the engine has it. */
@@ -42,8 +45,8 @@ export const EMPTY: ThreadState = {
 }
 
 export function fromView(view: ThreadView): ThreadState {
-  const { at, items, turns, settings, offer } = view
-  return { at, items, turns, settings, offer }
+  const { at, items, turns, settings, offer, usage } = view
+  return { at, items, turns, settings, offer, usage }
 }
 
 /** The value a Thread runs `option` with: its own choice, or else the
@@ -229,6 +232,26 @@ export function apply(state: ThreadState, event: Event): ThreadState {
         ),
       }
     }
+    case "plan.made": {
+      const { item: id, turn, steps } = fact.payload
+      return {
+        ...next,
+        items: [...state.items, item(id, { kind: "plan", steps }, turn)],
+      }
+    }
+    case "plan.changed": {
+      const { item: id, steps } = fact.payload
+      return {
+        ...next,
+        items: changeItem(state, id, (item) =>
+          item.body.kind === "plan"
+            ? { ...item, body: { kind: "plan", steps } }
+            : item
+        ),
+      }
+    }
+    case "thread.used":
+      return { ...next, usage: fact.payload.usage }
     case "notice.posted": {
       const { item: id, turn, text } = fact.payload
       return {

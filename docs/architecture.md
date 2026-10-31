@@ -219,6 +219,12 @@ If Chat is removed, Agents still works through its own Thread.
   Claude Code sends it once the command is done. The Thread keeps it all,
   up to 4 MB for one command's output, text or diff, which only a runaway
   command reaches; a diff past it says so instead.
+- **An Agent's plan** for its turn is one entry whose steps follow the
+  Harness: each plan it sends replaces the steps. A new turn's plan is a
+  new entry.
+- **How full the Agent's context is** belongs to the Thread
+  (`thread.used`), as the Harness last said, and shows under the message
+  box.
 - **A restart interrupts** the turn it cut short and closes that turn's
   open Questions.
 - Its methods and their rights are listed in
