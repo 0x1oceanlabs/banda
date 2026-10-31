@@ -171,6 +171,20 @@ If Chat is removed, Agents still works through its own Thread.
   side, an Agent's own Threads too. A stop (`turn.stop`) and an answer
   (`question.reply`) have keys of their own, so neither waits behind the
   turn it is for.
+- **While the Agent works, a message goes into its turn or waits**, as in
+  T3 Code (ADR 0003, decision 8). Enter sends it into the running turn
+  (steering): the engine hands it over through `_session/steering`, which
+  Claude Code's and Codex's adapters share (`turn.steer`, keyed by the
+  Thread's steering), and what the Agent says of it follows it in the
+  Thread. Queue, or Ctrl+Enter, has it wait for a turn of its own. A
+  message the turn cannot take, as when it just ended, waits for its own
+  turn instead; a Harness that cannot steer stops its turn for it, and
+  says so.
+- **The queue shows after the Thread.** A waiting message can be changed
+  (`agents.edit`), taken back (`agents.withdraw`) or sent now into the
+  running turn (`agents.steer`). It reads where its turn starts. A Person's
+  stop and a restart hold the queue (`thread.held`) until the Person
+  continues (`agents.resume`) or sends another message.
 - **One Harness process per Space and Harness entry.** Every Thread on it is
   a session in that process. The engine starts it on the first turn, one
   start at a time; starts it again after a growing pause if it keeps dying;
@@ -251,7 +265,8 @@ If Chat is removed, Agents still works through its own Thread.
   it offers, and the window offers no images; a message with images gets
   the text alone, with a notice, and one of images alone fails its turn.
 - **A restart interrupts** the turn it cut short and closes that turn's
-  open Questions.
+  open Questions. Turns that waited stay queued, and the queue is held. A
+  message sent into a turn that never got it waits for a turn of its own.
 - Its methods and their rights are listed in
   `modules/agents/engine/src/lib.rs`, and its facts in `model.rs`.
 

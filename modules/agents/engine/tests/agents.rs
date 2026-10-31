@@ -916,6 +916,11 @@ async fn a_message_runs_with_the_settings_it_was_sent_with() {
         )
         .await
         .unwrap();
+    // The stop holds the queue until the Person lets it go.
+    world
+        .call(world.person(), "agents.resume", json!({ "thread": thread }))
+        .await
+        .unwrap();
     let view = world
         .until(&thread, |v| {
             state(v, &full["turn"]) == Some(TurnState::Done)
@@ -1411,4 +1416,199 @@ async fn an_image_whose_file_is_gone_is_left_out_and_said() {
         texts(&view)
     );
     assert_eq!(last_reply(&view), "message: You said: look");
+}
+
+impl World {
+    /// Sends `text` into the Thread's running turn, if one runs.
+    async fn steer(&self, thread: &Value, text: &str) -> Value {
+        let params = json!({ "agent": self.agent, "thread": thread, "text": text, "steer": true });
+        self.call(self.person(), "agents.send", params)
+            .await
+            .unwrap()
+    }
+
+    /// Starts a turn that waits for a message sent into it.
+    async fn waiting(&self, thread: Option<&Value>) -> Value {
+        let sent = self.send(thread, "wait here").await;
+        self.until(&sent["thread"], |v| {
+            texts(v).contains(&"message: Waiting.".to_owned())
+        })
+        .await;
+        sent
+    }
+
+    async fn on_turn(&self, method: &str, turn: &Value) -> Result<Value, bandaso_kernel::Refusal> {
+        self.call(self.person(), method, json!({ "turn": turn }))
+            .await
+    }
+}
+
+fn position(view: &ThreadView, text: &str) -> usize {
+    texts(view)
+        .iter()
+        .position(|t| t == text)
+        .unwrap_or_else(|| panic!("no {text:?} in {:?}", texts(view)))
+}
+
+#[tokio::test]
+async fn a_message_sent_into_a_running_turn_joins_it() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let wait = world.waiting(None).await;
+    let steered = world.steer(&wait["thread"], "also this").await;
+    assert_eq!(steered["turn"], wait["turn"], "no turn of its own");
+    let view = world.ended(&wait).await;
+    assert_eq!(state(&view, &wait["turn"]), Some(TurnState::Done));
+    assert_eq!(view.turns.len(), 1);
+    assert_eq!(
+        texts(&view),
+        [
+            "message: wait here",
+            "message: Waiting.",
+            "message: also this",
+            "message: Steered: also this.",
+        ],
+        "what the Agent says of it reads after it"
+    );
+    let item = view
+        .items
+        .iter()
+        .find(|i| serde_json::to_value(i.id).unwrap() == steered["item"])
+        .unwrap();
+    assert_eq!(serde_json::to_value(item.turn).unwrap(), wait["turn"]);
+
+    let alone = world.steer(&wait["thread"], "and now").await;
+    assert_ne!(
+        alone["turn"], wait["turn"],
+        "nothing runs: a turn of its own"
+    );
+    let view = world.ended(&alone).await;
+    assert_eq!(last_reply(&view), "message: You said: and now");
+}
+
+#[tokio::test]
+async fn a_harness_that_cannot_steer_stops_for_the_message() {
+    let root = tempfile::tempdir().unwrap();
+    let harnesses = harnesses_with(&[("FAKE_AGENT_NO_STEERING", "1")]);
+    let world = World::new_with(root.path(), Agents::new(harnesses)).await;
+    let wait = world.waiting(None).await;
+    world.steer(&wait["thread"], "instead this").await;
+    let view = world
+        .until(&wait["thread"], |v| {
+            v.turns.len() == 2 && v.turns[1].state == TurnState::Done
+        })
+        .await;
+    assert_eq!(state(&view, &wait["turn"]), Some(TurnState::Stopped));
+    let said = "notice: Fake cannot take a message while it works, \
+                so Bandaso stopped it to send yours.";
+    assert!(position(&view, said) < position(&view, "message: instead this"));
+    assert_eq!(last_reply(&view), "message: You said: instead this");
+}
+
+#[tokio::test]
+async fn a_waiting_message_changes_goes_and_waits_after_a_stop() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let wait = world.waiting(None).await;
+    let thread = wait["thread"].clone();
+    let second = world.send(Some(&thread), "second").await;
+    let third = world.send(Some(&thread), "third").await;
+
+    let edit = |item: &Value, text: &str| {
+        world.call(
+            world.person(),
+            "agents.edit",
+            json!({ "item": item.clone(), "text": text }),
+        )
+    };
+    edit(&second["item"], "second, changed").await.unwrap();
+    world
+        .on_turn("agents.withdraw", &third["turn"])
+        .await
+        .unwrap();
+    let refused = edit(&wait["item"], "no").await.unwrap_err();
+    assert!(refused.message.contains("taken"), "{}", refused.message);
+    let refused = edit(&second["item"], "").await.unwrap_err();
+    assert_eq!(
+        refused.code,
+        Code::Invalid,
+        "a message needs text or an image"
+    );
+    let view = world.thread(&thread).await;
+    assert_eq!(state(&view, &second["turn"]), Some(TurnState::Queued));
+    assert_eq!(state(&view, &third["turn"]), Some(TurnState::Withdrawn));
+
+    world.on_turn("agents.stop", &wait["turn"]).await.unwrap();
+    world
+        .until(&thread, |v| {
+            state(v, &wait["turn"]) == Some(TurnState::Stopped)
+        })
+        .await;
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    let view = world.thread(&thread).await;
+    assert!(view.held, "a stop holds the queue");
+    assert_eq!(state(&view, &second["turn"]), Some(TurnState::Queued));
+
+    world
+        .call(world.person(), "agents.resume", json!({ "thread": thread }))
+        .await
+        .unwrap();
+    let view = world.ended(&second).await;
+    assert!(!view.held);
+    assert_eq!(last_reply(&view), "message: You said: second, changed");
+    assert!(
+        position(&view, "message: Waiting.") < position(&view, "message: second, changed"),
+        "a message reads where its turn started: {:?}",
+        texts(&view)
+    );
+}
+
+#[tokio::test]
+async fn a_waiting_message_sent_now_joins_the_running_turn() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let wait = world.waiting(None).await;
+    let later = world.send(Some(&wait["thread"]), "now this").await;
+    world.on_turn("agents.steer", &later["turn"]).await.unwrap();
+    let view = world.ended(&wait).await;
+    assert_eq!(state(&view, &wait["turn"]), Some(TurnState::Done));
+    assert_eq!(state(&view, &later["turn"]), Some(TurnState::Withdrawn));
+    assert_eq!(last_reply(&view), "message: Steered: now this.");
+    assert_eq!(
+        position(&view, "message: now this") + 1,
+        position(&view, "message: Steered: now this.")
+    );
+    let refused = world
+        .on_turn("agents.steer", &later["turn"])
+        .await
+        .unwrap_err();
+    assert!(refused.message.contains("taken"), "{}", refused.message);
+}
+
+#[test]
+fn a_restart_holds_the_queue_until_a_person_sends_again() {
+    let root = tempfile::tempdir().unwrap();
+    across_a_restart(
+        root.path(),
+        || Agents::new(harnesses()),
+        async |world| {
+            let wait = world.waiting(None).await;
+            let second = world.send(Some(&wait["thread"]), "second").await;
+            (wait, second)
+        },
+        async |world, (wait, second)| {
+            let thread = &wait["thread"];
+            tokio::time::sleep(Duration::from_millis(300)).await;
+            let view = world.thread(thread).await;
+            assert_eq!(state(&view, &wait["turn"]), Some(TurnState::Interrupted));
+            assert_eq!(state(&view, &second["turn"]), Some(TurnState::Queued));
+            assert!(view.held, "a restart holds the queue");
+
+            let third = world.send(Some(thread), "third").await;
+            let view = world.ended(&third).await;
+            assert_eq!(state(&view, &second["turn"]), Some(TurnState::Done));
+            assert_eq!(last_reply(&view), "message: You said: third");
+            assert!(!view.held);
+        },
+    );
 }

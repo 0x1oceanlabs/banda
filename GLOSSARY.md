@@ -53,6 +53,18 @@ _Avoid_: command (that is a request to a module).
 One stretch of an Agent's work in a Thread. It begins at a message to the
 Agent and ends when the Agent stops or is stopped.
 
+**Queue**:
+The messages of a Thread that wait for their turns, in order, after the
+turn that runs. A Person can change one, take it back or send it now. A stop
+or a restart holds the queue until the Person continues.
+_Avoid_: backlog, pending.
+
+**Steering**:
+Sending a message into the turn that runs, which the Agent reads as it
+works, instead of queuing it. A Harness that cannot take one stops its turn
+and runs the message next.
+_Avoid_: interrupt (that is a stop), injection.
+
 **Question**:
 An Agent's request for the Person to decide something. Most often it asks for
 permission to run an action. The Harness writes the choices, and the Person's

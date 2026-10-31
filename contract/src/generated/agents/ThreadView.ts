@@ -18,4 +18,9 @@ offer: Offer,
 /**
  * How full the Agent's context is, as the Harness last said.
  */
-usage?: Usage, };
+usage?: Usage, 
+/**
+ * Its queue waits for a Person: a stop or a restart held it, and
+ * sending or going on lets it go.
+ */
+held: boolean, };

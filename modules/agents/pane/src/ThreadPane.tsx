@@ -61,7 +61,9 @@ import {
   NO_OFFER,
   retryable,
   rows,
+  running,
   type ThreadState,
+  waiting,
   working,
 } from "./thread"
 import { suggested } from "./slash"
@@ -75,6 +77,7 @@ import {
 import { summary, type Values } from "./form"
 import { QuestionForm } from "./QuestionForm"
 import { Plan } from "./Plan"
+import { Queue, type QueueActions } from "./Queue"
 import { ToolCall } from "./ToolCall"
 import { SettingsBar } from "./ThreadSettings"
 
@@ -161,7 +164,7 @@ function ThreadPane({
     closed: offer.no_images ? `${args.name} does not take images.` : undefined,
   })
   const [dropping, setDropping] = useState(false)
-  const send = async (text: string, images: Attached[]) => {
+  const send = async (text: string, images: Attached[], steer: boolean) => {
     for (const { image, url } of images) reader.remember(image.id, url)
     const sent = await sending.act(() =>
       engine.command<Sent>(
@@ -174,6 +177,7 @@ function ThreadPane({
           text,
           images: images.map(({ image }) => image.id),
           settings: thread === null ? (settings ?? null) : null,
+          steer,
         },
         space
       )
@@ -197,6 +201,24 @@ function ThreadPane({
     void acting.act(() =>
       engine.command("agents.retry", { turn: turn.id }, space)
     )
+  const queue: QueueActions = {
+    onSendNow: ({ turn }) =>
+      void acting.act(() =>
+        engine.command("agents.steer", { turn: turn.id }, space)
+      ),
+    onEdit: async ({ item }, text) =>
+      (await acting.act(() =>
+        engine.command("agents.edit", { item: item.id, text }, space)
+      )) !== undefined,
+    onRemove: ({ turn }) =>
+      void acting.act(() =>
+        engine.command("agents.withdraw", { turn: turn.id }, space)
+      ),
+    onContinue: () => {
+      if (thread === null) return
+      void acting.act(() => engine.command("agents.resume", { thread }, space))
+    },
+  }
 
   return (
     // Images dropped anywhere on the Pane join the message.
@@ -239,6 +261,7 @@ function ThreadPane({
             answering={acting.busy}
             onAnswer={answer}
             onRetry={retry}
+            queue={queue}
           />
         )}
       </div>
@@ -253,6 +276,7 @@ function ThreadPane({
           focused={focused}
           busy={sending.busy}
           working={turn}
+          steering={state !== undefined && running(state) !== undefined}
           usage={state?.usage}
           commands={suggested(offer)}
           images={images}
@@ -311,15 +335,18 @@ function Transcript({
   name,
   reader,
   onRetry,
+  queue,
   ...answers
 }: Answering & {
   state: ThreadState
   name: string
   reader: ImageReader
   onRetry: (turn: TurnView) => void
+  queue: QueueActions
 }) {
   const turn = working(state)
   const lines = rows(state)
+  const waits = waiting(state)
   const last = state.items.at(-1)
   return (
     <MessageScrollerProvider autoScroll defaultScrollPosition="end">
@@ -367,6 +394,19 @@ function Transcript({
                     </TraceTitle>
                   </TraceLine>
                 </Trace>
+              </MessageScrollerItem>
+            )}
+            {waits.length > 0 && (
+              <MessageScrollerItem key="waiting">
+                <Queue
+                  waiting={waits}
+                  held={state.held}
+                  working={running(state) !== undefined}
+                  name={name}
+                  busy={answers.answering}
+                  reader={reader}
+                  {...queue}
+                />
               </MessageScrollerItem>
             )}
           </MessageScrollerContent>

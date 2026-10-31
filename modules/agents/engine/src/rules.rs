@@ -19,9 +19,10 @@ pub fn may_choose(author: Participant) -> Result<(), Refusal> {
     }
 }
 
-/// Whether a turn may start now: it waits, and nobody stopped it.
-pub fn may_start(state: TurnState) -> bool {
-    state == TurnState::Queued
+/// Whether a turn may start now: it waits, nobody stopped it, and its
+/// Thread's queue is not held.
+pub fn may_start(state: TurnState, held: bool) -> bool {
+    state == TurnState::Queued && !held
 }
 
 /// Whether a turn has yet to end.
@@ -44,9 +45,23 @@ pub fn stop(state: TurnState) -> Stop {
     match state {
         TurnState::Queued => Stop::Now,
         TurnState::Running => Stop::AskHarness,
-        TurnState::Done | TurnState::Stopped | TurnState::Failed | TurnState::Interrupted => {
-            Stop::Nothing
-        }
+        TurnState::Done
+        | TurnState::Stopped
+        | TurnState::Failed
+        | TurnState::Interrupted
+        | TurnState::Withdrawn => Stop::Nothing,
+    }
+}
+
+/// Whether a Person may still change a message, take it back or send it
+/// now: only while its turn waits.
+pub fn waits(state: TurnState) -> Result<(), Refusal> {
+    if state == TurnState::Queued {
+        Ok(())
+    } else {
+        Err(Refusal::invalid(
+            "The Agent has taken this message, so it can no longer be changed.",
+        ))
     }
 }
 
@@ -644,9 +659,10 @@ mod tests {
     }
 
     #[test]
-    fn a_turn_starts_once_and_stops_by_its_state() {
-        assert!(may_start(TurnState::Queued));
-        assert!(!may_start(TurnState::Running));
+    fn a_turn_starts_once_stops_by_its_state_and_changes_while_it_waits() {
+        assert!(may_start(TurnState::Queued, false));
+        assert!(!may_start(TurnState::Queued, true), "the queue is held");
+        assert!(!may_start(TurnState::Running, false));
         assert_eq!(stop(TurnState::Queued), Stop::Now);
         assert_eq!(stop(TurnState::Running), Stop::AskHarness);
         for ended in [
@@ -654,10 +670,14 @@ mod tests {
             TurnState::Stopped,
             TurnState::Failed,
             TurnState::Interrupted,
+            TurnState::Withdrawn,
         ] {
             assert_eq!(stop(ended), Stop::Nothing);
             assert!(!ongoing(ended));
+            assert!(waits(ended).is_err(), "{ended:?}");
         }
+        assert!(waits(TurnState::Queued).is_ok());
+        assert!(waits(TurnState::Running).is_err(), "the Agent has it");
         let cancelled = || Ending::new(TurnState::Stopped, None);
         assert_eq!(cancelled().stop_asked(true).state, TurnState::Stopped);
         assert_eq!(
@@ -693,6 +713,7 @@ mod tests {
             TurnState::Running,
             TurnState::Done,
             TurnState::Stopped,
+            TurnState::Withdrawn,
         ] {
             assert!(retry(state, true).is_err(), "{state:?}");
         }

@@ -454,3 +454,74 @@ test("a message carries images to its Agent", async () => {
     .poll(() => shown.evaluate((img: HTMLImageElement) => img.naturalWidth))
     .toBe(2000)
 })
+
+test("a message goes into the turn that runs, or waits its turn in the queue", async () => {
+  window = await startWindow()
+  const { page } = window
+  await page.getByLabel("Name").fill("Work")
+  await page.getByRole("button", { name: "Create Space" }).click()
+  await page.getByRole("button", { name: "New Agent" }).click()
+  const dialog = page.getByRole("dialog", { name: "New Agent" })
+  await dialog.getByLabel("Name").fill("Writer")
+  await dialog.getByRole("button", { name: "Create Agent" }).click()
+  const thread = page.getByRole("region", { name: "Writer" })
+  const composer = thread.getByRole("textbox", { name: "Message to Writer" })
+  const waits = thread.getByText("Waiting.")
+
+  // While the Agent works, Enter sends a message into its turn.
+  await composer.fill("wait here")
+  await composer.press("Enter")
+  await expect(waits).toHaveCount(1)
+  await composer.fill("also this")
+  await expect(thread.getByRole("button", { name: "Queue" })).toBeVisible()
+  await page.screenshot({ path: "test-results/15-steer.png" })
+  await composer.press("Enter")
+  await expect(thread.getByText("Steered: also this.")).toBeVisible()
+
+  // Ctrl+Enter, or Queue, has it wait for the turn to end.
+  await composer.fill("wait again")
+  await composer.press("Enter")
+  await expect(waits).toHaveCount(2)
+  await composer.fill("second")
+  await composer.press("Control+Enter")
+  await composer.fill("third")
+  await thread.getByRole("button", { name: "Queue" }).click()
+  const queue = thread.getByRole("list", { name: "Waiting messages" })
+  await expect(queue.getByRole("listitem")).toHaveCount(2)
+  await page.screenshot({ path: "test-results/16-queue.png" })
+
+  const second = queue.getByRole("listitem").filter({ hasText: "second" })
+  await second.getByRole("button", { name: "Edit" }).click()
+  await second
+    .getByRole("textbox", { name: "Waiting message" })
+    .fill("second, changed")
+  await second.getByRole("button", { name: "Save" }).click()
+  await expect(second.getByText("second, changed")).toBeVisible()
+  await queue
+    .getByRole("listitem")
+    .filter({ hasText: "third" })
+    .getByRole("button", { name: "Remove" })
+    .click()
+  await expect(queue.getByRole("listitem")).toHaveCount(1)
+
+  // A stop holds the queue until the Person continues.
+  await thread.getByRole("button", { name: "Stop" }).click()
+  await expect(
+    thread.getByText("One message waits until you continue.")
+  ).toBeVisible()
+  await page.screenshot({ path: "test-results/17-held.png" })
+  await thread.getByRole("button", { name: "Continue" }).click()
+  await expect(thread.getByText("You said: second, changed")).toBeVisible()
+  await expect(queue).toBeHidden()
+  await expect(thread.getByText("third")).toBeHidden()
+
+  // Send now puts a waiting message into the turn that runs.
+  await composer.fill("wait once more")
+  await composer.press("Enter")
+  await expect(waits).toHaveCount(3)
+  await composer.fill("now this")
+  await composer.press("Control+Enter")
+  await queue.getByRole("button", { name: "Send now" }).click()
+  await expect(thread.getByText("Steered: now this.")).toBeVisible()
+  await expect(queue).toBeHidden()
+})

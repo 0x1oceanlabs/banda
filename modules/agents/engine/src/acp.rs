@@ -47,6 +47,8 @@ use tokio::time::timeout;
 const STARTING: Duration = Duration::from_secs(120);
 /// How long a Harness may take to open a session.
 const OPENING: Duration = Duration::from_secs(60);
+/// How long a Harness may take to say whether a message joins its turn.
+const STEERING: Duration = Duration::from_secs(30);
 
 /// What a Harness said during a turn.
 pub enum Said {
@@ -182,6 +184,34 @@ pub struct PromptImage {
     pub bytes: Vec<u8>,
 }
 
+/// What became of a message sent into a running turn.
+#[derive(Debug, PartialEq, Eq)]
+pub enum Steered {
+    /// It joined the turn: what the Agent says of it comes with the turn.
+    Joined,
+    /// No turn could take it, as one that just ended: it needs its own.
+    NotNow,
+}
+
+/// `_session/steering`, which Claude Code's and Codex's adapters share
+/// (ACP PR #1261): a message into the session's running turn. With
+/// `promptRequired` an adapter whose turn ended starts none by itself; the
+/// engine queues the message instead.
+#[derive(Debug, Clone, Serialize, Deserialize, agent_client_protocol::JsonRpcRequest)]
+#[request(method = "_session/steering", response = SteeringResponse)]
+#[serde(rename_all = "camelCase")]
+struct SteeringRequest {
+    session_id: acp::SessionId,
+    prompt: Vec<acp::ContentBlock>,
+    #[serde(rename = "_meta")]
+    meta: serde_json::Value,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, agent_client_protocol::JsonRpcResponse)]
+struct SteeringResponse {
+    outcome: String,
+}
+
 /// What a session runs with, as the Harness last said.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct Running {
@@ -291,6 +321,8 @@ struct Agreed {
     resumes: bool,
     /// It takes images in a prompt.
     images: bool,
+    /// It takes a message into a running turn (`_session/steering`).
+    steers: bool,
 }
 
 /// One Harness process and its ACP connection. Dropping it stops the
@@ -522,20 +554,12 @@ impl Connection {
     pub fn prompt(
         &self,
         Session(session): &Session,
-        Prompt { text, images }: &Prompt,
+        prompt: &Prompt,
     ) -> (mpsc::UnboundedReceiver<Said>, JoinHandle<Ending>) {
         let (said, hear) = mpsc::unbounded_channel();
         self.touch();
         self.routes.lock().unwrap().insert(session.clone(), said);
-        let text = (!text.is_empty()).then(|| acp::ContentBlock::Text(acp::TextContent::new(text)));
-        let images = images.iter().map(|image| {
-            acp::ContentBlock::Image(acp::ImageContent::new(
-                BASE64.encode(&image.bytes),
-                image.mime.clone(),
-            ))
-        });
-        let request =
-            acp::PromptRequest::new(session.clone(), text.into_iter().chain(images).collect());
+        let request = acp::PromptRequest::new(session.clone(), blocks(prompt));
         // Sent here, not in the task: a stop that follows must reach the
         // Harness after the prompt it stops.
         let sent = self.cx.send_request(request);
@@ -573,6 +597,48 @@ impl Connection {
         let mut running = running(known);
         running.offer.no_images = !self.agreed.images;
         running
+    }
+
+    /// Whether the Harness takes a message into a running turn.
+    pub fn steers(&self) -> bool {
+        self.agreed.steers
+    }
+
+    /// The Harness's name, for plain words.
+    pub fn name(&self) -> &str {
+        &self.name
+    }
+
+    /// Sends a message into the session's running turn.
+    pub async fn steer(
+        &self,
+        Session(session): &Session,
+        prompt: &Prompt,
+    ) -> Result<Steered, String> {
+        let request = SteeringRequest {
+            session_id: session.clone(),
+            prompt: blocks(prompt),
+            meta: serde_json::json!({ "steering": { "idleBehavior": "promptRequired" } }),
+        };
+        let sent = self.cx.send_request(request).block_task();
+        let answer = timeout(STEERING, sent)
+            .await
+            .map_err(|_| format!("{} did not take the message in time.", self.name))?
+            .map_err(plain)?;
+        match answer.outcome.as_str() {
+            "injected" => Ok(Steered::Joined),
+            "promptRequired" => Ok(Steered::NotNow),
+            // Only without `promptRequired`: the adapter ran the message as
+            // a turn of its own, whose words reach no turn here.
+            "startedNewTurn" => {
+                tracing::warn!(harness = %self.harness, "a steered message started a turn of its own");
+                Ok(Steered::Joined)
+            }
+            other => Err(format!(
+                "{} could not take the message ({other}).",
+                self.name
+            )),
+        }
     }
 
     /// Asks the Harness to stop the session's turn.
@@ -766,10 +832,15 @@ async fn drive(
             match agreed {
                 Ok(answer) if answer.protocol_version == ProtocolVersion::V1 => {
                     let capabilities = &answer.agent_capabilities;
+                    let steering = answer.meta.as_ref().and_then(|meta| meta.get("steering"));
                     let agreed = Agreed {
                         loads: capabilities.load_session,
                         resumes: capabilities.session_capabilities.resume.is_some(),
                         images: capabilities.prompt_capabilities.image,
+                        steers: steering
+                            .and_then(|steering| steering.get("supported"))
+                            .and_then(serde_json::Value::as_bool)
+                            .unwrap_or(false),
                     };
                     let _ = ready.send(Ok((cx.clone(), agreed)));
                 }
@@ -794,6 +865,18 @@ async fn drive(
     }
     // Every turn still listening hears that the Harness is gone.
     routes.lock().unwrap().clear();
+}
+
+/// A prompt as ACP content: its text, then its images.
+fn blocks(Prompt { text, images }: &Prompt) -> Vec<acp::ContentBlock> {
+    let text = (!text.is_empty()).then(|| acp::ContentBlock::Text(acp::TextContent::new(text)));
+    let images = images.iter().map(|image| {
+        acp::ContentBlock::Image(acp::ImageContent::new(
+            BASE64.encode(&image.bytes),
+            image.mime.clone(),
+        ))
+    });
+    text.into_iter().chain(images).collect()
 }
 
 fn message_of(chunk: &acp::ContentChunk) -> Option<String> {

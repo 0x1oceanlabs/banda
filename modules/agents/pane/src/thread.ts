@@ -25,6 +25,8 @@ export type ThreadState = {
   offer: Offer
   /** How full the Agent's context is, once the Harness has said. */
   usage?: Usage
+  /** Its queue waits for a Person: a stop or a restart held it. */
+  held: boolean
 }
 
 /** What a Thread runs with when nobody chose otherwise, as the engine has it. */
@@ -47,11 +49,12 @@ export const EMPTY: ThreadState = {
   turns: [],
   settings: DEFAULT_SETTINGS,
   offer: NO_OFFER,
+  held: false,
 }
 
 export function fromView(view: ThreadView): ThreadState {
-  const { at, items, turns, settings, offer, usage } = view
-  return { at, items, turns, settings, offer, usage }
+  const { at, items, turns, settings, offer, usage, held } = view
+  return { at, items, turns, settings, offer, usage, held }
 }
 
 /** The value a Thread runs `option` with: its own choice, or else the
@@ -88,6 +91,22 @@ function changeTool(
   return changeItem(state, id, (item) =>
     item.body.kind === "tool" ? { ...item, body: change(item.body) } : item
   )
+}
+
+/** The items with `id` after every other, changed by `change`. */
+function moveLast(
+  items: Item[],
+  id: string,
+  change: (item: Item) => Item = (item) => item
+): Item[] {
+  const moved = items.find((item) => item.id === id)
+  if (!moved) return items
+  return [...items.filter((item) => item !== moved), change(moved)]
+}
+
+/** The turn that first ran or will run `message`. */
+function firstTurnOf(turns: TurnView[], message: string): TurnView | undefined {
+  return turns.find((turn) => turn.message === message)
 }
 
 function changeTurn(
@@ -134,11 +153,37 @@ export function apply(state: ThreadState, event: Event): ThreadState {
           },
         ],
       }
-    case "turn.started":
+    case "message.steered": {
+      const { item: id, turn, text, images } = fact.payload
+      const steered = item(id, { kind: "message", text, images }, turn)
       return {
         ...next,
+        items: [...state.items.filter((i) => i.id !== id), steered],
+      }
+    }
+    case "message.edited": {
+      const { item: id, text } = fact.payload
+      return {
+        ...next,
+        items: changeItem(state, id, (i) =>
+          i.body.kind === "message" ? { ...i, body: { ...i.body, text } } : i
+        ),
+      }
+    }
+    case "turn.started": {
+      const started = state.turns.find((t) => t.id === fact.payload.turn)
+      // A message reads where its turn starts, unless an earlier turn ran it.
+      const first =
+        started && firstTurnOf(state.turns, started.message)?.id === started.id
+      return {
+        ...next,
+        items:
+          started && first
+            ? moveLast(state.items, started.message)
+            : state.items,
         turns: changeTurn(state, fact.payload.turn, { state: "running" }),
       }
+    }
     case "turn.ended":
       return {
         ...next,
@@ -152,9 +197,13 @@ export function apply(state: ThreadState, event: Event): ThreadState {
       const { turn, message } = fact.payload
       return {
         ...next,
+        // A message its turn could not take belongs to no turn but its own.
+        items: changeItem(state, message, (i) => ({ ...i, turn: undefined })),
         turns: [...state.turns, { id: turn, message, state: "queued" }],
       }
     }
+    case "thread.held":
+      return { ...next, held: fact.payload.held }
     case "reply.grew":
     case "thought.grew": {
       const { item: id, turn, text } = fact.payload
@@ -279,10 +328,49 @@ export function apply(state: ThreadState, event: Event): ThreadState {
   }
 }
 
-/** The turn the Agent works on or will work on next, if any. */
+/** The turn the Agent works on, if any. */
+export function running(state: ThreadState): TurnView | undefined {
+  return state.turns.find((turn) => turn.state === "running")
+}
+
+/** The turn the Agent works on, or the next one it will, unless a Person
+ * holds the queue. */
 export function working(state: ThreadState): TurnView | undefined {
-  return state.turns.findLast(
-    (turn) => turn.state === "queued" || turn.state === "running"
+  return (
+    running(state) ??
+    (state.held ? undefined : state.turns.find((t) => t.state === "queued"))
+  )
+}
+
+/** A message that waits for its turn: shown after the Thread, where a
+ * Person can change it, take it back or send it now. */
+export type Waiting = { item: Item; turn: TurnView }
+
+/** The messages that wait, in the order they will go. A message tried
+ * again stays where it was, since an earlier turn ran it. */
+export function waiting(state: ThreadState): Waiting[] {
+  const items = new Map(state.items.map((item) => [item.id, item]))
+  return state.turns.flatMap((turn): Waiting[] => {
+    const item = items.get(turn.message)
+    if (turn.state !== "queued" || !item) return []
+    return firstTurnOf(state.turns, turn.message) === turn
+      ? [{ item, turn }]
+      : []
+  })
+}
+
+/** Messages the Thread shows nowhere: taken back before any turn ran
+ * them, and not sent into another. */
+function withdrawn(state: ThreadState): Set<string> {
+  const ran = new Set(
+    state.turns
+      .filter((turn) => turn.state !== "withdrawn")
+      .map((turn) => turn.message)
+  )
+  return new Set(
+    state.turns
+      .filter((turn) => turn.state === "withdrawn" && !ran.has(turn.message))
+      .map((turn) => turn.message)
   )
 }
 
@@ -306,8 +394,18 @@ const UNFINISHED: ReadonlySet<TurnView["state"]> = new Set([
 ])
 
 /** The Thread's items, each unfinished turn's outcome after its last one:
- * what it wrote, or else the message that asked for it. */
+ * what it wrote, or else the message that asked for it. The messages that
+ * wait are not among them ({@link waiting}), nor those taken back. */
 export function rows(state: ThreadState): Row[] {
+  const gone = withdrawn(state)
+  const waits = new Set(waiting(state).map(({ item }) => item.id))
+  const items = state.items.filter(
+    (item) => !waits.has(item.id) && !(gone.has(item.id) && !item.turn)
+  )
+  return flow({ ...state, items })
+}
+
+function flow(state: ThreadState): Row[] {
   const index = new Map(state.items.map((item, at) => [item.id, at]))
   const last = new Map<string, number>()
   for (const turn of state.turns) {
