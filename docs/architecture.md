@@ -38,16 +38,23 @@ The kernel holds only what every module needs, and it names no module.
 
 - **Space.** A folder on disk (`~/Bandaso/<name>/` by default): the work's
   files plus `.bandaso/`. The latter holds the Space's SQLite, the modules'
-  migrations and the event log.
+  migrations and the event log. One engine at a time opens a Space: it holds
+  a lock on `.bandaso/space.lock` while the Space is open.
 - **Event log.** Append-only, with typed events, one per Space. Windows and
   the CLI subscribe to it. A subscription sends only what its view needs.
+  The database itself refuses to change or delete an event.
 - **Access decision.** One function decides whether a Participant may perform
-  an action on a target. Every command passes through it. On one computer it
-  answers "the owner may do everything". Members and roles arrive here later.
-- **Identity.** A port. On one computer it is the operating-system user.
-  Later it is OIDC, or our accounts.
+  an action on a target. Every method and every subscription passes through
+  it, before any module code runs. On one computer it answers: the owner may
+  do everything, an Agent may read and change the work but not the Space
+  itself, and nobody else may do anything. Members and roles arrive here
+  later.
+- **Identity.** A port: it says which Participant a connection's token names.
+  On one computer, whoever holds the engine's secret is the owner. Later it
+  is OIDC, or our accounts, and Agents get tokens of their own.
 - **Module registry and API.** The registry routes commands to their
-  module, delivers events to subscribers, and serves the API.
+  module, delivers events to subscribers, and serves the API. `welcome`
+  lists the engine's modules, so a window shows only what the engine has.
 - **Receipts and outbox.** These carry every command along one path (below).
 
 ### The command path
@@ -61,8 +68,15 @@ command (with its ID)
   → outbox worker: side effects in order per target, leased, retried
 ```
 
-- A repeated command returns its first result.
+- A repeated command returns its first result, a refusal included. A
+  receipt names its author: the same command ID from someone else, or for
+  another method, is a conflict.
 - A side effect never starts from a live subscription.
+- An effect holds its key while it runs, so its module bounds how long a run
+  takes. A restart that cuts an effect short counts as a try: after five,
+  the effect fails and its module says so.
+- Outbox rows are the kernel's bookkeeping, not records of the work. What a
+  Person sees of an effect is the events its module writes.
 - A window loads a snapshot at sequence N, then streams the events after N.
 
 ## Where data lives

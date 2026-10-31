@@ -2,7 +2,7 @@
 //! decision 6). Each event belongs to the module that emitted it and carries
 //! that module's version of its shape.
 
-use crate::{Actor, EventId};
+use crate::{EventId, Participant};
 use rusqlite::{Connection, Row, params};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -21,7 +21,7 @@ pub struct Event {
     pub version: u32,
     /// What the event is about, in the module's terms (an Agent, a Room).
     pub subject: Option<String>,
-    pub author: Actor,
+    pub author: Participant,
     #[ts(type = "number")]
     pub at: i64,
     #[ts(type = "unknown")]
@@ -54,14 +54,13 @@ const COLUMNS: &str =
 fn from_row(row: &Row<'_>) -> rusqlite::Result<Event> {
     let author_kind: String = row.get(6)?;
     let author_id: String = row.get(7)?;
-    let author = Actor::from_parts(&author_kind, &author_id).ok_or_else(|| {
+    let author = Participant::from_parts(&author_kind, &author_id).ok_or_else(|| {
         rusqlite::Error::FromSqlConversionFailure(
             6,
             rusqlite::types::Type::Text,
             format!("unknown author {author_kind}/{author_id}").into(),
         )
     })?;
-    let payload: String = row.get(9)?;
     Ok(Event {
         seq: row.get(0)?,
         id: row.get(1)?,
@@ -71,9 +70,15 @@ fn from_row(row: &Row<'_>) -> rusqlite::Result<Event> {
         subject: row.get(5)?,
         author,
         at: row.get(8)?,
-        payload: serde_json::from_str(&payload).map_err(|e| {
-            rusqlite::Error::FromSqlConversionFailure(9, rusqlite::types::Type::Text, Box::new(e))
-        })?,
+        payload: json_column(row, 9)?,
+    })
+}
+
+/// A column that holds JSON text.
+pub(crate) fn json_column(row: &Row<'_>, index: usize) -> rusqlite::Result<serde_json::Value> {
+    let text: String = row.get(index)?;
+    serde_json::from_str(&text).map_err(|e| {
+        rusqlite::Error::FromSqlConversionFailure(index, rusqlite::types::Type::Text, Box::new(e))
     })
 }
 

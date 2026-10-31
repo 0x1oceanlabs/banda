@@ -1,8 +1,10 @@
 //! The engine's API: JSON frames over one WebSocket (ADR 0001, decision 1).
 //!
-//! 1. The client's first frame is `hello`, with the protocol version and the
-//!    engine's token. A wrong version or token gets `goodbye` (ADR 0002,
-//!    decision 8).
+//! 1. The client's first frame is `hello`, with the protocol version and a
+//!    token. The [`Identity`] port says which Participant the token names.
+//!    A wrong version or an unknown token gets `goodbye`. `welcome` lists
+//!    the engine's modules, so a window shows only what the engine has
+//!    (ADR 0002, decision 8).
 //! 2. `call` runs a method and gets one `result` with the same `id`.
 //! 3. `subscribe` follows a Space's events after a position. The window first
 //!    reads a view with its position, then subscribes after it (ADR 0002,
@@ -11,8 +13,9 @@
 //!
 //! Unknown fields are ignored on both sides, so either side can be newer.
 
+use crate::access::{self, Right};
 use crate::events::{Event, EventFilter};
-use crate::{Actor, CommandId, Kernel, PROTOCOL, Refusal, SpaceId};
+use crate::{Code, CommandId, Kernel, PROTOCOL, Participant, PersonId, Refusal, SpaceId};
 use axum::Router;
 use axum::extract::State;
 use axum::extract::ws::{Message, Utf8Bytes, WebSocket, WebSocketUpgrade};
@@ -81,6 +84,8 @@ pub enum EngineFrame {
     Welcome {
         protocol: u32,
         engine: String,
+        /// The modules this engine runs.
+        modules: Vec<String>,
     },
     Result {
         #[ts(type = "number")]
@@ -107,20 +112,39 @@ pub enum EngineFrame {
     },
 }
 
+/// Who a connection is: the identity port (ADR 0001, decision 3). Here the
+/// kernel learns which Participant acts; the access decision then says what
+/// that Participant may do.
+pub trait Identity: Send + Sync + 'static {
+    /// The Participant a `hello`'s token names, or `None`.
+    fn identify(&self, token: &str) -> Option<Participant>;
+}
+
+/// One computer: whoever holds the engine's secret is its owner.
+pub struct OwnerSecret {
+    pub secret: String,
+    pub owner: PersonId,
+}
+
+impl Identity for OwnerSecret {
+    fn identify(&self, token: &str) -> Option<Participant> {
+        same_secret(token, &self.secret).then_some(Participant::Person(self.owner))
+    }
+}
+
 struct Api {
     kernel: Arc<Kernel>,
-    token: String,
+    identity: Box<dyn Identity>,
     engine: String,
 }
 
-/// The API's routes: one WebSocket at `/ws`. Only a caller with `token`
-/// gets past `hello`. That caller is the owner.
-pub fn router(kernel: Arc<Kernel>, token: String, engine: impl Into<String>) -> Router {
+/// The API's routes: one WebSocket at `/ws`.
+pub fn router(kernel: Arc<Kernel>, identity: impl Identity, engine: impl Into<String>) -> Router {
     Router::new()
         .route("/ws", get(upgrade))
         .with_state(Arc::new(Api {
             kernel,
-            token,
+            identity: Box::new(identity),
             engine: engine.into(),
         }))
 }
@@ -167,6 +191,21 @@ fn same_secret(a: &str, b: &str) -> bool {
             == 0
 }
 
+fn result(id: u64, answer: Result<Value, Refusal>) -> EngineFrame {
+    match answer {
+        Ok(ok) => EngineFrame::Result {
+            id,
+            ok: Some(ok),
+            error: None,
+        },
+        Err(error) => EngineFrame::Result {
+            id,
+            ok: None,
+            error: Some(error),
+        },
+    }
+}
+
 fn text(frame: &EngineFrame) -> Message {
     Message::Text(Utf8Bytes::from(
         serde_json::to_string(frame).expect("frames serialize"),
@@ -175,31 +214,41 @@ fn text(frame: &EngineFrame) -> Message {
 
 async fn serve(api: Arc<Api>, socket: WebSocket) {
     let (mut sink, mut stream) = socket.split();
-    let refusal = match tokio::time::timeout(HELLO_WITHIN, stream.next()).await {
-        Ok(Some(Ok(Message::Text(first)))) => match serde_json::from_str::<ClientFrame>(&first) {
-            Ok(ClientFrame::Hello { protocol, .. }) if protocol != PROTOCOL => Some(Refusal::new(
-                "protocol",
-                format!(
-                    "This engine speaks protocol {PROTOCOL}, the window speaks {protocol}. Update Bandaso."
-                ),
-            )),
-            Ok(ClientFrame::Hello { token, .. }) if same_secret(&token, &api.token) => None,
-            _ => Some(Refusal::forbidden(
-                "The first frame must be hello with this engine's token.",
-            )),
-        },
-        _ => Some(Refusal::forbidden(
-            "The first frame must be hello with this engine's token.",
+    let first = match tokio::time::timeout(HELLO_WITHIN, stream.next()).await {
+        Ok(Some(Ok(Message::Text(first)))) => serde_json::from_str::<ClientFrame>(&first).ok(),
+        _ => None,
+    };
+    let who = match first {
+        Some(ClientFrame::Hello { protocol, .. }) if protocol != PROTOCOL => Err(Refusal::new(
+            Code::Protocol,
+            format!(
+                "This engine speaks protocol {PROTOCOL}, the window speaks {protocol}. Update Bandaso."
+            ),
+        )),
+        Some(ClientFrame::Hello { token, .. }) => api.identity.identify(&token).ok_or_else(|| {
+            Refusal::forbidden("The first frame must be hello with a token this engine knows.")
+        }),
+        _ => Err(Refusal::forbidden(
+            "The first frame must be hello with a token this engine knows.",
         )),
     };
-    if let Some(reason) = refusal {
-        let _ = sink.send(text(&EngineFrame::Goodbye { reason })).await;
-        let _ = sink.close().await;
-        return;
-    }
+    let participant = match who {
+        Ok(participant) => participant,
+        Err(reason) => {
+            let _ = sink.send(text(&EngineFrame::Goodbye { reason })).await;
+            let _ = sink.close().await;
+            return;
+        }
+    };
     let welcome = EngineFrame::Welcome {
         protocol: PROTOCOL,
         engine: api.engine.clone(),
+        modules: api
+            .kernel
+            .modules()
+            .into_iter()
+            .map(str::to_owned)
+            .collect(),
     };
     if sink.send(text(&welcome)).await.is_err() {
         return;
@@ -213,7 +262,6 @@ async fn serve(api: Arc<Api>, socket: WebSocket) {
             }
         }
     });
-    let actor = Actor::Person(api.kernel.owner());
     let mut subscriptions: HashMap<u64, JoinHandle<()>> = HashMap::new();
 
     while let Some(Ok(message)) = stream.next().await {
@@ -230,16 +278,8 @@ async fn serve(api: Arc<Api>, socket: WebSocket) {
                     .ok()
                     .and_then(|v| v["id"].as_u64())
                 {
-                    let error = Some(Refusal::invalid(format!(
-                        "This frame does not fit: {error}."
-                    )));
-                    let _ = out
-                        .send(EngineFrame::Result {
-                            id,
-                            ok: None,
-                            error,
-                        })
-                        .await;
+                    let refusal = Refusal::invalid(format!("This frame does not fit: {error}."));
+                    let _ = out.send(result(id, Err(refusal))).await;
                 }
                 continue;
             }
@@ -256,12 +296,10 @@ async fn serve(api: Arc<Api>, socket: WebSocket) {
                 let kernel = api.kernel.clone();
                 let out = out.clone();
                 tokio::spawn(async move {
-                    let (ok, error) =
-                        match kernel.call(actor, &method, space, command, params).await {
-                            Ok(value) => (Some(value), None),
-                            Err(refusal) => (None, Some(refusal)),
-                        };
-                    let _ = out.send(EngineFrame::Result { id, ok, error }).await;
+                    let answer = kernel
+                        .call(participant, &method, space, command, params)
+                        .await;
+                    let _ = out.send(result(id, answer)).await;
                 });
             }
             ClientFrame::Subscribe {
@@ -270,31 +308,32 @@ async fn serve(api: Arc<Api>, socket: WebSocket) {
                 after,
                 filter,
             } => {
-                let (ok, error) = match api.kernel.space(space).await {
+                let allowed = match api.kernel.space(space).await {
                     Ok(space) => {
-                        if let Some(old) = subscriptions.insert(
-                            id,
-                            tokio::spawn(follow(space, id, after, filter, out.clone())),
-                        ) {
+                        access::decide(&participant, Right::Read, space.owner()).map(|()| space)
+                    }
+                    Err(refusal) => Err(refusal),
+                };
+                match allowed {
+                    Ok(space) => {
+                        // The answer goes out before the first event.
+                        let ok = serde_json::json!({ "subscription": id });
+                        let _ = out.send(result(id, Ok(ok))).await;
+                        let follower = tokio::spawn(follow(space, id, after, filter, out.clone()));
+                        if let Some(old) = subscriptions.insert(id, follower) {
                             old.abort();
                         }
-                        (Some(serde_json::json!({ "subscription": id })), None)
                     }
-                    Err(refusal) => (None, Some(refusal)),
-                };
-                let _ = out.send(EngineFrame::Result { id, ok, error }).await;
+                    Err(refusal) => {
+                        let _ = out.send(result(id, Err(refusal))).await;
+                    }
+                }
             }
             ClientFrame::Unsubscribe { id, subscription } => {
                 if let Some(task) = subscriptions.remove(&subscription) {
                     task.abort();
                 }
-                let _ = out
-                    .send(EngineFrame::Result {
-                        id,
-                        ok: Some(Value::Null),
-                        error: None,
-                    })
-                    .await;
+                let _ = out.send(result(id, Ok(Value::Null))).await;
             }
         }
     }

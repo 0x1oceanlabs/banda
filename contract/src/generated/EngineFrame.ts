@@ -3,4 +3,8 @@ import type { Event } from "./Event";
 import type { Refusal } from "./Refusal";
 import type { JsonValue } from "./serde_json/JsonValue";
 
-export type EngineFrame = { "type": "welcome", protocol: number, engine: string, } | { "type": "result", id: number, ok?: JsonValue, error?: Refusal, } | { "type": "event", subscription: number, event: Event, } | { "type": "resync", subscription: number, } | { "type": "goodbye", reason: Refusal, };
+export type EngineFrame = { "type": "welcome", protocol: number, engine: string, 
+/**
+ * The modules this engine runs.
+ */
+modules: Array<string>, } | { "type": "result", id: number, ok?: JsonValue, error?: Refusal, } | { "type": "event", subscription: number, event: Event, } | { "type": "resync", subscription: number, } | { "type": "goodbye", reason: Refusal, };

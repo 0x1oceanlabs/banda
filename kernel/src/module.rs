@@ -1,7 +1,7 @@
-use crate::access::{self, Right};
+use crate::access::Right;
 use crate::outbox::{Effect, OnRestart, Outcome, Settled};
 use crate::space::ModuleSpace;
-use crate::{Actor, CommandId, Error, Refusal, Tx};
+use crate::{CommandId, Error, Participant, Refusal, Tx};
 use serde_json::Value;
 
 /// A bounded context: its own words, data and contract (ADR 0001, decision
@@ -19,18 +19,25 @@ pub trait Module: Send + Sync + 'static {
     /// shipped step never changes.
     fn migrations(&self) -> &'static [&'static str];
 
+    /// The right each of its methods needs, or `None` when it has no such
+    /// method. `method` comes without the module's prefix. A module parses
+    /// it into its own method enum and maps that with one exhaustive
+    /// `match`, so the compiler rejects a method without a right (ADR 0002,
+    /// decision 9). The kernel decides before [`Module::call`] runs.
+    fn right(&self, method: &str) -> Option<Right>;
+
     /// Runs once a Space opens, after the outbox settled what a restart cut
     /// short: a module can pick up its work here.
     async fn opened(&self, _space: ModuleSpace) -> Result<(), Error> {
         Ok(())
     }
 
-    /// One of its methods. `method` comes without the module's prefix. The
-    /// module maps every method to a [`Right`] with one exhaustive `match`
-    /// and asks [`Call::authorize`] before anything else.
+    /// One of its methods, already allowed. `method` comes without the
+    /// module's prefix.
     async fn call(&self, call: Call, method: &str, params: Value) -> Result<Value, Refusal>;
 
-    /// Runs one of its side effects from the outbox.
+    /// Runs one of its side effects from the outbox. A run holds its key
+    /// until it ends, so a module bounds how long its own runs take.
     async fn run(&self, _space: ModuleSpace, effect: Effect) -> Outcome {
         Outcome::Fail(format!(
             "{} runs no effect of kind {}",
@@ -51,10 +58,10 @@ pub trait Module: Send + Sync + 'static {
     }
 }
 
-/// One call to a module's method: who makes it, in which Space, and the
-/// command ID that makes it run once.
+/// One allowed call to a module's method: who makes it, in which Space, and
+/// the command ID that makes it run once.
 pub struct Call {
-    actor: Actor,
+    participant: Participant,
     space: ModuleSpace,
     method: String,
     command: Option<CommandId>,
@@ -62,30 +69,25 @@ pub struct Call {
 
 impl Call {
     pub(crate) fn new(
-        actor: Actor,
+        participant: Participant,
         space: ModuleSpace,
         method: String,
         command: Option<CommandId>,
     ) -> Self {
         Self {
-            actor,
+            participant,
             space,
             method,
             command,
         }
     }
 
-    pub fn actor(&self) -> Actor {
-        self.actor
+    pub fn participant(&self) -> Participant {
+        self.participant
     }
 
     pub fn space(&self) -> &ModuleSpace {
         &self.space
-    }
-
-    /// The access decision for this call.
-    pub fn authorize(&self, right: Right) -> Result<(), Refusal> {
-        access::decide(&self.actor, right, self.space.owner())
     }
 
     /// Runs this call as a command: once per command ID, in one transaction
@@ -100,6 +102,8 @@ impl Call {
                 self.method
             ))
         })?;
-        self.space.command(command, &self.method, change).await
+        self.space
+            .command(command, &self.method, self.participant, change)
+            .await
     }
 }
