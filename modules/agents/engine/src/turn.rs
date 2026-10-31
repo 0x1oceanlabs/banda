@@ -81,7 +81,7 @@ pub struct ReplyEffect {
     pub secret: bool,
 }
 
-fn plain(error: impl std::fmt::Display) -> String {
+pub(crate) fn plain(error: impl std::fmt::Display) -> String {
     error.to_string()
 }
 
@@ -120,7 +120,7 @@ pub fn end(
 }
 
 /// Writes a line from Bandaso into the Thread.
-pub fn notice(
+fn notice(
     tx: &mut Tx<'_>,
     agent: Participant,
     thread: ThreadId,
@@ -193,17 +193,24 @@ pub fn queue(
         message,
         state: TurnState::Queued,
     };
-    let now = tx.now();
-    let settings = store::settings(tx.sql(), thread)?;
-    store::insert_turn(tx.sql(), &turn, author, now, &settings)?;
-    store::touch_thread(tx.sql(), thread, now)?;
-    let queued = Fact::TurnQueued {
-        turn: turn.id,
-        message,
-    };
-    emit(tx, author, thread, &queued)?;
+    add(tx, author, &turn)?;
     tx.enqueue(START, &thread.to_string(), &TurnEffect { turn: turn.id })?;
     Ok(turn.id)
+}
+
+/// Writes `turn` with the settings its Thread has now, which it answers,
+/// and says it is queued.
+pub fn add(tx: &mut Tx<'_>, author: Participant, turn: &store::Turn) -> Result<Settings, Error> {
+    let now = tx.now();
+    let settings = store::settings(tx.sql(), turn.thread)?;
+    store::insert_turn(tx.sql(), turn, author, now, &settings)?;
+    store::touch_thread(tx.sql(), turn.thread, now)?;
+    let queued = Fact::TurnQueued {
+        turn: turn.id,
+        message: turn.message,
+    };
+    emit(tx, author, turn.thread, &queued)?;
+    Ok(settings)
 }
 
 /// Sends a message into the turn that runs: the Thread shows it there, and
@@ -363,6 +370,9 @@ pub async fn start(
     let Ok(start) = serde_json::from_value::<TurnEffect>(effect.payload.clone()) else {
         return Outcome::Fail("The turn could not be read.".to_owned());
     };
+    if let Err(error) = after_questions(live, &space, start.turn).await {
+        return Outcome::Retry(error.to_string());
+    }
     let begun = space
         .write(move |tx| {
             let Some(turn) = store::turn(tx.sql(), start.turn)? else {
@@ -422,10 +432,42 @@ pub struct Message {
     pub images: Vec<Image>,
 }
 
+/// Waits while the Agent asks a Person in a turn of its own in the Thread
+/// of `turn`: the Harness takes a prompt into what it does, and the
+/// Question would go unanswered.
+async fn after_questions(live: &Live, space: &ModuleSpace, turn: TurnId) -> Result<(), Error> {
+    let own = space
+        .read(move |sql| {
+            let Some(turn) = store::turn(sql, turn)? else {
+                return Ok(None);
+            };
+            let Some(running) = store::running(sql, turn.thread)? else {
+                return Ok(None);
+            };
+            Ok(by_itself(sql, &running)?.then_some(running.id))
+        })
+        .await?;
+    if let Some(own) = own {
+        while live.asking(own) {
+            tokio::time::sleep(LOOK_AGAIN).await;
+        }
+    }
+    Ok(())
+}
+
 /// Whether the Agent started `turn` by itself: its message is a notice
 /// from Bandaso, not a Person's.
 pub fn by_itself(sql: &rusqlite::Connection, turn: &store::Turn) -> Result<bool, Error> {
-    Ok(Message::read(sql, turn.message)?.is_none())
+    Ok(matches!(
+        store::item(sql, turn.message)?,
+        Some((
+            _,
+            Item {
+                body: Body::Notice { .. },
+                ..
+            }
+        ))
+    ))
 }
 
 impl Message {
@@ -597,7 +639,7 @@ async fn run(
 ) -> Result<Ending, Ending> {
     let unplanned = |reason: String| Ending::failed(reason, None);
     let agent = settings::agent(space.folder(), turn.agent).map_err(|r| unplanned(r.message))?;
-    let called = agent.name.clone();
+    let name = agent.name.clone();
     let harness = harnesses.find(&agent.harness).ok_or_else(|| {
         unplanned(format!(
             "This computer has no Harness named \"{}\".",
@@ -618,16 +660,16 @@ async fn run(
         .await?;
     if let Opened::New { evidence, lost } = opened {
         let (id, agent) = (turn.id, Participant::Agent(turn.agent));
-        let name = harness.name.clone();
+        let afresh = format!(
+            "{} could not pick up this Thread's earlier conversation, \
+             so it starts afresh and does not remember what was said before.",
+            harness.name
+        );
         space
             .write(move |tx| {
                 store::set_evidence(tx.sql(), thread, &evidence)?;
                 if lost {
-                    let text = format!(
-                        "{name} could not pick up this Thread's earlier conversation, \
-                         so it starts afresh and does not remember what was said before."
-                    );
-                    notice(tx, agent, thread, id, text)?;
+                    notice(tx, agent, thread, id, afresh)?;
                 }
                 Ok(())
             })
@@ -663,7 +705,7 @@ async fn run(
         space: space.clone(),
         thread,
         agent: turn.agent,
-        name: called,
+        name,
         harness: harness.name.clone(),
     };
     listener.hear(&connection, &session);

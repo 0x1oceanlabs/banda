@@ -191,11 +191,15 @@ If Chat is removed, Agents still works through its own Thread.
   a background task it started ends or a wakeup fires. Each session that
   ran a turn has a listener (`between.rs`): what the session says then
   opens a turn of the Agent's own, whose message is a notice from Bandaso.
-  The turn ends with the cycle, when the Harness says what it cost; when a
-  Person's message goes, which the Harness takes into what it does; when a
-  Person stops it; or after a minute with nothing said or asked. A message
-  sent meanwhile gets a turn of its own, and a turn the Agent started is
-  not tried again. A restart interrupts it (`opened`).
+  The turn ends when the Harness says what that cost; when a Person's
+  message goes, which the Harness takes into what it does; when a Person
+  stops it; or after a minute with nothing said, no tool call of it
+  running and nothing asked. A message sent meanwhile gets a turn of its
+  own, which waits while the Agent asks a Person; a turn the Agent started
+  is not tried again. It keeps its Harness process as any turn does, and
+  a restart interrupts it (`opened`). A tool call that changes between
+  turns belongs to the turn that ended, as when a command Claude Code sent
+  to the background ends, and opens none.
 - **One Harness process per Space and Harness entry.** Every Thread on it is
   a session in that process. The engine starts it on the first turn, one
   start at a time; starts it again after a growing pause if it keeps dying;

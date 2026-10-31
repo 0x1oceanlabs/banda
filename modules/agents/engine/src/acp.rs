@@ -36,6 +36,7 @@ use base64::engine::general_purpose::STANDARD as BASE64;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 use std::path::Path;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tokio::sync::{mpsc, oneshot};
@@ -404,6 +405,9 @@ pub struct Connection {
     learned: Learned,
     /// When a turn last began or ended here.
     active: Arc<Mutex<Instant>>,
+    /// The turns the Agent went on with by itself here, which keep the
+    /// host as the engine's turns do.
+    kept: Arc<AtomicUsize>,
     /// The Harness's session for each Thread, in this process.
     sessions: tokio::sync::Mutex<HashMap<ThreadId, acp::SessionId>>,
     driver: JoinHandle<()>,
@@ -412,6 +416,19 @@ pub struct Connection {
 impl Drop for Connection {
     fn drop(&mut self) {
         self.driver.abort();
+    }
+}
+
+/// While it lives, its host is not let go as idle.
+pub struct Kept {
+    kept: Arc<AtomicUsize>,
+    active: Arc<Mutex<Instant>>,
+}
+
+impl Drop for Kept {
+    fn drop(&mut self) {
+        *self.active.lock().unwrap() = Instant::now();
+        self.kept.fetch_sub(1, Ordering::SeqCst);
     }
 }
 
@@ -451,6 +468,7 @@ impl Connection {
             routes,
             learned,
             active: Arc::new(Mutex::new(Instant::now())),
+            kept: Arc::default(),
             sessions: Default::default(),
             driver,
         }))
@@ -463,8 +481,23 @@ impl Connection {
 
     /// Since when no turn runs here, or `None` while one does.
     pub fn idle_since(&self) -> Option<Instant> {
-        let busy = !self.routes.turns.lock().unwrap().is_empty();
+        let busy =
+            !self.routes.turns.lock().unwrap().is_empty() || self.kept.load(Ordering::SeqCst) > 0;
         (!busy).then(|| *self.active.lock().unwrap())
+    }
+
+    /// Keeps the host while the Agent goes on by itself, as a turn does.
+    pub fn keep(&self) -> Kept {
+        self.kept.fetch_add(1, Ordering::SeqCst);
+        Kept {
+            kept: self.kept.clone(),
+            active: self.active.clone(),
+        }
+    }
+
+    /// Whether a turn's prompt runs in `session` now.
+    pub fn prompting(&self, Session(session): &Session) -> bool {
+        self.routes.turns.lock().unwrap().contains_key(session)
     }
 
     /// Marks the host as just used, so it is not let go as idle.

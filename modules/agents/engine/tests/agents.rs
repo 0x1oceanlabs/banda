@@ -1795,3 +1795,106 @@ fn a_restart_ends_what_the_agent_did_by_itself() {
         },
     );
 }
+
+#[tokio::test]
+async fn a_message_waits_while_the_agent_asks_in_a_turn_of_its_own() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let sent = world.send(None, "background asks").await;
+    let asking = "question: Run a check (Open)".to_owned();
+    let view = world
+        .until(&sent["thread"], |v| texts(v).contains(&asking))
+        .await;
+    let own = json!(view.turns[1].id);
+    let question = view.items.last().unwrap().id;
+    let next = world.steer(&sent["thread"], "and this").await;
+    tokio::time::sleep(Duration::from_millis(300)).await;
+    let view = world.thread(&sent["thread"]).await;
+    assert_eq!(
+        state(&view, &next["turn"]),
+        Some(TurnState::Queued),
+        "it waits for the answer"
+    );
+    world
+        .call(
+            world.person(),
+            "agents.answer",
+            json!({ "item": question, "choice": "allow" }),
+        )
+        .await
+        .unwrap();
+    let view = world.ended(&next).await;
+    assert_eq!(state(&view, &own), Some(TurnState::Done));
+    let said = texts(&view);
+    assert!(
+        said.contains(&"message: The check passed.".to_owned()),
+        "{said:?}"
+    );
+    assert_eq!(last_reply(&view), "message: You said: and this");
+}
+
+#[tokio::test]
+async fn what_the_agent_does_by_itself_ends_when_it_goes_quiet_and_asks_nothing() {
+    let root = tempfile::tempdir().unwrap();
+    let agents = Agents::new(harnesses()).quiet_after(Duration::from_millis(300));
+    let world = World::new_with(root.path(), agents).await;
+    let sent = world.send(None, "background asks quiet").await;
+    let asking = "question: Run a check (Open)".to_owned();
+    let view = world
+        .until(&sent["thread"], |v| texts(v).contains(&asking))
+        .await;
+    let own = json!(view.turns[1].id);
+    let question = view.items.last().unwrap().id;
+    tokio::time::sleep(Duration::from_millis(900)).await;
+    let view = world.thread(&sent["thread"]).await;
+    assert_eq!(
+        state(&view, &own),
+        Some(TurnState::Running),
+        "a Question keeps it"
+    );
+    world
+        .call(
+            world.person(),
+            "agents.answer",
+            json!({ "item": question, "choice": "allow" }),
+        )
+        .await
+        .unwrap();
+    let view = world
+        .until(&sent["thread"], |v| state(v, &own) == Some(TurnState::Done))
+        .await;
+    assert_eq!(last_reply(&view), "message: The check passed.");
+}
+
+#[tokio::test]
+async fn a_harness_that_stops_while_the_agent_goes_on_by_itself_fails_that_turn() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let sent = world.send(None, "background dies").await;
+    let view = world
+        .until(&sent["thread"], |v| {
+            v.turns.len() == 2 && v.turns[1].state == TurnState::Failed
+        })
+        .await;
+    assert_eq!(view.turns[1].failure, Some(Failure::HarnessStopped));
+}
+
+#[tokio::test]
+async fn a_command_that_ends_after_its_turn_opens_no_turn() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let sent = world.send(None, "background detached").await;
+    let view = world
+        .until(&sent["thread"], |v| {
+            v.usage.as_ref().map(|u| u.used) == Some(70_000)
+        })
+        .await;
+    assert_eq!(view.turns.len(), 1);
+    assert_eq!(
+        texts(&view),
+        [
+            "message: background detached",
+            "tool: Run the server (Done)"
+        ]
+    );
+}
