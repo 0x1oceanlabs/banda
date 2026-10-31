@@ -2,14 +2,24 @@
 import type { Choice } from "./Choice";
 import type { Field } from "./Field";
 import type { FieldValue } from "./FieldValue";
+import type { Output } from "./Output";
 import type { QuestionState } from "./QuestionState";
+import type { ToolContent } from "./ToolContent";
 import type { ToolKind } from "./ToolKind";
 import type { ToolStatus } from "./ToolStatus";
 
 /**
  * What one Thread entry holds.
  */
-export type Body = { "kind": "message", text: string, } | { "kind": "thought", text: string, } | { "kind": "tool", title: string, tool: ToolKind, status: ToolStatus, } | { "kind": "question", title: string, choices: Array<Choice>, 
+export type Body = { "kind": "message", text: string, } | { "kind": "thought", text: string, } | { "kind": "tool", title: string, tool: ToolKind, status: ToolStatus, 
+/**
+ * What it shows besides its title, as the Harness last said.
+ */
+content: Array<ToolContent>, 
+/**
+ * What the command printed.
+ */
+output?: Output, } | { "kind": "question", title: string, choices: Array<Choice>, 
 /**
  * A form to fill in, when the Harness asks for more than a choice.
  * Its choices then submit it or skip it.

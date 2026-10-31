@@ -116,6 +116,32 @@ test("a Question with a form keeps what the Person filled in", () => {
   })
 })
 
+test("a tool call shows its content and what its command printed", () => {
+  const diff = { kind: "diff", path: "a.md", old: "a", new: "b" }
+  const state = play(
+    event("tool.started", {
+      item: "x",
+      turn: "u",
+      title: "Run",
+      tool: "execute",
+      status: "running",
+      content: [],
+    }),
+    event("tool.output", { item: "x", text: "one\n", cut: false }),
+    event("tool.output", { item: "x", text: "two\n", cut: true }),
+    event("tool.changed", { item: "x", status: "done", exit: 0 }),
+    event("tool.changed", { item: "x", content: [diff] })
+  )
+  expect(state.items[0].body).toEqual({
+    kind: "tool",
+    title: "Run",
+    tool: "execute",
+    status: "done",
+    content: [diff],
+    output: { text: "one\ntwo\n", cut: true, exit: 0 },
+  })
+})
+
 test("a notice joins the Thread as its own line", () => {
   const state = play(
     event(

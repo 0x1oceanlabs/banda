@@ -18,8 +18,8 @@
 use crate::acp::{Answer, Opened, Running, Said};
 use crate::live::Live;
 use crate::model::{
-    Body, Fact, Failure, Item, ItemId, Mode, QuestionState, Settings, ThreadId, ToolKind,
-    ToolStatus, TurnId, TurnState,
+    Body, Fact, Failure, Item, ItemId, Mode, QuestionState, Settings, ThreadId, ToolContent,
+    ToolKind, ToolStatus, TurnId, TurnState,
 };
 use crate::rules::{self, Ending, Piece, Pieces, Text};
 use crate::settings::{self, Harnesses};
@@ -379,6 +379,19 @@ fn switched(
     )
 }
 
+/// A tool call the Thread shows.
+struct Shown {
+    item: ItemId,
+    title: String,
+    kind: ToolKind,
+    /// How much of what it printed the Thread holds, and whether it holds
+    /// no more.
+    kept: usize,
+    cut: bool,
+    /// What it printed that is not written yet.
+    waiting: String,
+}
+
 /// Writes what the Harness says into the Thread.
 struct Writer {
     space: ModuleSpace,
@@ -391,9 +404,8 @@ struct Writer {
     settings: Settings,
     running: Running,
     pieces: Pieces,
-    /// The Harness's tool call IDs, the items that show them, their titles
-    /// and kinds.
-    tools: HashMap<String, (ItemId, String, ToolKind)>,
+    /// The tool calls the Thread shows, by the Harness's IDs.
+    tools: HashMap<String, Shown>,
     /// The open Questions it asked, by the Harness's IDs for them.
     asked: HashMap<String, ItemId>,
     due: Option<Instant>,
@@ -461,26 +473,43 @@ impl Writer {
                 title,
                 tool,
                 status,
+                content,
             } => {
                 self.close().await?;
-                self.start_tool(call, title, tool, status).await
+                self.start_tool(call, title, tool, status, content).await
             }
             Said::ToolChanged {
                 call,
                 title,
                 status,
+                content,
+                output,
+                exit,
             } => {
-                self.close().await?;
-                let Some((id, known, _)) = self.tools.get_mut(&call) else {
-                    let title = title.unwrap_or_else(|| "A tool".to_owned());
-                    let status = status.unwrap_or(ToolStatus::Running);
-                    return self.start_tool(call, title, ToolKind::Other, status).await;
-                };
-                if let Some(title) = &title {
-                    known.clone_from(title);
+                let (mut title, mut status, mut content) = (title, status, content);
+                if !self.tools.contains_key(&call) {
+                    self.close().await?;
+                    let started = title.take().unwrap_or_else(|| "A tool".to_owned());
+                    let now = status.take().unwrap_or(ToolStatus::Running);
+                    let shows = content.take().unwrap_or_default();
+                    self.start_tool(call.clone(), started, ToolKind::Other, now, shows)
+                        .await?;
                 }
-                let id = *id;
-                self.change_tool(id, title, status).await
+                let shown = self.tools.get_mut(&call).expect("started above");
+                if let Some(text) = output {
+                    shown.waiting.push_str(&text);
+                    self.due.get_or_insert_with(|| Instant::now() + GATHER);
+                }
+                if title.is_none() && status.is_none() && content.is_none() && exit.is_none() {
+                    return Ok(());
+                }
+                if let Some(title) = &title {
+                    shown.title.clone_from(title);
+                }
+                let id = shown.item;
+                // What it printed comes before how it ended.
+                self.write_output().await?;
+                self.change_tool(id, title, status, content, exit).await
             }
             Said::Asks {
                 call,
@@ -492,7 +521,7 @@ impl Writer {
             } => {
                 self.close().await?;
                 let known = self.tools.get(&call);
-                let tool = tool.or(known.map(|(_, _, kind)| *kind));
+                let tool = tool.or(known.map(|shown| shown.kind));
                 // A form asks what only the Person knows: no mode answers it.
                 if form.is_none()
                     && !self.running.native
@@ -504,7 +533,7 @@ impl Writer {
                     return Ok(());
                 }
                 let title = title
-                    .or_else(|| known.map(|(_, t, _)| t.clone()))
+                    .or_else(|| known.map(|shown| shown.title.clone()))
                     .unwrap_or_else(|| "The Agent asks before it goes on.".to_owned());
                 let choices = rules::choices(offered);
                 if choices.is_empty() {
@@ -607,20 +636,33 @@ impl Writer {
         title: String,
         tool: ToolKind,
         status: ToolStatus,
+        content: Vec<ToolContent>,
     ) -> Result<(), String> {
         let id = ItemId::new();
-        self.tools.insert(call, (id, title.clone(), tool));
+        let shown = Shown {
+            item: id,
+            title: title.clone(),
+            kind: tool,
+            kept: 0,
+            cut: false,
+            waiting: String::new(),
+        };
+        self.tools.insert(call, shown);
+        let content = rules::kept(content);
         let started = Fact::ToolStarted {
             item: id,
             turn: self.turn,
             title: title.clone(),
             tool,
             status,
+            content: content.clone(),
         };
         let body = Body::Tool {
             title,
             tool,
             status,
+            content,
+            output: None,
         };
         self.put(id, body, started).await
     }
@@ -630,14 +672,19 @@ impl Writer {
         id: ItemId,
         title: Option<String>,
         status: Option<ToolStatus>,
+        content: Option<Vec<ToolContent>>,
+        exit: Option<i32>,
     ) -> Result<(), String> {
         let (thread, agent) = (self.thread, Participant::Agent(self.agent));
+        let content = content.map(rules::kept);
         self.space
             .write(move |tx| {
                 if let Some((_, mut item)) = store::item(tx.sql(), id)?
                     && let Body::Tool {
                         title: shown,
                         status: now,
+                        content: shows,
+                        output,
                         ..
                     } = &mut item.body
                 {
@@ -647,14 +694,67 @@ impl Writer {
                     if let Some(status) = status {
                         *now = status;
                     }
+                    if let Some(content) = &content {
+                        shows.clone_from(content);
+                    }
+                    if exit.is_some() {
+                        output.get_or_insert_default().exit = exit;
+                    }
                     store::set_body(tx.sql(), id, &item.body)?;
                 }
                 let changed = Fact::ToolChanged {
                     item: id,
                     title,
                     status,
+                    content,
+                    exit,
                 };
                 emit(tx, agent, thread, &changed)
+            })
+            .await
+            .map_err(plain)
+    }
+
+    /// Writes what each command printed since the last time, as far as the
+    /// Thread keeps it.
+    async fn write_output(&mut self) -> Result<(), String> {
+        let mut printed = Vec::new();
+        for shown in self.tools.values_mut() {
+            if shown.waiting.is_empty() {
+                continue;
+            }
+            let waiting = std::mem::take(&mut shown.waiting);
+            if shown.cut {
+                continue;
+            }
+            let text = rules::fit(&waiting, rules::OUTPUT_KEPT - shown.kept).to_owned();
+            shown.kept += text.len();
+            shown.cut = text.len() < waiting.len();
+            printed.push((shown.item, text, shown.cut));
+        }
+        if printed.is_empty() {
+            return Ok(());
+        }
+        let (thread, agent) = (self.thread, Participant::Agent(self.agent));
+        self.space
+            .write(move |tx| {
+                for (id, text, cut) in printed {
+                    if let Some((_, mut item)) = store::item(tx.sql(), id)?
+                        && let Body::Tool { output, .. } = &mut item.body
+                    {
+                        let output = output.get_or_insert_default();
+                        output.text.push_str(&text);
+                        output.cut |= cut;
+                        store::set_body(tx.sql(), id, &item.body)?;
+                    }
+                    let fact = Fact::ToolOutput {
+                        item: id,
+                        text,
+                        cut,
+                    };
+                    emit(tx, agent, thread, &fact)?;
+                }
+                Ok(())
             })
             .await
             .map_err(plain)
@@ -672,19 +772,19 @@ impl Writer {
 
     async fn write_gathered(&mut self) -> Result<(), String> {
         self.due = None;
-        match self.pieces.take() {
-            Some(piece) => self.write(piece).await,
-            None => Ok(()),
+        if let Some(piece) = self.pieces.take() {
+            self.write(piece).await?;
         }
+        self.write_output().await
     }
 
     /// Writes what is gathered and ends the open item.
     async fn close(&mut self) -> Result<(), String> {
         self.due = None;
-        match self.pieces.close() {
-            Some(piece) => self.write(piece).await,
-            None => Ok(()),
+        if let Some(piece) = self.pieces.close() {
+            self.write(piece).await?;
         }
+        self.write_output().await
     }
 
     async fn write(&self, Piece { item, kind, text }: Piece) -> Result<(), String> {

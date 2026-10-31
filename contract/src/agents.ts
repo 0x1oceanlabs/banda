@@ -23,6 +23,7 @@ export type { Mode } from "./generated/agents/Mode"
 export type { Offer } from "./generated/agents/Offer"
 export type { OptionChoice } from "./generated/agents/OptionChoice"
 export type { OptionValue } from "./generated/agents/OptionValue"
+export type { Output } from "./generated/agents/Output"
 export type { QuestionState } from "./generated/agents/QuestionState"
 export type { Sent } from "./generated/agents/Sent"
 export type { Settings } from "./generated/agents/Settings"
@@ -30,6 +31,7 @@ export type { ThreadId } from "./generated/agents/ThreadId"
 export type { ThreadList } from "./generated/agents/ThreadList"
 export type { ThreadSummary } from "./generated/agents/ThreadSummary"
 export type { ThreadView } from "./generated/agents/ThreadView"
+export type { ToolContent } from "./generated/agents/ToolContent"
 export type { ToolKind } from "./generated/agents/ToolKind"
 export type { ToolStatus } from "./generated/agents/ToolStatus"
 export type { TurnId } from "./generated/agents/TurnId"
@@ -53,6 +55,7 @@ const KINDS: ReadonlySet<string> = new Set(
     "thought.grew": true,
     "tool.started": true,
     "tool.changed": true,
+    "tool.output": true,
     "question.asked": true,
     "question.answered": true,
     "question.closed": true,

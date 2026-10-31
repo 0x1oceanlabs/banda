@@ -3,7 +3,8 @@
 
 use bandaso_agents::Agents;
 use bandaso_agents::model::{
-    Body, Failure, Mode, OptionValue, QuestionState, Settings, ThreadView, TurnState,
+    Body, Failure, Mode, OptionValue, QuestionState, Settings, ThreadView, ToolContent, ToolStatus,
+    TurnState,
 };
 use bandaso_agents::settings::{Harness, Harnesses};
 use bandaso_kernel::{AgentId, Code, CommandId, Kernel, Participant, PersonId, SpaceId};
@@ -1037,4 +1038,50 @@ async fn a_question_the_harness_stops_waiting_for_closes() {
         view.items[1]
     );
     assert_eq!(last_reply(&view), "message: The question was cancelled.");
+}
+
+/// The last tool call's body in a Thread.
+fn last_tool(view: &ThreadView) -> &Body {
+    let tool = view
+        .items
+        .iter()
+        .rev()
+        .find(|i| matches!(i.body, Body::Tool { .. }));
+    &tool.expect("a tool call").body
+}
+
+#[tokio::test]
+async fn a_tool_call_shows_its_diff_and_what_its_command_printed() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let (thread, view) = world.finish(None, "edit the notes").await;
+    let Body::Tool { content, .. } = last_tool(&view) else {
+        unreachable!()
+    };
+    assert_eq!(
+        content,
+        &[ToolContent::Diff {
+            path: "/work/notes.md".into(),
+            old: Some("one\ntwo\nthree\n".into()),
+            new: "one\n2\nthree\nfour\n".into(),
+        }]
+    );
+
+    let (_, view) = world.finish(Some(&thread), "run the tests").await;
+    let Body::Tool { status, output, .. } = last_tool(&view) else {
+        unreachable!()
+    };
+    assert_eq!(*status, ToolStatus::Done);
+    let output = output.as_ref().expect("what it printed");
+    assert_eq!(output.text, "test one ... ok\ntest two ... ok\n");
+    assert_eq!((output.exit, output.cut), (Some(0), false));
+
+    let (_, view) = world.finish(Some(&thread), "run them loud").await;
+    let Body::Tool { output, .. } = last_tool(&view) else {
+        unreachable!()
+    };
+    let output = output.as_ref().expect("what it printed");
+    assert_eq!(output.text.len(), 64 * 1024, "the Thread keeps the start");
+    assert!(output.cut && output.text.starts_with("   0 "));
+    assert_eq!(output.exit, Some(0));
 }

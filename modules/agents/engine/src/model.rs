@@ -350,6 +350,39 @@ pub enum QuestionState {
     Closed,
 }
 
+/// What a tool call shows besides its title.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+#[ts(export, export_to = "agents/")]
+pub enum ToolContent {
+    Text {
+        text: String,
+    },
+    /// A file's text before and after the change; none before for a new
+    /// file.
+    Diff {
+        path: String,
+        #[ts(optional)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        old: Option<String>,
+        new: String,
+    },
+}
+
+/// What a command printed, as far as Bandaso keeps it.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "agents/")]
+pub struct Output {
+    pub text: String,
+    /// How the command exited, once it has.
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub exit: Option<i32>,
+    /// It printed more than Bandaso keeps.
+    #[serde(default)]
+    pub cut: bool,
+}
+
 /// What one Thread entry holds.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(tag = "kind", rename_all = "snake_case")]
@@ -365,6 +398,13 @@ pub enum Body {
         title: String,
         tool: ToolKind,
         status: ToolStatus,
+        /// What it shows besides its title, as the Harness last said.
+        #[serde(default)]
+        content: Vec<ToolContent>,
+        /// What the command printed.
+        #[ts(optional)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        output: Option<Output>,
     },
     Question {
         title: String,
@@ -509,7 +549,10 @@ pub enum Fact {
         title: String,
         tool: ToolKind,
         status: ToolStatus,
+        #[serde(default)]
+        content: Vec<ToolContent>,
     },
+    /// Each field given replaces the tool call's.
     #[serde(rename = "tool.changed")]
     ToolChanged {
         item: ItemId,
@@ -519,6 +562,22 @@ pub enum Fact {
         #[ts(optional)]
         #[serde(default, skip_serializing_if = "Option::is_none")]
         status: Option<ToolStatus>,
+        #[ts(optional)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        content: Option<Vec<ToolContent>>,
+        /// The command exited so.
+        #[ts(optional)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        exit: Option<i32>,
+    },
+    /// The command printed more: `text` follows what it printed before.
+    #[serde(rename = "tool.output")]
+    ToolOutput {
+        item: ItemId,
+        text: String,
+        /// Bandaso keeps no more of its output.
+        #[serde(default)]
+        cut: bool,
     },
     #[serde(rename = "question.asked")]
     QuestionAsked {
