@@ -1,7 +1,7 @@
 use crate::access::{self, Right};
 use crate::module::{Call, Module};
-use crate::space::Space;
-use crate::{Actor, CommandId, Error, PersonId, Refusal, SpaceId};
+use crate::space::{Created, Space};
+use crate::{CommandId, Error, Participant, PersonId, Refusal, SpaceId};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -14,9 +14,9 @@ use ts_rs::TS;
 pub struct Kernel {
     root: PathBuf,
     owner: PersonId,
-    /// This run of the engine. Outbox rows claimed by another run were cut
-    /// short by a restart.
-    run: String,
+    /// This boot of the engine. Outbox rows claimed under another boot were
+    /// cut short by a restart.
+    boot: String,
     modules: Arc<[Arc<dyn Module>]>,
     spaces: RwLock<BTreeMap<SpaceId, Arc<Space>>>,
 }
@@ -61,25 +61,30 @@ impl KernelBuilder {
         let kernel = Arc::new(Kernel {
             root: self.root,
             owner: self.owner,
-            run: uuid::Uuid::now_v7().to_string(),
+            boot: uuid::Uuid::now_v7().to_string(),
             modules: self.modules.into(),
             spaces: RwLock::new(BTreeMap::new()),
         });
         let mut folders: Vec<PathBuf> = std::fs::read_dir(&kernel.root)?
             .filter_map(|entry| entry.ok().map(|e| e.path()))
-            .filter(|path| Space::is_space(path))
             .collect();
         folders.sort();
         for folder in folders {
-            match Space::open(
-                folder.clone(),
-                kernel.owner,
-                kernel.modules.clone(),
-                &kernel.run,
-            )
-            .await
-            {
-                Ok(space) => kernel.insert(space).await,
+            let Some(id) = Space::id_of(&folder) else {
+                continue;
+            };
+            if let Ok(kept) = kernel.space(id).await {
+                tracing::warn!(
+                    kept = %kept.folder().display(),
+                    skipped = %folder.display(),
+                    "two folders hold the same Space; the second stays closed"
+                );
+                continue;
+            }
+            match kernel.open_space(folder.clone()).await {
+                Ok(space) => {
+                    kernel.spaces.write().await.insert(space.id(), space);
+                }
                 Err(error) => {
                     tracing::error!(folder = %folder.display(), %error, "a Space did not open")
                 }
@@ -117,6 +122,10 @@ struct CreateSpace {
     name: String,
 }
 
+fn no_method(method: &str) -> Refusal {
+    Refusal::invalid(format!("There is no method \"{method}\"."))
+}
+
 impl Kernel {
     /// `root` holds the Spaces' folders (`~/Bandaso` by default). `owner`
     /// is the Person who owns this computer's Spaces.
@@ -132,47 +141,68 @@ impl Kernel {
         self.owner
     }
 
+    /// The names of the modules this engine runs: what a window may use.
+    pub fn modules(&self) -> Vec<&'static str> {
+        self.modules.iter().map(|m| m.name()).collect()
+    }
+
     /// Routes a call: `spaces.*` to the kernel, `<module>.*` to that module
-    /// in the given Space.
+    /// in the given Space. Every method passes the access decision first.
     pub async fn call(
         &self,
-        actor: Actor,
+        participant: Participant,
         method: &str,
         space: Option<SpaceId>,
         command: Option<CommandId>,
         params: Value,
     ) -> Result<Value, Refusal> {
         if let Some(own) = Method::parse(method) {
-            access::decide(&actor, own.right(), self.owner)?;
+            access::decide(&participant, own.right(), self.owner)?;
             return match own {
                 Method::ListSpaces => {
                     Ok(serde_json::to_value(self.spaces().await).map_err(Error::from)?)
                 }
                 Method::CreateSpace => {
-                    let params: CreateSpace = decode(params)?;
-                    Ok(serde_json::to_value(self.create_space(&params.name).await?)
-                        .map_err(Error::from)?)
+                    let command = command.ok_or_else(|| {
+                        Refusal::invalid("spaces.create is a command and needs a command ID.")
+                    })?;
+                    let CreateSpace { name } = decode(params)?;
+                    let created = self.create_space(&name, participant, command).await?;
+                    Ok(serde_json::to_value(created).map_err(Error::from)?)
                 }
             };
         }
-        let (prefix, rest) = method
-            .split_once('.')
-            .ok_or_else(|| Refusal::invalid(format!("There is no method \"{method}\".")))?;
+        let (prefix, rest) = method.split_once('.').ok_or_else(|| no_method(method))?;
         let module = self
             .modules
             .iter()
             .find(|m| m.name() == prefix)
-            .ok_or_else(|| Refusal::invalid(format!("There is no method \"{method}\".")))?;
+            .ok_or_else(|| no_method(method))?;
+        let right = module.right(rest).ok_or_else(|| no_method(method))?;
         let space = self
             .space(space.ok_or_else(|| Refusal::invalid(format!("{method} needs a Space.")))?)
             .await?;
-        let call = Call::new(
-            actor,
-            space.module(module.name()),
-            method.to_owned(),
-            command,
-        );
-        module.call(call, rest, params).await
+        let scope = space.module(module.name());
+        let receipt = command.map(|command| scope.receipt(command, method, participant));
+        if let Some(receipt) = &receipt {
+            let earlier = space.store().answered(receipt.clone()).await?;
+            if let Some(answer) = earlier {
+                return answer;
+            }
+        }
+        let answer = match access::decide(&participant, right, space.owner()) {
+            Ok(()) => {
+                let call = Call::new(participant, scope, method.to_owned(), command);
+                module.call(call, rest, params).await
+            }
+            Err(refusal) => Err(refusal),
+        };
+        // A refusal made before the command ran is its answer too (ADR
+        // 0002, decision 2). The store keeps it only if nothing answered.
+        if let (Some(receipt), Err(refusal)) = (receipt, &answer) {
+            space.store().refused(receipt, refusal.clone()).await?;
+        }
+        answer
     }
 
     pub async fn space(&self, id: SpaceId) -> Result<Arc<Space>, Refusal> {
@@ -193,37 +223,27 @@ impl Kernel {
             .collect()
     }
 
-    async fn create_space(&self, name: &str) -> Result<SpaceSummary, Refusal> {
-        let name = name.trim();
-        let plain = !name.is_empty()
-            && name.chars().count() <= 64
-            && !name.starts_with('.')
-            && !name.contains(['/', '\\', '\0'])
-            && name != "..";
-        if !plain {
-            return Err(Refusal::invalid(
-                "A Space's name is 1 to 64 characters, with no slashes and no leading dot.",
-            ));
-        }
-        let folder = self.root.join(name);
-        Space::create(&folder, name)?;
-        let space = Space::open(folder, self.owner, self.modules.clone(), &self.run).await?;
-        let summary = space.summary();
-        self.insert(space).await;
-        Ok(summary)
+    async fn open_space(&self, folder: PathBuf) -> Result<Arc<Space>, Error> {
+        Space::open(folder, self.owner, self.modules.clone(), &self.boot).await
     }
 
-    async fn insert(&self, space: Arc<Space>) {
-        let mut spaces = self.spaces.write().await;
-        if let Some(existing) = spaces.get(&space.id()) {
-            tracing::warn!(
-                kept = %existing.folder().display(),
-                skipped = %space.folder().display(),
-                "two folders hold the same Space; the second stays closed"
-            );
-            return;
+    async fn create_space(
+        &self,
+        name: &str,
+        author: Participant,
+        command: CommandId,
+    ) -> Result<SpaceSummary, Refusal> {
+        let name = Space::plain_name(name)?;
+        let folder = self.root.join(name);
+        match Space::create(&folder, name, author, command)? {
+            Created::Earlier(id) => Ok(self.space(id).await?.summary()),
+            Created::New => {
+                let space = self.open_space(folder).await?;
+                let summary = space.summary();
+                self.spaces.write().await.insert(space.id(), space);
+                Ok(summary)
+            }
         }
-        spaces.insert(space.id(), space);
     }
 }
 

@@ -1,9 +1,10 @@
 //! The kernel through its interface: a small test module, real SQLite in a
 //! temporary folder, and the real API over a WebSocket.
 
+use bandaso_kernel::api::Identity;
 use bandaso_kernel::{
-    Actor, AgentId, Call, CommandId, Effect, Error, Kernel, Module, ModuleSpace, OnRestart,
-    Outcome, PersonId, Refusal, Right, Settled, SpaceSummary, Tx, decode,
+    AgentId, Call, Code, CommandId, Effect, Error, Kernel, Module, ModuleSpace, OnRestart, Outcome,
+    Participant, PersonId, Refusal, Right, Settled, SpaceSummary, Tx, decode,
 };
 use futures::{SinkExt, StreamExt};
 use serde::Deserialize;
@@ -38,18 +39,20 @@ impl Module for Notes {
         &["CREATE TABLE notes_items (id INTEGER PRIMARY KEY, text TEXT NOT NULL)"]
     }
 
+    fn right(&self, method: &str) -> Option<Right> {
+        match method {
+            "add" => Some(Right::Write),
+            "list" => Some(Right::Read),
+            "purge" => Some(Right::Manage),
+            _ => None,
+        }
+    }
+
     async fn call(&self, call: Call, method: &str, params: Value) -> Result<Value, Refusal> {
-        let right = match method {
-            "add" => Right::Write,
-            "list" => Right::Read,
-            "purge" => Right::Manage,
-            _ => return Err(Refusal::invalid(format!("notes has no method {method}"))),
-        };
-        call.authorize(right)?;
         match method {
             "add" => {
                 let Add { text } = decode(params)?;
-                let author = call.actor();
+                let author = call.participant();
                 call.command(move |tx| {
                     tx.sql()
                         .execute("INSERT INTO notes_items (text) VALUES (?1)", [&text])?;
@@ -113,7 +116,7 @@ impl Module for Notes {
     }
 
     fn settle(&self, tx: &mut Tx<'_>, effect: &Effect, settled: &Settled) -> Result<(), Error> {
-        let author: Actor = serde_json::from_value(effect.payload["author"].clone())?;
+        let author: Participant = serde_json::from_value(effect.payload["author"].clone())?;
         let how = match settled {
             Settled::Abandoned => "abandoned".to_owned(),
             Settled::Failed(reason) => format!("failed: {reason}"),
@@ -137,29 +140,39 @@ async fn open(root: &Path, owner: PersonId, notes: &Notes) -> Arc<Kernel> {
         .unwrap()
 }
 
-async fn create(kernel: &Kernel, owner: PersonId, name: &str) -> SpaceSummary {
+async fn create_space(
+    kernel: &Kernel,
+    participant: Participant,
+    command: CommandId,
+    name: &str,
+) -> Result<SpaceSummary, Refusal> {
     let created = kernel
         .call(
-            Actor::Person(owner),
+            participant,
             "spaces.create",
             None,
-            None,
+            Some(command),
             json!({ "name": name }),
         )
+        .await?;
+    Ok(serde_json::from_value(created).unwrap())
+}
+
+async fn create(kernel: &Kernel, owner: PersonId, name: &str) -> SpaceSummary {
+    create_space(kernel, Participant::Person(owner), CommandId::new(), name)
         .await
-        .unwrap();
-    serde_json::from_value(created).unwrap()
+        .unwrap()
 }
 
 async fn add(
     kernel: &Kernel,
-    actor: Actor,
+    participant: Participant,
     space: &SpaceSummary,
     text: &str,
 ) -> Result<Value, Refusal> {
     kernel
         .call(
-            actor,
+            participant,
             "notes.add",
             Some(space.id),
             Some(CommandId::new()),
@@ -194,41 +207,40 @@ async fn a_space_is_a_folder_and_opens_again_after_a_restart() {
     let owner = PersonId::new();
     let notes = Notes::default();
     let kernel = open(root.path(), owner, &notes).await;
-    let space = create(&kernel, owner, "Research").await;
-    assert!(root.path().join("Research/.bandaso/space.json").is_file());
-    add(&kernel, Actor::Person(owner), &space, "first")
+    let person = Participant::Person(owner);
+    let command = CommandId::new();
+    let space = create_space(&kernel, person, command, "Research")
         .await
         .unwrap();
+    assert!(root.path().join("Research/.bandaso/space.json").is_file());
+    add(&kernel, person, &space, "first").await.unwrap();
 
-    let twin = kernel
-        .call(
-            Actor::Person(owner),
-            "spaces.create",
-            None,
-            None,
-            json!({ "name": "Research" }),
-        )
-        .await;
-    assert_eq!(twin.unwrap_err().code, "conflict");
+    let again = create_space(&kernel, person, command, "Research").await;
+    assert_eq!(
+        again,
+        Ok(space.clone()),
+        "the same command gets the same Space"
+    );
+    let twin = create_space(&kernel, person, CommandId::new(), "Research").await;
+    assert_eq!(twin.unwrap_err().code, Code::Conflict);
     for bad in ["", ".hidden", "a/b", "..", &"x".repeat(65)] {
-        let refused = kernel
-            .call(
-                Actor::Person(owner),
-                "spaces.create",
-                None,
-                None,
-                json!({ "name": bad }),
-            )
-            .await;
-        assert_eq!(refused.unwrap_err().code, "invalid", "{bad:?}");
+        let refused = create_space(&kernel, person, CommandId::new(), bad).await;
+        assert_eq!(refused.unwrap_err().code, Code::Invalid, "{bad:?}");
     }
+
+    let second = open(root.path(), owner, &notes).await;
+    assert!(
+        second.spaces().await.is_empty(),
+        "a Space opens in one engine at a time"
+    );
+    drop(second);
     drop(kernel);
 
     let again = open(root.path(), owner, &notes).await;
     assert_eq!(again.spaces().await, vec![space.clone()]);
     let listed = again
         .call(
-            Actor::Person(owner),
+            Participant::Person(owner),
             "notes.list",
             Some(space.id),
             None,
@@ -246,7 +258,7 @@ async fn a_command_runs_once_and_its_effect_runs_after_commit() {
     let notes = Notes::default();
     let kernel = open(root.path(), owner, &notes).await;
     let space = create(&kernel, owner, "Work").await;
-    let person = Actor::Person(owner);
+    let person = Participant::Person(owner);
 
     let command = CommandId::new();
     let call = || {
@@ -273,7 +285,7 @@ async fn a_command_runs_once_and_its_effect_runs_after_commit() {
         .await;
     assert_eq!(
         missing.unwrap_err().code,
-        "invalid",
+        Code::Invalid,
         "a command needs its ID"
     );
 
@@ -301,7 +313,7 @@ async fn effects_with_one_key_run_in_order_even_across_a_retry() {
         .push_back(Outcome::Retry("not yet".into()));
     let kernel = open(root.path(), owner, &notes).await;
     let space = create(&kernel, owner, "Work").await;
-    let person = Actor::Person(owner);
+    let person = Participant::Person(owner);
 
     add(&kernel, person, &space, "a").await.unwrap();
     add(&kernel, person, &space, "b").await.unwrap();
@@ -322,7 +334,7 @@ async fn an_effect_that_fails_is_settled_by_its_module() {
     let kernel = open(root.path(), owner, &notes).await;
     let space = create(&kernel, owner, "Work").await;
 
-    add(&kernel, Actor::Person(owner), &space, "a")
+    add(&kernel, Participant::Person(owner), &space, "a")
         .await
         .unwrap();
     eventually(|| async { kinds(&kernel, &space).await == ["added", "lost"] }).await;
@@ -346,15 +358,24 @@ async fn a_restart_replays_or_abandons_what_it_cut_short() {
     tokio::time::sleep(Duration::from_millis(50)).await;
 
     // An earlier run claimed two effects and then the engine stopped.
-    let author = serde_json::to_string(&Actor::Person(owner)).unwrap();
+    let author = serde_json::to_string(&Participant::Person(owner)).unwrap();
     let database =
         rusqlite::Connection::open(root.path().join("Work/.bandaso/space.sqlite3")).unwrap();
-    for (kind, text) in [("publish", "replayed"), ("notify", "abandoned")] {
+    for (kind, key, text, attempts) in [
+        ("publish", "a", "replayed", "0"),
+        ("notify", "b", "abandoned", "0"),
+        ("publish", "c", "worn out", "4"),
+    ] {
         database
             .execute(
-                "INSERT INTO kernel_outbox (module, kind, key, payload, state, run, next_at, created_at)
-                 VALUES ('notes', ?1, ?1, ?2, 'running', 'an-earlier-run', 0, 0)",
-                [kind, &format!(r#"{{"text":"{text}","author":{author}}}"#)],
+                "INSERT INTO kernel_outbox (module, kind, key, payload, state, boot, attempts, next_at, created_at)
+                 VALUES ('notes', ?1, ?2, ?3, 'running', 'an-earlier-boot', ?4, 0, 0)",
+                [
+                    kind,
+                    key,
+                    &format!(r#"{{"text":"{text}","author":{author}}}"#),
+                    attempts,
+                ],
             )
             .unwrap();
     }
@@ -362,7 +383,21 @@ async fn a_restart_replays_or_abandons_what_it_cut_short() {
 
     let kernel = open(root.path(), owner, &notes).await;
     eventually(|| async { *notes.published.lock().unwrap() == ["replayed"] }).await;
-    assert_eq!(kinds(&kernel, &space).await, ["lost"]);
+    let space = kernel.space(space.id).await.unwrap();
+    let lost: Vec<Value> = space
+        .events_after(0, Default::default(), 10)
+        .await
+        .unwrap()
+        .into_iter()
+        .map(|e| e.payload["how"].clone())
+        .collect();
+    assert_eq!(
+        lost,
+        [
+            json!("abandoned"),
+            json!("failed: Restarts cut it short too many times.")
+        ]
+    );
 }
 
 #[tokio::test]
@@ -372,7 +407,7 @@ async fn an_agent_works_in_the_space_but_may_not_manage_it() {
     let notes = Notes::default();
     let kernel = open(root.path(), owner, &notes).await;
     let space = create(&kernel, owner, "Work").await;
-    let agent = Actor::Agent(AgentId::new());
+    let agent = Participant::Agent(AgentId::new());
 
     add(&kernel, agent, &space, "by an agent").await.unwrap();
     let purge = kernel
@@ -384,29 +419,36 @@ async fn an_agent_works_in_the_space_but_may_not_manage_it() {
             Value::Null,
         )
         .await;
-    assert_eq!(purge.unwrap_err().code, "forbidden");
-    let create = kernel
-        .call(
-            agent,
-            "spaces.create",
-            None,
-            None,
-            json!({ "name": "Mine" }),
-        )
-        .await;
-    assert_eq!(create.unwrap_err().code, "forbidden");
-    let stranger = add(&kernel, Actor::Person(PersonId::new()), &space, "no").await;
-    assert_eq!(stranger.unwrap_err().code, "forbidden");
+    assert_eq!(purge.unwrap_err().code, Code::Forbidden);
+    let create = create_space(&kernel, agent, CommandId::new(), "Mine").await;
+    assert_eq!(create.unwrap_err().code, Code::Forbidden);
+    let stranger = add(&kernel, Participant::Person(PersonId::new()), &space, "no").await;
+    assert_eq!(stranger.unwrap_err().code, Code::Forbidden);
     let unknown = kernel
         .call(
-            Actor::Person(owner),
+            Participant::Person(owner),
             "nobody.add",
             Some(space.id),
             None,
             Value::Null,
         )
         .await;
-    assert_eq!(unknown.unwrap_err().code, "invalid");
+    assert_eq!(unknown.unwrap_err().code, Code::Invalid);
+}
+
+/// Tokens for the owner, an Agent and a Person who is not the owner.
+struct Tokens {
+    owner: PersonId,
+}
+
+impl Identity for Tokens {
+    fn identify(&self, token: &str) -> Option<Participant> {
+        match token {
+            "secret" => Some(Participant::Person(self.owner)),
+            "stranger" => Some(Participant::Person(PersonId::new())),
+            _ => None,
+        }
+    }
 }
 
 type Socket =
@@ -441,13 +483,13 @@ async fn the_api_refuses_strangers_and_follows_events_without_gaps() {
     let notes = Notes::default();
     let kernel = open(root.path(), owner, &notes).await;
     let space = create(&kernel, owner, "Work").await;
-    add(&kernel, Actor::Person(owner), &space, "before")
+    add(&kernel, Participant::Person(owner), &space, "before")
         .await
         .unwrap();
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let address = listener.local_addr().unwrap();
-    let app = bandaso_kernel::api::router(kernel.clone(), "secret".into(), "test");
+    let app = bandaso_kernel::api::router(kernel.clone(), Tokens { owner }, "test");
     tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
 
     let (_, refused) = connect(
@@ -470,6 +512,19 @@ async fn the_api_refuses_strangers_and_follows_events_without_gaps() {
     )
     .await;
     assert_eq!(welcome["type"], "welcome");
+    assert_eq!(welcome["modules"], json!(["notes"]));
+
+    let (mut stranger, _) = connect(
+        address,
+        json!({ "type": "hello", "protocol": 1, "token": "stranger" }),
+    )
+    .await;
+    let peek = json!({ "type": "subscribe", "id": 1, "space": space.id, "after": 0 });
+    stranger
+        .send(Message::text(peek.to_string()))
+        .await
+        .unwrap();
+    assert_eq!(next(&mut stranger).await["error"]["code"], "forbidden");
 
     let list = json!({ "type": "call", "id": 1, "method": "notes.list", "space": space.id });
     socket.send(Message::text(list.to_string())).await.unwrap();

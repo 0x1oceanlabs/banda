@@ -4,10 +4,13 @@
 //! A module queues an effect in the same transaction as the change that
 //! needs it. Each Space has one worker. It runs a module's effects with the
 //! same key one at a time, in the order they were queued, and effects with
-//! different keys side by side. An effect claimed by an earlier run of the
-//! engine was cut short by a restart: its module says whether it runs again
-//! or is abandoned, and writes what that means.
+//! different keys side by side. An effect claimed under an earlier boot of
+//! the engine was cut short by a restart: its module says whether it runs
+//! again or is abandoned, and writes what that means. Outbox rows are the
+//! kernel's bookkeeping, not records of the work: what a Person sees of an
+//! effect is the events its module writes.
 
+use crate::events::json_column;
 use crate::module::Module;
 use crate::space::Space;
 use crate::store::KERNEL;
@@ -56,7 +59,8 @@ pub enum Settled {
     Failed(String),
 }
 
-/// Tries before an effect that keeps asking to retry is failed.
+/// Tries before an effect that keeps asking to retry, or that restarts keep
+/// cutting short, is failed.
 pub const ATTEMPTS: u32 = 5;
 
 const LONGEST_WAIT_MS: i64 = 30_000;
@@ -69,13 +73,13 @@ fn find<'m>(modules: &'m [Arc<dyn Module>], name: &str) -> Option<&'m Arc<dyn Mo
     modules.iter().find(|m| m.name() == name)
 }
 
-/// Settles the effects an earlier run claimed. Runs once, while the Space
+/// Settles the effects an earlier boot claimed. Runs once, while the Space
 /// opens, before its worker starts.
-pub(crate) async fn recover(space: &Arc<Space>, run: &str) -> Result<(), Error> {
-    let run = run.to_owned();
+pub(crate) async fn recover(space: &Arc<Space>, boot: &str) -> Result<(), Error> {
+    let boot = boot.to_owned();
     let cut_short = space
         .store()
-        .read(move |sql| running_before(sql, &run))
+        .read(move |sql| running_before(sql, &boot))
         .await?;
     for (module_name, effect) in cut_short {
         let Some(module) = find(space.modules(), &module_name).cloned() else {
@@ -87,15 +91,21 @@ pub(crate) async fn recover(space: &Arc<Space>, run: &str) -> Result<(), Error> 
         space
             .store()
             .write(name, move |tx| {
-                if replay {
-                    tx.sql().execute(
-                        "UPDATE kernel_outbox SET state = 'pending', run = NULL WHERE id = ?1",
-                        params![effect.id],
-                    )?;
-                    Ok(())
-                } else {
-                    settle(tx, &*module, &effect, Settled::Abandoned)
+                if !replay {
+                    return settle(tx, &*module, &effect, Settled::Abandoned);
                 }
+                // An effect that takes the engine down with it must not
+                // replay forever.
+                if effect.attempts + 1 >= ATTEMPTS {
+                    let reason = "Restarts cut it short too many times.".to_owned();
+                    return settle(tx, &*module, &effect, Settled::Failed(reason));
+                }
+                tx.sql().execute(
+                    "UPDATE kernel_outbox SET state = 'pending', boot = NULL, attempts = attempts + 1
+                     WHERE id = ?1",
+                    params![effect.id],
+                )?;
+                Ok(())
             })
             .await?;
     }
@@ -105,15 +115,15 @@ pub(crate) async fn recover(space: &Arc<Space>, run: &str) -> Result<(), Error> 
 /// The Space's worker: claims what is ready, runs it, records how it ended,
 /// and sleeps until a commit queues more or a retry is due. It ends when the
 /// Space is closed.
-pub(crate) async fn work(space: Weak<Space>, run: String) {
+pub(crate) async fn work(space: Weak<Space>, boot: String) {
     let Some(signal) = space.upgrade().map(|s| s.store().outbox_signal()) else {
         return;
     };
     loop {
         let Some(open) = space.upgrade() else { return };
         let claimed = {
-            let run = run.clone();
-            open.store().write(KERNEL, move |tx| claim(tx, &run)).await
+            let boot = boot.clone();
+            open.store().write(KERNEL, move |tx| claim(tx, &boot)).await
         };
         match claimed {
             Ok(claimed) => {
@@ -157,17 +167,17 @@ fn start(space: &Arc<Space>, module_name: String, effect: Effect) {
     });
 }
 
-fn running_before(sql: &Connection, run: &str) -> Result<Vec<(String, Effect)>, Error> {
+fn running_before(sql: &Connection, boot: &str) -> Result<Vec<(String, Effect)>, Error> {
     let mut statement = sql.prepare(
         "SELECT module, id, kind, key, payload, attempts FROM kernel_outbox
-         WHERE state = 'running' AND (run IS NULL OR run != ?1) ORDER BY id",
+         WHERE state = 'running' AND (boot IS NULL OR boot != ?1) ORDER BY id",
     )?;
-    let rows = statement.query_map(params![run], read_effect)?;
+    let rows = statement.query_map(params![boot], read_effect)?;
     Ok(rows.collect::<rusqlite::Result<_>>()?)
 }
 
 /// The first pending effect of every key with nothing running, once it is due.
-fn claim(tx: &mut Tx<'_>, run: &str) -> Result<Vec<(String, Effect)>, Error> {
+fn claim(tx: &mut Tx<'_>, boot: &str) -> Result<Vec<(String, Effect)>, Error> {
     let now = tx.now();
     let ready = {
         let mut statement = tx.sql().prepare(
@@ -184,8 +194,8 @@ fn claim(tx: &mut Tx<'_>, run: &str) -> Result<Vec<(String, Effect)>, Error> {
     };
     for (_, effect) in &ready {
         tx.sql().execute(
-            "UPDATE kernel_outbox SET state = 'running', run = ?1 WHERE id = ?2",
-            params![run, effect.id],
+            "UPDATE kernel_outbox SET state = 'running', boot = ?1 WHERE id = ?2",
+            params![boot, effect.id],
         )?;
     }
     Ok(ready)
@@ -207,7 +217,7 @@ fn finish(
         }
         Outcome::Retry(reason) if effect.attempts + 1 < ATTEMPTS => {
             tx.sql().execute(
-                "UPDATE kernel_outbox SET state = 'pending', run = NULL, attempts = attempts + 1, next_at = ?1, error = ?2
+                "UPDATE kernel_outbox SET state = 'pending', boot = NULL, attempts = attempts + 1, next_at = ?1, error = ?2
                  WHERE id = ?3",
                 params![tx.now() + backoff_ms(effect.attempts), reason, effect.id],
             )?;
@@ -246,20 +256,13 @@ fn next_due(sql: &Connection) -> Result<Option<i64>, Error> {
 }
 
 fn read_effect(row: &rusqlite::Row<'_>) -> rusqlite::Result<(String, Effect)> {
-    let payload: String = row.get(4)?;
     Ok((
         row.get(0)?,
         Effect {
             id: row.get(1)?,
             kind: row.get(2)?,
             key: row.get(3)?,
-            payload: serde_json::from_str(&payload).map_err(|e| {
-                rusqlite::Error::FromSqlConversionFailure(
-                    4,
-                    rusqlite::types::Type::Text,
-                    Box::new(e),
-                )
-            })?,
+            payload: json_column(row, 4)?,
             attempts: row.get(5)?,
         },
     ))

@@ -3,6 +3,6 @@ import type { AgentId } from "./AgentId";
 import type { PersonId } from "./PersonId";
 
 /**
- * Who acts: a Participant. A Person or an Agent are the only two kinds.
+ * Anyone who acts in a Space: a Person or an Agent.
  */
-export type Actor = { "kind": "person", "id": PersonId } | { "kind": "agent", "id": AgentId };
+export type Participant = { "kind": "person", "id": PersonId } | { "kind": "agent", "id": AgentId };

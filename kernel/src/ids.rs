@@ -76,34 +76,34 @@ id!(
     CommandId
 );
 
-/// Who acts: a Participant. A Person or an Agent are the only two kinds.
+/// Anyone who acts in a Space: a Person or an Agent.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
 #[serde(tag = "kind", content = "id", rename_all = "snake_case")]
 #[ts(export)]
-pub enum Actor {
+pub enum Participant {
     Person(PersonId),
     Agent(AgentId),
 }
 
-impl Actor {
+impl Participant {
     pub(crate) fn kind(&self) -> &'static str {
         match self {
-            Actor::Person(_) => "person",
-            Actor::Agent(_) => "agent",
+            Participant::Person(_) => "person",
+            Participant::Agent(_) => "agent",
         }
     }
 
     pub(crate) fn id(&self) -> String {
         match self {
-            Actor::Person(id) => id.to_string(),
-            Actor::Agent(id) => id.to_string(),
+            Participant::Person(id) => id.to_string(),
+            Participant::Agent(id) => id.to_string(),
         }
     }
 
-    pub(crate) fn from_parts(kind: &str, id: &str) -> Option<Actor> {
+    pub(crate) fn from_parts(kind: &str, id: &str) -> Option<Participant> {
         match kind {
-            "person" => id.parse().ok().map(Actor::Person),
-            "agent" => id.parse().ok().map(Actor::Agent),
+            "person" => id.parse().ok().map(Participant::Person),
+            "agent" => id.parse().ok().map(Participant::Agent),
             _ => None,
         }
     }

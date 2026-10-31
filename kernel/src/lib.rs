@@ -6,7 +6,7 @@
 //! - [`Space`] is a folder with its own SQLite. One writer thread commits
 //!   every change, and events are published only after commit (ADR 0002).
 //! - A [`Module`] owns its words, its tables and its events. It reaches its
-//!   Space through a [`ModuleSpace`], which can emit only that module's
+//!   Space only through a [`ModuleSpace`], which can emit only that module's
 //!   events.
 //! - The outbox runs side effects after commit, in order per target, and
 //!   settles what a restart cut short.
@@ -26,9 +26,9 @@ mod space;
 mod store;
 
 pub use access::Right;
-pub use error::{Error, Refusal};
+pub use error::{Code, Error, Refusal};
 pub use events::{Event, EventFilter};
-pub use ids::{Actor, AgentId, CommandId, EventId, PersonId, SpaceId};
+pub use ids::{AgentId, CommandId, EventId, Participant, PersonId, SpaceId};
 pub use kernel::{Kernel, KernelBuilder, SpaceSummary, decode};
 pub use module::{Call, Module};
 pub use outbox::{Effect, OnRestart, Outcome, Settled};

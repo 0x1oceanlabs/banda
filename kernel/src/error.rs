@@ -7,40 +7,68 @@ use ts_rs::TS;
 #[error("{code}: {message}")]
 #[ts(export)]
 pub struct Refusal {
-    pub code: String,
+    pub code: Code,
     pub message: String,
 }
 
+/// Why a call was not done. A caller decides what to do by this alone.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export)]
+pub enum Code {
+    /// The call is malformed: a missing field, a wrong type, an unknown
+    /// method. Sending it again changes nothing.
+    Invalid,
+    NotFound,
+    /// The access decision said no.
+    Forbidden,
+    /// The state does not allow it now: read again, then decide.
+    Conflict,
+    /// The window and the engine speak different protocol versions.
+    Protocol,
+    /// Something broke inside the engine. The details are in its log.
+    Internal,
+}
+
+impl std::fmt::Display for Code {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(match self {
+            Code::Invalid => "invalid",
+            Code::NotFound => "not_found",
+            Code::Forbidden => "forbidden",
+            Code::Conflict => "conflict",
+            Code::Protocol => "protocol",
+            Code::Internal => "internal",
+        })
+    }
+}
+
 impl Refusal {
-    pub fn new(code: impl Into<String>, message: impl Into<String>) -> Self {
+    pub fn new(code: Code, message: impl Into<String>) -> Self {
         Self {
-            code: code.into(),
+            code,
             message: message.into(),
         }
     }
 
-    /// The call is malformed: a missing field, a wrong type, an unknown method.
     pub fn invalid(message: impl Into<String>) -> Self {
-        Self::new("invalid", message)
+        Self::new(Code::Invalid, message)
     }
 
     pub fn not_found(message: impl Into<String>) -> Self {
-        Self::new("not_found", message)
+        Self::new(Code::NotFound, message)
     }
 
-    /// The access decision said no.
     pub fn forbidden(message: impl Into<String>) -> Self {
-        Self::new("forbidden", message)
+        Self::new(Code::Forbidden, message)
     }
 
-    /// The state does not allow it now: try again after reading again.
     pub fn conflict(message: impl Into<String>) -> Self {
-        Self::new("conflict", message)
+        Self::new(Code::Conflict, message)
     }
 
-    /// Something broke inside the engine. The details are in the engine's log.
     pub fn internal() -> Self {
-        Self::new("internal", "Something went wrong inside the engine.")
+        Self::new(Code::Internal, "Something went wrong inside the engine.")
     }
 }
 
@@ -54,8 +82,9 @@ pub enum Error {
     Io(#[from] std::io::Error),
     #[error("json: {0}")]
     Json(#[from] serde_json::Error),
-    #[error("the Space's writer has stopped")]
-    WriterGone,
+    /// The Space's database closed while a change or a read waited for it.
+    #[error("the Space's database has closed")]
+    Closed,
     #[error(transparent)]
     Refused(#[from] Refusal),
 }

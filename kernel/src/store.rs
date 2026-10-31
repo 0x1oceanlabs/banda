@@ -6,7 +6,7 @@
 //! own connection: SQLite's WAL lets them read while the writer writes.
 
 use crate::events::{self, Event};
-use crate::{Actor, CommandId, Error, EventId, Refusal, now_ms};
+use crate::{CommandId, Error, EventId, Participant, Refusal, now_ms};
 use rusqlite::{Connection, OptionalExtension, TransactionBehavior, params};
 use serde::Serialize;
 use serde_json::Value;
@@ -19,7 +19,7 @@ pub(crate) const KERNEL: &str = "kernel";
 
 /// How many committed events a slow subscriber may fall behind before it is
 /// told to read again.
-const PUBLISHED: usize = 4096;
+const SUBSCRIBER_LAG: usize = 4096;
 
 /// The kernel's own steps. Each module keeps its own ledger next to them.
 const KERNEL_MIGRATIONS: &[&str] = &[r#"
@@ -36,11 +36,17 @@ CREATE TABLE kernel_events (
     payload TEXT NOT NULL
 );
 CREATE INDEX kernel_events_by_subject ON kernel_events (module, subject, seq);
+CREATE TRIGGER kernel_events_are_not_changed BEFORE UPDATE ON kernel_events
+BEGIN SELECT RAISE(ABORT, 'the event log is never rewritten'); END;
+CREATE TRIGGER kernel_events_are_not_deleted BEFORE DELETE ON kernel_events
+BEGIN SELECT RAISE(ABORT, 'the event log is never rewritten'); END;
 
 CREATE TABLE kernel_receipts (
     command TEXT PRIMARY KEY,
     module TEXT NOT NULL,
     method TEXT NOT NULL,
+    author_kind TEXT NOT NULL,
+    author_id TEXT NOT NULL,
     ok TEXT,
     refusal TEXT,
     at INTEGER NOT NULL
@@ -53,7 +59,7 @@ CREATE TABLE kernel_outbox (
     key TEXT NOT NULL,
     payload TEXT NOT NULL,
     state TEXT NOT NULL CHECK (state IN ('pending', 'running', 'done', 'abandoned', 'failed')),
-    run TEXT,
+    boot TEXT,
     attempts INTEGER NOT NULL DEFAULT 0,
     next_at INTEGER NOT NULL,
     error TEXT,
@@ -100,7 +106,7 @@ impl Tx<'_> {
         kind: &str,
         version: u32,
         subject: Option<&str>,
-        author: Actor,
+        author: Participant,
         payload: &impl Serialize,
     ) -> Result<&Event, Error> {
         let mut event = Event {
@@ -171,7 +177,7 @@ impl Store {
                     job(&mut writer);
                 }
             })?;
-        let (published, _) = broadcast::channel(PUBLISHED);
+        let (published, _) = broadcast::channel(SUBSCRIBER_LAG);
         Ok(Store {
             jobs,
             reader: Arc::new(Mutex::new(reader)),
@@ -189,7 +195,7 @@ impl Store {
     ) -> Result<T, Error> {
         let published = self.published.clone();
         let outbox = self.outbox.clone();
-        self.run(move |sql| {
+        self.on_writer(move |sql| {
             let (value, emitted, enqueued) = transact(sql, module, change)?;
             publish(&published, &outbox, emitted, enqueued);
             Ok(value)
@@ -203,21 +209,20 @@ impl Store {
     /// may try again (ADR 0002, decision 2).
     pub(crate) async fn command(
         &self,
-        module: &'static str,
-        command: CommandId,
-        method: String,
+        receipt: Receipt,
         change: impl FnOnce(&mut Tx<'_>) -> Result<Value, Error> + Send + 'static,
     ) -> Result<Value, Refusal> {
         let published = self.published.clone();
         let outbox = self.outbox.clone();
         let outcome = self
-            .run(move |sql| {
-                if let Some(earlier) = receipt(sql, command)? {
-                    return earlier.answer(module, &method);
+            .on_writer(move |sql| {
+                if let Some(answer) = receipt.earlier(sql)? {
+                    return Ok(answer);
                 }
+                let module = receipt.module;
                 let attempt = transact(sql, module, |tx| {
                     let value = change(tx)?;
-                    store_receipt(tx.sql(), command, module, &method, Ok(&value), tx.now())?;
+                    receipt.keep(tx.sql(), Ok(&value), tx.now())?;
                     Ok(value)
                 });
                 match attempt {
@@ -226,17 +231,34 @@ impl Store {
                         Ok(Ok(value))
                     }
                     Err(Error::Refused(refusal)) => {
-                        store_receipt(sql, command, module, &method, Err(&refusal), now_ms())?;
+                        receipt.keep(sql, Err(&refusal), now_ms())?;
                         Ok(Err(refusal))
                     }
                     Err(failure) => Err(failure),
                 }
             })
             .await;
-        match outcome {
-            Ok(result) => result,
-            Err(failure) => Err(failure.into()),
-        }
+        outcome.unwrap_or_else(|failure| Err(failure.into()))
+    }
+
+    /// The first answer to a command, if it has one.
+    pub(crate) async fn answered(
+        &self,
+        receipt: Receipt,
+    ) -> Result<Option<Result<Value, Refusal>>, Error> {
+        self.read(move |sql| receipt.earlier(sql)).await
+    }
+
+    /// Keeps a refusal made before the command ran, unless the command has
+    /// an answer already.
+    pub(crate) async fn refused(&self, receipt: Receipt, refusal: Refusal) -> Result<(), Error> {
+        self.on_writer(move |sql| {
+            if receipt.earlier(sql)?.is_none() {
+                receipt.keep(sql, Err(&refusal), now_ms())?;
+            }
+            Ok(())
+        })
+        .await
     }
 
     /// Reads on the reader connection, off the async threads.
@@ -252,7 +274,7 @@ impl Store {
             query(&sql)
         })
         .await
-        .map_err(|_| Error::WriterGone)?
+        .map_err(|_| Error::Closed)?
     }
 
     /// Committed events from now on, in commit order.
@@ -265,7 +287,7 @@ impl Store {
         self.outbox.clone()
     }
 
-    async fn run<T: Send + 'static>(
+    async fn on_writer<T: Send + 'static>(
         &self,
         job: impl FnOnce(&mut Connection) -> Result<T, Error> + Send + 'static,
     ) -> Result<T, Error> {
@@ -274,8 +296,8 @@ impl Store {
             .send(Box::new(move |sql| {
                 let _ = reply.send(job(sql));
             }))
-            .map_err(|_| Error::WriterGone)?;
-        answer.await.map_err(|_| Error::WriterGone)?
+            .map_err(|_| Error::Closed)?;
+        answer.await.map_err(|_| Error::Closed)?
     }
 }
 
@@ -318,63 +340,78 @@ fn publish(
     }
 }
 
-struct Receipt {
-    module: String,
-    method: String,
-    ok: Option<String>,
-    refusal: Option<String>,
+/// A command's receipt: which call it answers and who made it.
+#[derive(Clone)]
+pub(crate) struct Receipt {
+    pub(crate) command: CommandId,
+    pub(crate) module: &'static str,
+    pub(crate) method: String,
+    pub(crate) author: Participant,
 }
 
 impl Receipt {
-    fn answer(self, module: &str, method: &str) -> Result<Result<Value, Refusal>, Error> {
-        if self.module != module || self.method != method {
-            return Ok(Err(Refusal::conflict(format!(
-                "This command ID was already used for {}.{}.",
-                self.module, self.method
+    /// The answer stored for this command ID. The same ID used for another
+    /// call, or by someone else, is a conflict.
+    fn earlier(&self, sql: &Connection) -> Result<Option<Result<Value, Refusal>>, Error> {
+        let stored = sql
+            .query_row(
+                "SELECT module, method, author_kind, author_id, ok, refusal
+                 FROM kernel_receipts WHERE command = ?1",
+                params![self.command],
+                |row| {
+                    Ok((
+                        row.get::<_, String>(0)?,
+                        row.get::<_, String>(1)?,
+                        row.get::<_, String>(2)?,
+                        row.get::<_, String>(3)?,
+                        row.get::<_, Option<String>>(4)?,
+                        row.get::<_, Option<String>>(5)?,
+                    ))
+                },
+            )
+            .optional()?;
+        let Some((module, method, author_kind, author_id, ok, refusal)) = stored else {
+            return Ok(None);
+        };
+        let same_author = Participant::from_parts(&author_kind, &author_id) == Some(self.author);
+        if module != self.module || method != self.method || !same_author {
+            return Ok(Some(Err(Refusal::conflict(
+                "This command ID was already used for another call.",
             ))));
         }
-        match (self.ok, self.refusal) {
-            (Some(ok), _) => Ok(Ok(serde_json::from_str(&ok)?)),
-            (None, Some(refusal)) => Ok(Err(serde_json::from_str(&refusal)?)),
-            (None, None) => Ok(Ok(Value::Null)),
-        }
+        Ok(Some(match (ok, refusal) {
+            (Some(ok), _) => Ok(serde_json::from_str(&ok)?),
+            (None, Some(refusal)) => Err(serde_json::from_str(&refusal)?),
+            (None, None) => Ok(Value::Null),
+        }))
     }
-}
 
-fn receipt(sql: &Connection, command: CommandId) -> Result<Option<Receipt>, Error> {
-    Ok(sql
-        .query_row(
-            "SELECT module, method, ok, refusal FROM kernel_receipts WHERE command = ?1",
-            params![command],
-            |row| {
-                Ok(Receipt {
-                    module: row.get(0)?,
-                    method: row.get(1)?,
-                    ok: row.get(2)?,
-                    refusal: row.get(3)?,
-                })
-            },
-        )
-        .optional()?)
-}
-
-fn store_receipt(
-    sql: &Connection,
-    command: CommandId,
-    module: &str,
-    method: &str,
-    result: Result<&Value, &Refusal>,
-    at: i64,
-) -> Result<(), Error> {
-    let (ok, refusal) = match result {
-        Ok(value) => (Some(value.to_string()), None),
-        Err(refusal) => (None, Some(serde_json::to_string(refusal)?)),
-    };
-    sql.execute(
-        "INSERT INTO kernel_receipts (command, module, method, ok, refusal, at) VALUES (?1, ?2, ?3, ?4, ?5, ?6)",
-        params![command, module, method, ok, refusal, at],
-    )?;
-    Ok(())
+    fn keep(
+        &self,
+        sql: &Connection,
+        result: Result<&Value, &Refusal>,
+        at: i64,
+    ) -> Result<(), Error> {
+        let (ok, refusal) = match result {
+            Ok(value) => (Some(value.to_string()), None),
+            Err(refusal) => (None, Some(serde_json::to_string(refusal)?)),
+        };
+        sql.execute(
+            "INSERT INTO kernel_receipts (command, module, method, author_kind, author_id, ok, refusal, at)
+             VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+            params![
+                self.command,
+                self.module,
+                self.method,
+                self.author.kind(),
+                self.author.id(),
+                ok,
+                refusal,
+                at
+            ],
+        )?;
+        Ok(())
+    }
 }
 
 /// Applies the steps of `ledger` that this database has not seen, each in
@@ -419,7 +456,7 @@ fn migrate(sql: &mut Connection, ledger: &str, steps: &[&str]) -> Result<(), Err
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::{EventFilter, PersonId};
+    use crate::{Code, EventFilter, PersonId};
 
     fn store(dir: &tempfile::TempDir) -> Store {
         Store::open(
@@ -429,8 +466,17 @@ mod tests {
         .unwrap()
     }
 
-    fn author() -> Actor {
-        Actor::Person(PersonId::new())
+    fn author() -> Participant {
+        Participant::Person(PersonId::new())
+    }
+
+    fn receipt(command: CommandId, method: &str, author: Participant) -> Receipt {
+        Receipt {
+            command,
+            module: "notes",
+            method: method.to_owned(),
+            author,
+        }
     }
 
     #[tokio::test]
@@ -475,7 +521,7 @@ mod tests {
         let who = author();
         for _ in 0..2 {
             let result = store
-                .command("notes", command, "add".into(), move |tx| {
+                .command(receipt(command, "add", who), move |tx| {
                     tx.sql()
                         .execute("INSERT INTO notes_items (text) VALUES ('one')", [])?;
                     tx.emit("added", 1, None, who, &"one")?;
@@ -496,24 +542,74 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let store = store(&dir);
         let command = CommandId::new();
+        let who = author();
         let first = store
-            .command("notes", command, "add".into(), |_| {
+            .command(receipt(command, "add", who), |_| {
                 Err(Refusal::invalid("empty").into())
             })
             .await;
-        assert_eq!(first.unwrap_err().code, "invalid");
+        assert_eq!(first.unwrap_err().code, Code::Invalid);
         let again = store
-            .command("notes", command, "add".into(), |_| Ok(Value::from(1)))
+            .command(receipt(command, "add", who), |_| Ok(Value::from(1)))
             .await;
         assert_eq!(
             again.unwrap_err().code,
-            "invalid",
+            Code::Invalid,
             "the refusal is the command's answer"
         );
         let other = store
-            .command("notes", command, "remove".into(), |_| Ok(Value::Null))
+            .command(receipt(command, "remove", who), |_| Ok(Value::Null))
             .await;
-        assert_eq!(other.unwrap_err().code, "conflict");
+        assert_eq!(other.unwrap_err().code, Code::Conflict);
+        let someone_else = store
+            .command(receipt(command, "add", author()), |_| Ok(Value::Null))
+            .await;
+        assert_eq!(someone_else.unwrap_err().code, Code::Conflict);
+    }
+
+    #[tokio::test]
+    async fn a_refusal_before_the_command_is_its_answer_too() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = store(&dir);
+        let command = CommandId::new();
+        let who = author();
+        store
+            .refused(receipt(command, "add", who), Refusal::forbidden("no"))
+            .await
+            .unwrap();
+        let answer = store
+            .answered(receipt(command, "add", who))
+            .await
+            .unwrap()
+            .expect("an answer");
+        assert_eq!(answer.unwrap_err().code, Code::Forbidden);
+        let ran = store
+            .command(receipt(command, "add", who), |_| Ok(Value::from(1)))
+            .await;
+        assert_eq!(ran.unwrap_err().code, Code::Forbidden);
+    }
+
+    #[tokio::test]
+    async fn the_event_log_is_never_rewritten() {
+        let dir = tempfile::tempdir().unwrap();
+        let store = store(&dir);
+        let who = author();
+        store
+            .write("notes", move |tx| {
+                tx.emit("added", 1, None, who, &"kept")?;
+                Ok(())
+            })
+            .await
+            .unwrap();
+        for rewrite in [
+            "UPDATE kernel_events SET payload = '\"changed\"'",
+            "DELETE FROM kernel_events",
+        ] {
+            let refused = store
+                .write("notes", move |tx| Ok(tx.sql().execute(rewrite, [])?))
+                .await;
+            assert!(refused.is_err(), "{rewrite}");
+        }
     }
 
     #[tokio::test]
@@ -535,6 +631,6 @@ mod tests {
             .unwrap(),
         );
         let older = Store::open(&path, &[("notes", &[])]);
-        assert!(matches!(older, Err(Error::Refused(r)) if r.code == "conflict"));
+        assert!(matches!(older, Err(Error::Refused(r)) if r.code == Code::Conflict));
     }
 }
