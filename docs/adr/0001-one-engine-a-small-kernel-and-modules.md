@@ -74,6 +74,8 @@ code.
    Person's answer. It writes no command rules of its own. It never offers a
    Harness's own "always" answer, because that answer is written to files
    the Agent itself can change.
+   _Changed by ADR 0003, decision 9: a Question shows the "always" answers
+   too, and modes follow T3 Code._
 
 8. **Teams come later, but four rules hold from the start.** Every record
    has a global ID (UUIDv7) and an author, a Person or an Agent. Every
