@@ -57,7 +57,8 @@
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
   --radius-tile: var(--tile-radius);
-  --font-sans: "Inter Variable", sans-serif;
+  --font-sans: var(--font-family-sans);
+  --font-mono: var(--font-family-mono);
 }
 
 :root {
@@ -161,11 +162,20 @@
      default; the border shows the focus. */
   --focus-ring: 0px;
   --bar-height: 2.25rem;
+  /* [font]: the two families, and the root's size that makes the usual
+     text (text-sm) 14px. Everything measured in rem grows with it. */
+  --font-family-sans: "Inter Variable", sans-serif;
+  --font-family-mono: monospace;
+  --text-root: 16px;
 }
 
 @layer base {
   * {
     @apply border-border outline-ring/50;
+  }
+  html {
+    font-size: var(--text-root);
+    @apply font-sans;
   }
   body {
     @apply bg-background text-foreground;

@@ -13,7 +13,7 @@ import { problem as words } from "@bandaso/ui/lib/words"
 import { definePane, type PaneProps, PROGRAM_KEYS } from "@bandaso/ui/pane"
 import { RotateCcwIcon, SquareTerminalIcon } from "lucide-react"
 import { Input } from "./input"
-import { onThemeChange, themeOf } from "./theme"
+import { fontOf, onThemeChange, themeOf } from "./theme"
 
 /**
  * A terminal: the Person's shell in the Space's folder, or a program
@@ -203,6 +203,7 @@ function Screen({
     void (async () => {
       const made = await Surface.create(element, {
         theme: themeOf(element),
+        font: fontOf(element),
         onData: (data) => {
           if (running) input.type(data)
         },
@@ -228,9 +229,14 @@ function Screen({
       if (shell) void start().then(follow, fail)
       else follow()
     })()
-    const stopWatchingTheme = onThemeChange(() =>
+    let font = JSON.stringify(fontOf(element))
+    const stopWatchingTheme = onThemeChange(() => {
       drawn?.setTheme(themeOf(element))
-    )
+      const now = fontOf(element)
+      if (JSON.stringify(now) === font) return
+      font = JSON.stringify(now)
+      void drawn?.setFont(now)
+    })
     return () => {
       left = true
       stop()

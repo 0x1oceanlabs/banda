@@ -214,6 +214,19 @@ describe("focus and moves inside a workspace", () => {
     state = widen(widen(widen(widen(state, -1), -1), -1), -1)
     expect(current(state).columns[0].width).toBe("1/3")
   })
+
+  test("widths step through the look's presets, from any width", () => {
+    const presets = ["1/4", "3/5", "1"]
+    let state = open(start(), A, thread("t1"), { width: "1/2" })
+    state = widen(state, 1, presets)
+    expect(current(state).columns[0].width).toBe("3/5")
+    state = widen(widen(state, -1, presets), -1, presets)
+    expect(current(state).columns[0].width).toBe("1/4")
+    // A width kept from before, such as 2/5, survives a reload.
+    const kept = open(start(), A, thread("t2"), { width: "2/5" })
+    const back = parse(JSON.parse(JSON.stringify(kept)))!
+    expect(current(back).columns[0].width).toBe("2/5")
+  })
 })
 
 describe("closing", () => {

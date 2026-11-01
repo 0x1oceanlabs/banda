@@ -17,10 +17,22 @@ import type { PaneState, Place } from "@bandaso/ui/pane"
 /** One Pane on a workspace: what it shows, and the Space it belongs to. */
 export type Entry = { id: string; space: SpaceId; pane: PaneState }
 
-/** A column's share of the screen's width; Alt+Ctrl+Arrows step it. */
-export type Width = "1/3" | "1/2" | "2/3" | "1"
+/**
+ * A column's share of the screen's width, as a fraction such as `"1/3"`,
+ * or `"1"`. Alt+Ctrl+Arrows step it through the look's presets.
+ */
+export type Width = string
 
+/** niri's presets, and the look's until it says otherwise. */
 export const WIDTHS: readonly Width[] = ["1/3", "1/2", "2/3", "1"]
+
+/** A width's share of the screen, more than 0 and at most 1; `undefined`
+ * when it is no width. */
+export function share(width: Width): number | undefined {
+  const [top, bottom = "1"] = width.split("/")
+  const value = Number(top) / Number(bottom)
+  return Number.isFinite(value) && value > 0 && value <= 1 ? value : undefined
+}
 
 /** Panes one above another, sharing the column's height. */
 export type Column = {
@@ -353,13 +365,32 @@ export function shift(state: Workspaces, direction: Direction): Workspaces {
   })
 }
 
-/** Steps the focused column's width: wider or narrower. */
-export function widen(state: Workspaces, by: 1 | -1): Workspaces {
+/**
+ * Steps the focused column's width to the next of `presets`, wider or
+ * narrower, as niri does: from whatever width it has, the nearest preset
+ * past it.
+ */
+export function widen(
+  state: Workspaces,
+  by: 1 | -1,
+  presets: readonly Width[] = WIDTHS
+): Workspaces {
   const workspace = current(state)
   const column = workspace.columns[workspace.focus]
   if (!column) return state
-  const width = WIDTHS[clamp(WIDTHS.indexOf(column.width) + by, WIDTHS.length)]
-  if (width === column.width) return state
+  const now = share(column.width) ?? 0.5
+  const steps = presets
+    .map((width) => ({ width, at: share(width) }))
+    .filter(
+      (step): step is { width: Width; at: number } => step.at !== undefined
+    )
+    .sort((a, b) => a.at - b.at)
+  const next =
+    by > 0
+      ? steps.find((step) => step.at > now + 1e-6)
+      : steps.findLast((step) => step.at < now - 1e-6)
+  if (!next) return state
+  const width = next.width
   return setWorkspace(state, state.current, {
     ...workspace,
     columns: replace(workspace.columns, workspace.focus, { ...column, width }),
@@ -465,9 +496,10 @@ export function parse(value: unknown): Workspaces | null {
         return null
       const kept = column.entries.filter(isEntry)
       if (kept.length !== column.entries.length) return null
-      const width = WIDTHS.includes(column.width as Width)
-        ? (column.width as Width)
-        : "1/2"
+      const width =
+        typeof column.width === "string" && share(column.width) !== undefined
+          ? column.width
+          : "1/2"
       const active =
         typeof column.active === "number"
           ? clamp(column.active, kept.length)

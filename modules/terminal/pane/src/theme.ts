@@ -28,6 +28,22 @@ export function themeOf(element: HTMLElement): Theme {
   }
 }
 
+/** The terminal's font, as the look sets it (ADR 0007): `[font] mono`,
+ * at three quarters of the root's size, so `[font] size = 14` writes the
+ * terminal at 12px and grows it with the rest. */
+export function fontOf(element: HTMLElement): {
+  family?: string
+  size: number
+} {
+  const style = getComputedStyle(element)
+  const family = style.getPropertyValue("--font-family-mono").trim()
+  const root = parseFloat(style.getPropertyValue("--text-root")) || 16
+  return {
+    ...(family && { family }),
+    size: Math.round(root * 0.75 * 100) / 100,
+  }
+}
+
 let probe: CanvasRenderingContext2D | null = null
 
 function rgb(css: string): Color {

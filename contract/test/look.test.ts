@@ -3,7 +3,7 @@ import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { expect, test } from "vitest"
-import { DEFAULT_MOTION, type Look, shown } from "../src/look"
+import { DEFAULT_COLUMNS, DEFAULT_MOTION, type Look, shown } from "../src/look"
 import { DEFAULT_SIDEBAR } from "../src/sidebar"
 
 const look = (mode: Look["mode"], schemes: Look["schemes"]): Look => ({
@@ -11,6 +11,7 @@ const look = (mode: Look["mode"], schemes: Look["schemes"]): Look => ({
   schemes,
   vars: {},
   motion: DEFAULT_MOTION,
+  columns: DEFAULT_COLUMNS,
   sources: [],
   problems: [],
   sound: {
@@ -55,7 +56,7 @@ test("a theme with one scheme shows it whatever the system says", () => {
   })
 })
 
-test("the window's own motion is what bandaso look gives with no files", () => {
+test("the window's own motion and columns are what bandaso look gives with no files", () => {
   const repository = join(import.meta.dirname, "../..")
   const printed = execFileSync(
     join(repository, "target/debug/bandaso"),
@@ -65,10 +66,13 @@ test("the window's own motion is what bandaso look gives with no files", () => {
         ...process.env,
         BANDA_CONFIG: mkdtempSync(join(tmpdir(), "banda-look-")),
         BANDA_OMARCHY: "",
+        BANDA_FONTCONFIG: "",
         HYPRLAND_INSTANCE_SIGNATURE: "",
       },
       encoding: "utf8",
     }
   )
-  expect((JSON.parse(printed) as Look).motion).toEqual(DEFAULT_MOTION)
+  const look = JSON.parse(printed) as Look
+  expect(look.motion).toEqual(DEFAULT_MOTION)
+  expect(look.columns).toEqual(DEFAULT_COLUMNS)
 })

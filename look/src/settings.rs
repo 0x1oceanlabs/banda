@@ -2,6 +2,8 @@
 //! decision 2). Every key is optional: a layer says only what it changes,
 //! and [`Settings::over`] lays one layer over another.
 
+use crate::columns::ColumnsSettings;
+use crate::fonts::FontSettings;
 use crate::motion::MotionSettings;
 use crate::notify::NotifySettings;
 use crate::sound::SoundSettings;
@@ -36,6 +38,10 @@ pub struct Settings {
     pub bar: Bar,
     #[serde(default)]
     pub motion: MotionSettings,
+    #[serde(default)]
+    pub columns: ColumnsSettings,
+    #[serde(default)]
+    pub font: FontSettings,
     /// Banda's sounds (ADR 0009, decision 5).
     #[serde(default)]
     pub sound: SoundSettings,
@@ -189,6 +195,8 @@ impl Settings {
                 height: self.bar.height.or(under.bar.height),
             },
             motion: self.motion.over(under.motion),
+            columns: self.columns.over(under.columns),
+            font: self.font.over(under.font),
             sound: self.sound.over(under.sound),
             notify: self.notify.over(under.notify),
         }
@@ -218,6 +226,8 @@ impl Settings {
             },
             bar: Bar { height: Some(36.0) },
             motion: MotionSettings::defaults(),
+            columns: ColumnsSettings::defaults(),
+            font: FontSettings::defaults(),
             sound: SoundSettings::defaults(),
             notify: NotifySettings::default(),
         }

@@ -72,6 +72,7 @@ impl Machine {
                 config,
                 omarchy_current,
                 omarchy_themes: vec![omarchy_themes],
+                fontconfig: None,
             },
             _dir: dir,
         }
@@ -217,6 +218,34 @@ fn motion_comes_through_the_layers_slowed_and_checked() {
     let look = machine.look();
     let problem = &look.problems[0];
     assert_eq!((problem.line, problem.column), (Some(2), Some(20)));
+}
+
+#[test]
+fn columns_and_fonts_come_through_the_layers() {
+    let machine = Machine::new(false);
+    let look = machine.look();
+    assert_eq!(look.columns.presets, ["1/3", "1/2", "2/3", "1"]);
+    assert_eq!(look.vars["--font-family-mono"], "monospace");
+    assert_eq!(
+        look.vars["--font-family-sans"],
+        "\"Inter Variable\", sans-serif"
+    );
+    assert_eq!(look.vars["--text-root"], "16px");
+
+    machine.look_toml(
+        "[columns]\npresets = [\"1/4\", \"3/4\"]\ndefault = \"3/4\"\ncenter = \"always\"\n[font]\nmono = \"Iosevka\"\nsize = 12.25\n",
+    );
+    let look = machine.look();
+    assert!(look.problems.is_empty(), "{:?}", look.problems);
+    assert_eq!(look.columns.presets, ["1/4", "3/4"]);
+    assert_eq!(look.columns.default, "3/4");
+    assert_eq!(look.columns.center, bandaso_look::columns::Center::Always);
+    assert_eq!(look.vars["--font-family-mono"], "\"Iosevka\", monospace");
+    assert_eq!(look.vars["--text-root"], "14px");
+
+    machine.look_toml("[columns]\ndefault = \"wide\"\n");
+    let problem = &machine.look().problems[0];
+    assert_eq!((problem.line, problem.column), (Some(2), Some(11)));
 }
 
 #[test]

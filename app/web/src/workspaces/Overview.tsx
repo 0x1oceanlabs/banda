@@ -1,14 +1,7 @@
 import { useEffect, useRef } from "react"
 import type { SpaceId } from "@bandaso/contract"
 import { kindOf } from "../registry"
-import type { Width, Workspaces } from "./model"
-
-const SHARE: Record<Width, number> = {
-  "1/3": 1 / 3,
-  "1/2": 1 / 2,
-  "2/3": 2 / 3,
-  "1": 1,
-}
+import { share, type Workspaces } from "./model"
 
 /**
  * Every workspace zoomed out, one under another, as niri's overview: each
@@ -56,7 +49,7 @@ export function Overview({
       <ol className="mx-auto flex max-w-xl flex-col gap-4">
         {workspaces.list.map((workspace, i) => {
           const wide = workspace.columns.reduce(
-            (sum, column) => sum + SHARE[column.width],
+            (sum, column) => sum + (share(column.width) ?? 0.5),
             0
           )
           const fit = Math.max(1, wide)
@@ -87,7 +80,9 @@ export function Overview({
                   <div
                     key={column.id}
                     className="flex min-w-0 flex-col gap-1"
-                    style={{ width: `${(SHARE[column.width] / fit) * 100}%` }}
+                    style={{
+                      width: `${((share(column.width) ?? 0.5) / fit) * 100}%`,
+                    }}
                   >
                     {column.entries.map((entry) => {
                       const kind = kindOf(entry.pane.kind)

@@ -8,6 +8,7 @@ fn bandaso(config: &std::path::Path, args: &[&str]) -> Output {
         .args(args)
         .env("BANDA_CONFIG", config)
         .env("BANDA_OMARCHY", "")
+        .env("BANDA_FONTCONFIG", "")
         .env_remove("HYPRLAND_INSTANCE_SIGNATURE")
         .output()
         .expect("bandaso runs")

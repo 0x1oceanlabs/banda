@@ -76,6 +76,7 @@ export async function startWindow({
       // The look reads only its own folder: no Omarchy, no Hyprland.
       BANDA_CONFIG: join(dir, "look"),
       BANDA_OMARCHY: "",
+      BANDA_FONTCONFIG: "",
       HYPRLAND_INSTANCE_SIGNATURE: "",
       BANDASO_LOG: "warn",
       // Notices go to a list the tests read, never to the Person's screen.

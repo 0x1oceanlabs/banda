@@ -8,6 +8,7 @@ import { NEW_THREAD, threadPane } from "@bandaso/agents-pane"
 import { type PaneState, paneOf, type Place } from "@bandaso/ui/pane"
 import type { Action } from "../actions/actions"
 import { showing } from "../calls/sight"
+import { columnsOf } from "../look"
 import { launcher, showsOf, widthOf } from "../registry"
 import {
   close,
@@ -96,13 +97,13 @@ export const ACTIONS: readonly Action<Shell>[] = [
     id: "column.wider",
     title: "Make the column wider",
     key: { code: "ArrowRight", alt: true, ctrl: true },
-    run: (shell) => shell.change((w) => widen(w, 1)),
+    run: (shell) => shell.change((w) => widen(w, 1, columnsOf().presets)),
   },
   {
     id: "column.narrower",
     title: "Make the column narrower",
     key: { code: "ArrowLeft", alt: true, ctrl: true },
-    run: (shell) => shell.change((w) => widen(w, -1)),
+    run: (shell) => shell.change((w) => widen(w, -1, columnsOf().presets)),
   },
   {
     id: "thread.new",
