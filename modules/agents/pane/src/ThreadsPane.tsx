@@ -10,7 +10,7 @@ import {
   paneOf,
 } from "@bandaso/ui/pane"
 import { MessagesSquareIcon } from "lucide-react"
-import { AGENTS_FILTER, applyAgents, readAgents } from "./agents"
+import { applyThreads, readThreads, THREADS_FILTER } from "./list"
 import { threadPane } from "./ThreadPane"
 
 type NoArgs = { [key: string]: JsonValue }
@@ -37,9 +37,9 @@ function placeOf(event: React.MouseEvent): Place | undefined {
 function ThreadsPane({ engine, space, open }: PaneProps<NoArgs>) {
   const source = useMemo(
     () => ({
-      read: () => readAgents(engine, space),
-      filter: AGENTS_FILTER,
-      apply: applyAgents,
+      read: () => readThreads(engine, space),
+      filter: THREADS_FILTER,
+      apply: applyThreads,
     }),
     [engine, space]
   )
@@ -59,7 +59,7 @@ function ThreadsPane({ engine, space, open }: PaneProps<NoArgs>) {
       </p>
     )
   }
-  const { agents, threads } = live.view
+  const { threads } = live.view
   if (threads.length === 0) {
     return (
       <p className="px-2 py-1 text-xs text-muted-foreground">No Threads yet</p>
@@ -67,33 +67,29 @@ function ThreadsPane({ engine, space, open }: PaneProps<NoArgs>) {
   }
   return (
     <ul className="flex flex-col">
-      {threads.map((thread) => {
-        const agent = agents.find((agent) => agent.id === thread.agent)
-        const name = agent?.name ?? "Agent"
-        return (
-          <li key={thread.id}>
-            <button
-              type="button"
-              className="flex w-full min-w-0 items-center gap-2 rounded-md px-2 py-1 text-left text-sm text-muted-foreground transition-colors outline-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
-              onClick={(event) =>
-                open(
-                  paneOf(threadPane, {
-                    agent: thread.agent,
-                    name,
-                    thread: thread.id,
-                  }),
-                  placeOf(event)
-                )
-              }
-            >
-              <span className="min-w-0 flex-1 truncate">{thread.title}</span>
-              <span className="shrink-0 text-xs tabular-nums">
-                {ago(thread.updated_at)}
-              </span>
-            </button>
-          </li>
-        )
-      })}
+      {threads.map((thread) => (
+        <li key={thread.id}>
+          <button
+            type="button"
+            className="flex w-full min-w-0 items-center gap-2 rounded-md px-2 py-1 text-left text-sm text-muted-foreground transition-colors outline-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
+            onClick={(event) =>
+              open(
+                paneOf(threadPane, {
+                  thread: thread.id,
+                  harness: thread.harness,
+                  title: thread.title,
+                }),
+                placeOf(event)
+              )
+            }
+          >
+            <span className="min-w-0 flex-1 truncate">{thread.title}</span>
+            <span className="shrink-0 text-xs tabular-nums">
+              {ago(thread.updated_at)}
+            </span>
+          </button>
+        </li>
+      ))}
     </ul>
   )
 }

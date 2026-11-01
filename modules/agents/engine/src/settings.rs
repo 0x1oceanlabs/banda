@@ -1,16 +1,15 @@
 //! The agents module's settings are text files that people and Agents edit
-//! (ADR 0002, decision 1):
+//! (ADR 0002, decision 1): the Harness list, one per machine, says which
+//! agent programs it can start.
 //!
-//! - the Harness list, one per machine: which agent programs it can start;
-//! - one file per Agent, in the Space: `.bandaso/agents/<name>.toml`, with
-//!   the Agent's ID and its Harness. The file's name is the Agent's name.
-//!   It may also hold what the Agent's new Threads start with: `mode`
-//!   (`supervised`, `accept_edits`, `auto` or `full_access`), `plan`, and
-//!   the Harness's options by their IDs in `[options]`, such as `model`.
+//! Before ADR 0006 a Space also had one file per Agent,
+//! `.bandaso/agents/<name>.toml`, naming the Agent's Harness. Only
+//! [`old_agents`] reads them still, so the Threads from then learn their
+//! Harness; nothing writes them, and nothing removes them.
 
-use crate::model::{AgentView, HarnessView, Program, Settings};
-use bandaso_kernel::{AgentId, Error, Refusal};
-use serde::{Deserialize, Serialize};
+use crate::model::{HarnessView, Program};
+use bandaso_kernel::{AgentId, Error};
+use serde::Deserialize;
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -150,22 +149,19 @@ impl Harnesses {
     }
 }
 
-#[derive(Serialize, Deserialize)]
+/// What an Agent's file from before ADR 0006 says: who it was and its
+/// Harness. Anything else it holds is left as it is.
+#[derive(Deserialize)]
 struct AgentFile {
     id: AgentId,
     harness: String,
-    #[serde(flatten)]
-    settings: Settings,
 }
 
-fn folder(space: &Path) -> PathBuf {
-    space.join(".bandaso").join("agents")
-}
-
-/// The Agents of a Space, by name. A file that does not parse is logged
-/// and skipped, so one bad edit hides one Agent, not all of them.
-pub fn agents(space: &Path) -> Result<Vec<AgentView>, Error> {
-    let entries = match std::fs::read_dir(folder(space)) {
+/// Each old Agent of a Space and its Harness. A file that does not parse
+/// is logged and skipped.
+pub fn old_agents(space: &Path) -> Result<Vec<(AgentId, String)>, Error> {
+    let folder = space.join(".bandaso").join("agents");
+    let entries = match std::fs::read_dir(&folder) {
         Ok(entries) => entries,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
         Err(error) => return Err(error.into()),
@@ -173,77 +169,20 @@ pub fn agents(space: &Path) -> Result<Vec<AgentView>, Error> {
     let mut agents = Vec::new();
     for entry in entries {
         let path = entry?.path();
-        let Some(name) = path
-            .extension()
-            .is_some_and(|e| e == "toml")
-            .then(|| path.file_stem().and_then(|s| s.to_str()))
-            .flatten()
-        else {
+        if path.extension().is_none_or(|e| e != "toml") {
             continue;
-        };
+        }
         let parsed = std::fs::read_to_string(&path)
             .map_err(|e| e.to_string())
             .and_then(|text| toml::from_str::<AgentFile>(&text).map_err(|e| e.to_string()));
         match parsed {
-            Ok(file) => agents.push(AgentView {
-                id: file.id,
-                name: name.to_owned(),
-                harness: file.harness,
-                settings: file.settings,
-            }),
+            Ok(file) => agents.push((file.id, file.harness)),
             Err(error) => {
-                tracing::warn!(file = %path.display(), %error, "an Agent's file does not parse")
+                tracing::warn!(file = %path.display(), %error, "an old Agent's file does not parse")
             }
         }
     }
-    agents.sort_by(|a, b| a.name.cmp(&b.name));
     Ok(agents)
-}
-
-pub fn agent(space: &Path, id: AgentId) -> Result<AgentView, Refusal> {
-    agents(space)?
-        .into_iter()
-        .find(|a| a.id == id)
-        .ok_or_else(|| Refusal::not_found("There is no such Agent in this Space."))
-}
-
-/// Writes a new Agent's file. Its name is a plain name that no other Agent
-/// of the Space has.
-pub fn create(space: &Path, name: &str, harness: &str) -> Result<AgentView, Error> {
-    let name = bandaso_kernel::plain_name(name).ok_or_else(|| {
-        Refusal::invalid(
-            "An Agent's name is 1 to 64 characters, with no slashes and no leading dot.",
-        )
-    })?;
-    let id = AgentId::new();
-    // A new Agent's file names only what it must: its Threads start as
-    // every Thread does until someone writes otherwise.
-    #[derive(Serialize)]
-    struct NewFile<'a> {
-        id: AgentId,
-        harness: &'a str,
-    }
-    let text = toml::to_string(&NewFile { id, harness })
-        .map_err(|e| Error::Io(std::io::Error::other(e)))?;
-    std::fs::create_dir_all(folder(space))?;
-    let path = folder(space).join(format!("{name}.toml"));
-    let mut file = match std::fs::File::create_new(&path) {
-        Ok(file) => file,
-        Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
-            return Err(Refusal::conflict(format!(
-                "This Space already has an Agent named {name}."
-            ))
-            .into());
-        }
-        Err(error) => return Err(error.into()),
-    };
-    std::io::Write::write_all(&mut file, text.as_bytes())?;
-    Ok(AgentView {
-        id,
-        name: name.to_owned(),
-        harness: harness.to_owned(),
-        settings: Settings::default(),
-    })
 }
 
 #[cfg(test)]
@@ -269,38 +208,19 @@ mod tests {
     }
 
     #[test]
-    fn agents_are_files_that_keep_their_id() {
+    fn old_agent_files_name_their_harness() {
         let space = tempfile::tempdir().unwrap();
-        let made = create(space.path(), " Writer ", "claude").unwrap();
-        assert_eq!(made.name, "Writer");
-        assert!(space.path().join(".bandaso/agents/Writer.toml").is_file());
-        assert_eq!(agents(space.path()).unwrap(), vec![made.clone()]);
-        assert_eq!(agent(space.path(), made.id).unwrap(), made);
-
-        let path = space.path().join(".bandaso/agents/Writer.toml");
-        let text = std::fs::read_to_string(&path).unwrap();
-        let more =
-            "mode = \"supervised\"\nplan = true\n\n[options]\nmodel = \"smart\"\nbrief = true\n";
-        std::fs::write(&path, format!("{text}{more}")).unwrap();
-        let settings = agent(space.path(), made.id).unwrap().settings;
-        assert_eq!(settings.mode, crate::model::Mode::Supervised);
-        assert!(settings.plan);
+        assert!(old_agents(space.path()).unwrap().is_empty());
+        let folder = space.path().join(".bandaso/agents");
+        std::fs::create_dir_all(&folder).unwrap();
+        let id = AgentId::new();
+        let text = format!("id = \"{id}\"\nharness = \"codex\"\nmode = \"supervised\"\n");
+        std::fs::write(folder.join("Writer.toml"), text).unwrap();
+        std::fs::write(folder.join("Broken.toml"), "id = 3").unwrap();
+        std::fs::write(folder.join("notes.txt"), "not an Agent").unwrap();
         assert_eq!(
-            settings.options.get("model"),
-            Some(&crate::model::OptionValue::Choice("smart".into()))
-        );
-        assert_eq!(
-            settings.options.get("brief"),
-            Some(&crate::model::OptionValue::Toggle(true))
-        );
-
-        let twin = create(space.path(), "Writer", "codex").unwrap_err();
-        assert!(matches!(twin, Error::Refused(r) if r.code == bandaso_kernel::Code::Conflict));
-        std::fs::write(space.path().join(".bandaso/agents/Broken.toml"), "id = 3").unwrap();
-        assert_eq!(
-            agents(space.path()).unwrap().len(),
-            1,
-            "a bad file hides only itself"
+            old_agents(space.path()).unwrap(),
+            vec![(id, "codex".to_owned())]
         );
     }
 }

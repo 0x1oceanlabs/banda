@@ -116,17 +116,6 @@ fn a_script_drives_an_agent_through_the_engine_a_window_started() {
 
     let space = places.ok("spaces.create", None, json!({ "name": "Work" }));
     let space = text(&space["id"]);
-    let agent = places.ok(
-        "agents.create",
-        Some(space),
-        json!({ "name": "Writer", "harness": "fake" }),
-    );
-    assert!(
-        places
-            .root
-            .join("Work/.bandaso/agents/Writer.toml")
-            .exists()
-    );
 
     let refused = places.call("agents.thread", Some(space), json!({}));
     assert_eq!(refusal(&refused), "invalid");
@@ -152,7 +141,7 @@ fn a_script_drives_an_agent_through_the_engine_a_window_started() {
     let sent = places.ok(
         "agents.send",
         Some(space),
-        json!({ "agent": agent["id"], "text": "hello" }),
+        json!({ "harness": "fake", "text": "hello" }),
     );
     let mut kinds = Vec::new();
     while kinds.last().map(String::as_str) != Some("turn.ended") {
@@ -166,7 +155,6 @@ fn a_script_drives_an_agent_through_the_engine_a_window_started() {
     assert_eq!(
         kinds,
         [
-            "agent.created",
             "thread.started",
             "message.posted",
             "turn.started",

@@ -113,11 +113,6 @@ test("a window calls, follows and sees refusals by their code", async () => {
   await expect(refused).rejects.toBeInstanceOf(Refused)
   await expect(refused).rejects.toMatchObject({ refusal: { code: "invalid" } })
 
-  const agent = await client.command<{ id: string }>(
-    "agents.create",
-    { name: "Writer", harness: "fake" },
-    space.id
-  )
   const kinds: string[] = []
   const ended = new Promise<void>((done) =>
     client!.follow(
@@ -134,12 +129,11 @@ test("a window calls, follows and sees refusals by their code", async () => {
   )
   await client.command<Sent>(
     "agents.send",
-    { agent: agent.id, text: "hello" },
+    { harness: "fake", text: "hello" },
     space.id
   )
   await ended
   expect(kinds).toEqual([
-    "agent.created",
     "thread.started",
     "message.posted",
     "turn.started",
@@ -160,13 +154,13 @@ test("a subscription goes on after the engine restarts, without a gap", async ()
   client.follow(
     space.id,
     0,
-    {},
+    { module: "agents", kinds: ["thread.started"] },
     (event) => heard.push(event.kind),
     () => {}
   )
   await client.command(
-    "agents.create",
-    { name: "One", harness: "fake" },
+    "agents.send",
+    { harness: "fake", text: "one" },
     space.id
   )
 
@@ -176,11 +170,11 @@ test("a subscription goes on after the engine restarts, without a gap", async ()
   await until(client, "open")
 
   await client.command(
-    "agents.create",
-    { name: "Two", harness: "fake" },
+    "agents.send",
+    { harness: "fake", text: "two" },
     space.id
   )
-  await expect.poll(() => heard).toEqual(["agent.created", "agent.created"])
+  await expect.poll(() => heard).toEqual(["thread.started", "thread.started"])
 })
 
 test("a window runs a terminal and hears what it prints, until it closes", async () => {

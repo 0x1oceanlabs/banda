@@ -56,7 +56,8 @@ struct World {
     kernel: Arc<Kernel>,
     owner: PersonId,
     space: SpaceId,
-    agent: AgentId,
+    /// What a new Thread starts on.
+    harness: String,
 }
 
 impl World {
@@ -80,7 +81,7 @@ impl World {
         World::new_on(root, agents, "fake").await
     }
 
-    /// A Space with the Agent "Writer" on `harness`.
+    /// A Space whose new Threads start on `harness`.
     async fn new_on(root: &Path, agents: Agents, harness: &str) -> World {
         let owner = PersonId::new();
         let kernel = World::open_with(root, owner, agents).await;
@@ -96,27 +97,22 @@ impl World {
             .await
             .unwrap();
         let space: SpaceId = serde_json::from_value(space["id"].clone()).unwrap();
-        let agent = kernel
-            .call(
-                person,
-                "agents.create",
-                Some(space),
-                Some(CommandId::new()),
-                json!({ "name": "Writer", "harness": harness }),
-            )
-            .await
-            .unwrap();
-        let agent: AgentId = serde_json::from_value(agent["id"].clone()).unwrap();
         World {
             kernel,
             owner,
             space,
-            agent,
+            harness: harness.to_owned(),
         }
     }
 
     fn person(&self) -> Participant {
         Participant::Person(self.owner)
+    }
+
+    /// An Agent. What the kernel refuses an Agent, it refuses whichever
+    /// Thread the Agent works in.
+    fn agent(&self) -> Participant {
+        Participant::Agent(AgentId::new())
     }
 
     async fn call(
@@ -137,9 +133,10 @@ impl World {
     }
 
     async fn send(&self, thread: Option<&Value>, text: &str) -> Value {
-        let mut params = json!({ "agent": self.agent, "text": text });
-        if let Some(thread) = thread {
-            params["thread"] = thread.clone();
+        let mut params = json!({ "text": text });
+        match thread {
+            Some(thread) => params["thread"] = thread.clone(),
+            None => params["harness"] = json!(self.harness),
         }
         self.call(self.person(), "agents.send", params)
             .await
@@ -253,7 +250,7 @@ async fn a_message_gets_the_agents_reply() {
             "message: You said: hello there",
         ]
     );
-    assert_eq!(view.items[2].author, Participant::Agent(world.agent));
+    assert!(matches!(view.items[2].author, Participant::Agent(_)));
 
     let space = world.kernel.space(world.space).await.unwrap();
     let kinds: Vec<String> = space
@@ -266,7 +263,6 @@ async fn a_message_gets_the_agents_reply() {
     assert_eq!(
         kinds,
         [
-            "agent.created",
             "thread.started",
             "message.posted",
             "turn.started",
@@ -306,7 +302,7 @@ async fn a_question_waits_for_a_person_and_offers_every_answer_of_the_harness() 
 
     let by_agent = world
         .call(
-            Participant::Agent(world.agent),
+            world.agent(),
             "agents.answer",
             json!({ "item": question.id, "choice": "allow" }),
         )
@@ -442,25 +438,47 @@ async fn a_harness_that_dies_fails_its_turn_and_the_next_turn_starts_it_again() 
     );
 }
 
-#[tokio::test]
-async fn an_agent_on_a_harness_this_computer_lacks_fails_plainly() {
+#[test]
+fn a_thread_on_a_harness_this_computer_lacks_fails_plainly() {
     let root = tempfile::tempdir().unwrap();
-    let world = World::new(root.path()).await;
-    let file = root.path().join("Work/.bandaso/agents/Writer.toml");
-    let text = std::fs::read_to_string(&file)
-        .unwrap()
-        .replace("\"fake\"", "\"elsewhere\"");
-    std::fs::write(&file, text).unwrap();
-    let sent = world.send(None, "hello").await;
-    let view = world
-        .until(&sent["thread"], |v| {
-            state(v, &sent["turn"]) == Some(TurnState::Failed)
-        })
-        .await;
-    assert_eq!(
-        view.turns[0].reason.as_deref(),
-        Some("This computer has no Harness named \"elsewhere\".")
-    );
+    let runtime = || tokio::runtime::Runtime::new().unwrap();
+    let first = runtime();
+    let (owner, space, thread) = first.block_on(async {
+        let world = World::new(root.path()).await;
+        let params = json!({ "harness": "elsewhere", "text": "hello" });
+        let refused = world
+            .call(world.person(), "agents.send", params)
+            .await
+            .unwrap_err();
+        assert_eq!(
+            refused.message,
+            "This computer has no Harness named \"elsewhere\"."
+        );
+        let (thread, _) = world.finish(None, "hello").await;
+        (world.owner, world.space, thread)
+    });
+    first.shutdown_timeout(Duration::from_secs(5));
+    runtime().block_on(async {
+        // The machine's list lost the Harness the Thread started on.
+        let none = Agents::new(Harnesses::new(Vec::new()));
+        let kernel = World::open_with(root.path(), owner, none).await;
+        let world = World {
+            kernel,
+            owner,
+            space,
+            harness: "fake".to_owned(),
+        };
+        let sent = world.send(Some(&thread), "again").await;
+        let view = world
+            .until(&thread, |v| {
+                state(v, &sent["turn"]) == Some(TurnState::Failed)
+            })
+            .await;
+        assert_eq!(
+            view.turns[1].reason.as_deref(),
+            Some("This computer has no Harness named \"fake\".")
+        );
+    });
 }
 
 #[test]
@@ -557,10 +575,10 @@ fn across_a_restart<T>(
 ) {
     let runtime = || tokio::runtime::Runtime::new().unwrap();
     let first = runtime();
-    let (owner, space, agent, kept) = first.block_on(async {
+    let (owner, space, harness, kept) = first.block_on(async {
         let world = World::new_with(root, agents()).await;
         let kept = before(&world).await;
-        (world.owner, world.space, world.agent, kept)
+        (world.owner, world.space, world.harness.clone(), kept)
     });
     first.shutdown_timeout(Duration::from_secs(5));
     runtime().block_on(async {
@@ -569,7 +587,7 @@ fn across_a_restart<T>(
             kernel,
             owner,
             space,
-            agent,
+            harness,
         };
         after(&world, kept).await;
     });
@@ -892,7 +910,7 @@ async fn a_harness_signs_in_by_itself_for_a_person_only() {
     let world = signed_out(root.path(), home.path()).await;
     let (sent, _) = failing(&world, "hello").await;
 
-    let agent = Participant::Agent(world.agent);
+    let agent = world.agent();
     let refused = world.sign_in(agent, "fake-browser").await.unwrap_err();
     assert_eq!(refused.code, Code::Forbidden);
     let refused = world
@@ -929,7 +947,7 @@ async fn a_harness_says_who_is_signed_in_and_signs_out() {
     assert_eq!(signed_in["email"], "person@example.invalid");
 
     let sign_out = |who| world.call(who, "agents.sign_out", json!({ "harness": "fake" }));
-    let refused = sign_out(Participant::Agent(world.agent)).await.unwrap_err();
+    let refused = sign_out(world.agent()).await.unwrap_err();
     assert_eq!(refused.code, Code::Forbidden);
     sign_out(world.person()).await.unwrap();
     let account = world.account().await;
@@ -1054,7 +1072,7 @@ async fn a_harness_that_does_not_report_shows_no_one() {
 
 impl World {
     async fn defaults(&self) -> Value {
-        let params = json!({ "agent": self.agent });
+        let params = json!({ "harness": self.harness });
         self.call(self.person(), "agents.defaults", params)
             .await
             .unwrap()
@@ -1177,22 +1195,27 @@ async fn without_modes_of_its_own_a_harness_is_answered_by_the_threads_mode() {
 }
 
 #[tokio::test]
-async fn an_agents_file_holds_what_its_new_threads_start_with() {
+async fn a_new_thread_starts_with_full_access_and_what_its_harness_offers() {
     let root = tempfile::tempdir().unwrap();
     let world = World::new(root.path()).await;
     let first = world.defaults().await;
     assert_eq!(first["settings"]["mode"], "full_access");
     assert_eq!(first["offer"]["options"], json!([]), "nothing offered yet");
 
-    let space = world.kernel.space(world.space).await.unwrap();
-    let file = space.folder().join(".bandaso/agents/Writer.toml");
-    let text = std::fs::read_to_string(&file).unwrap();
-    std::fs::write(
-        &file,
-        format!("{text}mode = \"auto\"\n\n[options]\nmodel = \"smart\"\n"),
-    )
-    .unwrap();
-    let (_, view) = world.finish(None, "which settings").await;
+    let params = json!({
+        "harness": world.harness,
+        "text": "which settings",
+        "settings": { "mode": "auto", "options": { "model": "smart" } },
+    });
+    let sent = world
+        .call(world.person(), "agents.send", params)
+        .await
+        .unwrap();
+    let view = world
+        .until(&sent["thread"], |v| {
+            state(v, &sent["turn"]) == Some(TurnState::Done)
+        })
+        .await;
     assert_eq!(view.settings.mode, Mode::Auto);
     assert_eq!(
         last_reply(&view),
@@ -1200,16 +1223,25 @@ async fn an_agents_file_holds_what_its_new_threads_start_with() {
     );
 
     let after = world.defaults().await;
-    assert_eq!(after["settings"]["mode"], "auto");
-    assert_eq!(
-        after["offer"]["options"][0]["id"], "model",
-        "what the Harness offered"
-    );
-    assert_eq!(
-        after["settings"]["options"],
-        json!({ "model": "smart", "brief": false }),
-        "what the composer shows is what a new Thread gets"
-    );
+    assert_eq!(after["settings"]["mode"], "full_access", "a Thread's own");
+    let offered = after["offer"]["options"].as_array().unwrap();
+    assert_eq!(offered[0]["id"], "model", "what the Harness offered");
+    for option in offered {
+        assert_eq!(
+            after["settings"]["options"][option["id"].as_str().unwrap()],
+            option["value"],
+            "what the composer shows is what a new Thread gets"
+        );
+    }
+    let elsewhere = world
+        .call(
+            world.person(),
+            "agents.defaults",
+            json!({ "harness": "elsewhere" }),
+        )
+        .await
+        .unwrap_err();
+    assert_eq!(elsewhere.code, Code::Invalid);
 }
 
 #[tokio::test]
@@ -1223,7 +1255,6 @@ async fn a_message_runs_with_the_settings_it_was_sent_with() {
         .await;
     let supervised = world.send(Some(&thread), "which settings").await;
     let params = json!({
-        "agent": world.agent,
         "thread": thread,
         "text": "which settings",
         "settings": { "mode": "full_access" },
@@ -1268,7 +1299,7 @@ async fn only_a_person_chooses_how_freely_an_agent_acts() {
     let root = tempfile::tempdir().unwrap();
     let world = World::new(root.path()).await;
     let (thread, _) = world.finish(None, "hello").await;
-    let agent = Participant::Agent(world.agent);
+    let agent = world.agent();
     let settings = json!({ "mode": "full_access" });
     let configured = world
         .call(
@@ -1279,14 +1310,13 @@ async fn only_a_person_chooses_how_freely_an_agent_acts() {
         .await;
     assert_eq!(configured.unwrap_err().code, Code::Forbidden);
     let params = json!({
-        "agent": world.agent,
         "thread": thread,
         "text": "go on",
         "settings": settings,
     });
     let sent = world.call(agent, "agents.send", params).await;
     assert_eq!(sent.unwrap_err().code, Code::Forbidden);
-    let params = json!({ "agent": world.agent, "thread": thread, "text": "go on" });
+    let params = json!({ "thread": thread, "text": "go on" });
     world.call(agent, "agents.send", params).await.unwrap();
 }
 
@@ -1570,7 +1600,7 @@ impl World {
 
     async fn send_images(&self, text: &str, images: &[&Value]) -> Value {
         let ids: Vec<&Value> = images.iter().map(|image| &image["id"]).collect();
-        let params = json!({ "agent": self.agent, "text": text, "images": ids });
+        let params = json!({ "harness": self.harness, "text": text, "images": ids });
         self.call(self.person(), "agents.send", params)
             .await
             .unwrap()
@@ -1660,14 +1690,15 @@ async fn an_image_goes_only_as_what_it_is_and_with_one_message() {
         .attach(world.person(), "image/png", PNG, None)
         .await
         .unwrap();
-    let twice = json!({ "agent": world.agent, "text": "one", "images": [shot["id"], shot["id"]] });
+    let twice =
+        json!({ "harness": world.harness, "text": "one", "images": [shot["id"], shot["id"]] });
     let refused = world
         .call(world.person(), "agents.send", twice)
         .await
         .unwrap_err();
     assert_eq!(refused.message, "A message carries each image once.");
     world.send_images("one", &[&shot]).await;
-    let again = json!({ "agent": world.agent, "text": "two", "images": [shot["id"]] });
+    let again = json!({ "harness": world.harness, "text": "two", "images": [shot["id"]] });
     let refused = world
         .call(world.person(), "agents.send", again)
         .await
@@ -1676,10 +1707,10 @@ async fn an_image_goes_only_as_what_it_is_and_with_one_message() {
 
     // An image someone else added is not this Person's to send.
     let theirs = world
-        .attach(Participant::Agent(world.agent), "image/png", PNG, None)
+        .attach(world.agent(), "image/png", PNG, None)
         .await
         .unwrap();
-    let send = json!({ "agent": world.agent, "text": "three", "images": [theirs["id"]] });
+    let send = json!({ "harness": world.harness, "text": "three", "images": [theirs["id"]] });
     assert!(
         world
             .call(world.person(), "agents.send", send)
@@ -1740,7 +1771,7 @@ async fn an_image_whose_file_is_gone_is_left_out_and_said() {
 impl World {
     /// Sends `text` into the Thread's running turn, if one runs.
     async fn steer(&self, thread: &Value, text: &str) -> Value {
-        let params = json!({ "agent": self.agent, "thread": thread, "text": text, "steer": true });
+        let params = json!({ "thread": thread, "text": text, "steer": true });
         self.call(self.person(), "agents.send", params)
             .await
             .unwrap()
@@ -2047,7 +2078,7 @@ async fn what_a_harness_does_by_itself_shows_in_a_turn_of_the_agents_own() {
         [
             "message: background",
             "message: Started a task.",
-            "notice: Writer went on by itself.",
+            "notice: Fake went on by itself.",
             "message: The task finished.",
         ]
     );
@@ -2370,17 +2401,21 @@ fn recording(harness: &str) -> PathBuf {
 }
 
 impl World {
-    /// Has the Writer do [`EDIT`] to a notes.txt that holds "apples" in a
+    /// Has an Agent do [`EDIT`] to a notes.txt that holds "apples" in a
     /// supervised Thread, allowing each Question once, and waits up to
     /// `limit` for each step.
     async fn edit(&self, limit: Duration) -> ThreadView {
         let space = self.kernel.space(self.space).await.unwrap();
         std::fs::write(space.folder().join("notes.txt"), "apples\n").unwrap();
-        let file = space.folder().join(".bandaso/agents/Writer.toml");
-        let text = std::fs::read_to_string(&file).unwrap();
-        std::fs::write(&file, format!("{text}mode = \"supervised\"\n")).unwrap();
-
-        let sent = self.send(None, EDIT).await;
+        let params = json!({
+            "harness": self.harness,
+            "text": EDIT,
+            "settings": { "mode": "supervised" },
+        });
+        let sent = self
+            .call(self.person(), "agents.send", params)
+            .await
+            .unwrap();
         let (thread, turn) = (&sent["thread"], &sent["turn"]);
         loop {
             let view = self

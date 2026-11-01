@@ -1,13 +1,7 @@
 import { useCallback, useState } from "react"
-import {
-  type AgentId,
-  type Engine,
-  newId,
-  type SpaceId,
-} from "@bandaso/contract"
+import { type Engine, newId, type SpaceId } from "@bandaso/contract"
 import type {
   Account,
-  AgentView,
   Program,
   SignInWay,
   TurnId,
@@ -31,7 +25,7 @@ import { commandLine } from "./sign-in"
 export type Open = PaneProps<unknown>["open"]
 
 /**
- * Signing in to an Agent's Harness, from a turn that failed because its
+ * Signing in to a Thread's Harness, from a turn that failed because its
  * Person must: the ways the Harness offers. One it does by itself, as
  * Codex does in the browser, signs in at a click; one in a terminal runs
  * in a terminal Pane, and its program ending well says it worked. Then
@@ -40,46 +34,33 @@ export type Open = PaneProps<unknown>["open"]
 export function SignIn({
   engine,
   space,
-  agent,
+  harness,
   turn,
   open,
   onSignedIn,
 }: {
   engine: Engine
   space: SpaceId
-  agent: AgentId
+  harness: string
   turn: TurnId
   open: Open
   onSignedIn: () => void
 }) {
   const found = useRead(
-    useCallback(async () => {
-      const agents = await engine.call<AgentView[]>(
-        "agents.list",
-        {},
-        { space }
-      )
-      const harness = agents.find((a) => a.id === agent)?.harness
-      if (harness === undefined) return null
-      const account = await engine.call<Account>(
-        "agents.account",
-        { harness },
-        { space }
-      )
-      return { harness, ways: account.ways }
-    }, [engine, space, agent])
+    useCallback(
+      () => engine.call<Account>("agents.account", { harness }, { space }),
+      [engine, space, harness]
+    )
   )
   if (found.state === "loading") return <Spinner />
   if (found.state === "refused")
     return <Problem>{found.refusal.message}</Problem>
-  if (found.value === null) return null
-  const { harness, ways } = found.value
   return (
     <Ways
       engine={engine}
       space={space}
       harness={harness}
-      ways={ways}
+      ways={found.value.ways}
       turn={turn}
       open={open}
       onSignedIn={onSignedIn}

@@ -19,6 +19,10 @@ import {
 export type ThreadState = {
   /** The last position in the Space's log this state includes. */
   at: number
+  /** The start of its first message. */
+  title: string
+  /** The Harness it runs on, by its ID. */
+  harness: string
   items: Item[]
   turns: TurnView[]
   settings: Settings
@@ -45,6 +49,8 @@ export const NO_OFFER: Offer = {
 
 export const EMPTY: ThreadState = {
   at: 0,
+  title: "",
+  harness: "",
   items: [],
   turns: [],
   settings: DEFAULT_SETTINGS,
@@ -54,7 +60,8 @@ export const EMPTY: ThreadState = {
 
 export function fromView(view: ThreadView): ThreadState {
   const { at, items, turns, settings, offer, usage, held } = view
-  return { at, items, turns, settings, offer, usage, held }
+  const { title, harness } = view.thread
+  return { at, title, harness, items, turns, settings, offer, usage, held }
 }
 
 /** The value a Thread runs `option` with: its own choice, or else the
@@ -316,9 +323,12 @@ export function apply(state: ThreadState, event: Event): ThreadState {
       return { ...next, settings: fact.payload.settings }
     case "thread.offered":
       return { ...next, offer: fact.payload.offer }
-    case "agent.created":
     case "thread.started":
-      return next
+      return {
+        ...next,
+        title: fact.payload.title,
+        harness: fact.payload.harness ?? next.harness,
+      }
   }
 }
 

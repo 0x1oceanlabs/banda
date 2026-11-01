@@ -3,8 +3,8 @@ import type { Offer } from "./Offer";
 import type { Settings } from "./Settings";
 
 /**
- * What `agents.defaults` answers: what an Agent's new Threads start with,
- * and what its Harness last offered. `at` is where the Space's log stood,
+ * What `agents.defaults` answers: what a new Thread on a Harness starts
+ * with, and what the Harness last offered in this Space. `at` is where the Space's log stood,
  * so a window hears when a Thread learns more of what the Harness offers.
  */
 export type Defaults = { at: number, settings: Settings, offer: Offer, };

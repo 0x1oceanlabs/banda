@@ -1,7 +1,7 @@
 //! The agents module's published language: its IDs, the facts it publishes
 //! and the views a window reads. TypeScript types come from here.
 
-use bandaso_kernel::{AgentId, Participant};
+use bandaso_kernel::Participant;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use ts_rs::TS;
@@ -42,18 +42,6 @@ pub struct Image {
     #[ts(optional)]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub name: Option<String>,
-}
-
-/// An Agent, as its text file describes it.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "agents/")]
-pub struct AgentView {
-    pub id: AgentId,
-    pub name: String,
-    /// The Harness it runs on, by its ID in the Harness list.
-    pub harness: String,
-    /// What its new Threads start with.
-    pub settings: Settings,
 }
 
 /// How freely an Agent acts in a Thread (ADR 0003, decision 9). A Harness
@@ -651,7 +639,10 @@ pub struct Item {
 #[ts(export, export_to = "agents/")]
 pub struct ThreadSummary {
     pub id: ThreadId,
-    pub agent: AgentId,
+    /// The Harness it runs on, by its ID in the Harness list; chosen when
+    /// it starts, it stays (ADR 0006). Empty for a Thread from before
+    /// Threads named theirs whose Agent's file is gone.
+    pub harness: String,
     /// The start of its first message.
     pub title: String,
     #[ts(type = "number")]
@@ -697,17 +688,14 @@ pub struct ThreadList {
 #[serde(tag = "kind", content = "payload")]
 #[ts(export, export_to = "agents/")]
 pub enum Fact {
-    #[serde(rename = "agent.created")]
-    AgentCreated {
-        agent: AgentId,
-        name: String,
-        harness: String,
-    },
     #[serde(rename = "thread.started")]
     ThreadStarted {
         thread: ThreadId,
-        agent: AgentId,
         title: String,
+        /// The Harness it runs on. Older logs leave it out.
+        #[ts(optional)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        harness: Option<String>,
     },
     /// A message to the Agent, which queues a turn.
     #[serde(rename = "message.posted")]

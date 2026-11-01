@@ -24,11 +24,11 @@ owns every Space there.
 _Avoid_: user (outside code that talks to the operating system).
 
 **Agent**:
-An AI Participant that does work in a Space through a Harness. It has a name,
-and its Threads stay its own across Harness switches.
+The AI at work in one Thread, through that Thread's Harness. Each Thread has
+its own Agent, with no name or settings of its own (ADR 0006).
 
 **Harness**:
-The agent program an Agent runs on, for example Claude Code or Codex. The
+The agent program a Thread runs on, for example Claude Code or Codex. The
 engine reaches it through an adapter, ACP first. It reads what a Harness can
 do from the Harness's declared capabilities.
 
@@ -46,9 +46,10 @@ Harness, never in a terminal.
 _Avoid_: console, shell (that is one program a terminal runs).
 
 **Thread**:
-One conversation between a Person and an Agent. It shows items: messages, the
-Agent's thoughts, tool calls, its plans, notices and Questions.
-_Avoid_: chat, session.
+One session with a Harness in a Space: starting one is all it takes. Its
+Harness is chosen when it starts and stays with it. It shows items: messages,
+the Agent's thoughts, tool calls, its plans, notices and Questions.
+_Avoid_: chat, session (that is the Harness's own, evidence inside a Thread).
 
 **Plan**:
 The steps an Agent means to take in a turn, each to do, doing now or done.

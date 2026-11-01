@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs"
 import { join, resolve } from "node:path"
 import { expect, test } from "@playwright/test"
-import { startWindow, type Window } from "./window"
+import { firstThread, startWindow, type Window } from "./window"
 
 let window: Window
 
@@ -9,33 +9,25 @@ test.afterEach(async () => {
   await window?.close()
 })
 
-test("a Person makes a Space and an Agent, and works with it", async () => {
+test("a Person makes a Space, starts a Thread in it, and works with it", async () => {
   window = await startWindow()
   const { page } = window
 
   await expect(page.getByText("Create your first Space")).toBeVisible()
   await page.screenshot({ path: "test-results/0-welcome.png" })
-  await page.getByLabel("Name").fill("Work")
-  await page.getByRole("button", { name: "Create Space" }).click()
-
-  const agents = page.getByRole("region", { name: "Agents" })
-  await expect(agents.getByText("No Agents yet")).toBeVisible()
-  await page.screenshot({ path: "test-results/1-first-space.png" })
-  await agents.getByRole("button", { name: "New Agent" }).click()
-  const dialog = page.getByRole("dialog", { name: "New Agent" })
-  await dialog.getByLabel("Name").fill("Writer")
-  await expect(dialog.getByRole("combobox", { name: "Harness" })).toHaveText(
-    /Fake AI/
-  )
-  await dialog.getByRole("button", { name: "Create Agent" }).click()
-
-  const thread = page.getByRole("region", { name: "Writer" })
-  const composer = thread.getByRole("textbox", { name: "Message to Writer" })
+  const { thread, composer } = await firstThread(page)
+  await expect(page.getByRole("region", { name: "New Thread" })).toBeVisible()
   await expect(composer).toBeFocused()
+  await expect(
+    thread.getByRole("button", { name: "Harness: Fake AI" })
+  ).toBeVisible()
+  await page.screenshot({ path: "test-results/1-first-space.png" })
   await composer.fill("hello")
   await composer.press("Enter")
   await expect(thread.getByText("You said: hello")).toBeVisible()
-  await expect(agents.getByRole("button", { name: /hello/ })).toBeVisible()
+  await expect(page.getByRole("region", { name: "hello" })).toBeVisible()
+  // Once started, the Thread's Harness is its own.
+  await expect(thread.getByRole("button", { name: /^Harness:/ })).toBeHidden()
   const sidebar = page.getByRole("complementary", { name: "Sidebar" })
   await expect(sidebar.getByRole("button", { name: /hello/ })).toBeVisible()
 
@@ -49,12 +41,18 @@ test("a Person makes a Space and an Agent, and works with it", async () => {
   await expect(question.getByText("You chose: Allow")).toBeVisible()
   await page.screenshot({ path: "test-results/3-answered.png" })
 
-  await thread.getByRole("button", { name: "Close Writer" }).click()
+  await thread.getByRole("button", { name: "Close hello" }).click()
   await expect(thread).toBeHidden()
-  await agents.getByRole("button", { name: /hello/ }).click()
+  await sidebar.getByRole("button", { name: /hello/ }).click()
+  await expect(thread.getByText("The check passed.")).toBeVisible()
+
+  // A new Thread starts on the same Harness, beside the first.
+  await page.keyboard.press("Alt+Enter")
+  const second = page.getByRole("region", { name: "New Thread" })
+  await expect(second).toBeVisible()
   await expect(
-    page.getByRole("region", { name: "Writer" }).getByText("The check passed.")
-  ).toBeVisible()
+    second.getByRole("textbox", { name: "Message to Fake AI" })
+  ).toBeFocused()
 })
 
 test("a workspace opens Panes side by side, moves the focus by keys, and comes back as it was", async () => {
@@ -62,15 +60,15 @@ test("a workspace opens Panes side by side, moves the focus by keys, and comes b
   const { page } = window
   await page.getByLabel("Name").fill("Work")
   await page.getByRole("button", { name: "Create Space" }).click()
-  const agents = page.getByRole("region", { name: "Agents" })
-  await expect(agents.getByText("No Agents yet")).toBeVisible()
+  const draft = page.getByRole("region", { name: "New Thread" })
+  await expect(draft).toBeVisible()
 
   await page.keyboard.press("Alt+KeyN")
   const launcher = page.getByRole("region", { name: "New Pane" })
   await expect(launcher).toBeVisible()
   await expect(launcher).toHaveAttribute("data-focused", "true")
   await page.keyboard.press("Alt+ArrowLeft")
-  await expect(agents).toHaveAttribute("data-focused", "true")
+  await expect(draft).toHaveAttribute("data-focused", "true")
   await page.keyboard.press("Alt+ArrowRight")
   await expect(launcher).toHaveAttribute("data-focused", "true")
 
@@ -78,7 +76,7 @@ test("a workspace opens Panes side by side, moves the focus by keys, and comes b
   await expect(page.getByRole("region", { name: "New Pane" })).toBeVisible()
   await page.keyboard.press("Alt+KeyW")
   await expect(page.getByRole("region", { name: "New Pane" })).toBeHidden()
-  await expect(page.getByRole("region", { name: "Agents" })).toBeVisible()
+  await expect(page.getByRole("region", { name: "New Thread" })).toBeVisible()
 })
 
 test("a Pane moves to another workspace, and the overview shows them all", async () => {
@@ -86,8 +84,8 @@ test("a Pane moves to another workspace, and the overview shows them all", async
   const { page } = window
   await page.getByLabel("Name").fill("Work")
   await page.getByRole("button", { name: "Create Space" }).click()
-  const agents = page.getByRole("region", { name: "Agents" })
-  await expect(agents).toBeVisible()
+  const draft = page.getByRole("region", { name: "New Thread" })
+  await expect(draft).toBeVisible()
   const numbers = page.getByRole("navigation", { name: "Workspaces" })
   await expect(numbers.getByRole("button")).toHaveText(["1"])
 
@@ -96,20 +94,20 @@ test("a Pane moves to another workspace, and the overview shows them all", async
   await page.keyboard.press("Alt+Shift+Digit2")
   const launcher = page.getByRole("region", { name: "New Pane" })
   await expect(launcher).toHaveAttribute("data-focused", "true")
-  await expect(agents).toBeHidden()
+  await expect(draft).toBeHidden()
   await expect(numbers.getByRole("button")).toHaveText(["1", "2"])
   await expect(numbers.getByRole("button", { name: "2" })).toHaveAttribute(
     "aria-current",
     "true"
   )
   await page.keyboard.press("Alt+PageUp")
-  await expect(agents).toBeVisible()
+  await expect(draft).toBeVisible()
   await expect(launcher).toBeHidden()
 
   const overview = page.getByRole("dialog", { name: "Overview" })
   await page.keyboard.press("Alt+KeyO")
   await expect(
-    overview.getByRole("button", { name: "Agents in Work" })
+    overview.getByRole("button", { name: "New Thread in Work" })
   ).toBeVisible()
   await page.screenshot({ path: "test-results/3-overview.png" })
   await overview.getByRole("button", { name: "New Pane in Work" }).click()
@@ -131,14 +129,7 @@ test("a Pane moves to another workspace, and the overview shows them all", async
 test("the engine dies mid-work, comes back, and the Thread goes on", async () => {
   window = await startWindow()
   const { page } = window
-  await page.getByLabel("Name").fill("Work")
-  await page.getByRole("button", { name: "Create Space" }).click()
-  await page.getByRole("button", { name: "New Agent" }).click()
-  const dialog = page.getByRole("dialog", { name: "New Agent" })
-  await dialog.getByLabel("Name").fill("Writer")
-  await dialog.getByRole("button", { name: "Create Agent" }).click()
-  const thread = page.getByRole("region", { name: "Writer" })
-  const composer = thread.getByRole("textbox", { name: "Message to Writer" })
+  const { thread, composer } = await firstThread(page)
   await composer.fill("hello")
   await composer.press("Enter")
   await expect(thread.getByText("You said: hello")).toBeVisible()
@@ -158,14 +149,7 @@ test("the engine dies mid-work, comes back, and the Thread goes on", async () =>
 test("a failed turn says what to do, and Try again sends its message again", async () => {
   window = await startWindow()
   const { page } = window
-  await page.getByLabel("Name").fill("Work")
-  await page.getByRole("button", { name: "Create Space" }).click()
-  await page.getByRole("button", { name: "New Agent" }).click()
-  const dialog = page.getByRole("dialog", { name: "New Agent" })
-  await dialog.getByLabel("Name").fill("Writer")
-  await dialog.getByRole("button", { name: "Create Agent" }).click()
-  const thread = page.getByRole("region", { name: "Writer" })
-  const composer = thread.getByRole("textbox", { name: "Message to Writer" })
+  const { thread, composer } = await firstThread(page)
 
   await composer.fill("sign in please")
   await composer.press("Enter")
@@ -189,14 +173,7 @@ test("a failed turn says what to do, and Try again sends its message again", asy
 test("a Person signs in from the turn that needed it, and it goes again", async () => {
   window = await startWindow({ account: true })
   const { page } = window
-  await page.getByLabel("Name").fill("Work")
-  await page.getByRole("button", { name: "Create Space" }).click()
-  await page.getByRole("button", { name: "New Agent" }).click()
-  const dialog = page.getByRole("dialog", { name: "New Agent" })
-  await dialog.getByLabel("Name").fill("Writer")
-  await dialog.getByRole("button", { name: "Create Agent" }).click()
-  const thread = page.getByRole("region", { name: "Writer" })
-  const composer = thread.getByRole("textbox", { name: "Message to Writer" })
+  const { thread, composer } = await firstThread(page)
 
   await composer.fill("hello")
   await composer.press("Enter")
@@ -221,14 +198,7 @@ test("a Person signs in from the turn that needed it, and it goes again", async 
 test("a Person signs in in a terminal below the turn, and it goes again", async () => {
   window = await startWindow({ account: true })
   const { page } = window
-  await page.getByLabel("Name").fill("Work")
-  await page.getByRole("button", { name: "Create Space" }).click()
-  await page.getByRole("button", { name: "New Agent" }).click()
-  const dialog = page.getByRole("dialog", { name: "New Agent" })
-  await dialog.getByLabel("Name").fill("Writer")
-  await dialog.getByRole("button", { name: "Create Agent" }).click()
-  const thread = page.getByRole("region", { name: "Writer" })
-  const composer = thread.getByRole("textbox", { name: "Message to Writer" })
+  const { thread, composer } = await firstThread(page)
   await composer.fill("hello")
   await composer.press("Enter")
   await expect(thread.getByText("needs you to sign in.")).toBeVisible()
@@ -271,7 +241,7 @@ test("a Person works in a terminal in the Space, and closing it stops the shell"
   const { page, dir } = window
   await page.getByLabel("Name").fill("Work")
   await page.getByRole("button", { name: "Create Space" }).click()
-  await expect(page.getByRole("region", { name: "Agents" })).toBeVisible()
+  await expect(page.getByRole("region", { name: "New Thread" })).toBeVisible()
   await page.keyboard.press("Alt+KeyN")
   await page
     .getByRole("region", { name: "New Pane" })
@@ -329,7 +299,7 @@ test("a Person sees who is signed in to a Harness, signs in and out", async () =
   const { page } = window
   await page.getByLabel("Name").fill("Work")
   await page.getByRole("button", { name: "Create Space" }).click()
-  await expect(page.getByRole("region", { name: "Agents" })).toBeVisible()
+  await expect(page.getByRole("region", { name: "New Thread" })).toBeVisible()
   await page.keyboard.press("Alt+KeyN")
   await page
     .getByRole("region", { name: "New Pane" })
@@ -370,14 +340,7 @@ test("a Person sees who is signed in to a Harness, signs in and out", async () =
 test("a Person chooses the model and the mode under the message box", async () => {
   window = await startWindow()
   const { page } = window
-  await page.getByLabel("Name").fill("Work")
-  await page.getByRole("button", { name: "Create Space" }).click()
-  await page.getByRole("button", { name: "New Agent" }).click()
-  const dialog = page.getByRole("dialog", { name: "New Agent" })
-  await dialog.getByLabel("Name").fill("Writer")
-  await dialog.getByRole("button", { name: "Create Agent" }).click()
-  const thread = page.getByRole("region", { name: "Writer" })
-  const composer = thread.getByRole("textbox", { name: "Message to Writer" })
+  const { thread, composer } = await firstThread(page)
 
   await expect(
     thread.getByRole("button", { name: "Mode: Full access" })
@@ -434,14 +397,7 @@ test("a Person chooses the model and the mode under the message box", async () =
 test("a Person fills in the form an Agent asks with", async () => {
   window = await startWindow()
   const { page } = window
-  await page.getByLabel("Name").fill("Work")
-  await page.getByRole("button", { name: "Create Space" }).click()
-  await page.getByRole("button", { name: "New Agent" }).click()
-  const dialog = page.getByRole("dialog", { name: "New Agent" })
-  await dialog.getByLabel("Name").fill("Writer")
-  await dialog.getByRole("button", { name: "Create Agent" }).click()
-  const thread = page.getByRole("region", { name: "Writer" })
-  const composer = thread.getByRole("textbox", { name: "Message to Writer" })
+  const { thread, composer } = await firstThread(page)
 
   await composer.fill("choose a colour")
   await composer.press("Enter")
@@ -467,14 +423,7 @@ test("a Person fills in the form an Agent asks with", async () => {
 test("a tool call opens on what it changed and what it printed", async () => {
   window = await startWindow()
   const { page } = window
-  await page.getByLabel("Name").fill("Work")
-  await page.getByRole("button", { name: "Create Space" }).click()
-  await page.getByRole("button", { name: "New Agent" }).click()
-  const dialog = page.getByRole("dialog", { name: "New Agent" })
-  await dialog.getByLabel("Name").fill("Writer")
-  await dialog.getByRole("button", { name: "Create Agent" }).click()
-  const thread = page.getByRole("region", { name: "Writer" })
-  const composer = thread.getByRole("textbox", { name: "Message to Writer" })
+  const { thread, composer } = await firstThread(page)
 
   await composer.fill("edit the notes")
   await composer.press("Enter")
@@ -502,14 +451,7 @@ test("a tool call opens on what it changed and what it printed", async () => {
 test("an Agent's plan shows its steps, and the context how full it is", async () => {
   window = await startWindow()
   const { page } = window
-  await page.getByLabel("Name").fill("Work")
-  await page.getByRole("button", { name: "Create Space" }).click()
-  await page.getByRole("button", { name: "New Agent" }).click()
-  const dialog = page.getByRole("dialog", { name: "New Agent" })
-  await dialog.getByLabel("Name").fill("Writer")
-  await dialog.getByRole("button", { name: "Create Agent" }).click()
-  const thread = page.getByRole("region", { name: "Writer" })
-  const composer = thread.getByRole("textbox", { name: "Message to Writer" })
+  const { thread, composer } = await firstThread(page)
 
   await composer.fill("work in steps")
   await composer.press("Enter")
@@ -530,20 +472,13 @@ test("an Agent's plan shows its steps, and the context how full it is", async ()
 test("a message starts with a slash command its Agent offers", async () => {
   window = await startWindow()
   const { page } = window
-  await page.getByLabel("Name").fill("Work")
-  await page.getByRole("button", { name: "Create Space" }).click()
-  await page.getByRole("button", { name: "New Agent" }).click()
-  const dialog = page.getByRole("dialog", { name: "New Agent" })
-  await dialog.getByLabel("Name").fill("Writer")
-  await dialog.getByRole("button", { name: "Create Agent" }).click()
-  const thread = page.getByRole("region", { name: "Writer" })
-  const composer = thread.getByRole("textbox", { name: "Message to Writer" })
+  const { thread, composer } = await firstThread(page)
   const commands = thread.getByRole("listbox", { name: "Slash commands" })
 
   // Its Harness says its slash commands once its session opens.
   await composer.fill("/")
   await expect(
-    thread.getByText("No slash commands from Writer yet.")
+    thread.getByText("No slash commands from Fake AI yet.")
   ).toHaveAttribute("role", "status")
   await composer.fill("hello")
   await composer.press("Enter")
@@ -592,14 +527,7 @@ test("a message starts with a slash command its Agent offers", async () => {
 test("a message carries images to its Agent", async () => {
   window = await startWindow()
   const { page } = window
-  await page.getByLabel("Name").fill("Work")
-  await page.getByRole("button", { name: "Create Space" }).click()
-  await page.getByRole("button", { name: "New Agent" }).click()
-  const dialog = page.getByRole("dialog", { name: "New Agent" })
-  await dialog.getByLabel("Name").fill("Writer")
-  await dialog.getByRole("button", { name: "Create Agent" }).click()
-  const thread = page.getByRole("region", { name: "Writer" })
-  const composer = thread.getByRole("textbox", { name: "Message to Writer" })
+  const { thread, composer } = await firstThread(page)
   const shot = resolve(import.meta.dirname, "shot.png")
   const files = thread.locator('input[type="file"]')
 
@@ -657,7 +585,7 @@ test("a message carries images to its Agent", async () => {
     dragged.items.add(new File([blob], "wide.png", { type: "image/png" }))
     return dragged
   })
-  const transcript = thread.getByRole("region", { name: "Thread with Writer" })
+  const transcript = thread.getByRole("region", { name: "Thread with Fake AI" })
   await transcript.dispatchEvent("dragover", { dataTransfer: wide })
   await transcript.dispatchEvent("drop", { dataTransfer: wide })
   await expect(waiting.getByRole("img", { name: "wide.png" })).toBeVisible()
@@ -677,14 +605,7 @@ test("a message carries images to its Agent", async () => {
 test("a message goes into the turn that runs, or waits its turn in the queue", async () => {
   window = await startWindow()
   const { page } = window
-  await page.getByLabel("Name").fill("Work")
-  await page.getByRole("button", { name: "Create Space" }).click()
-  await page.getByRole("button", { name: "New Agent" }).click()
-  const dialog = page.getByRole("dialog", { name: "New Agent" })
-  await dialog.getByLabel("Name").fill("Writer")
-  await dialog.getByRole("button", { name: "Create Agent" }).click()
-  const thread = page.getByRole("region", { name: "Writer" })
-  const composer = thread.getByRole("textbox", { name: "Message to Writer" })
+  const { thread, composer } = await firstThread(page)
   const waits = thread.getByText("Waiting.")
 
   // While the Agent works, Enter sends a message into its turn.
@@ -748,26 +669,19 @@ test("a message goes into the turn that runs, or waits its turn in the queue", a
 test("what the Agent does by itself shows in a turn of its own", async () => {
   window = await startWindow()
   const { page } = window
-  await page.getByLabel("Name").fill("Work")
-  await page.getByRole("button", { name: "Create Space" }).click()
-  await page.getByRole("button", { name: "New Agent" }).click()
-  const dialog = page.getByRole("dialog", { name: "New Agent" })
-  await dialog.getByLabel("Name").fill("Writer")
-  await dialog.getByRole("button", { name: "Create Agent" }).click()
-  const thread = page.getByRole("region", { name: "Writer" })
-  const composer = thread.getByRole("textbox", { name: "Message to Writer" })
+  const { thread, composer } = await firstThread(page)
 
   // The turn ends; the task it started ends later, and the Agent goes on.
   await composer.fill("background long")
   await composer.press("Enter")
-  await expect(thread.getByText("Writer went on by itself.")).toBeVisible()
+  await expect(thread.getByText("Fake AI went on by itself.")).toBeVisible()
   await expect(thread.getByText("The task finished.")).toBeVisible()
-  await expect(thread.getByText("Writer is working…")).toBeVisible()
+  await expect(thread.getByText("Fake AI is working…")).toBeVisible()
   await composer.fill("and this")
   // Its own turn takes no message: one goes as a turn of its own.
   await expect(thread.getByRole("button", { name: "Queue" })).toBeHidden()
   await page.screenshot({ path: "test-results/18-by-itself.png" })
   await composer.press("Enter")
   await expect(thread.getByText("You said: and this")).toBeVisible()
-  await expect(thread.getByText("Writer is working…")).toBeHidden()
+  await expect(thread.getByText("Fake AI is working…")).toBeHidden()
 })

@@ -6,7 +6,7 @@
  */
 import { readdirSync, readFileSync, writeFileSync } from "node:fs"
 import { expect, test } from "@playwright/test"
-import { startWindow, type Window } from "./window"
+import { firstThread, startWindow, type Window } from "./window"
 
 let window: Window
 
@@ -72,17 +72,7 @@ test("the window starts fast, stays small and answers keys at once", async () =>
   await expect(page.getByText("Create your first Space")).toBeVisible()
   const startup = Date.now() - launched
 
-  await page.getByLabel("Name").fill("Work")
-  await page.getByRole("button", { name: "Create Space" }).click()
-  await page.getByRole("button", { name: "New Agent" }).click()
-  const dialog = page.getByRole("dialog", { name: "New Agent" })
-  await dialog.getByLabel("Name").fill("Writer")
-  await expect(dialog.getByRole("combobox", { name: "Harness" })).toHaveText(
-    /Fake AI/
-  )
-  await dialog.getByRole("button", { name: "Create Agent" }).click()
-  const thread = page.getByRole("region", { name: "Writer" })
-  const composer = thread.getByRole("textbox", { name: "Message to Writer" })
+  const { thread, composer } = await firstThread(page)
   await expect(composer).toBeFocused()
 
   // A keystroke's way: from the key to the frame that shows it.

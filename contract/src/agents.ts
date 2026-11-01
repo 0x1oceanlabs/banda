@@ -8,7 +8,6 @@ import { VERSION } from "./generated/agents/VERSION"
 
 export type { Account } from "./generated/agents/Account"
 export type { Adapter } from "./generated/agents/Adapter"
-export type { AgentView } from "./generated/agents/AgentView"
 export type { Body } from "./generated/agents/Body"
 export type { Choice } from "./generated/agents/Choice"
 export type { CliView } from "./generated/agents/CliView"
@@ -58,7 +57,6 @@ export { VERSION }
 /** Every kind of fact; the compiler checks it against the generated union. */
 const KINDS: ReadonlySet<string> = new Set(
   Object.keys({
-    "agent.created": true,
     "thread.started": true,
     "message.posted": true,
     "turn.started": true,

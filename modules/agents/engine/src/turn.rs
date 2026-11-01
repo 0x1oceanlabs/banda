@@ -33,7 +33,7 @@ use crate::model::{
     ThreadId, ToolContent, ToolKind, ToolStatus, TurnId, TurnState, Usage,
 };
 use crate::rules::{self, Ending, Piece, Pieces, Text};
-use crate::settings::{self, Harnesses};
+use crate::settings::Harnesses;
 use crate::{emit, store};
 use bandaso_kernel::{AgentId, Effect, Error, ModuleSpace, Outcome, Participant, Settled, Tx};
 use serde::{Deserialize, Serialize};
@@ -638,19 +638,25 @@ async fn run(
     settings: Settings,
 ) -> Result<Ending, Ending> {
     let unplanned = |reason: String| Ending::failed(reason, None);
-    let agent = settings::agent(space.folder(), turn.agent).map_err(|r| unplanned(r.message))?;
-    let name = agent.name.clone();
-    let harness = harnesses.find(&agent.harness).ok_or_else(|| {
-        unplanned(format!(
-            "This computer has no Harness named \"{}\".",
-            agent.harness
-        ))
+    let thread = turn.thread;
+    let named = space
+        .read(move |sql| store::thread(sql, thread))
+        .await
+        .map_err(|e| unplanned(plain(e)))?
+        .map(|summary| summary.harness)
+        .unwrap_or_default();
+    let harness = harnesses.find(&named).ok_or_else(|| {
+        unplanned(match named.as_str() {
+            "" => "This Thread names no Harness: its Agent's file is gone.".to_owned(),
+            _ => format!("This computer has no Harness named \"{named}\"."),
+        })
     })?;
+    // The Agent has no name of its own: its Harness's is the one to show.
+    let name = harness.name.clone();
     let connection = live
         .connection(space.id(), harness)
         .await
         .map_err(|reason| Ending::failed(reason, Some(Failure::HarnessStopped)))?;
-    let thread = turn.thread;
     let earlier = space
         .read(move |sql| store::evidence(sql, thread))
         .await
