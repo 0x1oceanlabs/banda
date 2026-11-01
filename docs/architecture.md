@@ -49,7 +49,9 @@ banda call/follow   the CLI: the same API, for people, scripts and Agents
   desktop to write the preset into the file. The browser's
   `~/.config/banda/browser.toml` comes with it too (ADR 0013), and the
   browser's switch and its pins ask the desktop to write `tabs` and
-  `pinned` into it, through `banda settings set`. The agents module's
+  `pinned` into it, through `banda settings set`; its `blocker` turns
+  the desktop's ad blocker (`app/desktop/src/blocker.ts`) on and off.
+  The agents module's
   `agents.toml`, what Enter does in the composer, comes with it the same
   way (ADR 0016). The settings window writes every file through `banda
   settings set` too; nothing else the page asks of Node writes a file. A Pane reads its part of the look

@@ -15,3 +15,7 @@ tabs = "top"
 # The extensions whose buttons sit in the row, by their IDs; the rest are
 # behind the Extensions button, whose menu pins them for you.
 # pinned = []
+
+# Whether Banda blocks ads and trackers in the browser, with EasyList,
+# EasyPrivacy and uBlock Origin's lists.
+# blocker = true

@@ -124,7 +124,10 @@ asked for the ADR; the rest are our defaults and stay his to change.
      - Vimium installs and its popup opens; its link hints did not answer
        a key sent by the test; not settled.
      - uBlock Origin Lite installs but blocks nothing: Electron has no
-       `declarativeNetRequest`. A known gap.
+       `declarativeNetRequest`. So Banda blocks ads itself (_decided_:
+       "Встроенный блокировщик"): Ghostery's engine with EasyList,
+       EasyPrivacy and uBlock Origin's lists, in the browser's profile, on
+       unless `blocker = false` in `browser.toml`.
 
 7. **Every Agent reaches the whole browser through CDP** (_decided_: "агент
    видит все вкладки", "просто имеет доступ к браузеру").

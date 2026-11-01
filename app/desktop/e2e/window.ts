@@ -64,6 +64,8 @@ export async function startWindow({
     mkdirSync(dirname(join(dir, path)), { recursive: true })
     writeFileSync(join(dir, path), text)
   }
+  // The blocker's lists: these two filters, never fetched.
+  writeFileSync(join(dir, "blocker.txt"), "/banda-ad.js\n##.banda-ad\n")
   if (look) writeFileSync(join(dir, "config/look.toml"), look)
   if (sidebar) writeFileSync(join(dir, "config/sidebar.toml"), sidebar)
   const fake = join(repository, "target/debug/banda-fake-agent")
@@ -88,6 +90,7 @@ export async function startWindow({
     BANDA_FONTCONFIG: "",
     HYPRLAND_INSTANCE_SIGNATURE: "",
     BANDA_LOG: "warn",
+    BANDA_BLOCK_LIST: join(dir, "blocker.txt"),
     // Notices go to a list the tests read, never to the Person's screen.
     BANDA_DESKTOP: "recorded",
     // A terminal runs the Person's shell: here one every machine has.
