@@ -42,6 +42,7 @@
 # default = "1/2"                    # a new column's width
 # alone = "1"                        # a column alone on its workspace; "1/2" never fills
 # center = "never"                   # "never", "always" or "on-overflow"
+# display = "stack"                  # "stack" or "tabs": how a new column shows its Panes
 # min = 30                           # no column narrower, in rem (a list: half)
 
 # [bar]

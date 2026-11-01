@@ -12,7 +12,11 @@
  * tests cover the rules; the window only draws the state.
  */
 import { type JsonValue, newId, type SpaceId } from "@banda/contract"
-import { type Columns, DEFAULT_COLUMNS } from "@banda/contract/look"
+import {
+  type Columns,
+  DEFAULT_COLUMNS,
+  type Display,
+} from "@banda/contract/look"
 import type { PaneState, Place } from "@banda/ui/pane"
 
 /** One Pane on a workspace: what it shows, and the Space it belongs to. */
@@ -50,6 +54,8 @@ export type Column = {
   width?: Width
   /** It takes the whole screen over its width (`maximize`). */
   full?: true
+  /** How it shows its Panes; left out, as the look's `display` says. */
+  display?: Display
 }
 
 export type Workspace = {
@@ -104,6 +110,24 @@ export function widthIn(
   if (column.full) return "1"
   if (column.width !== undefined) return column.width
   return workspace.columns.length === 1 ? sizes.alone : sizes.default
+}
+
+/** How a column shows its Panes: one above another, or as tabs. */
+export function displayOf(
+  column: Column,
+  look: Pick<Columns, "display"> = DEFAULT_COLUMNS
+): Display {
+  return column.display ?? look.display
+}
+
+/** The entries of a column on screen: all, or in tabs the one shown. */
+export function shownIn(
+  column: Column,
+  look: Pick<Columns, "display"> = DEFAULT_COLUMNS
+): Entry[] {
+  return displayOf(column, look) === "tabs"
+    ? column.entries.slice(column.active, column.active + 1)
+    : column.entries
 }
 
 /** The workspaces that hold Panes, and the current one: the bar's numbers. */
@@ -451,7 +475,7 @@ export function widen(
       : steps.findLast((step) => step.shows < now - EPSILON)
   if (!next && wrap) next = by > 0 ? steps[0] : steps.at(-1)
   if (!next || alike(next.shows, now)) return state
-  return resized(state, { ...column, width: next.width, full: undefined })
+  return withFocused(state, { ...column, width: next.width, full: undefined })
 }
 
 /**
@@ -462,16 +486,64 @@ export function maximize(state: Workspaces): Workspaces {
   const workspace = current(state)
   const column = workspace.columns[workspace.focus]
   if (!column) return state
-  return resized(state, { ...column, full: column.full ? undefined : true })
+  return withFocused(state, { ...column, full: column.full ? undefined : true })
 }
 
 /** Puts `column` in the place of the focused one. */
-function resized(state: Workspaces, column: Column): Workspaces {
+function withFocused(state: Workspaces, column: Column): Workspaces {
   const workspace = current(state)
   return setWorkspace(state, state.current, {
     ...workspace,
     columns: replace(workspace.columns, workspace.focus, column),
   })
+}
+
+/**
+ * Shows the focused column's Panes as tabs, or one above another again, as
+ * niri's toggle-column-tabbed-display and Hyprland's togglegroup.
+ */
+export function tabs(
+  state: Workspaces,
+  look: Pick<Columns, "display"> = DEFAULT_COLUMNS
+): Workspaces {
+  const workspace = current(state)
+  const column = workspace.columns[workspace.focus]
+  if (!column) return state
+  const display = displayOf(column, look) === "tabs" ? "stack" : "tabs"
+  return withFocused(state, { ...column, display })
+}
+
+/**
+ * Takes the focused Pane into the column on that side, as its last; one
+ * that shares its column goes out to a column of its own there instead,
+ * as niri's consume-or-expel-window-left and right.
+ */
+export function consume(state: Workspaces, side: "left" | "right"): Workspaces {
+  const workspace = current(state)
+  const column = workspace.columns[workspace.focus]
+  const entry = column?.entries[column.active]
+  if (!entry) return state
+  const columns = [...workspace.columns]
+  if (column.entries.length > 1) {
+    const rest = column.entries.filter((other) => other !== entry)
+    columns[workspace.focus] = {
+      ...column,
+      entries: rest,
+      active: Math.min(column.active, rest.length - 1),
+    }
+    const at = side === "right" ? workspace.focus + 1 : workspace.focus
+    columns.splice(at, 0, { id: newId(), entries: [entry], active: 0 })
+  } else {
+    const to = workspace.focus + (side === "right" ? 1 : -1)
+    const target = columns[to]
+    if (!target) return state
+    columns[to] = { ...target, entries: [...target.entries, entry] }
+    columns.splice(workspace.focus, 1)
+  }
+  return focusEntry(
+    setWorkspace(state, state.current, { ...workspace, columns }),
+    entry.id
+  )
 }
 
 /** Goes to a workspace by its place from the top; past the last, to the last. */
@@ -574,11 +646,19 @@ export function parse(value: unknown): Workspaces | null {
       if (kept.length !== column.entries.length) return null
       const width = isWidth(column.width) ? column.width : undefined
       const full = column.full === true || undefined
+      const display = isDisplay(column.display) ? column.display : undefined
       const active =
         typeof column.active === "number"
           ? clamp(column.active, kept.length)
           : 0
-      columns.push({ id: column.id, entries: kept, active, width, full })
+      columns.push({
+        id: column.id,
+        entries: kept,
+        active,
+        width,
+        full,
+        display,
+      })
     }
     const focus =
       typeof workspace.focus === "number"
@@ -588,6 +668,10 @@ export function parse(value: unknown): Workspaces | null {
   }
   if (list.length === 0) return null
   return normalize({ list, current: clamp(value.current, list.length) })
+}
+
+function isDisplay(value: unknown): value is Display {
+  return value === "stack" || value === "tabs"
 }
 
 function isWidth(value: unknown): value is Width {

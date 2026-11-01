@@ -29,6 +29,7 @@ Every key, with its default:
 - "Square corners": `radius = 0`.
 - "Orange focus": `[colors]` `accent = "orange"`, or a hex.
 - "Columns too narrow in a small window": `[columns]` `min = 36`.
+- "Tabs instead of Panes one above another": `[columns]` `display = "tabs"`.
 - "Less motion": `[motion]` `slowdown = 2`, or `off = true`.
 - "No sounds": `[sound]` `family = "off"`. Only when something fails:
   `done = false` and `asking = false`.

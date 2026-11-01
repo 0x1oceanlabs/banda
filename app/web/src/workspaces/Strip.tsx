@@ -4,9 +4,11 @@ import type { PaneState } from "@banda/ui/pane"
 import { columnsOf, moveOf, useLookColumns } from "../look"
 import { Moving } from "../motion"
 import { Choices, minOf } from "../registry"
-import { share, widthIn, type Workspace } from "./model"
+import type { Chime } from "@banda/ui/sound"
+import { displayOf, type Entry, share, widthIn, type Workspace } from "./model"
 import { ColumnMotion, minWidthOf, type Place, places, widthAt } from "./layout"
 import { type Frame, PaneFrame } from "./PaneFrame"
+import { Tabs } from "./Tabs"
 import { pixels, scrollsSideways, SWIPE_END, Swipe } from "./swipe"
 
 /**
@@ -26,6 +28,7 @@ export function Strip({
   engine,
   modules,
   spaceName,
+  called,
   frame,
   onStart,
 }: {
@@ -38,6 +41,8 @@ export function Strip({
   engine: Engine
   modules: readonly string[]
   spaceName: (space: SpaceId) => string
+  /** How the Thread a Pane shows calls the Person, if it does. */
+  called: (entry: Entry) => Chime | undefined
   frame: Frame
   /** Opens a first Pane on this empty workspace. */
   onStart: (pane: PaneState) => void
@@ -48,6 +53,7 @@ export function Strip({
   const columns = workspace.columns.map((column) => ({
     ...column,
     width: widthIn(workspace, column, look),
+    tabbed: displayOf(column, look) === "tabs",
     min: minOf(column, look.min),
   }))
   const widths = columns.map((c) => `${c.width} ${c.min}`).join()
@@ -156,6 +162,17 @@ export function Strip({
               focused={live && workspace.focus === c && column.active === e}
               spaceName={mixed ? spaceName(entry.space) : undefined}
               frame={frame}
+              hidden={column.tabbed && column.active !== e}
+              header={
+                column.tabbed && column.active === e ? (
+                  <Tabs
+                    entries={column.entries}
+                    active={column.active}
+                    called={called}
+                    frame={frame}
+                  />
+                ) : undefined
+              }
             />
           ))}
         </div>

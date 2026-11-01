@@ -53,6 +53,7 @@ The evidence is in two notes: [tiling managers](../research/2026-11-01-tiling-ma
    - **The Split** is today's tree of splits, close to Hyprland's dwindle.
    - **Its own window** (_decided_). Any Pane pops out into a window of its own and back. A window manager such as Hyprland or niri then places it beside Banda or on another monitor.
    - Each workspace keeps its choice, and `Alt+V` switches it, as Omarchy does.
+   - **A column is a group** (_built_ 2026-11-01), as niri's tabbed column and Hyprland's group. Its Panes stack one above another, or show as tabs: one at a time, a row of tabs in its tile's header. The tiles behind other tabs stay drawn, hidden, so their programs keep running. A tab whose Thread calls the Person carries its mark (decision 15). `[columns] display` in `look.toml` sets how a new column starts (ADR 0007).
    - The Strip answers "Agents keep opening things": a new Pane adds a column instead of shrinking the others. A sign-in terminal stacks under its Thread in the same column.
 
 6. **A Space is a folder on a machine** (_decided_).
@@ -96,6 +97,8 @@ The evidence is in two notes: [tiling managers](../research/2026-11-01-tiling-ma
    | `Alt+Ctrl+Arrows` | resize it; in the Strip, step the column's width |
    | `Alt+R`, `Alt+Shift+R` | the column's next or previous width, round, as niri's `Mod+R` |
    | `Alt+F` | the column the whole screen wide, and back, as niri's `Mod+F` |
+   | `Alt+G` | the column's Panes as tabs, and back, as Omarchy's group (`Super+G`) and niri's `Mod+W` |
+   | `Alt+[`, `Alt+]` | take the Pane into the column on that side; one sharing its column goes out to its own there, as niri's `Mod+[` and `Mod+]` |
    | `Alt+Return` | a new Thread, in the default Space |
    | `Alt+Shift+Return` | a new browser, as Omarchy's `Super+Shift+Return` |
    | `Alt+N`, then a letter | open or focus a kind: `T` terminal, `B` browser, `H` Harnesses; with `Shift`, open another |

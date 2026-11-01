@@ -56,6 +56,15 @@ export function showsOf(pane: PaneState): string | null {
   return kindOf(pane.kind)?.shows?.(pane.args) ?? null
 }
 
+/** A Pane's title and icon, as its kind gives them. */
+export function labelOf(pane: PaneState) {
+  const kind = kindOf(pane.kind)
+  return {
+    title: kind ? kind.title(pane.args) : "Unknown Pane",
+    Icon: kind?.icon,
+  }
+}
+
 /** Whether the engine runs what a kind of Pane, or a Watch, needs. */
 export function runs(
   needs: { module?: string },

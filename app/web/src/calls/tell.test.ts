@@ -1,7 +1,7 @@
 import type { Listed } from "@banda/ui/pane"
 import type { Chime } from "@banda/ui/sound"
 import { expect, test } from "vitest"
-import { open, start } from "../workspaces/model"
+import { consume, open, start } from "../workspaces/model"
 import { DEFAULT_NOTIFY as NOTIFY } from "./settings"
 import { type Shows, showing, sightOf } from "./sight"
 import { type Call, callsOf, newsOf, tell } from "./tell"
@@ -119,6 +119,15 @@ test("the Person looks at the focused Pane of the window in front", () => {
   expect(showing(w, { space: "s", about: "t1" }, shows)?.pane.args).toEqual({
     thread: "t1",
   })
+  // In one column as tabs, the Thread behind the shown tab is out of sight.
+  const grouped = consume(w, "left")
+  expect(sightOf(grouped, { space: "s", about: "t1" }, true, shows)).toBe(
+    "on-screen"
+  )
+  const tabbed = { display: "tabs" as const }
+  expect(
+    sightOf(grouped, { space: "s", about: "t1" }, true, shows, tabbed)
+  ).toBe("in-window")
 })
 
 test("a toast goes away by itself; a new call of its thing replaces it", () => {

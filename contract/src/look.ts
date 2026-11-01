@@ -24,6 +24,7 @@ export type { Listed } from "./generated/look/Listed"
 export type { Motion } from "./generated/look/Motion"
 export type { Columns } from "./generated/look/Columns"
 export type { Center } from "./generated/look/Center"
+export type { Display } from "./generated/look/Display"
 export type { Move } from "./generated/look/Move"
 export type { Spring } from "./generated/look/Spring"
 export type { Easing } from "./generated/look/Easing"
@@ -34,6 +35,7 @@ export const DEFAULT_COLUMNS: Columns = {
   default: "1/2",
   alone: "1",
   center: "never",
+  display: "stack",
   min: 30,
 }
 

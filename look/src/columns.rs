@@ -25,6 +25,8 @@ pub struct ColumnsSettings {
     #[schemars(with = "Option<String>")]
     pub alone: Option<Spanned<String>>,
     pub center: Option<Center>,
+    /// How a new column shows its Panes, as niri's `default-column-display`.
+    pub display: Option<Display>,
     /// The narrowest a column is drawn, in rem; a list's is half of it.
     #[schemars(with = "Option<f64>", range(min = 0, max = 200))]
     pub min: Option<Spanned<f64>>,
@@ -43,6 +45,18 @@ pub enum Center {
     OnOverflow,
 }
 
+/// How a column shows its Panes.
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, Serialize, TS, JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+#[ts(export, export_to = "look/")]
+pub enum Display {
+    /// One above another, sharing the column's height.
+    Stack,
+    /// One at a time, the rest as tabs over it, as niri's tabbed column and
+    /// Hyprland's group.
+    Tabs,
+}
+
 /// `[columns]` resolved: valid widths only, narrowest first.
 #[derive(Clone, Debug, PartialEq, Serialize, TS)]
 #[ts(export, export_to = "look/")]
@@ -51,6 +65,7 @@ pub struct Columns {
     pub default: String,
     pub alone: String,
     pub center: Center,
+    pub display: Display,
     pub min: f64,
 }
 
@@ -91,6 +106,7 @@ impl ColumnsSettings {
             default: self.default.or(under.default),
             alone: self.alone.or(under.alone),
             center: self.center.or(under.center),
+            display: self.display.or(under.display),
             min: self.min.or(under.min),
         }
     }
@@ -102,6 +118,7 @@ impl ColumnsSettings {
             default: Some(spanned(DEFAULT)),
             alone: Some(spanned(ALONE)),
             center: Some(Center::Never),
+            display: Some(Display::Stack),
             min: Some(Spanned::new(0..0, MIN)),
         }
     }
@@ -162,6 +179,7 @@ impl ColumnsSettings {
             default: width(&self.default, DEFAULT),
             alone: width(&self.alone, ALONE),
             center: self.center.unwrap_or(Center::Never),
+            display: self.display.unwrap_or(Display::Stack),
             min: self
                 .min
                 .as_ref()
@@ -200,6 +218,9 @@ mod tests {
         assert_eq!(columns.presets, ["2/5", "1"]);
         assert_eq!(columns.default, "1/2");
         assert_eq!(columns.alone, "1");
+        assert_eq!(columns.display, Display::Stack);
+        let tabbed = read("[columns]\ndisplay = \"tabs\"\n");
+        assert_eq!(tabbed.resolve().display, Display::Tabs);
         let half = read("[columns]\nalone = \"1/2\"\n");
         assert_eq!(half.resolve().alone, "1/2");
         assert_eq!(read("[columns]\nalone = \"all\"\n").problems().len(), 1);
