@@ -1,6 +1,7 @@
 import { describe, expect, test } from "vitest"
-import type { SpaceSummary } from "@banda/contract"
-import type { Listed } from "@banda/ui/pane"
+import type { SpaceId, SpaceSummary } from "@banda/contract"
+import type { BrowserArgs } from "@banda/browser-pane"
+import type { Listed, PaneState } from "@banda/ui/pane"
 import type { Action } from "../actions/actions"
 import type { Shell } from "../shell/actions"
 import {
@@ -29,7 +30,9 @@ const lists = {
     thread("t3", "slow hello", { changed: 2, mark: "done" }),
   ],
 }
-const spaces = [{ id: "s1", name: "banda" }] as unknown as SpaceSummary[]
+const spaces = [
+  { id: "s1", name: "banda", folder: "/home/r/banda" },
+] as unknown as SpaceSummary[]
 const action = (id: string, title: string): Action<Shell> => ({
   id,
   title,
@@ -51,6 +54,10 @@ const sources: Sources = {
     { id: "codex", name: "Codex" },
   ],
   settled: (listed) => listed.id === "t3",
+  files: { space: "s1" as SpaceId, paths: [] },
+  addressOf: (typed) =>
+    typed.includes(".") ? `https://${typed}` : `search:${typed}`,
+  weight: () => 0,
 }
 
 function nameOf(row: Choice): string {
@@ -71,18 +78,27 @@ function nameOf(row: Choice): string {
       return row.current ? `${row.name} ✓` : row.name
     case "settle":
       return `settle ${row.listed.id}`
+    case "file":
+      return `file ${row.path}`
+    case "web":
+      return row.address ? `open ${urlOf(row.pane)}` : `search: ${row.words}`
+    case "copy":
+      return `copy ${row.text}`
   }
 }
+
+/** The page a browser Pane opens at. */
+const urlOf = (pane: PaneState) => (pane.args as BrowserArgs).tabs[0].url
 
 const labels = (
   words: string,
   at: "root" | "actions" = "root",
-  inside?: Branch
+  inside?: Branch,
+  more: Partial<Sources> = {}
 ) =>
-  menuOf({ words, at, inside, sources }).map((group) => [
-    group.label,
-    group.rows.map(nameOf),
-  ])
+  menuOf({ words, at, inside, sources: { ...sources, ...more } }).map(
+    (group) => [group.label, group.rows.map(nameOf)]
+  )
 
 describe("the Banda menu", () => {
   test("empty, it shows the Recent Threads, what waits first, and Actions", () => {
@@ -95,18 +111,65 @@ describe("the Banda menu", () => {
     ])
   })
 
-  test("typed into, it finds Threads, Spaces and Actions, then New Thread with the words", () => {
+  test("typed into, it finds Threads, Spaces and Actions, then New Thread and the web with the words", () => {
     expect(labels("hello")).toEqual([
       ["Threads", ["hello from claude", "slow hello"]],
-      ["", ["ask: hello"]],
+      ["", ["ask: hello", "search: hello"]],
     ])
     expect(labels("ban")).toEqual([
       ["Spaces", ["banda"]],
-      ["", ["ask: ban"]],
+      ["", ["ask: ban", "search: ban"]],
     ])
     expect(labels("new")).toEqual([
       ["Actions", ["New Thread", "New browser"]],
-      ["", ["ask: new"]],
+      ["", ["ask: new", "search: new"]],
+    ])
+  })
+
+  test("an address typed opens; words search the web where the browser says", () => {
+    expect(labels("banda.so").at(-1)).toEqual([
+      "",
+      ["ask: banda.so", "open https://banda.so"],
+    ])
+    const web = menuOf({ words: "two words", at: "root", sources })
+      .at(-1)!
+      .rows.at(-1)
+    expect(web).toMatchObject({ kind: "web", address: false })
+    expect(web?.kind === "web" && urlOf(web.pane)).toBe("search:two words")
+  })
+
+  test("the focused Space's files come between its Spaces and the Actions", () => {
+    const files = { space: "s1" as SpaceId, paths: ["src/new.ts", "a b#.md"] }
+    expect(labels("new", "root", undefined, { files })).toEqual([
+      ["Files", ["file src/new.ts", "file a b#.md"]],
+      ["Actions", ["New Thread", "New browser"]],
+      ["", ["ask: new", "search: new"]],
+    ])
+    const [, odd] = menuOf({
+      words: "new",
+      at: "root",
+      sources: { ...sources, files },
+    })[0].rows
+    expect(odd).toMatchObject({ full: "/home/r/banda/a b#.md" })
+    expect(odd.kind === "file" && urlOf(odd.pane)).toBe(
+      "file:///home/r/banda/a%20b%23.md"
+    )
+    expect(actsOf(odd, sources).map((act) => nameOf(act.row))).toEqual([
+      "file a b#.md",
+      "copy /home/r/banda/a b#.md",
+    ])
+  })
+
+  test("what is chosen often and lately ranks first among equals, and leads the empty Actions", () => {
+    const weight = (id: string) =>
+      ({ "action:browser.new": 4, "action:sidebar.toggle": 1 })[id] ?? 0
+    expect(labels("new", "root", undefined, { weight })[0]).toEqual([
+      "Actions",
+      ["New browser", "New Thread"],
+    ])
+    expect(labels("", "root", undefined, { weight }).at(-1)).toEqual([
+      "Actions",
+      ["New browser", "Show or hide the sidebar", "New Thread"],
     ])
   })
 
@@ -137,6 +200,7 @@ describe("the Banda menu", () => {
       "thread:s1:t2",
       "thread:s1:t3",
       "ask",
+      "web",
     ])
   })
 })
@@ -193,6 +257,16 @@ describe("ranking", () => {
       "say hellos",
     ])
     expect(ranked(titles, "slow hel", (t) => [t])).toEqual(["a slow hello"])
+  })
+  test("among equal matches the one that weighs more comes first", () => {
+    expect(
+      ranked(
+        ["hello a", "hello b"],
+        "hello",
+        (t) => [t],
+        (t) => (t === "hello b" ? 1 : 0)
+      )
+    ).toEqual(["hello b", "hello a"])
   })
   test("a match in the first text beats one in the second", () => {
     const things = [

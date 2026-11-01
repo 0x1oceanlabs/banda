@@ -1,4 +1,6 @@
-import { useEffect, useState } from "react"
+import { useCallback, useEffect, useState } from "react"
+import type { Engine, SpaceId } from "@banda/contract"
+import { nameAndFolder } from "@banda/ui/lib/paths"
 import { useMenu } from "./Menu"
 
 /** How long the typing rests before the files are asked for, in ms. */
@@ -25,6 +27,32 @@ export function useFileMenu({
   onPick: (path: string) => void
 }) {
   const word = findFiles ? typed : undefined
+  const found = useFoundFiles(word, findFiles)
+  const answered = found?.word === word
+  return useMenu({
+    text,
+    word,
+    shown: found?.paths ?? [],
+    label: "Files",
+    empty: answered ? "No file holds that." : "Looking for files…",
+    nameOf: (path) => path,
+    render: (path) => {
+      const { name, folder } = nameAndFolder(path)
+      return { title: name, about: folder }
+    },
+    onPick,
+  })
+}
+
+/**
+ * The files that fit `word`, asked for once the typing rests; none is
+ * asked while it is `undefined`. The files found last stay while the
+ * next are asked for, with the word they were found for.
+ */
+export function useFoundFiles(
+  word: string | undefined,
+  findFiles: FindFiles | undefined
+): { word: string; paths: string[] } | undefined {
   const [found, setFound] = useState<{ word: string; paths: string[] }>()
   useEffect(() => {
     if (word === undefined || !findFiles) return
@@ -40,22 +68,20 @@ export function useFileMenu({
       clearTimeout(timer)
     }
   }, [word, findFiles])
-  // The files found last stay while the next are asked for.
-  const answered = found?.word === word
-  return useMenu({
-    text,
+  return found
+}
+
+/** The files in the Space's folder that fit `word`, as `@` finds them. */
+export function useSpaceFiles(
+  engine: Engine,
+  space: SpaceId,
+  word: string | undefined
+): { word: string; paths: string[] } | undefined {
+  return useFoundFiles(
     word,
-    shown: found?.paths ?? [],
-    label: "Files",
-    empty: answered ? "No file holds that." : "Looking for files…",
-    nameOf: (path) => path,
-    render: (path) => {
-      const slash = path.lastIndexOf("/")
-      return {
-        title: path.slice(slash + 1),
-        about: slash > 0 ? path.slice(0, slash) : undefined,
-      }
-    },
-    onPick,
-  })
+    useCallback(
+      (query: string) => engine.call("agents.files", { query }, { space }),
+      [engine, space]
+    )
+  )
 }

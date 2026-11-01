@@ -233,6 +233,13 @@ export function Shell({
           return toggleSettled(listsNow.current, row.space, row.listed.id)
         case "preset":
           return pickPreset(row.name)
+        case "file":
+        case "web":
+          return openPane(row.kind === "file" ? row.space : here, row.pane)
+        case "copy":
+          return void navigator.clipboard
+            .writeText(row.text)
+            .catch((error: unknown) => console.error("copy:", error))
       }
     },
     [change, openPane, newThreadIn, parts, here]

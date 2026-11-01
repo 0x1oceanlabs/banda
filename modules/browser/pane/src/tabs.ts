@@ -3,6 +3,7 @@
  * Pane comes back as it was: each tab's address and title, and which one
  * shows. Every change here is a new args; the pages follow them.
  */
+import { newId } from "@banda/contract"
 
 /** One page of the browser, by the ID its page is kept under. */
 export type Tab = { id: string; url: string; title: string }
@@ -126,4 +127,9 @@ export function afterTabKey(
       return showing(args, place === 9 ? args.tabs.length : place - 1)
     }
   }
+}
+
+/** A browser that opens `url` in its one tab. */
+export function browserAt(url: string): BrowserArgs {
+  return { tabs: [{ ...blankTab(newId()), url }], shown: 0 }
 }

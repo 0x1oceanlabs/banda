@@ -115,5 +115,6 @@ Roma, on 2026-11-01, looking at the sidebar's header:
   3. **The tree and the action list:** branches, chips, `Backspace` and `Tab`. Settings join once ADR 0016's window has its rows.
      - _Done_ with `Shift+Enter`, a Space and the sidebar's view as branches, and the Harnesses under `Tab` on "New Thread". Settings wait for that window.
   4. **More rows:** Files of the focused Space; the browser's "Open" and "Search the web"; ranking by what is opened often and lately.
+     - _Done._ A file opens in a browser, and `Tab` offers Copy path. What is chosen is kept in the window's storage, its count weighed by how lately: among equal matches it ranks first, and it leads the empty menu's Actions.
   5. **Sources from the manifests**, with ADR 0014.
   6. **`banda menu [route]`.**
