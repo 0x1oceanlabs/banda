@@ -4,15 +4,11 @@ import { Engine } from "@bandaso/contract"
 import "@bandaso/ui/globals.css"
 import { App } from "./App"
 import "./host"
-
-// The window follows the system's light or dark.
-const dark = matchMedia("(prefers-color-scheme: dark)")
-const paint = () =>
-  document.documentElement.classList.toggle("dark", dark.matches)
-paint()
-dark.addEventListener("change", paint)
+import { followLook } from "./look"
 
 const host = window.bandaso
+// The look the desktop reads (ADR 0007), else the system's light or dark.
+followLook(host)
 const root = createRoot(document.getElementById("root")!)
 
 if (host) {

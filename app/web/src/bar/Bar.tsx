@@ -8,6 +8,9 @@ import {
 import { Button } from "@bandaso/ui/components/button"
 import { Spinner } from "@bandaso/ui/components/spinner"
 import { type Attention, QUIET } from "@bandaso/ui/pane"
+import { TriangleAlertIcon } from "lucide-react"
+import type { Problem } from "@bandaso/contract/look"
+import { useLookProblems } from "../look"
 
 /**
  * The bar across the window's top (ADR 0005, decision 9): the sidebar's
@@ -83,7 +86,10 @@ export function Bar({
           )
         })}
       </nav>
-      <Connection status={status} />
+      <div className="ml-auto flex items-center">
+        <LookProblems />
+        <Connection status={status} />
+      </div>
     </header>
   )
 }
@@ -106,7 +112,7 @@ function Connection({ status }: { status: Status }) {
   return (
     <div
       role="status"
-      className="ml-auto flex items-center gap-2 px-2 text-xs text-muted-foreground"
+      className="flex items-center gap-2 px-2 text-xs text-muted-foreground"
     >
       {status.state === "refused" ? (
         <span className="size-2 rounded-full bg-destructive" />
@@ -114,6 +120,35 @@ function Connection({ status }: { status: Status }) {
         <Spinner className="size-3" />
       )}
       {words}
+    </div>
+  )
+}
+
+/** Where a file of the look is wrong, as compilers say it. */
+export function problemWords(problem: Problem): string {
+  const at =
+    problem.line != null ? `:${problem.line}:${problem.column ?? 1}` : ""
+  return `${problem.path}${at}: ${problem.message}`
+}
+
+/**
+ * Says when a file of the look is wrong (ADR 0005, decision 11): the last
+ * good look stays, and this names the file and the line.
+ * `bandaso look check` says the same in a terminal.
+ */
+function LookProblems() {
+  const problems = useLookProblems()
+  if (problems.length === 0) return null
+  const words = problems.map(problemWords).join("\n")
+  return (
+    <div
+      role="status"
+      aria-label={`The look: ${words}`}
+      title={`The look keeps its last good state:\n${words}`}
+      className="flex items-center gap-1 px-2 text-xs text-destructive"
+    >
+      <TriangleAlertIcon className="size-3.5" />
+      {problems[0].path.split("/").at(-1)}
     </div>
   )
 }
