@@ -42,6 +42,7 @@ mod hosts;
 mod images;
 mod live;
 pub mod model;
+mod record;
 mod rules;
 pub mod settings;
 mod store;

@@ -183,6 +183,9 @@ If Chat is removed, Agents still works through its own Thread.
     decision 3). Each start finds it on PATH and asks its version; a CLI
     that is not installed stops the start, so no bundled copy runs in its
     place. Checking the version against a supported range comes later.
+  - An entry may name a folder to `record` in: each start writes the
+    conversation there, one ACP frame per line, for tests to replay and
+    for a Harness's bug report. It holds everything said, files' text too.
 - **A message queues a turn.** The outbox runs one Thread's turns one at a
   time, in order (`turn.start`, keyed by the Thread). Threads run side by
   side, an Agent's own Threads too. A stop (`turn.stop`) and an answer
@@ -447,7 +450,7 @@ bandaso/
   app/web/            React: the Desk, the Space picker, the Pane registry
   app/desktop/        Electron: the window and the engine's start; e2e tests
   contract/           the engine's API for TypeScript: generated types and the client
-  tools/fake-agent/   a scripted ACP agent for tests and window checks
+  tools/fake-agent/   a scripted ACP agent for tests and window checks; it replays recordings too
   scripts/check.sh    every check a change must pass
   docs/               adr/ · architecture.md · research/
   GLOSSARY.md
@@ -461,8 +464,17 @@ bandaso/
 - **Module tests** run through the module's interface: commands go in and
   events come out. Nothing past the interface is mocked.
 - **Adapter tests** run the real engine. Only the Harness's transport is
-  replayed, from recorded conversations: ours, and T3 Code's recorded
-  scenarios (MIT, with their notice).
+  replayed: the fake agent plays a recorded conversation
+  (`FAKE_AGENT_REPLAY`). Each frame the engine sends takes the next
+  recorded one of its method, or the answer with its ID, and the
+  Harness's frames after it follow.
+  - Real Claude Code and Codex conversations live in
+    `modules/agents/engine/tests/recordings/`. An ignored test records
+    them again, a paid run, when an adapter changes.
+  - A recording leaves out who is signed in, the Person's home folder,
+    and the skills and plugins a Harness lists among its commands.
+  - T3 Code's fixtures record other protocols (Claude's SDK messages,
+    Codex's app server), so none of them replays here.
 - **End to end.** Playwright drives the Electron window against a scripted
   fake ACP agent. Screenshots let Agents check the UI themselves.
 - **Speed budget.** A window test measures start-up time, memory and input
