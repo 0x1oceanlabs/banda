@@ -878,12 +878,67 @@ test("the composer walks earlier messages, keeps a draft and edits what waits", 
   await composer.press("Control+Enter")
   const queue = thread.getByRole("list", { name: "Waiting messages" })
   await expect(queue.getByText("after it")).toBeVisible()
+  await expect(composer).toHaveValue("")
   await composer.press("ArrowUp")
   const edit = thread.getByRole("textbox", { name: "Waiting message" })
   await expect(edit).toHaveValue("after it")
   await edit.fill("after it, changed")
   await edit.press("Enter")
   await expect(queue.getByText("after it, changed")).toBeVisible()
+  await thread.getByRole("button", { name: "Stop" }).click()
+})
+
+test("a sent message moves near the top, the end says what waits, and a Thread keeps its place", async () => {
+  window = await startWindow()
+  const { page } = window
+  const { thread, composer } = await firstThread(page)
+  for (const word of ["one", "two", "three", "four", "five", "six"]) {
+    await composer.fill(word)
+    await composer.press("Enter")
+    await expect(thread.getByText(`You said: ${word}`)).toBeVisible()
+  }
+  const log = thread.getByRole("log")
+  const view = thread.getByRole("region", { name: "Thread with Fake AI" })
+
+  // The message sent sits near the top, its reply below it.
+  await composer.fill("wait here")
+  await composer.press("Enter")
+  await expect(thread.getByText("Waiting.")).toBeVisible()
+  const sent = log.getByText("wait here", { exact: true })
+  const top = async () =>
+    (await sent.boundingBox())!.y - (await view.boundingBox())!.y
+  await expect.poll(top).toBeLessThan(120)
+
+  // Scrolled up, the button to the end says what waits there.
+  for (const word of ["a", "b"]) {
+    await composer.fill(word)
+    await composer.press("Control+Enter")
+    await expect(composer).toHaveValue("")
+  }
+  await expect(
+    thread.getByRole("list", { name: "Waiting messages" }).getByRole("listitem")
+  ).toHaveCount(2)
+  await log.hover()
+  await page.mouse.wheel(0, -3000)
+  const toEnd = thread.getByRole("button", { name: /^Scroll to end/ })
+  await expect(toEnd).toHaveText("Scroll to end · 2 queued")
+  await expect(toEnd).toHaveAttribute("data-active", "true")
+  await page.screenshot({ path: "test-results/18b-scroll-to-end.png" })
+
+  // Closed and opened again, the Thread is where its Person left it.
+  await expect(log.getByText("You said: one")).toBeInViewport()
+  await thread.getByRole("button", { name: "Close one" }).click()
+  await page
+    .getByRole("complementary", { name: "Sidebar" })
+    .getByRole("button", { name: /one/ })
+    .click()
+  await expect(thread.getByText("Waiting.")).toBeAttached()
+  await expect(log.getByText("You said: one")).toBeInViewport()
+  await expect(thread.getByText("Waiting.")).not.toBeInViewport()
+
+  await toEnd.click()
+  await expect(toEnd).toHaveAttribute("data-active", "false")
+  await expect(thread.getByText("Waiting.")).toBeInViewport()
   await thread.getByRole("button", { name: "Stop" }).click()
 })
 
