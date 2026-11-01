@@ -64,8 +64,10 @@ The evidence is in two notes: [tiling managers](../research/2026-11-01-tiling-ma
    - **Another machine.** A Space on another machine is one whose engine runs there. The window connects to it over SSH, and the Agents, terminals and files work where the folder is. The Space list names each Space's machine. Where a browser Pane runs for such a Space is still open.
    - **Later.** A Thread in its own git worktree of the Space, as T3 Code offers.
 
-7. **A workspace is a screen of Panes, as in Hyprland** (_decided_).
-   - There are up to nine. `Alt+1…9` goes to one, and `Alt+Shift+1…9` moves the focused Pane there.
+7. **A workspace is a screen of Panes, and the windows behave as in niri** (_decided_).
+   - **Two directions of scrolling.** Inside a workspace the Strip scrolls sideways. The workspaces sit one under another and scroll up and down: `Alt+PageUp` and `Alt+PageDown`, or the wheel with Alt held. A sideways swipe or the wheel with Shift held scrolls the Strip.
+   - **As many as needed.** As in niri, there is always one empty workspace at the bottom, and an empty one in the middle goes away when the Person leaves it. `Alt+1…9` goes to one by its number, and `Alt+Shift+1…9` moves the focused Pane there.
+   - **The overview of every window** (_decided_). `Alt+O`, or a click on the current workspace's number, zooms out to every workspace with its Panes, as niri's overview does. A click picks a Pane or a workspace. Dragging a Pane moves it to another place or workspace. `Esc` or `Alt+O` again zooms back in.
    - A workspace holds Panes from any Space. It is only how the screen is laid out: it allows and forbids nothing, and the Space stays the boundary.
    - Each Pane's header names its Space, because one screen mixes them.
    - A new Thread starts in the default Space or in one picked from the list (ADR 0006, decision 2). A Pane opened from a Thread, such as its terminal, opens in that Thread's Space. Any other new Pane opens in the default Space.
@@ -93,7 +95,9 @@ The evidence is in two notes: [tiling managers](../research/2026-11-01-tiling-ma
    | `Alt+Shift+Arrows` | move the Pane that way |
    | `Alt+Ctrl+Arrows` | resize it; in the Strip, step the column's width |
    | `Alt+Return` | a new Thread, in the default Space |
-   | `Alt+O`, then a letter | open or focus a kind: `T` terminal, `B` browser, `A` Agents, `H` Harnesses; with `Shift`, open another |
+   | `Alt+N`, then a letter | open or focus a kind: `T` terminal, `B` browser, `H` Harnesses; with `Shift`, open another |
+   | `Alt+O` | the overview of every window, and back |
+   | `Alt+PageUp`, `Alt+PageDown` | the workspace above or below |
    | `Alt+W` | close the Pane |
    | `Alt+Z` | zoom the Pane over the workspace, and back |
    | `Alt+S` | the drawer |
@@ -105,7 +109,7 @@ The evidence is in two notes: [tiling managers](../research/2026-11-01-tiling-ma
    | `Alt+K` | the key sheet; picking a row runs it |
 
    - **Reading the key.** Electron's main process reads the keys before the page does (`before-input-event`) and acts only when the Alt held down is the left one. AltGr stays free for typing on European layouts. Keys bind by their physical place, so they work on any layout. There is no app menu, so a lone Alt does nothing.
-   - **Terminal Panes keep the shell's Alt keys.** Banda takes only letters readline leaves free (`a e h i j k m o q s v w z`). `Alt+1…9` takes readline's numeric argument, which is rarely used. A per-Pane switch sends every key to the program, for tmux, zellij or Emacs.
+   - **Terminal Panes keep the shell's Alt keys.** Banda takes only letters readline leaves free (`a e h i j k m o q s v w z`), and `n`. `Alt+1…9` takes readline's numeric argument and `Alt+N` its search forward through history, both rarely used. A per-Pane switch sends every key to the program, for tmux, zellij or Emacs.
    - **Today's `Ctrl+\` and `Ctrl+W` move to Alt.** In a terminal they are the program's: quit and word erase.
    - **On a Mac the mod is Cmd**, because Option types characters there.
 
