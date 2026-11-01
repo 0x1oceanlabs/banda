@@ -22,6 +22,7 @@ pub struct ColumnsSettings {
     pub default: Option<Spanned<String>>,
     pub center: Option<Center>,
     /// The narrowest a column is drawn, in rem; a list's is half of it.
+    #[schemars(with = "Option<f64>", range(min = 0, max = 200))]
     pub min: Option<Spanned<f64>>,
 }
 
