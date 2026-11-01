@@ -15,7 +15,7 @@ use std::sync::Arc;
 use tokio::sync::broadcast;
 
 /// The folder inside a Space that Bandaso keeps for itself.
-pub(crate) const DATA: &str = ".bandaso";
+pub const DATA: &str = ".bandaso";
 const MANIFEST: &str = "space.json";
 const DATABASE: &str = "space.sqlite3";
 const LOCK: &str = "space.lock";

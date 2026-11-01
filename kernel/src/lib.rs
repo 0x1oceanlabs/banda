@@ -32,7 +32,7 @@ pub use ids::{AgentId, CommandId, EventId, Participant, PersonId, SpaceId};
 pub use kernel::{Kernel, KernelBuilder, SpaceSummary, decode};
 pub use module::{Call, Module, Stream};
 pub use outbox::{Effect, OnRestart, Outcome, Settled};
-pub use space::{ModuleSpace, Space};
+pub use space::{DATA, ModuleSpace, Space};
 pub use store::Tx;
 
 /// The version of the API's wire protocol. A window that speaks another

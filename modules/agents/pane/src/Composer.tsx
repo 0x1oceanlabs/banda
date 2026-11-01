@@ -21,6 +21,8 @@ import { type EnterKey, keyFor, steers, useEnterKey } from "./enter-key"
 import { recall } from "./history"
 import { imagesAmong, KINDS } from "./images"
 import { ownCommand, type Suggested } from "./slash"
+import { type FindFiles, useFileMenu } from "./FileMenu"
+import { mention, mentioning } from "./mention"
 import { useSlashMenu } from "./SlashMenu"
 
 /**
@@ -49,6 +51,7 @@ export function Composer({
   images,
   dropping,
   onPlanMode,
+  findFiles,
   onEditLast,
   onSend,
   onStop,
@@ -84,6 +87,8 @@ export function Composer({
   dropping: boolean
   /** Switches the Thread's plan mode, for `/plan` and `/default`. */
   onPlanMode: (on: boolean) => void
+  /** Finds files in the Space's folder, for `@`. */
+  findFiles?: FindFiles
   /** Opens the last message that waits to edit; given while one does. */
   onEditLast?: () => void
   /** Sends the text and the images, into the turn that runs if `steer`;
@@ -103,15 +108,37 @@ export function Composer({
     if (focused) field.current?.focus()
   }, [focused])
 
+  // Where the caret is, for `@` and a file's name before it.
+  const [caret, setCaret] = useState(0)
+  /** Puts `next` in the box, the caret at its end, where the field puts it. */
+  const put = (next: string) => {
+    setText(next)
+    setCaret(next.length)
+  }
   const pick = (command: Suggested) => {
     if (command.planMode === undefined) {
-      setText(`/${command.name} `)
+      put(`/${command.name} `)
     } else {
       onPlanMode(command.planMode)
-      setText("")
+      put("")
     }
   }
   const slash = useSlashMenu({ text, commands, name, onPick: pick })
+  const at = mentioning(text, caret)
+  const fileMenu = useFileMenu({
+    text,
+    word: at?.word,
+    findFiles,
+    onPick: (path) => {
+      if (!at) return
+      const named = mention(text, at, path)
+      setText(named.text)
+      setCaret(named.caret)
+      requestAnimationFrame(() =>
+        field.current?.setSelectionRange(named.caret, named.caret)
+      )
+    },
+  })
 
   const written = text.trim() !== "" || images.adding.length > 0
   const ready = written && !busy && !images.busy
@@ -148,6 +175,7 @@ export function Composer({
         </p>
       )}
       {slash.menu}
+      {fileMenu.menu}
       <input
         ref={files}
         type="file"
@@ -176,9 +204,12 @@ export function Composer({
           placeholder={placeholder ?? `Write to ${name}`}
           aria-label={`Message to ${name}`}
           {...slash.field}
+          {...fileMenu.field}
+          onSelect={(event) => setCaret(event.currentTarget.selectionStart)}
           className="max-h-48 min-h-10"
           onChange={(event) => {
             setText(event.target.value)
+            setCaret(event.target.selectionStart)
             setBack(0)
           }}
           onPaste={(event) => {
@@ -188,7 +219,7 @@ export function Composer({
             images.add(pasted)
           }}
           onKeyDown={(event) => {
-            if (slash.onKeyDown(event)) return
+            if (slash.onKeyDown(event) || fileMenu.onKeyDown(event)) return
             if (event.key === "Tab" && event.shiftKey && plan !== undefined) {
               event.preventDefault()
               onPlanMode(!plan)
@@ -203,7 +234,7 @@ export function Composer({
               if (!step) return
               event.preventDefault()
               if (step === "edit") return onEditLast?.()
-              setText(step.text)
+              put(step.text)
               setBack(step.back)
               return
             }
