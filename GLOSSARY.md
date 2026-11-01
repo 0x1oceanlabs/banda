@@ -181,9 +181,15 @@ it is answered.
 **Watch**:
 What a module draws for each Space, showing nothing, to tell the window what
 its work there calls the Person for and what the sidebar lists for it. The
-bar's Mark shows the loudest, and a call that comes now plays a sound.
+bar's Mark shows the loudest, and the window tells the Person of each thing
+that starts calling.
 
 **Call**:
 Something that calls for the Person now: a Thread finished while they were
-away, asks them, or failed. The window plays its sound, unless the Person is
-looking at it.
+away, asks them, or failed. The window tells them where they look: nothing
+while they look at it, its sound, a toast in the window, or a system
+notification when the window is behind. `Alt+U` goes to it.
+
+**Toast**:
+A short card at the window's top right that tells of a Call whose Thread is
+not on screen. It goes away by itself; the Mark remembers.

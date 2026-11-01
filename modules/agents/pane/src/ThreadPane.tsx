@@ -41,6 +41,7 @@ import {
   TraceTitle,
 } from "@bandaso/ui/components/trace"
 import { useAct } from "@bandaso/ui/hooks/use-act"
+import { useInFront } from "@bandaso/ui/hooks/use-in-front"
 import { clock } from "@bandaso/ui/lib/words"
 import { READ_AGAIN, type Source, useLive } from "@bandaso/ui/hooks/use-live"
 import { definePane, paneOf, type PaneProps } from "@bandaso/ui/pane"
@@ -54,7 +55,6 @@ import {
   RotateCcwIcon,
   ShieldQuestionIcon,
 } from "lucide-react"
-import { lookAt } from "./looking"
 import { settledTurn } from "./marks"
 import { markSeen } from "./seen"
 import {
@@ -104,6 +104,7 @@ export const threadPane = definePane<ThreadArgs>({
   kind: "agents.thread",
   module: "agents",
   title: (args) => args.title || "New Thread",
+  shows: (args) => args.thread,
   icon: MessageSquareIcon,
   start: NEW_THREAD,
   Pane: ThreadPane,
@@ -142,17 +143,15 @@ function ThreadPane({
       update({ thread, harness: state.harness, title: state.title })
   }, [thread, state, args.title, args.harness, update])
 
-  // A Person who looks at the Thread sees how its latest turn ended, which
-  // settles its mark in the sidebar and the bar.
+  // A Person who looks at the Thread, its Pane focused in the window in
+  // front, sees how its latest turn ended, which settles its mark in the
+  // sidebar and the bar (ADR 0011, decision 1).
+  const front = useInFront()
   const settled = state && settledTurn(state.turns)
   useEffect(() => {
-    if (focused && thread !== null && settled) markSeen(thread, settled)
-  }, [focused, thread, settled])
-  // Nor does it call them with a sound while they look at it.
-  useEffect(
-    () => (focused && thread !== null ? lookAt(thread) : undefined),
-    [focused, thread]
-  )
+    if (focused && front && thread !== null && settled)
+      markSeen(thread, settled)
+  }, [focused, front, thread, settled])
 
   // A Thread not yet started keeps its settings here until its first
   // message, starting from its Harness's.

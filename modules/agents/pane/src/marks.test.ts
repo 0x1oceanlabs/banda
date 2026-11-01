@@ -1,6 +1,6 @@
 import type { ListedThread, TurnView } from "@bandaso/contract/agents"
 import { expect, test } from "vitest"
-import { attentionOf, callsOf, markOf, settledTurn } from "./marks"
+import { attentionOf, markOf, settledTurn } from "./marks"
 
 function thread(more: Partial<ListedThread> = {}): ListedThread {
   return {
@@ -75,34 +75,4 @@ test("the turn a Person sees settled is the latest that began and ended", () => 
       turn("u3", "queued"),
     ])
   ).toBe("u1")
-})
-
-test("a Thread calls once, when it comes to a mark that calls now", () => {
-  const first = callsOf(undefined, [ended("running")], {})
-  expect(first.calls).toEqual([])
-
-  const finished = callsOf(first.marks, [ended("done")], {})
-  expect(finished.calls.map((c) => c.chime)).toEqual(["done"])
-  expect(callsOf(finished.marks, [ended("done")], {}).calls).toEqual([])
-
-  const seen = callsOf(finished.marks, [ended("done")], { t1: "u1" })
-  expect(seen.calls).toEqual([])
-})
-
-test("what already was when a Watch began does not call", () => {
-  const threads = [
-    ended("failed"),
-    { ...thread({ asking: [{ item: "q", title: "Which?" }] }), id: "t2" },
-  ]
-  expect(callsOf(undefined, threads, {}).calls).toEqual([])
-})
-
-test("a new Thread calls from rest; a stopped one never does", () => {
-  const before = callsOf(undefined, [], {}).marks
-  const asking = {
-    ...thread({ asking: [{ item: "q", title: "Which?" }] }),
-    id: "t2",
-  }
-  const now = callsOf(before, [ended("stopped"), asking], {})
-  expect(now.calls).toEqual([{ thread: asking, chime: "asking" }])
 })

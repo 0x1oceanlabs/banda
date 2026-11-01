@@ -45,6 +45,11 @@ export function kindOf(kind: string): AnyKind | undefined {
   return kinds.find((k) => k.kind === kind)
 }
 
+/** The one thing a Pane shows, as its kind names it (`PaneKind.shows`). */
+export function showsOf(pane: PaneState): string | null {
+  return kindOf(pane.kind)?.shows?.(pane.args) ?? null
+}
+
 /** Whether the engine runs what a kind of Pane, or a Watch, needs. */
 export function runs(
   needs: { module?: string },

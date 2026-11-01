@@ -11,7 +11,6 @@ import type { ComponentType } from "react"
 import type { LucideIcon } from "lucide-react"
 import type { Engine, JsonValue, SpaceId } from "@bandaso/contract"
 import type { MarkState } from "./components/banda-mark"
-import type { Chime } from "./sound"
 
 /**
  * Marks where a program reads the keys, as in a terminal. Banda's Alt keys
@@ -60,6 +59,13 @@ export type PaneKind<A extends { [key: string]: JsonValue }> = {
   /** A list that sits beside other Panes: it opens a third of the screen wide. */
   narrow?: boolean
   /**
+   * The one thing the Pane shows, such as its Thread, by the ID its
+   * module lists it with (`Listed.id`): a Person who looks at the Pane sees
+   * that thing, so it need not call them (ADR 0011). None for a Pane of no
+   * one thing, as a list, or of one not yet made.
+   */
+  shows?: (args: A) => string | null
+  /**
    * What its module lets go of once the Pane leaves every workspace: it
    * closed, or its place shows another Pane or the same with other args. A
    * program in a terminal stops then. A Pane drawn again, as when it moves
@@ -95,16 +101,11 @@ export type Attention = { mark: MarkState; waiting: number }
 export const QUIET: Attention = { mark: "rest", waiting: 0 }
 
 /**
- * Something that calls for the Person now, such as a Thread that finished
- * while they were away: the window may play its sound (ADR 0009). `about`
- * names what calls, for the words around it.
- */
-export type Call = { chime: Chime; about: string }
-
-/**
  * One thing a module lists in the sidebar for a Space: a Thread, for the
  * agents module (ADR 0008). The module says what each one is; the window
- * arranges them as the Person's sidebar settings say.
+ * arranges them as the Person's sidebar settings say. One whose mark is
+ * `done`, `asking` or `failed` calls its Person: the window tells them
+ * where they will notice it (ADR 0011).
  */
 export type Listed = {
   id: string
@@ -114,7 +115,10 @@ export type Listed = {
   changed: number
   /** When the work that runs now began; a timer counts from it. */
   began?: number
-  /** What calls the Person, in a few words: what it asks, why it failed. */
+  /**
+   * What calls the Person, in a few words: what it asks, why it failed.
+   * A toast or a system notification says it too.
+   */
   calls?: string
   /** What it was last asked to do; its first line shows when nothing calls. */
   said?: string
@@ -130,20 +134,19 @@ export type Report = Attention & { listed: readonly Listed[] }
 export type WatchProps = {
   engine: Engine
   space: SpaceId
-  /** Says what the Space calls for now and lists; called on each change. */
-  report: (report: Report) => void
   /**
-   * Calls for the Person once, when something changes now: never for what
-   * already was when the Watch began, nor for what they are looking at.
+   * Says what the Space calls for now and lists; called on each change,
+   * first once the module has read its list. What calls in the first
+   * report already was, and is no news (ADR 0011, decision 6).
    */
-  call: (call: Call) => void
+  report: (report: Report) => void
 }
 
 /**
  * How a module tells the window what its work in a Space calls the Person
- * for, what the sidebar lists, and when something calls them now, while
- * none of its Panes may show. The window draws one per Space for as long
- * as the engine runs the module; it draws nothing itself.
+ * for and what the sidebar lists, while none of its Panes may show. The
+ * window draws one per Space for as long as the engine runs the module; it
+ * draws nothing itself.
  */
 export type Watch = {
   /** The engine module it follows; the window draws it only with it. */
