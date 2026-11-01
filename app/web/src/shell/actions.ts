@@ -4,7 +4,7 @@
  * read the same list later.
  */
 import type { SpaceId } from "@bandaso/contract"
-import { agentsPane } from "@bandaso/agents-pane"
+import { NEW_THREAD, threadPane } from "@bandaso/agents-pane"
 import { type PaneState, paneOf, type Place } from "@bandaso/ui/pane"
 import type { Action } from "../actions/actions"
 import { launcher, widthOf } from "../registry"
@@ -53,12 +53,12 @@ export function opening(
 }
 
 /**
- * A new Thread in a Space, in a new column. Until a Thread needs no Agent
- * (ADR 0006), it starts at the Space's Agents.
+ * A new Thread in a Space, in a new column, on this computer's first
+ * Harness (ADR 0006). One not yet started there gets the focus instead.
  */
 export function newThread(workspaces: Workspaces, space: SpaceId): Workspaces {
-  const agents = paneOf(agentsPane, {})
-  return opening(workspaces, space, agents, undefined, "right")
+  const thread = paneOf(threadPane, NEW_THREAD)
+  return opening(workspaces, space, thread, undefined, "right")
 }
 
 export const ACTIONS: readonly Action<Shell>[] = [

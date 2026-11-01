@@ -1,8 +1,8 @@
-//! The agents module: a Person works with Agents in Threads (ADR 0001,
-//! decision 10).
+//! The agents module: a Person works with Agents in Threads. A Thread is
+//! one session with a Harness in a Space, and the Agent at work in it is
+//! its own, with no name or settings (ADR 0006).
 //!
-//! - **Agents** are text files in the Space, and the **Harness list** is a
-//!   text file of the machine ([`settings`]).
+//! - The **Harness list** is a text file of the machine ([`settings`]).
 //! - **Threads, turns and Questions** are this module's tables and facts
 //!   ([`model`]). A message queues a turn, or goes into the turn that runs
 //!   (steering); the outbox runs a Thread's turns one at a time, and
@@ -18,12 +18,10 @@
 //! | `agents.account` | manage | a Harness as it says: its program, who is signed in, how to sign in: `{harness}` |
 //! | `agents.sign_in` | manage | signs in with one of those ways, then the Harness starts again, and the `turn` that needed it goes again: `{harness, way, turn?}` |
 //! | `agents.sign_out` | manage | asks the Harness to sign out, then it starts again: `{harness}` |
-//! | `agents.list` | read | the Space's Agents |
-//! | `agents.create` | manage | a new Agent: `{name, harness}` |
-//! | `agents.threads` | read | Threads, the latest first: `{agent?}` |
+//! | `agents.threads` | read | the Space's Threads, the latest first |
 //! | `agents.thread` | read | one Thread as a view: `{thread}` |
-//! | `agents.defaults` | read | what an Agent's new Threads start with: `{agent}` |
-//! | `agents.send` | write | a message that queues a turn, or with `steer` joins the one that runs: `{agent, thread?, text, images?, settings?, steer?}` |
+//! | `agents.defaults` | read | what a new Thread on a Harness starts with: `{harness}` |
+//! | `agents.send` | write | a message that queues a turn, or with `steer` joins the one that runs: in a Thread `{thread, …}`, or in a new one on a Harness `{harness, …}`; `{text, images?, settings?, steer?}` |
 //! | `agents.edit` | write | a waiting message's new text: `{turn, text}` |
 //! | `agents.withdraw` | write | takes a waiting message back: `{turn}` |
 //! | `agents.steer` | write | sends a waiting message into the turn that runs: `{turn}` |
@@ -136,8 +134,6 @@ enum Method {
     Account,
     SignIn,
     SignOut,
-    List,
-    Create,
     Threads,
     Thread,
     Defaults,
@@ -161,8 +157,6 @@ impl Method {
             "account" => Method::Account,
             "sign_in" => Method::SignIn,
             "sign_out" => Method::SignOut,
-            "list" => Method::List,
-            "create" => Method::Create,
             "threads" => Method::Threads,
             "thread" => Method::Thread,
             "defaults" => Method::Defaults,
@@ -184,13 +178,12 @@ impl Method {
     fn right(&self) -> Right {
         match self {
             Method::Harnesses
-            | Method::List
             | Method::Threads
             | Method::Thread
             | Method::Defaults
             | Method::Image => Right::Read,
             // A Harness's account serves every Space on this computer.
-            Method::Create | Method::Account | Method::SignIn | Method::SignOut => Right::Manage,
+            Method::Account | Method::SignIn | Method::SignOut => Right::Manage,
             Method::Send
             | Method::Edit
             | Method::Withdraw
@@ -222,39 +215,24 @@ struct SignIn {
 }
 
 #[derive(Deserialize)]
-struct Create {
-    name: String,
-    harness: String,
-}
-
-#[derive(Deserialize)]
-struct Threads {
-    #[serde(default)]
-    agent: Option<AgentId>,
-}
-
-#[derive(Deserialize)]
 struct OneThread {
     thread: ThreadId,
 }
 
-#[derive(Deserialize)]
-struct OneAgent {
-    agent: AgentId,
-}
-
+/// A message in a Thread, or the first one of a new Thread on a Harness.
 #[derive(Deserialize)]
 struct Send {
-    agent: AgentId,
     #[serde(default)]
     thread: Option<ThreadId>,
+    #[serde(default)]
+    harness: Option<String>,
     #[serde(default)]
     text: String,
     /// The images it carries, each added with `agents.attach` first.
     #[serde(default)]
     images: Vec<ImageId>,
-    /// What a new Thread starts with, instead of the Agent's defaults; or
-    /// the Thread's settings from this turn on.
+    /// What a new Thread starts with, instead of its Harness's defaults;
+    /// or the Thread's settings from this turn on.
     #[serde(default)]
     settings: Option<Settings>,
     /// It goes into the turn that runs, if one does, instead of waiting
@@ -299,8 +277,8 @@ struct Configure {
     settings: Settings,
 }
 
-/// What `agents.defaults` answers: what an Agent's new Threads start with,
-/// and what its Harness last offered. `at` is where the Space's log stood,
+/// What `agents.defaults` answers: what a new Thread on a Harness starts
+/// with, and what the Harness last offered in this Space. `at` is where the Space's log stood,
 /// so a window hears when a Thread learns more of what the Harness offers.
 #[derive(Clone, Debug, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "agents/")]
@@ -372,7 +350,6 @@ impl Module for Agents {
         let space = call.space();
         match method {
             Method::Harnesses => value(self.harnesses.views()),
-            Method::List => value(settings::agents(space.folder())?),
             Method::Account => {
                 let OneHarness { harness } = decode(params)?;
                 let (harness, connection) = self.running(space.id(), &harness).await?;
@@ -419,27 +396,8 @@ impl Module for Agents {
                 drop(connection);
                 self.start_again(&call, &harness.id).await
             }
-            Method::Create => {
-                let Create { name, harness } = decode(params)?;
-                self.harness(&harness)?;
-                let (folder, author) = (space.folder().to_owned(), call.participant());
-                call.command(move |tx| {
-                    // The module writes its own settings: the Agent's file
-                    // and its fact come from one command.
-                    let agent = settings::create(&folder, &name, &harness)?;
-                    let fact = Fact::AgentCreated {
-                        agent: agent.id,
-                        name: agent.name.clone(),
-                        harness: agent.harness.clone(),
-                    };
-                    emit(tx, author, agent.id, &fact)?;
-                    Ok(serde_json::to_value(agent)?)
-                })
-                .await
-            }
             Method::Threads => {
-                let Threads { agent } = decode(params)?;
-                let (at, threads) = space.view(move |sql| store::threads(sql, agent)).await?;
+                let (at, threads) = space.view(store::threads).await?;
                 value(ThreadList { at, threads })
             }
             Method::Thread => {
@@ -465,38 +423,18 @@ impl Module for Agents {
                 value(ThreadView { at, ..view })
             }
             Method::Defaults => {
-                let OneAgent { agent } = decode(params)?;
-                let agents = settings::agents(space.folder())?;
-                let found = agents
-                    .iter()
-                    .find(|a| a.id == agent)
-                    .ok_or_else(|| Refusal::not_found("There is no such Agent in this Space."))?;
-                // What this Agent's Harness offered, in its own Threads first.
-                let mut asked = vec![found.id];
-                asked.extend(
-                    agents
-                        .iter()
-                        .filter(|a| a.harness == found.harness && a.id != found.id)
-                        .map(|a| a.id),
-                );
+                let OneHarness { harness } = decode(params)?;
+                self.harness(&harness)?;
                 let (at, offer) = space
-                    .view(move |sql| {
-                        for agent in asked {
-                            if let Some(offer) = store::latest_offer(sql, agent)? {
-                                return Ok(offer);
-                            }
-                        }
-                        Ok(Offer::default())
-                    })
+                    .view(move |sql| Ok(store::latest_offer(sql, &harness)?.unwrap_or_default()))
                     .await?;
                 // What the composer shows is what the new Thread gets: the
-                // Agent's settings, and the Harness's values where it has none.
-                let mut settings = found.settings.clone();
+                // Harness's own values for its options.
+                let mut settings = Settings::default();
                 for option in &offer.options {
                     settings
                         .options
-                        .entry(option.id.clone())
-                        .or_insert_with(|| option.value.clone());
+                        .insert(option.id.clone(), option.value.clone());
                 }
                 value(Defaults {
                     at,
@@ -506,25 +444,29 @@ impl Module for Agents {
             }
             Method::Send => {
                 let Send {
-                    agent,
                     thread,
+                    harness,
                     text,
                     images,
                     settings,
                     steer,
                 } = decode(params)?;
                 rules::may_send(&text, &images)?;
-                let found = settings::agent(space.folder(), agent)?;
+                let into = match (thread, harness) {
+                    (Some(thread), _) => Target::Thread(thread),
+                    (None, Some(harness)) => Target::New(self.harness(&harness)?.id.clone()),
+                    (None, None) => {
+                        return Err(Refusal::invalid(
+                            "A message goes into a Thread, or starts one on a Harness.",
+                        ));
+                    }
+                };
                 let author = call.participant();
                 if settings.is_some() {
                     rules::may_choose(author)?;
                 }
-                let settings = match (thread, settings) {
-                    (None, None) => Some(found.settings),
-                    (_, settings) => settings,
-                };
                 let message = Message { text, images };
-                call.command(move |tx| send(tx, author, agent, thread, message, settings, steer))
+                call.command(move |tx| send(tx, author, into, message, settings, steer))
                     .await
             }
             Method::Edit => {
@@ -639,7 +581,13 @@ impl Module for Agents {
     }
 
     async fn opened(&self, space: ModuleSpace) -> Result<(), Error> {
-        space.write(between::cut_short).await
+        let agents = settings::old_agents(space.folder())?;
+        space
+            .write(move |tx| {
+                store::fill_harnesses(tx.sql(), &agents)?;
+                between::cut_short(tx)
+            })
+            .await
     }
 
     /// Every effect of this module dies with the Harness's process.
@@ -696,16 +644,21 @@ struct Message {
     images: Vec<ImageId>,
 }
 
-/// A message to an Agent, in its Thread or in a new one, and a turn that
-/// waits behind the Thread's earlier turns; or, to `steer`, a message into
-/// the turn that runs, if one does. A new Thread starts with `settings`;
-/// an existing one changes to them, if they are given. A message that
-/// waits for its own turn lets a held queue go on.
+/// Where a message goes: into a Thread, or into a new one on a Harness.
+enum Target {
+    Thread(ThreadId),
+    New(String),
+}
+
+/// A message in a Thread, or the first of a new Thread on a Harness, and
+/// a turn that waits behind the Thread's earlier turns; or, to `steer`, a
+/// message into the turn that runs, if one does. A new Thread starts with
+/// `settings`; an existing one changes to them, if they are given. A
+/// message that waits for its own turn lets a held queue go on.
 fn send(
     tx: &mut Tx<'_>,
     author: Participant,
-    agent: AgentId,
-    thread: Option<ThreadId>,
+    into: Target,
     Message { text, images }: Message,
     settings: Option<Settings>,
     steer: bool,
@@ -713,34 +666,33 @@ fn send(
     let now = tx.now();
     let images = store::unsent_images(tx.sql(), &images, author)?;
     rules::may_carry(&images)?;
-    let thread = match thread {
-        Some(id) => {
-            let found = store::thread(tx.sql(), id)?
+    let (thread, agent) = match into {
+        Target::Thread(id) => {
+            let agent = store::agent_of(tx.sql(), id)?
                 .ok_or_else(|| Refusal::not_found("There is no such Thread."))?;
-            if found.agent != agent {
-                return Err(Refusal::invalid("This Thread belongs to another Agent.").into());
-            }
             if let Some(settings) = settings {
                 configure(tx, author, id, settings)?;
             }
-            id
+            (id, agent)
         }
-        None => {
+        Target::New(harness) => {
             let summary = ThreadSummary {
                 id: ThreadId::new(),
-                agent,
+                harness,
                 title: rules::title(&text, &images),
                 updated_at: now,
             };
+            // The Thread's own Agent, and only one.
+            let agent = AgentId::new();
             let settings = settings.unwrap_or_default();
-            store::insert_thread(tx.sql(), &summary, author, &settings)?;
+            store::insert_thread(tx.sql(), &summary, agent, author, &settings)?;
             let fact = Fact::ThreadStarted {
                 thread: summary.id,
-                agent,
                 title: summary.title.clone(),
+                harness: Some(summary.harness.clone()),
             };
             emit(tx, author, summary.id, &fact)?;
-            summary.id
+            (summary.id, agent)
         }
     };
     let running = match steer {

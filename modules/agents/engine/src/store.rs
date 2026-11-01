@@ -88,6 +88,11 @@ CREATE INDEX agents_images_by_item ON agents_images (item);
 -- The Thread's queue waits for a Person: a stop or a restart held it.
 ALTER TABLE agents_threads ADD COLUMN held INTEGER NOT NULL DEFAULT 0;
 "#,
+    r#"
+-- A Thread names its Harness; the module fills it in for older Threads
+-- from their Agents' files (ADR 0006).
+ALTER TABLE agents_threads ADD COLUMN harness TEXT;
+"#,
 ];
 
 fn json<T: Serialize>(value: &T) -> Result<String, Error> {
@@ -116,24 +121,38 @@ fn state_of(row: &Row<'_>, index: usize) -> rusqlite::Result<TurnState> {
     serde_json::from_value(serde_json::Value::String(word)).map_err(|e| unreadable(index, e))
 }
 
+/// A new Thread, and the Agent at work in it: its own, and only one.
 pub fn insert_thread(
     sql: &Connection,
     thread: &ThreadSummary,
+    agent: AgentId,
     author: Participant,
     settings: &Settings,
 ) -> Result<(), Error> {
     sql.execute(
-        "INSERT INTO agents_threads (id, agent, author, title, settings, created_at, updated_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?6)",
+        "INSERT INTO agents_threads
+         (id, agent, harness, author, title, settings, created_at, updated_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7)",
         params![
             thread.id,
-            thread.agent,
+            agent,
+            thread.harness,
             json(&author)?,
             thread.title,
             json(settings)?,
             thread.updated_at
         ],
     )?;
+    Ok(())
+}
+
+/// Names the Harness of each older Thread whose Agent's file named one.
+pub fn fill_harnesses(sql: &Connection, agents: &[(AgentId, String)]) -> Result<(), Error> {
+    let mut statement =
+        sql.prepare("UPDATE agents_threads SET harness = ?2 WHERE agent = ?1 AND harness IS NULL")?;
+    for (agent, harness) in agents {
+        statement.execute(params![agent, harness])?;
+    }
     Ok(())
 }
 
@@ -194,13 +213,13 @@ pub fn set_usage(sql: &Connection, thread: ThreadId, usage: &Usage) -> Result<()
     set_thread_json(sql, thread, "usage", usage)
 }
 
-/// What a Harness last offered in a Thread of `agent`.
-pub fn latest_offer(sql: &Connection, agent: AgentId) -> Result<Option<Offer>, Error> {
+/// What a Harness last offered, in any Thread of the Space.
+pub fn latest_offer(sql: &Connection, harness: &str) -> Result<Option<Offer>, Error> {
     let text: Option<String> = sql
         .query_row(
-            "SELECT offer FROM agents_threads WHERE agent = ?1 AND offer IS NOT NULL
+            "SELECT offer FROM agents_threads WHERE harness = ?1 AND offer IS NOT NULL
              ORDER BY updated_at DESC, id DESC LIMIT 1",
-            params![agent],
+            params![harness],
             |row| row.get(0),
         )
         .optional()?;
@@ -364,12 +383,12 @@ pub fn evidence<T: DeserializeOwned>(
     Ok(text.and_then(|text| serde_json::from_str(&text).ok()))
 }
 
-const THREAD: &str = "SELECT id, agent, title, updated_at FROM agents_threads";
+const THREAD: &str = "SELECT id, COALESCE(harness, ''), title, updated_at FROM agents_threads";
 
 fn read_thread(row: &Row<'_>) -> rusqlite::Result<ThreadSummary> {
     Ok(ThreadSummary {
         id: row.get(0)?,
-        agent: row.get(1)?,
+        harness: row.get(1)?,
         title: row.get(2)?,
         updated_at: row.get(3)?,
     })
@@ -381,12 +400,10 @@ pub fn thread(sql: &Connection, id: ThreadId) -> Result<Option<ThreadSummary>, E
         .optional()?)
 }
 
-/// The Threads of one Agent, or of every Agent, the latest first.
-pub fn threads(sql: &Connection, agent: Option<AgentId>) -> Result<Vec<ThreadSummary>, Error> {
-    let mut statement = sql.prepare(&format!(
-        "{THREAD} WHERE ?1 IS NULL OR agent = ?1 ORDER BY updated_at DESC, id DESC"
-    ))?;
-    let rows = statement.query_map(params![agent], read_thread)?;
+/// The Space's Threads, the latest first.
+pub fn threads(sql: &Connection) -> Result<Vec<ThreadSummary>, Error> {
+    let mut statement = sql.prepare(&format!("{THREAD} ORDER BY updated_at DESC, id DESC"))?;
+    let rows = statement.query_map([], read_thread)?;
     Ok(rows.collect::<rusqlite::Result<_>>()?)
 }
 
@@ -634,7 +651,7 @@ pub fn open_questions(sql: &Connection, turn: TurnId) -> Result<Vec<Item>, Error
     Ok(rows.collect::<rusqlite::Result<_>>()?)
 }
 
-/// The Agent a Thread belongs to.
+/// The Agent at work in a Thread.
 pub fn agent_of(sql: &Connection, thread: ThreadId) -> Result<Option<AgentId>, Error> {
     Ok(sql
         .query_row(
@@ -643,4 +660,43 @@ pub fn agent_of(sql: &Connection, thread: ThreadId) -> Result<Option<AgentId>, E
             |row| row.get(0),
         )
         .optional()?)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn older_threads_learn_their_harness_from_their_agents_files() {
+        let sql = Connection::open_in_memory().unwrap();
+        for migration in MIGRATIONS {
+            sql.execute_batch(migration).unwrap();
+        }
+        let (writer, gone) = (AgentId::new(), AgentId::new());
+        for (title, agent) in [("by Writer", writer), ("by one whose file went", gone)] {
+            sql.execute(
+                "INSERT INTO agents_threads (id, agent, author, title, created_at, updated_at)
+                 VALUES (?1, ?2, '{}', ?3, 0, 0)",
+                params![ThreadId::new(), agent, title],
+            )
+            .unwrap();
+        }
+        let agents = [(writer, "codex".to_owned())];
+        fill_harnesses(&sql, &agents).unwrap();
+        fill_harnesses(&sql, &[(writer, "claude".to_owned())]).unwrap();
+        let mut named: Vec<_> = threads(&sql)
+            .unwrap()
+            .into_iter()
+            .map(|t| (t.title, t.harness))
+            .collect();
+        named.sort();
+        assert_eq!(
+            named,
+            [
+                ("by Writer".to_owned(), "codex".to_owned()),
+                ("by one whose file went".to_owned(), String::new()),
+            ],
+            "a Harness once named stays"
+        );
+    }
 }

@@ -1,5 +1,5 @@
-import { Fragment, useMemo, useState } from "react"
-import type { AgentId, Engine, SpaceId } from "@bandaso/contract"
+import { Fragment, useEffect, useMemo, useState } from "react"
+import type { Engine, SpaceId } from "@bandaso/contract"
 import type {
   Body,
   Defaults,
@@ -44,7 +44,7 @@ import {
 } from "@bandaso/ui/components/trace"
 import { useAct } from "@bandaso/ui/hooks/use-act"
 import { READ_AGAIN, type Source, useLive } from "@bandaso/ui/hooks/use-live"
-import { definePane, type PaneProps } from "@bandaso/ui/pane"
+import { definePane, paneOf, type PaneProps } from "@bandaso/ui/pane"
 import {
   BotIcon,
   BrainIcon,
@@ -81,19 +81,30 @@ import { Queue, type QueueActions } from "./Queue"
 import { ToolCall } from "./ToolCall"
 import { SettingsBar } from "./ThreadSettings"
 import { SignIn, Warning } from "./SignIn"
+import { harnessName, useHarnesses } from "./harnesses"
+import { NewThreadBar } from "./NewThread"
 
-/** One Thread with an Agent; without `thread`, the next message starts one. */
+/**
+ * One Thread: a session with a Harness in a Space (ADR 0006). Without
+ * `thread`, the next message starts one on `harness`, or on this computer's
+ * first Harness when it names none. `title` keeps the header's words while
+ * the Thread loads.
+ */
 export type ThreadArgs = {
-  agent: AgentId
-  name: string
   thread: ThreadId | null
+  harness: string
+  title: string
 }
+
+/** A Thread not yet started, on this computer's first Harness. */
+export const NEW_THREAD: ThreadArgs = { thread: null, harness: "", title: "" }
 
 export const threadPane = definePane<ThreadArgs>({
   kind: "agents.thread",
   module: "agents",
-  title: (args) => args.name,
+  title: (args) => args.title || "New Thread",
   icon: MessageSquareIcon,
+  start: NEW_THREAD,
   Pane: ThreadPane,
 })
 
@@ -130,15 +141,35 @@ function ThreadPane({
   const sending = useAct()
   const acting = useAct()
   const reader = useImageReader(engine, space)
+  const harnesses = useHarnesses(engine, space)
+  const harness =
+    thread === null
+      ? args.harness || harnesses[0]?.id || ""
+      : (state?.harness ?? args.harness)
+  const name = harnessName(harnesses, harness) || "the Agent"
+
+  // The header follows the Thread: its title, once the first message gives
+  // it one, and its Harness come back with the Pane.
+  useEffect(() => {
+    if (
+      thread !== null &&
+      state &&
+      (state.title !== args.title || state.harness !== args.harness)
+    )
+      update({ thread, harness: state.harness, title: state.title })
+  }, [thread, state, args.title, args.harness, update])
 
   // A Thread not yet started keeps its settings here until its first
-  // message, starting from the Agent's.
-  const defaults = useAgentDefaults(
+  // message, starting from its Harness's.
+  const defaults = useHarnessDefaults(
     engine,
     space,
-    thread === null ? args.agent : null
+    thread === null && harness !== "" ? harness : null
   )
-  const [draft, setDraft] = useState<Settings>()
+  const [drafts, setDrafts] = useState<Record<string, Settings>>({})
+  const draft = drafts[harness]
+  const setDraft = (next: Settings) =>
+    setDrafts((drafts) => ({ ...drafts, [harness]: next }))
   const settings =
     thread === null ? (draft ?? defaults?.settings) : state?.settings
   const offer: Offer =
@@ -156,7 +187,7 @@ function ThreadPane({
   const images = useAttachments({
     attach: (image: Attaching) =>
       engine.command<Image>("agents.attach", image, space),
-    closed: offer.no_images ? `${args.name} does not take images.` : undefined,
+    closed: offer.no_images ? `${name} does not take images.` : undefined,
   })
   const [dropping, setDropping] = useState(false)
   const send = async (text: string, images: Attached[], steer: boolean) => {
@@ -167,8 +198,7 @@ function ThreadPane({
         // A new Thread starts as its composer shows; an existing one runs
         // with its own settings, which the bar changes as it goes.
         {
-          agent: args.agent,
-          thread,
+          ...(thread === null ? { harness } : { thread }),
           text,
           images: images.map(({ image }) => image.id),
           settings: thread === null ? (settings ?? null) : null,
@@ -177,7 +207,8 @@ function ThreadPane({
         space
       )
     )
-    if (sent && thread === null) update({ ...args, thread: sent.thread })
+    if (sent && thread === null)
+      update({ thread: sent.thread, harness, title: args.title })
     return sent !== undefined
   }
   const stop = (turn: TurnView) =>
@@ -237,7 +268,7 @@ function ThreadPane({
     >
       <div className="min-h-0 flex-1">
         {thread === null ? (
-          <Start name={args.name} />
+          <Start name={name} />
         ) : live.state === "loading" ? (
           <Centered>
             <Spinner />
@@ -251,7 +282,7 @@ function ThreadPane({
         ) : (
           <Transcript
             state={live.view}
-            name={args.name}
+            name={name}
             reader={reader}
             answering={acting.busy}
             onAnswer={answer}
@@ -260,7 +291,7 @@ function ThreadPane({
               <SignIn
                 engine={engine}
                 space={space}
-                agent={args.agent}
+                harness={harness}
                 turn={turn.id}
                 open={open}
                 onSignedIn={() => retry(turn)}
@@ -282,7 +313,7 @@ function ThreadPane({
           </p>
         )}
         <Composer
-          name={args.name}
+          name={name}
           focused={focused}
           busy={sending.busy}
           working={turn}
@@ -295,6 +326,19 @@ function ThreadPane({
           onSend={send}
           onStop={stop}
         >
+          {thread === null && (
+            <NewThreadBar
+              engine={engine}
+              space={space}
+              harness={harness}
+              harnesses={harnesses}
+              disabled={sending.busy}
+              onSpace={(other) =>
+                open(paneOf(threadPane, { ...args, harness }), "here", other)
+              }
+              onHarness={(next) => update({ ...args, harness: next })}
+            />
+          )}
           {settings && (
             <SettingsBar
               settings={settings}
@@ -338,25 +382,25 @@ function Start({ name }: { name: string }) {
 const OFFERED = { module: "agents", kinds: ["thread.offered"] }
 
 /**
- * What a new Thread of `agent` starts with. A Thread learns what the
- * Harness offers, such as its models: a new Thread offers it too.
+ * What a new Thread on `harness` starts with: full access, and what the
+ * Harness last offered, such as its models.
  */
-function useAgentDefaults(
+function useHarnessDefaults(
   engine: Engine,
   space: SpaceId,
-  agent: AgentId | null
+  harness: string | null
 ): Defaults | undefined {
   const source = useMemo<Source<Defaults> | null>(
     () =>
-      agent === null
+      harness === null
         ? null
         : {
             read: () =>
-              engine.call<Defaults>("agents.defaults", { agent }, { space }),
+              engine.call<Defaults>("agents.defaults", { harness }, { space }),
             filter: OFFERED,
             apply: () => READ_AGAIN,
           },
-    [engine, space, agent]
+    [engine, space, harness]
   )
   const live = useLive(engine, space, source)
   return live.state === "ready" ? live.view : undefined

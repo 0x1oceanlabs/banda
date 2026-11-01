@@ -109,7 +109,7 @@ command (with its ID)
 | Where | What |
 |---|---|
 | The Space's folder | the files of the work |
-| Text files | Agents, in the Space's `.bandaso/agents/`; the Harnesses, in the config folder. Layouts, keys and themes join them later |
+| Text files | the Harnesses, in the config folder. Layouts, keys and themes join them later |
 | The Harness | its session, context and sign-in. We keep only its session ID, as evidence |
 | The OS keychain | secrets you give Bandaso. Its database never holds them |
 | The engine's state folder | the owner's ID; while the engine runs, its port and per-run secret |
@@ -160,7 +160,7 @@ If Chat is removed, Agents still works through its own Thread.
 
 | Module | Its words | When |
 |---|---|---|
-| agents | Agent, Harness, Thread, Turn, Question | first |
+| agents | Thread, Harness, Agent, Turn, Question | first |
 | terminal | Terminal | first |
 | browser | Page; an Agent drives it through MCP (CDP) | first |
 | files | the Space's files | soon |
@@ -169,10 +169,14 @@ If Chat is removed, Agents still works through its own Thread.
 
 ### agents
 
-- **An Agent is a text file** in its Space: `.bandaso/agents/<name>.toml`,
-  holding its ID and its Harness. The file's name is the Agent's name. It
-  may also say what its new Threads start with: a mode, Plan, and the
-  Harness's options such as its model.
+- **A Thread is a session with a Harness** (ADR 0006). The first message
+  starts it: `agents.send` with a `harness` and no `thread`. Its Harness is
+  its own from then on, and each Thread gets an Agent ID of its own. A new
+  Thread starts with full access and the options its Harness last offered,
+  such as its model (`agents.defaults`).
+  - Spaces from before ADR 0006 kept their Agents in
+    `.bandaso/agents/<name>.toml`. Opening the module reads those files
+    once to learn each older Thread's Harness, and leaves them as they are.
 - **The Harness list is a text file** of the machine. It says how to start
   each Harness. Without one, the engine knows Claude Code and Codex through
   their ACP adapters on npm, at exact versions. Reading the ACP Registry
@@ -189,7 +193,7 @@ If Chat is removed, Agents still works through its own Thread.
     finds the CLI again, so an update ends the warning without a restart.
 - **A message queues a turn.** The outbox runs one Thread's turns one at a
   time, in order (`turn.start`, keyed by the Thread). Threads run side by
-  side, an Agent's own Threads too. A stop (`turn.stop`) and an answer
+  side. A stop (`turn.stop`) and an answer
   (`question.reply`) have keys of their own, so neither waits behind the
   turn it is for.
 - **While the Agent works, a message goes into its turn or waits**, as in

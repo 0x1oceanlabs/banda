@@ -9,6 +9,7 @@ import { join, resolve } from "node:path"
 import {
   _electron as electron,
   type ElectronApplication,
+  type Locator,
   type Page,
 } from "@playwright/test"
 
@@ -96,4 +97,19 @@ export async function startWindow({
       rmSync(dir, { recursive: true, force: true })
     },
   }
+}
+
+/**
+ * Makes the first Space, "Work", which opens a new Thread on the fake
+ * agent. The Thread is found by its message box, so it stays found once
+ * its first message gives it a title.
+ */
+export async function firstThread(
+  page: Page
+): Promise<{ thread: Locator; composer: Locator }> {
+  await page.getByLabel("Name").fill("Work")
+  await page.getByRole("button", { name: "Create Space" }).click()
+  const composer = page.getByRole("textbox", { name: "Message to Fake AI" })
+  const thread = page.locator("section").filter({ has: composer })
+  return { thread, composer }
 }
