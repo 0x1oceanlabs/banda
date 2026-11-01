@@ -146,9 +146,10 @@
   --gap-inner: 4px;
   --gap-outer: 4px;
   --tile-radius: var(--radius);
-  --tile-border: 1px;
-  /* The focused tile's border, and every other tile's. */
-  --focus: color-mix(in oklab, var(--ring) 60%, transparent);
+  --tile-border: 2px;
+  /* The focused tile's border, and every other tile's. A theme's accent
+     takes --focus; without one it is the strongest colour there is. */
+  --focus: var(--primary);
   --focus-inactive: var(--border);
   --bar-height: 2.25rem;
 }
