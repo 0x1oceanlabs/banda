@@ -3,8 +3,9 @@
  * (app/desktop/src/preload.ts). The page reaches the engine only through
  * the address it hands out, gets the look the desktop reads (ADR 0007),
  * and asks it to write the sidebar's preset (ADR 0008) and to show system
- * notifications (ADR 0011).
+ * notifications (ADR 0011). The browser's pages live in it too (ADR 0013).
  */
+import type { BrowserHost } from "@banda/browser-pane/desktop"
 import type { Address } from "@banda/contract"
 import type { Look } from "@banda/contract/look"
 
@@ -39,6 +40,8 @@ export type Host = {
     /** Opens the file in the Person's editor, from the template if new. */
     edit: () => Promise<void>
   }
+  /** The browser's pages: their tabs, icons and downloads. */
+  browser: BrowserHost
   /** The desktop's notifications and its quiet. */
   notify: {
     /** Shows a notice; one of the same key goes first. */

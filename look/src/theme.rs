@@ -84,6 +84,10 @@ impl Places {
         self.config.join("sidebar.toml")
     }
 
+    pub fn browser_file(&self) -> PathBuf {
+        self.config.join("browser.toml")
+    }
+
     /// The Person's sidebar presets, `<name>.toml`.
     pub fn own_sidebars(&self) -> PathBuf {
         self.config.join("sidebars")

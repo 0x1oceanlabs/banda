@@ -22,3 +22,9 @@ test("the row shows a page's site", () => {
   expect(siteOf("file:///home/roma/notes.html")).toBe("notes.html")
   expect(siteOf("not an address")).toBe("not an address")
 })
+
+test("words go to the search browser.toml names", () => {
+  expect(addressOf("a b", "https://kagi.com/search?q=%s")).toBe(
+    "https://kagi.com/search?q=a%20b"
+  )
+})

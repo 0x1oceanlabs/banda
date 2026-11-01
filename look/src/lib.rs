@@ -10,9 +10,11 @@
 //! It is the window's machine's, not a Space's, so it is no module of the
 //! engine: `banda look` prints it, and `banda look --follow` prints it
 //! again on every change. The window runs that and applies what it reads.
-//! The sidebar's `sidebar.toml` (ADR 0008) is this machine's too, so it
-//! comes with the look: [`sidebar`].
+//! The sidebar's `sidebar.toml` (ADR 0008) and the browser's
+//! `browser.toml` (ADR 0013) are this machine's too, so they come with
+//! the look: [`sidebar`], [`browser`].
 
+pub mod browser;
 pub mod color;
 pub mod columns;
 pub mod fonts;
@@ -85,6 +87,8 @@ pub struct Look {
     pub sidebar: sidebar::Sidebar,
     /// How the window tells its Person of a call (ADR 0011).
     pub notify: notify::Notify,
+    /// How the browser looks and searches, from `browser.toml` (ADR 0013).
+    pub browser: browser::Browser,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, TS)]
@@ -422,6 +426,7 @@ pub fn resolve(places: &Places, windows: &dyn Fn() -> Option<Windows>) -> Resolv
     }
 
     let sidebar = sidebar::resolve(places, &mut problems, &mut watched);
+    let browser = browser::resolve(places, &mut problems, &mut watched);
     let mut vars = vars(&all);
     let system = |generic: &str| {
         places
@@ -450,6 +455,7 @@ pub fn resolve(places: &Places, windows: &dyn Fn() -> Option<Windows>) -> Resolv
             sound: all.sound.resolved(),
             sidebar,
             notify: all.notify.resolved(),
+            browser,
         },
         watched,
     }
@@ -638,7 +644,7 @@ pub use theme::Listed;
 
 /// Checks files as `banda look check` does: a `colors.toml` as a
 /// palette, a `sidebar.toml` or a file in `sidebars/` as the sidebar's
-/// schema, anything else as `look.toml`'s.
+/// schema, a `browser.toml` as the browser's, anything else as `look.toml`'s.
 pub fn check(paths: &[PathBuf]) -> Vec<Problem> {
     let mut problems = Vec::new();
     for path in paths {
@@ -651,6 +657,8 @@ pub fn check(paths: &[PathBuf]) -> Vec<Problem> {
         };
         if let Some(preset) = sidebar::is_sidebar_file(path) {
             sidebar::read_sidebar(path, &text, preset, &mut problems);
+        } else if browser::is_browser_file(path) {
+            browser::read_browser(path, &text, &mut problems);
         } else if path.file_name().is_some_and(|n| n == "colors.toml") {
             match Palette::parse(&text) {
                 Ok(palette) => {

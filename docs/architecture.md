@@ -46,8 +46,11 @@ banda call/follow   the CLI: the same API, for people, scripts and Agents
   to every other key. The sidebar's arrangement comes with it (ADR
   0008): `~/.config/banda/sidebar.toml` over the preset it names, Banda's
   or `sidebars/<name>.toml`, over the defaults. The view menu asks the
-  desktop to write the preset into the file; nothing else the page asks
-  of Node writes a file.
+  desktop to write the preset into the file. The browser's
+  `~/.config/banda/browser.toml` comes with it too (ADR 0013), and the
+  browser's switch asks the desktop to write `tabs` into it; nothing else
+  the page asks of Node writes a file. A Pane reads its part of the look
+  through `@banda/ui/lib/look`.
 - **The Banda skill is text for Agents** (ADR 0012). `banda skill`
   prints its core, `banda skill <topic>` a topic, and
   `banda skill --export <folder>` writes an Agent Skills folder. Each
@@ -126,7 +129,7 @@ command (with its ID)
 | Where | What |
 |---|---|
 | The Space's folder | the files of the work |
-| Text files | the Harnesses, in the config folder; the look (`look.toml`, themes) and the sidebar (`sidebar.toml`, presets) in `~/.config/banda/`. Layouts and keys join them later |
+| Text files | the Harnesses, in the config folder; the look (`look.toml`, themes) and the sidebar (`sidebar.toml`, presets) and the browser (`browser.toml`) in `~/.config/banda/`. Layouts and keys join them later |
 | The Harness | its session, context and sign-in. We keep only its session ID, as evidence |
 | The OS keychain | secrets you give Banda. Its database never holds them |
 | The engine's state folder | the owner's ID; while the engine runs, its port and per-run secret |
@@ -611,6 +614,12 @@ modules/*/pane   each module's Panes
     and the Pane hear them as their own.
   - A page takes the keys as an iframe does, with no focus event of its
     own; its tile takes the focus once the window blurs.
+  - A Pane keeps its tabs in its args, and holds their pages while it
+    has them: only the shown tab's page follows the slot, and a tab is
+    made a page the first time it shows. A page's new tabs, its icon and
+    the downloads come from the desktop as `browser:news`, by the page's
+    web contents ID; Banda's page shows no remote image, so the desktop
+    fetches the icon in the browser's profile.
 
 ## Repository
 
@@ -622,9 +631,9 @@ banda/
     agents/pane/      React: the Thread, the Harnesses, each Thread as the sidebar lists it
     terminal/engine/  Rust: Terminals, their PTYs and what they printed
     terminal/pane/    React: a terminal, drawn by Ghostty
-    browser/pane/     React: the browser Pane, its tabs and row (ADR 0013, next)
+    browser/pane/     React: the browser Pane, its tabs and row (ADR 0013)
     skill/            Rust: the Banda skill, its core and the topics it gathers (ADR 0012)
-  look/               Rust: banda look, the look and the sidebar's arrangement; skill/ its topics
+  look/               Rust: banda look, the look, the sidebar's arrangement and the browser's; skill/ its topics
   engine/             the banda program: serve (the kernel and its modules), call, follow, look, skill
   app/ui/             shadcn/ui and the Pane contract
   app/ghostty/        T3 Code's Ghostty adapter and its WebAssembly, vendored

@@ -11,6 +11,7 @@
  */
 import { HELD_BY, paneLayer } from "@banda/ui/pane"
 import { PARTITION } from "./desktop"
+import { hearNews } from "./host"
 
 /** What the row shows of a page. */
 export type PageState = {
@@ -23,6 +24,8 @@ export type PageState = {
   failed?: string
   /** Its renderer died: it shows nothing until it reloads. */
   crashed: boolean
+  /** The site's icon, as a data URL. */
+  icon?: string
 }
 
 /** A page not made yet. */
@@ -49,6 +52,7 @@ type View = HTMLElement & {
   isDevToolsOpened(): boolean
   openDevTools(): void
   closeDevTools(): void
+  getWebContentsId(): number
 }
 
 /** Where a page shows: the Pane's slot, and whether its tile has the focus. */
@@ -72,6 +76,8 @@ export class Page {
   /** Darkens the page as the tile's own veil darkens the tile. */
   private readonly veil: HTMLDivElement
   private ready = false
+  /** Its web contents' ID, by which the desktop names it. */
+  contents: number | null = null
   private slot: Slot | null = null
   /** What cuts the slot: its ancestors that clip, and the tile's corner. */
   private clips: HTMLElement[] = []
@@ -219,9 +225,15 @@ export class Page {
     this.veil.style.opacity = place.dim ? "var(--tile-dim)" : "0"
   }
 
+  /** The site's icon, which the desktop fetched. */
+  iconed(icon: string): void {
+    this.set({ icon })
+  }
+
   private set(change: Partial<PageState>): void {
     this.state = { ...this.state, ...change }
     for (const listener of this.listeners) listener()
+    changed()
   }
 
   /** Reads where the page can go: each read asks the desktop. */
@@ -236,6 +248,7 @@ export class Page {
     type Navigated = Event & { url: string; isMainFrame?: boolean }
     view.addEventListener("dom-ready", () => {
       this.ready = true
+      this.contents = view.getWebContentsId()
     })
     view.addEventListener("did-start-loading", () =>
       this.set({ loading: true, failed: undefined })
@@ -324,18 +337,81 @@ export function pageOf(id: string, url: string): Page | null {
   if (!layer || !("banda" in window)) return null
   const page = new Page(id, url, layer)
   pages.set(id, page)
+  heed()
+  changed()
   return page
 }
 
+/** The page of `id` when it was made: a tab not shown yet has none. */
+export function pageAt(id: string): Page | undefined {
+  return pages.get(id)
+}
+
+/** What a browser Pane does when a page of its tabs opens another. */
+export type Holder = {
+  open: (from: string, url: string, background: boolean) => void
+}
+
+/** The tabs a browser Pane holds now, by their pages' IDs. */
+const held = new Map<string, Holder>()
+
 /**
- * Lets go of the page of `id` unless a slot shows it. The window calls a
- * kind's `closed` when a Pane's args change too, as a page's address
- * does; by then the slot of a Pane still drawn shows it again, since React
- * lets every effect go before it runs the new ones.
+ * Keeps the pages of `ids` while a Pane holds them, shown or not, and
+ * hands it what they open; returns how to let go. The window lets a
+ * Pane's old args go once it drew the new ones, so the pages of tabs it
+ * still holds stay.
+ */
+export function hold(ids: readonly string[], holder: Holder): () => void {
+  for (const id of ids) held.set(id, holder)
+  return () => {
+    for (const id of ids) if (held.get(id) === holder) held.delete(id)
+  }
+}
+
+/**
+ * Lets go of the page of `id` unless a Pane holds it or a slot shows it.
+ * The window calls a kind's `closed` when a Pane's args change too, as a
+ * tab's address does; by then the Pane holds what it still has.
  */
 export function drop(id: string): void {
   const page = pages.get(id)
-  if (!page || page.shown) return
+  if (!page || page.shown || held.has(id)) return
   page.destroy()
   pages.delete(id)
+  changed()
+}
+
+const watchers = new Set<() => void>()
+let version = 0
+
+/** Calls `listener` on any change of any page; returns how to stop. */
+export function watchPages(listener: () => void): () => void {
+  watchers.add(listener)
+  return () => watchers.delete(listener)
+}
+
+/** A number that changes with any page, for `useSyncExternalStore`. */
+export function pagesVersion(): number {
+  return version
+}
+
+function changed(): void {
+  version++
+  for (const watcher of watchers) watcher()
+}
+
+let heeding = false
+
+/** Hears the desktop's news of the pages, once there is a page. */
+function heed(): void {
+  if (heeding) return
+  heeding = true
+  hearNews((news) => {
+    if (news.kind === "download") return
+    const entry = [...pages].find(([, page]) => page.contents === news.from)
+    if (!entry) return
+    const [id, page] = entry
+    if (news.kind === "icon") page.iconed(news.icon)
+    else held.get(id)?.open(id, news.url, news.background)
+  })
 }

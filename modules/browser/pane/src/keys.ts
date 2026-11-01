@@ -21,8 +21,30 @@ export type Does =
   | "zoom-out"
   | "zoom-reset"
   | "devtools"
+  | "tab-new"
+  | "tab-close"
+  | "tab-reopen"
+  | "tab-next"
+  | "tab-previous"
+  /** The tab at this place; Chrome's Ctrl+9 is always the last. */
+  | `tab-${1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9}`
+
+const PLACES = [1, 2, 3, 4, 5, 6, 7, 8, 9] as const
 
 const BINDS: readonly (Key & { does: Does })[] = [
+  { code: "KeyT", ctrl: true, does: "tab-new" },
+  { code: "KeyW", ctrl: true, does: "tab-close" },
+  { code: "F4", ctrl: true, does: "tab-close" },
+  { code: "KeyT", ctrl: true, shift: true, does: "tab-reopen" },
+  { code: "Tab", ctrl: true, does: "tab-next" },
+  { code: "PageDown", ctrl: true, does: "tab-next" },
+  { code: "Tab", ctrl: true, shift: true, does: "tab-previous" },
+  { code: "PageUp", ctrl: true, does: "tab-previous" },
+  ...PLACES.map((n) => ({
+    code: `Digit${n}`,
+    ctrl: true,
+    does: `tab-${n}` as const,
+  })),
   { code: "KeyL", ctrl: true, does: "address" },
   { code: "KeyR", ctrl: true, does: "reload" },
   { code: "F5", does: "reload" },

@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "browser.toml",
+  "description": "How Banda's browser shows its tabs and where it searches. Every key is\noptional.",
+  "type": "object",
+  "properties": {
+    "tabs": {
+      "description": "Where the tabs are: a row above the page, or a rail beside it.",
+      "$ref": "#/$defs/Tabs"
+    },
+    "search": {
+      "description": "Where words that are not an address go: an http or https address\nwith %s where the words go. DuckDuckGo when left out.",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "Tabs": {
+      "description": "Where a browser Pane shows its tabs.",
+      "oneOf": [
+        {
+          "description": "A row above the page.",
+          "type": "string",
+          "const": "top"
+        },
+        {
+          "description": "A rail of icons beside the page, opening to titles on hover.",
+          "type": "string",
+          "const": "left"
+        }
+      ]
+    }
+  }
+}
