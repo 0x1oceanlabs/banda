@@ -52,7 +52,7 @@ const PRESETS = {
     row: { lines: 1 },
   },
   places: {
-    group: { states: [...STATES], bottom: [], folded: ["idle"] },
+    group: { states: [...STATES], bottom: [] },
     spaces: { list: true },
     row: { lines: 2 },
   },
@@ -65,56 +65,77 @@ const of = (
   preset: Preset,
   keys?: Keys,
   only?: string,
-  toggled?: Set<string>
-) => arrange(lists, spaces, resolve(preset, keys), only, toggled)
+  toggled?: Set<string>,
+  settled: readonly string[] = []
+) =>
+  arrange(lists, spaces, resolve(preset, keys), only, toggled, (listed) =>
+    settled.includes(listed.id)
+  )
 
-test("inbox: what needs the Person first, the working on a shelf below", () => {
+test("inbox: one list, what waits first; the working and the settled on shelves", () => {
   const inbox = of("inbox")
   expect(ids(inbox)).toEqual([
-    ["needs", ["migration", "form"]],
-    ["done", ["letters"]],
-    ["idle", ["logo"]],
+    ["active", ["letters", "migration", "form", "logo"]],
   ])
+  expect(inbox.sections[0]?.label).toBe("")
   expect(ids(inbox, "shelves")).toEqual([["working", ["headers", "release"]]])
   expect(inbox.spaces).toBeUndefined()
+
+  const settled = of("inbox", {}, undefined, undefined, ["logo", "letters"])
+  expect(ids(settled)).toEqual([["active", ["migration", "form"]]])
+  expect(ids(settled, "shelves")).toEqual([
+    ["working", ["headers", "release"]],
+    ["settled", ["letters", "logo"]],
+  ])
+  expect(settled.shelves.map((s) => [s.label, s.folded])).toEqual([
+    ["Working", false],
+    ["Settled", true],
+  ])
 })
 
-test("spaces: each Space a section, the latest changed first, with its roll-up", () => {
+test("a Thread at work is never settled", () => {
+  const working = of("inbox", {}, undefined, undefined, ["headers"])
+  expect(ids(working, "shelves")).toEqual([["working", ["headers", "release"]]])
+})
+
+test("spaces: each Space a section, what waits first, with its roll-up", () => {
   const bySpace = of("spaces")
   expect(ids(bySpace)).toEqual([
-    ["s2", ["migration", "letters", "release"]],
+    ["s2", ["letters", "migration", "release"]],
     ["s1", ["form", "headers", "logo"]],
   ])
   expect(bySpace.sections[0]).toMatchObject({
     label: "API",
     mark: "failed",
-    waiting: 1,
+    waiting: 2,
   })
   expect(bySpace.shelves).toEqual([])
+  // A settled Thread goes last, and waits for no one.
+  const settled = of("spaces", {}, undefined, undefined, ["letters"])
+  expect(ids(settled)[0]).toEqual(["s2", ["migration", "release", "letters"]])
+  expect(settled.sections[0]?.waiting).toBe(1)
 })
 
 test("places: the Spaces listed above, and a click on one shows its rows", () => {
-  const places = of("places")
+  const places = of("places", {}, undefined, undefined, ["logo"])
   expect(
     places.spaces?.map((s) => [s.space.name, s.mark, s.waiting, s.count])
   ).toEqual([
-    ["API", "failed", 1, 3],
+    ["API", "failed", 2, 3],
     ["Landing", "asking", 1, 3],
     ["Quiet", "rest", 0, 0],
   ])
-  expect(places.sections.find((s) => s.key === "idle")?.folded).toBe(true)
+  expect(places.sections.find((s) => s.key === "settled")?.folded).toBe(true)
   expect(ids(of("places", {}, "s1"))).toEqual([
-    ["needs", ["form"]],
+    ["active", ["form", "logo"]],
     ["working", ["headers"]],
-    ["idle", ["logo"]],
   ])
 })
 
 test("a state the settings name nowhere goes to the last section", () => {
-  const keys: Keys = { group: { states: ["needs", "idle"], bottom: [] } }
+  const keys: Keys = { group: { states: ["active"], bottom: [] } }
   expect(ids(of("inbox", keys))).toEqual([
-    ["needs", ["migration", "form"]],
-    ["idle", ["letters", "headers", "release", "logo"]],
+    ["active", ["letters", "migration", "form", "headers", "release", "logo"]],
   ])
 })
 
@@ -128,16 +149,18 @@ test("the Person's keys win over the preset", () => {
 test("empty sections hide unless the settings show them", () => {
   const none = arrange({}, spaces, resolve("inbox"))
   expect(none.sections).toEqual([])
+  expect(none.shelves).toEqual([])
   const shown = arrange(
     {},
     spaces,
     resolve("inbox", { group: { empty: "show" } })
   )
-  expect(shown.sections.map((s) => s.key)).toEqual(["needs", "done", "idle"])
+  expect(shown.sections.map((s) => s.key)).toEqual(["active"])
+  expect(shown.shelves.map((s) => s.key)).toEqual(["working", "settled"])
 })
 
 test("folded comes from the settings, and the Person's toggle turns it over", () => {
-  const keys: Keys = { group: { folded: ["API", "done"] } }
+  const keys: Keys = { group: { folded: ["API", "working"] } }
   const bySpace = of("spaces", keys)
   expect(bySpace.sections.find((s) => s.key === "s2")?.folded).toBe(true)
   const opened = of("spaces", keys, undefined, new Set(["s2", "s1"]))
@@ -145,7 +168,7 @@ test("folded comes from the settings, and the Person's toggle turns it over", ()
     ["s2", false],
     ["s1", true],
   ])
-  expect(of("inbox", keys).sections.find((s) => s.key === "done")?.folded).toBe(
-    true
-  )
+  expect(
+    of("inbox", keys).shelves.find((s) => s.key === "working")?.folded
+  ).toBe(true)
 })

@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useState } from "react"
 import type { Item, TurnView } from "@bandaso/contract/agents"
 import { Spinner } from "@bandaso/ui/components/spinner"
 import {
@@ -10,6 +10,7 @@ import {
   TraceLine,
   TraceTitle,
 } from "@bandaso/ui/components/trace"
+import { useNow } from "@bandaso/ui/hooks/use-now"
 import { CircleCheckIcon, CircleSlashIcon, LayersIcon } from "lucide-react"
 import { duration, foldTitle, type Line, summary } from "./timeline"
 
@@ -105,7 +106,7 @@ export function Fold({
 
 /** The turn that runs, and how long it has: "Working for 12s". */
 export function Working({ turn, name }: { turn: TurnView; name: string }) {
-  const now = useNow(turn.started !== undefined)
+  const now = useNow(1000, turn.started !== undefined)
   const title =
     turn.started === undefined
       ? `${name} is working…`
@@ -120,17 +121,6 @@ export function Working({ turn, name }: { turn: TurnView; name: string }) {
       </TraceLine>
     </Trace>
   )
-}
-
-/** The time now, once a second while `ticking`. */
-function useNow(ticking: boolean): number {
-  const [now, setNow] = useState(Date.now)
-  useEffect(() => {
-    if (!ticking) return
-    const timer = setInterval(() => setNow(Date.now()), 1000)
-    return () => clearInterval(timer)
-  }, [ticking])
-  return now
 }
 
 /** A line's key among its siblings. */

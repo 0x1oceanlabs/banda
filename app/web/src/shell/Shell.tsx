@@ -12,6 +12,7 @@ import { first, type Heard, useCalls, type Where } from "../calls/useCalls"
 import { useLookNotify, useLookSound } from "../look"
 import { kindOf, showsOf, startable, widthOf } from "../registry"
 import { Sidebar } from "../sidebar/Sidebar"
+import { toggleSettled } from "../sidebar/settled"
 import {
   close,
   focused,
@@ -144,6 +145,16 @@ export function Shell({
       }),
     [answerCall]
   )
+  // Alt+S: the Thread in the focused Pane settles, or comes back.
+  const listsNow = useRef(lists)
+  useEffect(() => {
+    listsNow.current = lists
+  }, [lists])
+  const settle = useCallback(() => {
+    const entry = focused(now.current)
+    const thing = entry && showsOf(entry.pane)
+    if (entry && thing) toggleSettled(listsNow.current, entry.space, thing)
+  }, [])
   const toggleSidebar = useCallback(() => setSidebar((shows) => !shows), [])
   const toggleOverview = useCallback(() => setOverview((opens) => !opens), [])
   const closeOverview = useCallback(() => setOverview(false), [])
@@ -156,6 +167,7 @@ export function Shell({
       toggleSidebar,
       toggleOverview,
       answer,
+      settle,
     }
     const onKey = (event: KeyboardEvent) => {
       const action = actionFor(ACTIONS, event)
@@ -167,7 +179,7 @@ export function Shell({
     }
     window.addEventListener("keydown", onKey, { capture: true })
     return () => window.removeEventListener("keydown", onKey, { capture: true })
-  }, [change, home, toggleSidebar, toggleOverview, answer])
+  }, [change, home, toggleSidebar, toggleOverview, answer, settle])
 
   const frame: Frame = useMemo(
     () => ({

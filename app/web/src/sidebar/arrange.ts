@@ -4,12 +4,17 @@
  * what it returns. Pure, so plain tests cover every preset and key.
  */
 import type { SpaceId, SpaceSummary } from "@bandaso/contract"
-import { loudest, type MarkState } from "@bandaso/ui/components/banda-mark"
+import {
+  loudest,
+  type MarkState,
+  waits,
+  works,
+} from "@bandaso/ui/components/banda-mark"
 import type { Listed } from "@bandaso/ui/pane"
 import type { Settings, State } from "./settings"
 
-/** One row: what a module listed, and the Space it is in. */
-export type Row = { space: SpaceSummary; listed: Listed }
+/** One row: what a module listed, the Space it is in, where it stands. */
+export type Row = { space: SpaceSummary; listed: Listed; state: State }
 
 export type Section = {
   /** A state, or a Space's id. */
@@ -40,31 +45,25 @@ export type Arranged = {
   shelves: Section[]
 }
 
+/** The sections' headings: the active list has none, as T3 Code's. */
 export const STATE_WORDS: Record<State, string> = {
-  needs: "Needs you",
-  done: "Done",
+  active: "",
   working: "Working",
-  idle: "Quiet",
+  settled: "Settled",
 }
 
-/** What a mark means to the sidebar. */
-export function stateOf(mark: MarkState): State {
-  switch (mark) {
-    case "asking":
-    case "failed":
-    case "offline":
-      return "needs"
-    case "done":
-      return "done"
-    case "running":
-    case "thinking":
-      return "working"
-    default:
-      return "idle"
-  }
+/** Where a row stands: at work, settled as the Person's marks say, or active. */
+function stateOf(listed: Listed, settled: (listed: Listed) => boolean): State {
+  if (works(listed.mark)) return "working"
+  return settled(listed) ? "settled" : "active"
 }
 
-const RANK: Record<State, number> = { needs: 0, done: 1, working: 2, idle: 3 }
+/** The attention order: what waits first, then work, the rest, the settled. */
+function rank(row: Row): number {
+  if (row.state === "settled") return 3
+  if (row.state === "working") return 1
+  return waits(row.listed.mark) ? 0 : 2
+}
 
 /**
  * @param lists what each Space lists
@@ -72,16 +71,22 @@ const RANK: Record<State, number> = { needs: 0, done: 1, working: 2, idle: 3 }
  * Spaces asks
  * @param toggled the sections the Person folded or opened, against what
  * the settings start with
+ * @param settled whether the Person's marks have a row settled now
  */
 export function arrange(
   lists: Readonly<Record<SpaceId, readonly Listed[]>>,
   spaces: readonly SpaceSummary[],
   settings: Settings,
   only?: SpaceId,
-  toggled: ReadonlySet<string> = new Set()
+  toggled: ReadonlySet<string> = new Set(),
+  settled: (listed: Listed) => boolean = () => false
 ): Arranged {
   const all: Row[] = spaces.flatMap((space) =>
-    (lists[space.id] ?? []).map((listed) => ({ space, listed }))
+    (lists[space.id] ?? []).map((listed) => ({
+      space,
+      listed,
+      state: stateOf(listed, settled),
+    }))
   )
   const rows = all
     .filter((row) => only === undefined || row.space.id === only)
@@ -137,15 +142,14 @@ export function arrange(
       }
     case "state": {
       const { states, bottom } = settings.group
-      const of = (state: State) =>
-        rows.filter((row) => stateOf(row.listed.mark) === state)
+      const of = (state: State) => rows.filter((row) => row.state === state)
       const sections = states.map((state) =>
         section(state, STATE_WORDS[state], of(state))
       )
       // A state the settings name nowhere goes to the last section, so no
       // row is ever hidden.
       const placed = new Set<State>([...states, ...bottom])
-      const rest = rows.filter((row) => !placed.has(stateOf(row.listed.mark)))
+      const rest = rows.filter((row) => !placed.has(row.state))
       if (rest.length > 0) {
         const last = sections.at(-1)
         if (last) {
@@ -174,9 +178,7 @@ function order(by: Settings["sort"]["by"]): (a: Row, b: Row) => number {
   const latest = (a: Row, b: Row) => b.listed.changed - a.listed.changed
   switch (by) {
     case "attention":
-      return (a, b) =>
-        RANK[stateOf(a.listed.mark)] - RANK[stateOf(b.listed.mark)] ||
-        latest(a, b)
+      return (a, b) => rank(a) - rank(b) || latest(a, b)
     case "title":
       return (a, b) =>
         a.listed.title.localeCompare(b.listed.title) || latest(a, b)
@@ -188,7 +190,9 @@ function order(by: Settings["sort"]["by"]): (a: Row, b: Row) => number {
 function rollup(rows: readonly Row[]): { mark: MarkState; waiting: number } {
   return {
     mark: loudest(rows.map((row) => row.listed.mark)),
-    waiting: rows.filter((row) => stateOf(row.listed.mark) === "needs").length,
+    waiting: rows.filter(
+      (row) => row.state !== "settled" && waits(row.listed.mark)
+    ).length,
   }
 }
 

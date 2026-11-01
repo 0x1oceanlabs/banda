@@ -3,4 +3,4 @@
 /**
  * A Thread's mark as the sidebar sees it.
  */
-export type State = "needs" | "done" | "working" | "idle";
+export type State = "active" | "working" | "settled";

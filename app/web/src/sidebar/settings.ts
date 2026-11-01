@@ -10,7 +10,7 @@ export type { Part, State } from "@bandaso/contract/sidebar"
 /** What arranging needs of the sidebar: its keys, not where they came from. */
 export type Settings = Pick<Sidebar, "group" | "sort" | "spaces" | "row">
 
-export const STATES: readonly State[] = ["needs", "done", "working", "idle"]
+export const STATES: readonly State[] = ["active", "working", "settled"]
 
 /** What Banda's presets are, in a few words, for the view menu. */
 export const PRESET_WORDS: Readonly<Record<string, string>> = {

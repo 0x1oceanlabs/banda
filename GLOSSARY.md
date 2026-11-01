@@ -172,8 +172,8 @@ grouped and sorted and what a row shows; the Person's keys in
 `sidebar.toml` win over it.
 
 **Shelf**:
-A section at the bottom of the sidebar, folded or open, with its count:
-the working Threads, in the `inbox` preset.
+A section at the bottom of the sidebar, folded or open, with its count,
+as a Person's `group.bottom` asks; none of Banda's presets has one.
 
 **Bar**:
 The line across the window's top: the Mark, which is the sidebar's button,
