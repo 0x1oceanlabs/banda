@@ -6,12 +6,13 @@
 //! already applied, curves are Bézier points. The window runs the springs
 //! itself, so a move that is interrupted carries its speed on.
 
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use toml::Spanned;
 use ts_rs::TS;
 
 /// `[motion]` in a `look.toml` or a theme's `banda.toml`.
-#[derive(Clone, Debug, Default, Deserialize)]
+#[derive(Clone, Debug, Default, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct MotionSettings {
     /// Turns every event off, as the system's reduced motion does.
@@ -40,15 +41,17 @@ pub struct MotionSettings {
 }
 
 /// One event's table: `off`, and a `spring` or an `easing`.
-#[derive(Clone, Debug, Default, Deserialize)]
+#[derive(Clone, Debug, Default, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct Event {
     pub off: Option<bool>,
+    #[schemars(with = "Option<SpringSettings>")]
     pub spring: Option<Spanned<SpringSettings>>,
+    #[schemars(with = "Option<EasingSettings>")]
     pub easing: Option<Spanned<EasingSettings>>,
 }
 
-#[derive(Clone, Debug, Default, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct SpringSettings {
     /// 1 comes to rest without overshooting; less bounces.
@@ -59,11 +62,12 @@ pub struct SpringSettings {
     pub epsilon: Option<f64>,
 }
 
-#[derive(Clone, Debug, Default, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Default, Deserialize, PartialEq, JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct EasingSettings {
     pub duration_ms: Option<f64>,
     /// A named curve or `cubic-bezier(x1, y1, x2, y2)`.
+    #[schemars(with = "Option<String>")]
     pub curve: Option<Spanned<String>>,
 }
 

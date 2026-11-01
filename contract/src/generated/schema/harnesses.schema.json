@@ -1,0 +1,83 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "harnesses.toml",
+  "description": "The Harnesses this machine starts Threads with. Without the file,\nBanda starts Claude Code and Codex, each with the Person's own CLI.",
+  "type": "object",
+  "properties": {
+    "harness": {
+      "description": "One `[[harness]]` table per agent program.",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Harness"
+      }
+    }
+  },
+  "$defs": {
+    "Harness": {
+      "description": "An agent program and how to start it. It speaks ACP on its stdio.",
+      "type": "object",
+      "properties": {
+        "id": {
+          "description": "How Threads and the window name it: `claude`, `codex`.",
+          "type": "string"
+        },
+        "name": {
+          "description": "What the Person reads: `Claude Code`.",
+          "type": "string"
+        },
+        "command": {
+          "description": "The program that speaks ACP: its name on PATH, or its path.",
+          "type": "string"
+        },
+        "args": {
+          "description": "The program's arguments.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "env": {
+          "description": "Variables over the environment it starts in.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "string"
+          },
+          "default": {}
+        },
+        "cli": {
+          "description": "The Person's own CLI the program runs, when it runs one.",
+          "$ref": "#/$defs/Cli"
+        }
+      },
+      "required": [
+        "id",
+        "name",
+        "command"
+      ]
+    },
+    "Cli": {
+      "description": "A CLI the Person installed, which an adapter runs in place of a copy\nof its own (ADR 0003, decision 3).",
+      "type": "object",
+      "properties": {
+        "program": {
+          "description": "Its name on PATH, or its path.",
+          "type": "string"
+        },
+        "variable": {
+          "description": "The variable that tells the adapter where it is: Claude Code's\n`CLAUDE_CODE_EXECUTABLE`, Codex's `CODEX_PATH`.",
+          "type": "string"
+        },
+        "minimum": {
+          "description": "The oldest version the adapter supports: the one it was built for.\nAn older CLI still runs, and its Threads warn.",
+          "type": "string",
+          "default": null
+        }
+      },
+      "required": [
+        "program",
+        "variable"
+      ]
+    }
+  }
+}

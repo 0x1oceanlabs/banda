@@ -2,11 +2,12 @@
 //! in `look.toml` and in a theme's `banda.toml`, layered as every other
 //! key of the look. The window plays them; here they are only chosen.
 
+use schemars::JsonSchema;
 use serde::{Deserialize, Deserializer, Serialize, Serializer};
 use ts_rs::TS;
 
 /// A family of Banda's sounds; each plays every call its own way.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, TS)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, TS, JsonSchema)]
 #[serde(rename_all = "lowercase")]
 #[ts(export, export_to = "look/")]
 pub enum Family {
@@ -55,12 +56,27 @@ pub enum Families {
 }
 
 /// One call: on, off, or a family to borrow this one sound from.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, TS)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, TS, JsonSchema)]
 #[serde(untagged)]
 #[ts(export, export_to = "look/")]
 pub enum Call {
     On(bool),
     From(Family),
+}
+
+impl JsonSchema for Families {
+    fn schema_name() -> std::borrow::Cow<'static, str> {
+        "Families".into()
+    }
+
+    fn json_schema(_: &mut schemars::SchemaGenerator) -> schemars::Schema {
+        let names: Vec<&str> = Family::ALL.iter().map(|(name, _)| *name).collect();
+        let names = [names, vec!["off"]].concat();
+        schemars::json_schema!({
+            "description": "The family every call comes from, or `off` for silence.",
+            "enum": names,
+        })
+    }
 }
 
 impl TryFrom<toml::Value> for Families {
@@ -131,11 +147,12 @@ impl TryFrom<toml::Value> for Call {
 }
 
 /// `[sound]` as one layer says it: every key optional.
-#[derive(Clone, Debug, Default, Deserialize)]
+#[derive(Clone, Debug, Default, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct SoundSettings {
     pub family: Option<Families>,
     /// 0 to 1, for every sound.
+    #[schemars(range(min = 0, max = 1))]
     pub volume: Option<f64>,
     /// A soft room around each sound.
     pub room: Option<bool>,

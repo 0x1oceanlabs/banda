@@ -7,26 +7,33 @@ use crate::fonts::FontSettings;
 use crate::motion::MotionSettings;
 use crate::notify::NotifySettings;
 use crate::sound::SoundSettings;
+use schemars::JsonSchema;
 use serde::Deserialize;
 use std::collections::BTreeMap;
 use toml::Spanned;
 
-#[derive(Clone, Debug, Default, Deserialize)]
+/// How Banda looks and sounds: the theme, tiles, columns, font, motion,
+/// sounds and calls. A theme's `banda.toml` takes the same keys.
+#[derive(Clone, Debug, Default, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct Settings {
     /// `"omarchy"`, `"banda"`, a theme's name, or `{ light, dark }`.
+    #[schemars(with = "Option<ThemeChoice>")]
     pub theme: Option<Spanned<ThemeChoice>>,
     pub mode: Option<ModeChoice>,
     /// shadcn's `--radius`, in pixels: every corner is a step of it.
+    #[schemars(range(min = 0))]
     pub radius: Option<f64>,
     /// Whether to take Hyprland's rounding, border and gaps.
     pub hyprland: Option<bool>,
     /// Palette entries over the theme's: a palette name or hex.
     #[serde(default)]
+    #[schemars(with = "BTreeMap<String, String>")]
     pub colors: BTreeMap<String, Spanned<String>>,
     /// Tokens over the derived ones, by their names without `--`: a palette
     /// name, a token's name or any CSS colour.
     #[serde(default)]
+    #[schemars(with = "BTreeMap<String, String>")]
     pub tokens: BTreeMap<String, Spanned<String>>,
     #[serde(default)]
     pub gaps: Gaps,
@@ -50,14 +57,14 @@ pub struct Settings {
     pub notify: NotifySettings,
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq)]
+#[derive(Clone, Debug, Deserialize, PartialEq, JsonSchema)]
 #[serde(untagged)]
 pub enum ThemeChoice {
     One(String),
     Pair { light: String, dark: String },
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, PartialEq)]
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, JsonSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum ModeChoice {
     System,
@@ -65,39 +72,47 @@ pub enum ModeChoice {
     Dark,
 }
 
-#[derive(Clone, Debug, Default, Deserialize)]
+#[derive(Clone, Debug, Default, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct Gaps {
+    #[schemars(range(min = 0))]
     pub inner: Option<f64>,
+    #[schemars(range(min = 0))]
     pub outer: Option<f64>,
 }
 
-#[derive(Clone, Debug, Default, Deserialize)]
+#[derive(Clone, Debug, Default, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct Tile {
     pub radius: Option<Corner>,
+    #[schemars(range(min = 0))]
     pub border: Option<f64>,
     /// How much the tiles without the focus darken, from 0 to 1, as
     /// Hyprland's `dim_inactive` and `dim_strength`.
+    #[schemars(range(min = 0, max = 1))]
     pub dim_inactive: Option<f64>,
 }
 
-#[derive(Clone, Debug, Default, Deserialize)]
+#[derive(Clone, Debug, Default, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct Focus {
     /// The focused tile's border.
+    #[schemars(with = "Option<String>")]
     pub border: Option<Spanned<String>>,
     /// Every other tile's.
+    #[schemars(with = "Option<String>")]
     pub inactive_border: Option<Spanned<String>>,
     /// niri's focus ring: how far the focused tile's frame grows out
     /// into the gap, so nothing moves. It is the border's own colour, one
     /// frame and not two. 0 draws none.
+    #[schemars(range(min = 0))]
     pub ring: Option<f64>,
 }
 
-#[derive(Clone, Debug, Default, Deserialize)]
+#[derive(Clone, Debug, Default, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct Bar {
+    #[schemars(range(min = 0))]
     pub height: Option<f64>,
 }
 
@@ -137,6 +152,23 @@ impl Step {
             .iter()
             .find(|(_, step, _)| *step == self)
             .map_or(1.0, |(_, _, factor)| *factor)
+    }
+}
+
+impl JsonSchema for Corner {
+    fn schema_name() -> std::borrow::Cow<'static, str> {
+        "Corner".into()
+    }
+
+    fn json_schema(_: &mut schemars::SchemaGenerator) -> schemars::Schema {
+        let steps: Vec<&str> = Step::ALL.iter().map(|(name, _, _)| *name).collect();
+        schemars::json_schema!({
+            "description": "A corner: a step of shadcn's ladder, or pixels.",
+            "anyOf": [
+                { "type": "number", "minimum": 0 },
+                { "enum": steps },
+            ],
+        })
     }
 }
 

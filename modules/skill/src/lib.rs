@@ -158,9 +158,11 @@ mod tests {
     #[test]
     fn a_topic_shows_the_files_banda_ships() {
         let sidebar = topic("sidebar").unwrap().body;
-        assert!(sidebar.contains("```toml\n# How Banda's sidebar arranges"));
+        assert!(sidebar.contains(
+            "```toml\n#:schema ./schemas/sidebar.schema.json\n# How Banda's sidebar arranges"
+        ));
         let look = topic("look").unwrap().body;
-        assert!(look.contains("```toml\n# How Banda looks."));
+        assert!(look.contains("```toml\n#:schema ./schemas/look.schema.json\n# How Banda looks."));
     }
 
     #[test]

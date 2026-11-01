@@ -166,7 +166,8 @@ impl Problem {
         Problem::at(path, text, error.span(), error.message().trim().to_owned())
     }
 
-    fn whole(path: &Path, message: impl Into<String>) -> Problem {
+    /// A problem with the whole file, such as one that cannot be read.
+    pub fn whole(path: &Path, message: impl Into<String>) -> Problem {
         Problem::at(path, "", None, message)
     }
 }

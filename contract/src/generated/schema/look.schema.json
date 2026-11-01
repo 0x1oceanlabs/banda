@@ -1,0 +1,492 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "look.toml",
+  "description": "How Banda looks and sounds: the theme, tiles, columns, font, motion,\nsounds and calls. A theme's `banda.toml` takes the same keys.",
+  "type": "object",
+  "properties": {
+    "theme": {
+      "description": "`\"omarchy\"`, `\"banda\"`, a theme's name, or `{ light, dark }`.",
+      "$ref": "#/$defs/ThemeChoice"
+    },
+    "mode": {
+      "$ref": "#/$defs/ModeChoice"
+    },
+    "radius": {
+      "description": "shadcn's `--radius`, in pixels: every corner is a step of it.",
+      "type": "number",
+      "format": "double",
+      "minimum": 0
+    },
+    "hyprland": {
+      "description": "Whether to take Hyprland's rounding, border and gaps.",
+      "type": "boolean"
+    },
+    "colors": {
+      "description": "Palette entries over the theme's: a palette name or hex.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "default": {}
+    },
+    "tokens": {
+      "description": "Tokens over the derived ones, by their names without `--`: a palette\nname, a token's name or any CSS colour.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      },
+      "default": {}
+    },
+    "gaps": {
+      "$ref": "#/$defs/Gaps"
+    },
+    "tile": {
+      "$ref": "#/$defs/Tile"
+    },
+    "focus": {
+      "$ref": "#/$defs/Focus"
+    },
+    "bar": {
+      "$ref": "#/$defs/Bar"
+    },
+    "motion": {
+      "$ref": "#/$defs/MotionSettings"
+    },
+    "columns": {
+      "$ref": "#/$defs/ColumnsSettings"
+    },
+    "font": {
+      "$ref": "#/$defs/FontSettings"
+    },
+    "sound": {
+      "description": "Banda's sounds (ADR 0009, decision 5).",
+      "$ref": "#/$defs/SoundSettings"
+    },
+    "notify": {
+      "description": "How Banda tells its Person of a call (ADR 0011, decision 7).",
+      "$ref": "#/$defs/NotifySettings"
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "ThemeChoice": {
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "object",
+          "properties": {
+            "light": {
+              "type": "string"
+            },
+            "dark": {
+              "type": "string"
+            }
+          },
+          "required": [
+            "light",
+            "dark"
+          ]
+        }
+      ]
+    },
+    "ModeChoice": {
+      "type": "string",
+      "enum": [
+        "system",
+        "light",
+        "dark"
+      ]
+    },
+    "Gaps": {
+      "type": "object",
+      "properties": {
+        "inner": {
+          "type": "number",
+          "format": "double",
+          "minimum": 0
+        },
+        "outer": {
+          "type": "number",
+          "format": "double",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "Tile": {
+      "type": "object",
+      "properties": {
+        "radius": {
+          "$ref": "#/$defs/Corner"
+        },
+        "border": {
+          "type": "number",
+          "format": "double",
+          "minimum": 0
+        },
+        "dim-inactive": {
+          "description": "How much the tiles without the focus darken, from 0 to 1, as\nHyprland's `dim_inactive` and `dim_strength`.",
+          "type": "number",
+          "format": "double",
+          "minimum": 0,
+          "maximum": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "Corner": {
+      "description": "A corner: a step of shadcn's ladder, or pixels.",
+      "anyOf": [
+        {
+          "type": "number",
+          "minimum": 0
+        },
+        {
+          "enum": [
+            "sm",
+            "md",
+            "lg",
+            "xl",
+            "2xl",
+            "3xl",
+            "4xl"
+          ]
+        }
+      ]
+    },
+    "Focus": {
+      "type": "object",
+      "properties": {
+        "border": {
+          "description": "The focused tile's border.",
+          "type": "string"
+        },
+        "inactive-border": {
+          "description": "Every other tile's.",
+          "type": "string"
+        },
+        "ring": {
+          "description": "niri's focus ring: how far the focused tile's frame grows out\ninto the gap, so nothing moves. It is the border's own colour, one\nframe and not two. 0 draws none.",
+          "type": "number",
+          "format": "double",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "Bar": {
+      "type": "object",
+      "properties": {
+        "height": {
+          "type": "number",
+          "format": "double",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    },
+    "MotionSettings": {
+      "description": "`[motion]` in a `look.toml` or a theme's `banda.toml`.",
+      "type": "object",
+      "properties": {
+        "off": {
+          "description": "Turns every event off, as the system's reduced motion does.",
+          "type": "boolean"
+        },
+        "slowdown": {
+          "description": "2 is twice as slow; 0.5 twice as fast.",
+          "type": "number",
+          "format": "double"
+        },
+        "workspace": {
+          "description": "Moving to another workspace.",
+          "$ref": "#/$defs/Event"
+        },
+        "strip": {
+          "description": "Scrolling the Strip to a column.",
+          "$ref": "#/$defs/Event"
+        },
+        "move": {
+          "description": "Columns going to their new places, when one opens, closes, moves or\nchanges its width.",
+          "$ref": "#/$defs/Event"
+        },
+        "resize": {
+          "description": "A column changing its width.",
+          "$ref": "#/$defs/Event"
+        },
+        "open": {
+          "description": "A tile coming in: it fades in, growing a little.",
+          "$ref": "#/$defs/Event"
+        },
+        "close": {
+          "description": "A tile going: it fades out, shrinking a little, as the rest close in.",
+          "$ref": "#/$defs/Event"
+        }
+      },
+      "additionalProperties": false
+    },
+    "Event": {
+      "description": "One event's table: `off`, and a `spring` or an `easing`.",
+      "type": "object",
+      "properties": {
+        "off": {
+          "type": "boolean"
+        },
+        "spring": {
+          "$ref": "#/$defs/SpringSettings"
+        },
+        "easing": {
+          "$ref": "#/$defs/EasingSettings"
+        }
+      },
+      "additionalProperties": false
+    },
+    "SpringSettings": {
+      "type": "object",
+      "properties": {
+        "damping-ratio": {
+          "description": "1 comes to rest without overshooting; less bounces.",
+          "type": "number",
+          "format": "double"
+        },
+        "stiffness": {
+          "description": "How hard it pulls: more is faster.",
+          "type": "number",
+          "format": "double"
+        },
+        "epsilon": {
+          "description": "How close, as a share of the way, counts as there.",
+          "type": "number",
+          "format": "double"
+        }
+      },
+      "additionalProperties": false
+    },
+    "EasingSettings": {
+      "type": "object",
+      "properties": {
+        "duration-ms": {
+          "type": "number",
+          "format": "double"
+        },
+        "curve": {
+          "description": "A named curve or `cubic-bezier(x1, y1, x2, y2)`.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "ColumnsSettings": {
+      "type": "object",
+      "properties": {
+        "presets": {
+          "description": "What Alt+Ctrl+Left and Right step through.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "default": {
+          "description": "A new column's width, where its Pane does not ask for its own.",
+          "type": "string"
+        },
+        "center": {
+          "$ref": "#/$defs/Center"
+        }
+      },
+      "additionalProperties": false
+    },
+    "Center": {
+      "description": "Where the Strip scrolls a focused column to.",
+      "oneOf": [
+        {
+          "description": "The least scroll that shows it whole.",
+          "type": "string",
+          "const": "never"
+        },
+        {
+          "description": "The middle of the screen.",
+          "type": "string",
+          "const": "always"
+        },
+        {
+          "description": "The middle, when it does not fit beside the column focused before.",
+          "type": "string",
+          "const": "on-overflow"
+        }
+      ]
+    },
+    "FontSettings": {
+      "type": "object",
+      "properties": {
+        "sans": {
+          "description": "The interface's text.",
+          "type": "string"
+        },
+        "mono": {
+          "description": "The terminal's and code's.",
+          "type": "string"
+        },
+        "size": {
+          "description": "The interface's usual text, in pixels; everything measured in text\ngrows with it, as with a zoom.",
+          "type": "number",
+          "format": "double",
+          "minimum": 8,
+          "maximum": 32
+        }
+      },
+      "additionalProperties": false
+    },
+    "SoundSettings": {
+      "description": "`[sound]` as one layer says it: every key optional.",
+      "type": "object",
+      "properties": {
+        "family": {
+          "$ref": "#/$defs/Families"
+        },
+        "volume": {
+          "description": "0 to 1, for every sound.",
+          "type": "number",
+          "format": "double",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "room": {
+          "description": "A soft room around each sound.",
+          "type": "boolean"
+        },
+        "done": {
+          "$ref": "#/$defs/Call"
+        },
+        "asking": {
+          "$ref": "#/$defs/Call"
+        },
+        "failed": {
+          "$ref": "#/$defs/Call"
+        }
+      },
+      "additionalProperties": false
+    },
+    "Families": {
+      "description": "The family every call comes from, or `off` for silence.",
+      "enum": [
+        "banda",
+        "glass",
+        "wood",
+        "pop",
+        "pluck",
+        "off"
+      ]
+    },
+    "Call": {
+      "description": "One call: on, off, or a family to borrow this one sound from.",
+      "anyOf": [
+        {
+          "type": "boolean"
+        },
+        {
+          "$ref": "#/$defs/Family"
+        }
+      ]
+    },
+    "Family": {
+      "description": "A family of Banda's sounds; each plays every call its own way.",
+      "type": "string",
+      "enum": [
+        "banda",
+        "glass",
+        "wood",
+        "pop",
+        "pluck"
+      ]
+    },
+    "NotifySettings": {
+      "description": "`[notify]` as one layer says it: every key optional.",
+      "type": "object",
+      "properties": {
+        "system": {
+          "$ref": "#/$defs/System"
+        },
+        "window": {
+          "$ref": "#/$defs/Toasts"
+        },
+        "detail": {
+          "description": "What the Thread said, in the words; false shows only its title.",
+          "type": "boolean"
+        },
+        "quiet": {
+          "$ref": "#/$defs/Quiet"
+        },
+        "done": {
+          "type": "boolean"
+        },
+        "asking": {
+          "type": "boolean"
+        },
+        "failed": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "System": {
+      "description": "When a call becomes a system notification.",
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "off"
+          ]
+        },
+        {
+          "description": "When the window is not in front.",
+          "type": "string",
+          "const": "away"
+        },
+        {
+          "description": "Always, instead of a toast too.",
+          "type": "string",
+          "const": "always"
+        }
+      ]
+    },
+    "Toasts": {
+      "description": "When a call becomes a toast in the window.",
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "off"
+          ]
+        },
+        {
+          "description": "For a thing whose Pane is not on screen.",
+          "type": "string",
+          "const": "out-of-sight"
+        },
+        {
+          "description": "For one on screen too.",
+          "type": "string",
+          "const": "always"
+        }
+      ]
+    },
+    "Quiet": {
+      "description": "Whose quiet Banda keeps.",
+      "oneOf": [
+        {
+          "description": "The desktop's: nothing but the Marks while its Do Not Disturb is on.",
+          "type": "string",
+          "const": "desktop"
+        },
+        {
+          "description": "None: Banda tells its Person regardless.",
+          "type": "string",
+          "const": "never"
+        }
+      ]
+    }
+  }
+}

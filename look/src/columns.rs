@@ -5,22 +5,25 @@
 //! A width is a share of the screen as a fraction, `"1/3"`, or `"1"` for
 //! all of it.
 
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use toml::Spanned;
 use ts_rs::TS;
 
-#[derive(Clone, Debug, Default, Deserialize)]
+#[derive(Clone, Debug, Default, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct ColumnsSettings {
     /// What Alt+Ctrl+Left and Right step through.
+    #[schemars(with = "Option<Vec<String>>")]
     pub presets: Option<Vec<Spanned<String>>>,
     /// A new column's width, where its Pane does not ask for its own.
+    #[schemars(with = "Option<String>")]
     pub default: Option<Spanned<String>>,
     pub center: Option<Center>,
 }
 
 /// Where the Strip scrolls a focused column to.
-#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, Serialize, TS)]
+#[derive(Clone, Copy, Debug, Deserialize, PartialEq, Eq, Serialize, TS, JsonSchema)]
 #[serde(rename_all = "kebab-case")]
 #[ts(export, export_to = "look/")]
 pub enum Center {

@@ -1,0 +1,20 @@
+[package]
+name = "banda-settings"
+description = "Banda's settings files, each described once (ADR 0016): the files there are, each one's JSON Schema from its Rust structs, and a check of any of them. `banda settings` prints and checks them."
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+publish.workspace = true
+
+[dependencies]
+banda-agents = { path = "../modules/agents/engine" }
+banda-look = { path = "../look" }
+schemars.workspace = true
+serde_json.workspace = true
+
+[dev-dependencies]
+tempfile.workspace = true
+
+[lints]
+workspace = true

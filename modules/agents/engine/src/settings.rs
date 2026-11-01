@@ -9,19 +9,25 @@
 
 use crate::model::{HarnessView, Program};
 use banda_kernel::AgentId;
+use schemars::JsonSchema;
 use serde::Deserialize;
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
 /// An agent program and how to start it. It speaks ACP on its stdio.
-#[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, JsonSchema)]
 pub struct Harness {
+    /// How Threads and the window name it: `claude`, `codex`.
     pub id: String,
+    /// What the Person reads: `Claude Code`.
     pub name: String,
+    /// The program that speaks ACP: its name on PATH, or its path.
     pub command: String,
+    /// The program's arguments.
     #[serde(default)]
     pub args: Vec<String>,
+    /// Variables over the environment it starts in.
     #[serde(default)]
     pub env: BTreeMap<String, String>,
     /// The Person's own CLI the program runs, when it runs one.
@@ -37,7 +43,7 @@ pub struct Harness {
 
 /// A CLI the Person installed, which an adapter runs in place of a copy
 /// of its own (ADR 0003, decision 3).
-#[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, JsonSchema)]
 pub struct Cli {
     /// Its name on PATH, or its path.
     pub program: String,
@@ -66,8 +72,11 @@ impl Harness {
 #[derive(Clone, Debug, Default)]
 pub struct Harnesses(Arc<[Harness]>);
 
-#[derive(Deserialize)]
-struct HarnessFile {
+/// The Harnesses this machine starts Threads with. Without the file,
+/// Banda starts Claude Code and Codex, each with the Person's own CLI.
+#[derive(Deserialize, JsonSchema)]
+pub struct HarnessFile {
+    /// One `[[harness]]` table per agent program.
     #[serde(default)]
     harness: Vec<Harness>,
 }
@@ -119,8 +128,9 @@ impl Harnesses {
 
     /// Reads a Harness list: `[[harness]]` tables with `id`, `name`,
     /// `command`, and optional `args`, `env` and `cli`.
-    pub fn parse(text: &str) -> Result<Self, String> {
-        let file: HarnessFile = toml::from_str(text).map_err(|e| e.to_string())?;
+    /// A mistake keeps TOML's place for it, so a check names the line.
+    pub fn parse(text: &str) -> Result<Self, toml::de::Error> {
+        let file: HarnessFile = toml::from_str(text)?;
         Ok(Self::new(file.harness))
     }
 

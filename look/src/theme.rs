@@ -26,6 +26,16 @@ pub struct Places {
 }
 
 impl Places {
+    /// Only `config`: no Omarchy, no system fonts, as a test wants.
+    pub fn at(config: &Path) -> Places {
+        Places {
+            config: config.to_owned(),
+            omarchy_current: None,
+            omarchy_themes: Vec::new(),
+            fontconfig: None,
+        }
+    }
+
     /// The places on this machine. `BANDA_CONFIG` moves the config folder
     /// and `BANDA_OMARCHY` Omarchy's current theme (empty: no Omarchy);
     /// an empty `BANDA_FONTCONFIG` leaves the system's fonts unasked. So a

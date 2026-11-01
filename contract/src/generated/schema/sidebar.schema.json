@@ -1,0 +1,196 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "sidebar.toml",
+  "description": "How the sidebar arranges Threads: a preset, and the keys that change\nit. A preset file in `sidebars/` takes the same keys; every key is\noptional.",
+  "type": "object",
+  "properties": {
+    "preset": {
+      "description": "`\"inbox\"`, `\"spaces\"`, `\"places\"`, or a file of the Person's.",
+      "type": "string"
+    },
+    "group": {
+      "$ref": "#/$defs/GroupSettings"
+    },
+    "sort": {
+      "$ref": "#/$defs/SortSettings"
+    },
+    "spaces": {
+      "$ref": "#/$defs/SpacesSettings"
+    },
+    "row": {
+      "$ref": "#/$defs/RowSettings"
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "GroupSettings": {
+      "type": "object",
+      "properties": {
+        "by": {
+          "$ref": "#/$defs/GroupBy"
+        },
+        "states": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/State"
+          }
+        },
+        "bottom": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/State"
+          }
+        },
+        "folded": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "limit": {
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0
+        },
+        "empty": {
+          "$ref": "#/$defs/Empty"
+        }
+      },
+      "additionalProperties": false
+    },
+    "GroupBy": {
+      "type": "string",
+      "enum": [
+        "state",
+        "space",
+        "none"
+      ]
+    },
+    "State": {
+      "description": "A Thread's mark as the sidebar sees it.",
+      "oneOf": [
+        {
+          "description": "Neither at work nor settled: it asks, it failed, it finished, or the\nPerson has it in hand.",
+          "type": "string",
+          "const": "active"
+        },
+        {
+          "description": "Its Agent is at work.",
+          "type": "string",
+          "const": "working"
+        },
+        {
+          "description": "Put away by the Person, or by three days with nothing new.",
+          "type": "string",
+          "const": "settled"
+        }
+      ]
+    },
+    "Empty": {
+      "type": "string",
+      "enum": [
+        "hide",
+        "show"
+      ]
+    },
+    "SortSettings": {
+      "type": "object",
+      "properties": {
+        "by": {
+          "$ref": "#/$defs/SortBy"
+        }
+      },
+      "additionalProperties": false
+    },
+    "SortBy": {
+      "oneOf": [
+        {
+          "type": "string",
+          "enum": [
+            "changed",
+            "title"
+          ]
+        },
+        {
+          "description": "What needs the Person first, then the latest change.",
+          "type": "string",
+          "const": "attention"
+        }
+      ]
+    },
+    "SpacesSettings": {
+      "type": "object",
+      "properties": {
+        "list": {
+          "type": "boolean"
+        },
+        "order": {
+          "$ref": "#/$defs/SpaceOrder"
+        },
+        "rollup": {
+          "type": "boolean"
+        },
+        "new-thread": {
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "SpaceOrder": {
+      "type": "string",
+      "enum": [
+        "changed",
+        "name"
+      ]
+    },
+    "RowSettings": {
+      "type": "object",
+      "properties": {
+        "lines": {
+          "type": "integer",
+          "format": "uint8",
+          "minimum": 0,
+          "maximum": 255
+        },
+        "hide": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Part"
+          }
+        },
+        "line1": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Part"
+          }
+        },
+        "line2": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Part"
+          }
+        },
+        "line3": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Part"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "Part": {
+      "description": "A part of a row; `~` pushes the rest of its line to the right.",
+      "type": "string",
+      "enum": [
+        "mark",
+        "title",
+        "space",
+        "harness",
+        "status",
+        "note",
+        "~"
+      ]
+    }
+  }
+}

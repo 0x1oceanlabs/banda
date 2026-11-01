@@ -31,8 +31,9 @@ Banda is changed through text files, the same way the Person changes it.
 1. Read the topic for what you change, below.
 2. Edit the file. Keep the Person's comments and every key you were not
    asked to change. Every key is optional: write only what changes.
-3. Check it: `banda look check` prints `path:line:column: problem` for
-   each mistake, and nothing when all is well.
+3. Check it: `banda settings check` prints `path:line:column: problem`
+   for each mistake, and nothing when all is well. `banda settings schema
+   <file>` prints every key a file may hold, with what it does.
 4. Tell the Person what you changed, and how to undo it.
 
 The window applies each save at once. A broken file leaves the last good
@@ -51,3 +52,5 @@ Never touch credentials, a Harness's own configuration, or a Space's
 | `themes/<name>/` | the Person's own themes |
 | `sidebar.toml` | how the sidebar arranges Threads |
 | `sidebars/<name>.toml` | the Person's own sidebar presets |
+| `harnesses.toml` | the Harnesses Threads start with |
+| `schemas/` | each file's JSON Schema, written by Banda for editors |

@@ -9,13 +9,14 @@
 
 use crate::Problem;
 use crate::theme::Places;
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::path::{Path, PathBuf};
 use toml::Spanned;
 use ts_rs::TS;
 
 /// A Thread's mark as the sidebar sees it.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize, TS)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize, TS, JsonSchema)]
 #[serde(rename_all = "lowercase")]
 #[ts(export, export_to = "sidebar/")]
 pub enum State {
@@ -28,7 +29,7 @@ pub enum State {
     Settled,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize, TS)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize, TS, JsonSchema)]
 #[serde(rename_all = "lowercase")]
 #[ts(export, export_to = "sidebar/")]
 pub enum GroupBy {
@@ -37,7 +38,7 @@ pub enum GroupBy {
     None,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize, TS)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize, TS, JsonSchema)]
 #[serde(rename_all = "lowercase")]
 #[ts(export, export_to = "sidebar/")]
 pub enum SortBy {
@@ -47,7 +48,7 @@ pub enum SortBy {
     Title,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize, TS)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize, TS, JsonSchema)]
 #[serde(rename_all = "lowercase")]
 #[ts(export, export_to = "sidebar/")]
 pub enum SpaceOrder {
@@ -55,7 +56,7 @@ pub enum SpaceOrder {
     Name,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize, TS)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize, TS, JsonSchema)]
 #[serde(rename_all = "lowercase")]
 #[ts(export, export_to = "sidebar/")]
 pub enum Empty {
@@ -64,7 +65,7 @@ pub enum Empty {
 }
 
 /// A part of a row; `~` pushes the rest of its line to the right.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize, TS)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize, TS, JsonSchema)]
 #[serde(rename_all = "lowercase")]
 #[ts(export, export_to = "sidebar/")]
 pub enum Part {
@@ -78,11 +79,14 @@ pub enum Part {
     Push,
 }
 
-/// `sidebar.toml`, or a preset file: every key optional.
-#[derive(Clone, Debug, Default, Deserialize)]
+/// How the sidebar arranges Threads: a preset, and the keys that change
+/// it. A preset file in `sidebars/` takes the same keys; every key is
+/// optional.
+#[derive(Clone, Debug, Default, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct SidebarSettings {
     /// `"inbox"`, `"spaces"`, `"places"`, or a file of the Person's.
+    #[schemars(with = "Option<String>")]
     pub preset: Option<Spanned<String>>,
     #[serde(default)]
     pub group: GroupSettings,
@@ -94,7 +98,7 @@ pub struct SidebarSettings {
     pub row: RowSettings,
 }
 
-#[derive(Clone, Debug, Default, Deserialize)]
+#[derive(Clone, Debug, Default, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct GroupSettings {
     pub by: Option<GroupBy>,
@@ -105,13 +109,13 @@ pub struct GroupSettings {
     pub empty: Option<Empty>,
 }
 
-#[derive(Clone, Debug, Default, Deserialize)]
+#[derive(Clone, Debug, Default, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct SortSettings {
     pub by: Option<SortBy>,
 }
 
-#[derive(Clone, Debug, Default, Deserialize)]
+#[derive(Clone, Debug, Default, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct SpacesSettings {
     pub list: Option<bool>,
@@ -120,9 +124,10 @@ pub struct SpacesSettings {
     pub new_thread: Option<bool>,
 }
 
-#[derive(Clone, Debug, Default, Deserialize)]
+#[derive(Clone, Debug, Default, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct RowSettings {
+    #[schemars(with = "Option<u8>")]
     pub lines: Option<Spanned<u8>>,
     pub hide: Option<Vec<Part>>,
     pub line1: Option<Vec<Part>>,
@@ -493,12 +498,7 @@ mod tests {
     use super::*;
 
     fn places(config: &Path) -> Places {
-        Places {
-            config: config.to_owned(),
-            omarchy_current: None,
-            omarchy_themes: Vec::new(),
-            fontconfig: None,
-        }
+        Places::at(config)
     }
 
     fn resolved(config: &Path) -> (Sidebar, Vec<Problem>) {
