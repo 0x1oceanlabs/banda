@@ -1,15 +1,22 @@
 /**
  * What the Banda menu lists (ADR 0017): empty, the Recent Threads and the
- * Actions run most; typed into, the Threads, Spaces and Actions that fit
- * the words, then always "New Thread" with them. A Space and the sidebar's
+ * Actions run most; typed into, the Threads, Spaces, Files and Actions
+ * that fit the words, then always "New Thread" with them and the web's
+ * row for them. A Space and the sidebar's
  * view are branches the menu goes into, as Omarchy's menu does, and `Tab`
  * shows what can be done with a row. Plain data, so the window only draws
  * it.
  */
 import type { SpaceId, SpaceSummary } from "@banda/contract"
+import {
+  browserAt,
+  browserPane,
+  fileAddress,
+  isAddress,
+} from "@banda/browser-pane"
 import { waits } from "@banda/ui/components/banda-mark"
 import type { Key } from "@banda/ui/lib/keys"
-import type { Listed } from "@banda/ui/pane"
+import { type Listed, type PaneState, paneOf } from "@banda/ui/pane"
 import type { Action } from "../actions/actions"
 import type { Lists } from "../bar/Watches"
 import type { Shell } from "../shell/actions"
@@ -48,6 +55,27 @@ export type Choice =
   | { kind: "preset"; id: string; name: string; current: boolean }
   /** Settles a Thread, or brings it back. */
   | { kind: "settle"; id: string; space: SpaceId; listed: Listed }
+  /** A file in a Space's folder, `path` in it and `full` from the root:
+   * it opens as `pane` in the Space. */
+  | {
+      kind: "file"
+      id: string
+      space: SpaceId
+      path: string
+      full: string
+      pane: PaneState
+    }
+  /** The words as a page, opened as `pane`: the address typed, or a
+   * search for them. */
+  | {
+      kind: "web"
+      id: string
+      words: string
+      address: boolean
+      pane: PaneState
+    }
+  /** Puts `text` on the clipboard. */
+  | { kind: "copy"; id: string; text: string }
 
 /** A row the menu goes into rather than runs. */
 export type Branch = Extract<Choice, { kind: "space" | "views" }>
@@ -80,6 +108,14 @@ export type Sources = {
   harnesses: readonly { id: string; name: string }[]
   /** Whether a Thread is settled now. */
   settled: (listed: Listed) => boolean
+  /** The files of the focused Space that fit the words, as `@` finds
+   * them, the best first. */
+  files: { space: SpaceId; paths: readonly string[] }
+  /** The page the browser opens for what was typed. */
+  addressOf: (typed: string) => string
+  /** How often and lately a row was chosen, by its id: more ranks first
+   * among equal matches. */
+  weight: (id: string) => number
 }
 
 /** The Actions an empty menu offers, as T3 Code's palette offers its own. */
@@ -92,7 +128,7 @@ export const ROOT_ACTIONS = [
 ]
 
 /** How many rows of each group a search shows. */
-const SHOWN = { threads: 8, spaces: 5, actions: 8, recent: 6 }
+const SHOWN = { threads: 8, spaces: 5, files: 6, actions: 8, recent: 6 }
 
 /**
  * The menu's rows for `words`: opened `at` its root or its Actions, or
@@ -109,8 +145,9 @@ export function menuOf({
   inside?: Branch
   sources: Sources
 }): Group[] {
-  const { lists, spaces, actions, presets } = sources
+  const { lists, spaces, actions, presets, files, weight } = sources
   const query = words.trim()
+  const byWeight = (row: Choice) => weight(row.id)
   const views: Choice = { kind: "views", id: "views" }
   // The actions, and the branches among them, as one list.
   const actionRows: Choice[] = [
@@ -130,21 +167,24 @@ export function menuOf({
       space: space as SpaceId,
       listed: one,
     }))
-  const fitting = <Thing>(
-    things: readonly Thing[],
-    texts: (thing: Thing) => string[]
-  ) => (query ? ranked(things, query, texts) : [...things])
+  const fitting = <Row extends Choice>(
+    rows: readonly Row[],
+    texts: (row: Row) => string[]
+  ): Row[] => (query ? ranked(rows, query, texts, byWeight) : [...rows])
 
   if (inside?.kind === "views")
     return nonEmpty([
       {
         label: "",
-        rows: fitting(presets.names, (name) => [name]).map((name) => ({
-          kind: "preset",
-          id: `preset:${name}`,
-          name,
-          current: name === presets.current,
-        })),
+        rows: fitting(
+          presets.names.map((name) => ({
+            kind: "preset" as const,
+            id: `preset:${name}`,
+            name,
+            current: name === presets.current,
+          })),
+          (row) => [row.name]
+        ),
       },
     ])
   if (inside?.kind === "space") {
@@ -173,9 +213,20 @@ export function menuOf({
     threadsOf(space, listed)
   )
   if (!query) {
-    const offered = actionRows.filter(
-      (row) => row.kind === "action" && ROOT_ACTIONS.includes(row.action.id)
-    )
+    // The actions run most, then the ones T3 Code's palette offers.
+    const usual = (row: Choice) => {
+      const place =
+        row.kind === "action" ? ROOT_ACTIONS.indexOf(row.action.id) : -1
+      return place === -1 ? ROOT_ACTIONS.length : place
+    }
+    const offered = actionRows
+      .filter(
+        (row) =>
+          byWeight(row) > 0 ||
+          (row.kind === "action" && ROOT_ACTIONS.includes(row.action.id))
+      )
+      .toSorted((a, b) => byWeight(b) - byWeight(a) || usual(a) - usual(b))
+      .slice(0, ROOT_ACTIONS.length)
     return nonEmpty([
       {
         label: "Recent Threads",
@@ -185,26 +236,58 @@ export function menuOf({
     ])
   }
 
+  const folder = spaces.find((space) => space.id === files.space)?.folder
+  const browsing = (url: string) => paneOf(browserPane, browserAt(url))
   return nonEmpty([
     {
       label: "Threads",
-      rows: ranked(threads, query, threadTexts).slice(0, SHOWN.threads),
+      rows: fitting(threads, threadTexts).slice(0, SHOWN.threads),
     },
     {
       label: "Spaces",
-      rows: ranked(spaces, query, (space) => [space.name])
-        .slice(0, SHOWN.spaces)
-        .map((space): Choice => ({
-          kind: "space",
+      rows: fitting(
+        spaces.map((space) => ({
+          kind: "space" as const,
           id: `space:${space.id}`,
           space,
         })),
+        (row) => [row.space.name]
+      ).slice(0, SHOWN.spaces),
+    },
+    {
+      label: "Files",
+      rows:
+        folder === undefined
+          ? []
+          : files.paths.slice(0, SHOWN.files).map((path) => {
+              const full = `${folder.replace(/\/$/, "")}/${path}`
+              return {
+                kind: "file",
+                id: `file:${files.space}:${path}`,
+                space: files.space,
+                path,
+                full,
+                pane: browsing(fileAddress(full)),
+              }
+            }),
     },
     {
       label: "Actions",
-      rows: ranked(actionRows, query, actionTexts).slice(0, SHOWN.actions),
+      rows: fitting(actionRows, actionTexts).slice(0, SHOWN.actions),
     },
-    { label: "", rows: [{ kind: "ask", id: "ask", words: query }] },
+    {
+      label: "",
+      rows: [
+        { kind: "ask", id: "ask", words: query },
+        {
+          kind: "web",
+          id: "web",
+          words: query,
+          address: isAddress(query),
+          pane: browsing(sources.addressOf(query)),
+        },
+      ],
+    },
   ])
 }
 
@@ -257,6 +340,14 @@ export function actsOf(row: Choice, sources: Sources): Act[] {
       ]
     case "ask":
       return startOn(row, "Start")
+    case "file":
+      return [
+        { title: "Open", key: OPEN, row },
+        {
+          title: "Copy path",
+          row: { kind: "copy", id: `copy:${row.full}`, text: row.full },
+        },
+      ]
     default:
       return []
   }
@@ -278,12 +369,13 @@ function threadTexts({ listed }: { listed: Listed }): string[] {
  * The things that fit every word of `query`, the best first: a text that
  * is the query, then one that starts with it, then one with a word that
  * starts with it, then one that holds every word. The first text counts
- * most; among equals the list keeps its order.
+ * most; among equals the one that weighs more, then the list's order.
  */
 export function ranked<Thing>(
   things: readonly Thing[],
   query: string,
-  texts: (thing: Thing) => string[]
+  texts: (thing: Thing) => string[],
+  weight: (thing: Thing) => number = () => 0
 ): Thing[] {
   const lower = query.toLowerCase()
   const words = lower.split(/\s+/).filter(Boolean)
@@ -300,9 +392,11 @@ export function ranked<Thing>(
   return things
     .flatMap((thing, order) => {
       const found = rank(thing)
-      return found === undefined ? [] : [{ thing, order, rank: found }]
+      return found === undefined
+        ? []
+        : [{ thing, order, rank: found, weight: weight(thing) }]
     })
-    .sort((a, b) => a.rank - b.rank || a.order - b.order)
+    .sort((a, b) => a.rank - b.rank || b.weight - a.weight || a.order - b.order)
     .map((found) => found.thing)
 }
 

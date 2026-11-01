@@ -1,5 +1,5 @@
 import { expect, test } from "vitest"
-import { addressOf, siteOf } from "./address"
+import { addressOf, isAddress, siteOf } from "./address"
 
 test("what reads as an address opens it, and words go to the search", () => {
   expect(addressOf("github.com")).toBe("https://github.com")
@@ -13,6 +13,10 @@ test("what reads as an address opens it, and words go to the search", () => {
     "https://duckduckgo.com/?q=tiling%20window%20manager"
   )
   expect(addressOf("niri")).toBe("https://duckduckgo.com/?q=niri")
+  expect(isAddress(" banda.so ")).toBe(true)
+  expect(isAddress("localhost:5173")).toBe(true)
+  expect(isAddress("niri")).toBe(false)
+  expect(isAddress("banda.so is good")).toBe(false)
 })
 
 test("the row shows a page's site", () => {

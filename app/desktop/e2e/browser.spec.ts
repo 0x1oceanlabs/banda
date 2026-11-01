@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync } from "node:fs"
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { createServer, type Server } from "node:http"
 import type { AddressInfo } from "node:net"
 import { join } from "node:path"
@@ -273,4 +273,47 @@ test("tabs open, show and close as Chrome's, on top or on the left", async () =>
   await page.reload()
   await expect(tabs.getByRole("tab")).toHaveText(["Alpha", "Beta", "Gamma"])
   await expect(tab("Alpha")).toHaveAttribute("aria-selected", "true")
+})
+
+test("the Banda menu opens an address, and a file of the focused Space, in a browser", async () => {
+  const address = await serve({ "/": "<title>Alpha</title>" })
+  window = await startWindow()
+  const { app, page, dir } = window
+  const { thread } = await firstThread(page)
+  await expect(thread).toBeVisible()
+  const menu = page.getByRole("dialog", { name: "Banda menu" })
+  const search = menu.getByRole("combobox", { name: "Search" })
+
+  // An address typed opens, after New Thread with the words.
+  const site = address.replace("http://", "")
+  await page.keyboard.press("Alt+Space")
+  await search.fill(site)
+  await expect(menu.getByRole("option")).toHaveText([
+    new RegExp(`New Thread: “${site}”`),
+    `Open ${site}`,
+  ])
+  await search.press("ArrowDown")
+  await search.press("Enter")
+  await expect(menu).toBeHidden()
+  await expect(page.getByRole("region", { name: "Alpha" })).toBeVisible()
+
+  // Words would search the web. The page has the keys now, and Alt+Space
+  // is Banda's there too.
+  await pressInPage(app, "Space", ["alt"])
+  await search.fill("two words")
+  await expect(
+    menu.getByRole("option", { name: "Search the web: “two words”" })
+  ).toBeVisible()
+
+  // The focused Space's files, as @ finds them; Enter opens one.
+  const space = join(dir, "root", "Work")
+  mkdirSync(join(space, "notes"), { recursive: true })
+  writeFileSync(join(space, "notes", "plan.html"), "<title>The plan</title>")
+  await search.fill("plan.ht")
+  const files = menu.getByRole("group", { name: "Files" })
+  await expect(files.getByRole("option")).toHaveText(/plan\.html\s*notes/)
+  await page.screenshot({ path: "test-results/28-banda-menu-files.png" })
+  await search.press("Enter")
+  await expect(menu).toBeHidden()
+  await expect(page.getByRole("region", { name: "The plan" })).toBeVisible()
 })

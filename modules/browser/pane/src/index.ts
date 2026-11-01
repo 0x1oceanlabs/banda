@@ -2,6 +2,7 @@
 import { browserPane } from "./BrowserPane"
 
 export { browserPane }
-export { type BrowserArgs, NEW_BROWSER, type Tab } from "./tabs"
+export { fileAddress, isAddress, useAddressOf } from "./address"
+export { type BrowserArgs, browserAt, NEW_BROWSER, type Tab } from "./tabs"
 
 export const panes = [browserPane]

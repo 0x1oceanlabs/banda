@@ -9,9 +9,9 @@ export function problem(error: unknown): string {
   return "Something went wrong. Try again."
 }
 
-const MINUTE = 60_000
-const HOUR = 60 * MINUTE
-const DAY = 24 * HOUR
+export const MINUTE = 60_000
+export const HOUR = 60 * MINUTE
+export const DAY = 24 * HOUR
 
 /** How long ago `at` (ms since the epoch) was, in a few letters. */
 export function ago(at: number, now = Date.now()): string {

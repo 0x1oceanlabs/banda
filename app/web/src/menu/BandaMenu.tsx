@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import type { Engine, SpaceId, SpaceSummary } from "@banda/contract"
-import { useHarnesses } from "@banda/agents-pane"
+import { useHarnesses, useSpaceFiles } from "@banda/agents-pane"
+import { useAddressOf } from "@banda/browser-pane"
 import { MARK_WORDS, waits } from "@banda/ui/components/banda-mark"
 import { Dialog, DialogContent, DialogTitle } from "@banda/ui/components/dialog"
 import { HarnessLogo } from "@banda/ui/components/harness-logo"
@@ -11,10 +12,13 @@ import {
   Suggestions,
 } from "@banda/ui/components/suggestions"
 import { type Key, matches } from "@banda/ui/lib/keys"
+import { nameAndFolder } from "@banda/ui/lib/paths"
 import {
   CheckIcon,
   ChevronRightIcon,
   CornerDownLeftIcon,
+  FileIcon,
+  GlobeIcon,
   ListFilterIcon,
   SearchIcon,
   SquarePenIcon,
@@ -38,6 +42,7 @@ import {
   OPEN,
   type Sources,
 } from "./menu"
+import { opened, useOpened, weightOf } from "./opened"
 
 const ASK: Key = { code: "Enter", alt: true }
 
@@ -90,6 +95,8 @@ export function BandaMenu({
         {at && (
           <Menu
             at={at}
+            engine={engine}
+            space={space}
             lists={lists}
             spaces={spaces}
             actions={actions}
@@ -109,6 +116,8 @@ export function BandaMenu({
 /** The menu while it is open: it starts empty, at its root, each time. */
 function Menu({
   at,
+  engine,
+  space,
   lists,
   spaces,
   actions,
@@ -117,6 +126,8 @@ function Menu({
   onChoose,
 }: {
   at: At
+  engine: Engine
+  space: SpaceId
   lists: Lists
   spaces: readonly SpaceSummary[]
   actions: readonly Action<Shell>[]
@@ -126,6 +137,16 @@ function Menu({
 }) {
   const { preset, presets } = useLookSidebar()
   const settled = useIsSettled()
+  const addressOf = useAddressOf()
+  const uses = useOpened()
+  const [now] = useState(Date.now)
+  const [words, setWords] = useState("")
+  const [path, setPath] = useState<Branch[]>([])
+  // The focused Space's files that fit the words, as `@` finds them.
+  const query = words.trim()
+  const lookFiles = at === "root" && path.length === 0 && query !== ""
+  const found = useSpaceFiles(engine, space, lookFiles ? query : undefined)
+  const paths = (lookFiles && found?.paths) || NO_PATHS
   const sources: Sources = useMemo(
     () => ({
       lists,
@@ -134,11 +155,25 @@ function Menu({
       presets: { names: presets.map((one) => one.name), current: preset },
       harnesses,
       settled,
+      files: { space, paths },
+      addressOf,
+      weight: (id) => weightOf(uses[id], now),
     }),
-    [lists, spaces, actions, presets, preset, harnesses, settled]
+    [
+      lists,
+      spaces,
+      actions,
+      presets,
+      preset,
+      harnesses,
+      settled,
+      space,
+      paths,
+      addressOf,
+      uses,
+      now,
+    ]
   )
-  const [words, setWords] = useState("")
-  const [path, setPath] = useState<Branch[]>([])
   const [index, setIndex] = useState(0)
   // The row's acts that Tab shows, and the one chosen among them.
   const [acting, setActing] = useState<number>()
@@ -168,9 +203,13 @@ function Menu({
     setIndex(0)
     setActing(undefined)
   }
-  // A branch opens in the menu; any other row runs.
-  const choose = (row: Choice) =>
-    isBranch(row) ? restart([...path, row]) : onChoose(row)
+  // A branch opens in the menu; any other row runs. Either counts for
+  // the order next time.
+  const choose = (row: Choice) => {
+    if (isBranch(row)) restart([...path, row])
+    else onChoose(row)
+    opened(row.id)
+  }
 
   useEffect(() => {
     escapeRef.current = () => {
@@ -207,13 +246,12 @@ function Menu({
     // Alt+Enter starts a Thread with the words, whatever row is chosen;
     // another Enter does the row's act with that key, as Shift+Enter
     // opens a Thread beside.
-    const ask = words.trim()
     if (event.altKey) {
-      if (ask)
+      if (query)
         onChoose({
           kind: "ask",
           id: "ask",
-          words: ask,
+          words: query,
           ...(inside?.kind === "space" && { space: inside.space.id }),
         })
       return
@@ -249,7 +287,7 @@ function Menu({
               ? "Search…"
               : at === "actions"
                 ? "Search actions…"
-                : "Search actions, Spaces and Threads…"
+                : "Search actions, Spaces, Threads and files…"
           }
           aria-label="Search"
           role="combobox"
@@ -453,10 +491,36 @@ function RowView({
         </>
       )
     }
+    case "file": {
+      const { name, folder } = nameAndFolder(row.path)
+      return (
+        <>
+          <FileIcon className="size-4 shrink-0 text-muted-foreground" />
+          <span className="min-w-0 truncate">{name}</span>
+          <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+            {folder}
+          </span>
+        </>
+      )
+    }
+    case "web":
+      return (
+        <>
+          <GlobeIcon className="size-4 shrink-0 text-muted-foreground" />
+          <span className="min-w-0 flex-1 truncate">
+            {row.address
+              ? `Open ${row.words}`
+              : `Search the web: “${row.words}”`}
+          </span>
+        </>
+      )
     case "settle":
+    case "copy":
       return null
   }
 }
+
+const NO_PATHS: string[] = []
 
 function Detail({ children }: { children: React.ReactNode }) {
   return (
