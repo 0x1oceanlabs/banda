@@ -721,6 +721,14 @@ test("a message starts with a slash command its Agent offers", async () => {
     thread.getByRole("button", { name: "Plan", exact: true })
   ).toHaveAttribute("aria-pressed", "false")
   await expect(thread.getByText("You said: /default")).toBeHidden()
+
+  // A command starts any line, not only the message.
+  await composer.pressSequentially("first")
+  await composer.press("Shift+Enter")
+  await composer.pressSequentially("/rev")
+  await expect(commands).toBeVisible()
+  await composer.press("Enter")
+  await expect(composer.locator("p")).toHaveText(["first", "/review"])
 })
 
 test("a message carries images to its Agent", async () => {
@@ -1056,10 +1064,23 @@ test("@ names a file in the Space's folder, picked from a list", async () => {
   await expect(files.getByRole("option")).toContainText("src")
   await page.screenshot({ path: "test-results/18d-files.png" })
   await composer.press("Enter")
-  await expect(composer).toHaveText("look at @src/main.ts ")
+  // The file is a chip: its name, the path on hover.
+  const chip = composer.locator("[data-chip=file]")
+  await expect(chip).toHaveText("main.ts")
+  await expect(chip).toHaveAttribute("title", "src/main.ts")
   await expect(files).toBeHidden()
+  await page.screenshot({ path: "test-results/18e-file-chip.png" })
+  // Backspace takes the space, then the chip whole.
+  await composer.press("Backspace")
+  await composer.press("Backspace")
+  await expect(chip).toHaveCount(0)
+  await expect(composer).toHaveText("look at")
+  await composer.pressSequentially(" @mai")
+  await expect(files.getByRole("option")).toHaveCount(1)
+  await composer.press("Enter")
   await composer.pressSequentially("please")
   await composer.press("Enter")
+  // It is sent as what it writes.
   await expect(
     thread.getByText("You said: look at @src/main.ts please")
   ).toBeVisible()

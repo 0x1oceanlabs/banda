@@ -1,6 +1,7 @@
 import * as React from "react"
 import { splitBlock } from "@tiptap/pm/commands"
-import { TextSelection } from "@tiptap/pm/state"
+import { Slice } from "@tiptap/pm/model"
+import { type EditorState, TextSelection } from "@tiptap/pm/state"
 import type { EditorView } from "@tiptap/pm/view"
 import Document from "@tiptap/extension-document"
 import Paragraph from "@tiptap/extension-paragraph"
@@ -8,26 +9,38 @@ import Text from "@tiptap/extension-text"
 import { UndoRedo } from "@tiptap/extensions"
 import { EditorContent, useEditor } from "@tiptap/react"
 import { cn } from "cn"
-import { docOf, offsetOf, posOf, textOf } from "@banda/ui/lib/prompt"
+import { Chip } from "@banda/ui/components/prompt-chip"
+import {
+  chip,
+  CHIP_MARK,
+  type ChipKind,
+  docOf,
+  textOf,
+  type Typing,
+  typingIn,
+} from "@banda/ui/lib/prompt"
+
+export type { Typing }
 
 /** What a prompt editor's owner can do with it. */
 export type PromptEditorHandle = {
   focus(): void
-  /** Puts `text` in, the caret `caret` characters into it, at once. The
-   * owner sets its value to `text` as well. */
-  replace(text: string, caret: number): void
+  /** Puts `put` in place of the word being typed: text, or a chip and a
+   * space after it; the caret goes after it. */
+  complete(put: string | { chip: ChipKind; value: string }): void
   /** Whether the caret is on the first line going `up`, or on the last
    * going down, so an arrow would leave the text. */
   atEdge(up: boolean): boolean
 }
 
 type PromptEditorProps = {
-  /** The text, a line a paragraph. */
+  /** The text, a line a paragraph, a chip as what it writes. */
   value: string
-  /** The text changed, as typed; `caret` is where the caret is in it. */
-  onChange: (value: string, caret: number) => void
-  /** The caret moved, `caret` characters into the text. */
-  onCaret?: (caret: number) => void
+  /** The text changed, as typed. */
+  onChange: (value: string) => void
+  /** The word being typed that asks for suggestions, as the caret moves:
+   * `/` at a line's start, or `@` at a word's. */
+  onTyping?: (typing: Typing | undefined) => void
   /** Sees each key first; one it prevents goes no further. */
   onKeyDown?: (event: KeyboardEvent) => void
   /** Sees each paste first; one it prevents goes no further. */
@@ -43,13 +56,14 @@ type PromptEditorProps = {
 
 /**
  * Where a prompt is written: a text box on tiptap (ADR 0015) that holds a
- * string, as a textarea does, so its owner keeps the text. Enter is the
- * owner's to take, as to send; Shift+Enter starts a line.
+ * string, as a textarea does, so its owner keeps the text. What it points
+ * at, such as a file, is a chip in it. Enter is the owner's to take, as
+ * to send; Shift+Enter starts a line.
  */
 function PromptEditor({
   value,
   onChange,
-  onCaret,
+  onTyping,
   onKeyDown,
   onPaste,
   placeholder,
@@ -79,19 +93,38 @@ function PromptEditor({
         latest.current.onPaste?.(event)
         return event.defaultPrevented
       },
+      // Copied, a chip is what it writes; pasted, that is a chip again.
+      clipboardTextSerializer: (slice: Slice) => textOf(slice.content),
+      clipboardTextParser(
+        text: string,
+        _: unknown,
+        __: boolean,
+        view: EditorView
+      ) {
+        const doc = view.state.schema.nodeFromJSON(docOf(text))
+        return new Slice(doc.content, 1, 1)
+      },
     },
   }))
 
+  // The word being typed, told only when it changes.
+  const told = React.useRef<string>(undefined)
+  const tell = (state: EditorState) => {
+    const place = placeOf(state)
+    const now = place && { trigger: place.trigger, word: place.word }
+    const key = JSON.stringify(now)
+    if (key === told.current) return
+    told.current = key
+    onTyping?.(now)
+  }
   const editor = useEditor({
     extensions: EXTENSIONS,
     ...setup,
     onUpdate({ editor: { state } }) {
-      typed.current = textOf(state.doc)
-      onChange(typed.current, offsetOf(state.doc, state.selection.head))
+      typed.current = textOf(state.doc.content)
+      onChange(typed.current)
     },
-    onSelectionUpdate({ editor: { state } }) {
-      onCaret?.(offsetOf(state.doc, state.selection.head))
-    },
+    onTransaction: ({ editor: { state } }) => tell(state),
   })
 
   const shown = JSON.stringify({
@@ -105,31 +138,43 @@ function PromptEditor({
     editor.view.setProps({ attributes: JSON.parse(shown) })
   }, [editor, shown])
 
-  // A value its owner sets, rather than one typed, replaces the text,
-  // the caret at its end as a textarea puts it; undo does not go back
-  // past it.
-  const replace = React.useCallback(
-    (text: string, caret: number) => {
-      typed.current = text
-      const { state, view } = editor
-      const doc = state.schema.nodeFromJSON(docOf(text))
-      const tr = state.tr.replaceWith(0, state.doc.content.size, doc.content)
-      tr.setSelection(TextSelection.create(tr.doc, posOf(tr.doc, caret)))
-      tr.setMeta("addToHistory", false).setMeta("preventUpdate", true)
-      view.dispatch(tr)
-    },
-    [editor]
-  )
+  // A value its owner sets, rather than one typed, replaces the text, the
+  // caret at its end as a textarea puts it; undo does not go back past it.
   React.useEffect(() => {
-    if (value !== typed.current) replace(value, value.length)
-  }, [replace, value])
+    if (value === typed.current) return
+    typed.current = value
+    const { state, view } = editor
+    const doc = state.schema.nodeFromJSON(docOf(value))
+    const tr = state.tr.replaceWith(0, state.doc.content.size, doc.content)
+    tr.setSelection(TextSelection.atEnd(tr.doc))
+    tr.setMeta("addToHistory", false).setMeta("preventUpdate", true)
+    view.dispatch(tr)
+  }, [editor, value])
 
   React.useImperativeHandle(
     ref,
     () => ({
       // At once, as a textarea does; tiptap's own focus waits a frame.
       focus: () => editor.view.focus(),
-      replace,
+      complete(put) {
+        const { state, view } = editor
+        const typing = placeOf(state)
+        if (!typing) return
+        const { from, to } = typing
+        const tr = state.tr
+        if (typeof put === "string") tr.insertText(put, from, to)
+        else {
+          const made = state.schema.nodeFromJSON(chip(put.chip, put.value))
+          tr.replaceWith(from, to, made)
+          // One space after a chip, whether one was there or not.
+          const after = from + made.nodeSize
+          const next = tr.doc.textBetween(after, tr.doc.resolve(after).end())
+          if (!/^\s/.test(next)) tr.insertText(" ", after)
+          tr.setSelection(TextSelection.create(tr.doc, after + 1))
+        }
+        view.dispatch(tr)
+        view.focus()
+      },
       atEdge(up) {
         const { state, view } = editor
         const line = state.selection.$head.index(0)
@@ -137,7 +182,7 @@ function PromptEditor({
         return line === last && view.endOfTextblock(up ? "up" : "down")
       },
     }),
-    [editor, replace]
+    [editor]
   )
 
   return (
@@ -164,7 +209,19 @@ function PromptEditor({
   )
 }
 
-/** What a prompt is made of: lines of text, and undo. */
-const EXTENSIONS = [Document, Paragraph, Text, UndoRedo]
+/** The word being typed before the caret, if it asks for suggestions,
+ * and where it is, its trigger included. */
+function placeOf(
+  state: EditorState
+): (Typing & { from: number; to: number }) | undefined {
+  const { empty, $head } = state.selection
+  if (!empty || !$head.parent.isTextblock) return undefined
+  const { parent, parentOffset, pos } = $head
+  const found = typingIn(parent.textBetween(0, parentOffset, "", CHIP_MARK))
+  return found && { ...found, from: pos - found.word.length - 1, to: pos }
+}
+
+/** What a prompt is made of: lines of text with chips, and undo. */
+const EXTENSIONS = [Document, Paragraph, Text, Chip, UndoRedo]
 
 export { PromptEditor }
