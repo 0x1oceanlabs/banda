@@ -578,11 +578,16 @@ pub fn last_begun(sql: &Connection, thread: ThreadId) -> Result<Option<LatestTur
 
 pub fn turns(sql: &Connection, thread: ThreadId) -> Result<Vec<TurnView>, Error> {
     let mut statement = sql.prepare(
-        "SELECT id, message, state, reason, failure, started_at, ended_at FROM agents_turns
+        "SELECT id, message, state, reason, failure, started_at, ended_at, settings FROM agents_turns
          WHERE thread = ?1 ORDER BY created_at, id",
     )?;
     let rows = statement.query_map(params![thread], |row| {
         let failure: Option<String> = row.get(4)?;
+        // A turn from before turns kept their settings made no plan.
+        let settings: Option<String> = row.get(7)?;
+        let settings: Option<Settings> = settings
+            .map(|text| serde_json::from_str(&text).map_err(|e| unreadable(7, e)))
+            .transpose()?;
         Ok(TurnView {
             id: row.get(0)?,
             message: row.get(1)?,
@@ -593,6 +598,7 @@ pub fn turns(sql: &Connection, thread: ThreadId) -> Result<Vec<TurnView>, Error>
                 .transpose()?,
             started: row.get(5)?,
             ended: row.get(6)?,
+            plan: settings.is_some_and(|settings| settings.plan),
         })
     })?;
     Ok(rows.collect::<rusqlite::Result<_>>()?)
@@ -791,6 +797,21 @@ mod tests {
         assert_eq!(times(), (Some(20), None));
         set_turn(&sql, turn.id, TurnState::Done, None, None, 85).unwrap();
         assert_eq!(times(), (Some(20), Some(85)));
+        let planned = Turn {
+            id: TurnId::new(),
+            ..turn
+        };
+        let plan = Settings {
+            plan: true,
+            ..Settings::default()
+        };
+        insert_turn(&sql, &planned, Participant::Agent(agent), 90, &plan).unwrap();
+        let plans: Vec<bool> = turns(&sql, thread.id)
+            .unwrap()
+            .iter()
+            .map(|t| t.plan)
+            .collect();
+        assert_eq!(plans, [false, true], "a turn keeps whether it made a plan");
     }
 
     #[test]

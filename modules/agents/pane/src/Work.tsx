@@ -129,6 +129,7 @@ function useNow(ticking: boolean): number {
 export function key(line: Line): string {
   switch (line.kind) {
     case "item":
+    case "plan":
       return line.item.id
     case "work":
     case "fold":

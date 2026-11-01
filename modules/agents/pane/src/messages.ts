@@ -11,3 +11,12 @@ export function clamped(text: string): boolean {
   for (const char of text) if (char === "\n" && ++lines > LINES) return true
   return false
 }
+
+/** A plan's title: its first line, without markdown's marks. */
+export function planTitle(text: string): string {
+  const first = text.split("\n").find((line) => line.trim() !== "") ?? ""
+  return first
+    .replace(/^[#>*\-\s]+/, "")
+    .replace(/[*_`]/g, "")
+    .trim()
+}

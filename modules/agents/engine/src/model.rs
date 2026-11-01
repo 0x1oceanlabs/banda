@@ -337,6 +337,11 @@ pub struct TurnView {
     #[ts(optional, type = "number")]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub ended: Option<i64>,
+    /// It made a plan before changing anything: its Thread was in plan
+    /// mode when it was asked for.
+    #[ts(as = "Option<bool>", optional)]
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub plan: bool,
 }
 
 /// What kind of action a tool call is, as the Harness says.

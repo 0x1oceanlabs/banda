@@ -45,6 +45,8 @@ function shape(lines: Line[]): unknown[] {
         return `ended ${line.turn.state}`
       case "changes":
         return { changes: line.files.map((file) => file.path) }
+      case "plan":
+        return { plan: line.item.id }
     }
   })
 }
@@ -99,6 +101,37 @@ test("a turn that ended folds its work, and its last reply stays", () => {
     { fold: ["a", "r1", { work: ["b", "c"], live: false }] },
     "r2",
   ])
+})
+
+test("the reply a turn in plan mode ended with is its plan", () => {
+  const planning = { ...EMPTY, settings: { ...EMPTY.settings, plan: true } }
+  const state = [
+    asked(),
+    event("turn.started", { turn: "u" }),
+    tool("a"),
+    reply("r"),
+    event("turn.ended", { turn: "u", state: "done" }),
+    asked("v", "m2"),
+    event("turn.started", { turn: "v" }),
+    reply("r2", "v"),
+    event("turn.ended", { turn: "v", state: "done" }),
+  ].reduce(apply, planning)
+  // Every plan stays a card, not only the latest.
+  expect(shape(timeline(state))).toEqual([
+    "m",
+    { fold: ["a"] },
+    { plan: "r" },
+    "m2",
+    { plan: "r2" },
+  ])
+  // Out of plan mode, a turn's reply is a reply.
+  const replying = [
+    asked("w", "m3"),
+    event("turn.started", { turn: "w" }),
+    reply("r3", "w"),
+    event("turn.ended", { turn: "w", state: "done" }),
+  ].reduce(apply, { ...state, settings: { ...state.settings, plan: false } })
+  expect(shape(timeline(replying)).slice(-2)).toEqual(["m3", "r3"])
 })
 
 test("a turn with no work, or one that failed, does not fold", () => {

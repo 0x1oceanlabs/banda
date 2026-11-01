@@ -6,6 +6,7 @@ import {
   apply,
   asked as askedOf,
   declineOnce,
+  proposedPlan,
   choose,
   chosen,
   retryable,
@@ -520,4 +521,30 @@ test("the Question the Agent waits on, and the no it takes from a message", () =
     )
   )
   expect(askedOf(answered)).toBeUndefined()
+})
+
+test("a reply in plan mode is a plan that waits for the Person", () => {
+  const planning = { ...EMPTY, settings: { ...EMPTY.settings, plan: true } }
+  const state = [
+    event(
+      "message.posted",
+      { item: "m", turn: "u", text: "plan it", images: [] },
+      { author: person }
+    ),
+    event("turn.started", { turn: "u" }),
+    event("reply.grew", { item: "r", turn: "u", text: "# Fix it\n1. Read" }),
+  ].reduce(apply, planning)
+  // Not while the turn runs.
+  expect(proposedPlan(state)).toBeUndefined()
+  const done = apply(state, event("turn.ended", { turn: "u", state: "done" }))
+  expect(proposedPlan(done)?.id).toBe("r")
+  // Out of plan mode, a reply is a reply.
+  const off = { ...done, settings: { ...done.settings, plan: false } }
+  expect(proposedPlan(off)).toBeUndefined()
+  // A turn asked for before plan mode made no plan, though plan mode is on.
+  const before = {
+    ...done,
+    turns: done.turns.map((t) => ({ ...t, plan: false })),
+  }
+  expect(proposedPlan(before)).toBeUndefined()
 })
