@@ -599,6 +599,7 @@ pub fn turns(sql: &Connection, thread: ThreadId) -> Result<Vec<TurnView>, Error>
             started: row.get(5)?,
             ended: row.get(6)?,
             plan: settings.is_some_and(|settings| settings.plan),
+            can: Default::default(),
         })
     })?;
     Ok(rows.collect::<rusqlite::Result<_>>()?)

@@ -390,14 +390,18 @@ impl Agents {
                 let Some(summary) = store::thread(sql, thread)? else {
                     return Ok(None);
                 };
+                let items = store::items(sql, thread)?;
+                let mut turns = store::turns(sql, thread)?;
+                let held = store::held(sql, thread)?;
+                rules::can(&mut turns, &items, held);
                 Ok(Some(ThreadView {
                     at: 0,
-                    items: store::items(sql, thread)?,
-                    turns: store::turns(sql, thread)?,
+                    items,
+                    turns,
                     settings: store::settings(sql, thread)?,
                     offer: store::offer(sql, thread)?,
                     usage: store::usage(sql, thread)?,
-                    held: store::held(sql, thread)?,
+                    held,
                     thread: summary,
                 }))
             })
@@ -807,13 +811,12 @@ fn stop(tx: &mut Tx<'_>, author: Participant, turn: TurnId) -> Result<(), Error>
 /// nothing more, and one the Agent went on with by itself takes a message
 /// as a turn of its own, whose prompt the Harness takes into what it does.
 fn steerable(tx: &mut Tx<'_>, thread: ThreadId) -> Result<Option<store::Turn>, Error> {
-    if store::held(tx.sql(), thread)? {
-        return Ok(None);
-    }
+    let held = store::held(tx.sql(), thread)?;
     let Some(running) = store::running(tx.sql(), thread)? else {
         return Ok(None);
     };
-    Ok((!turn::by_itself(tx.sql(), &running)?).then_some(running))
+    let by_itself = turn::by_itself(tx.sql(), &running)?;
+    Ok(rules::steers(running.state, held, by_itself).then_some(running))
 }
 
 fn turn_of(tx: &mut Tx<'_>, turn: TurnId) -> Result<store::Turn, Error> {
@@ -830,10 +833,8 @@ fn waiting(tx: &mut Tx<'_>, turn: TurnId) -> Result<store::Turn, Error> {
 /// Changes the text of the message that waits for `turn`. Its images stay.
 fn edit(tx: &mut Tx<'_>, author: Participant, turn: TurnId, text: String) -> Result<(), Error> {
     let found = waiting(tx, turn)?;
-    let first = store::turns_of(tx.sql(), found.message)?
-        .first()
-        .map(|t| t.id);
-    rules::may_change(first == Some(turn))?;
+    let turns = store::turns(tx.sql(), found.thread)?;
+    rules::may_change(rules::position(&turns, found.id).first)?;
     let item = found.message;
     let Some((thread, mut message)) = store::item(tx.sql(), item)? else {
         return Err(Refusal::not_found("There is no such message.").into());
@@ -885,15 +886,10 @@ fn send_now(tx: &mut Tx<'_>, author: Participant, turn: TurnId) -> Result<(), Er
 /// it ended.
 fn retry(tx: &mut Tx<'_>, author: Participant, turn: TurnId) -> Result<Sent, Error> {
     let found = turn_of(tx, turn)?;
-    if turn::by_itself(tx.sql(), &found)? {
-        return Err(Refusal::invalid("Only a turn a Person asked for can be tried again.").into());
-    }
-    let latest = store::last_begun(tx.sql(), found.thread)?.map(|l| l.turn) == Some(found.id)
-        && store::turns_of(tx.sql(), found.message)?
-            .last()
-            .map(|t| t.id)
-            == Some(found.id);
-    rules::retry(found.state, latest)?;
+    let turns = store::turns(tx.sql(), found.thread)?;
+    let latest = rules::position(&turns, found.id).latest;
+    let by_itself = turn::by_itself(tx.sql(), &found)?;
+    rules::retry(found.state, latest, by_itself)?;
     // Queued first, it starts before a held queue goes on.
     let again = turn::queue(tx, author, found.thread, found.agent, found.message)?;
     turn::resume(tx, author, found.thread)?;

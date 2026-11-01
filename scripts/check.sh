@@ -25,6 +25,10 @@ types() { find contract/src/generated -type f -print0 | sort -z | xargs -0 sha25
 
 step "Rust: tests"
 before=$(types)
+# The agents module's tests write checkpoints that the Pane's projection
+# must reproduce (ADR 0014, decision 3); the Pane's tests read them below.
+export BANDA_CHECKPOINTS="$PWD/target/checkpoints"
+rm -rf "$BANDA_CHECKPOINTS" && mkdir -p "$BANDA_CHECKPOINTS"
 cargo test --workspace --quiet
 cargo build --workspace --quiet
 

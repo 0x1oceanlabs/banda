@@ -1,6 +1,7 @@
 import type { ListedThread, TurnView } from "@banda/contract/agents"
 import { expect, test } from "vitest"
 import { attentionOf, markOf, settledTurn } from "./marks"
+import { NOTHING } from "./thread"
 
 function thread(more: Partial<ListedThread> = {}): ListedThread {
   return {
@@ -63,6 +64,7 @@ test("the turn a Person sees settled is the latest that began and ended", () => 
     id,
     message: "m",
     state,
+    can: NOTHING,
   })
   expect(settledTurn([])).toBeUndefined()
   expect(settledTurn([turn("u1", "done"), turn("u2", "running")])).toBe(

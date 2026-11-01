@@ -2,8 +2,8 @@
 //! clock, randomness or Harness protocol. IDs come in from the caller.
 
 use crate::model::{
-    Body, Choice, Fact, Failure, Field, FieldValue, Image, ImageId, Input, ItemId, Mode,
-    QuestionState, ToolContent, ToolKind, TurnId, TurnState, Values,
+    Body, Can, Choice, Fact, Failure, Field, FieldValue, Image, ImageId, Input, Item, ItemId, Mode,
+    QuestionState, ToolContent, ToolKind, TurnId, TurnState, TurnView, Values,
 };
 use banda_kernel::{Participant, Refusal};
 use std::collections::HashSet;
@@ -143,9 +143,14 @@ impl Ending {
     }
 }
 
-/// Whether a turn may be tried again: it failed or was cut short, and
-/// nothing came after it in its Thread.
-pub fn retry(state: TurnState, latest: bool) -> Result<(), Refusal> {
+/// Whether a turn may be tried again: a Person asked for it, it failed or
+/// was cut short, and nothing came after it in its Thread.
+pub fn retry(state: TurnState, latest: bool, by_itself: bool) -> Result<(), Refusal> {
+    if by_itself {
+        return Err(Refusal::invalid(
+            "Only a turn a Person asked for can be tried again.",
+        ));
+    }
     if !matches!(state, TurnState::Failed | TurnState::Interrupted) {
         return Err(Refusal::invalid(
             "Only a turn that failed or was cut short can be tried again.",
@@ -157,6 +162,70 @@ pub fn retry(state: TurnState, latest: bool) -> Result<(), Refusal> {
         ));
     }
     Ok(())
+}
+
+/// Where a turn stands among its Thread's turns, as its rules need it.
+pub struct Position {
+    /// No turn ran its message before it: one tried again has a turn
+    /// before it.
+    pub first: bool,
+    /// It is the latest that began, and its message waits for no other.
+    pub latest: bool,
+}
+
+/// Where `turn` stands among `turns`, in the order they were made. A turn
+/// taken back counts for nothing.
+pub fn position(turns: &[TurnView], turn: TurnId) -> Position {
+    let counted = || turns.iter().filter(|t| t.state != TurnState::Withdrawn);
+    let Some(found) = counted().find(|t| t.id == turn) else {
+        return Position {
+            first: false,
+            latest: false,
+        };
+    };
+    let mut its = counted().filter(|t| t.message == found.message);
+    let first = its.next().map(|t| t.id) == Some(turn);
+    let last = its.next_back().map_or(first, |t| t.id == turn);
+    let begun = counted().rfind(|t| t.state != TurnState::Queued);
+    Position {
+        first,
+        latest: last && begun.map(|t| t.id) == Some(turn),
+    }
+}
+
+/// Whether a message sent now goes into a turn: it runs, its queue is not
+/// held, and a Person asked for it; one the Agent went on with by itself
+/// takes a message as a turn of its own.
+pub fn steers(state: TurnState, held: bool, by_itself: bool) -> bool {
+    state == TurnState::Running && !held && !by_itself
+}
+
+/// What a Person may do with each of a Thread's turns now (ADR 0014,
+/// decision 2), by the rules its commands ask. `turns` are in the order
+/// they were made, and `items` are the Thread's.
+pub fn can(turns: &mut [TurnView], items: &[Item], held: bool) {
+    let notices: HashSet<ItemId> = items
+        .iter()
+        .filter(|item| matches!(item.body, Body::Notice { .. }))
+        .map(|item| item.id)
+        .collect();
+    let can: Vec<Can> = turns
+        .iter()
+        .map(|turn| {
+            let Position { first, latest } = position(turns, turn.id);
+            let by_itself = notices.contains(&turn.message);
+            Can {
+                stop: stop(turn.state) != Stop::Nothing,
+                retry: retry(turn.state, latest, by_itself).is_ok(),
+                edit: waits(turn.state).is_ok() && may_change(first).is_ok(),
+                withdraw: waits(turn.state).is_ok(),
+                steer: steers(turn.state, held, by_itself),
+            }
+        })
+        .collect();
+    for (turn, can) in turns.iter_mut().zip(can) {
+        turn.can = can;
+    }
 }
 
 /// An answer as the Harness offers it.
@@ -639,6 +708,52 @@ impl Pieces {
 mod tests {
     use super::*;
 
+    fn turn(message: ItemId, state: TurnState) -> TurnView {
+        TurnView {
+            id: TurnId::new(),
+            message,
+            state,
+            reason: None,
+            failure: None,
+            started: None,
+            ended: None,
+            plan: false,
+            can: Can::default(),
+        }
+    }
+
+    #[test]
+    fn a_person_may_do_with_each_turn_what_its_commands_allow() {
+        let (asked, again, notice) = (ItemId::new(), ItemId::new(), ItemId::new());
+        let mut turns = vec![
+            turn(asked, TurnState::Failed),
+            turn(again, TurnState::Done),
+            turn(again, TurnState::Queued),
+            turn(notice, TurnState::Running),
+        ];
+        let items = [Item {
+            id: notice,
+            turn: None,
+            author: Participant::Agent(banda_kernel::AgentId::new()),
+            at: 0,
+            body: Body::Notice {
+                text: "It went on.".into(),
+            },
+        }];
+        can(&mut turns, &items, false);
+        let [failed, done, retried, by_itself] = [0, 1, 2, 3].map(|i| turns[i].can);
+        assert!(!failed.retry, "a turn began after it");
+        assert!(!done.stop && !done.retry);
+        assert!(
+            retried.stop && retried.withdraw && !retried.edit,
+            "a turn ran its message"
+        );
+        assert!(
+            by_itself.stop && !by_itself.steer,
+            "the Agent went on by itself"
+        );
+    }
+
     #[test]
     fn a_thread_keeps_tool_content_within_bounds() {
         assert_eq!(fit("héllo", 2), "h", "never half a character");
@@ -743,9 +858,10 @@ mod tests {
 
     #[test]
     fn only_the_latest_turn_that_failed_or_was_cut_short_is_tried_again() {
-        assert!(retry(TurnState::Failed, true).is_ok());
-        assert!(retry(TurnState::Interrupted, true).is_ok());
-        assert!(retry(TurnState::Failed, false).is_err());
+        assert!(retry(TurnState::Failed, true, false).is_ok());
+        assert!(retry(TurnState::Interrupted, true, false).is_ok());
+        assert!(retry(TurnState::Failed, false, false).is_err());
+        assert!(retry(TurnState::Failed, true, true).is_err(), "by itself");
         for state in [
             TurnState::Queued,
             TurnState::Running,
@@ -753,7 +869,7 @@ mod tests {
             TurnState::Stopped,
             TurnState::Withdrawn,
         ] {
-            assert!(retry(state, true).is_err(), "{state:?}");
+            assert!(retry(state, true, false).is_err(), "{state:?}");
         }
     }
 

@@ -1,4 +1,5 @@
 import type { Event } from "@banda/contract"
+import type { TurnView } from "@banda/contract/agents"
 import { expect, test } from "vitest"
 import { agent, event, person } from "./testing"
 import {
@@ -9,13 +10,17 @@ import {
   proposedPlan,
   choose,
   chosen,
-  retryable,
   rows,
   running,
   steerable,
+  type ThreadState,
   waiting,
   working,
 } from "./thread"
+
+/** `turn` as `state` has it now. */
+const turnIn = (state: ThreadState, turn: TurnView) =>
+  state.turns.find((t) => t.id === turn.id)!
 
 function play(...events: Event[]) {
   return events.reduce(apply, EMPTY)
@@ -223,14 +228,14 @@ test("a failed turn is tried again in a new turn, and only the latest can be", (
     })
   )
   expect(failed.turns[0].failure).toEqual({ class: "sign_in" })
-  expect(retryable(failed, failed.turns[0])).toBe(true)
+  expect(turnIn(failed, failed.turns[0]).can.retry).toBe(true)
 
   const again = apply(
     failed,
     event("turn.queued", { turn: "u2", message: "m" }, { author: person })
   )
   expect(working(again)?.id).toBe("u2")
-  expect(retryable(again, again.turns[0])).toBe(false)
+  expect(turnIn(again, again.turns[0]).can.retry).toBe(false)
   const state = [
     event("turn.started", { turn: "u2" }),
     event("reply.grew", { item: "r", turn: "u2", text: "Done." }),
@@ -239,7 +244,7 @@ test("a failed turn is tried again in a new turn, and only the latest can be", (
   expect(
     rows(state).map((row) => (row.kind === "item" ? row.item.id : row.turn.id))
   ).toEqual(["m", "u1", "r"])
-  expect(retryable(state, state.turns[1])).toBe(false)
+  expect(turnIn(state, state.turns[1]).can.retry).toBe(false)
 })
 
 test("the Thread's settings and the Harness's offer follow their facts", () => {
@@ -462,12 +467,12 @@ test("a failed turn can go again past messages that wait or were taken back", ()
     event("turn.ended", { turn: "u3", state: "withdrawn" })
   )
   const u1 = failed.turns[0]
-  expect(retryable(failed, u1)).toBe(true)
+  expect(turnIn(failed, u1).can.retry).toBe(true)
   const again = apply(
     failed,
     event("turn.queued", { turn: "u4", message: "m1" }, { author: person })
   )
-  expect(retryable(again, u1)).toBe(false)
+  expect(turnIn(again, u1).can.retry).toBe(false)
 })
 
 test("what the Agent does by itself is a turn its notice starts", () => {
@@ -494,7 +499,7 @@ test("what the Agent does by itself is a turn its notice starts", () => {
     goes,
     event("turn.ended", { turn: "u2", state: "interrupted" })
   )
-  expect(retryable(cut, cut.turns[1])).toBe(false)
+  expect(turnIn(cut, cut.turns[1]).can.retry).toBe(false)
   expect(own.message).toBe("n")
 })
 

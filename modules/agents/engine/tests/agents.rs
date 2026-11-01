@@ -7,12 +7,13 @@ use banda_agents::model::{
     ThreadList, ThreadView, ToolContent, ToolStatus, TurnState,
 };
 use banda_agents::settings::{Cli, Harness, Harnesses};
-use banda_kernel::{AgentId, Code, CommandId, Kernel, Participant, PersonId, SpaceId};
+use banda_kernel::{AgentId, Code, CommandId, EventFilter, Kernel, Participant, PersonId, SpaceId};
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as BASE64;
 use serde_json::{Value, json};
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, OnceLock};
+use std::sync::{Arc, Mutex, OnceLock};
 use std::time::Duration;
 
 /// Builds the fake agent once, next to this test's own binary.
@@ -155,7 +156,49 @@ impl World {
             )
             .await
             .unwrap();
-        serde_json::from_value(view).unwrap()
+        let view: ThreadView = serde_json::from_value(view).unwrap();
+        self.checkpoint(&view).await;
+        view
+    }
+
+    /// With `BANDA_CHECKPOINTS` set, writes there each change a test reads
+    /// of a Thread: the view it read before, the facts after that, and the
+    /// view it reads now. The Pane's tests apply those facts to the first
+    /// view and must get this one (ADR 0014, decision 3).
+    async fn checkpoint(&self, view: &ThreadView) {
+        static LAST: Mutex<BTreeMap<String, (usize, ThreadView)>> = Mutex::new(BTreeMap::new());
+        let Some(folder) = std::env::var_os("BANDA_CHECKPOINTS") else {
+            return;
+        };
+        let thread = view.thread.id.to_string();
+        let (n, start) = {
+            let mut last = LAST.lock().unwrap();
+            let Some((n, before)) = last.get_mut(&thread) else {
+                last.insert(thread, (0, view.clone()));
+                return;
+            };
+            if before.at == view.at {
+                return;
+            }
+            *n += 1;
+            (*n, std::mem::replace(before, view.clone()))
+        };
+        let filter = EventFilter {
+            module: Some("agents".to_owned()),
+            subject: Some(thread.clone()),
+            kinds: None,
+        };
+        let space = self.kernel.space(self.space).await.unwrap();
+        let events: Vec<_> = space
+            .events_after(start.at, filter, usize::MAX)
+            .await
+            .unwrap()
+            .into_iter()
+            .filter(|event| event.seq <= view.at)
+            .collect();
+        let checkpoint = json!({ "start": start, "events": events, "end": view });
+        let path = Path::new(&folder).join(format!("{thread}-{n}.json"));
+        std::fs::write(path, serde_json::to_vec(&checkpoint).unwrap()).unwrap();
     }
 
     async fn threads(&self) -> ThreadList {

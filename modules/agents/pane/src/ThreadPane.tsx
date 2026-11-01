@@ -59,7 +59,6 @@ import {
   declineOnce,
   NO_OFFER,
   proposedPlan,
-  retryable,
   sent,
   steerable,
   type ThreadState,
@@ -585,9 +584,7 @@ function Transcript({
           <Ended
             turn={line.turn}
             busy={answers.answering}
-            onRetry={
-              retryable(state, line.turn) ? () => onRetry(line.turn) : undefined
-            }
+            onRetry={line.turn.can.retry ? () => onRetry(line.turn) : undefined}
             signIn={signIn}
           />
         )

@@ -6,6 +6,7 @@ import type { Event } from "@banda/contract"
 import {
   decodeFact,
   type Body,
+  type Can,
   type HarnessOption,
   type Item,
   type Offer,
@@ -134,6 +135,61 @@ function changeTurn(
 
 /** The state after `event`. An event this Pane does not know changes nothing. */
 export function apply(state: ThreadState, event: Event): ThreadState {
+  const next = project(state, event)
+  return next.turns === state.turns && next.held === state.held
+    ? next
+    : withCan(next)
+}
+
+/**
+ * What a Person may do with each turn, as the engine's rules say
+ * (`rules::can`, ADR 0014, decision 2). The engine's view carries it; after
+ * a fact the Pane works it out again, and the checkpoints keep the two
+ * equal. A turn whose `can` stays the same stays the same object.
+ */
+function withCan(state: ThreadState): ThreadState {
+  const notices = new Set(
+    state.items
+      .filter((item) => item.body.kind === "notice")
+      .map((item) => item.id)
+  )
+  const counted = state.turns.filter((turn) => turn.state !== "withdrawn")
+  const begun = counted.findLast((turn) => turn.state !== "queued")?.id
+  const turns = state.turns.map((turn) => {
+    const its = counted.filter((t) => t.message === turn.message)
+    const byItself = notices.has(turn.message)
+    const waits = turn.state === "queued"
+    const can: Can = {
+      stop: waits || turn.state === "running",
+      retry:
+        !byItself &&
+        (turn.state === "failed" || turn.state === "interrupted") &&
+        begun === turn.id &&
+        its.at(-1)?.id === turn.id,
+      edit: waits && its[0]?.id === turn.id,
+      withdraw: waits,
+      steer: turn.state === "running" && !state.held && !byItself,
+    }
+    const same = (Object.keys(can) as (keyof Can)[]).every(
+      (key) => turn.can[key] === can[key]
+    )
+    return same ? turn : { ...turn, can }
+  })
+  return turns.every((turn, i) => turn === state.turns[i])
+    ? state
+    : { ...state, turns }
+}
+
+/** What a Person may do with a turn before its `can` is worked out. */
+export const NOTHING: Can = {
+  stop: false,
+  retry: false,
+  edit: false,
+  withdraw: false,
+  steer: false,
+}
+
+function project(state: ThreadState, event: Event): ThreadState {
   if (event.seq <= state.at) return state
   const next = { ...state, at: event.seq }
   const fact = decodeFact(event)
@@ -164,13 +220,17 @@ export function apply(state: ThreadState, event: Event): ThreadState {
             message: fact.payload.item,
             state: "queued",
             // A turn runs with the settings its Thread has when asked.
-            plan: state.settings.plan,
+            ...(state.settings.plan && { plan: true }),
+            can: NOTHING,
           },
         ],
       }
     case "message.steered": {
       const { item: id, turn, text, images } = fact.payload
-      const steered = item(id, { kind: "message", text, images }, turn)
+      // A waiting message sent now keeps who wrote it and when.
+      const was = state.items.find((i) => i.id === id)
+      const body: Body = { kind: "message", text, images }
+      const steered = was ? { ...was, turn, body } : item(id, body, turn)
       return { ...next, items: moveLast(state.items, steered) }
     }
     case "message.edited": {
@@ -215,7 +275,13 @@ export function apply(state: ThreadState, event: Event): ThreadState {
         items: changeItem(state, message, (i) => ({ ...i, turn: undefined })),
         turns: [
           ...state.turns,
-          { id: turn, message, state: "queued", plan: state.settings.plan },
+          {
+            id: turn,
+            message,
+            state: "queued",
+            ...(state.settings.plan && { plan: true }),
+            can: NOTHING,
+          },
         ],
       }
     }
@@ -400,19 +466,10 @@ export function running(state: ThreadState): TurnView | undefined {
   return state.turns.findLast((turn) => turn.state === "running")
 }
 
-/** Whether the Agent started `turn` by itself: its message is a notice
- * from Banda, not a Person's. */
-export function byItself(state: ThreadState, turn: TurnView): boolean {
-  const message = state.items.find((item) => item.id === turn.message)
-  return message?.body.kind === "notice"
-}
-
-/** Whether a message sent now goes into the turn that runs. One a Person
- * stopped takes nothing more, and one the Agent went on with by itself
- * takes a message as a turn of its own, which the Harness takes in. */
+/** Whether a message sent now goes into the turn that runs, as the
+ * engine says (`Can.steer`). */
 export function steerable(state: ThreadState): boolean {
-  const turn = running(state)
-  return turn !== undefined && !state.held && !byItself(state, turn)
+  return running(state)?.can.steer ?? false
 }
 
 /** The turn the Agent works on, or the next one it will, unless a Person
@@ -428,16 +485,14 @@ export function working(state: ThreadState): TurnView | undefined {
  * Person can change it, take it back or send it now. */
 export type Waiting = { item: Item; turn: TurnView }
 
-/** The messages that wait, in the order they will go. A message tried
- * again stays where it was, since an earlier turn ran it. */
+/** The messages that wait, in the order they will go: those a Person can
+ * still change (`Can.edit`). A message tried again stays where it was,
+ * since an earlier turn ran it. */
 export function waiting(state: ThreadState): Waiting[] {
   const items = new Map(state.items.map((item) => [item.id, item]))
   return state.turns.flatMap((turn): Waiting[] => {
     const item = items.get(turn.message)
-    if (turn.state !== "queued" || !item) return []
-    return firstTurnOf(state.turns, turn.message) === turn
-      ? [{ item, turn }]
-      : []
+    return turn.can.edit && item ? [{ item, turn }] : []
   })
 }
 
@@ -465,18 +520,6 @@ function withdrawn(state: ThreadState): Set<string> {
       .filter((turn) => turn.state === "withdrawn" && !ran.has(turn.message))
       .map((turn) => turn.message)
   )
-}
-
-/** Whether a Person can try `turn`'s message again: it failed or was cut
- * short, no turn began after it, and its message waits for no other. */
-export function retryable(state: ThreadState, turn: TurnView): boolean {
-  const last = (turns: TurnView[]) => turns.at(-1)?.id === turn.id
-  const counted = state.turns.filter((t) => t.state !== "withdrawn")
-  const latest =
-    last(counted.filter((t) => t.state !== "queued")) &&
-    last(counted.filter((t) => t.message === turn.message))
-  const failed = turn.state === "failed" || turn.state === "interrupted"
-  return latest && failed && !byItself(state, turn)
 }
 
 /** One line of a Thread as a Pane shows it. */
