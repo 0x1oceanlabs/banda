@@ -13,7 +13,7 @@
 //! The sidebar's `sidebar.toml` (ADR 0008), the browser's `browser.toml`
 //! (ADR 0013) and the agents module's `agents.toml` (ADR 0016) are this
 //! machine's too, so they come with the look: [`sidebar`], [`browser`],
-//! [`agents`].
+//! [`agents`]; so do its keys, [`keys`].
 
 pub mod agents;
 pub mod browser;
@@ -22,6 +22,7 @@ pub mod columns;
 pub mod fonts;
 pub mod hyprland;
 pub mod keyed;
+pub mod keys;
 pub mod motion;
 pub mod notify;
 pub mod palette;
@@ -94,6 +95,8 @@ pub struct Look {
     pub browser: browser::Browser,
     /// How messages to an Agent are sent, from `agents.toml` (ADR 0016).
     pub agents: agents::Agents,
+    /// The keys the Person bound in `keys.toml` (ADR 0005, decision 10).
+    pub keys: keys::Keys,
     /// Each key of each settings file, by file: its value, and where it
     /// comes from (ADR 0016).
     pub settings: BTreeMap<String, keyed::Keyed>,
@@ -443,11 +446,13 @@ pub fn resolve(places: &Places, windows: &dyn Fn() -> Option<Windows>) -> Resolv
     let (sidebar, sidebar_keys) = sidebar::resolve(places, &mut problems, &mut watched);
     let (browser, browser_keys) = browser::resolve(places, &mut problems, &mut watched);
     let (agents, agents_keys) = agents::resolve(places, &mut problems, &mut watched);
+    let (keys, keys_keys) = keys::resolve(places, &mut problems, &mut watched);
     let settings = BTreeMap::from([
         ("look.toml".to_owned(), keyed::keyed(&all, &keyed_layers)),
         ("sidebar.toml".to_owned(), sidebar_keys),
         ("browser.toml".to_owned(), browser_keys),
         ("agents.toml".to_owned(), agents_keys),
+        ("keys.toml".to_owned(), keys_keys),
     ]);
     let mut vars = vars(&all);
     let system = |generic: &str| {
@@ -479,6 +484,7 @@ pub fn resolve(places: &Places, windows: &dyn Fn() -> Option<Windows>) -> Resolv
             notify: all.notify.resolved(),
             browser,
             agents,
+            keys,
             settings,
         },
         watched,
@@ -683,6 +689,8 @@ pub fn check_text(path: &Path, text: &str) -> Vec<Problem> {
         browser::read_browser(path, text, &mut problems);
     } else if agents::is_agents_file(path) {
         agents::read_agents(path, text, &mut problems);
+    } else if keys::is_keys_file(path) {
+        keys::read_keys(path, text, &mut problems);
     } else if path.file_name().is_some_and(|n| n == "colors.toml") {
         match Palette::parse(text) {
             Ok(palette) => {

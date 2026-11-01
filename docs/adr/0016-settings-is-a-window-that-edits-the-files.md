@@ -55,7 +55,7 @@ Roma asked for a visual settings module where Claude Code, Codex and the rest ar
      - `look.toml`: the look, sounds and calls, as ADR 0007, 0009 and 0011 have it;
      - `sidebar.toml`;
      - `harnesses.toml`;
-     - `keys.toml`, once the keys come;
+     - `keys.toml`, the keys (ADR 0005, decision 11);
      - a later module's own file, such as `terminal.toml` or `browser.toml`.
    - The agents module's own preferences, such as what Enter does, go in `agents.toml`.
    - Sections follow what a Person looks for, not the files. So Sounds & calls is a section of its own, yet its keys stay in `look.toml`. Each section names its file and opens it.

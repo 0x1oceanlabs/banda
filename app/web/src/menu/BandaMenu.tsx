@@ -473,7 +473,7 @@ function RowView({
       return (
         <>
           <span className="min-w-0 flex-1 truncate">{row.action.title}</span>
-          {row.action.key && <Keys keyOf={row.action.key} />}
+          {row.action.keys?.[0] && <Keys keyOf={row.action.keys[0]} />}
         </>
       )
     case "ask": {

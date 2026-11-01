@@ -124,6 +124,7 @@ The evidence is in two notes: [tiling managers](../research/2026-11-01-tiling-ma
 11. **Config is text, Linux style** (_decided_ for the keys).
    - The files live in `~/.config/banda/`, beside `harnesses.toml`: `keys.toml`, `theme.toml` and the settings.
    - Shipped defaults are read-only. The Person's file adds, replaces or removes binds.
+   - **`keys.toml`** (_built_ 2026-11-01), as Hyprland's and niri's binds: a `[binds]` table, each line a key and the id of the action it runs, as the key sheet lists them. `"Alt+M" = "column.maximize"` binds a key; a key bound elsewhere by Banda leaves that action. `"Alt+F" = "none"` frees a key, so it goes to the Pane, as to a shell's readline. An action keeps its own keys besides. A key is Alt, Ctrl and Shift, any of them, then the key's name (`R`, `5`, `F2`, `Left`, `Return`, `[`); Super is the desktop's, and a key without Alt or Ctrl, but for F1 to F24, would be typed, so it is refused. `banda look` reads the file with the look and watches it; `banda look check` names a key written wrong, and the window names an action it does not have, at its line, in the bar.
    - A file applies once it is saved. On an error, the last good version stays in force, and a notice names the file and the line.
    - `banda check` validates a file before it is saved.
    - One reset chord cannot be rebound.

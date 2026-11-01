@@ -93,6 +93,11 @@ impl Places {
         self.config.join("agents.toml")
     }
 
+    /// The keys the Person binds (ADR 0005, decision 11).
+    pub fn keys_file(&self) -> PathBuf {
+        self.config.join("keys.toml")
+    }
+
     /// The Person's sidebar presets, `<name>.toml`.
     pub fn own_sidebars(&self) -> PathBuf {
         self.config.join("sidebars")
