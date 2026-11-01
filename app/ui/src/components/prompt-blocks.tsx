@@ -8,6 +8,7 @@ import {
 import { splitBlockAs } from "@tiptap/pm/commands"
 import type { Node as Block } from "@tiptap/pm/model"
 import type { Command, EditorState, Transaction } from "@tiptap/pm/state"
+import type { EditorView } from "@tiptap/pm/view"
 
 /**
  * The lines of a prompt that are more than text (ADR 0015, decision 3):
@@ -95,7 +96,7 @@ export const Rule = Node.create({
 /**
  * An item of a list: `- `, `* ` or `+ `, `1. ` or `1) `, and `- [ ] `
  * for a task, whose box is ticked with a click. As far in as the spaces
- * before its marker; Tab takes it in a step, Shift+Tab out.
+ * before its marker; Tab takes it in a step, Shift+Tab out ({@link itemKey}).
  */
 export const Item = Node.create({
   name: "item",
@@ -187,20 +188,24 @@ export const Item = Node.create({
       }),
     ]
   },
-  addKeyboardShortcuts() {
-    const shift = (deeper: boolean) => () => {
-      const { state, view } = this.editor
-      const { $from } = state.selection
-      const block = $from.parent
-      if (block.type !== this.type) return false
-      const indent: string = block.attrs.indent
-      const next = step(indent, deeper)
-      view.dispatch(state.tr.setNodeAttribute($from.before(), "indent", next))
-      return true
-    }
-    return { Tab: shift(true), "Shift-Tab": shift(false) }
-  },
 })
+
+/**
+ * Tab takes the caret's item a step in, and Shift+Tab out, before the
+ * box's owner sees them; on an item already at the start Shift+Tab is
+ * left to the owner.
+ */
+export function itemKey(view: EditorView, event: KeyboardEvent): boolean {
+  if (event.key !== "Tab") return false
+  const { state } = view
+  const { $from } = state.selection
+  if ($from.parent.type.name !== "item") return false
+  const indent: string = $from.parent.attrs.indent
+  const next = step(indent, !event.shiftKey)
+  if (next === indent) return false
+  view.dispatch(state.tr.setNodeAttribute($from.before(), "indent", next))
+  return true
+}
 
 /** `line` a step further in, two spaces, or out, a tab or up to two. */
 export function step(line: string, deeper: boolean) {

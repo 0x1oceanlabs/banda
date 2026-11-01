@@ -70,6 +70,12 @@ rest are our defaults and stay his to change.
      empty lines at its end, leaves it, and Backspace at its start makes
      its lines text. The block keeps its fence, its language as written
      and its closing line, or that it had none.
+   - Shift+Tab moves an item or a line of code out if it can; on one at
+     its line's start, as in plain text, it turns plan mode on or off.
+   - Typed with text chosen, `*` and `_` make it italic, and bold when it
+     was italic with them, `` ` `` makes it code, and a bracket or a quote
+     goes round it, the text still chosen, as in T3 Code. Nothing goes
+     round a chip, which must start and end a word.
    - Pasted text is read as a prompt is, even text copied from the box,
      so how its lines and styles were written is kept.
 
