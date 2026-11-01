@@ -4,6 +4,7 @@ import { HarnessLogo } from "@banda/ui/components/harness-logo"
 import { ago } from "@banda/ui/lib/words"
 import { cn } from "@banda/ui/lib/utils"
 import { useNow } from "@banda/ui/hooks/use-now"
+import type { Listed } from "@banda/ui/pane"
 import type { Row as Arranged } from "./arrange"
 import type { Part, Settings } from "./settings"
 
@@ -87,17 +88,7 @@ function Piece({
       return <span className="ml-auto" />
     case "mark":
       return (
-        <BandaMark
-          variant="agent"
-          state={listed.mark}
-          playful={0}
-          label={MARK_WORDS[listed.mark]}
-          className={cn(
-            "size-4 shrink-0",
-            listed.mark === "done" && "text-added",
-            quiet && "opacity-40"
-          )}
-        />
+        <ThreadMark listed={listed} className={cn(quiet && "opacity-40")} />
       )
     case "title":
       return (
@@ -215,6 +206,30 @@ export function elapsed(ms: number): string {
 const HUES = [350, 25, 85, 160, 210, 280]
 
 /** A Space's badge: its initials on its own hue. */
+/** A Thread's mark, as the sidebar and the Banda menu show it: green
+ * once done. */
+export function ThreadMark({
+  listed,
+  className,
+}: {
+  listed: Listed
+  className?: string
+}) {
+  return (
+    <BandaMark
+      variant="agent"
+      state={listed.mark}
+      playful={0}
+      label={MARK_WORDS[listed.mark]}
+      className={cn(
+        "size-4 shrink-0",
+        listed.mark === "done" && "text-added",
+        className
+      )}
+    />
+  )
+}
+
 export function SpaceBadge({ space }: { space: SpaceSummary }) {
   const hue = HUES[hash(space.id) % HUES.length]
   const colour = `oklch(0.6 0.15 ${hue})`

@@ -10,6 +10,7 @@ import { type PaneState, paneOf, type Place } from "@banda/ui/pane"
 import type { Action } from "../actions/actions"
 import { showing } from "../calls/sight"
 import { columnsOf } from "../look"
+import { type At, MENU_KEY } from "../menu/menu"
 import { launcher, minOf, showsOf, widthOf } from "../registry"
 import { floorOf } from "../workspaces/layout"
 import {
@@ -41,6 +42,8 @@ export type Shell = {
   answer: () => void
   /** Settles what the Person looks at, or brings it back (ADR 0008). */
   settle: () => void
+  /** Opens the Banda menu, or closes it when it is open (ADR 0017). */
+  menu: (at: At) => void
 }
 
 const ARROWS: Record<Direction, string> = {
@@ -81,9 +84,15 @@ export function opening(
 /**
  * A new Thread in a Space, in a new column, on this computer's first
  * Harness (ADR 0006). One not yet started there gets the focus instead.
+ * With `ask`, it starts at once with those words: the Banda menu's "New
+ * Thread" (ADR 0017, decision 6).
  */
-export function newThread(workspaces: Workspaces, space: SpaceId): Workspaces {
-  const thread = paneOf(threadPane, NEW_THREAD)
+export function newThread(
+  workspaces: Workspaces,
+  space: SpaceId,
+  ask?: string
+): Workspaces {
+  const thread = paneOf(threadPane, ask ? { ...NEW_THREAD, ask } : NEW_THREAD)
   return opening(workspaces, space, thread, undefined, "right")
 }
 
@@ -211,6 +220,20 @@ export const ACTIONS: readonly Action<Shell>[] = [
     title: "Settle the Thread you look at, or bring it back",
     key: { code: "KeyS", alt: true },
     run: (shell) => shell.settle(),
+  },
+  {
+    id: "menu.open",
+    title: "Banda menu",
+    key: MENU_KEY,
+    overDialogs: true,
+    run: (shell) => shell.menu("root"),
+  },
+  {
+    id: "menu.keys",
+    title: "Every action and its key",
+    key: { code: "KeyK", alt: true },
+    overDialogs: true,
+    run: (shell) => shell.menu("actions"),
   },
   {
     id: "sidebar.toggle",
