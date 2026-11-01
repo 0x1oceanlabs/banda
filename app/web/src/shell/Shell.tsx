@@ -7,6 +7,7 @@ import { Bar } from "../bar/Bar"
 import { type Lists, Watches } from "../bar/Watches"
 import { DEFAULT_NOTIFY } from "../calls/settings"
 import { sightOf } from "../calls/sight"
+import { SUMMARY } from "../calls/system"
 import { Toasts } from "../calls/Toasts"
 import { first, type Heard, useCalls, type Where } from "../calls/useCalls"
 import { useLookSound } from "../look"
@@ -84,20 +85,22 @@ export function Shell({
   const where: Where = useMemo(
     () => ({
       sight: (call) => sightOf(now.current, call, inFront(), showsOf),
-      quiet: () => false,
+      desktop: window.bandaso?.notify,
     }),
     []
   )
   const notify = DEFAULT_NOTIFY
   const calls = useCalls(useLookSound(), notify, where)
-  const { hear, leave, calling, hold, dismiss } = calls
+  const { hear, leave, calling, hold, dismiss, seen } = calls
   const listening = useMemo(() => ({ hear, leave }), [hear, leave])
   const front = useInFront()
-  // A toast of what the Person looks at says nothing new.
-  const toasts = calls.toasts.filter((toast) => {
-    const call = calling.find((c) => c.key === toast.key)
-    return call && sightOf(workspaces, call, front, showsOf) !== "looking"
-  })
+  // What the Person looks at is seen: its toast and notification go.
+  useEffect(() => {
+    for (const call of calling)
+      if (sightOf(workspaces, call, front, showsOf) === "looking")
+        seen(call.key)
+  }, [calling, workspaces, front, seen])
+  const toasts = calls.toasts
   useEffect(() => keepWorkspaces(workspaces), [workspaces])
   useEffect(() => keepSidebar(sidebar), [sidebar])
 
@@ -131,6 +134,17 @@ export function Shell({
     const call = first(heard.current)
     if (call) answerCall(call)
   }, [answerCall])
+  // A click on a notice brings the window to the front and goes there;
+  // the notice of many shows the sidebar, which lists them all.
+  useEffect(
+    () =>
+      window.bandaso?.notify.listen((key) => {
+        if (key === SUMMARY) return setSidebar(true)
+        const call = heard.current.find((c) => c.key === key)
+        if (call) answerCall(call)
+      }),
+    [answerCall]
+  )
   const toggleSidebar = useCallback(() => setSidebar((shows) => !shows), [])
   const toggleOverview = useCallback(() => setOverview((opens) => !opens), [])
   const closeOverview = useCallback(() => setOverview(false), [])

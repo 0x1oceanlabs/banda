@@ -547,9 +547,18 @@ modules/*/pane   each module's Panes
   - It gathers the news for a tenth of a second and tells of each where
     the Person looks (`tell.ts`): nothing while they look at it; the sound
     when it is on screen; the sound and a toast when it is elsewhere in
-    the window (`Toasts.tsx`, gone by itself after 5 to 12 s); later, a
-    system notification when the window is behind. `Alt+U` goes to what
-    calls, the loudest first.
+    the window (`Toasts.tsx`, gone by itself after 5 to 12 s); the sound
+    and a system notification when the window is behind (`system.ts`).
+    `Alt+U` goes to what calls, the loudest first.
+  - A system notification is the desktop's (`app/desktop/src/notices.ts`):
+    the page asks for it through `window.bandaso.notify`, with the mark
+    still in its state as its icon (`stillMark`, drawn to a PNG), and the
+    desktop shows it silent, takes it back once the Person sees the
+    Thread, and says when they click it; the window comes to the front and
+    goes there. More than two at once make one. While Omarchy's Do Not
+    Disturb is on (`omarchy-shell notifications isDnd`), only the Marks
+    change. The end-to-end tests run with a recorded desktop
+    (`BANDASO_DESKTOP=recorded`), so nothing reaches the screen.
   - A Thread Pane marks its turn seen only with the focus in the window in
     front, so a Thread that finishes behind another window calls.
 - **Sounds** (ADR 0009). Of the news, the window plays the loudest, and

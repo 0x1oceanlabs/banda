@@ -2,9 +2,13 @@ import { mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { join, resolve } from "node:path"
 import { expect, type Locator, type Page, test } from "@playwright/test"
 import {
+  clickNotice,
   countNotes,
+  desktopOf,
   firstThread,
   sendAndLeave,
+  setInFront,
+  setQuiet,
   startWindow,
   type Window,
 } from "./window"
@@ -989,4 +993,65 @@ test("Alt+U goes to the Thread that calls", async () => {
   const thread = page.getByRole("region", { name: "slow hello" })
   await expect(thread).toHaveAttribute("data-focused", "true")
   await expect(calls).toBeHidden()
+})
+
+test("a Thread that finishes behind another window sends a system notification, and its click goes there", async () => {
+  window = await startWindow()
+  const { app, page } = window
+  const { thread, composer } = await firstThread(page)
+  await composer.fill("slow hello")
+  await composer.press("Enter")
+  await expect(thread).not.toHaveAccessibleName("New Thread")
+  await setInFront(page, false)
+
+  // Its Pane has the focus, but the window is behind: it is not seen.
+  await expect.poll(async () => (await desktopOf(app)).shown.length).toBe(1)
+  const [notice] = (await desktopOf(app)).shown
+  expect(notice).toMatchObject({
+    title: "slow hello",
+    body: "Done",
+    answer: "Open",
+    lasts: false,
+  })
+  expect(notice!.icon).toMatch(/^data:image\/png;base64,/)
+  writeFileSync(
+    "test-results/24-notice-icon.png",
+    Buffer.from(notice!.icon!.split(",")[1]!, "base64")
+  )
+  const sidebar = page.getByRole("complementary", { name: "Sidebar" })
+  const done = sidebar
+    .getByRole("button", { name: /slow hello/ })
+    .getByRole("img", { name: "Done" })
+  await expect(done).toBeVisible()
+
+  // The Person clicks it: the window is in front again, the Thread seen.
+  await setInFront(page, true)
+  await clickNotice(app, notice!.key)
+  await expect(thread).toHaveAttribute("data-focused", "true")
+  await expect(done).toBeHidden()
+  // Seen, its notice is taken back.
+  await expect
+    .poll(async () => (await desktopOf(app)).withdrawn)
+    .toContain(notice!.key)
+})
+
+test("the desktop's Do Not Disturb leaves only the Marks", async () => {
+  window = await startWindow()
+  const { app, page } = window
+  const { thread, composer } = await firstThread(page)
+  const notes = await countNotes(page)
+  await setQuiet(app, true)
+  await composer.fill("slow hello")
+  await composer.press("Enter")
+  await expect(thread).not.toHaveAccessibleName("New Thread")
+  await setInFront(page, false)
+  const sidebar = page.getByRole("complementary", { name: "Sidebar" })
+  await expect(
+    sidebar.getByRole("button", { name: /slow hello/ }).getByRole("img", {
+      name: "Done",
+    })
+  ).toBeVisible()
+  await page.waitForTimeout(500)
+  expect((await desktopOf(app)).shown).toEqual([])
+  expect(await notes()).toBe(0)
 })
