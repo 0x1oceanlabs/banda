@@ -30,6 +30,13 @@ test.afterEach(async () => {
 test("a Person makes a Space, starts a Thread in it, and works with it", async () => {
   window = await startWindow()
   const { page } = window
+  // The desktop calls it Banda; its profile stays beside the engine's.
+  expect(
+    await window.app.evaluate(({ app }) => [
+      app.getName(),
+      app.getPath("userData"),
+    ])
+  ).toEqual(["Banda", join(window.dir, "state", "window")])
 
   await expect(page.getByText("Create your first Space")).toBeVisible()
   await page.screenshot({ path: "test-results/0-welcome.png" })

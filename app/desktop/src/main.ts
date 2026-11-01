@@ -67,9 +67,18 @@ const engineBinary =
 
 // The window keeps its own state beside the engine's when that moves, so
 // a test or a second setup never shares a profile with the first.
-if (process.env.BANDA_STATE) {
-  app.setPath("userData", join(process.env.BANDA_STATE, "window"))
-}
+// Otherwise it is pinned where it was, `~/.config/@banda/desktop`, before
+// the name below can move it.
+app.setPath(
+  "userData",
+  process.env.BANDA_STATE
+    ? join(process.env.BANDA_STATE, "window")
+    : app.getPath("userData")
+)
+// The name the desktop's notices and the Web Store show. The window's
+// class, `banda-desktop`, still comes from the package's name, so window
+// rules that match it keep working.
+app.setName("Banda")
 
 protocol.registerSchemesAsPrivileged([
   {
