@@ -4,8 +4,11 @@ import {
   InputGroup,
   InputGroupAddon,
   InputGroupButton,
-  InputGroupTextarea,
 } from "@banda/ui/components/input-group"
+import {
+  PromptEditor,
+  type PromptEditorHandle,
+} from "@banda/ui/components/prompt-editor"
 import { RingMeter } from "@banda/ui/components/ring-meter"
 import { Spinner } from "@banda/ui/components/spinner"
 import {
@@ -102,7 +105,7 @@ export function Composer({
   // How far back ↑ has walked the history; 0 for not at all.
   const [back, setBack] = useState(0)
   const [enter] = useEnterKey()
-  const field = useRef<HTMLTextAreaElement>(null)
+  const field = useRef<PromptEditorHandle>(null)
   const files = useRef<HTMLInputElement>(null)
   useEffect(() => {
     if (focused) field.current?.focus()
@@ -132,11 +135,9 @@ export function Composer({
     onPick: (path) => {
       if (!at) return
       const named = mention(text, at, path)
+      field.current?.replace(named.text, named.caret)
       setText(named.text)
       setCaret(named.caret)
-      requestAnimationFrame(() =>
-        field.current?.setSelectionRange(named.caret, named.caret)
-      )
     },
   })
 
@@ -197,23 +198,25 @@ export function Composer({
             <AttachmentList adding={images.adding} onRemove={images.remove} />
           </InputGroupAddon>
         )}
-        <InputGroupTextarea
+        <PromptEditor
           ref={field}
           value={text}
-          rows={1}
           placeholder={placeholder ?? `Write to ${name}`}
-          aria-label={`Message to ${name}`}
-          {...slash.field}
-          {...fileMenu.field}
-          onSelect={(event) => setCaret(event.currentTarget.selectionStart)}
+          attributes={{
+            "aria-label": `Message to ${name}`,
+            "data-slot": "input-group-control",
+            ...slash.field,
+            ...fileMenu.field,
+          }}
           className="max-h-48 min-h-10"
-          onChange={(event) => {
-            setText(event.target.value)
-            setCaret(event.target.selectionStart)
+          onCaret={setCaret}
+          onChange={(value, at) => {
+            setText(value)
+            setCaret(at)
             setBack(0)
           }}
           onPaste={(event) => {
-            const pasted = imagesAmong(event.clipboardData.files)
+            const pasted = imagesAmong(event.clipboardData?.files ?? [])
             if (pasted.length === 0) return
             event.preventDefault()
             images.add(pasted)
@@ -228,7 +231,7 @@ export function Composer({
             const up = event.key === "ArrowUp"
             if (plain(event) && (up || event.key === "ArrowDown")) {
               // Within a message of more lines, the caret moves first.
-              if (!atEdge(event.currentTarget, up)) return
+              if (!(field.current?.atEdge(up) ?? true)) return
               const waits = onEditLast !== undefined
               const step = recall(history(), back, text, up, waits)
               if (!step) return
@@ -241,7 +244,7 @@ export function Composer({
             if (
               event.key === "Enter" &&
               !event.shiftKey &&
-              !event.nativeEvent.isComposing
+              !event.isComposing
             ) {
               event.preventDefault()
               // Ctrl (⌘ on a Mac) does the other thing.
@@ -326,17 +329,8 @@ const PRIMARY: Record<
 }
 
 /** Whether a key comes with no modifier held. */
-function plain(event: React.KeyboardEvent): boolean {
+function plain(event: KeyboardEvent): boolean {
   return !event.altKey && !event.shiftKey && !event.ctrlKey && !event.metaKey
-}
-
-/** Whether the caret is on the first line of `field`, going `up`, or on
- * its last. */
-function atEdge(field: HTMLTextAreaElement, up: boolean): boolean {
-  const { value, selectionStart, selectionEnd } = field
-  return up
-    ? value.lastIndexOf("\n", selectionStart - 1) < 0
-    : value.indexOf("\n", selectionEnd) < 0
 }
 
 /** From this share of its context used, an Agent is near the point where
