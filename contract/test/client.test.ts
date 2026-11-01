@@ -81,7 +81,7 @@ test("a command that broke off goes again with the same command ID", async () =>
 
 test("a command gives up after three tries, and says the engine is away", async () => {
   const engine = new Engine(address)
-  const answer = engine.command("agents.send", {}, "space")
+  const answer = engine.command("agents.send", { text: "hi" }, "space")
   answer.catch(() => {})
   for (let attempt = 0; attempt < 3; attempt++) {
     await vi.advanceTimersByTimeAsync(5_000)

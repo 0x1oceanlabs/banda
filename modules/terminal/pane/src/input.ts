@@ -1,8 +1,14 @@
-import type { JsonValue } from "@banda/contract"
+import type { Params } from "@banda/contract"
 import type { Size, TerminalId } from "@banda/contract/terminal"
 
 /** The most one `terminal.write` carries: 16,384 UTF-16 units is at most 48 KB, under the engine's 64 KB. */
 const AT_ONCE = 16 * 1024
+
+/** How Input calls the engine. */
+type Send = <M extends "terminal.write" | "terminal.resize">(
+  method: M,
+  params: Params<M>
+) => Promise<unknown>
 
 /**
  * What a Pane sends one terminal, in the order the Person did it. The
@@ -12,7 +18,7 @@ const AT_ONCE = 16 * 1024
  * one replaces it; typing that does not is.
  */
 export class Input {
-  readonly #send: (method: string, params: JsonValue) => Promise<unknown>
+  readonly #send: Send
   readonly #terminal: TerminalId
   readonly #onProblem: (error: unknown) => void
   #typed = ""
@@ -20,7 +26,7 @@ export class Input {
   #sending = false
 
   constructor(
-    send: (method: string, params: JsonValue) => Promise<unknown>,
+    send: Send,
     terminal: TerminalId,
     onProblem: (error: unknown) => void
   ) {

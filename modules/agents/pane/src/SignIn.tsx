@@ -1,11 +1,6 @@
 import { useCallback } from "react"
 import { type Engine, newId, type SpaceId } from "@banda/contract"
-import type {
-  Account,
-  Program,
-  SignInWay,
-  TurnId,
-} from "@banda/contract/agents"
+import type { Program, SignInWay, TurnId } from "@banda/contract/agents"
 import { Button } from "@banda/ui/components/button"
 import { CopyButton } from "@banda/ui/components/copy-button"
 import { Spinner } from "@banda/ui/components/spinner"
@@ -48,7 +43,7 @@ export function SignIn({
 }) {
   const found = useRead(
     useCallback(
-      () => engine.call<Account>("agents.account", { harness }, { space }),
+      () => engine.call("agents.account", { harness }, { space }),
       [engine, space, harness]
     )
   )

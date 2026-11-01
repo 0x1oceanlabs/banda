@@ -1,4 +1,5 @@
 use crate::access::{self, Right};
+use crate::methods::{Asks, Nothing};
 use crate::module::{Call, Module, Stream};
 use crate::space::{Created, Space};
 use crate::{CommandId, Error, Participant, PersonId, Refusal, SpaceId};
@@ -94,30 +95,34 @@ impl KernelBuilder {
     }
 }
 
-/// The kernel's own methods, each with the right it needs.
-enum Method {
-    ListSpaces,
-    CreateSpace,
-}
-
-impl Method {
-    fn parse(name: &str) -> Option<Method> {
-        match name {
-            "spaces.list" => Some(Method::ListSpaces),
-            "spaces.create" => Some(Method::CreateSpace),
-            _ => None,
-        }
-    }
-
-    fn right(&self) -> Right {
-        match self {
-            Method::ListSpaces => Right::Read,
-            Method::CreateSpace => Right::Manage,
-        }
+crate::methods! {
+    Kernel(Own<'_>) as "SpacesMethods" in "./" {
+        /// This computer's Spaces.
+        call list(Nothing) -> Vec<SpaceSummary>, Read;
+        /// Makes a Space: its folder under the root, by its name.
+        command create(CreateSpace) -> SpaceSummary, Manage;
     }
 }
 
-#[derive(Deserialize)]
+/// Who calls one of the kernel's own methods, and under which command.
+struct Own<'a> {
+    participant: Participant,
+    method: &'a str,
+    command: Option<CommandId>,
+}
+
+impl Asks for Own<'_> {
+    fn command_id(&self) -> Result<CommandId, Refusal> {
+        self.command.ok_or_else(|| {
+            Refusal::invalid(format!(
+                "{} is a command and needs a command ID.",
+                self.method
+            ))
+        })
+    }
+}
+
+#[derive(Deserialize, TS)]
 struct CreateSpace {
     name: String,
 }
@@ -156,21 +161,16 @@ impl Kernel {
         command: Option<CommandId>,
         params: Value,
     ) -> Result<Value, Refusal> {
-        if let Some(own) = Method::parse(method) {
-            access::decide(&participant, own.right(), self.owner)?;
-            return match own {
-                Method::ListSpaces => {
-                    Ok(serde_json::to_value(self.spaces().await).map_err(Error::from)?)
-                }
-                Method::CreateSpace => {
-                    let command = command.ok_or_else(|| {
-                        Refusal::invalid("spaces.create is a command and needs a command ID.")
-                    })?;
-                    let CreateSpace { name } = decode(params)?;
-                    let created = self.create_space(&name, participant, command).await?;
-                    Ok(serde_json::to_value(created).map_err(Error::from)?)
-                }
+        if let Some(own) = method.strip_prefix("spaces.")
+            && let Some(right) = Self::method_right(own)
+        {
+            access::decide(&participant, right, self.owner)?;
+            let ask = Own {
+                participant,
+                method,
+                command,
             };
+            return self.dispatch(ask, own, params).await;
         }
         let (module, rest, right) = self.method(method)?;
         let space = self
@@ -255,6 +255,19 @@ impl Kernel {
 
     async fn open_space(&self, folder: PathBuf) -> Result<Arc<Space>, Error> {
         Space::open(folder, self.owner, self.modules.clone(), &self.boot).await
+    }
+
+    async fn list(&self, _: Own<'_>, _: Nothing) -> Result<Vec<SpaceSummary>, Refusal> {
+        Ok(self.spaces().await)
+    }
+
+    async fn create(
+        &self,
+        ask: Own<'_>,
+        CreateSpace { name }: CreateSpace,
+    ) -> Result<SpaceSummary, Refusal> {
+        self.create_space(&name, ask.participant, ask.command_id()?)
+            .await
     }
 
     async fn create_space(

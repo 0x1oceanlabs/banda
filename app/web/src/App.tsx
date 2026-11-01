@@ -14,7 +14,7 @@ export function App({ engine }: { engine: Engine }) {
   const status = useStatus(engine)
   const modules = useModules(engine)
   const listed = useRead(
-    useCallback(() => engine.call<SpaceSummary[]>("spaces.list"), [engine])
+    useCallback(() => engine.call("spaces.list", {}), [engine])
   )
   // Spaces made in this window, until the list is read again.
   const [created, setCreated] = useState<SpaceSummary[]>([])

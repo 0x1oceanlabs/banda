@@ -155,7 +155,11 @@ module's `Module` implementation is its manifest.
 
 **Its contract** is everything it shows outward:
 
-- **Commands it accepts**, with typed input and output.
+- **Methods it accepts**, each a call, a command or a stream with typed
+  params and answer: one line in its `methods!` table, which makes the
+  right, the dispatch and the module's methods as TypeScript, so the
+  window's `engine.call`, `engine.command` and `engine.stream` take only
+  those (ADR 0014).
 - **Events it publishes.** These are its published language, and they carry a
   version.
 - **Its tables.** Only this module writes them, and no other module reads
@@ -360,7 +364,7 @@ If Chat is removed, Agents still works through its own Thread.
 - **A restart interrupts** the turn it cut short and closes that turn's
   open Questions. Turns that waited stay queued, and the queue is held. A
   message sent into a turn that never got it waits for a turn of its own.
-- Its methods and their rights are listed in
+- Its methods and their rights are the `methods!` table in
   `modules/agents/engine/src/lib.rs`, and its facts in `model.rs`.
 
 ### terminal
@@ -384,7 +388,7 @@ If Chat is removed, Agents still works through its own Thread.
   session and a process group of its own. While it runs, a close sends the
   group a hangup and a request to stop, then a kill a second later; a
   shell passes the hangup on to its jobs. A close ends every watch.
-- Its methods are listed in `modules/terminal/engine/src/lib.rs`.
+- Its methods are the `methods!` table in `modules/terminal/engine/src/lib.rs`.
 - **Its Pane** (`modules/terminal/pane`) draws a terminal with Ghostty:
   T3 Code's adapter over `libghostty-vt` compiled to WebAssembly,
   vendored in `app/ghostty`, on a canvas in the window's colours.

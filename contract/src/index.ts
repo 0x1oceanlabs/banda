@@ -23,3 +23,4 @@ export {
   type Status,
 } from "./engine"
 export { newId } from "./ids"
+export type { Answer, CommandCall, MethodOf, Methods, Params } from "./methods"
