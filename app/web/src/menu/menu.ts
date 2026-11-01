@@ -1,8 +1,10 @@
 /**
  * What the Banda menu lists (ADR 0017): empty, the Recent Threads and the
  * Actions run most; typed into, the Threads, Spaces and Actions that fit
- * the words, then always "New Thread" with them. Plain data, so the
- * window only draws it.
+ * the words, then always "New Thread" with them. A Space and the sidebar's
+ * view are branches the menu goes into, as Omarchy's menu does, and `Tab`
+ * shows what can be done with a row. Plain data, so the window only draws
+ * it.
  */
 import type { SpaceId, SpaceSummary } from "@banda/contract"
 import { waits } from "@banda/ui/components/banda-mark"
@@ -11,6 +13,7 @@ import type { Listed } from "@banda/ui/pane"
 import type { Action } from "../actions/actions"
 import type { Lists } from "../bar/Watches"
 import type { Shell } from "../shell/actions"
+import { settles } from "../sidebar/settled"
 
 /** Where the menu opens: its root, or its Actions, as the key sheet. */
 export type At = "root" | "actions"
@@ -20,15 +23,63 @@ export const MENU_KEY: Key = { code: "Space", alt: true }
 
 /** One row, and what choosing it does. */
 export type Choice =
-  | { kind: "thread"; id: string; space: SpaceId; listed: Listed }
+  /** Opens the Thread; `beside` brings it to this workspace. */
+  | {
+      kind: "thread"
+      id: string
+      space: SpaceId
+      listed: Listed
+      beside?: true
+    }
+  /** A branch: the Space's Threads, and a new one there. */
   | { kind: "space"; id: string; space: SpaceSummary }
+  /** A branch: the sidebar's presets. */
+  | { kind: "views"; id: string }
   | { kind: "action"; id: string; action: Action<Shell> }
-  | { kind: "ask"; id: string; words: string }
+  /** A new Thread: with `words`, in `space`, on `harness`, where given. */
+  | {
+      kind: "ask"
+      id: string
+      words: string
+      space?: SpaceId
+      harness?: string
+    }
+  /** Arranges the sidebar by a preset (ADR 0008). */
+  | { kind: "preset"; id: string; name: string; current: boolean }
+  /** Settles a Thread, or brings it back. */
+  | { kind: "settle"; id: string; space: SpaceId; listed: Listed }
+
+/** A row the menu goes into rather than runs. */
+export type Branch = Extract<Choice, { kind: "space" | "views" }>
+
+export function isBranch(row: Choice): row is Branch {
+  return row.kind === "space" || row.kind === "views"
+}
+
+/** A branch's name, as its chip in the field shows it. */
+export function branchName(branch: Branch): string {
+  return branch.kind === "space" ? branch.space.name : VIEWS
+}
+
+const VIEWS = "Sidebar view"
 
 /** A group of rows under its heading; the fallback row has none. */
 export type Group = {
   label: string
   rows: Choice[]
+}
+
+/** What the menu lists besides the words typed. */
+export type Sources = {
+  lists: Lists
+  spaces: readonly SpaceSummary[]
+  actions: readonly Action<Shell>[]
+  /** The sidebar's presets, and the one in force. */
+  presets: { names: readonly string[]; current: string }
+  /** The Harnesses a new Thread can start on, the first by default. */
+  harnesses: readonly { id: string; name: string }[]
+  /** Whether a Thread is settled now. */
+  settled: (listed: Listed) => boolean
 }
 
 /** The Actions an empty menu offers, as T3 Code's palette offers its own. */
@@ -43,71 +94,101 @@ export const ROOT_ACTIONS = [
 /** How many rows of each group a search shows. */
 const SHOWN = { threads: 8, spaces: 5, actions: 8, recent: 6 }
 
-/** The menu's rows for `words`, opened `at` its root or its Actions. */
+/**
+ * The menu's rows for `words`: opened `at` its root or its Actions, or
+ * `inside` a branch.
+ */
 export function menuOf({
   words,
   at,
-  lists,
-  spaces,
-  actions,
+  inside,
+  sources,
 }: {
   words: string
   at: At
-  lists: Lists
-  spaces: readonly SpaceSummary[]
-  actions: readonly Action<Shell>[]
+  inside?: Branch
+  sources: Sources
 }): Group[] {
+  const { lists, spaces, actions, presets } = sources
   const query = words.trim()
-  const actionRows = (found: readonly Action<Shell>[]) =>
-    found.map((action): Choice => ({
+  const views: Choice = { kind: "views", id: "views" }
+  // The actions, and the branches among them, as one list.
+  const actionRows: Choice[] = [
+    ...actions.map((action): Choice => ({
       kind: "action",
       id: `action:${action.id}`,
       action,
-    }))
-  if (at === "actions")
-    return nonEmpty([
-      {
-        label: "Actions",
-        rows: actionRows(
-          query ? ranked(actions, query, (a) => [a.title, a.id]) : actions
-        ),
-      },
-    ])
-
-  const threads = Object.entries(lists).flatMap(([space, listed]) =>
+    })),
+    views,
+  ]
+  const actionTexts = (row: Choice) =>
+    row.kind === "action" ? [row.action.title, row.action.id] : [VIEWS]
+  const threadsOf = (space: string, listed: readonly Listed[]) =>
     listed.map((one) => ({
       kind: "thread" as const,
       id: `thread:${space}:${one.id}`,
       space: space as SpaceId,
       listed: one,
     }))
+  const fitting = <Thing>(
+    things: readonly Thing[],
+    texts: (thing: Thing) => string[]
+  ) => (query ? ranked(things, query, texts) : [...things])
+
+  if (inside?.kind === "views")
+    return nonEmpty([
+      {
+        label: "",
+        rows: fitting(presets.names, (name) => [name]).map((name) => ({
+          kind: "preset",
+          id: `preset:${name}`,
+          name,
+          current: name === presets.current,
+        })),
+      },
+    ])
+  if (inside?.kind === "space") {
+    const here = inside.space.id
+    return nonEmpty([
+      {
+        label: "",
+        rows: [{ kind: "ask", id: `ask:${here}`, words: query, space: here }],
+      },
+      {
+        label: "Threads",
+        rows: fitting(
+          threadsOf(here, lists[here] ?? []).toSorted(byRecent),
+          threadTexts
+        ),
+      },
+    ])
+  }
+
+  if (at === "actions")
+    return nonEmpty([
+      { label: "Actions", rows: fitting(actionRows, actionTexts) },
+    ])
+
+  const threads = Object.entries(lists).flatMap(([space, listed]) =>
+    threadsOf(space, listed)
   )
   if (!query) {
-    const recent = threads
-      .toSorted(
-        (a, b) =>
-          Number(waits(b.listed.mark)) - Number(waits(a.listed.mark)) ||
-          b.listed.changed - a.listed.changed
-      )
-      .slice(0, SHOWN.recent)
-    const offered = ROOT_ACTIONS.flatMap((id) => {
-      const action = actions.find((one) => one.id === id)
-      return action ? [action] : []
-    })
+    const offered = actionRows.filter(
+      (row) => row.kind === "action" && ROOT_ACTIONS.includes(row.action.id)
+    )
     return nonEmpty([
-      { label: "Recent Threads", rows: recent },
-      { label: "Actions", rows: actionRows(offered) },
+      {
+        label: "Recent Threads",
+        rows: threads.toSorted(byRecent).slice(0, SHOWN.recent),
+      },
+      { label: "Actions", rows: offered },
     ])
   }
 
   return nonEmpty([
     {
       label: "Threads",
-      rows: ranked(threads, query, ({ listed }) => [
-        listed.title,
-        listed.said ?? "",
-        listed.calls ?? "",
-      ]).slice(0, SHOWN.threads),
+      rows: ranked(threads, query, threadTexts).slice(0, SHOWN.threads),
     },
     {
       label: "Spaces",
@@ -121,12 +202,76 @@ export function menuOf({
     },
     {
       label: "Actions",
-      rows: actionRows(
-        ranked(actions, query, (a) => [a.title, a.id]).slice(0, SHOWN.actions)
-      ),
+      rows: ranked(actionRows, query, actionTexts).slice(0, SHOWN.actions),
     },
     { label: "", rows: [{ kind: "ask", id: "ask", words: query }] },
   ])
+}
+
+/** One thing that can be done with a row, as `Tab` lists them. */
+export type Act = { title: string; key?: Key; row: Choice }
+
+/** The keys a row's acts take in the menu. */
+export const OPEN: Key = { code: "Enter" }
+const BESIDE: Key = { code: "Enter", shift: true }
+
+/** What can be done with `row`, the first as `Enter` does it. */
+export function actsOf(row: Choice, sources: Sources): Act[] {
+  const { harnesses, settled } = sources
+  const startOn = (ask: Extract<Choice, { kind: "ask" }>, verb: string) =>
+    harnesses.map((harness) => ({
+      title: `${verb} on ${harness.name}`,
+      row: { ...ask, id: `${ask.id}:${harness.id}`, harness: harness.id },
+    }))
+  switch (row.kind) {
+    case "thread": {
+      const acts: Act[] = [
+        { title: "Open", key: OPEN, row },
+        { title: "Open beside", key: BESIDE, row: { ...row, beside: true } },
+      ]
+      const now = settled(row.listed)
+      if (now || settles(row.listed))
+        acts.push({
+          title: now ? "Un-settle thread" : "Settle thread",
+          row: {
+            kind: "settle",
+            id: `settle:${row.listed.id}`,
+            space: row.space,
+            listed: row.listed,
+          },
+        })
+      return acts
+    }
+    case "space":
+      return [
+        { title: "Open", key: OPEN, row },
+        ...startOn(
+          {
+            kind: "ask",
+            id: `ask:${row.space.id}`,
+            words: "",
+            space: row.space.id,
+          },
+          "New Thread"
+        ),
+      ]
+    case "ask":
+      return startOn(row, "Start")
+    default:
+      return []
+  }
+}
+
+/** What waits first, then what changed last: the sidebar's order. */
+function byRecent(a: { listed: Listed }, b: { listed: Listed }): number {
+  return (
+    Number(waits(b.listed.mark)) - Number(waits(a.listed.mark)) ||
+    b.listed.changed - a.listed.changed
+  )
+}
+
+function threadTexts({ listed }: { listed: Listed }): string[] {
+  return [listed.title, listed.said ?? "", listed.calls ?? ""]
 }
 
 /**

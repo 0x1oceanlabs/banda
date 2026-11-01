@@ -4,7 +4,9 @@
  * decision 8), kept by the window as "seen" is.
  */
 import type { SpaceId } from "@banda/contract"
+import { useCallback } from "react"
 import { works } from "@banda/ui/components/banda-mark"
+import { useNow } from "@banda/ui/hooks/use-now"
 import { kept } from "@banda/ui/lib/kept"
 import type { Listed } from "@banda/ui/pane"
 import type { Lists } from "../bar/Watches"
@@ -48,6 +50,19 @@ const says = kept(
 
 /** What this window's Person said of each row, kept current. */
 export const useSettled = says.use
+
+/**
+ * Whether a Thread is settled, kept current: by what the Person said, and
+ * by the hour for the three quiet days.
+ */
+export function useIsSettled(): (listed: Listed) => boolean {
+  const said = useSettled()
+  const now = useNow(60 * 60 * 1000)
+  return useCallback(
+    (listed: Listed) => isSettled(listed, said[listed.id], now),
+    [said, now]
+  )
+}
 
 /** Keeps that the Person settled `id`, or brought it back, now. */
 export function settle(id: string, settled: boolean) {

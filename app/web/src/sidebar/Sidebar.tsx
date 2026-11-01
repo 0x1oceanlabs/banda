@@ -21,7 +21,6 @@ import {
 } from "@banda/ui/components/dropdown-menu"
 import { Kbd } from "@banda/ui/components/kbd"
 import { ScrollArea } from "@banda/ui/components/scroll-area"
-import { useNow } from "@banda/ui/hooks/use-now"
 import { cn } from "@banda/ui/lib/utils"
 import type { PaneState } from "@banda/ui/pane"
 import {
@@ -45,8 +44,8 @@ import {
 } from "./arrange"
 import { useLookSidebar } from "../look"
 import { Row, SpaceBadge } from "./Row"
-import { PRESET_WORDS, type Settings } from "./settings"
-import { isSettled, settle, settles, useSettled } from "./settled"
+import { pickPreset, PRESET_WORDS, type Settings } from "./settings"
+import { settle, settles, useIsSettled } from "./settled"
 
 /**
  * The sidebar, docked at the window's left edge (ADR 0005, decision 8):
@@ -100,20 +99,11 @@ export function Sidebar({
   }
   // The Person's settled Threads (ADR 0008): what they said, or three
   // quiet days.
-  const says = useSettled()
-  const now = useNow(60 * 60 * 1000)
+  const settled = useIsSettled()
   const arranged = useMemo(
-    () =>
-      arrange(lists, spaces, settings, only, toggled, (listed) =>
-        isSettled(listed, says[listed.id], now)
-      ),
-    [lists, spaces, settings, only, toggled, says, now]
+    () => arrange(lists, spaces, settings, only, toggled, settled),
+    [lists, spaces, settings, only, toggled, settled]
   )
-  const pick = (next: string) => {
-    host?.sidebar.preset(next).catch((error: unknown) => {
-      console.error("banda: the sidebar's preset was not written", error)
-    })
-  }
   const edit = () => {
     host?.sidebar.edit().catch((error: unknown) => {
       console.error("banda: sidebar.toml did not open", error)
@@ -178,7 +168,7 @@ export function Sidebar({
               <DropdownMenuLabel>How the sidebar is arranged</DropdownMenuLabel>
               <DropdownMenuRadioGroup
                 value={preset}
-                onValueChange={(next: string) => pick(next)}
+                onValueChange={(next: string) => pickPreset(next)}
               >
                 {presets.map(({ name, origin }) => (
                   <DropdownMenuRadioItem

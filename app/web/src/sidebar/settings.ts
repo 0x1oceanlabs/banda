@@ -13,6 +13,14 @@ export type Settings = Pick<Sidebar, "group" | "sort" | "spaces" | "row">
 export const STATES: readonly State[] = ["active", "working", "settled"]
 
 /** What Banda's presets are, in a few words, for the view menu. */
+/** Arranges the sidebar by the preset `name`: the desktop writes it into
+ * `sidebar.toml`, and the arrangement comes back with the look. */
+export function pickPreset(name: string): void {
+  window.banda?.sidebar.preset(name).catch((error: unknown) => {
+    console.error("banda: the sidebar's preset was not written", error)
+  })
+}
+
 export const PRESET_WORDS: Readonly<Record<string, string>> = {
   inbox: "What needs you first",
   spaces: "Threads under their Spaces",

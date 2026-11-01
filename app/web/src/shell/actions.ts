@@ -14,6 +14,7 @@ import { type At, MENU_KEY } from "../menu/menu"
 import { launcher, minOf, showsOf, widthOf } from "../registry"
 import { floorOf } from "../workspaces/layout"
 import {
+  bring,
   close,
   current,
   type Direction,
@@ -81,18 +82,36 @@ export function opening(
   return open(workspaces, space, pane, { from, place, width: widthOf(pane) })
 }
 
+/** Shows a Pane here, right of the focused one, with its width; one
+ * another workspace shows moves here. */
+export function bringing(
+  workspaces: Workspaces,
+  space: SpaceId,
+  pane: PaneState
+): Workspaces {
+  return bring(workspaces, space, pane, {
+    place: "right",
+    width: widthOf(pane),
+  })
+}
+
 /**
  * A new Thread in a Space, in a new column, on this computer's first
  * Harness (ADR 0006). One not yet started there gets the focus instead.
- * With `ask`, it starts at once with those words: the Banda menu's "New
- * Thread" (ADR 0017, decision 6).
+ * With `ask`, it starts at once with those words, and with `harness` on
+ * that Harness: the Banda menu's "New Thread" (ADR 0017, decision 6).
  */
 export function newThread(
   workspaces: Workspaces,
   space: SpaceId,
-  ask?: string
+  ask?: string,
+  harness?: string
 ): Workspaces {
-  const thread = paneOf(threadPane, ask ? { ...NEW_THREAD, ask } : NEW_THREAD)
+  const thread = paneOf(threadPane, {
+    ...NEW_THREAD,
+    ...(ask && { ask }),
+    ...(harness && { harness }),
+  })
   return opening(workspaces, space, thread, undefined, "right")
 }
 
