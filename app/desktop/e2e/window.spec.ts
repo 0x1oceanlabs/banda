@@ -942,6 +942,47 @@ test("a sent message moves near the top, the end says what waits, and a Thread k
   await thread.getByRole("button", { name: "Stop" }).click()
 })
 
+test("Ctrl+F finds in the Thread and opens what folds it, and the minimap goes to a message", async () => {
+  window = await startWindow()
+  const { page } = window
+  const { thread, composer } = await firstThread(page)
+  await composer.fill("run it")
+  await composer.press("Enter")
+  await expect(thread.getByText("The tests passed.")).toBeVisible()
+  for (const word of ["one", "two"]) {
+    await composer.fill(word)
+    await composer.press("Enter")
+    await expect(thread.getByText(`You said: ${word}`)).toBeVisible()
+  }
+  const tool = thread.getByRole("button", { name: /Run the tests/ })
+  await expect(tool).toBeHidden()
+
+  // Ctrl+F opens the find bar; what it finds in a folded turn shows.
+  await composer.press("ControlOrMeta+f")
+  const find = thread.getByRole("textbox", { name: "Find in thread" })
+  await expect(find).toBeFocused()
+  await find.fill("the tests")
+  await expect(tool).toBeVisible()
+  await expect(thread.getByText(/^1 of \d+$/)).toBeVisible()
+  await find.press("Enter")
+  await expect(thread.getByText(/^2 of \d+$/)).toBeVisible()
+  await find.fill("nothing like it")
+  await expect(thread.getByText("No results")).toBeVisible()
+  await find.fill("you said")
+  await page.screenshot({ path: "test-results/18c-find.png" })
+  await find.press("Escape")
+  await expect(find).toBeHidden()
+  await expect(tool).toBeHidden()
+
+  // The minimap marks each message the Person sent, and goes to it.
+  const minimap = thread.getByRole("navigation", { name: "Your messages" })
+  await expect(minimap.getByRole("button")).toHaveCount(3)
+  await minimap.getByRole("button", { name: "run it" }).click()
+  await expect(
+    thread.getByRole("log").getByText("run it", { exact: true })
+  ).toBeInViewport()
+})
+
 test("what the Agent does by itself shows in a turn of its own", async () => {
   window = await startWindow()
   const { page } = window

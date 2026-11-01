@@ -88,7 +88,10 @@ asked to build all of it; the rest are our defaults and stay his to change.
      (AGENTS.md: complexity on a user's request).
 
 9. **Later, each when it is built.** Find in the Thread (Mod+F), a minimap
-   of the Person's messages, `@` for files. Edit from here and fork need the
+   of the Person's messages, `@` for files.
+   Built: Mod+F finds by the key's place, marks the words with CSS
+   highlights and opens a folded turn that holds them; the minimap marks
+   each message the Person sent down the Thread's edge. Edit from here and fork need the
    Harness to rewind or fork a session; they wait for a check of what
    Claude Code and Codex offer through ACP.
 

@@ -85,6 +85,9 @@ import { type Line, timeline } from "./timeline"
 import { Fold, key, WorkLine, Working } from "./Work"
 import { Queue, type QueueActions } from "./Queue"
 import { ScrollPlace } from "./ScrollPlace"
+import { FindBar, useFound } from "./Find"
+import { holds } from "./find"
+import { Minimap } from "./Minimap"
 import { ToolCall } from "./ToolCall"
 import { SettingsBar } from "./ThreadSettings"
 import { SignIn, Warning } from "./SignIn"
@@ -191,6 +194,11 @@ function ThreadPane({
     closed: offer.no_images ? `${name} does not take images.` : undefined,
   })
   const [dropping, setDropping] = useState(false)
+  // What the Person looks for in the Thread, while the find bar is open.
+  const [find, setFind] = useState<{ query: string; at: number }>()
+  const area = useRef<HTMLDivElement>(null)
+  const findField = useRef<HTMLInputElement>(null)
+  const found = useFound(area, find?.query ?? "", find?.at ?? 0, state)
   // The waiting message open to edit, from its Edit or ↑ in the composer.
   const [editing, setEditing] = useState<ItemId>()
   const waits = state ? waiting(state) : []
@@ -279,9 +287,19 @@ function ThreadPane({
   }
 
   return (
-    // Images dropped anywhere on the Pane join the message.
+    // Images dropped anywhere on the Pane join the message; Mod+F finds in
+    // it, as in T3 Code.
     <div
       className="flex h-full min-h-0 flex-col"
+      onKeyDown={(event) => {
+        const mod = event.ctrlKey || event.metaKey
+        // By the key's place, as the window's keys, on any layout.
+        if (!mod || event.altKey || event.shiftKey || event.code !== "KeyF")
+          return
+        event.preventDefault()
+        setFind((now) => now ?? { query: "", at: 0 })
+        findField.current?.select()
+      }}
       onDragOver={(event) => {
         if (!event.dataTransfer.types.includes("Files")) return
         event.preventDefault()
@@ -298,7 +316,17 @@ function ThreadPane({
         images.add([...event.dataTransfer.files])
       }}
     >
-      <div className="min-h-0 flex-1">
+      <div ref={area} className="relative min-h-0 flex-1">
+        {find && (
+          <FindBar
+            field={findField}
+            query={find.query}
+            found={found}
+            onQuery={(query) => setFind({ ...find, query, at: 0 })}
+            onStep={(by) => setFind({ ...find, at: found.current + by })}
+            onClose={() => setFind(undefined)}
+          />
+        )}
         {thread === null ? (
           <Start name={name} />
         ) : live.state === "loading" ? (
@@ -317,6 +345,7 @@ function ThreadPane({
             key={thread}
             thread={thread}
             forYou={Boolean(asking || planned)}
+            finding={find?.query ?? ""}
             state={live.view}
             waits={waits}
             name={name}
@@ -478,6 +507,7 @@ type Answering = {
 function Transcript({
   thread,
   forYou,
+  finding,
   state,
   waits,
   name,
@@ -491,6 +521,8 @@ function Transcript({
   thread: string
   /** The Thread waits for its Person: a Question, or a plan. */
   forYou: boolean
+  /** What the Person looks for in it, if anything. */
+  finding: string
   state: ThreadState
   /** The messages that wait, from {@link waiting}. */
   waits: Waiting[]
@@ -527,9 +559,23 @@ function Transcript({
           />
         )
       case "work":
-        return <WorkLine items={line.items} live={line.live} render={render} />
+        return (
+          <WorkLine
+            items={line.items}
+            live={line.live}
+            found={holds(line, finding)}
+            render={render}
+          />
+        )
       case "fold":
-        return <Fold turn={line.turn} lines={line.lines} render={render} />
+        return (
+          <Fold
+            turn={line.turn}
+            lines={line.lines}
+            found={holds(line, finding)}
+            render={render}
+          />
+        )
       case "working":
         return <Working turn={line.turn} name={name} />
       case "ended":
@@ -546,6 +592,14 @@ function Transcript({
     }
   }
   const viewport = useRef<HTMLDivElement>(null)
+  const messages = lines.flatMap((line) =>
+    line.kind === "item" &&
+    line.item.author.kind === "person" &&
+    line.item.body.kind === "message" &&
+    line.item.body.text
+      ? [{ id: line.item.id, text: line.item.body.text }]
+      : []
+  )
   return (
     <MessageScrollerProvider autoScroll defaultScrollPosition="end">
       <MessageScroller>
@@ -595,6 +649,7 @@ function Transcript({
           </MessageScrollerContent>
         </MessageScrollerViewport>
         <ScrollToEnd queued={waits.length} forYou={forYou} />
+        <Minimap messages={messages} />
         <ScrollPlace thread={thread} viewport={viewport} />
       </MessageScroller>
     </MessageScrollerProvider>
