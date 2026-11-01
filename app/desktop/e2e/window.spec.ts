@@ -1673,3 +1673,63 @@ test("Alt+Space opens the Banda menu: it finds a Thread, and Alt+Enter starts on
   await page.keyboard.press("Alt+K")
   await expect(menu).toBeHidden()
 })
+
+test("the Banda menu goes into a Space and the sidebar's view, and Tab shows what a row can do", async () => {
+  window = await startWindow()
+  const { page } = window
+  const { thread, composer } = await firstThread(page)
+  await composer.fill("hello")
+  await composer.press("Enter")
+  await expect(thread).not.toHaveAccessibleName("New Thread")
+  const menu = page.getByRole("dialog", { name: "Banda menu" })
+  const search = menu.getByRole("combobox", { name: "Search" })
+
+  // Enter goes into a Space: its new Thread, then its Threads; Backspace
+  // in the empty field comes back out.
+  await page.keyboard.press("Alt+Space")
+  await search.fill("work")
+  await expect(menu.getByRole("option").first()).toContainText("Work")
+  await search.press("Enter")
+  await expect(menu.getByText("Work", { exact: true })).toBeVisible()
+  await expect(menu.getByRole("option").first()).toContainText(
+    "New Thread here"
+  )
+  await expect(menu.getByRole("group", { name: "Threads" })).toContainText(
+    "hello"
+  )
+  await search.press("Backspace")
+  await expect(
+    menu.getByRole("group", { name: "Recent Threads" })
+  ).toBeVisible()
+
+  // Tab on a Thread shows its acts; Settle thread puts it away.
+  await search.fill("hello")
+  await search.press("Tab")
+  const acts = menu.getByRole("listbox", { name: "Actions" })
+  await expect(acts).toContainText("Open beside")
+  // Esc shuts the act list, and the menu stays.
+  await search.press("Escape")
+  await expect(acts).toBeHidden()
+  await expect(menu).toBeVisible()
+  await search.press("Tab")
+  await expect(acts).toContainText("Open beside")
+  await page.screenshot({ path: "test-results/27-banda-menu-acts.png" })
+  await search.press("ArrowDown")
+  await search.press("ArrowDown")
+  await search.press("Enter")
+  await expect(menu).toBeHidden()
+  const sidebar = page.getByRole("complementary", { name: "Sidebar" })
+  await expect(sidebar.getByRole("group", { name: "Settled" })).toBeVisible()
+
+  // The sidebar's view: its presets, one picked writes the file.
+  await page.keyboard.press("Alt+Space")
+  await search.fill("view")
+  await search.press("Enter")
+  await expect(menu.getByRole("option", { name: /inbox/i })).toBeVisible()
+  await search.fill("spaces")
+  await search.press("Enter")
+  await expect(menu).toBeHidden()
+  await expect(
+    sidebar.getByRole("button", { name: "View: spaces" })
+  ).toBeVisible()
+})

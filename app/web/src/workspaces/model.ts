@@ -296,6 +296,27 @@ export function update(
 }
 
 /**
+ * Shows a Pane on this workspace, as `opening` says: one another workspace
+ * shows moves here, and one this workspace shows gets the focus (the
+ * Banda menu's Shift+Enter, ADR 0017).
+ */
+export function bring(
+  state: Workspaces,
+  space: SpaceId,
+  pane: PaneState,
+  opening: Opening = {}
+): Workspaces {
+  const away = entries(state).find(
+    (entry) =>
+      samePane(entry, { space, pane }) &&
+      find(state, entry.id)?.workspace !== state.current
+  )
+  return away
+    ? normalize(open(remove(state, away.id), space, pane, opening))
+    : open(state, space, pane, opening)
+}
+
+/**
  * Closes an entry. Its column goes when it was the last there, and the
  * focus moves to the neighbour that took its place.
  */

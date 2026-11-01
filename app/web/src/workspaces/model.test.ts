@@ -1,6 +1,7 @@
 import type { PaneState } from "@banda/ui/pane"
 import { describe, expect, test } from "vitest"
 import {
+  bring,
   close,
   current,
   entries,
@@ -376,5 +377,29 @@ describe("what was kept", () => {
     const back = parse({ list: [one.list[0]], current: 0 })!
     expect(back.list).toHaveLength(2)
     expect(back.list[1].columns).toEqual([])
+  })
+})
+
+describe("bringing a Pane here", () => {
+  test("moves one another workspace shows beside the focused Pane", () => {
+    let state = open(start(), A, thread("t1"))
+    state = go(state, 1)
+    state = open(state, A, terminal("x1"))
+    state = bring(state, A, thread("t1"), { place: "right" })
+    expect(columns(state)).toEqual([["x1"], ["t1"]])
+    expect(focusName(state)).toBe("t1")
+    expect(
+      entries(state).filter((e) => e.pane.args.thread === "t1")
+    ).toHaveLength(1)
+  })
+
+  test("focuses one this workspace shows, and opens one none shows", () => {
+    let state = open(start(), A, thread("t1"))
+    state = open(state, A, terminal("x1"), { place: "right" })
+    state = bring(state, A, thread("t1"), { place: "right" })
+    expect(columns(state)).toEqual([["t1"], ["x1"]])
+    expect(focusName(state)).toBe("t1")
+    state = bring(state, A, thread("t2"), { place: "right" })
+    expect(columns(state)).toEqual([["t1"], ["t2"], ["x1"]])
   })
 })

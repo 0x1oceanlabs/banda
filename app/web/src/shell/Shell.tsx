@@ -10,10 +10,11 @@ import { SUMMARY } from "../calls/system"
 import { Toasts } from "../calls/Toasts"
 import { first, type Heard, useCalls, type Where } from "../calls/useCalls"
 import { BandaMenu } from "../menu/BandaMenu"
-import type { At, Choice } from "../menu/menu"
+import type { At, Branch, Choice } from "../menu/menu"
 import { useLookNotify, useLookSound } from "../look"
 import { kindOf, showsOf, startable, widthOf } from "../registry"
 import { Sidebar } from "../sidebar/Sidebar"
+import { pickPreset } from "../sidebar/settings"
 import { toggleSettled } from "../sidebar/settled"
 import {
   close,
@@ -39,6 +40,7 @@ import { Workspaces } from "../workspaces/Workspaces"
 import {
   ACTIONS,
   answering,
+  bringing,
   newThread,
   opening,
   type Shell as Parts,
@@ -206,25 +208,34 @@ export function Shell({
     [change]
   )
   const newThreadIn = useCallback(
-    (space: SpaceId, ask?: string) => change((w) => newThread(w, space, ask)),
+    (space: SpaceId, ask?: string, harness?: string) =>
+      change((w) => newThread(w, space, ask, harness)),
     [change]
   )
   // The Space the focused Pane is in: where the menu's New Thread starts.
   const here = focused(workspaces)?.space ?? home
   const choose = useCallback(
-    (row: Choice) => {
+    (row: Exclude<Choice, Branch>) => {
       switch (row.kind) {
         case "thread":
-          return openPane(row.space, row.listed.pane)
-        case "space":
-          return newThreadIn(row.space.id)
+          return row.beside
+            ? change((w) => bringing(w, row.space, row.listed.pane))
+            : openPane(row.space, row.listed.pane)
         case "action":
           return row.action.run(parts)
         case "ask":
-          return newThreadIn(here, row.words)
+          return newThreadIn(
+            row.space ?? here,
+            row.words || undefined,
+            row.harness
+          )
+        case "settle":
+          return toggleSettled(listsNow.current, row.space, row.listed.id)
+        case "preset":
+          return pickPreset(row.name)
       }
     },
-    [openPane, newThreadIn, parts, here]
+    [change, openPane, newThreadIn, parts, here]
   )
 
   const frame: Frame = useMemo(
