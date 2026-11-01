@@ -471,6 +471,14 @@ modules/*/pane   each module's Panes
     Ctrl-click (⌘ on a Mac) always opens a new column.
   - Every workspace stays drawn, so its Panes keep running; only the
     current one takes clicks and keys.
+  - A touchpad's swipe is read as niri reads one (`workspaces/swipe.ts`).
+    Each swipe goes one way, picked as it starts. Up and down belongs to
+    the Pane under the pointer, and the Strip never drifts sideways under
+    it. A sideways swipe moves the Strip with the fingers. Where it ends,
+    the column most in view takes the focus and comes whole into view.
+    Over something that scrolls sideways itself, such as a wide table,
+    the swipe is that Pane's unless Alt is held. With Alt held, the wheel
+    is the window's, and one swipe up or down moves one workspace.
   - A Pane leaves when it closes or its place shows another Pane, or the
     same with other args; moving it to another column or workspace draws
     it again without that.

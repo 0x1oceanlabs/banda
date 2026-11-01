@@ -1,12 +1,13 @@
-import { useRef } from "react"
+import { useEffect, useLayoutEffect, useRef } from "react"
 import type { Engine, SpaceId } from "@bandaso/contract"
 import type { PaneState } from "@bandaso/ui/pane"
 import type { Workspaces as State } from "./model"
 import type { Frame } from "./PaneFrame"
 import { Strip } from "./Strip"
+import { pixels, Swipe } from "./swipe"
 
-/** A wheel's turn moves one workspace; the rest of a swipe waits this long. */
-const WHEEL_PAUSE = 300
+/** How far a swipe goes, in pixels, before it moves a workspace. */
+const STEP = 24
 
 /**
  * The workspaces one under another, as niri stacks them: the current one
@@ -31,21 +32,37 @@ export function Workspaces({
   modules: readonly string[]
   spaceName: (space: SpaceId) => string
   frame: Frame
-  /** The wheel with Alt held steps up or down. */
+  /** A swipe up or down with Alt held steps once, however long it is. */
   onStep: (by: 1 | -1) => void
   onStart: (pane: PaneState) => void
 }) {
-  const wheeled = useRef(0)
+  const root = useRef<HTMLDivElement>(null)
+  const step = useRef(onStep)
+  useLayoutEffect(() => {
+    step.current = onStep
+  })
+  useEffect(() => {
+    const element = root.current
+    if (!element) return
+    const swipe = new Swipe()
+    let stepped = false
+    // With Alt held the wheel is the window's: no Pane scrolls under it.
+    const onWheel = (event: WheelEvent) => {
+      const { x, y } = pixels(event)
+      if (swipe.add(x, y, event.timeStamp)) stepped = false
+      if (!event.altKey) return
+      event.preventDefault()
+      if (stepped || swipe.way !== "upright" || Math.abs(swipe.y) < STEP) {
+        return
+      }
+      stepped = true
+      step.current(swipe.y > 0 ? 1 : -1)
+    }
+    element.addEventListener("wheel", onWheel, { passive: false })
+    return () => element.removeEventListener("wheel", onWheel)
+  }, [])
   return (
-    <div
-      className="relative h-full min-h-0 overflow-hidden"
-      onWheel={(event) => {
-        if (!event.altKey || event.deltaY === 0) return
-        if (event.timeStamp - wheeled.current < WHEEL_PAUSE) return
-        wheeled.current = event.timeStamp
-        onStep(event.deltaY > 0 ? 1 : -1)
-      }}
-    >
+    <div ref={root} className="relative h-full min-h-0 overflow-hidden">
       {workspaces.list.map((workspace, i) => {
         const current = i === workspaces.current
         const live = current && !covered
