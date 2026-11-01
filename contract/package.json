@@ -6,7 +6,8 @@
   "description": "The engine's API for TypeScript: the types generated from Rust, the modules' decoders and the client a window uses.",
   "exports": {
     ".": "./src/index.ts",
-    "./agents": "./src/agents.ts"
+    "./agents": "./src/agents.ts",
+    "./terminal": "./src/terminal.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

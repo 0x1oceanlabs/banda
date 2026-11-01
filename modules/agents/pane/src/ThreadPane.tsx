@@ -80,6 +80,7 @@ import { Plan } from "./Plan"
 import { Queue, type QueueActions } from "./Queue"
 import { ToolCall } from "./ToolCall"
 import { SettingsBar } from "./ThreadSettings"
+import { SignIn } from "./SignIn"
 
 /** One Thread with an Agent; without `thread`, the next message starts one. */
 export type ThreadArgs = {
@@ -254,6 +255,14 @@ function ThreadPane({
             answering={acting.busy}
             onAnswer={answer}
             onRetry={retry}
+            signIn={(turn) => (
+              <SignIn
+                engine={engine}
+                space={space}
+                agent={args.agent}
+                onSignedIn={() => retry(turn)}
+              />
+            )}
             queue={queue}
           />
         )}
@@ -356,6 +365,7 @@ function Transcript({
   name,
   reader,
   onRetry,
+  signIn,
   queue,
   ...answers
 }: Answering & {
@@ -363,6 +373,8 @@ function Transcript({
   name: string
   reader: ImageReader
   onRetry: (turn: TurnView) => void
+  /** How a Person signs in again, below a turn that failed for that. */
+  signIn: (turn: TurnView) => React.ReactNode
   queue: QueueActions
 }) {
   const turn = working(state)
@@ -397,6 +409,7 @@ function Transcript({
                         ? () => onRetry(line.turn)
                         : undefined
                     }
+                    signIn={signIn}
                   />
                 </MessageScrollerItem>
               )
@@ -589,18 +602,22 @@ function Question({
 }
 
 /** A turn that did not finish: why, what to do about it, and Try again
- * when its message can be sent again. */
+ * when its message can be sent again. One that failed because its Person
+ * must sign in offers the ways to, while it can go again. */
 function Ended({
   turn,
   busy,
   onRetry,
+  signIn,
 }: {
   turn: TurnView
   busy: boolean
   onRetry?: () => void
+  signIn: (turn: TurnView) => React.ReactNode
 }) {
   const failed = turn.state === "failed"
-  const advice = turn.failure && adviceFor(turn.failure)
+  const signsIn = turn.failure?.class === "sign_in" && onRetry !== undefined
+  const advice = !signsIn && turn.failure && adviceFor(turn.failure)
   return (
     <Trace>
       <TraceLine status={failed ? "error" : undefined}>
@@ -629,6 +646,7 @@ function Ended({
           )}
         </div>
       )}
+      {signsIn && <div className="pl-6">{signIn(turn)}</div>}
     </Trace>
   )
 }

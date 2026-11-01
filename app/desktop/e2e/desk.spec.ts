@@ -148,6 +148,36 @@ test("a failed turn says what to do, and Try again sends its message again", asy
   await page.screenshot({ path: "test-results/5-tried-again.png" })
 })
 
+test("a Person signs in from the turn that needed it, and it goes again", async () => {
+  window = await startWindow({ account: true })
+  const { page } = window
+  await page.getByLabel("Name").fill("Work")
+  await page.getByRole("button", { name: "Create Space" }).click()
+  await page.getByRole("button", { name: "New Agent" }).click()
+  const dialog = page.getByRole("dialog", { name: "New Agent" })
+  await dialog.getByLabel("Name").fill("Writer")
+  await dialog.getByRole("button", { name: "Create Agent" }).click()
+  const thread = page.getByRole("region", { name: "Writer" })
+  const composer = thread.getByRole("textbox", { name: "Message to Writer" })
+
+  await composer.fill("hello")
+  await composer.press("Enter")
+  await expect(thread.getByText("needs you to sign in.")).toBeVisible()
+  // A way in a terminal shows what to run, with the Harness's own program.
+  await expect(thread.getByText(/Fake account .*run this in a/)).toBeVisible()
+  await expect(thread.getByText(/bandaso-fake-agent --login$/)).toBeVisible()
+  await page.screenshot({ path: "test-results/4-sign-in.png" })
+
+  await thread
+    .getByRole("button", { name: "Sign in with Fake browser" })
+    .click()
+  await expect(thread.getByText("You said: hello")).toBeVisible()
+  await expect(thread.getByText("needs you to sign in.")).toBeVisible()
+  await expect(
+    thread.getByRole("button", { name: "Sign in with Fake browser" })
+  ).toHaveCount(0)
+})
+
 test("a Person chooses the model and the mode under the message box", async () => {
   window = await startWindow()
   const { page } = window

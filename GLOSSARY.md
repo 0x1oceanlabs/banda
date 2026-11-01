@@ -32,6 +32,19 @@ The agent program an Agent runs on, for example Claude Code or Codex. The
 engine reaches it through an adapter, ACP first. It reads what a Harness can
 do from the Harness's declared capabilities.
 
+**Sign-in**:
+How a Person lets a Harness work under their account, in a way the Harness
+offers: in a terminal, as Claude Code does, or by itself in the browser, as
+Codex does. The Harness keeps the credentials; Bandaso holds none.
+_Avoid_: login, auth.
+
+**Terminal**:
+A program the engine runs on a PTY for a Person, such as their shell or a
+Harness's sign-in. Every window that opens it shows the same screen; it ends
+when it is closed or the engine stops. An Agent runs programs through its
+Harness, never in a terminal.
+_Avoid_: console, shell (that is one program a terminal runs).
+
 **Thread**:
 One conversation between a Person and an Agent. It shows items: messages, the
 Agent's thoughts, tool calls, its plans, notices and Questions.
@@ -102,6 +115,11 @@ returns a result or a refusal.
 A fact a module publishes after a change, in its published language and with
 a version. Other modules and windows subscribe to events. They never read
 another module's tables.
+
+**Stream**:
+What a module says to a window for one call while it lasts, such as what a
+terminal prints. Unlike an event it is not logged: a window that connects
+again hears it again from the start.
 
 **Access decision**:
 The one place where the kernel decides whether a Participant may perform an

@@ -18,6 +18,9 @@ pub enum Right {
     /// Decide what an Agent asked a Person to decide. An Agent never
     /// answers in a Person's place (ADR 0002, decision 9).
     Decide,
+    /// Run programs as the Person, as a terminal does. An Agent runs them
+    /// through its Harness, under its Thread's mode.
+    Run,
 }
 
 /// On one computer the owner may do everything, and Agents may read and
@@ -36,6 +39,9 @@ pub fn decide(participant: &Participant, right: Right, owner: PersonId) -> Resul
         (Participant::Agent(_), Right::Decide) => Err(Refusal::forbidden(
             "Only a Person decides what an Agent asked.",
         )),
+        (Participant::Agent(_), Right::Run) => Err(Refusal::forbidden(
+            "An Agent runs programs through its Harness, not in a terminal.",
+        )),
     }
 }
 
@@ -47,7 +53,13 @@ mod tests {
     #[test]
     fn the_owner_may_do_everything() {
         let owner = PersonId::new();
-        for right in [Right::Read, Right::Write, Right::Manage, Right::Decide] {
+        for right in [
+            Right::Read,
+            Right::Write,
+            Right::Manage,
+            Right::Decide,
+            Right::Run,
+        ] {
             assert_eq!(decide(&Participant::Person(owner), right, owner), Ok(()));
         }
     }
@@ -66,7 +78,7 @@ mod tests {
         let agent = Participant::Agent(AgentId::new());
         assert_eq!(decide(&agent, Right::Read, owner), Ok(()));
         assert_eq!(decide(&agent, Right::Write, owner), Ok(()));
-        for right in [Right::Manage, Right::Decide] {
+        for right in [Right::Manage, Right::Decide, Right::Run] {
             assert_eq!(
                 decide(&agent, right, owner).unwrap_err().code,
                 Code::Forbidden

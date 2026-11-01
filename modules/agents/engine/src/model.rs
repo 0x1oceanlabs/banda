@@ -182,6 +182,34 @@ pub struct HarnessView {
     pub name: String,
 }
 
+/// A way to sign in to a Harness, as the Harness offers it. Bandaso runs
+/// it and holds none of the account's credentials: the Harness keeps them.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "agents/")]
+pub struct SignInWay {
+    pub id: String,
+    pub name: String,
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub description: Option<String>,
+    /// The program a Person signs in with, in a terminal: it ends with
+    /// code 0 when that worked. Without one the Harness signs in by itself,
+    /// as Codex does in the browser.
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub terminal: Option<Program>,
+}
+
+/// A program with its arguments, never a shell line, and what it adds to
+/// the engine's environment.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "agents/")]
+pub struct Program {
+    pub program: String,
+    pub args: Vec<String>,
+    pub env: BTreeMap<String, String>,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[serde(rename_all = "snake_case")]
 #[ts(export, export_to = "agents/")]

@@ -1,5 +1,5 @@
 use crate::access::{self, Right};
-use crate::module::{Call, Module};
+use crate::module::{Call, Module, Stream};
 use crate::space::{Created, Space};
 use crate::{CommandId, Error, Participant, PersonId, Refusal, SpaceId};
 use serde::{Deserialize, Serialize};
@@ -172,13 +172,7 @@ impl Kernel {
                 }
             };
         }
-        let (prefix, rest) = method.split_once('.').ok_or_else(|| no_method(method))?;
-        let module = self
-            .modules
-            .iter()
-            .find(|m| m.name() == prefix)
-            .ok_or_else(|| no_method(method))?;
-        let right = module.right(rest).ok_or_else(|| no_method(method))?;
+        let (module, rest, right) = self.method(method)?;
         let space = self
             .space(space.ok_or_else(|| Refusal::invalid(format!("{method} needs a Space.")))?)
             .await?;
@@ -205,6 +199,40 @@ impl Kernel {
             space.store().refused(receipt, refusal.clone()).await?;
         }
         answer
+    }
+
+    /// Opens a module's stream in a Space, once the access decision
+    /// allows it.
+    pub async fn stream(
+        &self,
+        participant: Participant,
+        method: &str,
+        space: SpaceId,
+        params: Value,
+    ) -> Result<Stream, Refusal> {
+        let (module, rest, right) = self.method(method)?;
+        let space = self.space(space).await?;
+        access::decide(&participant, right, space.owner())?;
+        let call = Call::new(
+            participant,
+            space.module(module.name()),
+            method.to_owned(),
+            None,
+        );
+        module.stream(call, rest, params).await
+    }
+
+    /// The module of `method`, the method without its prefix, and the
+    /// right it needs.
+    fn method<'a>(&self, method: &'a str) -> Result<(&Arc<dyn Module>, &'a str, Right), Refusal> {
+        let (prefix, rest) = method.split_once('.').ok_or_else(|| no_method(method))?;
+        let module = self
+            .modules
+            .iter()
+            .find(|m| m.name() == prefix)
+            .ok_or_else(|| no_method(method))?;
+        let right = module.right(rest).ok_or_else(|| no_method(method))?;
+        Ok((module, rest, right))
     }
 
     pub async fn space(&self, id: SpaceId) -> Result<Arc<Space>, Refusal> {

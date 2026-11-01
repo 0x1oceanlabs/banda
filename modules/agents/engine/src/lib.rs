@@ -15,6 +15,8 @@
 //! | Method | Right | What it does |
 //! |---|---|---|
 //! | `agents.harnesses` | read | the Harnesses this machine can start |
+//! | `agents.account` | manage | how a Person signs in to a Harness: `{harness}` |
+//! | `agents.sign_in` | manage | signs in with one of those ways, then the Harness starts again: `{harness, way}` |
 //! | `agents.list` | read | the Space's Agents |
 //! | `agents.create` | manage | a new Agent: `{name, harness}` |
 //! | `agents.threads` | read | Threads, the latest first: `{agent?}` |
@@ -52,12 +54,12 @@ use base64::engine::general_purpose::STANDARD as BASE64;
 use images::Images;
 use live::Live;
 use model::{
-    Body, Fact, Image, ImageId, Item, ItemId, Offer, Settings, ThreadId, ThreadList, ThreadSummary,
-    ThreadView, TurnId, TurnState, VERSION,
+    Body, Fact, Image, ImageId, Item, ItemId, Offer, Settings, SignInWay, ThreadId, ThreadList,
+    ThreadSummary, ThreadView, TurnId, TurnState, VERSION,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use settings::Harnesses;
+use settings::{Harness, Harnesses};
 use std::fmt::Display;
 use std::sync::Arc;
 use std::time::Duration;
@@ -97,10 +99,18 @@ impl Agents {
         self.live = Arc::new(Live::new(self.idle, self.quiet));
         self
     }
+
+    fn harness(&self, id: &str) -> Result<&Harness, Refusal> {
+        self.harnesses.find(id).ok_or_else(|| {
+            Refusal::invalid(format!("This computer has no Harness named \"{id}\"."))
+        })
+    }
 }
 
 enum Method {
     Harnesses,
+    Account,
+    SignIn,
     List,
     Create,
     Threads,
@@ -123,6 +133,8 @@ impl Method {
     fn parse(name: &str) -> Option<Method> {
         Some(match name {
             "harnesses" => Method::Harnesses,
+            "account" => Method::Account,
+            "sign_in" => Method::SignIn,
             "list" => Method::List,
             "create" => Method::Create,
             "threads" => Method::Threads,
@@ -151,7 +163,8 @@ impl Method {
             | Method::Thread
             | Method::Defaults
             | Method::Image => Right::Read,
-            Method::Create => Right::Manage,
+            // Which account a Space's Agents work under is the Space's own.
+            Method::Create | Method::Account | Method::SignIn => Right::Manage,
             Method::Send
             | Method::Edit
             | Method::Withdraw
@@ -164,6 +177,25 @@ impl Method {
             Method::Configure | Method::Answer => Right::Decide,
         }
     }
+}
+
+#[derive(Deserialize)]
+struct OneHarness {
+    harness: String,
+}
+
+#[derive(Deserialize)]
+struct SignIn {
+    harness: String,
+    way: String,
+}
+
+/// What `agents.account` answers: how a Person signs in to a Harness on
+/// this machine, as the Harness offers it.
+#[derive(Clone, Debug, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "agents/")]
+pub struct Account {
+    pub ways: Vec<SignInWay>,
 }
 
 #[derive(Deserialize)]
@@ -318,13 +350,42 @@ impl Module for Agents {
         match method {
             Method::Harnesses => value(self.harnesses.views()),
             Method::List => value(settings::agents(space.folder())?),
+            Method::Account => {
+                let OneHarness { harness } = decode(params)?;
+                let harness = self.harness(&harness)?;
+                let connection = self.live.connection(space.id(), harness).await;
+                let ways = connection.map_err(Refusal::conflict)?.ways().to_vec();
+                value(Account { ways })
+            }
+            Method::SignIn => {
+                let SignIn { harness, way } = decode(params)?;
+                let harness = self.harness(&harness)?;
+                let connection = self.live.connection(space.id(), harness).await;
+                let connection = connection.map_err(Refusal::conflict)?;
+                let found = connection
+                    .ways()
+                    .iter()
+                    .find(|w| w.id == way)
+                    .ok_or_else(|| {
+                        Refusal::not_found(format!(
+                            "{} offers no such way to sign in.",
+                            harness.name
+                        ))
+                    })?;
+                // A way in a terminal ran already: the Person signed in there.
+                if found.terminal.is_none() {
+                    connection.sign_in(&way).await.map_err(Refusal::conflict)?;
+                }
+                drop(connection);
+                // ACP has a client start the Harness again after a sign-in,
+                // so it reads the account anew; in every Space, since they
+                // share the account.
+                self.live.let_go(&harness.id).await;
+                value(())
+            }
             Method::Create => {
                 let Create { name, harness } = decode(params)?;
-                if self.harnesses.find(&harness).is_none() {
-                    return Err(Refusal::invalid(format!(
-                        "This computer has no Harness named \"{harness}\"."
-                    )));
-                }
+                self.harness(&harness)?;
                 let (folder, author) = (space.folder().to_owned(), call.participant());
                 call.command(move |tx| {
                     // The module writes its own settings: the Agent's file

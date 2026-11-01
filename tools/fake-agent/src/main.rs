@@ -47,6 +47,13 @@
 //! Just after a session opens it says its commands, `/review` and
 //! `/compact`, as Claude Code does.
 //!
+//! With `FAKE_AGENT_HOME` set it has an account, kept as a file there. It
+//! reads it when it starts, and a prompt fails as one whose Person must
+//! sign in until someone has. It offers two ways: in a terminal, `fake-agent --login`, where the Person
+//! pastes the code `fake-code`, as Claude Code's adapter offers to a client
+//! that runs terminals; and `fake-browser`, which signs in by itself, as
+//! Codex's does in the browser.
+//!
 //! Its sessions can be resumed or loaded after a restart, as a real
 //! Harness keeps them on disk. With `FAKE_AGENT_FORGETS` set it refuses
 //! both, as a Harness that lost them would.
@@ -60,7 +67,8 @@
 
 use agent_client_protocol::schema::ProtocolVersion;
 use agent_client_protocol::schema::v1::{
-    AgentCapabilities, AvailableCommand, AvailableCommandInput, AvailableCommandsUpdate,
+    AgentCapabilities, AuthMethod, AuthMethodAgent, AuthMethodTerminal, AuthenticateRequest,
+    AuthenticateResponse, AvailableCommand, AvailableCommandInput, AvailableCommandsUpdate,
     CancelNotification, ConfigOptionUpdate, ContentBlock, ContentChunk, Cost,
     CreateElicitationRequest, Diff, ElicitationAction, ElicitationContentValue,
     ElicitationFormMode, ElicitationSchema, ElicitationSessionScope, EnumOption, Implementation,
@@ -117,6 +125,8 @@ struct Fake {
     /// The turn each session runs, by where a message sent into it goes.
     running: Arc<Mutex<HashMap<SessionId, mpsc::UnboundedSender<String>>>>,
     setups: Arc<Mutex<HashMap<SessionId, Setup>>>,
+    /// Its Person signed in, as it read when it started or signed in since.
+    signed_in: Arc<AtomicBool>,
 }
 
 /// What a session runs with.
@@ -285,7 +295,7 @@ async fn turn(
     if words.contains("flaky") && fake.failed_once.lock().unwrap().insert(words.clone()) {
         return Err(Error::internal_error().data("the fake agent fails this once"));
     }
-    if words.contains("sign in") {
+    if words.contains("sign in") || !fake.signed_in.load(Ordering::Relaxed) {
         return Err(Error::auth_required());
     }
     if words.contains("limit") {
@@ -788,6 +798,32 @@ async fn choose(
     })
 }
 
+/// The file that says its Person signed in, when it has an account.
+fn account() -> Option<std::path::PathBuf> {
+    std::env::var_os("FAKE_AGENT_HOME").map(|home| std::path::Path::new(&home).join("signed-in"))
+}
+
+/// Signs in in a terminal, as `claude auth login` does: the Person pastes
+/// the code the browser shows. It ends with code 0 when the code is right.
+fn log_in() -> ! {
+    use std::io::{BufRead, Write};
+    let Some(signed_in) = account() else {
+        eprintln!("This fake agent has no account: set FAKE_AGENT_HOME.");
+        std::process::exit(2);
+    };
+    print!("Open https://example.invalid/fake-login to sign in.\r\nPaste the code: ");
+    let _ = std::io::stdout().flush();
+    let mut code = String::new();
+    let _ = std::io::stdin().lock().read_line(&mut code);
+    if code.trim() != "fake-code" {
+        print!("That code is wrong.\r\n");
+        std::process::exit(1);
+    }
+    std::fs::write(&signed_in, "yes").expect("the fake agent's home takes its account");
+    print!("Signed in.\r\n");
+    std::process::exit(0);
+}
+
 /// Whether this run lost the sessions of earlier runs.
 fn forgets() -> bool {
     std::env::var_os("FAKE_AGENT_FORGETS").is_some()
@@ -795,7 +831,12 @@ fn forgets() -> bool {
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
+    if std::env::args().any(|arg| arg == "--login") {
+        log_in();
+    }
     let fake = Fake::default();
+    let signed_in = account().is_none_or(|signed_in| signed_in.exists());
+    fake.signed_in.store(signed_in, Ordering::Relaxed);
     Agent
         .builder()
         .name("bandaso-fake-agent")
@@ -832,8 +873,23 @@ async fn main() -> Result<(), Error> {
                         .session_capabilities(
                             SessionCapabilities::new().resume(SessionResumeCapabilities::new()),
                         );
+                    let mut ways = Vec::new();
+                    if account().is_some() {
+                        if request.client_capabilities.auth.terminal {
+                            ways.push(AuthMethod::Terminal(
+                                AuthMethodTerminal::new("fake-login", "Fake account")
+                                    .description("Paste a code from the browser")
+                                    .args(vec!["--login".to_owned()]),
+                            ));
+                        }
+                        ways.push(AuthMethod::Agent(AuthMethodAgent::new(
+                            "fake-browser",
+                            "Fake browser",
+                        )));
+                    }
                     responder.respond(
                         InitializeResponse::new(protocol)
+                            .auth_methods(ways)
                             .agent_capabilities(capabilities)
                             .meta(meta.as_object().cloned())
                             .agent_info(Implementation::new(
@@ -841,6 +897,25 @@ async fn main() -> Result<(), Error> {
                                 env!("CARGO_PKG_VERSION"),
                             )),
                     )
+                }
+            },
+            agent_client_protocol::on_receive_request!(),
+        )
+        .on_receive_request(
+            {
+                let fake = fake.clone();
+                async move |request: AuthenticateRequest,
+                            responder: Responder<AuthenticateResponse>,
+                            _cx: ConnectionTo<Client>| {
+                    match account() {
+                        Some(signed_in) if &*request.method_id.0 == "fake-browser" => {
+                            std::fs::write(signed_in, "yes")
+                                .map_err(|_| Error::internal_error())?;
+                            fake.signed_in.store(true, Ordering::Relaxed);
+                            responder.respond(AuthenticateResponse::new())
+                        }
+                        _ => responder.respond_with_error(Error::invalid_params()),
+                    }
                 }
             },
             agent_client_protocol::on_receive_request!(),
