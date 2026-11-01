@@ -895,7 +895,9 @@ test("the composer walks earlier messages, keeps a draft and edits what waits", 
     )
   await composer.fill("half written")
   await expect.poll(drafts).toEqual(["half written"])
-  await composer.fill("")
+  // fill("") can leave the text, the editor's selection behind the page's.
+  await composer.press("ControlOrMeta+a")
+  await composer.press("Backspace")
   await expect.poll(drafts).toEqual([])
 
   // ↑ opens the last message that waits, to change it, before the
@@ -1149,6 +1151,43 @@ test("a line's start makes it a heading, a list, a task, a quote or a rule", asy
   await composer.press("Backspace")
   await expect(items).toHaveCount(0)
   await expect(composer.locator("p")).toHaveText("gone")
+})
+
+test("``` and Enter starts code: coloured, its language picked, left by its fence", async () => {
+  window = await startWindow()
+  const { page } = window
+  const { thread, composer } = await firstThread(page)
+  const block = composer.locator("[data-code]")
+
+  await composer.pressSequentially("```ts")
+  await composer.press("Enter")
+  await expect(block).toHaveCount(1)
+  const language = composer.getByRole("combobox", { name: "Language" })
+  await expect(language).toHaveValue("typescript")
+  // In code, Enter starts a line as far in as the one before; Shift+Tab
+  // moves it out.
+  await composer.pressSequentially("if (a) {")
+  await composer.press("Enter")
+  await composer.pressSequentially("  go()")
+  await composer.press("Enter")
+  await composer.pressSequentially("}")
+  await composer.press("Shift+Tab")
+  // Shiki colours it.
+  await expect(block.locator("span[style*='--sdm-c']").first()).toBeVisible()
+  // Enter after the closing fence leaves the code.
+  await composer.press("Enter")
+  await composer.pressSequentially("```")
+  await composer.press("Enter")
+  await composer.pressSequentially("done")
+  await language.selectOption("python")
+  await page.screenshot({ path: "test-results/18h-code.png" })
+
+  await composer.getByText("done").click()
+  await composer.press("End")
+  await composer.press("Enter")
+  const written = "```python\nif (a) {\n  go()\n}\n```\ndone"
+  const said = thread.locator("[data-slot=bubble]").filter({ hasText: "go()" })
+  await expect(said).toHaveJSProperty("textContent", written)
 })
 
 test("what the Agent does by itself shows in a turn of its own", async () => {

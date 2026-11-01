@@ -63,8 +63,13 @@ rest are our defaults and stay his to change.
      its marker, which it keeps, as it keeps its marker and its number.
      Shift+Enter goes on with a list or a quote, an empty item ends it,
      Tab and Shift+Tab move an item in and out, and Backspace at a line's
-     start makes it text. Lines inside a ``` fence stay text until code
-     blocks come.
+     start makes it text.
+   - A fence's lines are one block of code, as they are, to the line that
+     closes it or the end. In code Enter starts a line, as far in as the
+     one before, as in T3 Code; Enter after a closing fence, or after two
+     empty lines at its end, leaves it, and Backspace at its start makes
+     its lines text. The block keeps its fence, its language as written
+     and its closing line, or that it had none.
    - Pasted text is read as a prompt is, even text copied from the box,
      so how its lines and styles were written is kept.
 

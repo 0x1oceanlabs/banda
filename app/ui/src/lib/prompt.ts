@@ -47,24 +47,43 @@ export function chip(kind: ChipKind, value: string): JSONContent {
 /** The document that shows `text`: a paragraph for each line, styled as
  * its markdown says, what it points at as chips. */
 export function docOf(text: string): JSONContent {
-  // Inside a fence, lines are code: text as it is, until the fence closes.
-  let fence: string | undefined
-  return {
-    type: "doc",
-    content: text.split("\n").map((line) => {
-      if (fence === undefined) {
-        fence = FENCE.exec(line)?.[1]
-        if (fence === undefined) return blockOf(line)
-      } else if (closes(line, fence)) fence = undefined
-      return textblock("paragraph", {}, line, false)
-    }),
+  const lines = text.split("\n")
+  const content: JSONContent[] = []
+  for (let at = 0; at < lines.length; at += 1) {
+    const open = openingFence(lines[at])
+    if (!open) {
+      content.push(blockOf(lines[at]))
+      continue
+    }
+    // A fence's lines are code, as they are, to the line that closes it
+    // or the end of the text.
+    let end = at + 1
+    while (end < lines.length && !closes(lines[end], open.fence)) end += 1
+    const code = lines.slice(at + 1, end).join("\n")
+    content.push({
+      type: "codeBlock",
+      attrs: { ...open, close: lines[end] ?? null, hollow: end === at + 1 },
+      ...(code && { content: [{ type: "text", text: code }] }),
+    })
+    at = end
   }
+  return { type: "doc", content }
 }
 
-const FENCE = /^(`{3,}|~{3,})/
+/** The fence a line opens, and the language written after it; a fence of
+ * backticks cannot have one in its language. */
+export function openingFence(
+  line: string
+): { fence: string; language: string } | undefined {
+  const found = /^(`{3,}|~{3,})(.*)$/.exec(line)
+  if (!found || (found[1][0] === "`" && found[2].includes("`")))
+    return undefined
+  return { fence: found[1], language: found[2] }
+}
+
 const CLOSE = /^(`{3,}|~{3,})[ \t]*$/
 /** Whether `line` closes `fence`: as long a run of the same, or longer. */
-function closes(line: string, fence: string) {
+export function closes(line: string, fence: string) {
   const run = CLOSE.exec(line)?.[1]
   return run !== undefined && run[0] === fence[0] && run.length >= fence.length
 }
@@ -113,10 +132,9 @@ function blockOf(line: string): JSONContent {
 function textblock(
   type: string,
   attrs: Record<string, unknown>,
-  text: string,
-  styled = true
+  text: string
 ): JSONContent {
-  const content = styled ? inline(text) : text ? [{ type: "text", text }] : []
+  const content = inline(text)
   return {
     type,
     ...(Object.keys(attrs).length > 0 && { attrs }),
@@ -304,10 +322,13 @@ function sourceOf(leaf: Node): string {
 /** The text `content` shows: its blocks, a line each. */
 export function textOf(content: Fragment): string {
   const lines: string[] = []
-  content.forEach((block) => {
+  content.forEach((block, _, at) => {
     // A block an edit left alone is the same node, its line known.
     let line = LINES.get(block)
     if (line === undefined) LINES.set(block, (line = lineOf(block)))
+    // Code that ran to the end closes before what now comes after it.
+    const open = block.type.name === "codeBlock" && block.attrs.close === null
+    if (open && at < content.childCount - 1) line += `\n${fenceOf(block)}`
     lines.push(line)
   })
   return lines.join("\n")
@@ -318,13 +339,21 @@ const LINES = new WeakMap<Node, string>()
 /** A block's line: how it starts, then its text. */
 function lineOf(block: Node): string {
   const { attrs } = block
+  if (block.type.name === "rule") return String(attrs.source)
+  if (block.type.name === "codeBlock") {
+    const code = block.textContent
+    const fence = fenceOf(block)
+    // A longer fence opens, so it closes too.
+    const closed = fence === attrs.fence ? attrs.close : fence
+    const close = attrs.close === null ? "" : `\n${closed}`
+    const lines = code === "" && attrs.hollow ? "" : `\n${code}`
+    return fence + attrs.language + lines + close
+  }
   const text = textIn(block)
   // What starts a line with text in it needs a space before the text, or
   // it would be read back as text.
   const gap = (space: string) => space || (text ? " " : "")
   switch (block.type.name) {
-    case "rule":
-      return String(attrs.source)
     case "heading":
       return "#".repeat(Number(attrs.level)) + String(attrs.space) + text
     case "quote":
@@ -338,6 +367,17 @@ function lineOf(block: Node): string {
     default:
       return text
   }
+}
+
+/** The fence a code block is written with: its own, or a longer one if
+ * a line of its code would close that. */
+function fenceOf(block: Node): string {
+  const fence: string = block.attrs.fence
+  let longest = fence.length - 1
+  for (const line of block.textContent.split("\n"))
+    if (closes(line, fence))
+      longest = Math.max(longest, /^[`~]+/.exec(line)![0].length)
+  return fence[0].repeat(longest + 1)
 }
 
 /** A textblock's text and its chips as what they write, each style

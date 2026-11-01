@@ -6,6 +6,7 @@ import { Node } from "@tiptap/pm/model"
 import { expect, test } from "vitest"
 import { PROMPT_BLOCKS } from "../components/prompt-blocks"
 import { Chip } from "../components/prompt-chip"
+import { CodeBlock } from "../components/prompt-code"
 import { PROMPT_MARKS } from "../components/prompt-marks"
 import { docOf, textOf, typingIn } from "./prompt"
 
@@ -16,6 +17,7 @@ const schema = getSchema([
   Chip,
   ...PROMPT_MARKS,
   ...PROMPT_BLOCKS,
+  CodeBlock,
 ])
 const node = (text: string) => Node.fromJSON(schema, docOf(text))
 const back = (text: string) => textOf(node(text).content)
@@ -115,6 +117,9 @@ test("any text comes back as it was", () => {
     "[ ] ",
     "[x]",
     "\n```",
+    "\n~~~",
+    "````",
+    "ts",
     "\t",
   ]
   let seed = 7
@@ -179,17 +184,39 @@ test("how a line starts says what it is, written back as it was", () => {
   ])
 })
 
-test("lines in a fence are text as they are", () => {
-  const text = "```sh\n# a comment\n- not a list *or* @a/b.ts\n```\n# after"
+test("a fence's lines are code, as they are, to the line closing it", () => {
+  const text =
+    "```sh\n# a comment\n- not a list *or* @a/b.ts\n```\n# after\n~~~~\n~~~\n~~~~ \n```\n```"
   expect(back(text)).toBe(text)
   expect(blocks(text)).toEqual([
-    "paragraph: ```sh",
-    "paragraph: # a comment",
-    "paragraph: - not a list *or* @a/b.ts",
-    "paragraph: ```",
+    'codeBlock fence="```" language="sh" close="```" hollow=false: # a comment\n- not a list *or* @a/b.ts',
     'heading level=1 space=" ": after',
+    'codeBlock fence="~~~~" language="" close="~~~~ " hollow=false: ~~~',
+    'codeBlock fence="```" language="" close="```" hollow=true: ',
   ])
-  expect(styles(text).filter((piece) => /^[a-z+]+:/.test(piece))).toEqual([])
+  // A fence left open runs to the end; one with ` after its backticks is
+  // not a fence.
+  for (const open of ["```ts\nconst a = 1", "```", "```\n", "``` a`b"])
+    expect(back(open)).toBe(open)
+  expect(blocks("``` a`b")).toEqual(["paragraph: ``` a`b"])
+})
+
+test("code is written so that it reads back as it is", () => {
+  const code = (text: string, close: string | null) =>
+    schema.nodes.codeBlock.create(
+      { fence: "```", language: "md", close },
+      text ? schema.text(text) : null
+    )
+  const line = schema.nodes.paragraph.create(null, schema.text("after"))
+  const doc = (...content: Node[]) => schema.node("doc", null, content)
+  // Code holding a closing fence is fenced longer.
+  expect(textOf(doc(code("```\nx", "```")).content)).toBe(
+    "````md\n```\nx\n````"
+  )
+  // Code left open closes before what comes after it.
+  expect(textOf(doc(code("x", null), line).content)).toBe(
+    "```md\nx\n```\nafter"
+  )
 })
 
 test("an item given text is written with a space after its marker", () => {
