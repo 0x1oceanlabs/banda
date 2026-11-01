@@ -75,10 +75,12 @@ ADR 0005 promised a theme file (decision 11) and "one look, and honest motion" (
 
 9. **Motion, as niri says it.**
    - `[motion]`: `off`, `slowdown` (2 is twice as slow).
-   - Each event has its own table: `workspace`, `strip` (scrolling to a column), `open`, `close`, `resize`, `overview`, `focus`.
-   - Each is a spring (`damping-ratio`, `stiffness`, `epsilon`) or an easing (`duration-ms`, `curve`). Curves are named: Omarchy's `easeOutQuint`, `easeInOutCubic`, `linear` and a `cubic-bezier(…)`.
+   - Each event that moves something has its own table. Two move today: `workspace` (the stack slides to another workspace) and `strip` (the Strip scrolls to a column). `open`, `close`, `resize`, `overview` and `focus` join when the window moves them; until then they are not keys, so no setting does nothing.
+   - Each is a spring (`damping-ratio`, `stiffness`, `epsilon`) or an easing (`duration-ms`, `curve`), not both. A layer that names one replaces the one under it; one of the same kind fills in what it leaves out from it. Curves are named as Hyprland and Omarchy write them (`linear`, `easeOutQuad`, `easeOutCubic`, `easeOutQuint`, `easeOutExpo`, `easeInOutCubic`, `easeInOutQuint`) or `cubic-bezier(x1, y1, x2, y2)`.
+   - Banda's own are niri's springs: `damping-ratio = 1`, `stiffness = 800`, `epsilon = 0.0001`, which come to rest without overshooting in about 0.4 s.
+   - `bandaso look` resolves it: `off` makes an event `{ kind = "off" }`, and `slowdown` is applied, an easing's duration times it, a spring's stiffness over its square, which is the same spring with time stretched. The window gets numbers, not settings.
    - The system's reduced motion turns it off, as `off` does.
-   - Springs run in the window, so a move that is interrupted carries its speed on, as niri's do.
+   - Springs run in the window, frame by frame, so a move that is sent elsewhere halfway carries its speed on, as niri's do. A swipe stops the Strip's spring where it is: the fingers take over.
 
 10. **The look is a program, `bandaso look`, not a module of the engine** (_decided_: "do it the UNIX way").
    - **Why not a module.** Every module call and stream of the engine belongs to a Space, and the engine may run on another machine (ADR 0005, decision 6). The look is the window's machine's: its Omarchy, its Hyprland, its `~/.config/banda/`. So the window resolves it where it runs, and the engine stays out.
@@ -169,11 +171,7 @@ spring = { damping-ratio = 1.0, stiffness = 800, epsilon = 0.0001 }
 [motion.strip]
 spring = { damping-ratio = 1.0, stiffness = 800, epsilon = 0.0001 }
 
-[motion.open]
-easing = { duration-ms = 150, curve = "easeOutQuint" }
-
-[motion.close]
-easing = { duration-ms = 120, curve = "linear" }
+# Or an easing: easing = { duration-ms = 250, curve = "easeOutCubic" }
 ```
 
 **Consequences.**
