@@ -467,6 +467,7 @@ fn vars(all: &Settings) -> BTreeMap<String, String> {
     put("gap-inner", all.gaps.inner);
     put("gap-outer", all.gaps.outer);
     put("bar-height", all.bar.height);
+    put("focus-ring", all.focus.ring);
     vars
 }
 

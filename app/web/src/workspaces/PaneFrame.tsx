@@ -56,7 +56,7 @@ export function PaneFrame({
       data-focused={focused}
       onPointerDownCapture={take}
       onFocusCapture={take}
-      className="group/tile flex min-h-0 flex-1 flex-col overflow-hidden rounded-tile border-(length:--tile-border) border-focus-inactive bg-background outline-none data-[focused=true]:border-focus"
+      className="group/tile flex min-h-0 flex-1 flex-col overflow-hidden rounded-tile border-(length:--tile-border) border-focus-inactive bg-background outline-none data-[focused=true]:border-focus data-[focused=true]:outline-[length:calc(var(--tile-border)+var(--focus-ring))] data-[focused=true]:outline-offset-[calc(-1*var(--tile-border))] data-[focused=true]:outline-focus data-[focused=true]:outline-solid"
     >
       <header className="flex h-9 shrink-0 items-center gap-2 border-b px-2.5 text-sm">
         {Icon && <Icon className="size-4 shrink-0 text-muted-foreground" />}

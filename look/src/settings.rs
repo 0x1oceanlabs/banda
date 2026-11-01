@@ -69,6 +69,10 @@ pub struct Focus {
     pub border: Option<Spanned<String>>,
     /// Every other tile's.
     pub inactive_border: Option<Spanned<String>>,
+    /// niri's focus ring: how far the focused tile's frame grows out
+    /// into the gap, so nothing moves. It is the border's own colour, one
+    /// frame and not two. 0 draws none.
+    pub ring: Option<f64>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
@@ -168,6 +172,7 @@ impl Settings {
             focus: Focus {
                 border: self.focus.border.or(under.focus.border),
                 inactive_border: self.focus.inactive_border.or(under.focus.inactive_border),
+                ring: self.focus.ring.or(under.focus.ring),
             },
             bar: Bar {
                 height: self.bar.height.or(under.bar.height),
@@ -195,6 +200,7 @@ impl Settings {
             focus: Focus {
                 border: Some(Spanned::new(0..0, "accent".to_owned())),
                 inactive_border: Some(Spanned::new(0..0, "border".to_owned())),
+                ring: Some(0.0),
             },
             bar: Bar { height: Some(36.0) },
         }
@@ -208,6 +214,7 @@ impl Settings {
             ("gaps.outer", self.gaps.outer),
             ("tile.border", self.tile.border),
             ("bar.height", self.bar.height),
+            ("focus.ring", self.focus.ring),
         ]
         .into_iter()
         .filter(|(_, v)| v.is_some_and(|v| !(v.is_finite() && v >= 0.0)))
