@@ -81,8 +81,8 @@ The evidence is in two notes: [tiling managers](../research/2026-11-01-tiling-ma
 
 9. **The bar, as in Omarchy, and minimal** (_decided_).
    - One thin line along the window's top.
-   - Left: the workspaces' numbers, the ones that hold Panes and the current one, each marked while a Thread there waits for the Person.
-   - Centre: the sidebar's button, an icon with a dot while any Thread waits for the Person.
+   - On the left, above the sidebar: the sidebar's button, an icon with a dot while any Thread waits for the Person.
+   - Beside it: the workspaces' numbers, the ones that hold Panes and the current one, each marked while a Thread there waits for the Person.
    - Nothing else for now. More items come as icons from modules' manifests, once real use shows they are needed.
 
 10. **Left Alt is the mod, and the binds come in families, as in Omarchy** (_decided_):
