@@ -49,7 +49,9 @@ _Avoid_: console, shell (that is one program a terminal runs).
 One session with a Harness in a Space: starting one is all it takes. Its
 Harness is chosen when it starts and stays with it. It shows items: messages,
 the Agent's thoughts, tool calls, its plans, notices and Questions.
-_Avoid_: chat, session (that is the Harness's own, evidence inside a Thread).
+A Harness keeps a session of its own for it, which a Thread holds as
+evidence.
+_Avoid_: chat.
 
 **Plan**:
 The steps an Agent means to take in a turn, each to do, doing now or done.
@@ -93,7 +95,7 @@ _Avoid_: prompt, approval request.
 ## Shape
 
 **Engine**:
-The one process on a machine that owns Spaces, Agents and every module's
+The one process on a machine that owns Spaces, Threads and every module's
 data. Windows and the CLI are clients of its API.
 _Avoid_: server (that is a machine), backend.
 

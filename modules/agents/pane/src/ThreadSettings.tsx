@@ -112,8 +112,38 @@ function Choices({
   disabled: boolean
   onChange: (settings: Settings) => void
 }) {
-  const value = chosen(settings, option)
-  const now = option.choices.find((choice) => choice.value === value)
+  return (
+    <Pick
+      what={option.name}
+      value={String(chosen(settings, option))}
+      choices={option.choices.map((choice) => ({
+        id: choice.value,
+        name: choice.name,
+        about: choice.description,
+      }))}
+      disabled={disabled}
+      onChange={(next) => onChange(choose(settings, option.id, next))}
+    />
+  )
+}
+
+/** One of a few choices, as a menu that opens above the message box. */
+export function Pick({
+  what,
+  icon,
+  value,
+  choices,
+  disabled,
+  onChange,
+}: {
+  what: string
+  icon?: React.ReactNode
+  value: string
+  choices: { id: string; name: string; about?: string }[]
+  disabled: boolean
+  onChange: (id: string) => void
+}) {
+  const now = choices.find((choice) => choice.id === value)
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -123,33 +153,29 @@ function Choices({
             type="button"
             variant="ghost"
             size="xs"
-            aria-label={`${option.name}: ${now?.name ?? String(value)}`}
+            aria-label={`${what}: ${now?.name ?? value}`}
           />
         }
       >
-        {now?.name ?? String(value)}
+        {icon}
+        {now?.name ?? value}
         <ChevronDownIcon data-icon="inline-end" />
       </DropdownMenuTrigger>
       <DropdownMenuContent side="top" className="w-auto min-w-48">
         <DropdownMenuGroup>
-          <DropdownMenuLabel>{option.name}</DropdownMenuLabel>
-          <DropdownMenuRadioGroup
-            value={value}
-            onValueChange={(next: string) =>
-              onChange(choose(settings, option.id, next))
-            }
-          >
-            {option.choices.map((choice) => (
+          <DropdownMenuLabel>{what}</DropdownMenuLabel>
+          <DropdownMenuRadioGroup value={value} onValueChange={onChange}>
+            {choices.map((choice) => (
               <DropdownMenuRadioItem
-                key={choice.value}
-                value={choice.value}
+                key={choice.id}
+                value={choice.id}
                 closeOnClick
               >
                 <span className="flex flex-col">
                   <span>{choice.name}</span>
-                  {choice.description && (
+                  {choice.about && (
                     <span className="text-xs text-muted-foreground">
-                      {choice.description}
+                      {choice.about}
                     </span>
                   )}
                 </span>

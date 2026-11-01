@@ -173,10 +173,13 @@ If Chat is removed, Agents still works through its own Thread.
   starts it: `agents.send` with a `harness` and no `thread`. Its Harness is
   its own from then on, and each Thread gets an Agent ID of its own. A new
   Thread starts with full access and the options its Harness last offered,
-  such as its model (`agents.defaults`).
+  such as its model (`agents.defaults`). Defaults a Person sets per Harness
+  entry (ADR 0006, decision 3) are not built yet.
   - Spaces from before ADR 0006 kept their Agents in
     `.bandaso/agents/<name>.toml`. Opening the module reads those files
     once to learn each older Thread's Harness, and leaves them as they are.
+    Older Threads keep the Agent ID they had, so one old Agent's Threads
+    still share it.
 - **The Harness list is a text file** of the machine. It says how to start
   each Harness. Without one, the engine knows Claude Code and Codex through
   their ACP adapters on npm, at exact versions. Reading the ACP Registry
@@ -323,7 +326,7 @@ If Chat is removed, Agents still works through its own Thread.
   as it starts or ends. A session that has not said them yet leaves the
   Thread's. A list said between turns reaches the Thread at once, like
   what the Agent has used, and a new Thread's message box offers what the
-  Agent's Threads last learned. The window suggests them as a
+  Space's Threads on its Harness last learned. The window suggests them as a
   message starts with `/`, and adds `/plan` and `/default`, as T3 Code
   does: they switch plan mode and send nothing.
 - **A message can carry images**, as in T3 Code: PNG, JPEG, GIF or
@@ -485,8 +488,8 @@ modules/*/pane   each module's Panes
   key, Ctrl+W among them.
 - **The sidebar** lists every Space, each with the Pane the agents module
   offers for it (`agents.threads`: its Threads, the one changed last
-  first), and a new Thread in it. A new Thread opens the Space's Agents
-  until a Thread needs no Agent (ADR 0006).
+  first), and a new Thread in it. A new Thread opens as a Thread Pane
+  with no Thread yet; its first message starts one (ADR 0006).
 - **Only `window.bandaso` ties the page to the desktop.** It names no
   Electron API, so a browser can host it later; for now the engine lets in
   only `app://bandaso` and pages on localhost.
@@ -497,8 +500,8 @@ modules/*/pane   each module's Panes
 bandaso/
   kernel/             Rust: Space, event log, access, registry, API
   modules/
-    agents/engine/    Rust: Agents, Threads, turns, Questions, the ACP adapter
-    agents/pane/      React: the Agents list, the Thread, a Space's Threads for the sidebar
+    agents/engine/    Rust: Threads, turns, Questions, the ACP adapter
+    agents/pane/      React: the Thread, the Harnesses, a Space's Threads for the sidebar
     terminal/engine/  Rust: Terminals, their PTYs and what they printed
     terminal/pane/    React: a terminal, drawn by Ghostty
     browser/pane/     React: the browser Pane (next)

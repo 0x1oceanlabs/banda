@@ -21,6 +21,9 @@ test("a Person makes a Space, starts a Thread in it, and works with it", async (
   await expect(
     thread.getByRole("button", { name: "Harness: Fake AI" })
   ).toBeVisible()
+  await expect(
+    thread.getByRole("button", { name: "Space: Work" })
+  ).toBeVisible()
   await page.screenshot({ path: "test-results/1-first-space.png" })
   await composer.fill("hello")
   await composer.press("Enter")
@@ -28,6 +31,7 @@ test("a Person makes a Space, starts a Thread in it, and works with it", async (
   await expect(page.getByRole("region", { name: "hello" })).toBeVisible()
   // Once started, the Thread's Harness is its own.
   await expect(thread.getByRole("button", { name: /^Harness:/ })).toBeHidden()
+  await expect(thread.getByRole("button", { name: /^Space:/ })).toBeHidden()
   const sidebar = page.getByRole("complementary", { name: "Sidebar" })
   await expect(sidebar.getByRole("button", { name: /hello/ })).toBeVisible()
 
@@ -46,7 +50,7 @@ test("a Person makes a Space, starts a Thread in it, and works with it", async (
   await sidebar.getByRole("button", { name: /hello/ }).click()
   await expect(thread.getByText("The check passed.")).toBeVisible()
 
-  // A new Thread starts on the same Harness, beside the first.
+  // Alt+Enter opens another new Thread beside the first.
   await page.keyboard.press("Alt+Enter")
   const second = page.getByRole("region", { name: "New Thread" })
   await expect(second).toBeVisible()
