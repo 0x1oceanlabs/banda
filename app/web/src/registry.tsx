@@ -1,8 +1,8 @@
 /**
- * The kinds of Pane this window knows: each module's, and the Desk's own
- * launcher. A tile shows a kind only while the engine runs its module.
+ * The kinds of Pane this window knows: each module's, and the window's own
+ * launcher. A Pane shows only while the engine runs its module.
  */
-import { panes as agentPanes } from "@bandaso/agents-pane"
+import { panes as agentPanes, threadsPane } from "@bandaso/agents-pane"
 import { panes as terminalPanes } from "@bandaso/terminal-pane"
 import type { JsonValue } from "@bandaso/contract"
 import { Button } from "@bandaso/ui/components/button"
@@ -15,23 +15,27 @@ import {
   paneOf,
 } from "@bandaso/ui/pane"
 import { LayoutGridIcon } from "lucide-react"
+import type { Width } from "./workspaces/model"
 
 type Args = { [key: string]: JsonValue }
 type AnyKind = PaneKind<Args>
 
 /** Lists the Panes a Person can open, and becomes the one picked. */
 export const launcher: AnyKind = definePane<Args>({
-  kind: "desk.launcher",
+  kind: "window.launcher",
   title: () => "New Pane",
   icon: LayoutGridIcon,
   Pane: Launcher,
 })
 
 /**
- * The Panes the modules offer. Each kind checks its own args; the Desk
+ * The Panes the modules offer. Each kind checks its own args; the window
  * hands it only the args it kept for it.
  */
 const offered = [...agentPanes, ...terminalPanes] as unknown as AnyKind[]
+
+/** What the sidebar shows for each Space: its Threads (ADR 0005, decision 8). */
+export const sidebar = threadsPane as unknown as AnyKind
 
 export const kinds: AnyKind[] = [launcher, ...offered]
 
@@ -42,6 +46,11 @@ export function kindOf(kind: string): AnyKind | undefined {
 /** Whether the engine runs what a kind of Pane needs. */
 export function runs(kind: AnyKind, engineModules: readonly string[]): boolean {
   return kind.module === undefined || engineModules.includes(kind.module)
+}
+
+/** How wide a new column for a Pane opens: a list a third, the rest half. */
+export function widthOf(pane: PaneState): Width {
+  return kindOf(pane.kind)?.narrow ? "1/3" : "1/2"
 }
 
 /** The Panes a Person can start, in the order the menu lists them. */

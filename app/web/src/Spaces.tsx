@@ -1,5 +1,5 @@
 import { useState } from "react"
-import type { Engine, SpaceSummary, Status } from "@bandaso/contract"
+import type { Engine, SpaceSummary } from "@bandaso/contract"
 import { Button } from "@bandaso/ui/components/button"
 import {
   Card,
@@ -16,17 +16,6 @@ import {
   DialogTitle,
 } from "@bandaso/ui/components/dialog"
 import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@bandaso/ui/components/dropdown-menu"
-import {
   Field,
   FieldError,
   FieldGroup,
@@ -35,7 +24,6 @@ import {
 import { Input } from "@bandaso/ui/components/input"
 import { Spinner } from "@bandaso/ui/components/spinner"
 import { useAct } from "@bandaso/ui/hooks/use-act"
-import { ChevronsUpDownIcon, FolderIcon, PlusIcon } from "lucide-react"
 
 /** Names a new Space and creates it; `onCreated` hears the Space. */
 function SpaceForm({
@@ -110,106 +98,35 @@ export function FirstSpace({
   )
 }
 
-/** The window's top line: which Space, and how the engine is. */
-export function TopBar({
+/** A dialog that names a new Space and creates it. */
+export function NewSpace({
   engine,
-  status,
-  spaces,
-  current,
-  onPick,
+  open,
+  onOpenChange,
   onCreated,
 }: {
   engine: Engine
-  status: Status
-  spaces: SpaceSummary[]
-  current: SpaceSummary | undefined
-  onPick: (space: SpaceSummary) => void
+  open: boolean
+  onOpenChange: (open: boolean) => void
   onCreated: (space: SpaceSummary) => void
 }) {
-  const [creating, setCreating] = useState(false)
   return (
-    <header className="flex h-10 shrink-0 items-center gap-2 border-b px-2">
-      {current && (
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            render={<Button variant="ghost" size="sm" aria-label="Space" />}
-          >
-            <FolderIcon />
-            <span className="max-w-48 truncate">{current.name}</span>
-            <ChevronsUpDownIcon className="text-muted-foreground" />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="start" className="min-w-64">
-            <DropdownMenuGroup>
-              <DropdownMenuLabel>Spaces</DropdownMenuLabel>
-              <DropdownMenuRadioGroup
-                value={current.id}
-                onValueChange={(id) => {
-                  const space = spaces.find((s) => s.id === id)
-                  if (space) onPick(space)
-                }}
-              >
-                {spaces.map((space) => (
-                  <DropdownMenuRadioItem key={space.id} value={space.id}>
-                    <div className="flex min-w-0 flex-col">
-                      <span className="truncate">{space.name}</span>
-                      <span className="truncate text-xs text-muted-foreground">
-                        {space.folder}
-                      </span>
-                    </div>
-                  </DropdownMenuRadioItem>
-                ))}
-              </DropdownMenuRadioGroup>
-            </DropdownMenuGroup>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => setCreating(true)}>
-              <PlusIcon />
-              New Space…
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-      )}
-      <Connection status={status} />
-      <Dialog open={creating} onOpenChange={setCreating}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>New Space</DialogTitle>
-            <DialogDescription>
-              A new folder for you and your Agents.
-            </DialogDescription>
-          </DialogHeader>
-          <SpaceForm
-            engine={engine}
-            onCreated={(space) => {
-              setCreating(false)
-              onCreated(space)
-            }}
-          />
-        </DialogContent>
-      </Dialog>
-    </header>
-  )
-}
-
-/** Says nothing while the engine answers; otherwise, what is going on. */
-function Connection({ status }: { status: Status }) {
-  if (status.state === "open") return null
-  const words =
-    status.state === "connecting"
-      ? "Connecting…"
-      : status.state === "lost"
-        ? "Reconnecting…"
-        : status.refusal.message
-  return (
-    <div
-      role="status"
-      className="ml-auto flex items-center gap-2 px-2 text-xs text-muted-foreground"
-    >
-      {status.state === "refused" ? (
-        <span className="size-2 rounded-full bg-destructive" />
-      ) : (
-        <Spinner className="size-3" />
-      )}
-      {words}
-    </div>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>New Space</DialogTitle>
+          <DialogDescription>
+            A new folder for you and your Agents.
+          </DialogDescription>
+        </DialogHeader>
+        <SpaceForm
+          engine={engine}
+          onCreated={(space) => {
+            onOpenChange(false)
+            onCreated(space)
+          }}
+        />
+      </DialogContent>
+    </Dialog>
   )
 }

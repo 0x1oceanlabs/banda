@@ -36,6 +36,8 @@ test("a Person makes a Space and an Agent, and works with it", async () => {
   await composer.press("Enter")
   await expect(thread.getByText("You said: hello")).toBeVisible()
   await expect(agents.getByRole("button", { name: /hello/ })).toBeVisible()
+  const sidebar = page.getByRole("complementary", { name: "Sidebar" })
+  await expect(sidebar.getByRole("button", { name: /hello/ })).toBeVisible()
 
   await composer.fill("please ask first")
   await composer.press("Enter")
@@ -55,7 +57,7 @@ test("a Person makes a Space and an Agent, and works with it", async () => {
   ).toBeVisible()
 })
 
-test("the desk splits, moves the focus by keys, and comes back as it was", async () => {
+test("a workspace opens Panes side by side, moves the focus by keys, and comes back as it was", async () => {
   window = await startWindow()
   const { page } = window
   await page.getByLabel("Name").fill("Work")
@@ -63,7 +65,7 @@ test("the desk splits, moves the focus by keys, and comes back as it was", async
   const agents = page.getByRole("region", { name: "Agents" })
   await expect(agents.getByText("No Agents yet")).toBeVisible()
 
-  await page.keyboard.press("Control+Backslash")
+  await page.keyboard.press("Alt+KeyN")
   const launcher = page.getByRole("region", { name: "New Pane" })
   await expect(launcher).toBeVisible()
   await expect(launcher).toHaveAttribute("data-focused", "true")
@@ -74,21 +76,56 @@ test("the desk splits, moves the focus by keys, and comes back as it was", async
 
   await page.reload()
   await expect(page.getByRole("region", { name: "New Pane" })).toBeVisible()
-  await page.keyboard.press("Control+w")
+  await page.keyboard.press("Alt+KeyW")
   await expect(page.getByRole("region", { name: "New Pane" })).toBeHidden()
   await expect(page.getByRole("region", { name: "Agents" })).toBeVisible()
 })
 
-test("each split adds a tile, even beside a New Pane", async () => {
+test("a Pane moves to another workspace, and the overview shows them all", async () => {
   window = await startWindow()
   const { page } = window
   await page.getByLabel("Name").fill("Work")
   await page.getByRole("button", { name: "Create Space" }).click()
-  await expect(page.getByRole("region", { name: "Agents" })).toBeVisible()
+  const agents = page.getByRole("region", { name: "Agents" })
+  await expect(agents).toBeVisible()
+  const numbers = page.getByRole("navigation", { name: "Workspaces" })
+  await expect(numbers.getByRole("button")).toHaveText(["1"])
 
-  await page.keyboard.press("Control+Backslash")
-  await page.keyboard.press("Control+Shift+Backslash")
-  await expect(page.getByRole("region", { name: "New Pane" })).toHaveCount(2)
+  // The Pane goes to the workspace below, and the window follows it.
+  await page.keyboard.press("Alt+KeyN")
+  await page.keyboard.press("Alt+Shift+Digit2")
+  const launcher = page.getByRole("region", { name: "New Pane" })
+  await expect(launcher).toHaveAttribute("data-focused", "true")
+  await expect(agents).toBeHidden()
+  await expect(numbers.getByRole("button")).toHaveText(["1", "2"])
+  await expect(numbers.getByRole("button", { name: "2" })).toHaveAttribute(
+    "aria-current",
+    "true"
+  )
+  await page.keyboard.press("Alt+PageUp")
+  await expect(agents).toBeVisible()
+  await expect(launcher).toBeHidden()
+
+  const overview = page.getByRole("dialog", { name: "Overview" })
+  await page.keyboard.press("Alt+KeyO")
+  await expect(
+    overview.getByRole("button", { name: "Agents in Work" })
+  ).toBeVisible()
+  await page.screenshot({ path: "test-results/3-overview.png" })
+  await overview.getByRole("button", { name: "New Pane in Work" }).click()
+  await expect(overview).toBeHidden()
+  await expect(launcher).toHaveAttribute("data-focused", "true")
+
+  // A click on the current number opens it too; Esc goes back.
+  await numbers.getByRole("button", { name: "2" }).click()
+  await expect(overview).toBeVisible()
+  await page.keyboard.press("Escape")
+  await expect(overview).toBeHidden()
+
+  const sidebar = page.getByRole("complementary", { name: "Sidebar" })
+  await expect(sidebar).toBeVisible()
+  await page.keyboard.press("Alt+KeyA")
+  await expect(sidebar).toBeHidden()
 })
 
 test("the engine dies mid-work, comes back, and the Thread goes on", async () => {
@@ -235,7 +272,7 @@ test("a Person works in a terminal in the Space, and closing it stops the shell"
   await page.getByLabel("Name").fill("Work")
   await page.getByRole("button", { name: "Create Space" }).click()
   await expect(page.getByRole("region", { name: "Agents" })).toBeVisible()
-  await page.keyboard.press("Control+Backslash")
+  await page.keyboard.press("Alt+KeyN")
   await page
     .getByRole("region", { name: "New Pane" })
     .getByRole("button", { name: "Terminal" })
@@ -251,21 +288,21 @@ test("a Person works in a terminal in the Space, and closing it stops the shell"
   await expect.poll(() => read(join(space, "typed.txt"))).toBe("é 😀")
   await page.screenshot({ path: "test-results/7-terminal.png" })
 
-  // A split draws it again: the same shell goes on.
-  await page.keyboard.press("Control+Shift+Backslash")
+  // Moving it to another workspace draws it again: the same shell goes on.
+  await page.keyboard.press("Alt+Shift+Digit2")
   await expect(screen).toHaveAttribute("data-state", "running")
   await screen.click()
   await page.keyboard.type("echo again >> typed.txt")
   await page.keyboard.press("Enter")
   await expect.poll(() => read(join(space, "typed.txt"))).toBe("é 😀again\n")
 
-  // Ctrl+W is the shell's: it deletes a word. Ctrl+Shift+W closes the tile.
+  // Ctrl+W is the shell's: it deletes a word. Alt+W closes the Pane.
   await page.keyboard.type("echo one > word.txt two")
   await page.keyboard.press("Control+w")
   await page.keyboard.press("Enter")
   await expect.poll(() => read(join(space, "word.txt"))).toBe("one\n")
   const shell = Number(read(join(space, "shell.pid")))
-  await page.keyboard.press("Control+Shift+w")
+  await page.keyboard.press("Alt+KeyW")
   await expect(terminal).toBeHidden()
   await expect.poll(() => running(shell)).toBe(false)
 })
@@ -293,7 +330,7 @@ test("a Person sees who is signed in to a Harness, signs in and out", async () =
   await page.getByLabel("Name").fill("Work")
   await page.getByRole("button", { name: "Create Space" }).click()
   await expect(page.getByRole("region", { name: "Agents" })).toBeVisible()
-  await page.keyboard.press("Control+Backslash")
+  await page.keyboard.press("Alt+KeyN")
   await page
     .getByRole("region", { name: "New Pane" })
     .getByRole("button", { name: "Harnesses" })

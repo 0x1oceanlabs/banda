@@ -10,7 +10,7 @@ export function useStatus(engine: Engine): Status {
 
 /**
  * The modules the engine ran when it last answered. A connection that
- * breaks for a moment keeps them, so the Panes on the Desk stay as they
+ * breaks for a moment keeps them, so the Panes on the workspaces stay as they
  * are and follow on when it comes back.
  */
 export function useModules(engine: Engine): readonly string[] {

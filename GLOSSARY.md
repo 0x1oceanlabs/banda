@@ -12,7 +12,7 @@ One body of work and its folder on disk (`~/Banda/<name>/` by default). It
 holds the files that the Person and the Agents work on, plus `.bandaso/`,
 which keeps the Space's data and event log. Copying the folder moves the
 Space.
-_Avoid_: project, workspace (that is the whole app).
+_Avoid_: project, workspace (that is a screen of Panes).
 
 **Participant**:
 Anyone who acts in a Space: a Person or an Agent. Every record names its
@@ -135,6 +135,22 @@ the Electron app.
 One tile in the window that shows a module's view, such as a Thread or a
 browser page. A Pane reaches the engine only through the API.
 
-**Desk**:
-A Space's Panes in the window, and how they split it. Each Space keeps its
-own Desk on this computer.
+**Workspace**:
+One screen of Panes. It can hold Panes of any Spaces; it only lays out the
+screen, and the Space stays the boundary. Workspaces sit one under another,
+and there is always one empty workspace at the bottom.
+_Avoid_: Desk.
+
+**Strip**:
+How a workspace lays out its Panes: columns side by side that scroll
+sideways, each holding Panes one above another.
+
+**Overview**:
+Every workspace zoomed out at once, to pick a Pane or a workspace.
+
+**Sidebar**:
+The list of every Space with its Threads, docked at the window's left edge.
+
+**Bar**:
+The line across the window's top: the sidebar's button and the numbers of
+the workspaces.
