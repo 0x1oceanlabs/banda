@@ -4,11 +4,19 @@ import Paragraph from "@tiptap/extension-paragraph"
 import Text from "@tiptap/extension-text"
 import { Node } from "@tiptap/pm/model"
 import { expect, test } from "vitest"
+import { PROMPT_BLOCKS } from "../components/prompt-blocks"
 import { Chip } from "../components/prompt-chip"
 import { PROMPT_MARKS } from "../components/prompt-marks"
 import { docOf, textOf, typingIn } from "./prompt"
 
-const schema = getSchema([Document, Paragraph, Text, Chip, ...PROMPT_MARKS])
+const schema = getSchema([
+  Document,
+  Paragraph,
+  Text,
+  Chip,
+  ...PROMPT_MARKS,
+  ...PROMPT_BLOCKS,
+])
 const node = (text: string) => Node.fromJSON(schema, docOf(text))
 const back = (text: string) => textOf(node(text).content)
 
@@ -97,6 +105,17 @@ test("any text comes back as it was", () => {
     "@a/b.ts",
     "\n",
     "x_y",
+    // What starts a line.
+    "\n- ",
+    "\n1. ",
+    "\n# ",
+    "\n> ",
+    "\n---",
+    "\n  * ",
+    "[ ] ",
+    "[x]",
+    "\n```",
+    "\t",
   ]
   let seed = 7
   const next = () => (seed = (seed * 48271) % 2147483647)
@@ -106,6 +125,79 @@ test("any text comes back as it was", () => {
       text += pieces[next() % pieces.length]
     expect(back(text)).toBe(text)
   }
+})
+
+/** Each line's block: its kind and what it holds. */
+const blocks = (text: string) => {
+  const lines: string[] = []
+  node(text).forEach((block) => {
+    const attrs = Object.entries(block.attrs)
+      .map(([key, value]) => `${key}=${JSON.stringify(value)}`)
+      .join(" ")
+    lines.push(
+      `${block.type.name}${attrs ? ` ${attrs}` : ""}: ${block.textContent}`
+    )
+  })
+  return lines
+}
+
+test("how a line starts says what it is, written back as it was", () => {
+  const text = [
+    "# Title",
+    "###  Small",
+    "> quoted",
+    ">close",
+    "- one",
+    "  * two",
+    "+ three",
+    "1. first",
+    "10) tenth",
+    "- [ ] to do",
+    "- [x] done",
+    "-",
+    "---",
+    "* * *",
+    "#tag and -dash and 1.5",
+  ].join("\n")
+  expect(back(text)).toBe(text)
+  expect(blocks(text)).toEqual([
+    'heading level=1 space=" ": Title',
+    'heading level=3 space="  ": Small',
+    'quote prefix="> ": quoted',
+    'quote prefix=">": close',
+    'item indent="" marker="-" space=" " check=null checkSpace="": one',
+    'item indent="  " marker="*" space=" " check=null checkSpace="": two',
+    'item indent="" marker="+" space=" " check=null checkSpace="": three',
+    'item indent="" marker="1." space=" " check=null checkSpace="": first',
+    'item indent="" marker="10)" space=" " check=null checkSpace="": tenth',
+    'item indent="" marker="-" space=" " check=" " checkSpace=" ": to do',
+    'item indent="" marker="-" space=" " check="x" checkSpace=" ": done',
+    'item indent="" marker="-" space="" check=null checkSpace="": ',
+    'rule source="---": ',
+    'rule source="* * *": ',
+    "paragraph: #tag and -dash and 1.5",
+  ])
+})
+
+test("lines in a fence are text as they are", () => {
+  const text = "```sh\n# a comment\n- not a list *or* @a/b.ts\n```\n# after"
+  expect(back(text)).toBe(text)
+  expect(blocks(text)).toEqual([
+    "paragraph: ```sh",
+    "paragraph: # a comment",
+    "paragraph: - not a list *or* @a/b.ts",
+    "paragraph: ```",
+    'heading level=1 space=" ": after',
+  ])
+  expect(styles(text).filter((piece) => /^[a-z+]+:/.test(piece))).toEqual([])
+})
+
+test("an item given text is written with a space after its marker", () => {
+  const item = schema.nodes.item.create(
+    { marker: "-", space: "", check: " ", checkSpace: "" },
+    schema.text("x")
+  )
+  expect(textOf(schema.node("doc", null, [item]).content)).toBe("- [ ] x")
 })
 
 test("a chip takes the style around it, and in code it is text", () => {

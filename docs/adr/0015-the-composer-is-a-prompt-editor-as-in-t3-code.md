@@ -57,6 +57,16 @@ rest are our defaults and stay his to change.
      with (`**` or `__`, `*` or `_`) and which style was outside, so
      any string comes back character for character; a delimiter that
      pairs with nothing stays text.
+   - A line is one block, as it starts: `# ` a heading, `> ` a line of a
+     quote, `- `, `1. ` or `- [ ] ` an item, `---` a rule. A list is not
+     nested in the document: each item is as far in as the spaces before
+     its marker, which it keeps, as it keeps its marker and its number.
+     Shift+Enter goes on with a list or a quote, an empty item ends it,
+     Tab and Shift+Tab move an item in and out, and Backspace at a line's
+     start makes it text. Lines inside a ``` fence stay text until code
+     blocks come.
+   - Pasted text is read as a prompt is, even text copied from the box,
+     so how its lines and styles were written is kept.
 
 4. **The box behaves.**
    - A key typed, or text pasted, anywhere in the Thread Pane outside a
@@ -82,9 +92,9 @@ rest are our defaults and stay his to change.
 **Build order.** One PR each: (1) the prompt editor in place of the
 textarea, nothing else changing, (2) chips for `@` files and `/` anywhere
 at a line's start, (3) markdown, in parts: (3a) bold, italic, strike
-and inline code, (3b) quotes, headings, rules and lists, (3c) code
-blocks with their language and Shiki, (3d) wrapping a selection and
-lists going on with Enter, (4) the box behaves,
+and inline code, (3b) quotes, headings, rules and lists, going on
+with Shift+Enter, (3c) code blocks with their language and Shiki, (3d)
+wrapping a selection, (4) the box behaves,
 (5) paste and drop, (6) skills and quotes, once their ADR 0010 parts are
 checked with the Harnesses.
 

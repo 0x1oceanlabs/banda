@@ -1,14 +1,14 @@
 import * as React from "react"
-import { splitBlock } from "@tiptap/pm/commands"
 import { Slice } from "@tiptap/pm/model"
-import { type EditorState, TextSelection } from "@tiptap/pm/state"
+import { type EditorState, Selection, TextSelection } from "@tiptap/pm/state"
 import type { EditorView } from "@tiptap/pm/view"
 import Document from "@tiptap/extension-document"
 import Paragraph from "@tiptap/extension-paragraph"
 import Text from "@tiptap/extension-text"
-import { UndoRedo } from "@tiptap/extensions"
+import { Gapcursor, UndoRedo } from "@tiptap/extensions"
 import { EditorContent, useEditor } from "@tiptap/react"
 import { cn } from "cn"
+import { newLine, PROMPT_BLOCKS } from "@banda/ui/components/prompt-blocks"
 import { Chip } from "@banda/ui/components/prompt-chip"
 import { PROMPT_MARKS } from "@banda/ui/components/prompt-marks"
 import {
@@ -89,24 +89,27 @@ function PromptEditor({
         latest.current.onKeyDown?.(event)
         if (event.defaultPrevented) return true
         if (event.key === "Enter" && event.shiftKey && !event.isComposing)
-          return splitBlock(view.state, view.dispatch)
+          return newLine(view.state, view.dispatch)
         return false
       },
-      handlePaste(_: EditorView, event: ClipboardEvent) {
+      // Pasted text is read as a prompt is, even from this box: its HTML
+      // would lose how its lines and styles were written.
+      handlePaste(view: EditorView, event: ClipboardEvent) {
         latest.current.onPaste?.(event)
-        return event.defaultPrevented
+        if (event.defaultPrevented) return true
+        const text = event.clipboardData?.getData("text/plain")
+        if (!text || event.clipboardData?.files.length) return false
+        paste(view, text)
+        return true
       },
-      // Copied, a chip is what it writes; pasted, that is a chip again.
+      // Copied, a chip is what it writes; dropped, that is a chip again.
       clipboardTextSerializer: (slice: Slice) => textOf(slice.content),
-      clipboardTextParser(
+      clipboardTextParser: (
         text: string,
         _: unknown,
         __: boolean,
         view: EditorView
-      ) {
-        const doc = view.state.schema.nodeFromJSON(docOf(text))
-        return new Slice(doc.content, 1, 1)
-      },
+      ) => sliceOf(view, text),
     },
   }))
 
@@ -224,7 +227,40 @@ function placeOf(
   return found && { ...found, from: pos - found.word.length - 1, to: pos }
 }
 
-/** What a prompt is made of: lines of styled text with chips, and undo. */
-const EXTENSIONS = [Document, Paragraph, Text, Chip, ...PROMPT_MARKS, UndoRedo]
+/** `text` as the lines it makes, open at their ends to join the line it
+ * goes into. */
+function sliceOf(view: EditorView, text: string) {
+  const doc = view.state.schema.nodeFromJSON(docOf(text))
+  return Slice.maxOpen(doc.content)
+}
+
+/** Puts `text` where the caret is; on a line of its own, its first line
+ * keeps what it is, such as an item of a list. */
+function paste(view: EditorView, text: string) {
+  const { state } = view
+  const { $from, empty } = state.selection
+  const line = $from.parent
+  const slice = sliceOf(view, text)
+  const tr = state.tr
+  if (empty && line.type.name === "paragraph" && line.content.size === 0) {
+    tr.replaceWith($from.before(), $from.after(), slice.content)
+    const end = $from.before() + slice.content.size
+    tr.setSelection(Selection.near(tr.doc.resolve(end), -1))
+  } else tr.replaceSelection(slice)
+  view.dispatch(tr.scrollIntoView().setMeta("uiEvent", "paste"))
+}
+
+/** What a prompt is made of: lines, some of them headings, quotes, items
+ * and rules, of styled text with chips; a caret beside a rule; undo. */
+const EXTENSIONS = [
+  Document,
+  Paragraph,
+  Text,
+  Chip,
+  ...PROMPT_MARKS,
+  ...PROMPT_BLOCKS,
+  Gapcursor,
+  UndoRedo,
+]
 
 export { PromptEditor }
