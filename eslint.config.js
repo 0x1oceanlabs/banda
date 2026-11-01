@@ -31,4 +31,10 @@ export default defineConfig([
       "react-refresh/only-export-components": "off",
     },
   },
+  {
+    // The window's main process has no React; Effect's `Service.use` is
+    // not a hook (ADR 0020).
+    files: ["app/desktop/src/**/*.ts"],
+    rules: { "react-hooks/rules-of-hooks": "off" },
+  },
 ])

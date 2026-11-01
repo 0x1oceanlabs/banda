@@ -22,13 +22,16 @@ import {
   session,
   shell,
 } from "electron"
+import type { Look as LookValue } from "@banda/contract/look"
 import type { Notice } from "@banda/web/host"
+import { NodeServices } from "@effect/platform-node"
+import { Effect, Layer, ManagedRuntime, Stream } from "effect"
 import { Blocker } from "./blocker"
 import { hostPages, keepProfile, reveal } from "./browser"
 import { openDoor } from "./door"
 import { Extensions } from "./extensions"
-import { EngineProcess } from "./engine"
-import { firstFrame, LookProcess } from "./look"
+import { Engine } from "./engine"
+import { firstFrame, Look } from "./look"
 import { type Desktop, RecordedDesktop, SystemDesktop } from "./notices"
 import { Settings } from "./settings"
 import { ensure } from "./sidebar"
@@ -89,8 +92,16 @@ protocol.registerSchemesAsPrivileged([
   },
 ])
 
-const engine = new EngineProcess(engineBinary)
-const look = new LookProcess(engineBinary)
+/** Main's services (ADR 0020): the engine and the look, as children.
+ * They start with the first effect run, and stop when it is disposed. */
+const runtime = ManagedRuntime.make(
+  Layer.mergeAll(Engine.layer(engineBinary), Look.layer(engineBinary)).pipe(
+    Layer.provide(NodeServices.layer)
+  )
+)
+/** The last look, for what reads it at once; none before the first.
+ * The window opens once the runtime is built (`ready`). */
+const lookNow = () => runtime.runSync(Look.use((look) => look.current))
 const settings = new Settings(engineBinary)
 let window: BrowserWindow | null = null
 /** The settings window; one at a time (ADR 0016, decision 1). */
@@ -117,9 +128,9 @@ if (!app.requestSingleInstanceLock()) {
 }
 
 async function ready(): Promise<void> {
-  engine.start()
-  look.start()
-  look.listen((now) => {
+  const blocker = new Blocker()
+  const listen = (now: LookValue) => {
+    void blocker.set(now.browser.blocker)
     // Native parts (scrollbars, menus) and the page's own
     // prefers-color-scheme follow the look's mode.
     nativeTheme.themeSource = now.mode
@@ -128,7 +139,14 @@ async function ready(): Promise<void> {
       if (background) shown?.setBackgroundColor(background)
       shown?.webContents.send("look", now)
     }
-  })
+  }
+  runtime.runFork(
+    Look.use((look) =>
+      look.changes.pipe(
+        Stream.runForEach((now) => Effect.sync(() => listen(now)))
+      )
+    )
+  )
   protocol.handle("app", page)
   // The page asks for nothing: no camera, no notifications, no location.
   // Its system notifications go through the desktop (notices.ts).
@@ -136,26 +154,24 @@ async function ready(): Promise<void> {
     (_contents, _permission, answer) => answer(false)
   )
   keepProfile(() => window)
-  const blocker = new Blocker()
-  look.listen((now) => void blocker.set(now.browser.blocker))
   const extensions = new Extensions(() => window)
   ipcMain.handle("engine", (event) => {
     const from = event.senderFrame?.url ?? ""
     if (!fromPage(from))
       throw new Error("Only Banda's page may ask for the engine.")
-    return engine.address()
+    return runtime.runPromise(Engine.use((engine) => engine.address))
   })
   ipcMain.handle("look", (event) => {
     const from = event.senderFrame?.url ?? ""
     if (!fromPage(from))
       throw new Error("Only Banda's page may ask for the look.")
-    return look.current()
+    return lookNow()
   })
   ipcMain.handle("sidebar.preset", async (event, name: unknown) => {
     const from = event.senderFrame?.url ?? ""
     if (!fromPage(from))
       throw new Error("Only Banda's page may change the sidebar.")
-    const sidebar = look.current()?.sidebar
+    const sidebar = lookNow()?.sidebar
     if (!sidebar) throw new Error("The sidebar's file is not known yet.")
     if (!sidebar.presets.some((preset) => preset.name === name))
       throw new Error(`There is no preset ${JSON.stringify(name)}.`)
@@ -171,7 +187,7 @@ async function ready(): Promise<void> {
     const from = event.senderFrame?.url ?? ""
     if (!fromPage(from))
       throw new Error("Only Banda's page may open the sidebar's file.")
-    const sidebar = look.current()?.sidebar
+    const sidebar = lookNow()?.sidebar
     if (!sidebar) throw new Error("The sidebar's file is not known yet.")
     ensure(sidebar.file)
     const failed = await shell.openPath(sidebar.file)
@@ -194,7 +210,7 @@ async function ready(): Promise<void> {
   }
   /** Pins the extension `id` to the row, or takes it off. */
   const pin = async (id: string, pinned: boolean) => {
-    const others = (look.current()?.browser.pinned ?? []).filter(
+    const others = (lookNow()?.browser.pinned ?? []).filter(
       (each) => each !== id
     )
     const list = pinned ? [...others, id] : others
@@ -233,7 +249,7 @@ async function ready(): Promise<void> {
   pageOnly("settings.reset", (file, key) => settings.reset(file, key))
   pageOnly("settings.themes", () => settings.themes())
   pageOnly("settings.reveal", (file) => {
-    const sidebar = look.current()?.sidebar
+    const sidebar = lookNow()?.sidebar
     if (!sidebar) throw new Error("The config folder is not known yet.")
     return settings.reveal(sidebar.file, file)
   })
@@ -265,13 +281,13 @@ async function ready(): Promise<void> {
     if (!fromPage(event.senderFrame?.url ?? "")) return false
     return desktop.quiet()
   })
-  const first = await look.first(LOOK_WAIT)
+  const first = await runtime.runPromise(Look.first(LOOK_WAIT))
   if (first) nativeTheme.themeSource = first.mode
   Menu.setApplicationMenu(process.platform === "darwin" ? macMenu() : null)
   window = openWindow(extensions)
   // `banda menu [route]` opens the Banda menu here, or the settings
   // window at a route of its own (ADR 0017).
-  void engine.door().then((path) => {
+  void runtime.runPromise(Engine.use((engine) => engine.door)).then((path) => {
     shutDoor = openDoor(path, { menu: openMenu })
   })
 }
@@ -390,7 +406,7 @@ function pageWindow(
     "width" | "height" | "minWidth" | "minHeight" | "title"
   >
 ): BrowserWindow {
-  const current = look.current()
+  const current = lookNow()
   const opened = new BrowserWindow({
     ...size,
     show: false,
@@ -442,8 +458,7 @@ app.on("will-quit", (event) => {
   if (stopped) return
   event.preventDefault()
   shutDoor?.()
-  look.stop()
-  void engine.stop().then(() => {
+  void runtime.dispose().then(() => {
     stopped = true
     app.quit()
   })

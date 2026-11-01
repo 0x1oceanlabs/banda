@@ -31,6 +31,24 @@ the window's end-to-end tests too, on runners on devbox
 `gh pr merge --auto --rebase` and go on: the PR merges itself once `ci` is
 green. A red `ci` is yours to fix, on the PR or, after a merge, on `main`.
 
+## Effect in the window's main process
+
+`app/desktop/src` (not the preload, not the page) is written in Effect 4
+([ADR 0020](docs/adr/0020-the-windows-main-process-is-written-in-effect.md)):
+
+- A part of main is a service: `class X extends Context.Service<X, {…}>()("banda/X")`,
+  with a `static layer` that builds it. What it starts it starts in the
+  layer's scope (`Effect.forkScoped`), so disposing the runtime stops it.
+- Electron's callbacks are the edge: each runs one effect on the runtime
+  in `main.ts` (`runtime.runPromise`, `runtime.runFork`). Nowhere else
+  runs an effect.
+- Input from outside main (the page, an extension, a CDP client, a
+  program's output) is decoded with `Schema`. The contract's types are
+  not written again in `Schema`; they come from Rust.
+- Errors a caller can act on are tagged classes (`Data.TaggedError`).
+- Tests are `@effect/vitest` beside the code (`src/*.test.ts`): a fake
+  layer, or `TestClock` for time.
+
 ## Research
 
 `docs/research/` keeps dated evidence with its source and limits. It is

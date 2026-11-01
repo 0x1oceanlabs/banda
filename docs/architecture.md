@@ -535,9 +535,12 @@ modules/*/pane   each module's Panes
   shipped with it, which Ghostty draws terminals with.
 - **The engine is the window's child.** Main starts
   `banda serve --with-parent`, starts it again when it dies (waiting up
-  to 10 s between tries), and closes its stdin on quit. The client then
-  reconnects and follows on from the last event it delivered, so a Pane
-  sees no gap.
+  to 10 s between tries), and sends it SIGTERM on quit; if the window
+  dies, the engine sees its stdin close. `banda look --follow` runs the
+  same way. Both are Effect services in main (`Engine`, `Look`; ADR
+  0020), started by one runtime and stopped when it is disposed. The
+  client then reconnects and follows on from the last event it
+  delivered, so a Pane sees no gap.
 - **A Pane** is a `PaneKind`: a kind, the module it needs, a title, an
   icon, optional start args, what its module lets go of when it leaves
   every workspace (`closed`), and a component. The component gets the
