@@ -78,6 +78,8 @@ export async function startWindow({
       BANDA_OMARCHY: "",
       HYPRLAND_INSTANCE_SIGNATURE: "",
       BANDASO_LOG: "warn",
+      // Notices go to a list the tests read, never to the Person's screen.
+      BANDASO_DESKTOP: "recorded",
       // A terminal runs the Person's shell: here one every machine has.
       SHELL: "/bin/sh",
     },
@@ -161,4 +163,64 @@ export async function sendAndLeave(
   await expect(thread).not.toHaveAccessibleName("New Thread")
   await page.keyboard.press("Alt+Enter")
   await expect(page.getByRole("region", { name: "New Thread" })).toBeVisible()
+}
+
+/** What the recorded desktop was asked to show (app/desktop/src/notices.ts). */
+export type Recorded = {
+  shown: {
+    key: string
+    title: string
+    body?: string
+    icon?: string
+    answer: string
+    lasts: boolean
+  }[]
+  withdrawn: string[]
+  isQuiet: boolean
+}
+
+/** Reads the recorded desktop. */
+export function desktopOf(app: ElectronApplication): Promise<Recorded> {
+  return app.evaluate(() => {
+    const desktop = (globalThis as unknown as { bandasoDesktop: Recorded })
+      .bandasoDesktop
+    return {
+      shown: desktop.shown,
+      withdrawn: desktop.withdrawn,
+      isQuiet: desktop.isQuiet,
+    }
+  })
+}
+
+/** Turns the desktop's Do Not Disturb on or off. */
+export async function setQuiet(app: ElectronApplication, quiet: boolean) {
+  await app.evaluate((_electron, quiet) => {
+    ;(
+      globalThis as unknown as { bandasoDesktop: Recorded }
+    ).bandasoDesktop.isQuiet = quiet
+  }, quiet)
+}
+
+/** The Person clicks the notice of `key`. */
+export async function clickNotice(app: ElectronApplication, key: string) {
+  await app.evaluate((_electron, key) => {
+    ;(
+      globalThis as unknown as {
+        bandasoDesktop: { click: (key: string) => void }
+      }
+    ).bandasoDesktop.click(key)
+  }, key)
+}
+
+/**
+ * The Person goes to another window, or comes back: the page hears its
+ * window lose or take the desktop's focus. A headless window never does.
+ */
+export async function setInFront(page: Page, front: boolean) {
+  await page.evaluate((front) => {
+    const own = globalThis as unknown as { realHasFocus?: () => boolean }
+    own.realHasFocus ??= Document.prototype.hasFocus
+    Document.prototype.hasFocus = front ? own.realHasFocus : () => false
+    window.dispatchEvent(new Event(front ? "focus" : "blur"))
+  }, front)
 }

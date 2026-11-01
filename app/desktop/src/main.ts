@@ -19,8 +19,10 @@ import {
   session,
   shell,
 } from "electron"
+import type { Notice } from "@bandaso/web/host"
 import { EngineProcess } from "./engine"
 import { firstFrame, LookProcess } from "./look"
+import { type Desktop, RecordedDesktop, SystemDesktop } from "./notices"
 import { ensure, writePreset } from "./sidebar"
 
 /** The page's origin; the engine lets it in (kernel/src/api.rs, APP_ORIGIN). */
@@ -71,6 +73,16 @@ const engine = new EngineProcess(engineBinary)
 const look = new LookProcess(engineBinary)
 let window: BrowserWindow | null = null
 
+/**
+ * Where the page's notices go: the desktop's notification server, or, for
+ * the end-to-end tests, a list they read (`BANDASO_DESKTOP=recorded`).
+ */
+const desktop: Desktop =
+  process.env.BANDASO_DESKTOP === "recorded"
+    ? ((globalThis as { bandasoDesktop?: RecordedDesktop }).bandasoDesktop =
+        new RecordedDesktop())
+    : new SystemDesktop()
+
 /** How long the window waits for its look, so it opens in its colours. */
 const LOOK_WAIT = 300
 
@@ -97,6 +109,7 @@ async function ready(): Promise<void> {
   })
   protocol.handle("app", page)
   // The page asks for nothing: no camera, no notifications, no location.
+  // Its system notifications go through the desktop (notices.ts).
   session.defaultSession.setPermissionRequestHandler(
     (_contents, _permission, answer) => answer(false)
   )
@@ -132,10 +145,33 @@ async function ready(): Promise<void> {
     const failed = await shell.openPath(sidebar.file)
     if (failed) throw new Error(failed)
   })
+  ipcMain.on("notify:show", (event, notice: Notice) => {
+    if (!fromPage(event.senderFrame?.url ?? "")) return
+    desktop.show(notice, answered)
+    // The workspace that holds the window lights up in the desktop's bar.
+    if (window && !window.isFocused()) window.flashFrame(true)
+  })
+  ipcMain.on("notify:withdraw", (event, key: string) => {
+    if (fromPage(event.senderFrame?.url ?? "")) desktop.withdraw(key)
+  })
+  ipcMain.handle("notify:quiet", (event) => {
+    if (!fromPage(event.senderFrame?.url ?? "")) return false
+    return desktop.quiet()
+  })
   const first = await look.first(LOOK_WAIT)
   if (first) nativeTheme.themeSource = first.mode
   Menu.setApplicationMenu(process.platform === "darwin" ? macMenu() : null)
   window = openWindow()
+}
+
+/** The Person clicked a notice: the window comes to the front, and the
+ * page goes to what called. */
+function answered(key: string) {
+  if (!window) return
+  if (window.isMinimized()) window.restore()
+  window.show()
+  window.focus()
+  window.webContents.send("notify:answer", key)
 }
 
 /** Serves the built page; nothing outside its folder. */
@@ -180,6 +216,7 @@ function openWindow(): BrowserWindow {
     },
   })
   opened.once("ready-to-show", () => opened.show())
+  opened.on("focus", () => opened.flashFrame(false))
   const contents = opened.webContents
   // The page never leaves: links open in the browser, nothing navigates.
   contents.setWindowOpenHandler(({ url }) => {

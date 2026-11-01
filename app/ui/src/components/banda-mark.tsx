@@ -638,6 +638,110 @@ const lessMotion =
     ? matchMedia("(prefers-reduced-motion: reduce)")
     : undefined
 
+/** What one pose draws: the hat's outline and turn, its eyes, their glyph. */
+type Drawn = {
+  d: string
+  transform: string
+  /** Each eye's ellipse; `rx` 0 when it does not show. */
+  eyes: { cx: number; cy: number; rx: number; ry: number }[]
+  /** Happy or crossed eyes, drawn as strokes; empty for round ones. */
+  glyph: string
+  /** How much the eyes show at all. */
+  shown: number
+}
+
+function drawnOf(p: Pose): Drawn {
+  const [a, b, c] = p.w
+  const [sq, ci, tr] = OUTLINES as [
+    (typeof OUTLINES)[0],
+    (typeof OUTLINES)[0],
+    (typeof OUTLINES)[0],
+  ]
+  let d = ""
+  for (let i = 0; i < POINTS; i++) {
+    const x = CX + a * sq.xs[i]! + b * ci.xs[i]! + c * tr.xs[i]!
+    const y = CY + a * sq.ys[i]! + b * ci.ys[i]! + c * tr.ys[i]!
+    d += `${i ? "L" : "M"}${f(x)} ${f(y)}`
+  }
+  d += "Z"
+  const transform = `translate(${f(p.tx)} ${f(p.ty)}) rotate(${f(TILT + p.rot)} 54 45) translate(76 45) scale(${f(p.sx)} ${f(p.sy)}) translate(-76 -45) rotate(${f(p.spin)} ${CX} ${CY})`
+
+  const [s0, s1, s2] = SHAPES as [
+    (typeof SHAPES)[0],
+    (typeof SHAPES)[0],
+    (typeof SHAPES)[0],
+  ]
+  const ex = CX + p.ex
+  const ey = CY + a * s0.eyes[0] + b * s1.eyes[0] + c * s2.eyes[0] + p.ey
+  const gap =
+    (a * s0.eyes[1] + b * s1.eyes[1] + c * s2.eyes[1]) * Math.min(p.big, 1.06)
+  const xs = [ex - gap, ex + gap]
+  const shown = clamp(p.eyes)
+  const round = p.eye === "open" || p.eye === "closed"
+  const closed = p.eye === "closed"
+  const eyes = xs.map((x) =>
+    shown < 0.02 || !round
+      ? { cx: x, cy: ey, rx: 0, ry: 0 }
+      : {
+          cx: x,
+          cy: ey,
+          rx: (closed ? 5.4 : 4.9 * p.big) * Math.min(1, shown * 1.6),
+          ry: (closed ? 1.7 : 7 * p.big * p.open) * shown,
+        }
+  )
+  const glyph =
+    shown < 0.02 || round
+      ? ""
+      : xs
+          .map((x) =>
+            p.eye === "happy"
+              ? `M${f(x - 4.6)} ${f(ey + 2.6)}Q${f(x)} ${f(ey - 6.5)} ${f(x + 4.6)} ${f(ey + 2.6)}`
+              : `M${f(x - 3.6)} ${f(ey - 3.6)}L${f(x + 3.6)} ${f(ey + 3.6)}M${f(x + 3.6)} ${f(ey - 3.6)}L${f(x - 3.6)} ${f(ey + 3.6)}`
+          )
+          .join("")
+  return { d, transform, eyes, glyph, shown }
+}
+
+/** The colours a still mark is drawn in, as CSS colours. */
+export type MarkColors = {
+  body: string
+  attention: string
+  destructive: string
+}
+
+/**
+ * The Agent's tile, still in `state`, as one SVG of its own: a picture of
+ * the mark for outside the window, such as a system notification's icon.
+ */
+export function stillMark(state: MarkState, colors: MarkColors): string {
+  const p = STILL[state]
+  const drawn = drawnOf(p)
+  const eyes = drawn.eyes
+    .filter((eye) => eye.rx > 0)
+    .map(
+      (eye) =>
+        `<ellipse cx="${f(eye.cx)}" cy="${f(eye.cy)}" rx="${f(eye.rx)}" ry="${f(eye.ry)}" fill="#000"/>`
+    )
+    .join("")
+  const glyph = drawn.glyph
+    ? `<path d="${drawn.glyph}" fill="none" stroke="#000" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"/>`
+    : ""
+  const fill = (color: string, opacity: number) =>
+    opacity > 0
+      ? `<path d="${drawn.d}" fill="${color}" fill-opacity="${f(opacity)}"/>`
+      : ""
+  return [
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="48 -6 56 56" width="112" height="112">`,
+    `<defs><mask id="m" maskUnits="userSpaceOnUse" x="-60" y="-90" width="260" height="260">`,
+    `<rect x="-60" y="-90" width="260" height="260" fill="#fff"/>${eyes}${glyph}</mask></defs>`,
+    `<g transform="${drawn.transform}"><g mask="url(#m)">`,
+    fill(colors.body, 1),
+    fill(colors.attention, p.lit),
+    fill(colors.destructive, p.alarm),
+    `</g></g></svg>`,
+  ].join("")
+}
+
 class Animator {
   private readonly svg: SVGSVGElement
   private readonly logo: boolean
@@ -820,71 +924,27 @@ class Animator {
 
   private paint(p: Pose, time: number) {
     this.last = p
-    const [a, b, c] = p.w
-    const [sq, ci, tr] = OUTLINES as [
-      (typeof OUTLINES)[0],
-      (typeof OUTLINES)[0],
-      (typeof OUTLINES)[0],
-    ]
-    let d = ""
-    for (let i = 0; i < POINTS; i++) {
-      const x = CX + a * sq.xs[i]! + b * ci.xs[i]! + c * tr.xs[i]!
-      const y = CY + a * sq.ys[i]! + b * ci.ys[i]! + c * tr.ys[i]!
-      d += `${i ? "L" : "M"}${f(x)} ${f(y)}`
-    }
-    d += "Z"
-    this.body.setAttribute("d", d)
-    this.lit.setAttribute("d", d)
+    const drawn = drawnOf(p)
+    this.body.setAttribute("d", drawn.d)
+    this.lit.setAttribute("d", drawn.d)
     this.lit.setAttribute("fill-opacity", f(p.lit))
-    this.alarm.setAttribute("d", d)
+    this.alarm.setAttribute("d", drawn.d)
     this.alarm.setAttribute("fill-opacity", f(p.alarm))
-    this.hat.setAttribute(
-      "transform",
-      `translate(${f(p.tx)} ${f(p.ty)}) rotate(${f(TILT + p.rot)} 54 45) translate(76 45) scale(${f(p.sx)} ${f(p.sy)}) translate(-76 -45) rotate(${f(p.spin)} ${CX} ${CY})`
-    )
-
-    const [s0, s1, s2] = SHAPES as [
-      (typeof SHAPES)[0],
-      (typeof SHAPES)[0],
-      (typeof SHAPES)[0],
-    ]
-    const ex = CX + p.ex
-    const ey = CY + a * s0.eyes[0] + b * s1.eyes[0] + c * s2.eyes[0] + p.ey
-    const gap =
-      (a * s0.eyes[1] + b * s1.eyes[1] + c * s2.eyes[1]) * Math.min(p.big, 1.06)
-    const xs = [ex - gap, ex + gap]
-    const shown = clamp(p.eyes)
-    const round = p.eye === "open" || p.eye === "closed"
+    this.hat.setAttribute("transform", drawn.transform)
     this.eyes.forEach((eye, i) => {
-      if (shown < 0.02 || !round) {
+      const { cx, cy, rx, ry } = drawn.eyes[i]!
+      if (rx === 0) {
         eye.setAttribute("rx", "0")
         eye.setAttribute("ry", "0")
         return
       }
-      const closed = p.eye === "closed"
-      eye.setAttribute("cx", f(xs[i]!))
-      eye.setAttribute("cy", f(ey))
-      eye.setAttribute(
-        "rx",
-        f((closed ? 5.4 : 4.9 * p.big) * Math.min(1, shown * 1.6))
-      )
-      eye.setAttribute("ry", f((closed ? 1.7 : 7 * p.big * p.open) * shown))
+      eye.setAttribute("cx", f(cx))
+      eye.setAttribute("cy", f(cy))
+      eye.setAttribute("rx", f(rx))
+      eye.setAttribute("ry", f(ry))
     })
-    if (shown < 0.02 || round) {
-      this.glyph.setAttribute("d", "")
-    } else {
-      this.glyph.setAttribute("stroke-opacity", f(shown))
-      this.glyph.setAttribute(
-        "d",
-        xs
-          .map((x) =>
-            p.eye === "happy"
-              ? `M${f(x - 4.6)} ${f(ey + 2.6)}Q${f(x)} ${f(ey - 6.5)} ${f(x + 4.6)} ${f(ey + 2.6)}`
-              : `M${f(x - 3.6)} ${f(ey - 3.6)}L${f(x + 3.6)} ${f(ey + 3.6)}M${f(x + 3.6)} ${f(ey - 3.6)}L${f(x - 3.6)} ${f(ey + 3.6)}`
-          )
-          .join("")
-      )
-    }
+    this.glyph.setAttribute("d", drawn.glyph)
+    if (drawn.glyph) this.glyph.setAttribute("stroke-opacity", f(drawn.shown))
     this.zz.forEach((z, i) => {
       const phase = (time * 0.45 + i / 3) % 1
       z.setAttribute("x", f(100 + phase * 12))
