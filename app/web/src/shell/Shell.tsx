@@ -4,15 +4,17 @@ import { QUIET } from "@bandaso/ui/pane"
 import { DEFAULT_SOUND } from "@bandaso/ui/sound"
 import { actionFor } from "../actions/actions"
 import { Bar } from "../bar/Bar"
-import { Watches } from "../bar/Watches"
+import { type Lists, Watches } from "../bar/Watches"
 import { useCalls } from "../calls/useCalls"
 import { kindOf, startable, widthOf } from "../registry"
 import { Sidebar } from "../sidebar/Sidebar"
 import {
   close,
+  focused,
   focusEntry,
   go,
   left,
+  samePane,
   shown,
   step,
   update,
@@ -62,6 +64,7 @@ export function Shell({
   const [attention, setAttention] = useState(QUIET)
   // The look will bring the Person's own `[sound]` (ADR 0009, decision 5).
   const call = useCalls(DEFAULT_SOUND)
+  const [lists, setLists] = useState<Lists>({})
   useEffect(() => keepWorkspaces(workspaces), [workspaces])
   useEffect(() => keepSidebar(sidebar), [sidebar])
 
@@ -122,6 +125,7 @@ export function Shell({
         spaces={spaces}
         onChange={setAttention}
         onCall={call}
+        onLists={setLists}
       />
       <Bar
         status={status}
@@ -140,8 +144,13 @@ export function Shell({
         {sidebar && (
           <Sidebar
             engine={engine}
-            modules={modules}
             spaces={spaces}
+            lists={lists}
+            home={home}
+            isCurrent={(space, pane) => {
+              const entry = focused(workspaces)
+              return entry !== undefined && samePane(entry, { space, pane })
+            }}
             onOpen={(space, pane) =>
               change((w) => opening(w, space, pane, undefined, "right"))
             }

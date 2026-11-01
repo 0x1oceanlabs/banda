@@ -498,14 +498,23 @@ modules/*/pane   each module's Panes
   Shift+1…9 move the Pane there, A shows or hides the sidebar. The window
   takes these keys before any Pane hears them; a terminal gets every other
   key, Ctrl+W among them.
-- **The sidebar** lists every Space, each with the Pane the agents module
-  offers for it (`agents.threads`: its Threads, the one changed last
-  first), and a new Thread in it. A new Thread opens as a Thread Pane
-  with no Thread yet; its first message starts one (ADR 0006).
+- **The sidebar** lists every Thread of every Space, arranged as a preset
+  and the Person's keys say (ADR 0008): grouped by state, by Space or not
+  at all; sorted by need, by change or by title; shelves at the bottom;
+  a list of Spaces above; rows of one, two or three lines. `arrange.ts` is
+  the one pure rule, `settings.ts` holds the defaults and the presets
+  (`inbox`, `spaces`, `places`), and the view menu picks one, kept in the
+  window's storage until the engine reads `sidebar.toml`. The sidebar
+  knows nothing of Threads: each module's Watch reports a `Listed` per
+  row (its title, mark, times, what calls the Person, what it was last
+  asked, and the Pane a click opens). A new Thread opens as a Thread
+  Pane with no Thread yet; its first message starts one (ADR 0006).
   - Each Thread shows its Agent's Mark (ADR 0005, decision 8). The engine
-    lists each Thread with its latest turn that began, and its Questions
-    that wait; the list follows them from `turn.started`, `turn.ended` and
-    the `question.*` facts. The pane's rules (`marks.ts`) say what that
+    lists each Thread with its latest turn that began (when, and why it
+    ended as it did), its Questions that wait (with their titles) and the
+    start of its latest message; the list follows them from
+    `message.posted`, `turn.started`, `turn.ended` and the `question.*`
+    facts. The pane's rules (`marks.ts`) say what that
     means: a Question asks, a failed or interrupted turn failed, a turn
     that finished is done, a running one works, and anything else rests.
   - A turn that finished or failed settles once the Person has seen it: a
@@ -515,10 +524,11 @@ modules/*/pane   each module's Panes
   for, with how many things wait for them when more than one does. A
   module offers a `Watch` for this: a component the window draws for
   each Space while the engine runs the module, which shows nothing and
-  reports an `Attention`, a Mark state and a count (`app/ui/src/pane.ts`).
-  The agents module's follows the same list as the sidebar, so the bar
-  knows even while the sidebar is hidden. The window combines them
-  (`app/web/src/bar`) and knows nothing of Threads.
+  reports a Mark state, a count and the Space's rows for the sidebar
+  (`Report` in `app/ui/src/pane.ts`). The bar and the sidebar read the same
+  report, so they never disagree, and the bar knows even while the sidebar
+  is hidden. The window combines them (`app/web/src/bar`) and knows
+  nothing of Threads.
 - **Sounds** (ADR 0009). A Watch also calls the window when something
   calls for the Person now: a Thread came to done, asking or failed. It
   calls only for a change it saw happen, never for what was there when it
@@ -546,7 +556,7 @@ bandaso/
   kernel/             Rust: Space, event log, access, registry, API
   modules/
     agents/engine/    Rust: Threads, turns, Questions, the ACP adapter
-    agents/pane/      React: the Thread, the Harnesses, a Space's Threads for the sidebar
+    agents/pane/      React: the Thread, the Harnesses, each Thread as the sidebar lists it
     terminal/engine/  Rust: Terminals, their PTYs and what they printed
     terminal/pane/    React: a terminal, drawn by Ghostty
     browser/pane/     React: the browser Pane (next)

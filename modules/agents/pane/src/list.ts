@@ -11,6 +11,9 @@ import {
 } from "@bandaso/contract/agents"
 import type { Source } from "@bandaso/ui/hooks/use-live"
 
+/** How much of a message the list keeps, as the engine does. */
+export const LISTED_MESSAGE = 200
+
 export async function readThreads(
   engine: Engine,
   space: SpaceId
@@ -50,8 +53,8 @@ export function threadsSource(
 /**
  * The list after one fact. A new Thread joins it at the top, and a Thread
  * that heard a message or ended a turn moves there. Each Thread keeps its
- * latest turn that began and its Questions that wait, as the engine reads
- * them.
+ * latest turn that began, its Questions that wait and the start of its
+ * latest message, as the engine reads them.
  */
 export function applyThreads(state: ThreadList, event: Event): ThreadList {
   const fact = decodeFact(event)
@@ -63,40 +66,54 @@ export function applyThreads(state: ThreadList, event: Event): ThreadList {
       const started = { id, harness, title, updated_at: event.at, asking: [] }
       return { ...state, threads: [started, ...state.threads] }
     }
-    case "message.posted":
-      return change(state, event, (thread) => thread, true)
+    case "message.posted": {
+      const message = fact.payload.text.slice(0, LISTED_MESSAGE)
+      return change(state, event, (thread) => ({ ...thread, message }), true)
+    }
     case "turn.started": {
       const { turn } = fact.payload
       return change(state, event, (thread) => ({
         ...thread,
-        latest: { turn, state: "running" },
+        latest: { turn, state: "running", began: event.at },
       }))
     }
     case "turn.ended": {
-      const { turn, state: ended } = fact.payload
+      const { turn, state: ended, reason } = fact.payload
       // A turn a Person took back never began, so it is no one's latest.
       if (ended === "withdrawn") return state
       return change(
         state,
         event,
-        (thread) => ({ ...thread, latest: { turn, state: ended } }),
+        (thread) => ({
+          ...thread,
+          latest: {
+            turn,
+            state: ended,
+            began:
+              thread.latest?.turn === turn ? thread.latest.began : event.at,
+            ...(reason ? { reason } : {}),
+          },
+        }),
         true
       )
     }
     case "question.asked": {
-      const { item } = fact.payload
+      const { item, title } = fact.payload
       return change(state, event, (thread) =>
-        thread.asking.includes(item)
+        thread.asking.some((asking) => asking.item === item)
           ? thread
-          : { ...thread, asking: [...thread.asking, item] }
+          : { ...thread, asking: [...thread.asking, { item, title }] }
       )
     }
     case "question.answered":
     case "question.closed": {
       const { item } = fact.payload
       return change(state, event, (thread) =>
-        thread.asking.includes(item)
-          ? { ...thread, asking: thread.asking.filter((id) => id !== item) }
+        thread.asking.some((asking) => asking.item === item)
+          ? {
+              ...thread,
+              asking: thread.asking.filter((asking) => asking.item !== item),
+            }
           : thread
       )
     }

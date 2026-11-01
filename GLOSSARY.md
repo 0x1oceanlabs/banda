@@ -152,8 +152,18 @@ sideways, each holding Panes one above another.
 Every workspace zoomed out at once, to pick a Pane or a workspace.
 
 **Sidebar**:
-The list of every Space with its Threads, docked at the window's left edge.
-Each Thread shows its own Mark.
+The list of every Thread of every Space, docked at the window's left edge.
+Each Thread shows its own Mark. A preset arranges it, and the Person's own
+keys change any part of it.
+
+**Preset**:
+A named arrangement of the sidebar: `inbox`, `spaces` or `places`, or a file
+of the Person's own. It sets how Threads are grouped and sorted and what a
+row shows; the Person's keys win over it.
+
+**Shelf**:
+A section at the bottom of the sidebar, folded or open, with its count:
+the working Threads, in the `inbox` preset.
 
 **Bar**:
 The line across the window's top: the Mark, which is the sidebar's button,
@@ -169,8 +179,8 @@ it is answered.
 
 **Watch**:
 What a module draws for each Space, showing nothing, to tell the window what
-its work there calls the Person for. The bar's Mark shows the loudest, and a
-call that comes now plays a sound.
+its work there calls the Person for and what the sidebar lists for it. The
+bar's Mark shows the loudest, and a call that comes now plays a sound.
 
 **Call**:
 Something that calls for the Person now: a Thread finished while they were

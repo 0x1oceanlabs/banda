@@ -703,16 +703,39 @@ pub struct ListedThread {
     pub latest: Option<LatestTurn>,
     /// Its Questions that wait for an answer, the first asked first.
     #[serde(default)]
-    pub asking: Vec<ItemId>,
+    pub asking: Vec<Asking>,
+    /// The start of the latest message sent into it: what it was last asked
+    /// to do. A list shows its first line.
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub message: Option<String>,
+}
+
+/// How much of a message a list keeps.
+pub const LISTED_MESSAGE: usize = 200;
+
+/// A Question that waits for an answer, as a list names it.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "agents/")]
+pub struct Asking {
+    pub item: ItemId,
+    pub title: String,
 }
 
 /// A Thread's latest turn that began, and where it stands: it runs, or how
 /// it ended. A turn that waits, or that a Person took back, never began.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "agents/")]
 pub struct LatestTurn {
     pub turn: TurnId,
     pub state: TurnState,
+    /// When it began to run, in milliseconds since the epoch.
+    #[ts(type = "number")]
+    pub began: i64,
+    /// Why it ended as it did, when the Harness or the engine said.
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reason: Option<String>,
 }
 
 /// What the agents module publishes, version 1: each fact is an Event's

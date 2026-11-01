@@ -6,4 +6,12 @@ import type { TurnState } from "./TurnState";
  * A Thread's latest turn that began, and where it stands: it runs, or how
  * it ended. A turn that waits, or that a Person took back, never began.
  */
-export type LatestTurn = { turn: TurnId, state: TurnState, };
+export type LatestTurn = { turn: TurnId, state: TurnState, 
+/**
+ * When it began to run, in milliseconds since the epoch.
+ */
+began: number, 
+/**
+ * Why it ended as it did, when the Harness or the engine said.
+ */
+reason?: string, };

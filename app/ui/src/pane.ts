@@ -101,11 +101,37 @@ export const QUIET: Attention = { mark: "rest", waiting: 0 }
  */
 export type Call = { chime: Chime; about: string }
 
+/**
+ * One thing a module lists in the sidebar for a Space: a Thread, for the
+ * agents module (ADR 0008). The module says what each one is; the window
+ * arranges them as the Person's sidebar settings say.
+ */
+export type Listed = {
+  id: string
+  title: string
+  mark: MarkState
+  /** When it last changed, in milliseconds since the epoch. */
+  changed: number
+  /** When the work that runs now began; a timer counts from it. */
+  began?: number
+  /** What calls the Person, in a few words: what it asks, why it failed. */
+  calls?: string
+  /** What it was last asked to do; its first line shows when nothing calls. */
+  said?: string
+  /** Who does the work: a Harness's name. */
+  by?: string
+  /** What a click on it opens. */
+  pane: PaneState
+}
+
+/** What a Watch says about one Space: what calls the Person, and its list. */
+export type Report = Attention & { listed: readonly Listed[] }
+
 export type WatchProps = {
   engine: Engine
   space: SpaceId
-  /** Says what the Space calls for now; called again on each change. */
-  report: (attention: Attention) => void
+  /** Says what the Space calls for now and lists; called on each change. */
+  report: (report: Report) => void
   /**
    * Calls for the Person once, when something changes now: never for what
    * already was when the Watch began, nor for what they are looking at.
@@ -115,9 +141,9 @@ export type WatchProps = {
 
 /**
  * How a module tells the window what its work in a Space calls the Person
- * for, and when something calls them now, while none of its Panes may
- * show. The window draws one per Space for as long as the engine runs the
- * module; it draws nothing itself.
+ * for, what the sidebar lists, and when something calls them now, while
+ * none of its Panes may show. The window draws one per Space for as long
+ * as the engine runs the module; it draws nothing itself.
  */
 export type Watch = {
   /** The engine module it follows; the window draws it only with it. */

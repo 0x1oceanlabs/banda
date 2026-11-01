@@ -3,11 +3,7 @@
  * launcher; and each module's Watch on what calls for the Person. A Pane
  * or a Watch runs only while the engine runs its module.
  */
-import {
-  panes as agentPanes,
-  threadsPane,
-  threadsWatch,
-} from "@bandaso/agents-pane"
+import { panes as agentPanes, threadsWatch } from "@bandaso/agents-pane"
 import { panes as terminalPanes } from "@bandaso/terminal-pane"
 import type { JsonValue } from "@bandaso/contract"
 import { Button } from "@bandaso/ui/components/button"
@@ -39,9 +35,6 @@ export const launcher: AnyKind = definePane<Args>({
  * hands it only the args it kept for it.
  */
 const offered = [...agentPanes, ...terminalPanes] as unknown as AnyKind[]
-
-/** What the sidebar shows for each Space: its Threads (ADR 0005, decision 8). */
-export const sidebar = threadsPane as unknown as AnyKind
 
 /** What the bar's mark hears from the modules (ADR 0005, decision 9). */
 export const watches: Watch[] = [threadsWatch]

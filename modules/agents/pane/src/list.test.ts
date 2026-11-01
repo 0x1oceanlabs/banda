@@ -47,6 +47,7 @@ test("a Thread that hears a message moves to the top", () => {
   )
   const moved = applyThreads(state, posted)
   expect(moved.threads.map((t) => t.id)).toEqual(["t1", "t2"])
+  expect(moved.threads[0].message).toBe("again")
   const growing = event(
     "reply.grew",
     { item: "r", turn: "u", text: "…" },
@@ -65,7 +66,11 @@ const one: ThreadList = {
 test("a Thread keeps its latest turn that began, and how it ended", () => {
   const started = event("turn.started", { turn: "u1" }, { subject: "t1" })
   const running = applyThreads(one, started)
-  expect(running.threads[0].latest).toEqual({ turn: "u1", state: "running" })
+  expect(running.threads[0].latest).toEqual({
+    turn: "u1",
+    state: "running",
+    began: started.at,
+  })
   expect(running.threads[0].updated_at).toBe(1)
 
   const withdrawn = event(
@@ -77,12 +82,17 @@ test("a Thread keeps its latest turn that began, and how it ended", () => {
 
   const ended = event(
     "turn.ended",
-    { turn: "u1", state: "done" },
+    { turn: "u1", state: "failed", reason: "It broke." },
     { subject: "t1" }
   )
-  const done = applyThreads(running, ended)
-  expect(done.threads[0].latest).toEqual({ turn: "u1", state: "done" })
-  expect(done.threads[0].updated_at).toBe(ended.at)
+  const failed = applyThreads(running, ended)
+  expect(failed.threads[0].latest).toEqual({
+    turn: "u1",
+    state: "failed",
+    began: started.at,
+    reason: "It broke.",
+  })
+  expect(failed.threads[0].updated_at).toBe(ended.at)
 })
 
 test("a Thread's Questions ask until they are answered or closed", () => {
@@ -96,7 +106,10 @@ test("a Thread's Questions ask until they are answered or closed", () => {
     applyThreads,
     one
   )
-  expect(asking.threads[0].asking).toEqual(["q1", "q2"])
+  expect(asking.threads[0].asking).toEqual([
+    { item: "q1", title: "Which?" },
+    { item: "q2", title: "Which?" },
+  ])
 
   const answered = event(
     "question.answered",

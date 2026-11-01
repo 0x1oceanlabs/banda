@@ -40,18 +40,17 @@ Roma liked A, B and C, and asked for one thing instead of three: "unify everythi
    empty = "hide"              # an empty section: "hide" or "show"
 
    [sort]
-   by = "attention"            # "attention", "changed", "created" or "title"
+   by = "attention"            # "attention", "changed" or "title"
 
    [spaces]
    list = false                # a list of Spaces above the Threads, as Herdr's
-   order = "changed"           # "changed", "name" or "created"
+   order = "changed"           # "changed" or "name"
    rollup = true               # a Space shows its loudest mark and how many need you
    new-thread = true           # each Space offers a new Thread in it
 
    [row]
    lines = 3                   # 1, 2 or 3: the built-in layouts below
    hide = []                   # parts to leave out of the layout: "space", "harness", "note", …
-   time = "changed"            # "changed": since its state changed; "message": the last message
    # A layout of one's own, part by part; "~" pushes the rest to the right:
    # line1 = ["space", "~", "status"]
    # line2 = ["mark", "title"]
@@ -60,7 +59,7 @@ Roma liked A, B and C, and asked for one thing instead of three: "unify everythi
 
    - **States** are the marks seen from the sidebar: `needs` (it asks, or it failed), `done` (it finished while the Person was away), `working` and `idle`. A state listed in neither `states` nor `bottom` goes to the last section, so no Thread is ever hidden.
    - **`attention`** sorts `needs`, then `done`, `working` and `idle`, and the latest change first inside each. It is what ADR 0005 named the attention order.
-   - **`group.by = "space"`** makes each Space a section; `states`, `bottom` and `folded` then apply inside each Space, and `folded` may name Spaces too.
+   - **`group.by = "space"`** makes each Space a section, its rows in `sort.by`'s order; `folded` may name Spaces too.
    - **A row is one, two or three lines** (_decided_: "how many lines one Thread gets, 1, 2 or 3, and how to show the info"). The line with the title is always the same, the mark and the title, so a Thread looks the same in every density; the other lines add context:
 
      | `lines` | line 1 | line 2 | line 3 |
