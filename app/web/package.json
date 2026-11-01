@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "The window's page: the desk of Panes, the Space picker and the engine connection.",
+  "description": "The window's page: the bar, the sidebar, the workspaces of Panes and the engine connection.",
   "exports": {
     "./host": "./src/host.ts"
   },

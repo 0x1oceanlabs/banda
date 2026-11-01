@@ -113,7 +113,7 @@ command (with its ID)
 | The Harness | its session, context and sign-in. We keep only its session ID, as evidence |
 | The OS keychain | secrets you give Bandaso. Its database never holds them |
 | The engine's state folder | the owner's ID; while the engine runs, its port and per-run secret |
-| The window's storage | each Space's Desk: its tiles, their Panes and the focus; what Enter does while an Agent works |
+| The window's storage | the workspaces: their columns, each Pane with its Space, the widths and the focus; whether the sidebar shows; what Enter does while an Agent works |
 | `.bandaso/` SQLite | Threads, Questions and answers, the Agents' queue, Databases' records, receipts, events, outbox |
 | `.bandaso/images/` | the bytes of the images messages carry, one file per image; the SQLite says what each is and which message carries it |
 
@@ -250,7 +250,7 @@ If Chat is removed, Agents still works through its own Thread.
     account. The Thread runs it in a terminal Pane in a tile below. Once
     its program ended with code 0, that Pane sends the sign-in with the
     turn that needed it (`agents.sign_in {harness, way, turn}`), and the
-    turn goes again in the same command. The Desk keeps that Pane, so the
+    turn goes again in the same command. The workspace keeps that Pane, so the
     sign-in lands after a reload or with the Thread closed. The line stays
     to run by hand, after which the Person says so.
   - Codex's adapter signs in by itself in the browser when the engine asks
@@ -373,8 +373,8 @@ If Chat is removed, Agents still works through its own Thread.
     closes.
   - It sends what the Person types one call after another, as the engine
     runs calls side by side.
-  - Closing the Pane closes its terminal. A split that draws it again
-    does not.
+  - Closing the Pane closes its terminal. Moving it to another column or
+    workspace draws it again and does not.
 
 ## Inside a module
 
@@ -419,7 +419,7 @@ module reaches a Harness through an adapter:
 
 ```
 app/desktop      Electron main: starts the engine, serves the page, hands it the address
-app/web          the page: Spaces, the Desk and its keys, the Pane registry
+app/web          the page: the bar, the sidebar, the workspaces and the overview; the actions; the Pane registry
 app/ui           shadcn/ui (preset b0, on Base UI) and the Pane contract
 app/ghostty      T3 Code's Ghostty adapter: a terminal on a canvas
 modules/*/pane   each module's Panes
@@ -438,25 +438,51 @@ modules/*/pane   each module's Panes
   sees no gap.
 - **A Pane** is a `PaneKind`: a kind, the module it needs, a title, an
   icon, optional start args, what its module lets go of when it leaves
-  the Desk (`closed`), and a component. The component gets the
-  engine, the Space, its args, whether it has the focus, `open`,
-  `update`, and `close` for its own tile. A Pane's args are all its
-  state; the Desk keeps them.
+  every workspace (`closed`), and a component. The component gets the
+  engine, its Space, its args, whether it has the focus, `open`,
+  `update`, and `close` for its own tile. `open` opens a Pane of the same
+  Space unless it names another. A Pane's args are all its state; the
+  workspaces keep them, each Pane with its Space.
 - **A Pane reads a view, then follows.** `useLive` reads the view once,
   applies each event after its `at`, and reads again when the engine says
   so. Events that arrive within one frame render once.
-- **The Desk** is a tree of splits whose leaves are tiles
-  (`app/web/src/layout.ts`); every change to it is a pure function.
-  - Opening a Pane that is already shown focuses it.
-  - Opened with no place, a Pane takes the tile that last showed its kind,
-    or splits to the right. Ctrl-click (⌘ on a Mac) always splits.
-  - Keys: Alt+Arrows move the focus, Ctrl+\ splits right, Ctrl+Shift+\
-    splits down, Ctrl+W closes. In a terminal Ctrl+W is the program's,
-    and Ctrl+Shift+W closes.
-  - A Pane leaves the Desk when its tile closes or shows another Pane, or
-    the same with other args; a split draws the tiles again without that.
-  - Each Space keeps its own Desk in the window's storage
-    (`$BANDASO_STATE/window` when that is set).
+- **The shell** (`app/web/src/shell/Shell.tsx`) puts the parts together:
+  the bar on top, the sidebar docked on the left, and the workspaces, or
+  the overview over them (ADR 0005, decisions 7–9).
+- **The workspaces** follow niri (`app/web/src/workspaces/model.ts`); every
+  change to them is a pure function.
+  - They sit one under another, and there is always one empty workspace
+    at the bottom; an empty one in the middle goes once the Person leaves
+    it. Each one is a Strip: columns a third, half, two thirds or all of
+    the screen wide, scrolling sideways, each holding Panes one above
+    another. The focused column always comes fully into view.
+  - A workspace holds Panes of any Spaces; a Pane's header names its
+    Space when the workspace mixes them.
+  - Opening a Pane that is already shown goes to its workspace and focuses
+    it. Opened with no place, a Pane takes the place of one of its kind on
+    the opener's workspace, or a new column right of the opener.
+    Ctrl-click (⌘ on a Mac) always opens a new column.
+  - Every workspace stays drawn, so its Panes keep running; only the
+    current one takes clicks and keys.
+  - A Pane leaves when it closes or its place shows another Pane, or the
+    same with other args; moving it to another column or workspace draws
+    it again without that.
+  - The window keeps the workspaces in its storage
+    (`$BANDASO_STATE/window` when that is set) until they move into the
+    engine (ADR 0005, decision 3); `workspaces/store.ts` is the one place
+    that changes then.
+- **One list of actions** (`app/web/src/shell/actions.ts`) holds what the
+  window does, each with a name and a default key, by its physical place.
+  Alt is the mod: Arrows focus, Shift+Arrows move, Ctrl+Arrows step the
+  width, Return opens a new Thread, N a new Pane, W closes, O the overview,
+  PageUp and PageDown the workspace above or below, 1…9 go to one,
+  Shift+1…9 move the Pane there, A shows or hides the sidebar. The window
+  takes these keys before any Pane hears them; a terminal gets every other
+  key, Ctrl+W among them.
+- **The sidebar** lists every Space, each with the Pane the agents module
+  offers for it (`agents.threads`: its Threads, the one changed last
+  first), and a new Thread in it. A new Thread opens the Space's Agents
+  until a Thread needs no Agent (ADR 0006).
 - **Only `window.bandaso` ties the page to the desktop.** It names no
   Electron API, so a browser can host it later; for now the engine lets in
   only `app://bandaso` and pages on localhost.
@@ -468,14 +494,14 @@ bandaso/
   kernel/             Rust: Space, event log, access, registry, API
   modules/
     agents/engine/    Rust: Agents, Threads, turns, Questions, the ACP adapter
-    agents/pane/      React: the Agents list and the Thread
+    agents/pane/      React: the Agents list, the Thread, a Space's Threads for the sidebar
     terminal/engine/  Rust: Terminals, their PTYs and what they printed
     terminal/pane/    React: a terminal, drawn by Ghostty
     browser/pane/     React: the browser Pane (next)
   engine/             the bandaso program: serve (the kernel and its modules), call, follow
   app/ui/             shadcn/ui and the Pane contract
   app/ghostty/        T3 Code's Ghostty adapter and its WebAssembly, vendored
-  app/web/            React: the Desk, the Space picker, the Pane registry
+  app/web/            React: the shell (bar, sidebar, workspaces, overview), the actions, the Pane registry
   app/desktop/        Electron: the window and the engine's start; e2e tests
   contract/           the engine's API for TypeScript: generated types and the client
   tools/fake-agent/   a scripted ACP agent for tests and window checks; it replays recordings too

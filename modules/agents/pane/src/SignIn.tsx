@@ -27,7 +27,7 @@ import {
 } from "lucide-react"
 import { commandLine } from "./sign-in"
 
-/** How a Pane opens another, as the Desk gives it. */
+/** How a Pane opens another, as the window gives it. */
 export type Open = PaneProps<unknown>["open"]
 
 /**
@@ -177,7 +177,7 @@ function Way({
 
 /**
  * A way in a terminal. It runs in a terminal Pane below, which the
- * terminal module draws and the Desk keeps: once its program ended with
+ * terminal module draws and the window keeps: once its program ended with
  * code 0, that Pane sends the sign-in, which sends the `turn` that needed
  * it again too, and closes. So the sign-in lands even after a reload, or
  * with this card gone. The line stays to run by hand, where no terminal

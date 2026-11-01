@@ -208,7 +208,7 @@ function Screen({
         },
         onResize: (cols, rows) => input.resize({ cols, rows }),
         onSelectionChange: () => {},
-        // The Desk's own keys, such as Alt+Arrows, stay the Desk's.
+        // The window's own keys, such as Alt+Arrows, stay the window's.
         beforeKey: (event) => !event.defaultPrevented,
         canActivateLink: web,
         onLinkActivate: (text) => {
