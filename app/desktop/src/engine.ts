@@ -1,109 +1,103 @@
 /**
- * The engine as the window's child: `banda serve --with-parent`. It
- * starts the engine, learns its address from the first line, starts it
- * again when it dies, and stops it when the window quits. Closing its
- * stdin is how the engine hears the window is gone.
+ * The engine as the window's child: `banda serve --with-parent` (ADR
+ * 0020). It learns the engine's address from the first line it prints,
+ * forgets it while the engine is down, and stops the engine with the
+ * window (child.ts).
  */
-import { type ChildProcess, spawn } from "node:child_process"
-import { createInterface } from "node:readline"
 import type { Address } from "@banda/contract"
+import {
+  Context,
+  Data,
+  Deferred,
+  Effect,
+  Layer,
+  Option,
+  Schema,
+  Stream,
+  SubscriptionRef,
+} from "effect"
+import { command, keepRunning, known, lines } from "./child"
 
 /** The first line `serve --with-parent` prints; `window` is where the
  * window listens for `banda menu`. */
-type Running = {
-  protocol: number
-  port: number
-  secret: string
-  window: string
-}
+const Running = Schema.fromJsonString(
+  Schema.Struct({
+    protocol: Schema.Number,
+    port: Schema.Number,
+    secret: Schema.String,
+    window: Schema.String,
+  })
+)
 
-const FIRST_WAIT = 500
-const LONGEST_WAIT = 10_000
-/** An engine that ran this long without dying starts again at once. */
-const HEALTHY = 30_000
-/** How long a stopping engine has before it is killed. */
-const STOPPING = 5_000
+/** The engine's first line was not what `serve --with-parent` prints. */
+class Unexpected extends Data.TaggedError("Unexpected")<{
+  readonly message: string
+}> {}
 
-export class EngineProcess {
-  readonly #binary: string
-  #child: ChildProcess | null = null
-  #address: Address | null = null
-  #waiting: Array<(address: Address) => void> = []
-  #wait = FIRST_WAIT
-  #stopping = false
-  #door: Promise<string>
-  #found: (door: string) => void = () => {}
-
-  constructor(binary: string) {
-    this.#binary = binary
-    this.#door = new Promise((found) => (this.#found = found))
+export class Engine extends Context.Service<
+  Engine,
+  {
+    /** Where the engine listens; waits while it starts. */
+    readonly address: Effect.Effect<Address>
+    /** Where the window listens for `banda menu`, as the engine named it
+     * the first time it started. */
+    readonly door: Effect.Effect<string>
   }
-
-  /** Where the window listens for `banda menu`, as the engine names it
-   * once it has started. */
-  door(): Promise<string> {
-    return this.#door
-  }
-
-  /** Where the engine listens; waits while it starts. */
-  address(): Promise<Address> {
-    if (this.#address) return Promise.resolve(this.#address)
-    return new Promise((resolve) => this.#waiting.push(resolve))
-  }
-
-  start(): void {
-    if (this.#stopping) return
-    const started = Date.now()
-    const child = spawn(this.#binary, ["serve", "--with-parent"], {
-      stdio: ["pipe", "pipe", "inherit"],
-    })
-    this.#child = child
-    createInterface({ input: child.stdout! }).once("line", (line) => {
-      let running: Running
-      try {
-        running = JSON.parse(line)
-      } catch {
-        console.error(`banda: the engine said something unexpected: ${line}`)
-        child.kill()
-        return
-      }
-      this.#address = {
-        url: `ws://127.0.0.1:${running.port}/ws`,
-        secret: running.secret,
-      }
-      for (const resolve of this.#waiting.splice(0)) resolve(this.#address)
-      this.#found(running.window)
-    })
-    child.once("error", (error) => {
-      console.error(`banda: the engine did not start: ${error.message}`)
-    })
-    // `close` comes after an exit, and also after a start that failed.
-    child.once("close", (code, signal) => {
-      this.#child = null
-      this.#address = null
-      if (this.#stopping) return
-      if (Date.now() - started > HEALTHY) this.#wait = FIRST_WAIT
-      const wait = this.#wait
-      this.#wait = Math.min(wait * 2, LONGEST_WAIT)
-      console.error(
-        `banda: the engine stopped (${signal ?? `code ${code}`}); starting it again in ${wait} ms`
-      )
-      setTimeout(() => this.start(), wait)
-    })
-  }
-
-  /** Stops the engine for good, and resolves once it has gone. */
-  stop(): Promise<void> {
-    this.#stopping = true
-    const child = this.#child
-    if (!child) return Promise.resolve()
-    return new Promise((done) => {
-      const kill = setTimeout(() => child.kill("SIGKILL"), STOPPING)
-      child.once("close", () => {
-        clearTimeout(kill)
-        done()
+>()("banda/Engine") {
+  static readonly layer = (binary: string) =>
+    Layer.effect(Engine)(
+      Effect.gen(function* () {
+        const address = yield* SubscriptionRef.make(Option.none<Address>())
+        const door = yield* Deferred.make<string>()
+        /** The first line of a run: where it listens, and the door. */
+        const started = (line: string) =>
+          Schema.decodeUnknownEffect(Running)(line).pipe(
+            Effect.mapError(
+              (error) =>
+                new Unexpected({
+                  message: `it said something unexpected: ${error.message}`,
+                })
+            ),
+            Effect.flatMap((running) =>
+              Effect.andThen(
+                SubscriptionRef.set(
+                  address,
+                  Option.some({
+                    url: `ws://127.0.0.1:${running.port}/ws`,
+                    secret: running.secret,
+                  })
+                ),
+                Deferred.succeed(door, running.window)
+              )
+            )
+          )
+        yield* Effect.forkScoped(
+          keepRunning(
+            "engine",
+            command(binary, ["serve", "--with-parent"]),
+            (child) => {
+              let first = true
+              // Every line is read, so the pipe never fills; the address
+              // is kept until the engine dies, then forgotten.
+              return lines(child).pipe(
+                Stream.runForEach((line) => {
+                  if (!first) return Effect.void
+                  first = false
+                  return started(line)
+                }),
+                Effect.andThen(Effect.never),
+                Effect.ensuring(SubscriptionRef.set(address, Option.none()))
+              )
+            }
+          )
+        )
+        return {
+          address: known(address).pipe(
+            Stream.runHead,
+            Effect.map(Option.getOrThrow)
+          ),
+          door: Deferred.await(door),
+        }
       })
-      child.stdin!.end()
-    })
-  }
+    )
 }

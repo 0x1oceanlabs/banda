@@ -10,21 +10,26 @@
     "dev": "node build.mjs && BANDA_PAGE=http://localhost:5173/ electron .",
     "start": "node build.mjs && electron .",
     "e2e": "pnpm build && playwright test",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --dir src"
   },
   "devDependencies": {
     "@banda/browser-pane": "workspace:*",
     "@banda/contract": "workspace:*",
     "@banda/web": "workspace:*",
+    "@effect/vitest": "4.1.1",
     "@playwright/test": "1.64.1",
     "@types/chrome": "^0.3.7",
     "@types/node": "^24",
     "electron": "45.1.0",
     "esbuild": "^0.28.2",
-    "typescript": "~6.0.2"
+    "typescript": "~6.0.2",
+    "vitest": "^5.0.5"
   },
   "dependencies": {
+    "@effect/platform-node": "4.1.1",
     "@ghostery/adblocker-electron": "2.20.3",
+    "effect": "4.1.1",
     "electron-chrome-extensions": "4.10.0",
     "electron-chrome-web-store": "0.13.0"
   }
