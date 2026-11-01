@@ -41,6 +41,8 @@ export const DEFAULT_MOTION: Motion = {
     epsilon: 0.0001,
   },
   strip: { kind: "spring", dampingRatio: 1, stiffness: 800, epsilon: 0.0001 },
+  move: { kind: "spring", dampingRatio: 1, stiffness: 800, epsilon: 0.0001 },
+  resize: { kind: "spring", dampingRatio: 1, stiffness: 800, epsilon: 0.0001 },
 }
 
 /** The scheme that shows, and whether it is the dark one: the look's

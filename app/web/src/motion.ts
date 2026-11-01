@@ -120,9 +120,13 @@ export class Moving {
     return this.moving ? this.#target : this.value
   }
 
-  /** Moves to `target` as `move` says; `off` jumps there. */
-  to(target: number, move: Move): void {
-    const from = this.value
+  /**
+   * Moves to `target` as `move` says; `off` jumps there. It starts where it
+   * is, or at `from` when the thing it moves was just put elsewhere, as a
+   * column that the layout moved: then it keeps its speed all the same.
+   * The start is on screen at once, before the next frame.
+   */
+  to(target: number, move: Move, from: number = this.value): void {
     const velocity = this.moving ? this.#velocity : 0
     this.stop()
     if (move.kind === "off" || from === target) {
@@ -150,6 +154,7 @@ export class Moving {
     this.#value = from
     this.#velocity = velocity
     this.#target = target
+    this.#write(from)
     this.#id = this.#clock.frame(tick)
   }
 

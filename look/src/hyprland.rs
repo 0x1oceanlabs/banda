@@ -6,6 +6,7 @@
 //! Hyprland config works, Lua or not, and listens on its event socket for
 //! `configreloaded`.
 
+use crate::motion::MotionSettings;
 use crate::settings::{Corner, Gaps, Settings, Step, Tile};
 use std::io::{BufRead, BufReader, Read, Write};
 use std::os::unix::net::UnixStream;
@@ -21,6 +22,8 @@ pub struct Windows {
     pub gaps: f64,
     /// `dim_strength`, when `dim_inactive` is on.
     pub dim: Option<f64>,
+    /// `animations:enabled`: off, Banda's tiles hold still too.
+    pub animations: bool,
 }
 
 impl Windows {
@@ -38,6 +41,10 @@ impl Windows {
                 radius: Some(Corner::Step(Step::Xl)),
                 border: Some(self.border),
                 dim_inactive: self.dim,
+            },
+            motion: MotionSettings {
+                off: (!self.animations).then_some(true),
+                ..MotionSettings::default()
             },
             ..Settings::default()
         }
@@ -97,6 +104,7 @@ impl Hyprland {
             } else {
                 None
             },
+            animations: on("animations:enabled")?,
         })
     }
 
@@ -138,6 +146,7 @@ mod tests {
             border: 2.0,
             gaps: 5.0,
             dim: Some(0.3),
+            animations: false,
         }
         .layer();
         let radius = layer.radius.unwrap();
@@ -145,5 +154,6 @@ mod tests {
         assert_eq!(layer.gaps.inner, Some(5.0));
         assert_eq!(layer.tile.border, Some(2.0));
         assert_eq!(layer.tile.dim_inactive, Some(0.3));
+        assert_eq!(layer.motion.off, Some(true));
     }
 }

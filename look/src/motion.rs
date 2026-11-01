@@ -24,6 +24,13 @@ pub struct MotionSettings {
     /// Scrolling the Strip to a column.
     #[serde(default)]
     pub strip: Event,
+    /// Columns going to their new places, when one opens, closes, moves or
+    /// changes its width.
+    #[serde(default, rename = "move")]
+    pub moves: Event,
+    /// A column changing its width.
+    #[serde(default)]
+    pub resize: Event,
 }
 
 /// One event's table: `off`, and a `spring` or an `easing`.
@@ -80,6 +87,9 @@ pub const CURVES: [(&str, [f64; 4]); 7] = [
 pub struct Motion {
     pub workspace: Move,
     pub strip: Move,
+    #[serde(rename = "move")]
+    pub moves: Move,
+    pub resize: Move,
 }
 
 /// One event's move, resolved: no move, a spring or an easing.
@@ -118,6 +128,8 @@ impl MotionSettings {
             slowdown: self.slowdown.or(under.slowdown),
             workspace: self.workspace.over(under.workspace),
             strip: self.strip.over(under.strip),
+            moves: self.moves.over(under.moves),
+            resize: self.resize.over(under.resize),
         }
     }
 
@@ -140,12 +152,19 @@ impl MotionSettings {
             slowdown: Some(1.0),
             workspace: spring(),
             strip: spring(),
+            moves: spring(),
+            resize: spring(),
         }
     }
 
     /// The events by their keys, for checks.
-    fn events(&self) -> [(&'static str, &Event); 2] {
-        [("workspace", &self.workspace), ("strip", &self.strip)]
+    fn events(&self) -> [(&'static str, &Event); 4] {
+        [
+            ("workspace", &self.workspace),
+            ("strip", &self.strip),
+            ("move", &self.moves),
+            ("resize", &self.resize),
+        ]
     }
 
     /// What TOML alone does not refuse, with where it is when known.
@@ -261,6 +280,8 @@ impl MotionSettings {
         Motion {
             workspace: event(&self.workspace),
             strip: event(&self.strip),
+            moves: event(&self.moves),
+            resize: event(&self.resize),
         }
     }
 }
