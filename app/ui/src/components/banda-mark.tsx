@@ -27,7 +27,7 @@ export type MarkState =
   | "asking"
   /** A turn ended well and the Person has not looked yet. */
   | "done"
-  /** A turn failed. */
+  /** A turn failed. Red, in `--destructive`. */
   | "failed"
   /** The engine does not answer: asleep. */
   | "offline"
@@ -163,6 +163,7 @@ export function BandaMark({
         <g mask={`url(#${mask})`}>
           <path data-body fill="currentColor" />
           <path data-lit fill="var(--attention, #ff5a1f)" fillOpacity="0" />
+          <path data-alarm fill="var(--destructive, #e7000b)" fillOpacity="0" />
         </g>
       </g>
     </svg>
@@ -195,6 +196,8 @@ type Pose = {
   eye: Eye
   /** How lit it is in `--attention`. */
   lit: number
+  /** How red it is, in `--destructive`. */
+  alarm: number
   /** How much it snores. */
   zz: number
   /** How much the eyes show at all: 0 at rest. */
@@ -215,6 +218,7 @@ const BASE: Pose = {
   big: 1,
   eye: "open",
   lit: 0,
+  alarm: 0,
   zz: 0,
   eyes: 1,
 }
@@ -432,6 +436,7 @@ const STATES: Record<Exclude<MarkState, "rest">, Motion> = {
       ty: 1,
       rot: 4 + shake * 1.2,
       eye: "cross",
+      alarm: 1,
     }
   },
   offline: (_t, time) => {
@@ -577,7 +582,7 @@ const STILL: Record<MarkState, Pose> = {
   running: { ...BASE, w: only(CIRCLE), ex: -2.6, ey: 2.6, open: 0.6 },
   asking: { ...BASE, w: only(TRIANGLE), rot: -6, big: 1.12, lit: 1 },
   done: { ...BASE, eye: "happy" },
-  failed: { ...BASE, w: only(TRIANGLE), rot: 4, eye: "cross" },
+  failed: { ...BASE, w: only(TRIANGLE), rot: 4, eye: "cross", alarm: 1 },
   offline: {
     ...BASE,
     rot: 7,
@@ -605,6 +610,7 @@ function mix(a: Pose, b: Pose, m: number): Pose {
     big: lerp(a.big, b.big, m),
     eye: m < 0.5 ? a.eye : b.eye,
     lit: lerp(a.lit, b.lit, m),
+    alarm: lerp(a.alarm, b.alarm, m),
     zz: lerp(a.zz, b.zz, m),
     eyes: lerp(a.eyes, b.eyes, m),
   }
@@ -638,6 +644,7 @@ class Animator {
   private readonly hat: SVGGElement
   private readonly body: SVGPathElement
   private readonly lit: SVGPathElement
+  private readonly alarm: SVGPathElement
   private readonly eyes: SVGEllipseElement[]
   private readonly glyph: SVGPathElement
   private readonly zz: SVGTextElement[]
@@ -668,6 +675,7 @@ class Animator {
     this.hat = svg.querySelector("[data-hat]")!
     this.body = svg.querySelector("[data-body]")!
     this.lit = svg.querySelector("[data-lit]")!
+    this.alarm = svg.querySelector("[data-alarm]")!
     this.eyes = [...svg.querySelectorAll<SVGEllipseElement>("[data-eye]")]
     this.glyph = svg.querySelector("[data-glyph]")!
     this.zz = [...svg.querySelectorAll<SVGTextElement>("[data-zz] text")]
@@ -828,6 +836,8 @@ class Animator {
     this.body.setAttribute("d", d)
     this.lit.setAttribute("d", d)
     this.lit.setAttribute("fill-opacity", f(p.lit))
+    this.alarm.setAttribute("d", d)
+    this.alarm.setAttribute("fill-opacity", f(p.alarm))
     this.hat.setAttribute(
       "transform",
       `translate(${f(p.tx)} ${f(p.ty)}) rotate(${f(TILT + p.rot)} 54 45) translate(76 45) scale(${f(p.sx)} ${f(p.sy)}) translate(-76 -45) rotate(${f(p.spin)} ${CX} ${CY})`
