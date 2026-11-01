@@ -31,6 +31,8 @@
   --color-border: var(--border);
   --color-destructive: var(--destructive);
   --color-attention: var(--attention);
+  --color-focus: var(--focus);
+  --color-focus-inactive: var(--focus-inactive);
   --color-added: var(--added);
   --color-removed: var(--removed);
   --color-accent-foreground: var(--accent-foreground);
@@ -54,6 +56,7 @@
   --radius-2xl: calc(var(--radius) * 1.8);
   --radius-3xl: calc(var(--radius) * 2.2);
   --radius-4xl: calc(var(--radius) * 2.6);
+  --radius-tile: var(--tile-radius);
   --font-sans: "Inter Variable", sans-serif;
 }
 
@@ -131,6 +134,28 @@
   --sidebar-accent-foreground: oklch(0.985 0 0);
   --sidebar-border: oklch(1 0 0 / 10%);
   --sidebar-ring: oklch(0.556 0 0);
+}
+
+/*
+ * The tiles' look (ADR 0007): the gaps, the tiles' corners and borders,
+ * and how the focused tile stands out, as Hyprland shows it: its border
+ * takes the focus colour. These are Banda's defaults, in light and dark;
+ * the look module sets them from look.toml. Components read these
+ * variables, never constants of their own.
+ */
+:root {
+  /* Between tiles, and between the tiles and the window's edge. */
+  --gap-inner: 4px;
+  --gap-outer: 4px;
+  /* The tile holds cards (xl), and the outer is never rounder than what
+     it holds, so the tile is the top step of shadcn's ladder. */
+  --tile-radius: calc(var(--radius) * 1.4);
+  --tile-border: 2px;
+  /* The focused tile's border, and every other tile's. A theme's accent
+     takes --focus; without one it is the strongest colour there is. */
+  --focus: var(--primary);
+  --focus-inactive: var(--border);
+  --bar-height: 2.25rem;
 }
 
 @layer base {
