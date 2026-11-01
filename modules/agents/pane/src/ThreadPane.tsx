@@ -61,9 +61,11 @@ import {
   NO_OFFER,
   proposedPlan,
   retryable,
+  sent,
   steerable,
   type ThreadState,
   waiting,
+  type Waiting,
   working,
 } from "./thread"
 import { suggested } from "./slash"
@@ -187,6 +189,10 @@ function ThreadPane({
     closed: offer.no_images ? `${name} does not take images.` : undefined,
   })
   const [dropping, setDropping] = useState(false)
+  // The waiting message open to edit, from its Edit or ↑ in the composer.
+  const [editing, setEditing] = useState<ItemId>()
+  const waits = state ? waiting(state) : []
+  const last = waits.at(-1)
   // The Question the Agent waits on: one with a form opens on the composer,
   // and a message sent while any waits says no to it first, as in T3 Code.
   const asking = state && asked(state)
@@ -262,6 +268,8 @@ function ThreadPane({
       void acting.act(() =>
         engine.command("agents.withdraw", { turn: turn.id }, space)
       ),
+    editing,
+    onEditing: setEditing,
     onContinue: () => {
       if (thread === null) return
       void acting.act(() => engine.command("agents.resume", { thread }, space))
@@ -304,6 +312,7 @@ function ThreadPane({
         ) : (
           <Transcript
             state={live.view}
+            waits={waits}
             name={name}
             reader={reader}
             answering={acting.busy}
@@ -351,6 +360,8 @@ function ThreadPane({
         )}
         <Composer
           name={name}
+          thread={thread}
+          history={() => (state ? sent(state) : [])}
           placeholder={
             asking
               ? `Send a message to say no and tell ${name} what to do instead`
@@ -368,6 +379,7 @@ function ThreadPane({
           images={images}
           dropping={dropping}
           onPlanMode={(plan) => settings && configure({ ...settings, plan })}
+          onEditLast={last && (() => setEditing(last.item.id))}
           onSend={send}
           onStop={stop}
         >
@@ -459,6 +471,7 @@ type Answering = {
 
 function Transcript({
   state,
+  waits,
   name,
   reader,
   onRetry,
@@ -468,6 +481,8 @@ function Transcript({
   ...answers
 }: Answering & {
   state: ThreadState
+  /** The messages that wait, from {@link waiting}. */
+  waits: Waiting[]
   name: string
   reader: ImageReader
   onRetry: (turn: TurnView) => void
@@ -478,7 +493,6 @@ function Transcript({
 }) {
   const turn = working(state)
   const lines = useMemo(() => timeline(state), [state])
-  const waits = waiting(state)
   const last = state.items.at(-1)
   const render = (line: Line): React.ReactNode => {
     switch (line.kind) {

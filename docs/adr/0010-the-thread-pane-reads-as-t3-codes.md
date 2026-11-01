@@ -70,6 +70,9 @@ asked to build all of it; the rest are our defaults and stay his to change.
    - While a turn runs, the button with text queues or steers, by the
      Person's setting; Mod+Enter does the other. With no text, it stops.
    - Alt+↑ brings the last queued message into the composer to edit.
+     Built: Alt and the arrows move between Panes in Banda, so while a
+     message waits, ↑ in an empty composer opens the last one to edit, in
+     its place in the queue.
    - ↑ and ↓ walk the Thread's earlier messages; drafts are kept per
      Thread in the window's storage.
    - Model, effort and mode sit in the composer's footer and rest, faded,

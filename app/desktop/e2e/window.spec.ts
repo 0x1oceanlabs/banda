@@ -771,19 +771,23 @@ test("a message goes into the turn that runs, or waits its turn in the queue", a
   await composer.press("Enter")
   await expect(waits).toHaveCount(1)
   await composer.fill("also this")
-  await expect(thread.getByRole("button", { name: "Queue" })).toBeVisible()
+  // The button steers too, and says so.
+  await expect(thread.getByRole("button", { name: "Steer" })).toBeEnabled()
   await page.screenshot({ path: "test-results/15-steer.png" })
   await composer.press("Enter")
   await expect(thread.getByText("Steered: also this.")).toBeVisible()
 
-  // Ctrl+Enter, or Queue, has it wait for the turn to end.
+  // Ctrl+Enter, or Ctrl+click on the button, has it wait for the turn to
+  // end.
   await composer.fill("wait again")
   await composer.press("Enter")
   await expect(waits).toHaveCount(2)
   await composer.fill("second")
   await composer.press("Control+Enter")
   await composer.fill("third")
-  await thread.getByRole("button", { name: "Queue" }).click()
+  await thread
+    .getByRole("button", { name: "Steer" })
+    .click({ modifiers: ["ControlOrMeta"] })
   const queue = thread.getByRole("list", { name: "Waiting messages" })
   await expect(queue.getByRole("listitem")).toHaveCount(2)
   await page.screenshot({ path: "test-results/16-queue.png" })
@@ -824,6 +828,56 @@ test("a message goes into the turn that runs, or waits its turn in the queue", a
   await expect(queue).toBeHidden()
 })
 
+test("the composer walks earlier messages, keeps a draft and edits what waits", async () => {
+  window = await startWindow()
+  const { page } = window
+  const { thread, composer } = await firstThread(page)
+  await composer.fill("hello")
+  await composer.press("Enter")
+  await expect(thread.getByText("You said: hello")).toBeVisible()
+  await composer.fill("again")
+  await composer.press("Enter")
+  await expect(thread.getByText("You said: again")).toBeVisible()
+
+  // ↑ and ↓ in an empty box walk what the Person sent.
+  await composer.press("ArrowUp")
+  await expect(composer).toHaveValue("again")
+  await composer.press("ArrowUp")
+  await expect(composer).toHaveValue("hello")
+  await composer.press("ArrowDown")
+  await composer.press("ArrowDown")
+  await expect(composer).toHaveValue("")
+
+  // What is written waits as the Thread's draft, until it is sent.
+  const drafts = () =>
+    page.evaluate(() =>
+      Object.keys(localStorage)
+        .filter((key) => key.startsWith("bandaso.agents.draft."))
+        .map((key) => localStorage.getItem(key))
+    )
+  await composer.fill("half written")
+  await expect.poll(drafts).toEqual(["half written"])
+  await composer.fill("")
+  await expect.poll(drafts).toEqual([])
+
+  // ↑ opens the last message that waits, to change it, before the
+  // earlier ones.
+  await composer.fill("wait here")
+  await composer.press("Enter")
+  await expect(thread.getByText("Waiting.")).toBeVisible()
+  await composer.fill("after it")
+  await composer.press("Control+Enter")
+  const queue = thread.getByRole("list", { name: "Waiting messages" })
+  await expect(queue.getByText("after it")).toBeVisible()
+  await composer.press("ArrowUp")
+  const edit = thread.getByRole("textbox", { name: "Waiting message" })
+  await expect(edit).toHaveValue("after it")
+  await edit.fill("after it, changed")
+  await edit.press("Enter")
+  await expect(queue.getByText("after it, changed")).toBeVisible()
+  await thread.getByRole("button", { name: "Stop" }).click()
+})
+
 test("what the Agent does by itself shows in a turn of its own", async () => {
   window = await startWindow()
   const { page } = window
@@ -837,7 +891,7 @@ test("what the Agent does by itself shows in a turn of its own", async () => {
   await expect(thread.getByText(/^Working for \d+s$/)).toBeVisible()
   await composer.fill("and this")
   // Its own turn takes no message: one goes as a turn of its own.
-  await expect(thread.getByRole("button", { name: "Queue" })).toBeHidden()
+  await expect(thread.getByRole("button", { name: "Steer" })).toBeHidden()
   await page.screenshot({ path: "test-results/18-by-itself.png" })
   await composer.press("Enter")
   await expect(thread.getByText("You said: and this")).toBeVisible()

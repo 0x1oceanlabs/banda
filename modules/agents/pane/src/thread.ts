@@ -429,6 +429,17 @@ export function waiting(state: ThreadState): Waiting[] {
   })
 }
 
+/** What the Person sent the Thread, oldest first, for ↑ and ↓ in the
+ * composer: each text once in a row, none empty. */
+export function sent(state: ThreadState): string[] {
+  const texts: string[] = []
+  for (const { author, body } of state.items) {
+    const said = author.kind === "person" && body.kind === "message"
+    if (said && body.text && texts.at(-1) !== body.text) texts.push(body.text)
+  }
+  return texts
+}
+
 /** Messages the Thread shows nowhere: taken back before any turn ran
  * them, and not sent into another. */
 function withdrawn(state: ThreadState): Set<string> {
