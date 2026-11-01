@@ -1,11 +1,16 @@
 /**
- * A prompt is a string; the prompt editor shows it as a document of
- * paragraphs, one a line, styled as its markdown says, where what the text
- * points at is a chip (ADR 0015, decisions 2 and 3). A chip is one atom:
- * what it points at, written into the string in its kind's way, a file as
- * `@path`. A style keeps the delimiters it was written with, so the string
- * comes back as it was, character for character. These turn one into the
- * other, and find the word being typed. Pure, so plain tests cover them.
+ * A prompt is a string; the prompt editor shows it as a document of lines,
+ * one block a line, where what the text points at is a chip (ADR 0015,
+ * decisions 2 and 3). How a line starts says what it is: `# ` a heading,
+ * `> ` a quote, `- `, `1. ` or `- [ ] ` an item of a list, `---` a rule;
+ * the rest is text, styled as its markdown says. A list is its items,
+ * each as far in as the spaces before its marker say, so a line is always
+ * one block. A chip is one atom: what it points at, written into the
+ * string in its kind's way, a file as `@path`. Each block keeps how its
+ * line started and each style the delimiters it was written with, so the
+ * string comes back as it was, character for character. These turn one
+ * into the other, and find the word being typed. Pure, so plain tests
+ * cover them.
  */
 import type { JSONContent } from "@tiptap/core"
 import type { Fragment, Mark, Node } from "@tiptap/pm/model"
@@ -42,12 +47,80 @@ export function chip(kind: ChipKind, value: string): JSONContent {
 /** The document that shows `text`: a paragraph for each line, styled as
  * its markdown says, what it points at as chips. */
 export function docOf(text: string): JSONContent {
+  // Inside a fence, lines are code: text as it is, until the fence closes.
+  let fence: string | undefined
   return {
     type: "doc",
     content: text.split("\n").map((line) => {
-      const content = inline(line)
-      return { type: "paragraph", ...(content.length > 0 && { content }) }
+      if (fence === undefined) {
+        fence = FENCE.exec(line)?.[1]
+        if (fence === undefined) return blockOf(line)
+      } else if (closes(line, fence)) fence = undefined
+      return textblock("paragraph", {}, line, false)
     }),
+  }
+}
+
+const FENCE = /^(`{3,}|~{3,})/
+const CLOSE = /^(`{3,}|~{3,})[ \t]*$/
+/** Whether `line` closes `fence`: as long a run of the same, or longer. */
+function closes(line: string, fence: string) {
+  const run = CLOSE.exec(line)?.[1]
+  return run !== undefined && run[0] === fence[0] && run.length >= fence.length
+}
+
+const RULE = /^([-*_])(?:[ \t]*\1){2,}[ \t]*$/
+const HEADING = /^(#{1,6})([ \t]+)/
+const QUOTE = /^>[ \t]*/
+const ITEM = /^([ \t]*)([-*+]|\d{1,9}[.)])([ \t]+|$)/
+const CHECK = /^\[([ xX])\]([ \t]+|$)/
+
+/** The block a line is, from how it starts. */
+function blockOf(line: string): JSONContent {
+  if (RULE.test(line)) return { type: "rule", attrs: { source: line } }
+  const heading = HEADING.exec(line)
+  if (heading)
+    return textblock(
+      "heading",
+      { level: heading[1].length, space: heading[2] },
+      line.slice(heading[0].length)
+    )
+  const quote = QUOTE.exec(line)
+  if (quote)
+    return textblock("quote", { prefix: quote[0] }, line.slice(quote[0].length))
+  const item = ITEM.exec(line)
+  if (item) {
+    const [found, indent, marker, space] = item
+    const rest = line.slice(found.length)
+    // A task's box comes after the marker and a space.
+    const check = space ? CHECK.exec(rest) : null
+    return textblock(
+      "item",
+      {
+        indent,
+        marker,
+        space,
+        check: check?.[1] ?? null,
+        checkSpace: check?.[2] ?? "",
+      },
+      rest.slice(check?.[0].length ?? 0)
+    )
+  }
+  return textblock("paragraph", {}, line)
+}
+
+/** A block of `type` holding `text`, styled unless it is code. */
+function textblock(
+  type: string,
+  attrs: Record<string, unknown>,
+  text: string,
+  styled = true
+): JSONContent {
+  const content = styled ? inline(text) : text ? [{ type: "text", text }] : []
+  return {
+    type,
+    ...(Object.keys(attrs).length > 0 && { attrs }),
+    ...(content.length > 0 && { content }),
   }
 }
 
@@ -228,11 +301,11 @@ function sourceOf(leaf: Node): string {
   return kind in KINDS ? KINDS[kind as ChipKind].write(String(value)) : ""
 }
 
-/** The text `content` shows: its paragraphs, a line each. */
+/** The text `content` shows: its blocks, a line each. */
 export function textOf(content: Fragment): string {
   const lines: string[] = []
   content.forEach((block) => {
-    // A paragraph an edit left alone is the same node, its line known.
+    // A block an edit left alone is the same node, its line known.
     let line = LINES.get(block)
     if (line === undefined) LINES.set(block, (line = lineOf(block)))
     lines.push(line)
@@ -242,9 +315,34 @@ export function textOf(content: Fragment): string {
 
 const LINES = new WeakMap<Node, string>()
 
-/** A paragraph's line: its text and its chips as what they write, each
- * style between the delimiters it was written with. */
+/** A block's line: how it starts, then its text. */
 function lineOf(block: Node): string {
+  const { attrs } = block
+  const text = textIn(block)
+  // What starts a line with text in it needs a space before the text, or
+  // it would be read back as text.
+  const gap = (space: string) => space || (text ? " " : "")
+  switch (block.type.name) {
+    case "rule":
+      return String(attrs.source)
+    case "heading":
+      return "#".repeat(Number(attrs.level)) + String(attrs.space) + text
+    case "quote":
+      return String(attrs.prefix) + text
+    case "item": {
+      const start = String(attrs.indent) + String(attrs.marker)
+      if (attrs.check === null) return start + gap(String(attrs.space)) + text
+      const box = `${String(attrs.space) || " "}[${String(attrs.check)}]`
+      return start + box + gap(String(attrs.checkSpace)) + text
+    }
+    default:
+      return text
+  }
+}
+
+/** A textblock's text and its chips as what they write, each style
+ * between the delimiters it was written with. */
+function textIn(block: Node): string {
   // Markdown cannot open a style before a space nor close one after it,
   // so the spaces at a styled run's edges are written outside it.
   const pieces: { leaf: Node; marks: readonly Mark[]; blank: boolean }[] = []

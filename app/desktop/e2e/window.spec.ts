@@ -1120,6 +1120,73 @@ test("markdown is styled as it is typed, and sent as it was written", async () =
   await expect(composer.locator("code")).toHaveText("npm i")
 })
 
+test("a line's start makes it a heading, a list, a task, a quote or a rule", async () => {
+  window = await startWindow()
+  const { page } = window
+  const { thread, composer } = await firstThread(page)
+  const items = composer.locator("[data-item]")
+
+  await composer.pressSequentially("# Plan")
+  await expect(composer.locator("h1")).toHaveText("Plan")
+  // After a heading comes text; a list goes on with Shift+Enter, and an
+  // empty item ends it, the line text again.
+  await composer.press("Shift+Enter")
+  await composer.pressSequentially("- one")
+  await composer.press("Shift+Enter")
+  await composer.pressSequentially("two")
+  await expect(items).toHaveText(["•one", "•two"])
+  await composer.press("Shift+Enter")
+  await composer.press("Shift+Enter")
+  // Numbers go on; Tab takes an item in.
+  await composer.pressSequentially("1. first")
+  await composer.press("Shift+Enter")
+  await composer.pressSequentially("second")
+  await expect(items.nth(3)).toHaveText("2.second")
+  await composer.press("Shift+Enter")
+  await composer.press("Shift+Enter")
+  // A task's box ticks with a click.
+  await composer.pressSequentially("- [ ] ship it")
+  const box = composer.getByRole("checkbox", { name: "To do" })
+  await box.click()
+  await expect(composer.getByRole("checkbox", { name: "Done" })).toBeChecked()
+  await composer.press("End")
+  await composer.press("Shift+Enter")
+  await composer.press("Shift+Enter")
+  await composer.pressSequentially("> said so")
+  await expect(composer.locator("blockquote")).toHaveText("said so")
+  await composer.press("Shift+Enter")
+  await composer.press("Shift+Enter")
+  await composer.pressSequentially("---")
+  await expect(composer.locator("hr")).toHaveCount(1)
+  await composer.pressSequentially("end")
+  await page.screenshot({ path: "test-results/18g-blocks.png" })
+
+  // It is sent as the markdown it was written as.
+  await composer.press("Enter")
+  const written = [
+    "# Plan",
+    "- one",
+    "- two",
+    "1. first",
+    "2. second",
+    "- [x] ship it",
+    "> said so",
+    "---",
+    "end",
+  ].join("\n")
+  const said = thread.locator("[data-slot=bubble]").filter({ hasText: "Plan" })
+  await expect(said).toHaveJSProperty("textContent", written)
+
+  // Backspace at an item's start makes it text again.
+  await composer.pressSequentially("- gone")
+  await composer.press("Home")
+  // Keys outrun the selection's news to the editor; let it arrive.
+  await page.evaluate(() => new Promise((done) => setTimeout(done)))
+  await composer.press("Backspace")
+  await expect(items).toHaveCount(0)
+  await expect(composer.locator("p")).toHaveText("gone")
+})
+
 test("what the Agent does by itself shows in a turn of its own", async () => {
   window = await startWindow()
   const { page } = window
