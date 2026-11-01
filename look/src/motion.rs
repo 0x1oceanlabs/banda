@@ -31,6 +31,12 @@ pub struct MotionSettings {
     /// A column changing its width.
     #[serde(default)]
     pub resize: Event,
+    /// A tile coming in: it fades in, growing a little.
+    #[serde(default)]
+    pub open: Event,
+    /// A tile going: it fades out, shrinking a little, as the rest close in.
+    #[serde(default)]
+    pub close: Event,
 }
 
 /// One event's table: `off`, and a `spring` or an `easing`.
@@ -90,6 +96,8 @@ pub struct Motion {
     #[serde(rename = "move")]
     pub moves: Move,
     pub resize: Move,
+    pub open: Move,
+    pub close: Move,
 }
 
 /// One event's move, resolved: no move, a spring or an easing.
@@ -130,6 +138,8 @@ impl MotionSettings {
             strip: self.strip.over(under.strip),
             moves: self.moves.over(under.moves),
             resize: self.resize.over(under.resize),
+            open: self.open.over(under.open),
+            close: self.close.over(under.close),
         }
     }
 
@@ -147,6 +157,17 @@ impl MotionSettings {
             )),
             easing: None,
         };
+        let easing = |duration: f64, curve: &str| Event {
+            off: Some(false),
+            spring: None,
+            easing: Some(Spanned::new(
+                0..0,
+                EasingSettings {
+                    duration_ms: Some(duration),
+                    curve: Some(Spanned::new(0..0, curve.to_owned())),
+                },
+            )),
+        };
         MotionSettings {
             off: Some(false),
             slowdown: Some(1.0),
@@ -154,16 +175,21 @@ impl MotionSettings {
             strip: spring(),
             moves: spring(),
             resize: spring(),
+            // niri's window-open and window-close.
+            open: easing(150.0, "easeOutExpo"),
+            close: easing(150.0, "easeOutQuad"),
         }
     }
 
     /// The events by their keys, for checks.
-    fn events(&self) -> [(&'static str, &Event); 4] {
+    fn events(&self) -> [(&'static str, &Event); 6] {
         [
             ("workspace", &self.workspace),
             ("strip", &self.strip),
             ("move", &self.moves),
             ("resize", &self.resize),
+            ("open", &self.open),
+            ("close", &self.close),
         ]
     }
 
@@ -282,6 +308,8 @@ impl MotionSettings {
             strip: event(&self.strip),
             moves: event(&self.moves),
             resize: event(&self.resize),
+            open: event(&self.open),
+            close: event(&self.close),
         }
     }
 }
@@ -383,6 +411,13 @@ mod tests {
         let motion = MotionSettings::defaults().resolve();
         assert_eq!(motion.workspace, Move::Spring(SPRING));
         assert_eq!(motion.strip, Move::Spring(SPRING));
+        assert_eq!(
+            motion.open,
+            Move::Easing(Easing {
+                duration_ms: 150.0,
+                bezier: [0.16, 1.0, 0.3, 1.0]
+            })
+        );
     }
 
     #[test]

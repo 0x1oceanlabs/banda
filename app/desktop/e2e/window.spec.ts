@@ -1025,6 +1025,33 @@ test("columns grow and go to their new places on the look's motion", async () =>
   await expect.poll(slide).toBe("")
 })
 
+test("a tile fades in as it opens and fades out where it was as it closes", async () => {
+  const slow = 'easing = { duration-ms = 1500, curve = "linear" }'
+  window = await startWindow({
+    look: `[motion.open]\n${slow}\n[motion.close]\n${slow}\n`,
+  })
+  const { page } = window
+  const { composer } = await firstThread(page)
+  await expect(composer).toBeFocused()
+  const opacity = (tile: Locator) =>
+    tile.evaluate((e) => Number(getComputedStyle(e).opacity))
+
+  await page.keyboard.press("Alt+KeyN")
+  const launcher = page.getByRole("region", { name: "New Pane" })
+  await expect(launcher).toBeVisible()
+  expect(await opacity(launcher)).toBeLessThan(0.9)
+  await expect.poll(() => opacity(launcher)).toBe(1)
+
+  // Closed, it is gone from the window at once, and its look fades out.
+  await page.keyboard.press("Alt+KeyW")
+  await expect(launcher).toBeHidden()
+  const ghost = page.locator("[aria-hidden=true][inert]", {
+    hasText: "What should this tile show?",
+  })
+  await expect(ghost).toHaveCount(1)
+  await expect(ghost).toHaveCount(0)
+})
+
 test("the window takes its look from look.toml, and again on each save", async () => {
   window = await startWindow({
     look: '[gaps]\ninner = 12\n[colors]\naccent = "#e07a3f"\n',
