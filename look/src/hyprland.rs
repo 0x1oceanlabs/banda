@@ -1,6 +1,6 @@
 //! Hyprland's own window settings, when Banda runs under it (ADR 0007,
-//! decision 8): its rounding, border and gaps become a layer of the look,
-//! so the tiles inside Banda look like the windows around it.
+//! decision 8): its rounding, border, gaps and dimming become a layer of
+//! the look, so the tiles inside Banda look like the windows around it.
 //!
 //! Banda asks Hyprland over its socket, as `hyprctl getoption` does, so any
 //! Hyprland config works, Lua or not, and listens on its event socket for
@@ -12,12 +12,15 @@ use std::os::unix::net::UnixStream;
 use std::path::PathBuf;
 use std::time::Duration;
 
-/// The three settings Banda takes, in pixels.
+/// The settings Banda takes: sizes in pixels, and how much windows
+/// without the focus darken when Hyprland dims them.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Windows {
     pub rounding: f64,
     pub border: f64,
     pub gaps: f64,
+    /// `dim_strength`, when `dim_inactive` is on.
+    pub dim: Option<f64>,
 }
 
 impl Windows {
@@ -34,6 +37,7 @@ impl Windows {
             tile: Tile {
                 radius: Some(Corner::Step(Step::Xl)),
                 border: Some(self.border),
+                dim_inactive: self.dim,
             },
             ..Settings::default()
         }
@@ -75,10 +79,24 @@ impl Hyprland {
                     std::io::Error::other(format!("Hyprland has no number for {option}"))
                 })
         };
+        let on = |option: &str| -> std::io::Result<bool> {
+            let answer = self.ask(&format!("j/getoption {option}"))?;
+            let value: serde_json::Value =
+                serde_json::from_str(&answer).unwrap_or(serde_json::Value::Null);
+            Ok(value["bool"]
+                .as_bool()
+                .or_else(|| value["int"].as_i64().map(|n| n != 0))
+                .unwrap_or(false))
+        };
         Ok(Windows {
             rounding: number("decoration:rounding")?,
             border: number("general:border_size")?,
             gaps: number("general:gaps_in")?,
+            dim: if on("decoration:dim_inactive")? {
+                Some(number("decoration:dim_strength")?)
+            } else {
+                None
+            },
         })
     }
 
@@ -119,11 +137,13 @@ mod tests {
             rounding: 12.0,
             border: 2.0,
             gaps: 5.0,
+            dim: Some(0.3),
         }
         .layer();
         let radius = layer.radius.unwrap();
         assert!((radius * Step::Xl.factor() - 12.0).abs() < 1e-9);
         assert_eq!(layer.gaps.inner, Some(5.0));
         assert_eq!(layer.tile.border, Some(2.0));
+        assert_eq!(layer.tile.dim_inactive, Some(0.3));
     }
 }

@@ -55,7 +55,7 @@ ADR 0005 promised a theme file (decision 11) and "one look, and honest motion" (
 
 6. **The tiling look, named as Hyprland and niri name it.** In `look.toml`, in pixels:
    - `[gaps]`: `inner` between tiles and `outer` around the Strip (Hyprland's `gaps_in` and `gaps_out`).
-   - `[tile]`: `radius` (a step of the ladder or pixels, decision 7), `border` width, `dim-inactive` (0 to 1).
+   - `[tile]`: `radius` (a step of the ladder or pixels, decision 7), `border` width, `dim-inactive` (0 to 1: a black veil over the content of the tiles without the focus, as Hyprland dims its windows; the border stays; _built_).
    - `[focus]`: how the focused tile stands out (_decided_), as in Hyprland by default: its `border` takes the accent, the others keep `inactive-border`. niri's focus ring is a switch: `ring` grows the focused tile's frame that far out into the gap, so nothing moves; `0`, the default, draws none. The ring has no colour of its own: it is the border's, drawn as one stroke over it, so the tile has one frame and no seam where two would meet. A border of one colour and a ring of another looked like two frames. Colours are palette names or hex. A gradient comes later, written as Hyprland writes it.
    - `[columns]`, as niri's (_built_):
      - `presets` are the widths Alt+Ctrl+Left and Right step through, as fractions of the screen (`"1/3"`, `"2/5"`, `"1"`). A column steps from whatever width it has to the nearest preset past it.
@@ -77,7 +77,8 @@ ADR 0005 promised a theme file (decision 11) and "one look, and honest motion" (
    - The tile is the `xl` step, so `radius` becomes `rounding / 1.4`, and every control keeps its place on the ladder. Roma's 12 gives tiles of 12 px and fields of 8.6 px; Omarchy's 0 makes everything square.
    - The engine asks Hyprland over its socket (`j/getoption`, what `hyprctl getoption` prints), so any Hyprland config works, Lua or not. It listens for `configreloaded` and repaints.
    - `look.toml` still wins key by key. `hyprland = false` turns it off.
-   - Only these three: Hyprland's colours come through the Omarchy theme, and its gaps around the screen (`gaps_out`) belong to the desktop, not to the tiles in Banda's window.
+   - And its dimming: when `decoration:dim_inactive` is on, `dim_strength` becomes `tile.dim-inactive`, so the tiles without the focus darken as the windows do. Off, it leaves the setting to the layers under it.
+   - Only these: Hyprland's colours come through the Omarchy theme, and its gaps around the screen (`gaps_out`) belong to the desktop, not to the tiles in Banda's window.
 
 9. **Motion, as niri says it.**
    - `[motion]`: `off`, `slowdown` (2 is twice as slow).

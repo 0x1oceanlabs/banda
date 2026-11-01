@@ -185,6 +185,13 @@ pub fn read_settings(path: &Path, text: &str, problems: &mut Vec<Problem>) -> Op
     for key in settings.negative_sizes() {
         problems.push(Problem::whole(path, format!("{key} cannot be negative")));
     }
+    if settings
+        .tile
+        .dim_inactive
+        .is_some_and(|d| !(d.is_finite() && (0.0..=1.0).contains(&d)))
+    {
+        problems.push(Problem::whole(path, "tile.dim-inactive is from 0 to 1"));
+    }
     for (span, message) in settings.columns.problems() {
         problems.push(Problem::at(path, text, span, message));
     }
@@ -525,6 +532,16 @@ fn vars(all: &Settings) -> BTreeMap<String, String> {
     put("gap-outer", all.gaps.outer);
     put("bar-height", all.bar.height);
     put("focus-ring", all.focus.ring);
+    if let Some(dim) = all
+        .tile
+        .dim_inactive
+        .filter(|d| d.is_finite() && (0.0..=1.0).contains(d))
+    {
+        vars.insert(
+            "--tile-dim".to_owned(),
+            format!("{}", (dim * 1000.0).round() / 1000.0),
+        );
+    }
     vars
 }
 
