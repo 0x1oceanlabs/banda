@@ -22,6 +22,15 @@ test("the browser's keys are Chrome's, with Ctrl", () => {
   )
   expect(browserKey(key("BracketLeft", { metaKey: true }))).toBe("back")
   expect(browserKey(key("F12"))).toBe("devtools")
+  expect(browserKey(key("KeyT", { ctrlKey: true }))).toBe("tab-new")
+  expect(browserKey(key("KeyT", { ctrlKey: true, shiftKey: true }))).toBe(
+    "tab-reopen"
+  )
+  expect(browserKey(key("KeyW", { ctrlKey: true }))).toBe("tab-close")
+  expect(browserKey(key("Tab", { ctrlKey: true, shiftKey: true }))).toBe(
+    "tab-previous"
+  )
+  expect(browserKey(key("Digit9", { ctrlKey: true }))).toBe("tab-9")
   expect(browserKey(key("KeyL"))).toBeUndefined()
   expect(browserKey(key("KeyC", { ctrlKey: true }))).toBeUndefined()
 })

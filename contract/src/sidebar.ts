@@ -4,6 +4,7 @@
  * it comes, and how the view menu writes a preset into the file.
  */
 import type { Sidebar } from "./generated/sidebar/Sidebar"
+import { withTopKey } from "./look"
 
 export type { Sidebar } from "./generated/sidebar/Sidebar"
 export type { Group } from "./generated/sidebar/Group"
@@ -42,22 +43,8 @@ export const DEFAULT_SIDEBAR: Sidebar = {
   row: { lines: 3, hide: [] },
 }
 
-/** `text`, a `sidebar.toml`, naming the preset `name`: the line that names
- * one now changes, its comment kept, or a line goes in at the top. Nothing
- * else in the file changes. */
+/** `text`, a `sidebar.toml`, naming the preset `name`; nothing else in
+ * the file changes. */
 export function withPreset(text: string, name: string): string {
-  const line = `preset = ${JSON.stringify(name)}`
-  const lines = text.split("\n")
-  for (const [at, now] of lines.entries()) {
-    // `preset` is a key of the file's top, before any table.
-    if (/^\s*\[/.test(now)) break
-    const named = /^(\s*)preset\s*=\s*("(?:[^"\\]|\\.)*"|'[^']*')(.*)$/.exec(
-      now
-    )
-    if (named) {
-      lines[at] = `${named[1]}${line}${named[3]}`
-      return lines.join("\n")
-    }
-  }
-  return text === "" ? `${line}\n` : `${line}\n${text}`
+  return withTopKey(text, "preset", name)
 }

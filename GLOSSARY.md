@@ -138,6 +138,11 @@ the Electron app.
 One tile in the window that shows a module's view, such as a Thread or a
 browser page. A Pane reaches the engine only through the API.
 
+**Tab**:
+One page of a browser Pane, with its own address and history. A Pane
+keeps its tabs on top of its row or on the left beside the page, as
+`browser.toml` says.
+
 **Workspace**:
 One screen of Panes. It can hold Panes of any Spaces; it only lays out the
 screen, and the Space stays the boundary. Workspaces sit one under another,

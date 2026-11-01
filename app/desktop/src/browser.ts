@@ -4,19 +4,33 @@
  * browser's profile, sandboxed, with no preload and no Node. A site asks
  * the Person before it uses the camera, the location or another program;
  * downloads go to the Person's Downloads; Banda's Alt keys and the
- * browser's own go to the window instead of the page (decision 5).
+ * browser's own go to the window instead of the page (decision 5). The
+ * Pane hears of new tabs, icons and downloads as `BrowserNews`, and the
+ * switch writes `browser.toml`.
  */
+import { randomUUID } from "node:crypto"
 import { existsSync } from "node:fs"
 import { join, parse } from "node:path"
 import {
   app,
   type BrowserWindow,
   dialog,
+  type DownloadItem,
   type PermissionRequest,
   session,
+  shell,
   type WebContents,
 } from "electron"
-import { PARTITION, type Pressed, taken } from "@banda/browser-pane/desktop"
+import {
+  type BrowserNews,
+  type Download,
+  PARTITION,
+  type Pressed,
+  taken,
+} from "@banda/browser-pane/desktop"
+import { type Tabs, withTopKey } from "@banda/contract/look"
+import TEMPLATE from "../../../look/browser.toml"
+import { rewrite } from "./whole"
 
 /** What a page may open: the web, a blank page and the Person's files. */
 const OPENS = /^(https?|about|file):/i
@@ -39,6 +53,7 @@ export function hostPages(contents: WebContents): void {
 }
 
 function keep(page: WebContents, window: WebContents): void {
+  const tell = (news: BrowserNews) => window.send("browser:news", news)
   page.setWindowOpenHandler(({ url, disposition }) => {
     if (!OPENS.test(url)) return { action: "deny" }
     // A popup that needs its opener, as a sign-in, opens as a window of
@@ -49,9 +64,21 @@ function keep(page: WebContents, window: WebContents): void {
         overrideBrowserWindowOptions: { autoHideMenuBar: true },
       }
     }
-    // Until there are tabs, a page meant for a new tab opens in place.
-    void page.loadURL(url).catch(() => undefined)
+    // The rest is a tab, which the Pane opens beside the page's.
+    const background = disposition === "background-tab"
+    tell({ kind: "open", from: page.id, url, background })
     return { action: "deny" }
+  })
+  // A page names its icon again on each load: it is sent once.
+  let named = ""
+  page.on("page-favicon-updated", (_event, icons) => {
+    const first = icons[0]
+    if (!first || first === named) return
+    named = first
+    void iconOf(page, first).then((icon) => {
+      if (icon && !page.isDestroyed())
+        tell({ kind: "icon", from: page.id, icon })
+    })
   })
   page.on("did-create-window", (popup) =>
     popup.webContents.setWindowOpenHandler(() => ({ action: "deny" }))
@@ -69,6 +96,26 @@ function keep(page: WebContents, window: WebContents): void {
     event.preventDefault()
     window.send("browser:key", key)
   })
+}
+
+/** The largest icon Banda takes from a site. */
+const ICON_BYTES = 64 * 1024
+
+/** The icon at `url`, fetched in the page's profile, as a data URL. */
+async function iconOf(page: WebContents, url: string): Promise<string | null> {
+  try {
+    if (url.startsWith("data:image/"))
+      return url.length < ICON_BYTES ? url : null
+    if (!/^https?:/i.test(url)) return null
+    const answer = await page.session.fetch(url)
+    const type = answer.headers.get("content-type") ?? ""
+    if (!answer.ok || !type.startsWith("image/")) return null
+    const bytes = Buffer.from(await answer.arrayBuffer())
+    if (bytes.length > ICON_BYTES) return null
+    return `data:${type};base64,${bytes.toString("base64")}`
+  } catch {
+    return null
+  }
 }
 
 /** What a site asks for, in the words of the question; the rest is no. */
@@ -118,8 +165,66 @@ export function keepProfile(window: () => BrowserWindow | null): void {
     }
   )
   profile.on("will-download", (_event, item) => {
-    item.setSavePath(free(join(app.getPath("downloads"), item.getFilename())))
+    const path = free(join(app.getPath("downloads"), item.getFilename()))
+    item.setSavePath(path)
+    saved.add(path)
+    const id = randomUUID()
+    const tell = () =>
+      window()?.webContents.send("browser:news", {
+        kind: "download",
+        download: downloadOf(id, path, item),
+      } satisfies BrowserNews)
+    // Chromium says it on every piece received: the row hears it at most
+    // a few times a second, and always at the end.
+    let told = 0
+    tell()
+    item.on("updated", () => {
+      if (Date.now() - told < TELL_EVERY) return
+      told = Date.now()
+      tell()
+    })
+    item.once("done", tell)
   })
+}
+
+/** How often a running download is told of, in ms. */
+const TELL_EVERY = 250
+
+/** What Banda saved this run: the only files it shows in their folder. */
+const saved = new Set<string>()
+
+function downloadOf(id: string, path: string, item: DownloadItem): Download {
+  const state = item.getState()
+  return {
+    id,
+    name: parse(path).base,
+    path,
+    received: item.getReceivedBytes(),
+    total: item.getTotalBytes(),
+    state:
+      state === "completed"
+        ? "done"
+        : state === "progressing"
+          ? "running"
+          : "failed",
+  }
+}
+
+/** Shows a file Banda downloaded in its folder; nothing for any other. */
+export function reveal(path: unknown): void {
+  if (typeof path === "string" && saved.has(path)) shell.showItemInFolder(path)
+}
+
+/** Writes where the tabs are into `file`, a `browser.toml`, keeping every
+ * other line; a file not there yet starts from Banda's template. */
+export function writeTabs(file: string, where: unknown): void {
+  if (where !== "top" && where !== "left")
+    throw new Error(
+      `The tabs go "top" or "left", not ${JSON.stringify(where)}.`
+    )
+  rewrite(file, TEMPLATE, (text) =>
+    withTopKey(text, "tabs", where satisfies Tabs)
+  )
 }
 
 async function ask(

@@ -7,6 +7,7 @@
  */
 
 import { type Key, matches, type Pressed } from "@banda/ui/lib/keys"
+import type { TabKey } from "./tabs"
 
 export type { Pressed }
 
@@ -21,8 +22,24 @@ export type Does =
   | "zoom-out"
   | "zoom-reset"
   | "devtools"
+  | TabKey
+
+const PLACES = [1, 2, 3, 4, 5, 6, 7, 8, 9] as const
 
 const BINDS: readonly (Key & { does: Does })[] = [
+  { code: "KeyT", ctrl: true, does: "tab-new" },
+  { code: "KeyW", ctrl: true, does: "tab-close" },
+  { code: "F4", ctrl: true, does: "tab-close" },
+  { code: "KeyT", ctrl: true, shift: true, does: "tab-reopen" },
+  { code: "Tab", ctrl: true, does: "tab-next" },
+  { code: "PageDown", ctrl: true, does: "tab-next" },
+  { code: "Tab", ctrl: true, shift: true, does: "tab-previous" },
+  { code: "PageUp", ctrl: true, does: "tab-previous" },
+  ...PLACES.map((n) => ({
+    code: `Digit${n}`,
+    ctrl: true,
+    does: `tab-${n}` as const,
+  })),
   { code: "KeyL", ctrl: true, does: "address" },
   { code: "KeyR", ctrl: true, does: "reload" },
   { code: "F5", does: "reload" },
@@ -50,4 +67,9 @@ const MODIFIER = /^(Alt|Control|Shift|Meta|OS)(Left|Right)$/
 export function taken(key: Pressed): boolean {
   if (MODIFIER.test(key.code)) return false
   return key.altKey || browserKey(key) !== undefined
+}
+
+/** Whether `does` is a key of the tabs, not of the page. */
+export function isTabKey(does: Does): does is TabKey {
+  return does.startsWith("tab-")
 }

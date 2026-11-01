@@ -1,0 +1,13 @@
+#:schema ./schemas/browser.schema.json
+# How Banda's browser looks and searches (ADR 0013). Every key is
+# optional: what you leave out is Banda's default, written below. The
+# browser's switch writes `tabs` for you. Check a change with:
+# banda settings check
+
+# Where the tabs are: "top", a row above the page, or "left", a rail of
+# icons beside it that opens to titles on hover.
+tabs = "top"
+
+# Where words that are not an address go: an address with %s where the
+# words go.
+# search = "https://duckduckgo.com/?q=%s"

@@ -5,7 +5,6 @@
  * scheme that shows. Until the first look comes, and outside the desktop,
  * the defaults show in the system's light or dark.
  */
-import { useSyncExternalStore } from "react"
 import {
   type Columns,
   DEFAULT_COLUMNS,
@@ -18,6 +17,7 @@ import {
   shown,
 } from "@banda/contract/look"
 import { DEFAULT_SIDEBAR, type Sidebar } from "@banda/contract/sidebar"
+import { currentLook, takeLook, useLook } from "@banda/ui/lib/look"
 import { DEFAULT_SOUND, type SoundSettings } from "@banda/ui/sound"
 import { DEFAULT_NOTIFY } from "./calls/settings"
 import type { Host } from "./host"
@@ -28,13 +28,7 @@ const ask = (query: string) =>
 const system = ask("(prefers-color-scheme: dark)")
 const reduced = ask("(prefers-reduced-motion: reduce)")
 const STILL: Move = { kind: "off" }
-let look: Look | null = null
 let applied = new Set<string>()
-const listeners = new Set<() => void>()
-const subscribe = (changed: () => void) => {
-  listeners.add(changed)
-  return () => listeners.delete(changed)
-}
 const NONE: Problem[] = []
 
 /** Paints `root` in `look`, or in the defaults when there is none. */
@@ -63,7 +57,7 @@ export function apply(
 function paint() {
   applied = apply(
     document.documentElement,
-    look,
+    currentLook(),
     system?.matches ?? false,
     applied
   )
@@ -75,12 +69,11 @@ export function followLook(host: Host | undefined): void {
   system?.addEventListener("change", paint)
   if (!host) return
   const take = (next: Look) => {
-    look = next
+    takeLook(next)
     paint()
-    for (const listener of listeners) listener()
   }
   void host.look.current().then((first) => {
-    if (first && !look) take(first)
+    if (first && !currentLook()) take(first)
   })
   host.look.listen(take)
 }
@@ -89,17 +82,17 @@ export function followLook(host: Host | undefined): void {
  * and not at all when the system asks for reduced motion. */
 export function moveOf(event: keyof Motion): Move {
   if (reduced?.matches) return STILL
-  return (look?.motion ?? DEFAULT_MOTION)[event]
+  return (currentLook()?.motion ?? DEFAULT_MOTION)[event]
 }
 
 /** The widths columns take, and where the focused one scrolls to. */
 export function columnsOf(): Columns {
-  return look?.columns ?? DEFAULT_COLUMNS
+  return currentLook()?.columns ?? DEFAULT_COLUMNS
 }
 
 /** What is wrong in the look's files now, for the bar to say. */
 export function useLookProblems(): Problem[] {
-  return useSyncExternalStore(subscribe, () => look?.problems ?? NONE)
+  return useLook((look) => look.problems, NONE)
 }
 
 /**
@@ -107,22 +100,16 @@ export function useLookProblems(): Problem[] {
  * defaults till the look comes.
  */
 export function useLookNotify(): Notify {
-  return useSyncExternalStore(subscribe, () => look?.notify ?? DEFAULT_NOTIFY)
+  return useLook((look) => look.notify, DEFAULT_NOTIFY)
 }
 
 /** The sounds the look chose, `[sound]` (ADR 0009); the defaults till then. */
 export function useLookSound(): SoundSettings {
-  return useSyncExternalStore(subscribe, () => look?.sound ?? DEFAULT_SOUND)
+  return useLook((look) => look.sound, DEFAULT_SOUND)
 }
 
 /** How the sidebar is arranged, from `sidebar.toml` (ADR 0008); Banda's
  * own till then. */
 export function useLookSidebar(): Sidebar {
-  return useSyncExternalStore(
-    (changed) => {
-      listeners.add(changed)
-      return () => listeners.delete(changed)
-    },
-    () => look?.sidebar ?? DEFAULT_SIDEBAR
-  )
+  return useLook((look) => look.sidebar, DEFAULT_SIDEBAR)
 }

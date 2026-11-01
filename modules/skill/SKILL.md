@@ -52,5 +52,6 @@ Never touch credentials, a Harness's own configuration, or a Space's
 | `themes/<name>/` | the Person's own themes |
 | `sidebar.toml` | how the sidebar arranges Threads |
 | `sidebars/<name>.toml` | the Person's own sidebar presets |
+| `browser.toml` | where the browser's tabs are, and its search |
 | `harnesses.toml` | the Harnesses Threads start with |
 | `schemas/` | each file's JSON Schema, written by Banda for editors |

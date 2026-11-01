@@ -1,6 +1,6 @@
 /** Gives the page its one bridge to the desktop (app/web/src/host.ts). */
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron"
-import type { Pressed } from "@banda/browser-pane/desktop"
+import type { BrowserNews, Pressed } from "@banda/browser-pane/desktop"
 import type { Look } from "@banda/contract/look"
 import type { Host, Notice } from "@banda/web/host"
 
@@ -19,6 +19,18 @@ const host: Host = {
   sidebar: {
     preset: (name) => ipcRenderer.invoke("sidebar.preset", name),
     edit: () => ipcRenderer.invoke("sidebar.edit"),
+  },
+  browser: {
+    tabs: (where) => ipcRenderer.invoke("browser.tabs", where),
+    reveal: (path) => ipcRenderer.send("browser.reveal", path),
+    listen: (listener) => {
+      const heard = (_event: IpcRendererEvent, news: BrowserNews) =>
+        listener(news)
+      ipcRenderer.on("browser:news", heard)
+      return () => {
+        ipcRenderer.removeListener("browser:news", heard)
+      }
+    },
   },
   notify: {
     show: (notice: Notice) => ipcRenderer.send("notify:show", notice),

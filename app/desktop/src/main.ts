@@ -21,7 +21,7 @@ import {
   shell,
 } from "electron"
 import type { Notice } from "@banda/web/host"
-import { hostPages, keepProfile } from "./browser"
+import { hostPages, keepProfile, reveal, writeTabs } from "./browser"
 import { EngineProcess } from "./engine"
 import { firstFrame, LookProcess } from "./look"
 import { type Desktop, RecordedDesktop, SystemDesktop } from "./notices"
@@ -147,6 +147,16 @@ async function ready(): Promise<void> {
     ensure(sidebar.file)
     const failed = await shell.openPath(sidebar.file)
     if (failed) throw new Error(failed)
+  })
+  ipcMain.handle("browser.tabs", (event, where: unknown) => {
+    if (!fromPage(event.senderFrame?.url ?? ""))
+      throw new Error("Only Banda's page may change the browser.")
+    const browser = look.current()?.browser
+    if (!browser) throw new Error("The browser's file is not known yet.")
+    writeTabs(browser.file, where)
+  })
+  ipcMain.on("browser.reveal", (event, path: unknown) => {
+    if (fromPage(event.senderFrame?.url ?? "")) reveal(path)
   })
   ipcMain.on("notify:show", (event, notice: Notice) => {
     if (!fromPage(event.senderFrame?.url ?? "")) return

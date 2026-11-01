@@ -2,11 +2,14 @@
  * The look's words for TypeScript (ADR 0007): what `banda look` prints,
  * and which of its schemes shows.
  */
+import type { Browser } from "./generated/look/Browser"
 import type { Look } from "./generated/look/Look"
 import type { Columns } from "./generated/look/Columns"
 import type { Motion } from "./generated/look/Motion"
 
 export type { Look } from "./generated/look/Look"
+export type { Browser } from "./generated/look/Browser"
+export type { Tabs } from "./generated/look/Tabs"
 export type { Problem } from "./generated/look/Problem"
 export type { Call } from "./generated/look/Call"
 export type { Families } from "./generated/look/Families"
@@ -59,4 +62,39 @@ export function shown(
     look.mode === "dark" || (look.mode === "system" && systemDark)
   if (wantsDark ? dark : !light) return { dark: true, colors: dark ?? {} }
   return { dark: false, colors: light ?? {} }
+}
+
+/** Banda's browser, as `banda look` gives it with no `browser.toml`: for
+ * before the first look and outside the desktop. */
+export const DEFAULT_BROWSER: Browser = {
+  file: "",
+  tabs: "top",
+  search: "https://duckduckgo.com/?q=%s",
+}
+
+/**
+ * `text`, one of the look's TOML files, with the key `key` of its top set
+ * to the string `value`: the line that sets it now changes, its comment
+ * kept, or a line goes in at the top, under its `#:schema` line. Nothing
+ * else in the file changes.
+ */
+export function withTopKey(text: string, key: string, value: string): string {
+  const line = `${key} = ${JSON.stringify(value)}`
+  const keyed = new RegExp(
+    `^(\\s*)${key}\\s*=\\s*("(?:[^"\\\\]|\\\\.)*"|'[^']*')(.*)$`
+  )
+  const lines = text.split("\n")
+  for (const [at, now] of lines.entries()) {
+    // A key of the file's top comes before any table.
+    if (/^\s*\[/.test(now)) break
+    const set = keyed.exec(now)
+    if (set) {
+      lines[at] = `${set[1]}${line}${set[3]}`
+      return lines.join("\n")
+    }
+  }
+  // An editor reads a `#:schema` line only at the very top.
+  const at = lines[0]?.startsWith("#:schema") ? 1 : 0
+  lines.splice(at, 0, line)
+  return text === "" ? `${line}\n` : lines.join("\n")
 }

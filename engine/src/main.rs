@@ -6,8 +6,9 @@
 //!   object per line.
 //! - `banda look` prints the window's look, resolved from Omarchy's
 //!   theme, Hyprland and `~/.config/banda/look.toml`, with the sidebar's
-//!   arrangement from `sidebar.toml`; `--follow` prints it again on each
-//!   change. It needs no engine: the look is this machine's.
+//!   arrangement from `sidebar.toml` and the browser's from
+//!   `browser.toml`; `--follow` prints it again on each change. It needs
+//!   no engine: the look is this machine's.
 //! - `banda skill` prints the Banda skill, what an Agent needs to know to
 //!   work in Banda and change it; `banda skill <topic>` prints a topic.
 //!
@@ -82,8 +83,9 @@ enum Command {
         kinds: Vec<String>,
     },
     /// Prints the window's look as JSON: CSS variables from Omarchy's
-    /// theme, Hyprland's windows and ~/.config/banda/look.toml, and the
-    /// sidebar's arrangement from ~/.config/banda/sidebar.toml.
+    /// theme, Hyprland's windows and ~/.config/banda/look.toml, the
+    /// sidebar's arrangement from ~/.config/banda/sidebar.toml, and the
+    /// browser's from ~/.config/banda/browser.toml.
     Look {
         #[command(subcommand)]
         what: Option<LookCommand>,
@@ -113,8 +115,8 @@ enum Command {
 
 #[derive(Subcommand)]
 enum LookCommand {
-    /// Checks look.toml, sidebar.toml, a sidebar preset, a theme's
-    /// banda.toml or colors.toml, or with no files every settings file,
+    /// Checks look.toml, sidebar.toml, a sidebar preset, browser.toml, a
+    /// theme's banda.toml or colors.toml, or with no files every settings file,
     /// as `banda settings check` does. Prints path:line:column: problem
     /// and exits 1 when anything is wrong; prints nothing when all is well.
     Check { files: Vec<PathBuf> },

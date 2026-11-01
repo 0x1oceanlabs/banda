@@ -8,7 +8,8 @@ import { join, relative } from "node:path"
 import { expect, test } from "vitest"
 
 const PANE = [
-  /^@banda\/contract$/,
+  // The look brings `browser.toml`: where the tabs go, and the search.
+  /^@banda\/contract(\/look)?$/,
   /^@banda\/ui\//,
   /^react$/,
   /^lucide-react$/,
