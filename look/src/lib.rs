@@ -230,6 +230,10 @@ pub fn read_settings(path: &Path, text: &str, problems: &mut Vec<Problem>) -> Op
     Some(settings)
 }
 
+/// What `look.toml` can say, every key with its default and commented
+/// out: the Banda skill's reference shows it, and it is an example too.
+pub const TEMPLATE: &str = include_str!("../look.toml");
+
 /// One resolution: the look, and every file it read or looked for, so a
 /// follower knows what to watch.
 pub struct Resolved {

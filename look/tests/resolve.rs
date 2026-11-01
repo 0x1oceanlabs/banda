@@ -331,3 +331,36 @@ fn sound_in_look_toml_reaches_the_window_and_a_wrong_key_is_named() {
     assert!(look.problems[0].message.contains("\"bell\" is no family"));
     assert_eq!(look.problems[0].line, Some(2), "{:?}", look.problems);
 }
+
+/// The template's commented keys are the defaults, so a Person who
+/// uncomments one changes only what they change.
+#[test]
+fn the_template_says_the_defaults() {
+    fn key(line: &str) -> Option<&str> {
+        let rest = line.strip_prefix("# ")?;
+        let starts = rest.starts_with('[')
+            || rest
+                .split_once(" = ")
+                .is_some_and(|(k, _)| k.chars().all(|c| c.is_ascii_lowercase() || c == '-'));
+        starts.then_some(rest)
+    }
+    let uncommented: String = bandaso_look::TEMPLATE
+        .lines()
+        .filter(|line| !line.starts_with("# theme"))
+        .map(|line| key(line).unwrap_or(line))
+        .collect::<Vec<_>>()
+        .join("\n");
+    assert!(uncommented.contains("[motion.strip]"), "{uncommented}");
+    let machine = Machine::new(false);
+    let defaults = machine.look();
+    machine.look_toml(&uncommented);
+    let template = machine.look();
+    assert!(template.problems.is_empty(), "{:?}", template.problems);
+    assert_eq!(
+        Look {
+            sources: defaults.sources.clone(),
+            ..template
+        },
+        defaults
+    );
+}

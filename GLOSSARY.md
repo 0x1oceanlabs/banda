@@ -156,6 +156,15 @@ The list of every Thread of every Space, docked at the window's left edge.
 Each Thread shows its own Mark. A preset arranges it, and the Person's own
 keys change any part of it.
 
+**Banda skill**:
+What an Agent needs to know to work in Banda and to change it for its
+Person: a short core, read first, and topics read when needed, one per
+area such as `look` or `sidebar` (ADR 0012).
+
+**Topic**:
+One page of the Banda skill, written beside the code it describes, in its
+part's `skill/` folder.
+
 **Preset**:
 A named arrangement of the sidebar: `inbox`, `spaces` or `places`, or a file
 of the Person's own in `~/.config/banda/sidebars/`. It sets how Threads are

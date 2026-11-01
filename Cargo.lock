@@ -292,6 +292,7 @@ dependencies = [
  "bandaso-agents",
  "bandaso-kernel",
  "bandaso-look",
+ "bandaso-skill",
  "bandaso-terminal",
  "clap",
  "dirs",
@@ -364,6 +365,13 @@ dependencies = [
  "tempfile",
  "toml",
  "ts-rs",
+]
+
+[[package]]
+name = "bandaso-skill"
+version = "0.1.0"
+dependencies = [
+ "tempfile",
 ]
 
 [[package]]
