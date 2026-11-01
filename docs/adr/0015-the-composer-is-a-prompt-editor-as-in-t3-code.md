@@ -50,6 +50,13 @@ rest are our defaults and stay his to change.
    highlights it in the theme's light and dark, as `@streamdown/code`
    already does for replies. Lists go on with Enter. Typed with text
    selected, `(`, `"`, `` ` `` and `*` wrap it.
+   - The string is read and written by our own code, line by line, as
+     T3 Code does, not by a markdown library: `@tiptap/markdown`
+     escapes plain text (`snake_case` comes back `snake\_case`) and
+     folds lines together. Each style keeps the delimiter it was typed
+     with (`**` or `__`, `*` or `_`) and which style was outside, so
+     any string comes back character for character; a delimiter that
+     pairs with nothing stays text.
 
 4. **The box behaves.**
    - A key typed, or text pasted, anywhere in the Thread Pane outside a
@@ -74,7 +81,10 @@ rest are our defaults and stay his to change.
 
 **Build order.** One PR each: (1) the prompt editor in place of the
 textarea, nothing else changing, (2) chips for `@` files and `/` anywhere
-at a line's start, (3) markdown and code blocks, (4) the box behaves,
+at a line's start, (3) markdown, in parts: (3a) bold, italic, strike
+and inline code, (3b) quotes, headings, rules and lists, (3c) code
+blocks with their language and Shiki, (3d) wrapping a selection and
+lists going on with Enter, (4) the box behaves,
 (5) paste and drop, (6) skills and quotes, once their ADR 0010 parts are
 checked with the Harnesses.
 

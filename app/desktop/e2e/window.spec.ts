@@ -1090,6 +1090,36 @@ test("@ names a file in the Space's folder, picked from a list", async () => {
   await expect(page.getByText("No file holds that.")).toBeVisible()
 })
 
+test("markdown is styled as it is typed, and sent as it was written", async () => {
+  window = await startWindow()
+  const { page } = window
+  const { thread, composer } = await firstThread(page)
+
+  // A pair of delimiters styles what is between them as it closes.
+  await composer.pressSequentially("make **this** bold, `npm i` code and ")
+  await expect(composer.locator("strong")).toHaveText("this")
+  await expect(composer.locator("code")).toHaveText("npm i")
+  // Mod+B writes bold from here on, until it is pressed again; a name with
+  // _ in it stays as it is.
+  await composer.pressSequentially("snake_case_name ")
+  await composer.press("ControlOrMeta+b")
+  await composer.pressSequentially("this too")
+  await composer.press("ControlOrMeta+b")
+  await composer.pressSequentially("!")
+  await expect(composer.locator("strong")).toHaveText(["this", "this too"])
+  await page.screenshot({ path: "test-results/18f-markdown.png" })
+  // It is sent as the markdown it was written as.
+  await composer.press("Enter")
+  const written =
+    "make **this** bold, `npm i` code and snake_case_name **this too**!"
+  await expect(thread.getByText(written, { exact: true })).toBeVisible()
+
+  // Walked back to, it is styled again.
+  await composer.press("ArrowUp")
+  await expect(composer.locator("strong")).toHaveText(["this", "this too"])
+  await expect(composer.locator("code")).toHaveText("npm i")
+})
+
 test("what the Agent does by itself shows in a turn of its own", async () => {
   window = await startWindow()
   const { page } = window

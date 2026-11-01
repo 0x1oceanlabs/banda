@@ -10,6 +10,7 @@ import { UndoRedo } from "@tiptap/extensions"
 import { EditorContent, useEditor } from "@tiptap/react"
 import { cn } from "cn"
 import { Chip } from "@banda/ui/components/prompt-chip"
+import { PROMPT_MARKS } from "@banda/ui/components/prompt-marks"
 import {
   chip,
   CHIP_MARK,
@@ -34,7 +35,8 @@ export type PromptEditorHandle = {
 }
 
 type PromptEditorProps = {
-  /** The text, a line a paragraph, a chip as what it writes. */
+  /** The text, a line a paragraph, a chip as what it writes, a style as
+   * the markdown it was written with. */
   value: string
   /** The text changed, as typed. */
   onChange: (value: string) => void
@@ -57,8 +59,9 @@ type PromptEditorProps = {
 /**
  * Where a prompt is written: a text box on tiptap (ADR 0015) that holds a
  * string, as a textarea does, so its owner keeps the text. What it points
- * at, such as a file, is a chip in it. Enter is the owner's to take, as
- * to send; Shift+Enter starts a line.
+ * at, such as a file, is a chip in it, and its markdown is styled as it
+ * is typed. Enter is the owner's to take, as to send; Shift+Enter starts
+ * a line.
  */
 function PromptEditor({
   value,
@@ -203,7 +206,7 @@ function PromptEditor({
       )}
       <EditorContent
         editor={editor}
-        className="[&_.ProseMirror]:min-h-6 [&_.ProseMirror]:wrap-break-word [&_.ProseMirror]:whitespace-pre-wrap [&_.ProseMirror]:outline-none"
+        className="[&_.ProseMirror]:min-h-6 [&_.ProseMirror]:wrap-break-word [&_.ProseMirror]:whitespace-pre-wrap [&_.ProseMirror]:outline-none [&_code]:rounded [&_code]:bg-muted [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-sm"
       />
     </div>
   )
@@ -221,7 +224,7 @@ function placeOf(
   return found && { ...found, from: pos - found.word.length - 1, to: pos }
 }
 
-/** What a prompt is made of: lines of text with chips, and undo. */
-const EXTENSIONS = [Document, Paragraph, Text, Chip, UndoRedo]
+/** What a prompt is made of: lines of styled text with chips, and undo. */
+const EXTENSIONS = [Document, Paragraph, Text, Chip, ...PROMPT_MARKS, UndoRedo]
 
 export { PromptEditor }
