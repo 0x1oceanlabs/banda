@@ -12,6 +12,7 @@ axum.workspace = true
 bandaso-agents = { path = "../modules/agents/engine" }
 bandaso-terminal = { path = "../modules/terminal/engine" }
 bandaso-kernel = { path = "../kernel" }
+bandaso-look = { path = "../look" }
 clap.workspace = true
 dirs.workspace = true
 futures.workspace = true

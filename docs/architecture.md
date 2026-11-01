@@ -37,6 +37,10 @@ bandaso call/follow   the CLI: the same API, for people, scripts and Agents
   window starts it with `--with-parent`: the engine then prints the same
   JSON as its first line, and stops when its stdin closes. A second
   engine with the same state folder refuses to start.
+- **The look is the window's machine's** (ADR 0007). `bandaso look`
+  reads Omarchy's theme, Hyprland's windows and `~/.config/banda/look.toml`
+  and prints the CSS variables as JSON, with no engine; `--follow` prints
+  each change, and `check` names a broken file's line.
 - **The CLI prints JSON.** `bandaso call <method>` prints `{"ok": …}`.
   `bandaso follow` prints events, one per line. When the engine refuses
   the call, the hello or the follow, the CLI prints

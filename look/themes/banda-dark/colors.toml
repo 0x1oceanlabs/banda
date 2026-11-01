@@ -1,0 +1,34 @@
+# Banda Dark: shadcn/ui's neutral greys, with Tailwind's colours for the
+# terminal. An Omarchy palette, so it works in Omarchy too: copy this
+# folder to ~/.config/banda/themes/<name>/ and change what you like.
+mode = "dark"
+
+accent = "#e5e5e5"
+selection = "#404040"
+muted = "#737373"
+
+background = "#0a0a0a"
+dark_background = "#171717"
+darker_background = "#0a0a0a"
+lighter_background = "#171717"
+
+foreground = "#fafafa"
+dark_foreground = "#a3a3a3"
+light_foreground = "#d4d4d4"
+bright_foreground = "#ffffff"
+
+red = "#f87171"
+yellow = "#facc15"
+orange = "#fb923c"
+green = "#4ade80"
+cyan = "#22d3ee"
+blue = "#60a5fa"
+magenta = "#e879f9"
+brown = "#b45309"
+
+bright_red = "#fca5a5"
+bright_yellow = "#fde047"
+bright_green = "#86efac"
+bright_cyan = "#67e8f9"
+bright_blue = "#93c5fd"
+bright_magenta = "#f0abfc"
