@@ -10,6 +10,9 @@
 //! - `which settings`: replies with the session's mode, model and brevity.
 //! - `plan done`: in the plan mode, switches to accepting edits, as Claude
 //!   Code does when a Person accepts its plan.
+//! - `propose`: asks to leave plan mode with its plan, as Claude Code does.
+//!   An answer that allows it switches to accepting edits and carries the
+//!   plan out; "keep planning" ends the turn as cancelled.
 //! - `quit`: ends the turn as cancelled, though nobody stopped it.
 //! - `slow`: replies in forty pieces, fifty milliseconds apart, and stops
 //!   early when cancelled.
@@ -204,6 +207,21 @@ impl Fake {
 
     /// Sets one option, if the session offers it and the value is one of
     /// its own.
+    /// Leaves plan mode for accepting edits, as Claude Code does once its
+    /// plan is accepted: what to tell the client, if it was planning.
+    fn leave_plan(&self, session: &SessionId) -> Option<SessionUpdate> {
+        {
+            let mut setups = self.setups.lock().unwrap();
+            let setup = setups.entry(session.clone()).or_default();
+            if setup.mode != "plan" {
+                return None;
+            }
+            setup.mode = "acceptEdits".into();
+        }
+        let update = ConfigOptionUpdate::new(self.options(session));
+        Some(SessionUpdate::ConfigOptionUpdate(update))
+    }
+
     fn set(&self, request: &SetSessionConfigOptionRequest) -> Result<(), Error> {
         let offered = self.options(&request.session_id);
         let option = offered
@@ -406,18 +424,10 @@ async fn turn(
         return Ok(StopReason::EndTurn);
     }
     if words.contains("plan done") {
-        let planned = {
-            let mut setups = fake.setups.lock().unwrap();
-            let setup = setups.entry(session.clone()).or_default();
-            let planned = setup.mode == "plan";
-            if planned {
-                setup.mode = "acceptEdits".into();
-            }
-            planned
-        };
-        if planned {
-            let update = ConfigOptionUpdate::new(fake.options(&session));
-            say(&cx, &session, SessionUpdate::ConfigOptionUpdate(update))?;
+        let left = fake.leave_plan(&session);
+        let planned = left.is_some();
+        if let Some(update) = left {
+            say(&cx, &session, update)?;
         }
         let reply = if planned {
             "The plan is ready."
@@ -645,6 +655,62 @@ async fn turn(
             &cx,
             &session,
             SessionUpdate::AgentMessageChunk(text(&reply)),
+        )?;
+        return Ok(StopReason::EndTurn);
+    }
+    if words.contains("propose") {
+        let tool = "plan-1";
+        let input = json!({ "plan": "# Tidy the notes\n\n1. Read them.\n2. Sort them." });
+        say(
+            &cx,
+            &session,
+            SessionUpdate::ToolCall(
+                ToolCall::new(tool, "Approve Plan")
+                    .kind(ToolKind::SwitchMode)
+                    .status(ToolCallStatus::Pending)
+                    .raw_input(input.clone()),
+            ),
+        )?;
+        let options = vec![
+            PermissionOption::new(
+                "acceptEdits",
+                "Yes, auto-accept edits",
+                PermissionOptionKind::AllowAlways,
+            ),
+            PermissionOption::new(
+                "default",
+                "Yes, manually approve edits",
+                PermissionOptionKind::AllowOnce,
+            ),
+            PermissionOption::new(
+                "plan",
+                "No, keep planning",
+                PermissionOptionKind::RejectOnce,
+            ),
+        ];
+        let fields = ToolCallUpdateFields::new()
+            .title("Approve Plan")
+            .kind(ToolKind::SwitchMode)
+            .raw_input(input);
+        let question = RequestPermissionRequest::new(
+            session.clone(),
+            ToolCallUpdate::new(tool, fields),
+            options,
+        );
+        let answer = cx.send_request(question).block_task().await?;
+        let RequestPermissionOutcome::Selected(selected) = answer.outcome else {
+            return Ok(StopReason::Cancelled);
+        };
+        if selected.option_id.0.as_ref() == "plan" {
+            return Ok(StopReason::Cancelled);
+        }
+        if let Some(update) = fake.leave_plan(&session) {
+            say(&cx, &session, update)?;
+        }
+        say(
+            &cx,
+            &session,
+            SessionUpdate::AgentMessageChunk(text("The notes are tidy.")),
         )?;
         return Ok(StopReason::EndTurn);
     }

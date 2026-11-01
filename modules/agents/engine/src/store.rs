@@ -877,6 +877,7 @@ mod tests {
                     title: "Which?".to_owned(),
                     choices: Vec::new(),
                     form: None,
+                    plan: None,
                     state,
                     answer: None,
                     values: None,

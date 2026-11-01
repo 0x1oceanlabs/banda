@@ -26,7 +26,12 @@ output?: Output, } | { "kind": "plan", steps: Array<PlanStep>, } | { "kind": "qu
  * A form to fill in, when the Harness asks for more than a choice.
  * Its choices then submit it or skip it.
  */
-form?: Array<Field>, state: QuestionState, answer?: string, 
+form?: Array<Field>, 
+/**
+ * The plan the Agent asks to carry out, when it asks to leave plan
+ * mode.
+ */
+plan?: string, state: QuestionState, answer?: string, 
 /**
  * What the Person filled in the form.
  */

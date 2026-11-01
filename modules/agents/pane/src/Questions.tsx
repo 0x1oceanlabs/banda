@@ -18,6 +18,7 @@ import {
   ShieldQuestionIcon,
 } from "lucide-react"
 import { Card } from "./Card"
+import { ProposedPlan } from "./ProposedPlan"
 import { summary, type Values } from "./form"
 import { QuestionForm } from "./QuestionForm"
 import type { Asked, QuestionBody } from "./thread"
@@ -42,7 +43,17 @@ export function Question({
   answering: boolean
   onAnswer: Answer
 }) {
-  const { title, choices, form, state } = question
+  const { title, choices, form, plan, state } = question
+  const answers =
+    state === "open" ? (
+      <Choices choices={choices} answering={answering} onAnswer={onAnswer} />
+    ) : (
+      <Answered question={question} />
+    )
+  // Claude Code asks to leave plan mode with its plan: the plan's card,
+  // answered right there (ADR 0010, decision 6).
+  if (plan !== undefined)
+    return <ProposedPlan text={plan}>{answers}</ProposedPlan>
   if (state === "open" && form)
     return (
       <Trace>
@@ -58,11 +69,7 @@ export function Question({
     )
   return (
     <Card icon={<ShieldQuestionIcon />} title={title}>
-      {state === "open" ? (
-        <Choices choices={choices} answering={answering} onAnswer={onAnswer} />
-      ) : (
-        <Answered question={question} />
-      )}
+      {answers}
     </Card>
   )
 }

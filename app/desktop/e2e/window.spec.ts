@@ -524,18 +524,23 @@ test("a Person fills in the form an Agent asks with", async () => {
   await page.screenshot({ path: "test-results/9-answered.png" })
 })
 
-test("a plan waits for the Person to implement it", async () => {
-  window = await startWindow()
-  const { page } = window
+/** A Thread with a turn done, and plan mode on: Shift+Tab switches it, as
+ * in T3 Code. */
+async function planning(page: Page) {
   const { thread, composer } = await firstThread(page)
   await composer.fill("hello")
   await composer.press("Enter")
   await expect(thread.getByText("You said: hello")).toBeVisible()
-
-  // Shift+Tab switches plan mode, as in T3 Code.
   const planMode = thread.getByRole("button", { name: "Plan", exact: true })
   await composer.press("Shift+Tab")
   await expect(planMode).toHaveAttribute("aria-pressed", "true")
+  return { thread, composer, planMode }
+}
+
+test("a plan waits for the Person to implement it", async () => {
+  window = await startWindow()
+  const { page } = window
+  const { thread, composer, planMode } = await planning(page)
   await composer.fill("a plan for the notes")
   await composer.press("Enter")
   const proposed = thread.getByRole("group", { name: "Proposed plan" })
@@ -549,6 +554,34 @@ test("a plan waits for the Person to implement it", async () => {
   await expect(thread.getByText("You said: Implement the plan.")).toBeVisible()
   await expect(planMode).toHaveAttribute("aria-pressed", "false")
   await expect(ready).toBeHidden()
+})
+
+test("a plan Claude Code asks to carry out shows in its card, answered there", async () => {
+  window = await startWindow()
+  const { page } = window
+  const { thread, composer, planMode } = await planning(page)
+
+  // The fake agent asks to leave plan mode with its plan, as Claude Code
+  // does: the plan is the card, its answers under it.
+  await composer.fill("propose")
+  await composer.press("Enter")
+  const proposed = thread.getByRole("group", { name: "Proposed plan" })
+  await expect(
+    proposed.getByRole("heading", { name: "Tidy the notes" })
+  ).toBeVisible()
+  await expect(proposed).toContainText("Sort them.")
+  await page.screenshot({ path: "test-results/7c-plan-asked.png" })
+  await proposed
+    .getByRole("button", { name: "Yes, manually approve edits" })
+    .click()
+  await expect(thread.getByText("The notes are tidy.")).toBeVisible()
+  await expect(proposed).toContainText("You chose: Yes, manually approve edits")
+  // The Thread follows the Harness out of plan mode; nothing waits.
+  await expect(planMode).toHaveAttribute("aria-pressed", "false")
+  await expect(thread.getByRole("group", { name: "Plan ready" })).toBeHidden()
+  await expect(
+    thread.getByRole("group", { name: "Proposed plan" })
+  ).toHaveCount(1)
 })
 
 test("a message sent while the Agent asks says no to it", async () => {

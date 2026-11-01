@@ -104,6 +104,8 @@ pub enum Said {
         offered: Vec<Offered>,
         /// A form to fill in, for a Question that asks more than a choice.
         form: Option<Vec<Field>>,
+        /// The plan it asks to carry out, when it asks to leave plan mode.
+        plan: Option<String>,
         answer: oneshot::Sender<Answer>,
     },
     /// The Harness no longer waits for the answer to what it asked.
@@ -1029,6 +1031,7 @@ async fn drive(
                     tool: fields.kind.map(tool_kind),
                     offered: request.options.iter().map(offered).collect(),
                     form: None,
+                    plan: proposed(fields),
                     answer,
                 };
                 let route = asked.of(&request.session_id);
@@ -1100,6 +1103,7 @@ async fn drive(
                     tool: None,
                     offered: vec![choice(SUBMIT, "Submit", true), choice(SKIP, "Skip", false)],
                     form: Some(fields.clone()),
+                    plan: None,
                     answer,
                 };
                 if !route.send(question) {
@@ -1766,6 +1770,16 @@ fn offered(option: &acp::PermissionOption) -> Offered {
     }
 }
 
+/// The plan a Harness asks to carry out: Claude Code leaves plan mode by
+/// asking, the plan in what it would call the tool with.
+fn proposed(fields: &acp::ToolCallUpdateFields) -> Option<String> {
+    if fields.kind != Some(acp::ToolKind::SwitchMode) {
+        return None;
+    }
+    let plan = fields.raw_input.as_ref()?.get("plan")?.as_str()?.trim();
+    (!plan.is_empty()).then(|| plan.to_owned())
+}
+
 fn tool_kind(kind: acp::ToolKind) -> ToolKind {
     match kind {
         acp::ToolKind::Read => ToolKind::Read,
@@ -1833,6 +1847,25 @@ fn ending(reason: &acp::StopReason) -> Ending {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn claude_asking_to_leave_plan_mode_brings_its_plan() {
+        let asks = |kind, input: serde_json::Value| {
+            proposed(&acp::ToolCallUpdateFields::new().kind(kind).raw_input(input))
+        };
+        let plan = serde_json::json!({ "plan": "  # Plan\n\n1. Read it.\n" });
+        assert_eq!(
+            asks(acp::ToolKind::SwitchMode, plan.clone()).as_deref(),
+            Some("# Plan\n\n1. Read it.")
+        );
+        assert_eq!(
+            asks(acp::ToolKind::Execute, plan),
+            None,
+            "only leaving a mode"
+        );
+        let empty = serde_json::json!({ "plan": " " });
+        assert_eq!(asks(acp::ToolKind::SwitchMode, empty), None);
+    }
 
     fn select(id: &str, now: &str, values: &[&str]) -> acp::SessionConfigOption {
         let choices = values

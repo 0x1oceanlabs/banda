@@ -620,6 +620,11 @@ pub enum Body {
         #[ts(optional)]
         #[serde(default, skip_serializing_if = "Option::is_none")]
         form: Option<Vec<Field>>,
+        /// The plan the Agent asks to carry out, when it asks to leave plan
+        /// mode.
+        #[ts(optional)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        plan: Option<String>,
         state: QuestionState,
         #[ts(optional)]
         #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -886,6 +891,9 @@ pub enum Fact {
         #[ts(optional)]
         #[serde(default, skip_serializing_if = "Option::is_none")]
         form: Option<Vec<Field>>,
+        #[ts(optional)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        plan: Option<String>,
     },
     #[serde(rename = "question.answered")]
     QuestionAnswered {

@@ -134,6 +134,28 @@ test("the reply a turn in plan mode ended with is its plan", () => {
   expect(shape(timeline(replying)).slice(-2)).toEqual(["m3", "r3"])
 })
 
+test("a plan the Agent asked to carry out is in its Question, not its reply", () => {
+  const planning = { ...EMPTY, settings: { ...EMPTY.settings, plan: true } }
+  const choices = [{ id: "yes", name: "Yes", allows: true, always: false }]
+  const state = [
+    asked(),
+    event("turn.started", { turn: "u" }),
+    event("question.asked", {
+      item: "q",
+      turn: "u",
+      title: "Approve Plan",
+      choices,
+      plan: "# Plan",
+    }),
+    event("question.answered", { item: "q", choice: "yes" }),
+    tool("a"),
+    reply("r"),
+    event("turn.ended", { turn: "u", state: "done" }),
+  ].reduce(apply, planning)
+  // It stays in sight when the work before the reply folds.
+  expect(shape(timeline(state))).toEqual(["m", "q", { fold: ["a"] }, "r"])
+})
+
 test("a turn with no work, or one that failed, does not fold", () => {
   const plain = play(
     asked(),

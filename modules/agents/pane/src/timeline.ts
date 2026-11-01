@@ -8,6 +8,7 @@ import type { Item, ToolKind, TurnView } from "@banda/contract/agents"
 import { changes, type FileChange } from "./changes"
 import {
   isReply,
+  planOf,
   type Row,
   rows,
   running,
@@ -110,12 +111,22 @@ function fold(lines: Line[], turns: TurnView[]): Line[] {
       const line = lines[at]
       return line.kind === "item" && isReply(line.item)
     })
-    // A plan turn's reply is the plan, a card of its own (ADR 0010, 6).
-    const said = reply === undefined ? undefined : lines[reply]
-    if (reply !== undefined && said?.kind === "item" && isReply(said.item))
-      if (turn.plan && turn.state === "done")
-        plans.set(reply, { kind: "plan", turn, item: said.item })
-    const folded = reply === undefined ? own : own.filter((at) => at < reply)
+    // The turn's plan stays out of the fold; one in a reply is a card of
+    // its own (ADR 0010, decision 6).
+    const items = own.flatMap((at) => {
+      const line = lines[at]
+      return line.kind === "item" ? [line.item] : []
+    })
+    const plan = planOf(turn, items)
+    const planned = own.find((at) => {
+      const line = lines[at]
+      return line.kind === "item" && line.item === plan
+    })
+    if (planned !== undefined && plan && isReply(plan))
+      plans.set(planned, { kind: "plan", turn, item: plan })
+    const folded = own.filter(
+      (at) => (reply === undefined || at < reply) && at !== planned
+    )
     if (!folded.some((at) => lines[at].kind === "work" || isWork(lines[at])))
       continue
     starts.set(folded[0], {

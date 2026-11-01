@@ -8,8 +8,16 @@ import { useClamp } from "./Messages"
 /**
  * The plan an Agent proposed in plan mode, as a card (ADR 0010, decision
  * 6): its words in markdown, Copy, and a long one clamped until opened.
+ * `children` come after it: how a Harness that asks to carry it out is
+ * answered.
  */
-export function ProposedPlan({ text }: { text: string }) {
+export function ProposedPlan({
+  text,
+  children,
+}: {
+  text: string
+  children?: React.ReactNode
+}) {
   const clamp = useClamp(text, "max-h-60", "Show the whole plan")
   return (
     <Card
@@ -20,6 +28,7 @@ export function ProposedPlan({ text }: { text: string }) {
     >
       <Markdown className={clamp.className}>{text}</Markdown>
       {clamp.toggle}
+      {children}
     </Card>
   )
 }
