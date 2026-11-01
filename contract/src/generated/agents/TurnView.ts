@@ -16,4 +16,13 @@ reason?: string,
 /**
  * What kind of failure it was, when the turn failed and that is known.
  */
-failure?: Failure, };
+failure?: Failure, 
+/**
+ * When it began to run, in ms since the epoch. A turn from before
+ * Bandaso kept it has none.
+ */
+started?: number, 
+/**
+ * When it stopped running, the same way.
+ */
+ended?: number, };

@@ -63,7 +63,6 @@ import {
   fromView,
   NO_OFFER,
   retryable,
-  rows,
   steerable,
   type ThreadState,
   waiting,
@@ -77,6 +76,8 @@ import { AgentMessage, PersonMessage } from "./Messages"
 import { summary, type Values } from "./form"
 import { QuestionForm } from "./QuestionForm"
 import { Plan } from "./Plan"
+import { type Line, timeline } from "./timeline"
+import { Fold, key, WorkLine, Working } from "./Work"
 import { Queue, type QueueActions } from "./Queue"
 import { ToolCall } from "./ToolCall"
 import { SettingsBar } from "./ThreadSettings"
@@ -442,54 +443,60 @@ function Transcript({
   queue: QueueActions
 }) {
   const turn = working(state)
-  const lines = rows(state)
+  const lines = timeline(state)
   const waits = waiting(state)
   const last = state.items.at(-1)
+  const render = (line: Line): React.ReactNode => {
+    switch (line.kind) {
+      case "item":
+        return (
+          <Entry
+            item={line.item}
+            live={turn?.state === "running" && line.item === last}
+            reader={reader}
+            {...answers}
+          />
+        )
+      case "work":
+        return <WorkLine items={line.items} live={line.live} render={render} />
+      case "fold":
+        return <Fold turn={line.turn} lines={line.lines} render={render} />
+      case "working":
+        return <Working turn={line.turn} name={name} />
+      case "ended":
+        return (
+          <Ended
+            turn={line.turn}
+            busy={answers.answering}
+            onRetry={
+              retryable(state, line.turn) ? () => onRetry(line.turn) : undefined
+            }
+            signIn={signIn}
+          />
+        )
+    }
+  }
   return (
     <MessageScrollerProvider autoScroll defaultScrollPosition="end">
       <MessageScroller>
         <MessageScrollerViewport aria-label={`Thread with ${name}`}>
           <MessageScrollerContent className="mx-auto w-full max-w-3xl gap-4 px-4 pt-4 pb-2">
-            {lines.map((line) =>
-              line.kind === "item" ? (
-                <MessageScrollerItem
-                  key={line.item.id}
-                  messageId={line.item.id}
-                >
-                  <Entry
-                    item={line.item}
-                    live={turn?.state === "running" && line.item === last}
-                    reader={reader}
-                    {...answers}
-                  />
-                </MessageScrollerItem>
-              ) : (
-                <MessageScrollerItem key={`ended-${line.turn.id}`}>
-                  <Ended
-                    turn={line.turn}
-                    busy={answers.answering}
-                    onRetry={
-                      retryable(state, line.turn)
-                        ? () => onRetry(line.turn)
-                        : undefined
-                    }
-                    signIn={signIn}
-                  />
-                </MessageScrollerItem>
-              )
-            )}
-            {turn && (
-              <MessageScrollerItem key="working">
+            {lines.map((line) => (
+              <MessageScrollerItem
+                key={key(line)}
+                messageId={line.kind === "item" ? line.item.id : undefined}
+              >
+                {render(line)}
+              </MessageScrollerItem>
+            ))}
+            {turn?.state === "queued" && (
+              <MessageScrollerItem key="getting-ready">
                 <Trace>
                   <TraceLine status="running">
                     <TraceIcon>
                       <Spinner />
                     </TraceIcon>
-                    <TraceTitle>
-                      {turn.state === "queued"
-                        ? `${name} is getting ready…`
-                        : `${name} is working…`}
-                    </TraceTitle>
+                    <TraceTitle>{`${name} is getting ready…`}</TraceTitle>
                   </TraceLine>
                 </Trace>
               </MessageScrollerItem>

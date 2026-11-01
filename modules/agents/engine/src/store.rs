@@ -93,6 +93,12 @@ ALTER TABLE agents_threads ADD COLUMN held INTEGER NOT NULL DEFAULT 0;
 -- from their Agents' files (ADR 0006).
 ALTER TABLE agents_threads ADD COLUMN harness TEXT;
 "#,
+    r#"
+-- When each turn began to run and when it ended, so a Thread can say how
+-- long the Agent worked (ADR 0010, decision 4). Older turns have neither.
+ALTER TABLE agents_turns ADD COLUMN started_at INTEGER;
+ALTER TABLE agents_turns ADD COLUMN ended_at INTEGER;
+"#,
 ];
 
 fn json<T: Serialize>(value: &T) -> Result<String, Error> {
@@ -435,8 +441,8 @@ pub fn insert_turn(
     settings: &Settings,
 ) -> Result<(), Error> {
     sql.execute(
-        "INSERT INTO agents_turns (id, thread, agent, author, message, state, settings, created_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8)",
+        "INSERT INTO agents_turns (id, thread, agent, author, message, state, settings, created_at, started_at)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
         params![
             turn.id,
             turn.thread,
@@ -445,7 +451,8 @@ pub fn insert_turn(
             turn.message,
             state_word(turn.state),
             json(settings)?,
-            at
+            at,
+            (turn.state == TurnState::Running).then_some(at)
         ],
     )?;
     Ok(())
@@ -515,17 +522,30 @@ pub fn turns_of(sql: &Connection, message: ItemId) -> Result<Vec<Turn>, Error> {
     Ok(rows.collect::<rusqlite::Result<_>>()?)
 }
 
+/// Sets `turn`'s state at `at`: a turn that runs began then, and one that
+/// no longer runs or waits ended then.
 pub fn set_turn(
     sql: &Connection,
     turn: TurnId,
     state: TurnState,
     reason: Option<&str>,
     failure: Option<Failure>,
+    at: i64,
 ) -> Result<(), Error> {
     let failure = failure.as_ref().map(json).transpose()?;
+    let started = (state == TurnState::Running).then_some(at);
+    let ended = !matches!(state, TurnState::Queued | TurnState::Running);
     sql.execute(
-        "UPDATE agents_turns SET state = ?2, reason = ?3, failure = ?4 WHERE id = ?1",
-        params![turn, state_word(state), reason, failure],
+        "UPDATE agents_turns SET state = ?2, reason = ?3, failure = ?4,
+         started_at = COALESCE(?5, started_at), ended_at = ?6 WHERE id = ?1",
+        params![
+            turn,
+            state_word(state),
+            reason,
+            failure,
+            started,
+            ended.then_some(at)
+        ],
     )?;
     Ok(())
 }
@@ -554,7 +574,7 @@ pub fn last_begun(sql: &Connection, thread: ThreadId) -> Result<Option<LatestTur
 
 pub fn turns(sql: &Connection, thread: ThreadId) -> Result<Vec<TurnView>, Error> {
     let mut statement = sql.prepare(
-        "SELECT id, message, state, reason, failure FROM agents_turns
+        "SELECT id, message, state, reason, failure, started_at, ended_at FROM agents_turns
          WHERE thread = ?1 ORDER BY created_at, id",
     )?;
     let rows = statement.query_map(params![thread], |row| {
@@ -567,6 +587,8 @@ pub fn turns(sql: &Connection, thread: ThreadId) -> Result<Vec<TurnView>, Error>
             failure: failure
                 .map(|text| serde_json::from_str(&text).map_err(|e| unreadable(4, e)))
                 .transpose()?,
+            started: row.get(5)?,
+            ended: row.get(6)?,
         })
     })?;
     Ok(rows.collect::<rusqlite::Result<_>>()?)
@@ -707,6 +729,44 @@ mod tests {
     }
 
     #[test]
+    fn a_turn_keeps_when_it_ran() {
+        let sql = migrated();
+        let agent = AgentId::new();
+        let thread = ThreadSummary {
+            id: ThreadId::new(),
+            harness: "fake".to_owned(),
+            title: "Hello".to_owned(),
+            updated_at: 0,
+        };
+        insert_thread(
+            &sql,
+            &thread,
+            agent,
+            Participant::Agent(agent),
+            &Settings::default(),
+        )
+        .unwrap();
+        let turn = Turn {
+            id: TurnId::new(),
+            thread: thread.id,
+            agent,
+            message: ItemId::new(),
+            state: TurnState::Queued,
+        };
+        let settings = Settings::default();
+        insert_turn(&sql, &turn, Participant::Agent(agent), 10, &settings).unwrap();
+        let times = || {
+            let view = turns(&sql, thread.id).unwrap().pop().unwrap();
+            (view.started, view.ended)
+        };
+        assert_eq!(times(), (None, None), "a turn that waits has not run");
+        set_turn(&sql, turn.id, TurnState::Running, None, None, 20).unwrap();
+        assert_eq!(times(), (Some(20), None));
+        set_turn(&sql, turn.id, TurnState::Done, None, None, 85).unwrap();
+        assert_eq!(times(), (Some(20), Some(85)));
+    }
+
+    #[test]
     fn a_listed_thread_says_where_its_work_stands() {
         let sql = migrated();
         let agent = AgentId::new();
@@ -742,7 +802,7 @@ mod tests {
             state: TurnState::Running,
         });
         assert_eq!(listed().latest, running, "a turn that waits never began");
-        set_turn(&sql, ran, TurnState::Done, None, None).unwrap();
+        set_turn(&sql, ran, TurnState::Done, None, None, 100).unwrap();
         add(TurnState::Withdrawn);
         assert_eq!(
             listed().latest,
