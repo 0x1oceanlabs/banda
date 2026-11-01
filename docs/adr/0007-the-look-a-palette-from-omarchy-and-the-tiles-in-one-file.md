@@ -80,18 +80,23 @@ ADR 0005 promised a theme file (decision 11) and "one look, and honest motion" (
    - The system's reduced motion turns it off, as `off` does.
    - Springs run in the window, so a move that is interrupted carries its speed on, as niri's do.
 
-10. **The look is the engine's `look` module, like any other module.**
-   - It reads `look.toml` and the theme's files, checks them, and resolves one value, the `Look`: tokens, gaps, tiles, focus, columns, fonts and motion, every value already filled in.
-   - It watches the files. A saved file applies at once. A broken one leaves the last good `Look` in force, and a notice names the file and the line (ADR 0005, decision 11).
-   - Its contract: a stream `look` that starts with the whole `Look` and sends a new one on every change; a command `look.set` that writes keys into `look.toml` and keeps the Person's comments; `look.themes` lists the themes it can find; `bandaso check` validates the file.
-   - Its manifest declares MCP tools for the same, so an Agent changes the look as a Person does: "make the gaps bigger", "take Omarchy's theme", "no animations".
-   - The look belongs to the machine the window runs on, not to a Space. A Space on another machine is drawn in the local look.
+10. **The look is a program, `bandaso look`, not a module of the engine** (_decided_: "do it the UNIX way").
+   - **Why not a module.** Every module call and stream of the engine belongs to a Space, and the engine may run on another machine (ADR 0005, decision 6). The look is the window's machine's: its Omarchy, its Hyprland, its `~/.config/banda/`. So the window resolves it where it runs, and the engine stays out.
+   - **One program, another mode**, as `bandaso mcp` is. It reads the files, checks them, lays the layers and prints one `Look` as JSON: the CSS variables of each scheme, the sizes, the layers it came from and the problems.
+     - `bandaso look` prints it once. `| jq` reads it, a script uses it, the window's tests check it.
+     - `bandaso look --follow` prints it again, one line per change: a saved file, Omarchy switching its theme, Hyprland reloading. The window runs this and applies each line.
+     - `bandaso look check [files]` validates `look.toml`, a `banda.toml` or a `colors.toml`. It prints `path:line:column: problem`, as compilers do, so editors jump there, prints nothing when all is well, and exits 1 on a problem.
+     - `bandaso look themes` lists every theme it finds, one JSON line each.
+   - **A broken file** leaves the last good look in force, and the problems ride along with it, so the window can say which file and line (ADR 0005, decision 11).
+   - **Files are the interface.** A Person, a script or an Agent changes the look by editing `look.toml`; `check` says whether it is right. A theme is a folder anyone can copy, Banda's own included. Writing keys with the Person's comments kept (`look.set`) and MCP tools come with the MCP module (ADR 0005, decision 14), on top of the same files.
+   - **It follows Omarchy's own resolver.** An Omarchy palette is read with the same aliases and fallbacks as `omarchy-theme-color`, so old themes that name only `color0`…`color15` work, and a mix rounds as Omarchy's templates round. Omarchy need not be installed for its themes to work.
+   - **Watching is polling.** The few files it read are checked four times a second for a change of time or size. That costs nothing, and survives editors that save by renaming and Omarchy replacing its whole theme folder. Hyprland is heard on its event socket.
 
 11. **The window only applies it.**
    - It writes the tokens and the sizes as CSS variables on `:root`: `--gap-inner`, `--gap-outer`, `--tile-radius`, `--tile-border`, `--focus`, `--focus-inactive`, `--focus-ring`, `--bar-height`.
    - The Strip, the frame and the bar take sizes from those variables, not from constants.
    - The terminal takes all 16 colours, the cursor and the selection from the tokens.
-   - Until the engine answers, the window draws the `banda` defaults, the same values the module ships.
+   - Until `bandaso look` answers, the window draws the `banda` defaults from its CSS, the same values Banda's own theme gives.
 
 **Tokens from a palette.** Omarchy's `accent` is the theme's colour, and it goes to shadcn's `--primary` and `--ring`. shadcn's `--accent` is something else: the background of a row under the pointer.
 
@@ -173,13 +178,14 @@ easing = { duration-ms = 120, curve = "linear" }
 
 **Consequences.**
 
-- `--attention` and the tokens' list move from CSS into the module's defaults. `globals.css` keeps only the mapping to Tailwind (`@theme inline`).
+- The tokens' values live in Banda's own theme (`look/themes/banda-light`, `banda-dark`), in the same files any theme has. `globals.css` keeps them as the first frame's defaults.
 - Words for `GLOSSARY.md`, once built: the look, the theme, the palette.
 - The app is called Banda (_decided_ 2026-11-01). The look lives in `~/.config/banda/`, as ADR 0005 named it. The other places (`~/.config/bandaso/`, `~/.local/state/bandaso/`, `BANDASO_*`, the window title) move in a rename PR of their own.
 - The order of work, each step its own PR:
   1. **The window reads sizes and colours from variables.** The `banda` defaults, `--gap-*`, `--tile-*`, `--focus-*`; the Strip, the frame and the bar take them. The tile becomes the `xl` step with a 2 px border, and the last corners that ignore the ladder take its steps.
-  2. **The `look` module.** `look.toml`, the `banda` and `omarchy` themes, the derivation, the stream and the file watch; light and dark; `nativeTheme`; Hyprland's rounding, border and gaps.
-  3. **The terminal's 16 colours and the focus ring.**
-  4. **Motion**: springs in the window, the `[motion]` tables, reduced motion.
-  5. **`look.set`, `look.themes` and the MCP tools**, then a settings page on the same file.
+  2. **`bandaso look`**: `look.toml`, the `banda` and `omarchy` themes, the derivation, Hyprland's rounding, border and gaps, `--follow`, `check` and `themes`.
+  3. **The window applies it**: it runs `bandaso look --follow`, sets the variables, light and dark, and `nativeTheme`.
+  4. **The terminal's 16 colours and the focus ring.**
+  5. **Motion**: springs in the window, the `[motion]` tables, reduced motion.
+  6. **`look.set` and the MCP tools**, then a settings page on the same file.
 - Later: gradients on the focus ring, shadows and blur, per-workspace gaps, an Omarchy template so a theme can ship `banda.toml` from `colors.toml` alone.
