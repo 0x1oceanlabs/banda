@@ -13,7 +13,13 @@ test("a new Thread joins the list once, with its Harness", () => {
   )
   const state = [started, started].reduce(applyThreads, empty)
   expect(state.threads).toEqual([
-    { id: "t1", harness: "claude", title: "Hello", updated_at: started.at },
+    {
+      id: "t1",
+      harness: "claude",
+      title: "Hello",
+      updated_at: started.at,
+      asking: [],
+    },
   ])
 })
 
@@ -30,8 +36,8 @@ test("a Thread that hears a message moves to the top", () => {
   const state: ThreadList = {
     at: 2,
     threads: [
-      { id: "t2", harness: "fake", title: "Two", updated_at: 2 },
-      { id: "t1", harness: "fake", title: "One", updated_at: 1 },
+      { id: "t2", harness: "fake", title: "Two", updated_at: 2, asking: [] },
+      { id: "t1", harness: "fake", title: "One", updated_at: 1, asking: [] },
     ],
   }
   const posted = event(
@@ -47,4 +53,63 @@ test("a Thread that hears a message moves to the top", () => {
     { subject: "t1" }
   )
   expect(applyThreads(moved, growing)).toBe(moved)
+})
+
+const one: ThreadList = {
+  at: 1,
+  threads: [
+    { id: "t1", harness: "fake", title: "One", updated_at: 1, asking: [] },
+  ],
+}
+
+test("a Thread keeps its latest turn that began, and how it ended", () => {
+  const started = event("turn.started", { turn: "u1" }, { subject: "t1" })
+  const running = applyThreads(one, started)
+  expect(running.threads[0].latest).toEqual({ turn: "u1", state: "running" })
+  expect(running.threads[0].updated_at).toBe(1)
+
+  const withdrawn = event(
+    "turn.ended",
+    { turn: "u2", state: "withdrawn" },
+    { author: person, subject: "t1" }
+  )
+  expect(applyThreads(running, withdrawn)).toBe(running)
+
+  const ended = event(
+    "turn.ended",
+    { turn: "u1", state: "done" },
+    { subject: "t1" }
+  )
+  const done = applyThreads(running, ended)
+  expect(done.threads[0].latest).toEqual({ turn: "u1", state: "done" })
+  expect(done.threads[0].updated_at).toBe(ended.at)
+})
+
+test("a Thread's Questions ask until they are answered or closed", () => {
+  const asked = (item: string) =>
+    event(
+      "question.asked",
+      { item, turn: "u1", title: "Which?", choices: [] },
+      { subject: "t1" }
+    )
+  const asking = [asked("q1"), asked("q2"), asked("q1")].reduce(
+    applyThreads,
+    one
+  )
+  expect(asking.threads[0].asking).toEqual(["q1", "q2"])
+
+  const answered = event(
+    "question.answered",
+    { item: "q1", choice: "allow" },
+    { author: person, subject: "t1" }
+  )
+  const closed = event("question.closed", { item: "q2" }, { subject: "t1" })
+  const settled = [answered, closed].reduce(applyThreads, asking)
+  expect(settled.threads[0].asking).toEqual([])
+  expect(applyThreads(settled, closed)).toBe(settled)
+})
+
+test("a fact about a Thread the list does not have changes nothing", () => {
+  const started = event("turn.started", { turn: "u" }, { subject: "t9" })
+  expect(applyThreads(one, started)).toBe(one)
 })

@@ -677,7 +677,33 @@ pub struct ThreadView {
 pub struct ThreadList {
     #[ts(type = "number")]
     pub at: i64,
-    pub threads: Vec<ThreadSummary>,
+    pub threads: Vec<ListedThread>,
+}
+
+/// A Thread as a list shows it: what it is, and where its work stands. A
+/// list follows it from the Thread's facts; what that means to a Person,
+/// such as "needs you", is the window's to say (ADR 0005, decision 8).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "agents/")]
+pub struct ListedThread {
+    #[serde(flatten)]
+    pub thread: ThreadSummary,
+    /// Its latest turn that began. None has yet.
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub latest: Option<LatestTurn>,
+    /// Its Questions that wait for an answer, the first asked first.
+    #[serde(default)]
+    pub asking: Vec<ItemId>,
+}
+
+/// A Thread's latest turn that began, and where it stands: it runs, or how
+/// it ended. A turn that waits, or that a Person took back, never began.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "agents/")]
+pub struct LatestTurn {
+    pub turn: TurnId,
+    pub state: TurnState,
 }
 
 /// What the agents module publishes, version 1: each fact is an Event's

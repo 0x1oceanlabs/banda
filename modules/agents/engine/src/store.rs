@@ -2,8 +2,8 @@
 //! through these functions.
 
 use crate::model::{
-    Body, Failure, Image, ImageId, Item, ItemId, Offer, QuestionState, Settings, ThreadId,
-    ThreadSummary, TurnId, TurnState, TurnView, Usage,
+    Body, Failure, Image, ImageId, Item, ItemId, LatestTurn, ListedThread, Offer, QuestionState,
+    Settings, ThreadId, ThreadSummary, TurnId, TurnState, TurnView, Usage,
 };
 use bandaso_kernel::{AgentId, Error, Participant, Refusal};
 use rusqlite::{Connection, OptionalExtension, Row, params};
@@ -400,11 +400,21 @@ pub fn thread(sql: &Connection, id: ThreadId) -> Result<Option<ThreadSummary>, E
         .optional()?)
 }
 
-/// The Space's Threads, the latest first.
-pub fn threads(sql: &Connection) -> Result<Vec<ThreadSummary>, Error> {
+/// The Space's Threads, the latest first, each with where its work stands.
+pub fn threads(sql: &Connection) -> Result<Vec<ListedThread>, Error> {
     let mut statement = sql.prepare(&format!("{THREAD} ORDER BY updated_at DESC, id DESC"))?;
     let rows = statement.query_map([], read_thread)?;
-    Ok(rows.collect::<rusqlite::Result<_>>()?)
+    let summaries = rows.collect::<rusqlite::Result<Vec<_>>>()?;
+    summaries
+        .into_iter()
+        .map(|thread| {
+            Ok(ListedThread {
+                latest: last_begun(sql, thread.id)?,
+                asking: asking(sql, thread.id)?,
+                thread,
+            })
+        })
+        .collect()
 }
 
 /// One turn, with what running it needs.
@@ -520,19 +530,24 @@ pub fn set_turn(
     Ok(())
 }
 
-/// The Thread's latest turn that began: one that waits, or that a Person
-/// took back, never did.
-pub fn last_begun(sql: &Connection, thread: ThreadId) -> Result<Option<TurnId>, Error> {
+/// The Thread's latest turn that began, and where it stands: one that
+/// waits, or that a Person took back, never did.
+pub fn last_begun(sql: &Connection, thread: ThreadId) -> Result<Option<LatestTurn>, Error> {
     Ok(sql
         .query_row(
-            "SELECT id FROM agents_turns WHERE thread = ?1 AND state NOT IN (?2, ?3)
+            "SELECT id, state FROM agents_turns WHERE thread = ?1 AND state NOT IN (?2, ?3)
              ORDER BY created_at DESC, id DESC LIMIT 1",
             params![
                 thread,
                 state_word(TurnState::Queued),
                 state_word(TurnState::Withdrawn)
             ],
-            |row| row.get(0),
+            |row| {
+                Ok(LatestTurn {
+                    turn: row.get(0)?,
+                    state: state_of(row, 1)?,
+                })
+            },
         )
         .optional()?)
 }
@@ -640,14 +655,31 @@ pub fn items(sql: &Connection, thread: ThreadId) -> Result<Vec<Item>, Error> {
     Ok(rows.collect::<rusqlite::Result<_>>()?)
 }
 
+/// An item that is a Question still waiting for an answer, with `?2`
+/// bound to [`open_word`].
+const OPEN_QUESTION: &str =
+    "json_extract(body, '$.kind') = 'question' AND json_extract(body, '$.state') = ?2";
+
+fn open_word() -> Result<String, Error> {
+    Ok(json(&QuestionState::Open)?.trim_matches('"').to_owned())
+}
+
 /// The Questions of a turn that still wait for an answer.
 pub fn open_questions(sql: &Connection, turn: TurnId) -> Result<Vec<Item>, Error> {
     let mut statement = sql.prepare(&format!(
-        "{ITEM} WHERE turn = ?1 AND json_extract(body, '$.kind') = 'question'
-           AND json_extract(body, '$.state') = ?2 ORDER BY rowid"
+        "{ITEM} WHERE turn = ?1 AND {OPEN_QUESTION} ORDER BY rowid"
     ))?;
-    let open = json(&QuestionState::Open)?;
-    let rows = statement.query_map(params![turn, open.trim_matches('"')], read_item)?;
+    let rows = statement.query_map(params![turn, open_word()?], read_item)?;
+    Ok(rows.collect::<rusqlite::Result<_>>()?)
+}
+
+/// The Thread's Questions that still wait for an answer, the first asked
+/// first.
+pub fn asking(sql: &Connection, thread: ThreadId) -> Result<Vec<ItemId>, Error> {
+    let mut statement = sql.prepare(&format!(
+        "SELECT id FROM agents_items WHERE thread = ?1 AND {OPEN_QUESTION} ORDER BY rowid"
+    ))?;
+    let rows = statement.query_map(params![thread, open_word()?], |row| row.get(0))?;
     Ok(rows.collect::<rusqlite::Result<_>>()?)
 }
 
@@ -665,6 +697,86 @@ pub fn agent_of(sql: &Connection, thread: ThreadId) -> Result<Option<AgentId>, E
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    fn migrated() -> Connection {
+        let sql = Connection::open_in_memory().unwrap();
+        for migration in MIGRATIONS {
+            sql.execute_batch(migration).unwrap();
+        }
+        sql
+    }
+
+    #[test]
+    fn a_listed_thread_says_where_its_work_stands() {
+        let sql = migrated();
+        let agent = AgentId::new();
+        let author = Participant::Agent(agent);
+        let summary = ThreadSummary {
+            id: ThreadId::new(),
+            harness: "fake".to_owned(),
+            title: "Hello".to_owned(),
+            updated_at: 0,
+        };
+        let settings = Settings::default();
+        insert_thread(&sql, &summary, agent, author, &settings).unwrap();
+        let listed = || threads(&sql).unwrap().remove(0);
+        assert_eq!(listed().latest, None, "no turn began yet");
+
+        let mut at = 0;
+        let mut add = |state: TurnState| {
+            at += 1;
+            let turn = Turn {
+                id: TurnId::new(),
+                thread: summary.id,
+                agent,
+                message: ItemId::new(),
+                state,
+            };
+            insert_turn(&sql, &turn, author, at, &settings).unwrap();
+            turn.id
+        };
+        let ran = add(TurnState::Running);
+        add(TurnState::Queued);
+        let running = Some(LatestTurn {
+            turn: ran,
+            state: TurnState::Running,
+        });
+        assert_eq!(listed().latest, running, "a turn that waits never began");
+        set_turn(&sql, ran, TurnState::Done, None, None).unwrap();
+        add(TurnState::Withdrawn);
+        assert_eq!(
+            listed().latest,
+            Some(LatestTurn {
+                turn: ran,
+                state: TurnState::Done,
+            }),
+            "nor one a Person took back"
+        );
+
+        let question = |state: QuestionState| {
+            let item = Item {
+                id: ItemId::new(),
+                turn: Some(ran),
+                author,
+                at: 0,
+                body: Body::Question {
+                    title: "Which?".to_owned(),
+                    choices: Vec::new(),
+                    form: None,
+                    state,
+                    answer: None,
+                    values: None,
+                },
+            };
+            insert_item(&sql, summary.id, &item).unwrap();
+            item.id
+        };
+        question(QuestionState::Answered);
+        let first = question(QuestionState::Open);
+        question(QuestionState::Closed);
+        let second = question(QuestionState::Open);
+        assert_eq!(listed().asking, [first, second], "only open Questions ask");
+    }
 
     #[test]
     fn older_threads_learn_their_harness_from_their_agents_files() {
@@ -687,7 +799,7 @@ mod tests {
         let mut named: Vec<_> = threads(&sql)
             .unwrap()
             .into_iter()
-            .map(|t| (t.title, t.harness))
+            .map(|t| (t.thread.title, t.thread.harness))
             .collect();
         named.sort();
         assert_eq!(

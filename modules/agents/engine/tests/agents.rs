@@ -3,8 +3,8 @@
 
 use bandaso_agents::Agents;
 use bandaso_agents::model::{
-    Body, Choice, Exit, Failure, ItemId, Mode, OptionValue, QuestionState, Settings, StepState,
-    ThreadView, ToolContent, ToolStatus, TurnState,
+    Body, Choice, Exit, Failure, ItemId, LatestTurn, Mode, OptionValue, QuestionState, Settings,
+    StepState, ThreadList, ThreadView, ToolContent, ToolStatus, TurnState,
 };
 use bandaso_agents::settings::{Cli, Harness, Harnesses};
 use bandaso_kernel::{AgentId, Code, CommandId, Kernel, Participant, PersonId, SpaceId};
@@ -156,6 +156,21 @@ impl World {
             .await
             .unwrap();
         serde_json::from_value(view).unwrap()
+    }
+
+    async fn threads(&self) -> ThreadList {
+        let list = self
+            .kernel
+            .call(
+                self.person(),
+                "agents.threads",
+                Some(self.space),
+                None,
+                json!({}),
+            )
+            .await
+            .unwrap();
+        serde_json::from_value(list).unwrap()
     }
 
     /// Waits up to ten seconds for the Thread to satisfy `check`.
@@ -339,6 +354,42 @@ async fn a_question_waits_for_a_person_and_offers_every_answer_of_the_harness() 
             "message: The check passed.",
         ]
     );
+}
+
+#[tokio::test]
+async fn the_list_says_where_each_threads_work_stands() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let sent = world.send(None, "please ask first").await;
+    let view = world.until(&sent["thread"], asking).await;
+    let (question, _) = open(&view).unwrap();
+    let turn = serde_json::from_value(sent["turn"].clone()).unwrap();
+    let listed = world.threads().await.threads.remove(0);
+    assert_eq!(
+        listed.latest,
+        Some(LatestTurn {
+            turn,
+            state: TurnState::Running
+        })
+    );
+    assert_eq!(listed.asking, [question], "it waits for its Person");
+
+    world
+        .call(
+            world.person(),
+            "agents.answer",
+            json!({ "item": question, "choice": "allow" }),
+        )
+        .await
+        .unwrap();
+    world
+        .until(&sent["thread"], |v| {
+            state(v, &sent["turn"]) == Some(TurnState::Done)
+        })
+        .await;
+    let listed = world.threads().await.threads.remove(0);
+    assert_eq!(listed.latest.map(|l| l.state), Some(TurnState::Done));
+    assert!(listed.asking.is_empty(), "the answer was all it asked");
 }
 
 #[tokio::test]

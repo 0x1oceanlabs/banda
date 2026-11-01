@@ -861,7 +861,7 @@ fn retry(tx: &mut Tx<'_>, author: Participant, turn: TurnId) -> Result<Value, Er
     if turn::by_itself(tx.sql(), &found)? {
         return Err(Refusal::invalid("Only a turn a Person asked for can be tried again.").into());
     }
-    let latest = store::last_begun(tx.sql(), found.thread)? == Some(found.id)
+    let latest = store::last_begun(tx.sql(), found.thread)?.map(|l| l.turn) == Some(found.id)
         && store::turns_of(tx.sql(), found.message)?
             .last()
             .map(|t| t.id)
