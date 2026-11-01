@@ -13,6 +13,7 @@
 
 pub mod color;
 pub mod hyprland;
+pub mod motion;
 pub mod palette;
 pub mod settings;
 pub mod theme;
@@ -20,6 +21,7 @@ pub mod tokens;
 
 use color::{is_css_color, is_hex};
 use hyprland::Windows;
+use motion::Motion;
 use palette::Palette;
 use serde::Serialize;
 use settings::{Corner, ModeChoice, Settings, ThemeChoice};
@@ -61,6 +63,8 @@ pub struct Look {
     pub schemes: Schemes,
     /// Sizes, the same in light and dark.
     pub vars: BTreeMap<String, String>,
+    /// How each event moves, already slowed down or turned off.
+    pub motion: Motion,
     /// The layers it came from, bottom first.
     pub sources: Vec<Source>,
     /// What is wrong in the files. The look still applies: a broken layer
@@ -165,6 +169,9 @@ pub fn read_settings(path: &Path, text: &str, problems: &mut Vec<Problem>) -> Op
     };
     for key in settings.negative_sizes() {
         problems.push(Problem::whole(path, format!("{key} cannot be negative")));
+    }
+    for (span, message) in settings.motion.problems() {
+        problems.push(Problem::at(path, text, span, message));
     }
     let named = |value: &Spanned<String>| {
         let v = value.get_ref();
@@ -383,6 +390,7 @@ pub fn resolve(places: &Places, windows: &dyn Fn() -> Option<Windows>) -> Resolv
             mode: shown,
             schemes,
             vars: vars(&all),
+            motion: all.motion.resolve(),
             sources,
             problems,
         },

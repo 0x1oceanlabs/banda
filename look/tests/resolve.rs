@@ -2,6 +2,7 @@
 //! Hyprland's windows, in throwaway folders.
 
 use bandaso_look::hyprland::Windows;
+use bandaso_look::motion::Move;
 use bandaso_look::theme::{Origin, Places};
 use bandaso_look::{Look, Shown, follow, resolve};
 use std::fs;
@@ -199,6 +200,23 @@ fn niri_ring_is_a_switch() {
     machine.look_toml("[focus]\nring = 3\nring-color = \"orange\"\n");
     let look = machine.look();
     assert!(look.problems[0].message.contains("ring-color"));
+}
+
+#[test]
+fn motion_comes_through_the_layers_slowed_and_checked() {
+    let machine = Machine::new(false);
+    let look = machine.look();
+    assert!(matches!(look.motion.workspace, Move::Spring(s) if s.stiffness == 800.0));
+
+    machine.look_toml("[motion]\nslowdown = 2\n[motion.strip]\noff = true\n");
+    let look = machine.look();
+    assert!(matches!(look.motion.workspace, Move::Spring(s) if s.stiffness == 200.0));
+    assert_eq!(look.motion.strip, Move::Off);
+
+    machine.look_toml("[motion.strip]\neasing = { curve = \"bouncy\" }\n");
+    let look = machine.look();
+    let problem = &look.problems[0];
+    assert_eq!((problem.line, problem.column), (Some(2), Some(20)));
 }
 
 #[test]

@@ -1,6 +1,8 @@
 import { useEffect, useLayoutEffect, useRef } from "react"
 import type { Engine, SpaceId } from "@bandaso/contract"
 import type { PaneState } from "@bandaso/ui/pane"
+import { moveOf } from "../look"
+import { Moving } from "../motion"
 import { Choices } from "../registry"
 import type { Width, Workspace } from "./model"
 import { type Frame, PaneFrame } from "./PaneFrame"
@@ -77,6 +79,8 @@ export function Strip({
       }
       if (event.altKey) event.preventDefault()
       if (!mine || swipe.way !== "sideways") return
+      // The fingers take the Strip from wherever the spring has it.
+      scrollOf(strip).stop()
       strip.scrollLeft += x
       clearTimeout(ending)
       ending = setTimeout(
@@ -139,17 +143,41 @@ export function Strip({
   )
 }
 
-/** Scrolls the Strip by the least that shows `column` whole. */
+const scrolls = new WeakMap<HTMLElement, Moving>()
+
+/** The Strip's scroll, moving on the look's spring. */
+function scrollOf(strip: HTMLElement): Moving {
+  let scroll = scrolls.get(strip)
+  if (!scroll) {
+    scroll = new Moving(
+      (left) => {
+        strip.scrollLeft = left
+      },
+      () => strip.scrollLeft
+    )
+    scrolls.set(strip, scroll)
+  }
+  return scroll
+}
+
+/** Scrolls the Strip by the least that shows `column` whole, measured
+ * from where it is headed, so a second step goes on from the first. */
 function reveal(strip: HTMLElement, column: HTMLElement) {
+  const scroll = scrollOf(strip)
+  const at = scroll.target
   // The look's outer gap stays in view beside the column.
   const gap = parseFloat(getComputedStyle(strip).paddingLeft) || 0
   const start = column.offsetLeft - gap
   const end = column.offsetLeft + column.offsetWidth + gap
-  if (start < strip.scrollLeft) {
-    strip.scrollTo({ left: start, behavior: "smooth" })
-  } else if (end > strip.scrollLeft + strip.clientWidth) {
-    strip.scrollTo({ left: end - strip.clientWidth, behavior: "smooth" })
-  }
+  const most = strip.scrollWidth - strip.clientWidth
+  const to =
+    start < at
+      ? start
+      : end > at + strip.clientWidth
+        ? end - strip.clientWidth
+        : at
+  const target = Math.max(0, Math.min(most, to))
+  if (target !== at) scroll.to(target, moveOf("strip"))
 }
 
 /**

@@ -804,6 +804,27 @@ test("the window takes its look from look.toml, and again on each save", async (
   await expect(thread).toHaveCSS("outline-offset", "-2px")
   await expect(thread).toHaveCSS("outline-color", "rgb(63, 160, 224)")
   await page.screenshot({ path: "test-results/21-look-ring.png" })
+
+  // Motion is the look's too: a slow, straight move between workspaces
+  // is seen halfway, and lands.
+  writeFileSync(
+    file,
+    '[gaps]\ninner = 7\n[motion.workspace]\neasing = { duration-ms = 1500, curve = "linear" }\n'
+  )
+  await expect(root).toHaveCSS("--gap-inner", "7px")
+  const first = page.getByRole("group", {
+    name: "Workspace 1",
+    includeHidden: true,
+  })
+  const place = () =>
+    first.evaluate((e) =>
+      parseFloat(e.style.transform.slice("translateY(".length))
+    )
+  await page.keyboard.press("Alt+KeyN")
+  await page.keyboard.press("Alt+Shift+Digit2")
+  await expect.poll(place).toBeLessThan(-10)
+  expect(await place()).toBeGreaterThan(-90)
+  await expect.poll(place).toBe(-100)
 })
 
 test("a Thread that finishes while the Person is elsewhere calls them with a sound", async () => {

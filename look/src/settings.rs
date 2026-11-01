@@ -2,6 +2,7 @@
 //! decision 2). Every key is optional: a layer says only what it changes,
 //! and [`Settings::over`] lays one layer over another.
 
+use crate::motion::MotionSettings;
 use serde::Deserialize;
 use std::collections::BTreeMap;
 use toml::Spanned;
@@ -31,6 +32,8 @@ pub struct Settings {
     pub focus: Focus,
     #[serde(default)]
     pub bar: Bar,
+    #[serde(default)]
+    pub motion: MotionSettings,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq)]
@@ -177,6 +180,7 @@ impl Settings {
             bar: Bar {
                 height: self.bar.height.or(under.bar.height),
             },
+            motion: self.motion.over(under.motion),
         }
     }
 
@@ -203,6 +207,7 @@ impl Settings {
                 ring: Some(0.0),
             },
             bar: Bar { height: Some(36.0) },
+            motion: MotionSettings::defaults(),
         }
     }
 

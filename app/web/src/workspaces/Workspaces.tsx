@@ -1,6 +1,8 @@
 import { useEffect, useLayoutEffect, useRef } from "react"
 import type { Engine, SpaceId } from "@bandaso/contract"
 import type { PaneState } from "@bandaso/ui/pane"
+import { moveOf } from "../look"
+import { Moving } from "../motion"
 import type { Workspaces as State } from "./model"
 import type { Frame } from "./PaneFrame"
 import { Strip } from "./Strip"
@@ -37,6 +39,20 @@ export function Workspaces({
   onStart: (pane: PaneState) => void
 }) {
   const root = useRef<HTMLDivElement>(null)
+  // The stack's place, in workspaces: it moves on the look's spring.
+  const place = useRef<Moving | null>(null)
+  useLayoutEffect(() => {
+    const stack = root.current
+    if (!stack) return
+    place.current ??= stackPlace(stack, workspaces.current)
+    const moving = place.current
+    // A workspace just drawn takes its place in the stack as it stands.
+    if (!moving.moving) moving.to(moving.value, { kind: "off" })
+    if (moving.target !== workspaces.current) {
+      moving.to(workspaces.current, moveOf("workspace"))
+    }
+  })
+  useEffect(() => () => place.current?.stop(), [])
   const step = useRef(onStep)
   useLayoutEffect(() => {
     step.current = onStep
@@ -73,10 +89,7 @@ export function Workspaces({
             aria-label={`Workspace ${i + 1}`}
             aria-hidden={!live}
             inert={!live}
-            className="absolute inset-0 transition-transform duration-300 ease-out motion-reduce:transition-none"
-            style={{
-              transform: `translateY(${(i - workspaces.current) * 100}%)`,
-            }}
+            className="absolute inset-0"
           >
             <Strip
               workspace={workspace}
@@ -91,5 +104,21 @@ export function Workspaces({
         )
       })}
     </div>
+  )
+}
+
+/** Where the stack stands, in workspaces: 1.5 shows half of the second
+ * and half of the third. */
+function stackPlace(stack: HTMLElement, at: number): Moving {
+  let shown = at
+  return new Moving(
+    (place) => {
+      shown = place
+      for (const [i, child] of [...stack.children].entries()) {
+        ;(child as HTMLElement).style.transform =
+          `translateY(${(i - place) * 100}%)`
+      }
+    },
+    () => shown
   )
 }
