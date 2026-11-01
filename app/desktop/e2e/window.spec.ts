@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs"
+import { readFileSync, writeFileSync } from "node:fs"
 import { join, resolve } from "node:path"
 import { expect, test } from "@playwright/test"
 import { firstThread, startWindow, type Window } from "./window"
@@ -751,4 +751,31 @@ test("what the Agent does by itself shows in a turn of its own", async () => {
   await composer.press("Enter")
   await expect(thread.getByText("You said: and this")).toBeVisible()
   await expect(thread.getByText("Fake AI is working…")).toBeHidden()
+})
+
+test("the window takes its look from look.toml, and again on each save", async () => {
+  window = await startWindow({
+    look: '[gaps]\ninner = 12\n[colors]\naccent = "#e07a3f"\n',
+  })
+  const { page, dir } = window
+  const file = join(dir, "look/look.toml")
+  const { thread } = await firstThread(page)
+  const root = page.locator("html")
+  await expect(root).toHaveCSS("--gap-inner", "12px")
+  // The focused tile's border takes the accent.
+  await expect(thread).toHaveAttribute("data-focused", "true")
+  await expect(thread).toHaveCSS("border-top-color", "rgb(224, 122, 63)")
+  await page.screenshot({ path: "test-results/19-look.png" })
+
+  // A broken file keeps the last good look, and the bar names its line.
+  writeFileSync(file, "[gaps]\ninner = oops\n")
+  const problem = page.getByRole("status", { name: /^The look: / })
+  await expect(problem).toHaveAttribute("aria-label", /look\.toml:2:9: /)
+  await expect(root).toHaveCSS("--gap-inner", "12px")
+
+  writeFileSync(file, 'mode = "dark"\n[gaps]\ninner = 20\n')
+  await expect(root).toHaveCSS("--gap-inner", "20px")
+  await expect(root).toHaveClass(/\bdark\b/)
+  await expect(problem).toBeHidden()
+  await page.screenshot({ path: "test-results/20-look-dark.png" })
 })

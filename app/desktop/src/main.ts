@@ -1,7 +1,9 @@
 /**
  * The desktop window. It runs the engine as its child, serves the page
- * from `app://bandaso` and hands the page the engine's address; nothing
- * else crosses from Node to the page (docs/architecture.md, "Processes").
+ * from `app://bandaso` and hands the page the engine's address. It also
+ * runs `bandaso look --follow` and hands the page each look (ADR 0007);
+ * nothing else crosses from Node to the page (docs/architecture.md,
+ * "Processes").
  */
 import { join, resolve, sep } from "node:path"
 import { pathToFileURL } from "node:url"
@@ -17,6 +19,7 @@ import {
   shell,
 } from "electron"
 import { EngineProcess } from "./engine"
+import { firstFrame, LookProcess } from "./look"
 
 /** The page's origin; the engine lets it in (kernel/src/api.rs, APP_ORIGIN). */
 const ORIGIN = "app://bandaso"
@@ -63,7 +66,11 @@ protocol.registerSchemesAsPrivileged([
 ])
 
 const engine = new EngineProcess(engineBinary)
+const look = new LookProcess(engineBinary)
 let window: BrowserWindow | null = null
+
+/** How long the window waits for its look, so it opens in its colours. */
+const LOOK_WAIT = 300
 
 if (!app.requestSingleInstanceLock()) {
   app.quit()
@@ -77,6 +84,15 @@ if (!app.requestSingleInstanceLock()) {
 
 async function ready(): Promise<void> {
   engine.start()
+  look.start()
+  look.listen((now) => {
+    // Native parts (scrollbars, menus) and the page's own
+    // prefers-color-scheme follow the look's mode.
+    nativeTheme.themeSource = now.mode
+    const background = firstFrame(now, nativeTheme.shouldUseDarkColors)
+    if (background) window?.setBackgroundColor(background)
+    window?.webContents.send("look", now)
+  })
   protocol.handle("app", page)
   // The page asks for nothing: no camera, no notifications, no location.
   session.defaultSession.setPermissionRequestHandler(
@@ -88,6 +104,14 @@ async function ready(): Promise<void> {
       throw new Error("Only Bandaso's page may ask for the engine.")
     return engine.address()
   })
+  ipcMain.handle("look", (event) => {
+    const from = event.senderFrame?.url ?? ""
+    if (!fromPage(from))
+      throw new Error("Only Bandaso's page may ask for the look.")
+    return look.current()
+  })
+  const first = await look.first(LOOK_WAIT)
+  if (first) nativeTheme.themeSource = first.mode
   Menu.setApplicationMenu(process.platform === "darwin" ? macMenu() : null)
   window = openWindow()
 }
@@ -113,6 +137,7 @@ function fromPage(url: string): boolean {
 }
 
 function openWindow(): BrowserWindow {
+  const current = look.current()
   const opened = new BrowserWindow({
     width: 1280,
     height: 820,
@@ -120,7 +145,9 @@ function openWindow(): BrowserWindow {
     minHeight: 420,
     show: false,
     title: "Bandaso",
-    backgroundColor: nativeTheme.shouldUseDarkColors ? "#0a0a0a" : "#ffffff",
+    backgroundColor:
+      (current && firstFrame(current, nativeTheme.shouldUseDarkColors)) ??
+      (nativeTheme.shouldUseDarkColors ? "#0a0a0a" : "#ffffff"),
     webPreferences: {
       preload: join(import.meta.dirname, "preload.cjs"),
       sandbox: true,
@@ -164,6 +191,7 @@ let stopped = false
 app.on("will-quit", (event) => {
   if (stopped) return
   event.preventDefault()
+  look.stop()
   void engine.stop().then(() => {
     stopped = true
     app.quit()

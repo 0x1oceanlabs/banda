@@ -42,9 +42,12 @@ function fakeCli(dir: string, version: string, minimum: string): string {
 export async function startWindow({
   account = false,
   oldCli = false,
+  look = "",
 } = {}): Promise<Window> {
   const dir = mkdtempSync(join(tmpdir(), "bandaso-window-"))
   mkdirSync(join(dir, "config"))
+  mkdirSync(join(dir, "look"))
+  if (look) writeFileSync(join(dir, "look/look.toml"), look)
   const fake = join(repository, "target/debug/bandaso-fake-agent")
   const home = join(dir, "fake-home")
   mkdirSync(home)
@@ -66,6 +69,10 @@ export async function startWindow({
       BANDASO_ROOT: join(dir, "root"),
       BANDASO_STATE: join(dir, "state"),
       BANDASO_CONFIG: join(dir, "config"),
+      // The look reads only its own folder: no Omarchy, no Hyprland.
+      BANDA_CONFIG: join(dir, "look"),
+      BANDA_OMARCHY: "",
+      HYPRLAND_INSTANCE_SIGNATURE: "",
       BANDASO_LOG: "warn",
       // A terminal runs the Person's shell: here one every machine has.
       SHELL: "/bin/sh",
