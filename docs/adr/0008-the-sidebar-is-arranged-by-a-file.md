@@ -33,9 +33,9 @@ Roma liked A, B and C, and asked for one thing instead of three: "unify everythi
 
    [group]
    by = "state"                # "state", "space" or "none"
-   states = ["needs", "done", "idle"]   # the sections, in this order
-   bottom = ["working"]        # shelves at the bottom, each with its count
-   folded = []                 # sections, shelves or Spaces that start folded
+   states = ["active"]         # the sections, in this order
+   bottom = ["working", "settled"]   # shelves at the bottom, each with its count
+   folded = ["settled"]        # sections, shelves or Spaces that start folded
    limit = 10                  # rows before "Show more"; 0 shows all
    empty = "hide"              # an empty section: "hide" or "show"
 
@@ -57,8 +57,13 @@ Roma liked A, B and C, and asked for one thing instead of three: "unify everythi
    # line3 = ["note", "~", "harness"]
    ```
 
-   - **States** are the marks seen from the sidebar: `needs` (it asks, or it failed), `done` (it finished while the Person was away), `working` and `idle`. A state listed in neither `states` nor `bottom` goes to the last section, so no Thread is ever hidden.
-   - **`attention`** sorts `needs`, then `done`, `working` and `idle`, and the latest change first inside each. It is what ADR 0005 named the attention order.
+   - **States** are where a Thread stands, seen from the sidebar: `active` (neither at work nor settled: it asks, it failed, it finished, or the Person has it in hand; its mark and its status say which, and the section has no heading), `working` (its Agent is at work) and `settled` (put away, as an archive that keeps it at hand). A state listed in neither `states` nor `bottom` goes to the last section, so no Thread is ever hidden.
+     - _Changed on 2026-11-01, once Roma had used it._ The states were `needs`, `done`, `working` and `idle`, each a section with its heading ("Needs you", "Done", "Quiet"), and only the working Threads on a shelf. Roma: "Done and Needs you are one place, just different statuses: when the agent has finished I have to go there, see what it wrote and carry the task on"; the old sessions are "settled, like an archive; look at T3 Code and do the same". So the sidebar is T3 Code's: one list with no heading, then the shelves "Working" and "Settled" with their counts, "Settled" folded.
+   - **Settled is one of the Person's own marks** (ADR 0005, decision 8), kept by the window as "seen" is, after T3 Code's:
+     - The Person settles a Thread from its row's menu (a right click: "Settle thread"), or with `Alt+S` on the Thread they look at; the same un-settles it. A Thread at work, or one that asks, is not settled.
+     - A Thread with nothing new for three days settles by itself, unless it asks the Person or they un-settled it since.
+     - Anything new in it, a message, a turn that ends, brings it back to the list. Seeing it moves nothing.
+   - **`attention`** sorts what waits for the Person first (it asks, it failed, or it finished unseen), then the rest, and the latest change first inside each. It is what ADR 0005 named the attention order.
    - **`group.by = "space"`** makes each Space a section, its rows in `sort.by`'s order; `folded` may name Spaces too.
    - **A row is one, two or three lines** (_decided_: "how many lines one Thread gets, 1, 2 or 3, and how to show the info"). The line with the title is always the same, the mark and the title, so a Thread looks the same in every density; the other lines add context:
 
@@ -70,15 +75,15 @@ Roma liked A, B and C, and asked for one thing instead of three: "unify everythi
 
    - **The parts.** `mark`: Banda's mark of the Thread's state. `title`. `space`: the Space's coloured badge, with its name when the row has room. `harness`: Claude's or Codex's icon. `status`: "Asks you", "Failed" or "Done" in their colours, the running turn's timer, or the time since the last change. `note`: what it asks, or why it failed, or else the last message. Later: `branch`, `pr`, `diff`.
    - `hide` leaves parts out of the built-in layout; `line1` … `line3` replace it. A row leaves out what its header already says: no Space under a Space's header.
-   - A Space's own order (`manual`, by dragging) and the Person's marks (pinned, snoozed, settled; ADR 0005, decision 8) come later, as more values of the same keys: `sort.by = "manual"` and a `pinned` state.
+   - A Space's own order (`manual`, by dragging) and the rest of the Person's marks (pinned, snoozed; ADR 0005, decision 8) come later, as more values of the same keys: `sort.by = "manual"` and a `pinned` state.
 
 5. **The three presets.**
 
    | Key | `inbox` (A, T3 Code) | `spaces` (B) | `places` (C, Herdr) |
    |---|---|---|---|
    | `group.by` | `state` | `space` | `state` |
-   | `group.states` | needs, done, idle | needs, done, working, idle | needs, done, working, idle |
-   | `group.bottom` | working | none | none |
+   | `group.states` | active | active, working, settled | active, working, settled |
+   | `group.bottom` | working, settled | none | none |
    | `spaces.list` | no | no (the groups are Spaces) | yes |
    | `row.lines` | 3 | 1 | 2 |
 
@@ -110,4 +115,4 @@ Roma liked A, B and C, and asked for one thing instead of three: "unify everythi
 - The order of work, each step its own PR:
   1. **The arrangement and the three presets**, from the built-in defaults, with the preset menu kept in the window until step 2. _Done._
   2. **The file**: `bandaso look` reads and watches `sidebar.toml` and the preset files; the view menu writes the preset; "Edit sidebar.toml"; the notice for a broken file. _Done._
-- Later: the keys in the Banda skill's reference, once there is one; search; `sort.by = "manual"`; pinned, snoozed and settled; a rail when the sidebar is narrow, as Herdr's.
+- Later: the keys in the Banda skill's reference, once there is one; search; `sort.by = "manual"`; pinned and snoozed; a rail when the sidebar is narrow, as Herdr's.
