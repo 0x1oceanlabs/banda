@@ -179,7 +179,7 @@ If Chat is removed, Agents still works through its own Thread.
 |---|---|---|
 | agents | Thread, Harness, Agent, Turn, Question | first |
 | terminal | Terminal | first |
-| browser | Page; an Agent drives it through MCP (CDP) | first |
+| browser | Tab; the window's, with no engine part; every Agent reaches it over CDP (ADR 0013) | first |
 | files | the Space's files | soon |
 | chat | Room, Message, Mention | later |
 | databases | Database, Field, Record, View | later |
@@ -601,7 +601,7 @@ bandaso/
     agents/pane/      React: the Thread, the Harnesses, each Thread as the sidebar lists it
     terminal/engine/  Rust: Terminals, their PTYs and what they printed
     terminal/pane/    React: a terminal, drawn by Ghostty
-    browser/pane/     React: the browser Pane (next)
+    browser/pane/     React: the browser Pane, its tabs and row (ADR 0013, next)
     skill/            Rust: the Banda skill, its core and the topics it gathers (ADR 0012)
   look/               Rust: bandaso look, the look and the sidebar's arrangement; skill/ its topics
   engine/             the bandaso program: serve (the kernel and its modules), call, follow, look, skill

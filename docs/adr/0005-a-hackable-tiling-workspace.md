@@ -142,7 +142,7 @@ The evidence is in two notes: [tiling managers](../research/2026-11-01-tiling-ma
     - `bandaso describe` shows what is open and running now, to a Person and to an Agent alike.
     - Nothing is written into the Space's folder or into a Harness's own config.
 
-15. **The base first: Threads, the terminal, the browser** (_decided_). The browser is a module: a Pane with a page that the Person and the Space's Agents share, and one sign-in profile per Space. Agents drive it through its MCP tools. It gets its own ADR when it is built.
+15. **The base first: Threads, the terminal, the browser** (_decided_). The browser is a module: a Pane with a page that the Person and the Space's Agents share, and one sign-in profile per Space. Agents drive it through its MCP tools. It gets its own ADR when it is built. (ADR 0013 made it the window's, with one profile for every Space and every Agent.)
 
 16. **One look, and honest motion.**
     - One theme recolours every Pane, including the terminal's 16 colours and the browser's chrome. It can follow the system's theme, Omarchy's among others.
