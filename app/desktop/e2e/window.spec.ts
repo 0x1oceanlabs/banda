@@ -983,6 +983,35 @@ test("Ctrl+F finds in the Thread and opens what folds it, and the minimap goes t
   ).toBeInViewport()
 })
 
+test("@ names a file in the Space's folder, picked from a list", async () => {
+  window = await startWindow()
+  const { page, dir } = window
+  const { thread, composer } = await firstThread(page)
+  const space = join(dir, "root", "Work")
+  mkdirSync(join(space, "src"), { recursive: true })
+  writeFileSync(join(space, "src", "main.ts"), "")
+  writeFileSync(join(space, "notes.md"), "")
+
+  await composer.fill("look at @mai")
+  const files = page.getByRole("listbox", { name: "Files" })
+  await expect(files.getByRole("option")).toHaveCount(1)
+  await expect(files.getByRole("option")).toContainText("main.ts")
+  await expect(files.getByRole("option")).toContainText("src")
+  await page.screenshot({ path: "test-results/18d-files.png" })
+  await composer.press("Enter")
+  await expect(composer).toHaveValue("look at @src/main.ts ")
+  await expect(files).toBeHidden()
+  await composer.pressSequentially("please")
+  await composer.press("Enter")
+  await expect(
+    thread.getByText("You said: look at @src/main.ts please")
+  ).toBeVisible()
+
+  // Nothing that holds the words says so.
+  await composer.fill("@nothing-like-it")
+  await expect(page.getByText("No file holds that.")).toBeVisible()
+})
+
 test("what the Agent does by itself shows in a turn of its own", async () => {
   window = await startWindow()
   const { page } = window

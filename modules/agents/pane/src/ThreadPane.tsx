@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import type { Engine, SpaceId } from "@bandaso/contract"
 import type {
   Defaults,
@@ -194,6 +194,12 @@ function ThreadPane({
     closed: offer.no_images ? `${name} does not take images.` : undefined,
   })
   const [dropping, setDropping] = useState(false)
+  // The files `@` names come from the Space's folder.
+  const findFiles = useCallback(
+    (query: string) =>
+      engine.command<string[]>("agents.files", { query }, space),
+    [engine, space]
+  )
   // What the Person looks for in the Thread, while the find bar is open.
   const [find, setFind] = useState<{ query: string; at: number }>()
   const area = useRef<HTMLDivElement>(null)
@@ -415,6 +421,7 @@ function ThreadPane({
           dropping={dropping}
           onPlanMode={(plan) => settings && configure({ ...settings, plan })}
           onEditLast={last && (() => setEditing(last.item.id))}
+          findFiles={findFiles}
           onSend={send}
           onStop={stop}
         >

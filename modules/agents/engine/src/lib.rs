@@ -36,6 +36,7 @@
 mod acp;
 mod between;
 mod cli;
+mod files;
 mod hosts;
 mod images;
 mod live;
@@ -73,6 +74,7 @@ pub struct Agents {
     live: Arc<Live>,
     idle: Duration,
     quiet: Duration,
+    listings: Arc<files::Listings>,
 }
 
 impl Agents {
@@ -82,6 +84,7 @@ impl Agents {
             live: Arc::new(Live::new(hosts::IDLE, between::QUIET)),
             idle: hosts::IDLE,
             quiet: between::QUIET,
+            listings: Arc::default(),
         }
     }
 
@@ -148,6 +151,8 @@ enum Method {
     Answer,
     Attach,
     Image,
+    /// The files in the Space's folder, for `@` in the composer.
+    Files,
 }
 
 impl Method {
@@ -171,6 +176,7 @@ impl Method {
             "answer" => Method::Answer,
             "attach" => Method::Attach,
             "image" => Method::Image,
+            "files" => Method::Files,
             _ => return None,
         })
     }
@@ -181,7 +187,8 @@ impl Method {
             | Method::Threads
             | Method::Thread
             | Method::Defaults
-            | Method::Image => Right::Read,
+            | Method::Image
+            | Method::Files => Right::Read,
             // A Harness's account serves every Space on this computer.
             Method::Account | Method::SignIn | Method::SignOut => Right::Manage,
             Method::Send
@@ -256,6 +263,13 @@ struct Attach {
     data: String,
     #[serde(default)]
     name: Option<String>,
+}
+
+/// What `agents.files` asks: the files in the Space's folder that hold
+/// these words.
+#[derive(Deserialize)]
+struct FileQuery {
+    query: String,
 }
 
 #[derive(Deserialize)]
@@ -552,6 +566,17 @@ impl Module for Agents {
                     .await;
                 tokio::spawn(sweep(space.clone(), images));
                 kept
+            }
+            Method::Files => {
+                let FileQuery { query } = decode(params)?;
+                let folder = space.folder().to_path_buf();
+                let listings = self.listings.clone();
+                let found = tokio::task::spawn_blocking(move || {
+                    files::matching(&listings.of(&folder), &query)
+                })
+                .await
+                .map_err(|_| Refusal::invalid("The files could not be listed."))?;
+                value(found)
             }
             Method::Image => {
                 let OneImage { image } = decode(params)?;
