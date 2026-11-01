@@ -1,6 +1,6 @@
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { join, resolve } from "node:path"
-import { expect, type Locator, test } from "@playwright/test"
+import { expect, type Locator, type Page, test } from "@playwright/test"
 import {
   countNotes,
   firstThread,
@@ -930,4 +930,63 @@ test("[sound] in look.toml chooses the sounds: off is silence", async () => {
   ).toBeVisible()
   await page.waitForTimeout(500)
   expect(await notes()).toBe(0)
+})
+
+/** Sends `text` in `composer`'s Thread, then goes to the empty workspace below. */
+async function sendAndGoBelow(page: Page, composer: Locator, text: string) {
+  await composer.fill(text)
+  await composer.press("Enter")
+  const thread = composer.locator("xpath=ancestor::section[1]")
+  await expect(thread).not.toHaveAccessibleName("New Thread")
+  await page.keyboard.press("Alt+PageDown")
+  await expect(thread).toBeHidden()
+}
+
+test("a Thread that finishes out of sight shows a toast, and it goes there", async () => {
+  window = await startWindow()
+  const { page } = window
+  const { composer } = await firstThread(page)
+  await sendAndGoBelow(page, composer, "slow hello")
+
+  const calls = page.getByRole("region", { name: "Calls" })
+  const toast = calls.getByRole("button", { name: /slow hello/ })
+  await expect(toast).toContainText("Done")
+  await expect(toast).toContainText("Open")
+  await page.screenshot({ path: "test-results/23-toast.png" })
+
+  await toast.click()
+  const thread = page.getByRole("region", { name: "slow hello" })
+  await expect(thread).toHaveAttribute("data-focused", "true")
+  await expect(toast).toBeHidden()
+  // Seen: the sidebar's mark settles.
+  const sidebar = page.getByRole("complementary", { name: "Sidebar" })
+  await expect(
+    sidebar.getByRole("button", { name: /slow hello/ }).getByRole("img", {
+      name: "Done",
+    })
+  ).toBeHidden()
+})
+
+test("a Thread that finishes on screen makes its sound, and no toast", async () => {
+  window = await startWindow()
+  const { page } = window
+  const { composer } = await firstThread(page)
+  const notes = await countNotes(page)
+  await sendAndLeave(page, composer, "slow hello")
+  await expect.poll(notes).toBeGreaterThan(0)
+  await expect(page.getByRole("region", { name: "Calls" })).toBeHidden()
+})
+
+test("Alt+U goes to the Thread that calls", async () => {
+  window = await startWindow()
+  const { page } = window
+  const { composer } = await firstThread(page)
+  await sendAndGoBelow(page, composer, "slow hello")
+  const calls = page.getByRole("region", { name: "Calls" })
+  await expect(calls.getByRole("button", { name: /slow hello/ })).toBeVisible()
+
+  await page.keyboard.press("Alt+U")
+  const thread = page.getByRole("region", { name: "slow hello" })
+  await expect(thread).toHaveAttribute("data-focused", "true")
+  await expect(calls).toBeHidden()
 })

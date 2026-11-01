@@ -1,32 +1,38 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import type { Engine, SpaceId, SpaceSummary } from "@bandaso/contract"
-import type { Attention, Call, Listed, Report, Watch } from "@bandaso/ui/pane"
+import type { Attention, Listed, Report, Watch } from "@bandaso/ui/pane"
 import { runs, watches } from "../registry"
 import { combine } from "./attention"
 
 /** What every module lists for each Space, for the sidebar. */
 export type Lists = Readonly<Record<SpaceId, readonly Listed[]>>
 
+/** Where each Watch's list goes too, for the window to tell what calls. */
+export type Listening = {
+  hear: (source: string, space: SpaceId, listed: readonly Listed[]) => void
+  leave: (source: string) => void
+}
+
 /**
  * Draws every module's Watch for every Space, while the engine runs the
- * module, and says what they call the Person for together, what each
- * Space lists, and each call they make now. It shows nothing: the bar and
- * the sidebar show what it says, and the window plays the calls.
+ * module, and says what they call the Person for together and what each
+ * Space lists. It shows nothing: the bar and the sidebar show what it
+ * says, and the window tells of what calls (ADR 0011).
  */
 export function Watches({
   engine,
   modules,
   spaces,
   onChange,
-  onCall,
   onLists,
+  listening,
 }: {
   engine: Engine
   modules: readonly string[]
   spaces: SpaceSummary[]
   onChange: (attention: Attention) => void
-  onCall: (call: Call) => void
   onLists: (lists: Lists) => void
+  listening: Listening
 }) {
   const [reports, setReports] = useState<Record<string, Heard>>({})
   const hear = useCallback((key: string, heard?: Heard) => {
@@ -68,7 +74,7 @@ export function Watches({
             engine={engine}
             space={space.id}
             hear={hear}
-            call={onCall}
+            listening={listening}
           />
         )
       })
@@ -89,22 +95,32 @@ function One({
   engine,
   space,
   hear,
-  call,
+  listening,
 }: {
   id: string
   watch: Watch
   engine: Engine
   space: SpaceId
   hear: (key: string, heard?: Heard) => void
-  call: (call: Call) => void
+  listening: Listening
 }) {
+  const { hear: listen, leave } = listening
   const report = useCallback(
-    (report: Report) => hear(id, { ...report, space }),
-    [hear, id, space]
+    (report: Report) => {
+      hear(id, { ...report, space })
+      listen(id, space, report.listed)
+    },
+    [hear, listen, id, space]
   )
   // It says what it calls for itself, once drawn; leaving, it calls for
   // nothing.
-  useEffect(() => () => hear(id), [hear, id])
+  useEffect(
+    () => () => {
+      hear(id)
+      leave(id)
+    },
+    [hear, leave, id]
+  )
   const Watched = watch.Watch
-  return <Watched engine={engine} space={space} report={report} call={call} />
+  return <Watched engine={engine} space={space} report={report} />
 }

@@ -536,13 +536,24 @@ modules/*/pane   each module's Panes
   report, so they never disagree, and the bar knows even while the sidebar
   is hidden. The window combines them (`app/web/src/bar`) and knows
   nothing of Threads.
-- **Sounds** (ADR 0009). A Watch also calls the window when something
-  calls for the Person now: a Thread came to done, asking or failed. It
-  calls only for a change it saw happen, never for what was there when it
-  began, and never for the Thread the Person looks at, whose Pane has the
-  focus while the window is in front (`looking.ts`). The window gathers the
-  calls for a tenth of a second, plays the loudest, and for 1.5 s after
-  plays only a louder one (`app/web/src/calls`).
+- **Calls** (ADR 0011). A row whose Mark is done, asking or failed calls
+  the Person. The window reads the calls from the Watches' reports and
+  compares each with the one before: what starts calling is news, what
+  stops is taken back, and a Watch's first report is what already was
+  (`app/web/src/calls`). It knows nothing of Threads: a Pane kind's
+  `shows` names the thing it shows, so the window knows when the Person
+  looks at it (its Pane has the focus and the window is in front), sees
+  it on screen, or is elsewhere.
+  - It gathers the news for a tenth of a second and tells of each where
+    the Person looks (`tell.ts`): nothing while they look at it; the sound
+    when it is on screen; the sound and a toast when it is elsewhere in
+    the window (`Toasts.tsx`, gone by itself after 5 to 12 s); later, a
+    system notification when the window is behind. `Alt+U` goes to what
+    calls, the loudest first.
+  - A Thread Pane marks its turn seen only with the focus in the window in
+    front, so a Thread that finishes behind another window calls.
+- **Sounds** (ADR 0009). Of the news, the window plays the loudest, and
+  for 1.5 s after plays only a louder one.
   - The sounds are made in code with Web Audio, in `app/ui/src/sound`: a
     few instruments (a bell, a marimba bar, a bubble, a string), five
     families that play the three calls on them, and the level of each

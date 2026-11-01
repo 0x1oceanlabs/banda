@@ -7,10 +7,12 @@ import type { SpaceId } from "@bandaso/contract"
 import { NEW_THREAD, threadPane } from "@bandaso/agents-pane"
 import { type PaneState, paneOf, type Place } from "@bandaso/ui/pane"
 import type { Action } from "../actions/actions"
-import { launcher, widthOf } from "../registry"
+import { showing } from "../calls/sight"
+import { launcher, showsOf, widthOf } from "../registry"
 import {
   close,
   type Direction,
+  focusEntry,
   focused,
   go,
   move,
@@ -30,6 +32,8 @@ export type Shell = {
   home: SpaceId
   toggleSidebar: () => void
   toggleOverview: () => void
+  /** Goes to what calls the Person first (ADR 0011, decision 5). */
+  answer: () => void
 }
 
 const ARROWS: Record<Direction, string> = {
@@ -59,6 +63,20 @@ export function opening(
 export function newThread(workspaces: Workspaces, space: SpaceId): Workspaces {
   const thread = paneOf(threadPane, NEW_THREAD)
   return opening(workspaces, space, thread, undefined, "right")
+}
+
+/**
+ * Goes to a thing that calls: to the Pane that shows it, on any
+ * workspace, or to a new column that does.
+ */
+export function answering(
+  workspaces: Workspaces,
+  thing: { space: SpaceId; about: string; pane: PaneState }
+): Workspaces {
+  const entry = showing(workspaces, thing, showsOf)
+  return entry
+    ? focusEntry(workspaces, entry.id)
+    : opening(workspaces, thing.space, thing.pane, undefined, "right")
 }
 
 export const ACTIONS: readonly Action<Shell>[] = [
@@ -135,6 +153,12 @@ export const ACTIONS: readonly Action<Shell>[] = [
     title: "The workspace below",
     key: { code: "PageDown", alt: true },
     run: (shell) => shell.change((w) => step(w, 1)),
+  },
+  {
+    id: "calls.answer",
+    title: "Go to what calls you",
+    key: { code: "KeyU", alt: true },
+    run: (shell) => shell.answer(),
   },
   {
     id: "sidebar.toggle",

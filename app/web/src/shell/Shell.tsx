@@ -1,12 +1,16 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import type { Engine, SpaceId, SpaceSummary, Status } from "@bandaso/contract"
+import { inFront, useInFront } from "@bandaso/ui/hooks/use-in-front"
 import { QUIET } from "@bandaso/ui/pane"
 import { actionFor } from "../actions/actions"
 import { Bar } from "../bar/Bar"
 import { type Lists, Watches } from "../bar/Watches"
-import { useCalls } from "../calls/useCalls"
+import { DEFAULT_NOTIFY } from "../calls/settings"
+import { sightOf } from "../calls/sight"
+import { Toasts } from "../calls/Toasts"
+import { first, type Heard, useCalls, type Where } from "../calls/useCalls"
 import { useLookSound } from "../look"
-import { kindOf, startable, widthOf } from "../registry"
+import { kindOf, showsOf, startable, widthOf } from "../registry"
 import { Sidebar } from "../sidebar/Sidebar"
 import {
   close,
@@ -29,7 +33,13 @@ import {
   loadWorkspaces,
 } from "../workspaces/store"
 import { Workspaces } from "../workspaces/Workspaces"
-import { ACTIONS, newThread, opening, type Shell as Parts } from "./actions"
+import {
+  ACTIONS,
+  answering,
+  newThread,
+  opening,
+  type Shell as Parts,
+} from "./actions"
 
 type Change = (workspaces: State) => State
 
@@ -37,7 +47,8 @@ type Change = (workspaces: State) => State
  * The window (ADR 0005): the bar on top, the sidebar docked on the left,
  * and the workspaces, or the overview of them all. It holds what they
  * share, the workspaces, which parts show and what the modules call the
- * Person for, plays their calls, and runs the actions that change them.
+ * Person for, tells them of each call where they will notice it, and runs
+ * the actions that change them.
  */
 export function Shell({
   engine,
@@ -62,9 +73,31 @@ export function Shell({
   const [sidebar, setSidebar] = useState(loadSidebar)
   const [overview, setOverview] = useState(false)
   const [attention, setAttention] = useState(QUIET)
-  // The Person's `[sound]`, as the look brings it (ADR 0009, decision 5).
-  const call = useCalls(useLookSound())
   const [lists, setLists] = useState<Lists>({})
+
+  // What calls the Person, told where they look (ADR 0011), with the
+  // Person's `[sound]` as the look brings it (ADR 0009, decision 5).
+  const now = useRef(workspaces)
+  useEffect(() => {
+    now.current = workspaces
+  }, [workspaces])
+  const where: Where = useMemo(
+    () => ({
+      sight: (call) => sightOf(now.current, call, inFront(), showsOf),
+      quiet: () => false,
+    }),
+    []
+  )
+  const notify = DEFAULT_NOTIFY
+  const calls = useCalls(useLookSound(), notify, where)
+  const { hear, leave, calling, hold, dismiss } = calls
+  const listening = useMemo(() => ({ hear, leave }), [hear, leave])
+  const front = useInFront()
+  // A toast of what the Person looks at says nothing new.
+  const toasts = calls.toasts.filter((toast) => {
+    const call = calling.find((c) => c.key === toast.key)
+    return call && sightOf(workspaces, call, front, showsOf) !== "looking"
+  })
   useEffect(() => keepWorkspaces(workspaces), [workspaces])
   useEffect(() => keepSidebar(sidebar), [sidebar])
 
@@ -83,13 +116,34 @@ export function Shell({
   }, [engine, workspaces])
 
   const change = useCallback((how: Change) => setWorkspaces(how), [])
+  const answerCall = useCallback(
+    (call: Heard) => {
+      dismiss(call.key)
+      change((w) => answering(w, call))
+    },
+    [change, dismiss]
+  )
+  const heard = useRef(calling)
+  useEffect(() => {
+    heard.current = calling
+  }, [calling])
+  const answer = useCallback(() => {
+    const call = first(heard.current)
+    if (call) answerCall(call)
+  }, [answerCall])
   const toggleSidebar = useCallback(() => setSidebar((shows) => !shows), [])
   const toggleOverview = useCallback(() => setOverview((opens) => !opens), [])
   const closeOverview = useCallback(() => setOverview(false), [])
 
   // The keys run the actions, before any Pane hears them.
   useEffect(() => {
-    const parts: Parts = { change, home, toggleSidebar, toggleOverview }
+    const parts: Parts = {
+      change,
+      home,
+      toggleSidebar,
+      toggleOverview,
+      answer,
+    }
     const onKey = (event: KeyboardEvent) => {
       const action = actionFor(ACTIONS, event)
       if (!action) return
@@ -100,7 +154,7 @@ export function Shell({
     }
     window.addEventListener("keydown", onKey, { capture: true })
     return () => window.removeEventListener("keydown", onKey, { capture: true })
-  }, [change, home, toggleSidebar, toggleOverview])
+  }, [change, home, toggleSidebar, toggleOverview, answer])
 
   const frame: Frame = useMemo(
     () => ({
@@ -124,8 +178,8 @@ export function Shell({
         modules={modules}
         spaces={spaces}
         onChange={setAttention}
-        onCall={call}
         onLists={setLists}
+        listening={listening}
       />
       <Bar
         status={status}
@@ -171,6 +225,14 @@ export function Shell({
             frame={frame}
             onStep={(by) => change((w) => step(w, by))}
             onStart={(pane) => change((w) => opening(w, home, pane))}
+          />
+          <Toasts
+            toasts={toasts}
+            calling={calling}
+            detail={notify.detail}
+            onAnswer={answerCall}
+            onMore={() => setSidebar(true)}
+            onHold={hold}
           />
           {overview && (
             <Overview

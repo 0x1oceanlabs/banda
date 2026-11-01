@@ -7,7 +7,6 @@
 import type { ListedThread, TurnId, TurnView } from "@bandaso/contract/agents"
 import { loudest, type MarkState } from "@bandaso/ui/components/banda-mark"
 import type { Attention } from "@bandaso/ui/pane"
-import type { Chime } from "@bandaso/ui/sound"
 
 /**
  * The turn of a Thread its Person has seen since it ended, by Thread: what
@@ -61,36 +60,4 @@ export function settledTurn(turns: readonly TurnView[]): TurnId | undefined {
   )
   const latest = begun.at(-1)
   return latest && latest.state !== "running" ? latest.id : undefined
-}
-
-/** Each Thread's mark, by its ID, as a Watch last saw them. */
-export type Marks = ReadonlyMap<string, MarkState>
-
-/** The marks that call for the Person when a Thread comes to one. */
-const CHIMES: Partial<Record<MarkState, Chime>> = {
-  done: "done",
-  asking: "asking",
-  failed: "failed",
-}
-
-/**
- * The Threads' marks now, and the Threads that came to one that calls for
- * the Person since `before`. With nothing before, nothing calls: what
- * already was when a Watch began is no news (ADR 0009, decision 3). A
- * Thread that is new since then came from rest.
- */
-export function callsOf(
-  before: Marks | undefined,
-  threads: readonly ListedThread[],
-  seen: Seen
-): { marks: Marks; calls: { thread: ListedThread; chime: Chime }[] } {
-  const marks = new Map(threads.map((t) => [t.id, markOf(t, seen)]))
-  if (!before) return { marks, calls: [] }
-  const calls = threads.flatMap((thread) => {
-    const mark = marks.get(thread.id)!
-    const chime = CHIMES[mark]
-    const was = before.get(thread.id) ?? "rest"
-    return chime && mark !== was ? [{ thread, chime }] : []
-  })
-  return { marks, calls }
 }
