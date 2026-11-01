@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "agents.toml",
+  "description": "How messages to an Agent are sent. Every key is optional.",
+  "type": "object",
+  "properties": {
+    "enter": {
+      "description": "What Enter does with a message written while the Agent works.\nCtrl+Enter (⌘+Enter on a Mac) does the other.",
+      "$ref": "#/$defs/Enter"
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "Enter": {
+      "description": "Where a message written while the Agent works goes when sent with\nEnter.",
+      "oneOf": [
+        {
+          "description": "Into the turn: the Agent reads it as it works, as in T3 Code.",
+          "type": "string",
+          "const": "steer"
+        },
+        {
+          "description": "Into the queue: it waits until the turn ends.",
+          "type": "string",
+          "const": "queue"
+        }
+      ]
+    }
+  }
+}

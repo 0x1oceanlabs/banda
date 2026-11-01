@@ -437,9 +437,11 @@
       "type": "object",
       "properties": {
         "system": {
+          "description": "When a call becomes a system notification.",
           "$ref": "#/$defs/System"
         },
         "window": {
+          "description": "When a call becomes a toast in the window.",
           "$ref": "#/$defs/Toasts"
         },
         "detail": {
@@ -447,15 +449,19 @@
           "type": "boolean"
         },
         "quiet": {
+          "description": "Whose quiet Banda keeps.",
           "$ref": "#/$defs/Quiet"
         },
         "done": {
+          "description": "Whether a Thread that finished tells you.",
           "type": "boolean"
         },
         "asking": {
+          "description": "Whether a Thread that asks you something tells you.",
           "type": "boolean"
         },
         "failed": {
+          "description": "Whether a Thread that failed tells you.",
           "type": "boolean"
         }
       },
@@ -465,12 +471,6 @@
       "description": "When a call becomes a system notification.",
       "oneOf": [
         {
-          "type": "string",
-          "enum": [
-            "off"
-          ]
-        },
-        {
           "description": "When the window is not in front.",
           "type": "string",
           "const": "away"
@@ -479,18 +479,17 @@
           "description": "Always, instead of a toast too.",
           "type": "string",
           "const": "always"
+        },
+        {
+          "description": "Never.",
+          "type": "string",
+          "const": "off"
         }
       ]
     },
     "Toasts": {
       "description": "When a call becomes a toast in the window.",
       "oneOf": [
-        {
-          "type": "string",
-          "enum": [
-            "off"
-          ]
-        },
         {
           "description": "For a thing whose Pane is not on screen.",
           "type": "string",
@@ -500,6 +499,11 @@
           "description": "For one on screen too.",
           "type": "string",
           "const": "always"
+        },
+        {
+          "description": "Never.",
+          "type": "string",
+          "const": "off"
         }
       ]
     },

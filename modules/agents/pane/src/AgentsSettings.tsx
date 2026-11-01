@@ -22,16 +22,19 @@ import {
 } from "@banda/ui/components/dialog"
 import {
   Field,
-  FieldContent,
   FieldDescription,
   FieldGroup,
   FieldLabel,
-  FieldLegend,
-  FieldSet,
 } from "@banda/ui/components/field"
 import { HarnessLogo } from "@banda/ui/components/harness-logo"
 import { Input } from "@banda/ui/components/input"
-import { RadioGroup, RadioGroupItem } from "@banda/ui/components/radio-group"
+import {
+  Item,
+  ItemActions,
+  ItemContent,
+  ItemDescription,
+  ItemTitle,
+} from "@banda/ui/components/item"
 import { Spinner } from "@banda/ui/components/spinner"
 import { Switch } from "@banda/ui/components/switch"
 import { useAct } from "@banda/ui/hooks/use-act"
@@ -47,7 +50,6 @@ import {
   RotateCwIcon,
   Trash2Icon,
 } from "lucide-react"
-import { type EnterKey, useEnterKey } from "./enter-key"
 import { commandLine, wordsOf } from "./sign-in"
 import { type Open, Problem, Warning, Ways } from "./SignIn"
 
@@ -76,10 +78,10 @@ type Props = {
 /**
  * The settings window's Agents (ADR 0016, decision 7), as T3 Code's
  * providers: a card per Harness entry with who is signed in, on or off,
- * and how it starts; adding one; then what a message written while an
- * Agent works does. The engine reads the file again once it changed, so
- * the list is asked again after each change, and when the window comes
- * to the front.
+ * and how it starts; adding one. What a message written while an Agent
+ * works does is `agents.toml`'s, drawn from its schema under these. The
+ * engine reads `harnesses.toml` again once it changed, so the list is
+ * asked again after each change, and when the window comes to the front.
  */
 export function AgentsSettings({
   lit,
@@ -121,7 +123,6 @@ export function AgentsSettings({
       {Array.isArray(list) && (
         <AddHarness file={props.file} taken={list} onAdded={readList} />
       )}
-      <EnterKeyChoice />
     </div>
   )
 }
@@ -209,7 +210,12 @@ function Frame({
     >
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
-          <HarnessLogo id={harness.id} name={harness.name} className="size-4" />
+          <HarnessLogo
+            id={harness.id}
+            name={harness.name}
+            className="size-4"
+            fallback={null}
+          />
           {harness.name}
         </CardTitle>
         {about && <CardDescription title={aboutTitle}>{about}</CardDescription>}
@@ -367,13 +373,13 @@ function Row({
   children: ReactNode
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 py-2.5">
-      <div className="min-w-40 flex-1">
-        <div className="text-sm font-medium">{title}</div>
-        <div className="text-xs text-muted-foreground">{about}</div>
-      </div>
-      {children}
-    </div>
+    <Item className="rounded-none px-0">
+      <ItemContent className="min-w-40">
+        <ItemTitle>{title}</ItemTitle>
+        <ItemDescription className="text-xs">{about}</ItemDescription>
+      </ItemContent>
+      <ItemActions>{children}</ItemActions>
+    </Item>
   )
 }
 
@@ -642,57 +648,5 @@ function SignOut({
         </DialogContent>
       </Dialog>
     </>
-  )
-}
-
-const ENTER_KEYS: { value: EnterKey; label: string; about: string }[] = [
-  {
-    value: "steer",
-    label: "Send it into the turn",
-    about: "The Agent reads it as it works.",
-  },
-  {
-    value: "queue",
-    label: "Queue it",
-    about: "It goes once the turn ends.",
-  },
-]
-
-function EnterKeyChoice() {
-  const [enter, choose] = useEnterKey()
-  return (
-    <FieldSet>
-      <FieldLegend id="enter-key" variant="label">
-        When you press Enter while an Agent works
-      </FieldLegend>
-      <FieldDescription>
-        Ctrl+Enter (⌘+Enter on a Mac) does the other. This window keeps the
-        choice.
-      </FieldDescription>
-      <RadioGroup
-        value={enter}
-        aria-labelledby="enter-key"
-        onValueChange={(next) => choose(next as EnterKey)}
-      >
-        {ENTER_KEYS.map((choice) => {
-          const id = `enter-key-${choice.value}`
-          return (
-            <Field key={choice.value} orientation="horizontal">
-              <RadioGroupItem
-                value={choice.value}
-                id={id}
-                aria-describedby={`${id}-about`}
-              />
-              <FieldContent>
-                <FieldLabel htmlFor={id}>{choice.label}</FieldLabel>
-                <FieldDescription id={`${id}-about`}>
-                  {choice.about}
-                </FieldDescription>
-              </FieldContent>
-            </Field>
-          )
-        })}
-      </RadioGroup>
-    </FieldSet>
   )
 }

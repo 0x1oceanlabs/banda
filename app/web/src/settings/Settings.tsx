@@ -47,9 +47,9 @@ export function Settings({
   )
   // A link's row comes into view, lit.
   useEffect(() => {
-    if (!at.key || !at.section.file) return
+    if (!at.key) return
     document
-      .getElementById(`row-${at.section.file}-${at.key}`)
+      .querySelector(`[data-key="${CSS.escape(at.key)}"]`)
       ?.scrollIntoView({ block: "center" })
   }, [at])
   useEffect(() => {
@@ -237,25 +237,19 @@ export function Settings({
                     <OpenFile file={section.file} words="Open file" />
                   )}
                 </div>
-                {section.Body ? (
-                  <section.Body engine={engine} lit={at.key} />
-                ) : section.file ? (
-                  <>
-                    {groups}
-                    {above.length > 0 && (
-                      <div
-                        role="alert"
-                        className="order-first rounded-lg border border-destructive/40 px-4 py-2 text-xs text-destructive"
-                      >
-                        {above.map((p) => (
-                          <p key={problemWords(p)}>{problemWords(p)}</p>
-                        ))}
-                      </div>
-                    )}
-                  </>
-                ) : (
-                  <Files wrong={wrong} />
+                {section.Body && <section.Body engine={engine} lit={at.key} />}
+                {groups}
+                {above.length > 0 && (
+                  <div
+                    role="alert"
+                    className="order-first rounded-lg border border-destructive/40 px-4 py-2 text-xs text-destructive"
+                  >
+                    {above.map((p) => (
+                      <p key={problemWords(p)}>{problemWords(p)}</p>
+                    ))}
+                  </div>
                 )}
+                {!section.file && !section.Body && <Files wrong={wrong} />}
               </>
             )}
           </div>

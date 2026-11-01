@@ -16,6 +16,7 @@ pub enum System {
     Away,
     /// Always, instead of a toast too.
     Always,
+    /// Never.
     Off,
 }
 
@@ -28,6 +29,7 @@ pub enum Toasts {
     OutOfSight,
     /// For one on screen too.
     Always,
+    /// Never.
     Off,
 }
 
@@ -46,13 +48,19 @@ pub enum Quiet {
 #[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct NotifySettings {
+    /// When a call becomes a system notification.
     pub system: Option<System>,
+    /// When a call becomes a toast in the window.
     pub window: Option<Toasts>,
     /// What the Thread said, in the words; false shows only its title.
     pub detail: Option<bool>,
+    /// Whose quiet Banda keeps.
     pub quiet: Option<Quiet>,
+    /// Whether a Thread that finished tells you.
     pub done: Option<bool>,
+    /// Whether a Thread that asks you something tells you.
     pub asking: Option<bool>,
+    /// Whether a Thread that failed tells you.
     pub failed: Option<bool>,
 }
 
@@ -71,6 +79,21 @@ pub struct Notify {
 }
 
 impl NotifySettings {
+    /// Banda's own, every key named: the look's bottom layer, so each key
+    /// says where it comes from.
+    pub fn defaults() -> NotifySettings {
+        let own = Notify::default();
+        NotifySettings {
+            system: Some(own.system),
+            window: Some(own.window),
+            detail: Some(own.detail),
+            quiet: Some(own.quiet),
+            done: Some(own.done),
+            asking: Some(own.asking),
+            failed: Some(own.failed),
+        }
+    }
+
     /// `self` laid over `under`: what `self` says wins, key by key.
     pub fn over(self, under: NotifySettings) -> NotifySettings {
         NotifySettings {

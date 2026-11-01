@@ -4,6 +4,7 @@ import { createRoot } from "react-dom/client"
 import { Engine } from "@banda/contract"
 import "@banda/ui/globals.css"
 import "./host"
+import { moveEnterKey } from "./enter-key"
 import { followLook } from "./look"
 
 const host = window.banda
@@ -32,7 +33,8 @@ if (host && engine && location.hash.startsWith("#settings")) {
       </StrictMode>
     )
   )
-} else if (engine) {
+} else if (host && engine) {
+  void moveEnterKey(host).catch(() => undefined)
   void import("./App").then(({ App }) =>
     root.render(
       <StrictMode>

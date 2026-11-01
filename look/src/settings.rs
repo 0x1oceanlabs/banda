@@ -279,7 +279,7 @@ impl Settings {
             columns: ColumnsSettings::defaults(),
             font: FontSettings::defaults(),
             sound: SoundSettings::defaults(),
-            notify: NotifySettings::default(),
+            notify: NotifySettings::defaults(),
         }
     }
 

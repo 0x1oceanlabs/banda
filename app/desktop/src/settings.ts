@@ -50,10 +50,11 @@ export class Settings {
   }
 
   /** Opens `file`, beside `sidebar.toml` in the config folder, in the
-   * Person's editor; the folder when it is not there yet. */
+   * Person's editor; the folder when it is not there yet, or for "". */
   async reveal(sidebarFile: string, file: unknown): Promise<void> {
     const name = text(file)
-    if (!/^[a-z-]+\.toml$/.test(name)) throw new Error(`${name} is not one.`)
+    if (name && !/^[a-z-]+\.toml$/.test(name))
+      throw new Error(`${name} is not one.`)
     const path = join(dirname(sidebarFile), name)
     const failed = await shell.openPath(existsSync(path) ? path : dirname(path))
     if (failed) throw new Error(failed)

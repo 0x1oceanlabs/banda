@@ -10,10 +10,12 @@
 //! It is the window's machine's, not a Space's, so it is no module of the
 //! engine: `banda look` prints it, and `banda look --follow` prints it
 //! again on every change. The window runs that and applies what it reads.
-//! The sidebar's `sidebar.toml` (ADR 0008) and the browser's
-//! `browser.toml` (ADR 0013) are this machine's too, so they come with
-//! the look: [`sidebar`], [`browser`].
+//! The sidebar's `sidebar.toml` (ADR 0008), the browser's `browser.toml`
+//! (ADR 0013) and the agents module's `agents.toml` (ADR 0016) are this
+//! machine's too, so they come with the look: [`sidebar`], [`browser`],
+//! [`agents`].
 
+pub mod agents;
 pub mod browser;
 pub mod color;
 pub mod columns;
@@ -90,6 +92,8 @@ pub struct Look {
     pub notify: notify::Notify,
     /// How the browser looks and searches, from `browser.toml` (ADR 0013).
     pub browser: browser::Browser,
+    /// How messages to an Agent are sent, from `agents.toml` (ADR 0016).
+    pub agents: agents::Agents,
     /// Each key of each settings file, by file: its value, and where it
     /// comes from (ADR 0016).
     pub settings: BTreeMap<String, keyed::Keyed>,
@@ -438,10 +442,12 @@ pub fn resolve(places: &Places, windows: &dyn Fn() -> Option<Windows>) -> Resolv
 
     let (sidebar, sidebar_keys) = sidebar::resolve(places, &mut problems, &mut watched);
     let (browser, browser_keys) = browser::resolve(places, &mut problems, &mut watched);
+    let (agents, agents_keys) = agents::resolve(places, &mut problems, &mut watched);
     let settings = BTreeMap::from([
         ("look.toml".to_owned(), keyed::keyed(&all, &keyed_layers)),
         ("sidebar.toml".to_owned(), sidebar_keys),
         ("browser.toml".to_owned(), browser_keys),
+        ("agents.toml".to_owned(), agents_keys),
     ]);
     let mut vars = vars(&all);
     let system = |generic: &str| {
@@ -472,6 +478,7 @@ pub fn resolve(places: &Places, windows: &dyn Fn() -> Option<Windows>) -> Resolv
             sidebar,
             notify: all.notify.resolved(),
             browser,
+            agents,
             settings,
         },
         watched,
@@ -666,13 +673,16 @@ pub(crate) fn line_at(text: &str, offset: usize) -> u32 {
 
 /// Checks `text` as the file at `path` would be read: a `colors.toml` as
 /// a palette, a `sidebar.toml` or a file in `sidebars/` as the sidebar's
-/// schema, a `browser.toml` as the browser's, anything else as `look.toml`'s.
+/// schema, a `browser.toml` as the browser's, an `agents.toml` as the
+/// agents module's, anything else as `look.toml`'s.
 pub fn check_text(path: &Path, text: &str) -> Vec<Problem> {
     let mut problems = Vec::new();
     if let Some(preset) = sidebar::is_sidebar_file(path) {
         sidebar::read_sidebar(path, text, preset, &mut problems);
     } else if browser::is_browser_file(path) {
         browser::read_browser(path, text, &mut problems);
+    } else if agents::is_agents_file(path) {
+        agents::read_agents(path, text, &mut problems);
     } else if path.file_name().is_some_and(|n| n == "colors.toml") {
         match Palette::parse(text) {
             Ok(palette) => {

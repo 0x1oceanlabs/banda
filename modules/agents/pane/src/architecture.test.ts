@@ -8,8 +8,9 @@ import { join, relative } from "node:path"
 import { expect, test } from "vitest"
 
 const PANE = [
-  // The settings contract too: the module writes its own file (ADR 0016).
-  /^@banda\/contract(\/agents|\/settings)?$/,
+  // The look and the settings contract too: the module's own files come
+  // with the look, and it writes them (ADR 0016).
+  /^@banda\/contract(\/agents|\/look|\/settings)?$/,
   /^@banda\/ui\//,
   /^react$/,
   /^lucide-react$/,

@@ -88,6 +88,11 @@ impl Places {
         self.config.join("browser.toml")
     }
 
+    /// How messages to an Agent are sent (ADR 0016).
+    pub fn agents_file(&self) -> PathBuf {
+        self.config.join("agents.toml")
+    }
+
     /// The Person's sidebar presets, `<name>.toml`.
     pub fn own_sidebars(&self) -> PathBuf {
         self.config.join("sidebars")
