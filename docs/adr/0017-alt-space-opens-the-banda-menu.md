@@ -93,6 +93,8 @@ Roma, on 2026-11-01, looking at the sidebar's header:
 
 9. **The key sheet is the Banda menu opened at Actions.**
    - `Alt+K` opens it there, so there is one list of keys, not two.
+   - (_built_ 2026-11-02) Empty, it lists every action under its section (Threads, Panes, Columns, Workspaces, Banda), each with all its keys; a key from `keys.toml` is outlined and names its line. A family of actions, as Focus a Pane on the four arrows or Go to a workspace on 1–9, is one row the menu goes into; a search finds each one.
+   - `Tab` on an action runs it, adds a key or frees one of its keys. Add a key waits for the next key pressed, Alt+K too, and writes it to `keys.toml` through `banda settings set` (ADR 0005, decision 11); the line under the field says what changed, or why a key is refused.
 
 10. **It looks like the mockup Roma saw**, `docs/adr/0017-banda-menu.html`.
     - It uses `@banda/ui` and the theme's tokens, as every Pane does.

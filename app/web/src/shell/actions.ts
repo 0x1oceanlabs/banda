@@ -141,12 +141,14 @@ export function answering(
 export const ACTIONS: readonly Action<Shell>[] = [
   ...DIRECTIONS.map((direction) => ({
     id: `pane.focus-${direction}`,
+    family: "Focus a Pane",
     title: `Focus the Pane ${direction}`,
     keys: [{ code: ARROWS[direction], alt: true }],
     run: (shell: Shell) => shell.change((w) => move(w, direction)),
   })),
   ...DIRECTIONS.map((direction) => ({
     id: `pane.move-${direction}`,
+    family: "Move the Pane",
     title: `Move the Pane ${direction}`,
     keys: [{ code: ARROWS[direction], alt: true, shift: true }],
     run: (shell: Shell) => shell.change((w) => shift(w, direction)),
@@ -290,12 +292,14 @@ export const ACTIONS: readonly Action<Shell>[] = [
   },
   ...NUMBERS.map((n) => ({
     id: `workspace.go-${n}`,
+    family: "Go to a workspace",
     title: `Go to workspace ${n}`,
     keys: [{ code: `Digit${n}`, alt: true }],
     run: (shell: Shell) => shell.change((w) => go(w, n - 1)),
   })),
   ...NUMBERS.map((n) => ({
     id: `pane.send-${n}`,
+    family: "Move the Pane to a workspace",
     title: `Move the Pane to workspace ${n}`,
     keys: [{ code: `Digit${n}`, alt: true, shift: true }],
     run: (shell: Shell) => shell.change((w) => send(w, n - 1)),

@@ -8,6 +8,7 @@ import {
   actsOf,
   type Branch,
   type Choice,
+  isBranch,
   menuOf,
   openingOf,
   ranked,
@@ -85,6 +86,12 @@ function nameOf(row: Choice): string {
       return row.address ? `open ${urlOf(row.pane)}` : `search: ${row.words}`
     case "copy":
       return `copy ${row.text}`
+    case "family":
+      return `${row.title} ›`
+    case "bind":
+      return `bind ${row.action.id}`
+    case "free":
+      return `free ${row.action.id}`
   }
 }
 
@@ -178,20 +185,57 @@ describe("the Banda menu", () => {
     expect(labels("button")[0]).toEqual(["Threads", ["Fix the login form"]])
   })
 
-  test("opened at its Actions, it is the key sheet: every action, and no more", () => {
+  test("opened at its Actions, it is the key sheet: every action by section, and no more", () => {
     expect(labels("", "actions")).toEqual([
-      [
-        "Actions",
-        [
-          "New Thread",
-          "New browser",
-          "Show or hide the sidebar",
-          "Sidebar view",
-        ],
-      ],
+      ["Threads", ["New Thread", "Show or hide the sidebar", "Sidebar view"]],
+      ["Panes", ["New browser"]],
     ])
     expect(labels("side", "actions")).toEqual([
       ["Actions", ["Sidebar view", "Show or hide the sidebar"]],
+    ])
+  })
+
+  test("the key sheet folds a family into one row, which it goes into; a search finds each", () => {
+    const go = (n: number): Action<Shell> => ({
+      ...action(`workspace.go-${n}`, `Go to workspace ${n}`),
+      family: "Go to a workspace",
+    })
+    const more = { actions: [...actions, go(1), go(2), go(3)] }
+    expect(labels("", "actions", undefined, more).at(-1)).toEqual([
+      "Workspaces",
+      ["Go to a workspace ›"],
+    ])
+    const family = menuOf({
+      words: "",
+      at: "actions",
+      sources: { ...sources, ...more },
+    })
+      .flatMap((group) => group.rows)
+      .find((row) => row.kind === "family")
+    expect(family && isBranch(family)).toBe(true)
+    expect(labels("", "actions", family as Branch, more)).toEqual([
+      ["", ["Go to workspace 1", "Go to workspace 2", "Go to workspace 3"]],
+    ])
+    expect(labels("workspace 2", "actions", undefined, more)).toEqual([
+      ["Actions", ["Go to workspace 2"]],
+    ])
+  })
+
+  test("Tab on an action runs it, binds it a key, or frees one of its keys", () => {
+    const row: Choice = {
+      kind: "action",
+      id: "action:menu.keys",
+      action: {
+        ...action("menu.keys", "Every action and its key"),
+        keys: [{ code: "KeyK", alt: true }],
+      },
+    }
+    expect(
+      actsOf(row, sources).map((act) => [act.title, act.row.kind])
+    ).toEqual([
+      ["Run", "action"],
+      ["Add a key…", "bind"],
+      ["Free Alt+K", "free"],
     ])
   })
 

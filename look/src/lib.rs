@@ -95,7 +95,7 @@ pub struct Look {
     pub browser: browser::Browser,
     /// How messages to an Agent are sent, from `agents.toml` (ADR 0016).
     pub agents: agents::Agents,
-    /// The keys the Person bound in `keys.toml` (ADR 0005, decision 10).
+    /// The keys the Person bound in `keys.toml` (ADR 0005, decision 11).
     pub keys: keys::Keys,
     /// Each key of each settings file, by file: its value, and where it
     /// comes from (ADR 0016).

@@ -17,7 +17,7 @@ import {
 import { waits } from "@banda/ui/components/banda-mark"
 import type { Key } from "@banda/ui/lib/keys"
 import { type Listed, type PaneState, paneOf } from "@banda/ui/pane"
-import type { Action } from "../actions/actions"
+import { type Action, keyName } from "../actions/actions"
 import type { Lists } from "../bar/Watches"
 import type { Shell } from "../shell/actions"
 import { settles } from "../sidebar/settled"
@@ -43,6 +43,17 @@ export type Choice =
   /** A branch: the sidebar's presets. */
   | { kind: "views"; id: string }
   | { kind: "action"; id: string; action: Action<Shell> }
+  /** A branch: a family of actions, as the key sheet folds them. */
+  | {
+      kind: "family"
+      id: string
+      title: string
+      actions: readonly Action<Shell>[]
+    }
+  /** Waits for a key and binds it to the action, in `keys.toml`. */
+  | { kind: "bind"; id: string; action: Action<Shell> }
+  /** Frees one of the action's keys, in `keys.toml`. */
+  | { kind: "free"; id: string; action: Action<Shell>; key: Key }
   /** A new Thread: with `words`, in `space`, on `harness`, where given. */
   | {
       kind: "ask"
@@ -78,15 +89,29 @@ export type Choice =
   | { kind: "copy"; id: string; text: string }
 
 /** A row the menu goes into rather than runs. */
-export type Branch = Extract<Choice, { kind: "space" | "views" }>
+export type Branch = Extract<Choice, { kind: "space" | "views" | "family" }>
 
 export function isBranch(row: Choice): row is Branch {
-  return row.kind === "space" || row.kind === "views"
+  return row.kind === "space" || row.kind === "views" || row.kind === "family"
+}
+
+/** A row that changes the keys, which the menu does itself, staying open. */
+export type Keying = Extract<Choice, { kind: "bind" | "free" }>
+
+export function isKeying(row: Choice): row is Keying {
+  return row.kind === "bind" || row.kind === "free"
 }
 
 /** A branch's name, as its chip in the field shows it. */
 export function branchName(branch: Branch): string {
-  return branch.kind === "space" ? branch.space.name : VIEWS
+  switch (branch.kind) {
+    case "space":
+      return branch.space.name
+    case "family":
+      return branch.title
+    case "views":
+      return VIEWS
+  }
 }
 
 const VIEWS = "Sidebar view"
@@ -170,6 +195,21 @@ export const ROOT_ACTIONS = [
   "overview.toggle",
 ]
 
+/** The key sheet's sections, each with the owners whose actions it lists
+ * (an id's first part); what is left goes under "More". */
+const SECTIONS: readonly (readonly [string, readonly string[]])[] = [
+  ["Threads", ["thread", "calls", "sidebar"]],
+  ["Panes", ["pane", "browser"]],
+  ["Columns", ["column"]],
+  ["Workspaces", ["workspace", "overview"]],
+  ["Banda", ["menu", "settings"]],
+]
+
+function sectionOf(id: string): string {
+  const owner = id.split(".")[0]
+  return SECTIONS.find(([, owners]) => owners.includes(owner))?.[0] ?? "More"
+}
+
 /** How many rows of each group a search shows. */
 const SHOWN = { threads: 8, spaces: 5, files: 6, actions: 8, recent: 6 }
 
@@ -192,14 +232,7 @@ export function menuOf({
   const query = words.trim()
   const byWeight = (row: Choice) => weight(row.id)
   // The actions, and the branches among them, as one list.
-  const actionRows: Choice[] = [
-    ...actions.map((action): Choice => ({
-      kind: "action",
-      id: `action:${action.id}`,
-      action,
-    })),
-    VIEWS_BRANCH,
-  ]
+  const actionRows: Choice[] = [...actions.map(actionRow), VIEWS_BRANCH]
   const actionTexts = (row: Choice) =>
     row.kind === "action" ? [row.action.title, row.action.id] : [VIEWS]
   const threadsOf = (space: string, listed: readonly Listed[]) =>
@@ -246,10 +279,40 @@ export function menuOf({
     ])
   }
 
-  if (at === "actions")
+  if (inside?.kind === "family")
     return nonEmpty([
-      { label: "Actions", rows: fitting(actionRows, actionTexts) },
+      { label: "", rows: fitting(inside.actions.map(actionRow), actionTexts) },
     ])
+  if (at === "actions") {
+    if (query)
+      return nonEmpty([
+        { label: "Actions", rows: fitting(actionRows, actionTexts) },
+      ])
+    // The key sheet: every action by section, a family as one row, and
+    // the sidebar's view with the Threads.
+    const sections = new Map<string, Choice[]>(
+      [...SECTIONS.map(([label]) => label), "More"].map((label) => [label, []])
+    )
+    const families = new Map<string, Action<Shell>[]>()
+    for (const action of actions) {
+      const rows = sections.get(sectionOf(action.id))
+      const { family } = action
+      if (!family) rows?.push(actionRow(action))
+      else if (families.has(family)) families.get(family)?.push(action)
+      else {
+        const members = [action]
+        families.set(family, members)
+        rows?.push({
+          kind: "family",
+          id: `family:${family}`,
+          title: family,
+          actions: members,
+        })
+      }
+    }
+    sections.get("Threads")?.push(VIEWS_BRANCH)
+    return nonEmpty([...sections].map(([label, rows]) => ({ label, rows })))
+  }
 
   const threads = Object.entries(lists).flatMap(([space, listed]) =>
     threadsOf(space, listed)
@@ -377,6 +440,27 @@ export function actsOf(row: Choice, sources: Sources): Act[] {
       ]
     case "ask":
       return startOn(row, "Start")
+    case "action":
+      return [
+        { title: "Run", key: OPEN, row },
+        {
+          title: "Add a key…",
+          row: {
+            kind: "bind",
+            id: `bind:${row.action.id}`,
+            action: row.action,
+          },
+        },
+        ...(row.action.keys ?? []).map((key) => ({
+          title: `Free ${keyName(key)}`,
+          row: {
+            kind: "free" as const,
+            id: `free:${keyName(key)}`,
+            action: row.action,
+            key,
+          },
+        })),
+      ]
     case "file":
       return [
         { title: "Open", key: OPEN, row },
@@ -388,6 +472,10 @@ export function actsOf(row: Choice, sources: Sources): Act[] {
     default:
       return []
   }
+}
+
+function actionRow(action: Action<Shell>): Choice {
+  return { kind: "action", id: `action:${action.id}`, action }
 }
 
 /** What waits first, then what changed last: the sidebar's order. */

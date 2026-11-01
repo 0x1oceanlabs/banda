@@ -108,11 +108,11 @@ impl Open {
         let mut tables = Key::parse(key)
             .map_err(|error| whole(&path, format!("{key:?} is not a key: {error}")))?;
         let leaf = tables.pop().ok_or_else(|| whole(&path, "no key to set"))?;
-        let leaf = leaf.get().to_owned();
         let was = read(&path, file).map_err(|error| whole(&path, error))?;
         let document = was
             .parse::<DocumentMut>()
             .map_err(|error| whole(&path, error))?;
+        let leaf = written_as(&document, name, &tables, leaf.get());
         Ok(Open {
             path,
             was,
@@ -156,6 +156,27 @@ impl Open {
 
 /// The table `tables` name in `document`, made when it is not there; in a
 /// list of tables, the entry the next name is the `id` of.
+/// The name `leaf` has in the file. A key of `keys.toml` goes by the key
+/// it names, so `Alt+K` changes the line written `alt+k`, as one file has
+/// one line for a key.
+fn written_as(document: &DocumentMut, name: &str, tables: &[Key], leaf: &str) -> String {
+    let binds = match tables {
+        [table] if name == "keys.toml" && table.get() == "binds" => document.get("binds"),
+        _ => None,
+    };
+    let names = banda_look::keys::canonical(leaf);
+    binds
+        .and_then(Item::as_table_like)
+        .and_then(|binds| {
+            binds
+                .iter()
+                .map(|(written, _)| written)
+                .find(|written| names.is_some() && banda_look::keys::canonical(written) == names)
+        })
+        .unwrap_or(leaf)
+        .to_owned()
+}
+
 fn walk<'d>(
     document: &'d mut DocumentMut,
     tables: &[Key],
@@ -352,6 +373,19 @@ mod tests {
         let refused = set(config.path(), "look.toml", "tile.border", "thick").unwrap_err();
         assert!(refused[0].message.contains("expected f64"), "{refused:?}");
         assert!(!look(&config).contains("thick"));
+    }
+
+    #[test]
+    fn a_key_of_keys_toml_changes_the_line_that_names_it() {
+        let config = tempfile::tempdir().unwrap();
+        let keys = config.path().join("keys.toml");
+        std::fs::write(&keys, "[binds]\n\"alt+k\" = \"pane.new\" # mine\n").unwrap();
+        set(config.path(), "keys.toml", "binds.\"Alt+K\"", "none").unwrap();
+        set(config.path(), "keys.toml", "binds.\"Alt+M\"", "pane.new").unwrap();
+        assert_eq!(
+            std::fs::read_to_string(&keys).unwrap(),
+            "[binds]\n\"alt+k\" = \"none\" # mine\n\"Alt+M\" = \"pane.new\"\n"
+        );
     }
 
     #[test]

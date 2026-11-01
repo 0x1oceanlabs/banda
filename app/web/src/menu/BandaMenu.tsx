@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react"
 import type { Engine, SpaceId, SpaceSummary } from "@banda/contract"
+import type { Bind } from "@banda/contract/look"
 import { useHarnesses, useSpaceFiles } from "@banda/agents-pane"
 import { useAddressOf } from "@banda/browser-pane"
 import { MARK_WORDS, waits } from "@banda/ui/components/banda-mark"
@@ -11,7 +12,8 @@ import {
   SuggestionList,
   Suggestions,
 } from "@banda/ui/components/suggestions"
-import { type Key, matches } from "@banda/ui/lib/keys"
+import { useWrite } from "@banda/ui/hooks/use-write"
+import { type Key, matches, sameKey } from "@banda/ui/lib/keys"
 import { nameAndFolder } from "@banda/ui/lib/paths"
 import {
   CheckIcon,
@@ -25,7 +27,7 @@ import {
 } from "lucide-react"
 import { type Action, keyName } from "../actions/actions"
 import type { Lists } from "../bar/Watches"
-import { useLookSidebar } from "../look"
+import { useLookKeys, useLookSidebar } from "../look"
 import type { Shell } from "../shell/actions"
 import { SpaceBadge, ThreadMark } from "../sidebar/Row"
 import { PRESET_WORDS } from "../sidebar/settings"
@@ -37,6 +39,8 @@ import {
   branchName,
   type Choice,
   isBranch,
+  isKeying,
+  type Keying,
   menuOf,
   OPEN,
   type Opening,
@@ -45,6 +49,12 @@ import {
 import { opened, useOpened, weightOf } from "./opened"
 
 const ASK: Key = { code: "Enter", alt: true }
+
+/** The file the menu writes a key to (ADR 0005, decision 11). */
+const KEYS_FILE = "keys.toml"
+
+/** Keys that are only mods: a key to bind comes with them, not alone. */
+const MODS = new Set(["Alt", "AltGraph", "Control", "Shift", "Meta"])
 
 /**
  * The Banda menu (ADR 0017): one window in the middle that finds and runs
@@ -66,7 +76,7 @@ export function BandaMenu({
   opening: Opening | null
   onClose: () => void
   /** Runs a chosen row, once the menu has closed. */
-  onChoose: (row: Exclude<Choice, Branch>) => void
+  onChoose: (row: Exclude<Choice, Branch | Keying>) => void
   engine: Engine
   /** The Space a new Thread starts in, whose Harnesses it can start on. */
   space: SpaceId
@@ -137,9 +147,10 @@ function Menu({
   actions: readonly Action<Shell>[]
   harnesses: Sources["harnesses"]
   escapeRef: React.RefObject<() => boolean>
-  onChoose: (row: Exclude<Choice, Branch>) => void
+  onChoose: (row: Exclude<Choice, Branch | Keying>) => void
 }) {
   const { preset, presets } = useLookSidebar()
+  const { binds } = useLookKeys()
   const settled = useIsSettled()
   const addressOf = useAddressOf()
   const uses = useOpened()
@@ -182,6 +193,10 @@ function Menu({
   const [index, setIndex] = useState(0)
   // The row's acts that Tab shows, and the one chosen among them.
   const [acting, setActing] = useState<number>()
+  // The action that waits for a key to bind, and what the last change
+  // of the keys did.
+  const [taking, setTaking] = useState<Action<Shell>>()
+  const [note, setNote] = useState<string>()
   const inside = path.at(-1)
   const groups = useMemo(
     () => menuOf({ words, at, inside, sources }),
@@ -208,23 +223,78 @@ function Menu({
     setIndex(0)
     setActing(undefined)
   }
-  // A branch opens in the menu; any other row runs. Either counts for
-  // the order next time.
+  // Writes `key` to keys.toml, bound to `action` or freed; the look
+  // brings the change back. What it did shows once it is written, and a
+  // key refused leaves the action waiting for another.
+  const done = useRef("")
+  const { refused, write: writing } = useWrite(() => {
+    setTaking(undefined)
+    setNote(done.current)
+  })
+  const write = (key: Key, action: string, did: string) => {
+    done.current = did
+    setNote(undefined)
+    writing(
+      window.banda?.settings.set(
+        KEYS_FILE,
+        `binds.${JSON.stringify(keyName(key))}`,
+        action
+      ) ?? Promise.resolve(["Only the desktop app writes keys.toml"])
+    )
+  }
+  const keying = (row: Keying) => {
+    setActing(undefined)
+    if (row.kind === "bind") {
+      setTaking(row.action)
+      setNote(undefined)
+      return
+    }
+    write(row.key, "none", `${keyName(row.key)} goes to the Pane now`)
+  }
+  // A branch opens in the menu, and the keys change in it; any other row
+  // runs. Each counts for the order next time.
   const choose = (row: Choice) => {
     if (isBranch(row)) restart([...path, row])
+    else if (isKeying(row)) keying(row)
     else onChoose(row)
     opened(row.id)
   }
 
+  // The key pressed while an action waits for one: bound to it, unless
+  // the desktop's; `banda settings` refuses one that would be typed.
+  const take = (event: React.KeyboardEvent, action: Action<Shell>) => {
+    event.preventDefault()
+    if (MODS.has(event.key) || event.key === "Escape") return
+    const key: Key = {
+      code: event.code,
+      alt: event.altKey,
+      shift: event.shiftKey,
+      ctrl: event.ctrlKey,
+    }
+    if (event.metaKey)
+      return setNote("Super is the desktop's: hold Alt or Ctrl instead")
+    const had = actions.find(
+      (one) => one !== action && one.keys?.some((mine) => sameKey(mine, key))
+    )
+    write(
+      key,
+      action.id,
+      `${keyName(key)} runs “${action.title}” now` +
+        (had ? `, not “${had.title}”` : "")
+    )
+  }
+
   useEffect(() => {
     escapeRef.current = () => {
-      if (acting === undefined) return false
-      setActing(undefined)
+      if (taking) setTaking(undefined)
+      else if (acting !== undefined) setActing(undefined)
+      else return false
       return true
     }
-  }, [escapeRef, acting])
+  }, [escapeRef, acting, taking])
 
   const onKeyDown = (event: React.KeyboardEvent) => {
+    if (taking) return take(event, taking)
     const step = { ArrowDown: 1, ArrowUp: -1 }[event.key]
     // The arrows and Enter work in the act list while it is open.
     if (step !== undefined) {
@@ -280,7 +350,9 @@ function Menu({
         ))}
         <input
           autoFocus
-          value={words}
+          // Every key comes here while one is taken, the window's too.
+          data-takes-keys={taking ? "" : undefined}
+          value={taking ? "" : words}
           onChange={(event) => {
             setWords(event.currentTarget.value)
             setIndex(0)
@@ -288,11 +360,13 @@ function Menu({
           }}
           onKeyDown={onKeyDown}
           placeholder={
-            inside
-              ? "Search…"
-              : at === "actions"
-                ? "Search actions…"
-                : "Search actions, Spaces, Threads and files…"
+            taking
+              ? `Press the keys for “${taking.title}”…`
+              : inside
+                ? "Search…"
+                : at === "actions"
+                  ? "Search actions…"
+                  : "Search actions, Spaces, Threads and files…"
           }
           aria-label="Search"
           role="combobox"
@@ -302,6 +376,14 @@ function Menu({
           className="h-11 min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-muted-foreground"
         />
       </div>
+      {(note || refused.length > 0) && (
+        <div
+          role="status"
+          className="border-b px-3 py-1.5 text-xs text-muted-foreground"
+        >
+          {note ?? refused.join("; ")}
+        </div>
+      )}
       <SuggestionList
         id="banda-menu-list"
         aria-label="Banda menu"
@@ -327,7 +409,12 @@ function Menu({
                 onClick={() => choose(row)}
                 className="h-8 gap-2.5"
               >
-                <RowView row={row} sources={sources} inside={inside} />
+                <RowView
+                  row={row}
+                  sources={sources}
+                  inside={inside}
+                  binds={binds}
+                />
               </Suggestion>
             ))}
           </div>
@@ -417,9 +504,12 @@ function RowView({
   row,
   sources,
   inside,
+  binds,
 }: {
   row: Choice
   sources: Sources
+  /** The Person's keys, which a row outlines. */
+  binds: readonly Bind[]
   /** The branch the menu is in: a Space's rows leave out its name. */
   inside?: Branch
 }) {
@@ -473,7 +563,21 @@ function RowView({
       return (
         <>
           <span className="min-w-0 flex-1 truncate">{row.action.title}</span>
-          {row.action.keys?.[0] && <Keys keyOf={row.action.keys[0]} />}
+          {row.action.keys?.map((key) => (
+            <Keys
+              key={keyName(key)}
+              keyOf={key}
+              bind={binds.find((bind) => sameKey(bind, key))}
+            />
+          ))}
+        </>
+      )
+    case "family":
+      return (
+        <>
+          <span className="min-w-0 flex-1 truncate">{row.title}</span>
+          <FamilyKeys actions={row.actions} />
+          <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground" />
         </>
       )
     case "ask": {
@@ -521,6 +625,8 @@ function RowView({
       )
     case "settle":
     case "copy":
+    case "bind":
+    case "free":
       return null
   }
 }
@@ -533,17 +639,62 @@ function Detail({ children }: { children: React.ReactNode }) {
   )
 }
 
-/** A key as its caps: Alt, Shift, ↵. */
-function Keys({ keyOf }: { keyOf: Key }) {
+/** A key as its caps: Alt, Shift, ↵. One the Person bound in keys.toml
+ * is outlined, and says its line. */
+function Keys({ keyOf, bind }: { keyOf: Key; bind?: Bind }) {
   return (
-    <KbdGroup>
+    <KbdGroup title={bind && `${KEYS_FILE}, line ${bind.line}`}>
       {keyName(keyOf)
         .split("+")
         .map((part) => (
-          <Kbd key={part}>
-            {part === "Return" ? <CornerDownLeftIcon /> : part}
-          </Kbd>
+          <Cap key={part} part={part} mine={!!bind} />
         ))}
     </KbdGroup>
+  )
+}
+
+/** A family's keys at once: its mods, then each key, `1–9` for a run of
+ * digits. None when they differ in their mods. */
+function FamilyKeys({ actions }: { actions: readonly Action<Shell>[] }) {
+  const keys = actions.map((action) => action.keys?.[0])
+  const first = keys[0]
+  if (
+    !first ||
+    keys.some((key) => !key || !sameKey(key, { ...first, code: key.code }))
+  )
+    return null
+  const parts = keyName(first).split("+")
+  const mods = parts.slice(0, -1)
+  const names = keys.map((key) => (key ? keyName({ code: key.code }) : ""))
+  const run =
+    names.every((name, n) => name === String(Number(names[0]) + n)) &&
+    names.length > 2
+  return (
+    <KbdGroup>
+      {mods.map((mod) => (
+        <Cap key={mod} part={mod} />
+      ))}
+      <Kbd>
+        {run
+          ? `${names[0]}–${names.at(-1)}`
+          : names.map((name) => ARROWS[name] ?? name).join(" ")}
+      </Kbd>
+    </KbdGroup>
+  )
+}
+
+const ARROWS: Record<string, string> = {
+  Left: "←",
+  Right: "→",
+  Up: "↑",
+  Down: "↓",
+}
+
+/** One cap: an arrow as its arrow, Return as ↵. */
+function Cap({ part, mine }: { part: string; mine?: boolean }) {
+  return (
+    <Kbd className={mine ? "border-primary/60 text-foreground" : undefined}>
+      {part === "Return" ? <CornerDownLeftIcon /> : (ARROWS[part] ?? part)}
+    </Kbd>
   )
 }
