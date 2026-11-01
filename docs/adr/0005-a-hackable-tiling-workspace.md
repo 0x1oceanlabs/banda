@@ -31,7 +31,7 @@ The evidence is in two notes: [tiling managers](../research/2026-11-01-tiling-ma
 2. **Everything is an action, kept in one list** (_decided_).
    - An action has a name, a description in plain words, typed arguments, a default key, and who may run it (the Person, an Agent or both).
    - Keys, Pane header buttons, menus, the palette, the key sheet, the CLI and Agents all call the same actions. So a button and its key cannot drift apart, and a tooltip can always show the key.
-   - The Desk's own actions and every module's actions are declared the same way, in manifests (decision 10).
+   - The Desk's own actions and every module's actions are declared the same way, in manifests (decision 11).
    - Precedents: herdr-app's commands, niri's `niri msg action`, Hyprland's dispatchers, and Omarchy's binds, each of which carries its description.
 
 3. **The Desk lives in the engine** (_decided_).
@@ -49,6 +49,7 @@ The evidence is in two notes: [tiling managers](../research/2026-11-01-tiling-ma
 5. **The Strip by default, the Split as a switch** (_decided_).
    - **The Strip** works as in niri. Columns sit on a strip that scrolls sideways. Panes stack inside a column or become its tabs, and column widths step through 1/3, 1/2, 2/3 and full.
    - **The Split** is today's tree of splits, close to Hyprland's dwindle.
+   - **Its own window** (_decided_). Any Pane pops out into a window of its own and back. A window manager such as Hyprland or niri then places it beside Bandaso or on another monitor.
    - Each Desk keeps its choice, and `Alt+V` switches it, as Omarchy switches a workspace's layout.
    - The Strip answers "Agents keep opening things": a new Pane adds a column instead of shrinking the others. A sign-in terminal stacks under its Thread in the same column.
 
@@ -63,14 +64,24 @@ The evidence is in two notes: [tiling managers](../research/2026-11-01-tiling-ma
    - **The drawer** (a proposal). It slides a quick Thread over the Desk (`Alt+S`), as Omarchy's scratchpad does.
    - **Later.** An overview of every Space's Desk, and a Thread in its own git worktree of the Space, as T3 Code offers.
 
-7. **The Overview: every Agent in every Space, in one place** (_decided_: a module of its own, as T3 Code's sidebar; where it sits is a proposal).
-   - **What it shows.** Every Thread of every Space on every connected machine, each row naming its Agent and its Space. Threads come in this order: those that need the Person (a Question, a failed turn, a sign-in), those that finished while the Person was away, those that work (folded, as in T3 Code), and the pinned ones. A second order, chosen by a switch, groups the Threads under their Spaces, as Herdr does and as T3 Code's grouped sidebar does.
+7. **The Overview: every Agent in every Space, in one place** (_decided_).
+   - **What it shows.** Every Thread of every Space on every connected machine, each row naming its Agent and its Space. Threads come in this order: those that need the Person (a Question, a failed turn, a sign-in), those that finished while the Person was away, those that work (folded, as in T3 Code), and the pinned ones. A switch turns it to the second order, which groups the Threads under their Spaces, as Herdr does and as T3 Code's grouped sidebar does.
    - **What it does.** A click on a Thread goes to its Space and focuses its Thread Pane, or opens it as a new column. A click on a Space goes there. Each row offers a new Thread there. The palette searches the same Threads.
    - **Its own module, with its own data.** The agents module owns Threads and publishes what happens in them. The Overview turns those events into "needs you", "done", "working" and "idle", and keeps the Person's own marks: seen, pinned, settled and snoozed. No other module reads those marks.
-   - **Where it sits.** It is docked at the window's left edge, outside the Strip, so it never scrolls away. `Alt+A` folds it to a rail of Spaces with their marks, as Omarchy's bar shows workspaces. Any Pane can pop out into its own window, the Overview too, so a Hyprland or niri user can tile it beside Bandaso or move it to another monitor.
+   - **Where it sits.** It is docked at the window's left edge, outside the Strip, so it never scrolls away. `Alt+A` and the bar's button show and hide it. It needs no folded rail, because the bar already shows the Spaces and their marks. Like any Pane, it can pop out into its own window (decision 5).
    - **Calls for the Person.** When an Agent needs the Person and the window is not in front, a system notification says so, and clicking it goes there.
 
-8. **Left Alt is the mod, and the binds come in families, as in Omarchy** (_decided_):
+8. **The bar, as in Omarchy** (_decided_: as Omarchy's bar, with the Spaces on the left and the Overview's button in the centre; the rest is a proposal).
+   - **Its shape.** One line along the window's top, in Omarchy's sections: left, the start of the centre, the centre, the end of the centre, and right. Each item comes from a module's manifest. The `[bar]` table in the settings lists the items of each section. Dragging an item along the bar changes the same table.
+   - **Left.** The menu and the Spaces: their numbers, their marks, and a dashed mark for one on another machine. A click goes to a Space, a right click offers its menu, and `+` opens a folder as a Space. The current Space shows its layout, and a click on that mark switches between the Strip and the Split.
+   - **The start of the centre** holds the indicators, as in Omarchy. Each shows only while it is on, such as the mark that the focused Pane sends every key to its program.
+   - **The centre.** The Overview's button, which carries the Agents' pulse: how many need the Person, how many work and how many finished. A click shows or hides the Overview. A click on the waiting count goes straight to the first Thread that waits. The button takes the attention colour while someone waits.
+   - **Right.** The servers this Space's terminals and Agents started (a click opens one in a browser Pane), the Harnesses' sign-in state, the machines the window is connected to, and the palette.
+   - **What it leaves out.** Model usage limits stay with the Harness and its provider. Omarchy's bar already has an item for them.
+   - **One grammar for every item.** A left click does its main thing, a right click its second, a middle click its third, and the wheel steps. Each of these is an action, so the palette and the key sheet list them too.
+   - **Placement.** The bar sits at the top or at the bottom, or hides.
+
+9. **Left Alt is the mod, and the binds come in families, as in Omarchy** (_decided_):
 
    | Keys | Action |
    |---|---|
@@ -82,7 +93,7 @@ The evidence is in two notes: [tiling managers](../research/2026-11-01-tiling-ma
    | `Alt+W` | close the Pane |
    | `Alt+Z` | zoom the Pane over the Desk, and back |
    | `Alt+S` | the drawer |
-   | `Alt+A` | fold the Overview to its rail, and back |
+   | `Alt+A` | show or hide the Overview |
    | `Alt+V` | Strip or Split |
    | `Alt+1…9` | go to Space N |
    | `Alt+Space` | the palette: every action, each with its key |
@@ -93,7 +104,7 @@ The evidence is in two notes: [tiling managers](../research/2026-11-01-tiling-ma
    - **Today's `Ctrl+\` and `Ctrl+W` move to Alt.** In a terminal they are the program's: quit and word erase.
    - **On a Mac the mod is Cmd**, because Option types characters there.
 
-9. **Config is text, Linux style** (_decided_ for the keys).
+10. **Config is text, Linux style** (_decided_ for the keys).
    - The files live in `~/.config/bandaso/`, beside `harnesses.toml`: `keys.toml`, `theme.toml` and the settings.
    - Shipped defaults are read-only. The Person's file adds, replaces or removes binds.
    - A file applies once it is saved. On an error, the last good version stays in force, and a notice names the file and the line.
@@ -101,18 +112,18 @@ The evidence is in two notes: [tiling managers](../research/2026-11-01-tiling-ma
    - One reset chord cannot be rebound.
    - The settings page edits the same files, so there is one source of truth.
 
-10. **Every module, ours too, is built on the contract a module from elsewhere gets.**
+11. **Every module, ours too, is built on the contract a module from elsewhere gets.**
    - A module has a `module.toml`. It declares its Panes, actions, commands, events, tables, MCP tools and a settings schema. The window's Pane registry, the palette, the key sheet and the skill's reference are all built from these manifests.
    - No module of ours takes a path that another module lacks. What ours need goes into the contract. An API still settling is marked unstable in the manifest, and the marks are counted, so the debt stays visible.
    - **Panes are React with `@bandaso/ui`** (_decided_): shadcn/ui on preset b0 and the theme's tokens, the same for every module. Every module follows the theme, and a new block goes into `@bandaso/ui` before any module uses it.
    - A module from elsewhere runs its engine part as a process that speaks the same engine API. The engine starts and stops it. Our modules stay crates in the one binary for now.
 
-11. **Open like Linux** (_decided_).
+12. **Open like Linux** (_decided_).
     - Modules are neither sandboxed nor gated by capabilities. A module runs with the Person's rights.
     - Our base modules are checked by us. A module from elsewhere is marked as not from Bandaso, and it is installed only when the Person says so.
     - When an Agent asks before acting is still the Harness's decision, under the mode the Person chose (ADR 0001, decision 7).
 
-12. **Everything through an Agent, through the MCP module** (_decided_).
+13. **Everything through an Agent, through the MCP module** (_decided_).
     - **The MCP module is Bandaso's MCP server, and that is its one job.** Its interface is MCP on one side and the engine API on the other.
       - It turns the tools that modules declare in their manifests into MCP tools.
       - A tool call becomes that module's command, made by the Agent as a Participant, through the kernel's access decision.
@@ -122,9 +133,9 @@ The evidence is in two notes: [tiling managers](../research/2026-11-01-tiling-ma
     - `bandaso describe` shows what is open and running now, to a Person and to an Agent alike.
     - Nothing is written into the Space's folder or into a Harness's own config.
 
-13. **The base first: Threads, the terminal, the browser** (_decided_). The browser is a module: a Pane with a page that the Person and the Space's Agents share, and one sign-in profile per Space. Agents drive it through its MCP tools. It gets its own ADR when it is built.
+14. **The base first: Threads, the terminal, the browser** (_decided_). The browser is a module: a Pane with a page that the Person and the Space's Agents share, and one sign-in profile per Space. Agents drive it through its MCP tools. It gets its own ADR when it is built.
 
-14. **One look, and honest motion.**
+15. **One look, and honest motion.**
     - One theme recolours every Pane, including the terminal's 16 colours and the browser's chrome. It can follow the system's theme, Omarchy's among others.
     - Motion follows niri: springs for moving and resizing, a short fade for opening and closing, and one switch to reduce motion.
     - An Agent's state rolls up from its Pane to the column, the Desk and the Space list: blocked, then done, then working, then idle. An Agent waiting for the Person is never hidden in a collapsed tab.
@@ -144,7 +155,7 @@ The evidence is in two notes: [tiling managers](../research/2026-11-01-tiling-ma
   3. the manifests of the agents and terminal modules;
   4. the Desk in the engine, as a Strip, with the Split as a switch;
   5. the MCP module, and calm placement with its marks;
-  6. the Overview;
+  6. the Overview, the bar and a Pane in its own window;
   7. the browser module;
   8. the Bandaso skill and `bandaso describe`;
   9. the theme file, motion and the drawer.
