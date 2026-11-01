@@ -24,6 +24,7 @@ import {
 } from "electron"
 import type { Notice } from "@banda/web/host"
 import { hostPages, keepProfile, reveal } from "./browser"
+import { openDoor } from "./door"
 import { Extensions } from "./extensions"
 import { EngineProcess } from "./engine"
 import { firstFrame, LookProcess } from "./look"
@@ -101,10 +102,7 @@ const LOOK_WAIT = 300
 if (!app.requestSingleInstanceLock()) {
   app.quit()
 } else {
-  app.on("second-instance", () => {
-    if (window?.isMinimized()) window.restore()
-    window?.focus()
-  })
+  app.on("second-instance", () => inFront())
   void app.whenReady().then(ready)
 }
 
@@ -256,16 +254,43 @@ async function ready(): Promise<void> {
   if (first) nativeTheme.themeSource = first.mode
   Menu.setApplicationMenu(process.platform === "darwin" ? macMenu() : null)
   window = openWindow(extensions)
+  // `banda menu [route]` opens the Banda menu here, or the settings
+  // window at a route of its own (ADR 0017).
+  void engine.door().then((path) => {
+    shutDoor = openDoor(path, { menu: openMenu })
+  })
+}
+
+/** Shuts the door `banda menu` knocks at. */
+let shutDoor: (() => void) | null = null
+
+/** Opens the menu at `route`, or the settings at `settings.<section>.<row>`. */
+function openMenu(route: unknown): string {
+  if (typeof route !== "string") return "the route is not a string"
+  const [first, ...rest] = route.trim().split(".")
+  if (first === "settings") {
+    openSettings(linkOf(rest.join("/")))
+    return "ok"
+  }
+  const shown = inFront()
+  if (!shown) return "no window"
+  shown.webContents.send("menu:open", route)
+  return "ok"
 }
 
 /** The Person clicked a notice: the window comes to the front, and the
  * page goes to what called. */
 function answered(key: string) {
-  if (!window) return
+  inFront()?.webContents.send("notify:answer", key)
+}
+
+/** The window, brought to the front; none when it is closed. */
+function inFront(): BrowserWindow | null {
+  if (!window) return null
   if (window.isMinimized()) window.restore()
   window.show()
   window.focus()
-  window.webContents.send("notify:answer", key)
+  return window
 }
 
 /** Serves the built page; nothing outside its folder. */
@@ -401,6 +426,7 @@ let stopped = false
 app.on("will-quit", (event) => {
   if (stopped) return
   event.preventDefault()
+  shutDoor?.()
   look.stop()
   void engine.stop().then(() => {
     stopped = true

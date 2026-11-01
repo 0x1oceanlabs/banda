@@ -1797,3 +1797,36 @@ test("the Banda menu goes into a Space and the sidebar's view, and Tab shows wha
     sidebar.getByRole("button", { name: "View: spaces" })
   ).toBeVisible()
 })
+
+test("banda menu opens the Banda menu at a route, from outside the window", async () => {
+  window = await startWindow()
+  const { page, banda } = window
+  const { thread, composer } = await firstThread(page)
+  await composer.fill("hello")
+  await composer.press("Enter")
+  await expect(thread).not.toHaveAccessibleName("New Thread")
+  const menu = page.getByRole("dialog", { name: "Banda menu" })
+  const search = menu.getByRole("combobox", { name: "Search" })
+  // At its Actions: the key sheet.
+  banda("menu", "actions")
+  await expect(menu.getByRole("group", { name: "Actions" })).toContainText(
+    "Show or hide the sidebar"
+  )
+  // In a Space, by its name, though the menu is open.
+  banda("menu", "space.work")
+  await expect(menu.getByText("Work", { exact: true })).toBeVisible()
+  await expect(menu.getByRole("group", { name: "Threads" })).toContainText(
+    "hello"
+  )
+  // Other words are typed in.
+  banda("menu", "hello")
+  await expect(search).toHaveValue("hello")
+  await expect(menu.getByRole("option").first()).toContainText("hello")
+  await page.screenshot({ path: "test-results/29-banda-menu-route.png" })
+
+  // A settings route opens the settings window there.
+  banda("menu", "settings.appearance")
+  await expect
+    .poll(() => window.app.windows().map((shown) => new URL(shown.url()).hash))
+    .toContain("#settings/appearance")
+})

@@ -74,6 +74,11 @@ impl Places {
         self.config.join("harnesses.toml")
     }
 
+    /// Where the window listens for `banda menu` while it is open.
+    pub fn window(&self) -> PathBuf {
+        self.state.join("window.sock")
+    }
+
     /// Held by the engine while it runs: one engine per state folder.
     pub fn lock(&self) -> PathBuf {
         self.state.join("engine.lock")

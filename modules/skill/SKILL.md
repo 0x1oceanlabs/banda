@@ -49,6 +49,16 @@ state in force, and the bar names the file and the line.
 Never touch credentials, a Harness's own configuration, or a Space's
 `.banda/` folder.
 
+## Opening the Banda menu for the Person
+
+`banda menu [route]` opens the Banda menu in the window, as Alt+Space
+does: `banda menu actions` at its Actions, each with its key;
+`banda menu space.<name>` in a Space, its Threads and a new one there;
+`banda menu views` at the sidebar's presets; `banda menu
+settings.<section>.<row>` opens the settings window there. Other words
+open it with them typed in, as a search. It exits 2 when the window is
+not open.
+
 ## Where things live
 
 `~/.config/banda/` (or `$BANDA_CONFIG`) holds what belongs to this machine:

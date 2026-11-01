@@ -80,6 +80,15 @@ const host: Host = {
       }
     },
   },
+  menu: {
+    listen: (open) => {
+      const heard = (_event: IpcRendererEvent, route: string) => open(route)
+      ipcRenderer.on("menu:open", heard)
+      return () => {
+        ipcRenderer.removeListener("menu:open", heard)
+      }
+    },
+  },
   notify: {
     show: (notice: Notice) => ipcRenderer.send("notify:show", notice),
     withdraw: (key: string) => ipcRenderer.send("notify:withdraw", key),

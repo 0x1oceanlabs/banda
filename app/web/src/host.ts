@@ -62,6 +62,11 @@ export type Host = {
     /** Calls `go` with each link the window is opened at again. */
     listen: (go: (link: string) => void) => () => void
   }
+  /** The Banda menu, as `banda menu [route]` opens it (ADR 0017). */
+  menu: {
+    /** Calls `open` with each route the menu is asked to open at. */
+    listen: (open: (route: string) => void) => () => void
+  }
   /** The desktop's notifications and its quiet. */
   notify: {
     /** Shows a notice; one of the same key goes first. */
