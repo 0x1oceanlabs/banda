@@ -55,6 +55,8 @@ import {
   RotateCcwIcon,
   ShieldQuestionIcon,
 } from "lucide-react"
+import { settledTurn } from "./marks"
+import { markSeen } from "./seen"
 import {
   apply,
   fromView,
@@ -158,6 +160,13 @@ function ThreadPane({
     )
       update({ thread, harness: state.harness, title: state.title })
   }, [thread, state, args.title, args.harness, update])
+
+  // A Person who looks at the Thread sees how its latest turn ended, which
+  // settles its mark in the sidebar and the bar.
+  const settled = state && settledTurn(state.turns)
+  useEffect(() => {
+    if (focused && thread !== null && settled) markSeen(thread, settled)
+  }, [focused, thread, settled])
 
   // A Thread not yet started keeps its settings here until its first
   // message, starting from its Harness's.

@@ -153,7 +153,20 @@ Every workspace zoomed out at once, to pick a Pane or a workspace.
 
 **Sidebar**:
 The list of every Space with its Threads, docked at the window's left edge.
+Each Thread shows its own Mark.
 
 **Bar**:
-The line across the window's top: the sidebar's button and the numbers of
-the workspaces.
+The line across the window's top: the Mark, which is the sidebar's button,
+and the numbers of the workspaces.
+
+**Mark**:
+Banda's sign: three tiles, the top one an Agent with eyes. Its shape and
+colour say what the work calls the Person for: it rests, works, asks them,
+finished, failed, or the engine is offline. In the bar it shows the loudest
+of every Thread; in the sidebar, each Thread's own. A finished or failed
+turn settles once the Person has looked at its Thread; a Question asks until
+it is answered.
+
+**Watch**:
+What a module draws for each Space, showing nothing, to tell the window what
+its work there calls the Person for. The bar's Mark shows the loudest.

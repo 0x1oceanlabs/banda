@@ -10,6 +10,7 @@
 import type { ComponentType } from "react"
 import type { LucideIcon } from "lucide-react"
 import type { Engine, JsonValue, SpaceId } from "@bandaso/contract"
+import type { MarkState } from "./components/banda-mark"
 
 /**
  * Marks where a program reads the keys, as in a terminal. Banda's Alt keys
@@ -80,4 +81,32 @@ export function paneOf<A extends { [key: string]: JsonValue }>(
   args: A
 ): PaneState {
   return { kind: kind.kind, args }
+}
+
+/**
+ * What a module's work in one Space calls its Person for: the loudest
+ * state, as Banda's mark shows it, and how many things wait for the Person
+ * to act. The bar shows the loudest of every Space's.
+ */
+export type Attention = { mark: MarkState; waiting: number }
+
+/** Nothing calls for the Person. */
+export const QUIET: Attention = { mark: "rest", waiting: 0 }
+
+export type WatchProps = {
+  engine: Engine
+  space: SpaceId
+  /** Says what the Space calls for now; called again on each change. */
+  report: (attention: Attention) => void
+}
+
+/**
+ * How a module tells the window what its work in a Space calls the Person
+ * for, while none of its Panes may show. The window draws one per Space
+ * for as long as the engine runs the module; it draws nothing itself.
+ */
+export type Watch = {
+  /** The engine module it follows; the window draws it only with it. */
+  module: string
+  Watch: ComponentType<WatchProps>
 }
