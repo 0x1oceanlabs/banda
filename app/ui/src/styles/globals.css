@@ -170,6 +170,11 @@
   --font-family-sans: "Inter Variable", sans-serif;
   --font-family-mono: monospace;
   --text-root: 16px;
+  /* Scrollbars as T3 Code draws them: a thin thumb in the border's
+     colour on no track, as the ScrollArea's. The terminal's too. */
+  --app-scrollbar-width: 6px;
+  --app-scrollbar-thumb: var(--border);
+  --app-scrollbar-thumb-hover: var(--muted-foreground);
 }
 
 @layer base {
@@ -183,6 +188,24 @@
   body {
     @apply bg-background text-foreground;
   }
+}
+
+/* Without these, Chromium on Linux draws its own scrollbar: a wide light
+   track with arrows, whatever the look. */
+::-webkit-scrollbar {
+  width: var(--app-scrollbar-width);
+  height: var(--app-scrollbar-width);
+}
+::-webkit-scrollbar-track,
+::-webkit-scrollbar-corner {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--app-scrollbar-thumb);
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--app-scrollbar-thumb-hover);
 }
 
 /* Words a find marks, as CSS highlights: all of them, and the one found
