@@ -1,0 +1,37 @@
+# The CI runners on the banda-ci user's rootless engine; `ci/devbox.sh
+# compose` runs this file as that user (ci/README.md).
+name: banda-runners
+
+x-runner: &runner
+  build: .
+  image: banda-runner:local
+  restart: unless-stopped
+  init: true
+  # Guards, not budgets: a fork bomb stops here, and under memory pressure
+  # the kernel ends a CI process first.
+  pids_limit: 4096
+  oom_score_adj: 500
+  # The tests' scratch, in memory: their SQLite fsyncs stall on the shared
+  # disk. exec: the tests run what they write there.
+  tmpfs:
+    - /tmp:size=4g,exec,mode=1777
+  # Chromium's shared memory; Docker's default 64 MB is too small.
+  shm_size: 2g
+  environment:
+    RUNNER_TOKEN: ${RUNNER_TOKEN:-}
+
+services:
+  runner-1: { <<: *runner, command: devbox-1, volumes: [runner-1:/state] }
+  runner-2: { <<: *runner, command: devbox-2, volumes: [runner-2:/state] }
+  runner-3: { <<: *runner, command: devbox-3, volumes: [runner-3:/state] }
+  runner-4: { <<: *runner, command: devbox-4, volumes: [runner-4:/state] }
+  runner-5: { <<: *runner, command: devbox-5, volumes: [runner-5:/state] }
+  runner-6: { <<: *runner, command: devbox-6, volumes: [runner-6:/state] }
+
+volumes:
+  runner-1:
+  runner-2:
+  runner-3:
+  runner-4:
+  runner-5:
+  runner-6:
