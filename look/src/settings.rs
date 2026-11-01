@@ -8,13 +8,13 @@ use crate::motion::MotionSettings;
 use crate::notify::NotifySettings;
 use crate::sound::SoundSettings;
 use schemars::JsonSchema;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use toml::Spanned;
 
 /// How Banda looks and sounds: the theme, tiles, columns, font, motion,
 /// sounds and calls. A theme's `banda.toml` takes the same keys.
-#[derive(Clone, Debug, Default, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct Settings {
     /// `"omarchy"`, `"banda"`, a theme's name, or `{ light, dark }`.
@@ -57,14 +57,14 @@ pub struct Settings {
     pub notify: NotifySettings,
 }
 
-#[derive(Clone, Debug, Deserialize, PartialEq, JsonSchema)]
+#[derive(Clone, Debug, Deserialize, Serialize, PartialEq, JsonSchema)]
 #[serde(untagged)]
 pub enum ThemeChoice {
     One(String),
     Pair { light: String, dark: String },
 }
 
-#[derive(Clone, Copy, Debug, Deserialize, PartialEq, JsonSchema)]
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, JsonSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum ModeChoice {
     System,
@@ -72,7 +72,7 @@ pub enum ModeChoice {
     Dark,
 }
 
-#[derive(Clone, Debug, Default, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct Gaps {
     #[schemars(range(min = 0))]
@@ -81,7 +81,7 @@ pub struct Gaps {
     pub outer: Option<f64>,
 }
 
-#[derive(Clone, Debug, Default, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct Tile {
     pub radius: Option<Corner>,
@@ -93,7 +93,7 @@ pub struct Tile {
     pub dim_inactive: Option<f64>,
 }
 
-#[derive(Clone, Debug, Default, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct Focus {
     /// The focused tile's border.
@@ -109,7 +109,7 @@ pub struct Focus {
     pub ring: Option<f64>,
 }
 
-#[derive(Clone, Debug, Default, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct Bar {
     #[schemars(range(min = 0))]
@@ -152,6 +152,19 @@ impl Step {
             .iter()
             .find(|(_, step, _)| *step == self)
             .map_or(1.0, |(_, _, factor)| *factor)
+    }
+}
+
+/// Written as it is read: the step's name, or pixels.
+impl Serialize for Corner {
+    fn serialize<S: serde::Serializer>(&self, serializer: S) -> Result<S::Ok, S::Error> {
+        match self {
+            Corner::Pixels(px) => serializer.serialize_f64(*px),
+            Corner::Step(step) => {
+                let name = Step::ALL.iter().find(|(_, s, _)| s == step);
+                serializer.serialize_str(name.map_or("lg", |(name, _, _)| name))
+            }
+        }
     }
 }
 

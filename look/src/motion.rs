@@ -12,7 +12,7 @@ use toml::Spanned;
 use ts_rs::TS;
 
 /// `[motion]` in a `look.toml` or a theme's `banda.toml`.
-#[derive(Clone, Debug, Default, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct MotionSettings {
     /// Turns every event off, as the system's reduced motion does.
@@ -41,7 +41,7 @@ pub struct MotionSettings {
 }
 
 /// One event's table: `off`, and a `spring` or an `easing`.
-#[derive(Clone, Debug, Default, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct Event {
     pub off: Option<bool>,
@@ -51,7 +51,7 @@ pub struct Event {
     pub easing: Option<Spanned<EasingSettings>>,
 }
 
-#[derive(Clone, Debug, Default, Deserialize, PartialEq, JsonSchema)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct SpringSettings {
     /// 1 comes to rest without overshooting; less bounces.
@@ -62,7 +62,7 @@ pub struct SpringSettings {
     pub epsilon: Option<f64>,
 }
 
-#[derive(Clone, Debug, Default, Deserialize, PartialEq, JsonSchema)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize, PartialEq, JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct EasingSettings {
     pub duration_ms: Option<f64>,

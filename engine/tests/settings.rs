@@ -50,3 +50,42 @@ fn settings_schema_prints_a_file_and_exports_them_all() {
     let out = banda(config.path(), &["settings", "schema", "nope"]);
     assert_eq!(out.status.code(), Some(2));
 }
+
+#[test]
+fn settings_set_and_reset_change_one_key() {
+    let config = tempfile::tempdir().unwrap();
+    let look = config.path().join("look.toml");
+    std::fs::write(&look, "# mine\nradius = 4\n").unwrap();
+
+    let out = banda(
+        config.path(),
+        &["settings", "set", "look.toml", "tile.border", "3"],
+    );
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert_eq!(
+        std::fs::read_to_string(&look).unwrap(),
+        "# mine\nradius = 4\n\n[tile]\nborder = 3\n"
+    );
+
+    let out = banda(
+        config.path(),
+        &["settings", "set", "look.toml", "radius", "big"],
+    );
+    assert_eq!(out.status.code(), Some(1));
+    let said = String::from_utf8(out.stderr).unwrap();
+    assert!(
+        said.starts_with(&format!("{}:2:", look.display())),
+        "{said}"
+    );
+
+    let out = banda(config.path(), &["settings", "reset", "look.toml", "radius"]);
+    assert!(out.status.success());
+    assert_eq!(
+        std::fs::read_to_string(&look).unwrap(),
+        "# mine\n\n[tile]\nborder = 3\n"
+    );
+}

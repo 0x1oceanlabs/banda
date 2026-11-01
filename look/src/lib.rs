@@ -19,6 +19,7 @@ pub mod color;
 pub mod columns;
 pub mod fonts;
 pub mod hyprland;
+pub mod keyed;
 pub mod motion;
 pub mod notify;
 pub mod palette;
@@ -89,6 +90,9 @@ pub struct Look {
     pub notify: notify::Notify,
     /// How the browser looks and searches, from `browser.toml` (ADR 0013).
     pub browser: browser::Browser,
+    /// Each key of each settings file, by file: its value, and where it
+    /// comes from (ADR 0016).
+    pub settings: BTreeMap<String, keyed::Keyed>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, TS)]
@@ -154,9 +158,8 @@ impl Problem {
     ) -> Problem {
         let (line, column) = span.map_or((None, None), |span| {
             let before = &text[..span.start.min(text.len())];
-            let line = before.matches('\n').count() + 1;
             let column = before.rsplit('\n').next().map_or(0, |l| l.chars().count()) + 1;
-            (Some(line as u32), Some(column as u32))
+            (Some(line_at(text, span.start)), Some(column as u32))
         });
         Problem {
             path: path.display().to_string(),
@@ -274,10 +277,12 @@ pub fn resolve(places: &Places, windows: &dyn Fn() -> Option<Windows>) -> Resolv
 
     let look_file = places.look_file();
     watched.push(look_file.clone());
-    let mine = match std::fs::read_to_string(&look_file) {
-        Ok(text) => read_settings(&look_file, &text, &mut problems),
-        Err(_) => None,
-    };
+    let mine_file = std::fs::read_to_string(&look_file)
+        .ok()
+        .map(|text| (look_file.clone(), text));
+    let mine = mine_file
+        .as_ref()
+        .and_then(|(path, text)| read_settings(path, text, &mut problems));
     let mine_read = mine.is_some();
     let mine = mine.unwrap_or_default();
 
@@ -382,13 +387,18 @@ pub fn resolve(places: &Places, windows: &dyn Fn() -> Option<Windows>) -> Resolv
         });
     }
     let mut layers = Settings::defaults();
+    let mut keyed_layers = vec![keyed::Layer::new("defaults", &layers, None)];
     if let Some(theme) = sizing {
+        let file = theme.banda_toml.as_ref();
+        keyed_layers.push(keyed::Layer::new("theme", &theme.settings, file));
         layers = theme.settings.clone().over(layers);
     }
     if mine.hyprland.unwrap_or(true)
         && let Some(found) = windows()
     {
-        layers = found.layer().over(layers);
+        let found = found.layer();
+        keyed_layers.push(keyed::Layer::new("hyprland", &found, None));
+        layers = found.over(layers);
         sources.push(Source {
             layer: "hyprland".to_owned(),
             name: None,
@@ -404,6 +414,7 @@ pub fn resolve(places: &Places, windows: &dyn Fn() -> Option<Windows>) -> Resolv
             path: Some(look_file.display().to_string()),
         });
     }
+    keyed_layers.push(keyed::Layer::new("file", &mine, mine_file.as_ref()));
     let all = mine.clone().over(layers);
 
     let schemes = Schemes {
@@ -425,8 +436,13 @@ pub fn resolve(places: &Places, windows: &dyn Fn() -> Option<Windows>) -> Resolv
         }
     }
 
-    let sidebar = sidebar::resolve(places, &mut problems, &mut watched);
-    let browser = browser::resolve(places, &mut problems, &mut watched);
+    let (sidebar, sidebar_keys) = sidebar::resolve(places, &mut problems, &mut watched);
+    let (browser, browser_keys) = browser::resolve(places, &mut problems, &mut watched);
+    let settings = BTreeMap::from([
+        ("look.toml".to_owned(), keyed::keyed(&all, &keyed_layers)),
+        ("sidebar.toml".to_owned(), sidebar_keys),
+        ("browser.toml".to_owned(), browser_keys),
+    ]);
     let mut vars = vars(&all);
     let system = |generic: &str| {
         places
@@ -456,6 +472,7 @@ pub fn resolve(places: &Places, windows: &dyn Fn() -> Option<Windows>) -> Resolv
             sidebar,
             notify: all.notify.resolved(),
             browser,
+            settings,
         },
         watched,
     }
@@ -642,43 +659,39 @@ fn fingerprint(paths: &[PathBuf]) -> Vec<Option<u64>> {
 
 pub use theme::Listed;
 
-/// Checks files as `banda look check` does: a `colors.toml` as a
-/// palette, a `sidebar.toml` or a file in `sidebars/` as the sidebar's
+/// The line, from 1, that byte `offset` of `text` is on.
+pub(crate) fn line_at(text: &str, offset: usize) -> u32 {
+    text[..offset.min(text.len())].matches('\n').count() as u32 + 1
+}
+
+/// Checks `text` as the file at `path` would be read: a `colors.toml` as
+/// a palette, a `sidebar.toml` or a file in `sidebars/` as the sidebar's
 /// schema, a `browser.toml` as the browser's, anything else as `look.toml`'s.
-pub fn check(paths: &[PathBuf]) -> Vec<Problem> {
+pub fn check_text(path: &Path, text: &str) -> Vec<Problem> {
     let mut problems = Vec::new();
-    for path in paths {
-        let text = match std::fs::read_to_string(path) {
-            Ok(text) => text,
-            Err(error) => {
-                problems.push(Problem::whole(path, error.to_string()));
-                continue;
-            }
-        };
-        if let Some(preset) = sidebar::is_sidebar_file(path) {
-            sidebar::read_sidebar(path, &text, preset, &mut problems);
-        } else if browser::is_browser_file(path) {
-            browser::read_browser(path, &text, &mut problems);
-        } else if path.file_name().is_some_and(|n| n == "colors.toml") {
-            match Palette::parse(&text) {
-                Ok(palette) => {
-                    let complete = palette.complete();
-                    let not_hex = complete.not_hex();
-                    if !not_hex.is_empty() {
-                        problems.push(Problem::whole(
-                            path,
-                            format!(
-                                "{} are not hex, so colours mixed from them fall back",
-                                not_hex.join(", ")
-                            ),
-                        ));
-                    }
+    if let Some(preset) = sidebar::is_sidebar_file(path) {
+        sidebar::read_sidebar(path, text, preset, &mut problems);
+    } else if browser::is_browser_file(path) {
+        browser::read_browser(path, text, &mut problems);
+    } else if path.file_name().is_some_and(|n| n == "colors.toml") {
+        match Palette::parse(text) {
+            Ok(palette) => {
+                let complete = palette.complete();
+                let not_hex = complete.not_hex();
+                if !not_hex.is_empty() {
+                    problems.push(Problem::whole(
+                        path,
+                        format!(
+                            "{} are not hex, so colours mixed from them fall back",
+                            not_hex.join(", ")
+                        ),
+                    ));
                 }
-                Err(error) => problems.push(Problem::toml(path, &text, &error)),
             }
-        } else {
-            read_settings(path, &text, &mut problems);
+            Err(error) => problems.push(Problem::toml(path, text, &error)),
         }
+    } else {
+        read_settings(path, text, &mut problems);
     }
     problems
 }

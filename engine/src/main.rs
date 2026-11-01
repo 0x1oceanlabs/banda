@@ -133,9 +133,7 @@ enum SettingsCommand {
     /// Prints a file's JSON Schema: every key it may hold, with its type
     /// and what it does. With no file, the list of files.
     Schema {
-        #[arg(value_parser = clap::builder::PossibleValuesParser::new(
-            banda_settings::FILES.map(|file| file.name)
-        ))]
+        #[arg(value_parser = file_names())]
         file: Option<String>,
         /// Writes every file's schema into the config folder's schemas/
         /// instead, where the files' `#:schema` lines point an editor.
@@ -143,6 +141,27 @@ enum SettingsCommand {
         #[arg(long, conflicts_with = "file")]
         export: bool,
     },
+    /// Sets one key, as the settings window does, and leaves every other
+    /// line and comment as it was. VALUE is TOML (`3`, `true`,
+    /// `["a", "b"]`), or else taken as a string. Refuses, saying why
+    /// as `check` does, when the file would then be wrong.
+    Set {
+        #[arg(value_parser = file_names())]
+        file: String,
+        /// Dotted: `tile.border`.
+        key: String,
+        value: String,
+    },
+    /// Takes one key out of the file, so the layer under it shows again.
+    Reset {
+        #[arg(value_parser = file_names())]
+        file: String,
+        key: String,
+    },
+}
+
+fn file_names() -> clap::builder::PossibleValuesParser {
+    clap::builder::PossibleValuesParser::new(banda_settings::FILES.map(|file| file.name))
 }
 
 /// Why the program did not do its job, and how it exits.
@@ -286,6 +305,12 @@ fn settings(what: SettingsCommand) -> ExitCode {
     let places = banda_look::theme::Places::from_env();
     match what {
         SettingsCommand::Check { files } => report(banda_settings::check(&places, &files)),
+        SettingsCommand::Set { file, key, value } => {
+            report_done(banda_settings::set(&places.config, &file, &key, &value))
+        }
+        SettingsCommand::Reset { file, key } => {
+            report_done(banda_settings::reset(&places.config, &file, &key))
+        }
         SettingsCommand::Schema { export: true, .. } => {
             let folder = places.config.join("schemas");
             match banda_settings::export(&folder) {
@@ -308,6 +333,11 @@ fn settings(what: SettingsCommand) -> ExitCode {
             ExitCode::SUCCESS
         }
     }
+}
+
+/// A change's refusal, said as a check's problems are.
+fn report_done(done: Result<(), Vec<banda_look::Problem>>) -> ExitCode {
+    report(done.err().unwrap_or_default())
 }
 
 /// A check's problems on stderr, as a compiler says them: exit 1 when

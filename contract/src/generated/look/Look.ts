@@ -6,6 +6,7 @@ import type { Motion } from "./Motion";
 import type { Notify } from "./Notify";
 import type { Problem } from "./Problem";
 import type { Schemes } from "./Schemes";
+import type { Setting } from "./Setting";
 import type { Shown } from "./Shown";
 import type { Sound } from "./Sound";
 import type { Source } from "./Source";
@@ -56,4 +57,9 @@ notify: Notify,
 /**
  * How the browser looks and searches, from `browser.toml` (ADR 0013).
  */
-browser: Browser, };
+browser: Browser, 
+/**
+ * Each key of each settings file, by file: its value, and where it
+ * comes from (ADR 0016).
+ */
+settings: { [key in string]: { [key in string]: Setting } }, };

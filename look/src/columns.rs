@@ -11,7 +11,7 @@ use serde::{Deserialize, Serialize};
 use toml::Spanned;
 use ts_rs::TS;
 
-#[derive(Clone, Debug, Default, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct ColumnsSettings {
     /// What Alt+Ctrl+Left and Right step through.

@@ -29,7 +29,11 @@ Pane of Banda's window.
 Banda is changed through text files, the same way the Person changes it.
 
 1. Read the topic for what you change, below.
-2. Edit the file. Keep the Person's comments and every key you were not
+2. Change one key with `banda settings set <file> <key> <value>`, as
+   `banda settings set look.toml tile.border 3`, or take it out with
+   `banda settings reset <file> <key>`: they keep every comment and other
+   key, and refuse a value the file would not take. For more than a key,
+   edit the file: keep the Person's comments and every key you were not
    asked to change. Every key is optional: write only what changes.
 3. Check it: `banda settings check` prints `path:line:column: problem`
    for each mistake, and nothing when all is well. `banda settings schema
