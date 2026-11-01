@@ -81,6 +81,12 @@ impl Live {
         Ok(connection)
     }
 
+    /// Lets go of every process of `harness`: each starts again on its
+    /// next turn.
+    pub async fn let_go(&self, harness: &str) {
+        self.hosts.let_go(harness).await;
+    }
+
     /// The turn's prompt went to the Harness in `session`. If a Person
     /// stopped the turn while it started, the Harness hears the stop now.
     pub fn begin(&self, turn: TurnId, connection: Arc<Connection>, session: Session) {

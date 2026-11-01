@@ -728,6 +728,116 @@ async fn a_failed_turn_can_be_tried_again_once_it_is_the_latest() {
     assert!(refused.message.contains("failed"), "{}", refused.message);
 }
 
+/// A World whose fake agent has an account in `home`, signed out.
+async fn signed_out(root: &Path, home: &Path) -> World {
+    let home = home.display().to_string();
+    let agents = Agents::new(harnesses_with(&[("FAKE_AGENT_HOME", &home)]));
+    World::new_with(root, agents).await
+}
+
+impl World {
+    async fn sign_in(&self, who: Participant, way: &str) -> Result<Value, bandaso_kernel::Refusal> {
+        let params = json!({ "harness": "fake", "way": way });
+        self.call(who, "agents.sign_in", params).await
+    }
+
+    /// Tries the failed turn of `sent` again and waits for it to end:
+    /// how it ended, and what was sent to try it.
+    async fn retried(&self, sent: &Value) -> (TurnState, Value) {
+        let params = json!({ "turn": sent["turn"] });
+        let mut again = self
+            .call(self.person(), "agents.retry", params)
+            .await
+            .unwrap();
+        let view = self
+            .until(&sent["thread"], |v| {
+                state(v, &again["turn"])
+                    .is_some_and(|s| s != TurnState::Queued && s != TurnState::Running)
+            })
+            .await;
+        again["thread"] = sent["thread"].clone();
+        (state(&view, &again["turn"]).unwrap(), again)
+    }
+}
+
+#[tokio::test]
+async fn a_person_signs_in_in_a_terminal_and_the_harness_starts_again() {
+    let (root, home) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+    let world = signed_out(root.path(), home.path()).await;
+    let (sent, view) = failing(&world, "hello").await;
+    assert_eq!(view.turns[0].failure, Some(Failure::SignIn));
+
+    let account = world
+        .call(
+            world.person(),
+            "agents.account",
+            json!({ "harness": "fake" }),
+        )
+        .await
+        .unwrap();
+    let ways = account["ways"].as_array().unwrap();
+    assert_eq!(ways.len(), 2, "{account}");
+    let terminal = &ways[0]["terminal"];
+    assert_eq!(ways[0]["name"], "Fake account");
+    assert_eq!(terminal["program"], fake_agent().display().to_string());
+    assert_eq!(terminal["args"], json!(["--login"]), "its own program");
+    let home_path = home.path().display().to_string();
+    assert_eq!(
+        terminal["env"]["FAKE_AGENT_HOME"], home_path,
+        "and its account"
+    );
+    assert!(
+        ways[1].get("terminal").is_none(),
+        "the other it does by itself"
+    );
+
+    // What a terminal does: the Person pastes the code the browser shows.
+    let mut login = std::process::Command::new(fake_agent())
+        .arg("--login")
+        .env("FAKE_AGENT_HOME", &home_path)
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::null())
+        .spawn()
+        .unwrap();
+    use std::io::Write as _;
+    login
+        .stdin
+        .take()
+        .unwrap()
+        .write_all(b"fake-code\n")
+        .unwrap();
+    assert!(login.wait().unwrap().success(), "a right code signs in");
+    let (ended, again) = world.retried(&sent).await;
+    assert_eq!(
+        ended,
+        TurnState::Failed,
+        "the Harness read its account when it started"
+    );
+    world.sign_in(world.person(), "fake-login").await.unwrap();
+    let (ended, _) = world.retried(&again).await;
+    assert_eq!(ended, TurnState::Done, "it starts again");
+}
+
+#[tokio::test]
+async fn a_harness_signs_in_by_itself_for_a_person_only() {
+    let (root, home) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+    let world = signed_out(root.path(), home.path()).await;
+    let (sent, _) = failing(&world, "hello").await;
+
+    let agent = Participant::Agent(world.agent);
+    let refused = world.sign_in(agent, "fake-browser").await.unwrap_err();
+    assert_eq!(refused.code, Code::Forbidden);
+    let refused = world
+        .sign_in(world.person(), "elsewhere")
+        .await
+        .unwrap_err();
+    assert_eq!(refused.code, Code::NotFound);
+    assert_eq!(refused.message, "Fake offers no such way to sign in.");
+
+    world.sign_in(world.person(), "fake-browser").await.unwrap();
+    assert_eq!(world.retried(&sent).await.0, TurnState::Done);
+}
+
 impl World {
     async fn defaults(&self) -> Value {
         let params = json!({ "agent": self.agent });

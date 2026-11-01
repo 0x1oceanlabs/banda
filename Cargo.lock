@@ -291,6 +291,7 @@ dependencies = [
  "axum",
  "bandaso-agents",
  "bandaso-kernel",
+ "bandaso-terminal",
  "clap",
  "dirs",
  "futures",
@@ -348,6 +349,24 @@ dependencies = [
  "thiserror",
  "tokio",
  "tokio-tungstenite",
+ "tracing",
+ "ts-rs",
+ "uuid",
+]
+
+[[package]]
+name = "bandaso-terminal"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "bandaso-kernel",
+ "pty-process",
+ "rusqlite",
+ "rustix",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
  "tracing",
  "ts-rs",
  "uuid",
@@ -1392,6 +1411,16 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "985e7ec9bb745e6ce6535b544d84d6cd6f7ad8bd711c398938ae983b91a766d9"
 dependencies = [
  "unicode-ident",
+]
+
+[[package]]
+name = "pty-process"
+version = "0.5.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5f0cff49b5194f464ce14bfaef7d6dba180889934e9bfa37ca5f2528ea515c0b"
+dependencies = [
+ "rustix",
+ "tokio",
 ]
 
 [[package]]

@@ -6,6 +6,8 @@
 //! - A host that keeps dying starts again after a growing pause.
 //! - A host with nothing to do for `idle` is let go. Its Threads resume
 //!   their sessions when it starts again.
+//! - After a sign-in every host of that Harness entry is let go, so each
+//!   reads the account again when it starts.
 //! - A host's process runs in its own process group, which is killed when
 //!   the host is dropped; an engine that dies closes the host's stdin.
 
@@ -112,6 +114,25 @@ impl Hosts {
                 slot.started = None;
                 Err(error)
             }
+        }
+    }
+
+    /// Lets go of every host of the Harness entry `harness`, in every
+    /// Space, once it is no longer starting. A turn that runs keeps its
+    /// host until it ends.
+    pub async fn let_go(&self, harness: &str) {
+        let slots: Vec<_> = self
+            .slots
+            .lock()
+            .unwrap()
+            .iter()
+            .filter(|((_, id), _)| id == harness)
+            .map(|(_, slot)| slot.clone())
+            .collect();
+        for slot in slots {
+            let mut slot = slot.lock().await;
+            slot.host = None;
+            slot.deaths = 0;
         }
     }
 

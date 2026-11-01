@@ -53,6 +53,14 @@ type Following = {
   onEnd: (refusal?: Refusal) => void
 }
 
+type Hearing = {
+  space: SpaceId
+  method: string
+  params: JsonValue
+  onPiece: (piece: unknown) => void
+  onEnd: (refusal?: Refusal) => void
+}
+
 /** A command breaks off at most this often before its caller hears why. */
 const ATTEMPTS = 3
 const FIRST_WAIT = 250
@@ -66,6 +74,7 @@ const LONGEST_WAIT = 5000
  * - A call made while the engine is away waits for it.
  * - A subscription goes on after a reconnect from the last event it
  *   delivered, so a Pane sees no gap and no repeat.
+ * - A stream is heard again after a reconnect, from its start.
  */
 export class Engine {
   readonly #address: () => Promise<Address>
@@ -75,6 +84,7 @@ export class Engine {
   #nextId = 1
   readonly #pending = new Map<number, Pending>()
   readonly #following = new Map<number, Following>()
+  readonly #hearing = new Map<number, Hearing>()
   #wait = FIRST_WAIT
   #closed = false
 
@@ -162,6 +172,40 @@ export class Engine {
     }
   }
 
+  /**
+   * Hears a module's stream, such as a terminal's output: what it says now
+   * and keeps nowhere. After a reconnect the engine says it again from its
+   * start. `onEnd` hears when the module ends it, or refuses it. Returns how
+   * to stop.
+   */
+  stream<P>(
+    space: SpaceId,
+    method: string,
+    params: JsonValue,
+    onPiece: (piece: P) => void,
+    onEnd: (refusal?: Refusal) => void
+  ): () => void {
+    const id = this.#nextId++
+    const hearing: Hearing = {
+      space,
+      method,
+      params,
+      onPiece: onPiece as (piece: unknown) => void,
+      onEnd,
+    }
+    this.#hearing.set(id, hearing)
+    if (this.#status.state === "open") this.#hear(id, hearing)
+    return () => {
+      if (this.#hearing.delete(id) && this.#status.state === "open") {
+        this.#send({
+          type: "unsubscribe",
+          id: this.#nextId++,
+          subscription: id,
+        })
+      }
+    }
+  }
+
   /** Closes the connection for good. */
   close(): void {
     this.#closed = true
@@ -225,6 +269,16 @@ export class Engine {
     })
   }
 
+  #hear(id: number, hearing: Hearing): void {
+    this.#send({
+      type: "stream",
+      id,
+      space: hearing.space,
+      method: hearing.method,
+      params: hearing.params,
+    })
+  }
+
   #receive(text: string): void {
     let frame: EngineFrame
     try {
@@ -243,6 +297,7 @@ export class Engine {
         for (const [id, following] of this.#following) {
           this.#subscribe(id, following)
         }
+        for (const [id, hearing] of this.#hearing) this.#hear(id, hearing)
         break
       case "goodbye":
         this.#set({ state: "refused", refusal: frame.reason })
@@ -260,6 +315,22 @@ export class Engine {
         if (following && frame.error) {
           this.#following.delete(frame.id)
           following.onEnd(frame.error)
+        }
+        const hearing = this.#hearing.get(frame.id)
+        if (hearing && frame.error) {
+          this.#hearing.delete(frame.id)
+          hearing.onEnd(frame.error)
+        }
+        break
+      }
+      case "piece":
+        this.#hearing.get(frame.stream)?.onPiece(frame.data)
+        break
+      case "ended": {
+        const hearing = this.#hearing.get(frame.stream)
+        if (hearing) {
+          this.#hearing.delete(frame.stream)
+          hearing.onEnd()
         }
         break
       }

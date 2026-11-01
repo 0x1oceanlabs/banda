@@ -4,7 +4,7 @@
 use bandaso_kernel::api::Identity;
 use bandaso_kernel::{
     AgentId, Call, Code, CommandId, Effect, Error, Kernel, Module, ModuleSpace, OnRestart, Outcome,
-    Participant, PersonId, Refusal, Right, Settled, SpaceSummary, Tx, decode,
+    Participant, PersonId, Refusal, Right, Settled, SpaceSummary, Stream, Tx, decode,
 };
 use futures::{SinkExt, StreamExt};
 use serde::Deserialize;
@@ -44,8 +44,26 @@ impl Module for Notes {
             "add" => Some(Right::Write),
             "list" => Some(Right::Read),
             "purge" => Some(Right::Manage),
+            "count" => Some(Right::Read),
             _ => None,
         }
+    }
+
+    /// `count` says the numbers up to `to`, then ends.
+    async fn stream(&self, _call: Call, method: &str, params: Value) -> Result<Stream, Refusal> {
+        if method != "count" {
+            return Err(Refusal::invalid("No such stream."));
+        }
+        let to = params["to"].as_u64().unwrap_or(0);
+        let (say, heard) = tokio::sync::mpsc::channel(4);
+        tokio::spawn(async move {
+            for n in 1..=to {
+                if say.send(json!({ "n": n })).await.is_err() {
+                    return;
+                }
+            }
+        });
+        Ok(heard)
     }
 
     async fn call(&self, call: Call, method: &str, params: Value) -> Result<Value, Refusal> {
@@ -593,6 +611,58 @@ async fn the_api_refuses_strangers_and_follows_events_without_gaps() {
 
     socket
         .send(Message::text(r#"{"type":"call","id":4}"#))
+        .await
+        .unwrap();
+    assert_eq!(next(&mut socket).await["error"]["code"], "invalid");
+}
+
+#[tokio::test]
+async fn a_stream_says_its_pieces_then_that_it_ended() {
+    let root = tempfile::tempdir().unwrap();
+    let owner = PersonId::new();
+    let notes = Notes::default();
+    let kernel = open(root.path(), owner, &notes).await;
+    let space = create(&kernel, owner, "Work").await;
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let app = bandaso_kernel::api::router(kernel.clone(), Tokens { owner }, "test");
+    tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+
+    let count = |id: u64| json!({ "type": "stream", "id": id, "space": space.id, "method": "notes.count", "params": { "to": 3 } });
+    let (mut stranger, _) = connect(
+        address,
+        json!({ "type": "hello", "protocol": 1, "token": "stranger" }),
+    )
+    .await;
+    stranger
+        .send(Message::text(count(1).to_string()))
+        .await
+        .unwrap();
+    assert_eq!(next(&mut stranger).await["error"]["code"], "forbidden");
+
+    let (mut socket, _) = connect(
+        address,
+        json!({ "type": "hello", "protocol": 1, "token": "secret" }),
+    )
+    .await;
+    socket
+        .send(Message::text(count(7).to_string()))
+        .await
+        .unwrap();
+    assert_eq!(next(&mut socket).await["ok"]["stream"], 7);
+    for n in 1..=3 {
+        let piece = next(&mut socket).await;
+        assert_eq!(piece["type"], "piece");
+        assert_eq!(piece["stream"], 7);
+        assert_eq!(piece["data"]["n"], n);
+    }
+    let ended = next(&mut socket).await;
+    assert_eq!(ended, json!({ "type": "ended", "stream": 7 }));
+
+    let unknown =
+        json!({ "type": "stream", "id": 8, "space": space.id, "method": "notes.nothing" });
+    socket
+        .send(Message::text(unknown.to_string()))
         .await
         .unwrap();
     assert_eq!(next(&mut socket).await["error"]["code"], "invalid");

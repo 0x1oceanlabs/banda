@@ -3,6 +3,13 @@ use crate::outbox::{Effect, OnRestart, Outcome, Settled};
 use crate::space::ModuleSpace;
 use crate::{CommandId, Error, Participant, Refusal, Tx};
 use serde_json::Value;
+use tokio::sync::mpsc;
+
+/// What a module says now and keeps nowhere, such as a terminal's output:
+/// pieces in order, until its sender drops. Only those who hear it now get
+/// it, and one heard again starts again; the event log is for what the work
+/// keeps.
+pub type Stream = mpsc::Receiver<Value>;
 
 /// A bounded context: its own words, data and contract (ADR 0001, decision
 /// 3). The kernel knows a module only through this trait.
@@ -35,6 +42,15 @@ pub trait Module: Send + Sync + 'static {
     /// One of its methods, already allowed. `method` comes without the
     /// module's prefix.
     async fn call(&self, call: Call, method: &str, params: Value) -> Result<Value, Refusal>;
+
+    /// One of its streams, already allowed. `method` comes without the
+    /// module's prefix, and [`Module::right`] names its right too.
+    async fn stream(&self, _call: Call, method: &str, _params: Value) -> Result<Stream, Refusal> {
+        Err(Refusal::invalid(format!(
+            "{} has no stream named {method}.",
+            self.name()
+        )))
+    }
 
     /// Runs one of its side effects from the outbox. A run holds its key
     /// until it ends, so a module bounds how long its own runs take.

@@ -59,14 +59,21 @@ The kernel holds only what every module needs, and it names no module.
   an action on a target. Every method and every subscription passes through
   it, before any module code runs. On one computer it answers: the owner may
   do everything; an Agent may read and change the work, but neither change
-  the Space itself nor decide what an Agent asked a Person; nobody else may
-  do anything. Members and roles arrive here later.
+  the Space itself, decide what an Agent asked a Person, nor run programs
+  as the Person in a terminal (an Agent runs them through its Harness);
+  nobody else may do anything. Members and roles arrive here later.
 - **Identity.** A port: it says which Participant a connection's token names.
   On one computer, whoever holds the engine's secret is the owner. Later it
   is OIDC, or our accounts, and Agents get tokens of their own.
 - **Module registry and API.** The registry routes commands to their
   module, delivers events to subscribers, and serves the API. `welcome`
   lists the engine's modules, so a window shows only what the engine has.
+- **Streams.** A module can answer a window with live pieces that are not
+  facts, such as what a terminal prints: the window asks for a stream
+  (`stream`) and hears its pieces (`piece`) until it ends (`ended`) or the
+  window lets it go (`unsubscribe`). The access decision runs when it
+  starts. Nothing of a stream is logged; a window that connects again asks
+  again and hears it from the start.
 - **Receipts and outbox.** These carry every command along one path (below).
 
 ### The command path
@@ -152,6 +159,7 @@ If Chat is removed, Agents still works through its own Thread.
 | Module | Its words | When |
 |---|---|---|
 | agents | Agent, Harness, Thread, Turn, Question | first |
+| terminal | Terminal | first |
 | browser | Page; an Agent drives it through MCP (CDP) | first |
 | files | the Space's files | soon |
 | chat | Room, Message, Mention | later |
@@ -218,6 +226,16 @@ If Chat is removed, Agents still works through its own Thread.
   Harness stopped, or provider error. The Thread's latest turn that failed
   or was cut short can be tried again (`agents.retry`): its message goes
   in a new turn, and the failed one stays as it ended.
+- **A Person signs in to a Harness in a way it offers** (ACP's auth
+  methods; `agents.account`), and the Harness keeps the credentials: Bandaso
+  holds none and reads none of its files. The engine declares that it runs
+  terminals, so Claude Code's adapter offers its own logins, which run the
+  Harness entry's program with the way's arguments, and its environment,
+  so an entry's own config folder gets the account. Codex's signs in by
+  itself in the browser (`agents.sign_in`). After a sign-in every process
+  of that Harness entry is let go, so each reads the account when it next
+  starts. A turn that failed for a sign-in offers the ways, and goes again
+  once the Person signed in.
 - **The Harness's notices**, such as warnings, join the Thread as lines of
   their own.
 - **A Thread has settings: a mode, Plan, and the Harness's options.** The
@@ -284,6 +302,26 @@ If Chat is removed, Agents still works through its own Thread.
   message sent into a turn that never got it waits for a turn of its own.
 - Its methods and their rights are listed in
   `modules/agents/engine/src/lib.rs`, and its facts in `model.rs`.
+
+### terminal
+
+- **A Terminal is a program on a PTY** in the engine, run as the Person:
+  their shell in the Space's folder, or a program with its arguments,
+  never a shell line, such as a Harness's sign-in. It needs the Run right.
+  The window chooses its ID, so a Pane names its terminal before the
+  engine answers (`terminal.open`).
+- **What it printed stays in memory**, the newest 2 MB, never in the log: a
+  screen repaints megabytes, and the program ends with the engine anyway.
+  The bytes become text as they come, a character split between reads
+  whole.
+- **A window watches it through a stream** (`terminal.watch`): the screen
+  so far first, then what it prints, then how it ended. Every window that
+  opens it sees the same screen, and a window that falls behind gets the
+  whole screen again.
+- **A close stops what the program started too.** The program leads a
+  session of its own: a close sends the group a hangup and a request to
+  stop, then a kill a second later, and ends every watch.
+- Its methods are listed in `modules/terminal/engine/src/lib.rs`.
 
 ## Inside a module
 
@@ -371,6 +409,7 @@ bandaso/
   modules/
     agents/engine/    Rust: Agents, Threads, turns, Questions, the ACP adapter
     agents/pane/      React: the Agents list and the Thread
+    terminal/engine/  Rust: Terminals, their PTYs and what they printed
     browser/pane/     React: the browser Pane (next)
   engine/             the bandaso program: serve (the kernel and its modules), call, follow
   app/ui/             shadcn/ui and the Pane contract

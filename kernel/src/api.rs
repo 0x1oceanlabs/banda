@@ -12,11 +12,16 @@
 //!    follow; a subscriber that falls behind catches up from the log.
 //!    `resync` ends a subscription the engine cannot go on with: read the
 //!    view again.
+//! 4. `stream` hears what a module says now and keeps nowhere, such as a
+//!    terminal's output: `piece` after `piece`, until `ended` says the
+//!    module ended it. Heard again after a reconnect, it starts again.
+//!    `unsubscribe` stops a stream as it stops a subscription.
 //!
 //! Unknown fields are ignored on both sides, so either side can be newer.
 
 use crate::access::{self, Right};
 use crate::events::{Event, EventFilter};
+use crate::module::Stream;
 use crate::{Code, CommandId, Kernel, PROTOCOL, Participant, PersonId, Refusal, SpaceId};
 use axum::Router;
 use axum::extract::State;
@@ -76,6 +81,14 @@ pub enum ClientFrame {
         #[ts(type = "number")]
         subscription: u64,
     },
+    Stream {
+        #[ts(type = "number")]
+        id: u64,
+        space: SpaceId,
+        method: String,
+        #[serde(default)]
+        params: Value,
+    },
 }
 
 #[derive(Clone, Debug, Deserialize, Serialize, TS)]
@@ -107,6 +120,17 @@ pub enum EngineFrame {
     Resync {
         #[ts(type = "number")]
         subscription: u64,
+    },
+    /// One piece of a stream.
+    Piece {
+        #[ts(type = "number")]
+        stream: u64,
+        data: Value,
+    },
+    /// The module ended the stream.
+    Ended {
+        #[ts(type = "number")]
+        stream: u64,
     },
     Goodbye {
         reason: Refusal,
@@ -335,6 +359,27 @@ async fn serve(api: Arc<Api>, socket: WebSocket) {
                     }
                 }
             }
+            ClientFrame::Stream {
+                id,
+                space,
+                method,
+                params,
+            } => {
+                match api.kernel.stream(participant, &method, space, params).await {
+                    Ok(pieces) => {
+                        // The answer goes out before the first piece.
+                        let ok = serde_json::json!({ "stream": id });
+                        let _ = out.send(result(id, Ok(ok))).await;
+                        let hearing = tokio::spawn(hear(id, pieces, out.clone()));
+                        if let Some(old) = subscriptions.insert(id, hearing) {
+                            old.abort();
+                        }
+                    }
+                    Err(refusal) => {
+                        let _ = out.send(result(id, Err(refusal))).await;
+                    }
+                }
+            }
             ClientFrame::Unsubscribe { id, subscription } => {
                 if let Some(task) = subscriptions.remove(&subscription) {
                     task.abort();
@@ -348,6 +393,16 @@ async fn serve(api: Arc<Api>, socket: WebSocket) {
     }
     drop(out);
     let _ = writer.await;
+}
+
+/// Forwards a stream's pieces, then says that it ended.
+async fn hear(stream: u64, mut pieces: Stream, out: mpsc::Sender<EngineFrame>) {
+    while let Some(data) = pieces.recv().await {
+        if out.send(EngineFrame::Piece { stream, data }).await.is_err() {
+            return;
+        }
+    }
+    let _ = out.send(EngineFrame::Ended { stream }).await;
 }
 
 /// Replays the stored events after `after`, then forwards live ones, with no

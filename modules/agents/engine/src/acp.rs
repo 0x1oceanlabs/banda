@@ -18,13 +18,16 @@
 //! waits there. A permission request is routed to its turn, and a task off
 //! the loop answers it once the Person decides.
 //!
+//! It declares terminal sign-in too, so a Harness offers the ways it signs
+//! in, Claude Code's in a terminal among them ([`Connection::ways`]).
+//!
 //! Starting a Harness and opening a session are bounded; a turn is not: it
 //! runs until the Harness ends it or a Person stops it.
 
 use crate::model::{
     Cost, Exit, Failure, Field, FieldValue, HarnessOption, Input, Mode, Offer, OptionChoice,
-    OptionValue, PlanStep, Settings, SlashCommand, StepState, TextFormat, ThreadId, ToolContent,
-    ToolKind, ToolStatus, TurnState, Usage, Values,
+    OptionValue, PlanStep, Program, Settings, SignInWay, SlashCommand, StepState, TextFormat,
+    ThreadId, ToolContent, ToolKind, ToolStatus, TurnState, Usage, Values,
 };
 use crate::rules::{Ending, Offered};
 use crate::settings::Harness;
@@ -50,6 +53,8 @@ pub const STARTING: Duration = Duration::from_secs(120);
 pub const OPENING: Duration = Duration::from_secs(60);
 /// How long a Harness may take to say whether a message joins its turn.
 const STEERING: Duration = Duration::from_secs(30);
+/// How long a Harness that signs in by itself may wait for its Person.
+const SIGNING_IN: Duration = Duration::from_secs(10 * 60);
 
 /// What a Harness said during a turn.
 pub enum Said {
@@ -393,6 +398,14 @@ struct Agreed {
     steers: bool,
 }
 
+/// What a Harness said when it started: what it can do with sessions, and
+/// how a Person signs in to it.
+struct Started {
+    cx: ConnectionTo<Agent>,
+    agreed: Agreed,
+    methods: Vec<acp::AuthMethod>,
+}
+
 /// One Harness process and its ACP connection. Dropping it stops the
 /// process and everything it started.
 pub struct Connection {
@@ -401,6 +414,8 @@ pub struct Connection {
     /// The Harness's name, for plain words.
     name: String,
     agreed: Agreed,
+    /// The ways it offers to sign in.
+    ways: Vec<SignInWay>,
     routes: Routes,
     learned: Learned,
     /// When a turn last began or ended here.
@@ -451,7 +466,11 @@ impl Connection {
         let (routes, learned) = (Routes::default(), Learned::default());
         let (ready, started) = oneshot::channel();
         let driver = tokio::spawn(drive(process, routes.clone(), learned.clone(), ready));
-        let (cx, agreed) = match timeout(STARTING, started).await {
+        let Started {
+            cx,
+            agreed,
+            methods,
+        } = match timeout(STARTING, started).await {
             Ok(Ok(Ok(agreed))) => agreed,
             Ok(Ok(Err(error))) => return Err(error),
             Ok(Err(_)) => return Err("The Harness stopped while it started.".to_owned()),
@@ -465,6 +484,7 @@ impl Connection {
             harness: harness.id.clone(),
             name: harness.name.clone(),
             agreed,
+            ways: ways(harness, methods),
             routes,
             learned,
             active: Arc::new(Mutex::new(Instant::now())),
@@ -762,13 +782,72 @@ impl Connection {
             .send_notification(acp::CancelNotification::new(session.clone()))
             .map_err(plain)
     }
+
+    /// The ways the Harness offers to sign in.
+    pub fn ways(&self) -> &[SignInWay] {
+        &self.ways
+    }
+
+    /// Signs in with `way`, which the Harness does by itself: Codex opens
+    /// the browser and waits there for the Person.
+    pub async fn sign_in(&self, way: &str) -> Result<(), String> {
+        let request = acp::AuthenticateRequest::new(way.to_owned());
+        let asked = self.cx.send_request(request).block_task();
+        let signed_in = timeout(SIGNING_IN, asked)
+            .await
+            .map_err(|_| format!("Signing in to {} took too long: try again.", self.name))?;
+        signed_in.map(|_| ()).map_err(|error| {
+            let said = error
+                .data
+                .as_ref()
+                .and_then(|d| d.get("message"))
+                .and_then(|m| m.as_str());
+            format!(
+                "{} could not sign in: {}",
+                self.name,
+                said.unwrap_or(error.message.trim())
+            )
+        })
+    }
+}
+
+/// The ways `harness` offers to sign in, from what it said when it
+/// started. A way in a terminal runs the Harness's own program with the
+/// way's arguments after its own, and the way's environment over its own,
+/// as ACP has a client do; a kind Bandaso does not know is left out.
+fn ways(harness: &Harness, methods: Vec<acp::AuthMethod>) -> Vec<SignInWay> {
+    methods
+        .into_iter()
+        .filter_map(|method| {
+            let terminal = match &method {
+                acp::AuthMethod::Terminal(way) => Some(Program {
+                    program: harness.command.clone(),
+                    args: harness.args.iter().chain(&way.args).cloned().collect(),
+                    env: harness
+                        .env
+                        .clone()
+                        .into_iter()
+                        .chain(way.env.clone())
+                        .collect(),
+                }),
+                acp::AuthMethod::Agent(_) => None,
+                _ => return None,
+            };
+            Some(SignInWay {
+                id: method.id().0.to_string(),
+                name: method.name().to_owned(),
+                description: method.description().map(str::to_owned),
+                terminal,
+            })
+        })
+        .collect()
 }
 
 async fn drive(
     process: AcpAgent,
     routes: Routes,
     learned: Learned,
-    ready: oneshot::Sender<Result<(ConnectionTo<Agent>, Agreed), String>>,
+    ready: oneshot::Sender<Result<Started, String>>,
 ) {
     let heard = routes.clone();
     let asked = routes.clone();
@@ -930,6 +1009,7 @@ async fn drive(
             let mut output = acp::Meta::new();
             output.insert(OUTPUT_META.to_owned(), true.into());
             let shows = acp::ClientCapabilities::new()
+                .auth(acp::AuthCapabilities::new().terminal(true))
                 .elicitation(forms)
                 .session(
                     acp::ClientSessionCapabilities::new()
@@ -960,7 +1040,11 @@ async fn drive(
                             .and_then(serde_json::Value::as_bool)
                             .unwrap_or(false),
                     };
-                    let _ = ready.send(Ok((cx.clone(), agreed)));
+                    let _ = ready.send(Ok(Started {
+                        cx: cx.clone(),
+                        agreed,
+                        methods: answer.auth_methods,
+                    }));
                 }
                 Ok(answer) => {
                     let _ = ready.send(Err(format!(

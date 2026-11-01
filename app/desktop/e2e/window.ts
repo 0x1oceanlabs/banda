@@ -24,13 +24,19 @@ export type Window = {
   close: () => Promise<void>
 }
 
-export async function startWindow(): Promise<Window> {
+/** With `account`, the fake agent has one in the throwaway folders, signed out. */
+export async function startWindow({ account = false } = {}): Promise<Window> {
   const dir = mkdtempSync(join(tmpdir(), "bandaso-window-"))
   mkdirSync(join(dir, "config"))
   const fake = join(repository, "target/debug/bandaso-fake-agent")
+  const home = join(dir, "fake-home")
+  mkdirSync(home)
+  const env = account
+    ? `env = { FAKE_AGENT_HOME = ${JSON.stringify(home)} }\n`
+    : ""
   writeFileSync(
     join(dir, "config/harnesses.toml"),
-    `[[harness]]\nid = "fake"\nname = "Fake AI"\ncommand = ${JSON.stringify(fake)}\n`
+    `[[harness]]\nid = "fake"\nname = "Fake AI"\ncommand = ${JSON.stringify(fake)}\n${env}`
   )
   const app = await electron.launch({
     args: [

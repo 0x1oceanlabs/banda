@@ -15,9 +15,11 @@ import { join, resolve } from "node:path"
 import { createInterface } from "node:readline"
 import { afterEach, beforeEach, expect, test } from "vitest"
 import { decodeFact, type Sent } from "../src/agents"
+import type { Piece } from "../src/terminal"
 import {
   type Address,
   Engine,
+  newId,
   type Event,
   Refused,
   type SpaceSummary,
@@ -101,7 +103,7 @@ test("a window calls, follows and sees refusals by their code", async () => {
   await serve()
   client = new Engine(address)
   await until(client, "open")
-  expect(client.status).toMatchObject({ modules: ["agents"] })
+  expect(client.status).toMatchObject({ modules: ["agents", "terminal"] })
 
   const space = await client.command<SpaceSummary>("spaces.create", {
     name: "Work",
@@ -179,4 +181,43 @@ test("a subscription goes on after the engine restarts, without a gap", async ()
     space.id
   )
   await expect.poll(() => heard).toEqual(["agent.created", "agent.created"])
+})
+
+test("a window runs a terminal and hears what it prints, until it closes", async () => {
+  await serve()
+  client = new Engine(address)
+  const space = await client.command<SpaceSummary>("spaces.create", {
+    name: "Work",
+  })
+  const terminal = newId()
+  await client.call(
+    "terminal.open",
+    {
+      terminal,
+      program: "sh",
+      args: ["-c", 'read word; echo "got $word"; sleep 100'],
+      size: { cols: 80, rows: 24 },
+    },
+    { space: space.id }
+  )
+  let screen = ""
+  let closed = false
+  client.stream<Piece>(
+    space.id,
+    "terminal.watch",
+    { terminal },
+    (piece) => {
+      if (piece.kind === "snapshot") screen = piece.history
+      if (piece.kind === "output") screen += piece.text
+    },
+    () => (closed = true)
+  )
+  await client.call(
+    "terminal.write",
+    { terminal, data: "hi\r" },
+    { space: space.id }
+  )
+  await expect.poll(() => screen).toContain("got hi")
+  await client.call("terminal.close", { terminal }, { space: space.id })
+  await expect.poll(() => closed).toBe(true)
 })

@@ -10,6 +10,7 @@ publish.workspace = true
 [dependencies]
 axum.workspace = true
 bandaso-agents = { path = "../modules/agents/engine" }
+bandaso-terminal = { path = "../modules/terminal/engine" }
 bandaso-kernel = { path = "../kernel" }
 clap.workspace = true
 dirs.workspace = true

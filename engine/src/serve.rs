@@ -8,6 +8,7 @@ use bandaso_agents::Agents;
 use bandaso_agents::settings::Harnesses;
 use bandaso_kernel::api::{self, OwnerSecret};
 use bandaso_kernel::{Kernel, PROTOCOL};
+use bandaso_terminal::Terminals;
 use std::fs::{File, TryLockError};
 use std::io::Read;
 
@@ -42,6 +43,7 @@ pub async fn serve(places: Places, port: u16, with_parent: bool) -> Result<(), F
     let harnesses = Harnesses::load(&places.harnesses()).map_err(Failure::broken)?;
     let kernel = Kernel::builder(&places.root, owner)
         .module(Agents::new(harnesses))
+        .module(Terminals::new())
         .open()
         .await
         .map_err(Failure::broken)?;
