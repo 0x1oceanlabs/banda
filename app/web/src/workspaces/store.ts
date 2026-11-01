@@ -14,7 +14,7 @@ const SIDEBAR = "banda.sidebar"
 /** The workspaces kept, or a first one with the Pane a Person starts with. */
 export function loadWorkspaces(
   space: SpaceId,
-  first: { pane: PaneState; width: Width } | undefined
+  first: { pane: PaneState; width?: Width } | undefined
 ): Workspaces {
   try {
     const kept = parse(JSON.parse(localStorage.getItem(WORKSPACES) ?? "null"))

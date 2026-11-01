@@ -31,6 +31,7 @@ export type { Easing } from "./generated/look/Easing"
 export const DEFAULT_COLUMNS: Columns = {
   presets: ["1/3", "1/2", "2/3", "1"],
   default: "1/2",
+  alone: "1",
   center: "never",
   min: 30,
 }

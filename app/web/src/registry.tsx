@@ -69,11 +69,10 @@ function narrow(pane: PaneState): boolean {
   return kindOf(pane.kind)?.narrow === true
 }
 
-/** How wide a new column for a Pane opens, as the look says: a list at
- * the narrowest preset, the rest at the default width. */
-export function widthOf(pane: PaneState): Width {
-  const { presets, default: width } = columnsOf()
-  return narrow(pane) ? (presets[0] ?? width) : width
+/** How wide a new column for a Pane opens: a list at the narrowest
+ * preset; the rest as the look says, by what is beside it. */
+export function widthOf(pane: PaneState): Width | undefined {
+  return narrow(pane) ? columnsOf().presets[0] : undefined
 }
 
 /**

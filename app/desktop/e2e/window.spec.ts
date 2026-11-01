@@ -1188,7 +1188,7 @@ test("the sidebar is arranged by sidebar.toml, and its view menu writes the file
 
 test("columns and the text size come from look.toml", async () => {
   window = await startWindow({
-    look: '[columns]\npresets = ["1/4", "3/4"]\ndefault = "1/4"\nmin = 0\n[font]\nsize = 16\n',
+    look: '[columns]\npresets = ["1/4", "3/4"]\ndefault = "1/4"\nalone = "1/4"\nmin = 0\n[font]\nsize = 16\n',
   })
   const { page } = window
   const root = page.locator("html")
@@ -1214,7 +1214,9 @@ test("columns and the text size come from look.toml", async () => {
 
 test("no column is narrower than columns.min; Alt+R goes round, Alt+F fills", async () => {
   // 50 rem is more than 2/3 of this window's Strip and less than all of it.
-  window = await startWindow({ look: "[columns]\nmin = 50\n" })
+  window = await startWindow({
+    look: '[columns]\nmin = 50\nalone = "1/2"\n',
+  })
   const { page } = window
   const rem = await page
     .locator("html")
@@ -1270,10 +1272,32 @@ test("tiles without the focus darken as dim-inactive says", async () => {
   await page.screenshot({ path: "test-results/22-look-dim.png" })
 })
 
+test("a column alone fills its workspace, and a second halves it", async () => {
+  window = await startWindow()
+  const { page } = window
+  const { thread } = await firstThread(page)
+  const shares = () =>
+    page.locator("[data-column]").evaluateAll((columns) =>
+      columns.map((e) => {
+        const strip = e.parentElement!
+        const pad = parseFloat(getComputedStyle(strip).paddingLeft)
+        const gap = parseFloat(getComputedStyle(strip).columnGap) || 0
+        const room = strip.clientWidth - 2 * pad + gap
+        return Math.round((((e as HTMLElement).offsetWidth + gap) / room) * 100)
+      })
+    )
+  await expect.poll(shares).toEqual([100])
+  await page.keyboard.press("Alt+KeyN")
+  await expect.poll(shares).toEqual([50, 50])
+  await page.keyboard.press("Alt+KeyW")
+  await expect(thread).toBeVisible()
+  await expect.poll(shares).toEqual([100])
+})
+
 test("columns grow and go to their new places on the look's motion", async () => {
   const slow = 'easing = { duration-ms = 1500, curve = "linear" }'
   window = await startWindow({
-    look: `[motion.resize]\n${slow}\n[motion.move]\n${slow}\n`,
+    look: `[columns]\nalone = "1/2"\n[motion.resize]\n${slow}\n[motion.move]\n${slow}\n`,
   })
   const { page } = window
   const { thread, composer } = await firstThread(page)
