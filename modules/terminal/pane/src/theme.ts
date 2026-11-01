@@ -5,16 +5,26 @@ import type { Color, Theme } from "@bandaso/ghostty"
  * where `element` sits, so a terminal looks like the Pane around it in
  * light and dark. A token may be any CSS colour, `oklch()` included: a
  * canvas turns it into red, green and blue.
+ *
+ * The look (ADR 0007) also brings the theme's sixteen terminal colours as
+ * `--ansi-0` to `--ansi-15`, its cursor and its selection; without them
+ * Ghostty keeps its own sixteen and the rest comes from the foreground.
  */
 export function themeOf(element: HTMLElement): Theme {
   const style = getComputedStyle(element)
-  const color = (token: string) => rgb(style.getPropertyValue(token))
+  const token = (name: string) => style.getPropertyValue(name).trim()
+  const color = (name: string) => rgb(token(name))
   const foreground = color("--foreground")
+  const ansi = Array.from({ length: 16 }, (_, n) => token(`--ansi-${n}`))
+  const selection = token("--selection")
   return {
     foreground,
     background: color("--background"),
-    cursor: foreground,
-    selectionBackground: `rgba(${foreground.r}, ${foreground.g}, ${foreground.b}, 0.25)`,
+    cursor: token("--cursor") ? color("--cursor") : foreground,
+    selectionBackground:
+      selection ||
+      `rgba(${foreground.r}, ${foreground.g}, ${foreground.b}, 0.25)`,
+    ...(ansi.every(Boolean) && { palette: ansi.map(rgb) }),
   }
 }
 

@@ -142,6 +142,12 @@ fn with_omarchy_banda_takes_its_current_theme_and_mode() {
     // As t3code.json's sidebarRowActive: mix dark_background accent 18%.
     assert_eq!(color(&look, true, "--sidebar-accent"), "#2d392d");
     assert_eq!(color(&look, true, "--ansi-8"), "#9e927a");
+    assert_eq!(color(&look, true, "--ansi-15"), "#ead4ad");
+    assert_eq!(color(&look, true, "--cursor"), "#ead4ad");
+    assert_eq!(color(&look, true, "--selection"), "#354b3e");
+    // No ring by default: Hyprland's border shows the focus.
+    assert_eq!(look.vars["--focus-ring"], "0px");
+    assert_eq!(color(&look, true, "--focus-ring-color"), "#a3b88c");
     let theme = &look.sources[1];
     assert_eq!(theme.origin, Some(Origin::Current));
 }
@@ -181,6 +187,15 @@ fn the_accent_is_the_persons_too() {
     assert_eq!(color(&look, true, "--primary"), "#d39d70");
     assert_eq!(color(&look, true, "--focus"), "#d39d70");
     assert_eq!(color(&look, true, "--focus-inactive"), "#9e927a");
+}
+
+#[test]
+fn niri_ring_is_a_switch() {
+    let machine = Machine::new(true);
+    machine.look_toml("[focus]\nring = 3\nring-color = \"orange\"\n");
+    let look = machine.look();
+    assert_eq!(look.vars["--focus-ring"], "3px");
+    assert_eq!(color(&look, true, "--focus-ring-color"), "#d39d70");
 }
 
 #[test]

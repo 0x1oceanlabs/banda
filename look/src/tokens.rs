@@ -65,6 +65,8 @@ pub fn derive(palette: &Palette) -> BTreeMap<String, String> {
     put("sidebar-ring", &accent);
     put("selection", &get("selection"));
     put("selection-foreground", &get("selection_foreground"));
+    // Omarchy's cursor is its brightest foreground.
+    put("cursor", &get("bright_foreground"));
     for (n, key) in ANSI.iter().enumerate() {
         put(&format!("ansi-{n}"), &get(key));
     }

@@ -9,7 +9,7 @@ const css = readFileSync(
   join(here, "../../../ui/src/styles/globals.css"),
   "utf8"
 )
-const LOOK = /--(gap-[a-z]+|tile-[a-z]+|focus(?:-[a-z]+)?|bar-height)\b/g
+const LOOK = /--(gap-[a-z]+|tile-[a-z]+|focus(?:-[a-z]+)*|bar-height)\b/g
 
 function sources(folder: string): string[] {
   return readdirSync(folder, { withFileTypes: true }).flatMap((entry) => {
