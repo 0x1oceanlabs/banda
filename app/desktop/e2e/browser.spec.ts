@@ -10,7 +10,7 @@ import {
   type Page,
   test,
 } from "@playwright/test"
-import { firstThread, startWindow, type Window } from "./window"
+import { firstThread, SANDBOXED, startWindow, type Window } from "./window"
 
 let window: Window
 let site: Server | undefined
@@ -381,7 +381,11 @@ test("an extension's button shows its popup, which opens a tab", async () => {
     .poll(() => readFileSync(file, "utf8"))
     .toContain(`pinned = ["${extension.id}"]`)
   await page.keyboard.press("Escape")
-  const button = page.getByRole("button", { name: "Fixture (7)" })
+  // Its worker sets the badge: workers have their APIs only in the sandbox.
+  const button = page.getByRole("button", {
+    name: SANDBOXED ? "Fixture (7)" : "Fixture",
+    exact: true,
+  })
   await expect(button).toBeVisible()
 
   // Its popup opens in the window under it, as large as its page: 220
