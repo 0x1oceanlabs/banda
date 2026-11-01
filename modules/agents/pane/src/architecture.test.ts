@@ -8,8 +8,7 @@ import { join, relative } from "node:path"
 import { expect, test } from "vitest"
 
 const PANE = [
-  // The terminal's words too: a sign-in runs in a terminal Pane.
-  /^@bandaso\/contract(\/agents|\/terminal)?$/,
+  /^@bandaso\/contract(\/agents)?$/,
   /^@bandaso\/ui\//,
   /^react$/,
   /^lucide-react$/,

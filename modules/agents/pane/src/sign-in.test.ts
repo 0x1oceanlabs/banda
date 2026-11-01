@@ -1,5 +1,5 @@
 import { expect, test } from "vitest"
-import { commandLine, signInFailed } from "./sign-in"
+import { commandLine } from "./sign-in"
 
 test("a sign-in command reads as a line to paste into a shell", () => {
   expect(
@@ -13,15 +13,5 @@ test("a sign-in command reads as a line to paste into a shell", () => {
   )
   expect(commandLine({ program: "x", args: ["it's", "a=b"], env: {} })).toBe(
     `x 'it'\\''s' 'a=b'`
-  )
-})
-
-test("a sign-in in a terminal worked when its program ended with code 0", () => {
-  expect(signInFailed({ code: 0 })).toBeNull()
-  expect(signInFailed({ code: 1 })).toBe(
-    "The sign-in ended with code 1. Try again."
-  )
-  expect(signInFailed({ signal: 15 })).toBe(
-    "The sign-in was stopped before it ended. Try again."
   )
 })

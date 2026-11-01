@@ -261,6 +261,7 @@ function ThreadPane({
                 engine={engine}
                 space={space}
                 agent={args.agent}
+                turn={turn.id}
                 open={open}
                 onSignedIn={() => retry(turn)}
               />

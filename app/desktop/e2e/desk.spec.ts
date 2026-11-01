@@ -208,23 +208,25 @@ test("a Person signs in in a terminal below the turn, and it goes again", async 
   await page.keyboard.type("wrong")
   await page.keyboard.press("Enter")
   await expect(first.getByText("The program ended with code 1.")).toBeVisible()
-  await expect(
-    thread.getByText("The sign-in ended with code 1. Try again.")
-  ).toBeVisible()
+  await expect(thread.getByText("You said: hello")).toHaveCount(0)
   await first
     .getByRole("button", { name: "Close Sign in: Fake account" })
     .click()
 
+  // The right one, after a reload: the terminal Pane signs in, the turn
+  // goes again, and the Pane closes.
   await signIn.click()
   const terminal = page.getByRole("region", { name: "Sign in: Fake account" })
   const screen = terminal.getByRole("region", { name: "Terminal screen" })
   await expect(screen).toHaveAttribute("data-state", "running")
   await page.screenshot({ path: "test-results/6-sign-in-terminal.png" })
+  await page.reload()
+  await expect(screen).toHaveAttribute("data-state", "running")
   await screen.click()
   await page.keyboard.type("fake-code")
   await page.keyboard.press("Enter")
   await expect(thread.getByText("You said: hello")).toBeVisible()
-  await expect(terminal.getByText("The program ended.")).toBeVisible()
+  await expect(terminal).toBeHidden()
 })
 
 test("a Person works in a terminal in the Space, and closing it stops the shell", async () => {

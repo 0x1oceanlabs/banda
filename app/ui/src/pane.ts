@@ -11,6 +11,13 @@ import type { ComponentType } from "react"
 import type { LucideIcon } from "lucide-react"
 import type { Engine, JsonValue, SpaceId } from "@bandaso/contract"
 
+/**
+ * Marks where a program reads the keys, as in a terminal: there the Desk
+ * leaves it Ctrl+W (a shell deletes a word with it), and Ctrl+Shift+W
+ * closes the tile. Spread it on the element: `<div {...PROGRAM_KEYS} />`.
+ */
+export const PROGRAM_KEYS = { "data-keys": "program" } as const
+
 /** What one tile shows: a kind of Pane and its args. */
 export type PaneState = { kind: string; args: { [key: string]: JsonValue } }
 
@@ -31,6 +38,8 @@ export type PaneProps<A> = {
   open: (pane: PaneState, place?: Place) => void
   /** Keeps new args for this Pane. */
   update: (args: A) => void
+  /** Closes this Pane's tile, as one that finished its job does. */
+  close: () => void
 }
 
 export type PaneKind<A extends { [key: string]: JsonValue }> = {
@@ -46,9 +55,10 @@ export type PaneKind<A extends { [key: string]: JsonValue }> = {
   /** A list that sits beside other Panes: a tile split from it takes most of the room. */
   narrow?: boolean
   /**
-   * What its module lets go of once the Pane leaves the Desk: the Person
-   * closed it, or another Pane took its tile. A program in a terminal stops
-   * then. A Pane drawn again, as when a split moves it, has not left.
+   * What its module lets go of once the Pane leaves the Desk: its tile
+   * closed, or shows another Pane or the same with other args. A program in
+   * a terminal stops then. A Pane drawn again, as when a split moves it,
+   * has not left.
    */
   closed?: (left: { engine: Engine; space: SpaceId; args: A }) => void
   Pane: ComponentType<PaneProps<A>>

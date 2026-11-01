@@ -9,7 +9,7 @@ import {
 import type { PaneState, Place } from "@bandaso/ui/pane"
 import { paneOf } from "@bandaso/ui/pane"
 import { Columns2Icon, Rows2Icon, XIcon } from "lucide-react"
-import { keyAction, toProgram } from "./keys"
+import { keyAction, readByProgram } from "./keys"
 import {
   close,
   EMPTY,
@@ -59,7 +59,7 @@ export function Desk({
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      const action = keyAction(event, toProgram(event.target))
+      const action = keyAction(event, readByProgram(event.target))
       if (!action) return
       event.preventDefault()
       setLayout((layout) => {
@@ -259,6 +259,7 @@ function TileView({
             update={(args) =>
               change((l) => show(l, tile.id, { kind: tile.pane.kind, args }))
             }
+            close={() => change((l) => close(l, tile.id))}
           />
         ) : (
           <p className="p-4 text-sm text-muted-foreground">

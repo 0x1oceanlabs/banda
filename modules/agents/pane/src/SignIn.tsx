@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react"
+import { useCallback, useState } from "react"
 import {
   type AgentId,
   type Engine,
@@ -10,14 +10,13 @@ import type {
   AgentView,
   Program,
   SignInWay,
+  TurnId,
 } from "@bandaso/contract/agents"
-import type { Ended, Piece, TerminalId } from "@bandaso/contract/terminal"
 import { Button } from "@bandaso/ui/components/button"
 import { Spinner } from "@bandaso/ui/components/spinner"
 import { useAct } from "@bandaso/ui/hooks/use-act"
 import { useRead } from "@bandaso/ui/hooks/use-read"
 import { useModules } from "@bandaso/ui/hooks/use-status"
-import { problem as words } from "@bandaso/ui/lib/words"
 import type { PaneProps } from "@bandaso/ui/pane"
 import {
   CheckIcon,
@@ -26,7 +25,7 @@ import {
   LogInIcon,
   SquareTerminalIcon,
 } from "lucide-react"
-import { commandLine, signInFailed } from "./sign-in"
+import { commandLine } from "./sign-in"
 
 /** How a Pane opens another, as the Desk gives it. */
 export type Open = PaneProps<unknown>["open"]
@@ -36,18 +35,20 @@ export type Open = PaneProps<unknown>["open"]
  * Person must: the ways the Harness offers. One it does by itself, as
  * Codex does in the browser, signs in at a click; one in a terminal runs
  * in a terminal Pane, and its program ending well says it worked. Then
- * the turn goes again. Bandaso holds none of the account's credentials.
+ * `turn` goes again. Bandaso holds none of the account's credentials.
  */
 export function SignIn({
   engine,
   space,
   agent,
+  turn,
   open,
   onSignedIn,
 }: {
   engine: Engine
   space: SpaceId
   agent: AgentId
+  turn: TurnId
   open: Open
   onSignedIn: () => void
 }) {
@@ -79,18 +80,23 @@ export function SignIn({
       space={space}
       harness={harness}
       ways={ways}
+      turn={turn}
       open={open}
       onSignedIn={onSignedIn}
     />
   )
 }
 
-/** The ways a Harness offers to sign in, each with what it takes. */
+/**
+ * The ways a Harness offers to sign in, each with what it takes; `turn`
+ * is the one that needed it, when a Thread asks.
+ */
 export function Ways({
   engine,
   space,
   harness,
   ways,
+  turn,
   open,
   onSignedIn,
 }: {
@@ -98,6 +104,7 @@ export function Ways({
   space: SpaceId
   harness: string
   ways: SignInWay[]
+  turn?: TurnId
   open: Open
   onSignedIn: () => void
 }) {
@@ -125,6 +132,7 @@ export function Ways({
             harness={harness}
             way={way}
             program={way.terminal}
+            turn={turn}
             terminals={terminals}
             open={open}
             busy={signing.busy}
@@ -167,100 +175,13 @@ function Way({
   )
 }
 
-type Run =
-  | { is: "idle" }
-  | { is: "starting" }
-  | { is: "running" }
-  | { is: "failed"; problem: string }
-
-/**
- * The terminal each way's sign-in runs in, by Space, Harness and way. It
- * outlives the card that started it: opening the terminal Pane splits the
- * card's tile, which draws the card again.
- */
-const runningIn = new Map<string, TerminalId>()
-
-/**
- * A sign-in in a terminal: `start` runs the way's program in a terminal
- * Pane and watches it; its ending with code 0 calls `onSignIn`.
- */
-function useTerminalSignIn(
-  engine: Engine,
-  space: SpaceId,
-  key: string,
-  onSignIn: () => void
-) {
-  const [run, setRun] = useState<Run>(() =>
-    runningIn.has(key) ? { is: "running" } : { is: "idle" }
-  )
-  const stop = useRef<() => void>(() => {})
-  const signIn = useRef(onSignIn)
-  useEffect(() => {
-    signIn.current = onSignIn
-  })
-  const watch = useCallback(
-    (terminal: TerminalId) => {
-      stop.current()
-      const ended = (how: Ended) => {
-        runningIn.delete(key)
-        stop.current()
-        const failed = signInFailed(how)
-        if (failed === null) signIn.current()
-        else setRun({ is: "failed", problem: failed })
-      }
-      stop.current = engine.stream<Piece>(
-        space,
-        "terminal.watch",
-        { terminal },
-        (piece) => {
-          if (piece.kind === "exited") ended(piece.ended)
-          if (piece.kind === "snapshot" && piece.ended) ended(piece.ended)
-        },
-        (refusal) => {
-          runningIn.delete(key)
-          setRun({
-            is: "failed",
-            problem:
-              refusal?.message ??
-              "The terminal closed before the sign-in ended. Try again.",
-          })
-        }
-      )
-    },
-    [engine, space, key]
-  )
-  useEffect(() => {
-    const terminal = runningIn.get(key)
-    if (terminal) watch(terminal)
-    return () => stop.current()
-  }, [key, watch])
-  const start = async (program: Program, open: Open, title: string) => {
-    stop.current()
-    setRun({ is: "starting" })
-    const terminal = newId()
-    try {
-      await engine.call("terminal.open", { terminal, ...program }, { space })
-    } catch (error) {
-      setRun({ is: "failed", problem: words(error) })
-      return
-    }
-    // All at once, before the Desk draws the card again.
-    runningIn.set(key, terminal)
-    setRun({ is: "running" })
-    open(
-      { kind: "terminal.terminal", args: { terminal, title, shell: false } },
-      "below"
-    )
-    watch(terminal)
-  }
-  return { run, start }
-}
-
 /**
  * A way in a terminal. It runs in a terminal Pane below, which the
- * terminal module draws; its program ending with code 0 says the Person
- * signed in. The line stays to run by hand, where no terminal runs here
- * or the Person would rather.
+ * terminal module draws and the Desk keeps: once its program ended with
+ * code 0, that Pane sends the sign-in, which sends the `turn` that needed
+ * it again too, and closes. So the sign-in lands even after a reload, or
+ * with this card gone. The line stays to run by hand, where no terminal
+ * runs here or the Person would rather.
  */
 function TerminalWay({
   engine,
@@ -268,6 +189,7 @@ function TerminalWay({
   harness,
   way,
   program,
+  turn,
   terminals,
   open,
   busy,
@@ -278,55 +200,66 @@ function TerminalWay({
   harness: string
   way: SignInWay
   program: Program
+  turn: TurnId | undefined
   terminals: boolean
   open: Open
   busy: boolean
   onSignIn: () => void
 }) {
-  const { run, start } = useTerminalSignIn(
-    engine,
-    space,
-    `${space} ${harness} ${way.id}`,
-    onSignIn
-  )
+  const starting = useAct()
+  const start = async () => {
+    const terminal = newId()
+    const opened = await starting.act(() =>
+      engine.call("terminal.open", { terminal, ...program }, { space })
+    )
+    if (opened === undefined) return
+    const signIn = { harness, way: way.id, ...(turn && { turn }) }
+    const done = { method: "agents.sign_in", params: signIn, command: newId() }
+    const title = `Sign in: ${way.name}`
+    open(
+      {
+        kind: "terminal.terminal",
+        args: { terminal, title, shell: false, done },
+      },
+      "below"
+    )
+  }
   const line = commandLine(program)
   const what = `${way.name}${way.description ? ` (${way.description.trim()})` : ""}`
   return (
     <div className="flex flex-col gap-1.5">
       {terminals ? (
-        <div className="flex flex-wrap items-center gap-2">
-          <Button
-            variant="outline"
-            size="xs"
-            disabled={busy || run.is === "starting" || run.is === "running"}
-            onClick={() => void start(program, open, `Sign in: ${way.name}`)}
-          >
-            <SquareTerminalIcon data-icon="inline-start" />
-            Sign in with {way.name}
-          </Button>
-          {run.is === "running" ? (
-            <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <Spinner /> Sign in in the terminal below.
-            </span>
-          ) : (
-            way.description && (
+        <>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              variant="outline"
+              size="xs"
+              disabled={busy || starting.busy}
+              onClick={() => void start()}
+            >
+              <SquareTerminalIcon data-icon="inline-start" />
+              Sign in with {way.name}
+            </Button>
+            {way.description && (
               <span className="text-xs text-muted-foreground">
                 {way.description}
               </span>
-            )
-          )}
-        </div>
+            )}
+          </div>
+          <span className="text-xs text-muted-foreground">
+            It runs in a terminal below.{" "}
+            {turn
+              ? "Once you signed in there, this turn goes again."
+              : "Once you signed in there, check again."}{" "}
+            Or run it yourself, then say you signed in:
+          </span>
+        </>
       ) : (
         <span className="text-xs text-muted-foreground">
           {what}: run this in a terminal, sign in, then come back.
         </span>
       )}
-      {run.is === "failed" && <Problem>{run.problem}</Problem>}
-      {terminals && (
-        <span className="text-xs text-muted-foreground">
-          Or run it yourself, then say you signed in:
-        </span>
-      )}
+      {starting.problem && <Problem>{starting.problem}</Problem>}
       <div className="flex items-center gap-1.5">
         <code className="min-w-0 flex-1 truncate rounded-md bg-muted px-2 py-1 font-mono text-xs">
           {line}

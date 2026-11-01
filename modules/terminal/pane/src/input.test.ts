@@ -1,6 +1,6 @@
 import { expect, test } from "vitest"
 import type { JsonValue } from "@bandaso/contract"
-import { Line } from "./line"
+import { Input } from "./input"
 
 /** An engine that answers each call when the test says so. */
 function engine() {
@@ -16,10 +16,10 @@ const settle = () => new Promise((resolve) => setTimeout(resolve, 0))
 
 test("typing waits for the typing before it, and what came meanwhile goes as one", async () => {
   const { calls, send } = engine()
-  const line = new Line(send, "t", () => {})
-  line.type("l")
-  line.type("s")
-  line.type("\r")
+  const input = new Input(send, "t", () => {})
+  input.type("l")
+  input.type("s")
+  input.type("\r")
   await settle()
   expect(calls.map((c) => c.params)).toEqual([{ terminal: "t", data: "l" }])
   calls[0].answer()
@@ -32,11 +32,11 @@ test("typing waits for the typing before it, and what came meanwhile goes as one
 
 test("only the last size goes, before what was typed with it", async () => {
   const { calls, send } = engine()
-  const line = new Line(send, "t", () => {})
-  line.type("a")
-  line.resize({ cols: 80, rows: 24 })
-  line.resize({ cols: 100, rows: 30 })
-  line.type("b")
+  const input = new Input(send, "t", () => {})
+  input.type("a")
+  input.resize({ cols: 80, rows: 24 })
+  input.resize({ cols: 100, rows: 30 })
+  input.type("b")
   await settle()
   calls[0].answer()
   await settle()
@@ -51,7 +51,7 @@ test("only the last size goes, before what was typed with it", async () => {
 
 test("a paste larger than one call goes in pieces, never half a character", async () => {
   const sent: string[] = []
-  const line = new Line(
+  const input = new Input(
     async (_method, params) => {
       sent.push((params as { data: string }).data)
     },
@@ -59,7 +59,7 @@ test("a paste larger than one call goes in pieces, never half a character", asyn
     () => {}
   )
   const paste = "x".repeat(16 * 1024 - 1) + "😀" + "y"
-  line.type(paste)
+  input.type(paste)
   await settle()
   expect(sent.join("")).toBe(paste)
   expect(sent[0].length).toBe(16 * 1024 - 1)
@@ -68,15 +68,15 @@ test("a paste larger than one call goes in pieces, never half a character", asyn
 
 test("typing a program does not read says so; a size it missed does not", async () => {
   const problems: unknown[] = []
-  const line = new Line(
+  const input = new Input(
     async () => {
       throw new Error("does not read")
     },
     "t",
     (error) => problems.push(error)
   )
-  line.resize({ cols: 80, rows: 24 })
-  line.type("a")
+  input.resize({ cols: 80, rows: 24 })
+  input.type("a")
   await settle()
   expect(problems).toEqual([new Error("does not read")])
 })
