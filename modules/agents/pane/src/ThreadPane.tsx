@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import type { Engine, SpaceId } from "@bandaso/contract"
 import type {
   Defaults,
@@ -45,6 +45,7 @@ import { clock } from "@bandaso/ui/lib/words"
 import { READ_AGAIN, type Source, useLive } from "@bandaso/ui/hooks/use-live"
 import { definePane, paneOf, type PaneProps } from "@bandaso/ui/pane"
 import {
+  ArrowDownIcon,
   BotIcon,
   BrainIcon,
   CircleAlertIcon,
@@ -83,6 +84,7 @@ import { planTitle } from "./messages"
 import { type Line, timeline } from "./timeline"
 import { Fold, key, WorkLine, Working } from "./Work"
 import { Queue, type QueueActions } from "./Queue"
+import { ScrollPlace } from "./ScrollPlace"
 import { ToolCall } from "./ToolCall"
 import { SettingsBar } from "./ThreadSettings"
 import { SignIn, Warning } from "./SignIn"
@@ -311,6 +313,10 @@ function ThreadPane({
           </Centered>
         ) : (
           <Transcript
+            // Each Thread scrolls on its own, from where it was left.
+            key={thread}
+            thread={thread}
+            forYou={Boolean(asking || planned)}
             state={live.view}
             waits={waits}
             name={name}
@@ -470,6 +476,8 @@ type Answering = {
 }
 
 function Transcript({
+  thread,
+  forYou,
   state,
   waits,
   name,
@@ -480,6 +488,9 @@ function Transcript({
   queue,
   ...answers
 }: Answering & {
+  thread: string
+  /** The Thread waits for its Person: a Question, or a plan. */
+  forYou: boolean
   state: ThreadState
   /** The messages that wait, from {@link waiting}. */
   waits: Waiting[]
@@ -534,15 +545,24 @@ function Transcript({
         )
     }
   }
+  const viewport = useRef<HTMLDivElement>(null)
   return (
     <MessageScrollerProvider autoScroll defaultScrollPosition="end">
       <MessageScroller>
-        <MessageScrollerViewport aria-label={`Thread with ${name}`}>
+        <MessageScrollerViewport
+          ref={viewport}
+          aria-label={`Thread with ${name}`}
+        >
           <MessageScrollerContent className="mx-auto w-full max-w-3xl gap-4 px-4 pt-4 pb-2">
             {lines.map((line) => (
               <MessageScrollerItem
                 key={key(line)}
                 messageId={line.kind === "item" ? line.item.id : undefined}
+                // A message the Person sends moves near the top, and the
+                // reply grows below it, as in T3 Code.
+                scrollAnchor={
+                  line.kind === "item" && line.item.author.kind === "person"
+                }
               >
                 {render(line)}
               </MessageScrollerItem>
@@ -574,9 +594,30 @@ function Transcript({
             )}
           </MessageScrollerContent>
         </MessageScrollerViewport>
-        <MessageScrollerButton />
+        <ScrollToEnd queued={waits.length} forYou={forYou} />
+        <ScrollPlace thread={thread} viewport={viewport} />
       </MessageScroller>
     </MessageScrollerProvider>
+  )
+}
+
+/** The button to the end of the Thread, once it is scrolled up: it says
+ * what waits there, as T3 Code's does. */
+function ScrollToEnd({ queued, forYou }: { queued: number; forYou: boolean }) {
+  const below = [
+    queued > 0 && `${queued} queued`,
+    forYou && "waiting for you",
+  ].filter((said) => said !== false)
+  return (
+    <MessageScrollerButton
+      size={below.length > 0 ? "sm" : "icon-sm"}
+      className="rounded-full shadow-sm"
+    >
+      <ArrowDownIcon />
+      <span className={below.length === 0 ? "sr-only" : undefined}>
+        {["Scroll to end", ...below].join(" · ")}
+      </span>
+    </MessageScrollerButton>
   )
 }
 

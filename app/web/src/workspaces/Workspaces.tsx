@@ -78,7 +78,9 @@ export function Workspaces({
     return () => element.removeEventListener("wheel", onWheel)
   }, [])
   return (
-    <div ref={root} className="relative h-full min-h-0 overflow-hidden">
+    // Clipped, not hidden: the stack moves by transforms only, and nothing
+    // scrolled into view in a Pane may slide the next workspace in.
+    <div ref={root} className="relative h-full min-h-0 overflow-clip">
       {workspaces.list.map((workspace, i) => {
         const current = i === workspaces.current
         const live = current && !covered
