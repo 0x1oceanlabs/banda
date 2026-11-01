@@ -108,6 +108,12 @@ ALTER TABLE agents_turns ADD COLUMN opener TEXT NOT NULL DEFAULT 'person';
 UPDATE agents_turns SET opener = 'by_itself' WHERE message IN
     (SELECT id FROM agents_items WHERE json_extract(body, '$.kind') = 'notice');
 "#,
+    r#"
+-- The other Thread of a turn another Thread's Agent opened (ADR 0019,
+-- decision 4): the one that asked, for 'asked'; the one that answers, for
+-- 'answered'. NULL for every other turn.
+ALTER TABLE agents_turns ADD COLUMN from_thread TEXT;
+"#,
 ];
 
 fn json<T: Serialize>(value: &T) -> Result<String, Error> {
@@ -441,6 +447,17 @@ pub struct Turn {
     pub message: ItemId,
     pub state: TurnState,
     pub opener: Opener,
+    /// The other Thread, for a turn another Thread's Agent opened: the one
+    /// that asked, kept when a Person tries it again; or the one that
+    /// answers.
+    pub from_thread: Option<ThreadId>,
+}
+
+impl Turn {
+    /// The Thread that waits for this turn's answer, if one does.
+    pub fn answers(&self) -> Option<ThreadId> {
+        self.from_thread.filter(|_| self.opener != Opener::Answered)
+    }
 }
 
 /// A turn, with the settings it runs with: its Thread's when it was sent.
@@ -453,8 +470,9 @@ pub fn insert_turn(
 ) -> Result<(), Error> {
     sql.execute(
         "INSERT INTO agents_turns
-         (id, thread, agent, author, message, state, settings, created_at, started_at, opener)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
+         (id, thread, agent, author, message, state, settings, created_at, started_at, opener,
+          from_thread)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11)",
         params![
             turn.id,
             turn.thread,
@@ -465,7 +483,8 @@ pub fn insert_turn(
             json(settings)?,
             at,
             (turn.state == TurnState::Running).then_some(at),
-            word(turn.opener)
+            word(turn.opener),
+            turn.from_thread
         ],
     )?;
     Ok(())
@@ -485,7 +504,8 @@ pub fn turn_settings(sql: &Connection, turn: &Turn) -> Result<Settings, Error> {
     }
 }
 
-const TURN: &str = "SELECT id, thread, agent, message, state, opener FROM agents_turns";
+const TURN: &str =
+    "SELECT id, thread, agent, message, state, opener, from_thread FROM agents_turns";
 
 fn read_turn(row: &Row<'_>) -> rusqlite::Result<Turn> {
     Ok(Turn {
@@ -495,6 +515,7 @@ fn read_turn(row: &Row<'_>) -> rusqlite::Result<Turn> {
         message: row.get(3)?,
         state: word_of(row, 4)?,
         opener: word_of(row, 5)?,
+        from_thread: row.get(6)?,
     })
 }
 
@@ -767,6 +788,83 @@ pub fn agent_of(sql: &Connection, thread: ThreadId) -> Result<Option<AgentId>, E
         .optional()?)
 }
 
+/// A Thread's title and its Agent.
+pub fn title_and_agent(
+    sql: &Connection,
+    thread: ThreadId,
+) -> Result<Option<(String, AgentId)>, Error> {
+    Ok(sql
+        .query_row(
+            "SELECT title, agent FROM agents_threads WHERE id = ?1",
+            params![thread],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .optional()?)
+}
+
+/// Whether the Thread's Agent waits for its Person to answer a Question.
+pub fn asks(sql: &Connection, thread: ThreadId) -> Result<bool, Error> {
+    Ok(sql.query_row(
+        &format!(
+            "SELECT EXISTS (SELECT 1 FROM agents_items
+             WHERE thread = ?1 AND {OPEN_QUESTION} LIMIT 1)"
+        ),
+        params![thread, open_word()?],
+        |row| row.get(0),
+    )?)
+}
+
+/// The Thread whose Agent this is. An Agent from before ADR 0006 may work
+/// in several: the latest.
+pub fn thread_of(sql: &Connection, agent: AgentId) -> Result<Option<ThreadId>, Error> {
+    Ok(sql
+        .query_row(
+            "SELECT id FROM agents_threads WHERE agent = ?1 ORDER BY updated_at DESC LIMIT 1",
+            params![agent],
+            |row| row.get(0),
+        )
+        .optional()?)
+}
+
+/// The Threads that wait for an answer from `thread`'s Agent: those whose
+/// Agent asked it in a turn still going, and up the chain from them.
+pub fn waiting_for(sql: &Connection, thread: ThreadId) -> Result<Vec<ThreadId>, Error> {
+    let mut statement = sql.prepare(
+        "WITH RECURSIVE up (thread) AS (
+             SELECT ?1
+             UNION
+             SELECT t.from_thread FROM agents_turns t JOIN up ON t.thread = up.thread
+             WHERE t.from_thread IS NOT NULL AND t.opener != ?2 AND t.state IN (?3, ?4)
+         )
+         SELECT thread FROM up WHERE thread != ?1",
+    )?;
+    let ongoing = [TurnState::Queued, TurnState::Running].map(word);
+    let answered = word(Opener::Answered);
+    let rows = statement.query_map(params![thread, answered, ongoing[0], ongoing[1]], |row| {
+        row.get(0)
+    })?;
+    Ok(rows.collect::<rusqlite::Result<_>>()?)
+}
+
+/// What the Agent last said in `turn` of `thread`: its last message there.
+pub fn last_reply(
+    sql: &Connection,
+    thread: ThreadId,
+    turn: TurnId,
+    agent: AgentId,
+) -> Result<Option<String>, Error> {
+    Ok(sql
+        .query_row(
+            "SELECT json_extract(body, '$.text') FROM agents_items
+             WHERE thread = ?1 AND turn = ?2 AND author = ?3
+                 AND json_extract(body, '$.kind') = 'message'
+             ORDER BY rowid DESC LIMIT 1",
+            params![thread, turn, json(&Participant::Agent(agent))?],
+            |row| row.get(0),
+        )
+        .optional()?)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -858,6 +956,7 @@ mod tests {
             message: ItemId::new(),
             state: TurnState::Queued,
             opener: Opener::Person,
+            from_thread: None,
         };
         let settings = Settings::default();
         insert_turn(&sql, &turn, Participant::Agent(agent), 10, &settings).unwrap();
@@ -913,6 +1012,7 @@ mod tests {
                 message: ItemId::new(),
                 state,
                 opener: Opener::Person,
+                from_thread: None,
             };
             insert_turn(&sql, &turn, author, at, &settings).unwrap();
             turn.id

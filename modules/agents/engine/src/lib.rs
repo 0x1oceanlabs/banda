@@ -178,9 +178,13 @@ banda_kernel::methods! {
         call thread(OneThread) -> ThreadView, Read, tool "read";
         /// What a new Thread on a Harness starts with.
         call defaults(OneHarness) -> Defaults, Read;
-        /// A message that queues a turn, or with `steer` joins the one that
-        /// runs: in a Thread, or in a new one on a Harness.
-        command send(Send) -> Sent, Write;
+        /// Writes into a Thread of this Space, or starts a new Thread on a
+        /// Harness. Its Agent reads that the message is from your Thread's
+        /// Agent, not its Person; when the turn it asks for ends, its last
+        /// reply comes back to your Thread by itself. A message waits its
+        /// turn in a Thread that works; a Person's with `steer` joins the
+        /// turn that runs.
+        command send(Send) -> Sent, Write, tool "send";
         /// A waiting message's new text.
         command edit(Edit) -> (), Write;
         /// Takes a waiting message back.
@@ -234,31 +238,37 @@ struct OneThread {
 }
 
 /// A message in a Thread, or the first one of a new Thread on a Harness.
-#[derive(Deserialize, TS)]
+#[derive(Deserialize, TS, JsonSchema)]
 #[ts(export_to = "agents/")]
 struct Send {
+    /// The Thread to write into, as `threads` lists it.
     #[serde(default)]
     #[ts(optional = nullable)]
     thread: Option<ThreadId>,
+    /// Or the Harness a new Thread starts on, as `threads` names them.
     #[serde(default)]
     #[ts(optional = nullable)]
     harness: Option<String>,
+    /// What you write.
     #[serde(default)]
     #[ts(as = "Option<String>", optional)]
     text: String,
     /// The images it carries, each added with `agents.attach` first.
     #[serde(default)]
     #[ts(as = "Option<Vec<ImageId>>", optional)]
+    #[schemars(skip)]
     images: Vec<ImageId>,
     /// What a new Thread starts with, instead of its Harness's defaults;
     /// or the Thread's settings from this turn on.
     #[serde(default)]
     #[ts(optional = nullable)]
+    #[schemars(skip)]
     settings: Option<Settings>,
     /// It goes into the turn that runs, if one does, instead of waiting
     /// for a turn of its own.
     #[serde(default)]
     #[ts(as = "Option<bool>", optional)]
+    #[schemars(skip)]
     steer: bool,
 }
 
@@ -509,8 +519,18 @@ impl Agents {
             rules::may_choose(author)?;
         }
         let message = Message { text, images };
-        call.command(move |tx| send(tx, author, target, message, settings, steer))
-            .await
+        call.command(move |tx| {
+            // An Agent writes from its Thread, which waits for the answer.
+            let by = match author {
+                Participant::Agent(agent) => {
+                    let from = rules::own_thread(store::thread_of(tx.sql(), agent)?)?;
+                    Some((Opener::Asked, from))
+                }
+                Participant::Person(_) => None,
+            };
+            send(tx, author, target, message, settings, steer, by)
+        })
+        .await
     }
 
     async fn edit(&self, call: Call, Edit { turn, text }: Edit) -> Result<(), Refusal> {
@@ -738,8 +758,10 @@ enum Target {
 /// A message in a Thread, or the first of a new Thread on a Harness, and
 /// a turn that waits behind the Thread's earlier turns; or, to `steer`, a
 /// message into the turn that runs, if one does. A new Thread starts with
-/// `settings`; an existing one changes to them, if they are given. A
-/// message that waits for its own turn lets a held queue go on.
+/// `settings`; an existing one changes to them, if they are given. `by`
+/// says how another Thread's Agent wrote it, and from which Thread: then
+/// the rules of ADR 0019 (decision 4) say whether it may. Only a Person's
+/// word joins the turn that runs or lets a held queue go on.
 fn send(
     tx: &mut Tx<'_>,
     author: Participant,
@@ -747,14 +769,24 @@ fn send(
     Message { text, images }: Message,
     settings: Option<Settings>,
     steer: bool,
+    by: Option<(Opener, ThreadId)>,
 ) -> Result<Sent, Error> {
     let now = tx.now();
+    let opener = by.map_or(Opener::Person, |(opener, _)| opener);
+    let by_person = opener.by_person();
     let images = store::unsent_images(tx.sql(), &images, author)?;
     rules::may_carry(&images)?;
     let (thread, agent) = match target {
         Target::Thread(id) => {
-            let agent = store::agent_of(tx.sql(), id)?
+            let (title, agent) = store::title_and_agent(tx.sql(), id)?
                 .ok_or_else(|| Refusal::not_found("There is no such Thread."))?;
+            if let Some((Opener::Asked, from)) = by {
+                let (asks, waiting) = (
+                    store::asks(tx.sql(), id)?,
+                    store::waiting_for(tx.sql(), from)?,
+                );
+                rules::may_write(from, id, &title, asks, &waiting)?;
+            }
             if let Some(settings) = settings {
                 configure(tx, author, id, settings)?;
             }
@@ -780,7 +812,7 @@ fn send(
             (summary.id, agent)
         }
     };
-    let running = match steer {
+    let running = match steer && by_person {
         true => steerable(tx, thread)?,
         false => None,
     };
@@ -812,14 +844,17 @@ fn send(
         };
         return Ok(sent);
     }
-    turn::resume(tx, author, thread)?;
+    if by_person {
+        turn::resume(tx, author, thread)?;
+    }
     let turn = store::Turn {
         id: TurnId::new(),
         thread,
         agent,
         message: item.id,
         state: TurnState::Queued,
-        opener: Opener::Person,
+        opener,
+        from_thread: by.map(|(_, from)| from),
     };
     let settings = store::settings(tx.sql(), thread)?;
     store::insert_turn(tx.sql(), &turn, author, now, &settings)?;
@@ -944,8 +979,10 @@ fn retry(tx: &mut Tx<'_>, author: Participant, turn: TurnId) -> Result<Sent, Err
     let latest = rules::position(&turns, found.id).latest;
     rules::retry(found.state, latest, found.opener.by_itself())?;
     // Queued first, it starts before a held queue goes on.
+    // One another Thread's Agent asked for still answers that Thread.
     let (thread, agent, message) = (found.thread, found.agent, found.message);
-    let again = turn::queue(tx, author, thread, agent, message, Opener::Retry)?;
+    let from = found.answers();
+    let again = turn::queue(tx, author, thread, agent, message, Opener::Retry, from)?;
     turn::resume(tx, author, found.thread)?;
     Ok(Sent {
         thread: found.thread,

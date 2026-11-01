@@ -6,7 +6,19 @@ import type { ThreadId } from "./ThreadId";
 /**
  * A message in a Thread, or the first one of a new Thread on a Harness.
  */
-export type Send = { thread?: ThreadId | null, harness?: string | null, text?: string, 
+export type Send = { 
+/**
+ * The Thread to write into, as `threads` lists it.
+ */
+thread?: ThreadId | null, 
+/**
+ * Or the Harness a new Thread starts on, as `threads` names them.
+ */
+harness?: string | null, 
+/**
+ * What you write.
+ */
+text?: string, 
 /**
  * The images it carries, each added with `agents.attach` first.
  */

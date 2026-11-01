@@ -57,8 +57,12 @@ thread: CallMethod<OneThread, ThreadView>,
  */
 defaults: CallMethod<OneHarness, Defaults>, 
 /**
- * A message that queues a turn, or with `steer` joins the one that
- * runs: in a Thread, or in a new one on a Harness.
+ * Writes into a Thread of this Space, or starts a new Thread on a
+ * Harness. Its Agent reads that the message is from your Thread's
+ * Agent, not its Person; when the turn it asks for ends, its last
+ * reply comes back to your Thread by itself. A message waits its
+ * turn in a Thread that works; a Person's with `steer` joins the
+ * turn that runs.
  */
 send: CommandMethod<Send, Sent>, 
 /**

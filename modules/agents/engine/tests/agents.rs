@@ -7,7 +7,9 @@ use banda_agents::model::{
     ThreadList, ThreadView, ToolContent, ToolStatus, TurnState,
 };
 use banda_agents::settings::{Cli, Harness, Harnesses};
-use banda_kernel::{AgentId, Code, CommandId, EventFilter, Kernel, Participant, PersonId, SpaceId};
+use banda_kernel::{
+    AgentId, Caller, Code, CommandId, EventFilter, Kernel, Participant, PersonId, SpaceId,
+};
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as BASE64;
 use serde_json::{Value, json};
@@ -251,14 +253,14 @@ fn state(view: &ThreadView, turn: &Value) -> Option<TurnState> {
         .map(|t| t.state)
 }
 
-/// Who opened `turn`, as the module keeps it in the Space's database: the
-/// window does not read it.
-fn opener(root: &Path, turn: &Value) -> String {
+/// Who opened `turn`, and from which other Thread, as the module keeps it
+/// in the Space's database: the window does not read it.
+fn opened(root: &Path, turn: &Value) -> (String, Option<String>) {
     let sql = rusqlite::Connection::open(root.join("Work/.banda/space.sqlite3")).unwrap();
     sql.query_row(
-        "SELECT opener FROM agents_turns WHERE id = ?1",
+        "SELECT opener, from_thread FROM agents_turns WHERE id = ?1",
         [turn.as_str().unwrap()],
-        |row| row.get(0),
+        |row| Ok((row.get(0)?, row.get(1)?)),
     )
     .unwrap()
 }
@@ -854,8 +856,8 @@ async fn a_failed_turn_can_be_tried_again_once_it_is_the_latest() {
         })
         .await;
     assert_eq!(state(&view, &sent["turn"]), Some(TurnState::Failed));
-    assert_eq!(opener(root.path(), &sent["turn"]), "person");
-    assert_eq!(opener(root.path(), &again["turn"]), "retry");
+    assert_eq!(opened(root.path(), &sent["turn"]).0, "person");
+    assert_eq!(opened(root.path(), &again["turn"]).0, "retry");
     assert_eq!(texts(&view).last().unwrap(), "message: You said: flaky one");
     assert_eq!(
         view.items
@@ -1422,8 +1424,12 @@ async fn only_a_person_chooses_how_freely_an_agent_acts() {
     });
     let sent = world.call(agent, "agents.send", params).await;
     assert_eq!(sent.unwrap_err().code, Code::Forbidden);
-    let params = json!({ "thread": thread, "text": "go on" });
-    world.call(agent, "agents.send", params).await.unwrap();
+    // Another Thread's Agent writes with the settings the Thread has.
+    let (_, other) = world.finish(None, "hi there").await;
+    world
+        .write(agent_of(&other), Some(&thread), "go on")
+        .await
+        .unwrap();
 }
 
 /// Whether the Thread waits on an open Question.
@@ -1956,7 +1962,7 @@ async fn a_harness_that_cannot_steer_stops_for_the_message() {
         .await;
     assert_eq!(state(&view, &wait["turn"]), Some(TurnState::Stopped));
     let requeued = json!(view.turns[1].id);
-    assert_eq!(opener(root.path(), &requeued), "requeue");
+    assert_eq!(opened(root.path(), &requeued).0, "requeue");
     let said = "notice: Fake cannot take a message while it works, \
                 so Banda stopped it to send yours.";
     assert!(position(&view, said) < position(&view, "message: instead this"));
@@ -2191,7 +2197,7 @@ async fn what_a_harness_does_by_itself_shows_in_a_turn_of_the_agents_own() {
         ]
     );
     let own = view.turns[1].id.to_string();
-    assert_eq!(opener(root.path(), &json!(own)), "by_itself");
+    assert_eq!(opened(root.path(), &json!(own)).0, "by_itself");
     assert_eq!(view.usage.map(|u| u.used), Some(60_000));
     let refused = world
         .on_turn("agents.retry", &json!(own))
@@ -2756,10 +2762,11 @@ async fn a_recorded_conversation_plays_again_as_it_went() {
     assert_eq!(replayed.turns[0].state, TurnState::Done);
 }
 
-/// `threads` and `read` are tools from the methods table (ADR 0019): their
-/// MCP names, their methods, their `///` and the schema of their params.
+/// `threads`, `read` and `send` are tools from the methods table (ADR
+/// 0019): their MCP names, their methods, their `///` and the schema of
+/// their params, with only what an Agent sets.
 #[tokio::test]
-async fn threads_and_one_thread_are_an_agents_tools() {
+async fn threads_one_thread_and_send_are_an_agents_tools() {
     let root = tempfile::tempdir().unwrap();
     let owner = PersonId::new();
     let kernel = Kernel::builder(root.path(), owner)
@@ -2768,10 +2775,26 @@ async fn threads_and_one_thread_are_an_agents_tools() {
         .await
         .unwrap();
     let agent = Participant::Agent(AgentId::new());
-    let tools = kernel
+    let mut tools = kernel
         .call(agent, "spaces.tools", None, None, Value::Null)
         .await
         .unwrap();
+    let send = tools.as_array_mut().unwrap().pop().unwrap();
+    assert_eq!(
+        (&send["name"], &send["method"]),
+        (&json!("send"), &json!("agents.send"))
+    );
+    let description = send["description"].as_str().unwrap();
+    assert!(
+        description.starts_with("Writes into a Thread of this Space"),
+        "{description}"
+    );
+    let given: Vec<_> = send["schema"]["properties"]
+        .as_object()
+        .unwrap()
+        .keys()
+        .collect();
+    assert_eq!(given, ["thread", "harness", "text"]);
     let thread = json!({
         "type": "string",
         "format": "uuid",
@@ -2801,4 +2824,189 @@ async fn threads_and_one_thread_are_an_agents_tools() {
             }
         ])
     );
+}
+
+/// The Agent at work in a Thread, as its replies name it.
+fn agent_of(view: &ThreadView) -> Participant {
+    let mut authors = view.items.iter().map(|item| item.author);
+    authors
+        .find(|author| matches!(author, Participant::Agent(_)))
+        .expect("the Agent replied")
+}
+
+/// Whether the Thread has `turns` turns and every one has ended.
+fn settled(turns: usize) -> impl Fn(&ThreadView) -> bool {
+    move |view| view.turns.len() == turns && view.turns.iter().all(|t| !ongoing(view, &json!(t.id)))
+}
+
+/// `(opener, from_thread)` as a turn that `from`'s Agent opened keeps it.
+fn by(opener: &str, from: &Value) -> (String, Option<String>) {
+    (opener.to_owned(), from.as_str().map(str::to_owned))
+}
+
+impl World {
+    /// An Agent's message into a Thread, or into a new one on the Harness.
+    async fn write(
+        &self,
+        agent: Participant,
+        thread: Option<&Value>,
+        text: &str,
+    ) -> Result<Value, banda_kernel::Refusal> {
+        let mut params = json!({ "text": text });
+        match thread {
+            Some(thread) => params["thread"] = thread.clone(),
+            None => params["harness"] = json!(self.harness),
+        }
+        self.call(agent, "agents.send", params).await
+    }
+}
+
+#[tokio::test]
+async fn an_agent_writes_to_another_thread_and_its_answer_comes_back() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let (a, asking) = world.finish(None, "hello").await;
+    let (b, answering) = world.finish(None, "hi there").await;
+    let sent = world
+        .write(agent_of(&asking), Some(&b), "count the files")
+        .await
+        .unwrap();
+    assert_eq!(opened(root.path(), &sent["turn"]), by("asked", &a));
+
+    // B keeps the plain words, by A's Agent; its Harness read who wrote.
+    let view = world.until(&b, settled(2)).await;
+    let message = view.items.iter().find(|i| json!(i.id) == sent["item"]);
+    assert_eq!(message.unwrap().author, agent_of(&asking));
+    let said = texts(&view);
+    assert_eq!(said[3], "message: count the files");
+    let from = format!(
+        "message: You said: The Agent of Thread \"hello\" ({}), another Agent of this Space",
+        a.as_str().unwrap()
+    );
+    assert!(said[5].starts_with(&from), "{}", said[5]);
+    assert!(said[5].ends_with("\n\ncount the files"), "{}", said[5]);
+
+    // B's last reply goes back to A by itself, from B's Agent, and A goes on.
+    let view = world.until(&a, settled(2)).await;
+    let answered = json!(view.turns[1].id);
+    assert_eq!(opened(root.path(), &answered), by("answered", &b));
+    let answer = view.items.iter().find(|i| i.id == view.turns[1].message);
+    assert_eq!(answer.unwrap().author, agent_of(&answering));
+    let said_in_a = texts(&view);
+    assert_eq!(said_in_a[3], said[5], "the answer is B's last reply");
+    let from = format!(
+        "message: You said: The Agent of Thread \"hi there\" ({}), another Agent of this Space, answers",
+        b.as_str().unwrap()
+    );
+    assert!(said_in_a[5].starts_with(&from), "{}", said_in_a[5]);
+    // An answer is not asked again.
+    assert_eq!(world.thread(&b).await.turns.len(), 2);
+}
+
+#[tokio::test]
+async fn an_agent_starts_a_thread_on_a_harness_and_hears_from_it() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let (a, view) = world.finish(None, "hello").await;
+    let sent = world
+        .write(agent_of(&view), None, "look around")
+        .await
+        .unwrap();
+    let started = &sent["thread"];
+    assert_ne!(*started, a);
+    assert_eq!(opened(root.path(), &sent["turn"]), by("asked", &a));
+    let view = world.until(started, settled(1)).await;
+    assert_eq!(view.thread.title, "look around");
+    let view = world.until(&a, settled(2)).await;
+    let answered = json!(view.turns[1].id);
+    assert_eq!(opened(root.path(), &answered), by("answered", started));
+    assert_eq!(world.threads().await.threads.len(), 2);
+}
+
+#[tokio::test]
+async fn a_failed_turn_an_agent_asked_for_answers_again_when_tried_again() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let (a, asking) = world.finish(None, "hello").await;
+    let (b, _) = world.finish(None, "hi there").await;
+    let sent = world
+        .write(agent_of(&asking), Some(&b), "flaky count")
+        .await
+        .unwrap();
+    world.until(&b, settled(2)).await;
+    let view = world.until(&a, settled(2)).await;
+    assert!(texts(&view)[3].starts_with("message: Its turn ended failed: "));
+
+    let params = json!({ "turn": sent["turn"] });
+    let again = world
+        .call(world.person(), "agents.retry", params)
+        .await
+        .unwrap();
+    assert_eq!(opened(root.path(), &again["turn"]), by("retry", &a));
+    let tried = world.until(&b, settled(3)).await;
+    let view = world.until(&a, settled(3)).await;
+    let reply = texts(&tried).pop().unwrap();
+    assert!(
+        texts(&view).contains(&reply),
+        "the reply went back: {reply}"
+    );
+}
+
+#[tokio::test]
+async fn an_agent_writes_neither_to_its_own_thread_nor_in_a_circle() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let (a, va) = world.finish(None, "hello").await;
+    let (b, vb) = world.finish(None, "hi there").await;
+    let (c, vc) = world.finish(None, "good day").await;
+    let (agent_a, agent_b, agent_c) = (agent_of(&va), agent_of(&vb), agent_of(&vc));
+    let code = |written: Result<Value, banda_kernel::Refusal>| written.unwrap_err().code;
+    let own = world.write(agent_a, Some(&a), "hello me").await;
+    assert_eq!(code(own), Code::Invalid);
+
+    // A asks B, and B asks C, while each one's turn goes on.
+    world.write(agent_a, Some(&b), "slow count").await.unwrap();
+    let circle = world.write(agent_b, Some(&a), "answer").await;
+    assert_eq!(code(circle), Code::Conflict);
+    world.write(agent_b, Some(&c), "slow too").await.unwrap();
+    for to in [&a, &b] {
+        let circle = world.write(agent_c, Some(to), "answer").await;
+        assert_eq!(code(circle), Code::Conflict);
+    }
+
+    // Once the answers came back, nobody waits.
+    world.until(&b, settled(3)).await;
+    world.until(&a, settled(2)).await;
+    world.write(agent_c, Some(&a), "now then").await.unwrap();
+    // An Agent of no Thread writes nowhere.
+    let nowhere = world.write(world.agent(), Some(&a), "hi").await;
+    assert_eq!(code(nowhere), Code::Forbidden);
+}
+
+#[tokio::test]
+async fn an_agent_writes_neither_over_a_persons_question_nor_into_another_space() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let (_, view) = world.finish(None, "hello").await;
+    let agent = agent_of(&view);
+    let sent = world.send(None, "please ask first").await;
+    world.until(&sent["thread"], asking).await;
+    let refused = world
+        .write(agent, Some(&sent["thread"]), "yes, go on")
+        .await;
+    assert_eq!(refused.unwrap_err().code, Code::Conflict);
+
+    // A pass keeps its Agent in its own Space, whatever it calls.
+    let walled = Caller {
+        participant: agent,
+        only: Some(SpaceId::new()),
+    };
+    let params = json!({ "harness": "fake", "text": "elsewhere" });
+    let command = Some(CommandId::new());
+    let refused = world
+        .kernel
+        .call(walled, "agents.send", Some(world.space), command, params)
+        .await
+        .unwrap_err();
+    assert_eq!(refused.code, Code::Forbidden);
 }

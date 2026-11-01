@@ -246,6 +246,7 @@ fn open(
         message: ItemId::new(),
         state: TurnState::Running,
         opener: Opener::ByItself,
+        from_thread: None,
     };
     let item = Item {
         id: turn.message,

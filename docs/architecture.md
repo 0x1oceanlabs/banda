@@ -198,7 +198,7 @@ module's `Module` implementation is its manifest.
 - **Tools** it offers Agents: a `methods!` line marked `tool "<name>"`
   is one, with its `///` as its description and the JSON Schema of its
   params, from `schemars` (ADR 0019, decision 3). The agents module's
-  `threads` and `thread` are `threads` and `read`.
+  `threads`, `thread` and `send` are `threads`, `read` and `send`.
 - **Panes.** They reach the engine only through the API.
 
 **Modules connect only by commands and events.** Here is an example, once
@@ -408,7 +408,25 @@ If Chat is removed, Agents still works through its own Thread.
   whether the queue is held, or refuses, a late event too. The rules the
   commands ask are questions to it. A turn keeps who opened it
   (`agents_turns.opener`): a Person's message, a retry, a message its turn
-  could not take, or the Agent by itself; "by itself" is read from it.
+  could not take, the Agent by itself, or another Thread's Agent that
+  asked or answered (`from_thread` names that Thread); "by itself" is read
+  from it.
+- **Agents talk by writing to each other's Threads** (ADR 0019, decision
+  4). The Agent of Thread A calls `send` (the `agents.send` tool, with only
+  `thread` or `harness`, and `text`); B gets a message by A's Agent and a
+  turn opened as asked, which waits in B's queue as a Person's would, but
+  never lets a held queue go on nor joins the turn that runs. The Harness
+  reads a first line naming A's title and ID and that it is not its
+  Person's word; the Thread keeps the plain text. When that turn ends,
+  however it ends (`turn::end`, in the same transaction), its last reply,
+  or how it ended and why, goes back into A as a message by B's Agent, in
+  a turn opened as answered, which answers nothing back; a Person's retry
+  of an asked turn still answers. An Agent writes only from its own
+  Thread. Three rules, in
+  `rules::may_write`: no circle (an Agent cannot write to its own Thread,
+  nor to one up the chain of asked turns still going that waits for its
+  answer), not over a Person's Question (a Thread with an open Question),
+  and only its own Space (the kernel's wall).
 - **A turn says what a Person may do with it** (`can`, ADR 0014): stop
   it, try it again, change, take back or send its message now, or send a
   message into it. `rules::can` asks `next` what it accepts, and the
