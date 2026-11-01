@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 date: 2026-11-01
 ---
 
@@ -9,7 +9,7 @@ ADR 0005 (decision 8) put every Thread of every Space in one sidebar, ordered by
 
 Roma liked A, B and C, and asked for one thing instead of three: "unify everything, and change only the sorting and the display. Better, make it hackable: the Person sets it up as they like through a config, and we give only presets and defaults. This is the point of our app: a hackable workspace, and an Agent can set the app up for its Person, as with themes."
 
-**Decision.** Roma decided the points marked _decided_. The rest are our defaults until he accepts them; each stays his to change.
+**Decision.** Roma decided the points marked _decided_. On 2026-11-01 he accepted the rest as our defaults and asked to build, for now without search and with the presets in the view menu; each stays his to change.
 
 1. **One sidebar; A, B and C are presets of it** (_decided_).
    - Every arrangement uses the same parts: one row, one section header, one Space header, the same marks (ADR 0005, decision 16), the same counts and the same roll-up.
@@ -87,7 +87,7 @@ Roma liked A, B and C, and asked for one thing instead of three: "unify everythi
    - In `places`, a click on a Space in the list shows only its Threads, and a second click shows all again, as Herdr's active Space does.
 
 6. **Switching is one click, and it writes the file** (_decided_: "the Person sets it up as they like").
-   - The sidebar's header has a menu with every preset it can find, the Person's own too, and "Edit sidebar.toml".
+   - The sidebar's header has a view menu, behind a filter icon, with every preset it can find, the Person's own too, and "Edit sidebar.toml" (_decided_).
    - Picking a preset writes `preset = "…"` into the file and keeps the Person's other keys and comments.
    - An Agent changes it the same way, through the sidebar's MCP tools (ADR 0005, decision 14): "group my Threads by Space", "one line per Thread".
 
@@ -106,7 +106,7 @@ Roma liked A, B and C, and asked for one thing instead of three: "unify everythi
 **Consequences.**
 
 - The engine's Thread list grows what a row needs and the list lacks today: the latest message's first line, why the latest turn failed, and when the running turn began.
-- **The design every preset shares**, after T3 Code's: a header with search, the view menu (the preset and its keys), a new Space and a new Thread; the current Thread raised as a card; the shelves at the bottom with their counts; the settings at the foot.
+- **The design every preset shares**, after T3 Code's: a header with the view menu, a new Space and a new Thread (search comes later, _decided_); the current Thread raised as a card; the shelves at the bottom with their counts; the settings at the foot.
 - The sidebar stops drawing one `agents.threads` Pane per Space. It reads the Threads of every Space itself and arranges them, so it can sort across Spaces. The agents module still owns Threads and publishes what happens in them (ADR 0005, decision 8).
 - The bar's waiting dot and the workspace marks take the same states, so the sidebar and the bar never disagree.
 - Words for `GLOSSARY.md`, once built: preset, section, shelf.
@@ -114,4 +114,4 @@ Roma liked A, B and C, and asked for one thing instead of three: "unify everythi
   1. **The arrangement and the three presets**, from the built-in defaults, with the preset menu kept in the window until step 2.
   2. **The module's file**: the engine reads, watches and writes `sidebar.toml` and the preset files; the notice for a broken file.
   3. **The MCP tools and the Banda skill's page** on the sidebar's keys, so an Agent can arrange it.
-- Later: `sort.by = "manual"`, pinned, snoozed and settled; a rail when the sidebar is narrow, as Herdr's; search.
+- Later: search; `sort.by = "manual"`; pinned, snoozed and settled; a rail when the sidebar is narrow, as Herdr's.
