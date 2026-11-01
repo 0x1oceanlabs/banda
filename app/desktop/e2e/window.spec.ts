@@ -970,6 +970,21 @@ test("columns and the text size come from look.toml", async () => {
   await expect.poll(share).toBeGreaterThan(0.7)
 })
 
+test("tiles without the focus darken as dim-inactive says", async () => {
+  window = await startWindow({ look: "[tile]\ndim-inactive = 0.5\n" })
+  const { page } = window
+  const { thread } = await firstThread(page)
+  const veil = (tile: Locator) =>
+    tile.evaluate((e) => getComputedStyle(e, "::after").opacity)
+  await expect.poll(() => veil(thread)).toBe("0")
+  await page.keyboard.press("Alt+KeyN")
+  const launcher = page.getByRole("region", { name: "New Pane" })
+  await expect(launcher).toHaveAttribute("data-focused", "true")
+  await expect.poll(() => veil(thread)).toBe("0.5")
+  expect(await veil(launcher)).toBe("0")
+  await page.screenshot({ path: "test-results/22-look-dim.png" })
+})
+
 test("the window takes its look from look.toml, and again on each save", async () => {
   window = await startWindow({
     look: '[gaps]\ninner = 12\n[colors]\naccent = "#e07a3f"\n',

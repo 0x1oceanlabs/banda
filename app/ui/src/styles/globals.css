@@ -161,6 +161,9 @@
      in its colour: one frame, and no seam where two would meet. None by
      default; the border shows the focus. */
   --focus-ring: 0px;
+  /* [tile] dim-inactive: a black veil over the tiles without the focus,
+     as Hyprland dims its windows. 0 is none. */
+  --tile-dim: 0;
   --bar-height: 2.25rem;
   /* [font]: the two families, and the root's size that makes the usual
      text (text-sm) 14px. Everything measured in rem grows with it. */

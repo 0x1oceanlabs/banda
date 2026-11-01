@@ -77,6 +77,9 @@ pub struct Gaps {
 pub struct Tile {
     pub radius: Option<Corner>,
     pub border: Option<f64>,
+    /// How much the tiles without the focus darken, from 0 to 1, as
+    /// Hyprland's `dim_inactive` and `dim_strength`.
+    pub dim_inactive: Option<f64>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize)]
@@ -185,6 +188,7 @@ impl Settings {
             tile: Tile {
                 radius: self.tile.radius.or(under.tile.radius),
                 border: self.tile.border.or(under.tile.border),
+                dim_inactive: self.tile.dim_inactive.or(under.tile.dim_inactive),
             },
             focus: Focus {
                 border: self.focus.border.or(under.focus.border),
@@ -218,6 +222,7 @@ impl Settings {
             tile: Tile {
                 radius: Some(Corner::Step(Step::Xl)),
                 border: Some(2.0),
+                dim_inactive: Some(0.0),
             },
             focus: Focus {
                 border: Some(Spanned::new(0..0, "accent".to_owned())),

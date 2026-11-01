@@ -91,6 +91,7 @@ impl Machine {
             rounding: 12.0,
             border: 2.0,
             gaps: 5.0,
+            dim: Some(0.4),
         };
         resolve(&self.places, &|| Some(windows)).look
     }
@@ -121,6 +122,7 @@ fn without_omarchy_banda_shows_its_own_light_and_dark_as_today() {
     assert_eq!(look.vars["--tile-border"], "2px");
     assert_eq!(look.vars["--gap-inner"], "4px");
     assert_eq!(look.vars["--bar-height"], "36px");
+    assert_eq!(look.vars["--tile-dim"], "0");
     // shadcn's own tokens, as globals.css has them today.
     assert_eq!(color(&look, false, "--border"), "oklch(0.922 0 0)");
     assert_eq!(color(&look, true, "--card"), "oklch(0.205 0 0)");
@@ -162,6 +164,8 @@ fn under_hyprland_the_tiles_look_like_its_windows() {
     assert_eq!(look.vars["--tile-border"], "2px");
     assert_eq!(look.vars["--gap-inner"], "5px");
     assert_eq!(look.vars["--gap-outer"], "5px");
+    // Hyprland dims windows without the focus: so do the tiles.
+    assert_eq!(look.vars["--tile-dim"], "0.4");
     assert!(look.sources.iter().any(|s| s.layer == "hyprland"));
 }
 
