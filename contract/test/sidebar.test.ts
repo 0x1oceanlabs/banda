@@ -4,34 +4,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { expect, test } from "vitest"
 import type { Look } from "../src/look"
-import { DEFAULT_SIDEBAR, withPreset } from "../src/sidebar"
-
-test("the line that names the preset changes, and nothing else", () => {
-  const file = [
-    "# mine",
-    'preset = "inbox"  # the default',
-    "",
-    "[row]",
-    'preset = "not this one"',
-  ].join("\n")
-  expect(withPreset(file, "places")).toBe(
-    [
-      "# mine",
-      'preset = "places"  # the default',
-      "",
-      "[row]",
-      'preset = "not this one"',
-    ].join("\n")
-  )
-})
-
-test("a file that names none gets the line at the top", () => {
-  expect(withPreset("", "spaces")).toBe('preset = "spaces"\n')
-  expect(withPreset("[row]\nlines = 1\n", "spaces")).toBe(
-    'preset = "spaces"\n[row]\nlines = 1\n'
-  )
-  expect(withPreset("preset = 'inbox'\n", "my-own")).toBe('preset = "my-own"\n')
-})
+import { DEFAULT_SIDEBAR } from "../src/sidebar"
 
 test("the window's own arrangement is what banda look gives with no files", () => {
   const repository = join(import.meta.dirname, "../..")

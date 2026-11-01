@@ -255,6 +255,12 @@ export const ACTIONS: readonly Action<Shell>[] = [
     run: (shell) => shell.menu("actions"),
   },
   {
+    id: "settings.open",
+    title: "Open the settings",
+    key: { code: "Comma", alt: true },
+    run: () => window.banda?.settings.open(),
+  },
+  {
     id: "sidebar.toggle",
     title: "Show or hide the sidebar",
     key: { code: "KeyA", alt: true },

@@ -30,6 +30,7 @@ import {
   FolderPlusIcon,
   ListFilterIcon,
   SearchIcon,
+  SettingsIcon,
   SquarePenIcon,
 } from "lucide-react"
 import { keyName } from "../actions/actions"
@@ -244,6 +245,19 @@ export function Sidebar({
           {arranged.shelves.map(drawn)}
         </div>
       )}
+      <div className="border-t px-1.5 py-1">
+        <Button
+          variant="ghost"
+          size="sm"
+          className="w-full justify-start text-muted-foreground"
+          disabled={!host}
+          title="Settings (Alt+,)"
+          onClick={() => host?.settings.open()}
+        >
+          <SettingsIcon />
+          Settings
+        </Button>
+      </div>
       <NewSpace
         engine={engine}
         open={creating}

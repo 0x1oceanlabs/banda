@@ -7,7 +7,7 @@
  */
 import type { BrowserHost } from "@banda/browser-pane/desktop"
 import type { Address } from "@banda/contract"
-import type { Look } from "@banda/contract/look"
+import type { Listed, Look } from "@banda/contract/look"
 
 /** A system notification the page asks the desktop for (ADR 0011, decision 3). */
 export type Notice = {
@@ -42,6 +42,26 @@ export type Host = {
   }
   /** The browser's pages: their tabs, icons and downloads. */
   browser: BrowserHost
+  /**
+   * The settings window (ADR 0016): the desktop opens it, and changes the
+   * files through `banda settings`; the look brings each change back.
+   */
+  settings: {
+    /** Opens the window at `link`, a section and a row: `appearance/radius`. */
+    open: (link?: string) => void
+    /** Closes the window. */
+    close: () => void
+    /** Sets `key` in `file` to `value`, TOML; what was wrong, if refused. */
+    set: (file: string, key: string, value: string) => Promise<string[]>
+    /** Takes `key` out of `file`; what was wrong, if refused. */
+    reset: (file: string, key: string) => Promise<string[]>
+    /** Opens `file` in the Person's editor; its folder when it is not there. */
+    reveal: (file: string) => Promise<void>
+    /** The themes there are. */
+    themes: () => Promise<Listed[]>
+    /** Calls `go` with each link the window is opened at again. */
+    listen: (go: (link: string) => void) => () => void
+  }
   /** The desktop's notifications and its quiet. */
   notify: {
     /** Shows a notice; one of the same key goes first. */

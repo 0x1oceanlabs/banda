@@ -118,3 +118,10 @@ export function useLookSound(): SoundSettings {
 export function useLookSidebar(): Sidebar {
   return useLook((look) => look.sidebar, DEFAULT_SIDEBAR)
 }
+
+const NO_SETTINGS: Look["settings"] = {}
+
+/** Each key of each settings file, and where it comes from (ADR 0016). */
+export function useLookSettings(): Look["settings"] {
+  return useLook((look) => look.settings, NO_SETTINGS)
+}

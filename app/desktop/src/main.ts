@@ -5,13 +5,15 @@
  * and writes the preset the page picks into `sidebar.toml` (ADR 0008);
  * nothing else crosses from Node to the page (docs/architecture.md,
  * "Processes"). The page shows the browser's pages, kept apart from it
- * (browser.ts, ADR 0013).
+ * (browser.ts, ADR 0013). Settings open in a window of their own, the same
+ * page at `#settings` (settings.ts, ADR 0016).
  */
 import { join, resolve, sep } from "node:path"
 import { pathToFileURL } from "node:url"
 import {
   app,
   BrowserWindow,
+  type BrowserWindowConstructorOptions,
   ipcMain,
   Menu,
   nativeTheme,
@@ -25,7 +27,8 @@ import { hostPages, keepProfile, reveal, writeTabs } from "./browser"
 import { EngineProcess } from "./engine"
 import { firstFrame, LookProcess } from "./look"
 import { type Desktop, RecordedDesktop, SystemDesktop } from "./notices"
-import { ensure, writePreset } from "./sidebar"
+import { Settings } from "./settings"
+import { ensure } from "./sidebar"
 
 /** The page's origin; the engine lets it in (kernel/src/api.rs, APP_ORIGIN). */
 const ORIGIN = "app://banda"
@@ -34,6 +37,8 @@ const ORIGIN = "app://banda"
  * A packaged app ignores it: no other page ever gets the engine.
  */
 const DEV_PAGE = app.isPackaged ? undefined : process.env.BANDA_PAGE
+/** Where the windows load the page from. */
+const PAGE = DEV_PAGE ?? `${ORIGIN}/index.html`
 
 const CSP = [
   "default-src 'self'",
@@ -73,7 +78,10 @@ protocol.registerSchemesAsPrivileged([
 
 const engine = new EngineProcess(engineBinary)
 const look = new LookProcess(engineBinary)
+const settings = new Settings(engineBinary)
 let window: BrowserWindow | null = null
+/** The settings window; one at a time (ADR 0016, decision 1). */
+let settingsWindow: BrowserWindow | null = null
 
 /**
  * Where the page's notices go: the desktop's notification server, or, for
@@ -106,8 +114,10 @@ async function ready(): Promise<void> {
     // prefers-color-scheme follow the look's mode.
     nativeTheme.themeSource = now.mode
     const background = firstFrame(now, nativeTheme.shouldUseDarkColors)
-    if (background) window?.setBackgroundColor(background)
-    window?.webContents.send("look", now)
+    for (const shown of [window, settingsWindow]) {
+      if (background) shown?.setBackgroundColor(background)
+      shown?.webContents.send("look", now)
+    }
   })
   protocol.handle("app", page)
   // The page asks for nothing: no camera, no notifications, no location.
@@ -128,7 +138,7 @@ async function ready(): Promise<void> {
       throw new Error("Only Banda's page may ask for the look.")
     return look.current()
   })
-  ipcMain.handle("sidebar.preset", (event, name: unknown) => {
+  ipcMain.handle("sidebar.preset", async (event, name: unknown) => {
     const from = event.senderFrame?.url ?? ""
     if (!fromPage(from))
       throw new Error("Only Banda's page may change the sidebar.")
@@ -136,7 +146,13 @@ async function ready(): Promise<void> {
     if (!sidebar) throw new Error("The sidebar's file is not known yet.")
     if (!sidebar.presets.some((preset) => preset.name === name))
       throw new Error(`There is no preset ${JSON.stringify(name)}.`)
-    writePreset(sidebar.file, name as string)
+    // The one writer (ADR 0016, decision 5).
+    const refused = await settings.set(
+      "sidebar.toml",
+      "preset",
+      JSON.stringify(name)
+    )
+    if (refused.length) throw new Error(refused.join("\n"))
   })
   ipcMain.handle("sidebar.edit", async (event) => {
     const from = event.senderFrame?.url ?? ""
@@ -157,6 +173,20 @@ async function ready(): Promise<void> {
   })
   ipcMain.on("browser.reveal", (event, path: unknown) => {
     if (fromPage(event.senderFrame?.url ?? "")) reveal(path)
+  })
+  ipcMain.on("settings.open", (event, link: unknown) => {
+    if (fromPage(event.senderFrame?.url ?? "")) openSettings(linkOf(link))
+  })
+  ipcMain.on("settings.close", (event) => {
+    if (fromPage(event.senderFrame?.url ?? "")) settingsWindow?.close()
+  })
+  pageOnly("settings.set", (file, key, value) => settings.set(file, key, value))
+  pageOnly("settings.reset", (file, key) => settings.reset(file, key))
+  pageOnly("settings.themes", () => settings.themes())
+  pageOnly("settings.reveal", (file) => {
+    const sidebar = look.current()?.sidebar
+    if (!sidebar) throw new Error("The config folder is not known yet.")
+    return settings.reveal(sidebar.file, file)
   })
   ipcMain.on("notify:show", (event, notice: Notice) => {
     if (!fromPage(event.senderFrame?.url ?? "")) return
@@ -202,20 +232,77 @@ async function page(request: Request): Promise<Response> {
   return new Response(found.body, { status: found.status, headers })
 }
 
+/** Answers `channel` for Banda's page alone. */
+function pageOnly(channel: string, answer: (...args: unknown[]) => unknown) {
+  ipcMain.handle(channel, (event, ...args: unknown[]) => {
+    if (!fromPage(event.senderFrame?.url ?? ""))
+      throw new Error(`Only Banda's page may ask for ${channel}.`)
+    return answer(...args)
+  })
+}
+
 function fromPage(url: string): boolean {
   if (DEV_PAGE) return url.startsWith(DEV_PAGE)
   return url === ORIGIN || url.startsWith(`${ORIGIN}/`)
 }
 
 function openWindow(): BrowserWindow {
-  const current = look.current()
-  const opened = new BrowserWindow({
+  const opened = pageWindow({
     width: 1280,
     height: 820,
     minWidth: 640,
     minHeight: 420,
-    show: false,
     title: "Banda",
+  })
+  hostPages(opened.webContents)
+  void opened.loadURL(PAGE)
+  opened.on("closed", () => {
+    window = null
+  })
+  return opened
+}
+
+/** A section and a row, `agents/codex`; nothing else is a link. */
+function linkOf(link: unknown): string {
+  return typeof link === "string" && /^[a-z0-9./_-]*$/i.test(link) ? link : ""
+}
+
+/**
+ * Opens the settings at `link`, or brings them forward there: one window,
+ * the page at `#settings/<link>`. Hyprland tells it by its title.
+ */
+function openSettings(link: string) {
+  if (settingsWindow) {
+    if (settingsWindow.isMinimized()) settingsWindow.restore()
+    settingsWindow.focus()
+    if (link) settingsWindow.webContents.send("settings:go", link)
+    return
+  }
+  const opened = pageWindow({
+    width: 960,
+    height: 680,
+    minWidth: 560,
+    minHeight: 400,
+    title: "Banda Settings",
+  })
+  void opened.loadURL(`${PAGE}#settings/${link}`)
+  opened.on("closed", () => {
+    settingsWindow = null
+  })
+  settingsWindow = opened
+}
+
+/** A window that shows Banda's page, in the look's first colour. */
+function pageWindow(
+  size: Pick<
+    BrowserWindowConstructorOptions,
+    "width" | "height" | "minWidth" | "minHeight" | "title"
+  >
+): BrowserWindow {
+  const current = look.current()
+  const opened = new BrowserWindow({
+    ...size,
+    show: false,
     backgroundColor:
       (current && firstFrame(current, nativeTheme.shouldUseDarkColors)) ??
       (nativeTheme.shouldUseDarkColors ? "#0a0a0a" : "#ffffff"),
@@ -233,7 +320,6 @@ function openWindow(): BrowserWindow {
   opened.once("ready-to-show", () => opened.show())
   opened.on("focus", () => opened.flashFrame(false))
   const contents = opened.webContents
-  hostPages(contents)
   // The page never leaves: links open in the browser, nothing navigates.
   contents.setWindowOpenHandler(({ url }) => {
     if (/^https?:\/\//.test(url)) void shell.openExternal(url)
@@ -251,10 +337,6 @@ function openWindow(): BrowserWindow {
       }
     })
   }
-  void opened.loadURL(DEV_PAGE ?? `${ORIGIN}/index.html`)
-  opened.on("closed", () => {
-    window = null
-  })
   return opened
 }
 

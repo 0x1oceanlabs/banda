@@ -9,7 +9,8 @@
     "./agents": "./src/agents.ts",
     "./terminal": "./src/terminal.ts",
     "./look": "./src/look.ts",
-    "./sidebar": "./src/sidebar.ts"
+    "./sidebar": "./src/sidebar.ts",
+    "./settings": "./src/settings.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
