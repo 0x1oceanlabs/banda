@@ -125,8 +125,6 @@ export function inCode(state: EditorState): boolean {
  * which makes its lines text.
  */
 export function codeKey(view: EditorView, event: KeyboardEvent): boolean {
-  if (event.isComposing || event.ctrlKey || event.metaKey || event.altKey)
-    return false
   const { state } = view
   const dispatch = (tr: Transaction) => view.dispatch(tr.scrollIntoView())
   if (!inCode(state)) return event.key === "Enter" && startCode(state, dispatch)
@@ -238,7 +236,7 @@ function lineAsBefore(state: EditorState, dispatch: Dispatch) {
 }
 
 /** Tab moves the chosen lines in a step, or puts a step at the caret;
- * Shift+Tab moves them out. */
+ * Shift+Tab moves them out, if it can. */
 function indent(state: EditorState, deeper: boolean, dispatch: Dispatch) {
   const { $from, from, to, empty } = state.selection
   if (empty && deeper) {
@@ -256,7 +254,8 @@ function indent(state: EditorState, deeper: boolean, dispatch: Dispatch) {
   const moved = lines.map((line) => (line ? step(line, deeper) : line))
   const was = lines.join("\n")
   const now = moved.join("\n")
-  if (now === was) return true
+  // Lines at the start leave Shift+Tab to the box's owner.
+  if (now === was) return deeper
   const tr = state.tr.insertText(now, base + start, base + end)
   const head = Math.max(base + start, from + moved[0].length - lines[0].length)
   const tail = Math.max(head, to + now.length - was.length)

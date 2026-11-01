@@ -1,4 +1,7 @@
 import { type Mark, markInputRule } from "@tiptap/core"
+import type { Mark as Style, Node as Block } from "@tiptap/pm/model"
+import { TextSelection } from "@tiptap/pm/state"
+import type { EditorView } from "@tiptap/pm/view"
 import Bold, {
   starInputRegex as boldStar,
   underscoreInputRegex as boldUnderscore,
@@ -54,3 +57,89 @@ export const PROMPT_MARKS = [
     [[codeInput, "`"]]
   ),
 ]
+
+/** What a character typed over chosen text puts after it, as in T3 Code. */
+const CLOSE: Record<string, string> = {
+  "(": ")",
+  "[": "]",
+  "{": "}",
+  "'": "'",
+  '"': '"',
+  "“": "”",
+  "<": ">",
+  "«": "»",
+}
+
+/**
+ * Typed with text chosen, `*` and `_` make it italic, and bold if it was
+ * italic with them; `` ` `` makes it code; a bracket or a quote goes
+ * around it. What was chosen stays chosen. Code is as it is typed.
+ */
+export function wrap(
+  view: EditorView,
+  from: number,
+  to: number,
+  typed: string
+): boolean {
+  const { state } = view
+  const { selection, schema } = state
+  const close = CLOSE[typed]
+  if (
+    (close === undefined && !STYLES.includes(typed)) ||
+    view.composing ||
+    !(selection instanceof TextSelection) ||
+    selection.empty ||
+    selection.from !== from ||
+    selection.to !== to
+  )
+    return false
+  const { italic, bold, code } = schema.marks
+  let text = false
+  let chips = false
+  let blocked = false
+  let italics = true
+  state.doc.nodesBetween(from, to, (node) => {
+    if (blocked) return false
+    if (node.type.spec.code) blocked = true
+    else if (!node.isInline) return true
+    else if (!node.isText) chips = true
+    else {
+      text = true
+      italics &&= node.marks.some(
+        (style) => style.type === italic && style.attrs.delimiter === typed
+      )
+    }
+    return false
+  })
+  // A chip must start a word and end one, so what goes round it would make
+  // it text; code holds a chip's text, not a chip.
+  if (blocked || !text || (chips && (close !== undefined || typed === "`")))
+    return false
+  const tr = state.tr
+  if (close !== undefined) {
+    // What goes round takes the styles that run on across its place.
+    tr.insert(to, schema.text(close, across(state.doc, to)))
+    tr.insert(from, schema.text(typed, across(state.doc, from)))
+    tr.setSelection(TextSelection.create(tr.doc, from + 1, to + 1))
+  } else if (typed === "`")
+    tr.addMark(from, to, code.create({ delimiter: "`" }))
+  else {
+    if (italics) tr.removeMark(from, to, italic)
+    const style = italics
+      ? bold.create({ delimiter: typed.repeat(2) })
+      : italic.create({ delimiter: typed })
+    tr.addMark(from, to, style)
+  }
+  view.dispatch(tr)
+  return true
+}
+
+/** What styles chosen text when typed over it. */
+const STYLES = ["*", "_", "`"]
+
+/** The styles of both sides of `at`. */
+function across(doc: Block, at: number): readonly Style[] {
+  const $at = doc.resolve(at)
+  const after = $at.nodeAfter?.marks ?? []
+  return ($at.nodeBefore?.marks ?? []).filter((style) => style.isInSet(after))
+}

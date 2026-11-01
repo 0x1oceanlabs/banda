@@ -8,10 +8,14 @@ import Text from "@tiptap/extension-text"
 import { Gapcursor, UndoRedo } from "@tiptap/extensions"
 import { EditorContent, useEditor } from "@tiptap/react"
 import { cn } from "cn"
-import { newLine, PROMPT_BLOCKS } from "@banda/ui/components/prompt-blocks"
+import {
+  itemKey,
+  newLine,
+  PROMPT_BLOCKS,
+} from "@banda/ui/components/prompt-blocks"
 import { CodeBlock, codeKey, inCode } from "@banda/ui/components/prompt-code"
 import { Chip } from "@banda/ui/components/prompt-chip"
-import { PROMPT_MARKS } from "@banda/ui/components/prompt-marks"
+import { PROMPT_MARKS, wrap } from "@banda/ui/components/prompt-marks"
 import {
   chip,
   CHIP_MARK,
@@ -87,14 +91,19 @@ function PromptEditor({
     content: docOf(value),
     editorProps: {
       handleKeyDown(view: EditorView, event: KeyboardEvent) {
-        // In code, Enter and Tab are the code's, before the owner's.
-        if (codeKey(view, event)) return true
+        // The text's keys come before the owner's, but not while a word
+        // being typed may have its suggestions open, which Enter and Tab
+        // pick from.
+        const suggesting = placeOf(view.state) !== undefined
+        if (!suggesting && textKey(view, event)) return true
         latest.current.onKeyDown?.(event)
         if (event.defaultPrevented) return true
+        if (suggesting && textKey(view, event)) return true
         if (event.key === "Enter" && event.shiftKey && !event.isComposing)
           return newLine(view.state, view.dispatch)
         return false
       },
+      handleTextInput: wrap,
       // Pasted text is read as a prompt is, even from this box: its HTML
       // would lose how its lines and styles were written.
       handlePaste(view: EditorView, event: ClipboardEvent) {
@@ -218,6 +227,17 @@ function PromptEditor({
       />
     </div>
   )
+}
+
+/**
+ * A key the text takes: in code Enter and Tab are the code's, and in a
+ * list Tab is the item's. Each takes a key only if it changes something,
+ * so a Shift+Tab that moves nothing is the owner's, plan mode's.
+ */
+function textKey(view: EditorView, event: KeyboardEvent): boolean {
+  if (event.isComposing || event.ctrlKey || event.metaKey || event.altKey)
+    return false
+  return codeKey(view, event) || itemKey(view, event)
 }
 
 /** The word being typed before the caret, if it asks for suggestions,

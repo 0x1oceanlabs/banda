@@ -1190,6 +1190,75 @@ test("``` and Enter starts code: coloured, its language picked, left by its fenc
   await expect(said).toHaveJSProperty("textContent", written)
 })
 
+test("typed over chosen text, * styles it and ( goes round it; Shift+Tab takes an item out, then is plan mode's", async () => {
+  window = await startWindow()
+  const { page, dir } = window
+  const { thread, composer } = await firstThread(page)
+  const space = join(dir, "root", "Work", "src")
+  mkdirSync(space, { recursive: true })
+  writeFileSync(join(space, "main.ts"), "")
+  await composer.fill("hello")
+  await composer.press("Enter")
+  await expect(thread.getByText("You said: hello")).toBeVisible()
+  // Keys outrun the selection's news to the editor; let it arrive.
+  const settle = () =>
+    page.evaluate(() => new Promise((done) => setTimeout(done)))
+  const choose = async (
+    start: "Home" | "End",
+    move: number,
+    length: number
+  ) => {
+    await composer.press(start)
+    const away = start === "Home" ? "ArrowRight" : "ArrowLeft"
+    for (let at = 0; at < move; at += 1) await composer.press(away)
+    for (let at = 0; at < length; at += 1) await composer.press(`Shift+${away}`)
+    await settle()
+  }
+
+  await composer.pressSequentially("say word now")
+  await choose("Home", 4, 4)
+  await composer.press("*")
+  await expect(composer.locator("em")).toHaveText("word")
+  // Again, and it is bold.
+  await composer.press("*")
+  await expect(composer.locator("strong")).toHaveText("word")
+  await expect(composer.locator("em")).toHaveCount(0)
+  await choose("End", 0, 3)
+  await composer.press("(")
+  await expect(composer.locator("p")).toHaveText("say word (now)")
+
+  // In a list, Shift+Tab takes an item out; at the start, it is plan
+  // mode's, as everywhere else.
+  await composer.press("End")
+  await settle()
+  await composer.press("Shift+Enter")
+  await composer.pressSequentially("- item")
+  const item = composer.locator("[data-item]")
+  await composer.press("Tab")
+  await expect(item).toHaveCSS("padding-inline-start", /^[1-9]/)
+  await composer.press("Shift+Tab")
+  await expect(item).toHaveCSS("padding-inline-start", "0px")
+  const planMode = thread.getByRole("button", { name: "Plan", exact: true })
+  await expect(planMode).toHaveAttribute("aria-pressed", "false")
+  await composer.press("Shift+Tab")
+  await expect(planMode).toHaveAttribute("aria-pressed", "true")
+  // With a file's name being typed, Tab picks it, as the list says.
+  await composer.pressSequentially(" @mai")
+  const files = page.getByRole("listbox", { name: "Files" })
+  await expect(files.getByRole("option")).toHaveCount(1)
+  await composer.press("Tab")
+  await expect(composer.locator("[data-chip=file]")).toHaveText("main.ts")
+  await expect(item).toHaveCSS("padding-inline-start", "0px")
+  await page.screenshot({ path: "test-results/18i-wrap.png" })
+
+  await composer.press("Enter")
+  const said = thread.locator("[data-slot=bubble]").filter({ hasText: "item" })
+  await expect(said).toHaveJSProperty(
+    "textContent",
+    "say **word** (now)\n- item @src/main.ts "
+  )
+})
+
 test("what the Agent does by itself shows in a turn of its own", async () => {
   window = await startWindow()
   const { page } = window
