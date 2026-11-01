@@ -192,7 +192,7 @@ spring = { damping-ratio = 1.0, stiffness = 800, epsilon = 0.0001 }
 
 - The tokens' values live in Banda's own theme (`look/themes/banda-light`, `banda-dark`), in the same files any theme has. `globals.css` keeps them as the first frame's defaults.
 - Words for `GLOSSARY.md`, once built: the look, the theme, the palette.
-- The app is called Banda (_decided_ 2026-11-01). The look lives in `~/.config/banda/`, as ADR 0005 named it. The other places (`~/.config/banda/`, `~/.local/state/banda/`, `BANDA_*`, the window title) move in a rename PR of their own.
+- The app is called Banda (_decided_ 2026-11-01). The look lives in `~/.config/banda/`, as ADR 0005 named it. The rest followed in a rename of its own: the repository, the `banda` command, `~/Banda`, `~/.local/state/banda/`, `BANDA_*` and each Space's `.banda/`. The engine and the look share `~/.config/banda/` and one `BANDA_CONFIG`.
 - The order of work, each step its own PR:
   1. **The window reads sizes and colours from variables.** The `banda` defaults, `--gap-*`, `--tile-*`, `--focus-*`; the Strip, the frame and the bar take them. The tile becomes the `xl` step with a 2 px border, and the last corners that ignore the ladder take its steps.
   2. **`banda look`**: `look.toml`, the `banda` and `omarchy` themes, the derivation, Hyprland's rounding, border and gaps, `--follow`, `check` and `themes`.

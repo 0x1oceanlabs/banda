@@ -49,9 +49,8 @@ export async function startWindow({
 } = {}): Promise<Window> {
   const dir = mkdtempSync(join(tmpdir(), "banda-window-"))
   mkdirSync(join(dir, "config"))
-  mkdirSync(join(dir, "look"))
-  if (look) writeFileSync(join(dir, "look/look.toml"), look)
-  if (sidebar) writeFileSync(join(dir, "look/sidebar.toml"), sidebar)
+  if (look) writeFileSync(join(dir, "config/look.toml"), look)
+  if (sidebar) writeFileSync(join(dir, "config/sidebar.toml"), sidebar)
   const fake = join(repository, "target/debug/banda-fake-agent")
   const home = join(dir, "fake-home")
   mkdirSync(home)
@@ -72,9 +71,9 @@ export async function startWindow({
       ...process.env,
       BANDA_ROOT: join(dir, "root"),
       BANDA_STATE: join(dir, "state"),
+      // The engine and the look read only this folder: no Omarchy, no
+      // Hyprland.
       BANDA_CONFIG: join(dir, "config"),
-      // The look reads only its own folder: no Omarchy, no Hyprland.
-      BANDA_CONFIG: join(dir, "look"),
       BANDA_OMARCHY: "",
       BANDA_FONTCONFIG: "",
       HYPRLAND_INSTANCE_SIGNATURE: "",

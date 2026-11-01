@@ -1035,7 +1035,7 @@ test("what the Agent does by itself shows in a turn of its own", async () => {
 test("the sidebar is arranged by sidebar.toml, and its view menu writes the file", async () => {
   window = await startWindow({ sidebar: '# mine\npreset = "spaces"\n' })
   const { page, dir } = window
-  const file = join(dir, "look/sidebar.toml")
+  const file = join(dir, "config/sidebar.toml")
   const { composer } = await firstThread(page)
   await composer.fill("hello")
   await composer.press("Enter")
@@ -1063,9 +1063,9 @@ test("the sidebar is arranged by sidebar.toml, and its view menu writes the file
   await expect(view).toHaveAccessibleName("View: places")
 
   // A preset of the Person's own is a file, and the menu lists it.
-  mkdirSync(join(dir, "look/sidebars"))
+  mkdirSync(join(dir, "config/sidebars"))
   writeFileSync(
-    join(dir, "look/sidebars/flat.toml"),
+    join(dir, "config/sidebars/flat.toml"),
     '[group]\nby = "none"\n[row]\nlines = 1\n'
   )
   writeFileSync(file, 'preset = "flat"\n')
@@ -1182,7 +1182,7 @@ test("the window takes its look from look.toml, and again on each save", async (
     look: '[gaps]\ninner = 12\n[colors]\naccent = "#e07a3f"\n',
   })
   const { page, dir } = window
-  const file = join(dir, "look/look.toml")
+  const file = join(dir, "config/look.toml")
   const { thread } = await firstThread(page)
   const root = page.locator("html")
   await expect(root).toHaveCSS("--gap-inner", "12px")

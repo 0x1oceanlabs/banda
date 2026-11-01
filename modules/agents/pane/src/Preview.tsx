@@ -1,8 +1,4 @@
-import {
-  Dialog,
-  DialogContent,
-  DialogTitle,
-} from "@banda/ui/components/dialog"
+import { Dialog, DialogContent, DialogTitle } from "@banda/ui/components/dialog"
 
 /** An image shown whole over the Pane. `children` hold the
  * `DialogTrigger` that opens it. */

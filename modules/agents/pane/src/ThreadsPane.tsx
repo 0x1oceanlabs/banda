@@ -10,12 +10,7 @@ import { Spinner } from "@banda/ui/components/spinner"
 import { useLive } from "@banda/ui/hooks/use-live"
 import { ago } from "@banda/ui/lib/words"
 import { cn } from "@banda/ui/lib/utils"
-import {
-  definePane,
-  type PaneProps,
-  type Place,
-  paneOf,
-} from "@banda/ui/pane"
+import { definePane, type PaneProps, type Place, paneOf } from "@banda/ui/pane"
 import { MessagesSquareIcon } from "lucide-react"
 import { harnessName, useHarnesses } from "./harnesses"
 import { threadsSource } from "./list"

@@ -1,3 +1,4 @@
+import "./renamed"
 import { StrictMode } from "react"
 import { createRoot } from "react-dom/client"
 import { Engine } from "@banda/contract"
