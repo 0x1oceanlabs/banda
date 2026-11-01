@@ -119,5 +119,6 @@ Roma, on 2026-11-01, looking at the sidebar's header:
   4. **More rows:** Files of the focused Space; the browser's "Open" and "Search the web"; ranking by what is opened often and lately.
      - _Done._ A file opens in a browser, and `Tab` offers Copy path. What is chosen is kept in the window's storage, its count weighed by how lately: among equal matches it ranks first, and it leads the empty menu's Actions.
   5. **Sources from the manifests**, with ADR 0014.
+     - _Changed on 2026-11-02:_ this is ADR 0022's step 4, where a module's `defineModule` declares its sources.
   6. **`banda menu [route]`.**
      - _Done._ The CLI writes one JSON line to the window's socket, `window.sock` in the state folder, and the window answers `ok`. The engine names that path to the window as it starts, so both find it the same way. Routes: `actions`, `views`, `space.<name>` (or its ID), and `settings.<section>.<row>` for the settings window; other words open the menu with them typed in. Dotted ids for every row wait for the manifests (step 5).
