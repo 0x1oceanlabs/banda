@@ -15,6 +15,7 @@ import {
   SquareIcon,
 } from "lucide-react"
 import { AttachmentList, type Attached, type Attachments } from "./Attachments"
+import { type FollowUp, steers, useFollowUp } from "./follow-up"
 import { imagesAmong, KINDS } from "./images"
 import { ownCommand, type Suggested } from "./slash"
 import { useSlashMenu } from "./SlashMenu"
@@ -23,8 +24,9 @@ import { useSlashMenu } from "./SlashMenu"
  * Where a Person writes to the Agent: the text, with the slash commands
  * it can start with; the images it carries, added with the button or by
  * pasting them; and Send, or Stop while the Agent works and nothing is
- * written. While the Agent works, a message goes into its turn (Enter, as
- * T3 Code's default) or waits for the turn to end (Queue, Ctrl+Enter).
+ * written. While the Agent works, a message goes into its turn or waits
+ * for the turn to end: Enter does what the window chose, into the turn as
+ * T3 Code's default, and Ctrl+Enter the other.
  */
 export function Composer({
   name,
@@ -67,6 +69,7 @@ export function Composer({
   children?: React.ReactNode
 }) {
   const [text, setText] = useState("")
+  const [followUp] = useFollowUp()
   const field = useRef<HTMLTextAreaElement>(null)
   const files = useRef<HTMLInputElement>(null)
   useEffect(() => {
@@ -159,8 +162,8 @@ export function Composer({
               !event.nativeEvent.isComposing
             ) {
               event.preventDefault()
-              // Ctrl (⌘ on a Mac) does the other thing: it queues.
-              void send(!(event.ctrlKey || event.metaKey))
+              // Ctrl (⌘ on a Mac) does the other thing.
+              void send(steers(followUp, event.ctrlKey || event.metaKey))
             }
           }}
         />
@@ -197,7 +200,7 @@ export function Composer({
                   variant="ghost"
                   size="icon-sm"
                   aria-label="Queue"
-                  title={`Queue it: it goes once ${name} is done (Ctrl+Enter).`}
+                  title={`Queue it: it goes once ${name} is done (${keyOf(followUp, "queue")}).`}
                   disabled={!ready}
                   onClick={() => void send(false)}
                 >
@@ -211,7 +214,7 @@ export function Composer({
                 aria-label={steering ? "Send now" : "Send"}
                 title={
                   steering
-                    ? `Send it now: ${name} reads it as it works (Enter).`
+                    ? `Send it now: ${name} reads it as it works (${keyOf(followUp, "steer")}).`
                     : undefined
                 }
                 disabled={!ready}
@@ -224,6 +227,11 @@ export function Composer({
       </InputGroup>
     </form>
   )
+}
+
+/** The key that sends a message `how`, as the window chose. */
+function keyOf(followUp: FollowUp, how: FollowUp): string {
+  return followUp === how ? "Enter" : "Ctrl+Enter"
 }
 
 /** From this share of its context used, an Agent is near the point where

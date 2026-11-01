@@ -178,6 +178,42 @@ test("a Person signs in from the turn that needed it, and it goes again", async 
   ).toHaveCount(0)
 })
 
+test("a Person sees who is signed in to a Harness, signs in and out", async () => {
+  window = await startWindow({ account: true })
+  const { page } = window
+  await page.getByLabel("Name").fill("Work")
+  await page.getByRole("button", { name: "Create Space" }).click()
+  await expect(page.getByRole("region", { name: "Agents" })).toBeVisible()
+  await page.keyboard.press("Control+Backslash")
+  await page
+    .getByRole("region", { name: "New Pane" })
+    .getByRole("button", { name: "Harnesses" })
+    .click()
+  const settings = page.getByRole("region", { name: "Harnesses" })
+  const fake = settings.getByRole("group", { name: "Fake AI" })
+  await expect(fake.getByText(/^bandaso-fake-agent \d/)).toBeVisible()
+  await expect(fake.getByText("Not signed in.")).toBeVisible()
+
+  await fake.getByRole("button", { name: "Sign in with Fake browser" }).click()
+  await expect(
+    fake.getByText("Signed in as person@example.invalid · Fake Pro")
+  ).toBeVisible()
+  await page.screenshot({ path: "test-results/5-harnesses.png" })
+
+  await fake.getByRole("button", { name: "Sign out" }).click()
+  const asking = page.getByRole("dialog", { name: "Sign out of Fake AI?" })
+  await asking.getByRole("button", { name: "Sign out" }).click()
+  await expect(fake.getByText("Not signed in.")).toBeVisible()
+
+  // What Enter does while an Agent works is the window's to choose.
+  const choice = page
+    .getByRole("radiogroup", { name: /while an Agent works/ })
+    .getByRole("radio", { name: "Queue it" })
+  await choice.click()
+  await page.reload()
+  await expect(choice).toBeChecked()
+})
+
 test("a Person chooses the model and the mode under the message box", async () => {
   window = await startWindow()
   const { page } = window
