@@ -16,6 +16,7 @@ pub mod hyprland;
 pub mod motion;
 pub mod palette;
 pub mod settings;
+pub mod sound;
 pub mod theme;
 pub mod tokens;
 
@@ -70,6 +71,8 @@ pub struct Look {
     /// What is wrong in the files. The look still applies: a broken layer
     /// is left out, and `--follow` keeps the last good look.
     pub problems: Vec<Problem>,
+    /// Banda's sounds, which the window plays (ADR 0009).
+    pub sound: sound::Sound,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, TS)]
@@ -172,6 +175,9 @@ pub fn read_settings(path: &Path, text: &str, problems: &mut Vec<Problem>) -> Op
     }
     for (span, message) in settings.motion.problems() {
         problems.push(Problem::at(path, text, span, message));
+    }
+    if settings.sound.volume_wrong() {
+        problems.push(Problem::whole(path, "sound.volume is from 0 to 1"));
     }
     let named = |value: &Spanned<String>| {
         let v = value.get_ref();
@@ -393,6 +399,7 @@ pub fn resolve(places: &Places, windows: &dyn Fn() -> Option<Windows>) -> Resolv
             motion: all.motion.resolve(),
             sources,
             problems,
+            sound: all.sound.resolved(),
         },
         watched,
     }

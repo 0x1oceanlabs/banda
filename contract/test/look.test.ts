@@ -12,6 +12,14 @@ const look = (mode: Look["mode"], schemes: Look["schemes"]): Look => ({
   motion: DEFAULT_MOTION,
   sources: [],
   problems: [],
+  sound: {
+    family: "banda",
+    volume: 0.6,
+    room: true,
+    done: true,
+    asking: true,
+    failed: true,
+  },
 })
 const light = { "--background": "#fff" }
 const dark = { "--background": "#000" }

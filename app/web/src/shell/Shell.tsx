@@ -1,11 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import type { Engine, SpaceId, SpaceSummary, Status } from "@bandaso/contract"
 import { QUIET } from "@bandaso/ui/pane"
-import { DEFAULT_SOUND } from "@bandaso/ui/sound"
 import { actionFor } from "../actions/actions"
 import { Bar } from "../bar/Bar"
 import { type Lists, Watches } from "../bar/Watches"
 import { useCalls } from "../calls/useCalls"
+import { useLookSound } from "../look"
 import { kindOf, startable, widthOf } from "../registry"
 import { Sidebar } from "../sidebar/Sidebar"
 import {
@@ -62,8 +62,8 @@ export function Shell({
   const [sidebar, setSidebar] = useState(loadSidebar)
   const [overview, setOverview] = useState(false)
   const [attention, setAttention] = useState(QUIET)
-  // The look will bring the Person's own `[sound]` (ADR 0009, decision 5).
-  const call = useCalls(DEFAULT_SOUND)
+  // The Person's `[sound]`, as the look brings it (ADR 0009, decision 5).
+  const call = useCalls(useLookSound())
   const [lists, setLists] = useState<Lists>({})
   useEffect(() => keepWorkspaces(workspaces), [workspaces])
   useEffect(() => keepSidebar(sidebar), [sidebar])
