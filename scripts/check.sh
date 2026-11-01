@@ -1,53 +1,67 @@
 #!/usr/bin/env bash
 # Every check a change must pass, in the order a failure is cheapest to
-# find. There is no CI yet: run this before a PR. `--no-window` skips the
-# end-to-end tests of the desktop window.
+# find. CI runs the parts side by side (.github/workflows/ci.yml).
+#
+#   scripts/check.sh               every part: rust, ts, window
+#   scripts/check.sh --no-window   all but the desktop window's end-to-end tests
+#   scripts/check.sh PART...       only these parts, in this order
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-window=1
+parts=()
 for arg in "$@"; do
   case "$arg" in
-    --no-window) window=0 ;;
-    *) echo "check.sh: unknown argument $arg" >&2; exit 2 ;;
+    --no-window) parts+=(rust ts) ;;
+    rust | ts | window) parts+=("$arg") ;;
+    *) echo "check.sh: unknown argument $arg (rust, ts, window, --no-window)" >&2; exit 2 ;;
   esac
 done
+((${#parts[@]})) || parts=(rust ts window)
 
 step() { printf '\n== %s\n' "$*"; }
-
-step "Rust: format, lints"
-cargo fmt --all --check
-cargo clippy --workspace --all-targets --quiet -- -D warnings
 
 # The Rust tests write contract/src/generated; a change there means the
 # TypeScript types on disk were stale.
 types() { find contract/src/generated -type f -print0 | sort -z | xargs -0 sha256sum; }
 
-step "Rust: tests"
-before=$(types)
-# The agents module's tests write checkpoints that the Pane's projection
-# must reproduce (ADR 0014, decision 3); the Pane's tests read them below.
-export BANDA_CHECKPOINTS="$PWD/target/checkpoints"
-rm -rf "$BANDA_CHECKPOINTS" && mkdir -p "$BANDA_CHECKPOINTS"
-cargo test --workspace --quiet
-cargo build --workspace --quiet
+rust() {
+  step "Rust: format, lints"
+  cargo fmt --all --check
+  cargo clippy --workspace --all-targets --quiet -- -D warnings
 
-step "The TypeScript types match the Rust"
-if [[ "$before" != "$(types)" ]]; then
-  echo "cargo test rewrote contract/src/generated: review it and run again." >&2
-  exit 1
-fi
+  step "Rust: tests"
+  local before; before=$(types)
+  # The agents module's tests write checkpoints that the Pane's projection
+  # must reproduce (ADR 0014, decision 3); the ts part's tests read them, so
+  # it runs after this one, in the same checkout.
+  export BANDA_CHECKPOINTS="$PWD/target/checkpoints"
+  rm -rf "$BANDA_CHECKPOINTS" && mkdir -p "$BANDA_CHECKPOINTS"
+  cargo test --workspace --quiet
 
-step "TypeScript: format, lints, types, tests"
-pnpm install --frozen-lockfile --silent
-pnpm exec prettier --check . --log-level warn
-pnpm exec eslint .
-pnpm -r --silent typecheck
-pnpm -r --silent test
+  step "The TypeScript types match the Rust"
+  if [[ "$before" != "$(types)" ]]; then
+    echo "cargo test rewrote contract/src/generated: review it and run again." >&2
+    exit 1
+  fi
+}
 
-if [[ $window == 1 ]]; then
+ts() {
+  step "TypeScript: format, lints, types, tests"
+  pnpm install --frozen-lockfile --silent
+  pnpm exec prettier --check . --log-level warn
+  pnpm exec eslint .
+  pnpm -r --silent typecheck
+  pnpm -r --silent test
+}
+
+window() {
   step "The desktop window, end to end"
+  # The window starts the engine and the fake agent from target/debug.
+  cargo build --workspace --quiet
+  pnpm install --frozen-lockfile --silent
   pnpm --filter @banda/desktop --silent e2e
-fi
+}
+
+for part in "${parts[@]}"; do "$part"; done
 
 printf '\nAll checks passed.\n'
