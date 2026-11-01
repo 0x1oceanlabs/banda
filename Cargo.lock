@@ -291,6 +291,7 @@ dependencies = [
  "axum",
  "bandaso-agents",
  "bandaso-kernel",
+ "bandaso-look",
  "bandaso-terminal",
  "clap",
  "dirs",
@@ -352,6 +353,17 @@ dependencies = [
  "tracing",
  "ts-rs",
  "uuid",
+]
+
+[[package]]
+name = "bandaso-look"
+version = "0.1.0"
+dependencies = [
+ "serde",
+ "serde_json",
+ "tempfile",
+ "toml",
+ "ts-rs",
 ]
 
 [[package]]

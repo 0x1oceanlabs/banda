@@ -4,6 +4,9 @@
 //! - `bandaso call <method>` calls one API method and prints `{"ok": …}`.
 //! - `bandaso follow --space <id>` prints the Space's events, one JSON
 //!   object per line.
+//! - `bandaso look` prints the window's look, resolved from Omarchy's
+//!   theme, Hyprland and `~/.config/banda/look.toml`; `--follow` prints it
+//!   again on each change. It needs no engine: the look is this machine's.
 //!
 //! When the engine refuses (the call, the hello or the follow), the CLI
 //! prints `{"error": {"code", "message"}}` and exits 1. When no engine
@@ -20,6 +23,8 @@ use client::Client;
 use places::Places;
 use serde_json::{Value, json};
 use std::fmt::Display;
+use std::io::Write;
+use std::path::PathBuf;
 use std::process::ExitCode;
 
 #[derive(Parser)]
@@ -73,6 +78,26 @@ enum Command {
         #[arg(long = "kind")]
         kinds: Vec<String>,
     },
+    /// Prints the window's look as JSON: CSS variables from Omarchy's
+    /// theme, Hyprland's windows and ~/.config/banda/look.toml.
+    Look {
+        #[command(subcommand)]
+        what: Option<LookCommand>,
+        /// Prints it again, one JSON object per line, each time a file it
+        /// reads changes or Hyprland reloads.
+        #[arg(long)]
+        follow: bool,
+    },
+}
+
+#[derive(Subcommand)]
+enum LookCommand {
+    /// Checks look.toml, a theme's banda.toml or colors.toml, or with no
+    /// files every file the look reads. Prints path:line:column: problem
+    /// and exits 1 when anything is wrong; prints nothing when all is well.
+    Check { files: Vec<PathBuf> },
+    /// Lists the themes there are, one JSON object per line.
+    Themes,
 }
 
 /// Why the program did not do its job, and how it exits.
@@ -115,6 +140,9 @@ impl Failure {
 
 fn main() -> ExitCode {
     let cli = Cli::parse();
+    if let Command::Look { what, follow } = cli.command {
+        return look(what, follow);
+    }
     tracing_subscriber::fmt()
         .with_env_filter(
             tracing_subscriber::EnvFilter::try_from_env("BANDASO_LOG")
@@ -151,6 +179,7 @@ async fn run(command: Command, places: Places) -> Result<(), Failure> {
             println!("{}", json!({ "ok": answer }));
             Ok(())
         }
+        Command::Look { .. } => unreachable!("the look runs without the engine"),
         Command::Follow {
             space,
             after,
@@ -168,6 +197,53 @@ async fn run(command: Command, places: Places) -> Result<(), Failure> {
                 .await?
                 .follow(space, after, filter, |event| println!("{}", json!(event)))
                 .await
+        }
+    }
+}
+
+/// `bandaso look`: no engine, no runtime, only files and Hyprland's socket.
+fn look(what: Option<LookCommand>, follow: bool) -> ExitCode {
+    use bandaso_look::hyprland::Hyprland;
+    use bandaso_look::theme::Places;
+
+    let places = Places::from_env();
+    let mut out = std::io::stdout().lock();
+    // A reader that went away is not an error: the window closed.
+    let mut print =
+        |value: serde_json::Value| writeln!(out, "{value}").and_then(|()| out.flush()).is_ok();
+    match what {
+        None if follow => {
+            bandaso_look::follow(&places, Hyprland::from_env(), |look| print(json!(look)));
+            ExitCode::SUCCESS
+        }
+        None => {
+            let hyprland = Hyprland::from_env();
+            let windows = || hyprland.as_ref().and_then(|h| h.windows().ok());
+            print(json!(bandaso_look::resolve(&places, &windows).look));
+            ExitCode::SUCCESS
+        }
+        Some(LookCommand::Themes) => {
+            for theme in places.themes() {
+                if !print(json!(theme)) {
+                    break;
+                }
+            }
+            ExitCode::SUCCESS
+        }
+        Some(LookCommand::Check { files }) => {
+            let problems = if files.is_empty() {
+                bandaso_look::resolve(&places, &|| None).look.problems
+            } else {
+                bandaso_look::check(&files)
+            };
+            for problem in &problems {
+                eprintln!("{problem}");
+            }
+            if problems.is_empty() {
+                ExitCode::SUCCESS
+            } else {
+                ExitCode::FAILURE
+            }
         }
     }
 }
