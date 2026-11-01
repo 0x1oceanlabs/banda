@@ -1,0 +1,1018 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Banda — Settings (mockup)</title>
+    <style>
+      :root {
+        --background: #1a1b26;
+        --foreground: #a9b1d6;
+        --card: #1a1b26;
+        --muted: #252734;
+        --muted-foreground: #565f89;
+        --border: #2b2d3b;
+        --input: #2b2d3b;
+        --primary: #7aa2f7;
+        --primary-foreground: #1a1b26;
+        --sidebar: #13141c;
+        --sidebar-accent: #262e43;
+        --attention: #eb927b;
+        --destructive: #f7768e;
+        --green: #9ece6a;
+        --bright: #c0caf5;
+        --radius: 8.6px;
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0 auto;
+        max-width: 1000px;
+        padding: 28px;
+        background: #0e0e14;
+        font-size: 13px;
+        color: var(--foreground);
+        font:
+          14px/1.45 "Inter Variable",
+          Inter,
+          system-ui,
+          sans-serif;
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+        align-items: center;
+      }
+      .cap {
+        color: #787c99;
+        font-size: 11.5px;
+        letter-spacing: 0.04em;
+        text-transform: uppercase;
+        align-self: stretch;
+      }
+      .win {
+        width: 100%;
+        display: flex;
+        border: 2px solid var(--primary);
+        border-radius: 12px;
+        overflow: hidden;
+        background: var(--background);
+        box-shadow: 0 20px 60px #0008;
+      }
+      nav {
+        width: 178px;
+        flex: none;
+        background: var(--sidebar);
+        border-right: 1px solid var(--border);
+        padding: 14px 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 2px;
+      }
+      .search {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        border: 1px solid var(--input);
+        border-radius: var(--radius);
+        padding: 6px 10px;
+        color: var(--muted-foreground);
+        margin-bottom: 12px;
+        font-size: 13px;
+      }
+      .search kbd {
+        margin-left: auto;
+      }
+      kbd {
+        font:
+          11px ui-monospace,
+          monospace;
+        border: 1px solid var(--border);
+        border-bottom-width: 2px;
+        border-radius: 4px;
+        padding: 0 4px;
+        color: var(--muted-foreground);
+      }
+      .item {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 6px 10px;
+        border-radius: calc(var(--radius) * 0.8);
+        font-size: 13.5px;
+        cursor: default;
+      }
+      .item svg {
+        width: 16px;
+        height: 16px;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 1.8;
+        opacity: 0.85;
+      }
+      .item.on {
+        background: var(--sidebar-accent);
+        color: var(--bright);
+      }
+      .item .n {
+        display: none;
+        margin-left: auto;
+        font-size: 11px;
+        color: var(--muted-foreground);
+      }
+      .item.sub {
+        padding-left: 36px;
+        font-size: 13px;
+        color: var(--muted-foreground);
+      }
+      .item.sub .dot {
+        margin-left: auto;
+      }
+      .grp {
+        font-size: 11px;
+        color: var(--muted-foreground);
+        padding: 12px 10px 4px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+      }
+      .navfoot {
+        margin-top: auto;
+        font-size: 12px;
+        color: var(--muted-foreground);
+        padding: 8px 10px;
+        border-top: 1px solid var(--border);
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+      main {
+        flex: 1;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+      }
+      .scroll {
+        flex: 1;
+        padding: 20px 20px;
+      }
+      .inner {
+        max-width: 720px;
+        margin: 0 auto;
+        display: flex;
+        flex-direction: column;
+        gap: 22px;
+      }
+      h1 {
+        font-size: 20px;
+        color: var(--bright);
+        margin: 0;
+        font-weight: 600;
+      }
+      .lead {
+        display: flex;
+        align-items: flex-start;
+        gap: 16px;
+      }
+      .lead p {
+        margin: 4px 0 0;
+        color: var(--muted-foreground);
+        font-size: 13px;
+      }
+      .lead .btn {
+        margin-left: auto;
+      }
+      code,
+      .file {
+        font:
+          12px ui-monospace,
+          "JetBrainsMono Nerd Font",
+          monospace;
+        color: var(--foreground);
+        background: var(--muted);
+        padding: 1px 6px;
+        border-radius: 5px;
+      }
+      .btn {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        border: 1px solid var(--border);
+        border-radius: calc(var(--radius) * 0.8);
+        padding: 5px 11px;
+        font-size: 13px;
+        background: transparent;
+        color: var(--foreground);
+        white-space: nowrap;
+      }
+      .btn.p {
+        background: var(--primary);
+        color: var(--primary-foreground);
+        border-color: var(--primary);
+        font-weight: 500;
+      }
+      .btn.ghost {
+        border-color: transparent;
+        color: var(--muted-foreground);
+      }
+      .btn svg {
+        width: 14px;
+        height: 14px;
+        stroke: currentColor;
+        fill: none;
+        stroke-width: 2;
+      }
+      h2 {
+        font-size: 12px;
+        color: var(--muted-foreground);
+        margin: 0 0 -12px;
+        text-transform: uppercase;
+        letter-spacing: 0.06em;
+        font-weight: 600;
+      }
+      .card {
+        border: 1px solid var(--border);
+        border-radius: calc(var(--radius) * 1.4);
+        overflow: hidden;
+      }
+      .row {
+        display: flex;
+        align-items: center;
+        gap: 16px;
+        padding: 12px 16px;
+        border-top: 1px solid var(--border);
+      }
+      .row:first-child {
+        border-top: 0;
+      }
+      .row .l {
+        flex: 1;
+        min-width: 0;
+      }
+      .row .t {
+        color: var(--bright);
+        font-size: 13.5px;
+        display: flex;
+        align-items: center;
+        gap: 8px;
+      }
+      .row .d {
+        color: var(--muted-foreground);
+        font-size: 12.5px;
+        margin-top: 1px;
+      }
+      .mod {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--primary);
+        display: inline-block;
+        margin-left: -14px;
+      }
+      .chip {
+        font-size: 11px;
+        border-radius: 999px;
+        padding: 1px 8px;
+        border: 1px solid var(--border);
+        color: var(--muted-foreground);
+        white-space: nowrap;
+      }
+      .chip.hypr {
+        color: #0db9d7;
+        border-color: #0db9d733;
+      }
+      .chip.mine {
+        color: var(--primary);
+        border-color: #7aa2f744;
+      }
+      .chip.theme {
+        color: #ad8ee6;
+        border-color: #ad8ee633;
+      }
+      .sel {
+        display: inline-flex;
+        align-items: center;
+        gap: 10px;
+        border: 1px solid var(--input);
+        border-radius: calc(var(--radius) * 0.8);
+        padding: 5px 10px;
+        font-size: 13px;
+        min-width: 110px;
+        justify-content: space-between;
+      }
+      .sel:after {
+        content: "⌄";
+        color: var(--muted-foreground);
+        margin-top: -5px;
+      }
+      .inp {
+        border: 1px solid var(--input);
+        border-radius: calc(var(--radius) * 0.8);
+        padding: 5px 10px;
+        font:
+          12.5px ui-monospace,
+          monospace;
+        min-width: 140px;
+        color: var(--foreground);
+      }
+      .sw {
+        width: 34px;
+        height: 20px;
+        border-radius: 999px;
+        background: var(--primary);
+        position: relative;
+        flex: none;
+      }
+      .sw:after {
+        content: "";
+        position: absolute;
+        right: 2px;
+        top: 2px;
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: var(--primary-foreground);
+      }
+      .sw.off {
+        background: var(--input);
+      }
+      .sw.off:after {
+        right: auto;
+        left: 2px;
+        background: var(--muted-foreground);
+      }
+      .seg {
+        display: inline-flex;
+        border: 1px solid var(--input);
+        border-radius: calc(var(--radius) * 0.8);
+        padding: 2px;
+        gap: 2px;
+      }
+      .seg span {
+        padding: 3px 11px;
+        border-radius: calc(var(--radius) * 0.6);
+        font-size: 12.5px;
+        color: var(--muted-foreground);
+      }
+      .seg span.on {
+        background: var(--muted);
+        color: var(--bright);
+      }
+      .h {
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 14px 16px;
+      }
+      .logo {
+        width: 34px;
+        height: 34px;
+        border-radius: 9px;
+        display: grid;
+        place-items: center;
+        font-weight: 700;
+        font-size: 15px;
+        flex: none;
+      }
+      .name {
+        color: var(--bright);
+        font-weight: 600;
+        font-size: 14.5px;
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+      .ver {
+        font:
+          11.5px ui-monospace,
+          monospace;
+        color: var(--muted-foreground);
+        font-weight: 400;
+      }
+      .status {
+        font-size: 12.5px;
+        color: var(--muted-foreground);
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        margin-top: 2px;
+      }
+      .dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        display: inline-block;
+        flex: none;
+      }
+      .ok {
+        background: var(--green);
+      }
+      .warn {
+        background: var(--attention);
+      }
+      .none {
+        background: var(--muted-foreground);
+      }
+      .h .acts {
+        margin-left: auto;
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+      .sub-rows .row {
+        padding-left: 16px;
+      }
+      .add {
+        border: 1px dashed var(--border);
+        border-radius: calc(var(--radius) * 1.4);
+        padding: 12px 16px;
+        color: var(--muted-foreground);
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 13.5px;
+      }
+      .top {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        padding: 9px 16px;
+        border-bottom: 1px solid var(--border);
+        font-size: 12.5px;
+        color: var(--muted-foreground);
+      }
+      .top b {
+        color: var(--bright);
+        font-weight: 500;
+      }
+      .top .x {
+        margin-left: auto;
+        display: flex;
+        gap: 10px;
+        align-items: center;
+      }
+      .rst {
+        color: var(--muted-foreground);
+        font-size: 14px;
+        line-height: 1;
+      }
+      .foot {
+        border-top: 1px solid var(--border);
+        padding: 8px 16px;
+        font-size: 12px;
+        color: var(--muted-foreground);
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        background: var(--sidebar);
+      }
+      .foot .warnline {
+        color: var(--attention);
+      }
+      .themes {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 12px;
+        padding: 14px 16px;
+      }
+      .th {
+        border: 1px solid var(--border);
+        border-radius: calc(var(--radius) * 1.2);
+        padding: 8px;
+        font-size: 12.5px;
+      }
+      .th.on {
+        border: 2px solid var(--primary);
+        padding: 7px;
+      }
+      .th .pv {
+        height: 62px;
+        border-radius: 6px;
+        margin-bottom: 8px;
+        display: flex;
+        gap: 4px;
+        padding: 6px;
+      }
+      .th .pv i {
+        flex: 1;
+        border-radius: 4px;
+      }
+      .th .s {
+        color: var(--muted-foreground);
+        font-size: 11.5px;
+      }
+      .slider {
+        width: 90px;
+        flex: none;
+        height: 4px;
+        background: var(--input);
+        border-radius: 2px;
+        position: relative;
+      }
+      .slider b {
+        position: absolute;
+        left: 0;
+        top: 0;
+        bottom: 0;
+        background: var(--primary);
+        border-radius: 2px;
+      }
+      .slider i {
+        position: absolute;
+        top: -6px;
+        width: 16px;
+        height: 16px;
+        border-radius: 50%;
+        background: var(--bright);
+        border: 3px solid var(--primary);
+      }
+      .val {
+        font:
+          12px ui-monospace,
+          monospace;
+        color: var(--muted-foreground);
+        width: 44px;
+        text-align: right;
+      }
+      .sw2 {
+        display: flex;
+        gap: 6px;
+      }
+      .sw2 i {
+        width: 20px;
+        height: 20px;
+        border-radius: 50%;
+        display: inline-block;
+        border: 2px solid transparent;
+      }
+      .sw2 i.on {
+        border-color: var(--bright);
+      }
+    </style>
+  </head>
+  <body>
+    <svg width="0" height="0" style="position: absolute">
+      <symbol id="i-gear" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="3" />
+        <path
+          d="M19.4 15a1.7 1.7 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.8-.3 1.7 1.7 0 0 0-1 1.5V21a2 2 0 1 1-4 0v-.1a1.7 1.7 0 0 0-1.1-1.5 1.7 1.7 0 0 0-1.8.3l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1a1.7 1.7 0 0 0 .3-1.8 1.7 1.7 0 0 0-1.5-1H3a2 2 0 1 1 0-4h.1a1.7 1.7 0 0 0 1.5-1.1 1.7 1.7 0 0 0-.3-1.8l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1a1.7 1.7 0 0 0 1.8.3H9a1.7 1.7 0 0 0 1-1.5V3a2 2 0 1 1 4 0v.1a1.7 1.7 0 0 0 1 1.5 1.7 1.7 0 0 0 1.8-.3l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1a1.7 1.7 0 0 0-.3 1.8V9a1.7 1.7 0 0 0 1.5 1H21a2 2 0 1 1 0 4h-.1a1.7 1.7 0 0 0-1.5 1z"
+        />
+      </symbol>
+      <symbol id="i-paint" viewBox="0 0 24 24">
+        <circle cx="13.5" cy="6.5" r="1.5" />
+        <circle cx="17.5" cy="10.5" r="1.5" />
+        <circle cx="8.5" cy="7.5" r="1.5" />
+        <circle cx="6.5" cy="12.5" r="1.5" />
+        <path
+          d="M12 2a10 10 0 0 0 0 20c.9 0 1.7-.8 1.7-1.7 0-.4-.2-.8-.4-1.1-.3-.3-.4-.7-.4-1.1 0-.9.8-1.7 1.7-1.7h2a5.6 5.6 0 0 0 5.6-5.6C22 6 17.5 2 12 2z"
+        />
+      </symbol>
+      <symbol id="i-side" viewBox="0 0 24 24">
+        <rect x="3" y="3" width="18" height="18" rx="2" />
+        <path d="M9 3v18" />
+      </symbol>
+      <symbol id="i-bell" viewBox="0 0 24 24">
+        <path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9" />
+        <path d="M10.3 21a1.9 1.9 0 0 0 3.4 0" />
+      </symbol>
+      <symbol id="i-bot" viewBox="0 0 24 24">
+        <rect x="3" y="8" width="18" height="12" rx="2" />
+        <path d="M12 8V4M8 14h.01M16 14h.01" />
+      </symbol>
+      <symbol id="i-term" viewBox="0 0 24 24">
+        <path d="m4 17 6-6-6-6M12 19h8" />
+      </symbol>
+      <symbol id="i-globe" viewBox="0 0 24 24">
+        <circle cx="12" cy="12" r="10" />
+        <path d="M2 12h20M12 2a15 15 0 0 1 0 20 15 15 0 0 1 0-20" />
+      </symbol>
+      <symbol id="i-key" viewBox="0 0 24 24">
+        <rect x="2" y="6" width="20" height="12" rx="2" />
+        <path d="M6 10h.01M10 10h.01M14 10h.01M18 10h.01M8 14h8" />
+      </symbol>
+      <symbol id="i-box" viewBox="0 0 24 24">
+        <path d="M21 8 12 3 3 8v8l9 5 9-5z" />
+        <path d="M3 8l9 5 9-5M12 13v8" />
+      </symbol>
+      <symbol id="i-file" viewBox="0 0 24 24">
+        <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+        <path d="M14 2v6h6" />
+      </symbol>
+      <symbol id="i-plus" viewBox="0 0 24 24">
+        <path d="M12 5v14M5 12h14" />
+      </symbol>
+      <symbol id="i-ext" viewBox="0 0 24 24">
+        <path
+          d="M15 3h6v6M10 14 21 3M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"
+        />
+      </symbol>
+      <symbol id="i-search" viewBox="0 0 24 24">
+        <circle cx="11" cy="11" r="7" />
+        <path d="m21 21-4.3-4.3" />
+      </symbol>
+    </svg>
+
+    <div class="cap">
+      1 · Settings → Agents (Alt+, opens the window; Threads' "Sign in" links
+      straight here)
+    </div>
+    <div class="win">
+      <nav>
+        <div class="search">
+          <svg
+            width="14"
+            height="14"
+            style="stroke: currentColor; fill: none; stroke-width: 2"
+          >
+            <use href="#i-search" /></svg
+          >Search settings<kbd>/</kbd>
+        </div>
+        <div class="item">
+          <svg><use href="#i-gear" /></svg>General
+        </div>
+        <div class="item">
+          <svg><use href="#i-paint" /></svg>Appearance<span class="n"
+            >look.toml</span
+          >
+        </div>
+        <div class="item">
+          <svg><use href="#i-side" /></svg>Sidebar<span class="n"
+            >sidebar.toml</span
+          >
+        </div>
+        <div class="item">
+          <svg><use href="#i-bell" /></svg>Sounds &amp; calls
+        </div>
+        <div class="item on">
+          <svg><use href="#i-bot" /></svg>Agents<span class="n"
+            >harnesses.toml</span
+          >
+        </div>
+        <div class="item sub">Claude Code<span class="dot ok"></span></div>
+        <div class="item sub">Codex<span class="dot warn"></span></div>
+        <div class="item">
+          <svg><use href="#i-term" /></svg>Terminal
+        </div>
+        <div class="item">
+          <svg><use href="#i-globe" /></svg>Browser
+        </div>
+        <div class="item">
+          <svg><use href="#i-key" /></svg>Keys<span class="n">keys.toml</span>
+        </div>
+        <div class="grp">Banda</div>
+        <div class="item">
+          <svg><use href="#i-box" /></svg>Modules
+        </div>
+        <div class="item">
+          <svg><use href="#i-file" /></svg>Files
+        </div>
+        <div class="navfoot">
+          <span class="dot ok"></span>~/.config/banda · all files valid
+        </div>
+      </nav>
+      <main>
+        <div class="top">
+          Settings <span>/</span> <b>Agents</b
+          ><span class="x"><kbd>Esc</kbd>✕</span>
+        </div>
+        <div class="scroll">
+          <div class="inner">
+            <div class="lead">
+              <div>
+                <h1>Agents</h1>
+                <p>
+                  The Harnesses Banda starts Threads with, and what a new Thread
+                  starts with. Kept in
+                  <code>~/.config/banda/harnesses.toml</code>.
+                </p>
+              </div>
+              <span class="btn ghost"
+                ><svg><use href="#i-ext" /></svg>Open file</span
+              >
+            </div>
+
+            <div class="card">
+              <div class="h">
+                <div class="logo" style="background: #d97757; color: #1a1b26">
+                  ✳
+                </div>
+                <div>
+                  <div class="name">
+                    Claude Code <span class="ver">v2.1.316 · ACP</span>
+                  </div>
+                  <div class="status">
+                    <span class="dot ok"></span>Signed in as r•••@gmail.com ·
+                    Max
+                  </div>
+                </div>
+                <div class="acts">
+                  <span class="btn ghost">Sign out</span>
+                  <div class="sw"></div>
+                </div>
+              </div>
+              <div class="sub-rows" style="border-top: 1px solid var(--border)">
+                <div class="row">
+                  <div class="l">
+                    <div class="t">
+                      <span class="mod"></span>Model for a new Thread
+                    </div>
+                    <div class="d">The Thread can change it any time.</div>
+                  </div>
+                  <span class="rst" title="Reset">↶</span
+                  ><span class="sel">Opus 5.5</span>
+                </div>
+                <div class="row">
+                  <div class="l">
+                    <div class="t">Mode</div>
+                    <div class="d">What the Agent may do without asking.</div>
+                  </div>
+                  <span class="seg"
+                    ><span>Ask</span><span class="on">Auto-edit</span
+                    ><span>Plan</span><span>Full</span></span
+                  >
+                </div>
+                <div class="row">
+                  <div class="l">
+                    <div class="t">Command</div>
+                    <div class="d">
+                      Found on PATH. A path or arguments here replace it.
+                    </div>
+                  </div>
+                  <span class="inp">claude-code-acp</span>
+                </div>
+                <div class="row">
+                  <div class="l">
+                    <div class="t">Environment</div>
+                    <div class="d">2 variables, 1 hidden</div>
+                  </div>
+                  <span class="btn">Edit…</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="h">
+                <div class="logo" style="background: #c0caf5; color: #1a1b26">
+                  ◎
+                </div>
+                <div>
+                  <div class="name">
+                    Codex <span class="ver">v0.94.0 · ACP</span>
+                  </div>
+                  <div class="status" style="color: var(--attention)">
+                    <span class="dot warn"></span>Not signed in — Threads with
+                    Codex wait for it
+                  </div>
+                </div>
+                <div class="acts">
+                  <span class="btn p">Sign in…</span>
+                  <div class="sw"></div>
+                </div>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="h">
+                <div
+                  class="logo"
+                  style="
+                    background: var(--muted);
+                    color: var(--muted-foreground);
+                  "
+                >
+                  G
+                </div>
+                <div>
+                  <div class="name" style="color: var(--muted-foreground)">
+                    Gemini CLI
+                  </div>
+                  <div class="status">
+                    <span class="dot none"></span>Not found on PATH ·
+                    <code>npm i -g @google/gemini-cli</code>
+                  </div>
+                </div>
+                <div class="acts"><div class="sw off"></div></div>
+              </div>
+            </div>
+
+            <div class="add">
+              <svg
+                width="16"
+                height="16"
+                style="stroke: currentColor; fill: none; stroke-width: 2"
+              >
+                <use href="#i-plus" /></svg
+              >Add a Harness — any agent that speaks ACP, or a second account
+            </div>
+
+            <h2>Writing to an Agent</h2>
+            <div class="card">
+              <div class="row">
+                <div class="l">
+                  <div class="t">Enter</div>
+                  <div class="d">
+                    Moves out of the window's memory into
+                    <code>agents.toml</code>, like every other setting.
+                  </div>
+                </div>
+                <span class="seg"
+                  ><span class="on">Sends</span><span>New line</span></span
+                >
+              </div>
+              <div class="row">
+                <div class="l">
+                  <div class="t">A message while the Agent works</div>
+                  <div class="d">As in T3 Code.</div>
+                </div>
+                <span class="seg"
+                  ><span class="on">Queue</span><span>Steer</span></span
+                >
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="foot">
+          <span class="dot ok"></span>Changes apply as you make them · written
+          to the file, comments kept · edit the file by hand and this page
+          follows
+        </div>
+      </main>
+    </div>
+
+    <div class="cap" style="margin-top: 14px">
+      2 · Settings → Appearance: every value says where it comes from, and a dot
+      marks what you changed
+    </div>
+    <div class="win">
+      <nav>
+        <div class="search">
+          <svg
+            width="14"
+            height="14"
+            style="stroke: currentColor; fill: none; stroke-width: 2"
+          >
+            <use href="#i-search" /></svg
+          >Search settings<kbd>/</kbd>
+        </div>
+        <div class="item">
+          <svg><use href="#i-gear" /></svg>General
+        </div>
+        <div class="item on">
+          <svg><use href="#i-paint" /></svg>Appearance<span class="n"
+            >look.toml</span
+          >
+        </div>
+        <div class="item sub">Theme</div>
+        <div class="item sub">Tiles</div>
+        <div class="item sub">Text</div>
+        <div class="item sub">Motion</div>
+        <div class="item">
+          <svg><use href="#i-side" /></svg>Sidebar<span class="n"
+            >sidebar.toml</span
+          >
+        </div>
+        <div class="item">
+          <svg><use href="#i-bell" /></svg>Sounds &amp; calls
+        </div>
+        <div class="item">
+          <svg><use href="#i-bot" /></svg>Agents<span class="n"
+            >harnesses.toml</span
+          >
+        </div>
+        <div class="item">
+          <svg><use href="#i-term" /></svg>Terminal
+        </div>
+        <div class="item">
+          <svg><use href="#i-key" /></svg>Keys<span class="n">keys.toml</span>
+        </div>
+        <div class="navfoot" style="color: var(--attention)">
+          <span class="dot warn"></span>look.toml:14 — see below
+        </div>
+      </nav>
+      <main>
+        <div class="top">
+          Settings <span>/</span> <b>Appearance</b
+          ><span class="x"><kbd>Esc</kbd>✕</span>
+        </div>
+        <div class="scroll">
+          <div class="inner">
+            <div class="lead">
+              <div>
+                <h1>Appearance</h1>
+                <p>
+                  Layers, each over the one before: Banda → theme → Hyprland →
+                  your <code>look.toml</code>. Reset takes your line out, and
+                  the layer below shows again.
+                </p>
+              </div>
+              <span class="btn ghost"
+                ><svg><use href="#i-ext" /></svg>Open file</span
+              >
+            </div>
+            <div class="card">
+              <div class="themes">
+                <div class="th on">
+                  <div class="pv" style="background: #1a1b26">
+                    <i style="background: #7aa2f7"></i
+                    ><i style="background: #ad8ee6"></i
+                    ><i style="background: #9ece6a"></i>
+                  </div>
+                  Follow Omarchy
+                  <div class="s">now tokyo-night</div>
+                </div>
+                <div class="th">
+                  <div class="pv" style="background: #f4f4f5">
+                    <i style="background: #18181b"></i
+                    ><i style="background: #e4e4e7"></i
+                    ><i style="background: #a1a1aa"></i>
+                  </div>
+                  Banda light
+                  <div class="s">built in</div>
+                </div>
+                <div class="th">
+                  <div class="pv" style="background: #09090b">
+                    <i style="background: #fafafa"></i
+                    ><i style="background: #27272a"></i
+                    ><i style="background: #71717a"></i>
+                  </div>
+                  Banda dark
+                  <div class="s">built in</div>
+                </div>
+              </div>
+              <div class="row">
+                <div class="l"><div class="t">Light or dark</div></div>
+                <span class="chip theme">from theme</span
+                ><span class="seg"
+                  ><span>System</span><span>Light</span
+                  ><span class="on">Dark</span></span
+                >
+              </div>
+              <div class="row">
+                <div class="l">
+                  <div class="t">Focus colour</div>
+                  <div class="d">The focused tile's border.</div>
+                </div>
+                <span class="chip theme">accent</span
+                ><span class="sw2"
+                  ><i class="on" style="background: #7aa2f7"></i
+                  ><i style="background: #ad8ee6"></i
+                  ><i style="background: #9ece6a"></i
+                  ><i style="background: #eb927b"></i
+                  ><i style="background: #f7768e"></i
+                ></span>
+              </div>
+            </div>
+            <h2>Tiles</h2>
+            <div class="card">
+              <div class="row">
+                <div class="l">
+                  <div class="t">Corners</div>
+                  <div class="d">rounding 12 in Hyprland</div>
+                </div>
+                <span class="chip hypr">from Hyprland</span>
+                <div class="slider">
+                  <b style="width: 40%"></b><i style="left: 38%"></i>
+                </div>
+                <span class="val">8.6px</span>
+              </div>
+              <div class="row">
+                <div class="l">
+                  <div class="t"><span class="mod"></span>Border</div>
+                  <div class="d">Yours over Hyprland's 2.</div>
+                </div>
+                <span class="rst" title="Reset">↶</span
+                ><span class="chip mine">look.toml:9</span>
+                <div class="slider">
+                  <b style="width: 20%"></b><i style="left: 18%"></i>
+                </div>
+                <span class="val">3px</span>
+              </div>
+              <div class="row">
+                <div class="l">
+                  <div class="t">Dim the tiles out of focus</div>
+                </div>
+                <span class="chip hypr">from Hyprland</span>
+                <div class="slider">
+                  <b style="width: 0%"></b><i style="left: 0%"></i>
+                </div>
+                <span class="val">0</span>
+              </div>
+              <div class="row" style="background: #eb927b10">
+                <div class="l">
+                  <div class="t" style="color: var(--attention)">Gaps</div>
+                  <div class="d" style="color: var(--attention)">
+                    look.toml:14:9 — gaps.inner is pixels, a number. The last
+                    good value stays.
+                  </div>
+                </div>
+                <span class="btn">Show line</span>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="foot">
+          <span class="dot ok"></span>An Agent changes the same file;
+          <code>banda look check</code> tells it what is wrong
+        </div>
+      </main>
+    </div>
+  </body>
+</html>
