@@ -1,0 +1,11 @@
+/**
+ * The modules this window has, by their window parts (ADR 0022,
+ * decision 2): the one place in the window that names them. Every
+ * registry is built from this list, in its order.
+ */
+import { agents } from "@banda/agents-pane"
+import { browser } from "@banda/browser-pane"
+import { terminal } from "@banda/terminal-pane"
+import type { Module } from "@banda/ui/module"
+
+export const modules: readonly Module[] = [agents, terminal, browser]

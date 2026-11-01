@@ -27,7 +27,6 @@ export type DiffArgs = {
 
 export const diffPane = definePane<DiffArgs>({
   kind: "agents.diff",
-  module: "agents",
   title: (args) => (args.title ? `Changes · ${args.title}` : "Changes"),
   icon: FileDiffIcon,
   Pane: DiffPane,

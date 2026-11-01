@@ -1,5 +1,6 @@
-import { readFileSync, readdirSync } from "node:fs"
+import { readFileSync } from "node:fs"
 import { join } from "node:path"
+import { sources } from "@banda/ui/testing/architecture"
 import { expect, test } from "vitest"
 
 // The tiles' look is a set of CSS variables that the look module sets
@@ -12,19 +13,9 @@ const css = readFileSync(
 const LOOK =
   /--(gap-[a-z]+|tile-[a-z]+|focus(?:-[a-z]+)*|bar-height|font-family-[a-z]+|text-root)\b/g
 
-function sources(folder: string): string[] {
-  return readdirSync(folder, { withFileTypes: true }).flatMap((entry) => {
-    const path = join(folder, entry.name)
-    if (entry.isDirectory()) return sources(path)
-    return /\.tsx?$/.test(entry.name) && !entry.name.includes(".test.")
-      ? [path]
-      : []
-  })
-}
-
 test("every look variable the window uses has a default", () => {
   const used = new Set(
-    sources(join(here, "..")).flatMap((file) =>
+    sources(join(here, ".."), { tests: false }).flatMap((file) =>
       [...readFileSync(file, "utf8").matchAll(LOOK)].map((m) => m[0])
     )
   )

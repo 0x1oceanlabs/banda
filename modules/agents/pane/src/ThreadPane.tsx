@@ -65,7 +65,6 @@ import { NEW_THREAD, type ThreadArgs, useThreadSession } from "./session"
 
 export const threadPane = definePane<ThreadArgs>({
   kind: "agents.thread",
-  module: "agents",
   title: (args) => args.title || "New Thread",
   shows: (args) => args.thread,
   icon: MessageSquareIcon,

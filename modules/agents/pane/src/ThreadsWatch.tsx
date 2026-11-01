@@ -14,7 +14,6 @@ import { useSeen } from "./seen"
  * shows or not, so they never disagree.
  */
 export const threadsWatch: Watch = {
-  module: "agents",
   Watch: ThreadsWatch,
 }
 

@@ -7,10 +7,12 @@
   "exports": {
     "./globals.css": "./src/styles/globals.css",
     "./pane": "./src/pane.ts",
+    "./module": "./src/module.ts",
     "./lib/*": "./src/lib/*.ts",
     "./components/*": "./src/components/*.tsx",
     "./hooks/*": "./src/hooks/*.ts",
-    "./sound": "./src/sound/index.ts"
+    "./sound": "./src/sound/index.ts",
+    "./testing/*": "./src/testing/*.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

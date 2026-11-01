@@ -62,10 +62,10 @@ export function Watches({
   useEffect(() => onLists(lists), [onLists, lists])
 
   return watches
-    .filter((watch) => runs(watch, modules))
-    .flatMap((watch) =>
+    .filter(({ module }) => runs(module, modules))
+    .flatMap(({ watch, module }) =>
       spaces.map((space) => {
-        const key = `${watch.module}:${space.id}`
+        const key = `${module.id}:${space.id}`
         return (
           <One
             key={key}

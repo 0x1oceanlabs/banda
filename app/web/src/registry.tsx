@@ -1,17 +1,15 @@
 /**
- * The kinds of Pane this window knows: each module's, and the window's own
- * launcher; and each module's Watch on what calls for the Person. A Pane
- * or a Watch runs only while the engine runs its module.
+ * The kinds of Pane this window knows and the Watches on what calls for
+ * the Person, built from the modules (ADR 0022): theirs, and the window's
+ * own, the launcher. A Pane or a Watch runs only while the engine runs
+ * its module.
  */
-import { panes as agentPanes, threadsWatch } from "@banda/agents-pane"
-import { panes as browserPanes } from "@banda/browser-pane"
-import { panes as terminalPanes } from "@banda/terminal-pane"
 import type { JsonValue } from "@banda/contract"
 import { Button } from "@banda/ui/components/button"
 import { useModules } from "@banda/ui/hooks/use-status"
+import { type AnyPaneKind, defineModule, type Module } from "@banda/ui/module"
 import {
   definePane,
-  type PaneKind,
   type PaneProps,
   type PaneState,
   paneOf,
@@ -19,36 +17,46 @@ import {
 } from "@banda/ui/pane"
 import { LayoutGridIcon } from "lucide-react"
 import { columnsOf } from "./look"
+import { modules } from "./modules"
 import type { Width } from "./workspaces/model"
 
 type Args = { [key: string]: JsonValue }
-type AnyKind = PaneKind<Args>
 
 /** Lists the Panes a Person can open, and becomes the one picked. */
-export const launcher: AnyKind = definePane<Args>({
+export const launcher: AnyPaneKind = definePane<Args>({
   kind: "window.launcher",
   title: () => "New Pane",
   icon: LayoutGridIcon,
   Pane: Launcher,
 })
 
-/**
- * The Panes the modules offer. Each kind checks its own args; the window
- * hands it only the args it kept for it.
- */
-const offered = [
-  ...agentPanes,
-  ...terminalPanes,
-  ...browserPanes,
-] as unknown as AnyKind[]
+/** The window's own things, as a module of their own. */
+const windowModule = defineModule({
+  id: "window",
+  engine: false,
+  panes: [launcher],
+})
 
-/** What the bar's mark hears from the modules (ADR 0005, decision 9). */
-export const watches: Watch[] = [threadsWatch]
+const all: readonly Module[] = [windowModule, ...modules]
 
-export const kinds: AnyKind[] = [launcher, ...offered]
+/** The Panes the modules offer, after the window's launcher. */
+export const kinds: readonly AnyPaneKind[] = all.flatMap((m) => m.panes)
 
-export function kindOf(kind: string): AnyKind | undefined {
-  return kinds.find((k) => k.kind === kind)
+/** Each kind of Pane, and its module, by its kind. */
+const byKind = new Map(
+  all.flatMap((module) =>
+    module.panes.map((kind) => [kind.kind, { kind, module }] as const)
+  )
+)
+
+/** What the bar's mark hears from the modules (ADR 0005, decision 9), each
+ * with its module. */
+export const watches: readonly { watch: Watch; module: Module }[] = all.flatMap(
+  (module) => module.watches.map((watch) => ({ watch, module }))
+)
+
+export function kindOf(kind: string): AnyPaneKind | undefined {
+  return byKind.get(kind)?.kind
 }
 
 /** The one thing a Pane shows, as its kind names it (`PaneKind.shows`). */
@@ -65,12 +73,16 @@ export function labelOf(pane: PaneState) {
   }
 }
 
-/** Whether the engine runs what a kind of Pane, or a Watch, needs. */
-export function runs(
-  needs: { module?: string },
-  engineModules: readonly string[]
-): boolean {
-  return needs.module === undefined || engineModules.includes(needs.module)
+/** Whether `module` runs: always, with no engine part; else while the
+ * engine runs it. */
+export function runs(module: Module, engineModules: readonly string[]) {
+  return !module.engine || engineModules.includes(module.id)
+}
+
+/** Whether a kind of Pane's module runs. */
+export function kindRuns(kind: string, engineModules: readonly string[]) {
+  const known = byKind.get(kind)
+  return known !== undefined && runs(known.module, engineModules)
 }
 
 /** Whether the Pane is a list that sits beside others (`PaneKind.narrow`). */
@@ -97,8 +109,8 @@ export function minOf(
 
 /** The Panes a Person can start, in the order the menu lists them. */
 export function startable(engineModules: readonly string[]): PaneState[] {
-  return offered
-    .filter((kind) => kind.start && runs(kind, engineModules))
+  return kinds
+    .filter((kind) => kind.start && kindRuns(kind.kind, engineModules))
     .map((kind) => paneOf(kind, kind.start!))
 }
 

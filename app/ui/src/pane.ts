@@ -83,10 +83,9 @@ export type PaneProps<A> = {
 }
 
 export type PaneKind<A extends { [key: string]: JsonValue }> = {
-  /** Unique, with the module's name first: `agents.thread`. */
+  /** Unique, with its module's id first: `agents.thread`. The window
+   * hides it while the engine does not run that module (`Module`). */
   kind: string
-  /** The engine module the Pane needs; the window hides the Pane without it. */
-  module?: string
   /** The words in its header. */
   title: (args: A) => string
   icon: LucideIcon
@@ -192,7 +191,5 @@ export type WatchProps = {
  * draws nothing itself.
  */
 export type Watch = {
-  /** The engine module it follows; the window draws it only with it. */
-  module: string
   Watch: ComponentType<WatchProps>
 }
