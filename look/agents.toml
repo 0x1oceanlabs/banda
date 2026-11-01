@@ -1,0 +1,9 @@
+#:schema ./schemas/agents.schema.json
+# How messages to an Agent are sent (ADR 0016). Every key is optional:
+# what you leave out is Banda's default, written below. Check a change
+# with: banda settings check
+
+# What Enter does with a message written while the Agent works: "steer",
+# into the turn, so the Agent reads it as it works, or "queue", so it
+# waits until the turn ends. Ctrl+Enter (⌘+Enter on a Mac) does the other.
+# enter = "steer"

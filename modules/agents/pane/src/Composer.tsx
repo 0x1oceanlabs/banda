@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import type { TurnView, Usage } from "@banda/contract/agents"
+import type { Enter } from "@banda/contract/look"
 import {
   InputGroup,
   InputGroupAddon,
@@ -21,7 +22,7 @@ import {
 } from "lucide-react"
 import { AttachmentList, type Attached, type Attachments } from "./Attachments"
 import { useDraft } from "./drafts"
-import { type EnterKey, keyFor, steers, useEnterKey } from "./enter-key"
+import { keyFor, steers, useEnterKey } from "./enter-key"
 import { recall } from "./history"
 import { imagesAmong, KINDS } from "./images"
 import { ownCommand, type Suggested } from "./slash"
@@ -33,7 +34,7 @@ import { useSlashMenu } from "./SlashMenu"
  * it can start with; the images it carries, added with the button or by
  * pasting them; and Send, or Stop while the Agent works and nothing is
  * written. While the Agent works, a message goes into its turn or waits
- * for the turn to end: Enter and the button do what the window chose,
+ * for the turn to end: Enter and the button do what agents.toml says,
  * into the turn as T3 Code's default, and Ctrl+Enter or Ctrl+click the
  * other. As in T3 Code, ↑ and ↓ in an empty box walk the earlier
  * messages, after the last one that waits, which ↑ opens to edit; and
@@ -104,7 +105,7 @@ export function Composer({
   const [text, setText] = useDraft(thread)
   // How far back ↑ has walked the history; 0 for not at all.
   const [back, setBack] = useState(0)
-  const [enter] = useEnterKey()
+  const enter = useEnterKey()
   const field = useRef<PromptEditorHandle>(null)
   const files = useRef<HTMLInputElement>(null)
   useEffect(() => {
@@ -301,11 +302,11 @@ export function Composer({
 
 /** What the primary button does with a message, and says so. */
 const PRIMARY: Record<
-  "send" | EnterKey,
+  "send" | Enter,
   {
     label: string
     icon: React.ReactNode
-    title?: (name: string, enter: EnterKey) => string
+    title?: (name: string, enter: Enter) => string
   }
 > = {
   send: { label: "Send", icon: <ArrowUpIcon /> },

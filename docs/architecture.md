@@ -49,8 +49,10 @@ banda call/follow   the CLI: the same API, for people, scripts and Agents
   desktop to write the preset into the file. The browser's
   `~/.config/banda/browser.toml` comes with it too (ADR 0013), and the
   browser's switch and its pins ask the desktop to write `tabs` and
-  `pinned` into it, through `banda settings set`; nothing else
-  the page asks of Node writes a file. A Pane reads its part of the look
+  `pinned` into it, through `banda settings set`. The agents module's
+  `agents.toml`, what Enter does in the composer, comes with it the same
+  way (ADR 0016). The settings window writes every file through `banda
+  settings set` too; nothing else the page asks of Node writes a file. A Pane reads its part of the look
   through `@banda/ui/lib/look`.
 - **The Banda skill is text for Agents** (ADR 0012). `banda skill`
   prints its core, `banda skill <topic>` a topic, and
@@ -153,11 +155,11 @@ command (with its ID)
 | Where | What |
 |---|---|
 | The Space's folder | the files of the work |
-| Text files | the Harnesses, in the config folder; the look (`look.toml`, themes) and the sidebar (`sidebar.toml`, presets) and the browser (`browser.toml`) in `~/.config/banda/`. Layouts and keys join them later |
+| Text files | the Harnesses, in the config folder; the look (`look.toml`, themes) and the sidebar (`sidebar.toml`, presets), the browser (`browser.toml`) and how messages to an Agent are sent (`agents.toml`) in `~/.config/banda/`. Layouts and keys join them later |
 | The Harness | its session, context and sign-in. We keep only its session ID, as evidence |
 | The OS keychain | secrets you give Banda. Its database never holds them |
 | The engine's state folder | the owner's ID; while the engine runs, its port and per-run secret |
-| The window's storage | the workspaces: their columns, each Pane with its Space, the widths and the focus; whether the sidebar shows; what Enter does while an Agent works; which finished turn of each Thread the Person has seen |
+| The window's storage | the workspaces: their columns, each Pane with its Space, the widths and the focus; whether the sidebar shows; which finished turn of each Thread the Person has seen |
 | `.banda/` SQLite | Threads, Questions and answers, the Agents' queue, Databases' records, receipts, events, outbox |
 | `.banda/images/` | the bytes of the images messages carry, one file per image; the SQLite says what each is and which message carries it |
 
@@ -261,8 +263,8 @@ If Chat is removed, Agents still works through its own Thread.
   Claude Code's and Codex's adapters share (`turn.steer`, keyed by the
   Thread's steering), and what the Agent says of it follows it in the
   Thread. Queue has it wait for a turn of its own. Enter does one of the
-  two, Send now unless the window chose Queue in the settings' Agents, and
-  Ctrl+Enter the other. A
+  two, Send now unless `agents.toml` says `enter = "queue"` (the settings'
+  Agents writes it), and Ctrl+Enter the other. A
   message the turn cannot take, as when it just ended or a Person stopped
   it, waits for its own turn instead; a Harness that cannot steer stops its
   turn for it, and says so. A message sent into a turn whose Harness still

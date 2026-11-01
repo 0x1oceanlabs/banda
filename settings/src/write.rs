@@ -38,6 +38,9 @@ pub fn set(config: &Path, name: &str, key: &str, value: &str) -> Result<(), Vec<
         }
         value => vec![(open.leaf.clone(), value)],
     };
+    // A file of nothing but comments, as a template, keeps them first,
+    // above what is set: its `#:schema` line stays its first.
+    let only_comments = open.document.is_empty();
     // The keys alone too, for when the file was wrong before them.
     let mut alone = DocumentMut::new();
     for document in [&mut open.document, &mut alone] {
@@ -47,6 +50,15 @@ pub fn set(config: &Path, name: &str, key: &str, value: &str) -> Result<(), Vec<
         }
     }
     let alone = alone.to_string();
+    if only_comments {
+        let mut comments = open.was.clone();
+        if !comments.is_empty() && !comments.ends_with('\n') {
+            comments.push('\n');
+        }
+        open.document = (comments + &alone)
+            .parse()
+            .map_err(|error| whole(&open.path, error))?;
+    }
     open.save(Some(&alone))
 }
 
@@ -354,6 +366,26 @@ mod tests {
         let empty = tempfile::tempdir().unwrap();
         reset(empty.path(), "look.toml", "radius").unwrap();
         assert!(!empty.path().join("look.toml").exists());
+    }
+
+    #[test]
+    fn a_file_of_only_comments_keeps_them_first() {
+        let config = tempfile::tempdir().unwrap();
+        set(config.path(), "agents.toml", "enter", "queue").unwrap();
+        let text = std::fs::read_to_string(config.path().join("agents.toml")).unwrap();
+        assert!(text.starts_with("#:schema "), "{text}");
+        assert!(
+            text.ends_with("# enter = \"steer\"\nenter = \"queue\"\n"),
+            "{text}"
+        );
+        let look = config.path().join("look.toml");
+        std::fs::write(&look, "#:schema ./schemas/look.schema.json\n# Mine.\n").unwrap();
+        set(config.path(), "look.toml", "tile.border", "3").unwrap();
+        let text = std::fs::read_to_string(&look).unwrap();
+        assert_eq!(
+            text,
+            "#:schema ./schemas/look.schema.json\n# Mine.\n[tile]\nborder = 3\n"
+        );
     }
 
     #[test]

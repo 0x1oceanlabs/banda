@@ -1,7 +1,7 @@
 import { expect, test } from "vitest"
 import { keyFor, steers } from "./enter-key"
 
-test("Enter does what the window chose, and Ctrl+Enter the other", () => {
+test("Enter does what agents.toml says, and Ctrl+Enter the other", () => {
   expect(steers("steer", false)).toBe(true)
   expect(steers("steer", true)).toBe(false)
   expect(steers("queue", false)).toBe(false)

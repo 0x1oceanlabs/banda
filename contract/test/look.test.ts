@@ -31,6 +31,7 @@ const look = (mode: Look["mode"], schemes: Look["schemes"]): Look => ({
   },
   sidebar: DEFAULT_SIDEBAR,
   browser: DEFAULT_BROWSER,
+  agents: { enter: "steer" },
   notify: {
     system: "away",
     window: "out-of-sight",

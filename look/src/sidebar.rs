@@ -34,8 +34,11 @@ pub enum State {
 #[serde(rename_all = "lowercase")]
 #[ts(export, export_to = "sidebar/")]
 pub enum GroupBy {
+    /// Sections by what each Thread's mark says.
     State,
+    /// Each Space a section of its own.
     Space,
+    /// One list.
     None,
 }
 
@@ -45,7 +48,9 @@ pub enum GroupBy {
 pub enum SortBy {
     /// What needs the Person first, then the latest change.
     Attention,
+    /// The latest change first.
     Changed,
+    /// By title, A to Z.
     Title,
 }
 
@@ -53,7 +58,9 @@ pub enum SortBy {
 #[serde(rename_all = "lowercase")]
 #[ts(export, export_to = "sidebar/")]
 pub enum SpaceOrder {
+    /// The Space with the latest change first.
     Changed,
+    /// By name, A to Z.
     Name,
 }
 
@@ -61,7 +68,9 @@ pub enum SpaceOrder {
 #[serde(rename_all = "lowercase")]
 #[ts(export, export_to = "sidebar/")]
 pub enum Empty {
+    /// Left out.
     Hide,
+    /// Shown with its title.
     Show,
 }
 
@@ -70,31 +79,42 @@ pub enum Empty {
 #[serde(rename_all = "lowercase")]
 #[ts(export, export_to = "sidebar/")]
 pub enum Part {
+    /// The Thread's mark.
     Mark,
+    /// Its title.
     Title,
+    /// Its Space.
     Space,
+    /// Its Harness.
     Harness,
+    /// What it does now, and when it last changed.
     Status,
+    /// The last thing said.
     Note,
+    /// Pushes the rest of the line to the right.
     #[serde(rename = "~")]
     Push,
 }
 
 /// How the sidebar arranges Threads: a preset, and the keys that change
-/// it. A preset file in `sidebars/` takes the same keys; every key is
+/// it. A preset file in sidebars/ takes the same keys; every key is
 /// optional.
 #[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct SidebarSettings {
-    /// `"inbox"`, `"spaces"`, `"places"`, or a file of the Person's.
+    /// Banda's inbox, spaces or places, or one of yours in sidebars/.
     #[schemars(with = "Option<String>")]
     pub preset: Option<Spanned<String>>,
+    /// How Threads fall into sections.
     #[serde(default)]
     pub group: GroupSettings,
+    /// Their order in a section.
     #[serde(default)]
     pub sort: SortSettings,
+    /// The Spaces above the Threads.
     #[serde(default)]
     pub spaces: SpacesSettings,
+    /// What a Thread's row shows.
     #[serde(default)]
     pub row: RowSettings,
 }
@@ -102,37 +122,53 @@ pub struct SidebarSettings {
 #[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct GroupSettings {
+    /// What makes a section: a Thread's state, its Space, or nothing.
     pub by: Option<GroupBy>,
+    /// The sections by state, in this order.
     pub states: Option<Vec<State>>,
+    /// Shelves at the bottom, each with its count.
     pub bottom: Option<Vec<State>>,
+    /// Sections, shelves or Spaces (by name) that start folded.
     pub folded: Option<Vec<String>>,
+    /// Rows a section shows before "Show more"; 0 shows all.
     pub limit: Option<u32>,
+    /// What an empty section does.
     pub empty: Option<Empty>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct SortSettings {
+    /// What comes first in a section.
     pub by: Option<SortBy>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct SpacesSettings {
+    /// A list of Spaces above the Threads.
     pub list: Option<bool>,
+    /// The order of that list.
     pub order: Option<SpaceOrder>,
+    /// A Space shows its loudest mark and how many need you.
     pub rollup: Option<bool>,
+    /// Each Space offers a new Thread in it.
     pub new_thread: Option<bool>,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct RowSettings {
-    #[schemars(with = "Option<u8>")]
+    /// 1, 2 or 3: one of Banda's layouts.
+    #[schemars(with = "Option<u8>", range(min = 1, max = 3))]
     pub lines: Option<Spanned<u8>>,
+    /// Parts the layout leaves out.
     pub hide: Option<Vec<Part>>,
+    /// The first line of a layout of your own, which replaces the lines'.
     pub line1: Option<Vec<Part>>,
+    /// Its second line.
     pub line2: Option<Vec<Part>>,
+    /// Its third line.
     pub line3: Option<Vec<Part>>,
 }
 

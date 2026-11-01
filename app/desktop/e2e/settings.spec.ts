@@ -35,9 +35,11 @@ test("Alt+, opens the settings window, which writes the files and follows them (
 
   const settings = await openSettings(app, page)
   await expect(settings).toHaveTitle("Banda Settings")
-  await expect(
-    settings.getByRole("heading", { name: "Appearance" })
-  ).toBeVisible()
+  await expect(settings.getByRole("heading", { name: "General" })).toBeVisible()
+  await settings
+    .getByRole("navigation", { name: "Settings sections" })
+    .getByRole("button", { name: /Appearance/ })
+    .click()
 
   // Each value says where it comes from; the Person's has a ↶.
   const radius = settings.locator('[data-key="radius"]')
@@ -160,15 +162,53 @@ test("Agents show who is signed in to each Harness, and write harnesses.toml", a
   await expect(other).toHaveCount(0)
   expect(readFileSync(file, "utf8")).not.toContain("other")
 
-  // What Enter does while an Agent works is the window's to choose.
-  const choice = settings
-    .getByRole("radiogroup", { name: /while an Agent works/ })
-    .getByRole("radio", { name: "Queue it" })
-  await choice.click()
-  await settings.reload()
-  await settings
-    .getByRole("navigation", { name: "Settings sections" })
-    .getByRole("button", { name: /Agents/ })
-    .click()
-  await expect(choice).toBeChecked()
+  // What Enter does while an Agent works is agents.toml's, under the
+  // Harnesses.
+  const enter = settings.locator('[data-key="enter"]')
+  await expect(enter).toContainText(/while the Agent works/)
+  await enter.getByRole("radio", { name: "queue" }).click()
+  await expect
+    .poll(() => readFileSync(join(dir, "config/agents.toml"), "utf8"))
+    .toContain('\nenter = "queue"\n')
+  await expect(enter.getByRole("radio", { name: "queue" })).toHaveAttribute(
+    "aria-checked",
+    "true"
+  )
+})
+
+test("General, the sidebar's presets, and hearing a sound", async () => {
+  window = await startWindow()
+  const { app, page, dir } = window
+  const { composer } = await firstThread(page)
+  await expect(composer).toBeVisible()
+  const settings = await openSettings(app, page)
+  const sections = settings.getByRole("navigation", {
+    name: "Settings sections",
+  })
+  await sections.getByRole("button", { name: /General/ }).click()
+  await expect(settings.getByText(/^banda \d/)).toBeVisible()
+
+  await sections.getByRole("button", { name: /Sidebar/ }).click()
+  const preset = settings.locator('[data-key="preset"]')
+  await expect(preset.getByRole("radio", { name: "inbox" })).toHaveAttribute(
+    "aria-checked",
+    "true"
+  )
+  await preset.getByRole("radio", { name: "spaces" }).click()
+  await expect
+    .poll(() => readFileSync(join(dir, "config/sidebar.toml"), "utf8"))
+    .toContain('preset = "spaces"')
+  // Each key says what it does.
+  await expect(settings.locator('[data-key="group.by"]')).toContainText(
+    "What makes a section"
+  )
+
+  await sections.getByRole("button", { name: /Sounds/ }).click()
+  await settings.getByRole("button", { name: "Play done" }).click()
+  await expect(settings.locator('[data-key="notify.done"]')).toContainText(
+    "finished"
+  )
+  await expect(
+    settings.locator('[data-key="notify.done"]').getByRole("switch")
+  ).toHaveAttribute("aria-checked", "true")
 })

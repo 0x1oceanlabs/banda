@@ -50,10 +50,10 @@ export function SettingRow({
     settings && write(settings.set(row.file, row.key, value))
   const reset = () => settings && write(settings.reset(row.file, row.key))
   const mine = setting?.from.layer === "file"
+  const control = <Control row={row} value={setting?.value} onSet={set} />
   const wrong = [...problems.map((p) => p.message), ...refused]
   return (
     <div
-      id={`row-${row.file}-${row.key}`}
       data-key={row.key}
       className={cn(
         "flex flex-col gap-1 px-4 py-3 transition-colors",
@@ -90,9 +90,9 @@ export function SettingRow({
         )}
         <div className="flex shrink-0 items-center">
           {Custom ? (
-            <Custom setting={setting} set={set} />
+            <Custom row={row} setting={setting} set={set} control={control} />
           ) : (
-            <Control row={row} value={setting?.value} onSet={set} />
+            control
           )}
         </div>
       </div>

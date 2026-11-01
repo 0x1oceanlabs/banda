@@ -70,5 +70,6 @@ not open.
 | `sidebar.toml` | how the sidebar arranges Threads |
 | `sidebars/<name>.toml` | the Person's own sidebar presets |
 | `browser.toml` | where the browser's tabs are, and its search |
+| `agents.toml` | what Enter does with a message written while the Agent works |
 | `harnesses.toml` | the Harnesses Threads start with |
 | `schemas/` | each file's JSON Schema, written by Banda for editors |

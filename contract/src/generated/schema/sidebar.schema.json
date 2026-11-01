@@ -1,23 +1,27 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "sidebar.toml",
-  "description": "How the sidebar arranges Threads: a preset, and the keys that change\nit. A preset file in `sidebars/` takes the same keys; every key is\noptional.",
+  "description": "How the sidebar arranges Threads: a preset, and the keys that change\nit. A preset file in sidebars/ takes the same keys; every key is\noptional.",
   "type": "object",
   "properties": {
     "preset": {
-      "description": "`\"inbox\"`, `\"spaces\"`, `\"places\"`, or a file of the Person's.",
+      "description": "Banda's inbox, spaces or places, or one of yours in sidebars/.",
       "type": "string"
     },
     "group": {
+      "description": "How Threads fall into sections.",
       "$ref": "#/$defs/GroupSettings"
     },
     "sort": {
+      "description": "Their order in a section.",
       "$ref": "#/$defs/SortSettings"
     },
     "spaces": {
+      "description": "The Spaces above the Threads.",
       "$ref": "#/$defs/SpacesSettings"
     },
     "row": {
+      "description": "What a Thread's row shows.",
       "$ref": "#/$defs/RowSettings"
     }
   },
@@ -27,43 +31,60 @@
       "type": "object",
       "properties": {
         "by": {
+          "description": "What makes a section: a Thread's state, its Space, or nothing.",
           "$ref": "#/$defs/GroupBy"
         },
         "states": {
+          "description": "The sections by state, in this order.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/State"
           }
         },
         "bottom": {
+          "description": "Shelves at the bottom, each with its count.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/State"
           }
         },
         "folded": {
+          "description": "Sections, shelves or Spaces (by name) that start folded.",
           "type": "array",
           "items": {
             "type": "string"
           }
         },
         "limit": {
+          "description": "Rows a section shows before \"Show more\"; 0 shows all.",
           "type": "integer",
           "format": "uint32",
           "minimum": 0
         },
         "empty": {
+          "description": "What an empty section does.",
           "$ref": "#/$defs/Empty"
         }
       },
       "additionalProperties": false
     },
     "GroupBy": {
-      "type": "string",
-      "enum": [
-        "state",
-        "space",
-        "none"
+      "oneOf": [
+        {
+          "description": "Sections by what each Thread's mark says.",
+          "type": "string",
+          "const": "state"
+        },
+        {
+          "description": "Each Space a section of its own.",
+          "type": "string",
+          "const": "space"
+        },
+        {
+          "description": "One list.",
+          "type": "string",
+          "const": "none"
+        }
       ]
     },
     "State": {
@@ -87,16 +108,24 @@
       ]
     },
     "Empty": {
-      "type": "string",
-      "enum": [
-        "hide",
-        "show"
+      "oneOf": [
+        {
+          "description": "Left out.",
+          "type": "string",
+          "const": "hide"
+        },
+        {
+          "description": "Shown with its title.",
+          "type": "string",
+          "const": "show"
+        }
       ]
     },
     "SortSettings": {
       "type": "object",
       "properties": {
         "by": {
+          "description": "What comes first in a section.",
           "$ref": "#/$defs/SortBy"
         }
       },
@@ -105,16 +134,19 @@
     "SortBy": {
       "oneOf": [
         {
-          "type": "string",
-          "enum": [
-            "changed",
-            "title"
-          ]
-        },
-        {
           "description": "What needs the Person first, then the latest change.",
           "type": "string",
           "const": "attention"
+        },
+        {
+          "description": "The latest change first.",
+          "type": "string",
+          "const": "changed"
+        },
+        {
+          "description": "By title, A to Z.",
+          "type": "string",
+          "const": "title"
         }
       ]
     },
@@ -122,55 +154,71 @@
       "type": "object",
       "properties": {
         "list": {
+          "description": "A list of Spaces above the Threads.",
           "type": "boolean"
         },
         "order": {
+          "description": "The order of that list.",
           "$ref": "#/$defs/SpaceOrder"
         },
         "rollup": {
+          "description": "A Space shows its loudest mark and how many need you.",
           "type": "boolean"
         },
         "new-thread": {
+          "description": "Each Space offers a new Thread in it.",
           "type": "boolean"
         }
       },
       "additionalProperties": false
     },
     "SpaceOrder": {
-      "type": "string",
-      "enum": [
-        "changed",
-        "name"
+      "oneOf": [
+        {
+          "description": "The Space with the latest change first.",
+          "type": "string",
+          "const": "changed"
+        },
+        {
+          "description": "By name, A to Z.",
+          "type": "string",
+          "const": "name"
+        }
       ]
     },
     "RowSettings": {
       "type": "object",
       "properties": {
         "lines": {
+          "description": "1, 2 or 3: one of Banda's layouts.",
           "type": "integer",
           "format": "uint8",
-          "minimum": 0,
-          "maximum": 255
+          "minimum": 1,
+          "maximum": 3
         },
         "hide": {
+          "description": "Parts the layout leaves out.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/Part"
           }
         },
         "line1": {
+          "description": "The first line of a layout of your own, which replaces the lines'.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/Part"
           }
         },
         "line2": {
+          "description": "Its second line.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/Part"
           }
         },
         "line3": {
+          "description": "Its third line.",
           "type": "array",
           "items": {
             "$ref": "#/$defs/Part"
@@ -181,15 +229,42 @@
     },
     "Part": {
       "description": "A part of a row; `~` pushes the rest of its line to the right.",
-      "type": "string",
-      "enum": [
-        "mark",
-        "title",
-        "space",
-        "harness",
-        "status",
-        "note",
-        "~"
+      "oneOf": [
+        {
+          "description": "The Thread's mark.",
+          "type": "string",
+          "const": "mark"
+        },
+        {
+          "description": "Its title.",
+          "type": "string",
+          "const": "title"
+        },
+        {
+          "description": "Its Space.",
+          "type": "string",
+          "const": "space"
+        },
+        {
+          "description": "Its Harness.",
+          "type": "string",
+          "const": "harness"
+        },
+        {
+          "description": "What it does now, and when it last changed.",
+          "type": "string",
+          "const": "status"
+        },
+        {
+          "description": "The last thing said.",
+          "type": "string",
+          "const": "note"
+        },
+        {
+          "description": "Pushes the rest of the line to the right.",
+          "type": "string",
+          "const": "~"
+        }
       ]
     }
   }

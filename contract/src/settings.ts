@@ -3,6 +3,7 @@
  * file's JSON Schema from its Rust structs, turned into rows. A new key in
  * Rust is a new row here, with no list kept by hand (decision 4).
  */
+import agents from "./generated/schema/agents.schema.json"
 import browser from "./generated/schema/browser.schema.json"
 import harnesses from "./generated/schema/harnesses.schema.json"
 import look from "./generated/schema/look.schema.json"
@@ -35,6 +36,7 @@ export const SCHEMAS: { [file: string]: Schema } = {
   "look.toml": look as Schema,
   "sidebar.toml": sidebar as Schema,
   "browser.toml": browser as Schema,
+  "agents.toml": agents as Schema,
   "harnesses.toml": harnesses as Schema,
 }
 
@@ -162,9 +164,9 @@ export function aboutOf(file: string): string {
   return oneLine(SCHEMAS[file]?.description ?? "")
 }
 
-/** `dim-inactive` as `Dim inactive`. */
+/** `dim-inactive` as `Dim inactive`, `line1` as `Line 1`. */
 export function titleOf(name: string): string {
-  const words = name.replaceAll(/[-_]/g, " ")
+  const words = name.replaceAll(/[-_]/g, " ").replace(/(\D)(\d+)$/, "$1 $2")
   return words.charAt(0).toUpperCase() + words.slice(1)
 }
 

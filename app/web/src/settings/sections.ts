@@ -7,7 +7,7 @@
  * with no list kept here; a row the schema cannot draw well, the section
  * draws itself (decision 4).
  */
-import type { ComponentType } from "react"
+import type { ComponentType, ReactNode } from "react"
 import type { Engine } from "@banda/contract"
 import {
   aboutOf,
@@ -24,14 +24,20 @@ import {
   type LucideIcon,
   PaletteIcon,
   PanelLeftIcon,
+  SettingsIcon,
 } from "lucide-react"
 import { Agents } from "./Agents"
+import { General } from "./General"
+import { PlaySound, PresetPicker } from "./rows"
 import { ThemePicker } from "./ThemePicker"
 
-/** A row a section draws itself: the value now, and how to set it. */
+/** A row a section draws itself: the value now, how to set it, and the
+ * control the schema would draw, to wrap. */
 export type CustomRow = ComponentType<{
+  row: Row
   setting?: Setting
   set: (value: string) => void
+  control: ReactNode
 }>
 
 export type Section = {
@@ -47,12 +53,21 @@ export type Section = {
   tables?: string[]
   /** Its own rows, by key. */
   custom?: { [key: string]: CustomRow }
-  /** What it shows instead of rows, as a module draws it; `lit` is the
-   * part a link names. */
+  /** What it shows instead of its file's rows, as a module draws it;
+   * `lit` is the part a link names. */
   Body?: ComponentType<{ engine: Engine; lit?: string }>
+  /** Another file whose rows follow the body, under `title`. */
+  also?: { file: string; title: string }
 }
 
 export const SECTIONS: Section[] = [
+  {
+    id: "general",
+    title: "General",
+    icon: SettingsIcon,
+    about: "Banda's engine, and where its settings files are.",
+    Body: General,
+  },
   {
     id: "appearance",
     title: "Appearance",
@@ -68,6 +83,7 @@ export const SECTIONS: Section[] = [
     icon: PanelLeftIcon,
     file: "sidebar.toml",
     about: aboutOf("sidebar.toml"),
+    custom: { preset: PresetPicker },
   },
   {
     id: "sounds",
@@ -77,6 +93,11 @@ export const SECTIONS: Section[] = [
     about:
       "Banda's sounds, and how it tells you a Thread calls for you. Kept in look.toml.",
     tables: ["sound", "notify"],
+    custom: {
+      "sound.done": PlaySound,
+      "sound.asking": PlaySound,
+      "sound.failed": PlaySound,
+    },
   },
   {
     id: "agents",
@@ -86,6 +107,7 @@ export const SECTIONS: Section[] = [
     about:
       "The Harnesses Banda starts Threads with, and what a message written while an Agent works does.",
     Body: Agents,
+    also: { file: "agents.toml", title: "Writing to an Agent" },
   },
   {
     id: "browser",
@@ -106,7 +128,15 @@ export const SECTIONS: Section[] = [
 /** Each section's rows in their tables, the file's own keys first; the
  * schemas never change, so once. */
 const GROUPS = new Map(
-  SECTIONS.map((section) => [section, grouped(rowsFor(section))])
+  SECTIONS.map((section) => [
+    section,
+    [
+      ...grouped(rowsFor(section)),
+      ...(section.also
+        ? [{ title: section.also.title, rows: rowsOf(section.also.file) }]
+        : []),
+    ],
+  ])
 )
 
 function rowsFor(section: Section): Row[] {
