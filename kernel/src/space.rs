@@ -5,8 +5,11 @@
 use crate::events::{self, Event, EventFilter};
 use crate::module::Module;
 use crate::outbox;
+use crate::passes::Passes;
 use crate::store::{Receipt, Store};
-use crate::{CommandId, Error, Participant, PersonId, Refusal, SpaceId, SpaceSummary, Tx, now_ms};
+use crate::{
+    AgentId, CommandId, Error, Participant, PersonId, Refusal, SpaceId, SpaceSummary, Tx, now_ms,
+};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::fs::{File, TryLockError};
@@ -45,6 +48,7 @@ pub struct Space {
     owner: PersonId,
     store: Store,
     modules: Arc<[Arc<dyn Module>]>,
+    passes: Arc<Passes>,
     /// Held while the Space is open, so one engine at a time writes it.
     _lock: File,
 }
@@ -115,6 +119,7 @@ impl Space {
         folder: PathBuf,
         owner: PersonId,
         modules: Arc<[Arc<dyn Module>]>,
+        passes: Arc<Passes>,
         boot: &str,
     ) -> Result<Arc<Space>, Error> {
         let manifest = Manifest::read(&folder)?;
@@ -142,6 +147,7 @@ impl Space {
             owner,
             store,
             modules,
+            passes,
             _lock: lock,
         });
         outbox::recover(&space, boot).await?;
@@ -243,6 +249,12 @@ impl ModuleSpace {
 
     pub fn owner(&self) -> PersonId {
         self.space.owner
+    }
+
+    /// The pass that names `agent` in this Space, for its session to reach
+    /// the engine through `banda mcp` (ADR 0019, decision 2).
+    pub fn pass(&self, agent: AgentId) -> Result<String, Error> {
+        self.space.passes.issue(agent, self.space.id)
     }
 
     /// One change in one transaction, outside any command: what a module

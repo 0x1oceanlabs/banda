@@ -58,6 +58,19 @@ banda call/follow   the CLI: the same API, for people, scripts and Agents
   part of Banda writes its topics in a `skill/` folder beside its code,
   and `modules/skill` gathers them when it is built; a topic may include a
   file the part ships, such as `look/sidebar.toml`.
+- **An Agent reaches Banda through `banda mcp`** (ADR 0019). The agents
+  module hands it to every ACP session it opens (`session/new`, `load`
+  and `resume`), as a stdio MCP server named `banda`, with two
+  variables: `BANDA_TOKEN`, a new pass for the session's Agent, and
+  `BANDA_ENGINE`, where the API listens. It is a pipe: MCP on stdio, one
+  JSON-RPC message per line, written on `serde_json`, and the engine's API
+  on the other side. Its calls name no Space, so they run in the pass's.
+  Its tools are `spaces.tools`, read once as it connects: the module
+  methods marked `tool` in their `methods!` tables. It adds `skill`,
+  which it answers itself from the Banda skill. Its
+  `instructions` are the skill's core. A refused or malformed call is a
+  tool result marked `isError`, with the refusal and that nothing was
+  done; only an engine that does not answer is a JSON-RPC error.
 - **The CLI prints JSON.** `banda call <method>` prints `{"ok": …}`.
   `banda follow` prints events, one per line. When the engine refuses
   the call, the hello or the follow, the CLI prints
@@ -83,9 +96,19 @@ The kernel holds only what every module needs, and it names no module.
   the Space itself, decide what an Agent asked a Person, nor run programs
   as the Person in a terminal (an Agent runs them through its Harness);
   nobody else may do anything. Members and roles arrive here later.
+- **The Space wall** (ADR 0019, decision 2). A caller with an Agent's
+  pass calls, subscribes and streams only in that pass's Space. The
+  kernel checks it where it finds the Space, before the access decision
+  (`access::within`), for the API and for callers in the engine alike. A
+  call that names no Space runs in the pass's; any other Space is
+  refused. `spaces.list` shows it only its own.
 - **Identity.** A port: it says which Participant a connection's token names.
   On one computer, whoever holds the engine's secret is the owner. Later it
-  is OIDC, or our accounts, and Agents get tokens of their own.
+  is OIDC, or our accounts.
+- **Passes.** A module asks its `ModuleSpace` for a new pass of an Agent
+  (`pass(agent)`), 32 random bytes in hex; the agents module asks as a
+  session opens. The kernel keeps passes in memory, so they end with the
+  engine. A `hello` with a pass connects as that Agent, in that Space.
 - **Module registry and API.** The registry routes commands to their
   module, delivers events to subscribers, and serves the API. `welcome`
   lists the engine's modules, so a window shows only what the engine has.
@@ -168,7 +191,10 @@ module's `Module` implementation is its manifest.
   version.
 - **Its tables.** Only this module writes them, and no other module reads
   them.
-- **MCP tools** that it offers Agents.
+- **Tools** it offers Agents: a `methods!` line marked `tool "<name>"`
+  is one, with its `///` as its description and the JSON Schema of its
+  params, from `schemars` (ADR 0019, decision 3). The agents module's
+  `threads` and `thread` are `threads` and `read`.
 - **Panes.** They reach the engine only through the API.
 
 **Modules connect only by commands and events.** Here is an example, once
@@ -635,7 +661,7 @@ banda/
     browser/pane/     React: the browser Pane, its tabs and row (ADR 0013)
     skill/            Rust: the Banda skill, its core and the topics it gathers (ADR 0012)
   look/               Rust: banda look, the look, the sidebar's arrangement and the browser's; skill/ its topics
-  engine/             the banda program: serve (the kernel and its modules), call, follow, look, skill
+  engine/             the banda program: serve (the kernel and its modules), call, follow, look, skill, mcp
   app/ui/             shadcn/ui and the Pane contract
   app/ghostty/        T3 Code's Ghostty adapter and its WebAssembly, vendored
   app/web/            React: the shell (bar, sidebar, workspaces, overview), the actions, the Pane registry

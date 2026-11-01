@@ -1,4 +1,5 @@
 use crate::access::Right;
+use crate::methods::Tool;
 use crate::outbox::{Effect, OnRestart, Outcome, Settled};
 use crate::space::ModuleSpace;
 use crate::{CommandId, Error, Participant, Refusal, Tx};
@@ -34,6 +35,13 @@ pub trait Module: Send + Sync + 'static {
     /// `match`, so the compiler rejects a method without a right (ADR 0002,
     /// decision 9). The kernel decides before [`Module::call`] runs.
     fn right(&self, method: &str) -> Option<Right>;
+
+    /// Its methods an Agent may call as tools: the lines of its `methods!`
+    /// table marked `tool`, `Self::method_tools(self.name())` (ADR 0019,
+    /// decision 3).
+    fn tools(&self) -> Vec<Tool> {
+        Vec::new()
+    }
 
     /// Runs once a Space opens, after the outbox settled what a restart cut
     /// short: a module can pick up its work here.

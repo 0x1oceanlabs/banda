@@ -18,7 +18,6 @@ banda-skill = { path = "../modules/skill" }
 clap.workspace = true
 dirs.workspace = true
 futures.workspace = true
-getrandom.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 tokio.workspace = true

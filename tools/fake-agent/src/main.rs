@@ -71,6 +71,10 @@
 //! it takes no images, and with `FAKE_AGENT_NO_STEERING` no message into a
 //! running turn.
 //!
+//! With `FAKE_AGENT_MCP` naming a file it writes there the MCP servers a
+//! new session was given, as JSON, so a test can start them as a Harness
+//! would.
+//!
 //! With `FAKE_AGENT_REPLAY` naming a recording it plays a real Harness's
 //! conversation instead: see [`replay`].
 
@@ -1055,9 +1059,13 @@ async fn main() -> Result<(), Error> {
         .on_receive_request(
             {
                 let fake = fake.clone();
-                async move |_request: NewSessionRequest,
+                async move |request: NewSessionRequest,
                             responder: Responder<NewSessionResponse>,
                             cx: ConnectionTo<Client>| {
+                    if let Some(file) = std::env::var_os("FAKE_AGENT_MCP") {
+                        let servers = serde_json::to_vec(&request.mcp_servers).unwrap_or_default();
+                        let _ = std::fs::write(file, servers);
+                    }
                     let number = fake.sessions.fetch_add(1, Ordering::Relaxed) + 1;
                     // Unique across processes, so a resumed session shows.
                     let id = SessionId::new(format!("fake-{}-{number}", std::process::id()));

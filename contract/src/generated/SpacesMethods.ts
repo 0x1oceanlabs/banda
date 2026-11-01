@@ -4,6 +4,7 @@ import type { CommandMethod } from "./CommandMethod";
 import type { CreateSpace } from "./CreateSpace";
 import type { Nothing } from "./Nothing";
 import type { SpaceSummary } from "./SpaceSummary";
+import type { Tool } from "./Tool";
 
 export type SpacesMethods = { 
 /**
@@ -13,4 +14,8 @@ list: CallMethod<Nothing, Array<SpaceSummary>>,
 /**
  * Makes a Space: its folder under the root, by its name.
  */
-create: CommandMethod<CreateSpace, SpaceSummary>, };
+create: CommandMethod<CreateSpace, SpaceSummary>, 
+/**
+ * The tools an Agent may call, from every module's methods.
+ */
+tools: CallMethod<Nothing, Array<Tool>>, };

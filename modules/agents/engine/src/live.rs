@@ -5,11 +5,12 @@
 //! One lock holds the running turns, the stops and the Questions together,
 //! so a stop that comes while a turn starts, or while it asks, is never lost.
 
+use crate::Pipe;
 use crate::acp::{Answer, Connection, Session};
 use crate::hosts::Hosts;
-use crate::model::{ItemId, TurnId, Values};
+use crate::model::{ItemId, Program, TurnId, Values};
 use crate::settings::Harness;
-use banda_kernel::SpaceId;
+use banda_kernel::{AgentId, ModuleSpace, SpaceId};
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -20,6 +21,8 @@ pub struct Live {
     turns: Mutex<Turns>,
     /// How long a turn the Agent went on with by itself waits for more.
     quiet: Duration,
+    /// How a session's Agent reaches Banda, if it does.
+    pipe: Option<Pipe>,
 }
 
 #[derive(Default)]
@@ -56,13 +59,21 @@ impl Turns {
 
 impl Live {
     /// Hosts let go after `idle` with nothing to do; a turn the Agent
-    /// went on with by itself ends after `quiet` with nothing said.
-    pub fn new(idle: Duration, quiet: Duration) -> Live {
+    /// went on with by itself ends after `quiet` with nothing said; each
+    /// session gets `banda mcp` through `pipe`.
+    pub fn new(idle: Duration, quiet: Duration, pipe: Option<Pipe>) -> Live {
         Live {
             hosts: Hosts::new(idle),
             turns: Mutex::default(),
             quiet,
+            pipe,
         }
+    }
+
+    /// `banda mcp` as a session of `agent`'s in `space` starts it, with a
+    /// new pass (ADR 0019).
+    pub fn banda(&self, space: &ModuleSpace, agent: AgentId) -> Option<Program> {
+        self.pipe.as_ref()?.program(space, agent)
     }
 
     /// How long a turn the Agent went on with by itself waits for more.

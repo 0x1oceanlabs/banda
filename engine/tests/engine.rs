@@ -1,11 +1,12 @@
 //! The `banda` program as a window and a script use it: `serve` with a
-//! parent, then `call` and `follow` over the API. The Harness is the fake
-//! agent from `tools/fake-agent`.
+//! parent, then `call` and `follow` over the API; and `banda mcp` as a
+//! Harness starts it for an Agent. The Harness is the fake agent from
+//! `tools/fake-agent`.
 
 use serde_json::{Value, json};
-use std::io::{BufRead, BufReader};
+use std::io::{BufRead, BufReader, Write};
 use std::path::{Path, PathBuf};
-use std::process::{Child, ChildStdin, Command, Output, Stdio};
+use std::process::{Child, ChildStdin, ChildStdout, Command, Output, Stdio};
 use std::sync::mpsc;
 use std::time::Duration;
 
@@ -22,12 +23,14 @@ fn fake_agent() -> PathBuf {
 }
 
 /// Temporary places for one engine, with the fake agent as its only
-/// Harness.
+/// Harness. The fake agent writes the MCP servers of its last new session
+/// in `mcp`.
 struct Places {
     _dir: tempfile::TempDir,
     root: PathBuf,
     state: PathBuf,
     config: PathBuf,
+    mcp: PathBuf,
 }
 
 impl Places {
@@ -39,9 +42,11 @@ impl Places {
             dir.path().join("config"),
         );
         std::fs::create_dir_all(&config).unwrap();
+        let mcp = dir.path().join("mcp.json");
         let list = format!(
-            "[[harness]]\nid = \"fake\"\nname = \"Fake\"\ncommand = {:?}\n",
-            fake_agent().display().to_string()
+            "[[harness]]\nid = \"fake\"\nname = \"Fake\"\ncommand = {:?}\nenv = {{ FAKE_AGENT_MCP = {:?} }}\n",
+            fake_agent().display().to_string(),
+            mcp.display().to_string(),
         );
         std::fs::write(config.join("harnesses.toml"), list).unwrap();
         Places {
@@ -49,6 +54,7 @@ impl Places {
             root,
             state,
             config,
+            mcp,
         }
     }
 
@@ -219,14 +225,159 @@ fn an_engine_with_a_parent_still_stops_on_sigterm() {
         .status()
         .unwrap();
     assert!(sent.success());
-    for _ in 0..500 {
-        if let Some(status) = engine.try_wait().unwrap() {
-            assert!(status.success(), "{status:?}");
-            assert!(!places.state.join("engine.json").exists());
-            return;
+    let Some(status) = wait_for(Duration::from_secs(5), || engine.try_wait().unwrap()) else {
+        engine.kill().unwrap();
+        panic!("the engine did not stop within five seconds");
+    };
+    assert!(status.success(), "{status:?}");
+    assert!(!places.state.join("engine.json").exists());
+}
+
+/// `banda mcp` as a Harness runs it: the command, arguments and
+/// environment a session was given.
+struct Mcp {
+    child: Child,
+    stdin: ChildStdin,
+    stdout: BufReader<ChildStdout>,
+}
+
+impl Mcp {
+    fn start(server: &Value) -> Mcp {
+        assert_eq!(server["name"], "banda");
+        assert_eq!(server["args"], json!(["mcp"]));
+        let mut command = Command::new(text(&server["command"]));
+        command.args(["mcp"]).env("BANDA_LOG", "warn");
+        for variable in server["env"].as_array().unwrap() {
+            command.env(text(&variable["name"]), text(&variable["value"]));
+        }
+        let mut child = command
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .spawn()
+            .unwrap();
+        let (stdin, stdout) = (child.stdin.take().unwrap(), child.stdout.take().unwrap());
+        Mcp {
+            child,
+            stdin,
+            stdout: BufReader::new(stdout),
+        }
+    }
+
+    fn tell(&mut self, message: Value) {
+        writeln!(self.stdin, "{message}").unwrap();
+    }
+
+    /// Sends a request and reads its answer, which must carry its ID.
+    fn ask(&mut self, id: u64, method: &str, params: Value) -> Value {
+        self.tell(json!({ "jsonrpc": "2.0", "id": id, "method": method, "params": params }));
+        let mut line = String::new();
+        self.stdout.read_line(&mut line).unwrap();
+        let answer: Value = serde_json::from_str(&line).unwrap();
+        assert_eq!(answer["id"], id, "{answer}");
+        answer
+    }
+
+    /// Calls a tool: whether it was an error, and its text.
+    fn call(&mut self, id: u64, tool: &str, arguments: Value) -> (bool, String) {
+        let params = json!({ "name": tool, "arguments": arguments });
+        let result = self.ask(id, "tools/call", params)["result"].clone();
+        let said = text(&result["content"][0]["text"]).to_owned();
+        (result["isError"].as_bool().unwrap(), said)
+    }
+
+    fn end(mut self) {
+        drop(self.stdin);
+        assert!(self.child.wait().unwrap().success());
+    }
+}
+
+#[test]
+fn an_agent_reaches_banda_through_banda_mcp() {
+    let places = Places::new();
+    let (mut engine, stdin, _) = places.serve();
+    let work = places.ok("spaces.create", None, json!({ "name": "Work" }));
+    let work = text(&work["id"]);
+    let sent = places.ok(
+        "agents.send",
+        Some(work),
+        json!({ "harness": "fake", "text": "hello" }),
+    );
+    let thread = text(&sent["thread"]);
+
+    // The session the agents module opened for the Thread got it.
+    let servers = wait_for(Duration::from_secs(30), || {
+        let bytes = std::fs::read(&places.mcp).ok()?;
+        Some(serde_json::from_slice::<Value>(&bytes).unwrap())
+    })
+    .expect("the session got its MCP servers");
+    let server = &servers[0];
+    let variables = server["env"].as_array().unwrap();
+    let names: Vec<_> = variables.iter().map(|v| text(&v["name"])).collect();
+    assert_eq!(names, ["BANDA_ENGINE", "BANDA_TOKEN"]);
+    assert_eq!(text(&variables[1]["value"]).len(), 64);
+
+    let mut mcp = Mcp::start(server);
+    let hello = json!({ "protocolVersion": "2025-06-18", "capabilities": {}, "clientInfo": { "name": "test", "version": "1" } });
+    let welcome = mcp.ask(1, "initialize", hello)["result"].clone();
+    assert_eq!(welcome["protocolVersion"], "2025-06-18");
+    assert_eq!(welcome["serverInfo"]["name"], "banda");
+    assert!(text(&welcome["instructions"]).contains("the `skill` tool"));
+    // A notification gets no answer: the next line answers the ping.
+    mcp.tell(json!({ "jsonrpc": "2.0", "method": "notifications/initialized" }));
+    assert_eq!(mcp.ask(2, "ping", json!({}))["result"], json!({}));
+
+    let tools = mcp.ask(3, "tools/list", json!({}))["result"]["tools"].clone();
+    let names: Vec<_> = tools
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|t| text(&t["name"]))
+        .collect();
+    assert_eq!(names, ["threads", "read", "skill"]);
+    assert_eq!(tools[1]["inputSchema"]["required"], json!(["thread"]));
+
+    let (error, threads) = mcp.call(4, "threads", json!({}));
+    assert!(!error, "{threads}");
+    let threads: Value = serde_json::from_str(&threads).unwrap();
+    assert_eq!(threads["threads"][0]["id"], thread);
+    let (error, read) = mcp.call(5, "read", json!({ "thread": thread }));
+    assert!(!error, "{read}");
+    assert_eq!(
+        serde_json::from_str::<Value>(&read).unwrap()["thread"]["id"],
+        thread
+    );
+
+    let nowhere = uuid::Uuid::now_v7().to_string();
+    let (error, said) = mcp.call(6, "read", json!({ "thread": nowhere }));
+    assert!(error);
+    assert!(
+        said.contains("There is no such Thread. Nothing was done."),
+        "{said}"
+    );
+    let (error, said) = mcp.call(7, "read", json!({ "thread": "nope" }));
+    assert!(error && said.contains("do not fit"), "{said}");
+    let (error, said) = mcp.call(8, "send", json!({ "text": "hi" }));
+    assert!(error && said.contains("no tool \"send\""), "{said}");
+
+    let (error, said) = mcp.call(9, "skill", json!({ "topic": "sidebar" }));
+    assert!(!error);
+    assert!(said.contains("sidebar.toml"), "{said}");
+    let unknown = mcp.ask(10, "resources/list", json!({}));
+    assert_eq!(unknown["error"]["code"], -32601);
+    mcp.end();
+
+    drop(stdin);
+    assert!(engine.wait().unwrap().success());
+}
+
+/// What `found` finds, asked every ten milliseconds until `within` passes.
+fn wait_for<T>(within: Duration, mut found: impl FnMut() -> Option<T>) -> Option<T> {
+    let until = std::time::Instant::now() + within;
+    while std::time::Instant::now() < until {
+        if let Some(found) = found() {
+            return Some(found);
         }
         std::thread::sleep(Duration::from_millis(10));
     }
-    engine.kill().unwrap();
-    panic!("the engine did not stop within five seconds");
+    None
 }

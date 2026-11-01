@@ -11,6 +11,9 @@
 //!   Person lets it go (ADR 0003, decision 8).
 //! - **Harnesses** are reached through ACP, one process per Space and
 //!   Harness entry (`hosts.rs`). ACP's words stop in `acp.rs`.
+//! - **An Agent reaches Banda** through `banda mcp`, which every session
+//!   gets with the Agent's pass ([`Pipe`]). Its tools are the methods
+//!   marked `tool` below (ADR 0019).
 //!
 //! Its methods, each with its right, params and answer, are the
 //! `methods!` table below (ADR 0014).
@@ -32,20 +35,22 @@ mod turn;
 use acp::Connection;
 use banda_kernel::{
     AgentId, Call, Effect, Error, Module, ModuleSpace, Nothing, OnRestart, Outcome, Participant,
-    Refusal, Right, Settled, SpaceId, Tx,
+    Refusal, Right, Settled, SpaceId, Tool, Tx,
 };
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as BASE64;
 use images::Images;
 use live::Live;
 use model::{
-    Account, Body, Fact, HarnessView, Image, ImageId, Item, ItemId, Offer, Settings, ThreadId,
-    ThreadList, ThreadSummary, ThreadView, TurnId, TurnState, VERSION,
+    Account, Body, Fact, HarnessView, Image, ImageId, Item, ItemId, Offer, Program, Settings,
+    ThreadId, ThreadList, ThreadSummary, ThreadView, TurnId, TurnState, VERSION,
 };
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use settings::{Harness, Harnesses};
 use std::fmt::Display;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 use ts_rs::TS;
@@ -57,17 +62,57 @@ pub struct Agents {
     idle: Duration,
     quiet: Duration,
     listings: Arc<files::Listings>,
+    pipe: Option<Pipe>,
+}
+
+/// How an Agent reaches Banda from its session: the engine's own program
+/// runs as `banda mcp` and talks to the engine's API (ADR 0019, decision
+/// 1). Without it, a session gets no Banda.
+#[derive(Clone, Debug)]
+pub struct Pipe {
+    /// The `banda` program.
+    pub program: PathBuf,
+    /// Where the engine's API listens: `ws://127.0.0.1:<port>/ws`.
+    pub engine: String,
+}
+
+impl Pipe {
+    /// `banda mcp` as a session of `agent`'s in `space` starts it, with a
+    /// new pass; `None`, said in the log, if there is no pass.
+    fn program(&self, space: &ModuleSpace, agent: AgentId) -> Option<Program> {
+        let pass = space
+            .pass(agent)
+            .inspect_err(|error| tracing::warn!(%error, "a session goes without Banda"))
+            .ok()?;
+        Some(Program {
+            program: self.program.display().to_string(),
+            args: vec!["mcp".to_owned()],
+            env: [("BANDA_TOKEN", pass), ("BANDA_ENGINE", self.engine.clone())]
+                .map(|(name, value)| (name.to_owned(), value))
+                .into(),
+        })
+    }
 }
 
 impl Agents {
     pub fn new(harnesses: Harnesses) -> Self {
         Self {
             harnesses,
-            live: Arc::new(Live::new(hosts::IDLE, between::QUIET)),
+            live: Arc::new(Live::new(hosts::IDLE, between::QUIET, None)),
             idle: hosts::IDLE,
             quiet: between::QUIET,
             listings: Arc::default(),
+            pipe: None,
         }
+    }
+
+    /// Hands every session it opens `banda mcp` through `pipe`.
+    pub fn piped(self, pipe: Pipe) -> Self {
+        Self {
+            pipe: Some(pipe),
+            ..self
+        }
+        .live_again()
     }
 
     /// Lets a Harness process go after `idle` with nothing to do, instead
@@ -83,7 +128,7 @@ impl Agents {
     }
 
     fn live_again(mut self) -> Self {
-        self.live = Arc::new(Live::new(self.idle, self.quiet));
+        self.live = Arc::new(Live::new(self.idle, self.quiet, self.pipe.clone()));
         self
     }
 
@@ -126,10 +171,13 @@ banda_kernel::methods! {
         command sign_in(SignIn) -> Option<Sent>, Manage;
         /// Asks the Harness to sign out, then it starts again.
         command sign_out(OneHarness) -> (), Manage;
-        /// The Space's Threads, the latest first.
-        call threads(Nothing) -> ThreadList, Read;
-        /// One Thread as a view.
-        call thread(OneThread) -> ThreadView, Read;
+        /// The Threads of this Space, the latest first: each one's ID, title
+        /// and Harness, what it was last asked, how its latest turn stands,
+        /// and the Questions it waits on.
+        call threads(Nothing) -> ThreadList, Read, tool "threads";
+        /// One Thread of this Space as its Person reads it: its messages and
+        /// replies, its turns and what each may do now, and its settings.
+        call thread(OneThread) -> ThreadView, Read, tool "read";
         /// What a new Thread on a Harness starts with.
         call defaults(OneHarness) -> Defaults, Read;
         /// A message that queues a turn, or with `steer` joins the one that
@@ -180,9 +228,10 @@ struct SignIn {
     turn: Option<TurnId>,
 }
 
-#[derive(Deserialize, TS)]
+#[derive(Deserialize, TS, JsonSchema)]
 #[ts(export_to = "agents/")]
 struct OneThread {
+    /// The Thread's ID, as `threads` lists it.
     thread: ThreadId,
 }
 
@@ -595,6 +644,10 @@ impl Module for Agents {
 
     fn right(&self, method: &str) -> Option<Right> {
         Self::method_right(method)
+    }
+
+    fn tools(&self) -> Vec<Tool> {
+        Self::method_tools(self.name())
     }
 
     async fn call(&self, call: Call, method: &str, params: Value) -> Result<Value, Refusal> {

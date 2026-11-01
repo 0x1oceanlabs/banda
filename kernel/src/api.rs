@@ -1,10 +1,12 @@
 //! The engine's API: JSON frames over one WebSocket (ADR 0001, decision 1).
 //!
 //! 1. The client's first frame is `hello`, with the protocol version and a
-//!    token. The [`Identity`] port says which Participant the token names.
-//!    A wrong version or an unknown token gets `goodbye`. `welcome` lists
-//!    the engine's modules, so a window shows only what the engine has
-//!    (ADR 0002, decision 8).
+//!    token. The [`Identity`] port says which Participant the token names,
+//!    or the token is a pass: an Agent, which works only in its pass's
+//!    Space ([`crate::access::within`]), and calls there when it names
+//!    none. A wrong version or an unknown token gets
+//!    `goodbye`. `welcome` lists the engine's modules, so a window shows
+//!    only what the engine has (ADR 0002, decision 8).
 //! 2. `call` runs a method and gets one `result` with the same `id`.
 //! 3. `subscribe` follows a Space's events after a position. The window first
 //!    reads a view with its position, then subscribes after it (ADR 0002,
@@ -19,7 +21,7 @@
 //!
 //! Unknown fields are ignored on both sides, so either side can be newer.
 
-use crate::access::{self, Right};
+use crate::access::Caller;
 use crate::events::{Event, EventFilter};
 use crate::module::Stream;
 use crate::{Code, CommandId, Kernel, PROTOCOL, Participant, PersonId, Refusal, SpaceId};
@@ -213,6 +215,18 @@ fn origin_allowed(origin: Option<&str>) -> bool {
     }
 }
 
+/// Who a `hello`'s token names, and the one Space a pass keeps it in.
+fn identify(api: &Api, token: &str) -> Option<Caller> {
+    if let Some(participant) = api.identity.identify(token) {
+        return Some(participant.into());
+    }
+    let (agent, space) = api.kernel.holder(token)?;
+    Some(Caller {
+        participant: Participant::Agent(agent),
+        only: Some(space),
+    })
+}
+
 fn same_secret(a: &str, b: &str) -> bool {
     a.len() == b.len()
         && a.bytes()
@@ -273,15 +287,15 @@ async fn serve(api: Arc<Api>, socket: WebSocket) {
                 "This engine speaks protocol {PROTOCOL}, the window speaks {protocol}. Update Banda."
             ),
         )),
-        Some(ClientFrame::Hello { token, .. }) => api.identity.identify(&token).ok_or_else(|| {
+        Some(ClientFrame::Hello { token, .. }) => identify(&api, &token).ok_or_else(|| {
             Refusal::forbidden("The first frame must be hello with a token this engine knows.")
         }),
         _ => Err(Refusal::forbidden(
             "The first frame must be hello with a token this engine knows.",
         )),
     };
-    let participant = match who {
-        Ok(participant) => participant,
+    let caller = match who {
+        Ok(caller) => caller,
         Err(reason) => {
             let _ = sink.send(text(&EngineFrame::Goodbye { reason })).await;
             let _ = sink.close().await;
@@ -347,9 +361,7 @@ async fn serve(api: Arc<Api>, socket: WebSocket) {
                 let kernel = api.kernel.clone();
                 let out = out.clone();
                 tokio::spawn(async move {
-                    let answer = kernel
-                        .call(participant, &method, space, command, params)
-                        .await;
+                    let answer = kernel.call(caller, &method, space, command, params).await;
                     let _ = out.send(result(id, answer)).await;
                 });
             }
@@ -359,13 +371,7 @@ async fn serve(api: Arc<Api>, socket: WebSocket) {
                 after,
                 filter,
             } => {
-                let allowed = match api.kernel.space(space).await {
-                    Ok(space) => {
-                        access::decide(&participant, Right::Read, space.owner()).map(|()| space)
-                    }
-                    Err(refusal) => Err(refusal),
-                };
-                match allowed {
+                match api.kernel.follow(caller, space).await {
                     Ok(space) => {
                         // The answer goes out before the first event.
                         let ok = serde_json::json!({ "subscription": id });
@@ -386,7 +392,7 @@ async fn serve(api: Arc<Api>, socket: WebSocket) {
                 method,
                 params,
             } => {
-                match api.kernel.stream(participant, &method, space, params).await {
+                match api.kernel.stream(caller, &method, space, params).await {
                     Ok(pieces) => {
                         // The answer goes out before the first piece.
                         let ok = serde_json::json!({ "stream": id });
