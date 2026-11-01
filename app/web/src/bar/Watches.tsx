@@ -1,24 +1,27 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import type { Engine, SpaceId, SpaceSummary } from "@bandaso/contract"
-import type { Attention, Watch } from "@bandaso/ui/pane"
+import type { Attention, Call, Watch } from "@bandaso/ui/pane"
 import { runs, watches } from "../registry"
 import { combine } from "./attention"
 
 /**
  * Draws every module's Watch for every Space, while the engine runs the
- * module, and says what they call the Person for together. It shows
- * nothing: the bar shows what it says.
+ * module, and says what they call the Person for together, and each call
+ * they make now. It shows nothing: the bar shows what it says, and the
+ * window plays the calls.
  */
 export function Watches({
   engine,
   modules,
   spaces,
   onChange,
+  onCall,
 }: {
   engine: Engine
   modules: readonly string[]
   spaces: SpaceSummary[]
   onChange: (attention: Attention) => void
+  onCall: (call: Call) => void
 }) {
   const [reports, setReports] = useState<Record<string, Attention>>({})
   const hear = useCallback((key: string, attention?: Attention) => {
@@ -52,6 +55,7 @@ export function Watches({
             engine={engine}
             space={space.id}
             hear={hear}
+            call={onCall}
           />
         )
       })
@@ -69,12 +73,14 @@ function One({
   engine,
   space,
   hear,
+  call,
 }: {
   id: string
   watch: Watch
   engine: Engine
   space: SpaceId
   hear: (key: string, attention?: Attention) => void
+  call: (call: Call) => void
 }) {
   const report = useCallback(
     (attention: Attention) => hear(id, attention),
@@ -84,5 +90,5 @@ function One({
   // nothing.
   useEffect(() => () => hear(id), [hear, id])
   const Watched = watch.Watch
-  return <Watched engine={engine} space={space} report={report} />
+  return <Watched engine={engine} space={space} report={report} call={call} />
 }

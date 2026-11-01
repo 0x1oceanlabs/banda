@@ -55,6 +55,7 @@ import {
   RotateCcwIcon,
   ShieldQuestionIcon,
 } from "lucide-react"
+import { lookAt } from "./looking"
 import { settledTurn } from "./marks"
 import { markSeen } from "./seen"
 import {
@@ -164,6 +165,11 @@ function ThreadPane({
   useEffect(() => {
     if (focused && thread !== null && settled) markSeen(thread, settled)
   }, [focused, thread, settled])
+  // Nor does it call them with a sound while they look at it.
+  useEffect(
+    () => (focused && thread !== null ? lookAt(thread) : undefined),
+    [focused, thread]
+  )
 
   // A Thread not yet started keeps its settings here until its first
   // message, starting from its Harness's.
