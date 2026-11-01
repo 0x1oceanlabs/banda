@@ -17,7 +17,7 @@ import {
   ChevronUpIcon,
   ShieldQuestionIcon,
 } from "lucide-react"
-import { cn } from "@bandaso/ui/lib/utils"
+import { Card } from "./Card"
 import { summary, type Values } from "./form"
 import { QuestionForm } from "./QuestionForm"
 import type { Asked, QuestionBody } from "./thread"
@@ -57,45 +57,13 @@ export function Question({
       </Trace>
     )
   return (
-    <Card title={title}>
+    <Card icon={<ShieldQuestionIcon />} title={title}>
       {state === "open" ? (
         <Choices choices={choices} answering={answering} onAnswer={onAnswer} />
       ) : (
         <Answered question={question} />
       )}
     </Card>
-  )
-}
-
-/** A Question's box: what it asks, then `children`; `action` sits at the
- * end of its title. */
-function Card({
-  title,
-  action,
-  className,
-  children,
-}: {
-  title: string
-  action?: React.ReactNode
-  className?: string
-  children: React.ReactNode
-}) {
-  return (
-    <div
-      role="group"
-      aria-label={title}
-      className={cn(
-        "flex flex-col gap-3 rounded-xl border bg-card p-3 text-sm",
-        className
-      )}
-    >
-      <div className="flex items-start gap-2 font-medium">
-        <ShieldQuestionIcon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-        <span className="min-w-0 flex-1 wrap-break-word">{title}</span>
-        {action}
-      </div>
-      {children}
-    </div>
   )
 }
 
@@ -207,6 +175,7 @@ export function QuestionDrawer({
   const [folded, setFolded] = useState(false)
   return (
     <Card
+      icon={<ShieldQuestionIcon />}
       title={title}
       className="shadow-sm"
       action={

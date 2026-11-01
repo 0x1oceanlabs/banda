@@ -25,4 +25,9 @@ started?: number,
 /**
  * When it stopped running, the same way.
  */
-ended?: number, };
+ended?: number, 
+/**
+ * It made a plan before changing anything: its Thread was in plan
+ * mode when it was asked for.
+ */
+plan?: boolean, };

@@ -25,8 +25,7 @@ export function PersonMessage({
   at: number
   reader: ImageReader
 }) {
-  const long = clamped(text)
-  const [open, setOpen] = useState(false)
+  const clamp = useClamp(text, "max-h-44", "Show full message")
   return (
     <Message align="end">
       <MessageContent>
@@ -34,27 +33,42 @@ export function PersonMessage({
         {text && (
           <Bubble variant="muted" align="end">
             <BubbleContent
-              className={cn(
-                "rounded-2xl whitespace-pre-wrap",
-                long &&
-                  !open &&
-                  "max-h-44 overflow-hidden mask-b-from-60% mask-b-to-100%"
-              )}
+              className={cn("rounded-2xl whitespace-pre-wrap", clamp.className)}
             >
               {text}
             </BubbleContent>
           </Bubble>
         )}
         <Meta at={at} text={text} align="end">
-          {long && (
-            <Button variant="ghost" size="xs" onClick={() => setOpen(!open)}>
-              {open ? "Show less" : "Show full message"}
-            </Button>
-          )}
+          {clamp.toggle}
         </Meta>
       </MessageContent>
     </Message>
   )
+}
+
+/** Long text clamped to `height` until its Person opens it, as in T3
+ * Code: the class that clamps it, and the button that opens it, which says
+ * `more`. Neither, for short text. */
+export function useClamp(text: string, height: string, more: string) {
+  const long = clamped(text)
+  const [open, setOpen] = useState(false)
+  return {
+    className:
+      long && !open
+        ? cn(height, "overflow-hidden mask-b-from-60% mask-b-to-100%")
+        : undefined,
+    toggle: long && (
+      <Button
+        variant="ghost"
+        size="xs"
+        className="self-start"
+        onClick={() => setOpen(!open)}
+      >
+        {open ? "Show less" : more}
+      </Button>
+    ),
+  }
 }
 
 /** The Agent's reply: markdown as prose, without a bubble. */

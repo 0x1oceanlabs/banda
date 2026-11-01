@@ -31,6 +31,7 @@ import { useSlashMenu } from "./SlashMenu"
 export function Composer({
   name,
   placeholder,
+  plan,
   focused,
   busy,
   working,
@@ -47,6 +48,9 @@ export function Composer({
   name: string
   /** What the empty box says, instead of asking to write to `name`. */
   placeholder?: string
+  /** Whether plan mode is on, where the Harness has one: Shift+Tab
+   * switches it. */
+  plan?: boolean
   focused: boolean
   busy: boolean
   /** The turn Stop stops: the one that runs, or the next. */
@@ -159,6 +163,11 @@ export function Composer({
           }}
           onKeyDown={(event) => {
             if (slash.onKeyDown(event)) return
+            if (event.key === "Tab" && event.shiftKey && plan !== undefined) {
+              event.preventDefault()
+              onPlanMode(!plan)
+              return
+            }
             if (
               event.key === "Enter" &&
               !event.shiftKey &&

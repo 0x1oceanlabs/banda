@@ -6,7 +6,14 @@
  */
 import type { Item, ToolKind, TurnView } from "@bandaso/contract/agents"
 import { changes, type FileChange } from "./changes"
-import { type Row, rows, running, type ThreadState } from "./thread"
+import {
+  isReply,
+  type Row,
+  rows,
+  running,
+  type Said,
+  type ThreadState,
+} from "./thread"
 
 export type Line =
   | Row
@@ -17,6 +24,8 @@ export type Line =
   | { kind: "fold"; id: string; turn: TurnView; lines: Line[] }
   /** The turn that runs, where its work starts. */
   | { kind: "working"; turn: TurnView }
+  /** The reply a turn in plan mode ended with: the plan it proposed. */
+  | { kind: "plan"; turn: TurnView; item: Said }
   /** The files a turn that ended changed, after what it wrote. */
   | { kind: "changes"; turn: TurnView; files: FileChange[] }
 
@@ -86,6 +95,7 @@ const FOLDS: ReadonlySet<TurnView["state"]> = new Set(["done", "stopped"])
 
 function fold(lines: Line[], turns: TurnView[]): Line[] {
   const starts = new Map<number, Line>()
+  const plans = new Map<number, Line>()
   const gone = new Set<number>()
   for (const turn of turns) {
     if (!FOLDS.has(turn.state)) continue
@@ -98,12 +108,13 @@ function fold(lines: Line[], turns: TurnView[]): Line[] {
     )
     const reply = own.findLast((at) => {
       const line = lines[at]
-      return (
-        line.kind === "item" &&
-        line.item.body.kind === "message" &&
-        line.item.author.kind !== "person"
-      )
+      return line.kind === "item" && isReply(line.item)
     })
+    // A plan turn's reply is the plan, a card of its own (ADR 0010, 6).
+    const said = reply === undefined ? undefined : lines[reply]
+    if (reply !== undefined && said?.kind === "item" && isReply(said.item))
+      if (turn.plan && turn.state === "done")
+        plans.set(reply, { kind: "plan", turn, item: said.item })
     const folded = reply === undefined ? own : own.filter((at) => at < reply)
     if (!folded.some((at) => lines[at].kind === "work" || isWork(lines[at])))
       continue
@@ -118,7 +129,7 @@ function fold(lines: Line[], turns: TurnView[]): Line[] {
   return lines.flatMap((line, at) => {
     const start = starts.get(at)
     if (start) return [start]
-    return gone.has(at) ? [] : [line]
+    return gone.has(at) ? [] : [plans.get(at) ?? line]
   })
 }
 

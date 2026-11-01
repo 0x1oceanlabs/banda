@@ -15,6 +15,7 @@ import {
   type TurnView,
   type Usage,
 } from "@bandaso/contract/agents"
+import { settledTurn } from "./marks"
 
 export type ThreadState = {
   /** The last position in the Space's log this state includes. */
@@ -162,6 +163,8 @@ export function apply(state: ThreadState, event: Event): ThreadState {
             id: fact.payload.turn,
             message: fact.payload.item,
             state: "queued",
+            // A turn runs with the settings its Thread has when asked.
+            plan: state.settings.plan,
           },
         ],
       }
@@ -210,7 +213,10 @@ export function apply(state: ThreadState, event: Event): ThreadState {
         ...next,
         // A message its turn could not take belongs to no turn but its own.
         items: changeItem(state, message, (i) => ({ ...i, turn: undefined })),
-        turns: [...state.turns, { id: turn, message, state: "queued" }],
+        turns: [
+          ...state.turns,
+          { id: turn, message, state: "queued", plan: state.settings.plan },
+        ],
       }
     }
     case "thread.held":
@@ -354,6 +360,27 @@ export function asked(state: ThreadState): Asked | undefined {
  * the engine does, it never picks one the Harness keeps for next time. */
 export function declineOnce(question: QuestionBody): string | undefined {
   return question.choices.find((choice) => !choice.allows && !choice.always)?.id
+}
+
+/** An item that is a message. */
+export type Said = Item & { body: Extract<Body, { kind: "message" }> }
+
+/** Whether `item` is something the Agent wrote, not a Person. */
+export function isReply(item: Item): item is Said {
+  return item.body.kind === "message" && item.author.kind !== "person"
+}
+
+/** The plan the Agent proposed, if it waits for the Person: plan mode is
+ * still on, nothing runs or waits, and the latest turn made a plan and
+ * ended done with a reply, which is the plan (ADR 0010, decision 6). */
+export function proposedPlan(state: ThreadState): Said | undefined {
+  if (!state.settings.plan || working(state)) return undefined
+  const settled = settledTurn(state.turns)
+  const turn = state.turns.find((t) => t.id === settled)
+  if (turn?.state !== "done" || !turn.plan) return undefined
+  return state.items.findLast(
+    (item): item is Said => item.turn === turn.id && isReply(item)
+  )
 }
 
 /** The turn the Agent works on, if any: the latest, as the engine says. */

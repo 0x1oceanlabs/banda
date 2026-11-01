@@ -59,6 +59,7 @@ import {
   asked,
   declineOnce,
   NO_OFFER,
+  proposedPlan,
   retryable,
   steerable,
   type ThreadState,
@@ -75,6 +76,8 @@ import { Question, QuestionDrawer } from "./Questions"
 import { ChangedFiles } from "./ChangedFiles"
 import { diffPane } from "./DiffPane"
 import { Plan } from "./Plan"
+import { PlanReady, ProposedPlan } from "./ProposedPlan"
+import { planTitle } from "./messages"
 import { type Line, timeline } from "./timeline"
 import { Fold, key, WorkLine, Working } from "./Work"
 import { Queue, type QueueActions } from "./Queue"
@@ -187,7 +190,16 @@ function ThreadPane({
   // The Question the Agent waits on: one with a form opens on the composer,
   // and a message sent while any waits says no to it first, as in T3 Code.
   const asking = state && asked(state)
-  const send = async (text: string, images: Attached[], steer: boolean) => {
+  // A plan the Agent proposed waits for Implement, or for a message that
+  // refines it.
+  const planned = state && proposedPlan(state)
+  /** Sends `text`; an existing Thread changes to `next` first, if given. */
+  const send = async (
+    text: string,
+    images: Attached[],
+    steer: boolean,
+    next?: Settings
+  ) => {
     const no = asking && declineOnce(asking.body)
     if (no && text && (await answer(asking.id, no)) === undefined) return false
     for (const { image, url } of images) reader.remember(image.id, url)
@@ -200,7 +212,7 @@ function ThreadPane({
           ...(thread === null ? { harness } : { thread }),
           text,
           images: images.map(({ image }) => image.id),
-          settings: thread === null ? (settings ?? null) : null,
+          settings: thread === null ? (settings ?? null) : (next ?? null),
           steer,
         },
         space
@@ -216,6 +228,10 @@ function ThreadPane({
     if (thread === null) return
     const title = state?.title ?? args.title
     open(paneOf(diffPane, { thread, turn, path: path ?? null, title }), "right")
+  }
+  // Implement turns plan mode off and asks for the plan, in one command.
+  const implement = () => {
+    if (settings) void send(IMPLEMENT, [], false, { ...settings, plan: false })
   }
   const stop = (turn: TurnView) =>
     void acting.act(() =>
@@ -319,6 +335,13 @@ function ThreadPane({
             {sending.problem ?? acting.problem}
           </p>
         )}
+        {planned && (
+          <PlanReady
+            title={planTitle(planned.body.text)}
+            busy={sending.busy}
+            onImplement={implement}
+          />
+        )}
         {asking?.body.form && (
           <QuestionDrawer
             item={asking}
@@ -331,8 +354,11 @@ function ThreadPane({
           placeholder={
             asking
               ? `Send a message to say no and tell ${name} what to do instead`
-              : undefined
+              : planned
+                ? "Write to refine the plan, or implement it"
+                : undefined
           }
+          plan={offer.plans ? settings?.plan : undefined}
           focused={focused}
           busy={sending.busy}
           working={turn}
@@ -466,6 +492,8 @@ function Transcript({
             {...answers}
           />
         )
+      case "plan":
+        return <ProposedPlan text={line.item.body.text} />
       case "changes":
         return (
           <ChangedFiles
@@ -688,3 +716,6 @@ function adviceFor(failure: Failure): string | undefined {
       return undefined
   }
 }
+
+/** What Implement asks the Agent, once plan mode is off. */
+const IMPLEMENT = "Implement the plan."
