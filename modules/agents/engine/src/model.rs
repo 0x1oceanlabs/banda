@@ -328,6 +328,15 @@ pub struct TurnView {
     #[ts(optional)]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub failure: Option<Failure>,
+    /// When it began to run, in ms since the epoch. A turn from before
+    /// Bandaso kept it has none.
+    #[ts(optional, type = "number")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub started: Option<i64>,
+    /// When it stopped running, the same way.
+    #[ts(optional, type = "number")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ended: Option<i64>,
 }
 
 /// What kind of action a tool call is, as the Harness says.

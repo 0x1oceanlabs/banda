@@ -108,7 +108,14 @@ pub fn end(
             &Fact::QuestionClosed { item: item.id },
         )?;
     }
-    store::set_turn(tx.sql(), turn.id, state, reason.as_deref(), failure)?;
+    store::set_turn(
+        tx.sql(),
+        turn.id,
+        state,
+        reason.as_deref(),
+        failure,
+        tx.now(),
+    )?;
     store::touch_thread(tx.sql(), turn.thread, tx.now())?;
     let ended = Fact::TurnEnded {
         turn: turn.id,
@@ -384,7 +391,7 @@ pub async fn start(
             if !rules::may_start(turn.state, held) {
                 return Ok(None);
             }
-            store::set_turn(tx.sql(), turn.id, TurnState::Running, None, None)?;
+            store::set_turn(tx.sql(), turn.id, TurnState::Running, None, None, tx.now())?;
             // A message reads where its turn starts, after what came while
             // it waited; a message tried again stays where it was.
             let first = store::turns_of(tx.sql(), turn.message)?

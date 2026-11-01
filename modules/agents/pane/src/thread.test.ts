@@ -49,9 +49,10 @@ test("a turn's facts build the Thread a Person reads", () => {
       { kind: "tool", title: "Run", tool: "execute", status: "done" },
     ],
   ])
-  expect(state.turns).toEqual([
-    { id: "u", message: "m", state: "done", reason: undefined },
-  ])
+  const [turn] = state.turns
+  expect(turn).toMatchObject({ id: "u", message: "m", state: "done" })
+  // It ran from its start to its end, as the log's times say.
+  expect(turn.started).toBeLessThan(turn.ended!)
   expect(working(state)).toBeUndefined()
 })
 

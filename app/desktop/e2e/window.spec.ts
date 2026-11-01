@@ -1,9 +1,17 @@
 import { readFileSync, writeFileSync } from "node:fs"
 import { join, resolve } from "node:path"
-import { expect, test } from "@playwright/test"
+import { expect, type Locator, test } from "@playwright/test"
 import { firstThread, startWindow, type Window } from "./window"
 
 let window: Window
+
+/** Opens the latest turn's work, which folds once the turn is done. */
+async function openWork(thread: Locator) {
+  await thread
+    .getByRole("button", { name: /^Worked for/ })
+    .last()
+    .click()
+}
 
 test.afterEach(async () => {
   await window?.close()
@@ -47,6 +55,9 @@ test("a Person makes a Space, starts a Thread in it, and works with it", async (
   await page.screenshot({ path: "test-results/2-question.png" })
   await question.getByRole("button", { name: "Allow", exact: true }).click()
   await expect(thread.getByText("The check passed.")).toBeVisible()
+  // The turn ended: its work folds behind how long it took.
+  await expect(question).toBeHidden()
+  await openWork(thread)
   await expect(question.getByText("You chose: Allow")).toBeVisible()
   // The Person watched it finish, so nothing calls for them.
   await expect(row).not.toContainText("Asks you")
@@ -495,6 +506,7 @@ test("a tool call opens on what it changed and what it printed", async () => {
   await composer.fill("edit the notes")
   await composer.press("Enter")
   await expect(thread.getByText("I edited notes.md.")).toBeVisible()
+  await openWork(thread)
   const edit = thread.getByRole("button", { name: /Edit notes\.md/ })
   await expect(edit).toHaveText(/\+2\s*−1/)
   await edit.click()
@@ -506,10 +518,13 @@ test("a tool call opens on what it changed and what it printed", async () => {
   await composer.fill("run the tests")
   await composer.press("Enter")
   await expect(thread.getByText("The tests passed.")).toBeVisible()
+  await openWork(thread)
   await thread.getByRole("button", { name: /Run the tests/ }).click()
   const printed = thread.locator("[data-slot=console]")
   await expect(printed).toBeVisible()
   await expect(printed).toContainText("test two ... ok")
+  // The fold opened above the reply; the console's own end is in view.
+  await printed.scrollIntoViewIfNeeded()
   await expect(printed.getByText("Finished.")).toBeInViewport({ ratio: 1 })
   await page.mouse.move(0, 0)
   await page.screenshot({ path: "test-results/10-tool-calls.png" })
@@ -618,8 +633,9 @@ test("a message carries images to its Agent", async () => {
   await composer.fill("look")
   await page.screenshot({ path: "test-results/13-images-to-send.png" })
   await composer.press("Enter")
-  await expect(thread.getByText("I see 1 image: image/png.")).toBeVisible()
   await expect(thread.getByText("You said: look")).toBeVisible()
+  await openWork(thread)
+  await expect(thread.getByText("I see 1 image: image/png.")).toBeVisible()
   await expect(waiting).toBeHidden()
   const sent = thread.getByRole("button", { name: "Open shot.png" })
   await expect(sent.getByRole("img", { name: "shot.png" })).toBeVisible()
@@ -743,14 +759,14 @@ test("what the Agent does by itself shows in a turn of its own", async () => {
   await composer.press("Enter")
   await expect(thread.getByText("Fake AI went on by itself.")).toBeVisible()
   await expect(thread.getByText("The task finished.")).toBeVisible()
-  await expect(thread.getByText("Fake AI is working…")).toBeVisible()
+  await expect(thread.getByText(/^Working for \d+s$/)).toBeVisible()
   await composer.fill("and this")
   // Its own turn takes no message: one goes as a turn of its own.
   await expect(thread.getByRole("button", { name: "Queue" })).toBeHidden()
   await page.screenshot({ path: "test-results/18-by-itself.png" })
   await composer.press("Enter")
   await expect(thread.getByText("You said: and this")).toBeVisible()
-  await expect(thread.getByText("Fake AI is working…")).toBeHidden()
+  await expect(thread.getByText(/^Working for/)).toBeHidden()
 })
 
 test("the window takes its look from look.toml, and again on each save", async () => {

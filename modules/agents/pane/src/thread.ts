@@ -182,7 +182,10 @@ export function apply(state: ThreadState, event: Event): ThreadState {
       return {
         ...next,
         items: message ? moveLast(state.items, message) : state.items,
-        turns: changeTurn(state, fact.payload.turn, { state: "running" }),
+        turns: changeTurn(state, fact.payload.turn, {
+          state: "running",
+          started: event.at,
+        }),
       }
     }
     case "turn.ended":
@@ -192,6 +195,7 @@ export function apply(state: ThreadState, event: Event): ThreadState {
           state: fact.payload.state,
           reason: fact.payload.reason,
           failure: fact.payload.failure,
+          ended: event.at,
         }),
       }
     case "turn.queued": {
