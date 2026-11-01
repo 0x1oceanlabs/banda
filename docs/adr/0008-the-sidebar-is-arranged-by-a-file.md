@@ -65,15 +65,16 @@ Roma liked A, B and C, and asked for one thing instead of three: "unify everythi
      - Anything new in it, a message, a turn that ends, brings it back to the list. Seeing it moves nothing.
    - **`attention`** sorts what waits for the Person first (it asks, it failed, or it finished unseen), then the rest, and the latest change first inside each. It is what ADR 0005 named the attention order.
    - **`group.by = "space"`** makes each Space a section, its rows in `sort.by`'s order; `folded` may name Spaces too.
-   - **A row is one, two or three lines** (_decided_: "how many lines one Thread gets, 1, 2 or 3, and how to show the info"). The line with the title is always the same, the mark and the title, so a Thread looks the same in every density; the other lines add context:
+   - **A row is one, two or three lines** (_decided_: "how many lines one Thread gets, 1, 2 or 3, and how to show the info"). With room, the mark heads the first line by the Space's name and the title stands alone on its own line; the other lines add context:
 
      | `lines` | line 1 | line 2 | line 3 |
      |---|---|---|---|
      | 1 | mark, title ~ space's badge, status | | |
-     | 2 | space, harness ~ status | mark, title | |
-     | 3 | space ~ status | mark, title | note ~ harness |
+     | 2 | mark, space ~ status | title ~ harness | |
+     | 3 | mark, space ~ status | title | note ~ harness |
 
-   - **The parts.** `mark`: Banda's mark of the Thread's state. `title`. `space`: the Space's coloured badge, with its name when the row has room. `harness`: Claude's or Codex's icon. `status`: "Asks you", "Failed" or "Done" in their colours, the running turn's timer, or the time since the last change. `note`: what it asks, or why it failed, or else the last message. Later: `branch`, `pr`, `diff`.
+   - **The parts.** `mark`: Banda's mark of the Thread's state, with its eyes; green once the Thread is done. `title`. `space`: the Space's name, or its coloured badge in a row of one line. `harness`: Claude's or Codex's logo, as T3 Code shows them, or the name of a Harness with none. `status`: "Asks you", "Failed" or "Done" in their colours, the running turn's timer, or the time since the last change. `note`: what it asks, or why it failed, or else the last message. Later: `branch`, `pr`, `diff`.
+     - _Changed on 2026-11-01, once Roma had seen the rows._ The title's line began with the mark, the Space had its badge, and the Harness was named in words. Roma: "two icons" on a line is one too many; "where the Space's name is, the agent's icon", the mark "with the eyes"; "the Thread's name without an icon"; "Claude's logo in the third line, as in T3 Code"; and "when it is done, let's make the agent's icon green".
    - `hide` leaves parts out of the built-in layout; `line1` … `line3` replace it. A row leaves out what its header already says: no Space under a Space's header.
    - A Space's own order (`manual`, by dragging) and the rest of the Person's marks (pinned, snoozed; ADR 0005, decision 8) come later, as more values of the same keys: `sort.by = "manual"` and a `pinned` state.
 
