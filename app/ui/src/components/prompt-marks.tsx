@@ -45,5 +45,12 @@ export const PROMPT_MARKS = [
   ]),
   written(Italic, [[italicStar, "*"]]),
   written(Strike, [[strikeInput, "~~"]]),
-  written(Code.extend({ excludes: "code" }), [[codeInput, "`"]]),
+  written(
+    Code.extend({ excludes: "code" }).configure({
+      HTMLAttributes: {
+        class: "rounded bg-muted px-1.5 py-0.5 font-mono text-sm",
+      },
+    }),
+    [[codeInput, "`"]]
+  ),
 ]

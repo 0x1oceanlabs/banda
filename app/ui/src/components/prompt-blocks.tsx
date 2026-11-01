@@ -21,7 +21,7 @@ import type { Command, EditorState, Transaction } from "@tiptap/pm/state"
 const LINE = { group: "block line", content: "inline*", defining: true }
 
 /** Attributes kept for how a line was written, not drawn. */
-function kept(defaults: Record<string, unknown>) {
+export function kept(defaults: Record<string, unknown>) {
   return Object.fromEntries(
     Object.entries(defaults).map(([key, value]) => [
       key,
@@ -194,7 +194,7 @@ export const Item = Node.create({
       const block = $from.parent
       if (block.type !== this.type) return false
       const indent: string = block.attrs.indent
-      const next = deeper ? indent + STEP : indent.replace(/^(\t| {1,2})/, "")
+      const next = step(indent, deeper)
       view.dispatch(state.tr.setNodeAttribute($from.before(), "indent", next))
       return true
     }
@@ -202,7 +202,11 @@ export const Item = Node.create({
   },
 })
 
-/** How far one step in a list goes. */
+/** `line` a step further in, two spaces, or out, a tab or up to two. */
+export function step(line: string, deeper: boolean) {
+  return deeper ? STEP + line : line.replace(/^(\t| {1,2})/, "")
+}
+
 const STEP = "  "
 
 /** How wide the spaces before a marker are, a tab four. */

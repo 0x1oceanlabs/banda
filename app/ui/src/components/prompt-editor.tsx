@@ -9,6 +9,7 @@ import { Gapcursor, UndoRedo } from "@tiptap/extensions"
 import { EditorContent, useEditor } from "@tiptap/react"
 import { cn } from "cn"
 import { newLine, PROMPT_BLOCKS } from "@banda/ui/components/prompt-blocks"
+import { CodeBlock, codeKey, inCode } from "@banda/ui/components/prompt-code"
 import { Chip } from "@banda/ui/components/prompt-chip"
 import { PROMPT_MARKS } from "@banda/ui/components/prompt-marks"
 import {
@@ -86,6 +87,8 @@ function PromptEditor({
     content: docOf(value),
     editorProps: {
       handleKeyDown(view: EditorView, event: KeyboardEvent) {
+        // In code, Enter and Tab are the code's, before the owner's.
+        if (codeKey(view, event)) return true
         latest.current.onKeyDown?.(event)
         if (event.defaultPrevented) return true
         if (event.key === "Enter" && event.shiftKey && !event.isComposing)
@@ -98,7 +101,9 @@ function PromptEditor({
         latest.current.onPaste?.(event)
         if (event.defaultPrevented) return true
         const text = event.clipboardData?.getData("text/plain")
-        if (!text || event.clipboardData?.files.length) return false
+        // Into code, ProseMirror puts the text as it is.
+        if (!text || event.clipboardData?.files.length || inCode(view.state))
+          return false
         paste(view, text)
         return true
       },
@@ -209,7 +214,7 @@ function PromptEditor({
       )}
       <EditorContent
         editor={editor}
-        className="[&_.ProseMirror]:min-h-6 [&_.ProseMirror]:wrap-break-word [&_.ProseMirror]:whitespace-pre-wrap [&_.ProseMirror]:outline-none [&_code]:rounded [&_code]:bg-muted [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-sm"
+        className="[&_.ProseMirror]:min-h-6 [&_.ProseMirror]:wrap-break-word [&_.ProseMirror]:whitespace-pre-wrap [&_.ProseMirror]:outline-none"
       />
     </div>
   )
@@ -221,7 +226,8 @@ function placeOf(
   state: EditorState
 ): (Typing & { from: number; to: number }) | undefined {
   const { empty, $head } = state.selection
-  if (!empty || !$head.parent.isTextblock) return undefined
+  if (!empty || !$head.parent.isTextblock || $head.parent.type.spec.code)
+    return undefined
   const { parent, parentOffset, pos } = $head
   const found = typingIn(parent.textBetween(0, parentOffset, "", CHIP_MARK))
   return found && { ...found, from: pos - found.word.length - 1, to: pos }
@@ -259,6 +265,7 @@ const EXTENSIONS = [
   Chip,
   ...PROMPT_MARKS,
   ...PROMPT_BLOCKS,
+  CodeBlock,
   Gapcursor,
   UndoRedo,
 ]
