@@ -37,7 +37,7 @@ export function Bar({
   const mark = loudest([attention, markOf(status)])
   const words = mark === "rest" ? "" : ` · ${MARK_WORDS[mark]}`
   return (
-    <header className="flex h-9 shrink-0 items-center gap-1 border-b px-1.5">
+    <header className="flex h-(--bar-height) shrink-0 items-center gap-1 border-b px-1.5">
       <Button
         variant="ghost"
         size="icon-sm"

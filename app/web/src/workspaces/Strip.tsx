@@ -5,9 +5,6 @@ import { Choices } from "../registry"
 import type { Width, Workspace } from "./model"
 import { type Frame, PaneFrame } from "./PaneFrame"
 
-/** The room between columns, and around them, in pixels. */
-const GAP = 4
-
 const SHARE: Record<Width, number> = {
   "1/3": 1 / 3,
   "1/2": 1 / 2,
@@ -50,8 +47,10 @@ export function Strip({
     const strip = scroller.current
     const column = strip?.querySelector<HTMLElement>(`[data-column="${focus}"]`)
     if (!strip || !column) return
-    const start = column.offsetLeft - GAP
-    const end = column.offsetLeft + column.offsetWidth + GAP
+    // The look's outer gap stays in view beside the column.
+    const gap = parseFloat(getComputedStyle(strip).paddingLeft) || 0
+    const start = column.offsetLeft - gap
+    const end = column.offsetLeft + column.offsetWidth + gap
     if (start < strip.scrollLeft) {
       strip.scrollTo({ left: start, behavior: "smooth" })
     } else if (end > strip.scrollLeft + strip.clientWidth) {
@@ -77,18 +76,16 @@ export function Strip({
   return (
     <div
       ref={scroller}
-      className="relative flex h-full overflow-x-auto overflow-y-hidden"
-      style={{ gap: GAP, padding: GAP }}
+      className="relative flex h-full gap-(--gap-inner) overflow-x-auto overflow-y-hidden p-(--gap-outer)"
     >
       {workspace.columns.map((column, c) => (
         <div
           key={column.id}
           data-column={column.id}
-          className="flex h-full shrink-0 flex-col"
+          className="flex h-full shrink-0 flex-col gap-(--gap-inner)"
           style={{
-            gap: GAP,
             // Shares of the room the Strip shows, gaps between them included.
-            width: `calc(${SHARE[column.width]} * (100% + ${GAP}px) - ${GAP}px)`,
+            width: `calc(${SHARE[column.width]} * (100% + var(--gap-inner)) - var(--gap-inner))`,
           }}
         >
           {column.entries.map((entry, e) => (
