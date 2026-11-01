@@ -6,10 +6,19 @@
  * the defaults show in the system's light or dark.
  */
 import { useSyncExternalStore } from "react"
-import { type Look, type Problem, shown } from "@bandaso/contract/look"
+import {
+  DEFAULT_MOTION,
+  type Look,
+  type Motion,
+  type Move,
+  type Problem,
+  shown,
+} from "@bandaso/contract/look"
 import type { Host } from "./host"
 
 const system = matchMedia("(prefers-color-scheme: dark)")
+const reduced = matchMedia("(prefers-reduced-motion: reduce)")
+const STILL: Move = { kind: "off" }
 let look: Look | null = null
 let applied = new Set<string>()
 const listeners = new Set<() => void>()
@@ -56,6 +65,13 @@ export function followLook(host: Host | undefined): void {
     if (first && !look) take(first)
   })
   host.look.listen(take)
+}
+
+/** How `event` moves now: as the look says, Banda's own before it comes,
+ * and not at all when the system asks for reduced motion. */
+export function moveOf(event: keyof Motion): Move {
+  if (reduced.matches) return STILL
+  return (look?.motion ?? DEFAULT_MOTION)[event]
 }
 
 /** What is wrong in the look's files now, for the bar to say. */
