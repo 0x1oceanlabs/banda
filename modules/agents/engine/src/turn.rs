@@ -120,10 +120,27 @@ pub fn end(
     let ended = Fact::TurnEnded {
         turn: turn.id,
         state,
-        reason,
+        reason: reason.clone(),
         failure,
     };
-    emit(tx, author, turn.thread, &ended)
+    emit(tx, author, turn.thread, &ended)?;
+    // The answer goes back by itself, as a message from this Thread's
+    // Agent, and waits its turn there (ADR 0019). ADR 0018's writer (step
+    // 3) makes this part of the Step that ends the turn.
+    if let Some(asking) = turn.answers() {
+        let reply = store::last_reply(tx.sql(), turn.thread, turn.id, turn.agent)?;
+        let message = crate::Message {
+            text: rules::answer_of(state, reason.as_deref(), reply),
+            images: Vec::new(),
+        };
+        let (agent, target) = (
+            Participant::Agent(turn.agent),
+            crate::Target::Thread(asking),
+        );
+        let by = Some((Opener::Answered, turn.thread));
+        crate::send(tx, agent, target, message, None, false, by)?;
+    }
+    Ok(())
 }
 
 /// Writes a line from Banda into the Thread.
@@ -184,8 +201,9 @@ fn held_to(
     Ok(true)
 }
 
-/// A new turn for `message`, opened by `opener`, which waits behind the
-/// Thread's earlier turns and runs with the Thread's settings now.
+/// A new turn for `message`, opened by `opener` (from `from_thread`, for
+/// another Thread's Agent), which waits behind the Thread's earlier turns
+/// and runs with the Thread's settings now.
 pub fn queue(
     tx: &mut Tx<'_>,
     author: Participant,
@@ -193,6 +211,7 @@ pub fn queue(
     agent: AgentId,
     message: ItemId,
     opener: Opener,
+    from_thread: Option<ThreadId>,
 ) -> Result<TurnId, Error> {
     let turn = store::Turn {
         id: TurnId::new(),
@@ -201,6 +220,7 @@ pub fn queue(
         message,
         state: TurnState::Queued,
         opener,
+        from_thread,
     };
     add(tx, author, &turn)?;
     tx.enqueue(START, &thread.to_string(), &TurnEffect { turn: turn.id })?;
@@ -259,7 +279,8 @@ pub fn requeue(tx: &mut Tx<'_>, item: ItemId) -> Result<(), Error> {
         return Ok(());
     };
     store::set_item_turn(tx.sql(), item, None)?;
-    queue(tx, found.author, thread, agent, item, Opener::Requeue)?;
+    // A message another Thread's Agent wrote never joins a turn.
+    queue(tx, found.author, thread, agent, item, Opener::Requeue, None)?;
     Ok(())
 }
 
@@ -399,10 +420,17 @@ pub async fn start(
             if first == Some(turn.id) {
                 store::move_last(tx.sql(), turn.message)?;
             }
-            let message = Message::read(tx.sql(), turn.message)?.unwrap_or(Message {
+            let mut message = Message::read(tx.sql(), turn.message)?.unwrap_or(Message {
                 text: String::new(),
                 images: Vec::new(),
             });
+            // Another Thread's Agent wrote it: the Harness reads which.
+            if let Some(from) = turn.from_thread {
+                let title = store::thread(tx.sql(), from)?.map(|t| t.title);
+                let answers = turn.opener == Opener::Answered;
+                let title = title.unwrap_or_default();
+                message.text = rules::from_agent(answers, from, &title, &message.text);
+            }
             let settings = store::turn_settings(tx.sql(), &turn)?;
             let started = Fact::TurnStarted { turn: turn.id };
             emit(tx, Participant::Agent(turn.agent), turn.thread, &started)?;

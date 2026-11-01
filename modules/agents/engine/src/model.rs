@@ -383,12 +383,24 @@ pub enum Opener {
     Requeue,
     /// The Agent went on by itself between turns.
     ByItself,
+    /// Another Thread's Agent wrote to this one; when the turn ends, its
+    /// last reply goes back there (ADR 0019, decision 4).
+    Asked,
+    /// Another Thread's Agent answers what this Thread's Agent asked.
+    Answered,
 }
 
 impl Opener {
     /// The Agent went on by itself between turns.
     pub fn by_itself(self) -> bool {
         self == Opener::ByItself
+    }
+
+    /// It is a Person's word: it may join the turn that runs and let a
+    /// held queue go on. Another Thread's Agent's message only waits.
+    /// ADR 0018's writer (step 3) gives it to `rules::next` as a fact.
+    pub fn by_person(self) -> bool {
+        !matches!(self, Opener::ByItself | Opener::Asked | Opener::Answered)
     }
 }
 

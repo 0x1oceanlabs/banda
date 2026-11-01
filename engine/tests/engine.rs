@@ -333,7 +333,7 @@ fn an_agent_reaches_banda_through_banda_mcp() {
         .iter()
         .map(|t| text(&t["name"]))
         .collect();
-    assert_eq!(names, ["threads", "read", "skill"]);
+    assert_eq!(names, ["threads", "read", "send", "skill"]);
     assert_eq!(tools[1]["inputSchema"]["required"], json!(["thread"]));
 
     let (error, threads) = mcp.call(4, "threads", json!({}));
@@ -356,8 +356,12 @@ fn an_agent_reaches_banda_through_banda_mcp() {
     );
     let (error, said) = mcp.call(7, "read", json!({ "thread": "nope" }));
     assert!(error && said.contains("do not fit"), "{said}");
-    let (error, said) = mcp.call(8, "send", json!({ "text": "hi" }));
-    assert!(error && said.contains("no tool \"send\""), "{said}");
+    let (error, said) = mcp.call(8, "send", json!({ "thread": thread, "text": "hi" }));
+    assert!(error && said.contains("your own Thread"), "{said}");
+    let (error, said) = mcp.call(11, "send", json!({ "harness": "fake", "text": "hi" }));
+    assert!(!error, "{said}");
+    let started = serde_json::from_str::<Value>(&said).unwrap()["thread"].clone();
+    assert_ne!(started, thread);
 
     let (error, said) = mcp.call(9, "skill", json!({ "topic": "sidebar" }));
     assert!(!error);
