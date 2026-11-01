@@ -5,19 +5,20 @@ import { type PaneState, QUIET } from "@banda/ui/pane"
 import { actionFor } from "../actions/actions"
 import { Bar } from "../bar/Bar"
 import { type Lists, Watches } from "../bar/Watches"
-import { sightOf } from "../calls/sight"
+import { isShowing, sightOf } from "../calls/sight"
 import { SUMMARY } from "../calls/system"
 import { Toasts } from "../calls/Toasts"
 import { first, type Heard, useCalls, type Where } from "../calls/useCalls"
 import { BandaMenu } from "../menu/BandaMenu"
 import type { At, Branch, Choice } from "../menu/menu"
-import { useLookNotify, useLookSound } from "../look"
+import { columnsOf, useLookNotify, useLookSound } from "../look"
 import { kindOf, showsOf, startable, widthOf } from "../registry"
 import { Sidebar } from "../sidebar/Sidebar"
 import { pickPreset } from "../sidebar/settings"
 import { toggleSettled } from "../sidebar/settled"
 import {
   close,
+  type Entry,
   focused,
   focusEntry,
   go,
@@ -89,7 +90,8 @@ export function Shell({
   }, [workspaces])
   const where: Where = useMemo(
     () => ({
-      sight: (call) => sightOf(now.current, call, inFront(), showsOf),
+      sight: (call) =>
+        sightOf(now.current, call, inFront(), showsOf, columnsOf()),
       desktop: window.banda?.notify,
     }),
     []
@@ -102,7 +104,7 @@ export function Shell({
   // What the Person looks at is seen: its toast and notification go.
   useEffect(() => {
     for (const call of calling)
-      if (sightOf(workspaces, call, front, showsOf) === "looking")
+      if (sightOf(workspaces, call, front, showsOf, columnsOf()) === "looking")
         seen(call.key)
   }, [calling, workspaces, front, seen])
   const toasts = calls.toasts
@@ -248,6 +250,11 @@ export function Shell({
     }),
     [change]
   )
+  const called = useCallback(
+    (entry: Entry) =>
+      calling.find((call) => isShowing(entry, call, showsOf))?.chime,
+    [calling]
+  )
   const spaceName = useCallback(
     (id: SpaceId) => spaces.find((space) => space.id === id)?.name ?? "Space",
     [spaces]
@@ -303,6 +310,7 @@ export function Shell({
             engine={engine}
             modules={modules}
             spaceName={spaceName}
+            called={called}
             frame={frame}
             onStep={(by) => change((w) => step(w, by))}
             onStart={(pane) => change((w) => opening(w, home, pane))}

@@ -3,7 +3,8 @@ import type { Engine, SpaceId } from "@banda/contract"
 import { holderOf, PANE_LAYER, type PaneState } from "@banda/ui/pane"
 import { moveOf } from "../look"
 import { Moving } from "../motion"
-import type { Workspaces as State } from "./model"
+import type { Chime } from "@banda/ui/sound"
+import type { Entry, Workspaces as State } from "./model"
 import type { Frame } from "./PaneFrame"
 import { Strip } from "./Strip"
 import { pixels, Swipe } from "./swipe"
@@ -23,6 +24,7 @@ export function Workspaces({
   engine,
   modules,
   spaceName,
+  called,
   frame,
   onStep,
   onStart,
@@ -33,6 +35,8 @@ export function Workspaces({
   engine: Engine
   modules: readonly string[]
   spaceName: (space: SpaceId) => string
+  /** How the Thread a Pane shows calls the Person, if it does. */
+  called: (entry: Entry) => Chime | undefined
   frame: Frame
   /** A swipe up or down with Alt held steps once, however long it is. */
   onStep: (by: 1 | -1) => void
@@ -118,6 +122,7 @@ export function Workspaces({
               engine={engine}
               modules={modules}
               spaceName={spaceName}
+              called={called}
               frame={frame}
               onStart={onStart}
             />

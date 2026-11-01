@@ -299,6 +299,10 @@
         "center": {
           "$ref": "#/$defs/Center"
         },
+        "display": {
+          "description": "How a new column shows its Panes, as niri's `default-column-display`.",
+          "$ref": "#/$defs/Display"
+        },
         "min": {
           "description": "The narrowest a column is drawn, in rem; a list's is half of it.",
           "type": "number",
@@ -326,6 +330,21 @@
           "description": "The middle, when it does not fit beside the column focused before.",
           "type": "string",
           "const": "on-overflow"
+        }
+      ]
+    },
+    "Display": {
+      "description": "How a column shows its Panes.",
+      "oneOf": [
+        {
+          "description": "One above another, sharing the column's height.",
+          "type": "string",
+          "const": "stack"
+        },
+        {
+          "description": "One at a time, the rest as tabs over it, as niri's tabbed column and\nHyprland's group.",
+          "type": "string",
+          "const": "tabs"
         }
       ]
     },

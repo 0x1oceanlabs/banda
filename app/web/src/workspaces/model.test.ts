@@ -1,9 +1,12 @@
 import type { PaneState } from "@banda/ui/pane"
 import { describe, expect, test } from "vitest"
+import { DEFAULT_COLUMNS } from "@banda/contract/look"
 import {
   bring,
   close,
+  consume,
   current,
+  displayOf,
   entries,
   focused,
   go,
@@ -17,6 +20,7 @@ import {
   shown,
   start,
   step,
+  tabs,
   update,
   SIZES,
   type Width,
@@ -303,6 +307,45 @@ describe("focus and moves inside a workspace", () => {
     state = widen(state, -1)
     expect(width(state)).toBe("2/3")
     expect(maximize(maximize(state))).toEqual(state)
+  })
+})
+
+describe("groups", () => {
+  const three = () => {
+    let state = open(start(), A, thread("t1"))
+    state = open(state, A, terminal("x1"), { place: "right" })
+    return open(state, A, terminal("x2"), { place: "right" })
+  }
+  const display = (state: Workspaces, look = DEFAULT_COLUMNS) =>
+    current(state).columns.map((column) => displayOf(column, look))
+
+  test("Alt+[ and Alt+] take a Pane into the next column, and out again", () => {
+    let state = consume(three(), "left")
+    expect(columns(state)).toEqual([["t1"], ["x1", "x2"]])
+    expect(focusName(state)).toBe("x2")
+    state = consume(state, "left")
+    expect(columns(state)).toEqual([["t1"], ["x2"], ["x1"]])
+    expect(focusName(state)).toBe("x2")
+    state = consume(consume(state, "left"), "right")
+    expect(columns(state)).toEqual([["t1"], ["x2"], ["x1"]])
+    expect(focusName(state)).toBe("x2")
+    // At the end, nothing to take it into.
+    const alone = open(start(), A, thread("t1"))
+    expect(consume(alone, "left")).toBe(alone)
+  })
+
+  test("Alt+G shows a column's Panes as tabs and back, as the look starts it", () => {
+    let state = consume(three(), "left")
+    expect(display(state)).toEqual(["stack", "stack"])
+    state = tabs(state)
+    expect(display(state)).toEqual(["stack", "tabs"])
+    // The look's display holds for the columns not set.
+    const tabbed = { ...DEFAULT_COLUMNS, display: "tabs" as const }
+    expect(display(state, tabbed)).toEqual(["tabs", "tabs"])
+    expect(display(tabs(state, tabbed), tabbed)).toEqual(["tabs", "stack"])
+    // It survives a reload.
+    const back = parse(JSON.parse(JSON.stringify(state)))!
+    expect(display(back)).toEqual(["stack", "tabs"])
   })
 })
 

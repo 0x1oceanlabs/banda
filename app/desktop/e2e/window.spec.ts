@@ -1294,6 +1294,46 @@ test("a column alone fills its workspace, and a second halves it", async () => {
   await expect.poll(shares).toEqual([100])
 })
 
+test("Alt+[ takes a Pane into a column, Alt+G shows it as tabs", async () => {
+  window = await startWindow()
+  const { page } = window
+  const { thread, composer } = await firstThread(page)
+  await expect(composer).toBeFocused()
+  await page.keyboard.press("Alt+KeyN")
+  const launcher = page.getByRole("region", { name: "New Pane" })
+  await expect(launcher).toHaveAttribute("data-focused", "true")
+  const columns = page.locator("[data-column]")
+  await expect(columns).toHaveCount(2)
+
+  // Into the Thread's column, under it.
+  await page.keyboard.press("Alt+BracketLeft")
+  await expect(columns).toHaveCount(1)
+  await expect(thread).toBeVisible()
+  await expect(launcher).toBeVisible()
+
+  // As tabs: one shows, the other waits behind its tab.
+  await page.keyboard.press("Alt+KeyG")
+  const tabs = page.getByRole("tab")
+  await expect(tabs).toHaveCount(2)
+  await expect(tabs.nth(1)).toHaveAttribute("aria-selected", "true")
+  await expect(launcher).toBeVisible()
+  await expect(thread).toBeHidden()
+  await tabs.nth(0).click()
+  await expect(thread).toBeVisible()
+  await expect(launcher).toBeHidden()
+  await expect(tabs.nth(0)).toHaveAttribute("aria-selected", "true")
+  await page.keyboard.press("Alt+ArrowDown")
+  await expect(launcher).toBeVisible()
+  await page.screenshot({ path: "test-results/tabs.png" })
+
+  // Back to one above another, and out to a column of its own.
+  await page.keyboard.press("Alt+KeyG")
+  await expect(tabs).toHaveCount(0)
+  await expect(thread).toBeVisible()
+  await page.keyboard.press("Alt+BracketRight")
+  await expect(columns).toHaveCount(2)
+})
+
 test("columns grow and go to their new places on the look's motion", async () => {
   const slow = 'easing = { duration-ms = 1500, curve = "linear" }'
   window = await startWindow({

@@ -1,8 +1,8 @@
-import { useEffect, useRef } from "react"
+import { type ReactNode, useEffect, useRef } from "react"
 import type { Engine, SpaceId } from "@banda/contract"
 import { PaneHeader } from "@banda/ui/components/pane-header"
 import { type PaneState, type Place, within } from "@banda/ui/pane"
-import { kindOf, runs } from "../registry"
+import { kindOf, labelOf, runs } from "../registry"
 import type { Entry } from "./model"
 
 /** What a framed Pane asks of the workspaces. */
@@ -16,7 +16,8 @@ export type Frame = {
 /**
  * One tile: a header with the Pane's icon and title, and its Space when the
  * workspace mixes Spaces, unless the Pane draws its own; under it, the Pane
- * itself.
+ * itself. A `header` given, as a tabbed column's tabs, takes the header's
+ * place.
  */
 export function PaneFrame({
   entry,
@@ -25,6 +26,8 @@ export function PaneFrame({
   focused,
   spaceName,
   frame,
+  header,
+  hidden = false,
 }: {
   entry: Entry
   engine: Engine
@@ -33,12 +36,15 @@ export function PaneFrame({
   /** Shown in the header when the workspace mixes Spaces. */
   spaceName: string | undefined
   frame: Frame
+  /** Drawn in the header's place. */
+  header?: ReactNode
+  /** Kept drawn, so the Pane keeps running, but not shown. */
+  hidden?: boolean
 }) {
   const kind = kindOf(entry.pane.kind)
   const shown = kind && runs(kind, modules) ? kind : undefined
   const element = useRef<HTMLElement>(null)
-  const title = kind ? kind.title(entry.pane.args) : "Unknown Pane"
-  const Icon = kind?.icon
+  const { title, Icon } = labelOf(entry.pane)
 
   useEffect(() => {
     const own = element.current
@@ -55,23 +61,25 @@ export function PaneFrame({
       aria-label={title}
       data-focused={focused}
       data-tile={entry.id}
+      hidden={hidden}
       onPointerDownCapture={take}
       onFocusCapture={take}
       className="group/tile relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-tile border-(length:--tile-border) border-focus-inactive bg-background outline-none after:pointer-events-none after:absolute after:inset-0 after:bg-black after:opacity-(--tile-dim) data-[focused=true]:border-focus data-[focused=true]:outline-[length:calc(var(--tile-border)+var(--focus-ring))] data-[focused=true]:outline-offset-[calc(-1*var(--tile-border))] data-[focused=true]:outline-focus data-[focused=true]:outline-solid data-[focused=true]:after:opacity-0"
     >
-      {kind?.header !== false && (
-        <PaneHeader title={title} onClose={() => frame.close(entry.id)}>
-          {Icon && <Icon className="size-4 shrink-0 text-muted-foreground" />}
-          <h2 className="min-w-0 truncate font-medium text-muted-foreground group-data-[focused=true]/tile:text-foreground">
-            {title}
-          </h2>
-          {spaceName && (
-            <span className="shrink-0 truncate rounded-sm bg-muted px-1.5 text-xs text-muted-foreground">
-              {spaceName}
-            </span>
-          )}
-        </PaneHeader>
-      )}
+      {header ??
+        (kind?.header !== false && (
+          <PaneHeader title={title} onClose={() => frame.close(entry.id)}>
+            {Icon && <Icon className="size-4 shrink-0 text-muted-foreground" />}
+            <h2 className="min-w-0 truncate font-medium text-muted-foreground group-data-[focused=true]/tile:text-foreground">
+              {title}
+            </h2>
+            {spaceName && (
+              <span className="shrink-0 truncate rounded-sm bg-muted px-1.5 text-xs text-muted-foreground">
+                {spaceName}
+              </span>
+            )}
+          </PaneHeader>
+        ))}
       <div className="min-h-0 flex-1">
         {shown ? (
           <shown.Pane

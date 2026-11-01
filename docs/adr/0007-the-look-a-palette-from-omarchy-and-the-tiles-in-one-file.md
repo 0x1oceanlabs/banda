@@ -61,6 +61,7 @@ ADR 0005 promised a theme file (decision 11) and "one look, and honest motion" (
      - `presets` are the widths Alt+Ctrl+Left and Right step through, as fractions of the screen (`"1/3"`, `"2/5"`, `"1"`). A column steps from whatever width it has to the nearest preset past it. Alt+R and Alt+Shift+R go round them, as niri's Mod+R: past the widest, the narrowest. Alt+F makes the column the whole screen wide and gives it back its width, as niri's Mod+F.
      - `default` is a new column's width. A list Pane opens at the narrowest preset.
      - `alone` (_decided_, 2026-11-01): the width of a column alone on its workspace, `"1"` by default. The first Pane on an empty workspace fills it; once a second column opens, both take `default`, and when it closes the one left fills the screen again. The look decides only for a column whose width the Person has not given: once they step it, it keeps theirs. `alone = "1/2"` keeps a lone column at a half, as niri does.
+     - `display` (_decided_, 2026-11-01): `"stack"` or `"tabs"`, how a new column shows its Panes, as niri's `default-column-display`. Alt+G switches a column (ADR 0005, decision 5).
      - `min` (_decided_, 2026-11-01): no column is drawn narrower than this many rem, 30 by default, unless the screen is; a column of lists only, half. A share alone suits a wide window and cramps a narrow one: half of a window beside another is a Thread of 30 letters a line. So in a narrow window a half is the whole Strip, and widens back to a half when the window does; the column keeps its share, only the drawing has a floor. Rem, so it follows `[font] size`. The steps go by what is drawn: a preset the floor draws as the one there is passed over, so every press shows. A width for each window size was weighed: it jumps at the breakpoint, and it gives only new columns their width.
      - `center`: `never` scrolls the least that shows the focused column; `always` puts it in the middle; `on-overflow` puts it in the middle only when it does not fit beside the column focused before, else shows both.
    - `[bar]`: `height`.
@@ -169,6 +170,7 @@ presets = ["1/3", "1/2", "2/3", "1"]
 min = 30
 default = "1/2"
 alone = "1"
+display = "stack"
 center = "never"
 
 [bar]

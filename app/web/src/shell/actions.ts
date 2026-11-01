@@ -16,6 +16,7 @@ import { floorOf } from "../workspaces/layout"
 import {
   bring,
   close,
+  consume,
   current,
   type Direction,
   focusEntry,
@@ -27,6 +28,7 @@ import {
   send,
   shift,
   step,
+  tabs,
   widen,
   type Workspaces,
 } from "../workspaces/model"
@@ -173,6 +175,26 @@ export const ACTIONS: readonly Action<Shell>[] = [
     title: "The column's previous width, round",
     key: { code: "KeyR", alt: true, shift: true },
     run: (shell) => resize(shell, -1, true),
+  },
+  {
+    id: "column.tabs",
+    title: "The column's Panes as tabs, or one above another",
+    // As Omarchy's Super+G, a group; niri's Mod+W.
+    key: { code: "KeyG", alt: true },
+    run: (shell) => shell.change((w) => tabs(w, columnsOf())),
+  },
+  {
+    id: "pane.consume-left",
+    title: "Take the Pane into the column on the left, or out of its own",
+    // As niri's Mod+[.
+    key: { code: "BracketLeft", alt: true },
+    run: (shell) => shell.change((w) => consume(w, "left")),
+  },
+  {
+    id: "pane.consume-right",
+    title: "Take the Pane into the column on the right, or out of its own",
+    key: { code: "BracketRight", alt: true },
+    run: (shell) => shell.change((w) => consume(w, "right")),
   },
   {
     id: "column.maximize",
