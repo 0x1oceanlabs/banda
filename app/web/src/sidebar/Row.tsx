@@ -1,9 +1,9 @@
-import { useEffect, useState } from "react"
 import type { SpaceSummary } from "@bandaso/contract"
-import { BandaMark, MARK_WORDS } from "@bandaso/ui/components/banda-mark"
+import { BandaMark, MARK_WORDS, waits } from "@bandaso/ui/components/banda-mark"
 import { ago } from "@bandaso/ui/lib/words"
 import { cn } from "@bandaso/ui/lib/utils"
-import { stateOf, type Row as Arranged } from "./arrange"
+import { useNow } from "@bandaso/ui/hooks/use-now"
+import type { Row as Arranged } from "./arrange"
 import type { Part, Settings } from "./settings"
 
 /**
@@ -82,7 +82,9 @@ function Piece({
   wide: boolean
 }) {
   const { listed, space } = row
-  const quiet = stateOf(listed.mark) === "idle"
+  // Nothing waits in it and nothing works: it steps back.
+  const quiet =
+    row.state === "settled" || (row.state === "active" && !waits(listed.mark))
   switch (part) {
     case "~":
       return <span className="ml-auto" />
@@ -189,11 +191,7 @@ function Word({
 
 /** How long the work that runs now has run, ticking each second. */
 function Timer({ from }: { from: number }) {
-  const [now, setNow] = useState(Date.now)
-  useEffect(() => {
-    const tick = setInterval(() => setNow(Date.now()), 1000)
-    return () => clearInterval(tick)
-  }, [])
+  const now = useNow(1000)
   return (
     <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
       {elapsed(now - from)}

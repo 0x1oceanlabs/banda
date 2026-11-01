@@ -3,6 +3,11 @@ import type { Engine, SpaceId, SpaceSummary } from "@bandaso/contract"
 import { BandaMark, MARK_WORDS } from "@bandaso/ui/components/banda-mark"
 import { Button } from "@bandaso/ui/components/button"
 import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuTrigger,
+} from "@bandaso/ui/components/context-menu"
+import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuGroup,
@@ -11,9 +16,11 @@ import {
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
+  DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from "@bandaso/ui/components/dropdown-menu"
 import { ScrollArea } from "@bandaso/ui/components/scroll-area"
+import { useNow } from "@bandaso/ui/hooks/use-now"
 import { cn } from "@bandaso/ui/lib/utils"
 import type { PaneState } from "@bandaso/ui/pane"
 import {
@@ -26,10 +33,16 @@ import {
 } from "lucide-react"
 import type { Lists } from "../bar/Watches"
 import { NewSpace } from "../Spaces"
-import { arrange, type Section, type SpaceLine } from "./arrange"
+import {
+  arrange,
+  type Row as Arranged,
+  type Section,
+  type SpaceLine,
+} from "./arrange"
 import { useLookSidebar } from "../look"
 import { Row, SpaceBadge } from "./Row"
 import { PRESET_WORDS, type Settings } from "./settings"
+import { isSettled, settle, settles, useSettled } from "./settled"
 
 /**
  * The sidebar, docked at the window's left edge (ADR 0005, decision 8):
@@ -78,9 +91,16 @@ export function Sidebar({
     setToggled(new Set())
     setMore(new Set())
   }
+  // The Person's settled Threads (ADR 0008): what they said, or three
+  // quiet days.
+  const says = useSettled()
+  const now = useNow(60 * 60 * 1000)
   const arranged = useMemo(
-    () => arrange(lists, spaces, settings, only, toggled),
-    [lists, spaces, settings, only, toggled]
+    () =>
+      arrange(lists, spaces, settings, only, toggled, (listed) =>
+        isSettled(listed, says[listed.id], now)
+      ),
+    [lists, spaces, settings, only, toggled, says, now]
   )
   const pick = (next: string) => {
     host?.sidebar.preset(next).catch((error: unknown) => {
@@ -107,6 +127,7 @@ export function Sidebar({
       onToggle={() => setToggled((set) => flip(set, section.key))}
       onMore={() => setMore((set) => flip(set, section.key))}
       onOpen={onOpen}
+      onSettle={(row) => settle(row.listed.id, row.state !== "settled")}
       onNewThread={onNewThread}
     />
   )
@@ -234,6 +255,7 @@ function SectionView({
   onToggle,
   onMore,
   onOpen,
+  onSettle,
   onNewThread,
 }: {
   section: Section
@@ -243,6 +265,8 @@ function SectionView({
   onToggle: () => void
   onMore: () => void
   onOpen: (space: SpaceId, pane: PaneState) => void
+  /** Settles the row, or brings it back. */
+  onSettle: (row: Arranged) => void
   onNewThread: (space: SpaceId) => void
 }) {
   const { limit } = settings.group
@@ -283,14 +307,28 @@ function SectionView({
       {!section.folded && (
         <div className="flex flex-col gap-px">
           {rows.map((row) => (
-            <Row
-              key={`${row.space.id}:${row.listed.id}`}
-              row={row}
-              settings={settings}
-              inSpace={space !== undefined}
-              current={isCurrent(row.space.id, row.listed.pane)}
-              onOpen={() => onOpen(row.space.id, row.listed.pane)}
-            />
+            <ContextMenu key={`${row.space.id}:${row.listed.id}`}>
+              <ContextMenuTrigger>
+                <Row
+                  row={row}
+                  settings={settings}
+                  inSpace={space !== undefined}
+                  current={isCurrent(row.space.id, row.listed.pane)}
+                  onOpen={() => onOpen(row.space.id, row.listed.pane)}
+                />
+              </ContextMenuTrigger>
+              <ContextMenuContent>
+                <DropdownMenuItem
+                  disabled={row.state !== "settled" && !settles(row.listed)}
+                  onClick={() => onSettle(row)}
+                >
+                  {row.state === "settled"
+                    ? "Un-settle thread"
+                    : "Settle thread"}
+                  <DropdownMenuShortcut>Alt+S</DropdownMenuShortcut>
+                </DropdownMenuItem>
+              </ContextMenuContent>
+            </ContextMenu>
           ))}
           {(hidden > 0 || more) && (
             <button

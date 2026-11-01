@@ -19,12 +19,13 @@ use ts_rs::TS;
 #[serde(rename_all = "lowercase")]
 #[ts(export, export_to = "sidebar/")]
 pub enum State {
-    /// It asks, or it failed.
-    Needs,
-    /// It finished while the Person was away.
-    Done,
+    /// Neither at work nor settled: it asks, it failed, it finished, or the
+    /// Person has it in hand.
+    Active,
+    /// Its Agent is at work.
     Working,
-    Idle,
+    /// Put away by the Person, or by three days with nothing new.
+    Settled,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize, TS)]
@@ -263,9 +264,9 @@ impl SidebarSettings {
             preset: None,
             group: GroupSettings {
                 by: Some(GroupBy::State),
-                states: Some(vec![State::Needs, State::Done, State::Idle]),
-                bottom: Some(vec![State::Working]),
-                folded: Some(Vec::new()),
+                states: Some(vec![State::Active]),
+                bottom: Some(vec![State::Working, State::Settled]),
+                folded: Some(vec!["settled".to_owned()]),
                 limit: Some(10),
                 empty: Some(Empty::Hide),
             },
@@ -512,7 +513,9 @@ mod tests {
         let (sidebar, problems) = resolved(dir.path());
         assert!(problems.is_empty(), "{problems:?}");
         assert_eq!(sidebar.preset, "inbox");
-        assert_eq!(sidebar.group.bottom, vec![State::Working]);
+        assert_eq!(sidebar.group.states, vec![State::Active]);
+        assert_eq!(sidebar.group.bottom, vec![State::Working, State::Settled]);
+        assert_eq!(sidebar.group.folded, ["settled"]);
         assert_eq!(sidebar.row.lines, 3);
         let names: Vec<_> = sidebar.presets.iter().map(|p| p.name.as_str()).collect();
         assert_eq!(names, ["inbox", "spaces", "places"]);

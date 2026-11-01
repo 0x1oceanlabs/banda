@@ -3,7 +3,7 @@
 
 [group]
 by = "space"
-states = ["needs", "done", "working", "idle"]
+states = ["active", "working", "settled"]
 bottom = []
 
 [row]

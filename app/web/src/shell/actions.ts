@@ -35,6 +35,8 @@ export type Shell = {
   toggleOverview: () => void
   /** Goes to what calls the Person first (ADR 0011, decision 5). */
   answer: () => void
+  /** Settles what the Person looks at, or brings it back (ADR 0008). */
+  settle: () => void
 }
 
 const ARROWS: Record<Direction, string> = {
@@ -160,6 +162,12 @@ export const ACTIONS: readonly Action<Shell>[] = [
     title: "Go to what calls you",
     key: { code: "KeyU", alt: true },
     run: (shell) => shell.answer(),
+  },
+  {
+    id: "sidebar.settle",
+    title: "Settle the Thread you look at, or bring it back",
+    key: { code: "KeyS", alt: true },
+    run: (shell) => shell.settle(),
   },
   {
     id: "sidebar.toggle",

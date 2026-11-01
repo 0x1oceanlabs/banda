@@ -53,6 +53,21 @@ export function loudest(states: Iterable<MarkState>): MarkState {
   return best === "idle" ? "rest" : best
 }
 
+/** A state that waits for the Person: it asks, it failed, it finished. */
+export function waits(state: MarkState): boolean {
+  return (
+    state === "asking" ||
+    state === "failed" ||
+    state === "offline" ||
+    state === "done"
+  )
+}
+
+/** A state of an Agent at work. */
+export function works(state: MarkState): boolean {
+  return state === "running" || state === "thinking"
+}
+
 /** Plain words for each state, for a title or a screen reader. */
 export const MARK_WORDS: Record<MarkState, string> = {
   rest: "Nothing runs",

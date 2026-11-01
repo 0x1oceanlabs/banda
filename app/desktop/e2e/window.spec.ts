@@ -1419,3 +1419,33 @@ test("[notify] in look.toml chooses where a call is told: always the desktop, ne
   ).toBeVisible()
   await expect(page.getByRole("region", { name: "Calls" })).toBeHidden()
 })
+
+test("a Thread settles from its row's menu, as in T3 Code, and Alt+S brings it back", async () => {
+  window = await startWindow()
+  const { page } = window
+  const { thread, composer } = await firstThread(page)
+  await composer.fill("hello")
+  await composer.press("Enter")
+  await expect(thread).not.toHaveAccessibleName("New Thread")
+  const sidebar = page.getByRole("complementary", { name: "Sidebar" })
+  const list = sidebar.getByRole("group", { name: "Threads" })
+  const row = list.getByRole("button", { name: /hello/ })
+  await expect(row).toBeVisible()
+
+  await row.click({ button: "right" })
+  await page.getByRole("menuitem", { name: /Settle thread/ }).click()
+  // On the Settled shelf, folded, with its count.
+  const shelf = sidebar.getByRole("group", { name: "Settled" })
+  const header = shelf.getByRole("button", { name: /Settled/ })
+  await expect(header).toHaveAttribute("aria-expanded", "false")
+  await expect(header).toContainText("1")
+  await expect(row).toBeHidden()
+  await header.click()
+  await expect(shelf.getByRole("button", { name: /hello/ })).toBeVisible()
+  await page.screenshot({ path: "test-results/25-settled.png" })
+
+  // The Thread in the focused Pane comes back with Alt+S.
+  await page.keyboard.press("Alt+S")
+  await expect(row).toBeVisible()
+  await expect(shelf).toBeHidden()
+})
