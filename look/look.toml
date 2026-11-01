@@ -1,0 +1,57 @@
+# How Banda looks. Every key is optional: what you leave out comes from
+# the theme, from Hyprland's own settings when Banda runs under it, and
+# from Banda's defaults, written below. Check a change with:
+# bandaso look check
+#
+# theme: "omarchy" follows Omarchy's current theme (the default when
+# Omarchy is installed), "banda" is Banda's own, light and dark (the
+# default elsewhere), and any other name is a theme folder in
+# ~/.config/banda/themes/<name>/ or Omarchy's ~/.config/omarchy/themes/.
+# For the system's light and dark, a pair:
+# theme = { light = "tokyo-night-light", dark = "forest-dusk" }
+
+# mode = "system"                    # "system", "light" or "dark"
+# radius = 10                        # every corner is a step of it; 0 squares all
+# hyprland = true                    # take Hyprland's rounding, border and gaps
+
+# Palette entries over the theme's, by name or hex. For example:
+# accent: "orange" or "#e07a3f"; attention, Banda's signal colour, too.
+# [colors]
+
+# shadcn/ui's tokens over the derived ones, by their names without "--":
+# a palette name, another token's name, or any CSS colour.
+# [tokens]
+
+# [gaps]
+# inner = 4                          # between tiles, in pixels
+# outer = 4                          # around the Strip
+
+# [tile]
+# radius = "xl"                      # a step ("sm" … "4xl") or pixels
+# border = 2
+
+# [focus]
+# border = "accent"                  # the focused tile's border
+# inactive-border = "border"         # every other tile's
+# ring = 0                           # grows the focused frame into the gap
+
+# [bar]
+# height = 36
+
+# [motion]
+# off = false                        # true stills everything
+# slowdown = 1                       # 2 is twice as slow
+# Each move is a spring or an easing (duration-ms, curve), not both.
+# [motion.workspace]
+# spring = { damping-ratio = 1, stiffness = 800, epsilon = 0.0001 }
+# [motion.strip]
+# spring = { damping-ratio = 1, stiffness = 800, epsilon = 0.0001 }
+
+# Banda's sounds when the work calls you.
+# [sound]
+# family = "banda"                   # "banda", "glass", "wood", "pop", "pluck" or "off"
+# volume = 0.6                       # 0 to 1
+# room = true                        # a little room around each sound
+# done = true                        # true, false, or a family to borrow from
+# asking = true
+# failed = true

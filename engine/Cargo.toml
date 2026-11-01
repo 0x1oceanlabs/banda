@@ -13,6 +13,7 @@ bandaso-agents = { path = "../modules/agents/engine" }
 bandaso-terminal = { path = "../modules/terminal/engine" }
 bandaso-kernel = { path = "../kernel" }
 bandaso-look = { path = "../look" }
+bandaso-skill = { path = "../modules/skill" }
 clap.workspace = true
 dirs.workspace = true
 futures.workspace = true

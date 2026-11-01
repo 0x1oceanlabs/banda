@@ -47,6 +47,12 @@ bandaso call/follow   the CLI: the same API, for people, scripts and Agents
   or `sidebars/<name>.toml`, over the defaults. The view menu asks the
   desktop to write the preset into the file; nothing else the page asks
   of Node writes a file.
+- **The Banda skill is text for Agents** (ADR 0012). `bandaso skill`
+  prints its core, `bandaso skill <topic>` a topic, and
+  `bandaso skill --export <folder>` writes an Agent Skills folder. Each
+  part of Banda writes its topics in a `skill/` folder beside its code,
+  and `modules/skill` gathers them when it is built; a topic may include a
+  file the part ships, such as `look/sidebar.toml`.
 - **The CLI prints JSON.** `bandaso call <method>` prints `{"ok": …}`.
   `bandaso follow` prints events, one per line. When the engine refuses
   the call, the hello or the follow, the CLI prints
@@ -589,7 +595,9 @@ bandaso/
     terminal/engine/  Rust: Terminals, their PTYs and what they printed
     terminal/pane/    React: a terminal, drawn by Ghostty
     browser/pane/     React: the browser Pane (next)
-  engine/             the bandaso program: serve (the kernel and its modules), call, follow
+    skill/            Rust: the Banda skill, its core and the topics it gathers (ADR 0012)
+  look/               Rust: bandaso look, the look and the sidebar's arrangement; skill/ its topics
+  engine/             the bandaso program: serve (the kernel and its modules), call, follow, look, skill
   app/ui/             shadcn/ui and the Pane contract
   app/ghostty/        T3 Code's Ghostty adapter and its WebAssembly, vendored
   app/web/            React: the shell (bar, sidebar, workspaces, overview), the actions, the Pane registry

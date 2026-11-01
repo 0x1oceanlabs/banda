@@ -8,6 +8,8 @@
 //!   theme, Hyprland and `~/.config/banda/look.toml`, with the sidebar's
 //!   arrangement from `sidebar.toml`; `--follow` prints it again on each
 //!   change. It needs no engine: the look is this machine's.
+//! - `bandaso skill` prints the Banda skill, what an Agent needs to know to
+//!   work in Banda and change it; `bandaso skill <topic>` prints a topic.
 //!
 //! When the engine refuses (the call, the hello or the follow), the CLI
 //! prints `{"error": {"code", "message"}}` and exits 1. When no engine
@@ -90,6 +92,16 @@ enum Command {
         #[arg(long)]
         follow: bool,
     },
+    /// Prints the Banda skill: what an Agent needs to know to work in
+    /// Banda and to change it for its Person, then its topics.
+    Skill {
+        /// Prints this topic instead.
+        topic: Option<String>,
+        /// Writes the skill into this folder as an Agent Skills folder,
+        /// SKILL.md and references/, for a Harness to load.
+        #[arg(long, conflicts_with = "topic")]
+        export: Option<PathBuf>,
+    },
 }
 
 #[derive(Subcommand)]
@@ -143,8 +155,10 @@ impl Failure {
 
 fn main() -> ExitCode {
     let cli = Cli::parse();
-    if let Command::Look { what, follow } = cli.command {
-        return look(what, follow);
+    match cli.command {
+        Command::Look { what, follow } => return look(what, follow),
+        Command::Skill { topic, export } => return skill(topic, export),
+        _ => {}
     }
     tracing_subscriber::fmt()
         .with_env_filter(
@@ -183,6 +197,7 @@ async fn run(command: Command, places: Places) -> Result<(), Failure> {
             Ok(())
         }
         Command::Look { .. } => unreachable!("the look runs without the engine"),
+        Command::Skill { .. } => unreachable!("the skill runs without the engine"),
         Command::Follow {
             space,
             after,
@@ -202,6 +217,36 @@ async fn run(command: Command, places: Places) -> Result<(), Failure> {
                 .await
         }
     }
+}
+
+/// `bandaso skill`: text built into the program, no engine.
+fn skill(topic: Option<String>, export: Option<PathBuf>) -> ExitCode {
+    use bandaso_skill::Reach;
+
+    if let Some(folder) = export {
+        return match bandaso_skill::export(&folder) {
+            Ok(()) => ExitCode::SUCCESS,
+            Err(error) => Failure::Broken(format!("{}: {error}", folder.display())).exit(),
+        };
+    }
+    let text = match topic {
+        None => bandaso_skill::core(Reach::Command),
+        Some(name) => match bandaso_skill::topic(&name) {
+            Some(topic) => topic.body.to_owned(),
+            None => {
+                let names: Vec<_> = bandaso_skill::topics().iter().map(|t| t.name).collect();
+                return Failure::Broken(format!(
+                    "there is no topic \"{name}\"; the topics are {}",
+                    names.join(", ")
+                ))
+                .exit();
+            }
+        },
+    };
+    let mut out = std::io::stdout().lock();
+    // A reader that went away is not an error.
+    let _ = write!(out, "{}", text.trim_end()).and_then(|()| writeln!(out));
+    ExitCode::SUCCESS
 }
 
 /// `bandaso look`: no engine, no runtime, only files and Hyprland's socket.
