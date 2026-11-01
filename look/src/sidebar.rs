@@ -496,6 +496,7 @@ mod tests {
             config: config.to_owned(),
             omarchy_current: None,
             omarchy_themes: Vec::new(),
+            fontconfig: None,
         }
     }
 
