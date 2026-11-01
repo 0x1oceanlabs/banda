@@ -17,6 +17,7 @@ import {
   XIcon,
 } from "lucide-react"
 import { type ImageReader, MessageImages } from "./MessageImages"
+import type { ItemId } from "@bandaso/contract/agents"
 import type { Waiting } from "./thread"
 
 /** What a Person does with a message that waits, as T3 Code offers it. */
@@ -27,6 +28,10 @@ export type QueueActions = {
   onRemove: (waiting: Waiting) => void
   /** Lets a held queue go on. */
   onContinue: () => void
+  /** The waiting message being edited, if one is. */
+  editing?: ItemId
+  /** Opens one to edit, or closes the one open. */
+  onEditing: (item?: ItemId) => void
 }
 
 /**
@@ -108,6 +113,8 @@ function WaitingMessage({
   onSendNow,
   onEdit,
   onRemove,
+  editing,
+  onEditing,
 }: Omit<QueueActions, "onContinue"> & {
   waiting: Waiting
   name: string
@@ -115,57 +122,22 @@ function WaitingMessage({
   busy: boolean
   reader: ImageReader
 }) {
-  const [editing, setEditing] = useState<string>()
   const body = waiting.item.body
   if (body.kind !== "message") return null
-  const save = async () => {
-    if (editing === undefined) return
-    if (await onEdit(waiting, editing)) setEditing(undefined)
-  }
+  const open = editing === waiting.item.id
   return (
     <Message align="end">
       <MessageContent>
         <MessageImages images={body.images} reader={reader} />
-        {editing !== undefined ? (
-          <form
-            className="flex w-full max-w-[80%] flex-col gap-2 self-end"
-            onSubmit={(event) => {
-              event.preventDefault()
-              void save()
+        {open ? (
+          <EditWaiting
+            text={body.text}
+            busy={busy}
+            onSave={async (text) => {
+              if (await onEdit(waiting, text)) onEditing()
             }}
-          >
-            <Textarea
-              value={editing}
-              autoFocus
-              aria-label="Waiting message"
-              className="min-h-16"
-              onChange={(event) => setEditing(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Escape") setEditing(undefined)
-                if (
-                  event.key === "Enter" &&
-                  !event.shiftKey &&
-                  !event.nativeEvent.isComposing
-                ) {
-                  event.preventDefault()
-                  void save()
-                }
-              }}
-            />
-            <div className="flex justify-end gap-1">
-              <Button
-                type="button"
-                variant="ghost"
-                size="xs"
-                onClick={() => setEditing(undefined)}
-              >
-                Cancel
-              </Button>
-              <Button type="submit" size="xs" disabled={busy}>
-                Save
-              </Button>
-            </div>
-          </form>
+            onCancel={() => onEditing()}
+          />
         ) : (
           body.text && (
             <Bubble variant="outline" align="end">
@@ -175,7 +147,7 @@ function WaitingMessage({
             </Bubble>
           )
         )}
-        {editing === undefined && (
+        {!open && (
           <div className="flex justify-end gap-1">
             {steerable && (
               <Button
@@ -193,7 +165,7 @@ function WaitingMessage({
               variant="ghost"
               size="xs"
               disabled={busy}
-              onClick={() => setEditing(body.text)}
+              onClick={() => onEditing(waiting.item.id)}
             >
               <PencilIcon data-icon="inline-start" />
               Edit
@@ -211,5 +183,57 @@ function WaitingMessage({
         )}
       </MessageContent>
     </Message>
+  )
+}
+
+/** A waiting message, open to change: Enter or Save keeps it, Escape or
+ * Cancel leaves it as it was. */
+function EditWaiting({
+  text,
+  busy,
+  onSave,
+  onCancel,
+}: {
+  text: string
+  busy: boolean
+  onSave: (text: string) => Promise<void>
+  onCancel: () => void
+}) {
+  const [editing, setEditing] = useState(text)
+  return (
+    <form
+      className="flex w-full max-w-[80%] flex-col gap-2 self-end"
+      onSubmit={(event) => {
+        event.preventDefault()
+        void onSave(editing)
+      }}
+    >
+      <Textarea
+        value={editing}
+        autoFocus
+        aria-label="Waiting message"
+        className="min-h-16"
+        onChange={(event) => setEditing(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Escape") onCancel()
+          if (
+            event.key === "Enter" &&
+            !event.shiftKey &&
+            !event.nativeEvent.isComposing
+          ) {
+            event.preventDefault()
+            void onSave(editing)
+          }
+        }}
+      />
+      <div className="flex justify-end gap-1">
+        <Button type="button" variant="ghost" size="xs" onClick={onCancel}>
+          Cancel
+        </Button>
+        <Button type="submit" size="xs" disabled={busy}>
+          Save
+        </Button>
+      </div>
+    </form>
   )
 }

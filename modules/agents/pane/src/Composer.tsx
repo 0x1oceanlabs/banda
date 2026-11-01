@@ -10,12 +10,15 @@ import { RingMeter } from "@bandaso/ui/components/ring-meter"
 import { Spinner } from "@bandaso/ui/components/spinner"
 import {
   ArrowUpIcon,
+  CornerUpRightIcon,
   ImagePlusIcon,
   ListPlusIcon,
   SquareIcon,
 } from "lucide-react"
 import { AttachmentList, type Attached, type Attachments } from "./Attachments"
-import { keyFor, steers, useEnterKey } from "./enter-key"
+import { useDraft } from "./drafts"
+import { type EnterKey, keyFor, steers, useEnterKey } from "./enter-key"
+import { recall } from "./history"
 import { imagesAmong, KINDS } from "./images"
 import { ownCommand, type Suggested } from "./slash"
 import { useSlashMenu } from "./SlashMenu"
@@ -25,11 +28,16 @@ import { useSlashMenu } from "./SlashMenu"
  * it can start with; the images it carries, added with the button or by
  * pasting them; and Send, or Stop while the Agent works and nothing is
  * written. While the Agent works, a message goes into its turn or waits
- * for the turn to end: Enter does what the window chose, into the turn as
- * T3 Code's default, and Ctrl+Enter the other.
+ * for the turn to end: Enter and the button do what the window chose,
+ * into the turn as T3 Code's default, and Ctrl+Enter or Ctrl+click the
+ * other. As in T3 Code, ↑ and ↓ in an empty box walk the earlier
+ * messages, after the last one that waits, which ↑ opens to edit; and
+ * what is written waits as the Thread's draft.
  */
 export function Composer({
   name,
+  thread,
+  history,
   placeholder,
   plan,
   focused,
@@ -41,11 +49,19 @@ export function Composer({
   images,
   dropping,
   onPlanMode,
+  onEditLast,
   onSend,
   onStop,
   children,
 }: {
   name: string
+  /** The Thread it writes to, which keeps its draft; null before it
+   * starts. */
+  thread: string | null
+  /** What the Person sent the Thread before, oldest first, read when ↑
+   * or ↓ asks. */
+  history: () => readonly string[]
+
   /** What the empty box says, instead of asking to write to `name`. */
   placeholder?: string
   /** Whether plan mode is on, where the Harness has one: Shift+Tab
@@ -68,6 +84,8 @@ export function Composer({
   dropping: boolean
   /** Switches the Thread's plan mode, for `/plan` and `/default`. */
   onPlanMode: (on: boolean) => void
+  /** Opens the last message that waits to edit; given while one does. */
+  onEditLast?: () => void
   /** Sends the text and the images, into the turn that runs if `steer`;
    * resolves whether it went. */
   onSend: (text: string, images: Attached[], steer: boolean) => Promise<boolean>
@@ -75,7 +93,9 @@ export function Composer({
   /** What the Thread runs with, beside the send button. */
   children?: React.ReactNode
 }) {
-  const [text, setText] = useState("")
+  const [text, setText] = useDraft(thread)
+  // How far back ↑ has walked the history; 0 for not at all.
+  const [back, setBack] = useState(0)
   const [enter] = useEnterKey()
   const field = useRef<HTMLTextAreaElement>(null)
   const files = useRef<HTMLInputElement>(null)
@@ -107,16 +127,19 @@ export function Composer({
     if (await onSend(text, sending, steer && steering)) {
       // What the Person wrote while it went stays.
       setText((now) => (now === text ? "" : now))
+      setBack(0)
       images.sent(sending)
     }
   }
 
+  const look =
+    PRIMARY[!steering ? "send" : steers(enter, false) ? "steer" : "queue"]
   return (
     <form
       className="relative flex flex-col gap-1.5"
       onSubmit={(event) => {
         event.preventDefault()
-        void send(true)
+        void send(steers(enter, false))
       }}
     >
       {images.problem && (
@@ -154,7 +177,10 @@ export function Composer({
           aria-label={`Message to ${name}`}
           {...slash.field}
           className="max-h-48 min-h-10"
-          onChange={(event) => setText(event.target.value)}
+          onChange={(event) => {
+            setText(event.target.value)
+            setBack(0)
+          }}
           onPaste={(event) => {
             const pasted = imagesAmong(event.clipboardData.files)
             if (pasted.length === 0) return
@@ -166,6 +192,19 @@ export function Composer({
             if (event.key === "Tab" && event.shiftKey && plan !== undefined) {
               event.preventDefault()
               onPlanMode(!plan)
+              return
+            }
+            const up = event.key === "ArrowUp"
+            if (plain(event) && (up || event.key === "ArrowDown")) {
+              // Within a message of more lines, the caret moves first.
+              if (!atEdge(event.currentTarget, up)) return
+              const waits = onEditLast !== undefined
+              const step = recall(history(), back, text, up, waits)
+              if (!step) return
+              event.preventDefault()
+              if (step === "edit") return onEditLast?.()
+              setText(step.text)
+              setBack(step.back)
               return
             }
             if (
@@ -192,7 +231,11 @@ export function Composer({
               <ImagePlusIcon />
             </InputGroupButton>
           )}
-          <div className="min-w-0 flex-1">{children}</div>
+          {/* What the Thread runs with rests, faded, while the box is not
+              in use. */}
+          <div className="min-w-0 flex-1 opacity-60 transition-opacity group-focus-within/input-group:opacity-100 group-hover/input-group:opacity-100">
+            {children}
+          </div>
           {usage && <ContextUsed usage={usage} />}
           {working && !written ? (
             <InputGroupButton
@@ -205,40 +248,64 @@ export function Composer({
               <SquareIcon className="fill-current" />
             </InputGroupButton>
           ) : (
-            <>
-              {steering && (
-                <InputGroupButton
-                  type="button"
-                  variant="ghost"
-                  size="icon-sm"
-                  aria-label="Queue"
-                  title={`Queue it: it goes once ${name} is done (${keyFor(enter, "queue")}).`}
-                  disabled={!ready}
-                  onClick={() => void send(false)}
-                >
-                  <ListPlusIcon />
-                </InputGroupButton>
-              )}
-              <InputGroupButton
-                type="submit"
-                variant="default"
-                size="icon-sm"
-                aria-label={steering ? "Send now" : "Send"}
-                title={
-                  steering
-                    ? `Send it now: ${name} reads it as it works (${keyFor(enter, "steer")}).`
-                    : undefined
-                }
-                disabled={!ready}
-              >
-                {busy ? <Spinner /> : <ArrowUpIcon />}
-              </InputGroupButton>
-            </>
+            <InputGroupButton
+              type="submit"
+              variant="default"
+              size="icon-sm"
+              aria-label={look.label}
+              title={look.title?.(name, enter)}
+              disabled={!ready}
+              onClick={(event) => {
+                // Ctrl (⌘ on a Mac) does the other thing, as with Enter.
+                event.preventDefault()
+                void send(steers(enter, event.ctrlKey || event.metaKey))
+              }}
+            >
+              {busy ? <Spinner /> : look.icon}
+            </InputGroupButton>
           )}
         </InputGroupAddon>
       </InputGroup>
     </form>
   )
+}
+
+/** What the primary button does with a message, and says so. */
+const PRIMARY: Record<
+  "send" | EnterKey,
+  {
+    label: string
+    icon: React.ReactNode
+    title?: (name: string, enter: EnterKey) => string
+  }
+> = {
+  send: { label: "Send", icon: <ArrowUpIcon /> },
+  steer: {
+    label: "Steer",
+    icon: <CornerUpRightIcon />,
+    title: (name, enter) =>
+      `Steer: ${name} reads it as it works. ${keyFor(enter, "queue")} or Ctrl+click queues it.`,
+  },
+  queue: {
+    label: "Queue",
+    icon: <ListPlusIcon />,
+    title: (name, enter) =>
+      `Queue it: it goes once ${name} is done. ${keyFor(enter, "steer")} or Ctrl+click sends it now.`,
+  },
+}
+
+/** Whether a key comes with no modifier held. */
+function plain(event: React.KeyboardEvent): boolean {
+  return !event.altKey && !event.shiftKey && !event.ctrlKey && !event.metaKey
+}
+
+/** Whether the caret is on the first line of `field`, going `up`, or on
+ * its last. */
+function atEdge(field: HTMLTextAreaElement, up: boolean): boolean {
+  const { value, selectionStart, selectionEnd } = field
+  return up
+    ? value.lastIndexOf("\n", selectionStart - 1) < 0
+    : value.indexOf("\n", selectionEnd) < 0
 }
 
 /** From this share of its context used, an Agent is near the point where
