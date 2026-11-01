@@ -33,7 +33,8 @@ pub async fn find(harness: &Harness) -> Result<(Harness, Option<CliView>), Strin
         (Some(version), Some(minimum)) if older(version, minimum) => {
             let name = Path::new(&path).file_name().unwrap_or_default();
             Some(format!(
-                "{} {version} is older than {minimum}, the oldest {} supports: update it.",
+                "{} {version} is older than {minimum}, which Bandaso's {} adapter was built \
+                 for. It still runs, but some things may not work until you update it.",
                 name.display(),
                 harness.name
             ))
@@ -92,11 +93,13 @@ fn version_in(said: &str) -> Option<String> {
 }
 
 /// Whether `version` comes before `minimum`, number by number: 2.1.99
-/// before 2.1.312. What follows a number in a part, as in `1-beta`, is not
-/// compared.
+/// before 2.1.312, 2.1 the same as 2.1.0. A leading `v` and what follows
+/// `-` or `+`, as in `0.165.0-alpha.3`, are not compared.
 fn older(version: &str, minimum: &str) -> bool {
     let numbers = |version: &str| -> Vec<u64> {
-        version
+        let version = version.trim_start_matches('v');
+        let release = version.split(['-', '+']).next().unwrap_or_default();
+        release
             .split('.')
             .map(|part| {
                 let digits = part
@@ -106,7 +109,12 @@ fn older(version: &str, minimum: &str) -> bool {
             })
             .collect()
     };
-    numbers(version) < numbers(minimum)
+    let (version, minimum) = (numbers(version), numbers(minimum));
+    let at = |numbers: &[u64], i: usize| numbers.get(i).copied().unwrap_or(0);
+    (0..version.len().max(minimum.len()))
+        .map(|i| at(&version, i).cmp(&at(&minimum, i)))
+        .find(|order| order.is_ne())
+        .is_some_and(std::cmp::Ordering::is_lt)
 }
 
 #[cfg(test)]
@@ -117,8 +125,11 @@ mod tests {
     fn a_version_is_older_number_by_number() {
         assert!(older("2.1.99", "2.1.312"));
         assert!(older("0.164.9", "0.165.0"));
-        assert!(older("2.1", "2.1.0"));
+        assert!(!older("2.1", "2.1.0"));
+        assert!(older("2.1", "2.1.1"));
         assert!(!older("2.1.312", "2.1.312"));
+        assert!(!older("0.165.0-alpha.3", "0.165.0"));
+        assert!(older("2.1.311", "v2.1.312"));
         assert!(!older("2.1.316", "2.1.312"));
         assert!(!older("0.166.0", "0.165.0"));
         assert!(!older("3.0.0-beta", "2.9.9"));

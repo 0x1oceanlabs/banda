@@ -24,8 +24,20 @@ export type Window = {
   close: () => Promise<void>
 }
 
+/** A CLI in `dir` that says it is `version`, as a Harness entry's `cli`
+ * that asks for `minimum` at least. */
+function fakeCli(dir: string, version: string, minimum: string): string {
+  const path = join(dir, "fake-cli")
+  writeFileSync(path, `#!/bin/sh\necho '${version} (Fake CLI)'\n`, {
+    mode: 0o755,
+  })
+  const program = JSON.stringify(path)
+  return `cli = { program = ${program}, variable = "FAKE_AGENT_CLI", minimum = ${JSON.stringify(minimum)} }\n`
+}
+
 /** With `account`, the fake agent has one in the throwaway folders, signed
- * out. With `oldCli`, it runs a CLI of version 1.0.0 that must be 2.0.0. */
+ * out. With `oldCli`, it runs a CLI that says 1.0.0 where its entry asks for
+ * 2.0.0 at least. */
 export async function startWindow({
   account = false,
   oldCli = false,
@@ -38,13 +50,7 @@ export async function startWindow({
   const env = account
     ? `env = { FAKE_AGENT_HOME = ${JSON.stringify(home)} }\n`
     : ""
-  const cliPath = join(dir, "fake-cli")
-  writeFileSync(cliPath, "#!/bin/sh\necho '1.0.0 (Fake CLI)'\n", {
-    mode: 0o755,
-  })
-  const cli = oldCli
-    ? `cli = { program = ${JSON.stringify(cliPath)}, variable = "FAKE_AGENT_CLI", minimum = "2.0.0" }\n`
-    : ""
+  const cli = oldCli ? fakeCli(dir, "1.0.0", "2.0.0") : ""
   writeFileSync(
     join(dir, "config/harnesses.toml"),
     `[[harness]]\nid = "fake"\nname = "Fake AI"\ncommand = ${JSON.stringify(fake)}\n${env}${cli}`

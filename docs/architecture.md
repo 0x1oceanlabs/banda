@@ -185,7 +185,8 @@ If Chat is removed, Agents still works through its own Thread.
     place.
   - Its `minimum` is the oldest version the adapter supports, the one it
     was built for: Claude Code 2.1.312, Codex 0.165.0. An older CLI runs,
-    and the Harnesses Pane and its Threads warn.
+    and the Harnesses Pane and its Threads warn. Checking the Harness again
+    finds the CLI again, so an update ends the warning without a restart.
 - **A message queues a turn.** The outbox runs one Thread's turns one at a
   time, in order (`turn.start`, keyed by the Thread). Threads run side by
   side, an Agent's own Threads too. A stop (`turn.stop`) and an answer

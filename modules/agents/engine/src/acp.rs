@@ -462,7 +462,6 @@ struct Started {
 /// What a Harness says of itself and its account when it starts.
 struct About {
     adapter: Option<Adapter>,
-    cli: Option<CliView>,
     signs_out: bool,
     /// It pushes who is signed in (`_auth/status_update`).
     reports_account: bool,
@@ -479,6 +478,9 @@ pub struct Connection {
     /// The ways it offers to sign in.
     ways: Vec<SignInWay>,
     about: About,
+    /// The Person's CLI it runs, as last found: when it started, or when a
+    /// Person last asked who is signed in.
+    cli: Mutex<Option<CliView>>,
     /// Who it last said is signed in.
     account: watch::Receiver<Option<AuthStatus>>,
     routes: Routes,
@@ -558,7 +560,7 @@ impl Connection {
             cx,
             agreed,
             methods,
-            mut about,
+            about,
         } = match timeout(STARTING, started).await {
             Ok(Ok(Ok(agreed))) => agreed,
             Ok(Ok(Err(error))) => return Err(error),
@@ -568,7 +570,6 @@ impl Connection {
                 return Err("The Harness did not start within two minutes.".to_owned());
             }
         };
-        about.cli = cli;
         Ok(Arc::new(Connection {
             cx,
             harness: harness.id.clone(),
@@ -576,6 +577,7 @@ impl Connection {
             agreed,
             ways: ways(harness, methods),
             about,
+            cli: Mutex::new(cli),
             account,
             routes,
             learned,
@@ -828,7 +830,8 @@ impl Connection {
     fn runs(&self, known: &Known) -> Running {
         let mut running = running(known);
         running.offer.no_images = !self.agreed.images;
-        running.offer.outdated = self.about.cli.as_ref().and_then(|c| c.outdated.clone());
+        let cli = self.cli.lock().unwrap();
+        running.offer.outdated = cli.as_ref().and_then(|c| c.outdated.clone());
         running
     }
 
@@ -884,20 +887,25 @@ impl Connection {
     /// This Harness entry as its process says, and how to sign in to it.
     /// A Harness that reports who is signed in says it soon after it
     /// starts: until then this waits, a few seconds at most.
-    pub async fn account(&self) -> Account {
+    /// Who is signed in, what the Harness runs, and the Person's CLI as
+    /// `harness` finds it now: updated since the start, its Threads stop
+    /// warning that it is old.
+    pub async fn account(&self, harness: &Harness) -> Result<Account, String> {
+        let (_, cli) = crate::cli::find(harness).await?;
+        *self.cli.lock().unwrap() = cli.clone();
         let mut account = self.account.clone();
         if self.about.reports_account {
             let _ = timeout(FIRST_REPORT, account.wait_for(Option::is_some)).await;
         }
         let status = account.borrow().clone();
         let by_account = status.as_ref().is_some_and(|s| s.kind == "account");
-        Account {
+        Ok(Account {
             ways: self.ways.clone(),
             adapter: self.about.adapter.clone(),
-            cli: self.about.cli.clone(),
+            cli,
             signed_in_as: status.map(SignedInAs::from),
             signs_out: self.about.signs_out && by_account,
-        }
+        })
     }
 
     /// Asks the Harness to sign out, when it says it does.
@@ -1169,7 +1177,6 @@ async fn drive(
                     });
                     let about = About {
                         adapter,
-                        cli: None,
                         signs_out: capabilities.auth.logout.is_some(),
                         reports_account,
                     };
