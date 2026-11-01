@@ -7,6 +7,8 @@
  */
 import { useSyncExternalStore } from "react"
 import {
+  type Columns,
+  DEFAULT_COLUMNS,
   DEFAULT_MOTION,
   type Look,
   type Motion,
@@ -20,8 +22,11 @@ import { DEFAULT_SOUND, type SoundSettings } from "@bandaso/ui/sound"
 import { DEFAULT_NOTIFY } from "./calls/settings"
 import type { Host } from "./host"
 
-const system = matchMedia("(prefers-color-scheme: dark)")
-const reduced = matchMedia("(prefers-reduced-motion: reduce)")
+// Outside a window, as in tests, nothing is asked of the system.
+const ask = (query: string) =>
+  typeof matchMedia === "function" ? matchMedia(query) : undefined
+const system = ask("(prefers-color-scheme: dark)")
+const reduced = ask("(prefers-reduced-motion: reduce)")
 const STILL: Move = { kind: "off" }
 let look: Look | null = null
 let applied = new Set<string>()
@@ -56,13 +61,18 @@ export function apply(
 }
 
 function paint() {
-  applied = apply(document.documentElement, look, system.matches, applied)
+  applied = apply(
+    document.documentElement,
+    look,
+    system?.matches ?? false,
+    applied
+  )
 }
 
 /** Follows the desktop's look, and the system's light or dark. */
 export function followLook(host: Host | undefined): void {
   paint()
-  system.addEventListener("change", paint)
+  system?.addEventListener("change", paint)
   if (!host) return
   const take = (next: Look) => {
     look = next
@@ -78,8 +88,13 @@ export function followLook(host: Host | undefined): void {
 /** How `event` moves now: as the look says, Banda's own before it comes,
  * and not at all when the system asks for reduced motion. */
 export function moveOf(event: keyof Motion): Move {
-  if (reduced.matches) return STILL
+  if (reduced?.matches) return STILL
   return (look?.motion ?? DEFAULT_MOTION)[event]
+}
+
+/** The widths columns take, and where the focused one scrolls to. */
+export function columnsOf(): Columns {
+  return look?.columns ?? DEFAULT_COLUMNS
 }
 
 /** What is wrong in the look's files now, for the bar to say. */

@@ -14,6 +14,8 @@
 //! comes with the look: [`sidebar`].
 
 pub mod color;
+pub mod columns;
+pub mod fonts;
 pub mod hyprland;
 pub mod motion;
 pub mod notify;
@@ -70,6 +72,8 @@ pub struct Look {
     pub vars: BTreeMap<String, String>,
     /// How each event moves, already slowed down or turned off.
     pub motion: Motion,
+    /// The widths columns take, and where the focused one scrolls to.
+    pub columns: columns::Columns,
     /// The layers it came from, bottom first.
     pub sources: Vec<Source>,
     /// What is wrong in the files. The look still applies: a broken layer
@@ -180,6 +184,12 @@ pub fn read_settings(path: &Path, text: &str, problems: &mut Vec<Problem>) -> Op
     };
     for key in settings.negative_sizes() {
         problems.push(Problem::whole(path, format!("{key} cannot be negative")));
+    }
+    for (span, message) in settings.columns.problems() {
+        problems.push(Problem::at(path, text, span, message));
+    }
+    for message in settings.font.problems() {
+        problems.push(Problem::whole(path, message));
     }
     for (span, message) in settings.motion.problems() {
         problems.push(Problem::at(path, text, span, message));
@@ -404,13 +414,29 @@ pub fn resolve(places: &Places, windows: &dyn Fn() -> Option<Windows>) -> Resolv
     }
 
     let sidebar = sidebar::resolve(places, &mut problems, &mut watched);
+    let mut vars = vars(&all);
+    let system = |generic: &str| {
+        places
+            .fontconfig
+            .as_deref()
+            .and_then(|folder| fonts::fc_match(generic, folder))
+    };
+    for (name, value) in all.font.vars(&system) {
+        vars.insert(format!("--{name}"), value);
+    }
+    if let Some(folder) = &places.fontconfig
+        && all.font.asks_the_system()
+    {
+        watched.push(folder.join("fonts.conf"));
+    }
 
     Resolved {
         look: Look {
             mode: shown,
             schemes,
-            vars: vars(&all),
+            vars,
             motion: all.motion.resolve(),
+            columns: all.columns.resolve(),
             sources,
             problems,
             sound: all.sound.resolved(),

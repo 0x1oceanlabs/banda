@@ -19,12 +19,17 @@ pub struct Places {
     pub omarchy_current: Option<PathBuf>,
     /// Omarchy's theme folders: the Person's first, then the system's.
     pub omarchy_themes: Vec<PathBuf>,
+    /// fontconfig's folder of the Person's, `~/.config/fontconfig`, where
+    /// Omarchy sets the system's monospace font. `None`: generic names
+    /// stay generic.
+    pub fontconfig: Option<PathBuf>,
 }
 
 impl Places {
     /// The places on this machine. `BANDA_CONFIG` moves the config folder
-    /// and `BANDA_OMARCHY` Omarchy's current theme (empty: no Omarchy), so
-    /// a test or a trial window runs beside the real one.
+    /// and `BANDA_OMARCHY` Omarchy's current theme (empty: no Omarchy);
+    /// an empty `BANDA_FONTCONFIG` leaves the system's fonts unasked. So a
+    /// test or a trial window runs beside the real one.
     pub fn from_env() -> Places {
         let var = |name: &str| std::env::var_os(name).map(PathBuf::from);
         let home = var("HOME").unwrap_or_default();
@@ -48,6 +53,11 @@ impl Places {
                 config_home.join("omarchy/themes"),
                 PathBuf::from("/usr/share/omarchy/themes"),
             ],
+            fontconfig: match var("BANDA_FONTCONFIG") {
+                Some(set) if set.as_os_str().is_empty() => None,
+                Some(set) => Some(set),
+                None => Some(config_home.join("fontconfig")),
+            },
         }
     }
 

@@ -57,8 +57,14 @@ ADR 0005 promised a theme file (decision 11) and "one look, and honest motion" (
    - `[gaps]`: `inner` between tiles and `outer` around the Strip (Hyprland's `gaps_in` and `gaps_out`).
    - `[tile]`: `radius` (a step of the ladder or pixels, decision 7), `border` width, `dim-inactive` (0 to 1).
    - `[focus]`: how the focused tile stands out (_decided_), as in Hyprland by default: its `border` takes the accent, the others keep `inactive-border`. niri's focus ring is a switch: `ring` grows the focused tile's frame that far out into the gap, so nothing moves; `0`, the default, draws none. The ring has no colour of its own: it is the border's, drawn as one stroke over it, so the tile has one frame and no seam where two would meet. A border of one colour and a ring of another looked like two frames. Colours are palette names or hex. A gradient comes later, written as Hyprland writes it.
-   - `[columns]`: `presets` (`[1/3, 1/2, 2/3, 1]`), `default` (`1/2`) and `center` (`never`, `always`, `on-overflow`), as niri's.
-   - `[bar]`: `height`. `[font]`: `sans`, `mono`, `size`. With `theme = "omarchy"` the fonts follow Omarchy's too.
+   - `[columns]`, as niri's (_built_):
+     - `presets` are the widths Alt+Ctrl+Left and Right step through, as fractions of the screen (`"1/3"`, `"2/5"`, `"1"`). A column steps from whatever width it has to the nearest preset past it.
+     - `default` is a new column's width. A list Pane opens at the narrowest preset.
+     - `center`: `never` scrolls the least that shows the focused column; `always` puts it in the middle; `on-overflow` puts it in the middle only when it does not fit beside the column focused before, else shows both.
+   - `[bar]`: `height`.
+   - `[font]`: `sans`, `mono`, `size` (_built_).
+     - A family is a font's name, a CSS list, or a generic name such as `monospace`. A generic name is the system's choice: `bandaso look` asks fontconfig as `omarchy-font-current` does (`fc-match monospace`), so on Omarchy the terminal writes in Omarchy's font, and follows it when `omarchy-font-set` changes it.
+     - `size` is the usual text, shadcn's `text-sm`, in pixels. The root grows by `size / 14`, so everything measured in text grows with it, as with a zoom; the terminal writes at three quarters of the root, 12 px at 14.
 
 7. **Corners follow shadcn/ui's ladder** (_decided_).
    - One number, `radius` in `look.toml`, is shadcn's `--radius`. Every corner in Banda is a step of its ladder, so one number rounds or squares the whole window. `radius = 0` makes everything square, as Omarchy's Hyprland is.

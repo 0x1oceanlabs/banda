@@ -17,6 +17,7 @@ import {
   type Watch,
 } from "@bandaso/ui/pane"
 import { LayoutGridIcon } from "lucide-react"
+import { columnsOf } from "./look"
 import type { Width } from "./workspaces/model"
 
 type Args = { [key: string]: JsonValue }
@@ -58,9 +59,11 @@ export function runs(
   return needs.module === undefined || engineModules.includes(needs.module)
 }
 
-/** How wide a new column for a Pane opens: a list a third, the rest half. */
+/** How wide a new column for a Pane opens, as the look says: a list at
+ * the narrowest preset, the rest at the default width. */
 export function widthOf(pane: PaneState): Width {
-  return kindOf(pane.kind)?.narrow ? "1/3" : "1/2"
+  const { presets, default: width } = columnsOf()
+  return kindOf(pane.kind)?.narrow ? (presets[0] ?? width) : width
 }
 
 /** The Panes a Person can start, in the order the menu lists them. */

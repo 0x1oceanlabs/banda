@@ -944,6 +944,30 @@ test("the sidebar is arranged by sidebar.toml, and its view menu writes the file
   await page.keyboard.press("Escape")
 })
 
+test("columns and the text size come from look.toml", async () => {
+  window = await startWindow({
+    look: '[columns]\npresets = ["1/4", "3/4"]\ndefault = "1/4"\n[font]\nsize = 16\n',
+  })
+  const { page } = window
+  const root = page.locator("html")
+  // 16px text: the root grows by 16/14, and the rest with it.
+  await expect(root).toHaveCSS("--text-root", "18.286px")
+  const size = await root.evaluate((e) =>
+    parseFloat(getComputedStyle(e).fontSize)
+  )
+  expect(size).toBeCloseTo(18.286, 1)
+
+  const { thread, composer } = await firstThread(page)
+  await expect(composer).toBeFocused()
+  const column = thread.locator("xpath=ancestor::*[@data-column][1]")
+  const share = () =>
+    column.evaluate((e) => e.offsetWidth / e.parentElement!.clientWidth)
+  // A new column opens at the look's default, a quarter.
+  await expect.poll(share).toBeLessThan(0.3)
+  await page.keyboard.press("Alt+Control+ArrowRight")
+  await expect.poll(share).toBeGreaterThan(0.7)
+})
+
 test("the window takes its look from look.toml, and again on each save", async () => {
   window = await startWindow({
     look: '[gaps]\ninner = 12\n[colors]\naccent = "#e07a3f"\n',

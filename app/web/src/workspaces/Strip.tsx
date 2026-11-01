@@ -1,19 +1,12 @@
 import { useEffect, useLayoutEffect, useRef } from "react"
 import type { Engine, SpaceId } from "@bandaso/contract"
 import type { PaneState } from "@bandaso/ui/pane"
-import { moveOf } from "../look"
+import { columnsOf, moveOf } from "../look"
 import { Moving } from "../motion"
 import { Choices } from "../registry"
-import type { Width, Workspace } from "./model"
+import { share, type Workspace } from "./model"
 import { type Frame, PaneFrame } from "./PaneFrame"
 import { pixels, scrollsSideways, SWIPE_END, Swipe } from "./swipe"
-
-const SHARE: Record<Width, number> = {
-  "1/3": 1 / 3,
-  "1/2": 1 / 2,
-  "2/3": 2 / 3,
-  "1": 1,
-}
 
 /**
  * One workspace, as niri's Strip: columns side by side, each its share of
@@ -53,10 +46,13 @@ export function Strip({
   const widths = workspace.columns.map((column) => column.width).join()
   const empty = workspace.columns.length === 0
 
+  // The column focused before, for `center = "on-overflow"`.
+  const before = useRef(focus)
   useLayoutEffect(() => {
     const strip = scroller.current
-    const column = strip?.querySelector<HTMLElement>(`[data-column="${focus}"]`)
-    if (strip && column) reveal(strip, column)
+    const column = strip && columnOf(strip, focus)
+    if (strip && column) reveal(strip, column, columnOf(strip, before.current))
+    before.current = focus
   }, [focus, widths])
 
   // What a swipe's end needs, as it is then.
@@ -123,7 +119,7 @@ export function Strip({
           className="flex h-full shrink-0 flex-col gap-(--gap-inner)"
           style={{
             // Shares of the room the Strip shows, gaps between them included.
-            width: `calc(${SHARE[column.width]} * (100% + var(--gap-inner)) - var(--gap-inner))`,
+            width: `calc(${share(column.width) ?? 0.5} * (100% + var(--gap-inner)) - var(--gap-inner))`,
           }}
         >
           {column.entries.map((entry, e) => (
@@ -160,22 +156,43 @@ function scrollOf(strip: HTMLElement): Moving {
   return scroll
 }
 
-/** Scrolls the Strip by the least that shows `column` whole, measured
- * from where it is headed, so a second step goes on from the first. */
-function reveal(strip: HTMLElement, column: HTMLElement) {
+function columnOf(strip: HTMLElement, id: string | undefined) {
+  return id === undefined
+    ? null
+    : strip.querySelector<HTMLElement>(`[data-column="${id}"]`)
+}
+
+/**
+ * Scrolls the Strip to show `column` whole, as the look's `center` says:
+ * by the least scroll; to the middle; or to the middle only when it does
+ * not fit beside `before`, the column focused before it, else by the least
+ * scroll that shows both. Measured from where the scroll is headed, so a
+ * second step goes on from the first.
+ */
+function reveal(
+  strip: HTMLElement,
+  column: HTMLElement,
+  before?: HTMLElement | null
+) {
   const scroll = scrollOf(strip)
   const at = scroll.target
-  // The look's outer gap stays in view beside the column.
+  const width = strip.clientWidth
+  // The look's outer gap stays in view beside what shows.
   const gap = parseFloat(getComputedStyle(strip).paddingLeft) || 0
-  const start = column.offsetLeft - gap
-  const end = column.offsetLeft + column.offsetWidth + gap
-  const most = strip.scrollWidth - strip.clientWidth
-  const to =
-    start < at
-      ? start
-      : end > at + strip.clientWidth
-        ? end - strip.clientWidth
-        : at
+  const left = (c: HTMLElement) => c.offsetLeft - gap
+  const right = (c: HTMLElement) => c.offsetLeft + c.offsetWidth + gap
+  const least = (start: number, end: number) =>
+    start < at ? start : end > at + width ? end - width : at
+  const middle = column.offsetLeft + column.offsetWidth / 2 - width / 2
+  const { center } = columnsOf()
+  let to = least(left(column), right(column))
+  if (center === "always") to = middle
+  if (center === "on-overflow" && before && before !== column) {
+    const start = Math.min(left(column), left(before))
+    const end = Math.max(right(column), right(before))
+    to = end - start <= width ? least(start, end) : middle
+  }
+  const most = strip.scrollWidth - width
   const target = Math.max(0, Math.min(most, to))
   if (target !== at) scroll.to(target, moveOf("strip"))
 }
@@ -202,7 +219,7 @@ function land(strip: HTMLElement, focus: string | undefined, frame: Frame) {
     .filter(({ i }) => shares[i] >= most)
     .sort((a, b) => Math.abs(a.i - at) - Math.abs(b.i - at))[0]?.column
   if (!picked) return
-  reveal(strip, picked)
+  reveal(strip, picked, columnOf(strip, focus))
   const entry = picked.dataset.entry
   if (picked.dataset.column !== focus && entry) frame.focus(entry)
 }
