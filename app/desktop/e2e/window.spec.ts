@@ -961,7 +961,9 @@ test("columns and the text size come from look.toml", async () => {
   await expect(composer).toBeFocused()
   const column = thread.locator("xpath=ancestor::*[@data-column][1]")
   const share = () =>
-    column.evaluate((e) => e.offsetWidth / e.parentElement!.clientWidth)
+    column.evaluate(
+      (e: HTMLElement) => e.offsetWidth / e.parentElement!.clientWidth
+    )
   // A new column opens at the look's default, a quarter.
   await expect.poll(share).toBeLessThan(0.3)
   await page.keyboard.press("Alt+Control+ArrowRight")
