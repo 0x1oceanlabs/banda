@@ -247,8 +247,9 @@ If Chat is removed, Agents still works through its own Thread.
   - The engine declares that it runs terminals, so Claude Code's adapter
     offers ways in a terminal: the Harness entry's program with the way's
     arguments and environment, so an entry's own config folder gets the
-    account. The Thread shows the line to run; the Person runs it in a
-    terminal and says when they signed in.
+    account. The Thread runs it in a terminal Pane below the turn, and
+    its program ending with code 0 says the Person signed in. The line
+    stays to run by hand, after which the Person says so.
   - Codex's adapter signs in by itself in the browser when the engine asks
     (`agents.sign_in`).
   - A sign-in writes nothing to the Space, and its receipt keeps the
@@ -357,6 +358,18 @@ If Chat is removed, Agents still works through its own Thread.
   group a hangup and a request to stop, then a kill a second later; a
   shell passes the hangup on to its jobs. A close ends every watch.
 - Its methods are listed in `modules/terminal/engine/src/lib.rs`.
+- **Its Pane** (`modules/terminal/pane`) draws a terminal with Ghostty:
+  T3 Code's adapter over `libghostty-vt` compiled to WebAssembly,
+  vendored in `app/ghostty`, on a canvas in the window's colours.
+  - Opened from the menu, it starts the Person's shell, and starts it
+    again when the engine lost it.
+  - Another Pane that started a program opens it on that terminal, as a
+    sign-in does: `{kind: "terminal.terminal", args: {terminal, title,
+    shell: false}}`.
+  - It sends what the Person types one call after another, as the engine
+    runs calls side by side.
+  - Closing the Pane closes its terminal. A split that draws it again
+    does not.
 
 ## Inside a module
 
@@ -410,14 +423,16 @@ modules/*/pane   each module's Panes
   it one thing: the engine's address, through `window.bandaso.engine()` in
   a sandboxed preload. The page is served from `app://bandaso` with a
   strict Content Security Policy. It cannot navigate, open windows or get
-  permissions, and links open in the browser.
+  permissions, and links open in the browser. It may run WebAssembly
+  shipped with it, which Ghostty draws terminals with.
 - **The engine is the window's child.** Main starts
   `bandaso serve --with-parent`, starts it again when it dies (waiting up
   to 10 s between tries), and closes its stdin on quit. The client then
   reconnects and follows on from the last event it delivered, so a Pane
   sees no gap.
 - **A Pane** is a `PaneKind`: a kind, the module it needs, a title, an
-  icon, optional start args, and a component. The component gets the
+  icon, optional start args, what its module lets go of when it leaves
+  the Desk (`closed`), and a component. The component gets the
   engine, the Space, its args, whether it has the focus, `open` and
   `update`. A Pane's args are all its state; the Desk keeps them.
 - **A Pane reads a view, then follows.** `useLive` reads the view once,
@@ -429,7 +444,10 @@ modules/*/pane   each module's Panes
   - Opened with no place, a Pane takes the tile that last showed its kind,
     or splits to the right. Ctrl-click (⌘ on a Mac) always splits.
   - Keys: Alt+Arrows move the focus, Ctrl+\ splits right, Ctrl+Shift+\
-    splits down, Ctrl+W closes.
+    splits down, Ctrl+W closes. In a terminal Ctrl+W is the program's,
+    and Ctrl+Shift+W closes.
+  - A Pane leaves the Desk when its tile closes or shows another Pane;
+    a split draws the tiles again without that.
   - Each Space keeps its own Desk in the window's storage
     (`$BANDASO_STATE/window` when that is set).
 - **Only `window.bandaso` ties the page to the desktop.** It names no
@@ -445,9 +463,11 @@ bandaso/
     agents/engine/    Rust: Agents, Threads, turns, Questions, the ACP adapter
     agents/pane/      React: the Agents list and the Thread
     terminal/engine/  Rust: Terminals, their PTYs and what they printed
+    terminal/pane/    React: a terminal, drawn by Ghostty
     browser/pane/     React: the browser Pane (next)
   engine/             the bandaso program: serve (the kernel and its modules), call, follow
   app/ui/             shadcn/ui and the Pane contract
+  app/ghostty/        T3 Code's Ghostty adapter and its WebAssembly, vendored
   app/web/            React: the Desk, the Space picker, the Pane registry
   app/desktop/        Electron: the window and the engine's start; e2e tests
   contract/           the engine's API for TypeScript: generated types and the client
@@ -461,7 +481,7 @@ bandaso/
 
 - **Architecture tests.** The kernel names no module, no module reads
   another's tables, and a Pane imports only the API, `@bandaso/ui`, React
-  and its icons.
+  and its icons; the terminal's Pane also Ghostty.
 - **Module tests** run through the module's interface: commands go in and
   events come out. Nothing past the interface is mocked.
 - **Adapter tests** run the real engine. Only the Harness's transport is

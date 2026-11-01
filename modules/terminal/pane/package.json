@@ -1,0 +1,29 @@
+{
+  "name": "@bandaso/terminal-pane",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "The terminal module's Pane: a program the engine runs on a PTY, drawn by Ghostty.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@bandaso/contract": "workspace:*",
+    "@bandaso/ghostty": "workspace:*",
+    "@bandaso/ui": "workspace:*",
+    "lucide-react": "^1.65.0",
+    "react": "^19.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "typescript": "~6.0.2",
+    "vite": "^8",
+    "vitest": "^5"
+  }
+}

@@ -35,7 +35,7 @@ import { useRead } from "@bandaso/ui/hooks/use-read"
 import { definePane, type PaneProps } from "@bandaso/ui/pane"
 import { LogOutIcon, RotateCwIcon, SettingsIcon } from "lucide-react"
 import { type EnterKey, useEnterKey } from "./enter-key"
-import { Problem, Warning, Ways } from "./SignIn"
+import { type Open, Problem, Warning, Ways } from "./SignIn"
 
 type NoArgs = { [key: string]: JsonValue }
 
@@ -53,7 +53,7 @@ export const harnessesPane = definePane<NoArgs>({
   Pane: HarnessesPane,
 })
 
-function HarnessesPane({ engine, space }: PaneProps<NoArgs>) {
+function HarnessesPane({ engine, space, open }: PaneProps<NoArgs>) {
   const harnesses = useRead(
     useCallback(
       () => engine.call<HarnessView[]>("agents.harnesses", {}, { space }),
@@ -75,6 +75,7 @@ function HarnessesPane({ engine, space }: PaneProps<NoArgs>) {
                 engine={engine}
                 space={space}
                 harness={harness}
+                open={open}
               />
             ))}
         </section>
@@ -84,7 +85,12 @@ function HarnessesPane({ engine, space }: PaneProps<NoArgs>) {
   )
 }
 
-type HarnessProps = { engine: Engine; space: SpaceId; harness: HarnessView }
+type HarnessProps = {
+  engine: Engine
+  space: SpaceId
+  harness: HarnessView
+  open: Open
+}
 
 /** What a Harness runs: the Person's CLI with its version, through its
  * adapter. */
@@ -112,6 +118,7 @@ function HarnessReading({
   engine,
   space,
   harness,
+  open,
   readAgain,
 }: HarnessProps & { readAgain: () => void }) {
   const account = useRead(
@@ -167,6 +174,7 @@ function HarnessReading({
             engine={engine}
             space={space}
             harness={harness}
+            open={open}
             account={account.value}
             onChanged={readAgain}
           />
@@ -180,6 +188,7 @@ function AccountState({
   engine,
   space,
   harness,
+  open,
   account,
   onChanged,
 }: HarnessProps & { account: Account; onChanged: () => void }) {
@@ -215,6 +224,7 @@ function AccountState({
         space={space}
         harness={harness.id}
         ways={account.ways}
+        open={open}
         onSignedIn={onChanged}
       />
     </div>
@@ -226,7 +236,7 @@ function SignOut({
   space,
   harness,
   onSignedOut,
-}: HarnessProps & { onSignedOut: () => void }) {
+}: Omit<HarnessProps, "open"> & { onSignedOut: () => void }) {
   const [asking, setAsking] = useState(false)
   const signing = useAct()
   const signOut = async () => {

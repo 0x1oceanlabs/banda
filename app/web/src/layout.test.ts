@@ -5,11 +5,13 @@ import {
   EMPTY,
   focused,
   type Layout,
+  left,
   move,
   type Node,
   open,
   parse,
   resize,
+  show,
   split,
   tiles,
 } from "./layout"
@@ -134,4 +136,17 @@ test("a split always adds a tile, even for a Pane already shown", () => {
     ],
     sizes: [50, 50],
   })
+})
+
+test("a Pane leaves the Desk when its tile closes or shows another Pane", () => {
+  const terminal: PaneState = { kind: "terminal.terminal", args: { t: "1" } }
+  const launcher: PaneState = { kind: "desk.launcher", args: {} }
+  const desk = open(open(EMPTY, list), terminal, { place: "right" })
+  const [first, second] = tiles(desk)
+  expect(
+    left(desk, split(desk, launcher, { from: second.id, place: "below" }))
+  ).toEqual([])
+  expect(left(desk, close(desk, second.id))).toEqual([terminal])
+  expect(left(desk, show(desk, first.id, thread("1")))).toEqual([list])
+  expect(left(desk, open(desk, thread("1")))).toEqual([])
 })

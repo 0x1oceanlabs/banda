@@ -9,13 +9,14 @@ import {
 import type { PaneState, Place } from "@bandaso/ui/pane"
 import { paneOf } from "@bandaso/ui/pane"
 import { Columns2Icon, Rows2Icon, XIcon } from "lucide-react"
-import { keyAction } from "./keys"
+import { keyAction, toProgram } from "./keys"
 import {
   close,
   EMPTY,
   focus,
   focused,
   type Layout,
+  left,
   move,
   type Node,
   open,
@@ -45,11 +46,20 @@ export function Desk({
 }) {
   const [layout, setLayout] = useState(() => load(space.id, modules))
   useEffect(() => keep(space.id, layout), [space.id, layout])
+  // A Pane that leaves lets its module let go, as a terminal stops its
+  // program; one that a split draws again has not left.
+  const shown = useRef(layout)
+  useEffect(() => {
+    for (const pane of left(shown.current, layout)) {
+      kindOf(pane.kind)?.closed?.({ engine, space: space.id, args: pane.args })
+    }
+    shown.current = layout
+  }, [engine, space.id, layout])
   const change = useCallback((how: Change) => setLayout(how), [])
 
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      const action = keyAction(event)
+      const action = keyAction(event, toProgram(event.target))
       if (!action) return
       event.preventDefault()
       setLayout((layout) => {

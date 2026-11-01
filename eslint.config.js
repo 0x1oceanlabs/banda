@@ -13,6 +13,8 @@ export default defineConfig([
     "contract/src/generated",
     "target",
     "app/desktop/test-results",
+    // T3 Code's terminal adapter, vendored as it is: a newer pin is a copy.
+    "app/ghostty/src/t3",
   ]),
   {
     files: ["**/*.{ts,tsx}"],

@@ -102,6 +102,7 @@ function ThreadPane({
   space,
   args,
   focused,
+  open,
   update,
 }: PaneProps<ThreadArgs>) {
   const { thread } = args
@@ -260,6 +261,7 @@ function ThreadPane({
                 engine={engine}
                 space={space}
                 agent={args.agent}
+                open={open}
                 onSignedIn={() => retry(turn)}
               />
             )}
