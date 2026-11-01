@@ -1,93 +1,197 @@
-import { useState } from "react"
+import { useMemo, useState } from "react"
 import type { Engine, SpaceId, SpaceSummary } from "@bandaso/contract"
+import { BandaMark, MARK_WORDS } from "@bandaso/ui/components/banda-mark"
 import { Button } from "@bandaso/ui/components/button"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuGroup,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+  DropdownMenuTrigger,
+} from "@bandaso/ui/components/dropdown-menu"
 import { ScrollArea } from "@bandaso/ui/components/scroll-area"
+import { cn } from "@bandaso/ui/lib/utils"
 import type { PaneState } from "@bandaso/ui/pane"
-import { FolderIcon, PlusIcon, SquarePenIcon } from "lucide-react"
-import { runs, sidebar } from "../registry"
+import {
+  ChevronDownIcon,
+  ChevronRightIcon,
+  FolderPlusIcon,
+  ListFilterIcon,
+  SquarePenIcon,
+} from "lucide-react"
+import type { Lists } from "../bar/Watches"
 import { NewSpace } from "../Spaces"
+import { arrange, type Section, type SpaceLine } from "./arrange"
+import { usePreset } from "./preset"
+import { Row, SpaceBadge } from "./Row"
+import {
+  PRESET_NAMES,
+  PRESET_WORDS,
+  type Preset,
+  resolve,
+  type Settings,
+} from "./settings"
 
 /**
  * The sidebar, docked at the window's left edge (ADR 0005, decision 8):
- * every Space, each with its Threads, and a new Thread in any of them.
- * What each Space lists is a Pane its module offers; the sidebar only
- * places them. For now it groups by Space; the attention order comes next.
+ * every Thread of every Space, arranged as the Person's preset and keys
+ * say (ADR 0008). The modules list what each Space has; the sidebar only
+ * arranges and draws it.
  */
 export function Sidebar({
   engine,
-  modules,
   spaces,
+  lists,
+  home,
+  isCurrent,
   onOpen,
   onNewThread,
   onCreated,
 }: {
   engine: Engine
-  modules: readonly string[]
   spaces: SpaceSummary[]
+  lists: Lists
+  /** The Space a new Thread from the header starts in. */
+  home: SpaceId
+  /** Whether a Pane is the one that has the focus. */
+  isCurrent: (space: SpaceId, pane: PaneState) => boolean
   /**
-   * Opens a Pane a list asked for: where a workspace shows it, or in a new
-   * column of the current one. The sidebar is no tile, so a place from it
-   * means nothing.
+   * Opens a Pane a row stands for: where a workspace shows it, or in a new
+   * column of the current one.
    */
   onOpen: (space: SpaceId, pane: PaneState) => void
   onNewThread: (space: SpaceId) => void
   onCreated: (space: SpaceSummary) => void
 }) {
   const [creating, setCreating] = useState(false)
-  const List = runs(sidebar, modules) ? sidebar.Pane : undefined
+  const [preset, setPreset] = usePreset()
+  const settings = useMemo(() => resolve(preset), [preset])
+  const [only, setOnly] = useState<SpaceId>()
+  const [toggled, setToggled] = useState<ReadonlySet<string>>(new Set())
+  const [more, setMore] = useState<ReadonlySet<string>>(new Set())
+  const arranged = useMemo(
+    () => arrange(lists, spaces, settings, only, toggled),
+    [lists, spaces, settings, only, toggled]
+  )
+  const pick = (next: Preset) => {
+    setPreset(next)
+    setOnly(undefined)
+    setToggled(new Set())
+    setMore(new Set())
+  }
+  const flip = (set: ReadonlySet<string>, key: string) => {
+    const next = new Set(set)
+    if (!next.delete(key)) next.add(key)
+    return next
+  }
+  const drawn = (section: Section) => (
+    <SectionView
+      key={section.key}
+      section={section}
+      settings={settings}
+      more={more.has(section.key)}
+      isCurrent={isCurrent}
+      onToggle={() => setToggled((set) => flip(set, section.key))}
+      onMore={() => setMore((set) => flip(set, section.key))}
+      onOpen={onOpen}
+      onNewThread={onNewThread}
+    />
+  )
+  const nothing =
+    arranged.sections.every((s) => s.rows.length === 0) &&
+    arranged.shelves.every((s) => s.rows.length === 0)
+
   return (
     <aside
       aria-label="Sidebar"
-      className="flex w-64 shrink-0 flex-col border-r bg-background/60"
+      className="flex w-64 shrink-0 flex-col border-r bg-sidebar/60"
     >
-      <ScrollArea className="min-h-0 flex-1">
-        <div className="flex flex-col gap-3 p-2">
-          {spaces.map((space) => (
-            <div key={space.id} role="group" aria-label={space.name}>
-              <div className="group/space flex items-center gap-1.5 px-2 pb-1 text-xs font-medium text-muted-foreground">
-                <FolderIcon className="size-3.5 shrink-0" />
-                <span className="min-w-0 flex-1 truncate" title={space.folder}>
-                  {space.name}
-                </span>
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  aria-label={`New Thread in ${space.name}`}
-                  title="New Thread"
-                  className="opacity-0 group-hover/space:opacity-100 focus-visible:opacity-100"
-                  onClick={() => onNewThread(space.id)}
-                >
-                  <SquarePenIcon />
-                </Button>
-              </div>
-              {List && (
-                <List
-                  engine={engine}
-                  space={space.id}
-                  args={{}}
-                  focused={false}
-                  open={(pane, _place, other) =>
-                    onOpen(other ?? space.id, pane)
-                  }
-                  update={() => {}}
-                  close={() => {}}
-                />
-              )}
-            </div>
-          ))}
-        </div>
-      </ScrollArea>
-      <div className="border-t p-2">
+      <div className="flex items-center gap-0.5 px-2 pt-2 pb-1">
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <Button
+                variant="ghost"
+                size="sm"
+                aria-label={`View: ${preset}`}
+                className="text-muted-foreground"
+              >
+                <ListFilterIcon />
+                <span className="capitalize">{preset}</span>
+              </Button>
+            }
+          />
+          <DropdownMenuContent align="start" className="w-auto min-w-60">
+            <DropdownMenuGroup>
+              <DropdownMenuLabel>How the sidebar is arranged</DropdownMenuLabel>
+              <DropdownMenuRadioGroup
+                value={preset}
+                onValueChange={(next: Preset) => pick(next)}
+              >
+                {PRESET_NAMES.map((name) => (
+                  <DropdownMenuRadioItem key={name} value={name} closeOnClick>
+                    <span className="flex flex-col">
+                      <span className="capitalize">{name}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {PRESET_WORDS[name]}
+                      </span>
+                    </span>
+                  </DropdownMenuRadioItem>
+                ))}
+              </DropdownMenuRadioGroup>
+            </DropdownMenuGroup>
+          </DropdownMenuContent>
+        </DropdownMenu>
         <Button
           variant="ghost"
-          size="sm"
-          className="w-full justify-start"
+          size="icon-sm"
+          className="ml-auto text-muted-foreground"
+          aria-label="New Space"
+          title="New Space"
           onClick={() => setCreating(true)}
         >
-          <PlusIcon />
-          New Space
+          <FolderPlusIcon />
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          className="text-muted-foreground"
+          aria-label="New Thread"
+          title="New Thread"
+          onClick={() => onNewThread(only ?? home)}
+        >
+          <SquarePenIcon />
         </Button>
       </div>
+      <ScrollArea className="min-h-0 flex-1">
+        <div className="flex flex-col gap-1 px-1.5 pb-2">
+          {arranged.spaces && (
+            <SpacesList
+              lines={arranged.spaces}
+              settings={settings}
+              only={only}
+              onPick={(space) =>
+                setOnly((was) => (was === space ? undefined : space))
+              }
+              onNewThread={onNewThread}
+            />
+          )}
+          {nothing ? (
+            <p className="px-2 py-1 text-xs text-muted-foreground">
+              No Threads yet
+            </p>
+          ) : (
+            arranged.sections.map(drawn)
+          )}
+        </div>
+      </ScrollArea>
+      {arranged.shelves.length > 0 && (
+        <div className="max-h-[45%] overflow-y-auto border-t px-1.5 py-1">
+          {arranged.shelves.map(drawn)}
+        </div>
+      )}
       <NewSpace
         engine={engine}
         open={creating}
@@ -95,5 +199,172 @@ export function Sidebar({
         onCreated={onCreated}
       />
     </aside>
+  )
+}
+
+/** A section: its header, which folds it, and its rows. */
+function SectionView({
+  section,
+  settings,
+  more,
+  isCurrent,
+  onToggle,
+  onMore,
+  onOpen,
+  onNewThread,
+}: {
+  section: Section
+  settings: Settings
+  more: boolean
+  isCurrent: (space: SpaceId, pane: PaneState) => boolean
+  onToggle: () => void
+  onMore: () => void
+  onOpen: (space: SpaceId, pane: PaneState) => void
+  onNewThread: (space: SpaceId) => void
+}) {
+  const { limit } = settings.group
+  const rows = limit > 0 && !more ? section.rows.slice(0, limit) : section.rows
+  const hidden = section.rows.length - rows.length
+  const Chevron = section.folded ? ChevronRightIcon : ChevronDownIcon
+  const { space } = section
+  return (
+    <div role="group" aria-label={section.label || "Threads"}>
+      {section.label && (
+        <div className="group/head flex items-center">
+          <button
+            type="button"
+            aria-expanded={!section.folded}
+            className={cn(
+              "flex min-w-0 flex-1 items-center gap-1.5 rounded-md px-2 pt-2 pb-1 text-xs outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+              space ? "font-medium text-foreground" : "text-muted-foreground"
+            )}
+            onClick={onToggle}
+          >
+            <Chevron className="size-3 shrink-0 text-muted-foreground" />
+            {space && <SpaceBadge space={space} />}
+            <span className="min-w-0 truncate" title={space?.folder}>
+              {section.label}
+            </span>
+            <span className="ml-auto flex items-center gap-1 text-muted-foreground tabular-nums">
+              {section.folded && settings.spaces.rollup && (
+                <Rollup mark={section.mark} waiting={section.waiting} />
+              )}
+              {section.rows.length}
+            </span>
+          </button>
+          {space && settings.spaces.newThread && (
+            <NewThreadIn space={space} onNewThread={onNewThread} />
+          )}
+        </div>
+      )}
+      {!section.folded && (
+        <div className="flex flex-col gap-px">
+          {rows.map((row) => (
+            <Row
+              key={`${row.space.id}:${row.listed.id}`}
+              row={row}
+              settings={settings}
+              inSpace={space !== undefined}
+              current={isCurrent(row.space.id, row.listed.pane)}
+              onOpen={() => onOpen(row.space.id, row.listed.pane)}
+            />
+          ))}
+          {(hidden > 0 || more) && (
+            <button
+              type="button"
+              className="rounded-md px-2 py-1 text-left text-xs text-muted-foreground outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50"
+              onClick={onMore}
+            >
+              {more ? "Show fewer" : `Show ${hidden} more`}
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  )
+}
+
+/** The list of Spaces, as Herdr's: a click shows only that Space's rows. */
+function SpacesList({
+  lines,
+  settings,
+  only,
+  onPick,
+  onNewThread,
+}: {
+  lines: SpaceLine[]
+  settings: Settings
+  only?: SpaceId
+  onPick: (space: SpaceId) => void
+  onNewThread: (space: SpaceId) => void
+}) {
+  return (
+    <div role="group" aria-label="Spaces" className="flex flex-col gap-px pb-1">
+      <div className="px-2 pt-2 pb-1 text-xs text-muted-foreground">Spaces</div>
+      {lines.map(({ space, mark, waiting }) => (
+        <div key={space.id} className="group/head flex items-center">
+          <button
+            type="button"
+            aria-pressed={only === space.id}
+            title={space.folder}
+            className={cn(
+              "flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-transparent px-2 py-1 text-left text-sm outline-none hover:bg-foreground/5 focus-visible:ring-3 focus-visible:ring-ring/50",
+              only === space.id && "border-border bg-background shadow-xs"
+            )}
+            onClick={() => onPick(space.id)}
+          >
+            <SpaceBadge space={space} />
+            <span className="min-w-0 flex-1 truncate">{space.name}</span>
+            {settings.spaces.rollup && <Rollup mark={mark} waiting={waiting} />}
+          </button>
+          {settings.spaces.newThread && (
+            <NewThreadIn space={space} onNewThread={onNewThread} />
+          )}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+/** The loudest mark of a group, and how many in it need the Person. */
+function Rollup({ mark, waiting }: { mark: Section["mark"]; waiting: number }) {
+  return (
+    <span className="flex items-center gap-1">
+      {mark !== "rest" && (
+        <BandaMark
+          variant="agent"
+          state={mark}
+          playful={0}
+          label={MARK_WORDS[mark]}
+          className="size-3.5"
+        />
+      )}
+      {waiting > 0 && (
+        <span className="inline-flex h-4 min-w-4 items-center justify-center rounded-full bg-attention px-1 text-[10px] font-semibold text-background">
+          {waiting}
+        </span>
+      )}
+    </span>
+  )
+}
+
+function NewThreadIn({
+  space,
+  onNewThread,
+}: {
+  space: SpaceSummary
+  onNewThread: (space: SpaceId) => void
+}) {
+  return (
+    <Button
+      variant="ghost"
+      size="icon-xs"
+      aria-label={`New Thread in ${space.name}`}
+      title="New Thread"
+      className="opacity-0 group-hover/head:opacity-100 focus-visible:opacity-100"
+      onClick={() => onNewThread(space.id)}
+    >
+      <SquarePenIcon />
+    </Button>
   )
 }

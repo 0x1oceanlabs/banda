@@ -3,8 +3,8 @@
 
 use bandaso_agents::Agents;
 use bandaso_agents::model::{
-    Body, Choice, Exit, Failure, ItemId, LatestTurn, Mode, OptionValue, QuestionState, Settings,
-    StepState, ThreadList, ThreadView, ToolContent, ToolStatus, TurnState,
+    Body, Choice, Exit, Failure, ItemId, Mode, OptionValue, QuestionState, Settings, StepState,
+    ThreadList, ThreadView, ToolContent, ToolStatus, TurnState,
 };
 use bandaso_agents::settings::{Cli, Harness, Harnesses};
 use bandaso_kernel::{AgentId, Code, CommandId, Kernel, Participant, PersonId, SpaceId};
@@ -365,14 +365,13 @@ async fn the_list_says_where_each_threads_work_stands() {
     let (question, _) = open(&view).unwrap();
     let turn = serde_json::from_value(sent["turn"].clone()).unwrap();
     let listed = world.threads().await.threads.remove(0);
-    assert_eq!(
-        listed.latest,
-        Some(LatestTurn {
-            turn,
-            state: TurnState::Running
-        })
-    );
-    assert_eq!(listed.asking, [question], "it waits for its Person");
+    let latest = listed.latest.clone().unwrap();
+    assert_eq!((latest.turn, latest.state), (turn, TurnState::Running));
+    assert!(latest.began > 0, "it says when it began");
+    assert_eq!(listed.message.as_deref(), Some("please ask first"));
+    let asking: Vec<_> = listed.asking.iter().map(|a| a.item).collect();
+    assert_eq!(asking, [question], "it waits for its Person");
+    assert!(!listed.asking[0].title.is_empty(), "and says what it asks");
 
     world
         .call(

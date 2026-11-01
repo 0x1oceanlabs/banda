@@ -2,8 +2,8 @@
 //! through these functions.
 
 use crate::model::{
-    Body, Failure, Image, ImageId, Item, ItemId, LatestTurn, ListedThread, Offer, QuestionState,
-    Settings, ThreadId, ThreadSummary, TurnId, TurnState, TurnView, Usage,
+    Asking, Body, Failure, Image, ImageId, Item, ItemId, LISTED_MESSAGE, LatestTurn, ListedThread,
+    Offer, QuestionState, Settings, ThreadId, ThreadSummary, TurnId, TurnState, TurnView, Usage,
 };
 use bandaso_kernel::{AgentId, Error, Participant, Refusal};
 use rusqlite::{Connection, OptionalExtension, Row, params};
@@ -417,6 +417,7 @@ pub fn threads(sql: &Connection) -> Result<Vec<ListedThread>, Error> {
             Ok(ListedThread {
                 latest: last_begun(sql, thread.id)?,
                 asking: asking(sql, thread.id)?,
+                message: latest_message(sql, thread.id)?,
                 thread,
             })
         })
@@ -555,7 +556,8 @@ pub fn set_turn(
 pub fn last_begun(sql: &Connection, thread: ThreadId) -> Result<Option<LatestTurn>, Error> {
     Ok(sql
         .query_row(
-            "SELECT id, state FROM agents_turns WHERE thread = ?1 AND state NOT IN (?2, ?3)
+            "SELECT id, state, COALESCE(started_at, created_at), reason FROM agents_turns
+             WHERE thread = ?1 AND state NOT IN (?2, ?3)
              ORDER BY created_at DESC, id DESC LIMIT 1",
             params![
                 thread,
@@ -566,6 +568,8 @@ pub fn last_begun(sql: &Connection, thread: ThreadId) -> Result<Option<LatestTur
                 Ok(LatestTurn {
                     turn: row.get(0)?,
                     state: state_of(row, 1)?,
+                    began: row.get(2)?,
+                    reason: row.get(3)?,
                 })
             },
         )
@@ -697,12 +701,35 @@ pub fn open_questions(sql: &Connection, turn: TurnId) -> Result<Vec<Item>, Error
 
 /// The Thread's Questions that still wait for an answer, the first asked
 /// first.
-pub fn asking(sql: &Connection, thread: ThreadId) -> Result<Vec<ItemId>, Error> {
+pub fn asking(sql: &Connection, thread: ThreadId) -> Result<Vec<Asking>, Error> {
     let mut statement = sql.prepare(&format!(
-        "SELECT id FROM agents_items WHERE thread = ?1 AND {OPEN_QUESTION} ORDER BY rowid"
+        "SELECT id, json_extract(body, '$.title') FROM agents_items
+         WHERE thread = ?1 AND {OPEN_QUESTION} ORDER BY rowid"
     ))?;
-    let rows = statement.query_map(params![thread, open_word()?], |row| row.get(0))?;
+    let rows = statement.query_map(params![thread, open_word()?], |row| {
+        Ok(Asking {
+            item: row.get(0)?,
+            title: row.get::<_, Option<String>>(1)?.unwrap_or_default(),
+        })
+    })?;
     Ok(rows.collect::<rusqlite::Result<_>>()?)
+}
+
+/// The start of the latest message sent into the Thread: one a turn was
+/// asked for, not an Agent's reply.
+pub fn latest_message(sql: &Connection, thread: ThreadId) -> Result<Option<String>, Error> {
+    let text: Option<Option<String>> = sql
+        .query_row(
+            "SELECT json_extract(i.body, '$.text') FROM agents_items i
+             WHERE i.thread = ?1 AND EXISTS (SELECT 1 FROM agents_turns t WHERE t.message = i.id)
+             ORDER BY i.at DESC, i.rowid DESC LIMIT 1",
+            params![thread],
+            |row| row.get(0),
+        )
+        .optional()?;
+    Ok(text
+        .flatten()
+        .map(|text| text.chars().take(LISTED_MESSAGE).collect()))
 }
 
 /// The Agent at work in a Thread.
@@ -800,15 +827,21 @@ mod tests {
         let running = Some(LatestTurn {
             turn: ran,
             state: TurnState::Running,
+            began: 1,
+            reason: None,
         });
         assert_eq!(listed().latest, running, "a turn that waits never began");
-        set_turn(&sql, ran, TurnState::Done, None, None, 100).unwrap();
+        set_turn(&sql, ran, TurnState::Running, None, None, 7).unwrap();
+        assert_eq!(listed().latest.unwrap().began, 7, "it began when it ran");
+        set_turn(&sql, ran, TurnState::Failed, Some("It broke."), None, 100).unwrap();
         add(TurnState::Withdrawn);
         assert_eq!(
             listed().latest,
             Some(LatestTurn {
                 turn: ran,
-                state: TurnState::Done,
+                state: TurnState::Failed,
+                began: 7,
+                reason: Some("It broke.".to_owned()),
             }),
             "nor one a Person took back"
         );
@@ -835,7 +868,13 @@ mod tests {
         let first = question(QuestionState::Open);
         question(QuestionState::Closed);
         let second = question(QuestionState::Open);
-        assert_eq!(listed().asking, [first, second], "only open Questions ask");
+        let asking: Vec<_> = listed().asking.into_iter().map(|a| a.item).collect();
+        assert_eq!(asking, [first, second], "only open Questions ask");
+        assert_eq!(
+            listed().asking[0].title,
+            "Which?",
+            "each names what it asks"
+        );
     }
 
     #[test]

@@ -14,7 +14,7 @@ function thread(more: Partial<ListedThread> = {}): ListedThread {
 }
 
 const ended = (state: TurnView["state"]) =>
-  thread({ latest: { turn: "u1", state } })
+  thread({ latest: { turn: "u1", state, began: 1 } })
 
 test("a Thread asks, works, fails, finishes or rests", () => {
   expect(markOf(thread(), {})).toBe("rest")
@@ -24,8 +24,8 @@ test("a Thread asks, works, fails, finishes or rests", () => {
   expect(markOf(ended("interrupted"), {})).toBe("failed")
   expect(markOf(ended("stopped"), {})).toBe("rest")
   const asking = thread({
-    latest: { turn: "u1", state: "running" },
-    asking: ["q1"],
+    latest: { turn: "u1", state: "running", began: 1 },
+    asking: [{ item: "q1", title: "Which?" }],
   })
   expect(markOf(asking, {})).toBe("asking")
 })
@@ -35,9 +35,12 @@ test("a turn the Person saw end settles; a Question still asks", () => {
   expect(markOf(ended("done"), seen)).toBe("rest")
   expect(markOf(ended("failed"), seen)).toBe("rest")
   expect(markOf(ended("done"), { t1: "u0" })).toBe("done")
-  expect(markOf(thread({ ...ended("done"), asking: ["q1"] }), seen)).toBe(
-    "asking"
-  )
+  expect(
+    markOf(
+      thread({ ...ended("done"), asking: [{ item: "q1", title: "Which?" }] }),
+      seen
+    )
+  ).toBe("asking")
 })
 
 test("a Space calls with its loudest Thread, and counts who waits", () => {
@@ -45,7 +48,7 @@ test("a Space calls with its loudest Thread, and counts who waits", () => {
     ended("running"),
     { ...ended("failed"), id: "t2" },
     { ...ended("done"), id: "t3" },
-    { ...thread({ asking: ["q"] }), id: "t4" },
+    { ...thread({ asking: [{ item: "q", title: "Which?" }] }), id: "t4" },
   ]
   expect(attentionOf(threads, {})).toEqual({ mark: "failed", waiting: 2 })
   expect(attentionOf(threads, { t2: "u1" })).toEqual({
@@ -87,13 +90,19 @@ test("a Thread calls once, when it comes to a mark that calls now", () => {
 })
 
 test("what already was when a Watch began does not call", () => {
-  const threads = [ended("failed"), { ...thread({ asking: ["q"] }), id: "t2" }]
+  const threads = [
+    ended("failed"),
+    { ...thread({ asking: [{ item: "q", title: "Which?" }] }), id: "t2" },
+  ]
   expect(callsOf(undefined, threads, {}).calls).toEqual([])
 })
 
 test("a new Thread calls from rest; a stopped one never does", () => {
   const before = callsOf(undefined, [], {}).marks
-  const asking = { ...thread({ asking: ["q"] }), id: "t2" }
+  const asking = {
+    ...thread({ asking: [{ item: "q", title: "Which?" }] }),
+    id: "t2",
+  }
   const now = callsOf(before, [ended("stopped"), asking], {})
   expect(now.calls).toEqual([{ thread: asking, chime: "asking" }])
 })
