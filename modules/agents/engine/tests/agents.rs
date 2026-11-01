@@ -780,7 +780,7 @@ async fn a_person_signs_in_in_a_terminal_and_the_harness_starts_again() {
     let terminal = &ways[0]["terminal"];
     assert_eq!(ways[0]["name"], "Fake account");
     assert_eq!(terminal["program"], fake_agent().display().to_string());
-    assert_eq!(terminal["args"], json!(["--login"]), "its own program");
+    assert_eq!(terminal["args"], json!(["--sign-in"]), "its own program");
     let home_path = home.path().display().to_string();
     assert_eq!(
         terminal["env"]["FAKE_AGENT_HOME"], home_path,
@@ -792,28 +792,31 @@ async fn a_person_signs_in_in_a_terminal_and_the_harness_starts_again() {
     );
 
     // What a terminal does: the Person pastes the code the browser shows.
-    let mut login = std::process::Command::new(fake_agent())
-        .arg("--login")
+    let mut signing_in = std::process::Command::new(fake_agent())
+        .arg("--sign-in")
         .env("FAKE_AGENT_HOME", &home_path)
         .stdin(std::process::Stdio::piped())
         .stdout(std::process::Stdio::null())
         .spawn()
         .unwrap();
     use std::io::Write as _;
-    login
+    signing_in
         .stdin
         .take()
         .unwrap()
         .write_all(b"fake-code\n")
         .unwrap();
-    assert!(login.wait().unwrap().success(), "a right code signs in");
+    assert!(
+        signing_in.wait().unwrap().success(),
+        "a right code signs in"
+    );
     let (ended, again) = world.retried(&sent).await;
     assert_eq!(
         ended,
         TurnState::Failed,
         "the Harness read its account when it started"
     );
-    world.sign_in(world.person(), "fake-login").await.unwrap();
+    world.sign_in(world.person(), "fake-sign-in").await.unwrap();
     let (ended, _) = world.retried(&again).await;
     assert_eq!(ended, TurnState::Done, "it starts again");
 }

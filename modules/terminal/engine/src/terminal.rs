@@ -1,8 +1,12 @@
 //! One terminal: a program on a PTY, what it printed, and who watches it.
 //!
-//! The program leads a session of its own, so a close reaches everything it
-//! started: a hangup and a request to stop, then a kill a second later. When
-//! the engine stops, the PTY closes and the program hears the hangup.
+//! The program leads a session and a process group of its own. A close
+//! while it runs reaches its group: a hangup and a request to stop, then a
+//! kill a second later; a shell passes the hangup on to its jobs. Once the
+//! program ended, its number may name another process, so a close sends
+//! nothing: the kernel hung up the terminal when its session's leader
+//! ended. When the engine stops, the PTY closes and the program hears the
+//! hangup.
 
 use crate::history::{Decoder, History, Since};
 use crate::model::{Ended, Open, Piece, Size};
@@ -22,6 +26,8 @@ const GRACE: Duration = Duration::from_secs(1);
 /// How long what a program printed may still come after it ended: a
 /// program it started may hold the PTY open.
 const LAST_WORDS: Duration = Duration::from_millis(200);
+/// How long typing may wait for a program that does not read.
+const TYPING: Duration = Duration::from_secs(5);
 
 pub struct Terminal {
     pub space: SpaceId,
@@ -111,15 +117,23 @@ impl Terminal {
         self.changed.send_replace(());
     }
 
+    pub fn ended(&self) -> bool {
+        self.now.lock().unwrap().ended.is_some()
+    }
+
     /// Types `data` into the program.
     pub async fn write(&self, data: &str) -> Result<(), String> {
         let mut input = self.input.lock().await;
-        input.write_all(data.as_bytes()).await.map_err(plain)
+        match tokio::time::timeout(TYPING, input.write_all(data.as_bytes())).await {
+            Ok(written) => written.map_err(plain),
+            Err(_) => Err("The program in this terminal does not read what you type.".to_owned()),
+        }
     }
 
     pub async fn resize(&self, size: Size) -> Result<(), String> {
         self.input.lock().await.resize(size.pty()).map_err(plain)?;
         self.now.lock().unwrap().size = size;
+        self.changed.send_replace(());
         Ok(())
     }
 
@@ -148,16 +162,15 @@ impl Terminal {
     /// until it is closed. A watcher that falls behind gets the whole
     /// screen again.
     pub fn watch(self: &Arc<Self>) -> Stream {
-        let (say, heard) = mpsc::channel(16);
+        // One piece waits at a time; what comes meanwhile goes in the next.
+        let (say, heard) = mpsc::channel(1);
         let terminal = self.clone();
         let mut changed = self.changed.subscribe();
         tokio::spawn(async move {
-            let mut heard_up_to = None;
-            let mut told_end = false;
+            let mut told = Told::default();
             loop {
                 changed.mark_unchanged();
-                let pieces = terminal.since(&mut heard_up_to, &mut told_end);
-                let Some(pieces) = pieces else {
+                let Some(pieces) = terminal.since(&mut told) else {
                     return;
                 };
                 for piece in pieces {
@@ -168,47 +181,65 @@ impl Terminal {
                         return;
                     }
                 }
-                if changed.changed().await.is_err() {
-                    return;
+                // A watcher the window let go of ends now, not at the next
+                // output.
+                tokio::select! {
+                    changed = changed.changed() => if changed.is_err() {
+                        return;
+                    },
+                    () = say.closed() => return,
                 }
             }
         });
         heard
     }
 
-    /// What a watcher that heard up to `heard_up_to` has not heard yet;
-    /// `None` once the terminal is closed.
-    fn since(&self, heard_up_to: &mut Option<u64>, told_end: &mut bool) -> Option<Vec<Piece>> {
+    /// What a watcher that was `told` this much has not heard yet; `None`
+    /// once the terminal is closed.
+    fn since(&self, told: &mut Told) -> Option<Vec<Piece>> {
         let now = self.now.lock().unwrap();
         if now.closed {
             return None;
         }
-        let snapshot = || Piece::Snapshot {
-            history: now.history.all(),
-            size: now.size,
-            ended: now.ended,
-        };
+        let output = told.up_to.map(|from| now.history.since(from));
+        told.up_to = Some(now.history.next());
         let mut pieces = Vec::new();
-        match heard_up_to.map(|from| now.history.since(from)) {
-            None => pieces.push(snapshot()),
-            Some(Since::Gone) => pieces.push(snapshot()),
+        match output {
+            None | Some(Since::Gone) => {
+                told.size = Some(now.size);
+                told.end = now.ended.is_some();
+                return Some(vec![Piece::Snapshot {
+                    history: now.history.all(),
+                    size: now.size,
+                    ended: now.ended,
+                }]);
+            }
             Some(Since::Pieces(texts)) if !texts.is_empty() => pieces.push(Piece::Output {
                 text: texts.concat(),
             }),
             Some(Since::Pieces(_)) => {}
         }
-        let snapshot_told = matches!(pieces.first(), Some(Piece::Snapshot { .. }));
-        if let Some(ended) = now.ended
-            && !*told_end
-        {
-            if !snapshot_told {
-                pieces.push(Piece::Exited { ended });
-            }
-            *told_end = true;
+        if told.size != Some(now.size) {
+            told.size = Some(now.size);
+            pieces.push(Piece::Resized { size: now.size });
         }
-        *heard_up_to = Some(now.history.next());
+        if let Some(ended) = now.ended
+            && !told.end
+        {
+            told.end = true;
+            pieces.push(Piece::Exited { ended });
+        }
         Some(pieces)
     }
+}
+
+/// What a watcher has heard so far.
+#[derive(Default)]
+struct Told {
+    /// The number of the first piece of output it has not heard.
+    up_to: Option<u64>,
+    size: Option<Size>,
+    end: bool,
 }
 
 /// The Person's shell.

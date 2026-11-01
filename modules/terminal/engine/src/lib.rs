@@ -1,5 +1,5 @@
 //! The terminal module: programs a Person runs in a terminal, such as a
-//! shell or a Harness's sign-in (ADR 0003, decision 4).
+//! shell or a Harness's sign-in (ADR 0004).
 //!
 //! The engine runs each program on a PTY in the Space's folder, keeps what
 //! it printed in memory, and lets windows watch it as a stream: none of it
@@ -17,6 +17,7 @@ use model::{Open, Size, TerminalId};
 use serde::Deserialize;
 use serde_json::Value;
 use std::collections::HashMap;
+use std::collections::hash_map::Entry;
 use std::sync::{Arc, Mutex};
 use terminal::Terminal;
 
@@ -84,7 +85,7 @@ struct Resize {
     size: Size,
 }
 
-fn too_big(size: Size) -> Result<(), Refusal> {
+fn allowed(size: Size) -> Result<(), Refusal> {
     match size.fits() {
         true => Ok(()),
         false => Err(Refusal::invalid(
@@ -112,17 +113,29 @@ impl Module for Terminals {
         let space = call.space();
         let method = Method::parse(method).ok_or_else(|| Refusal::invalid("No such method."))?;
         match method {
-            // Opening one that is open already leaves it as it is.
+            // Opening one that runs leaves it as it is; opening one whose
+            // program ended starts the program again.
             Method::Open => {
                 let open: Open = decode(params)?;
-                too_big(open.size)?;
-                if self.find(space.id(), open.terminal).is_ok() {
-                    return Ok(Value::Null);
-                }
+                allowed(open.size)?;
+                let mut open_now = self.open.lock().unwrap();
+                let ended = match open_now.get(&open.terminal) {
+                    Some(found) if found.space != space.id() => {
+                        return Err(Refusal::conflict(
+                            "That terminal ID is taken: open a new terminal.",
+                        ));
+                    }
+                    Some(found) if !found.ended() => return Ok(Value::Null),
+                    found => found.cloned(),
+                };
                 let id = open.terminal;
                 let started =
                     Terminal::start(space.id(), space.folder(), open).map_err(Refusal::invalid)?;
-                self.open.lock().unwrap().insert(id, started);
+                open_now.insert(id, started);
+                drop(open_now);
+                if let Some(ended) = ended {
+                    ended.close();
+                }
                 Ok(Value::Null)
             }
             Method::Write => {
@@ -131,19 +144,25 @@ impl Module for Terminals {
                     return Err(Refusal::invalid("Type at most 64 KB at once."));
                 }
                 let terminal = self.find(space.id(), terminal)?;
-                terminal.write(&data).await.map_err(Refusal::invalid)?;
+                terminal.write(&data).await.map_err(Refusal::conflict)?;
                 Ok(Value::Null)
             }
             Method::Resize => {
                 let Resize { terminal, size } = decode(params)?;
-                too_big(size)?;
+                allowed(size)?;
                 let terminal = self.find(space.id(), terminal)?;
-                terminal.resize(size).await.map_err(Refusal::invalid)?;
+                terminal.resize(size).await.map_err(Refusal::conflict)?;
                 Ok(Value::Null)
             }
             Method::Close => {
                 let One { terminal } = decode(params)?;
-                if let Some(closed) = self.open.lock().unwrap().remove(&terminal) {
+                let closed = match self.open.lock().unwrap().entry(terminal) {
+                    Entry::Occupied(found) if found.get().space == space.id() => {
+                        Some(found.remove())
+                    }
+                    _ => None,
+                };
+                if let Some(closed) = closed {
                     closed.close();
                 }
                 Ok(Value::Null)

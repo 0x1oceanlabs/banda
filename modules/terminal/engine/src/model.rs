@@ -67,7 +67,7 @@ pub struct Ended {
 }
 
 /// What `terminal.watch` says: the screen first, then what the program
-/// prints, and that it ended.
+/// prints, the size a window gives it, and that it ended.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 #[ts(export, export_to = "terminal/")]
@@ -82,6 +82,10 @@ pub enum Piece {
     },
     Output {
         text: String,
+    },
+    /// A window made it this size.
+    Resized {
+        size: Size,
     },
     Exited {
         ended: Ended,

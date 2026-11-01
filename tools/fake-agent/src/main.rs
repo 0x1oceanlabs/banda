@@ -49,7 +49,8 @@
 //!
 //! With `FAKE_AGENT_HOME` set it has an account, kept as a file there. It
 //! reads it when it starts, and a prompt fails as one whose Person must
-//! sign in until someone has. It offers two ways: in a terminal, `fake-agent --login`, where the Person
+//! sign in until someone has. It offers two ways: `fake-sign-in`, which
+//! runs `bandaso-fake-agent --sign-in` in a terminal, where the Person
 //! pastes the code `fake-code`, as Claude Code's adapter offers to a client
 //! that runs terminals; and `fake-browser`, which signs in by itself, as
 //! Codex's does in the browser.
@@ -805,13 +806,13 @@ fn account() -> Option<std::path::PathBuf> {
 
 /// Signs in in a terminal, as `claude auth login` does: the Person pastes
 /// the code the browser shows. It ends with code 0 when the code is right.
-fn log_in() -> ! {
+fn sign_in_in_a_terminal() -> ! {
     use std::io::{BufRead, Write};
     let Some(signed_in) = account() else {
         eprintln!("This fake agent has no account: set FAKE_AGENT_HOME.");
         std::process::exit(2);
     };
-    print!("Open https://example.invalid/fake-login to sign in.\r\nPaste the code: ");
+    print!("Open https://example.invalid/fake-sign-in to sign in.\r\nPaste the code: ");
     let _ = std::io::stdout().flush();
     let mut code = String::new();
     let _ = std::io::stdin().lock().read_line(&mut code);
@@ -831,8 +832,8 @@ fn forgets() -> bool {
 
 #[tokio::main]
 async fn main() -> Result<(), Error> {
-    if std::env::args().any(|arg| arg == "--login") {
-        log_in();
+    if std::env::args().any(|arg| arg == "--sign-in") {
+        sign_in_in_a_terminal();
     }
     let fake = Fake::default();
     let signed_in = account().is_none_or(|signed_in| signed_in.exists());
@@ -877,9 +878,9 @@ async fn main() -> Result<(), Error> {
                     if account().is_some() {
                         if request.client_capabilities.auth.terminal {
                             ways.push(AuthMethod::Terminal(
-                                AuthMethodTerminal::new("fake-login", "Fake account")
+                                AuthMethodTerminal::new("fake-sign-in", "Fake account")
                                     .description("Paste a code from the browser")
-                                    .args(vec!["--login".to_owned()]),
+                                    .args(vec!["--sign-in".to_owned()]),
                             ));
                         }
                         ways.push(AuthMethod::Agent(AuthMethodAgent::new(

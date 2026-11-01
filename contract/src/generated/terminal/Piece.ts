@@ -4,6 +4,6 @@ import type { Size } from "./Size";
 
 /**
  * What `terminal.watch` says: the screen first, then what the program
- * prints, and that it ended.
+ * prints, the size a window gives it, and that it ended.
  */
-export type Piece = { "kind": "snapshot", history: string, size: Size, ended?: Ended, } | { "kind": "output", text: string, } | { "kind": "exited", ended: Ended, };
+export type Piece = { "kind": "snapshot", history: string, size: Size, ended?: Ended, } | { "kind": "output", text: string, } | { "kind": "resized", size: Size, } | { "kind": "exited", ended: Ended, };

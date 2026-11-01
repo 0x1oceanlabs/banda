@@ -106,18 +106,25 @@ impl Call {
         &self.space
     }
 
+    /// The ID this call runs under as a command. A module whose command
+    /// acts before it writes asks first, so a call without one does
+    /// nothing.
+    pub fn command_id(&self) -> Result<CommandId, Refusal> {
+        self.command.ok_or_else(|| {
+            Refusal::invalid(format!(
+                "{} is a command and needs a command ID.",
+                self.method
+            ))
+        })
+    }
+
     /// Runs this call as a command: once per command ID, in one transaction
     /// with its receipt, its events and its outbox rows.
     pub async fn command(
         &self,
         change: impl FnOnce(&mut Tx<'_>) -> Result<Value, Error> + Send + 'static,
     ) -> Result<Value, Refusal> {
-        let command = self.command.ok_or_else(|| {
-            Refusal::invalid(format!(
-                "{} is a command and needs a command ID.",
-                self.method
-            ))
-        })?;
+        let command = self.command_id()?;
         self.space
             .command(command, &self.method, self.participant, change)
             .await

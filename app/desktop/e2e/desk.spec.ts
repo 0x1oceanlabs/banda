@@ -165,7 +165,7 @@ test("a Person signs in from the turn that needed it, and it goes again", async 
   await expect(thread.getByText("needs you to sign in.")).toBeVisible()
   // A way in a terminal shows what to run, with the Harness's own program.
   await expect(thread.getByText(/Fake account .*run this in a/)).toBeVisible()
-  await expect(thread.getByText(/bandaso-fake-agent --login$/)).toBeVisible()
+  await expect(thread.getByText(/bandaso-fake-agent --sign-in$/)).toBeVisible()
   await page.screenshot({ path: "test-results/4-sign-in.png" })
 
   await thread
