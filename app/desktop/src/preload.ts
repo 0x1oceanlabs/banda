@@ -1,5 +1,6 @@
 /** Gives the page its one bridge to the desktop (app/web/src/host.ts). */
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron"
+import type { Pressed } from "@banda/browser-pane/desktop"
 import type { Look } from "@banda/contract/look"
 import type { Host, Notice } from "@banda/web/host"
 
@@ -34,3 +35,11 @@ const host: Host = {
 }
 
 contextBridge.exposeInMainWorld("banda", host)
+
+// A key the desktop took from a browser page is pressed in the window, so
+// Banda's actions and the browser Pane hear it as their own (browser.ts).
+ipcRenderer.on("browser:key", (_event, key: Pressed) => {
+  window.dispatchEvent(
+    new KeyboardEvent("keydown", { ...key, bubbles: true, cancelable: true })
+  )
+})

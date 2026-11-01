@@ -1,0 +1,29 @@
+{
+  "name": "@banda/browser-pane",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "The browser's Pane: Chromium pages in the window, for the Person and every Agent (ADR 0013).",
+  "exports": {
+    ".": "./src/index.ts",
+    "./desktop": "./src/desktop.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@banda/contract": "workspace:*",
+    "@banda/ui": "workspace:*",
+    "lucide-react": "^1.65.0",
+    "react": "^19.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "typescript": "~6.0.2",
+    "vite": "^8",
+    "vitest": "^5"
+  }
+}

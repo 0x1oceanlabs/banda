@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef } from "react"
 import type { Engine, SpaceId } from "@banda/contract"
-import type { PaneState } from "@banda/ui/pane"
+import { holderOf, PANE_LAYER, type PaneState } from "@banda/ui/pane"
 import { moveOf } from "../look"
 import { Moving } from "../motion"
 import type { Workspaces as State } from "./model"
@@ -53,6 +53,24 @@ export function Workspaces({
     }
   })
   useEffect(() => () => place.current?.stop(), [])
+  // A page in the layer takes the keys as an iframe does, with no focus
+  // event of its own: the focus leaves for it, or the window blurs as it
+  // takes it. The tile that holds the page takes the focus then and there.
+  useEffect(() => {
+    const take = (element: Element | null) => {
+      const tile = holderOf(element)?.closest<HTMLElement>("[data-tile]")
+      if (tile?.dataset.tile) frame.focus(tile.dataset.tile)
+    }
+    const onLeave = (event: FocusEvent) =>
+      take(event.relatedTarget as Element | null)
+    const onBlur = () => take(document.activeElement)
+    document.addEventListener("focusout", onLeave, true)
+    window.addEventListener("blur", onBlur)
+    return () => {
+      document.removeEventListener("focusout", onLeave, true)
+      window.removeEventListener("blur", onBlur)
+    }
+  }, [frame])
   const step = useRef(onStep)
   useLayoutEffect(() => {
     step.current = onStep
@@ -79,8 +97,9 @@ export function Workspaces({
   }, [])
   return (
     // Clipped, not hidden: the stack moves by transforms only, and nothing
-    // scrolled into view in a Pane may slide the next workspace in.
-    <div ref={root} className="relative h-full min-h-0 overflow-clip">
+    // scrolled into view in a Pane may slide the next workspace in. Its own
+    // stacking context keeps the layer under the overview and the toasts.
+    <div ref={root} className="relative isolate h-full min-h-0 overflow-clip">
       {workspaces.list.map((workspace, i) => {
         const current = i === workspaces.current
         const live = current && !covered
@@ -105,6 +124,11 @@ export function Workspaces({
           </div>
         )
       })}
+      {/* What Panes keep drawn wherever they move, as browser pages. */}
+      <div
+        {...{ [PANE_LAYER]: "" }}
+        className="pointer-events-none absolute inset-0 z-1"
+      />
     </div>
   )
 }
