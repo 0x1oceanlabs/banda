@@ -85,3 +85,45 @@ export function keepClosed(tab: Tab): void {
 export function lastClosed(): Tab | undefined {
   return closed.pop()
 }
+
+/** What a tab key asks of the tabs: Chrome's, with Ctrl. */
+export type TabKey =
+  | "tab-new"
+  | "tab-close"
+  | "tab-reopen"
+  | "tab-next"
+  | "tab-previous"
+  /** The tab at this place; Chrome's Ctrl+9 is always the last. */
+  | `tab-${1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9}`
+
+/**
+ * `args` after the tab key `key`; none when it closed the last tab. A new
+ * tab, or one opened again, takes the ID `id`.
+ */
+export function afterTabKey(
+  args: BrowserArgs,
+  key: TabKey,
+  id: string
+): BrowserArgs | null {
+  switch (key) {
+    case "tab-new":
+      return withTab(args, blankTab(id))
+    case "tab-close": {
+      const gone = args.tabs[args.shown]
+      if (gone) keepClosed(gone)
+      return withoutTab(args, args.shown)
+    }
+    case "tab-reopen": {
+      const back = lastClosed()
+      return back ? withTab(args, { ...back, id }) : args
+    }
+    case "tab-next":
+      return stepped(args, 1)
+    case "tab-previous":
+      return stepped(args, -1)
+    default: {
+      const place = Number(key.slice(4))
+      return showing(args, place === 9 ? args.tabs.length : place - 1)
+    }
+  }
+}

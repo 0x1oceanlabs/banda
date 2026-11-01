@@ -83,10 +83,13 @@ export class Page {
   private clips: HTMLElement[] = []
   private radius = 0
   private drawn = ""
-  private listeners = new Set<() => void>()
   state: PageState
 
+  /** The ID its tab keeps it under. */
+  readonly id: string
+
   constructor(id: string, url: string, layer: HTMLElement) {
+    this.id = id
     this.state = { ...BLANK, url, loading: true }
     this.box = document.createElement("div")
     this.box.style.cssText =
@@ -105,12 +108,6 @@ export class Page {
     this.draw(null)
     this.box.append(this.view, this.veil)
     layer.append(this.box)
-  }
-
-  /** Calls `listener` on each change of `state`; returns how to stop. */
-  subscribe = (listener: () => void): (() => void) => {
-    this.listeners.add(listener)
-    return () => this.listeners.delete(listener)
   }
 
   /** Shows the page over `element`, until `release`. */
@@ -168,7 +165,7 @@ export class Page {
   }
 
   destroy(): void {
-    this.listeners.clear()
+    if (this.contents !== null) byContents.delete(this.contents)
     this.box.remove()
   }
 
@@ -231,8 +228,12 @@ export class Page {
   }
 
   private set(change: Partial<PageState>): void {
-    this.state = { ...this.state, ...change }
-    for (const listener of this.listeners) listener()
+    const now = this.state
+    const same = (Object.keys(change) as (keyof PageState)[]).every(
+      (key) => change[key] === now[key]
+    )
+    if (same) return
+    this.state = { ...now, ...change }
     changed()
   }
 
@@ -249,6 +250,7 @@ export class Page {
     view.addEventListener("dom-ready", () => {
       this.ready = true
       this.contents = view.getWebContentsId()
+      byContents.set(this.contents, this)
     })
     view.addEventListener("did-start-loading", () =>
       this.set({ loading: true, failed: undefined })
@@ -337,7 +339,6 @@ export function pageOf(id: string, url: string): Page | null {
   if (!layer || !("banda" in window)) return null
   const page = new Page(id, url, layer)
   pages.set(id, page)
-  heed()
   changed()
   return page
 }
@@ -400,18 +401,14 @@ function changed(): void {
   for (const watcher of watchers) watcher()
 }
 
-let heeding = false
+/** The pages by their web contents' IDs, as the desktop names them. */
+const byContents = new Map<number, Page>()
 
-/** Hears the desktop's news of the pages, once there is a page. */
-function heed(): void {
-  if (heeding) return
-  heeding = true
-  hearNews((news) => {
-    if (news.kind === "download") return
-    const entry = [...pages].find(([, page]) => page.contents === news.from)
-    if (!entry) return
-    const [id, page] = entry
-    if (news.kind === "icon") page.iconed(news.icon)
-    else held.get(id)?.open(id, news.url, news.background)
-  })
-}
+// A page's icon, and the pages it opens, which its Pane makes tabs of.
+hearNews((news) => {
+  if (news.kind === "download") return
+  const page = byContents.get(news.from)
+  if (!page) return
+  if (news.kind === "icon") page.iconed(news.icon)
+  else held.get(page.id)?.open(page.id, news.url, news.background)
+})

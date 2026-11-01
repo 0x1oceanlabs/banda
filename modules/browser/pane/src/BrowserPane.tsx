@@ -46,7 +46,7 @@ import {
 import { addressOf, siteOf } from "./address"
 import type { Download } from "./desktop"
 import { browserHost, downloadsNow, watchDownloads } from "./host"
-import { browserKey, type Does } from "./keys"
+import { browserKey, type Does, isTabKey } from "./keys"
 import {
   BLANK,
   drop,
@@ -59,14 +59,14 @@ import {
   watchPages,
 } from "./pages"
 import {
+  afterTabKey,
   type BrowserArgs,
   blankTab,
   keepClosed,
-  lastClosed,
   NEW_BROWSER,
   showing,
-  stepped,
   type Tab,
+  type TabKey,
   withChanged,
   withoutTab,
   withTab,
@@ -158,7 +158,7 @@ function BrowserPane({ args, focused, update, close }: PaneProps<BrowserArgs>) {
       if (gone) keepClosed(gone)
       change(withoutTab(args, at))
     },
-    onNew: () => change(withTab(args, blankTab(newId()))),
+    onNew: () => change(afterTabKey(args, "tab-new", newId())),
   }
   return (
     <Browser
@@ -168,19 +168,7 @@ function BrowserPane({ args, focused, update, close }: PaneProps<BrowserArgs>) {
       focused={focused}
       title={browserPane.title(args)}
       onOpen={(url) => update(withChanged(args, { ...tab, url }))}
-      onTabKey={(does) => {
-        if (does === "tab-new") tabs.onNew()
-        else if (does === "tab-close") tabs.onClose(args.shown)
-        else if (does === "tab-reopen") {
-          const back = lastClosed()
-          if (back) change(withTab(args, { ...back, id: newId() }))
-        } else if (does === "tab-next") change(stepped(args, 1))
-        else if (does === "tab-previous") change(stepped(args, -1))
-        else {
-          const place = Number(does.slice(4))
-          change(showing(args, place === 9 ? args.tabs.length : place - 1))
-        }
-      }}
+      onTabKey={(key) => change(afterTabKey(args, key, newId()))}
       close={close}
     />
   )
@@ -193,8 +181,6 @@ type TabsProps = {
   onClose: (at: number) => void
   onNew: () => void
 }
-
-type TabDoes = Extract<Does, `tab-${string}`>
 
 function Browser({
   tab,
@@ -212,7 +198,7 @@ function Browser({
   focused: boolean
   title: string
   onOpen: (url: string) => void
-  onTabKey: (does: TabDoes) => void
+  onTabKey: (key: TabKey) => void
   close: () => void
 }) {
   const root = useRef<HTMLDivElement>(null)
@@ -220,10 +206,8 @@ function Browser({
   const address = useRef<HTMLInputElement>(null)
   // The page is made once its tab shows with an address to open.
   const page = tab.url ? pageOf(tab.id, tab.url) : null
-  const state = useSyncExternalStore(
-    page?.subscribe ?? noSubscribe,
-    () => page?.state ?? BLANK
-  )
+  // The Pane draws again on any page's change (`watchPages`).
+  const state = page?.state ?? BLANK
 
   useEffect(() => {
     const element = slot.current
@@ -233,24 +217,19 @@ function Browser({
   }, [page, focused])
 
   // A tile that takes the focus gives it to its page, or to the address;
-  // so does a tab that comes to show.
-  const shownBefore = useRef(tab.id)
+  // so does a tab that comes to show. The first address typed in a tab
+  // made its page: it takes the keys.
+  const before = useRef({ tab: tab.id, page: page !== null })
   useEffect(() => {
-    const switched = shownBefore.current !== tab.id
-    shownBefore.current = tab.id
+    const was = before.current
+    before.current = { tab: tab.id, page: page !== null }
+    const switched = was.tab !== tab.id
+    if (page && !switched && !was.page) return page.focus()
     if (!focused) return
     if (!switched && root.current?.contains(document.activeElement)) return
     if (page) page.focus()
     else address.current?.focus()
   }, [focused, page, tab.id])
-
-  // The first address typed in a tab made its page: it takes the keys.
-  const made = useRef({ tab: tab.id, page: page !== null })
-  useEffect(() => {
-    const before = made.current
-    made.current = { tab: tab.id, page: page !== null }
-    if (page && before.tab === tab.id && !before.page) page.focus()
-  }, [page, tab.id])
 
   const open = (typed: string) => {
     const to = addressOf(typed, settings.search)
@@ -258,6 +237,10 @@ function Browser({
     else onOpen(to)
   }
 
+  const tabKey = useRef(onTabKey)
+  useEffect(() => {
+    tabKey.current = onTabKey
+  })
   useEffect(() => {
     if (!focused) return
     const onKey = (event: globalThis.KeyboardEvent) => {
@@ -266,18 +249,18 @@ function Browser({
       if (!does) return
       event.preventDefault()
       if (does === "address") address.current?.focus()
-      else if (does.startsWith("tab-")) onTabKey(does as TabDoes)
-      else if (page) ON_PAGE[does as PageDoes](page)
+      else if (isTabKey(does)) tabKey.current(does)
+      else if (page) ON_PAGE[does](page)
     }
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
-  }, [focused, page, onTabKey])
+  }, [focused, page])
 
   const left = settings.tabs === "left"
   return (
     <div ref={root} className="flex h-full flex-col">
       <PaneHeader title={title} onClose={close} className="gap-1 px-1.5">
-        {!left && <TopTabs {...tabs} />}
+        {!left && <TabStrip {...tabs} side="top" />}
         <Button
           variant="ghost"
           size="icon-xs"
@@ -344,84 +327,45 @@ function Browser({
   )
 }
 
-/** The tabs as a row at the start of the Pane's row, as Helium's. */
-function TopTabs({ args, onShow, onClose, onNew }: TabsProps) {
-  return (
-    <div className="flex min-w-0 flex-auto items-center gap-0.5">
-      <div
-        role="tablist"
-        aria-label="Tabs"
-        className="flex min-w-0 items-center gap-0.5 overflow-hidden"
-      >
-        {args.tabs.map((tab, at) => (
-          <TabItem
-            key={tab.id}
-            tab={tab}
-            shown={at === args.shown}
-            onShow={() => onShow(at)}
-            onClose={() => onClose(at)}
-            className="h-7 w-44 min-w-9 shrink"
-          />
-        ))}
-      </div>
-      <NewTab onNew={onNew} />
-    </div>
-  )
-}
-
 /** How long the pointer rests on the rail before it opens to titles. */
 const OPENING = 250
 
 /**
  * The tabs as a narrow rail of icons beside the page, opening to titles
  * while the pointer rests on it. The titles lie over the page, which is
- * drawn over the workspace, so they open in the window's top layer.
+ * drawn over the workspace, so they open in the window's top layer; the
+ * pointer in them is still on the rail, as React sees it.
  */
 function LeftTabs(tabs: TabsProps) {
   const rail = useRef<HTMLDivElement>(null)
   const [over, setOver] = useState<DOMRect | null>(null)
   const timer = useRef(0)
   useEffect(() => () => clearTimeout(timer.current), [])
-  const rest = () => {
-    clearTimeout(timer.current)
-    timer.current = window.setTimeout(() => {
-      const box = rail.current?.getBoundingClientRect()
-      if (box) setOver(box)
-    }, OPENING)
-  }
-  const leave = () => {
-    clearTimeout(timer.current)
-    setOver(null)
-  }
   return (
     <div
       ref={rail}
-      onPointerEnter={rest}
-      onPointerLeave={(event) => {
-        // Into the open titles is still on the rail.
-        if (!(
-          event.relatedTarget instanceof Node && opened(event.relatedTarget)
-        ))
-          leave()
+      onPointerEnter={() => {
+        clearTimeout(timer.current)
+        timer.current = window.setTimeout(() => {
+          const box = rail.current?.getBoundingClientRect()
+          if (box) setOver(box)
+        }, OPENING)
+      }}
+      onPointerLeave={() => {
+        clearTimeout(timer.current)
+        setOver(null)
       }}
       className="flex w-10 shrink-0 flex-col border-r"
     >
-      <TabList {...tabs} titles={false} />
+      <TabStrip {...tabs} side="left" />
       {over && (
         <TopLayer>
           <div
             data-browser-titles=""
-            onPointerLeave={(event) => {
-              if (
-                !(event.relatedTarget instanceof Node) ||
-                !rail.current?.contains(event.relatedTarget)
-              )
-                leave()
-            }}
             style={{ top: over.top, left: over.left, height: over.height }}
-            className="fixed z-40 flex w-60 flex-col border-r bg-background shadow-lg"
+            className="fixed z-50 flex w-60 flex-col border-r bg-background shadow-lg"
           >
-            <TabList {...tabs} titles />
+            <TabStrip {...tabs} side="titles" />
           </div>
         </TopLayer>
       )}
@@ -429,28 +373,33 @@ function LeftTabs(tabs: TabsProps) {
   )
 }
 
-/** Whether `node` is in the rail's open titles. */
-function opened(node: Node): boolean {
-  return (
-    node instanceof Element && node.closest("[data-browser-titles]") !== null
-  )
-}
-
-/** The rail's tabs, as icons or with their titles, and the new-tab button. */
-function TabList({
+/**
+ * The tabs and the new-tab button: a row at the start of the Pane's row,
+ * as Helium's, or a column of icons on the rail, or of titles over it.
+ */
+function TabStrip({
   args,
   onShow,
   onClose,
   onNew,
-  titles,
-}: TabsProps & { titles: boolean }) {
+  side,
+}: TabsProps & { side: "top" | "left" | "titles" }) {
+  const top = side === "top"
   return (
-    <>
+    <div
+      className={cn(
+        "flex min-w-0 gap-0.5",
+        top ? "flex-auto items-center" : "min-h-0 flex-1 flex-col"
+      )}
+    >
       <div
         role="tablist"
         aria-label="Tabs"
-        aria-orientation="vertical"
-        className="flex min-h-0 flex-col gap-0.5 overflow-y-auto p-1"
+        aria-orientation={top ? undefined : "vertical"}
+        className={cn(
+          "flex min-w-0 gap-0.5",
+          top ? "items-center overflow-hidden" : "flex-col overflow-y-auto p-1"
+        )}
       >
         {args.tabs.map((tab, at) => (
           <TabItem
@@ -459,15 +408,20 @@ function TabList({
             shown={at === args.shown}
             onShow={() => onShow(at)}
             onClose={() => onClose(at)}
-            iconOnly={!titles}
-            className="h-8 w-full shrink-0"
+            iconOnly={side === "left"}
+            className={top ? "h-7 w-44 min-w-9 shrink" : "h-8 w-full shrink-0"}
           />
         ))}
       </div>
-      <div className={cn("mt-auto p-1", !titles && "flex justify-center")}>
+      <div
+        className={cn(
+          !top && "mt-auto p-1",
+          side === "left" && "flex justify-center"
+        )}
+      >
         <NewTab onNew={onNew} />
       </div>
-    </>
+    </div>
   )
 }
 
@@ -712,7 +666,7 @@ function Words({
   )
 }
 
-type PageDoes = Exclude<Does, "address" | TabDoes>
+type PageDoes = Exclude<Does, "address" | TabKey>
 
 /** What each of the browser's keys does to the page. */
 const ON_PAGE: Record<PageDoes, (page: Page) => void> = {
@@ -725,5 +679,3 @@ const ON_PAGE: Record<PageDoes, (page: Page) => void> = {
   "zoom-reset": (page) => page.zoom(0),
   devtools: (page) => page.devtools(),
 }
-
-const noSubscribe = () => () => undefined

@@ -69,9 +69,12 @@ function keep(page: WebContents, window: WebContents): void {
     tell({ kind: "open", from: page.id, url, background })
     return { action: "deny" }
   })
+  // A page names its icon again on each load: it is sent once.
+  let named = ""
   page.on("page-favicon-updated", (_event, icons) => {
     const first = icons[0]
-    if (!first) return
+    if (!first || first === named) return
+    named = first
     void iconOf(page, first).then((icon) => {
       if (icon && !page.isDestroyed())
         tell({ kind: "icon", from: page.id, icon })
@@ -96,7 +99,7 @@ function keep(page: WebContents, window: WebContents): void {
 }
 
 /** The largest icon Banda takes from a site. */
-const ICON_BYTES = 256 * 1024
+const ICON_BYTES = 64 * 1024
 
 /** The icon at `url`, fetched in the page's profile, as a data URL. */
 async function iconOf(page: WebContents, url: string): Promise<string | null> {
@@ -171,11 +174,21 @@ export function keepProfile(window: () => BrowserWindow | null): void {
         kind: "download",
         download: downloadOf(id, path, item),
       } satisfies BrowserNews)
+    // Chromium says it on every piece received: the row hears it at most
+    // a few times a second, and always at the end.
+    let told = 0
     tell()
-    item.on("updated", tell)
+    item.on("updated", () => {
+      if (Date.now() - told < TELL_EVERY) return
+      told = Date.now()
+      tell()
+    })
     item.once("done", tell)
   })
 }
+
+/** How often a running download is told of, in ms. */
+const TELL_EVERY = 250
 
 /** What Banda saved this run: the only files it shows in their folder. */
 const saved = new Set<string>()

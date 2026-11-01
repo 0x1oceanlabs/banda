@@ -1,5 +1,6 @@
 import { expect, test } from "vitest"
 import {
+  afterTabKey,
   type BrowserArgs,
   keepClosed,
   lastClosed,
@@ -57,4 +58,20 @@ test("a closed tab opens again, the last first; a blank one is not kept", () => 
   expect(lastClosed()?.id).toBe("b")
   expect(lastClosed()?.id).toBe("a")
   expect(lastClosed()).toBeUndefined()
+})
+
+test("the tab keys do what Chrome's do", () => {
+  const args = of("abc", 1)
+  expect(ids(afterTabKey(args, "tab-new", "n"))).toBe("abcn:3")
+  expect(ids(afterTabKey(args, "tab-next", "n"))).toBe("abc:2")
+  expect(ids(afterTabKey(args, "tab-previous", "n"))).toBe("abc:0")
+  expect(ids(afterTabKey(args, "tab-1", "n"))).toBe("abc:0")
+  expect(ids(afterTabKey(of("abcdefghij", 0), "tab-9", "n"))).toBe(
+    "abcdefghij:9"
+  )
+  const closed = afterTabKey(args, "tab-close", "n")
+  expect(ids(closed)).toBe("ac:1")
+  expect(ids(afterTabKey(closed!, "tab-reopen", "r"))).toBe("acr:2")
+  expect(afterTabKey(of("a", 0), "tab-close", "n")).toBeNull()
+  lastClosed()
 })

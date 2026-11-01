@@ -7,6 +7,7 @@
  */
 
 import { type Key, matches, type Pressed } from "@banda/ui/lib/keys"
+import type { TabKey } from "./tabs"
 
 export type { Pressed }
 
@@ -21,13 +22,7 @@ export type Does =
   | "zoom-out"
   | "zoom-reset"
   | "devtools"
-  | "tab-new"
-  | "tab-close"
-  | "tab-reopen"
-  | "tab-next"
-  | "tab-previous"
-  /** The tab at this place; Chrome's Ctrl+9 is always the last. */
-  | `tab-${1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9}`
+  | TabKey
 
 const PLACES = [1, 2, 3, 4, 5, 6, 7, 8, 9] as const
 
@@ -72,4 +67,9 @@ const MODIFIER = /^(Alt|Control|Shift|Meta|OS)(Left|Right)$/
 export function taken(key: Pressed): boolean {
   if (MODIFIER.test(key.code)) return false
   return key.altKey || browserKey(key) !== undefined
+}
+
+/** Whether `does` is a key of the tabs, not of the page. */
+export function isTabKey(does: Does): does is TabKey {
+  return does.startsWith("tab-")
 }

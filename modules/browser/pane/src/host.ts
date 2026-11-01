@@ -1,7 +1,7 @@
 /**
  * The desktop's side of the browser, on `window.banda.browser`
- * (app/desktop/src/preload.ts); none outside Banda's desktop window. It
- * tells the pages' news to whoever listens: the pages, and the downloads.
+ * (app/desktop/src/preload.ts); none outside Banda's desktop window. Its
+ * news goes to the pages and to the downloads here.
  */
 import type { BrowserHost, BrowserNews, Download } from "./desktop"
 
@@ -11,19 +11,9 @@ export function browserHost(): BrowserHost | undefined {
     ?.browser
 }
 
-let heard = false
-const listeners = new Set<(news: BrowserNews) => void>()
-
 /** Calls `listener` with the desktop's news; returns how to stop. */
 export function hearNews(listener: (news: BrowserNews) => void): () => void {
-  if (!heard) {
-    heard = true
-    browserHost()?.listen((news) => {
-      for (const each of listeners) each(news)
-    })
-  }
-  listeners.add(listener)
-  return () => listeners.delete(listener)
+  return browserHost()?.listen(listener) ?? (() => undefined)
 }
 
 /** This run's downloads, the latest last. */
