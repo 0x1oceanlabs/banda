@@ -13,6 +13,7 @@ banda-agents = { path = "../modules/agents/engine" }
 banda-terminal = { path = "../modules/terminal/engine" }
 banda-kernel = { path = "../kernel" }
 banda-look = { path = "../look" }
+banda-settings = { path = "../settings" }
 banda-skill = { path = "../modules/skill" }
 clap.workspace = true
 dirs.workspace = true

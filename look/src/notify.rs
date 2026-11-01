@@ -3,11 +3,12 @@
 //! layered as every other key of the look, beside `[sound]`. The window
 //! tells; here it is only chosen.
 
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
 /// When a call becomes a system notification.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS, JsonSchema)]
 #[serde(rename_all = "kebab-case")]
 #[ts(export, export_to = "look/")]
 pub enum System {
@@ -19,7 +20,7 @@ pub enum System {
 }
 
 /// When a call becomes a toast in the window.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS, JsonSchema)]
 #[serde(rename_all = "kebab-case")]
 #[ts(export, export_to = "look/")]
 pub enum Toasts {
@@ -31,7 +32,7 @@ pub enum Toasts {
 }
 
 /// Whose quiet Banda keeps.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS, JsonSchema)]
 #[serde(rename_all = "kebab-case")]
 #[ts(export, export_to = "look/")]
 pub enum Quiet {
@@ -42,7 +43,7 @@ pub enum Quiet {
 }
 
 /// `[notify]` as one layer says it: every key optional.
-#[derive(Clone, Debug, Default, Deserialize)]
+#[derive(Clone, Debug, Default, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct NotifySettings {
     pub system: Option<System>,

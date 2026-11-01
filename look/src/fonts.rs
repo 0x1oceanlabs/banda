@@ -7,11 +7,12 @@
 //! `fc-match` for it as this does. So the terminal writes in Omarchy's
 //! font, and follows it when it changes.
 
+use schemars::JsonSchema;
 use serde::Deserialize;
 use std::path::Path;
 use std::process::Command;
 
-#[derive(Clone, Debug, Default, Deserialize)]
+#[derive(Clone, Debug, Default, Deserialize, JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct FontSettings {
     /// The interface's text.
@@ -20,6 +21,7 @@ pub struct FontSettings {
     pub mono: Option<String>,
     /// The interface's usual text, in pixels; everything measured in text
     /// grows with it, as with a zoom.
+    #[schemars(range(min = 8, max = 32))]
     pub size: Option<f64>,
 }
 

@@ -1,7 +1,8 @@
+#:schema ./schemas/look.schema.json
 # How Banda looks. Every key is optional: what you leave out comes from
 # the theme, from Hyprland's own settings when Banda runs under it, and
 # from Banda's defaults, written below. Check a change with:
-# banda look check
+# banda settings check
 #
 # theme: "omarchy" follows Omarchy's current theme (the default when
 # Omarchy is installed), "banda" is Banda's own, light and dark (the

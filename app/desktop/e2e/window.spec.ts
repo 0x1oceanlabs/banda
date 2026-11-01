@@ -1,4 +1,4 @@
-import { mkdirSync, readFileSync, writeFileSync } from "node:fs"
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { join, resolve } from "node:path"
 import { expect, type Locator, type Page, test } from "@playwright/test"
 import {
@@ -1240,6 +1240,10 @@ test("the window takes its look from look.toml, and again on each save", async (
   })
   const { page, dir } = window
   const file = join(dir, "config/look.toml")
+  // Each settings file's schema is there for an editor (ADR 0016).
+  await expect
+    .poll(() => existsSync(join(dir, "config/schemas/look.schema.json")))
+    .toBe(true)
   const { thread } = await firstThread(page)
   const root = page.locator("html")
   await expect(root).toHaveCSS("--gap-inner", "12px")

@@ -92,6 +92,13 @@ enum Command {
         #[arg(long)]
         follow: bool,
     },
+    /// Banda's settings files in ~/.config/banda: look.toml, sidebar.toml
+    /// and harnesses.toml. Agents and people edit them; this checks them
+    /// and prints what each may hold.
+    Settings {
+        #[command(subcommand)]
+        what: SettingsCommand,
+    },
     /// Prints the Banda skill: what an Agent needs to know to work in
     /// Banda and to change it for its Person, then its topics.
     Skill {
@@ -107,12 +114,33 @@ enum Command {
 #[derive(Subcommand)]
 enum LookCommand {
     /// Checks look.toml, sidebar.toml, a sidebar preset, a theme's
-    /// banda.toml or colors.toml, or with no files every file the look
-    /// reads. Prints path:line:column: problem
+    /// banda.toml or colors.toml, or with no files every settings file,
+    /// as `banda settings check` does. Prints path:line:column: problem
     /// and exits 1 when anything is wrong; prints nothing when all is well.
     Check { files: Vec<PathBuf> },
     /// Lists the themes there are, one JSON object per line.
     Themes,
+}
+
+#[derive(Subcommand)]
+enum SettingsCommand {
+    /// Checks the files given, or with none every settings file there
+    /// is. Prints path:line:column: problem and exits 1 when anything is
+    /// wrong; prints nothing when all is well.
+    Check { files: Vec<PathBuf> },
+    /// Prints a file's JSON Schema: every key it may hold, with its type
+    /// and what it does. With no file, the list of files.
+    Schema {
+        #[arg(value_parser = clap::builder::PossibleValuesParser::new(
+            banda_settings::FILES.map(|file| file.name)
+        ))]
+        file: Option<String>,
+        /// Writes every file's schema into the config folder's schemas/
+        /// instead, where the files' `#:schema` lines point an editor.
+        /// `banda look --follow` does it as it starts.
+        #[arg(long, conflicts_with = "file")]
+        export: bool,
+    },
 }
 
 /// Why the program did not do its job, and how it exits.
@@ -158,6 +186,7 @@ fn main() -> ExitCode {
     match cli.command {
         Command::Look { what, follow } => return look(what, follow),
         Command::Skill { topic, export } => return skill(topic, export),
+        Command::Settings { what } => return settings(what),
         _ => {}
     }
     tracing_subscriber::fmt()
@@ -198,6 +227,7 @@ async fn run(command: Command, places: Places) -> Result<(), Failure> {
         }
         Command::Look { .. } => unreachable!("the look runs without the engine"),
         Command::Skill { .. } => unreachable!("the skill runs without the engine"),
+        Command::Settings { .. } => unreachable!("the settings run without the engine"),
         Command::Follow {
             space,
             after,
@@ -249,6 +279,48 @@ fn skill(topic: Option<String>, export: Option<PathBuf>) -> ExitCode {
     ExitCode::SUCCESS
 }
 
+/// `banda settings`: no engine, only the files (ADR 0016).
+fn settings(what: SettingsCommand) -> ExitCode {
+    let places = banda_look::theme::Places::from_env();
+    match what {
+        SettingsCommand::Check { files } => report(banda_settings::check(&places, &files)),
+        SettingsCommand::Schema { export: true, .. } => {
+            let folder = places.config.join("schemas");
+            match banda_settings::export(&folder) {
+                Ok(()) => ExitCode::SUCCESS,
+                Err(error) => Failure::Broken(format!("{}: {error}", folder.display())).exit(),
+            }
+        }
+        SettingsCommand::Schema { file, .. } => {
+            let mut out = std::io::stdout().lock();
+            // A reader that went away is not an error.
+            let _ = match file.as_deref().and_then(banda_settings::file) {
+                Some(file) => {
+                    let schema = serde_json::to_string_pretty(&file.schema()).unwrap_or_default();
+                    writeln!(out, "{schema}")
+                }
+                None => banda_settings::FILES
+                    .iter()
+                    .try_for_each(|file| writeln!(out, "{}\t{}", file.name, file.about())),
+            };
+            ExitCode::SUCCESS
+        }
+    }
+}
+
+/// A check's problems on stderr, as a compiler says them: exit 1 when
+/// there are any, and nothing said when all is well.
+fn report(problems: Vec<banda_look::Problem>) -> ExitCode {
+    for problem in &problems {
+        eprintln!("{problem}");
+    }
+    if problems.is_empty() {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::FAILURE
+    }
+}
+
 /// `banda look`: no engine, no runtime, only files and Hyprland's socket.
 fn look(what: Option<LookCommand>, follow: bool) -> ExitCode {
     use banda_look::hyprland::Hyprland;
@@ -261,6 +333,12 @@ fn look(what: Option<LookCommand>, follow: bool) -> ExitCode {
         |value: serde_json::Value| writeln!(out, "{value}").and_then(|()| out.flush()).is_ok();
     match what {
         None if follow => {
+            // The window runs this as it starts: each settings file's
+            // schema goes where the files' `#:schema` lines point.
+            let schemas = places.config.join("schemas");
+            if let Err(error) = banda_settings::export(&schemas) {
+                eprintln!("banda: {}: {error}", schemas.display());
+            }
             banda_look::follow(&places, Hyprland::from_env(), |look| print(json!(look)));
             ExitCode::SUCCESS
         }
@@ -278,20 +356,6 @@ fn look(what: Option<LookCommand>, follow: bool) -> ExitCode {
             }
             ExitCode::SUCCESS
         }
-        Some(LookCommand::Check { files }) => {
-            let problems = if files.is_empty() {
-                banda_look::resolve(&places, &|| None).look.problems
-            } else {
-                banda_look::check(&files)
-            };
-            for problem in &problems {
-                eprintln!("{problem}");
-            }
-            if problems.is_empty() {
-                ExitCode::SUCCESS
-            } else {
-                ExitCode::FAILURE
-            }
-        }
+        Some(LookCommand::Check { files }) => report(banda_settings::check(&places, &files)),
     }
 }
