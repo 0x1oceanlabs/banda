@@ -3,8 +3,9 @@
  * and the desktop its keys. It looks like the rest of the window only
  * through app/ui (docs/architecture.md, "Checks that hold the shape").
  */
-import { readdirSync, readFileSync } from "node:fs"
-import { join, relative } from "node:path"
+import { readFileSync } from "node:fs"
+import { relative } from "node:path"
+import { imports, sources } from "@banda/ui/testing/architecture"
 import { expect, test } from "vitest"
 
 const PANE = [
@@ -18,22 +19,6 @@ const PANE = [
 /** A test may also read files and use its runner. */
 const TEST = [...PANE, /^node:/, /^vitest$/]
 
-function sources(folder: string): string[] {
-  return readdirSync(folder, { withFileTypes: true }).flatMap((entry) => {
-    const path = join(folder, entry.name)
-    if (entry.isDirectory()) return sources(path)
-    return /\.tsx?$/.test(entry.name) ? [path] : []
-  })
-}
-
-/** Every module a file names: `from "…"`, `import "…"`, `import("…")`. */
-function imports(source: string): string[] {
-  const found = source.matchAll(
-    /(?:\bfrom\s*|\bimport\s*\(?\s*)["']([^"']+)["']/g
-  )
-  return [...found].map((match) => match[1])
-}
-
 test("the browser Pane imports only the API, app/ui and React", () => {
   const folder = import.meta.dirname
   // This file names imports as examples; it is not a Pane.
@@ -45,12 +30,4 @@ test("the browser Pane imports only the API, app/ui and React", () => {
       .map((name) => `${relative(folder, file)}: ${name}`)
   })
   expect(outside).toEqual([])
-})
-
-test("the check sees every kind of import", () => {
-  expect(
-    imports(
-      `import a from "x"\nimport "y"\nconst z = import("z")\nexport { b } from 'w'`
-    )
-  ).toEqual(["x", "y", "z", "w"])
 })

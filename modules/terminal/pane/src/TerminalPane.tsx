@@ -45,7 +45,6 @@ export type Done = CommandCall
 
 export const terminalPane = definePane<TerminalArgs>({
   kind: "terminal.terminal",
-  module: "terminal",
   title: (args) => args.title,
   icon: SquareTerminalIcon,
   start: { terminal: null, title: "Terminal", shell: true, done: null },

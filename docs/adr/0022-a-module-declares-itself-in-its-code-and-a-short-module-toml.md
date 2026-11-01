@@ -146,6 +146,10 @@ from the first. Roma chose to declare in code what is code, and to keep
   1. This ADR.
   2. `defineModule` and `modules.ts`: the Panes and Watches come from the
      modules, with the architecture test.
+     - _Done._ A Pane or Watch no longer names its engine module: its
+       module's `engine` says whether it needs one. The architecture test
+       lists the files that still reach a module, each with the step that
+       ends it, and fails once one no longer does.
   3. The actions move to their modules; the window API moves into
      `@banda/ui`; the window stops importing modules.
   4. Sources: the Banda menu's Threads, files, Spaces and actions come

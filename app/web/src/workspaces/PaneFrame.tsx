@@ -2,7 +2,7 @@ import { type ReactNode, useEffect, useRef } from "react"
 import type { Engine, SpaceId } from "@banda/contract"
 import { PaneHeader } from "@banda/ui/components/pane-header"
 import { type PaneState, type Place, within } from "@banda/ui/pane"
-import { kindOf, labelOf, runs } from "../registry"
+import { kindOf, kindRuns, labelOf } from "../registry"
 import type { Entry } from "./model"
 
 /** What a framed Pane asks of the workspaces. */
@@ -42,7 +42,7 @@ export function PaneFrame({
   hidden?: boolean
 }) {
   const kind = kindOf(entry.pane.kind)
-  const shown = kind && runs(kind, modules) ? kind : undefined
+  const shown = kind && kindRuns(entry.pane.kind, modules) ? kind : undefined
   const element = useRef<HTMLElement>(null)
   const { title, Icon } = labelOf(entry.pane)
 

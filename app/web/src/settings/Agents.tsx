@@ -6,20 +6,18 @@
  */
 import { useCallback, useState } from "react"
 import { AgentsSettings, type HarnessFile } from "@banda/agents-pane/settings"
-import type { Engine, JsonValue } from "@banda/contract"
+import type { Engine } from "@banda/contract"
 import { Dialog, DialogContent, DialogTitle } from "@banda/ui/components/dialog"
 import { Spinner } from "@banda/ui/components/spinner"
 import { useRead } from "@banda/ui/hooks/use-read"
-import type { PaneKind, PaneState } from "@banda/ui/pane"
-import { panes as terminalPanes } from "@banda/terminal-pane"
+import type { PaneState } from "@banda/ui/pane"
+import { terminal } from "@banda/terminal-pane"
 
 const FILE = "harnesses.toml"
 
 /** The Panes a sign-in opens: a terminal. Not the whole registry, which
  * would load every module's Panes into this window. */
-const kinds = terminalPanes as unknown as PaneKind<{
-  [key: string]: JsonValue
-}>[]
+const kinds = terminal.panes
 
 const file: HarnessFile = {
   set: (key, value) =>

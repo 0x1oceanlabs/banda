@@ -177,12 +177,16 @@ contract. It is one folder:
 ```
 modules/<name>/
   engine/      Rust crate: rules · store · operation · adapters
-  pane/        React package: its Panes
-  module.toml  name, commands, events, tables, tools, Panes
+  pane/        React package: its window part, one defineModule
+  module.toml  id, name, version, from Banda, settings files, unstable marks
 ```
 
-`module.toml` arrives with third-party modules. Until then a first-party
-module's `Module` implementation is its manifest.
+A module declares itself in its code and a short `module.toml` (ADR 0022).
+Its engine part is the `Module` it gives the kernel, with its `methods!`
+table. Its window part is one `defineModule({ id, engine, panes, watches })`
+exported from its Pane package; the window lists these in
+`app/web/src/modules.ts`, the one place that names a module, and builds its
+registries from them. `module.toml` comes in ADR 0022's step 5.
 
 **Its contract** is everything it shows outward:
 

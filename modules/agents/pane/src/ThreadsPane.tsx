@@ -28,7 +28,6 @@ type NoArgs = { [key: string]: JsonValue }
  */
 export const threadsPane = definePane<NoArgs>({
   kind: "agents.threads",
-  module: "agents",
   title: () => "Threads",
   icon: MessagesSquareIcon,
   narrow: true,
