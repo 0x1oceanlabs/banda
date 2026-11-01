@@ -1,15 +1,5 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import type { Engine, SpaceId } from "@banda/contract"
-import type {
-  Defaults,
-  Failure,
-  Item,
-  ItemId,
-  Offer,
-  Settings,
-  ThreadId,
-  TurnView,
-} from "@banda/contract/agents"
+import { useMemo, useRef, useState } from "react"
+import type { Failure, Item, ItemId, TurnView } from "@banda/contract/agents"
 import { Button } from "@banda/ui/components/button"
 import {
   Empty,
@@ -37,10 +27,7 @@ import {
   TraceLine,
   TraceTitle,
 } from "@banda/ui/components/trace"
-import { useAct } from "@banda/ui/hooks/use-act"
-import { useInFront } from "@banda/ui/hooks/use-in-front"
 import { clock } from "@banda/ui/lib/words"
-import { READ_AGAIN, type Source, useLive } from "@banda/ui/hooks/use-live"
 import { definePane, paneOf, type PaneProps } from "@banda/ui/pane"
 import {
   ArrowDownIcon,
@@ -52,29 +39,14 @@ import {
   MessageSquareIcon,
   RotateCcwIcon,
 } from "lucide-react"
-import { settledTurn } from "./marks"
-import { markSeen } from "./seen"
-import {
-  asked,
-  declineOnce,
-  NO_OFFER,
-  proposedPlan,
-  sent,
-  steerable,
-  type ThreadState,
-  waiting,
-  type Waiting,
-  working,
-} from "./thread"
+import { steerable, type ThreadState, type Waiting, working } from "./thread"
 import { suggested } from "./slash"
-import { type Attached, type Attaching, useAttachments } from "./Attachments"
 import { Composer } from "./Composer"
-import { type ImageReader, useImageReader } from "./MessageImages"
+import type { ImageReader } from "./MessageImages"
 import { AgentMessage, PersonMessage } from "./Messages"
 import type { Values } from "./form"
 import { Question, QuestionDrawer } from "./Questions"
 import { ChangedFiles } from "./ChangedFiles"
-import { diffPane } from "./DiffPane"
 import { Plan } from "./Plan"
 import { PlanReady, ProposedPlan } from "./ProposedPlan"
 import { planTitle } from "./messages"
@@ -88,24 +60,8 @@ import { Minimap } from "./Minimap"
 import { ToolCall } from "./ToolCall"
 import { SettingsBar } from "./ThreadSettings"
 import { SignIn, Warning } from "./SignIn"
-import { harnessName, useHarnesses } from "./harnesses"
-import { useThread } from "./live-thread"
 import { NewThreadBar } from "./NewThread"
-
-/**
- * One Thread: a session with a Harness in a Space (ADR 0006). Without
- * `thread`, the next message starts one on `harness`, or on this computer's
- * first Harness when it names none. `title` keeps the header's words while
- * the Thread loads.
- */
-export type ThreadArgs = {
-  thread: ThreadId | null
-  harness: string
-  title: string
-}
-
-/** A Thread not yet started, on this computer's first Harness. */
-export const NEW_THREAD: ThreadArgs = { thread: null, harness: "", title: "" }
+import { NEW_THREAD, type ThreadArgs, useThreadSession } from "./session"
 
 export const threadPane = definePane<ThreadArgs>({
   kind: "agents.thread",
@@ -117,175 +73,47 @@ export const threadPane = definePane<ThreadArgs>({
   Pane: ThreadPane,
 })
 
-function ThreadPane({
-  engine,
-  space,
-  args,
-  focused,
-  open,
-  update,
-}: PaneProps<ThreadArgs>) {
+function ThreadPane(props: PaneProps<ThreadArgs>) {
+  const { engine, space, args, focused, open, update } = props
   const { thread } = args
-  const live = useThread(engine, space, thread)
-  const state = live.state === "ready" ? live.view : undefined
-  const turn = state && working(state)
-  const sending = useAct()
-  const acting = useAct()
-  const reader = useImageReader(engine, space)
-  const harnesses = useHarnesses(engine, space)
-  const harness =
-    thread === null
-      ? args.harness || harnesses[0]?.id || ""
-      : (state?.harness ?? args.harness)
-  const name = harnessName(harnesses, harness) || "the Agent"
-
-  // The header follows the Thread: its title, once the first message gives
-  // it one, and its Harness come back with the Pane.
-  useEffect(() => {
-    if (
-      thread !== null &&
-      state &&
-      (state.title !== args.title || state.harness !== args.harness)
-    )
-      update({ thread, harness: state.harness, title: state.title })
-  }, [thread, state, args.title, args.harness, update])
-
-  // A Person who looks at the Thread, its Pane focused in the window in
-  // front, sees how its latest turn ended, which settles its mark in the
-  // sidebar and the bar (ADR 0011, decision 1).
-  const front = useInFront()
-  const settled = state && settledTurn(state.turns)
-  useEffect(() => {
-    if (focused && front && thread !== null && settled)
-      markSeen(thread, settled)
-  }, [focused, front, thread, settled])
-
-  // A Thread not yet started keeps its settings here until its first
-  // message, starting from its Harness's.
-  const defaults = useHarnessDefaults(
-    engine,
-    space,
-    thread === null && harness !== "" ? harness : null
-  )
-  const [drafts, setDrafts] = useState<Record<string, Settings>>({})
-  const draft = drafts[harness]
-  const setDraft = (next: Settings) =>
-    setDrafts((drafts) => ({ ...drafts, [harness]: next }))
-  const settings =
-    thread === null ? (draft ?? defaults?.settings) : state?.settings
-  const offer: Offer =
-    (thread === null ? defaults?.offer : state?.offer) ?? NO_OFFER
-  const configure = (next: Settings) => {
-    if (thread === null) {
-      setDraft(next)
-      return
-    }
-    void acting.act(() =>
-      engine.command("agents.configure", { thread, settings: next }, space)
-    )
-  }
-
-  const images = useAttachments({
-    attach: (image: Attaching) => engine.command("agents.attach", image, space),
-    closed: offer.no_images ? `${name} does not take images.` : undefined,
-  })
+  const {
+    live,
+    state,
+    turn,
+    harness,
+    harnesses,
+    name,
+    reader,
+    sending,
+    acting,
+    problem,
+    settings,
+    offer,
+    configure,
+    plan,
+    setPlan,
+    history,
+    steering,
+    images,
+    findFiles,
+    waits,
+    asking,
+    planned,
+    send,
+    implement,
+    answer,
+    openDiff,
+    stop,
+    retry,
+    queue,
+    editLast,
+  } = useThreadSession(props)
   const [dropping, setDropping] = useState(false)
-  // The files `@` names come from the Space's folder.
-  const findFiles = useCallback(
-    (query: string) => engine.call("agents.files", { query }, { space }),
-    [engine, space]
-  )
   // What the Person looks for in the Thread, while the find bar is open.
   const [find, setFind] = useState<{ query: string; at: number }>()
   const area = useRef<HTMLDivElement>(null)
   const findField = useRef<HTMLInputElement>(null)
   const found = useFound(area, find?.query ?? "", find?.at ?? 0, state)
-  // The waiting message open to edit, from its Edit or ↑ in the composer.
-  const [editing, setEditing] = useState<ItemId>()
-  const waits = state ? waiting(state) : []
-  const last = waits.at(-1)
-  // The Question the Agent waits on: one with a form opens on the composer,
-  // and a message sent while any waits says no to it first, as in T3 Code.
-  const asking = state && asked(state)
-  // A plan the Agent proposed waits for Implement, or for a message that
-  // refines it.
-  const planned = state && proposedPlan(state)
-  /** Sends `text`; an existing Thread changes to `next` first, if given. */
-  const send = async (
-    text: string,
-    images: Attached[],
-    steer: boolean,
-    next?: Settings
-  ) => {
-    const no = asking && declineOnce(asking.body)
-    if (no && text && (await answer(asking.id, no)) === undefined) return false
-    for (const { image, url } of images) reader.remember(image.id, url)
-    const sent = await sending.act(() =>
-      engine.command(
-        "agents.send",
-        // A new Thread starts as its composer shows; an existing one runs
-        // with its own settings, which the bar changes as it goes.
-        {
-          ...(thread === null ? { harness } : { thread }),
-          text,
-          images: images.map(({ image }) => image.id),
-          settings: thread === null ? (settings ?? null) : (next ?? null),
-          steer,
-        },
-        space
-      )
-    )
-    if (sent && thread === null)
-      update({ thread: sent.thread, harness, title: args.title })
-    return sent !== undefined
-  }
-  // A turn's changes open in a Diff Pane beside the Thread, or in the one
-  // already open, which then shows them.
-  const openDiff = (turn: string, path?: string) => {
-    if (thread === null) return
-    const title = state?.title ?? args.title
-    open(paneOf(diffPane, { thread, turn, path: path ?? null, title }), "right")
-  }
-  // Implement turns plan mode off and asks for the plan, in one command.
-  const implement = () => {
-    if (settings) void send(IMPLEMENT, [], false, { ...settings, plan: false })
-  }
-  const stop = (turn: TurnView) =>
-    void acting.act(() =>
-      engine.command("agents.stop", { turn: turn.id }, space)
-    )
-  const answer = (item: ItemId, choice: string, values?: Values) =>
-    acting.act(() =>
-      engine.command(
-        "agents.answer",
-        { item, choice, ...(values && { values }) },
-        space
-      )
-    )
-  const retry = (turn: TurnView) =>
-    void acting.act(() =>
-      engine.command("agents.retry", { turn: turn.id }, space)
-    )
-  const queue: QueueActions = {
-    onSendNow: ({ turn }) =>
-      void acting.act(() =>
-        engine.command("agents.steer", { turn: turn.id }, space)
-      ),
-    onEdit: async ({ turn }, text) =>
-      (await acting.act(() =>
-        engine.command("agents.edit", { turn: turn.id, text }, space)
-      )) !== undefined,
-    onRemove: ({ turn }) =>
-      void acting.act(() =>
-        engine.command("agents.withdraw", { turn: turn.id }, space)
-      ),
-    editing,
-    onEditing: setEditing,
-    onContinue: () => {
-      if (thread === null) return
-      void acting.act(() => engine.command("agents.resume", { thread }, space))
-    },
-  }
 
   return (
     // Images dropped anywhere on the Pane join the message; Mod+F finds in
@@ -351,7 +179,7 @@ function ThreadPane({
             waits={waits}
             name={name}
             reader={reader}
-            answering={acting.busy}
+            answering={acting}
             onAnswer={answer}
             onRetry={retry}
             onOpenDiff={openDiff}
@@ -375,29 +203,29 @@ function ThreadPane({
             <Warning>{offer.outdated}</Warning>
           </div>
         )}
-        {(sending.problem ?? acting.problem) && (
+        {problem && (
           <p role="alert" className="px-1 text-xs text-destructive">
-            {sending.problem ?? acting.problem}
+            {problem}
           </p>
         )}
         {planned && (
           <PlanReady
             title={planTitle(planned.body.text)}
-            busy={sending.busy}
+            busy={sending}
             onImplement={implement}
           />
         )}
         {asking?.body.form && (
           <QuestionDrawer
             item={asking}
-            answering={acting.busy}
+            answering={acting}
             onAnswer={(choice, values) => answer(asking.id, choice, values)}
           />
         )}
         <Composer
           name={name}
           thread={thread}
-          history={() => (state ? sent(state) : [])}
+          history={history}
           placeholder={
             asking
               ? `Send a message to say no and tell ${name} what to do instead`
@@ -405,17 +233,17 @@ function ThreadPane({
                 ? "Write to refine the plan, or implement it"
                 : undefined
           }
-          plan={offer.plans ? settings?.plan : undefined}
+          plan={plan}
           focused={focused}
-          busy={sending.busy}
+          busy={sending}
           working={turn}
-          steering={state !== undefined && steerable(state)}
+          steering={steering}
           usage={state?.usage}
           commands={suggested(offer)}
           images={images}
           dropping={dropping}
-          onPlanMode={(plan) => settings && configure({ ...settings, plan })}
-          onEditLast={last && (() => setEditing(last.item.id))}
+          onPlanMode={setPlan}
+          onEditLast={editLast}
           findFiles={findFiles}
           onSend={send}
           onStop={stop}
@@ -426,7 +254,7 @@ function ThreadPane({
               space={space}
               harness={harness}
               harnesses={harnesses}
-              disabled={sending.busy}
+              disabled={sending}
               onSpace={(other) =>
                 open(paneOf(threadPane, { ...args, harness }), "here", other)
               }
@@ -437,7 +265,7 @@ function ThreadPane({
             <SettingsBar
               settings={settings}
               offer={offer}
-              disabled={acting.busy}
+              disabled={acting}
               onChange={configure}
             />
           )}
@@ -470,33 +298,6 @@ function Start({ name }: { name: string }) {
       </EmptyHeader>
     </Empty>
   )
-}
-
-/** The facts that say a Harness offers something new. */
-const OFFERED = { module: "agents", kinds: ["thread.offered"] }
-
-/**
- * What a new Thread on `harness` starts with: full access, and what the
- * Harness last offered, such as its models.
- */
-function useHarnessDefaults(
-  engine: Engine,
-  space: SpaceId,
-  harness: string | null
-): Defaults | undefined {
-  const source = useMemo<Source<Defaults> | null>(
-    () =>
-      harness === null
-        ? null
-        : {
-            read: () => engine.call("agents.defaults", { harness }, { space }),
-            filter: OFFERED,
-            apply: () => READ_AGAIN,
-          },
-    [engine, space, harness]
-  )
-  const live = useLive(engine, space, source)
-  return live.state === "ready" ? live.view : undefined
 }
 
 type Answering = {
@@ -825,6 +626,3 @@ function adviceFor(failure: Failure): string | undefined {
       return undefined
   }
 }
-
-/** What Implement asks the Agent, once plan mode is off. */
-const IMPLEMENT = "Implement the plan."
