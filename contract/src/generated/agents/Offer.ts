@@ -23,4 +23,9 @@ slash_commands: Array<SlashCommand>,
 /**
  * The Harness takes no images: a message to it carries text alone.
  */
-no_images: boolean, };
+no_images: boolean, 
+/**
+ * In plain words, that the Person's CLI is older than the Harness
+ * supports.
+ */
+outdated?: string, };

@@ -904,6 +904,12 @@ async fn a_harness_says_who_is_signed_in_and_signs_out() {
 
 /// The fake agent as the only Harness, running the CLI `program`.
 fn with_cli(program: &str) -> Agents {
+    with_cli_since(program, None)
+}
+
+/// The fake agent running the CLI `program`, which must be at least
+/// `minimum`.
+fn with_cli_since(program: &str, minimum: Option<&str>) -> Agents {
     Agents::new(Harnesses::new(vec![Harness {
         id: "fake".into(),
         name: "Fake".into(),
@@ -913,6 +919,7 @@ fn with_cli(program: &str) -> Agents {
         cli: Some(Cli {
             program: program.to_owned(),
             variable: "FAKE_AGENT_CLI".to_owned(),
+            minimum: minimum.map(str::to_owned),
         }),
         record: None,
     }]))
@@ -921,11 +928,9 @@ fn with_cli(program: &str) -> Agents {
 #[tokio::test]
 async fn a_harness_runs_the_persons_own_cli_and_says_its_version() {
     let (root, bin) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
-    let cli = bin.path().join("fake-cli");
-    std::fs::write(&cli, "#!/bin/sh\necho '9.9.9 (Fake CLI)'\n").unwrap();
-    use std::os::unix::fs::PermissionsExt as _;
-    std::fs::set_permissions(&cli, std::fs::Permissions::from_mode(0o755)).unwrap();
-    let world = World::new_with(root.path(), with_cli(&cli.display().to_string())).await;
+    let cli = fake_cli(bin.path());
+    let agents = with_cli_since(&cli.display().to_string(), Some("9.9.9"));
+    let world = World::new_with(root.path(), agents).await;
     let account = world.account().await;
     assert_eq!(
         account["cli"]["path"],
@@ -933,6 +938,31 @@ async fn a_harness_runs_the_persons_own_cli_and_says_its_version() {
         "{account}"
     );
     assert_eq!(account["cli"]["version"], "9.9.9");
+    assert!(account["cli"].get("outdated").is_none(), "{account}");
+    let (_, view) = world.finish(None, "hello").await;
+    assert_eq!(view.offer.outdated, None);
+}
+
+/// A CLI in `folder` that says it is 9.9.9.
+fn fake_cli(folder: &Path) -> PathBuf {
+    let cli = folder.join("fake-cli");
+    std::fs::write(&cli, "#!/bin/sh\necho '9.9.9 (Fake CLI)'\n").unwrap();
+    use std::os::unix::fs::PermissionsExt as _;
+    std::fs::set_permissions(&cli, std::fs::Permissions::from_mode(0o755)).unwrap();
+    cli
+}
+
+#[tokio::test]
+async fn a_cli_older_than_its_harness_supports_runs_and_its_threads_warn() {
+    let (root, bin) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+    let cli = fake_cli(bin.path()).display().to_string();
+    let world = World::new_with(root.path(), with_cli_since(&cli, Some("9.10.0"))).await;
+    let warning = "fake-cli 9.9.9 is older than 9.10.0, the oldest Fake supports: update it.";
+    let account = world.account().await;
+    assert_eq!(account["cli"]["outdated"], warning, "{account}");
+    let (_, view) = world.finish(None, "hello").await;
+    assert_eq!(view.turns[0].state, TurnState::Done, "it still runs");
+    assert_eq!(view.offer.outdated.as_deref(), Some(warning));
 }
 
 #[tokio::test]

@@ -2,7 +2,8 @@
 //! its own (ADR 0003, decision 3): Claude Code's `claude`, Codex's `codex`.
 //! Each time the Harness starts, the engine finds the CLI and asks its
 //! version; a CLI that is not there stops the start, so Bandaso never runs
-//! a bundled one in its place.
+//! a bundled one in its place. A CLI older than the entry's `minimum` runs,
+//! with a warning (ADR 0003, decision 3).
 
 use crate::model::CliView;
 use crate::settings::Harness;
@@ -28,9 +29,25 @@ pub async fn find(harness: &Harness) -> Result<(Harness, Option<CliView>), Strin
     })?;
     let path = path.display().to_string();
     let version = version_of(&path, harness).await;
+    let outdated = match (&version, &cli.minimum) {
+        (Some(version), Some(minimum)) if older(version, minimum) => {
+            let name = Path::new(&path).file_name().unwrap_or_default();
+            Some(format!(
+                "{} {version} is older than {minimum}, the oldest {} supports: update it.",
+                name.display(),
+                harness.name
+            ))
+        }
+        _ => None,
+    };
     let mut started = harness.clone();
     started.env.insert(cli.variable.clone(), path.clone());
-    Ok((started, Some(CliView { path, version })))
+    let view = CliView {
+        path,
+        version,
+        outdated,
+    };
+    Ok((started, Some(view)))
 }
 
 /// `program` itself when it is a path, or the first of that name on PATH.
@@ -74,9 +91,38 @@ fn version_in(said: &str) -> Option<String> {
         .map(str::to_owned)
 }
 
+/// Whether `version` comes before `minimum`, number by number: 2.1.99
+/// before 2.1.312. What follows a number in a part, as in `1-beta`, is not
+/// compared.
+fn older(version: &str, minimum: &str) -> bool {
+    let numbers = |version: &str| -> Vec<u64> {
+        version
+            .split('.')
+            .map(|part| {
+                let digits = part
+                    .find(|c: char| !c.is_ascii_digit())
+                    .unwrap_or(part.len());
+                part[..digits].parse().unwrap_or(0)
+            })
+            .collect()
+    };
+    numbers(version) < numbers(minimum)
+}
+
 #[cfg(test)]
 mod tests {
-    use super::version_in;
+    use super::{older, version_in};
+
+    #[test]
+    fn a_version_is_older_number_by_number() {
+        assert!(older("2.1.99", "2.1.312"));
+        assert!(older("0.164.9", "0.165.0"));
+        assert!(older("2.1", "2.1.0"));
+        assert!(!older("2.1.312", "2.1.312"));
+        assert!(!older("2.1.316", "2.1.312"));
+        assert!(!older("0.166.0", "0.165.0"));
+        assert!(!older("3.0.0-beta", "2.9.9"));
+    }
 
     #[test]
     fn a_version_is_the_first_word_that_reads_as_one() {

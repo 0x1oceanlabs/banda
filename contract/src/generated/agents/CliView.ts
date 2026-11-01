@@ -4,4 +4,9 @@
  * The Person's own CLI that a Harness runs, where it was found and the
  * version it says.
  */
-export type CliView = { path: string, version?: string, };
+export type CliView = { path: string, version?: string, 
+/**
+ * In plain words, that the version is older than the Harness
+ * supports.
+ */
+outdated?: string, };

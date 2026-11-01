@@ -45,6 +45,10 @@ pub struct Cli {
     /// The variable that tells the adapter where it is: Claude Code's
     /// `CLAUDE_CODE_EXECUTABLE`, Codex's `CODEX_PATH`.
     pub variable: String,
+    /// The oldest version the adapter supports: the one it was built for.
+    /// An older CLI still runs, and its Threads warn.
+    #[serde(default)]
+    pub minimum: Option<String>,
 }
 
 impl Harness {
@@ -79,31 +83,37 @@ impl Harnesses {
     /// running the Person's own CLI. Each one signs in on its own; Bandaso
     /// holds no model provider's credentials.
     pub fn known() -> Self {
-        let npx =
-            |id: &str, name: &str, package: &str, (program, variable): (&str, &str)| Harness {
-                id: id.to_owned(),
-                name: name.to_owned(),
-                command: "npx".to_owned(),
-                args: vec!["-y".to_owned(), package.to_owned()],
-                env: BTreeMap::new(),
-                cli: Some(Cli {
-                    program: program.to_owned(),
-                    variable: variable.to_owned(),
-                }),
-                record: None,
-            };
+        let npx = |id: &str,
+                   name: &str,
+                   package: &str,
+                   (program, variable, minimum): (&str, &str, &str)| Harness {
+            id: id.to_owned(),
+            name: name.to_owned(),
+            command: "npx".to_owned(),
+            args: vec!["-y".to_owned(), package.to_owned()],
+            env: BTreeMap::new(),
+            cli: Some(Cli {
+                program: program.to_owned(),
+                variable: variable.to_owned(),
+                minimum: Some(minimum.to_owned()),
+            }),
+            record: None,
+        };
         Self::new(vec![
             npx(
                 "claude",
                 "Claude Code",
                 "@agentclientprotocol/claude-agent-acp@0.99.1",
-                ("claude", "CLAUDE_CODE_EXECUTABLE"),
+                // The adapter's Agent SDK 0.3.312 was built for Claude Code
+                // 2.1.312 (its `claudeCodeVersion`).
+                ("claude", "CLAUDE_CODE_EXECUTABLE", "2.1.312"),
             ),
             npx(
                 "codex",
                 "Codex",
                 "@agentclientprotocol/codex-acp@2.5.0",
-                ("codex", "CODEX_PATH"),
+                // The adapter depends on `@openai/codex` ^0.165.0.
+                ("codex", "CODEX_PATH", "0.165.0"),
             ),
         ])
     }

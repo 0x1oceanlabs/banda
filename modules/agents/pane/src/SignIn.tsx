@@ -5,7 +5,7 @@ import { Button } from "@bandaso/ui/components/button"
 import { Spinner } from "@bandaso/ui/components/spinner"
 import { useAct } from "@bandaso/ui/hooks/use-act"
 import { useRead } from "@bandaso/ui/hooks/use-read"
-import { CheckIcon, CopyIcon, LogInIcon } from "lucide-react"
+import { CheckIcon, CircleAlertIcon, CopyIcon, LogInIcon } from "lucide-react"
 import { commandLine } from "./sign-in"
 
 /**
@@ -166,6 +166,20 @@ export function Problem({ children }: { children: React.ReactNode }) {
   return (
     <p role="alert" className="text-xs text-destructive">
       {children}
+    </p>
+  )
+}
+
+/** Something to know that stops nothing, such as a CLI older than its
+ * Harness supports. */
+export function Warning({ children }: { children: React.ReactNode }) {
+  return (
+    <p
+      role="status"
+      className="flex items-start gap-1.5 text-xs text-muted-foreground"
+    >
+      <CircleAlertIcon className="mt-px size-3.5 shrink-0" />
+      <span>{children}</span>
     </p>
   )
 }

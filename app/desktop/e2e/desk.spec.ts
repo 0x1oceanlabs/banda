@@ -179,7 +179,7 @@ test("a Person signs in from the turn that needed it, and it goes again", async 
 })
 
 test("a Person sees who is signed in to a Harness, signs in and out", async () => {
-  window = await startWindow({ account: true })
+  window = await startWindow({ account: true, oldCli: true })
   const { page } = window
   await page.getByLabel("Name").fill("Work")
   await page.getByRole("button", { name: "Create Space" }).click()
@@ -191,7 +191,14 @@ test("a Person sees who is signed in to a Harness, signs in and out", async () =
     .click()
   const settings = page.getByRole("region", { name: "Harnesses" })
   const fake = settings.getByRole("group", { name: "Fake AI" })
-  await expect(fake.getByText(/^bandaso-fake-agent \d/)).toBeVisible()
+  await expect(
+    fake.getByText(/^fake-cli 1\.0\.0 · bandaso-fake-agent \d/)
+  ).toBeVisible()
+  await expect(
+    fake
+      .getByRole("status")
+      .filter({ hasText: /1\.0\.0 is older than 2\.0\.0/ })
+  ).toBeVisible()
   await expect(fake.getByText("Not signed in.")).toBeVisible()
 
   await fake.getByRole("button", { name: "Sign in with Fake browser" }).click()

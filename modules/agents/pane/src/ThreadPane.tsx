@@ -80,7 +80,7 @@ import { Plan } from "./Plan"
 import { Queue, type QueueActions } from "./Queue"
 import { ToolCall } from "./ToolCall"
 import { SettingsBar } from "./ThreadSettings"
-import { SignIn } from "./SignIn"
+import { SignIn, Warning } from "./SignIn"
 
 /** One Thread with an Agent; without `thread`, the next message starts one. */
 export type ThreadArgs = {
@@ -268,6 +268,11 @@ function ThreadPane({
         )}
       </div>
       <div className="mx-auto flex w-full max-w-3xl flex-col gap-1.5 px-4 pb-4">
+        {offer.outdated && (
+          <div className="px-1">
+            <Warning>{offer.outdated}</Warning>
+          </div>
+        )}
         {(sending.problem ?? acting.problem) && (
           <p role="alert" className="px-1 text-xs text-destructive">
             {sending.problem ?? acting.problem}
