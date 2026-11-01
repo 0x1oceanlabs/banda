@@ -199,5 +199,5 @@ spring = { damping-ratio = 1.0, stiffness = 800, epsilon = 0.0001 }
   3. **The window applies it**: it runs `banda look --follow`, sets the variables, light and dark, and `nativeTheme`.
   4. **The terminal's 16 colours and the focus ring.**
   5. **Motion**: springs in the window, the `[motion]` tables, reduced motion.
-  6. **`look.set` and the MCP tools**, then a settings page on the same file.
+  6. ~~**`look.set` and the MCP tools**, then a settings page on the same file.~~ Dropped: Agents and people edit the files, and the settings window edits them too (ADR 0016).
 - Later: gradients on the focus ring, shadows and blur, per-workspace gaps, an Omarchy template so a theme can ship `banda.toml` from `colors.toml` alone.
