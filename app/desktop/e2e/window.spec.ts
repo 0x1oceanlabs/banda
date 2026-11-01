@@ -779,9 +779,13 @@ test("the window takes its look from look.toml, and again on each save", async (
   await expect(problem).toBeHidden()
   await page.screenshot({ path: "test-results/20-look-dark.png" })
 
-  // niri's ring, outside the focused tile and in its own colour.
-  writeFileSync(file, '[focus]\nring = 3\nring-color = "#3fa0e0"\n')
-  await expect(thread).toHaveCSS("outline-width", "3px")
+  // niri's ring grows the focused tile's frame out into the gap, in the
+  // border's colour: one frame, not two.
+  writeFileSync(file, '[focus]\nring = 3\nborder = "#3fa0e0"\n')
+  await expect(thread).toHaveCSS("border-top-color", "rgb(63, 160, 224)")
+  // One stroke over the 2px border and 3px past it.
+  await expect(thread).toHaveCSS("outline-width", "5px")
+  await expect(thread).toHaveCSS("outline-offset", "-2px")
   await expect(thread).toHaveCSS("outline-color", "rgb(63, 160, 224)")
   await page.screenshot({ path: "test-results/21-look-ring.png" })
 })

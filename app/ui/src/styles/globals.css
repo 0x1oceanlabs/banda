@@ -155,10 +155,11 @@
      takes --focus; without one it is the strongest colour there is. */
   --focus: var(--primary);
   --focus-inactive: var(--border);
-  /* niri's focus ring: drawn outside the focused tile, in the gap, so
-     nothing moves. None by default; the border shows the focus. */
+  /* niri's focus ring: the focused tile's frame grows this far out into
+     the gap, so nothing moves. It is drawn as one stroke over the border,
+     in its colour: one frame, and no seam where two would meet. None by
+     default; the border shows the focus. */
   --focus-ring: 0px;
-  --focus-ring-color: var(--focus);
   --bar-height: 2.25rem;
 }
 

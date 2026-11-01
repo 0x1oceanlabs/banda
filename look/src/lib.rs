@@ -198,13 +198,6 @@ pub fn read_settings(path: &Path, text: &str, problems: &mut Vec<Problem>) -> Op
                 .inactive_border
                 .iter()
                 .map(|v| ("focus.inactive-border".to_owned(), v)),
-        )
-        .chain(
-            settings
-                .focus
-                .ring_color
-                .iter()
-                .map(|v| ("focus.ring-color".to_owned(), v)),
         );
     for (key, value) in references {
         if !is_css_color(value.get_ref()) {
@@ -443,10 +436,8 @@ fn scheme(theme: &Theme, mine: &Settings, all: &Settings) -> BTreeMap<String, St
     };
     let active = focus(&all.focus.border, "primary");
     let inactive = focus(&all.focus.inactive_border, "border");
-    let ring = focus(&all.focus.ring_color, "primary");
     tokens.insert("focus".to_owned(), active);
     tokens.insert("focus-inactive".to_owned(), inactive);
-    tokens.insert("focus-ring-color".to_owned(), ring);
     tokens
         .into_iter()
         .map(|(k, v)| (format!("--{k}"), v))

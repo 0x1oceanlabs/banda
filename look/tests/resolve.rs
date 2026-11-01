@@ -147,7 +147,6 @@ fn with_omarchy_banda_takes_its_current_theme_and_mode() {
     assert_eq!(color(&look, true, "--selection"), "#354b3e");
     // No ring by default: Hyprland's border shows the focus.
     assert_eq!(look.vars["--focus-ring"], "0px");
-    assert_eq!(color(&look, true, "--focus-ring-color"), "#a3b88c");
     let theme = &look.sources[1];
     assert_eq!(theme.origin, Some(Origin::Current));
 }
@@ -192,10 +191,14 @@ fn the_accent_is_the_persons_too() {
 #[test]
 fn niri_ring_is_a_switch() {
     let machine = Machine::new(true);
-    machine.look_toml("[focus]\nring = 3\nring-color = \"orange\"\n");
+    machine.look_toml("[focus]\nring = 3\n");
     let look = machine.look();
     assert_eq!(look.vars["--focus-ring"], "3px");
-    assert_eq!(color(&look, true, "--focus-ring-color"), "#d39d70");
+
+    // One frame, one colour: the ring has none of its own.
+    machine.look_toml("[focus]\nring = 3\nring-color = \"orange\"\n");
+    let look = machine.look();
+    assert!(look.problems[0].message.contains("ring-color"));
 }
 
 #[test]
