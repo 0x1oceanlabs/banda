@@ -32,7 +32,7 @@ use settings::{Corner, ModeChoice, Settings, ThemeChoice};
 use std::collections::BTreeMap;
 use std::fmt;
 use std::path::{Path, PathBuf};
-use std::time::{Duration, SystemTime};
+use std::time::Duration;
 use theme::{Places, Theme};
 use toml::Spanned;
 use ts_rs::TS;
@@ -515,8 +515,19 @@ pub fn follow(
     let windows = || hyprland.as_ref().and_then(|h| h.windows().ok());
     let mut good: Option<Look> = None;
     let mut last: Option<Look> = None;
+    let mut watched: Vec<PathBuf> = Vec::new();
     loop {
-        let Resolved { look, watched } = resolve(places, &windows);
+        // The files as they were before they are read, so a save while they
+        // are read, or before the look is out, is still a change to come.
+        let before = fingerprint(&watched);
+        let resolved = resolve(places, &windows);
+        let seen = if resolved.watched == watched {
+            before
+        } else {
+            fingerprint(&resolved.watched)
+        };
+        let Resolved { look, watched: now } = resolved;
+        watched = now;
         let shown = match (&good, look.problems.is_empty()) {
             (Some(good), false) => Look {
                 problems: look.problems.clone(),
@@ -533,7 +544,6 @@ pub fn follow(
             }
             last = Some(shown);
         }
-        let seen = fingerprint(&watched);
         loop {
             match changes.recv_timeout(Duration::from_millis(250)) {
                 Ok(()) => break,
@@ -550,15 +560,28 @@ pub fn follow(
     }
 }
 
-/// What tells a file changed: whether it is there, when it changed and its
-/// size. Polling a few files costs nothing, and survives editors that save
-/// by renaming and Omarchy replacing its whole theme folder.
-fn fingerprint(paths: &[PathBuf]) -> Vec<Option<(SystemTime, u64)>> {
+/// What tells a file changed: its bytes, or for a folder the names in it,
+/// hashed; none if it is not there. Not its time and size: two quick saves
+/// of the same length can share both. Reading a few small files costs
+/// nothing, and survives editors that save by renaming and Omarchy
+/// replacing its whole theme folder.
+fn fingerprint(paths: &[PathBuf]) -> Vec<Option<u64>> {
+    use std::hash::{Hash, Hasher};
     paths
         .iter()
         .map(|path| {
-            let meta = std::fs::metadata(path).ok()?;
-            Some((meta.modified().ok()?, meta.len()))
+            let mut hash = std::collections::hash_map::DefaultHasher::new();
+            if path.is_dir() {
+                let mut names: Vec<_> = std::fs::read_dir(path)
+                    .ok()?
+                    .filter_map(|entry| entry.ok().map(|entry| entry.file_name()))
+                    .collect();
+                names.sort();
+                names.hash(&mut hash);
+            } else {
+                std::fs::read(path).ok()?.hash(&mut hash);
+            }
+            Some(hash.finish())
         })
         .collect()
 }
