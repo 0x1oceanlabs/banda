@@ -30,6 +30,7 @@ import { useSlashMenu } from "./SlashMenu"
  */
 export function Composer({
   name,
+  placeholder,
   focused,
   busy,
   working,
@@ -44,6 +45,8 @@ export function Composer({
   children,
 }: {
   name: string
+  /** What the empty box says, instead of asking to write to `name`. */
+  placeholder?: string
   focused: boolean
   busy: boolean
   /** The turn Stop stops: the one that runs, or the next. */
@@ -143,7 +146,7 @@ export function Composer({
           ref={field}
           value={text}
           rows={1}
-          placeholder={`Write to ${name}`}
+          placeholder={placeholder ?? `Write to ${name}`}
           aria-label={`Message to ${name}`}
           {...slash.field}
           className="max-h-48 min-h-10"

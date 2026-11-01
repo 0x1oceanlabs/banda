@@ -4,6 +4,8 @@ import { agent, event, person } from "./testing"
 import {
   EMPTY,
   apply,
+  asked as askedOf,
+  declineOnce,
   choose,
   chosen,
   retryable,
@@ -493,4 +495,29 @@ test("what the Agent does by itself is a turn its notice starts", () => {
   )
   expect(retryable(cut, cut.turns[1])).toBe(false)
   expect(own.message).toBe("n")
+})
+
+test("the Question the Agent waits on, and the no it takes from a message", () => {
+  const choices = [
+    { id: "always", name: "Always allow", allows: true, always: true },
+    { id: "never", name: "Never", allows: false, always: true },
+    { id: "allow", name: "Allow", allows: true, always: false },
+    { id: "reject", name: "Reject", allows: false, always: false },
+  ]
+  const state = play(
+    event("question.asked", { item: "q", turn: "u", title: "Run?", choices })
+  )
+  const question = askedOf(state)
+  expect(question?.id).toBe("q")
+  // Never one the Harness keeps for next time.
+  expect(declineOnce(question!.body)).toBe("reject")
+  const answered = apply(
+    state,
+    event(
+      "question.answered",
+      { item: "q", choice: "reject" },
+      { author: person }
+    )
+  )
+  expect(askedOf(answered)).toBeUndefined()
 })
