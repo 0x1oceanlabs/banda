@@ -158,8 +158,9 @@ keys change any part of it.
 
 **Preset**:
 A named arrangement of the sidebar: `inbox`, `spaces` or `places`, or a file
-of the Person's own. It sets how Threads are grouped and sorted and what a
-row shows; the Person's keys win over it.
+of the Person's own in `~/.config/banda/sidebars/`. It sets how Threads are
+grouped and sorted and what a row shows; the Person's keys in
+`sidebar.toml` win over it.
 
 **Shelf**:
 A section at the bottom of the sidebar, folded or open, with its count:

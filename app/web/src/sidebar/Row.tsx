@@ -11,7 +11,7 @@ import type { Part, Settings } from "./settings"
  * always the mark and the title, so a Thread looks the same in every
  * density; the other lines add context.
  */
-export const LAYOUTS: Record<1 | 2 | 3, Part[][]> = {
+export const LAYOUTS: Readonly<Record<number, Part[][]>> = {
   1: [["mark", "title", "~", "space", "status"]],
   2: [
     ["space", "harness", "~", "status"],
@@ -40,7 +40,7 @@ export function Row({
   onOpen: () => void
 }) {
   const { lines, hide, layout } = settings.row
-  const parts = (layout ?? LAYOUTS[lines]).map((line) =>
+  const parts = (layout ?? LAYOUTS[lines] ?? LAYOUTS[3]).map((line) =>
     line.filter(
       (part) => !hide.includes(part) && !(part === "space" && inSpace)
     )

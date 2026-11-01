@@ -1,0 +1,10 @@
+# Banda's "spaces" preset: each Space a section, its Threads by what needs
+# you, one line a row.
+
+[group]
+by = "space"
+states = ["needs", "done", "working", "idle"]
+bottom = []
+
+[row]
+lines = 1

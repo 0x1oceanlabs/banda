@@ -10,12 +10,15 @@
 //! It is the window's machine's, not a Space's, so it is no module of the
 //! engine: `bandaso look` prints it, and `bandaso look --follow` prints it
 //! again on every change. The window runs that and applies what it reads.
+//! The sidebar's `sidebar.toml` (ADR 0008) is this machine's too, so it
+//! comes with the look: [`sidebar`].
 
 pub mod color;
 pub mod hyprland;
 pub mod motion;
 pub mod palette;
 pub mod settings;
+pub mod sidebar;
 pub mod sound;
 pub mod theme;
 pub mod tokens;
@@ -73,6 +76,8 @@ pub struct Look {
     pub problems: Vec<Problem>,
     /// Banda's sounds, which the window plays (ADR 0009).
     pub sound: sound::Sound,
+    /// How the sidebar arranges its Threads, from `sidebar.toml` (ADR 0008).
+    pub sidebar: sidebar::Sidebar,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, TS)]
@@ -391,6 +396,8 @@ pub fn resolve(places: &Places, windows: &dyn Fn() -> Option<Windows>) -> Resolv
         }
     }
 
+    let sidebar = sidebar::resolve(places, &mut problems, &mut watched);
+
     Resolved {
         look: Look {
             mode: shown,
@@ -400,6 +407,7 @@ pub fn resolve(places: &Places, windows: &dyn Fn() -> Option<Windows>) -> Resolv
             sources,
             problems,
             sound: all.sound.resolved(),
+            sidebar,
         },
         watched,
     }
@@ -554,7 +562,8 @@ fn fingerprint(paths: &[PathBuf]) -> Vec<Option<(SystemTime, u64)>> {
 pub use theme::Listed;
 
 /// Checks files as `bandaso look check` does: a `colors.toml` as a
-/// palette, anything else as `look.toml`'s schema.
+/// palette, a `sidebar.toml` or a file in `sidebars/` as the sidebar's
+/// schema, anything else as `look.toml`'s.
 pub fn check(paths: &[PathBuf]) -> Vec<Problem> {
     let mut problems = Vec::new();
     for path in paths {
@@ -565,7 +574,9 @@ pub fn check(paths: &[PathBuf]) -> Vec<Problem> {
                 continue;
             }
         };
-        if path.file_name().is_some_and(|n| n == "colors.toml") {
+        if let Some(preset) = sidebar::is_sidebar_file(path) {
+            sidebar::read_sidebar(path, &text, preset, &mut problems);
+        } else if path.file_name().is_some_and(|n| n == "colors.toml") {
             match Palette::parse(&text) {
                 Ok(palette) => {
                     let complete = palette.complete();

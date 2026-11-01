@@ -1,7 +1,8 @@
 /**
  * The desktop window. It runs the engine as its child, serves the page
  * from `app://bandaso` and hands the page the engine's address. It also
- * runs `bandaso look --follow` and hands the page each look (ADR 0007);
+ * runs `bandaso look --follow` and hands the page each look (ADR 0007),
+ * and writes the preset the page picks into `sidebar.toml` (ADR 0008);
  * nothing else crosses from Node to the page (docs/architecture.md,
  * "Processes").
  */
@@ -20,6 +21,7 @@ import {
 } from "electron"
 import { EngineProcess } from "./engine"
 import { firstFrame, LookProcess } from "./look"
+import { ensure, writePreset } from "./sidebar"
 
 /** The page's origin; the engine lets it in (kernel/src/api.rs, APP_ORIGIN). */
 const ORIGIN = "app://bandaso"
@@ -109,6 +111,26 @@ async function ready(): Promise<void> {
     if (!fromPage(from))
       throw new Error("Only Bandaso's page may ask for the look.")
     return look.current()
+  })
+  ipcMain.handle("sidebar.preset", (event, name: unknown) => {
+    const from = event.senderFrame?.url ?? ""
+    if (!fromPage(from))
+      throw new Error("Only Bandaso's page may change the sidebar.")
+    const sidebar = look.current()?.sidebar
+    if (!sidebar) throw new Error("The sidebar's file is not known yet.")
+    if (!sidebar.presets.some((preset) => preset.name === name))
+      throw new Error(`There is no preset ${JSON.stringify(name)}.`)
+    writePreset(sidebar.file, name as string)
+  })
+  ipcMain.handle("sidebar.edit", async (event) => {
+    const from = event.senderFrame?.url ?? ""
+    if (!fromPage(from))
+      throw new Error("Only Bandaso's page may open the sidebar's file.")
+    const sidebar = look.current()?.sidebar
+    if (!sidebar) throw new Error("The sidebar's file is not known yet.")
+    ensure(sidebar.file)
+    const failed = await shell.openPath(sidebar.file)
+    if (failed) throw new Error(failed)
   })
   const first = await look.first(LOOK_WAIT)
   if (first) nativeTheme.themeSource = first.mode

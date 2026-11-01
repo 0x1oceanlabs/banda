@@ -1,0 +1,35 @@
+# How Banda's sidebar arranges your Threads. Every key is optional: what
+# you leave out comes from the preset, and what the preset leaves out from
+# Banda's defaults, written below. Check a change with: bandaso look check
+#
+# The presets: "inbox" (what needs you first), "spaces" (Threads under
+# their Spaces), "places" (Spaces above, Threads by need), or one of your
+# own: ~/.config/banda/sidebars/<name>.toml, with the keys of this file.
+preset = "inbox"
+
+# [group]
+# by = "state"                       # "state", "space" or "none"
+# states = ["needs", "done", "idle"] # the sections, in this order
+# bottom = ["working"]               # shelves at the bottom, with their counts
+# folded = []                        # sections, shelves or Spaces folded at first
+# limit = 10                         # rows before "Show more"; 0 shows all
+# empty = "hide"                     # an empty section: "hide" or "show"
+
+# [sort]
+# by = "attention"                   # "attention", "changed" or "title"
+
+# [spaces]
+# list = false                       # a list of Spaces above the Threads
+# order = "changed"                  # "changed" or "name"
+# rollup = true                      # a Space shows its loudest mark and count
+# new-thread = true                  # each Space offers a new Thread in it
+
+# [row]
+# lines = 3                          # 1, 2 or 3
+# hide = []                          # parts to leave out: "space", "note", …
+# A layout of your own replaces the lines', part by part; "~" pushes the
+# rest to the right. The parts: "mark", "title", "space", "harness",
+# "status", "note".
+# line1 = ["space", "~", "status"]
+# line2 = ["mark", "title"]
+# line3 = ["note", "~", "harness"]

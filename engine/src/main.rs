@@ -5,8 +5,9 @@
 //! - `bandaso follow --space <id>` prints the Space's events, one JSON
 //!   object per line.
 //! - `bandaso look` prints the window's look, resolved from Omarchy's
-//!   theme, Hyprland and `~/.config/banda/look.toml`; `--follow` prints it
-//!   again on each change. It needs no engine: the look is this machine's.
+//!   theme, Hyprland and `~/.config/banda/look.toml`, with the sidebar's
+//!   arrangement from `sidebar.toml`; `--follow` prints it again on each
+//!   change. It needs no engine: the look is this machine's.
 //!
 //! When the engine refuses (the call, the hello or the follow), the CLI
 //! prints `{"error": {"code", "message"}}` and exits 1. When no engine
@@ -79,7 +80,8 @@ enum Command {
         kinds: Vec<String>,
     },
     /// Prints the window's look as JSON: CSS variables from Omarchy's
-    /// theme, Hyprland's windows and ~/.config/banda/look.toml.
+    /// theme, Hyprland's windows and ~/.config/banda/look.toml, and the
+    /// sidebar's arrangement from ~/.config/banda/sidebar.toml.
     Look {
         #[command(subcommand)]
         what: Option<LookCommand>,
@@ -92,8 +94,9 @@ enum Command {
 
 #[derive(Subcommand)]
 enum LookCommand {
-    /// Checks look.toml, a theme's banda.toml or colors.toml, or with no
-    /// files every file the look reads. Prints path:line:column: problem
+    /// Checks look.toml, sidebar.toml, a sidebar preset, a theme's
+    /// banda.toml or colors.toml, or with no files every file the look
+    /// reads. Prints path:line:column: problem
     /// and exits 1 when anything is wrong; prints nothing when all is well.
     Check { files: Vec<PathBuf> },
     /// Lists the themes there are, one JSON object per line.

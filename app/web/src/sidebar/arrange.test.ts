@@ -3,7 +3,8 @@ import type { MarkState } from "@bandaso/ui/components/banda-mark"
 import type { Listed } from "@bandaso/ui/pane"
 import { expect, test } from "vitest"
 import { arrange, type Arranged } from "./arrange"
-import { type Keys, type Preset, resolve } from "./settings"
+import { DEFAULT_SIDEBAR } from "@bandaso/contract/sidebar"
+import { type Settings, STATES } from "./settings"
 
 const landing: SpaceSummary = { id: "s1", name: "Landing", folder: "/l" }
 const api: SpaceSummary = { id: "s2", name: "API", folder: "/a" }
@@ -33,6 +34,32 @@ const lists = {
 
 const ids = (arranged: Arranged, where: "sections" | "shelves" = "sections") =>
   arranged[where].map((s) => [s.key, s.rows.map((r) => r.listed.id)])
+
+/** Keys over others, as `bandaso look` lays them (look/src/sidebar.rs). */
+type Keys = { [Group in keyof Settings]?: Partial<Settings[Group]> }
+const over = (base: Settings, keys: Keys = {}): Settings => ({
+  group: { ...base.group, ...keys.group },
+  sort: { ...base.sort, ...keys.sort },
+  spaces: { ...base.spaces, ...keys.spaces },
+  row: { ...base.row, ...keys.row },
+})
+
+/** Banda's presets, as look/sidebars/*.toml set them. */
+const PRESETS = {
+  inbox: {},
+  spaces: {
+    group: { by: "space", states: [...STATES], bottom: [] },
+    row: { lines: 1 },
+  },
+  places: {
+    group: { states: [...STATES], bottom: [], folded: ["idle"] },
+    spaces: { list: true },
+    row: { lines: 2 },
+  },
+} satisfies Record<string, Keys>
+type Preset = keyof typeof PRESETS
+const resolve = (preset: Preset, keys?: Keys) =>
+  over(over(DEFAULT_SIDEBAR, PRESETS[preset]), keys)
 
 const of = (
   preset: Preset,
@@ -96,8 +123,6 @@ test("the Person's keys win over the preset", () => {
   expect(ids(flat)).toEqual([
     ["all", ["form", "headers", "letters", "logo", "migration", "release"]],
   ])
-  expect(resolve("spaces", { row: { lines: 2 } }).row.lines).toBe(2)
-  expect(resolve("spaces").row.lines).toBe(1)
 })
 
 test("empty sections hide unless the settings show them", () => {

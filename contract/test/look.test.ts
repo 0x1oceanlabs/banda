@@ -4,6 +4,7 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { expect, test } from "vitest"
 import { DEFAULT_MOTION, type Look, shown } from "../src/look"
+import { DEFAULT_SIDEBAR } from "../src/sidebar"
 
 const look = (mode: Look["mode"], schemes: Look["schemes"]): Look => ({
   mode,
@@ -20,6 +21,7 @@ const look = (mode: Look["mode"], schemes: Look["schemes"]): Look => ({
     asking: true,
     failed: true,
   },
+  sidebar: DEFAULT_SIDEBAR,
 })
 const light = { "--background": "#fff" }
 const dark = { "--background": "#000" }

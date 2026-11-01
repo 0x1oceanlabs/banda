@@ -9,7 +9,7 @@ ADR 0005 (decision 8) put every Thread of every Space in one sidebar, ordered by
 
 Roma liked A, B and C, and asked for one thing instead of three: "unify everything, and change only the sorting and the display. Better, make it hackable: the Person sets it up as they like through a config, and we give only presets and defaults. This is the point of our app: a hackable workspace, and an Agent can set the app up for its Person, as with themes."
 
-**Decision.** Roma decided the points marked _decided_. On 2026-11-01 he accepted the rest as our defaults and asked to build, for now without search and with the presets in the view menu; each stays his to change.
+**Decision.** Roma decided the points marked _decided_. On 2026-11-01 he accepted the rest as our defaults and asked to build, for now without search and with the presets in the view menu; each stays his to change. The same day he decided the file is the whole interface: no MCP tools and no CLI to set keys (decision 6).
 
 1. **One sidebar; A, B and C are presets of it** (_decided_).
    - Every arrangement uses the same parts: one row, one section header, one Space header, the same marks (ADR 0005, decision 16), the same counts and the same roll-up.
@@ -23,7 +23,7 @@ Roma liked A, B and C, and asked for one thing instead of three: "unify everythi
 
 3. **Presets are files, as themes are** (_decided_).
    - `preset` names one. Banda ships `inbox`, `spaces` and `places`.
-   - Any other name is a file: `~/.config/banda/sidebars/<name>.toml`, with the same keys as `sidebar.toml`. A Person can copy one, share one, or ask an Agent to write one.
+   - Any other name is a file: `~/.config/banda/sidebars/<name>.toml`, with the same keys as `sidebar.toml`. A Person can copy one, share one, or ask an Agent to write one. A file named as one of Banda's wins over it, so a Person can copy `inbox` and change it.
    - A preset file cannot name another preset, so there are no chains.
 
 4. **The keys.** Written out with the defaults of the `inbox` preset:
@@ -35,7 +35,7 @@ Roma liked A, B and C, and asked for one thing instead of three: "unify everythi
    by = "state"                # "state", "space" or "none"
    states = ["needs", "done", "idle"]   # the sections, in this order
    bottom = ["working"]        # shelves at the bottom, each with its count
-   folded = ["working"]        # sections and shelves that start folded
+   folded = []                 # sections, shelves or Spaces that start folded
    limit = 10                  # rows before "Show more"; 0 shows all
    empty = "hide"              # an empty section: "hide" or "show"
 
@@ -85,18 +85,16 @@ Roma liked A, B and C, and asked for one thing instead of three: "unify everythi
    - `inbox` is the default (_decided_ in ADR 0005, decision 8: "those that need the Person" first).
    - In `places`, a click on a Space in the list shows only its Threads, and a second click shows all again, as Herdr's active Space does.
 
-6. **Switching is one click, and it writes the file** (_decided_: "the Person sets it up as they like").
-   - The sidebar's header has a view menu, behind a filter icon, with every preset it can find, the Person's own too, and "Edit sidebar.toml" (_decided_).
-   - Picking a preset writes `preset = "…"` into the file and keeps the Person's other keys and comments.
-   - An Agent changes it the same way, through the sidebar's MCP tools (ADR 0005, decision 14): "group my Threads by Space", "one line per Thread".
+6. **Switching is one click, and it writes the file; the file is the whole interface** (_decided_: "the Person sets it up as they like"; and, asked whether it needs MCP tools, a CLI or only the file: "the config file, then").
+   - The sidebar's header has a view menu, behind a filter icon, with every preset it can find, the Person's own too, and "Edit sidebar.toml" (_decided_). That opens the file in the Person's editor, from Banda's template when it is not there yet: the preset, and every other key with its default, commented out.
+   - Picking a preset writes `preset = "…"` into the file and keeps the Person's other keys and comments. A file that is a link stays one.
+   - An Agent changes it the same way: it edits the file with its own tools, and `bandaso look check` tells it whether the file is right. No MCP tool and no CLI command sets a key; they would only repeat the file. The Banda skill's reference (ADR 0005, decision 14) will describe the keys when there is one.
 
-7. **A module's file is the engine's, read once for every module.**
-   - The engine reads `~/.config/banda/<name>.toml` for any module that declares the file, checks the TOML, and streams its values as JSON: the whole file first, then again on every save.
-   - A broken file leaves the last good values in force, and a notice names the file and the line (ADR 0005, decision 11).
-   - `config.set` writes keys into the file and keeps the Person's comments. `bandaso check` validates the file.
-   - The module that owns the file checks the meaning of its keys against its schema, declared in its manifest (ADR 0005, decision 12). A key it does not know is named in the notice and skipped; the rest still apply.
-   - The sidebar is the first module to use it. The look module (ADR 0007, decision 10) uses the same, so there is one way to read, watch and write a config.
-   - The file belongs to the machine the window runs on, as the look does.
+7. **The file is read with the look's.** _Changed on 2026-11-01, when it was built. This decision first had the engine read a config file for any module. The look had by then shipped without the engine (ADR 0007, decision 10), and the sidebar's file is this machine's as the look's is, so it joined the look._
+   - `bandaso look` resolves `sidebar.toml` with `look.toml`, and `bandaso look --follow` prints the arrangement again on every save of either file, of the preset file in force, or of the Person's presets folder. The window applies it as it applies the look.
+   - A broken file leaves the last good arrangement in force, and the bar names the file and the line, as it does for the look (ADR 0005, decision 11). A wrong value of `row.lines`, a preset file that names a preset, and an unknown preset are named and left out, and the rest still applies.
+   - `bandaso look check` checks `sidebar.toml` and any file in a `sidebars` folder; with no files it checks every file the look and the sidebar read.
+   - A config file the engine reads for any module waits until a module that runs in the engine needs one.
 
 8. **The arrangement is one pure function.**
    - It takes the Threads of every Space, the Spaces, the Person's seen marks and the settings, and returns the sections, each with its rows.
@@ -110,7 +108,6 @@ Roma liked A, B and C, and asked for one thing instead of three: "unify everythi
 - The bar's waiting dot and the workspace marks take the same states, so the sidebar and the bar never disagree.
 - Words for `GLOSSARY.md`, once built: preset, section, shelf.
 - The order of work, each step its own PR:
-  1. **The arrangement and the three presets**, from the built-in defaults, with the preset menu kept in the window until step 2.
-  2. **The module's file**: the engine reads, watches and writes `sidebar.toml` and the preset files; the notice for a broken file.
-  3. **The MCP tools and the Banda skill's page** on the sidebar's keys, so an Agent can arrange it.
-- Later: search; `sort.by = "manual"`; pinned, snoozed and settled; a rail when the sidebar is narrow, as Herdr's.
+  1. **The arrangement and the three presets**, from the built-in defaults, with the preset menu kept in the window until step 2. _Done._
+  2. **The file**: `bandaso look` reads and watches `sidebar.toml` and the preset files; the view menu writes the preset; "Edit sidebar.toml"; the notice for a broken file. _Done._
+- Later: the keys in the Banda skill's reference, once there is one; search; `sort.by = "manual"`; pinned, snoozed and settled; a rail when the sidebar is narrow, as Herdr's.

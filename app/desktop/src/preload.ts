@@ -15,6 +15,10 @@ const host: Host = {
       }
     },
   },
+  sidebar: {
+    preset: (name) => ipcRenderer.invoke("sidebar.preset", name),
+    edit: () => ipcRenderer.invoke("sidebar.edit"),
+  },
 }
 
 contextBridge.exposeInMainWorld("bandaso", host)

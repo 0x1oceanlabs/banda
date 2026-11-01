@@ -39,16 +39,19 @@ function fakeCli(dir: string, version: string, minimum: string): string {
 
 /** With `account`, the fake agent has one in the throwaway folders, signed
  * out. With `oldCli`, it runs a CLI that says 1.0.0 where its entry asks for
- * 2.0.0 at least. */
+ * 2.0.0 at least. `look` and `sidebar` are the text of `look.toml` and
+ * `sidebar.toml`. */
 export async function startWindow({
   account = false,
   oldCli = false,
   look = "",
+  sidebar = "",
 } = {}): Promise<Window> {
   const dir = mkdtempSync(join(tmpdir(), "bandaso-window-"))
   mkdirSync(join(dir, "config"))
   mkdirSync(join(dir, "look"))
   if (look) writeFileSync(join(dir, "look/look.toml"), look)
+  if (sidebar) writeFileSync(join(dir, "look/sidebar.toml"), sidebar)
   const fake = join(repository, "target/debug/bandaso-fake-agent")
   const home = join(dir, "fake-home")
   mkdirSync(home)

@@ -8,7 +8,8 @@
     ".": "./src/index.ts",
     "./agents": "./src/agents.ts",
     "./terminal": "./src/terminal.ts",
-    "./look": "./src/look.ts"
+    "./look": "./src/look.ts",
+    "./sidebar": "./src/sidebar.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
