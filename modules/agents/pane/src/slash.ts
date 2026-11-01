@@ -34,22 +34,14 @@ export function suggested(offer: Offer): Suggested[] {
   ]
 }
 
-/** The start of a slash command's name while the message is only that:
- * `/` and a word. A path, with a second `/`, is not one. */
-export function typed(text: string): string | undefined {
-  return /^\/([^\s/]*)$/.exec(text)?.[1]
-}
-
-/** The window's own slash command that a whole message is, as `/plan`:
- * it is not sent, but switches plan mode. */
+/** The plan mode a whole message switches to when it is one of the
+ * window's own slash commands, as `/plan`: it is not sent. */
 export function ownCommand(
   text: string,
   commands: Suggested[]
-): Suggested | undefined {
+): boolean | undefined {
   const name = /^\/(\S+)$/.exec(text.trim())?.[1]
-  return commands.find(
-    (command) => command.planMode !== undefined && command.name === name
-  )
+  return commands.find((command) => command.name === name)?.planMode
 }
 
 /** The slash commands that fit a word: by name exactly, then names that

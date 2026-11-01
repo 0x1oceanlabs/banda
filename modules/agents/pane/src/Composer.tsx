@@ -8,6 +8,7 @@ import {
 import {
   PromptEditor,
   type PromptEditorHandle,
+  type Typing,
 } from "@banda/ui/components/prompt-editor"
 import { RingMeter } from "@banda/ui/components/ring-meter"
 import { Spinner } from "@banda/ui/components/spinner"
@@ -25,7 +26,6 @@ import { recall } from "./history"
 import { imagesAmong, KINDS } from "./images"
 import { ownCommand, type Suggested } from "./slash"
 import { type FindFiles, useFileMenu } from "./FileMenu"
-import { mention, mentioning } from "./mention"
 import { useSlashMenu } from "./SlashMenu"
 
 /**
@@ -111,34 +111,28 @@ export function Composer({
     if (focused) field.current?.focus()
   }, [focused])
 
-  // Where the caret is, for `@` and a file's name before it.
-  const [caret, setCaret] = useState(0)
-  /** Puts `next` in the box, the caret at its end, where the field puts it. */
-  const put = (next: string) => {
-    setText(next)
-    setCaret(next.length)
-  }
+  // The word being typed that asks for suggestions: `/` or `@`.
+  const [typing, setTyping] = useState<Typing>()
   const pick = (command: Suggested) => {
     if (command.planMode === undefined) {
-      put(`/${command.name} `)
+      field.current?.complete(`/${command.name} `)
     } else {
       onPlanMode(command.planMode)
-      put("")
+      field.current?.complete("")
     }
   }
-  const slash = useSlashMenu({ text, commands, name, onPick: pick })
-  const at = mentioning(text, caret)
+  const slash = useSlashMenu({
+    text,
+    word: typing?.trigger === "/" ? typing.word : undefined,
+    commands,
+    name,
+    onPick: pick,
+  })
   const fileMenu = useFileMenu({
     text,
-    word: at?.word,
+    word: typing?.trigger === "@" ? typing.word : undefined,
     findFiles,
-    onPick: (path) => {
-      if (!at) return
-      const named = mention(text, at, path)
-      field.current?.replace(named.text, named.caret)
-      setText(named.text)
-      setCaret(named.caret)
-    },
+    onPick: (path) => field.current?.complete({ chip: "file", value: path }),
   })
 
   const written = text.trim() !== "" || images.adding.length > 0
@@ -146,9 +140,11 @@ export function Composer({
   const send = async (steer: boolean) => {
     if (!ready) return
     // A message that is only `/plan` or `/default` switches plan mode.
-    const own = images.adding.length === 0 && ownCommand(text, commands)
-    if (own) {
-      pick(own)
+    const mode =
+      images.adding.length === 0 ? ownCommand(text, commands) : undefined
+    if (mode !== undefined) {
+      onPlanMode(mode)
+      setText("")
       return
     }
     const sending = images.attached
@@ -209,10 +205,9 @@ export function Composer({
             ...fileMenu.field,
           }}
           className="max-h-48 min-h-10"
-          onCaret={setCaret}
-          onChange={(value, at) => {
+          onTyping={setTyping}
+          onChange={(value) => {
             setText(value)
-            setCaret(at)
             setBack(0)
           }}
           onPaste={(event) => {
@@ -237,7 +232,7 @@ export function Composer({
               if (!step) return
               event.preventDefault()
               if (step === "edit") return onEditLast?.()
-              put(step.text)
+              setText(step.text)
               setBack(step.back)
               return
             }

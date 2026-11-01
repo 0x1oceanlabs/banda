@@ -4,24 +4,41 @@ import Paragraph from "@tiptap/extension-paragraph"
 import Text from "@tiptap/extension-text"
 import { Node } from "@tiptap/pm/model"
 import { expect, test } from "vitest"
-import { docOf, offsetOf, posOf, textOf } from "./prompt"
+import { Chip } from "../components/prompt-chip"
+import { docOf, textOf, typingIn } from "./prompt"
 
-const schema = getSchema([Document, Paragraph, Text])
+const schema = getSchema([Document, Paragraph, Text, Chip])
 const node = (text: string) => Node.fromJSON(schema, docOf(text))
+const back = (text: string) => textOf(node(text).content)
 
 test("a prompt's lines are the document's paragraphs, and back", () => {
   for (const text of ["", "one", "one\ntwo", "a\n\nb\n"])
-    expect(textOf(node(text))).toBe(text)
+    expect(back(text)).toBe(text)
   expect(node("one\ntwo").childCount).toBe(2)
 })
 
-test("the caret maps between the text and the document", () => {
-  const doc = node("ab\n\ncd")
-  // Each offset into the text has a place, and comes back the same.
-  for (let offset = 0; offset <= "ab\n\ncd".length; offset++)
-    expect(offsetOf(doc, posOf(doc, offset))).toBe(offset)
-  // The second line starts in the second paragraph.
-  expect(posOf(doc, 3)).toBe(5)
-  // Past the end is the end.
-  expect(offsetOf(doc, posOf(doc, 99))).toBe(6)
+test("a file named in the text is a chip that writes it back", () => {
+  const text =
+    "look at @src/main.ts and @notes.md.\n@here stays, me@home too (@a/b)"
+  expect(back(text)).toBe(text)
+  const chips: string[] = []
+  node(text).descendants((child) => {
+    if (child.type.name === "chip") chips.push(child.attrs.value)
+  })
+  // A full stop or a bracket after a path is not part of it.
+  expect(chips).toEqual(["src/main.ts", "notes.md"])
+})
+
+test("a word being typed asks for suggestions", () => {
+  expect(typingIn("/rev")).toEqual({ trigger: "/", word: "rev" })
+  expect(typingIn("/")).toEqual({ trigger: "/", word: "" })
+  expect(typingIn("look at @src/ma")).toEqual({ trigger: "@", word: "src/ma" })
+  expect(typingIn("@")).toEqual({ trigger: "@", word: "" })
+  // Not a command past a line's start, a path, an address, a word the
+  // caret has left, or a chip.
+  expect(typingIn("see /rev")).toBeUndefined()
+  expect(typingIn("/a/b")).toBeUndefined()
+  expect(typingIn("me@home")).toBeUndefined()
+  expect(typingIn("@notes and")).toBeUndefined()
+  expect(typingIn("@￼")).toBeUndefined()
 })

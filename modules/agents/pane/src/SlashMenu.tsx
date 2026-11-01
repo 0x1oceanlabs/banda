@@ -1,21 +1,23 @@
 import { useMenu } from "./Menu"
-import { matching, type Suggested, typed } from "./slash"
+import { matching, type Suggested } from "./slash"
 
-/** The slash commands that fit a message while it is `/` and a word, in
- * a list above its box, as {@link useMenu} shows one. */
+/** The slash commands that fit `/` and a word at a line's start, in a
+ * list above the box, as {@link useMenu} shows one. */
 export function useSlashMenu({
   text,
+  word,
   commands,
   name,
   onPick,
 }: {
   text: string
+  /** The command's name being typed, if one is. */
+  word: string | undefined
   commands: Suggested[]
   /** The Agent's name, for when it has said no slash commands yet. */
   name: string
   onPick: (command: Suggested) => void
 }) {
-  const word = typed(text)
   return useMenu({
     text,
     word,
