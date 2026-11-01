@@ -297,10 +297,7 @@ pub fn settle(tx: &mut Tx<'_>, effect: &Effect, settled: &Settled) -> Result<(),
                     if turn.state == TurnState::Queued {
                         return Ok(());
                     }
-                    Ending::new(
-                        TurnState::Interrupted,
-                        Some("Banda stopped while the Agent worked."),
-                    )
+                    Ending::cut_short()
                 }
                 Settled::Failed(reason) => Ending::failed(reason.clone(), None),
             };

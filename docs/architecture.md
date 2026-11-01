@@ -400,10 +400,15 @@ If Chat is removed, Agents still works through its own Thread.
   that takes no images (ACP's `promptCapabilities.image`) says so in what
   it offers, and the window offers no images; a message with images gets
   the text alone, with a notice, and one of images alone fails its turn.
+- **One function moves a turn** (`rules::next`, ADR 0018): given what the
+  engine knows of a turn and what happened (started, stopped, changed,
+  taken back, steered, tried again), it says the turn's next state and
+  whether the queue is held, or refuses, a late event too. The rules the
+  commands ask are questions to it.
 - **A turn says what a Person may do with it** (`can`, ADR 0014): stop
   it, try it again, change, take back or send its message now, or send a
-  message into it. One function in the module's rules decides it from the
-  rules its commands ask, and the window shows only what it allows.
+  message into it. `rules::can` asks `next` what it accepts, and the
+  window shows only what it allows.
 - **A restart interrupts** the turn it cut short and closes that turn's
   open Questions. Turns that waited stay queued, and the queue is held. A
   message sent into a turn that never got it waits for a turn of its own.

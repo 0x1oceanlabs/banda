@@ -270,9 +270,8 @@ fn open(
 pub fn cut_short(tx: &mut Tx<'_>) -> Result<(), Error> {
     for running in store::every_running(tx.sql())? {
         if turn::by_itself(tx.sql(), &running)? {
-            let reason = Some("Banda stopped while the Agent worked.");
-            let ending = Ending::new(TurnState::Interrupted, reason);
-            turn::end(tx, Participant::Agent(running.agent), &running, ending)?;
+            let agent = Participant::Agent(running.agent);
+            turn::end(tx, agent, &running, Ending::cut_short())?;
         }
     }
     Ok(())

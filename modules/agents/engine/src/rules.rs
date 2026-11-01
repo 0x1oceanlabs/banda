@@ -8,6 +8,9 @@ use crate::model::{
 use banda_kernel::{Participant, Refusal};
 use std::collections::HashSet;
 
+mod moves;
+use moves::{Event, Step, TurnFacts, next};
+
 /// How freely an Agent acts is a Person's choice: an Agent sends a message
 /// with the settings its Thread has, and changes none.
 pub fn may_choose(author: Participant) -> Result<(), Refusal> {
@@ -22,11 +25,17 @@ pub fn may_choose(author: Participant) -> Result<(), Refusal> {
 /// Whether a turn may start now: it waits, nobody stopped it, and its
 /// Thread's queue is not held.
 pub fn may_start(state: TurnState, held: bool) -> bool {
-    state == TurnState::Queued && !held
+    let turn = TurnFacts {
+        held,
+        ..TurnFacts::of(state)
+    };
+    next(&turn, Event::Start).is_ok()
 }
 
 /// Whether a turn that ended so holds the Thread's queue: one whose
-/// Harness stopped, as after a restart.
+/// Harness stopped, as after a restart. Step 4 (ADR 0018, decision 4)
+/// holds it behind the Agent's own turn too, which `between.rs` ends
+/// without asking this.
 pub fn holds_queue(ending: &Ending) -> bool {
     ending.failure == Some(Failure::HarnessStopped)
 }
@@ -48,39 +57,27 @@ pub enum Stop {
 }
 
 pub fn stop(state: TurnState) -> Stop {
-    match state {
-        TurnState::Queued => Stop::Now,
-        TurnState::Running => Stop::AskHarness,
-        TurnState::Done
-        | TurnState::Stopped
-        | TurnState::Failed
-        | TurnState::Interrupted
-        | TurnState::Withdrawn => Stop::Nothing,
+    match next(&TurnFacts::of(state), Event::Stop) {
+        Ok(Step { held: true, .. }) => Stop::AskHarness,
+        Ok(_) => Stop::Now,
+        Err(_) => Stop::Nothing,
     }
 }
 
 /// Whether a Person may still change a message, take it back or send it
 /// now: only while its turn waits.
 pub fn waits(state: TurnState) -> Result<(), Refusal> {
-    if state == TurnState::Queued {
-        Ok(())
-    } else {
-        Err(Refusal::invalid(
-            "The Agent has taken this message, so it can no longer be changed.",
-        ))
-    }
+    next(&TurnFacts::of(state), Event::Withdraw).map(drop)
 }
 
 /// Whether a waiting message can be changed: one tried again cannot,
 /// since a turn already ran it.
 pub fn may_change(first: bool) -> Result<(), Refusal> {
-    if first {
-        Ok(())
-    } else {
-        Err(Refusal::invalid(
-            "The Agent has read this message, so it can no longer be changed.",
-        ))
-    }
+    let waiting = TurnFacts {
+        first,
+        ..TurnFacts::of(TurnState::Queued)
+    };
+    next(&waiting, Event::Change).map(drop)
 }
 
 /// How a turn ended: its state, in plain words why, and what kind of
@@ -99,6 +96,14 @@ impl Ending {
             reason: reason.map(str::to_owned),
             failure: None,
         }
+    }
+
+    /// A turn a restart cut short.
+    pub fn cut_short() -> Ending {
+        Ending::new(
+            TurnState::Interrupted,
+            Some("Banda stopped while the Agent worked."),
+        )
     }
 
     pub fn failed(reason: impl Into<String>, failure: Option<Failure>) -> Ending {
@@ -146,22 +151,12 @@ impl Ending {
 /// Whether a turn may be tried again: a Person asked for it, it failed or
 /// was cut short, and nothing came after it in its Thread.
 pub fn retry(state: TurnState, latest: bool, by_itself: bool) -> Result<(), Refusal> {
-    if by_itself {
-        return Err(Refusal::invalid(
-            "Only a turn a Person asked for can be tried again.",
-        ));
-    }
-    if !matches!(state, TurnState::Failed | TurnState::Interrupted) {
-        return Err(Refusal::invalid(
-            "Only a turn that failed or was cut short can be tried again.",
-        ));
-    }
-    if !latest {
-        return Err(Refusal::invalid(
-            "Only the Thread's latest turn can be tried again.",
-        ));
-    }
-    Ok(())
+    let turn = TurnFacts {
+        latest,
+        by_itself,
+        ..TurnFacts::of(state)
+    };
+    next(&turn, Event::Retry).map(drop)
 }
 
 /// Where a turn stands among its Thread's turns, as its rules need it.
@@ -197,11 +192,16 @@ pub fn position(turns: &[TurnView], turn: TurnId) -> Position {
 /// held, and a Person asked for it; one the Agent went on with by itself
 /// takes a message as a turn of its own.
 pub fn steers(state: TurnState, held: bool, by_itself: bool) -> bool {
-    state == TurnState::Running && !held && !by_itself
+    let turn = TurnFacts {
+        held,
+        by_itself,
+        ..TurnFacts::of(state)
+    };
+    next(&turn, Event::Steer).is_ok()
 }
 
 /// What a Person may do with each of a Thread's turns now (ADR 0014,
-/// decision 2), by the rules its commands ask. `turns` are in the order
+/// decision 2): what [`next`] accepts of a Person. `turns` are in the order
 /// they were made, and `items` are the Thread's.
 pub fn can(turns: &mut [TurnView], items: &[Item], held: bool) {
     let notices: HashSet<ItemId> = items
@@ -213,13 +213,20 @@ pub fn can(turns: &mut [TurnView], items: &[Item], held: bool) {
         .iter()
         .map(|turn| {
             let Position { first, latest } = position(turns, turn.id);
-            let by_itself = notices.contains(&turn.message);
+            let facts = TurnFacts {
+                by_itself: notices.contains(&turn.message),
+                first,
+                latest,
+                held,
+                ..TurnFacts::of(turn.state)
+            };
+            let takes = |event| next(&facts, event).is_ok();
             Can {
-                stop: stop(turn.state) != Stop::Nothing,
-                retry: retry(turn.state, latest, by_itself).is_ok(),
-                edit: waits(turn.state).is_ok() && may_change(first).is_ok(),
-                withdraw: waits(turn.state).is_ok(),
-                steer: steers(turn.state, held, by_itself),
+                stop: takes(Event::Stop),
+                retry: takes(Event::Retry),
+                edit: takes(Event::Change),
+                withdraw: takes(Event::Withdraw),
+                steer: takes(Event::Steer),
             }
         })
         .collect();
@@ -801,43 +808,22 @@ mod tests {
     }
 
     #[test]
-    fn a_turn_starts_once_stops_by_its_state_and_changes_while_it_waits() {
-        assert!(may_start(TurnState::Queued, false));
-        assert!(!may_start(TurnState::Queued, true), "the queue is held");
-        assert!(!may_start(TurnState::Running, false));
-        assert_eq!(stop(TurnState::Queued), Stop::Now);
-        assert_eq!(stop(TurnState::Running), Stop::AskHarness);
-        for ended in [
-            TurnState::Done,
-            TurnState::Stopped,
-            TurnState::Failed,
-            TurnState::Interrupted,
-            TurnState::Withdrawn,
-        ] {
-            assert_eq!(stop(ended), Stop::Nothing);
-            assert!(!ongoing(ended));
-            assert!(waits(ended).is_err(), "{ended:?}");
-        }
-        assert!(waits(TurnState::Queued).is_ok());
-        assert!(waits(TurnState::Running).is_err(), "the Agent has it");
-        assert!(may_change(true).is_ok());
-        assert!(may_change(false).is_err(), "a turn already ran it");
-        let stopped = Ending::failed("Gone.", Some(Failure::HarnessStopped));
-        assert!(holds_queue(&stopped));
+    fn a_turn_stops_when_a_person_asked_and_a_stopped_harness_holds_the_queue() {
+        use TurnState::{Done, Failed, Stopped};
+        let cancelled = || Ending::new(Stopped, None);
+        assert_eq!(cancelled().stop_asked(true).state, Stopped);
+        assert_eq!(cancelled().stop_asked(false).state, Failed, "nobody asked");
+        let done = || Ending::new(Done, None);
+        assert_eq!(done().stopped_if_asked(true).state, Stopped);
+        assert_eq!(done().stopped_if_asked(false).state, Done);
+        assert!(holds_queue(&Ending::failed(
+            "Gone.",
+            Some(Failure::HarnessStopped)
+        )));
         assert!(!holds_queue(&Ending::failed(
             "Down.",
             Some(Failure::Provider)
         )));
-        let cancelled = || Ending::new(TurnState::Stopped, None);
-        assert_eq!(cancelled().stop_asked(true).state, TurnState::Stopped);
-        assert_eq!(
-            cancelled().stop_asked(false).state,
-            TurnState::Failed,
-            "no Person stopped it"
-        );
-        let done = || Ending::new(TurnState::Done, None);
-        assert_eq!(done().stopped_if_asked(true).state, TurnState::Stopped);
-        assert_eq!(done().stopped_if_asked(false).state, TurnState::Done);
     }
 
     #[test]
@@ -854,23 +840,6 @@ mod tests {
         );
         let other = Ending::failed("Down.", Some(Failure::Provider)).resets(Some(5));
         assert_eq!(other.failure, Some(Failure::Provider));
-    }
-
-    #[test]
-    fn only_the_latest_turn_that_failed_or_was_cut_short_is_tried_again() {
-        assert!(retry(TurnState::Failed, true, false).is_ok());
-        assert!(retry(TurnState::Interrupted, true, false).is_ok());
-        assert!(retry(TurnState::Failed, false, false).is_err());
-        assert!(retry(TurnState::Failed, true, true).is_err(), "by itself");
-        for state in [
-            TurnState::Queued,
-            TurnState::Running,
-            TurnState::Done,
-            TurnState::Stopped,
-            TurnState::Withdrawn,
-        ] {
-            assert!(retry(state, true, false).is_err(), "{state:?}");
-        }
     }
 
     fn question() -> Body {
