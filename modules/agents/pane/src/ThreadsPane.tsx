@@ -125,7 +125,7 @@ function Row({
         state={mark}
         playful={0}
         label={quiet ? undefined : MARK_WORDS[mark]}
-        className={cn("size-3.5", quiet && "opacity-40")}
+        className={cn("size-4", quiet ? "opacity-40" : "text-foreground")}
       />
       <span className="min-w-0 flex-1 truncate">{thread.title}</span>
       {harness && <span className="shrink-0 truncate text-xs">{harness}</span>}
