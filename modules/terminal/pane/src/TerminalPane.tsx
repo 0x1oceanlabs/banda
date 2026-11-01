@@ -271,7 +271,7 @@ function Screen({
         aria-label="Terminal screen"
         data-state={now.is}
         {...PROGRAM_KEYS}
-        className="relative min-h-0 flex-1 overflow-hidden [--app-scrollbar-thumb-hover:var(--muted-foreground)] [--app-scrollbar-thumb:var(--border)] [--app-scrollbar-width:8px]"
+        className="relative min-h-0 flex-1 overflow-hidden [--app-scrollbar-width:8px]"
       />
       <Status
         now={now}
