@@ -169,4 +169,10 @@ it is answered.
 
 **Watch**:
 What a module draws for each Space, showing nothing, to tell the window what
-its work there calls the Person for. The bar's Mark shows the loudest.
+its work there calls the Person for. The bar's Mark shows the loudest, and a
+call that comes now plays a sound.
+
+**Call**:
+Something that calls for the Person now: a Thread finished while they were
+away, asks them, or failed. The window plays its sound, unless the Person is
+looking at it.

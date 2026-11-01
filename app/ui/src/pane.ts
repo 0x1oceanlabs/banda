@@ -11,6 +11,7 @@ import type { ComponentType } from "react"
 import type { LucideIcon } from "lucide-react"
 import type { Engine, JsonValue, SpaceId } from "@bandaso/contract"
 import type { MarkState } from "./components/banda-mark"
+import type { Chime } from "./sound"
 
 /**
  * Marks where a program reads the keys, as in a terminal. Banda's Alt keys
@@ -93,17 +94,30 @@ export type Attention = { mark: MarkState; waiting: number }
 /** Nothing calls for the Person. */
 export const QUIET: Attention = { mark: "rest", waiting: 0 }
 
+/**
+ * Something that calls for the Person now, such as a Thread that finished
+ * while they were away: the window may play its sound (ADR 0009). `about`
+ * names what calls, for the words around it.
+ */
+export type Call = { chime: Chime; about: string }
+
 export type WatchProps = {
   engine: Engine
   space: SpaceId
   /** Says what the Space calls for now; called again on each change. */
   report: (attention: Attention) => void
+  /**
+   * Calls for the Person once, when something changes now: never for what
+   * already was when the Watch began, nor for what they are looking at.
+   */
+  call: (call: Call) => void
 }
 
 /**
  * How a module tells the window what its work in a Space calls the Person
- * for, while none of its Panes may show. The window draws one per Space
- * for as long as the engine runs the module; it draws nothing itself.
+ * for, and when something calls them now, while none of its Panes may
+ * show. The window draws one per Space for as long as the engine runs the
+ * module; it draws nothing itself.
  */
 export type Watch = {
   /** The engine module it follows; the window draws it only with it. */

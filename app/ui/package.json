@@ -3,16 +3,18 @@
   "version": "0.0.0",
   "private": true,
   "type": "module",
-  "description": "Bandaso's look: shadcn/ui (preset b0) on Base UI, and the Pane contract every Pane is built to.",
+  "description": "Bandaso's look: shadcn/ui (preset b0) on Base UI, Banda's mark and sounds, and the Pane contract every Pane is built to.",
   "exports": {
     "./globals.css": "./src/styles/globals.css",
     "./pane": "./src/pane.ts",
     "./lib/*": "./src/lib/*.ts",
     "./components/*": "./src/components/*.tsx",
-    "./hooks/*": "./src/hooks/*.ts"
+    "./hooks/*": "./src/hooks/*.ts",
+    "./sound": "./src/sound/index.ts"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@bandaso/contract": "workspace:*",
@@ -36,6 +38,7 @@
     "@types/react-dom": "^19",
     "shadcn": "^4.23.0",
     "tailwindcss": "^4",
-    "typescript": "~6.0.2"
+    "typescript": "~6.0.2",
+    "vitest": "^5.0.5"
   }
 }
