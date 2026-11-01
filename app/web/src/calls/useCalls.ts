@@ -3,9 +3,9 @@ import type { SpaceId } from "@bandaso/contract"
 import { MARK_ORDER } from "@bandaso/ui/components/banda-mark"
 import type { Listed } from "@bandaso/ui/pane"
 import { type Chime, player, type SoundSettings } from "@bandaso/ui/sound"
+import type { Notify } from "@bandaso/contract/look"
 import type { Host } from "../host"
 import { GATHER, loudestChime, type Played, plays } from "./calls"
-import type { NotifySettings } from "./settings"
 import { iconOf, loudestOf, MANY, noticeOf, SUMMARY, summaryOf } from "./system"
 import { type Call, callsOf, newsOf, type Sight, tell } from "./tell"
 import { alive, released, type Toast, told } from "./toasts"
@@ -59,7 +59,7 @@ export type Calls = {
  */
 export function useCalls(
   sound: SoundSettings,
-  notify: NotifySettings,
+  notify: Notify,
   where: Where
 ): Calls {
   const settings = useRef({ sound, notify, where })
@@ -94,7 +94,10 @@ export function useCalls(
     gathered.current = []
     const { sound, notify, where } = settings.current
     const { desktop } = where
-    const quiet = desktop ? await desktop.quiet().catch(() => false) : false
+    const quiet =
+      desktop && notify.quiet === "desktop"
+        ? await desktop.quiet().catch(() => false)
+        : false
     const chimes: Chime[] = []
     const notices: Heard[] = []
     const now = Date.now()

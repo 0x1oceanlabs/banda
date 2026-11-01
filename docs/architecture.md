@@ -41,8 +41,9 @@ bandaso call/follow   the CLI: the same API, for people, scripts and Agents
   reads Omarchy's theme, Hyprland's windows and `~/.config/banda/look.toml`
   and prints the CSS variables as JSON, with no engine; `--follow` prints
   each change, and `check` names a broken file's line. Its `[sound]` says
-  which sounds the window plays (ADR 0009); the look's layers apply to it
-  as to every other key. The sidebar's arrangement comes with it (ADR
+  which sounds the window plays (ADR 0009) and its `[notify]` where the
+  window tells of a call (ADR 0011); the look's layers apply to them as
+  to every other key. The sidebar's arrangement comes with it (ADR
   0008): `~/.config/banda/sidebar.toml` over the preset it names, Banda's
   or `sidebars/<name>.toml`, over the defaults. The view menu asks the
   desktop to write the preset into the file; nothing else the page asks
@@ -565,6 +566,12 @@ modules/*/pane   each module's Panes
     Disturb is on (`omarchy-shell notifications isDnd`), only the Marks
     change. The end-to-end tests run with a recorded desktop
     (`BANDASO_DESKTOP=recorded`), so nothing reaches the screen.
+  - Every step of this is the Person's to choose: `[notify]` in
+    `look.toml` (`look/src/notify.rs`) turns the system notifications to
+    always or off and the toasts to always or off, drops the words, keeps
+    no quiet but its own, or leaves done, asking or failed to the Marks.
+    The window holds Banda's defaults till the look comes
+    (`calls/settings.ts`).
   - A Thread Pane marks its turn seen only with the focus in the window in
     front, so a Thread that finishes behind another window calls.
 - **Sounds** (ADR 0009). Of the news, the window plays the loudest, and

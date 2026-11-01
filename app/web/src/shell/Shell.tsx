@@ -5,12 +5,11 @@ import { QUIET } from "@bandaso/ui/pane"
 import { actionFor } from "../actions/actions"
 import { Bar } from "../bar/Bar"
 import { type Lists, Watches } from "../bar/Watches"
-import { DEFAULT_NOTIFY } from "../calls/settings"
 import { sightOf } from "../calls/sight"
 import { SUMMARY } from "../calls/system"
 import { Toasts } from "../calls/Toasts"
 import { first, type Heard, useCalls, type Where } from "../calls/useCalls"
-import { useLookSound } from "../look"
+import { useLookNotify, useLookSound } from "../look"
 import { kindOf, showsOf, startable, widthOf } from "../registry"
 import { Sidebar } from "../sidebar/Sidebar"
 import {
@@ -76,8 +75,8 @@ export function Shell({
   const [attention, setAttention] = useState(QUIET)
   const [lists, setLists] = useState<Lists>({})
 
-  // What calls the Person, told where they look (ADR 0011), with the
-  // Person's `[sound]` as the look brings it (ADR 0009, decision 5).
+  // What calls the Person, told where they look as `[notify]` says
+  // (ADR 0011), with their `[sound]` (ADR 0009, decision 5).
   const now = useRef(workspaces)
   useEffect(() => {
     now.current = workspaces
@@ -89,7 +88,7 @@ export function Shell({
     }),
     []
   )
-  const notify = DEFAULT_NOTIFY
+  const notify = useLookNotify()
   const calls = useCalls(useLookSound(), notify, where)
   const { hear, leave, calling, hold, dismiss, seen } = calls
   const listening = useMemo(() => ({ hear, leave }), [hear, leave])

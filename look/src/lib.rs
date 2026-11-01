@@ -16,6 +16,7 @@
 pub mod color;
 pub mod hyprland;
 pub mod motion;
+pub mod notify;
 pub mod palette;
 pub mod settings;
 pub mod sidebar;
@@ -78,6 +79,8 @@ pub struct Look {
     pub sound: sound::Sound,
     /// How the sidebar arranges its Threads, from `sidebar.toml` (ADR 0008).
     pub sidebar: sidebar::Sidebar,
+    /// How the window tells its Person of a call (ADR 0011).
+    pub notify: notify::Notify,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, TS)]
@@ -412,6 +415,7 @@ pub fn resolve(places: &Places, windows: &dyn Fn() -> Option<Windows>) -> Resolv
             problems,
             sound: all.sound.resolved(),
             sidebar,
+            notify: all.notify.resolved(),
         },
         watched,
     }

@@ -3,6 +3,7 @@
 //! and [`Settings::over`] lays one layer over another.
 
 use crate::motion::MotionSettings;
+use crate::notify::NotifySettings;
 use crate::sound::SoundSettings;
 use serde::Deserialize;
 use std::collections::BTreeMap;
@@ -38,6 +39,9 @@ pub struct Settings {
     /// Banda's sounds (ADR 0009, decision 5).
     #[serde(default)]
     pub sound: SoundSettings,
+    /// How Banda tells its Person of a call (ADR 0011, decision 7).
+    #[serde(default)]
+    pub notify: NotifySettings,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq)]
@@ -186,6 +190,7 @@ impl Settings {
             },
             motion: self.motion.over(under.motion),
             sound: self.sound.over(under.sound),
+            notify: self.notify.over(under.notify),
         }
     }
 
@@ -214,6 +219,7 @@ impl Settings {
             bar: Bar { height: Some(36.0) },
             motion: MotionSettings::defaults(),
             sound: SoundSettings::defaults(),
+            notify: NotifySettings::default(),
         }
     }
 
