@@ -1,7 +1,7 @@
 # Bandaso
 
-Bandaso is a tiling workspace for working with Agents, made for people who do
-not write code. Terms are English everywhere: in code, in docs, and in speech
+Bandaso is a hackable, tiling workspace for working with Agents, made first
+for enthusiasts and AI-native people. Terms are English everywhere: in code, in docs, and in speech
 in any language. A word belongs here only when some visible behaviour needs
 it.
 
