@@ -16,7 +16,7 @@
 //! |---|---|---|
 //! | `agents.harnesses` | read | the Harnesses this machine can start |
 //! | `agents.account` | manage | a Harness as it says: its program, who is signed in, how to sign in: `{harness}` |
-//! | `agents.sign_in` | manage | signs in with one of those ways, then the Harness starts again: `{harness, way}` |
+//! | `agents.sign_in` | manage | signs in with one of those ways, then the Harness starts again, and the `turn` that needed it goes again: `{harness, way, turn?}` |
 //! | `agents.sign_out` | manage | asks the Harness to sign out, then it starts again: `{harness}` |
 //! | `agents.list` | read | the Space's Agents |
 //! | `agents.create` | manage | a new Agent: `{name, harness}` |
@@ -214,6 +214,11 @@ struct OneHarness {
 struct SignIn {
     harness: String,
     way: String,
+    /// The turn that failed for it, which goes again in the same command:
+    /// a terminal that sends it once its program ended well sends one
+    /// command, which its ID keeps from being done twice.
+    #[serde(default)]
+    turn: Option<TurnId>,
 }
 
 #[derive(Deserialize)]
@@ -375,7 +380,7 @@ impl Module for Agents {
                 value(account.map_err(Refusal::conflict)?)
             }
             Method::SignIn => {
-                let SignIn { harness, way } = decode(params)?;
+                let SignIn { harness, way, turn } = decode(params)?;
                 call.command_id()?;
                 let (harness, connection) = self.running(space.id(), &harness).await?;
                 let found = connection
@@ -393,7 +398,18 @@ impl Module for Agents {
                     connection.sign_in(&way).await.map_err(Refusal::conflict)?;
                 }
                 drop(connection);
-                self.start_again(&call, &harness.id).await
+                self.live.let_go(&harness.id).await;
+                let author = call.participant();
+                call.command(move |tx| match turn {
+                    // A turn that went again already, or cannot, leaves the
+                    // sign-in as it is: the Person is signed in.
+                    Some(turn) => match retry(tx, author, turn) {
+                        Err(Error::Refused(_)) => Ok(Value::Null),
+                        answer => answer,
+                    },
+                    None => Ok(Value::Null),
+                })
+                .await
             }
             Method::SignOut => {
                 let OneHarness { harness } = decode(params)?;

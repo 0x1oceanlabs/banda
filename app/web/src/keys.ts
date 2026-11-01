@@ -1,4 +1,5 @@
 /** The Desk's keys, the same in every Pane. */
+import { PROGRAM_KEYS } from "@bandaso/ui/pane"
 import type { Direction } from "./layout"
 
 export type KeyAction =
@@ -48,9 +49,9 @@ export function keyAction(event: Keys, program = false): KeyAction | null {
   return null
 }
 
-/** Whether the keys at `target` go to a program, as in a terminal. */
-export function toProgram(target: EventTarget | null): boolean {
-  return (
-    target instanceof Element && target.closest("[data-keys=program]") !== null
-  )
+/** Whether the keys at `target` go to a program, as in a terminal: it
+ * sits in an element marked with `PROGRAM_KEYS`. */
+export function readByProgram(target: EventTarget | null): boolean {
+  const marked = `[data-keys="${PROGRAM_KEYS["data-keys"]}"]`
+  return target instanceof Element && target.closest(marked) !== null
 }

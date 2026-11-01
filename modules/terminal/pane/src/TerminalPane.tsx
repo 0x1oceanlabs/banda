@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react"
 import {
+  type CommandId,
   type Engine,
   type JsonValue,
   newId,
@@ -9,17 +10,17 @@ import type { Ended, Piece, TerminalId } from "@bandaso/contract/terminal"
 import { Surface } from "@bandaso/ghostty"
 import { Button } from "@bandaso/ui/components/button"
 import { problem as words } from "@bandaso/ui/lib/words"
-import { definePane, type PaneProps } from "@bandaso/ui/pane"
+import { definePane, type PaneProps, PROGRAM_KEYS } from "@bandaso/ui/pane"
 import { RotateCcwIcon, SquareTerminalIcon } from "lucide-react"
-import { Line } from "./line"
+import { Input } from "./input"
 import { onThemeChange, themeOf } from "./theme"
 
 /**
  * A terminal: the Person's shell in the Space's folder, or a program
  * another Pane started with `terminal.open`, such as a Harness's sign-in.
  * That Pane opens this one as `{kind: "terminal.terminal", args:
- * {terminal, title, shell: false}}`. The engine runs the program; Ghostty
- * draws it. Closing the Pane stops the program.
+ * {terminal, title, shell: false, done}}`. The engine runs the program;
+ * Ghostty draws it. Closing the Pane stops the program.
  */
 export type TerminalArgs = {
   /** `null` until the Pane picks the ID of the shell it starts. */
@@ -27,14 +28,23 @@ export type TerminalArgs = {
   title: string
   /** It runs the Person's shell, which starts again when it is gone. */
   shell: boolean
+  /** What to send once the program ended with code 0; then the Pane closes. */
+  done: Done | null
 }
+
+/**
+ * A command the Pane sends once its program ended with code 0: how the
+ * Pane that opened it hears that it ended well, as a sign-in's does. Its
+ * ID keeps it once only, whichever window sends it, after any reload.
+ */
+export type Done = { method: string; params: JsonValue; command: CommandId }
 
 export const terminalPane = definePane<TerminalArgs>({
   kind: "terminal.terminal",
   module: "terminal",
   title: (args) => args.title,
   icon: SquareTerminalIcon,
-  start: { terminal: null, title: "Terminal", shell: true },
+  start: { terminal: null, title: "Terminal", shell: true, done: null },
   closed: ({ engine, space, args }) => {
     if (args.terminal === null) return
     engine
@@ -50,6 +60,7 @@ function TerminalPane({
   args,
   focused,
   update,
+  close,
 }: PaneProps<TerminalArgs>) {
   const [chosen] = useState(newId)
   useEffect(() => {
@@ -63,7 +74,9 @@ function TerminalPane({
       space={space}
       terminal={args.terminal}
       shell={args.shell}
+      done={args.done}
       focused={focused}
+      close={close}
     />
   )
 }
@@ -79,13 +92,17 @@ function Screen({
   space,
   terminal,
   shell,
+  done,
   focused,
+  close,
 }: {
   engine: Engine
   space: SpaceId
   terminal: TerminalId
   shell: boolean
+  done: Done | null
   focused: boolean
+  close: () => void
 }) {
   const mount = useRef<HTMLDivElement>(null)
   const surface = useRef<Surface | null>(null)
@@ -99,6 +116,17 @@ function Screen({
     if (focused) surface.current?.focus()
   }, [focused])
 
+  // Once only in this Pane; the command's ID keeps it once everywhere.
+  const sent = useRef(false)
+  useEffect(() => {
+    if (!done || sent.current) return
+    if (now.is !== "ended" || now.ended.code !== 0) return
+    sent.current = true
+    engine
+      .call(done.method, done.params, { space, command: done.command })
+      .then(close, (error: unknown) => setProblem(words(error)))
+  }, [done, now, engine, space, close])
+
   useEffect(() => {
     const element = mount.current
     if (!element) return
@@ -111,7 +139,7 @@ function Screen({
     let followed = false
     const call = (method: string, params: JsonValue) =>
       engine.call(method, params, { space })
-    const line = new Line(call, terminal, (error) => setProblem(words(error)))
+    const input = new Input(call, terminal, (error) => setProblem(words(error)))
     const told = (next: Now) => {
       running = next.is === "running"
       setNow(next)
@@ -176,9 +204,9 @@ function Screen({
       const made = await Surface.create(element, {
         theme: themeOf(element),
         onData: (data) => {
-          if (running) line.type(data)
+          if (running) input.type(data)
         },
-        onResize: (cols, rows) => line.resize({ cols, rows }),
+        onResize: (cols, rows) => input.resize({ cols, rows }),
         onSelectionChange: () => {},
         // The Desk's own keys, such as Alt+Arrows, stay the Desk's.
         beforeKey: (event) => !event.defaultPrevented,
@@ -188,7 +216,8 @@ function Screen({
         },
         onContextMenu: (event) => event.preventDefault(),
       }).catch((error: unknown) => {
-        fail(error)
+        const why = error instanceof Error ? `: ${error.message}` : "."
+        told({ is: "gone", why: `This window cannot draw a terminal${why}` })
         return null
       })
       if (!made) return
@@ -218,8 +247,7 @@ function Screen({
         role="region"
         aria-label="Terminal screen"
         data-state={now.is}
-        // The Desk leaves the program its keys, such as Ctrl+W.
-        data-keys="program"
+        {...PROGRAM_KEYS}
         className="relative min-h-0 flex-1 overflow-hidden [--app-scrollbar-thumb-hover:var(--muted-foreground)] [--app-scrollbar-thumb:var(--border)] [--app-scrollbar-width:8px]"
       />
       <Status
@@ -243,12 +271,13 @@ function Status({
   shell: boolean
   onAgain: () => void
 }) {
-  const said =
-    now.is === "ended"
-      ? endWords(now.ended, shell)
-      : now.is === "gone"
-        ? now.why
-        : problem
+  const said = [
+    now.is === "ended" ? endWords(now.ended, shell) : undefined,
+    now.is === "gone" ? now.why : undefined,
+    problem,
+  ]
+    .filter(Boolean)
+    .join(" ")
   if (!said) return null
   const startable = shell && (now.is === "ended" || now.is === "gone")
   return (

@@ -759,6 +759,11 @@ impl World {
         self.call(who, "agents.sign_in", params).await
     }
 
+    async fn sign_in_for(&self, turn: &Value) -> Result<Value, bandaso_kernel::Refusal> {
+        let params = json!({ "harness": "fake", "way": "fake-sign-in", "turn": turn });
+        self.call(self.person(), "agents.sign_in", params).await
+    }
+
     async fn account(&self) -> Value {
         let params = json!({ "harness": "fake" });
         self.call(self.person(), "agents.account", params)
@@ -844,6 +849,41 @@ async fn a_person_signs_in_in_a_terminal_and_the_harness_starts_again() {
     world.sign_in(world.person(), "fake-sign-in").await.unwrap();
     let (ended, _) = world.retried(&again).await;
     assert_eq!(ended, TurnState::Done, "it starts again");
+}
+
+#[tokio::test]
+async fn a_sign_in_sends_the_turn_that_needed_it_again_once() {
+    let (root, home) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+    let world = signed_out(root.path(), home.path()).await;
+    let (sent, _) = failing(&world, "hello").await;
+    // What the way's program does in a terminal that ended with code 0.
+    std::fs::write(home.path().join("signed-in"), "yes").unwrap();
+
+    // A terminal Pane sends this once its program ended well; another
+    // window, or the same one after a reload, sends the same command.
+    let command = CommandId::new();
+    let params = json!({ "harness": "fake", "way": "fake-sign-in", "turn": sent["turn"] });
+    let sign_in = || {
+        world.kernel.call(
+            world.person(),
+            "agents.sign_in",
+            Some(world.space),
+            Some(command),
+            params.clone(),
+        )
+    };
+    let again = sign_in().await.unwrap();
+    assert_eq!(sign_in().await.unwrap(), again, "once");
+    let view = world
+        .until(&sent["thread"], |v| {
+            state(v, &again["turn"]) == Some(TurnState::Done)
+        })
+        .await;
+    assert_eq!(view.turns.len(), 2, "one turn went again");
+
+    // A turn that went again already leaves the sign-in as it is.
+    let later = world.sign_in_for(&sent["turn"]).await.unwrap();
+    assert_eq!(later, Value::Null);
 }
 
 #[tokio::test]

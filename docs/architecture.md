@@ -247,9 +247,12 @@ If Chat is removed, Agents still works through its own Thread.
   - The engine declares that it runs terminals, so Claude Code's adapter
     offers ways in a terminal: the Harness entry's program with the way's
     arguments and environment, so an entry's own config folder gets the
-    account. The Thread runs it in a terminal Pane below the turn, and
-    its program ending with code 0 says the Person signed in. The line
-    stays to run by hand, after which the Person says so.
+    account. The Thread runs it in a terminal Pane in a tile below. Once
+    its program ended with code 0, that Pane sends the sign-in with the
+    turn that needed it (`agents.sign_in {harness, way, turn}`), and the
+    turn goes again in the same command. The Desk keeps that Pane, so the
+    sign-in lands after a reload or with the Thread closed. The line stays
+    to run by hand, after which the Person says so.
   - Codex's adapter signs in by itself in the browser when the engine asks
     (`agents.sign_in`).
   - A sign-in writes nothing to the Space, and its receipt keeps the
@@ -365,7 +368,9 @@ If Chat is removed, Agents still works through its own Thread.
     again when the engine lost it.
   - Another Pane that started a program opens it on that terminal, as a
     sign-in does: `{kind: "terminal.terminal", args: {terminal, title,
-    shell: false}}`.
+    shell: false, done}}`. `done` is a command the Pane sends once the
+    program ended with code 0; its ID keeps it once only. Then the Pane
+    closes.
   - It sends what the Person types one call after another, as the engine
     runs calls side by side.
   - Closing the Pane closes its terminal. A split that draws it again
@@ -416,6 +421,7 @@ module reaches a Harness through an adapter:
 app/desktop      Electron main: starts the engine, serves the page, hands it the address
 app/web          the page: Spaces, the Desk and its keys, the Pane registry
 app/ui           shadcn/ui (preset b0, on Base UI) and the Pane contract
+app/ghostty      T3 Code's Ghostty adapter: a terminal on a canvas
 modules/*/pane   each module's Panes
 ```
 
@@ -433,8 +439,9 @@ modules/*/pane   each module's Panes
 - **A Pane** is a `PaneKind`: a kind, the module it needs, a title, an
   icon, optional start args, what its module lets go of when it leaves
   the Desk (`closed`), and a component. The component gets the
-  engine, the Space, its args, whether it has the focus, `open` and
-  `update`. A Pane's args are all its state; the Desk keeps them.
+  engine, the Space, its args, whether it has the focus, `open`,
+  `update`, and `close` for its own tile. A Pane's args are all its
+  state; the Desk keeps them.
 - **A Pane reads a view, then follows.** `useLive` reads the view once,
   applies each event after its `at`, and reads again when the engine says
   so. Events that arrive within one frame render once.
@@ -446,8 +453,8 @@ modules/*/pane   each module's Panes
   - Keys: Alt+Arrows move the focus, Ctrl+\ splits right, Ctrl+Shift+\
     splits down, Ctrl+W closes. In a terminal Ctrl+W is the program's,
     and Ctrl+Shift+W closes.
-  - A Pane leaves the Desk when its tile closes or shows another Pane;
-    a split draws the tiles again without that.
+  - A Pane leaves the Desk when its tile closes or shows another Pane, or
+    the same with other args; a split draws the tiles again without that.
   - Each Space keeps its own Desk in the window's storage
     (`$BANDASO_STATE/window` when that is set).
 - **Only `window.bandaso` ties the page to the desktop.** It names no

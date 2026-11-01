@@ -11,7 +11,7 @@ const AT_ONCE = 16 * 1024
  * A size that does not reach the program is not worth a word, as the next
  * one replaces it; typing that does not is.
  */
-export class Line {
+export class Input {
   readonly #send: (method: string, params: JsonValue) => Promise<unknown>
   readonly #terminal: TerminalId
   readonly #onProblem: (error: unknown) => void
