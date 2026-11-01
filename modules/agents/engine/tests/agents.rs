@@ -957,12 +957,21 @@ async fn a_cli_older_than_its_harness_supports_runs_and_its_threads_warn() {
     let (root, bin) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
     let cli = fake_cli(bin.path()).display().to_string();
     let world = World::new_with(root.path(), with_cli_since(&cli, Some("9.10.0"))).await;
-    let warning = "fake-cli 9.9.9 is older than 9.10.0, the oldest Fake supports: update it.";
+    let warning = "fake-cli 9.9.9 is older than 9.10.0, which Bandaso's Fake adapter was \
+                   built for. It still runs, but some things may not work until you update it.";
     let account = world.account().await;
     assert_eq!(account["cli"]["outdated"], warning, "{account}");
-    let (_, view) = world.finish(None, "hello").await;
+    let (thread, view) = world.finish(None, "hello").await;
     assert_eq!(view.turns[0].state, TurnState::Done, "it still runs");
     assert_eq!(view.offer.outdated.as_deref(), Some(warning));
+
+    // The Person updates it and checks again; the Harness keeps running.
+    std::fs::write(&cli, "#!/bin/sh\necho '9.10.0 (Fake CLI)'\n").unwrap();
+    let account = world.account().await;
+    assert_eq!(account["cli"]["version"], "9.10.0");
+    assert!(account["cli"].get("outdated").is_none(), "{account}");
+    let (_, view) = world.finish(Some(&thread), "hello again").await;
+    assert_eq!(view.offer.outdated, None);
 }
 
 #[tokio::test]

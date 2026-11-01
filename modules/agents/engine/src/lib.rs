@@ -370,8 +370,9 @@ impl Module for Agents {
             Method::List => value(settings::agents(space.folder())?),
             Method::Account => {
                 let OneHarness { harness } = decode(params)?;
-                let (_, connection) = self.running(space.id(), &harness).await?;
-                value(connection.account().await)
+                let (harness, connection) = self.running(space.id(), &harness).await?;
+                let account = connection.account(harness).await;
+                value(account.map_err(Refusal::conflict)?)
             }
             Method::SignIn => {
                 let SignIn { harness, way } = decode(params)?;
