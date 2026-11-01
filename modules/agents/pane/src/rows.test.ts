@@ -24,6 +24,7 @@ test("a quiet Thread lists its title, Harness and what it was asked", () => {
     changed: 5,
     said: "fix the form",
     by: "Claude",
+    harness: "claude",
     pane: { kind: "agents.thread", args: { thread: "t1", harness: "claude" } },
   })
   expect(listed.calls).toBeUndefined()

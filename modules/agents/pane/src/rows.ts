@@ -37,6 +37,7 @@ export function listedOf(
     ...(calls ? { calls } : {}),
     ...(said ? { said } : {}),
     ...(harness ? { by: harness } : {}),
+    ...(thread.harness ? { harness: thread.harness } : {}),
     pane: paneOf(threadPane, {
       thread: thread.id,
       harness: thread.harness,

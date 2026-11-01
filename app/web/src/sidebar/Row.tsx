@@ -1,5 +1,6 @@
 import type { SpaceSummary } from "@banda/contract"
 import { BandaMark, MARK_WORDS, waits } from "@banda/ui/components/banda-mark"
+import { HarnessLogo } from "@banda/ui/components/harness-logo"
 import { ago } from "@banda/ui/lib/words"
 import { cn } from "@banda/ui/lib/utils"
 import { useNow } from "@banda/ui/hooks/use-now"
@@ -14,14 +15,10 @@ import type { Part, Settings } from "./settings"
 export const LAYOUTS: Readonly<Record<number, Part[][]>> = {
   1: [["mark", "title", "~", "space", "status"]],
   2: [
-    ["space", "harness", "~", "status"],
-    ["mark", "title"],
+    ["mark", "space", "~", "status"],
+    ["title", "~", "harness"],
   ],
-  3: [
-    ["space", "~", "status"],
-    ["mark", "title"],
-    ["note", "~", "harness"],
-  ],
+  3: [["mark", "space", "~", "status"], ["title"], ["note", "~", "harness"]],
 }
 
 /** One row of the sidebar, its parts laid out as the settings say. */
@@ -95,7 +92,11 @@ function Piece({
           state={listed.mark}
           playful={0}
           label={MARK_WORDS[listed.mark]}
-          className={cn("size-4 shrink-0", quiet && "opacity-40")}
+          className={cn(
+            "size-4 shrink-0",
+            listed.mark === "done" && "text-added",
+            quiet && "opacity-40"
+          )}
         />
       )
     case "title":
@@ -110,22 +111,21 @@ function Piece({
         </span>
       )
     case "space":
-      return (
-        <>
-          <SpaceBadge space={space} />
-          {wide && (
-            <span className="min-w-0 truncate text-xs text-muted-foreground">
-              {space.name}
-            </span>
-          )}
-        </>
-      )
-    case "harness":
-      return listed.by ? (
-        <span className="shrink-0 text-xs text-muted-foreground">
-          {listed.by}
+      // The mark stands where the Space's badge was: a row with room names
+      // the Space; a row of one line shows its badge.
+      return wide ? (
+        <span className="min-w-0 truncate text-xs text-muted-foreground">
+          {space.name}
         </span>
-      ) : null
+      ) : (
+        <SpaceBadge space={space} />
+      )
+    case "harness": {
+      // Claude's or Codex's logo, as T3 Code shows them; another Harness
+      // by its name.
+      const name = listed.by ?? listed.harness
+      return name ? <HarnessLogo id={listed.harness} name={name} /> : null
+    }
     case "status":
       return <Status row={row} />
     case "note": {

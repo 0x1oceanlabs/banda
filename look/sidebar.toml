@@ -30,6 +30,6 @@ preset = "inbox"
 # A layout of your own replaces the lines', part by part; "~" pushes the
 # rest to the right. The parts: "mark", "title", "space", "harness",
 # "status", "note".
-# line1 = ["space", "~", "status"]
-# line2 = ["mark", "title"]
+# line1 = ["mark", "space", "~", "status"]
+# line2 = ["title"]
 # line3 = ["note", "~", "harness"]
