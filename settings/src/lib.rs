@@ -6,7 +6,7 @@
 //! an editor completes and checks the file with. A new key appears in all
 //! of them, with no list kept by hand.
 
-use banda_agents::settings::{HarnessFile, Harnesses};
+use banda_agents::settings::{HarnessFile, Harnesses, template as harness_template};
 use banda_look::Problem;
 use banda_look::browser::BrowserSettings;
 use banda_look::settings::Settings as LookSettings;
@@ -28,7 +28,7 @@ pub struct File {
     pub name: &'static str,
     schema: fn() -> Schema,
     /// What a new file starts as, before its first key is written.
-    template: &'static str,
+    template: fn() -> String,
 }
 
 const HARNESSES: &str = "harnesses.toml";
@@ -38,22 +38,22 @@ pub const FILES: [File; 4] = [
     File {
         name: "look.toml",
         schema: schema_of::<LookSettings>,
-        template: banda_look::TEMPLATE,
+        template: || banda_look::TEMPLATE.to_owned(),
     },
     File {
         name: "sidebar.toml",
         schema: schema_of::<SidebarSettings>,
-        template: banda_look::sidebar::TEMPLATE,
+        template: || banda_look::sidebar::TEMPLATE.to_owned(),
     },
     File {
         name: "browser.toml",
         schema: schema_of::<BrowserSettings>,
-        template: banda_look::browser::TEMPLATE,
+        template: || banda_look::browser::TEMPLATE.to_owned(),
     },
     File {
         name: HARNESSES,
         schema: schema_of::<HarnessFile>,
-        template: "#:schema ./schemas/harnesses.schema.json\n",
+        template: harness_template,
     },
 ];
 

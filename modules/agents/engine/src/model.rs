@@ -167,12 +167,35 @@ pub struct OptionChoice {
     pub description: Option<String>,
 }
 
-/// A Harness this machine can run.
+/// A Harness this machine can run, as `harnesses.toml` has it.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "agents/")]
 pub struct HarnessView {
     pub id: String,
     pub name: String,
+    /// Whether Threads start with it.
+    pub enabled: bool,
+    /// How it starts: its program, then its arguments.
+    pub command: Vec<String>,
+    /// The names of the variables it starts with. Their values may be
+    /// secrets, so they stay in the file.
+    pub env: Vec<String>,
+}
+
+impl HarnessView {
+    pub fn of(harness: &crate::settings::Harness) -> Self {
+        Self {
+            id: harness.id.clone(),
+            name: harness.name.clone(),
+            enabled: harness.enabled,
+            command: [&harness.command]
+                .into_iter()
+                .chain(&harness.args)
+                .cloned()
+                .collect(),
+            env: harness.env.keys().cloned().collect(),
+        }
+    }
 }
 
 /// What `agents.account` answers: a Harness entry on this computer as its

@@ -8,6 +8,7 @@
  * draws itself (decision 4).
  */
 import type { ComponentType } from "react"
+import type { Engine } from "@banda/contract"
 import {
   aboutOf,
   type Row,
@@ -17,12 +18,14 @@ import {
 } from "@banda/contract/settings"
 import {
   BellIcon,
+  BotIcon,
   FileCogIcon,
   GlobeIcon,
   type LucideIcon,
   PaletteIcon,
   PanelLeftIcon,
 } from "lucide-react"
+import { Agents } from "./Agents"
 import { ThemePicker } from "./ThemePicker"
 
 /** A row a section draws itself: the value now, and how to set it. */
@@ -44,6 +47,9 @@ export type Section = {
   tables?: string[]
   /** Its own rows, by key. */
   custom?: { [key: string]: CustomRow }
+  /** What it shows instead of rows, as a module draws it; `lit` is the
+   * part a link names. */
+  Body?: ComponentType<{ engine: Engine; lit?: string }>
 }
 
 export const SECTIONS: Section[] = [
@@ -73,6 +79,15 @@ export const SECTIONS: Section[] = [
     tables: ["sound", "notify"],
   },
   {
+    id: "agents",
+    title: "Agents",
+    icon: BotIcon,
+    file: "harnesses.toml",
+    about:
+      "The Harnesses Banda starts Threads with, and what a message written while an Agent works does.",
+    Body: Agents,
+  },
+  {
     id: "browser",
     title: "Browser",
     icon: GlobeIcon,
@@ -95,7 +110,7 @@ const GROUPS = new Map(
 )
 
 function rowsFor(section: Section): Row[] {
-  if (!section.file) return []
+  if (!section.file || section.Body) return []
   const taken = SECTIONS.filter((s) => s.file === section.file).flatMap(
     (s) => s.tables ?? []
   )

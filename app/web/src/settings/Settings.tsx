@@ -5,6 +5,7 @@
  * every value is the look's, as `banda look --follow` read the files.
  */
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react"
+import type { Engine } from "@banda/contract"
 import type { Problem } from "@banda/contract/look"
 import { aboutOf, type Row, SCHEMAS } from "@banda/contract/settings"
 import { Button } from "@banda/ui/components/button"
@@ -25,9 +26,11 @@ import { SettingRow } from "./SettingRow"
 const NONE: Problem[] = []
 
 export function Settings({
+  engine,
   link,
   onClose,
 }: {
+  engine: Engine
   /** Where it opens: a section and a row, `appearance/radius`. */
   link: string
   onClose: () => void
@@ -51,6 +54,12 @@ export function Settings({
   }, [at])
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
+      // A dialog over the window takes its own keys, Esc first.
+      if (
+        event.target instanceof Element &&
+        event.target.closest("[role=dialog]")
+      )
+        return
       const typing = event.target instanceof HTMLInputElement
       if (event.key === "Escape") {
         if (typing && field.current?.value) return setWords("")
@@ -228,7 +237,9 @@ export function Settings({
                     <OpenFile file={section.file} words="Open file" />
                   )}
                 </div>
-                {section.file ? (
+                {section.Body ? (
+                  <section.Body engine={engine} lit={at.key} />
+                ) : section.file ? (
                   <>
                     {groups}
                     {above.length > 0 && (

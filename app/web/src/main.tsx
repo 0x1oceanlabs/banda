@@ -10,9 +10,12 @@ const host = window.banda
 // The look the desktop reads (ADR 0007), else the system's light or dark.
 followLook(host)
 const root = createRoot(document.getElementById("root")!)
+// Both windows reach the engine.
+const engine = host && new Engine(() => host.engine())
 
-if (host && location.hash.startsWith("#settings")) {
-  // The settings window: the same page, without the engine (ADR 0016).
+if (host && engine && location.hash.startsWith("#settings")) {
+  // The settings window: the same page (ADR 0016), with the engine for
+  // what only it knows, as who is signed in to each Harness.
   // Its title is how Hyprland and the Person's window list tell it apart.
   document.title = "Banda Settings"
   // Each window loads only its own part of the page.
@@ -21,6 +24,7 @@ if (host && location.hash.startsWith("#settings")) {
       <StrictMode>
         <div className="h-svh">
           <Settings
+            engine={engine}
             link={location.hash.replace(/^#settings\/?/, "")}
             onClose={() => host.settings.close()}
           />
@@ -28,8 +32,7 @@ if (host && location.hash.startsWith("#settings")) {
       </StrictMode>
     )
   )
-} else if (host) {
-  const engine = new Engine(() => host.engine())
+} else if (engine) {
   void import("./App").then(({ App }) =>
     root.render(
       <StrictMode>

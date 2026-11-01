@@ -235,6 +235,11 @@ If Chat is removed, Agents still works through its own Thread.
   each Harness. Without one, the engine knows Claude Code and Codex through
   their ACP adapters on npm, at exact versions. Reading the ACP Registry
   comes next.
+  - The engine follows the file: each look at the list reads it again once
+    it changed, so a changed entry starts its next process as the file now
+    says, and a file that no longer reads leaves the list before it in
+    force (ADR 0016). An entry with `enabled = false` stays in the list,
+    and no Thread starts on it.
   - An entry may name the Person's own CLI the adapter runs (`[harness.cli]`
     with `program` and `variable`): `claude` through
     `CLAUDE_CODE_EXECUTABLE`, `codex` through `CODEX_PATH` (ADR 0003,
@@ -243,7 +248,7 @@ If Chat is removed, Agents still works through its own Thread.
     place.
   - Its `minimum` is the oldest version the adapter supports, the one it
     was built for: Claude Code 2.1.312, Codex 0.165.0. An older CLI runs,
-    and the Harnesses Pane and its Threads warn. Checking the Harness again
+    and the settings window's Agents and the Threads warn. Checking the Harness again
     finds the CLI again, so an update ends the warning without a restart.
 - **A message queues a turn.** The outbox runs one Thread's turns one at a
   time, in order (`turn.start`, keyed by the Thread). Threads run side by
@@ -256,7 +261,7 @@ If Chat is removed, Agents still works through its own Thread.
   Claude Code's and Codex's adapters share (`turn.steer`, keyed by the
   Thread's steering), and what the Agent says of it follows it in the
   Thread. Queue has it wait for a turn of its own. Enter does one of the
-  two, Send now unless the window chose Queue in the Harnesses Pane, and
+  two, Send now unless the window chose Queue in the settings' Agents, and
   Ctrl+Enter the other. A
   message the turn cannot take, as when it just ended or a Person stopped
   it, waits for its own turn instead; a Harness that cannot steer stops its
@@ -326,10 +331,12 @@ If Chat is removed, Agents still works through its own Thread.
   - A Harness that declares ACP's logout signs out when asked
     (`agents.sign_out`), and its processes are let go as after a sign-in.
     The adapter signs its CLI out, so the Person's own terminal too.
-  - The Harnesses Pane, like T3 Code's provider settings, shows each entry
-    with its CLI and adapter versions, who is signed in, Sign in, and Sign
-    out where a logout ends the sign-in: an account's, not a key's. Check
-    again asks the Harness anew.
+  - The settings window's Agents, like T3 Code's provider settings, shows
+    each entry with its CLI and adapter versions, who is signed in, Sign
+    in, and Sign out where a logout ends the sign-in: an account's, not a
+    key's. Check again asks the Harness anew. It turns an entry on or off,
+    changes its command, and adds or removes one, writing `harnesses.toml`
+    through `banda settings` (ADR 0016).
 - **The Harness's notices**, such as warnings, join the Thread as lines of
   their own.
 - **A Thread has settings: a mode, Plan, and the Harness's options.** The
@@ -655,7 +662,7 @@ banda/
   kernel/             Rust: Space, event log, access, registry, API
   modules/
     agents/engine/    Rust: Threads, turns, Questions, the ACP adapter
-    agents/pane/      React: the Thread, the Harnesses, each Thread as the sidebar lists it
+    agents/pane/      React: the Thread, the settings' Agents, each Thread as the sidebar lists it
     terminal/engine/  Rust: Terminals, their PTYs and what they printed
     terminal/pane/    React: a terminal, drawn by Ghostty
     browser/pane/     React: the browser Pane, its tabs and row (ADR 0013)

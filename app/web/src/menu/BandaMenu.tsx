@@ -74,7 +74,9 @@ export function BandaMenu({
   actions: readonly Action<Shell>[]
 }) {
   // Loaded while the menu is shut, so they are there as it opens.
-  const harnesses = useHarnesses(engine, space)
+  const all = useHarnesses(engine, space)
+  // A Harness turned off starts no new Thread.
+  const harnesses = useMemo(() => all.filter((h) => h.enabled), [all])
   // Esc shuts the open act list before the menu.
   const escapeRef = useRef<() => boolean>(() => false)
   return (

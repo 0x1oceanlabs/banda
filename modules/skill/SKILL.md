@@ -32,7 +32,10 @@ Banda is changed through text files, the same way the Person changes it.
 2. Change one key with `banda settings set <file> <key> <value>`, as
    `banda settings set look.toml tile.border 3`, or take it out with
    `banda settings reset <file> <key>`: they keep every comment and other
-   key, and refuse a value the file would not take. For more than a key,
+   key, and refuse a value the file would not take. A Harness is named by
+   its ID: `banda settings set harnesses.toml harness.codex.enabled false`;
+   `harness.<id>` set to an inline table adds a whole entry, and reset
+   takes it out. For more than a key,
    edit the file: keep the Person's comments and every key you were not
    asked to change. Every key is optional: write only what changes.
 3. Check it: `banda settings check` prints `path:line:column: problem`

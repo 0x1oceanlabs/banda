@@ -12,24 +12,61 @@ use toml_edit::{DocumentMut, Item, Key, TableLike, Value};
 /// `config`, to `value`: a TOML value, or else the text as a string. A
 /// file not there yet starts from its template. Refuses, with what is
 /// wrong, a value the file would not take.
+///
+/// In a list of tables, as `[[harness]]`, the name after the list's is an
+/// entry's `id`: `harness.codex.command`. An entry not there is added. An
+/// inline table sets each of its keys, so `harness.gemini = { name = …,
+/// command = … }` adds a whole entry at once.
 pub fn set(config: &Path, name: &str, key: &str, value: &str) -> Result<(), Vec<Problem>> {
     let mut open = Open::new(config, name, key)?;
     let value = value
         .parse::<Value>()
         .unwrap_or_else(|_| Value::from(value));
-    let leaf = open.leaf.clone();
-    put(open.table()?, &leaf, value.clone());
-    // The key alone, for when the file was wrong before it.
+    // The table the value goes in, and each key of it it sets.
+    let mut keys = open.tables.clone();
+    let pairs: Vec<(String, Value)> = match value {
+        Value::InlineTable(pairs) => {
+            keys.push(Key::new(open.leaf.clone()));
+            pairs
+                .into_iter()
+                .map(|(leaf, mut value)| {
+                    // Spaced as a key of its own, not as inside braces.
+                    value.decor_mut().clear();
+                    (leaf.to_string(), value)
+                })
+                .collect()
+        }
+        value => vec![(open.leaf.clone(), value)],
+    };
+    // The keys alone too, for when the file was wrong before them.
     let mut alone = DocumentMut::new();
-    put(walk(&mut alone, &open.tables, &open.path)?, &leaf, value);
-    open.save(Some(&alone.to_string()))
+    for document in [&mut open.document, &mut alone] {
+        let table = walk(document, &keys, &open.path)?;
+        for (leaf, value) in &pairs {
+            put(table, leaf, value.clone());
+        }
+    }
+    let alone = alone.to_string();
+    open.save(Some(&alone))
 }
 
 /// Takes `key` out of the file called `name`, so the layer under it
-/// shows. A key or file not there is already reset.
+/// shows; an entry of a list of tables, `harness.gemini`, goes whole. A
+/// key or file not there is already reset.
 pub fn reset(config: &Path, name: &str, key: &str) -> Result<(), Vec<Problem>> {
     let mut open = Open::new(config, name, key)?;
     let leaf = open.leaf.clone();
+    if let Some((list, tables)) = open.tables.split_last()
+        && let Ok(table) = walk(&mut open.document, tables, &open.path)
+        && let Some(Item::ArrayOfTables(list)) = table.get_mut(list.get())
+    {
+        let before = list.len();
+        list.retain(|entry| id_of(entry) != Some(&leaf));
+        if list.len() == before {
+            return Ok(());
+        }
+        return open.save(None);
+    }
     let table = open.table()?;
     if !table.contains_key(&leaf) {
         return Ok(());
@@ -105,26 +142,54 @@ impl Open {
     }
 }
 
-/// The table `tables` name in `document`, made when it is not there.
+/// The table `tables` name in `document`, made when it is not there; in a
+/// list of tables, the entry the next name is the `id` of.
 fn walk<'d>(
     document: &'d mut DocumentMut,
     tables: &[Key],
     path: &Path,
 ) -> Result<&'d mut dyn TableLike, Vec<Problem>> {
+    let not_table = |at: usize| {
+        let walked: Vec<_> = tables[..=at].iter().map(Key::get).collect();
+        whole(path, format!("{} is not a table", walked.join(".")))
+    };
     let mut table: &mut dyn TableLike = document.as_table_mut();
-    for (at, name) in tables.iter().enumerate() {
+    let mut names = tables.iter().enumerate();
+    while let Some((at, name)) = names.next() {
         let item = table.entry(name.get()).or_insert_with(|| {
             let mut new = toml_edit::Table::new();
             // A table only for the ones in it has no header of its own.
             new.set_implicit(true);
             Item::Table(new)
         });
-        table = item.as_table_like_mut().ok_or_else(|| {
-            let walked: Vec<_> = tables[..=at].iter().map(Key::get).collect();
-            whole(path, format!("{} is not a table", walked.join(".")))
-        })?;
+        table = match item {
+            Item::ArrayOfTables(list) => {
+                let (at, id) = names.next().ok_or_else(|| not_table(at))?;
+                entry(list, id.get()).ok_or_else(|| not_table(at))?
+            }
+            item => item.as_table_like_mut().ok_or_else(|| not_table(at))?,
+        };
     }
     Ok(table)
+}
+
+/// The entry of `list` whose `id` is `id`, added when there is none.
+fn entry<'l>(list: &'l mut toml_edit::ArrayOfTables, id: &str) -> Option<&'l mut dyn TableLike> {
+    let found = list.iter().position(|entry| id_of(entry) == Some(id));
+    let at = match found {
+        Some(at) => at,
+        None => {
+            let mut new = toml_edit::Table::new();
+            new.insert("id", toml_edit::value(id));
+            list.push(new);
+            list.len() - 1
+        }
+    };
+    list.get_mut(at).map(|entry| entry as &mut dyn TableLike)
+}
+
+fn id_of(entry: &toml_edit::Table) -> Option<&str> {
+    entry.get("id")?.as_str()
 }
 
 /// Sets `leaf` in `table`, keeping the comment beside its old value.
@@ -183,7 +248,7 @@ fn whole(path: &Path, message: impl ToString) -> Vec<Problem> {
 /// The file's text; its template when it is not there yet.
 fn read(path: &Path, file: &File) -> std::io::Result<String> {
     match std::fs::read_to_string(path) {
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(file.template.to_owned()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok((file.template)()),
         read => read,
     }
 }
@@ -289,6 +354,68 @@ mod tests {
         let empty = tempfile::tempdir().unwrap();
         reset(empty.path(), "look.toml", "radius").unwrap();
         assert!(!empty.path().join("look.toml").exists());
+    }
+
+    #[test]
+    fn a_harness_is_named_by_its_id() {
+        let config = tempfile::tempdir().unwrap();
+        let read = || std::fs::read_to_string(config.path().join("harnesses.toml")).unwrap();
+        set(
+            config.path(),
+            "harnesses.toml",
+            "harness.codex.enabled",
+            "false",
+        )
+        .unwrap();
+        let text = read();
+        assert!(
+            text.contains("id = \"claude\""),
+            "the template keeps the rest: {text}"
+        );
+        let codex = text.find("id = \"codex\"").unwrap();
+        assert!(text[codex..].contains("enabled = false"), "{text}");
+        assert!(!text[..codex].contains("enabled"), "{text}");
+
+        let refused = set(
+            config.path(),
+            "harnesses.toml",
+            "harness.gemini.command",
+            "gemini",
+        );
+        assert!(
+            refused.unwrap_err()[0].message.contains("name"),
+            "an entry needs its name"
+        );
+        set(
+            config.path(),
+            "harnesses.toml",
+            "harness.gemini",
+            r#"{ name = "Gemini CLI", command = "gemini", args = ["--acp"] }"#,
+        )
+        .unwrap();
+        let text = read();
+        assert!(
+            text.ends_with("[[harness]]\nid = \"gemini\"\nname = \"Gemini CLI\"\ncommand = \"gemini\"\nargs = [\"--acp\"]\n"),
+            "{text}"
+        );
+        set(
+            config.path(),
+            "harnesses.toml",
+            "harness.gemini.env.KEY",
+            "secret",
+        )
+        .unwrap();
+        assert!(
+            read().contains("[harness.env]\nKEY = \"secret\""),
+            "{}",
+            read()
+        );
+
+        reset(config.path(), "harnesses.toml", "harness.gemini").unwrap();
+        reset(config.path(), "harnesses.toml", "harness.nobody").unwrap();
+        assert!(!read().contains("gemini"), "{}", read());
+        reset(config.path(), "harnesses.toml", "harness.codex.enabled").unwrap();
+        assert!(!read().contains("enabled"), "{}", read());
     }
 
     #[cfg(unix)]
