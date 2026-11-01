@@ -64,9 +64,9 @@ function resize(shell: Shell, by: 1 | -1, wrap = false) {
     const workspace = current(w)
     const column = workspace.columns[workspace.focus]
     if (!column) return w
-    const { presets, min } = columnsOf()
-    const floor = floorOf(workspace.id, minOf(column, min))
-    return widen(w, by, presets, { floor, wrap })
+    const look = columnsOf()
+    const floor = floorOf(workspace.id, minOf(column, look.min))
+    return widen(w, by, look, { floor, wrap })
   })
 }
 

@@ -292,6 +292,10 @@
           "description": "A new column's width, where its Pane does not ask for its own.",
           "type": "string"
         },
+        "alone": {
+          "description": "The width of a column alone on its workspace, until the Person\ngives it one: once a second opens beside it, both take `default`.",
+          "type": "string"
+        },
         "center": {
           "$ref": "#/$defs/Center"
         },

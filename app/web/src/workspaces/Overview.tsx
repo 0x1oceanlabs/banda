@@ -1,7 +1,8 @@
 import { useEffect, useRef } from "react"
 import type { SpaceId } from "@banda/contract"
 import { kindOf } from "../registry"
-import { share, type Workspaces } from "./model"
+import { useLookColumns } from "../look"
+import { share, widthIn, type Workspaces } from "./model"
 
 /**
  * Every workspace zoomed out, one under another, as niri's overview: each
@@ -24,6 +25,7 @@ export function Overview({
   onGo: (index: number) => void
   onClose: () => void
 }) {
+  const look = useLookColumns()
   // The keys come here while it is open, not to a Pane under it.
   const element = useRef<HTMLDivElement>(null)
   useEffect(() => element.current?.focus(), [])
@@ -48,10 +50,10 @@ export function Overview({
     >
       <ol className="mx-auto flex max-w-xl flex-col gap-4">
         {workspaces.list.map((workspace, i) => {
-          const wide = workspace.columns.reduce(
-            (sum, column) => sum + (share(column.width) ?? 0.5),
-            0
+          const shares = workspace.columns.map(
+            (column) => share(widthIn(workspace, column, look)) ?? 0.5
           )
+          const wide = shares.reduce((sum, at) => sum + at, 0)
           const fit = Math.max(1, wide)
           return (
             <li
@@ -76,12 +78,12 @@ export function Overview({
                     Empty
                   </span>
                 )}
-                {workspace.columns.map((column) => (
+                {workspace.columns.map((column, c) => (
                   <div
                     key={column.id}
                     className="flex min-w-0 flex-col gap-1"
                     style={{
-                      width: `${((share(column.width) ?? 0.5) / fit) * 100}%`,
+                      width: `${(shares[c] / fit) * 100}%`,
                     }}
                   >
                     {column.entries.map((entry) => {

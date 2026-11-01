@@ -4,7 +4,7 @@ import type { PaneState } from "@banda/ui/pane"
 import { columnsOf, moveOf, useLookColumns } from "../look"
 import { Moving } from "../motion"
 import { Choices, minOf } from "../registry"
-import { share, type Workspace } from "./model"
+import { share, widthIn, type Workspace } from "./model"
 import { ColumnMotion, minWidthOf, type Place, places, widthAt } from "./layout"
 import { type Frame, PaneFrame } from "./PaneFrame"
 import { pixels, scrollsSideways, SWIPE_END, Swipe } from "./swipe"
@@ -44,10 +44,11 @@ export function Strip({
 }) {
   const scroller = useRef<HTMLDivElement>(null)
   const focus = workspace.columns[workspace.focus]?.id
-  const { min } = useLookColumns()
+  const look = useLookColumns()
   const columns = workspace.columns.map((column) => ({
     ...column,
-    min: minOf(column, min),
+    width: widthIn(workspace, column, look),
+    min: minOf(column, look.min),
   }))
   const widths = columns.map((c) => `${c.width} ${c.min}`).join()
   const empty = workspace.columns.length === 0

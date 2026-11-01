@@ -17,13 +17,27 @@ import {
   start,
   step,
   update,
+  SIZES,
+  type Width,
   widen,
-  WIDTHS,
+  widthIn,
   type Workspaces,
 } from "./model"
 
 const A = "space-a"
 const B = "space-b"
+
+/** The widths the focused workspace's columns are drawn at. */
+function widths(state: Workspaces, sizes = SIZES): Width[] {
+  const workspace = current(state)
+  return workspace.columns.map((column) => widthIn(workspace, column, sizes))
+}
+
+/** The focused column's width, as drawn. */
+function width(state: Workspaces, sizes = SIZES): Width {
+  return widths(state, sizes)[current(state).focus]
+}
+
 const thread = (id: string): PaneState => ({
   kind: "agents.thread",
   args: { thread: id },
@@ -109,7 +123,7 @@ describe("opening", () => {
 
   test("keeps the column's width", () => {
     const state = open(start(), A, thread("t1"), { width: "1/3" })
-    expect(current(state).columns[0].width).toBe("1/3")
+    expect(width(state)).toBe("1/3")
   })
 })
 
@@ -208,64 +222,85 @@ describe("focus and moves inside a workspace", () => {
   })
 
   test("widths step and stop at the ends", () => {
-    let state = open(start(), A, thread("t1"))
+    let state = open(start(), A, thread("t1"), { width: "1/2" })
     state = widen(state, 1)
-    expect(current(state).columns[0].width).toBe("2/3")
+    expect(width(state)).toBe("2/3")
     state = widen(widen(state, 1), 1)
-    expect(current(state).columns[0].width).toBe("1")
+    expect(width(state)).toBe("1")
     state = widen(widen(widen(widen(state, -1), -1), -1), -1)
-    expect(current(state).columns[0].width).toBe("1/3")
+    expect(width(state)).toBe("1/3")
   })
 
   test("widths step through the look's presets, from any width", () => {
-    const presets = ["1/4", "3/5", "1"]
+    const sizes = { ...SIZES, presets: ["1/4", "3/5", "1"] }
     let state = open(start(), A, thread("t1"), { width: "1/2" })
-    state = widen(state, 1, presets)
-    expect(current(state).columns[0].width).toBe("3/5")
-    state = widen(widen(state, -1, presets), -1, presets)
-    expect(current(state).columns[0].width).toBe("1/4")
+    state = widen(state, 1, sizes)
+    expect(width(state)).toBe("3/5")
+    state = widen(widen(state, -1, sizes), -1, sizes)
+    expect(width(state)).toBe("1/4")
     // A width kept from before, such as 2/5, survives a reload.
     const kept = open(start(), A, thread("t2"), { width: "2/5" })
     const back = parse(JSON.parse(JSON.stringify(kept)))!
-    expect(current(back).columns[0].width).toBe("2/5")
+    expect(width(back)).toBe("2/5")
+  })
+
+  test("a column alone fills the screen; a second halves it, as the look says", () => {
+    let state = open(start(), A, thread("t1"))
+    expect(width(state)).toBe("1")
+    state = open(state, A, terminal("x1"), { place: "right" })
+    expect(widths(state)).toEqual(["1/2", "1/2"])
+    // The look's own widths.
+    const sizes = { ...SIZES, default: "1/3", alone: "2/3" }
+    expect(widths(state, sizes)).toEqual(["1/3", "1/3"])
+    // Alone again, it fills the screen again.
+    state = close(state, focused(state)!.id)
+    expect(width(state)).toBe("1")
+    expect(width(state, sizes)).toBe("2/3")
+    // A width the Person gave stays.
+    state = open(widen(state, -1), A, terminal("x2"), { place: "right" })
+    expect(widths(state)).toEqual(["2/3", "1/2"])
+    // It survives a reload, as the look's does.
+    expect(widths(parse(JSON.parse(JSON.stringify(state)))!)).toEqual([
+      "2/3",
+      "1/2",
+    ])
   })
 
   test("widths step by what the window draws", () => {
     // A narrow window: 1/3, 1/2 and 2/3 are all drawn at the floor.
     const floor = 0.8
     let state = open(start(), A, thread("t1"), { width: "1/2" })
-    expect(widen(state, -1, WIDTHS, { floor })).toBe(state)
-    state = widen(state, 1, WIDTHS, { floor })
-    expect(current(state).columns[0].width).toBe("1")
-    state = widen(state, -1, WIDTHS, { floor })
-    expect(current(state).columns[0].width).toBe("2/3")
+    expect(widen(state, -1, SIZES, { floor })).toBe(state)
+    state = widen(state, 1, SIZES, { floor })
+    expect(width(state)).toBe("1")
+    state = widen(state, -1, SIZES, { floor })
+    expect(width(state)).toBe("2/3")
     // Too narrow for any step to show: it stays.
-    expect(widen(state, 1, WIDTHS, { floor: 1 })).toBe(state)
+    expect(widen(state, 1, SIZES, { floor: 1 })).toBe(state)
   })
 
   test("Alt+R goes round the widths", () => {
-    const width = (s: ReturnType<typeof start>) => current(s).columns[0].width
     let state = open(start(), A, thread("t1"), { width: "2/3" })
-    state = widen(state, 1, WIDTHS, { wrap: true })
+    state = widen(state, 1, SIZES, { wrap: true })
     expect(width(state)).toBe("1")
-    state = widen(state, 1, WIDTHS, { wrap: true })
+    state = widen(state, 1, SIZES, { wrap: true })
     expect(width(state)).toBe("1/3")
-    state = widen(state, -1, WIDTHS, { wrap: true })
+    state = widen(state, -1, SIZES, { wrap: true })
     expect(width(state)).toBe("1")
     // In a narrow window, round from the whole screen to the floor.
-    state = widen(state, 1, WIDTHS, { wrap: true, floor: 0.8 })
+    state = widen(state, 1, SIZES, { wrap: true, floor: 0.8 })
     expect(width(state)).toBe("2/3")
   })
 
   test("a column takes the whole screen and gives it back", () => {
     let state = open(start(), A, thread("t1"), { width: "1/3" })
     state = maximize(state)
-    expect(current(state).columns[0].width).toBe("1")
+    expect(width(state)).toBe("1")
     const back = parse(JSON.parse(JSON.stringify(state)))!
-    expect(current(maximize(back)).columns[0].width).toBe("1/3")
-    // A step forgets the width it had.
+    expect(width(maximize(back))).toBe("1/3")
+    // A step from there goes on from the whole screen.
     state = widen(state, -1)
-    expect(current(state).columns[0].width).toBe("2/3")
+    expect(width(state)).toBe("2/3")
     expect(maximize(maximize(state))).toEqual(state)
   })
 })

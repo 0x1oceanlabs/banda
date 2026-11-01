@@ -20,6 +20,10 @@ pub struct ColumnsSettings {
     /// A new column's width, where its Pane does not ask for its own.
     #[schemars(with = "Option<String>")]
     pub default: Option<Spanned<String>>,
+    /// The width of a column alone on its workspace, until the Person
+    /// gives it one: once a second opens beside it, both take `default`.
+    #[schemars(with = "Option<String>")]
+    pub alone: Option<Spanned<String>>,
     pub center: Option<Center>,
     /// The narrowest a column is drawn, in rem; a list's is half of it.
     #[schemars(with = "Option<f64>", range(min = 0, max = 200))]
@@ -45,12 +49,14 @@ pub enum Center {
 pub struct Columns {
     pub presets: Vec<String>,
     pub default: String,
+    pub alone: String,
     pub center: Center,
     pub min: f64,
 }
 
 const PRESETS: [&str; 4] = ["1/3", "1/2", "2/3", "1"];
 const DEFAULT: &str = "1/2";
+const ALONE: &str = "1";
 /// A Thread's lines stay readable at 30 rem, about 60 letters.
 const MIN: f64 = 30.0;
 /// Past this a column is the whole screen in any window.
@@ -70,6 +76,12 @@ pub fn share(width: &str) -> Option<f64> {
     (value.is_finite() && value > 0.0 && value <= 1.0).then_some(value)
 }
 
+/// A width as written, trimmed, when it is one.
+fn valid(width: &Spanned<String>) -> Option<String> {
+    let text = width.get_ref().trim();
+    share(text).map(|_| text.to_owned())
+}
+
 const WIDTH: &str = "is a share of the screen, such as \"1/3\", \"2/5\" or \"1\"";
 
 impl ColumnsSettings {
@@ -77,6 +89,7 @@ impl ColumnsSettings {
         ColumnsSettings {
             presets: self.presets.or(under.presets),
             default: self.default.or(under.default),
+            alone: self.alone.or(under.alone),
             center: self.center.or(under.center),
             min: self.min.or(under.min),
         }
@@ -87,6 +100,7 @@ impl ColumnsSettings {
         ColumnsSettings {
             presets: Some(PRESETS.iter().map(|p| spanned(p)).collect()),
             default: Some(spanned(DEFAULT)),
+            alone: Some(spanned(ALONE)),
             center: Some(Center::Never),
             min: Some(Spanned::new(0..0, MIN)),
         }
@@ -102,10 +116,12 @@ impl ColumnsSettings {
         if self.presets.as_ref().is_some_and(Vec::is_empty) {
             problems.push((None, "columns.presets needs one width at least".to_owned()));
         }
-        if let Some(default) = &self.default
-            && share(default.get_ref()).is_none()
-        {
-            problems.push((Some(default.span()), format!("columns.default {WIDTH}")));
+        for (key, width) in [("default", &self.default), ("alone", &self.alone)] {
+            if let Some(width) = width
+                && share(width.get_ref()).is_none()
+            {
+                problems.push((Some(width.span()), format!("columns.{key} {WIDTH}")));
+            }
         }
         if let Some(min) = &self.min
             && !MINS.contains(min.get_ref())
@@ -124,8 +140,8 @@ impl ColumnsSettings {
             .iter()
             .flatten()
             .filter_map(|p| {
-                let text = p.get_ref().trim().to_owned();
-                share(&text).map(|s| (s, text))
+                let text = valid(p)?;
+                Some((share(&text)?, text))
             })
             .collect();
         presets.sort_by(|a, b| a.0.total_cmp(&b.0));
@@ -135,15 +151,16 @@ impl ColumnsSettings {
         } else {
             presets.into_iter().map(|(_, text)| text).collect()
         };
-        let default = self
-            .default
-            .as_ref()
-            .map(|d| d.get_ref().trim().to_owned())
-            .filter(|d| share(d).is_some())
-            .unwrap_or_else(|| DEFAULT.to_owned());
+        let width = |width: &Option<Spanned<String>>, or: &str| {
+            width
+                .as_ref()
+                .and_then(valid)
+                .unwrap_or_else(|| or.to_owned())
+        };
         Columns {
             presets,
-            default,
+            default: width(&self.default, DEFAULT),
+            alone: width(&self.alone, ALONE),
             center: self.center.unwrap_or(Center::Never),
             min: self
                 .min
@@ -182,6 +199,10 @@ mod tests {
         let columns = mine.over(ColumnsSettings::defaults()).resolve();
         assert_eq!(columns.presets, ["2/5", "1"]);
         assert_eq!(columns.default, "1/2");
+        assert_eq!(columns.alone, "1");
+        let half = read("[columns]\nalone = \"1/2\"\n");
+        assert_eq!(half.resolve().alone, "1/2");
+        assert_eq!(read("[columns]\nalone = \"all\"\n").problems().len(), 1);
         assert_eq!(columns.center, Center::Never);
         let centred = read("[columns]\ncenter = \"on-overflow\"\n");
         assert_eq!(centred.resolve().center, Center::OnOverflow);

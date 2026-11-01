@@ -12,6 +12,7 @@
  * tests cover the rules; the window only draws the state.
  */
 import { type JsonValue, newId, type SpaceId } from "@banda/contract"
+import { type Columns, DEFAULT_COLUMNS } from "@banda/contract/look"
 import type { PaneState, Place } from "@banda/ui/pane"
 
 /** One Pane on a workspace: what it shows, and the Space it belongs to. */
@@ -23,8 +24,10 @@ export type Entry = { id: string; space: SpaceId; pane: PaneState }
  */
 export type Width = string
 
-/** niri's presets, and the look's until it says otherwise. */
-export const WIDTHS: readonly Width[] = ["1/3", "1/2", "2/3", "1"]
+/** What the look says of widths (`[columns]`): the steps, a new column's,
+ * and a column's alone on its workspace. Banda's own till the look comes. */
+export type Sizes = Pick<Columns, "presets" | "default" | "alone">
+export const SIZES: Sizes = DEFAULT_COLUMNS
 
 /** A width's share of the screen, more than 0 and at most 1; `undefined`
  * when it is no width. */
@@ -40,9 +43,13 @@ export type Column = {
   entries: Entry[]
   /** The entry that has the focus when the column does. */
   active: number
-  width: Width
-  /** The width it had before it took the whole screen (`maximize`). */
-  before?: Width
+  /**
+   * The width the Person gave it. Left out, the look's: `alone` while it is
+   * the only column on its workspace, `default` once another opens.
+   */
+  width?: Width
+  /** It takes the whole screen over its width (`maximize`). */
+  full?: true
 }
 
 export type Workspace = {
@@ -86,6 +93,17 @@ export function entries(state: Workspaces): Entry[] {
   return state.list.flatMap((workspace) =>
     workspace.columns.flatMap((column) => column.entries)
   )
+}
+
+/** The width a column of `workspace` is drawn at. */
+export function widthIn(
+  workspace: Workspace,
+  column: Column,
+  sizes: Sizes = SIZES
+): Width {
+  if (column.full) return "1"
+  if (column.width !== undefined) return column.width
+  return workspace.columns.length === 1 ? sizes.alone : sizes.default
 }
 
 /** The workspaces that hold Panes, and the current one: the bar's numbers. */
@@ -165,7 +183,7 @@ export type Opening = {
   from?: string
   /** Where; see {@link Place}. Left out, the window picks. */
   place?: Place
-  /** A new column's width; half the screen when left out. */
+  /** A new column's width; the look's when left out (`Column.width`). */
   width?: Width
 }
 
@@ -228,7 +246,7 @@ export function open(
     id: newId(),
     entries: [entry],
     active: 0,
-    width: opening.width ?? "1/2",
+    width: opening.width,
   }
   const at = from ? from.column + 1 : workspace.columns.length
   const columns = [...workspace.columns]
@@ -391,15 +409,15 @@ export function drawn(at: number, floor: number): number {
 export function widen(
   state: Workspaces,
   by: 1 | -1,
-  presets: readonly Width[] = WIDTHS,
+  sizes: Sizes = SIZES,
   { floor = 0, wrap = false }: { floor?: number; wrap?: boolean } = {}
 ): Workspaces {
   const workspace = current(state)
   const column = workspace.columns[workspace.focus]
   if (!column) return state
-  const now = drawn(share(column.width) ?? 0.5, floor)
+  const now = drawn(share(widthIn(workspace, column, sizes)) ?? 0.5, floor)
   // Of the presets drawn alike, the widest stands for them all.
-  const steps = presets
+  const steps = sizes.presets
     .flatMap((width) => {
       const at = share(width)
       return at === undefined ? [] : [{ width, at, shows: drawn(at, floor) }]
@@ -412,22 +430,18 @@ export function widen(
       : steps.findLast((step) => step.shows < now - EPSILON)
   if (!next && wrap) next = by > 0 ? steps[0] : steps.at(-1)
   if (!next || alike(next.shows, now)) return state
-  return resized(state, { ...column, width: next.width, before: undefined })
+  return resized(state, { ...column, width: next.width, full: undefined })
 }
 
 /**
- * Makes the focused column the whole screen wide, or gives it back the
- * width it had before, as niri's maximize-column does.
+ * Makes the focused column the whole screen wide, or gives it back its
+ * width, as niri's maximize-column does.
  */
 export function maximize(state: Workspaces): Workspaces {
   const workspace = current(state)
   const column = workspace.columns[workspace.focus]
   if (!column) return state
-  if (share(column.width) !== 1) {
-    return resized(state, { ...column, width: "1", before: column.width })
-  }
-  if (column.before === undefined) return state
-  return resized(state, { ...column, width: column.before, before: undefined })
+  return resized(state, { ...column, full: column.full ? undefined : true })
 }
 
 /** Puts `column` in the place of the focused one. */
@@ -460,8 +474,7 @@ export function send(state: Workspaces, index: number): Workspaces {
   const to = clamp(index, state.list.length)
   if (!entry || to === state.current) return state
   const target = state.list[to]
-  const width =
-    current(state).columns[current(state).focus]?.width ?? ("1/2" as Width)
+  const width = current(state).columns[current(state).focus]?.width
   const moved: Column = { id: newId(), entries: [entry], active: 0, width }
   const without = remove(state, entry.id)
   return focusEntry(
@@ -538,13 +551,13 @@ export function parse(value: unknown): Workspaces | null {
         return null
       const kept = column.entries.filter(isEntry)
       if (kept.length !== column.entries.length) return null
-      const width = isWidth(column.width) ? column.width : "1/2"
+      const width = isWidth(column.width) ? column.width : undefined
+      const full = column.full === true || undefined
       const active =
         typeof column.active === "number"
           ? clamp(column.active, kept.length)
           : 0
-      const before = isWidth(column.before) ? column.before : undefined
-      columns.push({ id: column.id, entries: kept, active, width, before })
+      columns.push({ id: column.id, entries: kept, active, width, full })
     }
     const focus =
       typeof workspace.focus === "number"
