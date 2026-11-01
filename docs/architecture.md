@@ -182,7 +182,10 @@ If Chat is removed, Agents still works through its own Thread.
     `CLAUDE_CODE_EXECUTABLE`, `codex` through `CODEX_PATH` (ADR 0003,
     decision 3). Each start finds it on PATH and asks its version; a CLI
     that is not installed stops the start, so no bundled copy runs in its
-    place. Checking the version against a supported range comes later.
+    place.
+  - Its `minimum` is the oldest version the adapter supports, the one it
+    was built for: Claude Code 2.1.312, Codex 0.165.0. An older CLI runs,
+    and the Harnesses Pane and its Threads warn.
 - **A message queues a turn.** The outbox runs one Thread's turns one at a
   time, in order (`turn.start`, keyed by the Thread). Threads run side by
   side, an Agent's own Threads too. A stop (`turn.stop`) and an answer

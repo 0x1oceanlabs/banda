@@ -828,6 +828,7 @@ impl Connection {
     fn runs(&self, known: &Known) -> Running {
         let mut running = running(known);
         running.offer.no_images = !self.agreed.images;
+        running.offer.outdated = self.about.cli.as_ref().and_then(|c| c.outdated.clone());
         running
     }
 
@@ -1413,6 +1414,7 @@ fn running(known: &Known) -> Running {
             plans: native && plans,
             slash_commands: Vec::new(),
             no_images: false,
+            outdated: None,
         },
         slash_commands: known.slash_commands.clone(),
     }

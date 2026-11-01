@@ -148,6 +148,11 @@ pub struct Offer {
     /// The Harness takes no images: a message to it carries text alone.
     #[serde(default)]
     pub no_images: bool,
+    /// In plain words, that the Person's CLI is older than the Harness
+    /// supports.
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub outdated: Option<String>,
 }
 
 /// What the Harness runs when a message starts with `/` and its name.
@@ -215,6 +220,11 @@ pub struct CliView {
     #[ts(optional)]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub version: Option<String>,
+    /// In plain words, that the version is older than the Harness
+    /// supports.
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub outdated: Option<String>,
 }
 
 /// A Harness's program, as it names itself when it starts: for Claude

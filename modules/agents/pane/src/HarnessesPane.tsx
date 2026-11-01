@@ -35,7 +35,7 @@ import { useRead } from "@bandaso/ui/hooks/use-read"
 import { definePane, type PaneProps } from "@bandaso/ui/pane"
 import { LogOutIcon, RotateCwIcon, SettingsIcon } from "lucide-react"
 import { type EnterKey, useEnterKey } from "./enter-key"
-import { Problem, Ways } from "./SignIn"
+import { Problem, Warning, Ways } from "./SignIn"
 
 type NoArgs = { [key: string]: JsonValue }
 
@@ -158,6 +158,9 @@ function HarnessReading({
           <Problem>
             {harness.name} does not start: {account.refusal.message}
           </Problem>
+        )}
+        {account.state === "ready" && account.value.cli?.outdated && (
+          <Warning>{account.value.cli.outdated}</Warning>
         )}
         {account.state === "ready" && (
           <AccountState
