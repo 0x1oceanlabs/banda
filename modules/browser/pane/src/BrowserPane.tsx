@@ -44,18 +44,21 @@ import {
   XIcon,
 } from "lucide-react"
 import { addressOf, siteOf } from "./address"
+import { Extensions, WEB_STORE } from "./Extensions"
 import type { Download } from "./desktop"
 import { browserHost, downloadsNow, watchDownloads } from "./host"
 import { browserKey, type Does, isTabKey } from "./keys"
 import {
   BLANK,
   drop,
+  type Holder,
   hold,
   type Page,
   type PageState,
   pageAt,
   pageOf,
   pagesVersion,
+  toFront,
   watchPages,
 } from "./pages"
 import {
@@ -87,6 +90,13 @@ export const browserPane = definePane<BrowserArgs>({
   Pane: BrowserPane,
 })
 
+/** `args` without the tab at `at`, which Ctrl+Shift+T opens again. */
+function closing(args: BrowserArgs, at: number): BrowserArgs | null {
+  const gone = args.tabs[at]
+  if (gone) keepClosed(gone)
+  return withoutTab(args, at)
+}
+
 /** A tab's words: its page's title, else its site. */
 function titleOf(tab: Tab): string {
   return tab.title || (tab.url ? siteOf(tab.url) : "New Tab")
@@ -97,9 +107,9 @@ function BrowserPane({ args, focused, update, close }: PaneProps<BrowserArgs>) {
   // Any page's change draws the tabs again: their titles, icons, loads.
   const version = useSyncExternalStore(watchPages, pagesVersion)
   const [first] = useState(newId)
-  const now = useRef({ args, update })
+  const now = useRef({ args, update, close })
   useEffect(() => {
-    now.current = { args, update }
+    now.current = { args, update, close }
   })
 
   useEffect(() => {
@@ -107,22 +117,40 @@ function BrowserPane({ args, focused, update, close }: PaneProps<BrowserArgs>) {
   })
 
   // The Pane holds its tabs' pages; a page opened from one is a tab
-  // beside it, loading out of sight when it opened in the background.
+  // beside it, loading out of sight when it opened in the background. An
+  // extension opens, shows and closes tabs of the Pane in front.
+  const [holder] = useState<Holder>(() => {
+    const at = (id: string) =>
+      now.current.args.tabs.findIndex((each) => each.id === id)
+    const change = (next: BrowserArgs | null) =>
+      next ? now.current.update(next) : now.current.close()
+    return {
+      open: (url, from, background = false) => {
+        const tab = { ...blankTab(newId()), url }
+        if (background) pageOf(tab.id, url)
+        const after = from === undefined ? undefined : at(from) + 1 || undefined
+        change(withTab(now.current.args, tab, after, background))
+        return tab.id
+      },
+      show: (id) => {
+        const i = at(id)
+        if (i >= 0) change(showing(now.current.args, i))
+      },
+      close: (id) => {
+        const i = at(id)
+        if (i >= 0) change(closing(now.current.args, i))
+      },
+    }
+  })
   const ids = args.tabs.map((tab) => tab.id)
   useEffect(
-    () =>
-      hold(ids, {
-        open: (from, url, background) => {
-          const { args, update } = now.current
-          const tab = { id: newId(), url, title: "" }
-          if (background) pageOf(tab.id, url)
-          const at = args.tabs.findIndex((each) => each.id === from) + 1
-          update(withTab(args, tab, at || undefined, background))
-        },
-      }),
+    () => hold(ids, holder),
     // eslint-disable-next-line react-hooks/exhaustive-deps -- the same tabs
     [ids.join(" ")]
   )
+  useEffect(() => {
+    if (focused) toFront(holder)
+  }, [focused, holder])
 
   // A tab keeps where its page went, so it comes back there; a title that
   // keeps changing, as an unread count, is kept once a load settles.
@@ -153,11 +181,7 @@ function BrowserPane({ args, focused, update, close }: PaneProps<BrowserArgs>) {
   const tabs: TabsProps = {
     args,
     onShow: (at) => change(showing(args, at)),
-    onClose: (at) => {
-      const gone = args.tabs[at]
-      if (gone) keepClosed(gone)
-      change(withoutTab(args, at))
-    },
+    onClose: (at) => change(closing(args, at)),
     onNew: () => change(afterTabKey(args, "tab-new", newId())),
   }
   return (
@@ -168,6 +192,7 @@ function BrowserPane({ args, focused, update, close }: PaneProps<BrowserArgs>) {
       focused={focused}
       title={browserPane.title(args)}
       onOpen={(url) => update(withChanged(args, { ...tab, url }))}
+      onStore={() => holder.open(WEB_STORE)}
       onTabKey={(key) => change(afterTabKey(args, key, newId()))}
       close={close}
     />
@@ -189,6 +214,7 @@ function Browser({
   focused,
   title,
   onOpen,
+  onStore,
   onTabKey,
   close,
 }: {
@@ -198,6 +224,7 @@ function Browser({
   focused: boolean
   title: string
   onOpen: (url: string) => void
+  onStore: () => void
   onTabKey: (key: TabKey) => void
   close: () => void
 }) {
@@ -215,6 +242,12 @@ function Browser({
     page.show(element, focused)
     return () => page.release(element)
   }, [page, focused])
+
+  // The page the Person looks at is the extensions' active tab.
+  const contents = page?.contents ?? null
+  useEffect(() => {
+    if (focused && contents !== null) browserHost()?.shown(contents)
+  }, [focused, contents])
 
   // A tile that takes the focus gives it to its page, or to the address;
   // so does a tab that comes to show. The first address typed in a tab
@@ -301,6 +334,13 @@ function Browser({
           onOpen={open}
           onLeave={() => page?.focus()}
         />
+        {browserHost() && (
+          <Extensions
+            tab={contents}
+            pinned={settings.pinned}
+            onStore={onStore}
+          />
+        )}
         <Downloads />
         <Button
           variant="ghost"

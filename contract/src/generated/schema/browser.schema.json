@@ -11,6 +11,13 @@
     "search": {
       "description": "Where words that are not an address go: an http or https address\nwith %s where the words go. DuckDuckGo when left out.",
       "type": "string"
+    },
+    "pinned": {
+      "description": "The extensions whose buttons sit in the row, by their IDs; the rest\nare behind the Extensions button. The row's menu writes it.",
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
     }
   },
   "additionalProperties": false,

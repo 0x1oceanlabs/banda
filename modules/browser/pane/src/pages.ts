@@ -11,7 +11,7 @@
  */
 import { HELD_BY, paneLayer } from "@banda/ui/pane"
 import { PARTITION } from "./desktop"
-import { hearNews } from "./host"
+import { browserHost, hearNews } from "./host"
 
 /** What the row shows of a page. */
 export type PageState = {
@@ -76,8 +76,11 @@ export class Page {
   /** Darkens the page as the tile's own veil darkens the tile. */
   private readonly veil: HTMLDivElement
   private ready = false
-  /** Its web contents' ID, by which the desktop names it. */
+  /** Its web contents' ID, by which the desktop names it; none until it
+   * attached. */
   contents: number | null = null
+  /** Who waits for it to attach. */
+  private attaching: ((contents: number) => void)[] = []
   private slot: Slot | null = null
   /** What cuts the slot: its ancestors that clip, and the tile's corner. */
   private clips: HTMLElement[] = []
@@ -164,6 +167,12 @@ export class Page {
     else this.view.openDevTools()
   }
 
+  /** Calls `then` with its web contents' ID once it attached. */
+  attached(then: (contents: number) => void): void {
+    if (this.contents === null) this.attaching.push(then)
+    else then(this.contents)
+  }
+
   destroy(): void {
     if (this.contents !== null) byContents.delete(this.contents)
     this.box.remove()
@@ -247,10 +256,15 @@ export class Page {
   private listen(): void {
     const view = this.view
     type Navigated = Event & { url: string; isMainFrame?: boolean }
+    view.addEventListener("did-attach", () => {
+      const contents = view.getWebContentsId()
+      this.contents = contents
+      byContents.set(contents, this)
+      for (const then of this.attaching.splice(0)) then(contents)
+      changed()
+    })
     view.addEventListener("dom-ready", () => {
       this.ready = true
-      this.contents = view.getWebContentsId()
-      byContents.set(this.contents, this)
     })
     view.addEventListener("did-start-loading", () =>
       this.set({ loading: true, failed: undefined })
@@ -348,9 +362,14 @@ export function pageAt(id: string): Page | undefined {
   return pages.get(id)
 }
 
-/** What a browser Pane does when a page of its tabs opens another. */
+/** What a browser Pane does with its tabs when a page or an extension
+ * asks. */
 export type Holder = {
-  open: (from: string, url: string, background: boolean) => void
+  /** Opens a tab at `url`, beside the tab `from` when a page of its tabs
+   * opened it, and behind it when in the `background`; the tab's ID. */
+  open: (url: string, from?: string, background?: boolean) => string
+  show: (id: string) => void
+  close: (id: string) => void
 }
 
 /** The tabs a browser Pane holds now, by their pages' IDs. */
@@ -367,6 +386,29 @@ export function hold(ids: readonly string[], holder: Holder): () => void {
   return () => {
     for (const id of ids) if (held.get(id) === holder) held.delete(id)
   }
+}
+
+/** The browser Pane the Person was in last, which takes an extension's
+ * tabs. */
+let front: Holder | null = null
+
+/** `holder`'s Pane has the focus. */
+export function toFront(holder: Holder): void {
+  front = holder
+}
+
+/** The Pane in front, else the last that holds a tab; none without one. */
+function frontHolder(): Holder | undefined {
+  const holders = [...held.values()]
+  return front && holders.includes(front) ? front : holders.at(-1)
+}
+
+/** Makes the tab an extension asked for, and tells the desktop its page. */
+function create(request: string, url: string): void {
+  const id = frontHolder()?.open(url)
+  const page = id ? pageOf(id, url) : null
+  if (!page) browserHost()?.created(request, null)
+  else page.attached((contents) => browserHost()?.created(request, contents))
 }
 
 /**
@@ -404,11 +446,17 @@ function changed(): void {
 /** The pages by their web contents' IDs, as the desktop names them. */
 const byContents = new Map<number, Page>()
 
-// A page's icon, and the pages it opens, which its Pane makes tabs of.
+// A page's icon, the pages it opens, which its Pane makes tabs of, and
+// the tabs extensions open, show and close.
 hearNews((news) => {
+  if (news.kind === "create") return create(news.request, news.url)
   if (news.kind === "download") return
   const page = byContents.get(news.from)
   if (!page) return
+  const holder = held.get(page.id)
   if (news.kind === "icon") page.iconed(news.icon)
-  else held.get(page.id)?.open(page.id, news.url, news.background)
+  else if (news.kind === "open") {
+    holder?.open(news.url, page.id, news.background)
+  } else if (news.kind === "select") holder?.show(page.id)
+  else holder?.close(page.id)
 })

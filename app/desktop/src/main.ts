@@ -23,7 +23,8 @@ import {
   shell,
 } from "electron"
 import type { Notice } from "@banda/web/host"
-import { hostPages, keepProfile, reveal, writeTabs } from "./browser"
+import { hostPages, keepProfile, reveal } from "./browser"
+import { Extensions } from "./extensions"
 import { EngineProcess } from "./engine"
 import { firstFrame, LookProcess } from "./look"
 import { type Desktop, RecordedDesktop, SystemDesktop } from "./notices"
@@ -45,7 +46,8 @@ const CSP = [
   // Ghostty draws terminals from WebAssembly that ships with the page.
   "script-src 'self' 'wasm-unsafe-eval'",
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data:",
+  // An extension's button shows its icon from crx:// (extensions.ts).
+  "img-src 'self' data: crx:",
   "font-src 'self' data:",
   // The engine; and the page's own files, as Ghostty fetches its WebAssembly.
   "connect-src 'self' ws://127.0.0.1:*",
@@ -126,6 +128,7 @@ async function ready(): Promise<void> {
     (_contents, _permission, answer) => answer(false)
   )
   keepProfile(() => window)
+  const extensions = new Extensions(() => window)
   ipcMain.handle("engine", (event) => {
     const from = event.senderFrame?.url ?? ""
     if (!fromPage(from))
@@ -164,15 +167,48 @@ async function ready(): Promise<void> {
     const failed = await shell.openPath(sidebar.file)
     if (failed) throw new Error(failed)
   })
-  ipcMain.handle("browser.tabs", (event, where: unknown) => {
-    if (!fromPage(event.senderFrame?.url ?? ""))
+  // The browser's (ADR 0013): only Banda's page asks.
+  const fromBanda = (
+    event: Electron.IpcMainEvent | Electron.IpcMainInvokeEvent
+  ) => fromPage(event.senderFrame?.url ?? "")
+  const browserAsks = (
+    event: Electron.IpcMainEvent | Electron.IpcMainInvokeEvent
+  ) => {
+    if (!fromBanda(event))
       throw new Error("Only Banda's page may change the browser.")
-    const browser = look.current()?.browser
-    if (!browser) throw new Error("The browser's file is not known yet.")
-    writeTabs(browser.file, where)
+  }
+  /** Sets `key` in browser.toml, through the one writer (ADR 0016). */
+  const setBrowser = async (key: string, value: string) => {
+    const refused = await settings.set("browser.toml", key, value)
+    if (refused.length) throw new Error(refused.join("\n"))
+  }
+  /** Pins the extension `id` to the row, or takes it off. */
+  const pin = async (id: string, pinned: boolean) => {
+    const others = (look.current()?.browser.pinned ?? []).filter(
+      (each) => each !== id
+    )
+    const list = pinned ? [...others, id] : others
+    await setBrowser("pinned", JSON.stringify(list))
+  }
+  ipcMain.handle("browser.tabs", async (event, where: unknown) => {
+    browserAsks(event)
+    if (where !== "top" && where !== "left")
+      throw new Error(`The tabs go "top" or "left", not ${String(where)}.`)
+    await setBrowser("tabs", JSON.stringify(where))
+  })
+  ipcMain.handle("browser.pin", async (event, id: unknown, pinned: unknown) => {
+    browserAsks(event)
+    if (!extensions.has(id))
+      throw new Error(`There is no extension ${String(id)}.`)
+    await pin(id, pinned === true)
+  })
+  ipcMain.handle("browser.remove", async (event, id: unknown) => {
+    browserAsks(event)
+    // A removed extension's button leaves the row too.
+    if (await extensions.remove(id)) await pin(id as string, false)
   })
   ipcMain.on("browser.reveal", (event, path: unknown) => {
-    if (fromPage(event.senderFrame?.url ?? "")) reveal(path)
+    if (fromBanda(event)) reveal(path)
   })
   ipcMain.on("settings.open", (event, link: unknown) => {
     if (fromPage(event.senderFrame?.url ?? "")) openSettings(linkOf(link))
@@ -188,6 +224,21 @@ async function ready(): Promise<void> {
     if (!sidebar) throw new Error("The config folder is not known yet.")
     return settings.reveal(sidebar.file, file)
   })
+  ipcMain.on(
+    "browser.popup",
+    (event, extension: unknown, url: unknown, under: unknown) => {
+      if (fromBanda(event)) extensions.popup(extension, url, under)
+    }
+  )
+  ipcMain.on("browser.shown", (event, contents: unknown) => {
+    if (fromBanda(event)) extensions.shown(contents)
+  })
+  ipcMain.on(
+    "browser.created",
+    (event, request: unknown, contents: unknown) => {
+      if (fromBanda(event)) extensions.created(request, contents)
+    }
+  )
   ipcMain.on("notify:show", (event, notice: Notice) => {
     if (!fromPage(event.senderFrame?.url ?? "")) return
     desktop.show(notice, answered)
@@ -204,7 +255,7 @@ async function ready(): Promise<void> {
   const first = await look.first(LOOK_WAIT)
   if (first) nativeTheme.themeSource = first.mode
   Menu.setApplicationMenu(process.platform === "darwin" ? macMenu() : null)
-  window = openWindow()
+  window = openWindow(extensions)
 }
 
 /** The Person clicked a notice: the window comes to the front, and the
@@ -246,7 +297,7 @@ function fromPage(url: string): boolean {
   return url === ORIGIN || url.startsWith(`${ORIGIN}/`)
 }
 
-function openWindow(): BrowserWindow {
+function openWindow(extensions: Extensions): BrowserWindow {
   const opened = pageWindow({
     width: 1280,
     height: 820,
@@ -254,7 +305,7 @@ function openWindow(): BrowserWindow {
     minHeight: 420,
     title: "Banda",
   })
-  hostPages(opened.webContents)
+  hostPages(opened.webContents, extensions)
   void opened.loadURL(PAGE)
   opened.on("closed", () => {
     window = null

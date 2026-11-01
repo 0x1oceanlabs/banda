@@ -17,9 +17,14 @@
     "@banda/contract": "workspace:*",
     "@banda/web": "workspace:*",
     "@playwright/test": "1.64.1",
+    "@types/chrome": "^0.3.7",
     "@types/node": "^24",
     "electron": "45.1.0",
     "esbuild": "^0.28.2",
     "typescript": "~6.0.2"
+  },
+  "dependencies": {
+    "electron-chrome-extensions": "4.10.0",
+    "electron-chrome-web-store": "0.13.0"
   }
 }

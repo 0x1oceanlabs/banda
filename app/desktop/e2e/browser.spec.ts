@@ -1,3 +1,4 @@
+import { createHash, generateKeyPairSync } from "node:crypto"
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { createServer, type Server } from "node:http"
 import type { AddressInfo } from "node:net"
@@ -317,3 +318,114 @@ test("the Banda menu opens an address, and a file of the focused Space, in a bro
   await expect(menu).toBeHidden()
   await expect(page.getByRole("region", { name: "The plan" })).toBeVisible()
 })
+
+/**
+ * An extension as the Chrome Web Store installs one, in the browser's
+ * profile: its `key` names it. Its button has a badge and a popup, which
+ * opens a tab at `?open=` of its own address.
+ */
+function storeExtension(): { id: string; files: Record<string, string> } {
+  const { publicKey } = generateKeyPairSync("rsa", { modulusLength: 2048 })
+  const der = publicKey.export({ type: "spki", format: "der" })
+  const id = [...createHash("sha256").update(der).digest("hex").slice(0, 32)]
+    .map((digit) => String.fromCharCode(97 + parseInt(digit, 16)))
+    .join("")
+  const folder = `state/window/Extensions/${id}/1.0.0_0`
+  const manifest = {
+    manifest_version: 3,
+    name: "Fixture",
+    version: "1.0.0",
+    key: der.toString("base64"),
+    action: { default_title: "Fixture", default_popup: "popup.html" },
+    background: { service_worker: "worker.js" },
+    permissions: ["tabs"],
+  }
+  return {
+    id,
+    files: {
+      [`${folder}/manifest.json`]: JSON.stringify(manifest),
+      [`${folder}/worker.js`]: `chrome.tabs.onUpdated.addListener((tabId, change) => {
+        if (change.status === "complete") chrome.action.setBadgeText({ tabId, text: "7" })
+      })`,
+      [`${folder}/popup.html`]:
+        '<body style="width:220px;height:90px"><p>From the popup</p><script src="popup.js"></script></body>',
+      [`${folder}/popup.js`]:
+        "window.openTab = (url) => chrome.tabs.create({ url })",
+    },
+  }
+}
+
+test("an extension's button shows its popup, which opens a tab", async () => {
+  const address = await serve({
+    "/": "<title>Alpha</title>",
+    "/delta": "<title>Delta</title>",
+  })
+  const extension = storeExtension()
+  window = await startWindow({ files: extension.files })
+  const { app, page, dir } = window
+  await expect((await firstThread(page)).thread).toBeVisible()
+  await page.keyboard.press("Alt+Shift+Enter")
+  const bar = addressBar(page)
+  await bar.fill(address)
+  await bar.press("Enter")
+  const tabs = page.getByRole("tablist", { name: "Tabs" })
+  await expect(tabs.getByRole("tab")).toHaveText(["Alpha"])
+
+  // The extensions' menu lists it; its pin puts it on the row, in
+  // browser.toml.
+  await page.getByRole("button", { name: "Extensions" }).click()
+  await expect(page.getByRole("menuitem", { name: /Fixture/ })).toBeVisible()
+  await page.getByRole("button", { name: "Pin Fixture" }).click()
+  const file = join(dir, "config/browser.toml")
+  await expect
+    .poll(() => readFileSync(file, "utf8"))
+    .toContain(`pinned = ["${extension.id}"]`)
+  await page.keyboard.press("Escape")
+  const button = page.getByRole("button", { name: "Fixture (7)" })
+  await expect(button).toBeVisible()
+
+  // Its popup opens in the window under it, as large as its page: 220
+  // pixels and the page's margins;
+  // a second click closes it.
+  await button.click()
+  await expect.poll(() => popupBox(app)).toMatchObject({ width: 236 })
+  const shown = (await popupBox(app))!
+  const under = (await button.boundingBox())!
+  expect(shown.y).toBeGreaterThan(under.y + under.height)
+  expect(shown.x + shown.width).toBeCloseTo(under.x + under.width, -1)
+  await page.screenshot({ path: "test-results/browser-extension-popup.png" })
+  await button.click()
+  await expect.poll(() => popupBox(app)).toBeNull()
+  await button.click()
+  await expect.poll(() => popupBox(app)).not.toBeNull()
+
+  // A tab it opens is a tab of this browser, and shows.
+  await app.evaluate(({ webContents }, url) => {
+    const popup = webContents
+      .getAllWebContents()
+      .find((each) => each.getURL().endsWith("/popup.html"))
+    return popup?.executeJavaScript(`openTab(${JSON.stringify(url)})`)
+  }, `${address}/delta`)
+  await expect(tabs.getByRole("tab")).toHaveText(["Alpha", "Delta"])
+  await expect(tabs.getByRole("tab", { name: "Delta" })).toHaveAttribute(
+    "aria-selected",
+    "true"
+  )
+  // The popup lost the focus to the new tab, so it closed.
+  await expect.poll(() => popupBox(app)).toBeNull()
+})
+
+/** Where an extension's popup shows in the window; none while none does. */
+function popupBox(app: ElectronApplication) {
+  return app.evaluate(({ BrowserWindow }) => {
+    const views = BrowserWindow.getAllWindows()[0]?.contentView.children ?? []
+    const popup = views.find(
+      (view) =>
+        "webContents" in view &&
+        (view.webContents as Electron.WebContents)
+          .getURL()
+          .endsWith("/popup.html")
+    )
+    return popup?.getBounds() ?? null
+  })
+}

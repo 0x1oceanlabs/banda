@@ -11,3 +11,7 @@ tabs = "top"
 # Where words that are not an address go: an address with %s where the
 # words go.
 # search = "https://duckduckgo.com/?q=%s"
+
+# The extensions whose buttons sit in the row, by their IDs; the rest are
+# behind the Extensions button, whose menu pins them for you.
+# pinned = []
