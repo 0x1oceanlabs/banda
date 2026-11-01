@@ -77,6 +77,11 @@ impl World {
     }
 
     async fn new_with(root: &Path, agents: Agents) -> World {
+        World::new_on(root, agents, "fake").await
+    }
+
+    /// A Space with the Agent "Writer" on `harness`.
+    async fn new_on(root: &Path, agents: Agents, harness: &str) -> World {
         let owner = PersonId::new();
         let kernel = World::open_with(root, owner, agents).await;
         let person = Participant::Person(owner);
@@ -97,7 +102,7 @@ impl World {
                 "agents.create",
                 Some(space),
                 Some(CommandId::new()),
-                json!({ "name": "Writer", "harness": "fake" }),
+                json!({ "name": "Writer", "harness": harness }),
             )
             .await
             .unwrap();
@@ -1208,15 +1213,7 @@ async fn only_a_person_chooses_how_freely_an_agent_acts() {
 
 /// Whether the Thread waits on an open Question.
 fn asking(view: &ThreadView) -> bool {
-    view.items.iter().any(|i| {
-        matches!(
-            i.body,
-            Body::Question {
-                state: QuestionState::Open,
-                ..
-            }
-        )
-    })
+    open(view).is_some()
 }
 
 #[tokio::test]
@@ -2189,23 +2186,10 @@ async fn record_the_real_harnesses_editing_a_file() {
         let raw = tempfile::tempdir().unwrap();
         let mut entry = known.find(harness).unwrap().clone();
         entry.record = Some(raw.path().to_owned());
-        let fake = harnesses().find("fake").unwrap().clone();
-        let agents = Agents::new(Harnesses::new(vec![fake, entry]));
+        let agents = Agents::new(Harnesses::new(vec![entry]));
         let root = tempfile::tempdir().unwrap();
-        let world = World::new_with(root.path(), agents).await;
-        let editor = world
-            .call(
-                world.person(),
-                "agents.create",
-                json!({ "name": "Editor", "harness": harness }),
-            )
-            .await
-            .unwrap();
-        let world = World {
-            agent: serde_json::from_value(editor["id"].clone()).unwrap(),
-            ..world
-        };
-        let view = world.edit("Editor", Duration::from_secs(300)).await;
+        let world = World::new_on(root.path(), agents, harness).await;
+        let view = world.edit(Duration::from_secs(300)).await;
         println!("{harness}: {:#?}", texts(&view));
 
         let account = world
@@ -2217,10 +2201,13 @@ async fn record_the_real_harnesses_editing_a_file() {
             .await
             .unwrap();
         let who = &account["signed_in_as"];
+        let email = who["email"]
+            .as_str()
+            .expect("the Harness says who is signed in");
         let home = std::env::var("HOME").unwrap();
         let private = [
             (who["organization"].as_str(), "Example Org"),
-            (who["email"].as_str(), "person@example.invalid"),
+            (Some(email), "person@example.invalid"),
             (Some(home.as_str()), "/home/person"),
         ];
         let recorded = std::fs::read_dir(raw.path())
@@ -2231,33 +2218,71 @@ async fn record_the_real_harnesses_editing_a_file() {
         let scrubbed = private
             .iter()
             .filter_map(|(was, is)| Some((was.filter(|w| !w.is_empty())?, is)))
-            .fold(own_commands(&recorded), |text, (was, is)| {
+            .fold(without_personal_setup(&recorded), |text, (was, is)| {
                 text.replace(was, is)
             });
+        assert!(!scrubbed.contains(email) && !scrubbed.contains(&home));
         std::fs::write(recording(harness), scrubbed).unwrap();
     }
 }
 
 /// The commands Claude Code and Codex have of their own. What else they
-/// list are the Person's skills and plugins, which a recording leaves out.
+/// list are the Person's skills and plugins.
 const OWN_COMMANDS: [&str; 8] = [
     "compact", "context", "init", "mcp", "model", "plan", "review", "status",
 ];
 
-/// `recorded` with each list of commands cut to [`OWN_COMMANDS`].
-fn own_commands(recorded: &str) -> String {
+/// `recorded` without the Person's skills, plugins and agents: each list
+/// of commands cut to [`OWN_COMMANDS`], and Claude Code's `agent` option
+/// to its default.
+fn without_personal_setup(recorded: &str) -> String {
     recorded
         .lines()
         .map(|line| {
             let mut entry: Value = serde_json::from_str(line).unwrap();
-            let update = &mut entry["frame"]["params"]["update"];
-            if update["sessionUpdate"] == "available_commands_update" {
-                let commands = update["availableCommands"].as_array_mut().unwrap();
+            let frame = &mut entry["frame"];
+            if let Some(update) = frame.pointer_mut("/params/update")
+                && update["sessionUpdate"] == "available_commands_update"
+                && let Some(commands) = update.get_mut("availableCommands")
+                && let Some(commands) = commands.as_array_mut()
+            {
                 commands.retain(|c| OWN_COMMANDS.contains(&c["name"].as_str().unwrap_or("")));
+            }
+            for at in ["/result/configOptions", "/params/update/configOptions"] {
+                let options = frame.pointer_mut(at).and_then(Value::as_array_mut);
+                for option in options.into_iter().flatten() {
+                    if option["id"] == "agent"
+                        && let Some(choices) = option.get_mut("options")
+                        && let Some(choices) = choices.as_array_mut()
+                    {
+                        choices.retain(|c| c["value"] == "default");
+                    }
+                }
             }
             entry.to_string() + "\n"
         })
         .collect()
+}
+
+#[test]
+fn the_recordings_hold_no_personal_setup() {
+    for harness in ["claude", "codex"] {
+        let text = std::fs::read_to_string(recording(harness)).unwrap();
+        let frames = |text: &str| -> Vec<Value> {
+            text.lines()
+                .map(|line| serde_json::from_str(line).unwrap())
+                .collect()
+        };
+        assert_eq!(frames(&without_personal_setup(&text)), frames(&text));
+        let emails: Vec<_> = text
+            .split(|c: char| c == '"' || c.is_whitespace())
+            .filter(|word| word.contains('@') && word.contains('.') && !word.starts_with('@'))
+            .collect();
+        assert!(
+            emails.iter().all(|e| *e == "person@example.invalid"),
+            "{emails:?}"
+        );
+    }
 }
 
 /// The recording of `harness` doing [`EDIT`].
@@ -2266,13 +2291,13 @@ fn recording(harness: &str) -> PathBuf {
 }
 
 impl World {
-    /// Has the Agent `name` do [`EDIT`] to a notes.txt that holds
-    /// "apples" in a supervised Thread, allowing each Question once, and
-    /// waits up to `limit` for each step.
-    async fn edit(&self, name: &str, limit: Duration) -> ThreadView {
+    /// Has the Writer do [`EDIT`] to a notes.txt that holds "apples" in a
+    /// supervised Thread, allowing each Question once, and waits up to
+    /// `limit` for each step.
+    async fn edit(&self, limit: Duration) -> ThreadView {
         let space = self.kernel.space(self.space).await.unwrap();
         std::fs::write(space.folder().join("notes.txt"), "apples\n").unwrap();
-        let file = space.folder().join(format!(".bandaso/agents/{name}.toml"));
+        let file = space.folder().join(".bandaso/agents/Writer.toml");
         let text = std::fs::read_to_string(&file).unwrap();
         std::fs::write(&file, format!("{text}mode = \"supervised\"\n")).unwrap();
 
@@ -2328,7 +2353,7 @@ impl World {
     /// and the Space's folder.
     async fn replay_edit(root: &Path, harness: &str) -> (World, ThreadView, PathBuf) {
         let world = World::new_with(root, replaying(harness)).await;
-        let view = world.edit("Writer", Duration::from_secs(10)).await;
+        let view = world.edit(Duration::from_secs(10)).await;
         let space = world.kernel.space(world.space).await.unwrap();
         let folder = space.folder().to_owned();
         (world, view, folder)
@@ -2380,7 +2405,7 @@ async fn claude_code_asks_before_it_edits_and_shows_the_change() {
 }
 
 #[tokio::test]
-async fn codex_asks_before_it_runs_a_command_and_shows_what_it_printed() {
+async fn codex_asks_before_it_runs_a_command_and_shows_what_its_commands_print() {
     let root = tempfile::tempdir().unwrap();
     let (_world, view, folder) = World::replay_edit(root.path(), "codex").await;
     let notes = folder.join("notes.txt");
@@ -2398,6 +2423,23 @@ async fn codex_asks_before_it_runs_a_command_and_shows_what_it_printed() {
         "message: notes.txt now contains `apples` and `pears`, each on its own line."
     );
     assert_eq!(view.turns[0].state, TurnState::Done);
+    let choices = view.items.iter().find_map(|item| match &item.body {
+        Body::Question { choices, .. } => Some(choices),
+        _ => None,
+    });
+    let ids: Vec<_> = choices
+        .unwrap()
+        .iter()
+        .map(|c| (c.id.as_str(), c.always))
+        .collect();
+    assert_eq!(
+        ids,
+        [
+            ("allow_once", false),
+            ("accept_execpolicy_amendment", true),
+            ("cancel", false)
+        ]
+    );
     let Body::Tool { title, output, .. } = last_tool(&view) else {
         unreachable!()
     };
@@ -2413,7 +2455,7 @@ async fn a_recorded_conversation_plays_again_as_it_went() {
     harness.record = Some(kept.path().join("recordings"));
     let agents = Agents::new(Harnesses::new(vec![harness]));
     let world = World::new_with(root.path(), agents).await;
-    let lived = world.edit("Writer", Duration::from_secs(10)).await;
+    let lived = world.edit(Duration::from_secs(10)).await;
 
     let files: Vec<_> = std::fs::read_dir(kept.path().join("recordings"))
         .unwrap()
@@ -2431,7 +2473,7 @@ async fn a_recorded_conversation_plays_again_as_it_went() {
     )]));
     let again = tempfile::tempdir().unwrap();
     let world = World::new_with(again.path(), agents).await;
-    let replayed = world.edit("Writer", Duration::from_secs(10)).await;
+    let replayed = world.edit(Duration::from_secs(10)).await;
     assert_eq!(texts(&replayed), texts(&lived));
     assert_eq!(replayed.turns[0].state, TurnState::Done);
 }
