@@ -779,3 +779,42 @@ test("the window takes its look from look.toml, and again on each save", async (
   await expect(problem).toBeHidden()
   await page.screenshot({ path: "test-results/20-look-dark.png" })
 })
+
+test("a Thread that finishes while the Person is elsewhere calls them with a sound", async () => {
+  window = await startWindow()
+  const { page } = window
+  const { thread, composer } = await firstThread(page)
+  // Playwright hears nothing; it counts the sounds' notes as they start.
+  await page.evaluate(() => {
+    const counted = globalThis as unknown as { notes: number }
+    counted.notes = 0
+    const start = AudioScheduledSourceNode.prototype.start
+    AudioScheduledSourceNode.prototype.start = function (...args) {
+      counted.notes += 1
+      return start.apply(this, args)
+    }
+  })
+  const notes = () =>
+    page.evaluate(() => (globalThis as unknown as { notes: number }).notes)
+
+  // A turn the Person watches end makes no sound.
+  await composer.fill("hello")
+  await composer.press("Enter")
+  await expect(thread.getByText("You said: hello")).toBeVisible()
+  await expect(thread.getByText("Fake AI is working…")).toBeHidden()
+  await page.waitForTimeout(500)
+  expect(await notes()).toBe(0)
+
+  // One that ends while they are in another Thread does.
+  await composer.fill("slow hello")
+  await composer.press("Enter")
+  await page.keyboard.press("Alt+Enter")
+  await expect(page.getByRole("region", { name: "New Thread" })).toBeVisible()
+  const sidebar = page.getByRole("complementary", { name: "Sidebar" })
+  await expect(
+    sidebar.getByRole("button", { name: /hello/ }).getByRole("img", {
+      name: "Done",
+    })
+  ).toBeVisible()
+  await expect.poll(notes).toBeGreaterThan(0)
+})

@@ -153,6 +153,8 @@ function openWindow(): BrowserWindow {
       sandbox: true,
       contextIsolation: true,
       nodeIntegration: false,
+      // Banda's sounds play before the Person first clicks (ADR 0009).
+      autoplayPolicy: "no-user-gesture-required",
     },
   })
   opened.once("ready-to-show", () => opened.show())

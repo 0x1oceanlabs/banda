@@ -431,7 +431,7 @@ module reaches a Harness through an adapter:
 ```
 app/desktop      Electron main: starts the engine, serves the page, hands it the address
 app/web          the page: the bar, the sidebar, the workspaces and the overview; the actions; the Pane registry
-app/ui           shadcn/ui (preset b0, on Base UI) and the Pane contract
+app/ui           shadcn/ui (preset b0, on Base UI), Banda's Mark and sounds, and the Pane contract
 app/ghostty      T3 Code's Ghostty adapter: a terminal on a canvas
 modules/*/pane   each module's Panes
 ```
@@ -519,6 +519,22 @@ modules/*/pane   each module's Panes
   The agents module's follows the same list as the sidebar, so the bar
   knows even while the sidebar is hidden. The window combines them
   (`app/web/src/bar`) and knows nothing of Threads.
+- **Sounds** (ADR 0009). A Watch also calls the window when something
+  calls for the Person now: a Thread came to done, asking or failed. It
+  calls only for a change it saw happen, never for what was there when it
+  began, and never for the Thread the Person looks at, whose Pane has the
+  focus while the window is in front (`looking.ts`). The window gathers the
+  calls for a tenth of a second, plays the loudest, and for 1.5 s after
+  plays only a louder one (`app/web/src/calls`).
+  - The sounds are made in code with Web Audio, in `app/ui/src/sound`: a
+    few instruments (a bell, a marimba bar, a bubble, a string), five
+    families that play the three calls on them, and the level of each
+    sound, measured so done is the softest and asking the clearest in
+    every family. Their noise is seeded, so a sound is the same every
+    time.
+  - What the Person chose is `[sound]` in `look.toml`; until the look
+    sends it, the defaults play. Electron lets the page play sound before
+    the first click.
 - **Only `window.bandaso` ties the page to the desktop.** It names no
   Electron API, so a browser can host it later; for now the engine lets in
   only `app://bandaso` and pages on localhost.

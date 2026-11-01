@@ -1,9 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import type { Engine, SpaceId, SpaceSummary, Status } from "@bandaso/contract"
 import { QUIET } from "@bandaso/ui/pane"
+import { DEFAULT_SOUND } from "@bandaso/ui/sound"
 import { actionFor } from "../actions/actions"
 import { Bar } from "../bar/Bar"
 import { Watches } from "../bar/Watches"
+import { useCalls } from "../calls/useCalls"
 import { kindOf, startable, widthOf } from "../registry"
 import { Sidebar } from "../sidebar/Sidebar"
 import {
@@ -33,7 +35,7 @@ type Change = (workspaces: State) => State
  * The window (ADR 0005): the bar on top, the sidebar docked on the left,
  * and the workspaces, or the overview of them all. It holds what they
  * share, the workspaces, which parts show and what the modules call the
- * Person for, and runs the actions that change them.
+ * Person for, plays their calls, and runs the actions that change them.
  */
 export function Shell({
   engine,
@@ -58,6 +60,8 @@ export function Shell({
   const [sidebar, setSidebar] = useState(loadSidebar)
   const [overview, setOverview] = useState(false)
   const [attention, setAttention] = useState(QUIET)
+  // The look will bring the Person's own `[sound]` (ADR 0009, decision 5).
+  const call = useCalls(DEFAULT_SOUND)
   useEffect(() => keepWorkspaces(workspaces), [workspaces])
   useEffect(() => keepSidebar(sidebar), [sidebar])
 
@@ -117,6 +121,7 @@ export function Shell({
         modules={modules}
         spaces={spaces}
         onChange={setAttention}
+        onCall={call}
       />
       <Bar
         status={status}
