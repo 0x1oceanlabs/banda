@@ -1,9 +1,9 @@
-# Tiling window managers and agent workspaces: what Bandaso's Desk can take
+# Tiling window managers and agent workspaces: what Banda's Desk can take
 
 **Date:** 2026-11-01
-**For:** Bandaso workspace design (the Desk of Panes, one Desk per Space)
+**For:** Banda workspace design (the Desk of Panes, one Desk per Space)
 **Method:** I read primary sources only: the projects' own docs and wikis (where possible the Markdown source in their repos), default config files, source code, READMEs and release notes. I also read three things installed on this machine: Omarchy 4.5.0-rc2 (`/usr/share/omarchy`, identical to the upstream tag `v4.5.0-rc2`), herdr 0.9.5 and herdr-app 0.1.10. I did not use blog write-ups. Two exceptions are marked: news coverage of Superlogical/Rex, used only to cross-check dates.
-**Status:** This is research, not a decision. It was written while Bandaso's audience read "people who do not write code"; on 2026-11-01 Roma set the first audience to enthusiasts and AI-native people, so read "non-developer" below as the later, wider audience. The "What Bandaso could take" ranking and the key grammar sketch are proposals.
+**Status:** This is research, not a decision. It was written while Banda's audience read "people who do not write code"; on 2026-11-01 Roma set the first audience to enthusiasts and AI-native people, so read "non-developer" below as the later, wider audience. The "What Banda could take" ranking and the key grammar sketch are proposals.
 
 Versions checked: niri v26.04 (2026-04-25) plus `main` as of 2026-10-31; Hyprland v0.57.0 (2026-10-28), wiki `main` (the wiki tracks the latest git commit); Omarchy v4.0.6 stable (2026-10-19) and v4.5.0-rc2 (2026-10-27); herdr TUI 0.9.5; herdr-app 0.1.11 (CHANGELOG, 2026-10-31); PaperWM `develop` README; AeroSpace v0.21.3-Beta; zellij docs (current site); tmux wiki.
 
@@ -12,20 +12,20 @@ Versions checked: niri v26.04 (2026-04-25) plus `main` as of 2026-10-31; Hyprlan
 ## 0. The short version
 
 - **niri** puts columns on an endless strip that runs to the right. A new window opens as a new column just right of the focused one. It never shrinks or moves the windows you already have. That rule, together with "the focused window does not move on its own", is the whole reason it feels calm. Classic tilers split the screen again for every new window, so everything gets smaller. niri also has: a zoomed-out Overview with drag and drop, tabbed columns, live-reloaded KDL config that keeps the old config if the new one fails to parse, and a JSON socket with an event stream that sends the full state first.
-- **Hyprland** is a dynamic tiler with layouts you can swap per workspace: dwindle (a binary tree, much like Bandaso's Desk today), master, monocle, and a built-in scrolling layout like niri's. It has special workspaces (scratchpads), groups (tabs), pinned floating windows, a large set of dispatchers, two UNIX sockets (commands and `EVENT>>DATA` events), and in-process C++ plugins. Since 0.55 (May 2026) its config is Lua. You can even register custom layouts in Lua.
+- **Hyprland** is a dynamic tiler with layouts you can swap per workspace: dwindle (a binary tree, much like Banda's Desk today), master, monocle, and a built-in scrolling layout like niri's. It has special workspaces (scratchpads), groups (tabs), pinned floating windows, a large set of dispatchers, two UNIX sockets (commands and `EVENT>>DATA` events), and in-process C++ plugins. Since 0.55 (May 2026) its config is Lua. You can even register custom layouts in Lua.
 - **Omarchy** is DHH's opinionated Arch + Hyprland setup, now at 4.x, maintained under `omacom/omarchy`. It shows best how to make tiling approachable:
   - **One mod, families of meaning.** `Super+key` acts on windows, `Super+Shift+letter` opens or focuses an app, `Super+Ctrl+letter` opens a system panel, and adding `Alt` gives a variant.
   - **Every bind carries a description.** `Super+K` opens a searchable sheet of every bind, and picking a row runs it.
   - **Two menus do almost everything.** `Super+Space` opens the menu and `Super+Alt+Space` opens the app grid.
   - **One `colors.toml` per theme** recolours every app.
   - **Shipped defaults stay read-only.** Your overrides load after them.
-- **"herder" is Herdr** (`herdrdev`). It is a terminal workspace manager for coding Agents: a TUI (Rust), plus since October 2026 a **GPUI desktop app** over a separate `herdr-core` server. It is the closest existing thing to Bandaso:
+- **"herder" is Herdr** (`herdrdev`). It is a terminal workspace manager for coding Agents: a TUI (Rust), plus since October 2026 a **GPUI desktop app** over a separate `herdr-core` server. It is the closest existing thing to Banda:
   - The same structure: Space per repo, tab per task, split panes, an agents sidebar with working/blocked/done/idle.
   - Agents drive the layout over a CLI and socket.
   - The whole UI is files (layouts, keys, JS mods) that the app tells Agents how to edit.
   - Omarchy ships Herdr bindings and theme sync.
 - **"superlogic" and "rex" are Superlogical and Rex.** Superlogical is Mitchell Hashimoto's new company (announced 2026-07-29). Rex is its first product, a terminal with persistent sessions, remote connections and "program activity status". It entered public testing on macOS on 2026-10-05. Its multiplexer is not public yet. Confidence: high for the identification, low for any details of the layout model (none are published).
-- **For Bandaso**, the ranked list in section 10 includes a Left-Alt key grammar sketch. The strongest points:
+- **For Banda**, the ranked list in section 10 includes a Left-Alt key grammar sketch. The strongest points:
   - One command list that keys, menus, the palette and Agents all call.
   - niri's calm placement rules.
   - Omarchy's families plus a searchable key sheet.
@@ -126,7 +126,7 @@ The docs describe workspace/monitor memory across reconnects, but **no built-in 
 Hyprland 0.55.0 (2026-05-09) made Lua the config language ("config/lua: init lua config manager, use lua if available") ([v0.55.0](https://github.com/hyprwm/Hyprland/releases/tag/v0.55.0)). The wiki now documents Lua (`hl.bind`, `hl.dsp.*`) for the latest git ([Configuring](https://github.com/hyprwm/hyprland-wiki/blob/main/content/configuring/core/_index.md)). Older blog posts describe the earlier `hyprland.conf` (hyprlang) syntax; `hyprctl reload full-reset` can switch between the two ([hyprctl](https://github.com/hyprwm/hyprland-wiki/blob/main/content/configuring/core/advanced-configuration/using-hyprctl.md)).
 
 ### Layouts (per workspace)
-- **Dwindle** is a "BSPWM-like layout, where every window on a workspace is a member of a binary tree". Its "splits are NOT PERMANENT": each split's direction follows the parent's width-to-height ratio unless `preserve_split` is set. `force_split` chooses whether the new window goes left/top, right/bottom, or follows the mouse. `smart_split` picks the split from which triangle of the window the cursor is in ([Dwindle](https://github.com/hyprwm/hyprland-wiki/blob/main/content/configuring/layouts/dwindle-layout.md)). This is the model closest to Bandaso's current split tree.
+- **Dwindle** is a "BSPWM-like layout, where every window on a workspace is a member of a binary tree". Its "splits are NOT PERMANENT": each split's direction follows the parent's width-to-height ratio unless `preserve_split` is set. `force_split` chooses whether the new window goes left/top, right/bottom, or follows the mouse. `smart_split` picks the split from which triangle of the window the cursor is in ([Dwindle](https://github.com/hyprwm/hyprland-wiki/blob/main/content/configuring/layouts/dwindle-layout.md)). This is the model closest to Banda's current split tree.
 - **Master** keeps one or more master windows plus a stack. It has options for where new windows go: `new_status` master/slave/inherit, `new_on_top`, and `new_on_active` before/after ([Master](https://github.com/hyprwm/hyprland-wiki/blob/main/content/configuring/layouts/master-layout.md)).
 - **Monocle** makes every window full-size, and you cycle through them ([Monocle](https://github.com/hyprwm/hyprland-wiki/blob/main/content/configuring/layouts/monocle-layout.md)).
 - **Scrolling** is now built in: "windows are positioned on an infinitely growing tape" ([Scrolling](https://github.com/hyprwm/hyprland-wiki/blob/main/content/configuring/layouts/scrolling-layout.md)).
@@ -271,7 +271,7 @@ Every bind goes through `o.bind(keys, description, action)`. The description is 
 ### Superlogical ("superlogic") and Rex ("rex") — confirmed with limits
 - **Superlogical** is a company founded by Mitchell Hashimoto (Ghostty, HashiCorp) with Jack Pearkes, Alasdair Monk and Hector Simpson. It is building "a multiplexer for all work" and will "begin with a terminal multiplexer". The site says terminals "connect developers, agents, tools, and infrastructure", and that a session should be "driven by software while remaining visible and controllable by people" ([superlogical.com](https://www.superlogical.com)). Hashimoto's post of **2026-07-29**: "Superlogical will begin by shipping a terminal multiplexer… build on libghostty" ([mitchellh.com/writing/superlogical](https://mitchellh.com/writing/superlogical)).
 - **Rex** "is a drop-in replacement for whichever terminal you use today" with "persistent sessions, performant and responsive remote connections, program activity status". The screenshot shows Codex, lazygit and a game in three split panes. The macOS app hosts its own Rex server and can connect to others. Public testing began on macOS on **2026-10-05**; servers run on Linux and Windows, and other clients are not ready yet. The multiplexer beta is "not yet available" ([updates/public-testing-beginning](https://www.superlogical.com/updates/public-testing-beginning)). Secondary news coverage (e.g. [devclass](https://www.devclass.com/devops/2026/08/01/dev-who-gave-hashicorp-its-name-returns-with-a-faster-terminal-multiplexer/5282025)) matches the dates. I took no layout facts from it.
-- **Evidence limits.** Superlogical publishes no docs on panes, layout or keys. What matters for Bandaso is the *direction*: durable sessions, an activity status per program, and one session visible to people and drivable by software.
+- **Evidence limits.** Superlogical publishes no docs on panes, layout or keys. What matters for Banda is the *direction*: durable sessions, an activity status per program, and one session visible to people and drivable by software.
 
 ---
 
@@ -344,7 +344,7 @@ How apps that live inside a window manager pick their own keys. Sources are tagg
 - zellij offers a "locked" preset as a switch at first run [ZJ2][ZJ3].
 - No app documents a clash with a Super-owning window manager. Some Linux defaults do use Super and would collide (WezTerm's SUPER rows, Ghostty's `Ctrl+Super+[`/`]`) [WE1][G1].
 
-### 7a. Left Alt as Bandaso's mod: what it collides with, and the rules
+### 7a. Left Alt as Banda's mod: what it collides with, and the rules
 
 **Collisions**
 - **The shell in a terminal Pane.**
@@ -367,7 +367,7 @@ How apps that live inside a window manager pick their own keys. Sources are tagg
   - Ghostty `macos-option-as-alt`, default true only on US layouts, settable to `left`/`right` [G1]
   - kitty `macos_option_as_alt`, settable to left, right or both [K1]
 
-**Rules for Bandaso (Left Alt)**
+**Rules for Banda (Left Alt)**
 1. **Decide Alt chords in the Electron main process** with `before-input-event`. It fires before the page's keydown, carries `code`, and `preventDefault()` keeps the key from the page [EL3]. Act only when the Alt held down was the one whose keydown had `code == "AltLeft"`. Never treat AltRight/AltGraph as the mod [UC][UE].
 2. **Bind by physical key** (`code`), so the binds work on Russian, German and Polish layouts. Show the key in the sheet as the active layout prints it (Omarchy does this, section 3).
 3. **Terminal Panes keep readline's Alt keys** (`b f d . _ Backspace u l c t y r p n …` and their Shift forms). The Desk takes only keys readline leaves free (section 10), the way VS Code takes `Alt+←/→` [RL][V3].
@@ -412,7 +412,7 @@ Sources: sections 1–5.
 
 ---
 
-## 10. What Bandaso could take (ranked)
+## 10. What Banda could take (ranked)
 
 1. **One command list behind everything.**
    - Keys, the Desk menu, the palette, Pane header buttons, the key sheet and **Agents** all call the same named commands with typed arguments: `pane.open {kind, place?, focus?}`, `pane.focus {direction}`, `pane.swap`, `pane.close`, `pane.zoom`, `desk.layout`, `space.select`, and so on.
@@ -431,7 +431,7 @@ Sources: sections 1–5.
 
    | Keys | Does | Precedent |
    |---|---|---|
-   | `Alt+Arrows` | focus the neighbouring Pane | Omarchy `Super+Arrows`, niri `Mod+Arrows`, herdr-app `alt-arrows`, Bandaso today |
+   | `Alt+Arrows` | focus the neighbouring Pane | Omarchy `Super+Arrows`, niri `Mod+Arrows`, herdr-app `alt-arrows`, Banda today |
    | `Alt+Shift+Arrows` | swap / move the Pane that way ("Shift carries it along") | Omarchy `Super+Shift+Arrows` |
    | `Alt+Ctrl+Arrows` | resize the Pane's edge (in Strip: Left/Right cycle width presets) | niri `Mod+R`, Omarchy resize |
    | `Alt+Return` | new Thread with an Agent (the main object) | Omarchy `Super+Return` |
@@ -445,7 +445,7 @@ Sources: sections 1–5.
    | `Alt+Shift+1..9` | send the Pane to Space N | Omarchy `Super+Shift+N` |
    | `Alt+Space` | Desk menu / palette (search every command; each row shows its key) | Omarchy `Super+Space` |
    | `Alt+K` | key sheet (searchable; picking a row runs it); also shown once at first start | Omarchy `Super+K`, niri overlay |
-   | `Alt+\` / `Alt+Shift+\` | split right / down (today's `Ctrl+\`, moved) | VS Code / Bandaso today |
+   | `Alt+\` / `Alt+Shift+\` | split right / down (today's `Ctrl+\`, moved) | VS Code / Banda today |
    | `Alt+V` | cycle the Desk **v**iew/layout (Split → Strip → Focus); not `Alt+L`, which is readline's downcase-word | Omarchy `Super+L` |
 
    Rules that go with it:
@@ -494,7 +494,7 @@ Sources: sections 1–5.
 - **Modal key sets and prefixes as the primary path** (Hyprland submaps, tmux `C-b`, zellij modes). They create invisible state; even Hyprland's wiki warns you can get stuck. A one-shot leader (`Alt+O`, then a letter) is fine only if a sheet shows the options at once and `Escape` always leaves.
 - **Mod+drag as the only pointer path** (niri/Hyprland/Omarchy `Super`+drag). Nobody discovers it. Provide visible grips and buttons first.
 - **Dwindle's ratio-based split direction** ("splits are NOT PERMANENT"). Where the next split goes depends on the tile's width-to-height ratio, which is unpredictable for newcomers. Keep explicit right/down or a single clear rule.
-- **Numbered workspaces 1–10 per monitor, or endless vertical workspaces.** Bandaso already has the Space as its unit (GLOSSARY). A second level of "workspaces" inside a Desk would duplicate it. Use tabs within tiles and Spaces above.
+- **Numbered workspaces 1–10 per monitor, or endless vertical workspaces.** Banda already has the Space as its unit (GLOSSARY). A second level of "workspaces" inside a Desk would duplicate it. Use tabs within tiles and Spaces above.
 - **Regex window rules on class/title** (niri, Hyprland). Replace them with plain Pane-kind rules ("Browser Panes open in the right column at 1/3").
 - **In-process native plugins** (Hyprland C++ `.so`: "Writing a plugin to wipe your computer is easy"). Prefer sandboxed extensions with explicit permissions (zellij WASM permissions; herdr-app JS mods without DOM, Node or `setTimeout`).
 - **vim `hjkl` as the default** (niri, herdr-app). Non-developers know arrows. `hjkl` can be an optional set.
@@ -597,7 +597,7 @@ Sources: sections 1–5.
 - tmux: https://github.com/tmux/tmux/wiki/Getting-Started
 - termios: https://man7.org/linux/man-pages/man3/termios.3.html
 - Bash readline commands: https://www.gnu.org/software/bash/manual/html_node/Miscellaneous-Commands.html, https://www.gnu.org/software/bash/manual/html_node/Commands-For-Moving.html
-- Bandaso (local): `~/code/bandaso-app/app/web/src/keys.ts`
+- Banda (local): `~/code/bandaso-app/app/web/src/keys.ts`
 
 **Sections 7–8 (tags)**
 - [Z1] https://github.com/zed-industries/zed/blob/main/assets/keymaps/default-linux.json · [Z2] …/default-macos.json · [Z3] https://github.com/zed-industries/zed/blob/main/docs/src/key-bindings.md · [Z4] https://github.com/zed-industries/zed/blob/main/assets/settings/default.json

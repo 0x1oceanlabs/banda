@@ -1,10 +1,10 @@
-# Hackable workspace: how plugin systems work, and options for Bandaso modules
+# Hackable workspace: how plugin systems work, and options for Banda modules
 
 - **Date:** 2026-11-01
-- **Question:** How do Obsidian, VS Code, Zed, Zellij, Raycast, Notion (plus Anytype and AFFiNE), AI-made UI hosts (Claude Artifacts, tldraw make real, ChatGPT Apps SDK, MCP Apps) and Emacs/Electron handle extensions? What should Bandaso's module system look like, given that a non-developer should be able to ask an Agent to write a module inside the app?
+- **Question:** How do Obsidian, VS Code, Zed, Zellij, Raycast, Notion (plus Anytype and AFFiNE), AI-made UI hosts (Claude Artifacts, tldraw make real, ChatGPT Apps SDK, MCP Apps) and Emacs/Electron handle extensions? What should Banda's module system look like, given that a non-developer should be able to ask an Agent to write a module inside the app?
 - **Added on request:** (a) how systems keep their own built-in features on the public extension API; (b) how tools give Agents knowledge of themselves (skills, AGENTS.md, MCP instructions, llms.txt) and how to keep it current; (c) config kept as text files with live reload that both a Person and an Agent can edit safely.
 - **Method:** Primary sources (official docs, API references, source code, the projects' own posts) read on 2026-11-01. Most pages were read through a summarising fetch tool. Quotes are as that tool returned them, so the short ones are reliable and the longer ones may be paraphrased. Source code (VS Code, Zed, Obsidian typings, Emacs manual sources, MCP schema) was downloaded and grepped directly. Third-party sources are marked as such. Limits are listed in section 13.
-- **Status:** Research only. Nothing here is an accepted Bandaso decision.
+- **Status:** Research only. Nothing here is an accepted Banda decision.
 
 ---
 
@@ -17,7 +17,7 @@
 5. **Built-ins on the public API is the norm, and every system has an exception lane.** VS Code's git, markdown and TypeScript support are extensions, but built-ins are exempt from the proposed-API gate (built-in git enables 34 proposals). Zellij's own UI is plugins, but only "externally loaded plugins" must ask for permissions. Zed keeps its most-used languages native and moves the rest to the same extension API. Obsidian's core plugins appear to run on internals (their types are not in the public typings): only Bases has a public extension point, and Canvas is open as a file format rather than an API.
 6. **Agent-written apps already work as products.** Claude Artifacts let a person describe an app, Claude writes the code, and each capability is approved on first use (calling Claude, connectors, personal or shared storage) ([help](https://support.claude.com/en/articles/17153992-what-are-artifacts-and-how-do-i-use-them)). Notion Workers are "designed to be built with AI coding agents" ([Notion docs](https://developers.notion.com/workers/get-started/overview.md)). The pattern in both: the Agent writes code against a small, documented contract; the host enforces capabilities; the person approves in plain words.
 7. **Agent-facing self-knowledge has converged on progressive disclosure.** A short description is always loaded and the body loads on demand. Claude Code skills, Codex skills (both follow agentskills.io), MCP `instructions` plus `tools/list`, and llms.txt all work this way. Content generated from manifests (VS Code `contributes`, MCP tool lists, Raycast `ai` evals) stays current. Hand-written prose goes stale.
-8. **Recommendation (section 12): manifest-first modules.** A module is a `module.toml` plus content in one of two tiers. Tier 1 is declarative Panes built from Bandaso's own blocks, the default for Agent-written modules. Tier 2 is a sandboxed-frame Pane with an MCP-Apps-compatible bridge, as an escape hatch. In both tiers, the logic runs in a separate process that holds a capability-scoped token for the same engine API. First-party modules should adopt the manifest and the "public API only" rule now.
+8. **Recommendation (section 12): manifest-first modules.** A module is a `module.toml` plus content in one of two tiers. Tier 1 is declarative Panes built from Banda's own blocks, the default for Agent-written modules. Tier 2 is a sandboxed-frame Pane with an MCP-Apps-compatible bridge, as an escape hatch. In both tiers, the logic runs in a separate process that holds a capability-scoped token for the same engine API. First-party modules should adopt the manifest and the "public API only" rule now.
 
 ---
 
@@ -38,7 +38,7 @@
 
 **Core plugins (Bases, Canvas).** Core plugins are "officially built and supported by the Obsidian team" and are switched on in Settings → Core plugins. The list includes Bases, Canvas, Web viewer, Slides and Sync ([core plugins](https://obsidian.md/help/plugins)). Bases is "a core plugin". It shows database-like views (Table, List, Cards, Kanban, Map) over notes, and "All the data in Obsidian Bases is stored in your local Markdown files and their properties". View definitions live in a `.base` file or a code block. "Community plugins can add more layouts" ([Bases](https://obsidian.md/help/bases)) through `registerBasesView` ([API](https://docs.obsidian.md/Reference/TypeScript+API/Plugin/registerBasesView)). Canvas has no public plugin API in the typings. It is open instead as a file format: JSON Canvas, "originally created for Obsidian", stored in `.canvas` files ([jsoncanvas.org](https://jsoncanvas.org/)).
 
-**Lesson for Bandaso:** Obsidian is the closest product to "hackable for non-developers", and its key moves are data the person owns (Markdown, `.base`, `.canvas`) and an easy dev loop. Its weak point is all-or-nothing trust.
+**Lesson for Banda:** Obsidian is the closest product to "hackable for non-developers", and its key moves are data the person owns (Markdown, `.base`, `.canvas`) and an easy dev loop. Its weak point is all-or-nothing trust.
 
 ## 2. VS Code
 
@@ -130,7 +130,7 @@ A PNG snapshot of the selected sketch goes to GPT-4V, the returned HTML is place
 - **Consent:** hooks only, using MAY and SHOULD ("MAY ... subject them to further user approval"; "SHOULD warn users when UI requires external domain access") ([spec 2026-01-26](https://github.com/modelcontextprotocol/ext-apps/blob/main/specification/2026-01-26/apps.mdx)).
 - **Launch (2026-01-26):** "MCP Apps are now live as an official MCP extension", in Claude (web and desktop), Goose, VS Code Insiders, and ChatGPT ("starting this week"). The four security layers are sandboxed iframes, predeclared templates, auditable JSON-RPC and user consent; "users should continue to proactively and thoroughly vet MCP servers" ([MCP blog](https://blog.modelcontextprotocol.io/posts/2026-01-26-mcp-apps/)).
 
-**Lesson:** MCP Apps is close to the frame half of a Bandaso third-party Pane. It also defines the separation of "tools the Agent sees" from "tools only the UI may call". Its host context passes theme *variables*, which is a hint about look, not a guarantee.
+**Lesson:** MCP Apps is close to the frame half of a Banda third-party Pane. It also defines the separation of "tools the Agent sees" from "tools only the UI may call". Its host context passes theme *variables*, which is a hint about look, not a guarantee.
 
 ## 7. Emacs, and Electron/web plugin sandboxing practice
 
@@ -197,7 +197,7 @@ A PNG snapshot of the selected sketch goes to GPT-4V, the returned HTML is place
 - **llms.txt:** a proposal (Jeremy Howard, 2024-09-03; v2 2026-08-10). It is a Markdown `/llms.txt` with an H1, a summary, and H2 lists of links, plus `.md` copies of pages, mainly for inference-time use ([llmstxt.org](https://llmstxt.org/)). Docs platforms now generate it. Pages on modelcontextprotocol.io and developers.notion.com start with "Documentation Index: Fetch the complete documentation index at …/llms.txt" (observed while fetching).
 - **In-manifest guidance:** VS Code `languageModelTools[].modelDescription` ([AI tools](https://code.visualstudio.com/api/extension-guides/ai/tools)); Raycast `ai.instructions` and `ai.evals` ([Raycast AI](https://developers.raycast.com/ai/learn-core-concepts-of-ai-extensions)); the Notion Workers template ships prompts and skills for coding agents ([Workers](https://developers.notion.com/workers/get-started/overview.md)).
 
-**Keeping a "Bandaso skill" current:**
+**Keeping a "Banda skill" current:**
 - **Generated content cannot drift from the code.** VS Code's settings UI and JSON IntelliSense come from `contributes.configuration` ([contribution points](https://code.visualstudio.com/api/references/contribution-points#contributes.configuration)). MCP clients read `tools/list` live. Zed derives the settings schema from Rust types (`JsonSchema` derives in [settings_content.rs](https://github.com/zed-industries/zed/blob/main/crates/settings_content/src/settings_content.rs)).
 - **Hand-written content is needed for concepts and judgment**, but it goes stale.
 - **Suggested split:**
@@ -221,7 +221,7 @@ A PNG snapshot of the selected sketch goes to GPT-4V, the returned HTML is place
   - **App writes:** when the app changes a setting it computes the updated file text from the existing text (`new_text_for_update`, same file). I did not verify that comments always survive.
 - **Zellij:** permission grants are a plain `permissions.kdl` that the user can edit or delete ([0.38.0](https://github.com/zellij-org/zellij/releases/tag/v0.38.0)).
 
-**Rules that follow for Bandaso config (keybinds, modules, layouts, settings):**
+**Rules that follow for Banda config (keybinds, modules, layouts, settings):**
 - One text file per concern, with comments allowed.
 - A JSON Schema generated from manifests, published so both editors and Agents can validate.
 - Watch, validate, then apply. On error, keep the last good config and show the error with its file and line.
@@ -230,7 +230,7 @@ A PNG snapshot of the selected sketch goes to GPT-4V, the returned HTML is place
 - App writes should be minimal text edits that keep human comments.
 - A `check` command an Agent can run before saving.
 
-## 12. Options for Bandaso
+## 12. Options for Banda
 
 The constraints:
 - **Today:** a module is a Rust engine crate (commands, events, its own SQLite tables, MCP tools) plus a React Pane package, all compiled in. Panes reach the engine only through the JSON-over-WebSocket API, under a strict CSP.
@@ -241,7 +241,7 @@ The constraints:
   - A third-party Pane is an `<iframe sandbox="allow-scripts">` served from a per-module origin through a custom protocol, never `file://` (Electron checklist).
   - The CSP is injected and derived from the manifest. Script cannot remove it ([Willison](https://simonwillison.net/2026/apr/3/test-csp-iframe-escape)), and the fallback is MCP Apps' deny-by-default.
   - A postMessage JSON-RPC bridge mirrors today's Pane props: `{space, args, focused}` in, `open`/`update`/`close` and `engine.call` out. The window filters every call by the module's granted capabilities and checks the sender (Electron IPC rule).
-  - The host passes Bandaso CSS tokens and fonts, like MCP Apps `styles.variables`.
+  - The host passes Banda CSS tokens and fonts, like MCP Apps `styles.variables`.
 - **Engine:** module logic runs as a separate process (Node or Deno, or any language) that holds a **scoped token** for the same engine API. The engine enforces the manifest: own namespaced tables, the allowed commands and events, outbound hosts, and Agent tools. A capability runtime such as Deno can map manifest network hosts onto `--allow-net=…`. WASM (wasmtime component model, as in Zed and Zellij) is a later option for hot paths.
 - **Safety:** high, if done right (origin split, CSP, token scopes, consent).
 - **Power:** high.
@@ -249,23 +249,23 @@ The constraints:
 - **For an Agent:** moderate. It writes HTML/React plus a small server against two documented contracts.
 
 ### Option B: MCP-App modules (adopt the standard as-is)
-- **Shape:** a module is a local MCP server, and its Panes are MCP Apps `ui://` resources. Bandaso becomes an MCP Apps host. Its tools for Agents are just MCP tools, with `visibility: ["model"|"app"]` separating Agent tools from UI-only tools.
+- **Shape:** a module is a local MCP server, and its Panes are MCP Apps `ui://` resources. Banda becomes an MCP Apps host. Its tools for Agents are just MCP tools, with `visibility: ["model"|"app"]` separating Agent tools from UI-only tools.
 - **Safety:** high (the spec's sandbox rules).
-- **Power:** moderate. MCP Apps was designed for widgets inside a chat. It has no Space, no Pane lifecycle (`open`/`update`/`close`), no engine events and no owned tables, so Bandaso would need `bandaso/*` extension methods.
+- **Power:** moderate. MCP Apps was designed for widgets inside a chat. It has no Space, no Pane lifecycle (`open`/`update`/`close`), no engine events and no owned tables, so Banda would need `bandaso/*` extension methods.
 - **Design language:** weak (variables only).
-- **For an Agent:** easiest *for developers' Agents*, since MCP servers are well known. Every existing MCP App works in Bandaso without changes.
-- **Risk:** Bandaso would follow someone else's spec revisions (MCP is already at 2026-07-28) for a core internal contract.
+- **For an Agent:** easiest *for developers' Agents*, since MCP servers are well known. Every existing MCP App works in Banda without changes.
+- **Risk:** Banda would follow someone else's spec revisions (MCP is already at 2026-07-28) for a core internal contract.
 
-### Option C: Declarative modules built from Bandaso's blocks (Raycast / Notion / Bases lineage)
-- **Shape:** a module is `module.toml` plus data schemas (its tables) plus **views composed from Bandaso's own components** (List, Table, Board, Form, Detail, Document, Chart, Terminal, Browser), all rendered by the window's own React. Actions bind to engine commands, MCP tools or a small logic script run as in Option A.
+### Option C: Declarative modules built from Banda's blocks (Raycast / Notion / Bases lineage)
+- **Shape:** a module is `module.toml` plus data schemas (its tables) plus **views composed from Banda's own components** (List, Table, Board, Form, Detail, Document, Chart, Terminal, Browser), all rendered by the window's own React. Actions bind to engine commands, MCP tools or a small logic script run as in Option A.
 - **Safety:** highest. No third-party code runs in the window.
-- **Power:** limited to what the blocks express. A new kind of widget is a Bandaso change.
+- **Power:** limited to what the blocks express. A new kind of widget is a Banda change.
 - **Design language:** **guaranteed**, as in Raycast.
 - **For an Agent:** easiest and most reliable. It generates schema-validated files, `check` catches mistakes, and the person sees a native-looking result at once. This is the best fit for non-developers.
 
 ### Option D: Trusted local code (Obsidian / Emacs lineage)
 - **Shape:** a module is JS loaded into the window with the full Pane props, behind a Restricted-mode switch.
-- **Safety:** none. An Agent that read a poisoned web page could write a module that takes everything. It also breaks the strict CSP Bandaso already has.
+- **Safety:** none. An Agent that read a poisoned web page could write a module that takes everything. It also breaks the strict CSP Banda already has.
 - **Power:** maximal.
 - **Design language:** advisory.
 - **For an Agent:** easy.
@@ -273,12 +273,12 @@ The constraints:
 
 ### Recommendation: manifest-first modules (C by default, A as the escape hatch, B-compatible at the frame bridge)
 1. **One contract, `module.toml`,** declares id, API version, Panes, commands (with input schemas and descriptions), events, tables (with migrations), MCP tools (each command marked for Agents, the UI or both, following MCP Apps visibility), settings schema, keybind actions, and **capabilities in plain words**. Keep capabilities few and coarse, for example own data, read Space, network hosts, use Agents, open Panes, run programs. Show them on enable and again when an update widens them (Zellij, Artifacts). Agent-written modules start as **local drafts** with no network and no Agent tools until the person approves.
-2. **Tier 1 (default): declarative Panes** from Bandaso's blocks. This is what the Agent writes for "make me a habit tracker / reading list / client CRM".
-3. **Tier 2 (escape hatch): frame Panes** under Option A's sandbox. The bridge speaks MCP Apps' `ui/initialize`, `tools/call` and host context *plus* Bandaso methods, so existing MCP Apps render in a Pane for free. Publish the blocks as an npm package and pass the CSS tokens, so frame Panes can match the look. This is encouraged, not enforced.
+2. **Tier 1 (default): declarative Panes** from Banda's blocks. This is what the Agent writes for "make me a habit tracker / reading list / client CRM".
+3. **Tier 2 (escape hatch): frame Panes** under Option A's sandbox. The bridge speaks MCP Apps' `ui/initialize`, `tools/call` and host context *plus* Banda methods, so existing MCP Apps render in a Pane for free. Publish the blocks as an npm package and pass the CSS tokens, so frame Panes can match the look. This is encouraged, not enforced.
 4. **Logic outside the window and outside the engine process.** It runs as a separate process with a scoped token for the *same* JSON-over-WebSocket engine API, under a capability runtime. WASM can come later.
 5. **Distribution:** start with a local folder per Space (like Obsidian's `.obsidian/plugins`, Zed dev extensions and Zellij `file:`), then git URLs, then a reviewed directory. Use Emacs-style review on update: show the source diff and the capability diff.
 6. **How an Agent writes one:**
-   - The Agent reads the generated "Bandaso module" skill: the block catalogue, capability list and engine API reference.
+   - The Agent reads the generated "Banda module" skill: the block catalogue, capability list and engine API reference.
    - It runs `bandaso module new`, writes the files, and runs `bandaso module check`, which validates the manifest, view JSON and schemas and reports errors by file and line.
    - `bandaso module dev` hot-reloads the Pane (Raycast `ray develop`, Obsidian Hot-Reload).
    - The person sees the capability screen and approves, and the module's MCP tools then appear to the Space's Agents.
@@ -296,7 +296,7 @@ Each rule should get an architecture test, per the project's refactoring rule:
 4. **First-party modules declare capabilities too.** They may be auto-granted (Zellij exempts built-ins from the prompt), but never undeclared. The engine checks them on every call, so the enforcement path is exercised from day one. This avoids Zellij's 0.38 retrofit.
 5. **One "proposed API" lane.** First-party modules may use APIs marked unstable, listed in the manifest, and the count is tracked (VS Code built-in git: 34 proposals). That debt stays visible, and third parties can't depend on those APIs by accident.
 6. **First-party Panes are built only from the public blocks.** No private styles or widgets. If a first-party module needs a new block, add it to the blocks package first, the rule Banda's terminal design system (tikho) kept.
-7. **Agent surfaces are declared, not hand-written.** Each command and tool description lives in the manifest, and the Bandaso skill's reference section is generated from the registry (section 10).
+7. **Agent surfaces are declared, not hand-written.** Each command and tool description lives in the manifest, and the Banda skill's reference section is generated from the registry (section 10).
 8. **Config is text with schemas** (section 11): keybinds, layouts, module settings and enabled modules, each watched, validated, applied, and kept at the last good version on error.
 9. **Dogfood the external path once.** Build one small first-party module (for example files or a notes list) as an out-of-process, declarative module, so the third-party path works before anyone outside depends on it (Zed's extraction of built-in languages; AFFiNE's "without any privileges" goal).
 
@@ -314,7 +314,7 @@ Each rule should get an architecture test, per the project's refactoring rule:
   - Whether Raycast's built-in commands use its public API.
   - Any 2026 Anytype or AFFiNE end-user plugin loader (none found).
   - Notion third-party custom UI blocks (none found).
-- **No Bandaso code or docs were read.** The options rest only on the description of Bandaso's current shape given in the request.
+- **No Banda code or docs were read.** The options rest only on the description of Banda's current shape given in the request.
 
 ## Sources
 

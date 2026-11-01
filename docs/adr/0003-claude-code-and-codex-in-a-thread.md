@@ -114,6 +114,7 @@ ADR 0002, decision 9, as decision 9 below says.
    - The modes are Supervised, Auto-accept edits, Auto and Full access,
      with Plan on its own. Full access is the default, and an Agent's file
      can change it.
+     _Changed by ADR 0006, decision 3: the Harness entry holds the default._
    - For Claude Code and Codex, each mode becomes the Harness's own mode,
      and the Harness enforces it.
    - For any other ACP agent, the engine answers the agent's Questions by
@@ -128,6 +129,8 @@ ADR 0002, decision 9, as decision 9 below says.
       options.
     - An Agent's file holds its defaults, as text. The composer shows the
       choices.
+      _Changed by ADR 0006, decision 3: the defaults belong to the Harness
+      entry, as there are no Agents to configure._
     - There is no model list of our own.
 
 11. **The log keeps everything the Harness says.**

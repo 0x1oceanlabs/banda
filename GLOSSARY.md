@@ -1,6 +1,6 @@
-# Bandaso
+# Banda
 
-Bandaso is a hackable, tiling workspace for working with Agents, made first
+Banda is a hackable, tiling workspace for working with Agents, made first
 for enthusiasts and AI-native people. Terms are English everywhere: in code, in docs, and in speech
 in any language. A word belongs here only when some visible behaviour needs
 it.
@@ -8,7 +8,7 @@ it.
 ## Work
 
 **Space**:
-One body of work and its folder on disk (`~/Bandaso/<name>/` by default). It
+One body of work and its folder on disk (`~/Banda/<name>/` by default). It
 holds the files that the Person and the Agents work on, plus `.bandaso/`,
 which keeps the Space's data and event log. Copying the folder moves the
 Space.
@@ -35,7 +35,7 @@ do from the Harness's declared capabilities.
 **Sign-in**:
 How a Person lets a Harness work under their account, in a way the Harness
 offers: in a terminal, as Claude Code does, or by itself in the browser, as
-Codex does. The Harness keeps the credentials; Bandaso holds none.
+Codex does. The Harness keeps the credentials; Banda holds none.
 _Avoid_: login, auth.
 
 **Terminal**:
