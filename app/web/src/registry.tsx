@@ -1,8 +1,13 @@
 /**
  * The kinds of Pane this window knows: each module's, and the window's own
- * launcher. A Pane shows only while the engine runs its module.
+ * launcher; and each module's Watch on what calls for the Person. A Pane
+ * or a Watch runs only while the engine runs its module.
  */
-import { panes as agentPanes, threadsPane } from "@bandaso/agents-pane"
+import {
+  panes as agentPanes,
+  threadsPane,
+  threadsWatch,
+} from "@bandaso/agents-pane"
 import { panes as terminalPanes } from "@bandaso/terminal-pane"
 import type { JsonValue } from "@bandaso/contract"
 import { Button } from "@bandaso/ui/components/button"
@@ -13,6 +18,7 @@ import {
   type PaneProps,
   type PaneState,
   paneOf,
+  type Watch,
 } from "@bandaso/ui/pane"
 import { LayoutGridIcon } from "lucide-react"
 import type { Width } from "./workspaces/model"
@@ -37,15 +43,21 @@ const offered = [...agentPanes, ...terminalPanes] as unknown as AnyKind[]
 /** What the sidebar shows for each Space: its Threads (ADR 0005, decision 8). */
 export const sidebar = threadsPane as unknown as AnyKind
 
+/** What the bar's mark hears from the modules (ADR 0005, decision 9). */
+export const watches: Watch[] = [threadsWatch]
+
 export const kinds: AnyKind[] = [launcher, ...offered]
 
 export function kindOf(kind: string): AnyKind | undefined {
   return kinds.find((k) => k.kind === kind)
 }
 
-/** Whether the engine runs what a kind of Pane needs. */
-export function runs(kind: AnyKind, engineModules: readonly string[]): boolean {
-  return kind.module === undefined || engineModules.includes(kind.module)
+/** Whether the engine runs what a kind of Pane, or a Watch, needs. */
+export function runs(
+  needs: { module?: string },
+  engineModules: readonly string[]
+): boolean {
+  return needs.module === undefined || engineModules.includes(needs.module)
 }
 
 /** How wide a new column for a Pane opens: a list a third, the rest half. */

@@ -1,7 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import type { Engine, SpaceId, SpaceSummary, Status } from "@bandaso/contract"
+import { QUIET } from "@bandaso/ui/pane"
 import { actionFor } from "../actions/actions"
 import { Bar } from "../bar/Bar"
+import { Watches } from "../bar/Watches"
 import { kindOf, startable, widthOf } from "../registry"
 import { Sidebar } from "../sidebar/Sidebar"
 import {
@@ -30,8 +32,8 @@ type Change = (workspaces: State) => State
 /**
  * The window (ADR 0005): the bar on top, the sidebar docked on the left,
  * and the workspaces, or the overview of them all. It holds what they
- * share, the workspaces and which parts show, and runs the actions that
- * change them.
+ * share, the workspaces, which parts show and what the modules call the
+ * Person for, and runs the actions that change them.
  */
 export function Shell({
   engine,
@@ -55,6 +57,7 @@ export function Shell({
   })
   const [sidebar, setSidebar] = useState(loadSidebar)
   const [overview, setOverview] = useState(false)
+  const [attention, setAttention] = useState(QUIET)
   useEffect(() => keepWorkspaces(workspaces), [workspaces])
   useEffect(() => keepSidebar(sidebar), [sidebar])
 
@@ -109,8 +112,15 @@ export function Shell({
 
   return (
     <div className="flex h-svh flex-col bg-muted/40 text-foreground">
+      <Watches
+        engine={engine}
+        modules={modules}
+        spaces={spaces}
+        onChange={setAttention}
+      />
       <Bar
         status={status}
+        attention={attention}
         numbers={shown(workspaces)}
         current={workspaces.current}
         sidebar={sidebar}

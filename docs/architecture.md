@@ -113,7 +113,7 @@ command (with its ID)
 | The Harness | its session, context and sign-in. We keep only its session ID, as evidence |
 | The OS keychain | secrets you give Bandaso. Its database never holds them |
 | The engine's state folder | the owner's ID; while the engine runs, its port and per-run secret |
-| The window's storage | the workspaces: their columns, each Pane with its Space, the widths and the focus; whether the sidebar shows; what Enter does while an Agent works |
+| The window's storage | the workspaces: their columns, each Pane with its Space, the widths and the focus; whether the sidebar shows; what Enter does while an Agent works; which finished turn of each Thread the Person has seen |
 | `.bandaso/` SQLite | Threads, Questions and answers, the Agents' queue, Databases' records, receipts, events, outbox |
 | `.bandaso/images/` | the bytes of the images messages carry, one file per image; the SQLite says what each is and which message carries it |
 
@@ -490,6 +490,23 @@ modules/*/pane   each module's Panes
   offers for it (`agents.threads`: its Threads, the one changed last
   first), and a new Thread in it. A new Thread opens as a Thread Pane
   with no Thread yet; its first message starts one (ADR 0006).
+  - Each Thread shows its Agent's Mark (ADR 0005, decision 8). The engine
+    lists each Thread with its latest turn that began, and its Questions
+    that wait; the list follows them from `turn.started`, `turn.ended` and
+    the `question.*` facts. The pane's rules (`marks.ts`) say what that
+    means: a Question asks, a failed or interrupted turn failed, a turn
+    that finished is done, a running one works, and anything else rests.
+  - A turn that finished or failed settles once the Person has seen it: a
+    Thread Pane with the focus marks its latest ended turn seen, in the
+    window's storage (`seen.ts`). The engine never hears of it.
+- **The bar's Mark** shows the loudest of what every Space calls the Person
+  for, with how many things wait for them when more than one does. A
+  module offers a `Watch` for this: a component the window draws for
+  each Space while the engine runs the module, which shows nothing and
+  reports an `Attention`, a Mark state and a count (`app/ui/src/pane.ts`).
+  The agents module's follows the same list as the sidebar, so the bar
+  knows even while the sidebar is hidden. The window combines them
+  (`app/web/src/bar`) and knows nothing of Threads.
 - **Only `window.bandaso` ties the page to the desktop.** It names no
   Electron API, so a browser can host it later; for now the engine lets in
   only `app://bandaso` and pages on localhost.

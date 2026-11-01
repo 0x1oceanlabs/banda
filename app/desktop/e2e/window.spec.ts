@@ -39,10 +39,18 @@ test("a Person makes a Space, starts a Thread in it, and works with it", async (
   await composer.press("Enter")
   const question = thread.getByRole("group", { name: "Run a check" })
   await expect(question).toBeVisible()
+  // The Thread's Mark, and the bar's, say it asks the Person.
+  const row = sidebar.getByRole("button", { name: /hello/ })
+  await expect(row).toContainText("Asks you")
+  const mark = page.getByRole("button", { name: /^Sidebar/ })
+  await expect(mark).toHaveAccessibleName(/Asks you/)
   await page.screenshot({ path: "test-results/2-question.png" })
   await question.getByRole("button", { name: "Allow", exact: true }).click()
   await expect(thread.getByText("The check passed.")).toBeVisible()
   await expect(question.getByText("You chose: Allow")).toBeVisible()
+  // The Person watched it finish, so nothing calls for them.
+  await expect(row).not.toContainText("Asks you")
+  await expect(mark).toHaveAccessibleName("Sidebar")
   await page.screenshot({ path: "test-results/3-answered.png" })
 
   await thread.getByRole("button", { name: "Close hello" }).click()
