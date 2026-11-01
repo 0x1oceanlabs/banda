@@ -14,6 +14,9 @@ export type Action<Context> = {
   /** The words a menu, a tooltip and the palette show. */
   title: string
   key?: Key
+  /** Its key works while a dialog is open, as the Banda menu's own do;
+   * any other key there is the dialog's. */
+  overDialogs?: true
   run: (context: Context) => void
 }
 

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import type { Engine, SpaceId, SpaceSummary, Status } from "@banda/contract"
 import { inFront, useInFront } from "@banda/ui/hooks/use-in-front"
-import { QUIET } from "@banda/ui/pane"
+import { type PaneState, QUIET } from "@banda/ui/pane"
 import { actionFor } from "../actions/actions"
 import { Bar } from "../bar/Bar"
 import { type Lists, Watches } from "../bar/Watches"
@@ -9,6 +9,8 @@ import { sightOf } from "../calls/sight"
 import { SUMMARY } from "../calls/system"
 import { Toasts } from "../calls/Toasts"
 import { first, type Heard, useCalls, type Where } from "../calls/useCalls"
+import { BandaMenu } from "../menu/BandaMenu"
+import type { At, Choice } from "../menu/menu"
 import { useLookNotify, useLookSound } from "../look"
 import { kindOf, showsOf, startable, widthOf } from "../registry"
 import { Sidebar } from "../sidebar/Sidebar"
@@ -73,6 +75,7 @@ export function Shell({
   })
   const [sidebar, setSidebar] = useState(loadSidebar)
   const [overview, setOverview] = useState(false)
+  const [menu, setMenu] = useState<At | null>(null)
   const [attention, setAttention] = useState(QUIET)
   const [lists, setLists] = useState<Lists>({})
 
@@ -158,20 +161,35 @@ export function Shell({
   const toggleSidebar = useCallback(() => setSidebar((shows) => !shows), [])
   const toggleOverview = useCallback(() => setOverview((opens) => !opens), [])
   const closeOverview = useCallback(() => setOverview(false), [])
+  // Alt+Space or Alt+K again, or the other of them, closes the menu.
+  const toggleMenu = useCallback(
+    (at: At) => setMenu((open) => (open ? null : at)),
+    []
+  )
+  const closeMenu = useCallback(() => setMenu(null), [])
 
-  // The keys run the actions, before any Pane hears them.
-  useEffect(() => {
-    const parts: Parts = {
+  const parts: Parts = useMemo(
+    () => ({
       change,
       home,
       toggleSidebar,
       toggleOverview,
       answer,
       settle,
-    }
+      menu: toggleMenu,
+    }),
+    [change, home, toggleSidebar, toggleOverview, answer, settle, toggleMenu]
+  )
+  // The keys run the actions, before any Pane hears them. A dialog keeps
+  // its keys, as the Banda menu its Alt+Enter, but for the menu's own.
+  useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
       const action = actionFor(ACTIONS, event)
       if (!action) return
+      const inDialog =
+        event.target instanceof Element &&
+        event.target.closest("[role=dialog]") !== null
+      if (inDialog && !action.overDialogs) return
       // A terminal leaves alone a key that was taken.
       event.preventDefault()
       event.stopPropagation()
@@ -179,7 +197,35 @@ export function Shell({
     }
     window.addEventListener("keydown", onKey, { capture: true })
     return () => window.removeEventListener("keydown", onKey, { capture: true })
-  }, [change, home, toggleSidebar, toggleOverview, answer, settle])
+  }, [parts])
+  // A row of the sidebar or the menu opens its Pane, where a workspace
+  // shows it or in a new column; a Space gets a new Thread.
+  const openPane = useCallback(
+    (space: SpaceId, pane: PaneState) =>
+      change((w) => opening(w, space, pane, undefined, "right")),
+    [change]
+  )
+  const newThreadIn = useCallback(
+    (space: SpaceId, ask?: string) => change((w) => newThread(w, space, ask)),
+    [change]
+  )
+  // The Space the focused Pane is in: where the menu's New Thread starts.
+  const here = focused(workspaces)?.space ?? home
+  const choose = useCallback(
+    (row: Choice) => {
+      switch (row.kind) {
+        case "thread":
+          return openPane(row.space, row.listed.pane)
+        case "space":
+          return newThreadIn(row.space.id)
+        case "action":
+          return row.action.run(parts)
+        case "ask":
+          return newThreadIn(here, row.words)
+      }
+    },
+    [openPane, newThreadIn, parts, here]
+  )
 
   const frame: Frame = useMemo(
     () => ({
@@ -223,6 +269,7 @@ export function Shell({
         {sidebar && (
           <Sidebar
             engine={engine}
+            onMenu={() => setMenu("root")}
             spaces={spaces}
             lists={lists}
             home={home}
@@ -230,13 +277,11 @@ export function Shell({
               const entry = focused(workspaces)
               return entry !== undefined && samePane(entry, { space, pane })
             }}
-            onOpen={(space, pane) =>
-              change((w) => opening(w, space, pane, undefined, "right"))
-            }
-            onNewThread={(space) => change((w) => newThread(w, space))}
+            onOpen={openPane}
+            onNewThread={newThreadIn}
             onCreated={(space) => {
               onCreated(space)
-              change((w) => newThread(w, space.id))
+              newThreadIn(space.id)
             }}
           />
         )}
@@ -258,6 +303,16 @@ export function Shell({
             onAnswer={answerCall}
             onMore={() => setSidebar(true)}
             onHold={hold}
+          />
+          <BandaMenu
+            at={menu}
+            onClose={closeMenu}
+            onChoose={choose}
+            engine={engine}
+            space={here}
+            lists={lists}
+            spaces={spaces}
+            actions={ACTIONS}
           />
           {overview && (
             <Overview

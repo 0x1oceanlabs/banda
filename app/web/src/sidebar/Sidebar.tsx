@@ -19,6 +19,7 @@ import {
   DropdownMenuShortcut,
   DropdownMenuTrigger,
 } from "@banda/ui/components/dropdown-menu"
+import { Kbd } from "@banda/ui/components/kbd"
 import { ScrollArea } from "@banda/ui/components/scroll-area"
 import { useNow } from "@banda/ui/hooks/use-now"
 import { cn } from "@banda/ui/lib/utils"
@@ -29,9 +30,12 @@ import {
   FileCogIcon,
   FolderPlusIcon,
   ListFilterIcon,
+  SearchIcon,
   SquarePenIcon,
 } from "lucide-react"
+import { keyName } from "../actions/actions"
 import type { Lists } from "../bar/Watches"
+import { MENU_KEY } from "../menu/menu"
 import { NewSpace } from "../Spaces"
 import {
   arrange,
@@ -57,6 +61,7 @@ export function Sidebar({
   lists,
   home,
   isCurrent,
+  onMenu,
   onOpen,
   onNewThread,
   onCreated,
@@ -68,6 +73,8 @@ export function Sidebar({
   home: SpaceId
   /** Whether a Pane is the one that has the focus. */
   isCurrent: (space: SpaceId, pane: PaneState) => boolean
+  /** Opens the Banda menu, as Alt+Space does (ADR 0017). */
+  onMenu: () => void
   /**
    * Opens a Pane a row stands for: where a workspace shows it, or in a new
    * column of the current one.
@@ -141,17 +148,28 @@ export function Sidebar({
       className="flex w-64 shrink-0 flex-col border-r bg-sidebar/60"
     >
       <div className="flex items-center gap-0.5 px-2 pt-2 pb-1">
+        <button
+          type="button"
+          onClick={onMenu}
+          className="mr-1 flex h-7 min-w-0 flex-1 items-center gap-1.5 overflow-hidden rounded-md border bg-background/60 px-2 text-[13px] text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+        >
+          <SearchIcon className="size-3.5 shrink-0" />
+          <span className="min-w-0 flex-1 truncate text-left">Search</span>
+          <Kbd className="h-4.5 px-0.5 text-[10px]">
+            {keyName(MENU_KEY).replaceAll("+", " ")}
+          </Kbd>
+        </button>
         <DropdownMenu>
           <DropdownMenuTrigger
             render={
               <Button
                 variant="ghost"
-                size="sm"
+                size="icon-sm"
                 aria-label={`View: ${preset}`}
+                title={`View: ${preset}`}
                 className="text-muted-foreground"
               >
                 <ListFilterIcon />
-                <span className="capitalize">{preset}</span>
               </Button>
             }
           />
@@ -191,7 +209,7 @@ export function Sidebar({
         <Button
           variant="ghost"
           size="icon-sm"
-          className="ml-auto text-muted-foreground"
+          className="text-muted-foreground"
           aria-label="New Space"
           title="New Space"
           onClick={() => setCreating(true)}

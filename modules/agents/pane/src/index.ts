@@ -7,5 +7,6 @@ import { threadsWatch } from "./ThreadsWatch"
 
 export { diffPane, harnessesPane, threadPane, threadsPane, threadsWatch }
 export { NEW_THREAD, type ThreadArgs } from "./session"
+export { useHarnesses } from "./harnesses"
 
 export const panes = [threadPane, harnessesPane, threadsPane, diffPane]

@@ -1574,3 +1574,48 @@ test("a Thread settles from its row's menu, as in T3 Code, and Alt+S brings it b
   await expect(row).toBeVisible()
   await expect(shelf).toBeHidden()
 })
+
+test("Alt+Space opens the Banda menu: it finds a Thread, and Alt+Enter starts one with the words", async () => {
+  window = await startWindow()
+  const { page } = window
+  const { thread, composer } = await firstThread(page)
+  await composer.fill("hello")
+  await composer.press("Enter")
+  await expect(thread).not.toHaveAccessibleName("New Thread")
+
+  // The sidebar's field opens it, and Esc closes it.
+  const sidebar = page.getByRole("complementary", { name: "Sidebar" })
+  await sidebar.screenshot({ path: "test-results/26-sidebar-search.png" })
+  await sidebar.getByRole("button", { name: /Search/ }).click()
+  const menu = page.getByRole("dialog", { name: "Banda menu" })
+  await expect(
+    menu.getByRole("group", { name: "Recent Threads" })
+  ).toContainText("hello")
+  await page.keyboard.press("Escape")
+  await expect(menu).toBeHidden()
+
+  // Alt+Space; the words find the Thread, and New Thread with them waits
+  // last.
+  await page.keyboard.press("Alt+Space")
+  const search = menu.getByRole("combobox", { name: "Search" })
+  await search.fill("hel")
+  await expect(menu.getByRole("option").first()).toContainText("hello")
+  await expect(
+    menu.getByRole("option", { name: /New Thread: “hel”/ })
+  ).toBeVisible()
+  await page.screenshot({ path: "test-results/26-banda-menu.png" })
+
+  // Alt+Enter starts a Thread with the words.
+  await search.fill("write a poem")
+  await page.keyboard.press("Alt+Enter")
+  await expect(menu).toBeHidden()
+  await expect(page.getByText("You said: write a poem")).toBeVisible()
+
+  // Alt+K opens it at its Actions, each with its key; Alt+K again closes it.
+  await page.keyboard.press("Alt+K")
+  await expect(menu.getByRole("group", { name: "Actions" })).toContainText(
+    "Show or hide the sidebar"
+  )
+  await page.keyboard.press("Alt+K")
+  await expect(menu).toBeHidden()
+})

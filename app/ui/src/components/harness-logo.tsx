@@ -4,6 +4,7 @@
  * named in words. The drawings are T3 Code's (MIT, apps/web/src/components/
  * Icons.tsx, Copyright (c) 2026 T3 Tools Inc.); the marks are their owners'.
  */
+import type { ReactNode } from "react"
 import { cn } from "cn"
 
 /** Each logo by the id of the Harness it stands for (harnesses.toml). */
@@ -31,12 +32,16 @@ export function HarnessLogo({
   id,
   name,
   className,
+  fallback,
 }: {
   id?: string
   name: string
   className?: string
+  /** What stands in for a missing logo, instead of the name. */
+  fallback?: ReactNode
 }) {
   const logo = id === undefined ? undefined : LOGOS[id]
+  if (!logo && fallback !== undefined) return fallback
   if (!logo)
     return (
       <span className={cn("shrink-0 text-xs text-muted-foreground", className)}>

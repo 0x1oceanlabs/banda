@@ -48,6 +48,8 @@ export type ThreadArgs = {
   thread: ThreadId | null
   harness: string
   title: string
+  /** The first message, sent as the Pane opens: the Banda menu's words. */
+  ask?: string
 }
 
 /** A Thread not yet started, on this computer's first Harness. */
@@ -179,6 +181,15 @@ export function useThreadSession({
       update({ thread: sent.thread, harness, title: args.title })
     return sent !== undefined
   }
+  // Words from the Banda menu start the Thread as the Pane opens, with its
+  // Harness's settings (ADR 0017, decision 6). They leave the Pane's args
+  // first, so they go once.
+  useEffect(() => {
+    if (thread !== null || !args.ask || !defaults) return
+    const { ask, ...rest } = args
+    update(rest)
+    void go(ask, [], false)
+  })
   // Implement turns plan mode off and asks for the plan, in one command.
   const implement = () => {
     if (settings) void go(IMPLEMENT, [], false, { ...settings, plan: false })
