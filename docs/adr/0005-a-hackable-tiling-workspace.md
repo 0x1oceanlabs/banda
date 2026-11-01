@@ -106,8 +106,10 @@ The evidence is in two notes: [tiling managers](../research/2026-11-01-tiling-ma
    | `Alt+V` | Strip or Split |
    | `Alt+1…9` | go to workspace N |
    | `Alt+Shift+1…9` | move the Pane to workspace N |
-   | `Alt+Space` | the palette: every action, each with its key |
-   | `Alt+K` | the key sheet; picking a row runs it |
+   | `Alt+Space` | the Banda menu: every action, each with its key, and every Thread, Space, file and setting (ADR 0017) |
+   | `Alt+K` | the Banda menu at its Actions: the key sheet; picking a row runs it |
+
+   - _Changed on 2026-11-01, by ADR 0017._ The palette is the Banda menu, "our Raycast" as Roma put it, and the key sheet is that menu opened at its Actions, so there is one list of keys.
 
    - **Reading the key.** Electron's main process reads the keys before the page does (`before-input-event`) and acts only when the Alt held down is the left one. AltGr stays free for typing on European layouts. Keys bind by their physical place, so they work on any layout. There is no app menu, so a lone Alt does nothing.
    - **Terminal Panes keep the shell's Alt keys.** Banda takes only letters readline leaves free (`a e h i j k m o q s v w z`), and `n`. `Alt+1…9` takes readline's numeric argument and `Alt+N` its search forward through history, both rarely used. A per-Pane switch sends every key to the program, for tmux, zellij or Emacs.

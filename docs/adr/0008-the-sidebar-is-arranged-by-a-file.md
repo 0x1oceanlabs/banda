@@ -109,7 +109,7 @@ Roma liked A, B and C, and asked for one thing instead of three: "unify everythi
 **Consequences.**
 
 - The engine's Thread list grows what a row needs and the list lacks today: the latest message's first line, why the latest turn failed, and when the running turn began.
-- **The design every preset shares**, after T3 Code's: a header with the view menu, a new Space and a new Thread (search comes later, _decided_); the current Thread raised as a card; the shelves at the bottom with their counts; the settings at the foot.
+- **The design every preset shares**, after T3 Code's: a header with the view menu, a new Space and a new Thread (search comes later, _decided_; _changed on 2026-11-01 by ADR 0017_: the header opens with the Banda menu's "Search" field, and the view menu is its filter icon alone, the preset named only in its tooltip); the current Thread raised as a card; the shelves at the bottom with their counts; the settings at the foot.
 - The sidebar stops drawing one `agents.threads` Pane per Space. It reads the Threads of every Space itself and arranges them, so it can sort across Spaces. The agents module still owns Threads and publishes what happens in them (ADR 0005, decision 8).
 - The bar's waiting dot and the workspace marks take the same states, so the sidebar and the bar never disagree.
 - Words for `GLOSSARY.md`, once built: preset, section, shelf.
