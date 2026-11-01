@@ -1,4 +1,4 @@
-import { useCallback, useState } from "react"
+import { useCallback } from "react"
 import { type Engine, newId, type SpaceId } from "@bandaso/contract"
 import type {
   Account,
@@ -7,6 +7,7 @@ import type {
   TurnId,
 } from "@bandaso/contract/agents"
 import { Button } from "@bandaso/ui/components/button"
+import { CopyButton } from "@bandaso/ui/components/copy-button"
 import { Spinner } from "@bandaso/ui/components/spinner"
 import { useAct } from "@bandaso/ui/hooks/use-act"
 import { useRead } from "@bandaso/ui/hooks/use-read"
@@ -15,7 +16,6 @@ import type { PaneProps } from "@bandaso/ui/pane"
 import {
   CheckIcon,
   CircleAlertIcon,
-  CopyIcon,
   LogInIcon,
   SquareTerminalIcon,
 } from "lucide-react"
@@ -245,7 +245,7 @@ function TerminalWay({
         <code className="min-w-0 flex-1 truncate rounded-md bg-muted px-2 py-1 font-mono text-xs">
           {line}
         </code>
-        <Copy text={line} />
+        <CopyButton text={line} label="Copy the command" />
       </div>
       <div>
         <Button variant="outline" size="xs" disabled={busy} onClick={onSignIn}>
@@ -253,22 +253,6 @@ function TerminalWay({
         </Button>
       </div>
     </div>
-  )
-}
-
-function Copy({ text }: { text: string }) {
-  const [copied, setCopied] = useState(false)
-  return (
-    <Button
-      variant="ghost"
-      size="icon-xs"
-      aria-label="Copy the command"
-      onClick={() =>
-        void navigator.clipboard.writeText(text).then(() => setCopied(true))
-      }
-    >
-      {copied ? <CheckIcon /> : <CopyIcon />}
-    </Button>
   )
 }
 
