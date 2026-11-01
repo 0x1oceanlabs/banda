@@ -65,6 +65,8 @@ asked to build all of it; the rest are our defaults and stay his to change.
    turn in plan mode ends with one, the composer shows "Plan ready" and its
    button is **Implement** (plan mode off, and the plan sent to be carried
    out) or **Refine** once text is typed. Shift+Tab switches plan mode.
+   Claude Code instead asks to leave plan mode, its plan in the request:
+   that Question is the plan's card, the Harness's own answers under it.
 
 7. **The composer as in T3 Code.**
    - While a turn runs, the button with text queues or steers, by the
