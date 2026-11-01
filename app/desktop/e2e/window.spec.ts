@@ -130,6 +130,61 @@ test("a Pane moves to another workspace, and the overview shows them all", async
   await expect(sidebar).toBeHidden()
 })
 
+test("a sideways swipe moves the Strip and lands on a column; a scroll up and down leaves it be", async () => {
+  window = await startWindow()
+  const { page } = window
+  const { thread, composer } = await firstThread(page)
+  await expect(composer).toBeFocused()
+  await page.keyboard.press("Alt+KeyN")
+  const launcher = page.getByRole("region", { name: "New Pane" })
+  await expect(launcher).toHaveAttribute("data-focused", "true")
+  // The launcher takes the whole screen; the Thread is out of view, left.
+  await page.keyboard.press("Alt+Control+ArrowRight")
+  await page.keyboard.press("Alt+Control+ArrowRight")
+  const strip = page.locator("[data-column]").first().locator("xpath=..")
+  const scrolled = () => strip.evaluate((element) => element.scrollLeft)
+  // It comes to rest at the right end, the launcher whole in view.
+  await expect
+    .poll(() =>
+      strip.evaluate((e) => e.scrollWidth - e.clientWidth - e.scrollLeft)
+    )
+    .toBeLessThan(1)
+  const box = await launcher.boundingBox()
+  await page.mouse.move(box!.x + box!.width / 2, box!.y + box!.height / 2)
+
+  // A scroll up that drifts sideways a little moves nothing sideways.
+  const before = await scrolled()
+  for (let i = 0; i < 6; i++) await page.mouse.wheel(4, -40)
+  await page.waitForTimeout(300)
+  expect(await scrolled()).toBe(before)
+  await expect(launcher).toHaveAttribute("data-focused", "true")
+
+  // A swipe to the left brings the Thread into view, and it takes the focus.
+  for (let i = 0; i < 10; i++) await page.mouse.wheel(-60, 0)
+  await expect(thread).toHaveAttribute("data-focused", "true")
+  await expect.poll(scrolled).toBe(0)
+
+  // Alt and a long swipe down moves one workspace, however long it is.
+  await page.keyboard.press("Alt+Shift+Digit2")
+  await page.keyboard.press("Alt+PageUp")
+  const numbers = page.getByRole("navigation", { name: "Workspaces" })
+  await expect(numbers.getByRole("button", { name: "1" })).toHaveAttribute(
+    "aria-current",
+    "true"
+  )
+  await page.keyboard.down("Alt")
+  for (let i = 0; i < 8; i++) {
+    await page.mouse.wheel(0, 30)
+    await page.waitForTimeout(60)
+  }
+  await page.keyboard.up("Alt")
+  await expect(numbers.getByRole("button", { name: "2" })).toHaveAttribute(
+    "aria-current",
+    "true"
+  )
+  await expect(numbers.getByRole("button")).toHaveText(["1", "2"])
+})
+
 test("the engine dies mid-work, comes back, and the Thread goes on", async () => {
   window = await startWindow()
   const { page } = window
