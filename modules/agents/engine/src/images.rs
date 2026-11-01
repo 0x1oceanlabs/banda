@@ -1,5 +1,5 @@
 //! The bytes of the images messages carry, as files in the Space:
-//! `.bandaso/images/<image ID>`. The Space's SQLite keeps what each image
+//! `.banda/images/<image ID>`. The Space's SQLite keeps what each image
 //! is and which message carries it (`store`); the bytes stay out of it
 //! (ADR 0002, decision 1), and copying the Space's folder moves them too.
 //!
@@ -25,7 +25,7 @@ impl Images {
     /// The images of the Space in `space`.
     pub fn of(space: &Path) -> Self {
         Images {
-            folder: space.join(".bandaso").join("images"),
+            folder: space.join(".banda").join("images"),
         }
     }
 

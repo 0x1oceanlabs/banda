@@ -1,5 +1,5 @@
 {
-  "name": "@bandaso/web",
+  "name": "@banda/web",
   "version": "0.0.0",
   "private": true,
   "type": "module",
@@ -14,10 +14,10 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@bandaso/agents-pane": "workspace:*",
-    "@bandaso/contract": "workspace:*",
-    "@bandaso/terminal-pane": "workspace:*",
-    "@bandaso/ui": "workspace:*",
+    "@banda/agents-pane": "workspace:*",
+    "@banda/contract": "workspace:*",
+    "@banda/terminal-pane": "workspace:*",
+    "@banda/ui": "workspace:*",
     "lucide-react": "^1.65.0",
     "react": "^19.3.1",
     "react-dom": "^19.3.1"

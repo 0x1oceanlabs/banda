@@ -1,8 +1,8 @@
 import { useCallback, useState } from "react"
-import type { Engine, SpaceSummary } from "@bandaso/contract"
-import { Spinner } from "@bandaso/ui/components/spinner"
-import { useRead } from "@bandaso/ui/hooks/use-read"
-import { useModules, useStatus } from "@bandaso/ui/hooks/use-status"
+import type { Engine, SpaceSummary } from "@banda/contract"
+import { Spinner } from "@banda/ui/components/spinner"
+import { useRead } from "@banda/ui/hooks/use-read"
+import { useModules, useStatus } from "@banda/ui/hooks/use-status"
 import { Shell } from "./shell/Shell"
 import { FirstSpace } from "./Spaces"
 

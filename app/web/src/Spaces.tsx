@@ -1,29 +1,29 @@
 import { useState } from "react"
-import type { Engine, SpaceSummary } from "@bandaso/contract"
-import { Button } from "@bandaso/ui/components/button"
+import type { Engine, SpaceSummary } from "@banda/contract"
+import { Button } from "@banda/ui/components/button"
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@bandaso/ui/components/card"
+} from "@banda/ui/components/card"
 import {
   Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
   DialogTitle,
-} from "@bandaso/ui/components/dialog"
+} from "@banda/ui/components/dialog"
 import {
   Field,
   FieldError,
   FieldGroup,
   FieldLabel,
-} from "@bandaso/ui/components/field"
-import { Input } from "@bandaso/ui/components/input"
-import { Spinner } from "@bandaso/ui/components/spinner"
-import { useAct } from "@bandaso/ui/hooks/use-act"
+} from "@banda/ui/components/field"
+import { Input } from "@banda/ui/components/input"
+import { Spinner } from "@banda/ui/components/spinner"
+import { useAct } from "@banda/ui/hooks/use-act"
 
 /** Names a new Space and creates it; `onCreated` hears the Space. */
 function SpaceForm({

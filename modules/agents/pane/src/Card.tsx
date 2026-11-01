@@ -1,4 +1,4 @@
-import { cn } from "@bandaso/ui/lib/utils"
+import { cn } from "@banda/ui/lib/utils"
 
 /** A box in the Thread that waits on the Person, as T3 Code draws one: an
  * icon and what it is, `action` at the end of that line, then `children`.

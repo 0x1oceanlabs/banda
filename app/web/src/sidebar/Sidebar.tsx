@@ -1,12 +1,12 @@
 import { useMemo, useState } from "react"
-import type { Engine, SpaceId, SpaceSummary } from "@bandaso/contract"
-import { BandaMark, MARK_WORDS } from "@bandaso/ui/components/banda-mark"
-import { Button } from "@bandaso/ui/components/button"
+import type { Engine, SpaceId, SpaceSummary } from "@banda/contract"
+import { BandaMark, MARK_WORDS } from "@banda/ui/components/banda-mark"
+import { Button } from "@banda/ui/components/button"
 import {
   ContextMenu,
   ContextMenuContent,
   ContextMenuTrigger,
-} from "@bandaso/ui/components/context-menu"
+} from "@banda/ui/components/context-menu"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -18,11 +18,11 @@ import {
   DropdownMenuSeparator,
   DropdownMenuShortcut,
   DropdownMenuTrigger,
-} from "@bandaso/ui/components/dropdown-menu"
-import { ScrollArea } from "@bandaso/ui/components/scroll-area"
-import { useNow } from "@bandaso/ui/hooks/use-now"
-import { cn } from "@bandaso/ui/lib/utils"
-import type { PaneState } from "@bandaso/ui/pane"
+} from "@banda/ui/components/dropdown-menu"
+import { ScrollArea } from "@banda/ui/components/scroll-area"
+import { useNow } from "@banda/ui/hooks/use-now"
+import { cn } from "@banda/ui/lib/utils"
+import type { PaneState } from "@banda/ui/pane"
 import {
   ChevronDownIcon,
   ChevronRightIcon,
@@ -79,7 +79,7 @@ export function Sidebar({
   const [creating, setCreating] = useState(false)
   const settings = useLookSidebar()
   const { preset, presets } = settings
-  const host = window.bandaso
+  const host = window.banda
   const [only, setOnly] = useState<SpaceId>()
   const [toggled, setToggled] = useState<ReadonlySet<string>>(new Set())
   const [more, setMore] = useState<ReadonlySet<string>>(new Set())
@@ -104,12 +104,12 @@ export function Sidebar({
   )
   const pick = (next: string) => {
     host?.sidebar.preset(next).catch((error: unknown) => {
-      console.error("bandaso: the sidebar's preset was not written", error)
+      console.error("banda: the sidebar's preset was not written", error)
     })
   }
   const edit = () => {
     host?.sidebar.edit().catch((error: unknown) => {
-      console.error("bandaso: sidebar.toml did not open", error)
+      console.error("banda: sidebar.toml did not open", error)
     })
   }
   const flip = (set: ReadonlySet<string>, key: string) => {

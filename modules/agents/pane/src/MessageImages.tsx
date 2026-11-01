@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useState } from "react"
-import type { Engine, SpaceId } from "@bandaso/contract"
-import type { Image, ImageData, ImageId } from "@bandaso/contract/agents"
-import { DialogTrigger } from "@bandaso/ui/components/dialog"
-import { Spinner } from "@bandaso/ui/components/spinner"
+import type { Engine, SpaceId } from "@banda/contract"
+import type { Image, ImageData, ImageId } from "@banda/contract/agents"
+import { DialogTrigger } from "@banda/ui/components/dialog"
+import { Spinner } from "@banda/ui/components/spinner"
 import {
   Thumbnail,
   ThumbnailBusy,
   ThumbnailImage,
-} from "@bandaso/ui/components/thumbnail"
+} from "@banda/ui/components/thumbnail"
 import { ImageOffIcon } from "lucide-react"
 import { UNNAMED, urlOf } from "./images"
 import { Preview } from "./Preview"

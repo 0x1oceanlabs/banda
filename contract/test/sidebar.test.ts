@@ -33,11 +33,11 @@ test("a file that names none gets the line at the top", () => {
   expect(withPreset("preset = 'inbox'\n", "my-own")).toBe('preset = "my-own"\n')
 })
 
-test("the window's own arrangement is what bandaso look gives with no files", () => {
+test("the window's own arrangement is what banda look gives with no files", () => {
   const repository = join(import.meta.dirname, "../..")
   const config = mkdtempSync(join(tmpdir(), "banda-sidebar-"))
   const printed = execFileSync(
-    join(repository, "target/debug/bandaso"),
+    join(repository, "target/debug/banda"),
     ["look"],
     {
       env: {

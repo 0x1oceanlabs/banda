@@ -3,8 +3,8 @@
  * from the workspaces and whether the window is in front. Pure, so plain
  * tests cover it.
  */
-import type { SpaceId } from "@bandaso/contract"
-import type { PaneState } from "@bandaso/ui/pane"
+import type { SpaceId } from "@banda/contract"
+import type { PaneState } from "@banda/ui/pane"
 import { current, entries, focused, type Workspaces } from "../workspaces/model"
 import type { Sight } from "./tell"
 

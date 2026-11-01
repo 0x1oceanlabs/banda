@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import type { Engine, SpaceId, SpaceSummary, Status } from "@bandaso/contract"
-import { inFront, useInFront } from "@bandaso/ui/hooks/use-in-front"
-import { QUIET } from "@bandaso/ui/pane"
+import type { Engine, SpaceId, SpaceSummary, Status } from "@banda/contract"
+import { inFront, useInFront } from "@banda/ui/hooks/use-in-front"
+import { QUIET } from "@banda/ui/pane"
 import { actionFor } from "../actions/actions"
 import { Bar } from "../bar/Bar"
 import { type Lists, Watches } from "../bar/Watches"
@@ -85,7 +85,7 @@ export function Shell({
   const where: Where = useMemo(
     () => ({
       sight: (call) => sightOf(now.current, call, inFront(), showsOf),
-      desktop: window.bandaso?.notify,
+      desktop: window.banda?.notify,
     }),
     []
   )
@@ -138,7 +138,7 @@ export function Shell({
   // the notice of many shows the sidebar, which lists them all.
   useEffect(
     () =>
-      window.bandaso?.notify.listen((key) => {
+      window.banda?.notify.listen((key) => {
         if (key === SUMMARY) return setSidebar(true)
         const call = heard.current.find((c) => c.key === key)
         if (call) answerCall(call)

@@ -3,9 +3,9 @@
  * 10): the keys run them now; the palette, the key sheet and `keys.toml`
  * read the same list later.
  */
-import type { SpaceId } from "@bandaso/contract"
-import { NEW_THREAD, threadPane } from "@bandaso/agents-pane"
-import { type PaneState, paneOf, type Place } from "@bandaso/ui/pane"
+import type { SpaceId } from "@banda/contract"
+import { NEW_THREAD, threadPane } from "@banda/agents-pane"
+import { type PaneState, paneOf, type Place } from "@banda/ui/pane"
 import type { Action } from "../actions/actions"
 import { showing } from "../calls/sight"
 import { columnsOf } from "../look"

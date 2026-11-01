@@ -36,7 +36,7 @@ On 2026-11-01 Roma asked for sounds when an Agent finishes or needs something, "
 
 5. **The settings are the look's: `[sound]` in `look.toml`** (_decided_: "our settings through the config file").
    - Sound is the look's other half, as motion is (ADR 0005, decision 16): the pop goes with the hat's hop. So it is layered as the look is (ADR 0007, decision 2): Banda's defaults, then a theme's `banda.toml`, then the Person's `~/.config/banda/look.toml`. A theme can bring its own sounds.
-   - `bandaso look` resolves and checks it, and `--follow` sends each change, as for every other key of the look. A wrong value is named in the notice: a volume out of 0 to 1 keeps the default and the rest applies; a family that does not exist is named with its line and the ones that do, and the file is left out as any file TOML cannot read is (ADR 0007).
+   - `banda look` resolves and checks it, and `--follow` sends each change, as for every other key of the look. A wrong value is named in the notice: a volume out of 0 to 1 keeps the default and the rest applies; a family that does not exist is named with its line and the ones that do, and the file is left out as any file TOML cannot read is (ADR 0007).
    - The keys, with their defaults:
 
      ```toml

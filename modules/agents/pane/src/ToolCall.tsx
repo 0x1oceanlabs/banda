@@ -5,13 +5,13 @@ import type {
   ToolContent,
   ToolKind,
   ToolStatus,
-} from "@bandaso/contract/agents"
+} from "@banda/contract/agents"
 import {
   Console,
   ConsoleFooter,
   ConsoleText,
-} from "@bandaso/ui/components/console"
-import { DiffCounts } from "@bandaso/ui/components/diff"
+} from "@banda/ui/components/console"
+import { DiffCounts } from "@banda/ui/components/diff"
 import {
   Trace,
   TraceCollapsible,
@@ -20,7 +20,7 @@ import {
   TraceIcon,
   TraceLine,
   TraceTitle,
-} from "@bandaso/ui/components/trace"
+} from "@banda/ui/components/trace"
 import {
   BrainIcon,
   FilePenIcon,

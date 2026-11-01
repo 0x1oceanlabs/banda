@@ -4,7 +4,7 @@
  * plain tests cover it; the Pane marks the words themselves where they
  * show.
  */
-import type { Item } from "@bandaso/contract/agents"
+import type { Item } from "@banda/contract/agents"
 import type { Line } from "./timeline"
 
 /** The words an item shows. */

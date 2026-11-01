@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useRef } from "react"
-import type { ThreadId } from "@bandaso/contract/agents"
+import type { ThreadId } from "@banda/contract/agents"
 import {
   Empty,
   EmptyDescription,
   EmptyHeader,
   EmptyTitle,
-} from "@bandaso/ui/components/empty"
-import { Spinner } from "@bandaso/ui/components/spinner"
-import { definePane, type PaneProps } from "@bandaso/ui/pane"
+} from "@banda/ui/components/empty"
+import { Spinner } from "@banda/ui/components/spinner"
+import { definePane, type PaneProps } from "@banda/ui/pane"
 import { FileDiffIcon } from "lucide-react"
 import { changes } from "./changes"
 import { useThread } from "./live-thread"

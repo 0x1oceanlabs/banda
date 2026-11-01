@@ -3,7 +3,7 @@
  * variants `[notify]` in `look.toml` chooses from (`look/src/notify.rs`),
  * and Banda's defaults, which hold until the look comes.
  */
-import type { Notify } from "@bandaso/contract/look"
+import type { Notify } from "@banda/contract/look"
 
 export const DEFAULT_NOTIFY: Notify = {
   system: "away",

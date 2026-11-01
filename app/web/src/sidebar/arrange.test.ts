@@ -1,9 +1,9 @@
-import type { SpaceSummary } from "@bandaso/contract"
-import type { MarkState } from "@bandaso/ui/components/banda-mark"
-import type { Listed } from "@bandaso/ui/pane"
+import type { SpaceSummary } from "@banda/contract"
+import type { MarkState } from "@banda/ui/components/banda-mark"
+import type { Listed } from "@banda/ui/pane"
 import { expect, test } from "vitest"
 import { arrange, type Arranged } from "./arrange"
-import { DEFAULT_SIDEBAR } from "@bandaso/contract/sidebar"
+import { DEFAULT_SIDEBAR } from "@banda/contract/sidebar"
 import { type Settings, STATES } from "./settings"
 
 const landing: SpaceSummary = { id: "s1", name: "Landing", folder: "/l" }
@@ -35,7 +35,7 @@ const lists = {
 const ids = (arranged: Arranged, where: "sections" | "shelves" = "sections") =>
   arranged[where].map((s) => [s.key, s.rows.map((r) => r.listed.id)])
 
-/** Keys over others, as `bandaso look` lays them (look/src/sidebar.rs). */
+/** Keys over others, as `banda look` lays them (look/src/sidebar.rs). */
 type Keys = { [Group in keyof Settings]?: Partial<Settings[Group]> }
 const over = (base: Settings, keys: Keys = {}): Settings => ({
   group: { ...base.group, ...keys.group },

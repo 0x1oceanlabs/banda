@@ -1,15 +1,15 @@
-import type { Status } from "@bandaso/contract"
+import type { Status } from "@banda/contract"
 import {
   BandaMark,
   loudest,
   MARK_WORDS,
   type MarkState,
-} from "@bandaso/ui/components/banda-mark"
-import { Button } from "@bandaso/ui/components/button"
-import { Spinner } from "@bandaso/ui/components/spinner"
-import { type Attention, QUIET } from "@bandaso/ui/pane"
+} from "@banda/ui/components/banda-mark"
+import { Button } from "@banda/ui/components/button"
+import { Spinner } from "@banda/ui/components/spinner"
+import { type Attention, QUIET } from "@banda/ui/pane"
 import { TriangleAlertIcon } from "lucide-react"
-import type { Problem } from "@bandaso/contract/look"
+import type { Problem } from "@banda/contract/look"
 import { useLookProblems } from "../look"
 
 /**
@@ -134,7 +134,7 @@ export function problemWords(problem: Problem): string {
 /**
  * Says when a file of the look is wrong (ADR 0005, decision 11): the last
  * good look stays, and this names the file and the line.
- * `bandaso look check` says the same in a terminal.
+ * `banda look check` says the same in a terminal.
  */
 function LookProblems() {
   const problems = useLookProblems()

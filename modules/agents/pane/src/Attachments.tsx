@@ -1,14 +1,14 @@
 import { useRef, useState } from "react"
-import type { Image } from "@bandaso/contract/agents"
-import { DialogTrigger } from "@bandaso/ui/components/dialog"
-import { Spinner } from "@bandaso/ui/components/spinner"
+import type { Image } from "@banda/contract/agents"
+import { DialogTrigger } from "@banda/ui/components/dialog"
+import { Spinner } from "@banda/ui/components/spinner"
 import {
   Thumbnail,
   ThumbnailBusy,
   ThumbnailImage,
   ThumbnailRemove,
-} from "@bandaso/ui/components/thumbnail"
-import { problem as words } from "@bandaso/ui/lib/words"
+} from "@banda/ui/components/thumbnail"
+import { problem as words } from "@banda/ui/lib/words"
 import {
   base64Of,
   dataUrl,

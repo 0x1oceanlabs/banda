@@ -1,5 +1,5 @@
-import type { Listed } from "@bandaso/ui/pane"
-import type { Chime } from "@bandaso/ui/sound"
+import type { Listed } from "@banda/ui/pane"
+import type { Chime } from "@banda/ui/sound"
 import { expect, test } from "vitest"
 import { open, start } from "../workspaces/model"
 import { DEFAULT_NOTIFY as NOTIFY } from "./settings"

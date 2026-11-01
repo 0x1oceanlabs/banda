@@ -56,10 +56,10 @@ test("a theme with one scheme shows it whatever the system says", () => {
   })
 })
 
-test("the window's own motion and columns are what bandaso look gives with no files", () => {
+test("the window's own motion and columns are what banda look gives with no files", () => {
   const repository = join(import.meta.dirname, "../..")
   const printed = execFileSync(
-    join(repository, "target/debug/bandaso"),
+    join(repository, "target/debug/banda"),
     ["look"],
     {
       env: {

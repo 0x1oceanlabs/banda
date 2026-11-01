@@ -52,7 +52,7 @@
 //! sign in until someone has. It says who is signed in as Claude Code's
 //! adapter does (`_auth/status_update`), and signs out when asked. It
 //! offers two ways to sign in: `fake-sign-in`, which
-//! runs `bandaso-fake-agent --sign-in` in a terminal, where the Person
+//! runs `banda-fake-agent --sign-in` in a terminal, where the Person
 //! pastes the code `fake-code`, as Claude Code's adapter offers to a client
 //! that runs terminals; and `fake-browser`, which signs in by itself, as
 //! Codex's does in the browser.
@@ -712,7 +712,7 @@ async fn turn(
 enum Run {
     /// Two lines, sent as they are printed, as Codex sends them.
     Quiet,
-    /// More than Bandaso keeps, in large pieces.
+    /// More than Banda keeps, in large pieces.
     Loud,
     /// As Claude Code sends it: all it printed once it is done, then the
     /// terminal; here with an exit it does not know.
@@ -878,7 +878,7 @@ async fn main() -> Result<(), Error> {
     fake.signed_in.store(signed_in, Ordering::Relaxed);
     Agent
         .builder()
-        .name("bandaso-fake-agent")
+        .name("banda-fake-agent")
         .on_receive_request(
             {
                 let fake = fake.clone();
@@ -936,7 +936,7 @@ async fn main() -> Result<(), Error> {
                             .agent_capabilities(capabilities)
                             .meta(meta.as_object().cloned())
                             .agent_info(Implementation::new(
-                                "bandaso-fake-agent",
+                                "banda-fake-agent",
                                 env!("CARGO_PKG_VERSION"),
                             )),
                     )?;

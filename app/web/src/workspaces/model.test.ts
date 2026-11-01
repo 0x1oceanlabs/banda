@@ -1,4 +1,4 @@
-import type { PaneState } from "@bandaso/ui/pane"
+import type { PaneState } from "@banda/ui/pane"
 import { describe, expect, test } from "vitest"
 import {
   close,

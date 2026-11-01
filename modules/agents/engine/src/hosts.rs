@@ -13,7 +13,7 @@
 
 use crate::acp::Connection;
 use crate::settings::Harness;
-use bandaso_kernel::SpaceId;
+use banda_kernel::SpaceId;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, Weak};
 use std::time::{Duration, Instant};

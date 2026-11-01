@@ -21,7 +21,7 @@ export type Window = {
   app: ElectronApplication
   page: Page
   dir: string
-  /** The engine's pid, main's child named `bandaso`; none while it restarts. */
+  /** The engine's pid, main's child named `banda`; none while it restarts. */
   engine: () => number | undefined
   close: () => Promise<void>
 }
@@ -47,12 +47,11 @@ export async function startWindow({
   look = "",
   sidebar = "",
 } = {}): Promise<Window> {
-  const dir = mkdtempSync(join(tmpdir(), "bandaso-window-"))
+  const dir = mkdtempSync(join(tmpdir(), "banda-window-"))
   mkdirSync(join(dir, "config"))
-  mkdirSync(join(dir, "look"))
-  if (look) writeFileSync(join(dir, "look/look.toml"), look)
-  if (sidebar) writeFileSync(join(dir, "look/sidebar.toml"), sidebar)
-  const fake = join(repository, "target/debug/bandaso-fake-agent")
+  if (look) writeFileSync(join(dir, "config/look.toml"), look)
+  if (sidebar) writeFileSync(join(dir, "config/sidebar.toml"), sidebar)
+  const fake = join(repository, "target/debug/banda-fake-agent")
   const home = join(dir, "fake-home")
   mkdirSync(home)
   const env = account
@@ -66,21 +65,21 @@ export async function startWindow({
   const app = await electron.launch({
     args: [
       desktop,
-      ...(process.env.BANDASO_E2E_SHOW ? [] : ["--ozone-platform=headless"]),
+      ...(process.env.BANDA_E2E_SHOW ? [] : ["--ozone-platform=headless"]),
     ],
     env: {
       ...process.env,
-      BANDASO_ROOT: join(dir, "root"),
-      BANDASO_STATE: join(dir, "state"),
-      BANDASO_CONFIG: join(dir, "config"),
-      // The look reads only its own folder: no Omarchy, no Hyprland.
-      BANDA_CONFIG: join(dir, "look"),
+      BANDA_ROOT: join(dir, "root"),
+      BANDA_STATE: join(dir, "state"),
+      // The engine and the look read only this folder: no Omarchy, no
+      // Hyprland.
+      BANDA_CONFIG: join(dir, "config"),
       BANDA_OMARCHY: "",
       BANDA_FONTCONFIG: "",
       HYPRLAND_INSTANCE_SIGNATURE: "",
-      BANDASO_LOG: "warn",
+      BANDA_LOG: "warn",
       // Notices go to a list the tests read, never to the Person's screen.
-      BANDASO_DESKTOP: "recorded",
+      BANDA_DESKTOP: "recorded",
       // A terminal runs the Person's shell: here one every machine has.
       SHELL: "/bin/sh",
     },
@@ -98,7 +97,7 @@ export async function startWindow({
     engine: () => {
       const main = String(app.process().pid)
       try {
-        const found = execFileSync("pgrep", ["-P", main, "-x", "bandaso"], {
+        const found = execFileSync("pgrep", ["-P", main, "-x", "banda"], {
           encoding: "utf8",
         })
         return Number(found.trim().split("\n").at(-1))
@@ -183,8 +182,8 @@ export type Recorded = {
 /** Reads the recorded desktop. */
 export function desktopOf(app: ElectronApplication): Promise<Recorded> {
   return app.evaluate(() => {
-    const desktop = (globalThis as unknown as { bandasoDesktop: Recorded })
-      .bandasoDesktop
+    const desktop = (globalThis as unknown as { bandaDesktop: Recorded })
+      .bandaDesktop
     return {
       shown: desktop.shown,
       withdrawn: desktop.withdrawn,
@@ -197,8 +196,8 @@ export function desktopOf(app: ElectronApplication): Promise<Recorded> {
 export async function setQuiet(app: ElectronApplication, quiet: boolean) {
   await app.evaluate((_electron, quiet) => {
     ;(
-      globalThis as unknown as { bandasoDesktop: Recorded }
-    ).bandasoDesktop.isQuiet = quiet
+      globalThis as unknown as { bandaDesktop: Recorded }
+    ).bandaDesktop.isQuiet = quiet
   }, quiet)
 }
 
@@ -207,9 +206,9 @@ export async function clickNotice(app: ElectronApplication, key: string) {
   await app.evaluate((_electron, key) => {
     ;(
       globalThis as unknown as {
-        bandasoDesktop: { click: (key: string) => void }
+        bandaDesktop: { click: (key: string) => void }
       }
-    ).bandasoDesktop.click(key)
+    ).bandaDesktop.click(key)
   }, key)
 }
 

@@ -1,4 +1,4 @@
-import type { Offer } from "@bandaso/contract/agents"
+import type { Offer } from "@banda/contract/agents"
 import { expect, test } from "vitest"
 import { matching, ownCommand, suggested, typed } from "./slash"
 

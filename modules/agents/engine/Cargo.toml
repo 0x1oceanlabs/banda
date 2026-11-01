@@ -1,5 +1,5 @@
 [package]
-name = "bandaso-agents"
+name = "banda-agents"
 description = "The agents module: Agents, Harnesses, Threads, turns and Questions, with ACP as the first adapter."
 version.workspace = true
 edition.workspace = true
@@ -11,7 +11,7 @@ publish.workspace = true
 agent-client-protocol = { workspace = true, features = ["process"] }
 async-trait.workspace = true
 base64.workspace = true
-bandaso-kernel = { path = "../../../kernel" }
+banda-kernel = { path = "../../../kernel" }
 rusqlite.workspace = true
 serde.workspace = true
 serde_json.workspace = true

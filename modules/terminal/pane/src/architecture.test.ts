@@ -9,9 +9,9 @@ import { expect, test } from "vitest"
 
 const PANE = [
   // Ghostty draws the screen: T3 Code's adapter, vendored in app/ghostty.
-  /^@bandaso\/ghostty$/,
-  /^@bandaso\/contract(\/terminal)?$/,
-  /^@bandaso\/ui\//,
+  /^@banda\/ghostty$/,
+  /^@banda\/contract(\/terminal)?$/,
+  /^@banda\/ui\//,
   /^react$/,
   /^lucide-react$/,
   /^\.\.?\//,

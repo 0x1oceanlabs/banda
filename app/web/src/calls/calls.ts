@@ -3,8 +3,8 @@
  * together make one sound, the loudest; for a while after a sound, only a
  * louder call plays. Pure, so plain tests cover it.
  */
-import { MARK_ORDER } from "@bandaso/ui/components/banda-mark"
-import type { Chime } from "@bandaso/ui/sound"
+import { MARK_ORDER } from "@banda/ui/components/banda-mark"
+import type { Chime } from "@banda/ui/sound"
 
 /** How long calls gather before the loudest of them plays, in ms. */
 export const GATHER = 100

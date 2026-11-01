@@ -6,7 +6,7 @@
  */
 import { useState, useSyncExternalStore } from "react"
 
-const PREFIX = "bandaso.agents.draft."
+const PREFIX = "banda.agents.draft."
 const heard = new Set<() => void>()
 /** The drafts read so far, and all of them for a window whose storage
  * fails: kept until it closes. */

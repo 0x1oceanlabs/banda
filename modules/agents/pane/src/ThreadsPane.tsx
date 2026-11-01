@@ -1,21 +1,16 @@
 import { useMemo } from "react"
-import type { JsonValue } from "@bandaso/contract"
-import type { ListedThread } from "@bandaso/contract/agents"
+import type { JsonValue } from "@banda/contract"
+import type { ListedThread } from "@banda/contract/agents"
 import {
   BandaMark,
   MARK_WORDS,
   type MarkState,
-} from "@bandaso/ui/components/banda-mark"
-import { Spinner } from "@bandaso/ui/components/spinner"
-import { useLive } from "@bandaso/ui/hooks/use-live"
-import { ago } from "@bandaso/ui/lib/words"
-import { cn } from "@bandaso/ui/lib/utils"
-import {
-  definePane,
-  type PaneProps,
-  type Place,
-  paneOf,
-} from "@bandaso/ui/pane"
+} from "@banda/ui/components/banda-mark"
+import { Spinner } from "@banda/ui/components/spinner"
+import { useLive } from "@banda/ui/hooks/use-live"
+import { ago } from "@banda/ui/lib/words"
+import { cn } from "@banda/ui/lib/utils"
+import { definePane, type PaneProps, type Place, paneOf } from "@banda/ui/pane"
 import { MessagesSquareIcon } from "lucide-react"
 import { harnessName, useHarnesses } from "./harnesses"
 import { threadsSource } from "./list"

@@ -47,7 +47,7 @@ function memoryOf(root: number): { total: number; engine: number } {
     }
   }
   const mb = (kb: number) => Math.round(kb / 1024)
-  const engine = tree.filter((pid) => names.get(pid) === "bandaso")
+  const engine = tree.filter((pid) => names.get(pid) === "banda")
   return {
     total: mb(tree.reduce((sum, pid) => sum + pss(pid), 0)),
     engine: mb(engine.reduce((sum, pid) => sum + pss(pid), 0)),

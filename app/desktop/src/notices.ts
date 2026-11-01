@@ -6,7 +6,7 @@
  */
 import { execFile } from "node:child_process"
 import { Notification, nativeImage } from "electron"
-import type { Notice } from "@bandaso/web/host"
+import type { Notice } from "@banda/web/host"
 
 /** What shows the page's notices, and hears the desktop's quiet. */
 export interface Desktop {
@@ -88,7 +88,7 @@ function omarchyQuiet(): Promise<boolean> {
 /**
  * A desktop that keeps what it was asked to show, for the end-to-end
  * tests: they read it, click it and turn the quiet on through
- * `globalThis.bandasoDesktop`, and nothing reaches the Person's screen.
+ * `globalThis.bandaDesktop`, and nothing reaches the Person's screen.
  */
 export class RecordedDesktop implements Desktop {
   readonly shown: Notice[] = []

@@ -1,8 +1,8 @@
 /** Where a new Thread starts: its Space and its Harness (ADR 0006). */
 import { useCallback } from "react"
-import type { Engine, SpaceId, SpaceSummary } from "@bandaso/contract"
-import type { HarnessView } from "@bandaso/contract/agents"
-import { useRead } from "@bandaso/ui/hooks/use-read"
+import type { Engine, SpaceId, SpaceSummary } from "@banda/contract"
+import type { HarnessView } from "@banda/contract/agents"
+import { useRead } from "@banda/ui/hooks/use-read"
 import { BotIcon, FolderIcon } from "lucide-react"
 import { Pick } from "./ThreadSettings"
 

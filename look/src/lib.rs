@@ -8,7 +8,7 @@
 //! tokens.
 //!
 //! It is the window's machine's, not a Space's, so it is no module of the
-//! engine: `bandaso look` prints it, and `bandaso look --follow` prints it
+//! engine: `banda look` prints it, and `banda look --follow` prints it
 //! again on every change. The window runs that and applies what it reads.
 //! The sidebar's `sidebar.toml` (ADR 0008) is this machine's too, so it
 //! comes with the look: [`sidebar`].
@@ -308,7 +308,7 @@ pub fn resolve(places: &Places, windows: &dyn Fn() -> Option<Windows>) -> Resolv
                 .to_owned()
         } else {
             format!(
-                "there is no theme \"{name}\"; Banda's own shows (bandaso look themes lists them)"
+                "there is no theme \"{name}\"; Banda's own shows (banda look themes lists them)"
             )
         };
         problems.push(Problem::whole(&look_file, words));
@@ -635,7 +635,7 @@ fn fingerprint(paths: &[PathBuf]) -> Vec<Option<u64>> {
 
 pub use theme::Listed;
 
-/// Checks files as `bandaso look check` does: a `colors.toml` as a
+/// Checks files as `banda look check` does: a `colors.toml` as a
 /// palette, a `sidebar.toml` or a file in `sidebars/` as the sidebar's
 /// schema, anything else as `look.toml`'s.
 pub fn check(paths: &[PathBuf]) -> Vec<Problem> {

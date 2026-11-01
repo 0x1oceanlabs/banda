@@ -1,5 +1,5 @@
 /**
- * The look's words for TypeScript (ADR 0007): what `bandaso look` prints,
+ * The look's words for TypeScript (ADR 0007): what `banda look` prints,
  * and which of its schemes shows.
  */
 import type { Look } from "./generated/look/Look"
@@ -24,14 +24,14 @@ export type { Move } from "./generated/look/Move"
 export type { Spring } from "./generated/look/Spring"
 export type { Easing } from "./generated/look/Easing"
 
-/** Banda's own columns, niri's: what `bandaso look` gives with no files. */
+/** Banda's own columns, niri's: what `banda look` gives with no files. */
 export const DEFAULT_COLUMNS: Columns = {
   presets: ["1/3", "1/2", "2/3", "1"],
   default: "1/2",
   center: "never",
 }
 
-/** Banda's own motion, niri's springs: what `bandaso look` gives with no
+/** Banda's own motion, niri's springs: what `banda look` gives with no
  * files, for the first frame and outside the desktop. */
 export const DEFAULT_MOTION: Motion = {
   workspace: {

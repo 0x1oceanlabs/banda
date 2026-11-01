@@ -5,12 +5,12 @@ import {
   type JsonValue,
   newId,
   type SpaceId,
-} from "@bandaso/contract"
-import type { Ended, Piece, TerminalId } from "@bandaso/contract/terminal"
-import { Surface } from "@bandaso/ghostty"
-import { Button } from "@bandaso/ui/components/button"
-import { problem as words } from "@bandaso/ui/lib/words"
-import { definePane, type PaneProps, PROGRAM_KEYS } from "@bandaso/ui/pane"
+} from "@banda/contract"
+import type { Ended, Piece, TerminalId } from "@banda/contract/terminal"
+import { Surface } from "@banda/ghostty"
+import { Button } from "@banda/ui/components/button"
+import { problem as words } from "@banda/ui/lib/words"
+import { definePane, type PaneProps, PROGRAM_KEYS } from "@banda/ui/pane"
 import { RotateCcwIcon, SquareTerminalIcon } from "lucide-react"
 import { Input } from "./input"
 import { fontOf, onThemeChange, themeOf } from "./theme"

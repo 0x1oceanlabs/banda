@@ -3,7 +3,7 @@
  * them: the Harness's, and, as in T3 Code, the window's own `/plan` and
  * `/default`, which switch plan mode and send nothing.
  */
-import type { Offer, SlashCommand } from "@bandaso/contract/agents"
+import type { Offer, SlashCommand } from "@banda/contract/agents"
 
 /** A slash command the composer suggests. One of the window's own names
  * the plan mode it switches to. */

@@ -2,7 +2,7 @@
  * A Thread as a Pane holds it: the view it loaded, then each fact applied in
  * the log's order (ADR 0002, decision 5). Pure, so plain tests cover it.
  */
-import type { Event } from "@bandaso/contract"
+import type { Event } from "@banda/contract"
 import {
   decodeFact,
   type Body,
@@ -14,7 +14,7 @@ import {
   type ThreadView,
   type TurnView,
   type Usage,
-} from "@bandaso/contract/agents"
+} from "@banda/contract/agents"
 import { settledTurn } from "./marks"
 
 export type ThreadState = {
@@ -389,7 +389,7 @@ export function running(state: ThreadState): TurnView | undefined {
 }
 
 /** Whether the Agent started `turn` by itself: its message is a notice
- * from Bandaso, not a Person's. */
+ * from Banda, not a Person's. */
 export function byItself(state: ThreadState, turn: TurnView): boolean {
   const message = state.items.find((item) => item.id === turn.message)
   return message?.body.kind === "notice"

@@ -189,10 +189,10 @@ async fn upgrade(
 /// Where the API listens on the engine's address.
 pub const PATH: &str = "/ws";
 
-/// The origin of Bandaso's own window.
-pub const APP_ORIGIN: &str = "app://bandaso";
+/// The origin of Banda's own window.
+pub const APP_ORIGIN: &str = "app://banda";
 
-/// A web page elsewhere must not reach the engine. Bandaso's window, the
+/// A web page elsewhere must not reach the engine. Banda's window, the
 /// CLI (no origin) and pages served from this machine may try, and still
 /// need the token. An opaque origin (`null`) could be any page.
 fn origin_allowed(origin: Option<&str>) -> bool {
@@ -270,7 +270,7 @@ async fn serve(api: Arc<Api>, socket: WebSocket) {
         Some(ClientFrame::Hello { protocol, .. }) if protocol != PROTOCOL => Err(Refusal::new(
             Code::Protocol,
             format!(
-                "This engine speaks protocol {PROTOCOL}, the window speaks {protocol}. Update Bandaso."
+                "This engine speaks protocol {PROTOCOL}, the window speaks {protocol}. Update Banda."
             ),
         )),
         Some(ClientFrame::Hello { token, .. }) => api.identity.identify(&token).ok_or_else(|| {

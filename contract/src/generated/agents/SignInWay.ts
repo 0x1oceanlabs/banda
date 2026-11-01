@@ -2,7 +2,7 @@
 import type { Program } from "./Program";
 
 /**
- * A way to sign in to a Harness, as the Harness offers it. Bandaso runs
+ * A way to sign in to a Harness, as the Harness offers it. Banda runs
  * it and holds none of the account's credentials: the Harness keeps them.
  */
 export type SignInWay = { id: string, name: string, description?: string, 

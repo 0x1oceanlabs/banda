@@ -2,7 +2,7 @@
 //! something is a spring or an easing, and `[motion]` can slow them all or
 //! turn them off.
 //!
-//! `bandaso look` resolves it into numbers: `slowdown` and `off` are
+//! `banda look` resolves it into numbers: `slowdown` and `off` are
 //! already applied, curves are Bézier points. The window runs the springs
 //! itself, so a move that is interrupted carries its speed on.
 

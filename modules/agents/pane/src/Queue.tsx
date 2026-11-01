@@ -1,14 +1,14 @@
 import { useState } from "react"
-import { Bubble, BubbleContent } from "@bandaso/ui/components/bubble"
-import { Button } from "@bandaso/ui/components/button"
-import { Message, MessageContent } from "@bandaso/ui/components/message"
-import { Textarea } from "@bandaso/ui/components/textarea"
+import { Bubble, BubbleContent } from "@banda/ui/components/bubble"
+import { Button } from "@banda/ui/components/button"
+import { Message, MessageContent } from "@banda/ui/components/message"
+import { Textarea } from "@banda/ui/components/textarea"
 import {
   Trace,
   TraceIcon,
   TraceLine,
   TraceTitle,
-} from "@bandaso/ui/components/trace"
+} from "@banda/ui/components/trace"
 import {
   CornerDownRightIcon,
   PauseIcon,
@@ -17,7 +17,7 @@ import {
   XIcon,
 } from "lucide-react"
 import { type ImageReader, MessageImages } from "./MessageImages"
-import type { ItemId } from "@bandaso/contract/agents"
+import type { ItemId } from "@banda/contract/agents"
 import type { Waiting } from "./thread"
 
 /** What a Person does with a message that waits, as T3 Code offers it. */

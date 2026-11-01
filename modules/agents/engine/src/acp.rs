@@ -295,7 +295,7 @@ impl From<AuthStatus> for SignedInAs {
 pub struct Running {
     /// The Harness has modes of its own and enforces the Thread's mode.
     pub native: bool,
-    /// The mode it runs in, when that is one of Bandaso's.
+    /// The mode it runs in, when that is one of Banda's.
     pub mode: Option<Mode>,
     /// It plans before it changes anything.
     pub plan: bool,
@@ -542,7 +542,7 @@ impl Connection {
         let process = AcpAgent::new(config).with_debug(move |line, direction| {
             let to = match direction {
                 LineDirection::Stdin => To::Harness,
-                LineDirection::Stdout => To::Bandaso,
+                LineDirection::Stdout => To::Banda,
                 LineDirection::Stderr => {
                     tracing::debug!(harness = %name, "{line}");
                     return;
@@ -754,7 +754,7 @@ impl Connection {
                     self.name, error.message
                 )),
                 Err(_) => refused.push(format!(
-                    "{} did not answer when Bandaso set {name}.",
+                    "{} did not answer when Banda set {name}.",
                     self.name
                 )),
             }
@@ -912,7 +912,7 @@ impl Connection {
     pub async fn sign_out(&self) -> Result<(), String> {
         if !self.about.signs_out {
             return Err(format!(
-                "{} does not sign out from Bandaso: sign out in a terminal.",
+                "{} does not sign out from Banda: sign out in a terminal.",
                 self.name
             ));
         }
@@ -942,7 +942,7 @@ impl Connection {
 /// The ways `harness` offers to sign in, from what it said when it
 /// started. A way in a terminal runs the Harness's own program with the
 /// way's arguments after its own, and the way's environment over its own,
-/// as ACP has a client do; a kind Bandaso does not know is left out.
+/// as ACP has a client do; a kind Banda does not know is left out.
 fn ways(harness: &Harness, methods: Vec<acp::AuthMethod>) -> Vec<SignInWay> {
     methods
         .into_iter()
@@ -974,7 +974,7 @@ async fn drive(
     let filling = routes.clone();
     let served = Client
         .builder()
-        .name("bandaso")
+        .name("banda")
         .on_receive_notification(
             async move |note: AuthStatusUpdate, _cx: ConnectionTo<Agent>| {
                 told.send_replace(Some(note.status));
@@ -1078,7 +1078,7 @@ async fn drive(
                 };
                 let Some(fields) = form_fields(&form.requested_schema) else {
                     let _ = route.send(Said::Notice(
-                        "The Agent asked with a form Bandaso cannot show, so it went unanswered."
+                        "The Agent asked with a form Banda cannot show, so it went unanswered."
                             .to_owned(),
                     ));
                     return responder.respond(cancel());
@@ -1146,10 +1146,7 @@ async fn drive(
                 .meta(output);
             let hello = acp::InitializeRequest::new(ProtocolVersion::V1)
                 .client_capabilities(shows)
-                .client_info(acp::Implementation::new(
-                    "bandaso",
-                    env!("CARGO_PKG_VERSION"),
-                ));
+                .client_info(acp::Implementation::new("banda", env!("CARGO_PKG_VERSION")));
             let agreed = cx.send_request(hello).block_task().await;
             match agreed {
                 Ok(answer) if answer.protocol_version == ProtocolVersion::V1 => {
@@ -1189,7 +1186,7 @@ async fn drive(
                 }
                 Ok(answer) => {
                     let _ = ready.send(Err(format!(
-                        "The Harness speaks ACP {:?}; Bandaso speaks version 1.",
+                        "The Harness speaks ACP {:?}; Banda speaks version 1.",
                         answer.protocol_version
                     )));
                     return Ok(());
@@ -1368,7 +1365,7 @@ fn mode_of(value: &str) -> Option<Mode> {
         .map(|(mode, _)| *mode)
 }
 
-/// Whether the Harness has modes Bandaso knows: Claude Code's or Codex's,
+/// Whether the Harness has modes Banda knows: Claude Code's or Codex's,
 /// told by the two strictest, which each offers always. Another Harness's
 /// mode named `default` is not enough.
 fn native(options: &[acp::SessionConfigOption]) -> bool {
@@ -1591,7 +1588,7 @@ fn failed(name: &str, error: &acp::Error) -> Ending {
 }
 
 /// A form's fields, from the JSON Schema the Harness asks with. A field of
-/// a kind Bandaso cannot show is left out.
+/// a kind Banda cannot show is left out.
 fn form_fields(schema: &acp::ElicitationSchema) -> Option<Vec<Field>> {
     let required = schema.required.as_deref().unwrap_or_default();
     let choices = |options: &[acp::EnumOption]| {
@@ -1969,7 +1966,7 @@ mod tests {
     }
 
     #[test]
-    fn a_form_with_a_required_field_bandaso_cannot_show_is_not_asked() {
+    fn a_form_with_a_required_field_banda_cannot_show_is_not_asked() {
         let future = serde_json::json!({ "type": "colour" });
         let optional = schema(serde_json::json!({ "shade": future }), &[]);
         assert_eq!(form_fields(&optional).unwrap(), []);
@@ -2030,7 +2027,7 @@ mod tests {
     }
 
     #[test]
-    fn modes_bandaso_does_not_know_are_options_like_any_other() {
+    fn modes_banda_does_not_know_are_options_like_any_other() {
         let other = vec![
             select("mode", "ask", &["ask", "code"])
                 .category(acp::SessionConfigOptionCategory::Mode),

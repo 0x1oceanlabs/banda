@@ -1,17 +1,17 @@
 import { Fragment, useState } from "react"
-import { Button } from "@bandaso/ui/components/button"
+import { Button } from "@banda/ui/components/button"
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
-} from "@bandaso/ui/components/dropdown-menu"
+} from "@banda/ui/components/dropdown-menu"
 import {
   Trace,
   TraceIcon,
   TraceLine,
   TraceTitle,
-} from "@bandaso/ui/components/trace"
+} from "@banda/ui/components/trace"
 import {
   ChevronDownIcon,
   ChevronUpIcon,

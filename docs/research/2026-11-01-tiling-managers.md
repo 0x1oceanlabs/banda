@@ -597,7 +597,7 @@ Sources: sections 1–5.
 - tmux: https://github.com/tmux/tmux/wiki/Getting-Started
 - termios: https://man7.org/linux/man-pages/man3/termios.3.html
 - Bash readline commands: https://www.gnu.org/software/bash/manual/html_node/Miscellaneous-Commands.html, https://www.gnu.org/software/bash/manual/html_node/Commands-For-Moving.html
-- Banda (local): `~/code/bandaso-app/app/web/src/keys.ts`
+- Banda (local): `~/code/banda-app/app/web/src/keys.ts`
 
 **Sections 7–8 (tags)**
 - [Z1] https://github.com/zed-industries/zed/blob/main/assets/keymaps/default-linux.json · [Z2] …/default-macos.json · [Z3] https://github.com/zed-industries/zed/blob/main/docs/src/key-bindings.md · [Z4] https://github.com/zed-industries/zed/blob/main/assets/settings/default.json

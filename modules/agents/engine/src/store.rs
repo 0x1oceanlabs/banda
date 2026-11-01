@@ -5,7 +5,7 @@ use crate::model::{
     Asking, Body, Failure, Image, ImageId, Item, ItemId, LISTED_MESSAGE, LatestTurn, ListedThread,
     Offer, QuestionState, Settings, ThreadId, ThreadSummary, TurnId, TurnState, TurnView, Usage,
 };
-use bandaso_kernel::{AgentId, Error, Participant, Refusal};
+use banda_kernel::{AgentId, Error, Participant, Refusal};
 use rusqlite::{Connection, OptionalExtension, Row, params};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
@@ -69,7 +69,7 @@ UPDATE agents_threads SET settings = '{"mode":"supervised"}';
 ALTER TABLE agents_threads ADD COLUMN usage TEXT;
 "#,
     r#"
--- The images messages carry; their bytes are files in .bandaso/images/.
+-- The images messages carry; their bytes are files in .banda/images/.
 -- One is added before its message is sent, and belongs to that message
 -- once it is.
 CREATE TABLE agents_images (

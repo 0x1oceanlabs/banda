@@ -2,7 +2,7 @@
 import type { Input } from "./Input";
 
 /**
- * One field of a Question's form. The Harness wrote it; Bandaso shows it.
+ * One field of a Question's form. The Harness wrote it; Banda shows it.
  */
 export type Field = { id: string, 
 /**

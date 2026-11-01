@@ -279,7 +279,7 @@ test("a Person signs in from the turn that needed it, and it goes again", async 
   await expect(
     thread.getByRole("button", { name: "Sign in with Fake account" })
   ).toBeVisible()
-  await expect(thread.getByText(/bandaso-fake-agent --sign-in$/)).toBeVisible()
+  await expect(thread.getByText(/banda-fake-agent --sign-in$/)).toBeVisible()
   await page.screenshot({ path: "test-results/4-sign-in.png" })
 
   await thread
@@ -405,7 +405,7 @@ test("a Person sees who is signed in to a Harness, signs in and out", async () =
   const settings = page.getByRole("region", { name: "Harnesses" })
   const fake = settings.getByRole("group", { name: "Fake AI" })
   await expect(
-    fake.getByText(/^fake-cli 1\.0\.0 · bandaso-fake-agent \d/)
+    fake.getByText(/^fake-cli 1\.0\.0 · banda-fake-agent \d/)
   ).toBeVisible()
   await expect(
     fake
@@ -861,7 +861,7 @@ test("the composer walks earlier messages, keeps a draft and edits what waits", 
   const drafts = () =>
     page.evaluate(() =>
       Object.keys(localStorage)
-        .filter((key) => key.startsWith("bandaso.agents.draft."))
+        .filter((key) => key.startsWith("banda.agents.draft."))
         .map((key) => localStorage.getItem(key))
     )
   await composer.fill("half written")
@@ -1035,7 +1035,7 @@ test("what the Agent does by itself shows in a turn of its own", async () => {
 test("the sidebar is arranged by sidebar.toml, and its view menu writes the file", async () => {
   window = await startWindow({ sidebar: '# mine\npreset = "spaces"\n' })
   const { page, dir } = window
-  const file = join(dir, "look/sidebar.toml")
+  const file = join(dir, "config/sidebar.toml")
   const { composer } = await firstThread(page)
   await composer.fill("hello")
   await composer.press("Enter")
@@ -1063,9 +1063,9 @@ test("the sidebar is arranged by sidebar.toml, and its view menu writes the file
   await expect(view).toHaveAccessibleName("View: places")
 
   // A preset of the Person's own is a file, and the menu lists it.
-  mkdirSync(join(dir, "look/sidebars"))
+  mkdirSync(join(dir, "config/sidebars"))
   writeFileSync(
-    join(dir, "look/sidebars/flat.toml"),
+    join(dir, "config/sidebars/flat.toml"),
     '[group]\nby = "none"\n[row]\nlines = 1\n'
   )
   writeFileSync(file, 'preset = "flat"\n')
@@ -1182,7 +1182,7 @@ test("the window takes its look from look.toml, and again on each save", async (
     look: '[gaps]\ninner = 12\n[colors]\naccent = "#e07a3f"\n',
   })
   const { page, dir } = window
-  const file = join(dir, "look/look.toml")
+  const file = join(dir, "config/look.toml")
   const { thread } = await firstThread(page)
   const root = page.locator("html")
   await expect(root).toHaveCSS("--gap-inner", "12px")

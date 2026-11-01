@@ -9,7 +9,7 @@
  */
 import type { ComponentType } from "react"
 import type { LucideIcon } from "lucide-react"
-import type { Engine, JsonValue, SpaceId } from "@bandaso/contract"
+import type { Engine, JsonValue, SpaceId } from "@banda/contract"
 import type { MarkState } from "./components/banda-mark"
 
 /**

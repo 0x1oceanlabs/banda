@@ -3,14 +3,14 @@
  * the settings in; the sections and their rows out. The sidebar only draws
  * what it returns. Pure, so plain tests cover every preset and key.
  */
-import type { SpaceId, SpaceSummary } from "@bandaso/contract"
+import type { SpaceId, SpaceSummary } from "@banda/contract"
 import {
   loudest,
   type MarkState,
   waits,
   works,
-} from "@bandaso/ui/components/banda-mark"
-import type { Listed } from "@bandaso/ui/pane"
+} from "@banda/ui/components/banda-mark"
+import type { Listed } from "@banda/ui/pane"
 import type { Settings, State } from "./settings"
 
 /** One row: what a module listed, the Space it is in, where it stands. */

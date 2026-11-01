@@ -1,12 +1,12 @@
 /**
- * The look as the window's child: `bandaso look --follow` (ADR 0007,
+ * The look as the window's child: `banda look --follow` (ADR 0007,
  * decision 10). Each line it prints is the whole look; this keeps the
  * last one, hands it to whoever listens, and starts the program again if
  * it dies. The look is this machine's, so it needs no engine.
  */
 import { type ChildProcess, spawn } from "node:child_process"
 import { createInterface } from "node:readline"
-import { type Look, shown } from "@bandaso/contract/look"
+import { type Look, shown } from "@banda/contract/look"
 
 const FIRST_WAIT = 500
 const LONGEST_WAIT = 10_000
@@ -62,7 +62,7 @@ export class LookProcess {
       try {
         look = JSON.parse(line)
       } catch {
-        console.error(`bandaso: the look said something unexpected: ${line}`)
+        console.error(`banda: the look said something unexpected: ${line}`)
         return
       }
       this.#wait = FIRST_WAIT
@@ -70,7 +70,7 @@ export class LookProcess {
       for (const listener of this.#listeners) listener(look)
     })
     child.once("error", (error) => {
-      console.error(`bandaso: the look did not start: ${error.message}`)
+      console.error(`banda: the look did not start: ${error.message}`)
     })
     child.once("close", (code, signal) => {
       this.#child = null
@@ -78,7 +78,7 @@ export class LookProcess {
       const wait = this.#wait
       this.#wait = Math.min(wait * 2, LONGEST_WAIT)
       console.error(
-        `bandaso: the look stopped (${signal ?? `code ${code}`}); starting it again in ${wait} ms`
+        `banda: the look stopped (${signal ?? `code ${code}`}); starting it again in ${wait} ms`
       )
       setTimeout(() => this.start(), wait)
     })

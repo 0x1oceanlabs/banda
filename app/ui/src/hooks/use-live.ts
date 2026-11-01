@@ -6,7 +6,7 @@ import {
   Refused,
   type Refusal,
   type SpaceId,
-} from "@bandaso/contract"
+} from "@banda/contract"
 
 /**
  * A view a Pane reads once and then keeps current from the Space's log.

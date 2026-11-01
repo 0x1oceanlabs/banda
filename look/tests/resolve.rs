@@ -1,10 +1,10 @@
 //! The look as a Person meets it: their files, Omarchy's theme and
 //! Hyprland's windows, in throwaway folders.
 
-use bandaso_look::hyprland::Windows;
-use bandaso_look::motion::Move;
-use bandaso_look::theme::{Origin, Places};
-use bandaso_look::{Look, Shown, follow, resolve};
+use banda_look::hyprland::Windows;
+use banda_look::motion::Move;
+use banda_look::theme::{Origin, Places};
+use banda_look::{Look, Shown, follow, resolve};
 use std::fs;
 use std::path::Path;
 use std::sync::mpsc;
@@ -244,7 +244,7 @@ fn columns_and_fonts_come_through_the_layers() {
     assert!(look.problems.is_empty(), "{:?}", look.problems);
     assert_eq!(look.columns.presets, ["1/4", "3/4"]);
     assert_eq!(look.columns.default, "3/4");
-    assert_eq!(look.columns.center, bandaso_look::columns::Center::Always);
+    assert_eq!(look.columns.center, banda_look::columns::Center::Always);
     assert_eq!(look.vars["--font-family-mono"], "\"Iosevka\", monospace");
     assert_eq!(look.vars["--text-root"], "14px");
 
@@ -334,7 +334,7 @@ fn following_prints_each_change_and_keeps_the_last_good_look() {
 
 #[test]
 fn notify_in_look_toml_reaches_the_window_and_a_wrong_value_is_named() {
-    use bandaso_look::notify::{Quiet, System, Toasts};
+    use banda_look::notify::{Quiet, System, Toasts};
     let machine = Machine::new(false);
     let look = machine.look();
     assert_eq!(look.notify.system, System::Away);
@@ -361,7 +361,7 @@ fn notify_in_look_toml_reaches_the_window_and_a_wrong_value_is_named() {
 
 #[test]
 fn sound_in_look_toml_reaches_the_window_and_a_wrong_key_is_named() {
-    use bandaso_look::sound::{Call, Families, Family};
+    use banda_look::sound::{Call, Families, Family};
     let machine = Machine::new(false);
     let look = machine.look();
     assert_eq!(look.sound.family, Families::One(Family::Banda));
@@ -405,7 +405,7 @@ fn the_template_says_the_defaults() {
                 .is_some_and(|(k, _)| k.chars().all(|c| c.is_ascii_lowercase() || c == '-'));
         starts.then_some(rest)
     }
-    let uncommented: String = bandaso_look::TEMPLATE
+    let uncommented: String = banda_look::TEMPLATE
         .lines()
         .filter(|line| !line.starts_with("# theme"))
         .map(|line| key(line).unwrap_or(line))

@@ -10,7 +10,7 @@
 
 use crate::history::{Decoder, History, Since};
 use crate::model::{Ended, Open, Piece, Size};
-use bandaso_kernel::{SpaceId, Stream};
+use banda_kernel::{SpaceId, Stream};
 use pty_process::{OwnedReadPty, OwnedWritePty};
 use rustix::process::{Pid, Signal, kill_process_group};
 use std::os::unix::process::ExitStatusExt;

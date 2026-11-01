@@ -2,7 +2,7 @@
  * Images a message carries, as the window handles them: which files can
  * go, how large ones are made smaller, and how their bytes travel as text.
  */
-import type { ImageData } from "@bandaso/contract/agents"
+import type { ImageData } from "@banda/contract/agents"
 
 const MB = 1024 * 1024
 /** The kinds the engine takes; the largest image, the most per message

@@ -5,7 +5,7 @@ date: 2026-10-31
 
 # One engine owns the work; a small kernel and modules; windows only show
 
-Roma decided on 2026-10-31 to start Bandaso in a new repository. Bandaso is an
+Roma decided on 2026-10-31 to start Banda in a new repository. Banda is an
 app for working with Agents, built as a tiling workspace for people who do not
 write code. It starts on one computer. Later it runs on your own server or in
 our cloud, and after that it serves teams.
@@ -14,7 +14,7 @@ The previous product, Banda, started from a multi-user Server: Caddy, Auth on
 Better Auth, Device codes, Docker workstations, and Chat in a terminal. Of
 about 206 thousand lines in that repository, around 14 thousand fit the new
 app. The rest serves the Server, multi-user work and the TUI. Banda keeps
-running for our own team until Bandaso can replace it. What we learned there
+running for our own team until Banda can replace it. What we learned there
 (Harness quirks, permissions, steering) moves over as knowledge, not as
 code.
 
@@ -25,7 +25,7 @@ code.
    every module's data. The window talks to it through one API: JSON over
    WebSocket, with TypeScript types generated from Rust. The window on your
    computer and, later, a browser tab on our cloud are the same kind of
-   client of the same API. Everything a window can do, the `bandaso` CLI can
+   client of the same API. Everything a window can do, the `banda` CLI can
    do too, so people, scripts and Agents can drive the app.
 
 2. **The window is Electron, React and shadcn/ui.** Claude, Codex and
@@ -56,22 +56,22 @@ code.
    interfaces with one implementation, and no event sourcing except where
    the work already is a stream of events (an Agent's Thread).
 
-5. **A Space is a folder you can see.** It is `~/Bandaso/<name>/` by default:
-   the files the Agents and the Person work on, plus `.bandaso/` with the
+5. **A Space is a folder you can see.** It is `~/Banda/<name>/` by default:
+   the files the Agents and the Person work on, plus `.banda/` with the
    Space's SQLite and event log. Copying the folder moves the Space, to
    another computer or a server. No vendor holds your work.
    _Changed by ADR 0005, decision 6: a Space is any folder on a machine,
-   and Bandaso keeps its data outside the folder, in the engine's state._
+   and Banda keeps its data outside the folder, in the engine's state._
 
 6. **Our model is at the centre, and ACP is the first adapter.** Threads,
-   turns, tool calls and Questions are Bandaso's own model. ACP is the
+   turns, tool calls and Questions are Banda's own model. ACP is the
    first and default way to reach a Harness, and the Harness list comes
    from the ACP Registry. A native adapter (for example Codex's app-server)
    is added only where ACP blocks something users need. The rest of the
    engine reads a Harness's capabilities, never its name.
 
-7. **The Harness decides when to ask; Bandaso relays.** A Harness asks for
-   permission by its own settings. Bandaso shows the Question in plain words,
+7. **The Harness decides when to ask; Banda relays.** A Harness asks for
+   permission by its own settings. Banda shows the Question in plain words,
    passes the Harness's own options through unchanged, and returns the
    Person's answer. It writes no command rules of its own. It never offers a
    Harness's own "always" answer, because that answer is written to files
@@ -93,7 +93,7 @@ code.
    accounts or a company's OIDC on your own server, our accounts in the
    cloud. Our cloud is one OIDC provider and one relay, with no special
    path in the code. A relay only connects and never signs anyone in.
-   Bandaso holds no model provider's credentials.
+   Banda holds no model provider's credentials.
 
 10. **The first step is the agents and browser modules.** One Person works
     with one Agent in a Thread, with a browser beside it. Chat (Rooms with

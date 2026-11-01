@@ -1,7 +1,7 @@
 /**
  * The desktop window. It runs the engine as its child, serves the page
- * from `app://bandaso` and hands the page the engine's address. It also
- * runs `bandaso look --follow` and hands the page each look (ADR 0007),
+ * from `app://banda` and hands the page the engine's address. It also
+ * runs `banda look --follow` and hands the page each look (ADR 0007),
  * and writes the preset the page picks into `sidebar.toml` (ADR 0008);
  * nothing else crosses from Node to the page (docs/architecture.md,
  * "Processes").
@@ -19,19 +19,19 @@ import {
   session,
   shell,
 } from "electron"
-import type { Notice } from "@bandaso/web/host"
+import type { Notice } from "@banda/web/host"
 import { EngineProcess } from "./engine"
 import { firstFrame, LookProcess } from "./look"
 import { type Desktop, RecordedDesktop, SystemDesktop } from "./notices"
 import { ensure, writePreset } from "./sidebar"
 
 /** The page's origin; the engine lets it in (kernel/src/api.rs, APP_ORIGIN). */
-const ORIGIN = "app://bandaso"
+const ORIGIN = "app://banda"
 /**
  * In development, the Vite server's address; the page is served from it.
  * A packaged app ignores it: no other page ever gets the engine.
  */
-const DEV_PAGE = app.isPackaged ? undefined : process.env.BANDASO_PAGE
+const DEV_PAGE = app.isPackaged ? undefined : process.env.BANDA_PAGE
 
 const CSP = [
   "default-src 'self'",
@@ -51,15 +51,15 @@ const CSP = [
 const here = app.getAppPath()
 const pageFolder = resolve(here, "../web/dist")
 const engineBinary =
-  process.env.BANDASO_ENGINE ??
+  process.env.BANDA_ENGINE ??
   (app.isPackaged
-    ? join(process.resourcesPath, "bandaso")
-    : resolve(here, "../../target/debug/bandaso"))
+    ? join(process.resourcesPath, "banda")
+    : resolve(here, "../../target/debug/banda"))
 
 // The window keeps its own state beside the engine's when that moves, so
 // a test or a second setup never shares a profile with the first.
-if (process.env.BANDASO_STATE) {
-  app.setPath("userData", join(process.env.BANDASO_STATE, "window"))
+if (process.env.BANDA_STATE) {
+  app.setPath("userData", join(process.env.BANDA_STATE, "window"))
 }
 
 protocol.registerSchemesAsPrivileged([
@@ -75,11 +75,11 @@ let window: BrowserWindow | null = null
 
 /**
  * Where the page's notices go: the desktop's notification server, or, for
- * the end-to-end tests, a list they read (`BANDASO_DESKTOP=recorded`).
+ * the end-to-end tests, a list they read (`BANDA_DESKTOP=recorded`).
  */
 const desktop: Desktop =
-  process.env.BANDASO_DESKTOP === "recorded"
-    ? ((globalThis as { bandasoDesktop?: RecordedDesktop }).bandasoDesktop =
+  process.env.BANDA_DESKTOP === "recorded"
+    ? ((globalThis as { bandaDesktop?: RecordedDesktop }).bandaDesktop =
         new RecordedDesktop())
     : new SystemDesktop()
 
@@ -116,19 +116,19 @@ async function ready(): Promise<void> {
   ipcMain.handle("engine", (event) => {
     const from = event.senderFrame?.url ?? ""
     if (!fromPage(from))
-      throw new Error("Only Bandaso's page may ask for the engine.")
+      throw new Error("Only Banda's page may ask for the engine.")
     return engine.address()
   })
   ipcMain.handle("look", (event) => {
     const from = event.senderFrame?.url ?? ""
     if (!fromPage(from))
-      throw new Error("Only Bandaso's page may ask for the look.")
+      throw new Error("Only Banda's page may ask for the look.")
     return look.current()
   })
   ipcMain.handle("sidebar.preset", (event, name: unknown) => {
     const from = event.senderFrame?.url ?? ""
     if (!fromPage(from))
-      throw new Error("Only Bandaso's page may change the sidebar.")
+      throw new Error("Only Banda's page may change the sidebar.")
     const sidebar = look.current()?.sidebar
     if (!sidebar) throw new Error("The sidebar's file is not known yet.")
     if (!sidebar.presets.some((preset) => preset.name === name))
@@ -138,7 +138,7 @@ async function ready(): Promise<void> {
   ipcMain.handle("sidebar.edit", async (event) => {
     const from = event.senderFrame?.url ?? ""
     if (!fromPage(from))
-      throw new Error("Only Bandaso's page may open the sidebar's file.")
+      throw new Error("Only Banda's page may open the sidebar's file.")
     const sidebar = look.current()?.sidebar
     if (!sidebar) throw new Error("The sidebar's file is not known yet.")
     ensure(sidebar.file)
@@ -179,7 +179,7 @@ async function page(request: Request): Promise<Response> {
   const url = new URL(request.url)
   const path = resolve(pageFolder, `.${decodeURIComponent(url.pathname)}`)
   const file = path === pageFolder ? join(pageFolder, "index.html") : path
-  if (url.host !== "bandaso" || !file.startsWith(pageFolder + sep)) {
+  if (url.host !== "banda" || !file.startsWith(pageFolder + sep)) {
     return new Response("Not found", { status: 404 })
   }
   const found = await net.fetch(pathToFileURL(file).toString())
@@ -202,7 +202,7 @@ function openWindow(): BrowserWindow {
     minWidth: 640,
     minHeight: 420,
     show: false,
-    title: "Bandaso",
+    title: "Banda",
     backgroundColor:
       (current && firstFrame(current, nativeTheme.shouldUseDarkColors)) ??
       (nativeTheme.shouldUseDarkColors ? "#0a0a0a" : "#ffffff"),

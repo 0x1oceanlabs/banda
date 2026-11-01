@@ -1,9 +1,9 @@
 //! The terminal module through the kernel, as a window uses it: a program
 //! starts on a PTY, prints, reads what is typed, and ends.
 
-use bandaso_kernel::{AgentId, Code, CommandId, Kernel, Participant, PersonId, SpaceId, Stream};
-use bandaso_terminal::Terminals;
-use bandaso_terminal::model::{Piece, TerminalId};
+use banda_kernel::{AgentId, Code, CommandId, Kernel, Participant, PersonId, SpaceId, Stream};
+use banda_terminal::Terminals;
+use banda_terminal::model::{Piece, TerminalId};
 use serde_json::{Value, json};
 use std::sync::Arc;
 use std::time::Duration;
@@ -43,7 +43,7 @@ impl World {
         }
     }
 
-    async fn call(&self, method: &str, params: Value) -> Result<Value, bandaso_kernel::Refusal> {
+    async fn call(&self, method: &str, params: Value) -> Result<Value, banda_kernel::Refusal> {
         self.call_in(self.space, method, params).await
     }
 
@@ -52,7 +52,7 @@ impl World {
         space: SpaceId,
         method: &str,
         params: Value,
-    ) -> Result<Value, bandaso_kernel::Refusal> {
+    ) -> Result<Value, banda_kernel::Refusal> {
         let person = Participant::Person(self.owner);
         self.kernel
             .call(person, method, Some(space), None, params)
@@ -86,7 +86,7 @@ impl World {
         &self,
         terminal: TerminalId,
         script: &str,
-    ) -> Result<Value, bandaso_kernel::Refusal> {
+    ) -> Result<Value, banda_kernel::Refusal> {
         let open = json!({
             "terminal": terminal, "program": "sh", "args": ["-c", script],
             "size": { "cols": 100, "rows": 30 },

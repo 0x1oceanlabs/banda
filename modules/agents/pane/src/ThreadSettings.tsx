@@ -3,8 +3,8 @@ import type {
   Mode,
   Offer,
   Settings,
-} from "@bandaso/contract/agents"
-import { Button } from "@bandaso/ui/components/button"
+} from "@banda/contract/agents"
+import { Button } from "@banda/ui/components/button"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -13,7 +13,7 @@ import {
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuTrigger,
-} from "@bandaso/ui/components/dropdown-menu"
+} from "@banda/ui/components/dropdown-menu"
 import {
   ChevronDownIcon,
   ListTodoIcon,

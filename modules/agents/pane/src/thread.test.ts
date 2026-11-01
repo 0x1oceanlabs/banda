@@ -1,4 +1,4 @@
-import type { Event } from "@bandaso/contract"
+import type { Event } from "@banda/contract"
 import { expect, test } from "vitest"
 import { agent, event, person } from "./testing"
 import {

@@ -1,6 +1,6 @@
 import { useState } from "react"
-import type { Item, TurnView } from "@bandaso/contract/agents"
-import { Spinner } from "@bandaso/ui/components/spinner"
+import type { Item, TurnView } from "@banda/contract/agents"
+import { Spinner } from "@banda/ui/components/spinner"
 import {
   Trace,
   TraceCollapsible,
@@ -9,8 +9,8 @@ import {
   TraceIcon,
   TraceLine,
   TraceTitle,
-} from "@bandaso/ui/components/trace"
-import { useNow } from "@bandaso/ui/hooks/use-now"
+} from "@banda/ui/components/trace"
+import { useNow } from "@banda/ui/hooks/use-now"
 import { CircleCheckIcon, CircleSlashIcon, LayersIcon } from "lucide-react"
 import { duration, foldTitle, type Line, summary } from "./timeline"
 

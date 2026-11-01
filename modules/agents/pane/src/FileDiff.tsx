@@ -1,4 +1,4 @@
-import { Button } from "@bandaso/ui/components/button"
+import { Button } from "@banda/ui/components/button"
 import {
   Diff,
   DiffCounts,
@@ -7,7 +7,7 @@ import {
   DiffLine,
   DiffLines,
   DiffPath,
-} from "@bandaso/ui/components/diff"
+} from "@banda/ui/components/diff"
 import { SquareArrowOutUpRightIcon } from "lucide-react"
 import type { FileChange } from "./changes"
 import { parts } from "./diff"

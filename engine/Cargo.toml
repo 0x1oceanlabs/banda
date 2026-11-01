@@ -1,6 +1,6 @@
 [package]
-name = "bandaso"
-description = "The bandaso binary: `bandaso serve` runs the engine, and its other commands are the CLI, a client of the same API."
+name = "banda"
+description = "The banda binary: `banda serve` runs the engine, and its other commands are the CLI, a client of the same API."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -9,11 +9,11 @@ publish.workspace = true
 
 [dependencies]
 axum.workspace = true
-bandaso-agents = { path = "../modules/agents/engine" }
-bandaso-terminal = { path = "../modules/terminal/engine" }
-bandaso-kernel = { path = "../kernel" }
-bandaso-look = { path = "../look" }
-bandaso-skill = { path = "../modules/skill" }
+banda-agents = { path = "../modules/agents/engine" }
+banda-terminal = { path = "../modules/terminal/engine" }
+banda-kernel = { path = "../kernel" }
+banda-look = { path = "../look" }
+banda-skill = { path = "../modules/skill" }
 clap.workspace = true
 dirs.workspace = true
 futures.workspace = true

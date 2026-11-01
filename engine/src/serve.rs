@@ -1,14 +1,14 @@
-//! `bandaso serve`: the one engine of this machine (ADR 0001, decision 1).
+//! `banda serve`: the one engine of this machine (ADR 0001, decision 1).
 //! It opens the Spaces under the root with their modules and serves the API
 //! on this machine only.
 
 use crate::Failure;
 use crate::places::{HOST, Places, Running};
-use bandaso_agents::Agents;
-use bandaso_agents::settings::Harnesses;
-use bandaso_kernel::api::{self, OwnerSecret};
-use bandaso_kernel::{Kernel, PROTOCOL};
-use bandaso_terminal::Terminals;
+use banda_agents::Agents;
+use banda_agents::settings::Harnesses;
+use banda_kernel::api::{self, OwnerSecret};
+use banda_kernel::{Kernel, PROTOCOL};
+use banda_terminal::Terminals;
 use std::fs::{File, TryLockError};
 use std::io::Read;
 
@@ -34,7 +34,7 @@ pub async fn serve(places: Places, port: u16, with_parent: bool) -> Result<(), F
         Ok(()) => {}
         Err(TryLockError::WouldBlock) => {
             return Err(Failure::broken(
-                "Bandaso's engine already runs with this state folder.",
+                "Banda's engine already runs with this state folder.",
             ));
         }
         Err(TryLockError::Error(error)) => return Err(Failure::broken(error)),
@@ -59,7 +59,7 @@ pub async fn serve(places: Places, port: u16, with_parent: bool) -> Result<(), F
         secret: running.secret.clone(),
         owner,
     };
-    let engine = format!("bandaso {}", env!("CARGO_PKG_VERSION"));
+    let engine = format!("banda {}", env!("CARGO_PKG_VERSION"));
     let app = api::router(kernel, identity, engine);
     places.announce(&running).map_err(Failure::broken)?;
     if with_parent {

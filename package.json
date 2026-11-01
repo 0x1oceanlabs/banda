@@ -1,15 +1,15 @@
 {
-  "name": "bandaso",
+  "name": "banda",
   "version": "0.0.0",
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "pnpm --filter @bandaso/desktop dev",
+    "dev": "pnpm --filter @banda/desktop dev",
     "build": "pnpm -r build",
     "typecheck": "pnpm -r typecheck",
     "lint": "eslint .",
     "test": "pnpm -r test",
-    "e2e": "pnpm --filter @bandaso/desktop e2e",
+    "e2e": "pnpm --filter @banda/desktop e2e",
     "format": "prettier --write .",
     "format:check": "prettier --check ."
   },

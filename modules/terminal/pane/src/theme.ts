@@ -1,4 +1,4 @@
-import type { Color, Theme } from "@bandaso/ghostty"
+import type { Color, Theme } from "@banda/ghostty"
 
 /**
  * The window's colours as Ghostty takes them, read from the CSS tokens

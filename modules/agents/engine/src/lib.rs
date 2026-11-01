@@ -48,7 +48,7 @@ mod store;
 mod turn;
 
 use acp::Connection;
-use bandaso_kernel::{
+use banda_kernel::{
     AgentId, Call, Effect, Error, Module, ModuleSpace, OnRestart, Outcome, Participant, Refusal,
     Right, Settled, SpaceId, Tx, decode,
 };

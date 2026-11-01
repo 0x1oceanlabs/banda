@@ -6,7 +6,7 @@ import {
   Suggestions,
   SuggestionsEmpty,
   SuggestionTitle,
-} from "@bandaso/ui/components/suggestions"
+} from "@banda/ui/components/suggestions"
 
 /**
  * What fits a word typed in the composer, in a list above its box: slash

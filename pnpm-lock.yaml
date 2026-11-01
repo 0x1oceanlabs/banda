@@ -38,10 +38,10 @@ importers:
 
   app/desktop:
     devDependencies:
-      '@bandaso/contract':
+      '@banda/contract':
         specifier: workspace:*
         version: link:../../contract
-      '@bandaso/web':
+      '@banda/web':
         specifier: workspace:*
         version: link:../web
       '@playwright/test':
@@ -84,7 +84,7 @@ importers:
 
   app/ui:
     dependencies:
-      '@bandaso/contract':
+      '@banda/contract':
         specifier: workspace:*
         version: link:../../contract
       '@base-ui/react':
@@ -151,16 +151,16 @@ importers:
 
   app/web:
     dependencies:
-      '@bandaso/agents-pane':
+      '@banda/agents-pane':
         specifier: workspace:*
         version: link:../../modules/agents/pane
-      '@bandaso/contract':
+      '@banda/contract':
         specifier: workspace:*
         version: link:../../contract
-      '@bandaso/terminal-pane':
+      '@banda/terminal-pane':
         specifier: workspace:*
         version: link:../../modules/terminal/pane
-      '@bandaso/ui':
+      '@banda/ui':
         specifier: workspace:*
         version: link:../ui
       lucide-react:
@@ -212,10 +212,10 @@ importers:
 
   modules/agents/pane:
     dependencies:
-      '@bandaso/contract':
+      '@banda/contract':
         specifier: workspace:*
         version: link:../../../contract
-      '@bandaso/ui':
+      '@banda/ui':
         specifier: workspace:*
         version: link:../../../app/ui
       lucide-react:
@@ -243,13 +243,13 @@ importers:
 
   modules/terminal/pane:
     dependencies:
-      '@bandaso/contract':
+      '@banda/contract':
         specifier: workspace:*
         version: link:../../../contract
-      '@bandaso/ghostty':
+      '@banda/ghostty':
         specifier: workspace:*
         version: link:../../../app/ghostty
-      '@bandaso/ui':
+      '@banda/ui':
         specifier: workspace:*
         version: link:../../../app/ui
       lucide-react:

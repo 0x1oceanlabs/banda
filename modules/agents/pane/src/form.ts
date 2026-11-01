@@ -2,7 +2,7 @@
  * A Question's form as a Person fills it in: what they have typed so far,
  * what of it the Harness gets, and how the answer reads afterwards.
  */
-import type { Field, FieldValue } from "@bandaso/contract/agents"
+import type { Field, FieldValue } from "@banda/contract/agents"
 
 /** Each field as typed: text and numbers as strings, a toggle, the picks.
  * An empty string is a field left alone, a toggle among them. */

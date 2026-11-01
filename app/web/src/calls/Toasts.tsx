@@ -1,6 +1,6 @@
-import { BandaMark, MARK_WORDS } from "@bandaso/ui/components/banda-mark"
-import type { Chime } from "@bandaso/ui/sound"
-import { cn } from "@bandaso/ui/lib/utils"
+import { BandaMark, MARK_WORDS } from "@banda/ui/components/banda-mark"
+import type { Chime } from "@banda/ui/sound"
+import { cn } from "@banda/ui/lib/utils"
 import { SHOWN, type Toast } from "./toasts"
 import type { Heard } from "./useCalls"
 

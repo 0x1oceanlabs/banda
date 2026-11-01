@@ -1,7 +1,7 @@
 //! The Person's own CLI that a Harness's adapter runs instead of a copy of
 //! its own (ADR 0003, decision 3): Claude Code's `claude`, Codex's `codex`.
 //! Each time the Harness starts, the engine finds the CLI and asks its
-//! version; a CLI that is not there stops the start, so Bandaso never runs
+//! version; a CLI that is not there stops the start, so Banda never runs
 //! a bundled one in its place. A CLI older than the entry's `minimum` runs,
 //! with a warning (ADR 0003, decision 3).
 
@@ -33,7 +33,7 @@ pub async fn find(harness: &Harness) -> Result<(Harness, Option<CliView>), Strin
         (Some(version), Some(minimum)) if older(version, minimum) => {
             let name = Path::new(&path).file_name().unwrap_or_default();
             Some(format!(
-                "{} {version} is older than {minimum}, which Bandaso's {} adapter was built \
+                "{} {version} is older than {minimum}, which Banda's {} adapter was built \
                  for. It still runs, but some things may not work until you update it.",
                 name.display(),
                 harness.name

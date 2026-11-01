@@ -2,7 +2,7 @@ import tailwindcss from "@tailwindcss/vite"
 import react from "@vitejs/plugin-react"
 import { defineConfig } from "vite"
 
-// The desktop loads the built page from app://bandaso, so every path is
+// The desktop loads the built page from app://banda, so every path is
 // relative; in development it loads the dev server instead.
 export default defineConfig({
   base: "./",

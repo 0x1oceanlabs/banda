@@ -1,4 +1,4 @@
-import type { ThreadList } from "@bandaso/contract/agents"
+import type { ThreadList } from "@banda/contract/agents"
 import { expect, test } from "vitest"
 import { applyThreads } from "./list"
 import { event, person } from "./testing"

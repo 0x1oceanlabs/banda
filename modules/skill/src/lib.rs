@@ -10,8 +10,8 @@
 //!   This crate gathers them when it is built; a new part of Banda adds a
 //!   topic and changes nothing here.
 //!
-//! The same text reaches an Agent in several ways: `bandaso skill` prints
-//! it, `bandaso skill --export` writes it as an Agent Skills folder, and
+//! The same text reaches an Agent in several ways: `banda skill` prints
+//! it, `banda skill --export` writes it as an Agent Skills folder, and
 //! the MCP module will serve it.
 
 use std::fmt::Write as _;
@@ -33,7 +33,7 @@ pub struct Topic {
 /// How an Agent reaches a topic from the core.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Reach {
-    /// It runs `bandaso skill <topic>`.
+    /// It runs `banda skill <topic>`.
     Command,
     /// It reads `references/<topic>.md` beside `SKILL.md`.
     Files,
@@ -62,7 +62,7 @@ pub fn core(reach: Reach) -> String {
     let mut text = CORE.trim_end().to_owned();
     text.push_str("\n\n## Topics\n\n");
     text.push_str(match reach {
-        Reach::Command => "Read one with `bandaso skill <topic>`.\n\n",
+        Reach::Command => "Read one with `banda skill <topic>`.\n\n",
         Reach::Files => "Each is a file in `references/`.\n\n",
     });
     for topic in topics() {

@@ -3,8 +3,8 @@
 
 use crate::Failure;
 use crate::places::Places;
-use bandaso_kernel::api::{ClientFrame, EngineFrame};
-use bandaso_kernel::{CommandId, Event, EventFilter, PROTOCOL, SpaceId};
+use banda_kernel::api::{ClientFrame, EngineFrame};
+use banda_kernel::{CommandId, Event, EventFilter, PROTOCOL, SpaceId};
 use futures::{SinkExt, StreamExt};
 use serde_json::Value;
 use tokio_tungstenite::tungstenite::Message;
@@ -24,7 +24,7 @@ impl Client {
         let (socket, _) = tokio_tungstenite::connect_async(running.url())
             .await
             .map_err(|_| {
-                Failure::broken("Bandaso's engine does not answer. Start it with: bandaso serve")
+                Failure::broken("Banda's engine does not answer. Start it with: banda serve")
             })?;
         let mut client = Client { socket, next_id: 1 };
         client

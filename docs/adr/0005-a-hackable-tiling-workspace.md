@@ -58,7 +58,7 @@ The evidence is in two notes: [tiling managers](../research/2026-11-01-tiling-ma
 6. **A Space is a folder on a machine** (_decided_).
    - **What a Space is.** One folder on one machine, this one or another, plus everything Banda keeps for it: its Threads, its terminals and its browser profile. This is what a project is in T3 Code and a space is in Herdr. A Space is the boundary: an Agent works in its own Space's folder.
    - **Which folder.** Any existing folder opens as a Space, a git repository too. `~/Banda/<name>/` stays the default place for a new one.
-   - **Where the data lives.** Banda's data lives outside the folder, in the engine's state on that machine (`~/.local/share/bandaso/spaces/<id>/`), as in T3 Code and Herdr. The folder holds only the work, so there is nothing to commit by mistake and nothing a sync tool can break.
+   - **Where the data lives.** Banda's data lives outside the folder, in the engine's state on that machine (`~/.local/share/banda/spaces/<id>/`), as in T3 Code and Herdr. The folder holds only the work, so there is nothing to commit by mistake and nothing a sync tool can break.
      - This changes ADR 0001, decision 5: copying the folder no longer moves the Threads. An export can, once someone needs it.
      - A Space whose folder moved asks where it went.
    - **Another machine.** A Space on another machine is one whose engine runs there. The window connects to it over SSH, and the Agents, terminals and files work where the folder is. The Space list names each Space's machine. Where a browser Pane runs for such a Space is still open.
@@ -117,14 +117,14 @@ The evidence is in two notes: [tiling managers](../research/2026-11-01-tiling-ma
    - The files live in `~/.config/banda/`, beside `harnesses.toml`: `keys.toml`, `theme.toml` and the settings.
    - Shipped defaults are read-only. The Person's file adds, replaces or removes binds.
    - A file applies once it is saved. On an error, the last good version stays in force, and a notice names the file and the line.
-   - `bandaso check` validates a file before it is saved.
+   - `banda check` validates a file before it is saved.
    - One reset chord cannot be rebound.
    - The settings page edits the same files, so there is one source of truth.
 
 12. **Every module, ours too, is built on the contract a module from elsewhere gets.**
    - A module has a `module.toml`. It declares its Panes, actions, commands, events, tables, MCP tools and a settings schema. The window's Pane registry, the palette, the key sheet and the skill's reference are all built from these manifests.
    - No module of ours takes a path that another module lacks. What ours need goes into the contract. An API still settling is marked unstable in the manifest, and the marks are counted, so the debt stays visible.
-   - **Panes are React with `@bandaso/ui`** (_decided_): shadcn/ui on preset b0 and the theme's tokens, the same for every module. Every module follows the theme, and a new block goes into `@bandaso/ui` before any module uses it.
+   - **Panes are React with `@banda/ui`** (_decided_): shadcn/ui on preset b0 and the theme's tokens, the same for every module. Every module follows the theme, and a new block goes into `@banda/ui` before any module uses it.
    - A module from elsewhere runs its engine part as a process that speaks the same engine API. The engine starts and stops it. Our modules stay crates in the one binary for now.
 
 13. **Open like Linux** (_decided_).
@@ -137,9 +137,9 @@ The evidence is in two notes: [tiling managers](../research/2026-11-01-tiling-ma
       - It turns the tools that modules declare in their manifests into MCP tools.
       - A tool call becomes that module's command, made by the Agent as a Participant, through the kernel's access decision.
       - No other module speaks MCP. The agents module only hands the server to each ACP session it opens.
-    - **It is the same program in another mode, UNIX style.** `bandaso mcp` speaks MCP on stdio, which every ACP agent supports, and talks to the engine over the API. The session's token tells the engine which Thread's Agent is calling.
+    - **It is the same program in another mode, UNIX style.** `banda mcp` speaks MCP on stdio, which every ACP agent supports, and talks to the engine over the API. The session's token tells the engine which Thread's Agent is calling.
     - **The Banda skill comes through it.** Its `instructions` are the short hand-written part: the words, how to change things safely and where things live. A guide tool hands out the reference topic by topic: actions, commands, tools, config files and their schemas. The reference is generated from the manifests, so it does not go stale.
-    - `bandaso describe` shows what is open and running now, to a Person and to an Agent alike.
+    - `banda describe` shows what is open and running now, to a Person and to an Agent alike.
     - Nothing is written into the Space's folder or into a Harness's own config.
 
 15. **The base first: Threads, the terminal, the browser** (_decided_). The browser is a module: a Pane with a page that the Person and the Space's Agents share, and one sign-in profile per Space. Agents drive it through its MCP tools. It gets its own ADR when it is built. (ADR 0013 made it the window's, with one profile for every Space and every Agent.)
@@ -156,7 +156,7 @@ The evidence is in two notes: [tiling managers](../research/2026-11-01-tiling-ma
 - ADR 0001, decision 10, still holds: modules from elsewhere come after our base. This ADR shapes the contract they will get, so that nothing changes for them later.
 - Each new seam gets an architecture test:
   - registries come only from manifests;
-  - a Pane imports only the API, `@bandaso/ui`, React and its icons;
+  - a Pane imports only the API, `@banda/ui`, React and its icons;
   - every action has a description.
 - The order of work, each step its own PR:
   1. the list of actions, Left Alt, `keys.toml`, the palette and the key sheet;
@@ -166,7 +166,7 @@ The evidence is in two notes: [tiling managers](../research/2026-11-01-tiling-ma
   5. the MCP module, and calm placement with its marks;
   6. the sidebar, the bar and a Pane in its own window;
   7. the browser module;
-  8. the Banda skill and `bandaso describe`;
+  8. the Banda skill and `banda describe`;
   9. the theme file, motion and the drawer.
 
   Spaces on other machines and Threads in their own worktrees come after these.

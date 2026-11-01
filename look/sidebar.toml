@@ -1,6 +1,6 @@
 # How Banda's sidebar arranges your Threads. Every key is optional: what
 # you leave out comes from the preset, and what the preset leaves out from
-# Banda's defaults, written below. Check a change with: bandaso look check
+# Banda's defaults, written below. Check a change with: banda look check
 #
 # The presets: "inbox" (what needs you first), "spaces" (Threads under
 # their Spaces), "places" (Spaces above, Threads by need), or one of your

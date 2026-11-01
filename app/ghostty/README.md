@@ -1,4 +1,4 @@
-# @bandaso/ghostty
+# @banda/ghostty
 
 A terminal drawn by Ghostty on a canvas, for the window's terminals. It is
 T3 Code's browser adapter over the official `libghostty-vt` C ABI compiled
@@ -26,4 +26,4 @@ Only import paths, so the files find each other here, and the tests import
 `vitest` instead of T3's `vite-plus/test`. T3's tests of its own terminal
 drawer are not brought: they test T3's transport, not the adapter.
 
-`src/index.ts` is Bandaso's: it names what the window uses.
+`src/index.ts` is Banda's: it names what the window uses.

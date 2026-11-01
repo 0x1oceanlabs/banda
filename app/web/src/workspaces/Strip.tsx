@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useRef } from "react"
-import type { Engine, SpaceId } from "@bandaso/contract"
-import type { PaneState } from "@bandaso/ui/pane"
+import type { Engine, SpaceId } from "@banda/contract"
+import type { PaneState } from "@banda/ui/pane"
 import { columnsOf, moveOf } from "../look"
 import { Moving } from "../motion"
 import { Choices } from "../registry"

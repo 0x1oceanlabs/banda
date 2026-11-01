@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import type { Engine, SpaceId } from "@bandaso/contract"
+import type { Engine, SpaceId } from "@banda/contract"
 import type {
   Defaults,
   Failure,
@@ -11,16 +11,16 @@ import type {
   Sent,
   TurnView,
   Image,
-} from "@bandaso/contract/agents"
-import { Button } from "@bandaso/ui/components/button"
+} from "@banda/contract/agents"
+import { Button } from "@banda/ui/components/button"
 import {
   Empty,
   EmptyDescription,
   EmptyHeader,
   EmptyMedia,
   EmptyTitle,
-} from "@bandaso/ui/components/empty"
-import { Markdown } from "@bandaso/ui/components/markdown"
+} from "@banda/ui/components/empty"
+import { Markdown } from "@banda/ui/components/markdown"
 import {
   MessageScroller,
   MessageScrollerButton,
@@ -28,8 +28,8 @@ import {
   MessageScrollerItem,
   MessageScrollerProvider,
   MessageScrollerViewport,
-} from "@bandaso/ui/components/message-scroller"
-import { Spinner } from "@bandaso/ui/components/spinner"
+} from "@banda/ui/components/message-scroller"
+import { Spinner } from "@banda/ui/components/spinner"
 import {
   Trace,
   TraceCollapsible,
@@ -38,12 +38,12 @@ import {
   TraceIcon,
   TraceLine,
   TraceTitle,
-} from "@bandaso/ui/components/trace"
-import { useAct } from "@bandaso/ui/hooks/use-act"
-import { useInFront } from "@bandaso/ui/hooks/use-in-front"
-import { clock } from "@bandaso/ui/lib/words"
-import { READ_AGAIN, type Source, useLive } from "@bandaso/ui/hooks/use-live"
-import { definePane, paneOf, type PaneProps } from "@bandaso/ui/pane"
+} from "@banda/ui/components/trace"
+import { useAct } from "@banda/ui/hooks/use-act"
+import { useInFront } from "@banda/ui/hooks/use-in-front"
+import { clock } from "@banda/ui/lib/words"
+import { READ_AGAIN, type Source, useLive } from "@banda/ui/hooks/use-live"
+import { definePane, paneOf, type PaneProps } from "@banda/ui/pane"
 import {
   ArrowDownIcon,
   BotIcon,

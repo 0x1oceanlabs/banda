@@ -171,7 +171,7 @@ impl Store {
 
         let (jobs, inbox) = mpsc::channel::<Job>();
         std::thread::Builder::new()
-            .name(format!("bandaso-writer {}", path.display()))
+            .name(format!("banda-writer {}", path.display()))
             .spawn(move || {
                 while let Ok(job) = inbox.recv() {
                     job(&mut writer);
@@ -434,7 +434,7 @@ fn migrate(sql: &mut Connection, ledger: &str, steps: &[&str]) -> Result<(), Err
     let known = i64::try_from(steps.len()).unwrap_or(i64::MAX);
     if done > known {
         return Err(Refusal::conflict(format!(
-            "This Space was opened by a newer Bandaso ({ledger} has {done} steps, this one knows {known})."
+            "This Space was opened by a newer Banda ({ledger} has {done} steps, this one knows {known})."
         ))
         .into());
     }

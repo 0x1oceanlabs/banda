@@ -1,7 +1,7 @@
 import { useCallback, useState } from "react"
-import type { Engine, JsonValue, SpaceId } from "@bandaso/contract"
-import type { Account, HarnessView } from "@bandaso/contract/agents"
-import { Button } from "@bandaso/ui/components/button"
+import type { Engine, JsonValue, SpaceId } from "@banda/contract"
+import type { Account, HarnessView } from "@banda/contract/agents"
+import { Button } from "@banda/ui/components/button"
 import {
   Card,
   CardAction,
@@ -9,7 +9,7 @@ import {
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@bandaso/ui/components/card"
+} from "@banda/ui/components/card"
 import {
   Dialog,
   DialogClose,
@@ -18,7 +18,7 @@ import {
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from "@bandaso/ui/components/dialog"
+} from "@banda/ui/components/dialog"
 import {
   Field,
   FieldContent,
@@ -26,13 +26,13 @@ import {
   FieldLabel,
   FieldLegend,
   FieldSet,
-} from "@bandaso/ui/components/field"
-import { RadioGroup, RadioGroupItem } from "@bandaso/ui/components/radio-group"
-import { ScrollArea } from "@bandaso/ui/components/scroll-area"
-import { Spinner } from "@bandaso/ui/components/spinner"
-import { useAct } from "@bandaso/ui/hooks/use-act"
-import { useRead } from "@bandaso/ui/hooks/use-read"
-import { definePane, type PaneProps } from "@bandaso/ui/pane"
+} from "@banda/ui/components/field"
+import { RadioGroup, RadioGroupItem } from "@banda/ui/components/radio-group"
+import { ScrollArea } from "@banda/ui/components/scroll-area"
+import { Spinner } from "@banda/ui/components/spinner"
+import { useAct } from "@banda/ui/hooks/use-act"
+import { useRead } from "@banda/ui/hooks/use-read"
+import { definePane, type PaneProps } from "@banda/ui/pane"
 import { LogOutIcon, RotateCwIcon, SettingsIcon } from "lucide-react"
 import { type EnterKey, useEnterKey } from "./enter-key"
 import { type Open, Problem, Warning, Ways } from "./SignIn"

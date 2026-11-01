@@ -1,13 +1,13 @@
 //! The agents module through the kernel's interface, with the fake agent
 //! from `tools/fake-agent` as the Harness: a real process speaking ACP.
 
-use bandaso_agents::Agents;
-use bandaso_agents::model::{
+use banda_agents::Agents;
+use banda_agents::model::{
     Body, Choice, Exit, Failure, ItemId, Mode, OptionValue, QuestionState, Settings, StepState,
     ThreadList, ThreadView, ToolContent, ToolStatus, TurnState,
 };
-use bandaso_agents::settings::{Cli, Harness, Harnesses};
-use bandaso_kernel::{AgentId, Code, CommandId, Kernel, Participant, PersonId, SpaceId};
+use banda_agents::settings::{Cli, Harness, Harnesses};
+use banda_kernel::{AgentId, Code, CommandId, Kernel, Participant, PersonId, SpaceId};
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as BASE64;
 use serde_json::{Value, json};
@@ -21,13 +21,13 @@ fn fake_agent() -> PathBuf {
     BUILT
         .get_or_init(|| {
             let status = std::process::Command::new(env!("CARGO"))
-                .args(["build", "-q", "-p", "bandaso-fake-agent"])
+                .args(["build", "-q", "-p", "banda-fake-agent"])
                 .status()
                 .expect("cargo runs");
             assert!(status.success(), "the fake agent builds");
             let deps = std::env::current_exe().unwrap();
             let profile = deps.parent().and_then(Path::parent).unwrap();
-            profile.join("bandaso-fake-agent")
+            profile.join("banda-fake-agent")
         })
         .clone()
 }
@@ -120,7 +120,7 @@ impl World {
         who: Participant,
         method: &str,
         params: Value,
-    ) -> Result<Value, bandaso_kernel::Refusal> {
+    ) -> Result<Value, banda_kernel::Refusal> {
         self.kernel
             .call(
                 who,
@@ -822,12 +822,12 @@ async fn signed_out(root: &Path, home: &Path) -> World {
 }
 
 impl World {
-    async fn sign_in(&self, who: Participant, way: &str) -> Result<Value, bandaso_kernel::Refusal> {
+    async fn sign_in(&self, who: Participant, way: &str) -> Result<Value, banda_kernel::Refusal> {
         let params = json!({ "harness": "fake", "way": way });
         self.call(who, "agents.sign_in", params).await
     }
 
-    async fn sign_in_for(&self, turn: &Value) -> Result<Value, bandaso_kernel::Refusal> {
+    async fn sign_in_for(&self, turn: &Value) -> Result<Value, banda_kernel::Refusal> {
         let params = json!({ "harness": "fake", "way": "fake-sign-in", "turn": turn });
         self.call(self.person(), "agents.sign_in", params).await
     }
@@ -979,10 +979,7 @@ async fn a_harness_says_who_is_signed_in_and_signs_out() {
     let (root, home) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
     let world = signed_out(root.path(), home.path()).await;
     let account = world.account().await;
-    assert_eq!(
-        account["adapter"]["name"], "bandaso-fake-agent",
-        "{account}"
-    );
+    assert_eq!(account["adapter"]["name"], "banda-fake-agent", "{account}");
     assert_eq!(account["signs_out"], false, "no one to sign out");
     let no_one = &account["signed_in_as"];
     assert_eq!(no_one["signed_in"], false, "{account}");
@@ -1065,7 +1062,7 @@ async fn a_cli_older_than_its_harness_supports_runs_and_its_threads_warn() {
     let (root, bin) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
     let cli = fake_cli(bin.path()).display().to_string();
     let world = World::new_with(root.path(), with_cli_since(&cli, Some("9.10.0"))).await;
-    let warning = "fake-cli 9.9.9 is older than 9.10.0, which Bandaso's Fake adapter was \
+    let warning = "fake-cli 9.9.9 is older than 9.10.0, which Banda's Fake adapter was \
                    built for. It still runs, but some things may not work until you update it.";
     let account = world.account().await;
     assert_eq!(account["cli"]["outdated"], warning, "{account}");
@@ -1085,7 +1082,7 @@ async fn a_cli_older_than_its_harness_supports_runs_and_its_threads_warn() {
 #[tokio::test]
 async fn a_harness_whose_cli_is_not_installed_does_not_start() {
     let root = tempfile::tempdir().unwrap();
-    let world = World::new_with(root.path(), with_cli("bandaso-no-such-cli")).await;
+    let world = World::new_with(root.path(), with_cli("banda-no-such-cli")).await;
     let refused = world
         .call(
             world.person(),
@@ -1630,7 +1627,7 @@ const PNG: &[u8] = b"\x89PNG\r\n\x1a\n a picture";
 /// Where the Space keeps an image's bytes.
 fn image_file(root: &Path, image: &Value) -> PathBuf {
     let id = image["id"].as_str().unwrap();
-    root.join("Work/.bandaso/images").join(id)
+    root.join("Work/.banda/images").join(id)
 }
 
 impl World {
@@ -1642,7 +1639,7 @@ impl World {
         mime: &str,
         bytes: &[u8],
         name: Option<&str>,
-    ) -> Result<Value, bandaso_kernel::Refusal> {
+    ) -> Result<Value, banda_kernel::Refusal> {
         let data = BASE64.encode(bytes);
         let params = json!({ "mime": mime, "data": data, "name": name });
         self.call(who, "agents.attach", params).await
@@ -1837,7 +1834,7 @@ impl World {
         sent
     }
 
-    async fn on_turn(&self, method: &str, turn: &Value) -> Result<Value, bandaso_kernel::Refusal> {
+    async fn on_turn(&self, method: &str, turn: &Value) -> Result<Value, banda_kernel::Refusal> {
         self.call(self.person(), method, json!({ "turn": turn }))
             .await
     }
@@ -1900,7 +1897,7 @@ async fn a_harness_that_cannot_steer_stops_for_the_message() {
         .await;
     assert_eq!(state(&view, &wait["turn"]), Some(TurnState::Stopped));
     let said = "notice: Fake cannot take a message while it works, \
-                so Bandaso stopped it to send yours.";
+                so Banda stopped it to send yours.";
     assert!(position(&view, said) < position(&view, "message: instead this"));
     assert_eq!(last_reply(&view), "message: You said: instead this");
 }
@@ -2298,7 +2295,7 @@ async fn a_command_that_ends_after_its_turn_opens_no_turn() {
 
 /// Starts the real Claude Code and Codex adapters on the Person's own CLIs
 /// and asks what they run and who is signed in; no model is called. Run it
-/// by hand: `cargo test -p bandaso-agents --test agents real -- --ignored
+/// by hand: `cargo test -p banda-agents --test agents real -- --ignored
 /// --nocapture`.
 #[tokio::test]
 #[ignore = "starts the real adapters, which npx may download"]
@@ -2336,7 +2333,7 @@ const EDIT: &str =
 /// Thread, allowed once, into `tests/recordings/<harness>-edit.jsonl`,
 /// with who is signed in and the Person's home folder written out. It
 /// calls the models, which costs money: run it by hand when an adapter
-/// changes, `cargo test -p bandaso-agents --test agents record --
+/// changes, `cargo test -p banda-agents --test agents record --
 /// --ignored --nocapture`, and read the files before committing them.
 #[tokio::test]
 #[ignore = "calls the real models, which costs money"]

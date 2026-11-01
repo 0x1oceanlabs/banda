@@ -13,7 +13,7 @@
     of `portable-pty` 0.9.0 and `pty-process` 0.5.4.
   - **CLI**: `claude` 2.1.316 and `codex-cli` 0.166.0 on Roma's laptop: their
     `--help`, and the field names (not values) of `claude auth status --json`.
-  - **E**: Bandaso at `a61a2e9`.
+  - **E**: Banda at `a61a2e9`.
 - **How:** we read code and docs, and ran only those help and status
   commands. Web sources were read on 2026-11-01.
 - **Limits:** evidence, not a decision. Line numbers drift. "Inferred" marks
@@ -172,7 +172,7 @@ IME and copy path, wrapped-line links, font loading and tests. ghostty-web
 adds the xterm.js API, so xterm code ports by an import change
 (GW `README.md:7`).
 
-### Which for Bandaso's window
+### Which for Banda's window
 
 **Take T3's adapter**, vendored as one package (`app/terminal`, with T3's and
 Ghostty's MIT notices), its WASM built by its script and committed:
@@ -194,7 +194,7 @@ refused: ghostty-web `0.4.0-next.21`, pinned exactly.
 ## 3. T3 Code's provider sign-in
 
 **A. An ACP agent with a `terminal` auth method** (Settings → provider →
-Account → Sign in). Bandaso's decision matches this one.
+Account → Sign in). Banda's decision matches this one.
 
 1. The server re-reads `authMethods` and picks the method (`RA:227-276`).
 2. It closes the ACP connection and spawns the agent's own program with the
@@ -277,7 +277,7 @@ The app advises against several accounts (`S/MultipleAccountsNote.tsx:16-36`).
   `unauthenticated`, `unknown`; type, label, email, `canLogout`), `message`,
   `usageLimits`, the advisories, `updateState` (`SV:55-73`, `:206-267`).
 
-**Where T3 reads credential files** (Bandaso reads none): Claude's OAuth
+**Where T3 reads credential files** (Banda reads none): Claude's OAuth
 token in `<config>/.credentials.json` for reset credits
 (`apps/server/src/provider/claudeResetCredits.ts:142`); `~/.codex/auth.json`
 and `~/.claude.json` for a telemetry ID
@@ -286,7 +286,7 @@ and `~/.claude.json` for a telemetry ID
 providers' `auth.json` for usage (e.g.
 `packages/provider-cursor/src/server/usageLimits.ts:119`).
 
-**What Bandaso can learn without reading a file:**
+**What Banda can learn without reading a file:**
 
 - *`_auth/status_update`*, pushed by both adapters: `{kind, label, detail,
   account: {email, organization, plan}}`, `kind` one of `account`,
@@ -294,7 +294,7 @@ providers' `auth.json` for usage (e.g.
   X `src/AuthStatusMeta.ts:38-57`). Both push after `initialize` and on
   change; silence means "cannot tell" (C `:11-37`; X `:13-31`). Claude's
   re-reads at each prompt, so a login made elsewhere shows (C `:19-22`).
-  Bandaso drops it today (the ACP note, line 58).
+  Banda drops it today (the ACP note, line 58).
 - *The CLIs:* `claude auth status --json` gives `loggedIn`, `authMethod`,
   `apiProvider`, `email`, `orgName`, `subscriptionType`, `configDirectory`
   (CLI), and the adapter runs it itself with a 5 s limit (C `:50-52`).
@@ -303,7 +303,7 @@ providers' `auth.json` for usage (e.g.
   advertised (S `authentication.mdx:196-232`), or `claude auth logout` /
   `codex logout` (CLI).
 - *The commands:* Claude's adapter offers terminal methods only when the
-  client declares `auth.terminal` or `_meta["terminal-auth"]`, and Bandaso
+  client declares `auth.terminal` or `_meta["terminal-auth"]`, and Banda
   declares neither (the ACP note, line 51). The subscription method is the
   adapter's program with `--cli auth login --claudeai`
   (C `src/acp-agent.ts:3015-3045`); `--cli` runs `CLAUDE_CODE_EXECUTABLE`
@@ -320,7 +320,7 @@ providers' `auth.json` for usage (e.g.
 |---|---|---|---|---|---|
 | `portable-pty` (wezterm) | 0.9.0, 2025-02-11 | MIT | no: blocking `Read`/`Write` (`src/lib.rs:88-107`) | ConPTY (`src/lib.rs:400-410`) | `nix` 0.28, `anyhow`, `serial2`, `filedescriptor`. Kill is SIGHUP to the pid, SIGKILL after 5×50 ms, never the group (`src/lib.rs:323-372`). Unreleased fixes on wezterm main: Windows kill (2026-06-07), `windows-sys` (2026-08-25) |
 | `pty-process` | 0.5.4, 2026-10-19 | MIT | yes, feature `async`: `Pty` is `AsyncRead + AsyncWrite`, `into_split`, `resize` (`src/pty.rs:45-98`) | no (inferred: rustix pty, no Windows code) | wraps `tokio::process::Command` with `kill_on_drop` (`src/command.rs:81-85`); the child leads a new session with the pty as controlling terminal (`src/lib.rs:28-36`, `src/sys.rs:149-158`). Only `rustix` 1.1.5 and `tokio` |
-| `rustix` | 1.1.6, 2026-10-27 | Apache-2.0/MIT | by hand (`AsyncFd`) | no | `openpt`/`grantpt`/`ptsname` (`src/pty.rs:91-171`), `kill_process_group` (`src/process/kill.rs:35`); already in Bandaso (E `Cargo.lock:1534-1535`) |
+| `rustix` | 1.1.6, 2026-10-27 | Apache-2.0/MIT | by hand (`AsyncFd`) | no | `openpt`/`grantpt`/`ptsname` (`src/pty.rs:91-171`), `kill_process_group` (`src/process/kill.rs:35`); already in Banda (E `Cargo.lock:1534-1535`) |
 | `nix` | 0.31.3, 2026-05-11 | MIT | by hand | no | `openpty`, `setsid`, `killpg`; a second libc wrapper |
 | `rustix-openpty` | 0.2.0, 2025-03-06 | Apache-2.0/MIT | no | no | `openpty` only |
 | `tokio-pty-process` | 0.4.0, 2019-06-05 | MIT/Apache-2.0 | old tokio | no | abandoned |
@@ -331,11 +331,11 @@ thread; it is the freshest; it adds only `rustix`, which we already build.
 Its child leads a session, so the group is the child's pid and
 `rustix::process::kill_process_group` takes the whole tree: SIGHUP,
 SIGTERM, then SIGKILL after a grace, as T3 does (`TM:110`). The tokio child
-gives the async `wait()` the sign-in needs. Bandaso names no Windows target;
+gives the async `wait()` the sign-in needs. Banda names no Windows target;
 if one comes, `portable-pty` behind the same small port (open, read, write,
 resize, wait, kill).
 
-## 5. A proposed shape for Bandaso
+## 5. A proposed shape for Banda
 
 **A module of its own, `terminal`** (`modules/terminal/engine` and `pane`),
 not part of agents: a shell Pane and the sign-in are two uses of one thing,
@@ -388,7 +388,7 @@ and the Pane says so and offers Restart.
 2. The window picks a Terminal ID, calls `agents.sign_in {harness,
    terminal}`, and opens the terminal Pane on that ID.
 3. Agents resolves the command. If the adapter advertised a terminal method
-   (Bandaso must then declare `auth.terminal`): the Harness entry's own
+   (Banda must then declare `auth.terminal`): the Harness entry's own
    program and env plus the method's args and env (S
    `authentication.mdx:169-188`); for Claude that runs the person's
    `claude auth login --claudeai`. Otherwise the entry's sign-in command,

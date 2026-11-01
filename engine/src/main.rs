@@ -1,15 +1,15 @@
-//! `bandaso`: the engine and its CLI in one program.
+//! `banda`: the engine and its CLI in one program.
 //!
-//! - `bandaso serve` runs this machine's engine.
-//! - `bandaso call <method>` calls one API method and prints `{"ok": …}`.
-//! - `bandaso follow --space <id>` prints the Space's events, one JSON
+//! - `banda serve` runs this machine's engine.
+//! - `banda call <method>` calls one API method and prints `{"ok": …}`.
+//! - `banda follow --space <id>` prints the Space's events, one JSON
 //!   object per line.
-//! - `bandaso look` prints the window's look, resolved from Omarchy's
+//! - `banda look` prints the window's look, resolved from Omarchy's
 //!   theme, Hyprland and `~/.config/banda/look.toml`, with the sidebar's
 //!   arrangement from `sidebar.toml`; `--follow` prints it again on each
 //!   change. It needs no engine: the look is this machine's.
-//! - `bandaso skill` prints the Banda skill, what an Agent needs to know to
-//!   work in Banda and change it; `bandaso skill <topic>` prints a topic.
+//! - `banda skill` prints the Banda skill, what an Agent needs to know to
+//!   work in Banda and change it; `banda skill <topic>` prints a topic.
 //!
 //! When the engine refuses (the call, the hello or the follow), the CLI
 //! prints `{"error": {"code", "message"}}` and exits 1. When no engine
@@ -20,7 +20,7 @@ mod client;
 mod places;
 mod serve;
 
-use bandaso_kernel::{CommandId, EventFilter, Refusal, SpaceId};
+use banda_kernel::{CommandId, EventFilter, Refusal, SpaceId};
 use clap::{Parser, Subcommand};
 use client::Client;
 use places::Places;
@@ -32,9 +32,9 @@ use std::process::ExitCode;
 
 #[derive(Parser)]
 #[command(
-    name = "bandaso",
+    name = "banda",
     version,
-    about = "Bandaso: a tiling workspace for working with Agents."
+    about = "Banda: a tiling workspace for working with Agents."
 )]
 struct Cli {
     #[command(subcommand)]
@@ -146,7 +146,7 @@ impl Failure {
                 ExitCode::FAILURE
             }
             Failure::Broken(words) => {
-                eprintln!("bandaso: {words}");
+                eprintln!("banda: {words}");
                 ExitCode::from(2)
             }
         }
@@ -162,7 +162,7 @@ fn main() -> ExitCode {
     }
     tracing_subscriber::fmt()
         .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_env("BANDASO_LOG")
+            tracing_subscriber::EnvFilter::try_from_env("BANDA_LOG")
                 .unwrap_or_else(|_| "info".into()),
         )
         .with_writer(std::io::stderr)
@@ -219,22 +219,22 @@ async fn run(command: Command, places: Places) -> Result<(), Failure> {
     }
 }
 
-/// `bandaso skill`: text built into the program, no engine.
+/// `banda skill`: text built into the program, no engine.
 fn skill(topic: Option<String>, export: Option<PathBuf>) -> ExitCode {
-    use bandaso_skill::Reach;
+    use banda_skill::Reach;
 
     if let Some(folder) = export {
-        return match bandaso_skill::export(&folder) {
+        return match banda_skill::export(&folder) {
             Ok(()) => ExitCode::SUCCESS,
             Err(error) => Failure::Broken(format!("{}: {error}", folder.display())).exit(),
         };
     }
     let text = match topic {
-        None => bandaso_skill::core(Reach::Command),
-        Some(name) => match bandaso_skill::topic(&name) {
+        None => banda_skill::core(Reach::Command),
+        Some(name) => match banda_skill::topic(&name) {
             Some(topic) => topic.body.to_owned(),
             None => {
-                let names: Vec<_> = bandaso_skill::topics().iter().map(|t| t.name).collect();
+                let names: Vec<_> = banda_skill::topics().iter().map(|t| t.name).collect();
                 return Failure::Broken(format!(
                     "there is no topic \"{name}\"; the topics are {}",
                     names.join(", ")
@@ -249,10 +249,10 @@ fn skill(topic: Option<String>, export: Option<PathBuf>) -> ExitCode {
     ExitCode::SUCCESS
 }
 
-/// `bandaso look`: no engine, no runtime, only files and Hyprland's socket.
+/// `banda look`: no engine, no runtime, only files and Hyprland's socket.
 fn look(what: Option<LookCommand>, follow: bool) -> ExitCode {
-    use bandaso_look::hyprland::Hyprland;
-    use bandaso_look::theme::Places;
+    use banda_look::hyprland::Hyprland;
+    use banda_look::theme::Places;
 
     let places = Places::from_env();
     let mut out = std::io::stdout().lock();
@@ -261,13 +261,13 @@ fn look(what: Option<LookCommand>, follow: bool) -> ExitCode {
         |value: serde_json::Value| writeln!(out, "{value}").and_then(|()| out.flush()).is_ok();
     match what {
         None if follow => {
-            bandaso_look::follow(&places, Hyprland::from_env(), |look| print(json!(look)));
+            banda_look::follow(&places, Hyprland::from_env(), |look| print(json!(look)));
             ExitCode::SUCCESS
         }
         None => {
             let hyprland = Hyprland::from_env();
             let windows = || hyprland.as_ref().and_then(|h| h.windows().ok());
-            print(json!(bandaso_look::resolve(&places, &windows).look));
+            print(json!(banda_look::resolve(&places, &windows).look));
             ExitCode::SUCCESS
         }
         Some(LookCommand::Themes) => {
@@ -280,9 +280,9 @@ fn look(what: Option<LookCommand>, follow: bool) -> ExitCode {
         }
         Some(LookCommand::Check { files }) => {
             let problems = if files.is_empty() {
-                bandaso_look::resolve(&places, &|| None).look.problems
+                banda_look::resolve(&places, &|| None).look.problems
             } else {
-                bandaso_look::check(&files)
+                banda_look::check(&files)
             };
             for problem in &problems {
                 eprintln!("{problem}");

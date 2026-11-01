@@ -1,5 +1,5 @@
 [package]
-name = "bandaso-skill"
+name = "banda-skill"
 description = "The Banda skill: what an Agent needs to know to work in Banda and to change it for its Person. Each part of Banda writes its own topics; this crate gathers them."
 version.workspace = true
 edition.workspace = true

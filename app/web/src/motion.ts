@@ -1,10 +1,10 @@
 /**
  * Motion in the window (ADR 0007, decision 9): each event moves on the
- * spring or the easing `bandaso look` resolved for it. Springs run here,
+ * spring or the easing `banda look` resolved for it. Springs run here,
  * frame by frame, so a move sent somewhere else halfway keeps its speed,
  * as niri's do.
  */
-import type { Move, Spring } from "@bandaso/contract/look"
+import type { Move, Spring } from "@banda/contract/look"
 
 /** Where a value is and how fast it goes, per second. */
 export interface State {

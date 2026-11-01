@@ -9,7 +9,7 @@
     lines.
   - **S**: npm `streamdown` 2.7.1 and `@streamdown/code` 2.0.0, and the
     Streamdown docs through Context7.
-  - **B**: Bandaso at `39d4925`, `modules/agents/pane/src`.
+  - **B**: Banda at `39d4925`, `modules/agents/pane/src`.
 - **How:** we read code and docs and ran nothing.
 - **Limits:** evidence, not a decision. Line numbers drift. We did not run
   T3 Code from this clone; what it feels like comes from Roma using T3 Code

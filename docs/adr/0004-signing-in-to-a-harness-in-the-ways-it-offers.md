@@ -57,8 +57,8 @@ integration as in T3 Code. Roma can reverse it. The evidence is in
      restart would open a browser that nobody asked for.
 
 5. **The rest of ADR 0003, decision 4, stands.**
-   - Tokens never pass through Bandaso.
-   - Bandaso reads none of the Harness's credential files.
+   - Tokens never pass through Banda.
+   - Banda reads none of the Harness's credential files.
    - A second account is a second entry, with its own config folder.
 
 **Consequences.**

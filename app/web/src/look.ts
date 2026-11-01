@@ -1,6 +1,6 @@
 /**
  * The page's side of the look (ADR 0007, decision 11): it only applies
- * what `bandaso look` resolved. Every variable goes on the root element,
+ * what `banda look` resolved. Every variable goes on the root element,
  * over the defaults in globals.css, and the `dark` class follows the
  * scheme that shows. Until the first look comes, and outside the desktop,
  * the defaults show in the system's light or dark.
@@ -16,9 +16,9 @@ import {
   type Notify,
   type Problem,
   shown,
-} from "@bandaso/contract/look"
-import { DEFAULT_SIDEBAR, type Sidebar } from "@bandaso/contract/sidebar"
-import { DEFAULT_SOUND, type SoundSettings } from "@bandaso/ui/sound"
+} from "@banda/contract/look"
+import { DEFAULT_SIDEBAR, type Sidebar } from "@banda/contract/sidebar"
+import { DEFAULT_SOUND, type SoundSettings } from "@banda/ui/sound"
 import { DEFAULT_NOTIFY } from "./calls/settings"
 import type { Host } from "./host"
 

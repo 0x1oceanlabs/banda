@@ -1,7 +1,7 @@
 /** Gives the page its one bridge to the desktop (app/web/src/host.ts). */
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron"
-import type { Look } from "@bandaso/contract/look"
-import type { Host, Notice } from "@bandaso/web/host"
+import type { Look } from "@banda/contract/look"
+import type { Host, Notice } from "@banda/web/host"
 
 const host: Host = {
   engine: () => ipcRenderer.invoke("engine"),
@@ -33,4 +33,4 @@ const host: Host = {
   },
 }
 
-contextBridge.exposeInMainWorld("bandaso", host)
+contextBridge.exposeInMainWorld("banda", host)

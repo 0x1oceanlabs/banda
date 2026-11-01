@@ -1,4 +1,4 @@
-import { useMessageScroller } from "@bandaso/ui/components/message-scroller"
+import { useMessageScroller } from "@banda/ui/components/message-scroller"
 
 /** From this many messages a Thread is long enough for a minimap. */
 const FROM = 3

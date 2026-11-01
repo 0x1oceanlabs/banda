@@ -3,9 +3,9 @@ import type {
   Choice,
   Field as FormField,
   Input as FieldInput,
-} from "@bandaso/contract/agents"
-import { Button } from "@bandaso/ui/components/button"
-import { Checkbox } from "@bandaso/ui/components/checkbox"
+} from "@banda/contract/agents"
+import { Button } from "@banda/ui/components/button"
+import { Checkbox } from "@banda/ui/components/checkbox"
 import {
   Field,
   FieldContent,
@@ -15,9 +15,9 @@ import {
   FieldLabel,
   FieldLegend,
   FieldSet,
-} from "@bandaso/ui/components/field"
-import { Input } from "@bandaso/ui/components/input"
-import { RadioGroup, RadioGroupItem } from "@bandaso/ui/components/radio-group"
+} from "@banda/ui/components/field"
+import { Input } from "@banda/ui/components/input"
+import { RadioGroup, RadioGroupItem } from "@banda/ui/components/radio-group"
 import {
   type Draft,
   draftOf,

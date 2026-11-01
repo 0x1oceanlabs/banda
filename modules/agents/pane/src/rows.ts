@@ -4,8 +4,8 @@
  * The window arranges the rows; this says only what each one is. Pure, so
  * plain tests cover it.
  */
-import type { ListedThread } from "@bandaso/contract/agents"
-import { type Listed, paneOf } from "@bandaso/ui/pane"
+import type { ListedThread } from "@banda/contract/agents"
+import { type Listed, paneOf } from "@banda/ui/pane"
 import { markOf, type Seen } from "./marks"
 import { threadPane } from "./ThreadPane"
 

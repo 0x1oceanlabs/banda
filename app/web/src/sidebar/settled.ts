@@ -3,10 +3,10 @@
  * decision 4): one of the Person's own marks the sidebar keeps (ADR 0005,
  * decision 8), kept by the window as "seen" is.
  */
-import type { SpaceId } from "@bandaso/contract"
-import { works } from "@bandaso/ui/components/banda-mark"
-import { kept } from "@bandaso/ui/lib/kept"
-import type { Listed } from "@bandaso/ui/pane"
+import type { SpaceId } from "@banda/contract"
+import { works } from "@banda/ui/components/banda-mark"
+import { kept } from "@banda/ui/lib/kept"
+import type { Listed } from "@banda/ui/pane"
 import type { Lists } from "../bar/Watches"
 
 /** What the Person said of a row, and when: put away, or kept out. */
@@ -38,7 +38,7 @@ export function isSettled(
 }
 
 const says = kept(
-  "bandaso.sidebar.settled",
+  "banda.sidebar.settled",
   (say): say is Say =>
     typeof say === "object" &&
     say !== null &&

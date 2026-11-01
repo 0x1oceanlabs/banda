@@ -1,5 +1,5 @@
 [package]
-name = "bandaso-terminal"
+name = "banda-terminal"
 description = "The terminal module: programs a Person runs in a terminal, in the engine."
 version.workspace = true
 edition.workspace = true
@@ -9,7 +9,7 @@ publish.workspace = true
 
 [dependencies]
 async-trait.workspace = true
-bandaso-kernel = { path = "../../../kernel" }
+banda-kernel = { path = "../../../kernel" }
 pty-process.workspace = true
 rusqlite.workspace = true
 rustix.workspace = true

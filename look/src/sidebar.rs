@@ -3,7 +3,7 @@
 //! defaults. A preset is a file with the same keys: Banda's own ship in
 //! this crate, and the Person's are `~/.config/banda/sidebars/<name>.toml`.
 //!
-//! It is this machine's, as the look is, so `bandaso look` resolves it
+//! It is this machine's, as the look is, so `banda look` resolves it
 //! with the look, watches its files with the look's, and names its
 //! problems in the same list. The window only draws what it says.
 
@@ -475,7 +475,7 @@ fn stem(path: &Path) -> String {
         .unwrap_or_default()
 }
 
-/// Whether `path` is read as the sidebar's schema by `bandaso look check`:
+/// Whether `path` is read as the sidebar's schema by `banda look check`:
 /// a `sidebar.toml`, or a file in a `sidebars` folder.
 pub fn is_sidebar_file(path: &Path) -> Option<bool> {
     if path.file_name().is_some_and(|n| n == "sidebar.toml") {
