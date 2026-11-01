@@ -184,3 +184,13 @@
     @apply bg-background text-foreground;
   }
 }
+
+/* Words a find marks, as CSS highlights: all of them, and the one found
+   now. */
+::highlight(find) {
+  background-color: color-mix(in oklab, var(--color-primary) 22%, transparent);
+}
+::highlight(find-current) {
+  background-color: color-mix(in oklab, var(--color-primary) 55%, transparent);
+  color: var(--color-primary-foreground);
+}

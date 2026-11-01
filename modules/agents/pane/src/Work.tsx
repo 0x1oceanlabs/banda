@@ -25,12 +25,16 @@ type Render = (line: Line) => React.ReactNode
 export function WorkLine({
   items,
   live,
+  found,
   render,
 }: {
   items: Item[]
   live: boolean
+  /** It holds what the Person looks for, so it shows open. */
+  found: boolean
   render: Render
 }) {
+  const [open, setOpen] = useState(false)
   const latest = items.at(-1)?.body
   const title = !live
     ? summary(items)
@@ -39,7 +43,7 @@ export function WorkLine({
       : "Thinking"
   return (
     <Trace>
-      <TraceCollapsible>
+      <TraceCollapsible open={open || found} onOpenChange={setOpen}>
         <TraceCollapsibleTrigger>
           <TraceLine status={live ? "running" : undefined}>
             <TraceIcon>
@@ -65,16 +69,20 @@ export function WorkLine({
 export function Fold({
   turn,
   lines,
+  found,
   render,
 }: {
   turn: TurnView
   lines: Line[]
+  /** It holds what the Person looks for, so it shows open. */
+  found: boolean
   render: Render
 }) {
+  const [open, setOpen] = useState(false)
   const Icon = turn.state === "stopped" ? CircleSlashIcon : CircleCheckIcon
   return (
     <Trace>
-      <TraceCollapsible>
+      <TraceCollapsible open={open || found} onOpenChange={setOpen}>
         <TraceCollapsibleTrigger>
           <TraceLine>
             <TraceIcon>
