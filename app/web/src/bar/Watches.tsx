@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
-import type { Engine, SpaceId, SpaceSummary } from "@bandaso/contract"
-import type { Attention, Listed, Report, Watch } from "@bandaso/ui/pane"
+import type { Engine, SpaceId, SpaceSummary } from "@banda/contract"
+import type { Attention, Listed, Report, Watch } from "@banda/ui/pane"
 import { runs, watches } from "../registry"
 import { combine } from "./attention"
 

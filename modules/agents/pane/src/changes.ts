@@ -3,7 +3,7 @@
  * from git, so it holds in any Space (ADR 0010, decision 3). Pure, so plain
  * tests cover it.
  */
-import type { Item } from "@bandaso/contract/agents"
+import type { Item } from "@banda/contract/agents"
 import { counts, type Line, lineDiff } from "./diff"
 
 /** One file's change, line by line: how it was before and after. */

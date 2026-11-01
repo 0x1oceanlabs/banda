@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import { Refused, type Refusal } from "@bandaso/contract"
+import { Refused, type Refusal } from "@banda/contract"
 
 export type Read<T> =
   | { state: "loading" }

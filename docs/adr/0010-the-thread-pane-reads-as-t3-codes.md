@@ -37,7 +37,7 @@ asked to build all of it; the rest are our defaults and stay his to change.
 2. **Markdown through Streamdown** (_decided_). `streamdown` renders replies
    and thoughts while they stream; `@streamdown/code` highlights code with
    Shiki, in the theme's light and dark. We write no markdown pipeline of
-   our own. It lives in `@bandaso/ui` as one component, so other modules'
+   our own. It lives in `@banda/ui` as one component, so other modules'
    Panes render markdown the same way.
 
 3. **A turn's changed files, and the diff as its own Pane** (_decided_).
@@ -108,7 +108,7 @@ Pane, (4) Questions, (5) plan mode, (6) the composer, (7) scrolling,
 
 **Consequences.**
 
-- `@bandaso/ui` gains `streamdown` and `@streamdown/code`, and a
+- `@banda/ui` gains `streamdown` and `@streamdown/code`, and a
   markdown component other modules can use.
 - The agents module gains the Diff Pane.
 - ADR 0003's rule that a tool call shows its diff stays: the diff now

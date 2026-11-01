@@ -285,15 +285,15 @@ dependencies = [
 ]
 
 [[package]]
-name = "bandaso"
+name = "banda"
 version = "0.1.0"
 dependencies = [
  "axum",
- "bandaso-agents",
- "bandaso-kernel",
- "bandaso-look",
- "bandaso-skill",
- "bandaso-terminal",
+ "banda-agents",
+ "banda-kernel",
+ "banda-look",
+ "banda-skill",
+ "banda-terminal",
  "clap",
  "dirs",
  "futures",
@@ -309,12 +309,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "bandaso-agents"
+name = "banda-agents"
 version = "0.1.0"
 dependencies = [
  "agent-client-protocol",
  "async-trait",
- "bandaso-kernel",
+ "banda-kernel",
  "base64 0.22.1",
  "rusqlite",
  "serde",
@@ -328,7 +328,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "bandaso-fake-agent"
+name = "banda-fake-agent"
 version = "0.1.0"
 dependencies = [
  "agent-client-protocol",
@@ -338,7 +338,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "bandaso-kernel"
+name = "banda-kernel"
 version = "0.1.0"
 dependencies = [
  "async-trait",
@@ -357,7 +357,7 @@ dependencies = [
 ]
 
 [[package]]
-name = "bandaso-look"
+name = "banda-look"
 version = "0.1.0"
 dependencies = [
  "serde",
@@ -368,18 +368,18 @@ dependencies = [
 ]
 
 [[package]]
-name = "bandaso-skill"
+name = "banda-skill"
 version = "0.1.0"
 dependencies = [
  "tempfile",
 ]
 
 [[package]]
-name = "bandaso-terminal"
+name = "banda-terminal"
 version = "0.1.0"
 dependencies = [
  "async-trait",
- "bandaso-kernel",
+ "banda-kernel",
  "pty-process",
  "rusqlite",
  "rustix",

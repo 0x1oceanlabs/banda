@@ -4,9 +4,9 @@
  * it works, or it rests. The engine says only what happened; these rules
  * say what that means here. Pure, so plain tests cover them.
  */
-import type { ListedThread, TurnId, TurnView } from "@bandaso/contract/agents"
-import { loudest, type MarkState } from "@bandaso/ui/components/banda-mark"
-import type { Attention } from "@bandaso/ui/pane"
+import type { ListedThread, TurnId, TurnView } from "@banda/contract/agents"
+import { loudest, type MarkState } from "@banda/ui/components/banda-mark"
+import type { Attention } from "@banda/ui/pane"
 
 /**
  * The turn of a Thread its Person has seen since it ended, by Thread: what

@@ -1,6 +1,6 @@
 import { useEffect, useMemo } from "react"
-import { useLive } from "@bandaso/ui/hooks/use-live"
-import type { Watch, WatchProps } from "@bandaso/ui/pane"
+import { useLive } from "@banda/ui/hooks/use-live"
+import type { Watch, WatchProps } from "@banda/ui/pane"
 import { harnessName, useHarnesses } from "./harnesses"
 import { threadsSource } from "./list"
 import { attentionOf } from "./marks"

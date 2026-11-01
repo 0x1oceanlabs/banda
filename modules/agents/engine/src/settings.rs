@@ -3,12 +3,12 @@
 //! agent programs it can start.
 //!
 //! Before ADR 0006 a Space also had one file per Agent,
-//! `.bandaso/agents/<name>.toml`, naming the Agent's Harness. Only
+//! `.banda/agents/<name>.toml`, naming the Agent's Harness. Only
 //! [`old_agents`] reads them still, so the Threads from then learn their
 //! Harness; nothing writes them, and nothing removes them.
 
 use crate::model::{HarnessView, Program};
-use bandaso_kernel::AgentId;
+use banda_kernel::AgentId;
 use serde::Deserialize;
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
@@ -27,7 +27,7 @@ pub struct Harness {
     /// The Person's own CLI the program runs, when it runs one.
     #[serde(default)]
     pub cli: Option<Cli>,
-    /// A folder where each start of the program writes what Bandaso and
+    /// A folder where each start of the program writes what Banda and
     /// the Harness say to each other, one ACP frame per line, for tests to
     /// replay. Only a test sets it, never a Harness list: a recording holds
     /// everything said, a secret typed into a form too.
@@ -77,9 +77,9 @@ impl Harnesses {
         Self(harnesses.into())
     }
 
-    /// The Harnesses Bandaso starts when a machine names none: the ACP
+    /// The Harnesses Banda starts when a machine names none: the ACP
     /// adapters for Claude Code and Codex, at versions we checked, each
-    /// running the Person's own CLI. Each one signs in on its own; Bandaso
+    /// running the Person's own CLI. Each one signs in on its own; Banda
     /// holds no model provider's credentials.
     pub fn known() -> Self {
         let npx = |id: &str,
@@ -161,7 +161,7 @@ struct AgentFile {
 /// or the whole folder, is logged and skipped: the Space opens anyway, and
 /// only the Threads it names miss their Harness.
 pub fn old_agents(space: &Path) -> Vec<(AgentId, String)> {
-    let folder = space.join(".bandaso").join("agents");
+    let folder = space.join(".banda").join("agents");
     let entries = match std::fs::read_dir(&folder) {
         Ok(entries) => entries,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Vec::new(),
@@ -217,7 +217,7 @@ mod tests {
     fn old_agent_files_name_their_harness() {
         let space = tempfile::tempdir().unwrap();
         assert!(old_agents(space.path()).is_empty());
-        let folder = space.path().join(".bandaso/agents");
+        let folder = space.path().join(".banda/agents");
         std::fs::create_dir_all(&folder).unwrap();
         let id = AgentId::new();
         let text = format!("id = \"{id}\"\nharness = \"codex\"\nmode = \"supervised\"\n");

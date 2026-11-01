@@ -8,7 +8,7 @@
 //! notification by its method, an answer by its ID. It must say what that
 //! one said, its params or its answer, in the recorded session's folder
 //! moved to this session's; only `initialize` may differ, as it changes
-//! with each version of Bandaso. What the Harness said after it is said
+//! with each version of Banda. What the Harness said after it is said
 //! again, fitted to this run: answers carry this run's request IDs, and
 //! the folder is this session's.
 //!

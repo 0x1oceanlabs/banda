@@ -1,8 +1,8 @@
-import type { SpaceSummary } from "@bandaso/contract"
-import { BandaMark, MARK_WORDS, waits } from "@bandaso/ui/components/banda-mark"
-import { ago } from "@bandaso/ui/lib/words"
-import { cn } from "@bandaso/ui/lib/utils"
-import { useNow } from "@bandaso/ui/hooks/use-now"
+import type { SpaceSummary } from "@banda/contract"
+import { BandaMark, MARK_WORDS, waits } from "@banda/ui/components/banda-mark"
+import { ago } from "@banda/ui/lib/words"
+import { cn } from "@banda/ui/lib/utils"
+import { useNow } from "@banda/ui/hooks/use-now"
 import type { Row as Arranged } from "./arrange"
 import type { Part, Settings } from "./settings"
 

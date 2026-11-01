@@ -1,13 +1,13 @@
 import { useEffect, useRef, useState } from "react"
-import type { TurnView, Usage } from "@bandaso/contract/agents"
+import type { TurnView, Usage } from "@banda/contract/agents"
 import {
   InputGroup,
   InputGroupAddon,
   InputGroupButton,
   InputGroupTextarea,
-} from "@bandaso/ui/components/input-group"
-import { RingMeter } from "@bandaso/ui/components/ring-meter"
-import { Spinner } from "@bandaso/ui/components/spinner"
+} from "@banda/ui/components/input-group"
+import { RingMeter } from "@banda/ui/components/ring-meter"
+import { Spinner } from "@banda/ui/components/spinner"
 import {
   ArrowUpIcon,
   CornerUpRightIcon,

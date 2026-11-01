@@ -28,7 +28,7 @@ ADR 0005 promised a theme file (decision 11) and "one look, and honest motion" (
    - **The palette** is what a theme says: Omarchy's `colors.toml`, key for key. So every Omarchy theme is a Banda theme as it is, and a Banda theme works in Omarchy.
    - **The tokens** are what components use: today's CSS variables (`--background`, `--primary`, `--border`, `--attention`, …), the terminal's 16 colours and the window's own (focus ring, gaps). One pure function derives them from the palette (the table below).
    - **Components** use only tokens, as they do now. No component reads the palette.
-   - The tokens are shadcn/ui's own names, and every Pane is built from `@bandaso/ui` (ADR 0005, decision 12). So a Person who wants to restyle further changes a token, and every component of every module follows. A token set made for shadcn elsewhere carries over as it is.
+   - The tokens are shadcn/ui's own names, and every Pane is built from `@banda/ui` (ADR 0005, decision 12). So a Person who wants to restyle further changes a token, and every component of every module follows. A token set made for shadcn elsewhere carries over as it is.
 
 2. **One schema, four layers** (_decided_). The look comes from four places, each over the one before:
    1. Banda's built-in defaults;
@@ -63,7 +63,7 @@ ADR 0005 promised a theme file (decision 11) and "one look, and honest motion" (
      - `center`: `never` scrolls the least that shows the focused column; `always` puts it in the middle; `on-overflow` puts it in the middle only when it does not fit beside the column focused before, else shows both.
    - `[bar]`: `height`.
    - `[font]`: `sans`, `mono`, `size` (_built_).
-     - A family is a font's name, a CSS list, or a generic name such as `monospace`. A generic name is the system's choice: `bandaso look` asks fontconfig as `omarchy-font-current` does (`fc-match monospace`), so on Omarchy the terminal writes in Omarchy's font, and follows it when `omarchy-font-set` changes it.
+     - A family is a font's name, a CSS list, or a generic name such as `monospace`. A generic name is the system's choice: `banda look` asks fontconfig as `omarchy-font-current` does (`fc-match monospace`), so on Omarchy the terminal writes in Omarchy's font, and follows it when `omarchy-font-set` changes it.
      - `size` is the usual text, shadcn's `text-sm`, in pixels. The root grows by `size / 14`, so everything measured in text grows with it, as with a zoom; the terminal writes at three quarters of the root, 12 px at 14.
 
 7. **Corners follow shadcn/ui's ladder** (_decided_).
@@ -92,17 +92,17 @@ ADR 0005 promised a theme file (decision 11) and "one look, and honest motion" (
      - `overview` and `focus` join when the window moves them; until then they are not keys, so no setting does nothing.
    - Each is a spring (`damping-ratio`, `stiffness`, `epsilon`) or an easing (`duration-ms`, `curve`), not both. A layer that names one replaces the one under it; one of the same kind fills in what it leaves out from it. Curves are named as Hyprland and Omarchy write them (`linear`, `easeOutQuad`, `easeOutCubic`, `easeOutQuint`, `easeOutExpo`, `easeInOutCubic`, `easeInOutQuint`) or `cubic-bezier(x1, y1, x2, y2)`.
    - Banda's own are niri's springs: `damping-ratio = 1`, `stiffness = 800`, `epsilon = 0.0001`, which come to rest without overshooting in about 0.4 s.
-   - `bandaso look` resolves it: `off` makes an event `{ kind = "off" }`, and `slowdown` is applied, an easing's duration times it, a spring's stiffness over its square, which is the same spring with time stretched. The window gets numbers, not settings.
+   - `banda look` resolves it: `off` makes an event `{ kind = "off" }`, and `slowdown` is applied, an easing's duration times it, a spring's stiffness over its square, which is the same spring with time stretched. The window gets numbers, not settings.
    - The system's reduced motion turns it off, as `off` does. So does Hyprland's `animations:enabled = false`, through its layer, unless `look.toml` says otherwise.
    - Springs run in the window, frame by frame, so a move that is sent elsewhere halfway carries its speed on, as niri's do. A swipe stops the Strip's spring where it is: the fingers take over.
 
-10. **The look is a program, `bandaso look`, not a module of the engine** (_decided_: "do it the UNIX way").
+10. **The look is a program, `banda look`, not a module of the engine** (_decided_: "do it the UNIX way").
    - **Why not a module.** Every module call and stream of the engine belongs to a Space, and the engine may run on another machine (ADR 0005, decision 6). The look is the window's machine's: its Omarchy, its Hyprland, its `~/.config/banda/`. So the window resolves it where it runs, and the engine stays out.
-   - **One program, another mode**, as `bandaso mcp` is. It reads the files, checks them, lays the layers and prints one `Look` as JSON: the CSS variables of each scheme, the sizes, the layers it came from and the problems.
-     - `bandaso look` prints it once. `| jq` reads it, a script uses it, the window's tests check it.
-     - `bandaso look --follow` prints it again, one line per change: a saved file, Omarchy switching its theme, Hyprland reloading. The window runs this and applies each line.
-     - `bandaso look check [files]` validates `look.toml`, a `banda.toml` or a `colors.toml`. It prints `path:line:column: problem`, as compilers do, so editors jump there, prints nothing when all is well, and exits 1 on a problem.
-     - `bandaso look themes` lists every theme it finds, one JSON line each.
+   - **One program, another mode**, as `banda mcp` is. It reads the files, checks them, lays the layers and prints one `Look` as JSON: the CSS variables of each scheme, the sizes, the layers it came from and the problems.
+     - `banda look` prints it once. `| jq` reads it, a script uses it, the window's tests check it.
+     - `banda look --follow` prints it again, one line per change: a saved file, Omarchy switching its theme, Hyprland reloading. The window runs this and applies each line.
+     - `banda look check [files]` validates `look.toml`, a `banda.toml` or a `colors.toml`. It prints `path:line:column: problem`, as compilers do, so editors jump there, prints nothing when all is well, and exits 1 on a problem.
+     - `banda look themes` lists every theme it finds, one JSON line each.
    - **A broken file** leaves the last good look in force, and the problems ride along with it, so the window can say which file and line (ADR 0005, decision 11).
    - **Files are the interface.** A Person, a script or an Agent changes the look by editing `look.toml`; `check` says whether it is right. A theme is a folder anyone can copy, Banda's own included. Writing keys with the Person's comments kept (`look.set`) and MCP tools come with the MCP module (ADR 0005, decision 14), on top of the same files.
    - **It follows Omarchy's own resolver.** An Omarchy palette is read with the same aliases and fallbacks as `omarchy-theme-color`, so old themes that name only `color0`…`color15` work, and a mix rounds as Omarchy's templates round. Omarchy need not be installed for its themes to work.
@@ -112,7 +112,7 @@ ADR 0005 promised a theme file (decision 11) and "one look, and honest motion" (
    - It writes the tokens and the sizes as CSS variables on `:root`: `--gap-inner`, `--gap-outer`, `--tile-radius`, `--tile-border`, `--focus`, `--focus-inactive`, `--focus-ring`, `--bar-height`.
    - The Strip, the frame and the bar take sizes from those variables, not from constants.
    - The terminal takes all 16 colours, the cursor and the selection from the tokens.
-   - Until `bandaso look` answers, the window draws the `banda` defaults from its CSS, the same values Banda's own theme gives.
+   - Until `banda look` answers, the window draws the `banda` defaults from its CSS, the same values Banda's own theme gives.
 
 **Tokens from a palette.** Omarchy's `accent` is the theme's colour, and it goes to shadcn's `--primary` and `--ring`. shadcn's `--accent` is something else: the background of a row under the pointer.
 
@@ -192,11 +192,11 @@ spring = { damping-ratio = 1.0, stiffness = 800, epsilon = 0.0001 }
 
 - The tokens' values live in Banda's own theme (`look/themes/banda-light`, `banda-dark`), in the same files any theme has. `globals.css` keeps them as the first frame's defaults.
 - Words for `GLOSSARY.md`, once built: the look, the theme, the palette.
-- The app is called Banda (_decided_ 2026-11-01). The look lives in `~/.config/banda/`, as ADR 0005 named it. The other places (`~/.config/bandaso/`, `~/.local/state/bandaso/`, `BANDASO_*`, the window title) move in a rename PR of their own.
+- The app is called Banda (_decided_ 2026-11-01). The look lives in `~/.config/banda/`, as ADR 0005 named it. The other places (`~/.config/banda/`, `~/.local/state/banda/`, `BANDA_*`, the window title) move in a rename PR of their own.
 - The order of work, each step its own PR:
   1. **The window reads sizes and colours from variables.** The `banda` defaults, `--gap-*`, `--tile-*`, `--focus-*`; the Strip, the frame and the bar take them. The tile becomes the `xl` step with a 2 px border, and the last corners that ignore the ladder take its steps.
-  2. **`bandaso look`**: `look.toml`, the `banda` and `omarchy` themes, the derivation, Hyprland's rounding, border and gaps, `--follow`, `check` and `themes`.
-  3. **The window applies it**: it runs `bandaso look --follow`, sets the variables, light and dark, and `nativeTheme`.
+  2. **`banda look`**: `look.toml`, the `banda` and `omarchy` themes, the derivation, Hyprland's rounding, border and gaps, `--follow`, `check` and `themes`.
+  3. **The window applies it**: it runs `banda look --follow`, sets the variables, light and dark, and `nativeTheme`.
   4. **The terminal's 16 colours and the focus ring.**
   5. **Motion**: springs in the window, the `[motion]` tables, reduced motion.
   6. **`look.set` and the MCP tools**, then a settings page on the same file.

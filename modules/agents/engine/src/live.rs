@@ -9,7 +9,7 @@ use crate::acp::{Answer, Connection, Session};
 use crate::hosts::Hosts;
 use crate::model::{ItemId, TurnId, Values};
 use crate::settings::Harness;
-use bandaso_kernel::SpaceId;
+use banda_kernel::SpaceId;
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;

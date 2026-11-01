@@ -43,7 +43,7 @@ pnpm -r --silent test
 
 if [[ $window == 1 ]]; then
   step "The desktop window, end to end"
-  pnpm --filter @bandaso/desktop --silent e2e
+  pnpm --filter @banda/desktop --silent e2e
 fi
 
 printf '\nAll checks passed.\n'

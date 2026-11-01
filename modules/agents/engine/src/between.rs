@@ -3,7 +3,7 @@
 //! Claude Code goes on by itself when a background task it started ends,
 //! or when a wakeup fires, and its adapter says what it does then as it
 //! says a turn's. Here that opens a turn of the Agent's own, whose message
-//! is a notice from Bandaso. The turn ends when the Harness says what that
+//! is a notice from Banda. The turn ends when the Harness says what that
 //! cost; when a turn's prompt goes to the session, which takes the prompt
 //! into what it does; when a Person stops it; or after a minute in which it
 //! says nothing and asks nothing.
@@ -19,7 +19,7 @@ use crate::model::{
 use crate::rules::{self, Ending};
 use crate::turn::{self, Writer, plain};
 use crate::{emit, store};
-use bandaso_kernel::{AgentId, Error, ModuleSpace, Participant, Tx};
+use banda_kernel::{AgentId, Error, ModuleSpace, Participant, Tx};
 use std::collections::HashSet;
 use std::sync::{Arc, Weak};
 use std::time::Duration;
@@ -228,7 +228,7 @@ struct Opened {
 }
 
 /// Opens a turn of the Agent's own in the Thread: its message is a notice
-/// from Bandaso, and it runs from now. `None` when the Thread is gone.
+/// from Banda, and it runs from now. `None` when the Thread is gone.
 fn open(
     tx: &mut Tx<'_>,
     thread: ThreadId,
@@ -270,7 +270,7 @@ fn open(
 pub fn cut_short(tx: &mut Tx<'_>) -> Result<(), Error> {
     for running in store::every_running(tx.sql())? {
         if turn::by_itself(tx.sql(), &running)? {
-            let reason = Some("Bandaso stopped while the Agent worked.");
+            let reason = Some("Banda stopped while the Agent worked.");
             let ending = Ending::new(TurnState::Interrupted, reason);
             turn::end(tx, Participant::Agent(running.agent), &running, ending)?;
         }

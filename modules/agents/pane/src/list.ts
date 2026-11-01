@@ -2,14 +2,14 @@
  * A Space's Threads, as the sidebar holds them: the list it read, then
  * each fact applied. Pure, so plain tests cover it.
  */
-import type { Engine, Event, EventFilter, SpaceId } from "@bandaso/contract"
+import type { Engine, Event, EventFilter, SpaceId } from "@banda/contract"
 import {
   decodeFact,
   type Fact,
   type ListedThread,
   type ThreadList,
-} from "@bandaso/contract/agents"
-import type { Source } from "@bandaso/ui/hooks/use-live"
+} from "@banda/contract/agents"
+import type { Source } from "@banda/ui/hooks/use-live"
 
 /** How much of a message the list keeps, as the engine does. */
 export const LISTED_MESSAGE = 200

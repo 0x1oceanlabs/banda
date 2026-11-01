@@ -1,6 +1,6 @@
 [package]
-name = "bandaso-look"
-description = "The window's look: Omarchy's palettes, Hyprland's corners and gaps, and look.toml, resolved into CSS variables. `bandaso look` prints it."
+name = "banda-look"
+description = "The window's look: Omarchy's palettes, Hyprland's corners and gaps, and look.toml, resolved into CSS variables. `banda look` prints it."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

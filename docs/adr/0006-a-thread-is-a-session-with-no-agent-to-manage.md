@@ -32,7 +32,7 @@ On 2026-11-01 Roma decided to do the same: "the Agents concept from old Banda is
 
 5. **What goes.**
    - The Agents Pane, with its list and its form for a new Agent.
-   - The per-Agent files, `.bandaso/agents/<name>.toml`.
+   - The per-Agent files, `.banda/agents/<name>.toml`.
    - An Agent's Threads that stay its own across a switch of Harness.
    - Existing Threads stay. Each keeps the Harness its Agent had, and moves over with its Space (ADR 0005, step 2).
 

@@ -4,7 +4,7 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use ts_rs::TS;
 
-bandaso_kernel::id!(
+banda_kernel::id!(
     /// A terminal. The window chooses it, so a Pane names its terminal
     /// before the engine answers.
     TerminalId,

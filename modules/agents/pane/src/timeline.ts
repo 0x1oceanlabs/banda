@@ -4,7 +4,7 @@
  * that ended folds its work away behind how long it took, and the turn that
  * runs says how long it has. Pure, so plain tests cover it.
  */
-import type { Item, ToolKind, TurnView } from "@bandaso/contract/agents"
+import type { Item, ToolKind, TurnView } from "@banda/contract/agents"
 import { changes, type FileChange } from "./changes"
 import {
   isReply,

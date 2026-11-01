@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import type { Engine, Status } from "@bandaso/contract"
+import type { Engine, Status } from "@banda/contract"
 
 /** The engine connection's status, kept current. */
 export function useStatus(engine: Engine): Status {

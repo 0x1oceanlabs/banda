@@ -1,4 +1,4 @@
-import type { Field } from "@bandaso/contract/agents"
+import type { Field } from "@banda/contract/agents"
 import { expect, test } from "vitest"
 import { draftOf, filled, problem, ready, summary } from "./form"
 

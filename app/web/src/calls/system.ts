@@ -7,8 +7,8 @@ import {
   type MarkColors,
   MARK_WORDS,
   stillMark,
-} from "@bandaso/ui/components/banda-mark"
-import type { Chime } from "@bandaso/ui/sound"
+} from "@banda/ui/components/banda-mark"
+import type { Chime } from "@banda/ui/sound"
 import type { Notice } from "../host"
 import { loudestChime } from "./calls"
 import type { Heard } from "./useCalls"

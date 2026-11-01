@@ -35,7 +35,7 @@ use crate::model::{
 use crate::rules::{self, Ending, Piece, Pieces, Text};
 use crate::settings::Harnesses;
 use crate::{emit, store};
-use bandaso_kernel::{AgentId, Effect, Error, ModuleSpace, Outcome, Participant, Settled, Tx};
+use banda_kernel::{AgentId, Effect, Error, ModuleSpace, Outcome, Participant, Settled, Tx};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -126,7 +126,7 @@ pub fn end(
     emit(tx, author, turn.thread, &ended)
 }
 
-/// Writes a line from Bandaso into the Thread.
+/// Writes a line from Banda into the Thread.
 fn notice(
     tx: &mut Tx<'_>,
     agent: Participant,
@@ -261,7 +261,7 @@ pub fn requeue(tx: &mut Tx<'_>, item: ItemId) -> Result<(), Error> {
     Ok(())
 }
 
-/// Writes lines from Bandaso into the turn.
+/// Writes lines from Banda into the turn.
 async fn notices(space: &ModuleSpace, turn: &store::Turn, texts: Vec<String>) -> Result<(), Error> {
     if texts.is_empty() {
         return Ok(());
@@ -299,7 +299,7 @@ pub fn settle(tx: &mut Tx<'_>, effect: &Effect, settled: &Settled) -> Result<(),
                     }
                     Ending::new(
                         TurnState::Interrupted,
-                        Some("Bandaso stopped while the Agent worked."),
+                        Some("Banda stopped while the Agent worked."),
                     )
                 }
                 Settled::Failed(reason) => Ending::failed(reason.clone(), None),
@@ -463,7 +463,7 @@ async fn after_questions(live: &Live, space: &ModuleSpace, turn: TurnId) -> Resu
 }
 
 /// Whether the Agent started `turn` by itself: its message is a notice
-/// from Bandaso, not a Person's.
+/// from Banda, not a Person's.
 pub fn by_itself(sql: &rusqlite::Connection, turn: &store::Turn) -> Result<bool, Error> {
     Ok(matches!(
         store::item(sql, turn.message)?,
@@ -493,7 +493,7 @@ impl Message {
     }
 }
 
-/// What `message` sends `harness`, and what Bandaso tells the Person it
+/// What `message` sends `harness`, and what Banda tells the Person it
 /// left out; why nothing of it can go, if nothing can.
 async fn prompt_of(
     space: &ModuleSpace,
@@ -562,7 +562,7 @@ pub async fn steer(live: &Live, space: ModuleSpace, effect: &Effect) -> Outcome 
     }
     if !connection.steers() {
         let text = format!(
-            "{} cannot take a message while it works, so Bandaso stopped it to send yours.",
+            "{} cannot take a message while it works, so Banda stopped it to send yours.",
             connection.name()
         );
         if let Err(error) = notices(&space, &turn, vec![text]).await {

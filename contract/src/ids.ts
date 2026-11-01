@@ -1,5 +1,5 @@
 /**
- * A new UUIDv7, the kind of ID Bandaso makes: its time first, so IDs sort
+ * A new UUIDv7, the kind of ID Banda makes: its time first, so IDs sort
  * by when they were made.
  */
 export function newId(): string {

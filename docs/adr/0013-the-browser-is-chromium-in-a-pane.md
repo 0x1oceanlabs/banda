@@ -81,7 +81,7 @@ asked for the ADR; the rest are our defaults and stay his to change.
    - **The switch** is a button in the row. It writes `tabs = "top"` or
      `"left"` into `~/.config/banda/browser.toml`, the way the sidebar's
      menu writes its preset (ADR 0008), and every browser Pane follows.
-     `bandaso look` reads the file as it reads `sidebar.toml`.
+     `banda look` reads the file as it reads `sidebar.toml`.
    - **The address** shows only the site (`github.com`). A click or
      `Ctrl+L` opens the whole address to edit. Words that are not an
      address go to the search in `browser.toml` (`search`), DuckDuckGo
@@ -125,7 +125,7 @@ asked for the ADR; the rest are our defaults and stay his to change.
      MCP's `--browser-url`, browser-use.
    - The window writes the endpoint to `$XDG_RUNTIME_DIR/banda/browser.json`,
      readable by the Person alone, and removes it when it closes.
-     `bandaso browser` prints it. The Banda skill gets a `browser` topic
+     `banda browser` prints it. The Banda skill gets a `browser` topic
      that tells an Agent how to use it (ADR 0012).
    - `--remote-debugging-port` is never turned on: it opens Banda's own
      page too, with no token.
@@ -170,7 +170,7 @@ asked for the ADR; the rest are our defaults and stay his to change.
   2. Tabs: the row, tabs on top and on the left with the switch,
      `browser.toml`, the address and search, tabs kept in args, downloads.
   3. Extensions and the Web Store, tried on the set.
-  4. The CDP endpoint, `bandaso browser`, the skill's topic, the Agent's
+  4. The CDP endpoint, `banda browser`, the skill's topic, the Agent's
      mark and its stop.
 - **Later:**
   - Banda's own browser tools, with the MCP module;

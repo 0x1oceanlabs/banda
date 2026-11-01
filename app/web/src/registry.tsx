@@ -3,11 +3,11 @@
  * launcher; and each module's Watch on what calls for the Person. A Pane
  * or a Watch runs only while the engine runs its module.
  */
-import { panes as agentPanes, threadsWatch } from "@bandaso/agents-pane"
-import { panes as terminalPanes } from "@bandaso/terminal-pane"
-import type { JsonValue } from "@bandaso/contract"
-import { Button } from "@bandaso/ui/components/button"
-import { useModules } from "@bandaso/ui/hooks/use-status"
+import { panes as agentPanes, threadsWatch } from "@banda/agents-pane"
+import { panes as terminalPanes } from "@banda/terminal-pane"
+import type { JsonValue } from "@banda/contract"
+import { Button } from "@banda/ui/components/button"
+import { useModules } from "@banda/ui/hooks/use-status"
 import {
   definePane,
   type PaneKind,
@@ -15,7 +15,7 @@ import {
   type PaneState,
   paneOf,
   type Watch,
-} from "@bandaso/ui/pane"
+} from "@banda/ui/pane"
 import { LayoutGridIcon } from "lucide-react"
 import { columnsOf } from "./look"
 import type { Width } from "./workspaces/model"

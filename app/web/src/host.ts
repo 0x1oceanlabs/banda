@@ -1,12 +1,12 @@
 /**
- * What the desktop gives the page, on `window.bandaso`
+ * What the desktop gives the page, on `window.banda`
  * (app/desktop/src/preload.ts). The page reaches the engine only through
  * the address it hands out, gets the look the desktop reads (ADR 0007),
  * and asks it to write the sidebar's preset (ADR 0008) and to show system
  * notifications (ADR 0011).
  */
-import type { Address } from "@bandaso/contract"
-import type { Look } from "@bandaso/contract/look"
+import type { Address } from "@banda/contract"
+import type { Look } from "@banda/contract/look"
 
 /** A system notification the page asks the desktop for (ADR 0011, decision 3). */
 export type Notice = {
@@ -25,7 +25,7 @@ export type Notice = {
 export type Host = {
   /** Where the engine listens now; it waits while the engine starts. */
   engine: () => Promise<Address>
-  /** `bandaso look --follow`, as the desktop hears it. */
+  /** `banda look --follow`, as the desktop hears it. */
   look: {
     /** The last look; none before the first. */
     current: () => Promise<Look | null>
@@ -57,6 +57,6 @@ export type Host = {
 
 declare global {
   interface Window {
-    bandaso?: Host
+    banda?: Host
   }
 }

@@ -1,4 +1,4 @@
-import type { ListedThread } from "@bandaso/contract/agents"
+import type { ListedThread } from "@banda/contract/agents"
 import { expect, test } from "vitest"
 import { FAILED, listedOf } from "./rows"
 

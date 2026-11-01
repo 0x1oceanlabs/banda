@@ -1,5 +1,5 @@
-import type { JsonValue } from "@bandaso/contract"
-import type { Size, TerminalId } from "@bandaso/contract/terminal"
+import type { JsonValue } from "@banda/contract"
+import type { Size, TerminalId } from "@banda/contract/terminal"
 
 /** The most one `terminal.write` carries: 16,384 UTF-16 units is at most 48 KB, under the engine's 64 KB. */
 const AT_ONCE = 16 * 1024

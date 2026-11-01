@@ -127,7 +127,7 @@ fn no_method(method: &str) -> Refusal {
 }
 
 impl Kernel {
-    /// `root` holds the Spaces' folders (`~/Bandaso` by default). `owner`
+    /// `root` holds the Spaces' folders (`~/Banda` by default). `owner`
     /// is the Person who owns this computer's Spaces.
     pub fn builder(root: impl Into<PathBuf>, owner: PersonId) -> KernelBuilder {
         KernelBuilder {

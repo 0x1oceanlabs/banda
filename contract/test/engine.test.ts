@@ -1,5 +1,5 @@
 /**
- * The client against the real engine (`target/debug/bandaso`), with the
+ * The client against the real engine (`target/debug/banda`), with the
  * fake agent as the Harness. Run `cargo build` first; `scripts/check.sh` does.
  */
 import { type ChildProcess, spawn } from "node:child_process"
@@ -34,11 +34,11 @@ let engine: ChildProcess | null = null
 let client: Engine | null = null
 
 beforeEach(() => {
-  dir = mkdtempSync(join(tmpdir(), "bandaso-contract-"))
+  dir = mkdtempSync(join(tmpdir(), "banda-contract-"))
   mkdirSync(join(dir, "config"))
   writeFileSync(
     join(dir, "config/harnesses.toml"),
-    `[[harness]]\nid = "fake"\nname = "Fake"\ncommand = ${JSON.stringify(binary("bandaso-fake-agent"))}\n`
+    `[[harness]]\nid = "fake"\nname = "Fake"\ncommand = ${JSON.stringify(binary("banda-fake-agent"))}\n`
   )
 })
 
@@ -50,13 +50,13 @@ afterEach(async () => {
 
 /** Starts the engine as a window does, and waits for its first line. */
 function serve(): Promise<void> {
-  const child = spawn(binary("bandaso"), ["serve", "--with-parent"], {
+  const child = spawn(binary("banda"), ["serve", "--with-parent"], {
     env: {
       ...process.env,
-      BANDASO_ROOT: join(dir, "root"),
-      BANDASO_STATE: join(dir, "state"),
-      BANDASO_CONFIG: join(dir, "config"),
-      BANDASO_LOG: "warn",
+      BANDA_ROOT: join(dir, "root"),
+      BANDA_STATE: join(dir, "state"),
+      BANDA_CONFIG: join(dir, "config"),
+      BANDA_LOG: "warn",
     },
     stdio: ["pipe", "pipe", "inherit"],
   })

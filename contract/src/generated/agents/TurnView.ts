@@ -19,7 +19,7 @@ reason?: string,
 failure?: Failure, 
 /**
  * When it began to run, in ms since the epoch. A turn from before
- * Bandaso kept it has none.
+ * Banda kept it has none.
  */
 started?: number, 
 /**

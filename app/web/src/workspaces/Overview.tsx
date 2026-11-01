@@ -1,5 +1,5 @@
 import { useEffect, useRef } from "react"
-import type { SpaceId } from "@bandaso/contract"
+import type { SpaceId } from "@banda/contract"
 import { kindOf } from "../registry"
 import { share, type Workspaces } from "./model"
 

@@ -11,11 +11,11 @@
   },
   "iconLibrary": "lucide",
   "aliases": {
-    "components": "@bandaso/ui/components",
-    "utils": "@bandaso/ui/lib/utils",
-    "hooks": "@bandaso/ui/hooks",
-    "lib": "@bandaso/ui/lib",
-    "ui": "@bandaso/ui/components"
+    "components": "@banda/ui/components",
+    "utils": "@banda/ui/lib/utils",
+    "hooks": "@banda/ui/hooks",
+    "lib": "@banda/ui/lib",
+    "ui": "@banda/ui/components"
   },
   "rtl": false,
   "menuColor": "default",

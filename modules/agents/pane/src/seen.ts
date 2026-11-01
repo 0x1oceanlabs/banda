@@ -4,12 +4,12 @@
  * window's, kept in its storage, and every Pane of the module hears a
  * change at once.
  */
-import type { ThreadId, TurnId } from "@bandaso/contract/agents"
-import { kept } from "@bandaso/ui/lib/kept"
+import type { ThreadId, TurnId } from "@banda/contract/agents"
+import { kept } from "@banda/ui/lib/kept"
 import type { Seen } from "./marks"
 
 const seen = kept(
-  "bandaso.agents.seen",
+  "banda.agents.seen",
   (turn): turn is TurnId => typeof turn === "string"
 )
 

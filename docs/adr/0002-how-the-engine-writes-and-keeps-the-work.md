@@ -27,10 +27,10 @@ calls, approvals and agent sessions were lost.
      its sign-in. The engine stores only the Harness's session ID, so it can
      resume the session.
    - **Secrets** live in the operating system's keychain or in the Harness's
-     own sign-in, never in Bandaso's database.
+     own sign-in, never in Banda's database.
    - **Window state** (focus, scroll, which Panes are open) stays with the
      window.
-   - **The Space's SQLite** (`.bandaso/`) holds only what needs search,
+   - **The Space's SQLite** (`.banda/`) holds only what needs search,
      subscriptions or transactions. That means Threads (what the Person
      saw: messages, tool calls, Questions and answers), the Agents' queue
      and state, Databases' records, and later access. A Thread can be
@@ -76,7 +76,7 @@ calls, approvals and agent sessions were lost.
    Rust this is one `match` over the method enum, so the compiler rejects a
    method without a right. The map governs the engine's own operations.
    What an Agent does inside its Harness is enforced by the Harness (ADR
-   0001, decision 7). Bandaso never fakes a mode a Harness lacks by
+   0001, decision 7). Banda never fakes a mode a Harness lacks by
    answering its Questions for it: the Harness's own check is stronger.
    _Changed by ADR 0003, decision 9: for an ACP agent other than Claude Code
    and Codex, the engine answers by the Thread's mode._

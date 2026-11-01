@@ -1,18 +1,18 @@
 import { useCallback } from "react"
-import { type Engine, newId, type SpaceId } from "@bandaso/contract"
+import { type Engine, newId, type SpaceId } from "@banda/contract"
 import type {
   Account,
   Program,
   SignInWay,
   TurnId,
-} from "@bandaso/contract/agents"
-import { Button } from "@bandaso/ui/components/button"
-import { CopyButton } from "@bandaso/ui/components/copy-button"
-import { Spinner } from "@bandaso/ui/components/spinner"
-import { useAct } from "@bandaso/ui/hooks/use-act"
-import { useRead } from "@bandaso/ui/hooks/use-read"
-import { useModules } from "@bandaso/ui/hooks/use-status"
-import type { PaneProps } from "@bandaso/ui/pane"
+} from "@banda/contract/agents"
+import { Button } from "@banda/ui/components/button"
+import { CopyButton } from "@banda/ui/components/copy-button"
+import { Spinner } from "@banda/ui/components/spinner"
+import { useAct } from "@banda/ui/hooks/use-act"
+import { useRead } from "@banda/ui/hooks/use-read"
+import { useModules } from "@banda/ui/hooks/use-status"
+import type { PaneProps } from "@banda/ui/pane"
 import {
   CheckIcon,
   CircleAlertIcon,
@@ -29,7 +29,7 @@ export type Open = PaneProps<unknown>["open"]
  * Person must: the ways the Harness offers. One it does by itself, as
  * Codex does in the browser, signs in at a click; one in a terminal runs
  * in a terminal Pane, and its program ending well says it worked. Then
- * `turn` goes again. Bandaso holds none of the account's credentials.
+ * `turn` goes again. Banda holds none of the account's credentials.
  */
 export function SignIn({
   engine,

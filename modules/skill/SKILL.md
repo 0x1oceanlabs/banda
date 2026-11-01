@@ -11,7 +11,7 @@ Pane of Banda's window.
 
 ## Words
 
-- **Space**: one body of work and its folder. Its `.bandaso/` folder keeps
+- **Space**: one body of work and its folder. Its `.banda/` folder keeps
   Banda's data and log for it.
 - **Thread**: one session with a Harness in a Space. Each Thread has its
   own Agent.
@@ -31,7 +31,7 @@ Banda is changed through text files, the same way the Person changes it.
 1. Read the topic for what you change, below.
 2. Edit the file. Keep the Person's comments and every key you were not
    asked to change. Every key is optional: write only what changes.
-3. Check it: `bandaso look check` prints `path:line:column: problem` for
+3. Check it: `banda look check` prints `path:line:column: problem` for
    each mistake, and nothing when all is well.
 4. Tell the Person what you changed, and how to undo it.
 
@@ -39,7 +39,7 @@ The window applies each save at once. A broken file leaves the last good
 state in force, and the bar names the file and the line.
 
 Never touch credentials, a Harness's own configuration, or a Space's
-`.bandaso/` folder.
+`.banda/` folder.
 
 ## Where things live
 

@@ -19,7 +19,7 @@ Every key, with its default:
 
 - A theme is a folder with Omarchy's `colors.toml` (the palette) and, if
   it wants, a `banda.toml` with the keys of `look.toml`.
-- `bandaso look themes` lists every theme there is, one JSON line each.
+- `banda look themes` lists every theme there is, one JSON line each.
 - To make one, copy a theme's folder into `~/.config/banda/themes/<name>/`
   and set `theme = "<name>"`.
 
@@ -34,6 +34,6 @@ Every key, with its default:
 
 ## Check it
 
-- `bandaso look check` checks every file the look reads.
-- `bandaso look` prints the look it resolves now, as JSON: the CSS
+- `banda look check` checks every file the look reads.
+- `banda look` prints the look it resolves now, as JSON: the CSS
   variables, the layers it came from, and any problems.

@@ -3,15 +3,15 @@
 //!
 //! | Place | Default | Holds |
 //! |---|---|---|
-//! | root | `~/Bandaso` | the Spaces' folders |
-//! | state | `~/.local/state/bandaso` | the owner's ID, the lock, `engine.json` |
-//! | config | `~/.config/bandaso` | `harnesses.toml` |
+//! | root | `~/Banda` | the Spaces' folders |
+//! | state | `~/.local/state/banda` | the owner's ID, the lock, `engine.json` |
+//! | config | `~/.config/banda` | `harnesses.toml` |
 //!
-//! `BANDASO_ROOT`, `BANDASO_STATE` and `BANDASO_CONFIG` move each one, so a
+//! `BANDA_ROOT`, `BANDA_STATE` and `BANDA_CONFIG` move each one, so a
 //! test or a trial window runs beside the real engine.
 
 use crate::Failure;
-use bandaso_kernel::{PersonId, api};
+use banda_kernel::{PersonId, api};
 use serde::{Deserialize, Serialize};
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -64,9 +64,9 @@ impl Places {
     pub fn from_env() -> Result<Places, Failure> {
         let state = dirs::state_dir().or_else(dirs::data_local_dir);
         Ok(Places {
-            root: place("BANDASO_ROOT", dirs::home_dir(), "Bandaso")?,
-            state: place("BANDASO_STATE", state, "bandaso")?,
-            config: place("BANDASO_CONFIG", dirs::config_dir(), "bandaso")?,
+            root: place("BANDA_ROOT", dirs::home_dir(), "Banda")?,
+            state: place("BANDA_STATE", state, "banda")?,
+            config: place("BANDA_CONFIG", dirs::config_dir(), "banda")?,
         })
     }
 
@@ -99,7 +99,7 @@ impl Places {
     pub fn running(&self) -> Result<Running, Failure> {
         let path = self.state.join(RUNNING);
         let bytes = std::fs::read(&path).map_err(|_| {
-            Failure::broken("Bandaso's engine is not running. Start it with: bandaso serve")
+            Failure::broken("Banda's engine is not running. Start it with: banda serve")
         })?;
         serde_json::from_slice(&bytes)
             .map_err(|e| Failure::broken(format!("{} does not parse: {e}", path.display())))

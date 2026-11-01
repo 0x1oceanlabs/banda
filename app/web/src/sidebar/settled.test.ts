@@ -1,5 +1,5 @@
-import type { MarkState } from "@bandaso/ui/components/banda-mark"
-import type { Listed } from "@bandaso/ui/pane"
+import type { MarkState } from "@banda/ui/components/banda-mark"
+import type { Listed } from "@banda/ui/pane"
 import { expect, test } from "vitest"
 import { isSettled, settles } from "./settled"
 

@@ -1,5 +1,5 @@
-import type { Event } from "@bandaso/contract"
-import type { TurnView } from "@bandaso/contract/agents"
+import type { Event } from "@banda/contract"
+import type { TurnView } from "@banda/contract/agents"
 import { expect, test } from "vitest"
 import { event, person } from "./testing"
 import { apply, EMPTY } from "./thread"

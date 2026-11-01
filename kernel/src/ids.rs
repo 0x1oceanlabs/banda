@@ -1,5 +1,5 @@
 //! Our IDs are the identity, and a Harness's IDs are evidence (ADR 0002,
-//! decision 7). Every ID here is a UUIDv7 made by Bandaso.
+//! decision 7). Every ID here is a UUIDv7 made by Banda.
 
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;

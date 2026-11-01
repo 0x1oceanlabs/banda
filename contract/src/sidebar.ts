@@ -1,6 +1,6 @@
 /**
  * The sidebar's words for TypeScript (ADR 0008): the arrangement
- * `bandaso look` resolves from `sidebar.toml`, Banda's defaults for before
+ * `banda look` resolves from `sidebar.toml`, Banda's defaults for before
  * it comes, and how the view menu writes a preset into the file.
  */
 import type { Sidebar } from "./generated/sidebar/Sidebar"
@@ -19,7 +19,7 @@ export type { Empty } from "./generated/sidebar/Empty"
 export type { Preset } from "./generated/sidebar/Preset"
 export type { PresetOrigin } from "./generated/sidebar/PresetOrigin"
 
-/** Banda's arrangement, the `inbox` preset: what `bandaso look` gives with
+/** Banda's arrangement, the `inbox` preset: what `banda look` gives with
  * no files, for before the first look and outside the desktop. */
 export const DEFAULT_SIDEBAR: Sidebar = {
   file: "",

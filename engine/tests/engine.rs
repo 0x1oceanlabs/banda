@@ -1,4 +1,4 @@
-//! The `bandaso` program as a window and a script use it: `serve` with a
+//! The `banda` program as a window and a script use it: `serve` with a
 //! parent, then `call` and `follow` over the API. The Harness is the fake
 //! agent from `tools/fake-agent`.
 
@@ -12,13 +12,13 @@ use std::time::Duration;
 /// Builds the fake agent, next to this test's own binary.
 fn fake_agent() -> PathBuf {
     let status = Command::new(env!("CARGO"))
-        .args(["build", "-q", "-p", "bandaso-fake-agent"])
+        .args(["build", "-q", "-p", "banda-fake-agent"])
         .status()
         .expect("cargo runs");
     assert!(status.success(), "the fake agent builds");
     let deps = std::env::current_exe().unwrap();
     let profile = deps.parent().and_then(Path::parent).unwrap();
-    profile.join("bandaso-fake-agent")
+    profile.join("banda-fake-agent")
 }
 
 /// Temporary places for one engine, with the fake agent as its only
@@ -52,22 +52,22 @@ impl Places {
         }
     }
 
-    fn bandaso(&self, args: &[&str]) -> Command {
-        let mut command = Command::new(env!("CARGO_BIN_EXE_bandaso"));
+    fn banda(&self, args: &[&str]) -> Command {
+        let mut command = Command::new(env!("CARGO_BIN_EXE_banda"));
         command
             .args(args)
-            .env("BANDASO_ROOT", &self.root)
-            .env("BANDASO_STATE", &self.state)
-            .env("BANDASO_CONFIG", &self.config)
-            .env("BANDASO_LOG", "warn");
+            .env("BANDA_ROOT", &self.root)
+            .env("BANDA_STATE", &self.state)
+            .env("BANDA_CONFIG", &self.config)
+            .env("BANDA_LOG", "warn");
         command
     }
 
-    /// Starts `bandaso serve --with-parent` and reads the line that says
+    /// Starts `banda serve --with-parent` and reads the line that says
     /// where it listens.
     fn serve(&self) -> (Child, ChildStdin, Value) {
         let mut engine = self
-            .bandaso(&["serve", "--with-parent"])
+            .banda(&["serve", "--with-parent"])
             .stdin(Stdio::piped())
             .stdout(Stdio::piped())
             .spawn()
@@ -86,7 +86,7 @@ impl Places {
         if let Some(space) = space {
             args.extend(["--space", space]);
         }
-        self.bandaso(&args).output().unwrap()
+        self.banda(&args).output().unwrap()
     }
 
     /// Calls a method that must succeed, and returns what it answered.
@@ -109,7 +109,7 @@ fn a_script_drives_an_agent_through_the_engine_a_window_started() {
     assert!(running["port"].as_u64().unwrap() > 0);
     assert_eq!(running["secret"].as_str().unwrap().len(), 64);
 
-    let second = places.bandaso(&["serve"]).output().unwrap();
+    let second = places.banda(&["serve"]).output().unwrap();
     assert_eq!(second.status.code(), Some(2), "{second:?}");
     assert!(second.stdout.is_empty(), "the secret stays off a terminal");
     assert!(String::from_utf8_lossy(&second.stderr).contains("already runs"));
@@ -120,13 +120,13 @@ fn a_script_drives_an_agent_through_the_engine_a_window_started() {
     let refused = places.call("agents.thread", Some(space), json!({}));
     assert_eq!(refusal(&refused), "invalid");
     let nowhere = places
-        .bandaso(&["follow", "--space", &uuid::Uuid::now_v7().to_string()])
+        .banda(&["follow", "--space", &uuid::Uuid::now_v7().to_string()])
         .output()
         .unwrap();
     assert_eq!(refusal(&nowhere), "not_found");
 
     let mut follow = places
-        .bandaso(&["follow", "--space", space, "--module", "agents"])
+        .banda(&["follow", "--space", space, "--module", "agents"])
         .stdout(Stdio::piped())
         .spawn()
         .unwrap();
@@ -203,7 +203,7 @@ fn refusal(output: &Output) -> String {
 fn bad_params_are_refused_before_the_engine_is_reached() {
     let places = Places::new();
     let output = places
-        .bandaso(&["call", "spaces.list", "--params", "{not json"])
+        .banda(&["call", "spaces.list", "--params", "{not json"])
         .output()
         .unwrap();
     assert_eq!(refusal(&output), "invalid");

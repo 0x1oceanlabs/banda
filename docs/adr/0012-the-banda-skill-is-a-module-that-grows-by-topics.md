@@ -34,20 +34,20 @@ The research on how tools teach Agents about themselves is in `docs/research/202
    - "Edit sidebar.toml" in the window starts a new file from the same template.
 
 5. **It reaches an Agent three ways, from one text.**
-   - `bandaso skill` prints the core, and `bandaso skill <topic>` prints a topic. Any Agent with a shell can read it, and so can a Person. It needs no engine.
-   - `bandaso skill --export <folder>` writes an Agent Skills folder (agentskills.io): `SKILL.md` and `references/<topic>.md`. Claude Code and Codex both read this format. Banda does not write it into a Harness's own config (ADR 0005, decision 14). The Person puts it where their Harness looks, for example `~/.claude/skills/banda/`.
+   - `banda skill` prints the core, and `banda skill <topic>` prints a topic. Any Agent with a shell can read it, and so can a Person. It needs no engine.
+   - `banda skill --export <folder>` writes an Agent Skills folder (agentskills.io): `SKILL.md` and `references/<topic>.md`. Claude Code and Codex both read this format. Banda does not write it into a Harness's own config (ADR 0005, decision 14). The Person puts it where their Harness looks, for example `~/.claude/skills/banda/`.
    - The MCP module will hand the core over as its `instructions`, and each topic through a guide tool, when it is built.
 
 6. **What the skill says about changing Banda.**
-   - Banda is changed through its files, as the Person changes it. Edit the file, keep the Person's comments and the keys they did not ask to change, and check it with `bandaso look check`. Then say what changed and how to undo it.
-   - Never touch credentials, a Harness's own config, or a Space's `.bandaso/` folder.
+   - Banda is changed through its files, as the Person changes it. Edit the file, keep the Person's comments and the keys they did not ask to change, and check it with `banda look check`. Then say what changed and how to undo it.
+   - Never touch credentials, a Harness's own config, or a Space's `.banda/` folder.
 
 **Consequences.**
 
 - The first topics are `look` and `sidebar`. The next ones come with their features: Threads, terminals, keys, workspaces.
-- An Agent in a Thread learns of the skill only once the MCP module hands it over, or once the Person exports it to their Harness. Until then, `bandaso skill` is there for an Agent that is told to run it.
+- An Agent in a Thread learns of the skill only once the MCP module hands it over, or once the Person exports it to their Harness. Until then, `banda skill` is there for an Agent that is told to run it.
 - Later:
-  - `bandaso describe`, Banda's state now (ADR 0005, decision 14), as a topic of its own or a tool;
+  - `banda describe`, Banda's state now (ADR 0005, decision 14), as a topic of its own or a tool;
   - Raycast-style evals: a few Agent tasks per topic, run against the skill;
   - topics declared in module manifests, for modules from elsewhere.
 - The MCP module gets its own ADR: how a Harness reaches it, what an Agent may do through it without asking the Person, and how Agents talk to each other.

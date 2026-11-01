@@ -1,4 +1,4 @@
-import type { PlanStep, StepState } from "@bandaso/contract/agents"
+import type { PlanStep, StepState } from "@banda/contract/agents"
 import {
   CircleCheckIcon,
   CircleDotIcon,

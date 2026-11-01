@@ -2,7 +2,7 @@ import {
   Dialog,
   DialogContent,
   DialogTitle,
-} from "@bandaso/ui/components/dialog"
+} from "@banda/ui/components/dialog"
 
 /** An image shown whole over the Pane. `children` hold the
  * `DialogTrigger` that opens it. */

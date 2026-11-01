@@ -1,5 +1,5 @@
 //! A Space is a folder you can see (ADR 0001, decision 5): the work's files,
-//! plus `.bandaso/` with the Space's SQLite. Copying the folder moves the
+//! plus `.banda/` with the Space's SQLite. Copying the folder moves the
 //! Space.
 
 use crate::events::{self, Event, EventFilter};
@@ -14,8 +14,8 @@ use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::broadcast;
 
-/// The folder inside a Space that Bandaso keeps for itself.
-pub const DATA: &str = ".bandaso";
+/// The folder inside a Space that Banda keeps for itself.
+pub const DATA: &str = ".banda";
 const MANIFEST: &str = "space.json";
 const DATABASE: &str = "space.sqlite3";
 const LOCK: &str = "space.lock";
@@ -126,7 +126,7 @@ impl Space {
         match lock.try_lock() {
             Ok(()) => {}
             Err(TryLockError::WouldBlock) => {
-                return Err(Refusal::conflict("This Space is open in another Bandaso.").into());
+                return Err(Refusal::conflict("This Space is open in another Banda.").into());
             }
             Err(TryLockError::Error(error)) => return Err(error.into()),
         }

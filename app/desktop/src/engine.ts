@@ -1,12 +1,12 @@
 /**
- * The engine as the window's child: `bandaso serve --with-parent`. It
+ * The engine as the window's child: `banda serve --with-parent`. It
  * starts the engine, learns its address from the first line, starts it
  * again when it dies, and stops it when the window quits. Closing its
  * stdin is how the engine hears the window is gone.
  */
 import { type ChildProcess, spawn } from "node:child_process"
 import { createInterface } from "node:readline"
-import type { Address } from "@bandaso/contract"
+import type { Address } from "@banda/contract"
 
 /** The first line `serve --with-parent` prints. */
 type Running = { protocol: number; port: number; secret: string }
@@ -48,7 +48,7 @@ export class EngineProcess {
       try {
         running = JSON.parse(line)
       } catch {
-        console.error(`bandaso: the engine said something unexpected: ${line}`)
+        console.error(`banda: the engine said something unexpected: ${line}`)
         child.kill()
         return
       }
@@ -59,7 +59,7 @@ export class EngineProcess {
       for (const resolve of this.#waiting.splice(0)) resolve(this.#address)
     })
     child.once("error", (error) => {
-      console.error(`bandaso: the engine did not start: ${error.message}`)
+      console.error(`banda: the engine did not start: ${error.message}`)
     })
     // `close` comes after an exit, and also after a start that failed.
     child.once("close", (code, signal) => {
@@ -70,7 +70,7 @@ export class EngineProcess {
       const wait = this.#wait
       this.#wait = Math.min(wait * 2, LONGEST_WAIT)
       console.error(
-        `bandaso: the engine stopped (${signal ?? `code ${code}`}); starting it again in ${wait} ms`
+        `banda: the engine stopped (${signal ?? `code ${code}`}); starting it again in ${wait} ms`
       )
       setTimeout(() => this.start(), wait)
     })

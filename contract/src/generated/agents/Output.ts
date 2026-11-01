@@ -2,7 +2,7 @@
 import type { Exit } from "./Exit";
 
 /**
- * What a command printed, as far as Bandaso keeps it.
+ * What a command printed, as far as Banda keeps it.
  */
 export type Output = { text: string, 
 /**
@@ -10,6 +10,6 @@ export type Output = { text: string,
  */
 exit?: Exit, 
 /**
- * It printed more than Bandaso keeps.
+ * It printed more than Banda keeps.
  */
 cut: boolean, };

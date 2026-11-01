@@ -1,4 +1,4 @@
-import { DiffCounts, DiffPath } from "@bandaso/ui/components/diff"
+import { DiffCounts, DiffPath } from "@banda/ui/components/diff"
 import { FileDiffIcon } from "lucide-react"
 import { type FileChange, total } from "./changes"
 

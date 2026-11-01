@@ -2,7 +2,7 @@
   "extends": "../../tsconfig.json",
   "compilerOptions": {
     "paths": {
-      "@bandaso/ui/*": ["./src/*"]
+      "@banda/ui/*": ["./src/*"]
     }
   },
   "include": ["src"]

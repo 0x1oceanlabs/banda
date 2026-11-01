@@ -1,8 +1,8 @@
 //! The kernel through its interface: a small test module, real SQLite in a
 //! temporary folder, and the real API over a WebSocket.
 
-use bandaso_kernel::api::Identity;
-use bandaso_kernel::{
+use banda_kernel::api::Identity;
+use banda_kernel::{
     AgentId, Call, Code, CommandId, Effect, Error, Kernel, Module, ModuleSpace, OnRestart, Outcome,
     Participant, PersonId, Refusal, Right, Settled, SpaceSummary, Stream, Tx, decode,
 };
@@ -230,7 +230,7 @@ async fn a_space_is_a_folder_and_opens_again_after_a_restart() {
     let space = create_space(&kernel, person, command, "Research")
         .await
         .unwrap();
-    assert!(root.path().join("Research/.bandaso/space.json").is_file());
+    assert!(root.path().join("Research/.banda/space.json").is_file());
     add(&kernel, person, &space, "first").await.unwrap();
 
     let again = create_space(&kernel, person, command, "Research").await;
@@ -413,7 +413,7 @@ async fn a_restart_replays_or_abandons_what_it_cut_short() {
     // An earlier run claimed two effects and then the engine stopped.
     let author = serde_json::to_string(&Participant::Person(owner)).unwrap();
     let database =
-        rusqlite::Connection::open(root.path().join("Work/.bandaso/space.sqlite3")).unwrap();
+        rusqlite::Connection::open(root.path().join("Work/.banda/space.sqlite3")).unwrap();
     for (kind, key, text, attempts) in [
         ("publish", "a", "replayed", "0"),
         ("notify", "b", "abandoned", "0"),
@@ -542,7 +542,7 @@ async fn the_api_refuses_strangers_and_follows_events_without_gaps() {
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let address = listener.local_addr().unwrap();
-    let app = bandaso_kernel::api::router(kernel.clone(), Tokens { owner }, "test");
+    let app = banda_kernel::api::router(kernel.clone(), Tokens { owner }, "test");
     tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
 
     let (_, refused) = connect(
@@ -625,7 +625,7 @@ async fn a_stream_says_its_pieces_then_that_it_ended() {
     let space = create(&kernel, owner, "Work").await;
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let address = listener.local_addr().unwrap();
-    let app = bandaso_kernel::api::router(kernel.clone(), Tokens { owner }, "test");
+    let app = banda_kernel::api::router(kernel.clone(), Tokens { owner }, "test");
     tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
 
     let count = |id: u64| json!({ "type": "stream", "id": id, "space": space.id, "method": "notes.count", "params": { "to": 3 } });
@@ -683,7 +683,7 @@ async fn a_subscription_replays_a_long_log_a_page_at_a_time() {
 
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let address = listener.local_addr().unwrap();
-    let app = bandaso_kernel::api::router(kernel.clone(), Tokens { owner }, "test");
+    let app = banda_kernel::api::router(kernel.clone(), Tokens { owner }, "test");
     tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
     let (mut socket, _) = connect(
         address,

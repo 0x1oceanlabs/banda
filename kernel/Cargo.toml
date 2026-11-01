@@ -1,5 +1,5 @@
 [package]
-name = "bandaso-kernel"
+name = "banda-kernel"
 description = "The kernel: Spaces, the event log, receipts, the outbox, the access decision, the module registry and the API."
 version.workspace = true
 edition.workspace = true

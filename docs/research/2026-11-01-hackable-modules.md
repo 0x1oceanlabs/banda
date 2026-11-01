@@ -251,7 +251,7 @@ The constraints:
 ### Option B: MCP-App modules (adopt the standard as-is)
 - **Shape:** a module is a local MCP server, and its Panes are MCP Apps `ui://` resources. Banda becomes an MCP Apps host. Its tools for Agents are just MCP tools, with `visibility: ["model"|"app"]` separating Agent tools from UI-only tools.
 - **Safety:** high (the spec's sandbox rules).
-- **Power:** moderate. MCP Apps was designed for widgets inside a chat. It has no Space, no Pane lifecycle (`open`/`update`/`close`), no engine events and no owned tables, so Banda would need `bandaso/*` extension methods.
+- **Power:** moderate. MCP Apps was designed for widgets inside a chat. It has no Space, no Pane lifecycle (`open`/`update`/`close`), no engine events and no owned tables, so Banda would need `banda/*` extension methods.
 - **Design language:** weak (variables only).
 - **For an Agent:** easiest *for developers' Agents*, since MCP servers are well known. Every existing MCP App works in Banda without changes.
 - **Risk:** Banda would follow someone else's spec revisions (MCP is already at 2026-07-28) for a core internal contract.
@@ -279,8 +279,8 @@ The constraints:
 5. **Distribution:** start with a local folder per Space (like Obsidian's `.obsidian/plugins`, Zed dev extensions and Zellij `file:`), then git URLs, then a reviewed directory. Use Emacs-style review on update: show the source diff and the capability diff.
 6. **How an Agent writes one:**
    - The Agent reads the generated "Banda module" skill: the block catalogue, capability list and engine API reference.
-   - It runs `bandaso module new`, writes the files, and runs `bandaso module check`, which validates the manifest, view JSON and schemas and reports errors by file and line.
-   - `bandaso module dev` hot-reloads the Pane (Raycast `ray develop`, Obsidian Hot-Reload).
+   - It runs `banda module new`, writes the files, and runs `banda module check`, which validates the manifest, view JSON and schemas and reports errors by file and line.
+   - `banda module dev` hot-reloads the Pane (Raycast `ray develop`, Obsidian Hot-Reload).
    - The person sees the capability screen and approves, and the module's MCP tools then appear to the Space's Agents.
 
 **Why this one:**

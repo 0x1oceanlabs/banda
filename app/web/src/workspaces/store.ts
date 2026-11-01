@@ -1,15 +1,15 @@
 /**
  * Where the window keeps its workspaces between runs: its own storage on
- * this computer (`$BANDASO_STATE/window` when that is set). They move into
+ * this computer (`$BANDA_STATE/window` when that is set). They move into
  * the engine later, so the CLI and Agents can arrange them too (ADR 0005,
  * decision 3); this file is the one place that changes then.
  */
-import type { SpaceId } from "@bandaso/contract"
-import type { PaneState } from "@bandaso/ui/pane"
+import type { SpaceId } from "@banda/contract"
+import type { PaneState } from "@banda/ui/pane"
 import { open, parse, start, type Width, type Workspaces } from "./model"
 
-const WORKSPACES = "bandaso.workspaces"
-const SIDEBAR = "bandaso.sidebar"
+const WORKSPACES = "banda.workspaces"
+const SIDEBAR = "banda.sidebar"
 
 /** The workspaces kept, or a first one with the Pane a Person starts with. */
 export function loadWorkspaces(

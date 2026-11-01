@@ -5,7 +5,7 @@ import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
-} from "@bandaso/ui/components/collapsible"
+} from "@banda/ui/components/collapsible"
 import { ChevronRightIcon } from "lucide-react"
 
 function Trace({ className, ...props }: React.ComponentProps<"div">) {

@@ -1,4 +1,4 @@
-import type { ListedThread, TurnView } from "@bandaso/contract/agents"
+import type { ListedThread, TurnView } from "@banda/contract/agents"
 import { expect, test } from "vitest"
 import { attentionOf, markOf, settledTurn } from "./marks"
 

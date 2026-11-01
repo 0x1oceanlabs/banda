@@ -2,7 +2,7 @@
 
 /**
  * Who a Harness says is signed in, in its own words: a plan such as
- * "Claude Max" with its email, an API key, a gateway, or no one. Bandaso
+ * "Claude Max" with its email, an API key, a gateway, or no one. Banda
  * reads none of its files to know.
  */
 export type SignedInAs = { 

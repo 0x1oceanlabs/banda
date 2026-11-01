@@ -1,5 +1,5 @@
 import { useCallback, useState } from "react"
-import { problem as words } from "@bandaso/ui/lib/words"
+import { problem as words } from "@banda/ui/lib/words"
 
 /**
  * Runs a Person's action: one at a time, with what went wrong in plain

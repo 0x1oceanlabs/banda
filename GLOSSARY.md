@@ -9,7 +9,7 @@ it.
 
 **Space**:
 One body of work and its folder on disk (`~/Banda/<name>/` by default). It
-holds the files that the Person and the Agents work on, plus `.bandaso/`,
+holds the files that the Person and the Agents work on, plus `.banda/`,
 which keeps the Space's data and event log. Copying the folder moves the
 Space.
 _Avoid_: project, workspace (that is a screen of Panes).

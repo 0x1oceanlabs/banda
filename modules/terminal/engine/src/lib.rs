@@ -12,7 +12,7 @@ pub mod model;
 mod history;
 mod terminal;
 
-use bandaso_kernel::{Call, Module, Refusal, Right, SpaceId, Stream, decode};
+use banda_kernel::{Call, Module, Refusal, Right, SpaceId, Stream, decode};
 use model::{Open, Size, TerminalId};
 use serde::Deserialize;
 use serde_json::Value;
@@ -42,7 +42,7 @@ impl Terminals {
             .filter(|t| t.space == space)
             .cloned()
             .ok_or_else(|| {
-                Refusal::not_found("This terminal is gone: it was closed, or Bandaso stopped.")
+                Refusal::not_found("This terminal is gone: it was closed, or Banda stopped.")
             })
     }
 }

@@ -1,5 +1,5 @@
 [package]
-name = "bandaso-fake-agent"
+name = "banda-fake-agent"
 description = "A scripted ACP agent for tests and window checks: the prompt's words choose what it does."
 version.workspace = true
 edition.workspace = true

@@ -279,7 +279,7 @@ test("a Person signs in from the turn that needed it, and it goes again", async 
   await expect(
     thread.getByRole("button", { name: "Sign in with Fake account" })
   ).toBeVisible()
-  await expect(thread.getByText(/bandaso-fake-agent --sign-in$/)).toBeVisible()
+  await expect(thread.getByText(/banda-fake-agent --sign-in$/)).toBeVisible()
   await page.screenshot({ path: "test-results/4-sign-in.png" })
 
   await thread
@@ -405,7 +405,7 @@ test("a Person sees who is signed in to a Harness, signs in and out", async () =
   const settings = page.getByRole("region", { name: "Harnesses" })
   const fake = settings.getByRole("group", { name: "Fake AI" })
   await expect(
-    fake.getByText(/^fake-cli 1\.0\.0 · bandaso-fake-agent \d/)
+    fake.getByText(/^fake-cli 1\.0\.0 · banda-fake-agent \d/)
   ).toBeVisible()
   await expect(
     fake
@@ -861,7 +861,7 @@ test("the composer walks earlier messages, keeps a draft and edits what waits", 
   const drafts = () =>
     page.evaluate(() =>
       Object.keys(localStorage)
-        .filter((key) => key.startsWith("bandaso.agents.draft."))
+        .filter((key) => key.startsWith("banda.agents.draft."))
         .map((key) => localStorage.getItem(key))
     )
   await composer.fill("half written")

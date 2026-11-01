@@ -2,7 +2,7 @@
  * The window's toasts (ADR 0011, decision 2): a toast tells, the Mark
  * remembers, so each goes away by itself. Pure, so plain tests cover it.
  */
-import type { Chime } from "@bandaso/ui/sound"
+import type { Chime } from "@banda/ui/sound"
 
 /** How long each call's toast shows, in ms: the louder, the longer. */
 export const LIFE: Record<Chime, number> = {

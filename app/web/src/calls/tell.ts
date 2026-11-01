@@ -3,10 +3,10 @@
  * where the window tells them of it (ADR 0011, decisions 1 and 6). Pure,
  * so plain tests cover it.
  */
-import type { MarkState } from "@bandaso/ui/components/banda-mark"
-import type { Listed, PaneState } from "@bandaso/ui/pane"
-import type { Chime } from "@bandaso/ui/sound"
-import type { Notify } from "@bandaso/contract/look"
+import type { MarkState } from "@banda/ui/components/banda-mark"
+import type { Listed, PaneState } from "@banda/ui/pane"
+import type { Chime } from "@banda/ui/sound"
+import type { Notify } from "@banda/contract/look"
 
 /** One thing that calls its Person now, as a module listed it. */
 export type Call = {

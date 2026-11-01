@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from "react"
-import { Button } from "@bandaso/ui/components/button"
+import { Button } from "@banda/ui/components/button"
 import {
   InputGroup,
   InputGroupAddon,
   InputGroupInput,
-} from "@bandaso/ui/components/input-group"
+} from "@banda/ui/components/input-group"
 import { ChevronDownIcon, ChevronUpIcon, XIcon } from "lucide-react"
 
 /** The names the window's CSS marks found words by. */

@@ -1,8 +1,8 @@
-//! What Bandaso and a Harness say to each other, written down as it
+//! What Banda and a Harness say to each other, written down as it
 //! happens, when a test has the Harness's entry `record` in a folder. Each
 //! start of its program writes one file, `<harness>-<UUIDv7>.jsonl`, named
 //! in the order of the starts, with a line per ACP frame:
-//! `{"to":"agent","frame":…}` for what Bandaso sent and
+//! `{"to":"agent","frame":…}` for what Banda sent and
 //! `{"to":"client","frame":…}` for what the Harness answered. The fake
 //! agent replays such a file (`FAKE_AGENT_REPLAY`), so tests hold what a
 //! real Claude Code or Codex said.
@@ -24,7 +24,7 @@ impl Recording {
             .map(|file| Recording(Mutex::new(file)))
             .map_err(|error| {
                 format!(
-                    "Bandaso cannot record the Harness in {}: {error}",
+                    "Banda cannot record the Harness in {}: {error}",
                     path.display()
                 )
             })
@@ -34,7 +34,7 @@ impl Recording {
     pub fn write(&self, to: To, line: &str) {
         let to = match to {
             To::Harness => "agent",
-            To::Bandaso => "client",
+            To::Banda => "client",
         };
         let frame = serde_json::from_str(line).unwrap_or_else(|_| Value::String(line.to_owned()));
         let mut entry = json!({ "to": to, "frame": frame }).to_string();
@@ -46,8 +46,8 @@ impl Recording {
 }
 
 /// Which side a frame went to. The file says it in ACP's words: the
-/// Harness is the agent, Bandaso the client.
+/// Harness is the agent, Banda the client.
 pub enum To {
     Harness,
-    Bandaso,
+    Banda,
 }

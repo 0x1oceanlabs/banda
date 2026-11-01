@@ -8,7 +8,7 @@ import { useSyncExternalStore } from "react"
 
 export type EnterKey = "steer" | "queue"
 
-const KEY = "bandaso.agents.enter-key"
+const KEY = "banda.agents.enter-key"
 const heard = new Set<() => void>()
 /** The choice, for a window whose storage fails: kept until it closes. */
 let here: EnterKey = "steer"

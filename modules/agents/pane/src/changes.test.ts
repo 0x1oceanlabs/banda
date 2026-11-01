@@ -1,4 +1,4 @@
-import type { Item, ToolContent, ToolStatus } from "@bandaso/contract/agents"
+import type { Item, ToolContent, ToolStatus } from "@banda/contract/agents"
 import { expect, test } from "vitest"
 import { changes, total } from "./changes"
 import { agent } from "./testing"

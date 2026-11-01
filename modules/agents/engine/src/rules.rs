@@ -5,7 +5,7 @@ use crate::model::{
     Body, Choice, Fact, Failure, Field, FieldValue, Image, ImageId, Input, ItemId, Mode,
     QuestionState, ToolContent, ToolKind, TurnId, TurnState, Values,
 };
-use bandaso_kernel::{Participant, Refusal};
+use banda_kernel::{Participant, Refusal};
 use std::collections::HashSet;
 
 /// How freely an Agent acts is a Person's choice: an Agent sends a message

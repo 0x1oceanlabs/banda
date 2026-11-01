@@ -1,11 +1,11 @@
 /** Plain words a Pane shows. */
-import { Lost, Refused } from "@bandaso/contract"
+import { Lost, Refused } from "@banda/contract"
 
 /** What went wrong with a call, for a Person to read. */
 export function problem(error: unknown): string {
   if (error instanceof Refused) return error.refusal.message
   if (error instanceof Lost)
-    return "Bandaso lost its engine for a moment. Try again."
+    return "Banda lost its engine for a moment. Try again."
   return "Something went wrong. Try again."
 }
 

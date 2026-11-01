@@ -1,5 +1,5 @@
 import { useLayoutEffect } from "react"
-import { useMessageScroller } from "@bandaso/ui/components/message-scroller"
+import { useMessageScroller } from "@banda/ui/components/message-scroller"
 
 /** The Threads whose place it remembers, the latest left last. */
 const KEEP = 50

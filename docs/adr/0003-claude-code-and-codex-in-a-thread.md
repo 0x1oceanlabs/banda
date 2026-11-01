@@ -57,11 +57,11 @@ ADR 0002, decision 9, as decision 9 below says.
 
 3. **The Person's own Claude Code and Codex.**
    - The adapters start at exact versions and use the CLIs the Person
-     installed (`CLAUDE_CODE_EXECUTABLE`, `CODEX_PATH`). Bandaso bundles
+     installed (`CLAUDE_CODE_EXECUTABLE`, `CODEX_PATH`). Banda bundles
      neither.
    - The engine reads each CLI's version and checks it against a supported
      range. The Thread warns when the version is outside it.
-   - Bandaso is for developers first.
+   - Banda is for developers first.
 
 4. **People sign in themselves.**
    - When a Harness needs a sign-in, the Thread offers to open a terminal
@@ -69,7 +69,7 @@ ADR 0002, decision 9, as decision 9 below says.
      `codex login`. When the command ends, the engine checks again.
      _Changed by ADR 0004: the Thread offers the ways the Harness declares
      in ACP, and Codex signs in by itself in the browser._
-   - Tokens never pass through Bandaso, and Bandaso reads none of the
+   - Tokens never pass through Banda, and Banda reads none of the
      Harness's credential files.
    - A second account is a second entry in the Harness list, with its own
      configuration folder.

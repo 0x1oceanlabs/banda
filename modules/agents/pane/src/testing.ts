@@ -1,5 +1,5 @@
 /** Events as the engine sends them, for this module's tests. */
-import type { Event, Participant } from "@bandaso/contract"
+import type { Event, Participant } from "@banda/contract"
 
 export const person: Participant = { kind: "person", id: "p" }
 export const agent: Participant = { kind: "agent", id: "a" }

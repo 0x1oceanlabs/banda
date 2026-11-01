@@ -1,5 +1,5 @@
 import { expect, test } from "vitest"
-import type { JsonValue } from "@bandaso/contract"
+import type { JsonValue } from "@banda/contract"
 import { Input } from "./input"
 
 /** An engine that answers each call when the test says so. */

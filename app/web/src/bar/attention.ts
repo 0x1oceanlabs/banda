@@ -3,8 +3,8 @@
  * every Space calls for, and how many things wait for the Person in all.
  * Pure, so plain tests cover it.
  */
-import { loudest } from "@bandaso/ui/components/banda-mark"
-import type { Attention } from "@bandaso/ui/pane"
+import { loudest } from "@banda/ui/components/banda-mark"
+import type { Attention } from "@banda/ui/pane"
 
 export function combine(reports: Iterable<Attention>): Attention {
   const all = [...reports]

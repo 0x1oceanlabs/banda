@@ -8,8 +8,8 @@ import { join, relative } from "node:path"
 import { expect, test } from "vitest"
 
 const PANE = [
-  /^@bandaso\/contract(\/agents)?$/,
-  /^@bandaso\/ui\//,
+  /^@banda\/contract(\/agents)?$/,
+  /^@banda\/ui\//,
   /^react$/,
   /^lucide-react$/,
   /^\.\.?\//,

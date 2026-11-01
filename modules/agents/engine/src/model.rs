@@ -1,35 +1,35 @@
 //! The agents module's published language: its IDs, the facts it publishes
 //! and the views a window reads. TypeScript types come from here.
 
-use bandaso_kernel::Participant;
+use banda_kernel::Participant;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use ts_rs::TS;
 
-bandaso_kernel::id!(
+banda_kernel::id!(
     /// A Thread: one conversation between a Person and an Agent.
     ThreadId,
     export_to = "agents/"
 );
-bandaso_kernel::id!(
+banda_kernel::id!(
     /// A Turn: one stretch of an Agent's work in a Thread.
     TurnId,
     export_to = "agents/"
 );
-bandaso_kernel::id!(
+banda_kernel::id!(
     /// One entry a Thread shows: a message, a thought, a tool call or a
     /// Question.
     ItemId,
     export_to = "agents/"
 );
-bandaso_kernel::id!(
+banda_kernel::id!(
     /// An image a message carries.
     ImageId,
     export_to = "agents/"
 );
 
 /// An image a Person sends with a message. Its bytes are kept apart, in
-/// the Space's `.bandaso/images/`, and read with `agents.image`.
+/// the Space's `.banda/images/`, and read with `agents.image`.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "agents/")]
 pub struct Image {
@@ -225,7 +225,7 @@ pub struct Adapter {
 }
 
 /// Who a Harness says is signed in, in its own words: a plan such as
-/// "Claude Max" with its email, an API key, a gateway, or no one. Bandaso
+/// "Claude Max" with its email, an API key, a gateway, or no one. Banda
 /// reads none of its files to know.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "agents/")]
@@ -244,7 +244,7 @@ pub struct SignedInAs {
     pub organization: Option<String>,
 }
 
-/// A way to sign in to a Harness, as the Harness offers it. Bandaso runs
+/// A way to sign in to a Harness, as the Harness offers it. Banda runs
 /// it and holds none of the account's credentials: the Harness keeps them.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "agents/")]
@@ -329,7 +329,7 @@ pub struct TurnView {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub failure: Option<Failure>,
     /// When it began to run, in ms since the epoch. A turn from before
-    /// Bandaso kept it has none.
+    /// Banda kept it has none.
     #[ts(optional, type = "number")]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub started: Option<i64>,
@@ -370,7 +370,7 @@ pub enum ToolStatus {
     Failed,
 }
 
-/// One answer a Question offers. The Harness wrote it; Bandaso passes it on
+/// One answer a Question offers. The Harness wrote it; Banda passes it on
 /// unchanged.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "agents/")]
@@ -383,7 +383,7 @@ pub struct Choice {
     pub always: bool,
 }
 
-/// One field of a Question's form. The Harness wrote it; Bandaso shows it.
+/// One field of a Question's form. The Harness wrote it; Banda shows it.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "agents/")]
 pub struct Field {
@@ -556,7 +556,7 @@ pub struct Cost {
     pub currency: String,
 }
 
-/// What a command printed, as far as Bandaso keeps it.
+/// What a command printed, as far as Banda keeps it.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "agents/")]
 pub struct Output {
@@ -565,7 +565,7 @@ pub struct Output {
     #[ts(optional)]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub exit: Option<Exit>,
-    /// It printed more than Bandaso keeps.
+    /// It printed more than Banda keeps.
     #[serde(default)]
     pub cut: bool,
 }
@@ -629,7 +629,7 @@ pub enum Body {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         values: Option<Values>,
     },
-    /// A line from Bandaso about the Thread, such as a session the
+    /// A line from Banda about the Thread, such as a session the
     /// Harness could not continue.
     Notice {
         text: String,
@@ -860,7 +860,7 @@ pub enum Fact {
     ToolOutput {
         item: ItemId,
         text: String,
-        /// Bandaso keeps no more of its output.
+        /// Banda keeps no more of its output.
         #[serde(default)]
         cut: bool,
     },

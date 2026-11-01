@@ -1,6 +1,6 @@
 # Architecture
 
-This is the shape Bandaso is built to. The decisions and their reasons are in
+This is the shape Banda is built to. The decisions and their reasons are in
 [ADR 0001](adr/0001-one-engine-a-small-kernel-and-modules.md) and
 [ADR 0002](adr/0002-how-the-engine-writes-and-keeps-the-work.md), and the
 words are in [`GLOSSARY.md`](../GLOSSARY.md). This page changes when the code
@@ -17,12 +17,12 @@ Inside a module      rules · store · operation           tactical DDD where in
 ## Processes
 
 ```
-bandaso (Electron)    window: tiling, Panes (React + shadcn/ui)
+banda (Electron)    window: tiling, Panes (React + shadcn/ui)
       │ engine API: JSON over WebSocket, types generated from Rust
-bandaso serve         the engine: one process per machine; owns the data
+banda serve         the engine: one process per machine; owns the data
       │ ACP over stdio              ▲ MCP: modules' tools for Agents
 Harness (Claude Code, Codex, …) ────┘
-bandaso call/follow   the CLI: the same API, for people, scripts and Agents
+banda call/follow   the CLI: the same API, for people, scripts and Agents
 ```
 
 - Each process does one job, speaks an explicit protocol, and can be
@@ -31,13 +31,13 @@ bandaso call/follow   the CLI: the same API, for people, scripts and Agents
 - Everything the window can do, the CLI can do.
 - Inside the engine there are no services: it is one process, with one
   SQLite writer per Space. Modules are crates in one binary.
-- **One program, `bandaso`.** `bandaso serve` runs the engine. It listens
+- **One program, `banda`.** `banda serve` runs the engine. It listens
   on 127.0.0.1 only, and writes its port and a fresh secret to
   `engine.json` in its state folder, a file only this user can read. A
   window starts it with `--with-parent`: the engine then prints the same
   JSON as its first line, and stops when its stdin closes. A second
   engine with the same state folder refuses to start.
-- **The look is the window's machine's** (ADR 0007). `bandaso look`
+- **The look is the window's machine's** (ADR 0007). `banda look`
   reads Omarchy's theme, Hyprland's windows and `~/.config/banda/look.toml`
   and prints the CSS variables as JSON, with no engine; `--follow` prints
   each change, and `check` names a broken file's line. Its `[sound]` says
@@ -48,14 +48,14 @@ bandaso call/follow   the CLI: the same API, for people, scripts and Agents
   or `sidebars/<name>.toml`, over the defaults. The view menu asks the
   desktop to write the preset into the file; nothing else the page asks
   of Node writes a file.
-- **The Banda skill is text for Agents** (ADR 0012). `bandaso skill`
-  prints its core, `bandaso skill <topic>` a topic, and
-  `bandaso skill --export <folder>` writes an Agent Skills folder. Each
+- **The Banda skill is text for Agents** (ADR 0012). `banda skill`
+  prints its core, `banda skill <topic>` a topic, and
+  `banda skill --export <folder>` writes an Agent Skills folder. Each
   part of Banda writes its topics in a `skill/` folder beside its code,
   and `modules/skill` gathers them when it is built; a topic may include a
   file the part ships, such as `look/sidebar.toml`.
-- **The CLI prints JSON.** `bandaso call <method>` prints `{"ok": …}`.
-  `bandaso follow` prints events, one per line. When the engine refuses
+- **The CLI prints JSON.** `banda call <method>` prints `{"ok": …}`.
+  `banda follow` prints events, one per line. When the engine refuses
   the call, the hello or the follow, the CLI prints
   `{"error": {"code", "message"}}` and exits 1. When no engine answers,
   or the CLI cannot do its part, it says so on stderr and exits 2; a call
@@ -65,10 +65,10 @@ bandaso call/follow   the CLI: the same API, for people, scripts and Agents
 
 The kernel holds only what every module needs, and it names no module.
 
-- **Space.** A folder on disk (`~/Bandaso/<name>/` by default): the work's
-  files plus `.bandaso/`. The latter holds the Space's SQLite, the modules'
+- **Space.** A folder on disk (`~/Banda/<name>/` by default): the work's
+  files plus `.banda/`. The latter holds the Space's SQLite, the modules'
   migrations and the event log. One engine at a time opens a Space: it holds
-  a lock on `.bandaso/space.lock` while the Space is open.
+  a lock on `.banda/space.lock` while the Space is open.
 - **Event log.** Append-only, with typed events, one per Space. Windows and
   the CLI subscribe to it. A subscription sends only what its view needs.
   The database itself refuses to change or delete an event.
@@ -128,11 +128,11 @@ command (with its ID)
 | The Space's folder | the files of the work |
 | Text files | the Harnesses, in the config folder; the look (`look.toml`, themes) and the sidebar (`sidebar.toml`, presets) in `~/.config/banda/`. Layouts and keys join them later |
 | The Harness | its session, context and sign-in. We keep only its session ID, as evidence |
-| The OS keychain | secrets you give Bandaso. Its database never holds them |
+| The OS keychain | secrets you give Banda. Its database never holds them |
 | The engine's state folder | the owner's ID; while the engine runs, its port and per-run secret |
 | The window's storage | the workspaces: their columns, each Pane with its Space, the widths and the focus; whether the sidebar shows; what Enter does while an Agent works; which finished turn of each Thread the Person has seen |
-| `.bandaso/` SQLite | Threads, Questions and answers, the Agents' queue, Databases' records, receipts, events, outbox |
-| `.bandaso/images/` | the bytes of the images messages carry, one file per image; the SQLite says what each is and which message carries it |
+| `.banda/` SQLite | Threads, Questions and answers, the Agents' queue, Databases' records, receipts, events, outbox |
+| `.banda/images/` | the bytes of the images messages carry, one file per image; the SQLite says what each is and which message carries it |
 
 Events are facts with a version, and the log is never rewritten. Each module
 keeps its own ledger of migrations. Our IDs are UUIDv7. A Harness's IDs are
@@ -193,7 +193,7 @@ If Chat is removed, Agents still works through its own Thread.
   such as its model (`agents.defaults`). Defaults a Person sets per Harness
   entry (ADR 0006, decision 3) are not built yet.
   - Spaces from before ADR 0006 kept their Agents in
-    `.bandaso/agents/<name>.toml`. Opening the module reads those files
+    `.banda/agents/<name>.toml`. Opening the module reads those files
     once to learn each older Thread's Harness, and leaves them as they are.
     Older Threads keep the Agent ID they had, so one old Agent's Threads
     still share it.
@@ -237,7 +237,7 @@ If Chat is removed, Agents still works through its own Thread.
 - **The Agent can go on by itself between turns**, as Claude Code does when
   a background task it started ends or a wakeup fires. Each session that
   ran a turn has a listener (`between.rs`): what the session says then
-  opens a turn of the Agent's own, whose message is a notice from Bandaso.
+  opens a turn of the Agent's own, whose message is a notice from Banda.
   The turn ends when the Harness says what that cost; when a Person's
   message goes, which the Harness takes into what it does; when a Person
   stops it; or after a minute with nothing said, no tool call of it
@@ -267,7 +267,7 @@ If Chat is removed, Agents still works through its own Thread.
   in a new turn, and the failed one stays as it ended.
 - **A Person signs in to a Harness in a way it offers** (ACP's auth
   methods; `agents.account`; ADR 0004), and the Harness keeps the
-  credentials: Bandaso holds none and reads none of its files.
+  credentials: Banda holds none and reads none of its files.
   - The engine declares that it runs terminals, so Claude Code's adapter
     offers ways in a terminal: the Harness entry's program with the way's
     arguments and environment, so an entry's own config folder gets the
@@ -305,7 +305,7 @@ If Chat is removed, Agents still works through its own Thread.
   acts decides what it asks. Each message keeps the settings its Thread
   had when it was sent, and its turn sets them on the session when it
   starts. The options come from the Harness, as it last offered them in
-  the Thread (`thread.offered`); Bandaso keeps no model list of its own.
+  the Thread (`thread.offered`); Banda keeps no model list of its own.
   When the Harness starts or leaves a plan by itself, the Thread's settings
   follow; a mode it moves to otherwise, or a stricter one it runs in
   because it lacks the chosen one, is a notice.
@@ -319,7 +319,7 @@ If Chat is removed, Agents still works through its own Thread.
   the engine checks against the form first; Skip declines. No mode answers
   a form. What a Person types in a field the Harness marks secret reaches
   the Harness from memory only: the Thread and the outbox keep a mask. A
-  form Bandaso cannot show goes unanswered, with a notice.
+  form Banda cannot show goes unanswered, with a notice.
 - **A Question closes** when the Harness stops waiting for it, as when it
   times out.
 - **A tool call shows what it did:** a file change as its diff, and what
@@ -415,7 +415,7 @@ plain.
 
 ## Harnesses
 
-Threads, turns, tool calls and Questions are Bandaso's model. The agents
+Threads, turns, tool calls and Questions are Banda's model. The agents
 module reaches a Harness through an adapter:
 
 - **ACP** is the first and default adapter. It covers any agent in the ACP
@@ -450,13 +450,13 @@ modules/*/pane   each module's Panes
 ```
 
 - **The page reaches the engine only through the API.** Electron main gives
-  it one thing: the engine's address, through `window.bandaso.engine()` in
-  a sandboxed preload. The page is served from `app://bandaso` with a
+  it one thing: the engine's address, through `window.banda.engine()` in
+  a sandboxed preload. The page is served from `app://banda` with a
   strict Content Security Policy. It cannot navigate, open windows or get
   permissions, and links open in the browser. It may run WebAssembly
   shipped with it, which Ghostty draws terminals with.
 - **The engine is the window's child.** Main starts
-  `bandaso serve --with-parent`, starts it again when it dies (waiting up
+  `banda serve --with-parent`, starts it again when it dies (waiting up
   to 10 s between tries), and closes its stdin on quit. The client then
   reconnects and follows on from the last event it delivered, so a Pane
   sees no gap.
@@ -500,7 +500,7 @@ modules/*/pane   each module's Panes
     same with other args; moving it to another column or workspace draws
     it again without that.
   - The window keeps the workspaces in its storage
-    (`$BANDASO_STATE/window` when that is set) until they move into the
+    (`$BANDA_STATE/window` when that is set) until they move into the
     engine (ADR 0005, decision 3); `workspaces/store.ts` is the one place
     that changes then.
 - **One list of actions** (`app/web/src/shell/actions.ts`) holds what the
@@ -515,7 +515,7 @@ modules/*/pane   each module's Panes
   and the Person's keys say (ADR 0008): grouped by state, by Space or not
   at all; sorted by need, by change or by title; shelves at the bottom;
   a list of Spaces above; rows of one, two or three lines. `arrange.ts` is
-  the one pure rule. `bandaso look` resolves the keys from `sidebar.toml`
+  the one pure rule. `banda look` resolves the keys from `sidebar.toml`
   (`look/src/sidebar.rs`; Banda's presets `inbox`, `spaces` and `places`
   are files in `look/sidebars/`), and the view menu writes the preset
   into the file, keeping the Person's other keys and comments. The sidebar
@@ -558,14 +558,14 @@ modules/*/pane   each module's Panes
     and a system notification when the window is behind (`system.ts`).
     `Alt+U` goes to what calls, the loudest first.
   - A system notification is the desktop's (`app/desktop/src/notices.ts`):
-    the page asks for it through `window.bandaso.notify`, with the mark
+    the page asks for it through `window.banda.notify`, with the mark
     still in its state as its icon (`stillMark`, drawn to a PNG), and the
     desktop shows it silent, takes it back once the Person sees the
     Thread, and says when they click it; the window comes to the front and
     goes there. More than two at once make one. While Omarchy's Do Not
     Disturb is on (`omarchy-shell notifications isDnd`), only the Marks
     change. The end-to-end tests run with a recorded desktop
-    (`BANDASO_DESKTOP=recorded`), so nothing reaches the screen.
+    (`BANDA_DESKTOP=recorded`), so nothing reaches the screen.
   - Every step of this is the Person's to choose: `[notify]` in
     `look.toml` (`look/src/notify.rs`) turns the system notifications to
     always or off and the toasts to always or off, drops the words, keeps
@@ -587,14 +587,14 @@ modules/*/pane   each module's Panes
     from another family. The page takes it with the look
     (`useLookSound`); until the first look comes, the defaults play.
     Electron lets the page play sound before the first click.
-- **Only `window.bandaso` ties the page to the desktop.** It names no
+- **Only `window.banda` ties the page to the desktop.** It names no
   Electron API, so a browser can host it later; for now the engine lets in
-  only `app://bandaso` and pages on localhost.
+  only `app://banda` and pages on localhost.
 
 ## Repository
 
 ```
-bandaso/
+banda/
   kernel/             Rust: Space, event log, access, registry, API
   modules/
     agents/engine/    Rust: Threads, turns, Questions, the ACP adapter
@@ -603,8 +603,8 @@ bandaso/
     terminal/pane/    React: a terminal, drawn by Ghostty
     browser/pane/     React: the browser Pane, its tabs and row (ADR 0013, next)
     skill/            Rust: the Banda skill, its core and the topics it gathers (ADR 0012)
-  look/               Rust: bandaso look, the look and the sidebar's arrangement; skill/ its topics
-  engine/             the bandaso program: serve (the kernel and its modules), call, follow, look, skill
+  look/               Rust: banda look, the look and the sidebar's arrangement; skill/ its topics
+  engine/             the banda program: serve (the kernel and its modules), call, follow, look, skill
   app/ui/             shadcn/ui and the Pane contract
   app/ghostty/        T3 Code's Ghostty adapter and its WebAssembly, vendored
   app/web/            React: the shell (bar, sidebar, workspaces, overview), the actions, the Pane registry
@@ -619,14 +619,14 @@ bandaso/
 ## Checks that hold the shape
 
 - **Architecture tests.** The kernel names no module, no module reads
-  another's tables, and a Pane imports only the API, `@bandaso/ui`, React
+  another's tables, and a Pane imports only the API, `@banda/ui`, React
   and its icons; the terminal's Pane also Ghostty.
 - **Module tests** run through the module's interface: commands go in and
   events come out. Nothing past the interface is mocked.
 - **Adapter tests** run the real engine. Only the Harness's transport is
   replayed: the fake agent plays a recorded conversation
   (`FAKE_AGENT_REPLAY`).
-  - A test has a Harness entry `record` what it and Bandaso say to each
+  - A test has a Harness entry `record` what it and Banda say to each
     other, one ACP frame per line. A Harness list cannot ask for it: a
     recording holds everything said, a secret typed into a form too.
   - Each frame the engine sends takes the next recorded one of its
