@@ -1,6 +1,9 @@
 //! What a terminal printed, kept in memory and bounded, so a window that
 //! opens it later, or comes back after a reconnect, starts from the same
 //! screen.
+//!
+//! It keeps the program's queries to the terminal too: a Pane replays it
+//! with its answers off, so a screen shown again types nothing.
 
 use std::collections::VecDeque;
 

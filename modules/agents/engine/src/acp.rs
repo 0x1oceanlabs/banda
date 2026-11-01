@@ -26,8 +26,8 @@
 
 use crate::model::{
     Cost, Exit, Failure, Field, FieldValue, HarnessOption, Input, Mode, Offer, OptionChoice,
-    OptionValue, PlanStep, Program, Settings, SignInWay, SlashCommand, StepState, TextFormat,
-    ThreadId, ToolContent, ToolKind, ToolStatus, TurnState, Usage, Values,
+    OptionValue, PlanStep, Settings, SignInWay, SlashCommand, StepState, TextFormat, ThreadId,
+    ToolContent, ToolKind, ToolStatus, TurnState, Usage, Values,
 };
 use crate::rules::{Ending, Offered};
 use crate::settings::Harness;
@@ -820,16 +820,7 @@ fn ways(harness: &Harness, methods: Vec<acp::AuthMethod>) -> Vec<SignInWay> {
         .into_iter()
         .filter_map(|method| {
             let terminal = match &method {
-                acp::AuthMethod::Terminal(way) => Some(Program {
-                    program: harness.command.clone(),
-                    args: harness.args.iter().chain(&way.args).cloned().collect(),
-                    env: harness
-                        .env
-                        .clone()
-                        .into_iter()
-                        .chain(way.env.clone())
-                        .collect(),
-                }),
+                acp::AuthMethod::Terminal(way) => Some(harness.program(&way.args, &way.env)),
                 acp::AuthMethod::Agent(_) => None,
                 _ => return None,
             };

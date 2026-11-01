@@ -45,9 +45,10 @@ pub mod settings;
 mod store;
 mod turn;
 
+use acp::Connection;
 use bandaso_kernel::{
     AgentId, Call, Effect, Error, Module, ModuleSpace, OnRestart, Outcome, Participant, Refusal,
-    Right, Settled, Tx, decode,
+    Right, Settled, SpaceId, Tx, decode,
 };
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as BASE64;
@@ -104,6 +105,17 @@ impl Agents {
         self.harnesses.find(id).ok_or_else(|| {
             Refusal::invalid(format!("This computer has no Harness named \"{id}\"."))
         })
+    }
+
+    /// Harness entry `id` with its process in `space`, started if need be.
+    async fn running(
+        &self,
+        space: SpaceId,
+        id: &str,
+    ) -> Result<(&Harness, Arc<Connection>), Refusal> {
+        let harness = self.harness(id)?;
+        let connection = self.live.connection(space, harness).await;
+        Ok((harness, connection.map_err(Refusal::conflict)?))
     }
 }
 
@@ -352,16 +364,15 @@ impl Module for Agents {
             Method::List => value(settings::agents(space.folder())?),
             Method::Account => {
                 let OneHarness { harness } = decode(params)?;
-                let harness = self.harness(&harness)?;
-                let connection = self.live.connection(space.id(), harness).await;
-                let ways = connection.map_err(Refusal::conflict)?.ways().to_vec();
-                value(Account { ways })
+                let (_, connection) = self.running(space.id(), &harness).await?;
+                value(Account {
+                    ways: connection.ways().to_vec(),
+                })
             }
             Method::SignIn => {
                 let SignIn { harness, way } = decode(params)?;
-                let harness = self.harness(&harness)?;
-                let connection = self.live.connection(space.id(), harness).await;
-                let connection = connection.map_err(Refusal::conflict)?;
+                call.command_id()?;
+                let (harness, connection) = self.running(space.id(), &harness).await?;
                 let found = connection
                     .ways()
                     .iter()
@@ -381,7 +392,9 @@ impl Module for Agents {
                 // so it reads the account anew; in every Space, since they
                 // share the account.
                 self.live.let_go(&harness.id).await;
-                value(())
+                // Its receipt keeps the answer, so the same command sent
+                // again does not sign in again.
+                call.command(|_| Ok(Value::Null)).await
             }
             Method::Create => {
                 let Create { name, harness } = decode(params)?;

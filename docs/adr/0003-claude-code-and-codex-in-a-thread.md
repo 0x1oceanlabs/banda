@@ -67,6 +67,8 @@ ADR 0002, decision 9, as decision 9 below says.
    - When a Harness needs a sign-in, the Thread offers to open a terminal
      Pane (Ghostty) with the Harness's own command: `claude auth login` or
      `codex login`. When the command ends, the engine checks again.
+     _Changed by ADR 0004: the Thread offers the ways the Harness declares
+     in ACP, and Codex signs in by itself in the browser._
    - Tokens never pass through Bandaso, and Bandaso reads none of the
      Harness's credential files.
    - A second account is a second entry in the Harness list, with its own

@@ -8,10 +8,10 @@
 //!   (`supervised`, `accept_edits`, `auto` or `full_access`), `plan`, and
 //!   the Harness's options by their IDs in `[options]`, such as `model`.
 
-use crate::model::{AgentView, HarnessView, Settings};
+use crate::model::{AgentView, HarnessView, Program, Settings};
 use bandaso_kernel::{AgentId, Error, Refusal};
 use serde::{Deserialize, Serialize};
-use std::collections::BTreeMap;
+use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 
@@ -25,6 +25,18 @@ pub struct Harness {
     pub args: Vec<String>,
     #[serde(default)]
     pub env: BTreeMap<String, String>,
+}
+
+impl Harness {
+    /// The entry's own program with `args` after its arguments and `env`
+    /// over its environment, as a Harness's sign-in in a terminal runs.
+    pub fn program(&self, args: &[String], env: &HashMap<String, String>) -> Program {
+        Program {
+            program: self.command.clone(),
+            args: self.args.iter().chain(args).cloned().collect(),
+            env: self.env.clone().into_iter().chain(env.clone()).collect(),
+        }
+    }
 }
 
 /// The Harnesses this machine can start.

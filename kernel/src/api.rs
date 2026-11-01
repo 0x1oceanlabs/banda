@@ -35,7 +35,7 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::{broadcast, mpsc};
+use tokio::sync::{broadcast, mpsc, oneshot};
 use tokio::task::JoinHandle;
 use ts_rs::TS;
 
@@ -221,8 +221,8 @@ fn same_secret(a: &str, b: &str) -> bool {
             == 0
 }
 
-fn result(id: u64, answer: Result<Value, Refusal>) -> EngineFrame {
-    match answer {
+fn result(id: u64, answer: Result<Value, Refusal>) -> Outgoing {
+    let frame = match answer {
         Ok(ok) => EngineFrame::Result {
             id,
             ok: Some(ok),
@@ -233,6 +233,24 @@ fn result(id: u64, answer: Result<Value, Refusal>) -> EngineFrame {
             ok: None,
             error: Some(error),
         },
+    };
+    frame.into()
+}
+
+/// A frame on its way to the socket. A stream's piece says when it is
+/// written, so each stream has one piece in flight: a window that reads
+/// slowly holds the module back, and the engine queues no more.
+struct Outgoing {
+    frame: EngineFrame,
+    written: Option<oneshot::Sender<()>>,
+}
+
+impl From<EngineFrame> for Outgoing {
+    fn from(frame: EngineFrame) -> Self {
+        Outgoing {
+            frame,
+            written: None,
+        }
     }
 }
 
@@ -284,11 +302,14 @@ async fn serve(api: Arc<Api>, socket: WebSocket) {
         return;
     }
 
-    let (out, mut outgoing) = mpsc::channel::<EngineFrame>(1024);
+    let (out, mut outgoing) = mpsc::channel::<Outgoing>(1024);
     let writer = tokio::spawn(async move {
-        while let Some(frame) = outgoing.recv().await {
+        while let Some(Outgoing { frame, written }) = outgoing.recv().await {
             if sink.send(text(&frame)).await.is_err() {
                 break;
+            }
+            if let Some(written) = written {
+                let _ = written.send(());
             }
         }
     });
@@ -396,13 +417,18 @@ async fn serve(api: Arc<Api>, socket: WebSocket) {
 }
 
 /// Forwards a stream's pieces, then says that it ended.
-async fn hear(stream: u64, mut pieces: Stream, out: mpsc::Sender<EngineFrame>) {
+async fn hear(stream: u64, mut pieces: Stream, out: mpsc::Sender<Outgoing>) {
     while let Some(data) = pieces.recv().await {
-        if out.send(EngineFrame::Piece { stream, data }).await.is_err() {
+        let (written, sent) = oneshot::channel();
+        let piece = Outgoing {
+            frame: EngineFrame::Piece { stream, data },
+            written: Some(written),
+        };
+        if out.send(piece).await.is_err() || sent.await.is_err() {
             return;
         }
     }
-    let _ = out.send(EngineFrame::Ended { stream }).await;
+    let _ = out.send(EngineFrame::Ended { stream }.into()).await;
 }
 
 /// Replays the stored events after `after`, then forwards live ones, with no
@@ -413,13 +439,16 @@ async fn follow(
     subscription: u64,
     after: i64,
     filter: EventFilter,
-    out: mpsc::Sender<EngineFrame>,
+    out: mpsc::Sender<Outgoing>,
 ) {
     let send = |event| {
-        out.send(EngineFrame::Event {
-            subscription,
-            event,
-        })
+        out.send(
+            EngineFrame::Event {
+                subscription,
+                event,
+            }
+            .into(),
+        )
     };
     let mut live = space.subscribe();
     let mut last = after;
@@ -429,7 +458,7 @@ async fn follow(
                 Ok(page) => page,
                 Err(error) => {
                     tracing::error!(%error, "a subscription could not read the log");
-                    let _ = out.send(EngineFrame::Resync { subscription }).await;
+                    let _ = out.send(EngineFrame::Resync { subscription }.into()).await;
                     return;
                 }
             };

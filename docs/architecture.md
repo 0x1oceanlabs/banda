@@ -72,8 +72,10 @@ The kernel holds only what every module needs, and it names no module.
   facts, such as what a terminal prints: the window asks for a stream
   (`stream`) and hears its pieces (`piece`) until it ends (`ended`) or the
   window lets it go (`unsubscribe`). The access decision runs when it
-  starts. Nothing of a stream is logged; a window that connects again asks
-  again and hears it from the start.
+  starts. Each stream has one piece on its way at a time, so a window that
+  reads slowly holds the module back, which sends more in the next piece.
+  Nothing of a stream is logged; a window that connects again asks again
+  and hears it from the start.
 - **Receipts and outbox.** These carry every command along one path (below).
 
 ### The command path
@@ -227,15 +229,20 @@ If Chat is removed, Agents still works through its own Thread.
   or was cut short can be tried again (`agents.retry`): its message goes
   in a new turn, and the failed one stays as it ended.
 - **A Person signs in to a Harness in a way it offers** (ACP's auth
-  methods; `agents.account`), and the Harness keeps the credentials: Bandaso
-  holds none and reads none of its files. The engine declares that it runs
-  terminals, so Claude Code's adapter offers its own logins, which run the
-  Harness entry's program with the way's arguments, and its environment,
-  so an entry's own config folder gets the account. Codex's signs in by
-  itself in the browser (`agents.sign_in`). After a sign-in every process
-  of that Harness entry is let go, so each reads the account when it next
-  starts. A turn that failed for a sign-in offers the ways, and goes again
-  once the Person signed in.
+  methods; `agents.account`; ADR 0004), and the Harness keeps the
+  credentials: Bandaso holds none and reads none of its files.
+  - The engine declares that it runs terminals, so Claude Code's adapter
+    offers ways in a terminal: the Harness entry's program with the way's
+    arguments and environment, so an entry's own config folder gets the
+    account. The Thread shows the line to run; the Person runs it in a
+    terminal and says when they signed in.
+  - Codex's adapter signs in by itself in the browser when the engine asks
+    (`agents.sign_in`).
+  - A sign-in writes nothing to the Space, and its receipt keeps the
+    answer. Every process of that Harness entry is let go, so each reads
+    the account when it next starts.
+  - A turn that failed for a sign-in offers the ways, and goes again once
+    the Person signed in.
 - **The Harness's notices**, such as warnings, join the Thread as lines of
   their own.
 - **A Thread has settings: a mode, Plan, and the Harness's options.** The
@@ -307,20 +314,23 @@ If Chat is removed, Agents still works through its own Thread.
 
 - **A Terminal is a program on a PTY** in the engine, run as the Person:
   their shell in the Space's folder, or a program with its arguments,
-  never a shell line, such as a Harness's sign-in. It needs the Run right.
-  The window chooses its ID, so a Pane names its terminal before the
-  engine answers (`terminal.open`).
+  never a shell line, such as a Harness's sign-in. It needs the Run right,
+  and it belongs to its Space. The window chooses its ID, so a Pane names
+  its terminal before the engine answers (`terminal.open`). Opening one
+  whose program ended runs the program again.
 - **What it printed stays in memory**, the newest 2 MB, never in the log: a
   screen repaints megabytes, and the program ends with the engine anyway.
   The bytes become text as they come, a character split between reads
   whole.
 - **A window watches it through a stream** (`terminal.watch`): the screen
-  so far first, then what it prints, then how it ended. Every window that
-  opens it sees the same screen, and a window that falls behind gets the
-  whole screen again.
+  so far first, then what it prints and the size a window gives it, then
+  how it ended. Every window that opens it sees the same screen, and a
+  window that falls behind gets the whole screen again.
+- **Typing waits at most 5 seconds** for a program that does not read.
 - **A close stops what the program started too.** The program leads a
-  session of its own: a close sends the group a hangup and a request to
-  stop, then a kill a second later, and ends every watch.
+  session and a process group of its own. While it runs, a close sends the
+  group a hangup and a request to stop, then a kill a second later; a
+  shell passes the hangup on to its jobs. A close ends every watch.
 - Its methods are listed in `modules/terminal/engine/src/lib.rs`.
 
 ## Inside a module
