@@ -43,7 +43,8 @@ jobs:
           fi
 
   check:
-    name: check (${{ matrix.parts }})
+    # GitHub adds the parts, "check (rust ts)"; a skipped job is just "check".
+    name: check
     needs: changes
     if: needs.changes.outputs.code == 'true'
     runs-on: devbox
