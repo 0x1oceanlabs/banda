@@ -90,6 +90,12 @@ function changeItem(
 /** A tool call as the Thread shows it. */
 export type Tool = Extract<Body, { kind: "tool" }>
 
+/** A Question the Agent asks, as the Thread shows it. */
+export type QuestionBody = Extract<Body, { kind: "question" }>
+
+/** An item that is a Question. */
+export type Asked = Item & { body: QuestionBody }
+
 function changeTool(
   state: ThreadState,
   id: string,
@@ -334,6 +340,20 @@ export function apply(state: ThreadState, event: Event): ThreadState {
         harness: fact.payload.harness ?? next.harness,
       }
   }
+}
+
+/** The Question the Agent waits on, if any: the first still open. */
+export function asked(state: ThreadState): Asked | undefined {
+  return state.items.find(
+    (item): item is Asked =>
+      item.body.kind === "question" && item.body.state === "open"
+  )
+}
+
+/** The answer that says no just this once, if the Question offers one. As
+ * the engine does, it never picks one the Harness keeps for next time. */
+export function declineOnce(question: QuestionBody): string | undefined {
+  return question.choices.find((choice) => !choice.allows && !choice.always)?.id
 }
 
 /** The turn the Agent works on, if any: the latest, as the engine says. */

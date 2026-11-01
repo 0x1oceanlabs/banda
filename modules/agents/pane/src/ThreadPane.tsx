@@ -1,7 +1,6 @@
-import { Fragment, useEffect, useMemo, useState } from "react"
+import { useEffect, useMemo, useState } from "react"
 import type { Engine, SpaceId } from "@bandaso/contract"
 import type {
-  Body,
   Defaults,
   Failure,
   Item,
@@ -53,11 +52,12 @@ import {
   InfoIcon,
   MessageSquareIcon,
   RotateCcwIcon,
-  ShieldQuestionIcon,
 } from "lucide-react"
 import { settledTurn } from "./marks"
 import { markSeen } from "./seen"
 import {
+  asked,
+  declineOnce,
   NO_OFFER,
   retryable,
   steerable,
@@ -70,8 +70,8 @@ import { type Attached, type Attaching, useAttachments } from "./Attachments"
 import { Composer } from "./Composer"
 import { type ImageReader, useImageReader } from "./MessageImages"
 import { AgentMessage, PersonMessage } from "./Messages"
-import { summary, type Values } from "./form"
-import { QuestionForm } from "./QuestionForm"
+import type { Values } from "./form"
+import { Question, QuestionDrawer } from "./Questions"
 import { ChangedFiles } from "./ChangedFiles"
 import { diffPane } from "./DiffPane"
 import { Plan } from "./Plan"
@@ -184,7 +184,12 @@ function ThreadPane({
     closed: offer.no_images ? `${name} does not take images.` : undefined,
   })
   const [dropping, setDropping] = useState(false)
+  // The Question the Agent waits on: one with a form opens on the composer,
+  // and a message sent while any waits says no to it first, as in T3 Code.
+  const asking = state && asked(state)
   const send = async (text: string, images: Attached[], steer: boolean) => {
+    const no = asking && declineOnce(asking.body)
+    if (no && text && (await answer(asking.id, no)) === undefined) return false
     for (const { image, url } of images) reader.remember(image.id, url)
     const sent = await sending.act(() =>
       engine.command<Sent>(
@@ -217,7 +222,7 @@ function ThreadPane({
       engine.command("agents.stop", { turn: turn.id }, space)
     )
   const answer = (item: ItemId, choice: string, values?: Values) =>
-    void acting.act(() =>
+    acting.act(() =>
       engine.command(
         "agents.answer",
         { item, choice, ...(values && { values }) },
@@ -314,8 +319,20 @@ function ThreadPane({
             {sending.problem ?? acting.problem}
           </p>
         )}
+        {asking?.body.form && (
+          <QuestionDrawer
+            item={asking}
+            answering={acting.busy}
+            onAnswer={(choice, values) => answer(asking.id, choice, values)}
+          />
+        )}
         <Composer
           name={name}
+          placeholder={
+            asking
+              ? `Send a message to say no and tell ${name} what to do instead`
+              : undefined
+          }
           focused={focused}
           busy={sending.busy}
           working={turn}
@@ -605,73 +622,6 @@ function Entry({
         </Trace>
       )
   }
-}
-
-function Question({
-  question: { title, choices, form, state, answer, values },
-  answering,
-  onAnswer,
-}: {
-  question: Extract<Body, { kind: "question" }>
-  answering: boolean
-  onAnswer: (choice: string, values?: Values) => void
-}) {
-  const first = choices.find((choice) => choice.allows)
-  const filledIn =
-    state === "answered" && form && values ? summary(form, values) : []
-  const answered =
-    state !== "answered"
-      ? "No longer asked."
-      : !form
-        ? `You chose: ${choices.find((c) => c.id === answer)?.name ?? answer}`
-        : values
-          ? "You sent it without filling anything in."
-          : "You skipped it."
-  return (
-    <div
-      role="group"
-      aria-label={title}
-      className="flex flex-col gap-3 rounded-xl border bg-card p-3 text-sm"
-    >
-      <div className="flex items-start gap-2 font-medium">
-        <ShieldQuestionIcon className="mt-0.5 size-4 shrink-0 text-muted-foreground" />
-        <span className="min-w-0 wrap-break-word">{title}</span>
-      </div>
-      {state === "open" && form ? (
-        <QuestionForm
-          form={form}
-          choices={choices}
-          answering={answering}
-          onAnswer={onAnswer}
-        />
-      ) : state === "open" ? (
-        <div className="flex flex-wrap gap-2">
-          {choices.map((choice) => (
-            <Button
-              key={choice.id}
-              size="sm"
-              variant={choice === first ? "default" : "outline"}
-              disabled={answering}
-              onClick={() => onAnswer(choice.id)}
-            >
-              {choice.name}
-            </Button>
-          ))}
-        </div>
-      ) : filledIn.length > 0 ? (
-        <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-xs">
-          {filledIn.map(({ id, title, value }) => (
-            <Fragment key={id}>
-              <dt className="text-muted-foreground">{title}</dt>
-              <dd className="min-w-0 wrap-break-word">{value}</dd>
-            </Fragment>
-          ))}
-        </dl>
-      ) : (
-        <p className="text-xs text-muted-foreground">{answered}</p>
-      )}
-    </div>
-  )
 }
 
 /** A turn that did not finish: why, what to do about it, and Try again

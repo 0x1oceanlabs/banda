@@ -27,8 +27,10 @@ import {
   type Values,
 } from "./form"
 
-/** A Question that asks for a form: its fields, then the Harness's answers.
- * The answer that allows submits what was filled in; the others skip it. */
+/** A Question that asks for a form, one field at a time as T3 Code asks
+ * (ADR 0010, decision 5): Previous and Next, keys 1–9 pick a choice of the
+ * field shown, and the last field shows the Harness's answers. The answer
+ * that allows submits what was filled in; the others skip it. */
 export function QuestionForm({
   form,
   choices,
@@ -41,13 +43,28 @@ export function QuestionForm({
   onAnswer: (choice: string, values?: Values) => void
 }) {
   const [draft, setDraft] = useState(() => draftOf(form))
+  const [page, setPage] = useState(0)
   const set = (id: string, value: Draft[string]) =>
     setDraft((now) => ({ ...now, [id]: value }))
   const complete = ready(form, draft)
+  const pages = form.length
+  const last = page >= pages - 1
+  const field = form[page]
+  const pick = (event: React.KeyboardEvent) => {
+    const typing =
+      event.target instanceof HTMLInputElement && event.target.type !== "radio"
+    const choice =
+      field?.input.kind === "choice" &&
+      field.input.choices[Number(event.key) - 1]
+    if (typing || !choice || event.altKey || event.ctrlKey) return
+    event.preventDefault()
+    set(field.id, choice.value)
+    if (!last) setPage(page + 1)
+  }
   return (
-    <>
+    <div className="flex flex-col gap-3" onKeyDown={pick}>
       <FieldGroup className="gap-4">
-        {form.map((field) => (
+        {field && (
           <FormInput
             key={field.id}
             field={field}
@@ -55,26 +72,47 @@ export function QuestionForm({
             disabled={answering}
             onChange={(value) => set(field.id, value)}
           />
-        ))}
+        )}
       </FieldGroup>
-      <div className="flex flex-wrap gap-2">
-        {choices.map((choice) => (
+      <div className="flex flex-wrap items-center gap-2">
+        {pages > 1 && (
+          <span className="mr-auto text-xs text-muted-foreground tabular-nums">
+            {page + 1} of {pages}
+          </span>
+        )}
+        {page > 0 && (
           <Button
-            key={choice.id}
             size="sm"
-            variant={choice.allows ? "default" : "outline"}
-            disabled={answering || (choice.allows && !complete)}
-            onClick={() =>
-              choice.allows
-                ? onAnswer(choice.id, filled(form, draft))
-                : onAnswer(choice.id)
-            }
+            variant="ghost"
+            disabled={answering}
+            onClick={() => setPage(page - 1)}
           >
-            {choice.name}
+            Previous
           </Button>
-        ))}
+        )}
+        {last ? (
+          choices.map((choice) => (
+            <Button
+              key={choice.id}
+              size="sm"
+              variant={choice.allows ? "default" : "outline"}
+              disabled={answering || (choice.allows && !complete)}
+              onClick={() =>
+                choice.allows
+                  ? onAnswer(choice.id, filled(form, draft))
+                  : onAnswer(choice.id)
+              }
+            >
+              {choice.name}
+            </Button>
+          ))
+        ) : (
+          <Button size="sm" onClick={() => setPage(page + 1)}>
+            Next
+          </Button>
+        )}
       </div>
-    </>
+    </div>
   )
 }
 

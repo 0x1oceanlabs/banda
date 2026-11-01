@@ -493,6 +493,9 @@ test("a Person fills in the form an Agent asks with", async () => {
   await question.getByRole("radio", { name: /^Blue/ }).click()
   await expect(question.getByText("Like the sea")).toBeVisible()
   await page.screenshot({ path: "test-results/8-form.png" })
+  // One field at a time, as T3 Code asks.
+  await expect(question.getByText("1 of 2")).toBeVisible()
+  await question.getByRole("button", { name: "Next" }).click()
   await question.getByRole("button", { name: "Submit" }).click()
   await expect(thread.getByText("You chose Blue.")).toBeVisible()
   await expect(question.getByText("Colour", { exact: true })).toBeVisible()
@@ -501,11 +504,37 @@ test("a Person fills in the form an Agent asks with", async () => {
   await composer.fill("choose once more")
   await composer.press("Enter")
   const again = thread.getByRole("group", { name: "Which colour?" }).last()
+  // Keys pick a choice of the field shown, and move on to the next.
+  await again.getByRole("radio", { name: /^Red/ }).focus()
+  await page.keyboard.press("2")
+  await expect(again.getByText("2 of 2")).toBeVisible()
   await again.getByLabel("Other").fill("Green")
   await again.getByRole("button", { name: "Submit" }).click()
   await expect(thread.getByText("You chose Green.")).toBeVisible()
   await page.mouse.move(0, 0)
   await page.screenshot({ path: "test-results/9-answered.png" })
+})
+
+test("a message sent while the Agent asks says no to it", async () => {
+  window = await startWindow()
+  const { thread, composer } = await firstThread(window.page)
+
+  await composer.fill("please ask first")
+  await composer.press("Enter")
+  const question = thread.getByRole("group", { name: "Run a check" })
+  // The answer the Harness keeps for next time waits under More.
+  await expect(question.getByRole("button", { name: "More" })).toBeVisible()
+  await expect(composer).toHaveAttribute(
+    "placeholder",
+    /^Send a message to say no/
+  )
+  await composer.fill("something else instead")
+  await composer.press("Enter")
+  await expect(
+    thread.getByText("You said: something else instead")
+  ).toBeVisible()
+  await openWork(thread)
+  await expect(thread.getByText("I did not run the check.")).toBeVisible()
 })
 
 test("a tool call opens on what it changed and what it printed", async () => {
