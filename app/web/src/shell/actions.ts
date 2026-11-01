@@ -10,13 +10,16 @@ import { type PaneState, paneOf, type Place } from "@banda/ui/pane"
 import type { Action } from "../actions/actions"
 import { showing } from "../calls/sight"
 import { columnsOf } from "../look"
-import { launcher, showsOf, widthOf } from "../registry"
+import { launcher, minOf, showsOf, widthOf } from "../registry"
+import { floorOf } from "../workspaces/layout"
 import {
   close,
+  current,
   type Direction,
   focusEntry,
   focused,
   go,
+  maximize,
   move,
   open,
   send,
@@ -48,6 +51,21 @@ const ARROWS: Record<Direction, string> = {
 }
 const DIRECTIONS = Object.keys(ARROWS) as Direction[]
 const NUMBERS = [1, 2, 3, 4, 5, 6, 7, 8, 9]
+
+/**
+ * Steps the focused column's width through the look's presets, by what
+ * the window shows: a preset its `min` hides is passed over.
+ */
+function resize(shell: Shell, by: 1 | -1, wrap = false) {
+  shell.change((w) => {
+    const workspace = current(w)
+    const column = workspace.columns[workspace.focus]
+    if (!column) return w
+    const { presets, min } = columnsOf()
+    const floor = floorOf(workspace.id, minOf(column, min))
+    return widen(w, by, presets, { floor, wrap })
+  })
+}
 
 /** Shows a Pane of a Space and focuses it; a new column takes its width. */
 export function opening(
@@ -107,13 +125,33 @@ export const ACTIONS: readonly Action<Shell>[] = [
     id: "column.wider",
     title: "Make the column wider",
     key: { code: "ArrowRight", alt: true, ctrl: true },
-    run: (shell) => shell.change((w) => widen(w, 1, columnsOf().presets)),
+    run: (shell) => resize(shell, 1),
   },
   {
     id: "column.narrower",
     title: "Make the column narrower",
     key: { code: "ArrowLeft", alt: true, ctrl: true },
-    run: (shell) => shell.change((w) => widen(w, -1, columnsOf().presets)),
+    run: (shell) => resize(shell, -1),
+  },
+  {
+    id: "column.next-width",
+    title: "The column's next width, round",
+    // As niri's Mod+R and Mod+Shift+R.
+    key: { code: "KeyR", alt: true },
+    run: (shell) => resize(shell, 1, true),
+  },
+  {
+    id: "column.previous-width",
+    title: "The column's previous width, round",
+    key: { code: "KeyR", alt: true, shift: true },
+    run: (shell) => resize(shell, -1, true),
+  },
+  {
+    id: "column.maximize",
+    title: "The column the whole screen wide, or back",
+    // As niri's Mod+F.
+    key: { code: "KeyF", alt: true },
+    run: (shell) => shell.change(maximize),
   },
   {
     id: "thread.new",

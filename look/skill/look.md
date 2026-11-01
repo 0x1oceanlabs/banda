@@ -28,6 +28,7 @@ Every key, with its default:
 - "Make it dark": `mode = "dark"`.
 - "Square corners": `radius = 0`.
 - "Orange focus": `[colors]` `accent = "orange"`, or a hex.
+- "Columns too narrow in a small window": `[columns]` `min = 36`.
 - "Less motion": `[motion]` `slowdown = 2`, or `off = true`.
 - "No sounds": `[sound]` `family = "off"`. Only when something fails:
   `done = false` and `asking = false`.

@@ -1,11 +1,11 @@
 import { useEffect, useLayoutEffect, useRef } from "react"
 import type { Engine, SpaceId } from "@banda/contract"
 import type { PaneState } from "@banda/ui/pane"
-import { columnsOf, moveOf } from "../look"
+import { columnsOf, moveOf, useLookColumns } from "../look"
 import { Moving } from "../motion"
-import { Choices } from "../registry"
+import { Choices, minOf } from "../registry"
 import { share, type Workspace } from "./model"
-import { ColumnMotion, type Place, places, widthAt } from "./layout"
+import { ColumnMotion, minWidthOf, type Place, places, widthAt } from "./layout"
 import { type Frame, PaneFrame } from "./PaneFrame"
 import { pixels, scrollsSideways, SWIPE_END, Swipe } from "./swipe"
 
@@ -44,21 +44,26 @@ export function Strip({
 }) {
   const scroller = useRef<HTMLDivElement>(null)
   const focus = workspace.columns[workspace.focus]?.id
-  const widths = workspace.columns.map((column) => column.width).join()
+  const { min } = useLookColumns()
+  const columns = workspace.columns.map((column) => ({
+    ...column,
+    min: minOf(column, min),
+  }))
+  const widths = columns.map((c) => `${c.width} ${c.min}`).join()
   const empty = workspace.columns.length === 0
 
   // Columns grow, shrink and go to new places on the look's springs.
   const motion = useRef(new ColumnMotion())
   useLayoutEffect(() => {
-    motion.current.sync(scroller.current, workspace.columns)
+    motion.current.sync(scroller.current, columns)
   })
   useEffect(() => () => motion.current.stop(), [])
 
   // What a scroll needs, as it is now: the columns, and for a swipe's end
   // the focus and the frame.
-  const now = useRef({ focus, frame, columns: workspace.columns })
+  const now = useRef({ focus, frame, columns })
   useLayoutEffect(() => {
-    now.current = { focus, frame, columns: workspace.columns }
+    now.current = { focus, frame, columns }
   })
 
   // The column focused before, for `center = "on-overflow"`.
@@ -125,17 +130,20 @@ export function Strip({
   return (
     <div
       ref={scroller}
+      data-strip={workspace.id}
       className="relative flex h-full gap-(--gap-inner) overflow-hidden p-(--gap-outer)"
     >
-      {workspace.columns.map((column, c) => (
+      {columns.map((column, c) => (
         <div
           key={column.id}
           data-column={column.id}
           data-entry={column.entries[column.active]?.id}
           className="relative flex h-full shrink-0 flex-col gap-(--gap-inner)"
           style={{
-            // Shares of the room the Strip shows, gaps between them included.
+            // Shares of the room the Strip shows, gaps between them
+            // included; never so narrow its Panes cannot be read.
             width: widthAt(share(column.width) ?? 0.5),
+            minWidth: minWidthOf(column.min),
           }}
         >
           {column.entries.map((entry, e) => (

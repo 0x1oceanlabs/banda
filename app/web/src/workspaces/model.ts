@@ -41,6 +41,8 @@ export type Column = {
   /** The entry that has the focus when the column does. */
   active: number
   width: Width
+  /** The width it had before it took the whole screen (`maximize`). */
+  before?: Width
 }
 
 export type Workspace = {
@@ -365,35 +367,75 @@ export function shift(state: Workspaces, direction: Direction): Workspaces {
   })
 }
 
+const EPSILON = 1e-6
+
+function alike(a: number, b: number | undefined): boolean {
+  return b !== undefined && Math.abs(a - b) < EPSILON
+}
+
+/** The share a column of share `at` is drawn at: at least `floor`, the
+ * share its `min` asks for, and at most the whole room. */
+export function drawn(at: number, floor: number): number {
+  return Math.min(1, Math.max(at, floor))
+}
+
 /**
  * Steps the focused column's width to the next of `presets`, wider or
  * narrower, as niri does: from whatever width it has, the nearest preset
- * past it.
+ * past it. It steps by the width the column is drawn at: in a window where
+ * `floor` (the share the column is never drawn narrower than) makes two
+ * presets look the same, it goes past both, and where no step shows, it
+ * stays. With `wrap`, past the widest it goes to the narrowest, and back,
+ * as niri's Mod+R does.
  */
 export function widen(
   state: Workspaces,
   by: 1 | -1,
-  presets: readonly Width[] = WIDTHS
+  presets: readonly Width[] = WIDTHS,
+  { floor = 0, wrap = false }: { floor?: number; wrap?: boolean } = {}
 ): Workspaces {
   const workspace = current(state)
   const column = workspace.columns[workspace.focus]
   if (!column) return state
-  const now = share(column.width) ?? 0.5
+  const now = drawn(share(column.width) ?? 0.5, floor)
+  // Of the presets drawn alike, the widest stands for them all.
   const steps = presets
-    .map((width) => ({ width, at: share(width) }))
-    .filter(
-      (step): step is { width: Width; at: number } => step.at !== undefined
-    )
+    .flatMap((width) => {
+      const at = share(width)
+      return at === undefined ? [] : [{ width, at, shows: drawn(at, floor) }]
+    })
     .sort((a, b) => a.at - b.at)
-  const next =
+    .filter((step, i, all) => !alike(step.shows, all[i + 1]?.shows))
+  let next =
     by > 0
-      ? steps.find((step) => step.at > now + 1e-6)
-      : steps.findLast((step) => step.at < now - 1e-6)
-  if (!next) return state
-  const width = next.width
+      ? steps.find((step) => step.shows > now + EPSILON)
+      : steps.findLast((step) => step.shows < now - EPSILON)
+  if (!next && wrap) next = by > 0 ? steps[0] : steps.at(-1)
+  if (!next || alike(next.shows, now)) return state
+  return resized(state, { ...column, width: next.width, before: undefined })
+}
+
+/**
+ * Makes the focused column the whole screen wide, or gives it back the
+ * width it had before, as niri's maximize-column does.
+ */
+export function maximize(state: Workspaces): Workspaces {
+  const workspace = current(state)
+  const column = workspace.columns[workspace.focus]
+  if (!column) return state
+  if (share(column.width) !== 1) {
+    return resized(state, { ...column, width: "1", before: column.width })
+  }
+  if (column.before === undefined) return state
+  return resized(state, { ...column, width: column.before, before: undefined })
+}
+
+/** Puts `column` in the place of the focused one. */
+function resized(state: Workspaces, column: Column): Workspaces {
+  const workspace = current(state)
   return setWorkspace(state, state.current, {
     ...workspace,
-    columns: replace(workspace.columns, workspace.focus, { ...column, width }),
+    columns: replace(workspace.columns, workspace.focus, column),
   })
 }
 
@@ -496,15 +538,13 @@ export function parse(value: unknown): Workspaces | null {
         return null
       const kept = column.entries.filter(isEntry)
       if (kept.length !== column.entries.length) return null
-      const width =
-        typeof column.width === "string" && share(column.width) !== undefined
-          ? column.width
-          : "1/2"
+      const width = isWidth(column.width) ? column.width : "1/2"
       const active =
         typeof column.active === "number"
           ? clamp(column.active, kept.length)
           : 0
-      columns.push({ id: column.id, entries: kept, active, width })
+      const before = isWidth(column.before) ? column.before : undefined
+      columns.push({ id: column.id, entries: kept, active, width, before })
     }
     const focus =
       typeof workspace.focus === "number"
@@ -514,6 +554,10 @@ export function parse(value: unknown): Workspaces | null {
   }
   if (list.length === 0) return null
   return normalize({ list, current: clamp(value.current, list.length) })
+}
+
+function isWidth(value: unknown): value is Width {
+  return typeof value === "string" && share(value) !== undefined
 }
 
 function isEntry(value: unknown): value is Entry {

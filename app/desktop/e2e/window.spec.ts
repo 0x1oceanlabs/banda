@@ -1158,7 +1158,7 @@ test("the sidebar is arranged by sidebar.toml, and its view menu writes the file
 
 test("columns and the text size come from look.toml", async () => {
   window = await startWindow({
-    look: '[columns]\npresets = ["1/4", "3/4"]\ndefault = "1/4"\n[font]\nsize = 16\n',
+    look: '[columns]\npresets = ["1/4", "3/4"]\ndefault = "1/4"\nmin = 0\n[font]\nsize = 16\n',
   })
   const { page } = window
   const root = page.locator("html")
@@ -1180,6 +1180,49 @@ test("columns and the text size come from look.toml", async () => {
   await expect.poll(share).toBeLessThan(0.3)
   await page.keyboard.press("Alt+Control+ArrowRight")
   await expect.poll(share).toBeGreaterThan(0.7)
+})
+
+test("no column is narrower than columns.min; Alt+R goes round, Alt+F fills", async () => {
+  // 50 rem is more than 2/3 of this window's Strip and less than all of it.
+  window = await startWindow({ look: "[columns]\nmin = 50\n" })
+  const { page } = window
+  const rem = await page
+    .locator("html")
+    .evaluate((e) => parseFloat(getComputedStyle(e).fontSize))
+  const { thread } = await firstThread(page)
+  const column = thread.locator("xpath=ancestor::*[@data-column][1]")
+  // The column's width, and the Strip's room for columns.
+  const sizes = () =>
+    column.evaluate((e: HTMLElement) => {
+      const strip = getComputedStyle(e.parentElement!)
+      const room =
+        e.parentElement!.clientWidth -
+        parseFloat(strip.paddingLeft) -
+        parseFloat(strip.paddingRight)
+      return { width: e.offsetWidth, room }
+    })
+  const floor = async () => {
+    const { width } = await sizes()
+    return Math.abs(width - 50 * rem) < 1
+  }
+  const full = async () => {
+    const { width, room } = await sizes()
+    return Math.abs(width - room) < 1
+  }
+  // A half would be too narrow: the column is 50 rem.
+  await expect.poll(floor).toBe(true)
+  // Nothing narrower shows, so the step does nothing.
+  await page.keyboard.press("Alt+Control+ArrowLeft")
+  await expect.poll(floor).toBe(true)
+  // 2/3 is drawn at the floor too: Alt+R goes past it to all of it.
+  await page.keyboard.press("Alt+r")
+  await expect.poll(full).toBe(true)
+  await page.keyboard.press("Alt+r")
+  await expect.poll(floor).toBe(true)
+  await page.keyboard.press("Alt+f")
+  await expect.poll(full).toBe(true)
+  await page.keyboard.press("Alt+f")
+  await expect.poll(floor).toBe(true)
 })
 
 test("tiles without the focus darken as dim-inactive says", async () => {

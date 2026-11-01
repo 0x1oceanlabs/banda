@@ -238,13 +238,14 @@ fn columns_and_fonts_come_through_the_layers() {
     assert_eq!(look.vars["--text-root"], "16px");
 
     machine.look_toml(
-        "[columns]\npresets = [\"1/4\", \"3/4\"]\ndefault = \"3/4\"\ncenter = \"always\"\n[font]\nmono = \"Iosevka\"\nsize = 12.25\n",
+        "[columns]\npresets = [\"1/4\", \"3/4\"]\ndefault = \"3/4\"\ncenter = \"always\"\nmin = 24.5\n[font]\nmono = \"Iosevka\"\nsize = 12.25\n",
     );
     let look = machine.look();
     assert!(look.problems.is_empty(), "{:?}", look.problems);
     assert_eq!(look.columns.presets, ["1/4", "3/4"]);
     assert_eq!(look.columns.default, "3/4");
     assert_eq!(look.columns.center, banda_look::columns::Center::Always);
+    assert_eq!(look.columns.min, 24.5);
     assert_eq!(look.vars["--font-family-mono"], "\"Iosevka\", monospace");
     assert_eq!(look.vars["--text-root"], "14px");
 

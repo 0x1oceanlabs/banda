@@ -294,6 +294,13 @@
         },
         "center": {
           "$ref": "#/$defs/Center"
+        },
+        "min": {
+          "description": "The narrowest a column is drawn, in rem; a list's is half of it.",
+          "type": "number",
+          "format": "double",
+          "minimum": 0,
+          "maximum": 200
         }
       },
       "additionalProperties": false
