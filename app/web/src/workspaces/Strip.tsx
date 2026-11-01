@@ -50,8 +50,7 @@ export function Strip({
   // Columns grow, shrink and go to new places on the look's springs.
   const motion = useRef(new ColumnMotion())
   useLayoutEffect(() => {
-    const strip = scroller.current
-    if (strip) motion.current.sync(strip, workspace.columns)
+    motion.current.sync(scroller.current, workspace.columns)
   })
   useEffect(() => () => motion.current.stop(), [])
 
@@ -133,7 +132,7 @@ export function Strip({
           key={column.id}
           data-column={column.id}
           data-entry={column.entries[column.active]?.id}
-          className="flex h-full shrink-0 flex-col gap-(--gap-inner)"
+          className="relative flex h-full shrink-0 flex-col gap-(--gap-inner)"
           style={{
             // Shares of the room the Strip shows, gaps between them included.
             width: widthAt(share(column.width) ?? 0.5),
