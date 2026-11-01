@@ -32,6 +32,7 @@ use crate::model::{
     Offer, OptionChoice, OptionValue, PlanStep, Settings, SignInWay, SignedInAs, SlashCommand,
     StepState, TextFormat, ThreadId, ToolContent, ToolKind, ToolStatus, TurnState, Usage, Values,
 };
+use crate::record::{Recording, To};
 use crate::rules::{Ending, Offered};
 use crate::settings::Harness;
 use agent_client_protocol::schema::ProtocolVersion;
@@ -531,10 +532,22 @@ impl Connection {
         let config = AcpAgentConfig::new(&harness.command)
             .args(harness.args.iter().cloned())
             .envs(harness.env.clone());
+        let recording = match &harness.record {
+            Some(folder) => Some(Recording::start(folder, &harness.id)?),
+            None => None,
+        };
         let name = harness.id.clone();
         let process = AcpAgent::new(config).with_debug(move |line, direction| {
-            if matches!(direction, LineDirection::Stderr) {
-                tracing::debug!(harness = %name, "{line}");
+            let to = match direction {
+                LineDirection::Stdin => To::Agent,
+                LineDirection::Stdout => To::Client,
+                LineDirection::Stderr => {
+                    tracing::debug!(harness = %name, "{line}");
+                    return;
+                }
+            };
+            if let Some(recording) = &recording {
+                recording.write(to, line);
             }
         });
         let (routes, learned) = (Routes::default(), Learned::default());

@@ -67,6 +67,11 @@
 //! agent other than Claude Code and Codex. With `FAKE_AGENT_NO_IMAGES` set
 //! it takes no images, and with `FAKE_AGENT_NO_STEERING` no message into a
 //! running turn.
+//!
+//! With `FAKE_AGENT_REPLAY` naming a recording it plays a real Harness's
+//! conversation instead: see [`replay`].
+
+mod replay;
 
 use agent_client_protocol::schema::ProtocolVersion;
 use agent_client_protocol::schema::v1::{
@@ -856,6 +861,17 @@ fn forgets() -> bool {
 async fn main() -> Result<(), Error> {
     if std::env::args().any(|arg| arg == "--sign-in") {
         sign_in_in_a_terminal();
+    }
+    if let Some(recording) = std::env::var_os("FAKE_AGENT_REPLAY") {
+        let recording = std::path::Path::new(&recording);
+        if let Err(error) = replay::replay(recording).await {
+            eprintln!(
+                "The fake agent cannot replay {}: {error}",
+                recording.display()
+            );
+            std::process::exit(1);
+        }
+        return Ok(());
     }
     let fake = Fake::default();
     let signed_in = account().is_none_or(|signed_in| signed_in.exists());

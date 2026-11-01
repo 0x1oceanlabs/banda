@@ -28,6 +28,11 @@ pub struct Harness {
     /// The Person's own CLI the program runs, when it runs one.
     #[serde(default)]
     pub cli: Option<Cli>,
+    /// A folder where each start of the program writes its conversation,
+    /// one ACP frame per line: what tests replay, and what to send with a
+    /// Harness's bug. It holds everything said, files' text too.
+    #[serde(default)]
+    pub record: Option<PathBuf>,
 }
 
 /// A CLI the Person installed, which an adapter runs in place of a copy
@@ -84,6 +89,7 @@ impl Harnesses {
                     program: program.to_owned(),
                     variable: variable.to_owned(),
                 }),
+                record: None,
             };
         Self::new(vec![
             npx(
@@ -102,7 +108,7 @@ impl Harnesses {
     }
 
     /// Reads a Harness list: `[[harness]]` tables with `id`, `name`,
-    /// `command`, and optional `args` and `env`.
+    /// `command`, and optional `args`, `env`, `cli` and `record`.
     pub fn parse(text: &str) -> Result<Self, String> {
         let file: HarnessFile = toml::from_str(text).map_err(|e| e.to_string())?;
         Ok(Self::new(file.harness))
