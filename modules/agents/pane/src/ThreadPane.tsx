@@ -14,7 +14,6 @@ import type {
   TurnView,
   Image,
 } from "@bandaso/contract/agents"
-import { Bubble, BubbleContent } from "@bandaso/ui/components/bubble"
 import { Button } from "@bandaso/ui/components/button"
 import {
   Empty,
@@ -23,7 +22,7 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@bandaso/ui/components/empty"
-import { Message, MessageContent } from "@bandaso/ui/components/message"
+import { Markdown } from "@bandaso/ui/components/markdown"
 import {
   MessageScroller,
   MessageScrollerButton,
@@ -43,6 +42,7 @@ import {
   TraceTitle,
 } from "@bandaso/ui/components/trace"
 import { useAct } from "@bandaso/ui/hooks/use-act"
+import { clock } from "@bandaso/ui/lib/words"
 import { READ_AGAIN, type Source, useLive } from "@bandaso/ui/hooks/use-live"
 import { definePane, paneOf, type PaneProps } from "@bandaso/ui/pane"
 import {
@@ -71,11 +71,8 @@ import {
 import { suggested } from "./slash"
 import { type Attached, type Attaching, useAttachments } from "./Attachments"
 import { Composer } from "./Composer"
-import {
-  type ImageReader,
-  MessageImages,
-  useImageReader,
-} from "./MessageImages"
+import { type ImageReader, useImageReader } from "./MessageImages"
+import { AgentMessage, PersonMessage } from "./Messages"
 import { summary, type Values } from "./form"
 import { QuestionForm } from "./QuestionForm"
 import { Plan } from "./Plan"
@@ -528,28 +525,14 @@ function Entry({
   switch (body.kind) {
     case "message":
       return item.author.kind === "person" ? (
-        <Message align="end">
-          <MessageContent>
-            <MessageImages images={body.images} reader={reader} />
-            {body.text && (
-              <Bubble variant="muted" align="end">
-                <BubbleContent className="whitespace-pre-wrap">
-                  {body.text}
-                </BubbleContent>
-              </Bubble>
-            )}
-          </MessageContent>
-        </Message>
+        <PersonMessage
+          text={body.text}
+          images={body.images}
+          at={item.at}
+          reader={reader}
+        />
       ) : (
-        <Message>
-          <MessageContent>
-            <Bubble variant="ghost">
-              <BubbleContent className="whitespace-pre-wrap">
-                {body.text}
-              </BubbleContent>
-            </Bubble>
-          </MessageContent>
-        </Message>
+        <AgentMessage text={body.text} at={item.at} live={live} />
       )
     case "thought":
       return (
@@ -563,8 +546,10 @@ function Entry({
                 <TraceTitle>{live ? "Thinking" : "Thought"}</TraceTitle>
               </TraceLine>
             </TraceCollapsibleTrigger>
-            <TraceCollapsibleContent className="whitespace-pre-wrap">
-              {body.text}
+            <TraceCollapsibleContent>
+              <Markdown streaming={live} className="text-muted-foreground">
+                {body.text}
+              </Markdown>
             </TraceCollapsibleContent>
           </TraceCollapsible>
         </Trace>
@@ -720,19 +705,9 @@ function adviceFor(failure: Failure): string | undefined {
     case "usage_limit":
       return failure.until === undefined
         ? undefined
-        : `You can try again after ${moment(failure.until)}.`
+        : `You can try again after ${clock(failure.until)}.`
     case "harness_stopped":
     case "provider":
       return undefined
   }
-}
-
-/** A time as a Person reads it: the hour today, the day too otherwise. */
-function moment(at: number): string {
-  const today = new Date().toDateString() === new Date(at).toDateString()
-  return new Intl.DateTimeFormat(undefined, {
-    weekday: today ? undefined : "short",
-    hour: "2-digit",
-    minute: "2-digit",
-  }).format(at)
 }
