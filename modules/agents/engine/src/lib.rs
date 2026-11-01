@@ -87,10 +87,8 @@ impl Agents {
         self
     }
 
-    fn harness(&self, id: &str) -> Result<&Harness, Refusal> {
-        self.harnesses.find(id).ok_or_else(|| {
-            Refusal::invalid(format!("This computer has no Harness named \"{id}\"."))
-        })
+    fn harness(&self, id: &str) -> Result<Harness, Refusal> {
+        self.harnesses.get(id).map_err(Refusal::invalid)
     }
 
     /// After a sign-in or a sign-out: ACP has a client start the Harness
@@ -107,9 +105,9 @@ impl Agents {
         &self,
         space: SpaceId,
         id: &str,
-    ) -> Result<(&Harness, Arc<Connection>), Refusal> {
+    ) -> Result<(Harness, Arc<Connection>), Refusal> {
         let harness = self.harness(id)?;
-        let connection = self.live.connection(space, harness).await;
+        let connection = self.live.connection(space, &harness).await;
         Ok((harness, connection.map_err(Refusal::conflict)?))
     }
 }
@@ -328,7 +326,10 @@ impl Agents {
         OneHarness { harness }: OneHarness,
     ) -> Result<Account, Refusal> {
         let (harness, connection) = self.running(call.space().id(), &harness).await?;
-        connection.account(harness).await.map_err(Refusal::conflict)
+        connection
+            .account(&harness)
+            .await
+            .map_err(Refusal::conflict)
     }
 
     async fn sign_in(
@@ -447,7 +448,7 @@ impl Agents {
         rules::may_send(&text, &images)?;
         let target = match (thread, harness) {
             (Some(thread), _) => Target::Thread(thread),
-            (None, Some(harness)) => Target::New(self.harness(&harness)?.id.clone()),
+            (None, Some(harness)) => Target::New(self.harness(&harness)?.id),
             (None, None) => {
                 return Err(Refusal::invalid(
                     "A message goes into a Thread, or starts one on a Harness.",

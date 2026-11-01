@@ -1,9 +1,26 @@
 import { readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
-import { expect, test } from "@playwright/test"
+import {
+  type ElectronApplication,
+  expect,
+  type Page,
+  test,
+} from "@playwright/test"
 import { firstThread, startWindow, type Window } from "./window"
 
 let window: Window
+
+/** Alt+, in `page`, and the settings window it opens. */
+async function openSettings(
+  app: ElectronApplication,
+  page: Page
+): Promise<Page> {
+  await page.keyboard.press("Alt+Comma")
+  const settingsPage = () =>
+    app.windows().find((shown) => shown.url().includes("#settings"))
+  await expect.poll(settingsPage).toBeTruthy()
+  return settingsPage()!
+}
 
 test.afterEach(async () => {
   await window?.close()
@@ -16,11 +33,7 @@ test("Alt+, opens the settings window, which writes the files and follows them (
   const { composer } = await firstThread(page)
   await expect(composer).toBeVisible()
 
-  await page.keyboard.press("Alt+Comma")
-  const settingsPage = () =>
-    app.windows().find((shown) => shown.url().includes("#settings"))
-  await expect.poll(settingsPage).toBeTruthy()
-  const settings = settingsPage()!
+  const settings = await openSettings(app, page)
   await expect(settings).toHaveTitle("Banda Settings")
   await expect(
     settings.getByRole("heading", { name: "Appearance" })
@@ -78,4 +91,84 @@ test("Alt+, opens the settings window, which writes the files and follows them (
   // The window goes as the key goes down, so the press may not finish.
   await settings.keyboard.down("Escape").catch(() => undefined)
   await expect.poll(() => app.windows().length).toBe(1)
+})
+
+test("Agents show who is signed in to each Harness, and write harnesses.toml", async () => {
+  window = await startWindow({ account: true, oldCli: true })
+  const { app, page, dir } = window
+  const file = join(dir, "config/harnesses.toml")
+  const { composer } = await firstThread(page)
+  await expect(composer).toBeVisible()
+  const settings = await openSettings(app, page)
+  await settings
+    .getByRole("navigation", { name: "Settings sections" })
+    .getByRole("button", { name: /Agents/ })
+    .click()
+
+  const fake = settings.getByRole("group", { name: "Fake AI" })
+  await expect(
+    fake.getByText(/^fake-cli 1\.0\.0 · banda-fake-agent \d/)
+  ).toBeVisible()
+  await expect(
+    fake
+      .getByRole("status")
+      .filter({ hasText: /1\.0\.0 is older than 2\.0\.0/ })
+  ).toBeVisible()
+  await expect(fake.getByText("Not signed in.")).toBeVisible()
+
+  await fake.getByRole("button", { name: "Sign in with Fake browser" }).click()
+  await expect(
+    fake.getByText("Signed in as person@example.invalid · Fake Pro")
+  ).toBeVisible()
+  await settings.screenshot({ path: "test-results/settings-agents.png" })
+
+  await fake.getByRole("button", { name: "Sign out" }).click()
+  const asking = settings.getByRole("dialog", { name: "Sign out of Fake AI?" })
+  await asking.getByRole("button", { name: "Sign out" }).click()
+  await expect(fake.getByText("Not signed in.")).toBeVisible()
+
+  // Off, the entry stays in the file, and no new Thread starts on it.
+  await fake.getByRole("switch", { name: "Fake AI on" }).click()
+  await expect
+    .poll(() => readFileSync(file, "utf8"))
+    .toContain("enabled = false")
+  await expect(fake.getByText("Off: no new Thread starts on it.")).toBeVisible()
+  await fake.getByRole("switch", { name: "Fake AI on" }).click()
+  await expect.poll(() => readFileSync(file, "utf8")).not.toContain("enabled")
+
+  // A new entry, and taking it out.
+  await settings.getByRole("button", { name: /Add a Harness/ }).click()
+  const adding = settings.getByRole("dialog", { name: "Add a Harness" })
+  await adding.getByLabel("Name").fill("Other Agent")
+  await expect(adding.getByLabel("ID")).toHaveValue("other-agent")
+  await adding.getByLabel("Command").fill("other-acp --stdio 'a b'")
+  await adding.getByRole("button", { name: "Add" }).click()
+  await expect
+    .poll(() => readFileSync(file, "utf8"))
+    .toContain(
+      '[[harness]]\nid = "other-agent"\nname = "Other Agent"\ncommand = "other-acp"\nargs = ["--stdio", "a b"]\n'
+    )
+  const other = settings.getByRole("group", { name: "Other Agent" })
+  await expect(
+    other.getByRole("textbox", { name: "Other Agent command" })
+  ).toHaveValue("other-acp --stdio 'a b'")
+  await other.getByRole("button", { name: "Remove" }).click()
+  await settings
+    .getByRole("dialog", { name: "Remove Other Agent?" })
+    .getByRole("button", { name: "Remove" })
+    .click()
+  await expect(other).toHaveCount(0)
+  expect(readFileSync(file, "utf8")).not.toContain("other")
+
+  // What Enter does while an Agent works is the window's to choose.
+  const choice = settings
+    .getByRole("radiogroup", { name: /while an Agent works/ })
+    .getByRole("radio", { name: "Queue it" })
+  await choice.click()
+  await settings.reload()
+  await settings
+    .getByRole("navigation", { name: "Settings sections" })
+    .getByRole("button", { name: /Agents/ })
+    .click()
+  await expect(choice).toBeChecked()
 })

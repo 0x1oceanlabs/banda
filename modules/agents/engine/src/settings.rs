@@ -10,13 +10,13 @@
 use crate::model::{HarnessView, Program};
 use banda_kernel::AgentId;
 use schemars::JsonSchema;
-use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 
 /// An agent program and how to start it. It speaks ACP on its stdio.
-#[derive(Clone, Debug, PartialEq, Eq, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct Harness {
     /// How Threads and the window name it: `claude`, `codex`.
     pub id: String,
@@ -24,14 +24,19 @@ pub struct Harness {
     pub name: String,
     /// The program that speaks ACP: its name on PATH, or its path.
     pub command: String,
+    /// Whether Threads start with it. One turned off stays in the list,
+    /// with how it starts, for when it is turned on again.
+    #[serde(default = "on", skip_serializing_if = "is_on")]
+    #[schemars(extend("default" = true))]
+    pub enabled: bool,
     /// The program's arguments.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub args: Vec<String>,
     /// Variables over the environment it starts in.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub env: BTreeMap<String, String>,
     /// The Person's own CLI the program runs, when it runs one.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cli: Option<Cli>,
     /// A folder where each start of the program writes what Banda and
     /// the Harness say to each other, one ACP frame per line, for tests to
@@ -41,9 +46,17 @@ pub struct Harness {
     pub record: Option<PathBuf>,
 }
 
+fn on() -> bool {
+    true
+}
+
+fn is_on(enabled: &bool) -> bool {
+    *enabled
+}
+
 /// A CLI the Person installed, which an adapter runs in place of a copy
 /// of its own (ADR 0003, decision 3).
-#[derive(Clone, Debug, PartialEq, Eq, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 pub struct Cli {
     /// Its name on PATH, or its path.
     pub program: String,
@@ -52,7 +65,7 @@ pub struct Cli {
     pub variable: String,
     /// The oldest version the adapter supports: the one it was built for.
     /// An older CLI still runs, and its Threads warn.
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub minimum: Option<String>,
 }
 
@@ -68,13 +81,25 @@ impl Harness {
     }
 }
 
-/// The Harnesses this machine can start.
+/// The Harnesses this machine can start. Read from a file, they follow
+/// it: each look at them reads it again once it changed (ADR 0016), so a
+/// Harness the settings window or the Person's editor changed starts its
+/// next process as the file now says.
 #[derive(Clone, Debug, Default)]
-pub struct Harnesses(Arc<[Harness]>);
+pub struct Harnesses(Arc<Mutex<List>>);
+
+#[derive(Debug, Default)]
+struct List {
+    harnesses: Arc<[Harness]>,
+    /// The file the list follows, and its text when last read: none when
+    /// it was not there. The text, not its time and size, tells a change,
+    /// as the look's files do: two quick saves of one length share both.
+    file: Option<(PathBuf, Option<String>)>,
+}
 
 /// The Harnesses this machine starts Threads with. Without the file,
 /// Banda starts Claude Code and Codex, each with the Person's own CLI.
-#[derive(Deserialize, JsonSchema)]
+#[derive(Serialize, Deserialize, JsonSchema)]
 pub struct HarnessFile {
     /// One `[[harness]]` table per agent program.
     #[serde(default)]
@@ -83,7 +108,12 @@ pub struct HarnessFile {
 
 impl Harnesses {
     pub fn new(harnesses: Vec<Harness>) -> Self {
-        Self(harnesses.into())
+        Self::with(harnesses, None)
+    }
+
+    fn with(harnesses: Vec<Harness>, file: Option<(PathBuf, Option<String>)>) -> Self {
+        let harnesses = harnesses.into();
+        Self(Arc::new(Mutex::new(List { harnesses, file })))
     }
 
     /// The Harnesses Banda starts when a machine names none: the ACP
@@ -91,72 +121,132 @@ impl Harnesses {
     /// running the Person's own CLI. Each one signs in on its own; Banda
     /// holds no model provider's credentials.
     pub fn known() -> Self {
-        let npx = |id: &str,
-                   name: &str,
-                   package: &str,
-                   (program, variable, minimum): (&str, &str, &str)| Harness {
-            id: id.to_owned(),
-            name: name.to_owned(),
-            command: "npx".to_owned(),
-            args: vec!["-y".to_owned(), package.to_owned()],
-            env: BTreeMap::new(),
-            cli: Some(Cli {
-                program: program.to_owned(),
-                variable: variable.to_owned(),
-                minimum: Some(minimum.to_owned()),
-            }),
-            record: None,
-        };
-        Self::new(vec![
-            npx(
-                "claude",
-                "Claude Code",
-                "@agentclientprotocol/claude-agent-acp@0.99.1",
-                // The adapter's Agent SDK 0.3.312 was built for Claude Code
-                // 2.1.312 (its `claudeCodeVersion`).
-                ("claude", "CLAUDE_CODE_EXECUTABLE", "2.1.312"),
-            ),
-            npx(
-                "codex",
-                "Codex",
-                "@agentclientprotocol/codex-acp@2.5.0",
-                // The adapter depends on `@openai/codex` ^0.165.0.
-                ("codex", "CODEX_PATH", "0.165.0"),
-            ),
-        ])
+        Self::new(known())
     }
 
     /// Reads a Harness list: `[[harness]]` tables with `id`, `name`,
     /// `command`, and optional `args`, `env` and `cli`.
     /// A mistake keeps TOML's place for it, so a check names the line.
     pub fn parse(text: &str) -> Result<Self, toml::de::Error> {
-        let file: HarnessFile = toml::from_str(text)?;
-        Ok(Self::new(file.harness))
+        parse(text).map(Self::new)
     }
 
-    /// Reads the machine's Harness list from `path`. A machine with no list
-    /// gets the [`known`](Self::known) Harnesses.
+    /// The machine's Harness list in `path`, followed from then on. A
+    /// machine with no list gets the [`known`](Self::known) Harnesses.
     pub fn load(path: &Path) -> Result<Self, String> {
-        match std::fs::read_to_string(path) {
-            Ok(text) => Self::parse(&text).map_err(|e| format!("{}: {e}", path.display())),
-            Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(Self::known()),
-            Err(error) => Err(format!("{}: {error}", path.display())),
+        let text = read(path)?;
+        let harnesses = listed(path, text.as_deref())?;
+        Ok(Self::with(harnesses, Some((path.to_owned(), text))))
+    }
+
+    /// The list as its file says now. A file that changed into one that
+    /// does not read is logged, and the list before it stays.
+    fn now(&self) -> Arc<[Harness]> {
+        let mut list = self.0.lock().unwrap();
+        let List { harnesses, file } = &mut *list;
+        if let Some((path, was)) = file {
+            match read(path) {
+                Ok(text) if text != *was => {
+                    match listed(path, text.as_deref()) {
+                        Ok(read) => *harnesses = read.into(),
+                        Err(error) => tracing::warn!(%error, "the Harness list does not read"),
+                    }
+                    *was = text;
+                }
+                Ok(_) => {}
+                Err(error) => tracing::warn!(%error, "the Harness list cannot be read"),
+            }
+        }
+        harnesses.clone()
+    }
+
+    pub fn find(&self, id: &str) -> Option<Harness> {
+        self.now().iter().find(|h| h.id == id).cloned()
+    }
+
+    /// Entry `id`, when Threads may start with it.
+    pub fn get(&self, id: &str) -> Result<Harness, String> {
+        match self.find(id) {
+            Some(harness) if harness.enabled => Ok(harness),
+            Some(harness) => Err(format!("{} is turned off in harnesses.toml.", harness.name)),
+            None => Err(format!("This computer has no Harness named \"{id}\".")),
         }
     }
 
-    pub fn find(&self, id: &str) -> Option<&Harness> {
-        self.0.iter().find(|h| h.id == id)
-    }
-
     pub fn views(&self) -> Vec<HarnessView> {
-        self.0
-            .iter()
-            .map(|h| HarnessView {
-                id: h.id.clone(),
-                name: h.name.clone(),
-            })
-            .collect()
+        self.now().iter().map(HarnessView::of).collect()
     }
+}
+
+fn known() -> Vec<Harness> {
+    let npx = |id: &str,
+               name: &str,
+               package: &str,
+               (program, variable, minimum): (&str, &str, &str)| Harness {
+        id: id.to_owned(),
+        name: name.to_owned(),
+        command: "npx".to_owned(),
+        args: vec!["-y".to_owned(), package.to_owned()],
+        enabled: true,
+        env: BTreeMap::new(),
+        cli: Some(Cli {
+            program: program.to_owned(),
+            variable: variable.to_owned(),
+            minimum: Some(minimum.to_owned()),
+        }),
+        record: None,
+    };
+    vec![
+        npx(
+            "claude",
+            "Claude Code",
+            "@agentclientprotocol/claude-agent-acp@0.99.1",
+            // The adapter's Agent SDK 0.3.312 was built for Claude Code
+            // 2.1.312 (its `claudeCodeVersion`).
+            ("claude", "CLAUDE_CODE_EXECUTABLE", "2.1.312"),
+        ),
+        npx(
+            "codex",
+            "Codex",
+            "@agentclientprotocol/codex-acp@2.5.0",
+            // The adapter depends on `@openai/codex` ^0.165.0.
+            ("codex", "CODEX_PATH", "0.165.0"),
+        ),
+    ]
+}
+
+fn parse(text: &str) -> Result<Vec<Harness>, toml::de::Error> {
+    Ok(toml::from_str::<HarnessFile>(text)?.harness)
+}
+
+/// The file's text; none when it is not there.
+fn read(path: &Path) -> Result<Option<String>, String> {
+    match std::fs::read_to_string(path) {
+        Ok(text) => Ok(Some(text)),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(None),
+        Err(error) => Err(format!("{}: {error}", path.display())),
+    }
+}
+
+/// The list `text` says, or the known one when there is no file.
+fn listed(path: &Path, text: Option<&str>) -> Result<Vec<Harness>, String> {
+    match text {
+        Some(text) => parse(text).map_err(|e| format!("{}: {e}", path.display())),
+        None => Ok(known()),
+    }
+}
+
+/// What `harnesses.toml` starts as when the settings window first writes
+/// it: the known Harnesses, written out, so a change to one keeps the
+/// others.
+pub fn template() -> String {
+    let known = HarnessFile { harness: known() };
+    let list = toml::to_string(&known).expect("a Harness list writes as TOML");
+    format!(
+        "#:schema ./schemas/harnesses.schema.json\n\
+         # The Harnesses Banda starts Threads with. Without this file, the\n\
+         # ones below.\n\n{list}"
+    )
 }
 
 /// What an Agent's file from before ADR 0006 says: who it was and its
@@ -221,6 +311,34 @@ mod tests {
         assert_eq!(fake.args, ["--quiet"]);
         assert!(list.find("claude").is_none());
         assert!(Harnesses::parse("harness = 3").is_err());
+    }
+
+    #[test]
+    fn the_list_follows_its_file() {
+        let folder = tempfile::tempdir().unwrap();
+        let path = folder.path().join("harnesses.toml");
+        let list = Harnesses::load(&path).unwrap();
+        assert!(list.find("claude").is_some(), "no file: the known ones");
+        let fake = "[[harness]]\nid = \"fake\"\nname = \"Fake\"\ncommand = \"fake\"\n";
+        std::fs::write(&path, fake).unwrap();
+        assert!(list.find("claude").is_none());
+        assert_eq!(list.get("fake").unwrap().command, "fake");
+        std::fs::write(&path, format!("{fake}enabled = false\n")).unwrap();
+        assert_eq!(
+            list.get("fake").unwrap_err(),
+            "Fake is turned off in harnesses.toml."
+        );
+        assert!(!list.views()[0].enabled, "a list shows it still");
+        std::fs::write(&path, "harness = 3").unwrap();
+        assert!(
+            list.find("fake").is_some(),
+            "a file that does not read changes nothing"
+        );
+    }
+
+    #[test]
+    fn the_template_reads_as_the_known_harnesses() {
+        assert_eq!(parse(&template()).unwrap(), known());
     }
 
     #[test]

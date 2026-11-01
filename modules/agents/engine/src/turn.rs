@@ -652,16 +652,15 @@ async fn run(
         .map_err(|e| unplanned(plain(e)))?
         .map(|summary| summary.harness)
         .unwrap_or_default();
-    let harness = harnesses.find(&harness_id).ok_or_else(|| {
-        unplanned(match harness_id.as_str() {
-            "" => "This Thread names no Harness: its Agent's file is gone.".to_owned(),
-            _ => format!("This computer has no Harness named \"{harness_id}\"."),
-        })
-    })?;
+    let harness = match harness_id.as_str() {
+        "" => Err("This Thread names no Harness: its Agent's file is gone.".to_owned()),
+        id => harnesses.get(id),
+    }
+    .map_err(unplanned)?;
     // The Agent has no name of its own: its Harness's is the one to show.
     let name = harness.name.clone();
     let connection = live
-        .connection(space.id(), harness)
+        .connection(space.id(), &harness)
         .await
         .map_err(|reason| Ending::failed(reason, Some(Failure::HarnessStopped)))?;
     let earlier = space

@@ -391,49 +391,6 @@ function running(pid: number): boolean {
   }
 }
 
-test("a Person sees who is signed in to a Harness, signs in and out", async () => {
-  window = await startWindow({ account: true, oldCli: true })
-  const { page } = window
-  await page.getByLabel("Name").fill("Work")
-  await page.getByRole("button", { name: "Create Space" }).click()
-  await expect(page.getByRole("region", { name: "New Thread" })).toBeVisible()
-  await page.keyboard.press("Alt+KeyN")
-  await page
-    .getByRole("region", { name: "New Pane" })
-    .getByRole("button", { name: "Harnesses" })
-    .click()
-  const settings = page.getByRole("region", { name: "Harnesses" })
-  const fake = settings.getByRole("group", { name: "Fake AI" })
-  await expect(
-    fake.getByText(/^fake-cli 1\.0\.0 · banda-fake-agent \d/)
-  ).toBeVisible()
-  await expect(
-    fake
-      .getByRole("status")
-      .filter({ hasText: /1\.0\.0 is older than 2\.0\.0/ })
-  ).toBeVisible()
-  await expect(fake.getByText("Not signed in.")).toBeVisible()
-
-  await fake.getByRole("button", { name: "Sign in with Fake browser" }).click()
-  await expect(
-    fake.getByText("Signed in as person@example.invalid · Fake Pro")
-  ).toBeVisible()
-  await page.screenshot({ path: "test-results/5-harnesses.png" })
-
-  await fake.getByRole("button", { name: "Sign out" }).click()
-  const asking = page.getByRole("dialog", { name: "Sign out of Fake AI?" })
-  await asking.getByRole("button", { name: "Sign out" }).click()
-  await expect(fake.getByText("Not signed in.")).toBeVisible()
-
-  // What Enter does while an Agent works is the window's to choose.
-  const choice = page
-    .getByRole("radiogroup", { name: /while an Agent works/ })
-    .getByRole("radio", { name: "Queue it" })
-  await choice.click()
-  await page.reload()
-  await expect(choice).toBeChecked()
-})
-
 test("a Person chooses the model and the mode under the message box", async () => {
   window = await startWindow()
   const { page } = window

@@ -74,9 +74,11 @@ export function useThreadSession({
   const acting = useAct()
   const reader = useImageReader(engine, space)
   const harnesses = useHarnesses(engine, space)
+  // A new Thread starts on a Harness that is on.
+  const offered = useMemo(() => harnesses.filter((h) => h.enabled), [harnesses])
   const harness =
     thread === null
-      ? args.harness || harnesses[0]?.id || ""
+      ? args.harness || offered[0]?.id || ""
       : (state?.harness ?? args.harness)
   const name = harnessName(harnesses, harness) || "the Agent"
 
@@ -237,7 +239,8 @@ export function useThreadSession({
     /** The turn that runs now, if one does. */
     turn: state && working(state),
     harness,
-    harnesses,
+    /** The Harnesses a new Thread may start on. */
+    harnesses: offered,
     /** The Harness's name, as the Thread speaks of its Agent. */
     name,
     reader,

@@ -4,7 +4,6 @@
  * and a ↶ for a key the Person's file sets. A change applies at once:
  * `banda settings set` writes it, and the look brings it back.
  */
-import { useState } from "react"
 import type { JsonValue } from "@banda/contract"
 import type { Problem } from "@banda/contract/look"
 import {
@@ -15,6 +14,8 @@ import {
 } from "@banda/contract/settings"
 import { Button } from "@banda/ui/components/button"
 import { Input } from "@banda/ui/components/input"
+import { Switch } from "@banda/ui/components/switch"
+import { useWrite } from "@banda/ui/hooks/use-write"
 import {
   Select,
   SelectContent,
@@ -23,7 +24,6 @@ import {
   SelectValue,
 } from "@banda/ui/components/select"
 import { cn } from "@banda/ui/lib/utils"
-import { problem } from "@banda/ui/lib/words"
 import { FileCogIcon, Undo2Icon } from "lucide-react"
 import type { CustomRow } from "./sections"
 
@@ -44,14 +44,11 @@ export function SettingRow({
   Custom?: CustomRow
 }) {
   // Written through the desktop; what was wrong when it refused.
-  const [refused, setRefused] = useState<string[]>([])
-  const done = (said: Promise<string[]> | undefined) =>
-    void said?.then(setRefused, (error: unknown) =>
-      setRefused([problem(error)])
-    )
+  const { refused, write } = useWrite()
   const settings = window.banda?.settings
-  const set = (value: string) => done(settings?.set(row.file, row.key, value))
-  const reset = () => done(settings?.reset(row.file, row.key))
+  const set = (value: string) =>
+    settings && write(settings.set(row.file, row.key, value))
+  const reset = () => settings && write(settings.reset(row.file, row.key))
   const mine = setting?.from.layer === "file"
   const wrong = [...problems.map((p) => p.message), ...refused]
   return (
@@ -208,37 +205,6 @@ function wordsOf(option: Option): string {
   if (option.value === true) return "On"
   if (option.value === false) return "Off"
   return String(option.value)
-}
-
-function Switch({
-  label,
-  on,
-  onChange,
-}: {
-  label: string
-  on: boolean
-  onChange: (on: boolean) => void
-}) {
-  return (
-    <button
-      type="button"
-      role="switch"
-      aria-checked={on}
-      aria-label={label}
-      onClick={() => onChange(!on)}
-      className={cn(
-        "relative h-5 w-9 rounded-full transition-colors",
-        on ? "bg-primary" : "bg-input"
-      )}
-    >
-      <span
-        className={cn(
-          "absolute top-0.5 left-0.5 size-4 rounded-full bg-background shadow transition-transform",
-          on && "translate-x-4"
-        )}
-      />
-    </button>
-  )
 }
 
 /** A few options side by side; more in a list. */

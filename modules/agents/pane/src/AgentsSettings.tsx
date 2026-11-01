@@ -1,0 +1,698 @@
+import { type ReactNode, useCallback, useEffect, useRef, useState } from "react"
+import type { Engine, SpaceId } from "@banda/contract"
+import type { Account, HarnessView } from "@banda/contract/agents"
+import { tomlOf } from "@banda/contract/settings"
+import { Button } from "@banda/ui/components/button"
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from "@banda/ui/components/card"
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@banda/ui/components/dialog"
+import {
+  Field,
+  FieldContent,
+  FieldDescription,
+  FieldGroup,
+  FieldLabel,
+  FieldLegend,
+  FieldSet,
+} from "@banda/ui/components/field"
+import { HarnessLogo } from "@banda/ui/components/harness-logo"
+import { Input } from "@banda/ui/components/input"
+import { RadioGroup, RadioGroupItem } from "@banda/ui/components/radio-group"
+import { Spinner } from "@banda/ui/components/spinner"
+import { Switch } from "@banda/ui/components/switch"
+import { useAct } from "@banda/ui/hooks/use-act"
+import { useInFront } from "@banda/ui/hooks/use-in-front"
+import { useRead } from "@banda/ui/hooks/use-read"
+import { useWrite } from "@banda/ui/hooks/use-write"
+import { cn } from "@banda/ui/lib/utils"
+import { problem } from "@banda/ui/lib/words"
+import {
+  FileCogIcon,
+  LogOutIcon,
+  PlusIcon,
+  RotateCwIcon,
+  Trash2Icon,
+} from "lucide-react"
+import { type EnterKey, useEnterKey } from "./enter-key"
+import { commandLine, wordsOf } from "./sign-in"
+import { type Open, Problem, Warning, Ways } from "./SignIn"
+
+/**
+ * `harnesses.toml`, as the settings window writes it (ADR 0016): through
+ * `banda settings`, which keeps the Person's text and refuses what the
+ * engine would not read. Each answers what was wrong, or nothing.
+ */
+export type HarnessFile = {
+  /** Sets `key`, as `harness.codex.enabled`, to a TOML value. */
+  set: (key: string, value: string) => Promise<string[]>
+  /** Takes `key` out; `harness.codex` takes the whole entry out. */
+  reset: (key: string) => Promise<string[]>
+  /** Opens the file in the Person's editor. */
+  reveal: () => void
+}
+
+type Props = {
+  engine: Engine
+  /** The Space each Harness is asked in: an account serves them all. */
+  space: SpaceId
+  open: Open
+  file: HarnessFile
+}
+
+/**
+ * The settings window's Agents (ADR 0016, decision 7), as T3 Code's
+ * providers: a card per Harness entry with who is signed in, on or off,
+ * and how it starts; adding one; then what a message written while an
+ * Agent works does. The engine reads the file again once it changed, so
+ * the list is asked again after each change, and when the window comes
+ * to the front.
+ */
+export function AgentsSettings({
+  lit,
+  ...props
+}: Props & {
+  /** A link's Harness: it shows lit. */
+  lit?: string
+}) {
+  const { engine, space } = props
+  const [list, setList] = useState<HarnessView[] | { refused: string }>()
+  const readList = useCallback(
+    () =>
+      void engine
+        .call("agents.harnesses", {}, { space })
+        .then(setList, (error: unknown) =>
+          setList({ refused: problem(error) })
+        ),
+    [engine, space]
+  )
+  // Read as the window comes to the front, for the Person's own edits.
+  const front = useInFront()
+  useEffect(() => {
+    if (front) readList()
+  }, [front, readList])
+  return (
+    <div className="flex flex-col gap-4">
+      {list === undefined && <Spinner />}
+      {list && "refused" in list && <Problem>{list.refused}</Problem>}
+      {Array.isArray(list) &&
+        list.map((harness) => (
+          <HarnessCard
+            key={harness.id}
+            {...props}
+            harness={harness}
+            lit={harness.id === lit}
+            onWritten={readList}
+          />
+        ))}
+      {Array.isArray(list) && (
+        <AddHarness file={props.file} taken={list} onAdded={readList} />
+      )}
+      <EnterKeyChoice />
+    </div>
+  )
+}
+
+type HarnessProps = Props & { harness: HarnessView }
+
+/** A Harness entry: its account, on or off, and how it starts. */
+function HarnessCard({
+  lit,
+  onWritten,
+  ...props
+}: HarnessProps & { lit: boolean; onWritten: () => void }) {
+  const { harness, file } = props
+  const { refused, write } = useWrite(onWritten)
+  // Asked again after each sign-in or sign-out: a new key, a new reading.
+  const [readings, setReadings] = useState(0)
+  const card = useRef<HTMLDivElement>(null)
+  useEffect(() => {
+    if (lit) card.current?.scrollIntoView({ block: "center" })
+  }, [lit])
+  const enabled = `harness.${harness.id}.enabled`
+  const frame: FrameProps = {
+    harness,
+    lit,
+    card,
+    refused,
+    toggle: (
+      <Switch
+        label={`${harness.name} on`}
+        on={harness.enabled}
+        onChange={(on) =>
+          write(on ? file.reset(enabled) : file.set(enabled, "false"))
+        }
+      />
+    ),
+    starts: <HowItStarts harness={harness} file={file} write={write} />,
+  }
+  return harness.enabled ? (
+    <Reading
+      key={readings}
+      {...props}
+      frame={frame}
+      readAgain={() => setReadings((n) => n + 1)}
+    />
+  ) : (
+    <Frame {...frame} about="Off: no new Thread starts on it." />
+  )
+}
+
+type FrameProps = {
+  harness: HarnessView
+  lit: boolean
+  card: React.RefObject<HTMLDivElement | null>
+  refused: string[]
+  toggle: ReactNode
+  starts: ReactNode
+}
+
+/** A card as T3 Code draws a provider: its logo and name, what it runs,
+ * its switch; who is signed in; how it starts. */
+function Frame({
+  harness,
+  lit,
+  card,
+  refused,
+  toggle,
+  starts,
+  about,
+  aboutTitle,
+  action,
+  children,
+}: FrameProps & {
+  about?: string
+  aboutTitle?: string
+  action?: ReactNode
+  children?: ReactNode
+}) {
+  return (
+    <Card
+      ref={card}
+      size="sm"
+      role="group"
+      aria-label={harness.name}
+      className={cn(lit && "ring-2 ring-primary/60")}
+    >
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <HarnessLogo id={harness.id} name={harness.name} className="size-4" />
+          {harness.name}
+        </CardTitle>
+        {about && <CardDescription title={aboutTitle}>{about}</CardDescription>}
+        <CardAction className="flex items-center gap-1">
+          {action}
+          {toggle}
+        </CardAction>
+      </CardHeader>
+      {children && (
+        <CardContent className="flex flex-col gap-3">{children}</CardContent>
+      )}
+      <CardContent className="flex flex-col divide-y border-t">
+        {starts}
+        {refused.map((message) => (
+          <Problem key={message}>{message}</Problem>
+        ))}
+      </CardContent>
+    </Card>
+  )
+}
+
+/** What a Harness runs: the Person's CLI with its version, through its
+ * adapter. */
+function runs({ cli, adapter }: Account): string {
+  const own = cli && [cli.path.split("/").pop(), cli.version].filter(Boolean)
+  const through = adapter && `${adapter.name} ${adapter.version}`
+  return [own?.join(" "), through].filter(Boolean).join(" · ")
+}
+
+/** Asks the Harness, which starts it if it does not run. */
+function Reading({
+  frame,
+  readAgain,
+  ...props
+}: HarnessProps & { frame: FrameProps; readAgain: () => void }) {
+  const { engine, space, harness } = props
+  const account = useRead(
+    useCallback(
+      () => engine.call("agents.account", { harness: harness.id }, { space }),
+      [engine, space, harness.id]
+    )
+  )
+  return (
+    <Frame
+      {...frame}
+      about={account.state === "ready" ? runs(account.value) : undefined}
+      aboutTitle={
+        account.state === "ready" ? account.value.cli?.path : undefined
+      }
+      action={
+        account.state !== "loading" && (
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            aria-label={`Check ${harness.name} again`}
+            title="Check again"
+            onClick={readAgain}
+          >
+            <RotateCwIcon />
+          </Button>
+        )
+      }
+    >
+      {account.state === "loading" && (
+        <span className="flex items-center gap-2 text-sm text-muted-foreground">
+          <Spinner /> Starting {harness.name}…
+        </span>
+      )}
+      {account.state === "refused" && (
+        <Problem>
+          {harness.name} does not start: {account.refusal.message}
+        </Problem>
+      )}
+      {account.state === "ready" && account.value.cli?.outdated && (
+        <Warning>{account.value.cli.outdated}</Warning>
+      )}
+      {account.state === "ready" && (
+        <AccountState
+          {...props}
+          account={account.value}
+          onChanged={readAgain}
+        />
+      )}
+    </Frame>
+  )
+}
+
+/** How the entry starts its program, as the file says, to change here;
+ * its environment's values may be secrets, so they stay in the file. */
+function HowItStarts({
+  harness,
+  file,
+  write,
+}: {
+  harness: HarnessView
+  file: HarnessFile
+  write: (said: Promise<string[]>) => void
+}) {
+  const [program = "", ...args] = harness.command
+  const line = commandLine({ program, args, env: {} })
+  const commit = (text: string) => {
+    const [command, ...rest] = wordsOf(text)
+    if (!command || text === line) return
+    const entry = `{ command = ${tomlOf(command)}, args = ${tomlOf(rest)} }`
+    write(file.set(`harness.${harness.id}`, entry))
+  }
+  return (
+    <>
+      <Row
+        title="Command"
+        about="The program that speaks ACP, then its arguments."
+      >
+        <Input
+          // A new value from the file starts the field afresh.
+          key={line}
+          aria-label={`${harness.name} command`}
+          defaultValue={line}
+          className="h-8 w-72 max-w-full font-mono text-xs"
+          onBlur={(event) => commit(event.target.value)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") commit(event.currentTarget.value)
+          }}
+        />
+      </Row>
+      <Row
+        title="Environment"
+        about={
+          harness.env.length === 0
+            ? "None over yours."
+            : `${harness.env.join(", ")}: their values stay in the file.`
+        }
+      >
+        <Button variant="outline" size="sm" onClick={file.reveal}>
+          <FileCogIcon />
+          Edit in harnesses.toml
+        </Button>
+      </Row>
+      <Row title="Remove" about="Takes the entry out of harnesses.toml.">
+        <Remove
+          harness={harness}
+          onRemove={() => write(file.reset(`harness.${harness.id}`))}
+        />
+      </Row>
+    </>
+  )
+}
+
+function Row({
+  title,
+  about,
+  children,
+}: {
+  title: string
+  about: string
+  children: ReactNode
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 py-2.5">
+      <div className="min-w-40 flex-1">
+        <div className="text-sm font-medium">{title}</div>
+        <div className="text-xs text-muted-foreground">{about}</div>
+      </div>
+      {children}
+    </div>
+  )
+}
+
+function Remove({
+  harness,
+  onRemove,
+}: {
+  harness: HarnessView
+  onRemove: () => void
+}) {
+  const [asking, setAsking] = useState(false)
+  return (
+    <>
+      <Button variant="ghost" size="sm" onClick={() => setAsking(true)}>
+        <Trash2Icon />
+        Remove
+      </Button>
+      <Dialog open={asking} onOpenChange={setAsking}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Remove {harness.name}?</DialogTitle>
+            <DialogDescription>
+              Its entry leaves harnesses.toml. Its Threads stay, and cannot go
+              on until an entry with the ID {harness.id} is back. Turning it off
+              keeps the entry.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <DialogClose render={<Button variant="outline" />}>
+              Cancel
+            </DialogClose>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                setAsking(false)
+                onRemove()
+              }}
+            >
+              Remove
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  )
+}
+
+/** A new entry: any agent that speaks ACP, or a second account of one. */
+function AddHarness({
+  file,
+  taken,
+  onAdded,
+}: {
+  file: HarnessFile
+  taken: HarnessView[]
+  onAdded: () => void
+}) {
+  const [asking, setAsking] = useState(false)
+  const [name, setName] = useState("")
+  const [id, setId] = useState<string>()
+  const [line, setLine] = useState("")
+  const wanted = id ?? idOf(name)
+  const [command, ...args] = wordsOf(line)
+  const wrong = !/^[a-z0-9][a-z0-9-]*$/.test(wanted)
+    ? "An ID is small letters, digits and dashes."
+    : taken.some((h) => h.id === wanted)
+      ? `There is a Harness with the ID ${wanted} already.`
+      : undefined
+  const ready = !wrong && command !== undefined && name.trim() !== ""
+  const { refused, write } = useWrite(() => {
+    setAsking(false)
+    setName("")
+    setId(undefined)
+    setLine("")
+    onAdded()
+  })
+  const add = () => {
+    if (!ready || !command) return
+    const entry = `{ name = ${tomlOf(name.trim())}, command = ${tomlOf(command)}, args = ${tomlOf(args)} }`
+    write(file.set(`harness.${wanted}`, entry))
+  }
+  return (
+    <>
+      <Button
+        variant="outline"
+        className="h-auto min-h-9 justify-start border-dashed text-left whitespace-normal text-muted-foreground"
+        onClick={() => setAsking(true)}
+      >
+        <PlusIcon />
+        Add a Harness: any agent that speaks ACP, or a second account
+      </Button>
+      <Dialog open={asking} onOpenChange={setAsking}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add a Harness</DialogTitle>
+            <DialogDescription>
+              A new entry in harnesses.toml. A second account of one is the same
+              command with its own config folder in its environment, which you
+              set in the file.
+            </DialogDescription>
+          </DialogHeader>
+          <form
+            onSubmit={(event) => {
+              event.preventDefault()
+              add()
+            }}
+          >
+            <FieldGroup>
+              <Field>
+                <FieldLabel htmlFor="harness-name">Name</FieldLabel>
+                <Input
+                  id="harness-name"
+                  value={name}
+                  placeholder="Gemini CLI"
+                  onChange={(event) => setName(event.target.value)}
+                />
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="harness-id">ID</FieldLabel>
+                <Input
+                  id="harness-id"
+                  value={wanted}
+                  onChange={(event) => setId(event.target.value)}
+                  className="font-mono"
+                />
+                <FieldDescription>
+                  How Threads name it. It stays: a Thread keeps the ID.
+                </FieldDescription>
+              </Field>
+              <Field>
+                <FieldLabel htmlFor="harness-command">Command</FieldLabel>
+                <Input
+                  id="harness-command"
+                  value={line}
+                  placeholder="npx -y @google/gemini-cli --experimental-acp"
+                  onChange={(event) => setLine(event.target.value)}
+                  className="font-mono"
+                />
+                <FieldDescription>
+                  The program that speaks ACP on its stdio, then its arguments.
+                </FieldDescription>
+              </Field>
+              {name && wrong && <Problem>{wrong}</Problem>}
+              {refused.map((message) => (
+                <Problem key={message}>{message}</Problem>
+              ))}
+            </FieldGroup>
+            <DialogFooter className="mt-4">
+              <DialogClose render={<Button variant="outline" />}>
+                Cancel
+              </DialogClose>
+              <Button type="submit" disabled={!ready}>
+                Add
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+    </>
+  )
+}
+
+/** `Gemini CLI` as `gemini-cli`. */
+function idOf(name: string): string {
+  return name
+    .toLowerCase()
+    .replaceAll(/[^a-z0-9]+/g, "-")
+    .replaceAll(/^-|-$/g, "")
+}
+
+function AccountState({
+  engine,
+  space,
+  harness,
+  open,
+  account,
+  onChanged,
+}: Omit<HarnessProps, "file"> & { account: Account; onChanged: () => void }) {
+  const who = account.signed_in_as
+  if (who?.signed_in)
+    return (
+      <div className="flex flex-col items-start gap-2">
+        <p className="text-sm">
+          Signed in as {[who.email, who.label].filter(Boolean).join(" · ")}
+          {who.detail && (
+            <span className="text-muted-foreground"> ({who.detail})</span>
+          )}
+        </p>
+        {account.signs_out && (
+          <SignOut
+            engine={engine}
+            space={space}
+            harness={harness}
+            onSignedOut={onChanged}
+          />
+        )}
+      </div>
+    )
+  return (
+    <div className="flex flex-col gap-2">
+      <p className="text-sm text-muted-foreground">
+        {who
+          ? "Not signed in."
+          : `${harness.name} does not say who is signed in.`}
+      </p>
+      <Ways
+        engine={engine}
+        space={space}
+        harness={harness.id}
+        ways={account.ways}
+        open={open}
+        onSignedIn={onChanged}
+      />
+    </div>
+  )
+}
+
+function SignOut({
+  engine,
+  space,
+  harness,
+  onSignedOut,
+}: Pick<HarnessProps, "engine" | "space" | "harness"> & {
+  onSignedOut: () => void
+}) {
+  const [asking, setAsking] = useState(false)
+  const signing = useAct()
+  const signOut = async () => {
+    const done = await signing.act(() =>
+      engine.command("agents.sign_out", { harness: harness.id }, space)
+    )
+    if (done === undefined) return
+    setAsking(false)
+    onSignedOut()
+  }
+  return (
+    <>
+      <Button variant="outline" size="xs" onClick={() => setAsking(true)}>
+        <LogOutIcon data-icon="inline-start" />
+        Sign out
+      </Button>
+      <Dialog open={asking} onOpenChange={setAsking}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Sign out of {harness.name}?</DialogTitle>
+            <DialogDescription>
+              This signs {harness.name} out on this computer, in your own
+              terminal too. Its Agents in every Space stop until someone signs
+              in again; their Threads stay.
+            </DialogDescription>
+          </DialogHeader>
+          {signing.problem && <Problem>{signing.problem}</Problem>}
+          <DialogFooter>
+            <DialogClose render={<Button variant="outline" />}>
+              Cancel
+            </DialogClose>
+            <Button
+              variant="destructive"
+              disabled={signing.busy}
+              onClick={() => void signOut()}
+            >
+              {signing.busy && <Spinner />}
+              Sign out
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  )
+}
+
+const ENTER_KEYS: { value: EnterKey; label: string; about: string }[] = [
+  {
+    value: "steer",
+    label: "Send it into the turn",
+    about: "The Agent reads it as it works.",
+  },
+  {
+    value: "queue",
+    label: "Queue it",
+    about: "It goes once the turn ends.",
+  },
+]
+
+function EnterKeyChoice() {
+  const [enter, choose] = useEnterKey()
+  return (
+    <FieldSet>
+      <FieldLegend id="enter-key" variant="label">
+        When you press Enter while an Agent works
+      </FieldLegend>
+      <FieldDescription>
+        Ctrl+Enter (⌘+Enter on a Mac) does the other. This window keeps the
+        choice.
+      </FieldDescription>
+      <RadioGroup
+        value={enter}
+        aria-labelledby="enter-key"
+        onValueChange={(next) => choose(next as EnterKey)}
+      >
+        {ENTER_KEYS.map((choice) => {
+          const id = `enter-key-${choice.value}`
+          return (
+            <Field key={choice.value} orientation="horizontal">
+              <RadioGroupItem
+                value={choice.value}
+                id={id}
+                aria-describedby={`${id}-about`}
+              />
+              <FieldContent>
+                <FieldLabel htmlFor={id}>{choice.label}</FieldLabel>
+                <FieldDescription id={`${id}-about`}>
+                  {choice.about}
+                </FieldDescription>
+              </FieldContent>
+            </Field>
+          )
+        })}
+      </RadioGroup>
+    </FieldSet>
+  )
+}

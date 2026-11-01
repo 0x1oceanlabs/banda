@@ -9,7 +9,8 @@
       "type": "array",
       "items": {
         "$ref": "#/$defs/Harness"
-      }
+      },
+      "default": []
     }
   },
   "$defs": {
@@ -29,21 +30,24 @@
           "description": "The program that speaks ACP: its name on PATH, or its path.",
           "type": "string"
         },
+        "enabled": {
+          "description": "Whether Threads start with it. One turned off stays in the list,\nwith how it starts, for when it is turned on again.",
+          "type": "boolean",
+          "default": true
+        },
         "args": {
           "description": "The program's arguments.",
           "type": "array",
           "items": {
             "type": "string"
-          },
-          "default": []
+          }
         },
         "env": {
           "description": "Variables over the environment it starts in.",
           "type": "object",
           "additionalProperties": {
             "type": "string"
-          },
-          "default": {}
+          }
         },
         "cli": {
           "description": "The Person's own CLI the program runs, when it runs one.",
@@ -70,8 +74,7 @@
         },
         "minimum": {
           "description": "The oldest version the adapter supports: the one it was built for.\nAn older CLI still runs, and its Threads warn.",
-          "type": "string",
-          "default": null
+          "type": "string"
         }
       },
       "required": [
