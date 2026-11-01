@@ -14,6 +14,7 @@ import {
   type Problem,
   shown,
 } from "@bandaso/contract/look"
+import { DEFAULT_SIDEBAR, type Sidebar } from "@bandaso/contract/sidebar"
 import { DEFAULT_SOUND, type SoundSettings } from "@bandaso/ui/sound"
 import type { Host } from "./host"
 
@@ -94,5 +95,17 @@ export function useLookSound(): SoundSettings {
       return () => listeners.delete(changed)
     },
     () => look?.sound ?? DEFAULT_SOUND
+  )
+}
+
+/** How the sidebar is arranged, from `sidebar.toml` (ADR 0008); Banda's
+ * own till then. */
+export function useLookSidebar(): Sidebar {
+  return useSyncExternalStore(
+    (changed) => {
+      listeners.add(changed)
+      return () => listeners.delete(changed)
+    },
+    () => look?.sidebar ?? DEFAULT_SIDEBAR
   )
 }

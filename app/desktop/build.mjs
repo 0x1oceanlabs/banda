@@ -9,6 +9,8 @@ const common = {
   external: ["electron"],
   sourcemap: true,
   logLevel: "warning",
+  // Banda's sidebar.toml template ships as text (src/sidebar.ts).
+  loader: { ".toml": "text" },
 }
 
 await Promise.all([

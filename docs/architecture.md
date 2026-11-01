@@ -42,7 +42,11 @@ bandaso call/follow   the CLI: the same API, for people, scripts and Agents
   and prints the CSS variables as JSON, with no engine; `--follow` prints
   each change, and `check` names a broken file's line. Its `[sound]` says
   which sounds the window plays (ADR 0009); the look's layers apply to it
-  as to every other key.
+  as to every other key. The sidebar's arrangement comes with it (ADR
+  0008): `~/.config/banda/sidebar.toml` over the preset it names, Banda's
+  or `sidebars/<name>.toml`, over the defaults. The view menu asks the
+  desktop to write the preset into the file; nothing else the page asks
+  of Node writes a file.
 - **The CLI prints JSON.** `bandaso call <method>` prints `{"ok": …}`.
   `bandaso follow` prints events, one per line. When the engine refuses
   the call, the hello or the follow, the CLI prints
@@ -115,7 +119,7 @@ command (with its ID)
 | Where | What |
 |---|---|
 | The Space's folder | the files of the work |
-| Text files | the Harnesses, in the config folder. Layouts, keys and themes join them later |
+| Text files | the Harnesses, in the config folder; the look (`look.toml`, themes) and the sidebar (`sidebar.toml`, presets) in `~/.config/banda/`. Layouts and keys join them later |
 | The Harness | its session, context and sign-in. We keep only its session ID, as evidence |
 | The OS keychain | secrets you give Bandaso. Its database never holds them |
 | The engine's state folder | the owner's ID; while the engine runs, its port and per-run secret |
@@ -504,9 +508,10 @@ modules/*/pane   each module's Panes
   and the Person's keys say (ADR 0008): grouped by state, by Space or not
   at all; sorted by need, by change or by title; shelves at the bottom;
   a list of Spaces above; rows of one, two or three lines. `arrange.ts` is
-  the one pure rule, `settings.ts` holds the defaults and the presets
-  (`inbox`, `spaces`, `places`), and the view menu picks one, kept in the
-  window's storage until the engine reads `sidebar.toml`. The sidebar
+  the one pure rule. `bandaso look` resolves the keys from `sidebar.toml`
+  (`look/src/sidebar.rs`; Banda's presets `inbox`, `spaces` and `places`
+  are files in `look/sidebars/`), and the view menu writes the preset
+  into the file, keeping the Person's other keys and comments. The sidebar
   knows nothing of Threads: each module's Watch reports a `Listed` per
   row (its title, mark, times, what calls the Person, what it was last
   asked, and the Pane a click opens). A new Thread opens as a Thread

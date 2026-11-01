@@ -6,9 +6,11 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuGroup,
+  DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@bandaso/ui/components/dropdown-menu"
 import { ScrollArea } from "@bandaso/ui/components/scroll-area"
@@ -17,6 +19,7 @@ import type { PaneState } from "@bandaso/ui/pane"
 import {
   ChevronDownIcon,
   ChevronRightIcon,
+  FileCogIcon,
   FolderPlusIcon,
   ListFilterIcon,
   SquarePenIcon,
@@ -24,21 +27,16 @@ import {
 import type { Lists } from "../bar/Watches"
 import { NewSpace } from "../Spaces"
 import { arrange, type Section, type SpaceLine } from "./arrange"
-import { usePreset } from "./preset"
+import { useLookSidebar } from "../look"
 import { Row, SpaceBadge } from "./Row"
-import {
-  PRESET_NAMES,
-  PRESET_WORDS,
-  type Preset,
-  resolve,
-  type Settings,
-} from "./settings"
+import { PRESET_WORDS, type Settings } from "./settings"
 
 /**
  * The sidebar, docked at the window's left edge (ADR 0005, decision 8):
- * every Thread of every Space, arranged as the Person's preset and keys
- * say (ADR 0008). The modules list what each Space has; the sidebar only
- * arranges and draws it.
+ * every Thread of every Space, arranged as `sidebar.toml` says (ADR 0008).
+ * The modules list what each Space has; the sidebar only arranges and
+ * draws it. Its view menu writes the preset into the file, through the
+ * desktop, and the new arrangement comes back with the look.
  */
 export function Sidebar({
   engine,
@@ -66,20 +64,33 @@ export function Sidebar({
   onCreated: (space: SpaceSummary) => void
 }) {
   const [creating, setCreating] = useState(false)
-  const [preset, setPreset] = usePreset()
-  const settings = useMemo(() => resolve(preset), [preset])
+  const settings = useLookSidebar()
+  const { preset, presets } = settings
+  const host = window.bandaso
   const [only, setOnly] = useState<SpaceId>()
   const [toggled, setToggled] = useState<ReadonlySet<string>>(new Set())
   const [more, setMore] = useState<ReadonlySet<string>>(new Set())
+  // Another preset starts afresh: no filter, nothing folded by hand.
+  const [arrangedBy, setArrangedBy] = useState(preset)
+  if (arrangedBy !== preset) {
+    setArrangedBy(preset)
+    setOnly(undefined)
+    setToggled(new Set())
+    setMore(new Set())
+  }
   const arranged = useMemo(
     () => arrange(lists, spaces, settings, only, toggled),
     [lists, spaces, settings, only, toggled]
   )
-  const pick = (next: Preset) => {
-    setPreset(next)
-    setOnly(undefined)
-    setToggled(new Set())
-    setMore(new Set())
+  const pick = (next: string) => {
+    host?.sidebar.preset(next).catch((error: unknown) => {
+      console.error("bandaso: the sidebar's preset was not written", error)
+    })
+  }
+  const edit = () => {
+    host?.sidebar.edit().catch((error: unknown) => {
+      console.error("bandaso: sidebar.toml did not open", error)
+    })
   }
   const flip = (set: ReadonlySet<string>, key: string) => {
     const next = new Set(set)
@@ -128,20 +139,32 @@ export function Sidebar({
               <DropdownMenuLabel>How the sidebar is arranged</DropdownMenuLabel>
               <DropdownMenuRadioGroup
                 value={preset}
-                onValueChange={(next: Preset) => pick(next)}
+                onValueChange={(next: string) => pick(next)}
               >
-                {PRESET_NAMES.map((name) => (
-                  <DropdownMenuRadioItem key={name} value={name} closeOnClick>
+                {presets.map(({ name, origin }) => (
+                  <DropdownMenuRadioItem
+                    key={name}
+                    value={name}
+                    disabled={!host}
+                    closeOnClick
+                  >
                     <span className="flex flex-col">
                       <span className="capitalize">{name}</span>
                       <span className="text-xs text-muted-foreground">
-                        {PRESET_WORDS[name]}
+                        {origin === "yours"
+                          ? "Your own preset"
+                          : PRESET_WORDS[name]}
                       </span>
                     </span>
                   </DropdownMenuRadioItem>
                 ))}
               </DropdownMenuRadioGroup>
             </DropdownMenuGroup>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem disabled={!host} onClick={edit}>
+              <FileCogIcon />
+              Edit sidebar.toml
+            </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
         <Button

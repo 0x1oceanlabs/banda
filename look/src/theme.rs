@@ -12,7 +12,8 @@ use ts_rs::TS;
 /// Where to look, on this machine.
 #[derive(Clone, Debug)]
 pub struct Places {
-    /// `~/.config/banda`: `look.toml`, and `themes/<name>/` of the Person's.
+    /// `~/.config/banda`: `look.toml`, `sidebar.toml`, and the Person's
+    /// `themes/<name>/` and `sidebars/<name>.toml`.
     pub config: PathBuf,
     /// Omarchy's current theme, when Omarchy is installed.
     pub omarchy_current: Option<PathBuf>,
@@ -56,6 +57,16 @@ impl Places {
 
     pub fn own_themes(&self) -> PathBuf {
         self.config.join("themes")
+    }
+
+    /// The sidebar's arrangement (ADR 0008).
+    pub fn sidebar_file(&self) -> PathBuf {
+        self.config.join("sidebar.toml")
+    }
+
+    /// The Person's sidebar presets, `<name>.toml`.
+    pub fn own_sidebars(&self) -> PathBuf {
+        self.config.join("sidebars")
     }
 }
 

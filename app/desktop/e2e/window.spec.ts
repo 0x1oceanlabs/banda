@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync } from "node:fs"
+import { mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { join, resolve } from "node:path"
 import { expect, type Locator, test } from "@playwright/test"
 import {
@@ -773,6 +773,52 @@ test("what the Agent does by itself shows in a turn of its own", async () => {
   await composer.press("Enter")
   await expect(thread.getByText("You said: and this")).toBeVisible()
   await expect(thread.getByText(/^Working for/)).toBeHidden()
+})
+
+test("the sidebar is arranged by sidebar.toml, and its view menu writes the file", async () => {
+  window = await startWindow({ sidebar: '# mine\npreset = "spaces"\n' })
+  const { page, dir } = window
+  const file = join(dir, "look/sidebar.toml")
+  const { composer } = await firstThread(page)
+  await composer.fill("hello")
+  await composer.press("Enter")
+  const sidebar = page.getByRole("complementary", { name: "Sidebar" })
+  const view = sidebar.getByRole("button", { name: /^View: / })
+  await expect(view).toHaveAccessibleName("View: spaces")
+  // Each Space a section: the row sits under its Space's name.
+  const work = sidebar.getByRole("group", { name: "Work" })
+  await expect(work.getByRole("button", { name: /hello/ })).toBeVisible()
+  await page.screenshot({ path: "test-results/22-sidebar-spaces.png" })
+
+  // The menu writes the preset into the file and keeps the rest; the
+  // arrangement comes back from the file.
+  await view.click()
+  await page.getByRole("menuitemradio", { name: /^places/ }).click()
+  await expect(view).toHaveAccessibleName("View: places")
+  expect(readFileSync(file, "utf8")).toBe('# mine\npreset = "places"\n')
+  await expect(sidebar.getByRole("group", { name: "Spaces" })).toBeVisible()
+  await page.screenshot({ path: "test-results/23-sidebar-places.png" })
+
+  // A wrong key is named by its line, and the last good arrangement stays.
+  writeFileSync(file, 'preset = "places"\n[row]\nlines = 5\n')
+  const problem = page.getByRole("status", { name: /^The look: / })
+  await expect(problem).toHaveAttribute("aria-label", /sidebar\.toml:3:9: /)
+  await expect(view).toHaveAccessibleName("View: places")
+
+  // A preset of the Person's own is a file, and the menu lists it.
+  mkdirSync(join(dir, "look/sidebars"))
+  writeFileSync(
+    join(dir, "look/sidebars/flat.toml"),
+    '[group]\nby = "none"\n[row]\nlines = 1\n'
+  )
+  writeFileSync(file, 'preset = "flat"\n')
+  await expect(view).toHaveAccessibleName("View: flat")
+  await expect(problem).toBeHidden()
+  await view.click()
+  await expect(
+    page.getByRole("menuitemradio", { name: /^flat/ })
+  ).toContainText("Your own preset")
+  await page.keyboard.press("Escape")
 })
 
 test("the window takes its look from look.toml, and again on each save", async () => {
