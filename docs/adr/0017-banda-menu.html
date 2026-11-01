@@ -1,0 +1,588 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Banda — the Banda menu (mockup, ADR 0017)</title>
+    <style>
+      :root {
+        --background: #1a1b26;
+        --foreground: #a9b1d6;
+        --card: #1a1b26;
+        --popover: #1f2130;
+        --secondary: #252734;
+        --muted-foreground: #565f89;
+        --border: #2b2d3b;
+        --accent: #262e43;
+        --accent-foreground: #c0caf5;
+        --success: #9ece6a;
+        --warning: #eb927b;
+        --info: #7aa2f7;
+        --radius: 8.6px;
+        --font-sans: "Inter Variable", Inter, system-ui, sans-serif;
+      }
+      html {
+        background: #0e0e14;
+      }
+      body {
+        max-width: 760px;
+        margin: 0 auto;
+        padding: 20px;
+      }
+      .it.sel .s {
+        color: inherit;
+        opacity: 0.75;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        margin: 0;
+        font-family: var(--font-sans);
+        font-size: 13px;
+        color: var(--foreground);
+      }
+      .cap {
+        font-size: 12px;
+        color: var(--muted-foreground);
+        margin: 14px 2px 6px;
+      }
+      .cap b {
+        color: var(--foreground);
+        font-weight: 600;
+      }
+      .win {
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        overflow: hidden;
+        background: var(--card);
+        position: relative;
+      }
+      .bar {
+        height: 30px;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 0 10px;
+        border-bottom: 1px solid var(--border);
+        font-size: 12px;
+        color: var(--muted-foreground);
+      }
+      .ws {
+        padding: 1px 6px;
+        border-radius: 4px;
+      }
+      .ws.on {
+        background: var(--secondary);
+        color: var(--foreground);
+      }
+      .main {
+        display: flex;
+        height: 370px;
+      }
+      .side {
+        width: 236px;
+        border-right: 1px solid var(--border);
+        padding: 8px;
+        flex-shrink: 0;
+      }
+      .head {
+        display: flex;
+        align-items: center;
+        gap: 2px;
+        margin-bottom: 8px;
+      }
+      .search {
+        flex: 1;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        height: 28px;
+        padding: 0 8px;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        color: var(--muted-foreground);
+        background: var(--background);
+        min-width: 0;
+      }
+      .search span {
+        flex: 1;
+      }
+      .ib {
+        width: 26px;
+        height: 26px;
+        display: grid;
+        place-items: center;
+        border-radius: 6px;
+        color: var(--muted-foreground);
+        position: relative;
+      }
+      .ib.dot::after {
+        content: "";
+        position: absolute;
+        top: 4px;
+        right: 4px;
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--info);
+      }
+      svg.i {
+        width: 15px;
+        height: 15px;
+        fill: none;
+        stroke: currentColor;
+        stroke-width: 2;
+        stroke-linecap: round;
+        stroke-linejoin: round;
+        flex-shrink: 0;
+      }
+      kbd {
+        font-family: var(--font-sans);
+        font-size: 10.5px;
+        padding: 1px 5px;
+        border: 1px solid var(--border);
+        border-bottom-width: 2px;
+        border-radius: 4px;
+        color: var(--muted-foreground);
+        background: var(--background);
+        white-space: nowrap;
+      }
+      .row {
+        padding: 6px 6px;
+        border-radius: 6px;
+        margin-bottom: 2px;
+      }
+      .row.sel {
+        background: var(--secondary);
+      }
+      .l1 {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        font-size: 11.5px;
+        color: var(--muted-foreground);
+      }
+      .l1 .st {
+        margin-left: auto;
+      }
+      .l2 {
+        margin: 2px 0 0;
+        font-size: 13px;
+      }
+      .mark {
+        width: 15px;
+        height: 15px;
+        border-radius: 4px;
+        background: currentColor;
+        position: relative;
+        flex-shrink: 0;
+        color: var(--muted-foreground);
+      }
+      .mark::before,
+      .mark::after {
+        content: "";
+        position: absolute;
+        top: 5px;
+        width: 3px;
+        height: 3px;
+        border-radius: 50%;
+        background: var(--card);
+      }
+      .mark::before {
+        left: 4px;
+      }
+      .mark::after {
+        right: 4px;
+      }
+      .mark.done {
+        color: var(--success);
+      }
+      .mark.ask {
+        color: var(--warning);
+      }
+      .content {
+        flex: 1;
+        position: relative;
+        background: var(--background);
+      }
+      .dim {
+        position: absolute;
+        inset: 0;
+        background: color-mix(in srgb, var(--foreground) 12%, transparent);
+      }
+      .pal {
+        position: absolute;
+        left: 50%;
+        top: 34px;
+        transform: translateX(-50%);
+        width: 430px;
+        background: var(--popover);
+        border: 1px solid var(--border);
+        border-radius: 12px;
+        box-shadow: 0 18px 50px -10px rgb(0 0 0/0.35);
+        overflow: hidden;
+      }
+      .in {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: 44px;
+        padding: 0 12px;
+        border-bottom: 1px solid var(--border);
+        font-size: 15px;
+      }
+      .in .crumb {
+        font-size: 11.5px;
+        padding: 2px 7px;
+        border-radius: 5px;
+        background: var(--secondary);
+        color: var(--foreground);
+      }
+      .in .ph {
+        color: var(--muted-foreground);
+      }
+      .caret {
+        display: inline-block;
+        width: 1.5px;
+        height: 17px;
+        background: var(--foreground);
+        vertical-align: -3px;
+        margin-left: 1px;
+      }
+      .list {
+        padding: 6px;
+      }
+      .g {
+        font-size: 11px;
+        color: var(--muted-foreground);
+        padding: 6px 8px 3px;
+      }
+      .it {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        height: 32px;
+        padding: 0 8px;
+        border-radius: 7px;
+      }
+      .it.sel {
+        background: var(--accent);
+        color: var(--accent-foreground);
+      }
+      .it .t {
+        flex: 1;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .it .s {
+        color: var(--muted-foreground);
+        font-size: 11.5px;
+      }
+      .it .k {
+        display: flex;
+        gap: 3px;
+      }
+      .foot {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        height: 34px;
+        padding: 0 12px;
+        border-top: 1px solid var(--border);
+        font-size: 11.5px;
+        color: var(--muted-foreground);
+      }
+      .foot .r {
+        margin-left: auto;
+        display: flex;
+        gap: 12px;
+      }
+      .foot span {
+        display: flex;
+        align-items: center;
+        gap: 5px;
+      }
+      .cl {
+        width: 14px;
+        height: 14px;
+        fill: #d97757;
+        flex-shrink: 0;
+      }
+      .acts {
+        position: absolute;
+        right: 10px;
+        bottom: 42px;
+        width: 200px;
+        background: var(--popover);
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        box-shadow: 0 12px 30px -8px rgb(0 0 0/0.3);
+        padding: 5px;
+      }
+      .acts .it {
+        height: 28px;
+        font-size: 12.5px;
+      }
+    </style>
+  </head>
+  <body>
+    <svg width="0" height="0" style="position: absolute">
+      <defs>
+        <symbol id="search" viewBox="0 0 24 24">
+          <circle cx="11" cy="11" r="8" />
+          <path d="m21 21-4.3-4.3" />
+        </symbol>
+        <symbol id="filter" viewBox="0 0 24 24">
+          <path d="M3 6h18" />
+          <path d="M7 12h10" />
+          <path d="M10 18h4" />
+        </symbol>
+        <symbol id="fplus" viewBox="0 0 24 24">
+          <path d="M12 10v6" />
+          <path d="M9 13h6" />
+          <path
+            d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"
+          />
+        </symbol>
+        <symbol id="pen" viewBox="0 0 24 24">
+          <path
+            d="M12 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"
+          />
+          <path d="M18.4 2.6a1 1 0 0 1 3 3l-9 9-3.7 1.3 1.3-3.7z" />
+        </symbol>
+        <symbol id="file" viewBox="0 0 24 24">
+          <path
+            d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"
+          />
+          <path d="M14 2v4a2 2 0 0 0 2 2h4" />
+        </symbol>
+        <symbol id="globe" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="10" />
+          <path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20" />
+          <path d="M2 12h20" />
+        </symbol>
+        <symbol id="cog" viewBox="0 0 24 24">
+          <circle cx="12" cy="12" r="3" />
+          <path
+            d="M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9l2.1 2.1M17 17l2.1 2.1M4.9 19.1 7 17M17 7l2.1-2.1"
+          />
+        </symbol>
+        <symbol id="folder" viewBox="0 0 24 24">
+          <path
+            d="M20 20a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13a2 2 0 0 0 2 2Z"
+          />
+        </symbol>
+        <symbol id="term" viewBox="0 0 24 24">
+          <path d="m4 17 6-6-6-6" />
+          <path d="M12 19h8" />
+        </symbol>
+        <symbol id="cl" viewBox="0 0 256 257">
+          <path
+            d="m50.228 170.321 50.357-28.257.843-2.463-.843-1.361h-2.462l-8.426-.518-28.775-.778-24.952-1.037-24.175-1.296-6.092-1.297L0 125.796l.583-3.759 5.12-3.434 7.324.648 16.202 1.101 24.304 1.685 17.629 1.037 26.118 2.722h4.148l.583-1.685-1.426-1.037-1.101-1.037-25.147-17.045-27.22-18.017-14.258-10.37-7.713-5.25-3.888-4.925-1.685-10.758 7-7.713 9.397.649 2.398.648 9.527 7.323 20.35 15.75L94.817 91.9l3.889 3.24 1.555-1.102.195-.777-1.75-2.917-14.453-26.118-15.425-26.572-6.87-11.018-1.814-6.61c-.648-2.723-1.102-4.991-1.102-7.778l7.972-10.823L71.42 0 82.05 1.426l4.472 3.888 6.61 15.101 10.694 23.786 16.591 32.34 4.861 9.592 2.592 8.879.973 2.722h1.685v-1.556l1.36-18.211 2.528-22.36 2.463-28.776.843-8.1 4.018-9.722 7.971-5.25 6.222 2.981 5.12 7.324-.713 4.73-3.046 19.768-5.962 30.98-3.889 20.739h2.268l2.593-2.593 10.499-13.934 17.628-22.036 7.778-8.749 9.073-9.657 5.833-4.601h11.018l8.1 12.055-3.628 12.443-11.342 14.388-9.398 12.184-13.48 18.147-8.426 14.518.778 1.166 2.01-.194 30.46-6.481 16.462-2.982 19.637-3.37 8.88 4.148.971 4.213-3.5 8.62-20.998 5.184-24.628 4.926-36.682 8.685-.454.324.519.648 16.526 1.555 7.065.389h17.304l32.21 2.398 8.426 5.574 5.055 6.805-.843 5.184-12.962 6.611-17.498-4.148-40.83-9.721-14-3.5h-1.944v1.167l11.666 11.406 21.387 19.314 26.767 24.887 1.36 6.157-3.434 4.86-3.63-.518-23.526-17.693-9.073-7.972-20.545-17.304h-1.36v1.814l4.73 6.935 25.017 37.59 1.296 11.536-1.814 3.76-6.481 2.268-7.13-1.297-14.647-20.544-15.1-23.138-12.185-20.739-1.49.843-7.194 77.448-3.37 3.953-7.778 2.981-6.48-4.925-3.436-7.972 3.435-15.749 4.148-20.544 3.37-16.333 3.046-20.285 1.815-6.74-.13-.454-1.49.194-15.295 20.999-23.267 31.433-18.406 19.702-4.407 1.75-7.648-3.954.713-7.064 4.277-6.286 25.47-32.405 15.36-20.092 9.917-11.6-.065-1.686h-.583L44.07 198.125l-12.055 1.555-5.185-4.86.648-7.972 2.463-2.593 20.35-13.999-.064.065Z"
+          />
+        </symbol>
+      </defs>
+    </svg>
+
+    <div class="cap">
+      <b>1. Typed into, it searches everything.</b> Alt+Space, or a click on the
+      sidebar's field. Tab shows the row's actions. The filter is an icon alone.
+    </div>
+    <div class="win">
+      <div class="bar">
+        <span class="mark" style="width: 13px; height: 13px"></span
+        ><span class="ws">1</span><span class="ws on">2</span>
+      </div>
+      <div class="main">
+        <div class="side">
+          <div class="head">
+            <div class="search">
+              <svg class="i"><use href="#search" /></svg><span>Search</span
+              ><kbd>Alt Space</kbd>
+            </div>
+            <div class="ib" title="View: Inbox">
+              <svg class="i"><use href="#filter" /></svg>
+            </div>
+            <div class="ib">
+              <svg class="i"><use href="#fplus" /></svg>
+            </div>
+            <div class="ib">
+              <svg class="i"><use href="#pen" /></svg>
+            </div>
+          </div>
+          <div class="row">
+            <div class="l1">
+              <span class="mark ask"></span>banda<span class="st"
+                >Needs you</span
+              >
+            </div>
+            <div class="l2">Fix the login form</div>
+          </div>
+          <div class="row">
+            <div class="l1">
+              <span class="mark done"></span>Work<span class="st">Done</span>
+            </div>
+            <div class="l2">slow hello from codex</div>
+          </div>
+          <div class="row">
+            <div class="l1">
+              <span class="mark"></span>Work<span class="st">2h</span>
+            </div>
+            <div class="l2">hello from claude</div>
+          </div>
+        </div>
+        <div class="content">
+          <div class="dim"></div>
+          <div class="pal">
+            <div class="in">
+              <svg class="i" style="color: var(--muted-foreground)">
+                <use href="#search" /></svg
+              ><span>login<span class="caret"></span></span>
+            </div>
+            <div class="list">
+              <div class="g">Threads</div>
+              <div class="it sel">
+                <span class="mark ask"></span
+                ><span class="t">Fix the login form</span
+                ><span class="s">banda · Needs you</span>
+              </div>
+              <div class="it">
+                <span class="mark"></span
+                ><span class="t">Login page redesign</span
+                ><span class="s">site · 3d</span>
+              </div>
+              <div class="g">Files in banda</div>
+              <div class="it">
+                <svg class="i"><use href="#file" /></svg
+                ><span class="t">app/web/src/auth/login.ts</span>
+              </div>
+              <div class="g">Actions</div>
+              <div class="it">
+                <svg class="i"><use href="#globe" /></svg
+                ><span class="t">Search the web for “login”</span>
+              </div>
+              <div class="it">
+                <svg class="cl"><use href="#cl" /></svg
+                ><span class="t">New Thread: “login”</span
+                ><span class="s">Claude Code</span
+                ><span class="k"><kbd>Alt</kbd><kbd>↵</kbd></span>
+              </div>
+            </div>
+            <div class="foot">
+              <span><kbd>↑↓</kbd></span
+              ><span><kbd>↵</kbd> Open</span>
+              <div class="r">
+                <span><kbd>Tab</kbd> Actions</span
+                ><span><kbd>Esc</kbd> Close</span>
+              </div>
+            </div>
+          </div>
+          <div class="acts" style="left: calc(50% + 30px); top: 78px">
+            <div class="it sel">Open</div>
+            <div class="it">
+              Open beside<span style="margin-left: auto"
+                ><kbd>Shift</kbd><kbd>↵</kbd></span
+              >
+            </div>
+            <div class="it">
+              Settle thread<span style="margin-left: auto"
+                ><kbd>Alt</kbd><kbd>S</kbd></span
+              >
+            </div>
+            <div class="it">Rename</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div style="display: flex; gap: 14px; margin-top: 4px">
+      <div style="flex: 1">
+        <div class="cap">
+          <b>2. Empty: Recent Threads, what waits first; Actions.</b>
+        </div>
+        <div class="pal" style="position: static; transform: none; width: 100%">
+          <div class="in">
+            <svg class="i" style="color: var(--muted-foreground)">
+              <use href="#search" /></svg
+            ><span class="ph">Search actions, Spaces and Threads…</span>
+          </div>
+          <div class="list">
+            <div class="g">Recent Threads</div>
+            <div class="it sel">
+              <span class="mark ask"></span
+              ><span class="t">Fix the login form</span
+              ><span class="s">Needs you</span>
+            </div>
+            <div class="it">
+              <span class="mark done"></span
+              ><span class="t">slow hello from codex</span
+              ><span class="s">Done</span>
+            </div>
+            <div class="it">
+              <span class="mark"></span><span class="t">hello from claude</span
+              ><span class="s">2h</span>
+            </div>
+            <div class="g">Actions</div>
+            <div class="it">
+              <svg class="i"><use href="#pen" /></svg
+              ><span class="t">New Thread</span
+              ><span class="k"><kbd>Alt</kbd><kbd>↵</kbd></span>
+            </div>
+            <div class="it">
+              <svg class="i"><use href="#globe" /></svg
+              ><span class="t">New browser</span
+              ><span class="k"><kbd>Alt</kbd><kbd>Shift</kbd><kbd>↵</kbd></span>
+            </div>
+            <div class="it">
+              <svg class="i"><use href="#cog" /></svg
+              ><span class="t">Settings</span><span class="s">›</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div style="flex: 1">
+        <div class="cap">
+          <b>3. A tree, as Omarchy's menu.</b> Enter goes in; Backspace in an
+          empty field goes back.
+        </div>
+        <div class="pal" style="position: static; transform: none; width: 100%">
+          <div class="in">
+            <span class="crumb">Settings</span><span class="crumb">Look</span
+            ><span class="ph">Search…</span>
+          </div>
+          <div class="list">
+            <div class="it sel">
+              <svg class="i"><use href="#cog" /></svg
+              ><span class="t">Theme</span><span class="s">Omarchy · ›</span>
+            </div>
+            <div class="it">
+              <svg class="i"><use href="#cog" /></svg
+              ><span class="t">Light or dark</span
+              ><span class="s">Follow Omarchy ✓</span>
+            </div>
+            <div class="it">
+              <svg class="i"><use href="#cog" /></svg
+              ><span class="t">Columns</span><span class="s">3 · ›</span>
+            </div>
+            <div class="it">
+              <svg class="i"><use href="#cog" /></svg
+              ><span class="t">Text size</span><span class="s">13 · ›</span>
+            </div>
+            <div class="it">
+              <svg class="i"><use href="#term" /></svg
+              ><span class="t">Open look.toml</span>
+            </div>
+          </div>
+          <div class="foot">
+            <span><kbd>↵</kbd> Open</span>
+            <div class="r">
+              <span><kbd>⌫</kbd> Back</span><span><kbd>Esc</kbd> Close</span>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

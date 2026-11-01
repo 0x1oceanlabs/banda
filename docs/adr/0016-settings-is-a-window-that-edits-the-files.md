@@ -38,7 +38,7 @@ Roma asked for a visual settings module where Claude Code, Codex and the rest ar
    - It is a second Electron window, class `banda-settings`. Only one is open at a time, and opening it again brings it forward. Esc closes it.
    - **Ways to open it:**
      - Alt+, (comma).
-     - The palette.
+     - The Banda menu (ADR 0017), which also finds each row.
      - A gear at the bottom of the sidebar (_decided_).
      - Wherever a setting is the answer: a Thread's "Sign in" opens Agents at that Harness.
    - A link names a section and a row, such as `agents/codex`.
