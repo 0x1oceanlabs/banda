@@ -277,12 +277,13 @@ export function apply(state: ThreadState, event: Event): ThreadState {
       }
     }
     case "question.asked": {
-      const { item: id, turn, title, choices, form } = fact.payload
+      const { item: id, turn, title, choices, form, plan } = fact.payload
       const body: Body = {
         kind: "question",
         title,
         choices,
         form,
+        plan,
         state: "open",
       }
       return { ...next, items: [...state.items, item(id, body, turn)] }
@@ -370,17 +371,28 @@ export function isReply(item: Item): item is Said {
   return item.body.kind === "message" && item.author.kind !== "person"
 }
 
-/** The plan the Agent proposed, if it waits for the Person: plan mode is
- * still on, nothing runs or waits, and the latest turn made a plan and
- * ended done with a reply, which is the plan (ADR 0010, decision 6). */
+/** Where a turn in plan mode proposed its plan (ADR 0010, decision 6):
+ * the Question that asks to carry it out, as Claude Code leaves plan mode,
+ * or else the reply the turn ended done with. `items` may hold others'. */
+export function planOf(turn: TurnView, items: Item[]): Item | undefined {
+  if (!turn.plan) return undefined
+  const own = items.filter((item) => item.turn === turn.id)
+  const asked = own.find(
+    (item) => item.body.kind === "question" && item.body.plan !== undefined
+  )
+  if (asked || turn.state !== "done") return asked
+  return own.findLast(isReply)
+}
+
+/** The plan the Agent proposed in a reply, if it waits for the Person:
+ * plan mode is still on, nothing runs or waits, and it is the latest
+ * turn's plan. */
 export function proposedPlan(state: ThreadState): Said | undefined {
   if (!state.settings.plan || working(state)) return undefined
   const settled = settledTurn(state.turns)
   const turn = state.turns.find((t) => t.id === settled)
-  if (turn?.state !== "done" || !turn.plan) return undefined
-  return state.items.findLast(
-    (item): item is Said => item.turn === turn.id && isReply(item)
-  )
+  const plan = turn && planOf(turn, state.items)
+  return plan && isReply(plan) ? plan : undefined
 }
 
 /** The turn the Agent works on, if any: the latest, as the engine says. */

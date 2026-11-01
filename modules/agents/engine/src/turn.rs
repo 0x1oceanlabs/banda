@@ -957,6 +957,7 @@ impl Writer {
                 tool,
                 offered,
                 form,
+                plan,
                 answer,
             } => {
                 self.close().await?;
@@ -991,11 +992,13 @@ impl Writer {
                     title: title.clone(),
                     choices: choices.clone(),
                     form: form.clone(),
+                    plan: plan.clone(),
                 };
                 let body = Body::Question {
                     title,
                     choices,
                     form,
+                    plan,
                     state: QuestionState::Open,
                     answer: None,
                     values: None,
