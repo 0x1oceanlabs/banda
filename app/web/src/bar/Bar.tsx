@@ -7,17 +7,19 @@ import {
 } from "@bandaso/ui/components/banda-mark"
 import { Button } from "@bandaso/ui/components/button"
 import { Spinner } from "@bandaso/ui/components/spinner"
+import { type Attention, QUIET } from "@bandaso/ui/pane"
 
 /**
  * The bar across the window's top (ADR 0005, decision 9): the sidebar's
  * button on the left, which is Banda's mark and shows the loudest state of
- * the work, then the workspaces' numbers. A click on another
+ * the work, with how many things wait for the Person when more than one
+ * does; then the workspaces' numbers. A click on another
  * number goes there; on the current one, opens the overview. More comes
  * later as small icons, once real use asks for them.
  */
 export function Bar({
   status,
-  attention = "rest",
+  attention = QUIET,
   numbers,
   current,
   sidebar,
@@ -25,8 +27,8 @@ export function Bar({
   onPick,
 }: {
   status: Status
-  /** The loudest state of the Threads, for the mark to show. */
-  attention?: MarkState
+  /** What the modules' work calls the Person for, for the mark to show. */
+  attention?: Attention
   /** The workspaces it shows: those with Panes, and the current one. */
   numbers: number[]
   current: number
@@ -34,8 +36,11 @@ export function Bar({
   onSidebar: () => void
   onPick: (index: number) => void
 }) {
-  const mark = loudest([attention, markOf(status)])
-  const words = mark === "rest" ? "" : ` · ${MARK_WORDS[mark]}`
+  const mark = loudest([attention.mark, markOf(status)])
+  const { waiting } = attention
+  const words =
+    (mark === "rest" ? "" : ` · ${MARK_WORDS[mark]}`) +
+    (waiting > 1 ? ` · ${waiting} wait for you` : "")
   return (
     <header className="flex h-9 shrink-0 items-center gap-1 border-b px-1.5">
       <Button
@@ -44,9 +49,18 @@ export function Bar({
         aria-label={`Sidebar${words}`}
         aria-pressed={sidebar}
         title={`Sidebar (Alt+A)${words}`}
+        className="relative"
         onClick={onSidebar}
       >
         <BandaMark state={mark} className="size-5" />
+        {waiting > 1 && (
+          <span
+            aria-hidden
+            className="absolute -top-0.5 -right-0.5 flex h-3.5 min-w-3.5 items-center justify-center rounded-full bg-attention px-0.5 text-[9px] leading-none font-semibold text-white tabular-nums"
+          >
+            {waiting > 9 ? "9+" : waiting}
+          </span>
+        )}
       </Button>
       <nav aria-label="Workspaces" className="flex items-center gap-0.5">
         {numbers.map((index) => {
