@@ -11,14 +11,7 @@ import {
   ConsoleFooter,
   ConsoleText,
 } from "@bandaso/ui/components/console"
-import {
-  Diff,
-  DiffCounts,
-  DiffGap,
-  DiffHeader,
-  DiffLine,
-  DiffLines,
-} from "@bandaso/ui/components/diff"
+import { DiffCounts } from "@bandaso/ui/components/diff"
 import {
   Trace,
   TraceCollapsible,
@@ -40,37 +33,34 @@ import {
   WrenchIcon,
   type LucideIcon,
 } from "lucide-react"
-import { counts, lineDiff, type Line, parts } from "./diff"
+import { type FileChange, fileChange, total } from "./changes"
+import { FileDiff } from "./FileDiff"
 import type { Tool } from "./thread"
 
 /** A tool call's content as the window shows it: a diff with its lines. */
 type Part =
-  | Exclude<ToolContent, { kind: "diff" }>
-  | (Extract<ToolContent, { kind: "diff" }> & {
-      lines: Line[]
-      added: number
-      removed: number
-    })
+  Exclude<ToolContent, { kind: "diff" }> | ({ kind: "diff" } & FileChange)
 
 /** A tool call in a Thread: its line, and, opened, what it changed in
  * files, what it said and what its command printed. */
-export function ToolCall({ tool }: { tool: Tool }) {
+export function ToolCall({
+  tool,
+  onOpenDiff,
+}: {
+  tool: Tool
+  /** Opens a file this call changed in a Diff Pane. */
+  onOpenDiff?: (path: string) => void
+}) {
   const Icon = TOOL_ICONS[tool.tool]
   const shown = useMemo(
     () =>
       tool.content.map((part): Part => {
         if (part.kind !== "diff") return part
-        const lines = lineDiff(part.old, part.new)
-        return { ...part, lines, ...counts(lines) }
+        return { kind: "diff", ...fileChange(part.path, part.old, part.new) }
       }),
     [tool.content]
   )
-  const total = { added: 0, removed: 0 }
-  for (const part of shown)
-    if (part.kind === "diff") {
-      total.added += part.added
-      total.removed += part.removed
-    }
+  const counted = total(shown.filter((part) => part.kind === "diff"))
   // What its command prints shows where its terminal is, or else last.
   const terminal = shown.findIndex((part) => part.kind === "terminal")
   const running = tool.status === "pending" || tool.status === "running"
@@ -86,7 +76,7 @@ export function ToolCall({ tool }: { tool: Tool }) {
         <Icon />
       </TraceIcon>
       <TraceTitle>{tool.title}</TraceTitle>
-      <DiffCounts {...total} />
+      <DiffCounts {...counted} />
     </TraceLine>
   )
   if (shown.length === 0 && !tool.output) return <Trace>{line}</Trace>
@@ -98,7 +88,13 @@ export function ToolCall({ tool }: { tool: Tool }) {
           {shown.map((part, at) => {
             switch (part.kind) {
               case "diff":
-                return <FileChange key={at} {...part} />
+                return (
+                  <FileDiff
+                    key={at}
+                    {...part}
+                    onOpen={onOpenDiff && (() => onOpenDiff(part.path))}
+                  />
+                )
               case "terminal":
                 return (
                   at === terminal && <Fragment key={at}>{printed}</Fragment>
@@ -118,44 +114,6 @@ export function ToolCall({ tool }: { tool: Tool }) {
         </TraceCollapsibleContent>
       </TraceCollapsible>
     </Trace>
-  )
-}
-
-/** One file's change: its path, then the changed lines and a few around. */
-function FileChange({
-  path,
-  old,
-  lines,
-  added,
-  removed,
-}: Extract<Part, { kind: "diff" }>) {
-  const slash = path.lastIndexOf("/") + 1
-  return (
-    <Diff>
-      <DiffHeader title={path}>
-        <span className="min-w-0 truncate">
-          <span className="text-muted-foreground">{path.slice(0, slash)}</span>
-          {path.slice(slash)}
-        </span>
-        {old === undefined && (
-          <span className="shrink-0 text-muted-foreground">New file</span>
-        )}
-        <DiffCounts added={added} removed={removed} className="ml-auto" />
-      </DiffHeader>
-      <DiffLines>
-        {parts(lines).map((part, at) =>
-          part.kind === "gap" ? (
-            <DiffGap key={at}>
-              ⋯ {part.lines} unchanged {part.lines === 1 ? "line" : "lines"}
-            </DiffGap>
-          ) : (
-            <DiffLine key={at} kind={part.kind}>
-              {part.text}
-            </DiffLine>
-          )
-        )}
-      </DiffLines>
-    </Diff>
   )
 }
 
