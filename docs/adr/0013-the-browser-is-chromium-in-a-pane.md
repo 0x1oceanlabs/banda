@@ -99,7 +99,8 @@ asked for the ADR; the rest are our defaults and stay his to change.
      `Ctrl+L` the address, `Ctrl+Tab` and `Ctrl+1…9` between tabs,
      `Ctrl+R` reload, `Ctrl+F` find, `Ctrl+=`, `Ctrl+-`, `Ctrl+0` zoom,
      `F12` the page's DevTools.
-   - `Alt+N B` opens the browser, as ADR 0005 already says.
+   - `Alt+N B` opens the browser, as ADR 0005 already says, and
+     `Alt+Shift+Return` opens a new one, as Omarchy's `Super+Shift+Return`.
 
 6. **Chrome's extensions, from the Chrome Web Store** (_decided_).
    - `electron-chrome-extensions` gives extensions Chrome's APIs: their

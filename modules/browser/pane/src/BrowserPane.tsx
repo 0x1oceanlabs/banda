@@ -34,6 +34,9 @@ export type Tab = { id: string; url: string; title: string }
 /** A browser Pane's tabs, and which one it shows; one tab, for now. */
 export type BrowserArgs = { tabs: Tab[]; shown: number }
 
+/** A browser with no tab yet: the Address waits for the Person. */
+export const NEW_BROWSER: BrowserArgs = { tabs: [], shown: 0 }
+
 export const browserPane = definePane<BrowserArgs>({
   kind: "browser.browser",
   title: (args) => {
@@ -41,7 +44,7 @@ export const browserPane = definePane<BrowserArgs>({
     return tab?.title || (tab?.url ? siteOf(tab.url) : "Browser")
   },
   icon: GlobeIcon,
-  start: { tabs: [], shown: 0 },
+  start: NEW_BROWSER,
   header: false,
   closed: ({ args }) => {
     for (const tab of args.tabs) drop(tab.id)

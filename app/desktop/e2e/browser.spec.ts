@@ -71,7 +71,11 @@ async function openBrowser(page: Page): Promise<Locator> {
     .getByRole("region", { name: "New Pane" })
     .getByRole("button", { name: "Browser" })
     .click()
-  // One browser here: its row's address, whatever the tile is named.
+  return addressBar(page)
+}
+
+/** One browser here: its row's address, whatever the tile is named. */
+function addressBar(page: Page): Locator {
   return page.getByRole("textbox", { name: "Address" })
 }
 
@@ -153,7 +157,10 @@ test("a browser page is kept apart from Banda", async () => {
   window = await startWindow()
   const { app, page } = window
   await expect((await firstThread(page)).thread).toBeVisible()
-  const bar = await openBrowser(page)
+  // Alt+Shift+Return opens a browser too, as Omarchy's Super+Shift+Return.
+  await page.keyboard.press("Alt+Shift+Enter")
+  const bar = addressBar(page)
+  await expect(bar).toBeFocused()
   await bar.fill(address)
   await bar.press("Enter")
   await expect(page.getByRole("region", { name: "Alpha" })).toBeVisible()

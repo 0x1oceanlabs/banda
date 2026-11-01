@@ -95,6 +95,7 @@ The evidence is in two notes: [tiling managers](../research/2026-11-01-tiling-ma
    | `Alt+Shift+Arrows` | move the Pane that way |
    | `Alt+Ctrl+Arrows` | resize it; in the Strip, step the column's width |
    | `Alt+Return` | a new Thread, in the default Space |
+   | `Alt+Shift+Return` | a new browser, as Omarchy's `Super+Shift+Return` |
    | `Alt+N`, then a letter | open or focus a kind: `T` terminal, `B` browser, `H` Harnesses; with `Shift`, open another |
    | `Alt+O` | the overview of every window, and back |
    | `Alt+PageUp`, `Alt+PageDown` | the workspace above or below |
