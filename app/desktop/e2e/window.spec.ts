@@ -154,7 +154,7 @@ test("a sideways swipe moves the Strip and lands on a column; a scroll up and do
 
   // A scroll up that drifts sideways a little moves nothing sideways.
   const before = await scrolled()
-  for (let i = 0; i < 6; i++) await page.mouse.wheel(4, -40)
+  for (let i = 0; i < 6; i++) await page.mouse.wheel(-4, -40)
   await page.waitForTimeout(300)
   expect(await scrolled()).toBe(before)
   await expect(launcher).toHaveAttribute("data-focused", "true")
