@@ -12,14 +12,15 @@ pub mod model;
 mod history;
 mod terminal;
 
-use banda_kernel::{Call, Module, Refusal, Right, SpaceId, Stream, decode};
-use model::{Open, Size, TerminalId};
+use banda_kernel::{Call, Module, Refusal, Right, SpaceId, Stream};
+use model::{Open, Piece, Size, TerminalId};
 use serde::Deserialize;
 use serde_json::Value;
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use std::sync::{Arc, Mutex};
 use terminal::Terminal;
+use ts_rs::TS;
 
 /// The most a window types at once.
 const AT_ONCE: usize = 64 * 1024;
@@ -47,39 +48,38 @@ impl Terminals {
     }
 }
 
-enum Method {
-    Open,
-    Write,
-    Resize,
-    Close,
-    Watch,
-}
-
-impl Method {
-    fn parse(name: &str) -> Option<Method> {
-        Some(match name {
-            "open" => Method::Open,
-            "write" => Method::Write,
-            "resize" => Method::Resize,
-            "close" => Method::Close,
-            "watch" => Method::Watch,
-            _ => return None,
-        })
+banda_kernel::methods! {
+    Terminals(Call) as "TerminalMethods" in "terminal/" {
+        /// Starts a program on a PTY, or again once it ended; one that runs
+        /// stays as it is.
+        call open(Open) -> (), Run;
+        /// What the Person types.
+        call write(Write) -> (), Run;
+        /// The size a window gives it.
+        call resize(Resize) -> (), Run;
+        /// Stops the program and what it started.
+        call close(One) -> (), Run;
+        /// The screen so far, then what it prints, then how it ended.
+        /// Watching shows what a Person types, such as a sign-in's code.
+        stream watch(One) -> Piece, Run;
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, TS)]
+#[ts(export_to = "terminal/")]
 struct One {
     terminal: TerminalId,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, TS)]
+#[ts(export_to = "terminal/")]
 struct Write {
     terminal: TerminalId,
     data: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, TS)]
+#[ts(export_to = "terminal/")]
 struct Resize {
     terminal: TerminalId,
     size: Size,
@@ -105,81 +105,71 @@ impl Module for Terminals {
     }
 
     fn right(&self, method: &str) -> Option<Right> {
-        // Watching shows what a Person types, such as a sign-in's code.
-        Method::parse(method).map(|_| Right::Run)
+        Self::method_right(method)
     }
 
     async fn call(&self, call: Call, method: &str, params: Value) -> Result<Value, Refusal> {
-        let space = call.space();
-        let method = Method::parse(method).ok_or_else(|| Refusal::invalid("No such method."))?;
-        match method {
-            // Opening one that runs leaves it as it is; opening one whose
-            // program ended starts the program again.
-            Method::Open => {
-                let open: Open = decode(params)?;
-                allowed(open.size)?;
-                let mut open_now = self.open.lock().unwrap();
-                let ended = match open_now.get(&open.terminal) {
-                    Some(found) if found.space != space.id() => {
-                        return Err(Refusal::conflict(
-                            "That terminal ID is taken: open a new terminal.",
-                        ));
-                    }
-                    Some(found) if !found.ended() => return Ok(Value::Null),
-                    found => found.cloned(),
-                };
-                let id = open.terminal;
-                let started =
-                    Terminal::start(space.id(), space.folder(), open).map_err(Refusal::invalid)?;
-                open_now.insert(id, started);
-                drop(open_now);
-                if let Some(ended) = ended {
-                    ended.close();
-                }
-                Ok(Value::Null)
-            }
-            Method::Write => {
-                let Write { terminal, data } = decode(params)?;
-                if data.len() > AT_ONCE {
-                    return Err(Refusal::invalid("Type at most 64 KB at once."));
-                }
-                let terminal = self.find(space.id(), terminal)?;
-                terminal.write(&data).await.map_err(Refusal::conflict)?;
-                Ok(Value::Null)
-            }
-            Method::Resize => {
-                let Resize { terminal, size } = decode(params)?;
-                allowed(size)?;
-                let terminal = self.find(space.id(), terminal)?;
-                terminal.resize(size).await.map_err(Refusal::conflict)?;
-                Ok(Value::Null)
-            }
-            Method::Close => {
-                let One { terminal } = decode(params)?;
-                let closed = match self.open.lock().unwrap().entry(terminal) {
-                    Entry::Occupied(found) if found.get().space == space.id() => {
-                        Some(found.remove())
-                    }
-                    _ => None,
-                };
-                if let Some(closed) = closed {
-                    closed.close();
-                }
-                Ok(Value::Null)
-            }
-            Method::Watch => Err(Refusal::invalid("terminal.watch is a stream.")),
-        }
+        self.dispatch(call, method, params).await
     }
 
     async fn stream(&self, call: Call, method: &str, params: Value) -> Result<Stream, Refusal> {
-        match Method::parse(method) {
-            Some(Method::Watch) => {
-                let One { terminal } = decode(params)?;
-                Ok(self.find(call.space().id(), terminal)?.watch())
+        self.dispatch_stream(call, method, params).await
+    }
+}
+
+impl Terminals {
+    async fn open(&self, call: Call, open: Open) -> Result<(), Refusal> {
+        allowed(open.size)?;
+        let space = call.space();
+        let mut open_now = self.open.lock().unwrap();
+        let ended = match open_now.get(&open.terminal) {
+            Some(found) if found.space != space.id() => {
+                return Err(Refusal::conflict(
+                    "That terminal ID is taken: open a new terminal.",
+                ));
             }
-            _ => Err(Refusal::invalid(format!(
-                "terminal.{method} is not a stream."
-            ))),
+            Some(found) if !found.ended() => return Ok(()),
+            found => found.cloned(),
+        };
+        let id = open.terminal;
+        let started =
+            Terminal::start(space.id(), space.folder(), open).map_err(Refusal::invalid)?;
+        open_now.insert(id, started);
+        drop(open_now);
+        if let Some(ended) = ended {
+            ended.close();
         }
+        Ok(())
+    }
+
+    async fn write(&self, call: Call, Write { terminal, data }: Write) -> Result<(), Refusal> {
+        if data.len() > AT_ONCE {
+            return Err(Refusal::invalid("Type at most 64 KB at once."));
+        }
+        let terminal = self.find(call.space().id(), terminal)?;
+        terminal.write(&data).await.map_err(Refusal::conflict)
+    }
+
+    async fn resize(&self, call: Call, Resize { terminal, size }: Resize) -> Result<(), Refusal> {
+        allowed(size)?;
+        let terminal = self.find(call.space().id(), terminal)?;
+        terminal.resize(size).await.map_err(Refusal::conflict)
+    }
+
+    async fn close(&self, call: Call, One { terminal }: One) -> Result<(), Refusal> {
+        let closed = match self.open.lock().unwrap().entry(terminal) {
+            Entry::Occupied(found) if found.get().space == call.space().id() => {
+                Some(found.remove())
+            }
+            _ => None,
+        };
+        if let Some(closed) = closed {
+            closed.close();
+        }
+        Ok(())
+    }
+
+    async fn watch(&self, call: Call, One { terminal }: One) -> Result<Stream, Refusal> {
+        Ok(self.find(call.space().id(), terminal)?.watch())
     }
 }

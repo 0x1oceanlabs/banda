@@ -39,7 +39,7 @@ function SpaceForm({
   const make = async () => {
     if (!ready) return
     const space = await act(() =>
-      engine.command<SpaceSummary>("spaces.create", { name: name.trim() })
+      engine.command("spaces.create", { name: name.trim() })
     )
     if (space) onCreated(space)
   }

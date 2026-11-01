@@ -1,4 +1,5 @@
 import { useRef, useState } from "react"
+import type { Params } from "@banda/contract"
 import type { Image } from "@banda/contract/agents"
 import { DialogTrigger } from "@banda/ui/components/dialog"
 import { Spinner } from "@banda/ui/components/spinner"
@@ -21,7 +22,7 @@ import {
 import { Preview } from "./Preview"
 
 /** What `agents.attach` takes for one image. */
-export type Attaching = { mime: string; data: string; name?: string }
+export type Attaching = Params<"agents.attach">
 
 /** An image the engine keeps for the message, and the URL it shows by. */
 export type Attached = { image: Image; url: string }

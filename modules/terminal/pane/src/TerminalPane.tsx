@@ -1,9 +1,10 @@
 import { useEffect, useRef, useState } from "react"
 import {
-  type CommandId,
+  type CommandCall,
   type Engine,
-  type JsonValue,
+  type MethodOf,
   newId,
+  type Params,
   type SpaceId,
 } from "@banda/contract"
 import type { Ended, Piece, TerminalId } from "@banda/contract/terminal"
@@ -40,7 +41,7 @@ export type TerminalArgs = {
  * Pane that opened it hears that it ended well, as a sign-in's does. Its
  * ID keeps it once only, whichever window sends it, after any reload.
  */
-export type Done = { method: string; params: JsonValue; command: CommandId }
+export type Done = CommandCall
 
 export const terminalPane = definePane<TerminalArgs>({
   kind: "terminal.terminal",
@@ -126,7 +127,7 @@ function Screen({
     if (now.is !== "ended" || now.ended.code !== 0) return
     sent.current = true
     engine
-      .call(done.method, done.params, { space, command: done.command })
+      .run(done, space)
       .then(close, (error: unknown) => setProblem(words(error)))
   }, [done, now, engine, space, close])
 
@@ -140,7 +141,7 @@ function Screen({
     // Set once the screen came, so a shell the engine lost starts again
     // once, not over and over.
     let followed = false
-    const call = (method: string, params: JsonValue) =>
+    const call = <M extends MethodOf<"call">>(method: M, params: Params<M>) =>
       engine.call(method, params, { space })
     const input = new Input(call, terminal, (error) => setProblem(words(error)))
     const told = (next: Now) => {
@@ -178,7 +179,7 @@ function Screen({
       }
     }
     const follow = () => {
-      stop = engine.stream<Piece>(
+      stop = engine.stream(
         space,
         "terminal.watch",
         { terminal },

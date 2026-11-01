@@ -18,7 +18,7 @@ export async function readThreads(
   engine: Engine,
   space: SpaceId
 ): Promise<ThreadList> {
-  return engine.call<ThreadList>("agents.threads", {}, { space })
+  return engine.call("agents.threads", {}, { space })
 }
 
 /**

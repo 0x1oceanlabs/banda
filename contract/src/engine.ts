@@ -7,6 +7,7 @@ import type { Refusal } from "./generated/Refusal"
 import type { SpaceId } from "./generated/SpaceId"
 import type { JsonValue } from "./generated/serde_json/JsonValue"
 import { newId } from "./ids"
+import type { Answer, CommandCall, MethodOf, Params } from "./methods"
 
 /** The protocol version this client speaks; the engine's `hello` checks it. */
 export const PROTOCOL = 1
@@ -104,11 +105,19 @@ export class Engine {
     return () => this.#watchers.delete(watcher)
   }
 
-  /** Calls one method. A command needs `command`; see {@link command}. */
-  async call<T>(
+  /** Calls a method that is not a command; see {@link command} for one. */
+  call<M extends MethodOf<"call">>(
+    method: M,
+    params: Params<M>,
+    options: { space?: SpaceId } = {}
+  ): Promise<Answer<M>> {
+    return this.#call(method, params, options)
+  }
+
+  async #call<T>(
     method: string,
-    params: JsonValue = {},
-    options: { space?: SpaceId; command?: CommandId } = {}
+    params: unknown,
+    options: { space?: SpaceId; command?: CommandId }
   ): Promise<T> {
     await this.#opened()
     const id = this.#nextId++
@@ -121,28 +130,36 @@ export class Engine {
       method,
       space: options.space,
       command: options.command,
-      params,
+      params: params as JsonValue,
     })
     return answer as Promise<T>
   }
 
   /**
    * Runs a command once. It carries one ID, and goes again with that ID
-   * when the connection breaks, so the engine runs it at most once.
+   * when the connection breaks, so the engine runs it at most once. An ID
+   * chosen earlier, as a Pane's args keep one, keeps it once across
+   * windows and reloads.
    */
-  async command<T>(
-    method: string,
-    params: JsonValue,
-    space?: SpaceId
-  ): Promise<T> {
-    const command = newId()
+  async command<M extends MethodOf<"command">>(
+    method: M,
+    params: Params<M>,
+    space?: SpaceId,
+    command: CommandId = newId()
+  ): Promise<Answer<M>> {
     for (let attempt = 1; ; attempt++) {
       try {
-        return await this.call<T>(method, params, { space, command })
+        return await this.#call<Answer<M>>(method, params, { space, command })
       } catch (error) {
         if (!(error instanceof Lost) || attempt === ATTEMPTS) throw error
       }
     }
+  }
+
+  /** Runs a command made elsewhere, as a Pane's args carry one. */
+  run(call: CommandCall, space?: SpaceId): Promise<unknown> {
+    // TypeScript cannot tell that a union's method and params belong together.
+    return this.command(call.method, call.params as never, space, call.command)
   }
 
   /**
@@ -178,18 +195,18 @@ export class Engine {
    * start. `onEnd` hears when the module ends it, or refuses it. Returns how
    * to stop.
    */
-  stream<P>(
+  stream<M extends MethodOf<"stream">>(
     space: SpaceId,
-    method: string,
-    params: JsonValue,
-    onPiece: (piece: P) => void,
+    method: M,
+    params: Params<M>,
+    onPiece: (piece: Answer<M>) => void,
     onEnd: (refusal?: Refusal) => void
   ): () => void {
     const id = this.#nextId++
     const hearing: Hearing = {
       space,
       method,
-      params,
+      params: params as JsonValue,
       onPiece: onPiece as (piece: unknown) => void,
       onEnd,
     }

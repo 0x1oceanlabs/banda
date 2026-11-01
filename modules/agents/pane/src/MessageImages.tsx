@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from "react"
 import type { Engine, SpaceId } from "@banda/contract"
-import type { Image, ImageData, ImageId } from "@banda/contract/agents"
+import type { Image, ImageId } from "@banda/contract/agents"
 import { DialogTrigger } from "@banda/ui/components/dialog"
 import { Spinner } from "@banda/ui/components/spinner"
 import {
@@ -28,9 +28,7 @@ export function useImageReader(engine: Engine, space: SpaceId): ImageReader {
       read: (image) => {
         let url = urls.get(image)
         if (!url) {
-          url = engine
-            .call<ImageData>("agents.image", { image }, { space })
-            .then(urlOf)
+          url = engine.call("agents.image", { image }, { space }).then(urlOf)
           // A read that failed goes again the next time.
           url.catch(() => urls.delete(image))
           urls.set(image, url)

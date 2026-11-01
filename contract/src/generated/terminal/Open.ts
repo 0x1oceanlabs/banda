@@ -7,4 +7,4 @@ import type { TerminalId } from "./TerminalId";
  * shell line, or the Person's shell when it names none. It runs in the
  * Space's folder, with the engine's environment and `env` on top.
  */
-export type Open = { terminal: TerminalId, program?: string, args: Array<string>, env: { [key in string]: string }, size: Size, };
+export type Open = { terminal: TerminalId, program?: string, args?: Array<string>, env?: { [key in string]: string }, size?: Size, };

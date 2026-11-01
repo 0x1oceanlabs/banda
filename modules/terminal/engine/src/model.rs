@@ -47,10 +47,13 @@ pub struct Open {
     #[ts(optional)]
     pub program: Option<String>,
     #[serde(default)]
+    #[ts(as = "Option<Vec<String>>", optional)]
     pub args: Vec<String>,
     #[serde(default)]
+    #[ts(as = "Option<BTreeMap<String, String>>", optional)]
     pub env: BTreeMap<String, String>,
     #[serde(default)]
+    #[ts(as = "Option<Size>", optional)]
     pub size: Size,
 }
 

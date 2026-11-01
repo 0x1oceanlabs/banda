@@ -2,6 +2,8 @@ use crate::access::Right;
 use crate::outbox::{Effect, OnRestart, Outcome, Settled};
 use crate::space::ModuleSpace;
 use crate::{CommandId, Error, Participant, Refusal, Tx};
+use serde::Serialize;
+use serde::de::DeserializeOwned;
 use serde_json::Value;
 use tokio::sync::mpsc;
 
@@ -119,14 +121,28 @@ impl Call {
     }
 
     /// Runs this call as a command: once per command ID, in one transaction
-    /// with its receipt, its events and its outbox rows.
-    pub async fn command(
+    /// with its receipt, its events and its outbox rows. A repeated command
+    /// answers what the first one did.
+    pub async fn command<T>(
         &self,
-        change: impl FnOnce(&mut Tx<'_>) -> Result<Value, Error> + Send + 'static,
-    ) -> Result<Value, Refusal> {
+        change: impl FnOnce(&mut Tx<'_>) -> Result<T, Error> + Send + 'static,
+    ) -> Result<T, Refusal>
+    where
+        T: Serialize + DeserializeOwned,
+    {
         let command = self.command_id()?;
-        self.space
-            .command(command, &self.method, self.participant, change)
-            .await
+        let kept = self
+            .space
+            .command(command, &self.method, self.participant, move |tx| {
+                Ok(serde_json::to_value(change(tx)?)?)
+            })
+            .await?;
+        Ok(serde_json::from_value(kept).map_err(Error::from)?)
+    }
+}
+
+impl crate::methods::Asks for Call {
+    fn command_id(&self) -> Result<CommandId, Refusal> {
+        Call::command_id(self)
     }
 }

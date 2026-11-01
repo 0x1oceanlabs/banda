@@ -14,15 +14,13 @@ import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
 import { createInterface } from "node:readline"
 import { afterEach, beforeEach, expect, test } from "vitest"
-import { decodeFact, type Sent } from "../src/agents"
-import type { Piece } from "../src/terminal"
+import { decodeFact } from "../src/agents"
 import {
   type Address,
   Engine,
   newId,
   type Event,
   Refused,
-  type SpaceSummary,
   type Status,
 } from "../src/index"
 
@@ -105,11 +103,14 @@ test("a window calls, follows and sees refusals by their code", async () => {
   await until(client, "open")
   expect(client.status).toMatchObject({ modules: ["agents", "terminal"] })
 
-  const space = await client.command<SpaceSummary>("spaces.create", {
+  const space = await client.command("spaces.create", {
     name: "Work",
   })
   expect(space.name).toBe("Work")
-  const refused = client.call("agents.thread", {}, { space: space.id })
+  // Params the engine does not take, as the CLI may send.
+  const refused = client.call("agents.thread", {} as never, {
+    space: space.id,
+  })
   await expect(refused).rejects.toBeInstanceOf(Refused)
   await expect(refused).rejects.toMatchObject({ refusal: { code: "invalid" } })
 
@@ -127,7 +128,7 @@ test("a window calls, follows and sees refusals by their code", async () => {
       () => {}
     )
   )
-  await client.command<Sent>(
+  await client.command(
     "agents.send",
     { harness: "fake", text: "hello" },
     space.id
@@ -147,7 +148,7 @@ test("a window calls, follows and sees refusals by their code", async () => {
 test("a subscription goes on after the engine restarts, without a gap", async () => {
   await serve()
   client = new Engine(address)
-  const space = await client.command<SpaceSummary>("spaces.create", {
+  const space = await client.command("spaces.create", {
     name: "Work",
   })
   const heard: string[] = []
@@ -180,7 +181,7 @@ test("a subscription goes on after the engine restarts, without a gap", async ()
 test("a window runs a terminal and hears what it prints, until it closes", async () => {
   await serve()
   client = new Engine(address)
-  const space = await client.command<SpaceSummary>("spaces.create", {
+  const space = await client.command("spaces.create", {
     name: "Work",
   })
   const terminal = newId()
@@ -196,7 +197,7 @@ test("a window runs a terminal and hears what it prints, until it closes", async
   )
   let screen = ""
   let closed = false
-  client.stream<Piece>(
+  client.stream(
     space.id,
     "terminal.watch",
     { terminal },

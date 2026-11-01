@@ -1,7 +1,7 @@
 /** A Thread as a Pane follows it: loaded once, then each of its events. */
 import { useMemo } from "react"
 import type { Engine, SpaceId } from "@banda/contract"
-import type { ThreadId, ThreadView } from "@banda/contract/agents"
+import type { ThreadId } from "@banda/contract/agents"
 import { useLive } from "@banda/ui/hooks/use-live"
 import { apply, fromView } from "./thread"
 
@@ -18,11 +18,7 @@ export function useThread(
         : {
             read: async () =>
               fromView(
-                await engine.call<ThreadView>(
-                  "agents.thread",
-                  { thread },
-                  { space }
-                )
+                await engine.call("agents.thread", { thread }, { space })
               ),
             filter: { module: "agents", subject: thread },
             apply,

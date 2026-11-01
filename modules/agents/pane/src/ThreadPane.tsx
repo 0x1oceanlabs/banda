@@ -8,9 +8,7 @@ import type {
   Offer,
   Settings,
   ThreadId,
-  Sent,
   TurnView,
-  Image,
 } from "@banda/contract/agents"
 import { Button } from "@banda/ui/components/button"
 import {
@@ -189,15 +187,13 @@ function ThreadPane({
   }
 
   const images = useAttachments({
-    attach: (image: Attaching) =>
-      engine.command<Image>("agents.attach", image, space),
+    attach: (image: Attaching) => engine.command("agents.attach", image, space),
     closed: offer.no_images ? `${name} does not take images.` : undefined,
   })
   const [dropping, setDropping] = useState(false)
   // The files `@` names come from the Space's folder.
   const findFiles = useCallback(
-    (query: string) =>
-      engine.command<string[]>("agents.files", { query }, space),
+    (query: string) => engine.call("agents.files", { query }, { space }),
     [engine, space]
   )
   // What the Person looks for in the Thread, while the find bar is open.
@@ -226,7 +222,7 @@ function ThreadPane({
     if (no && text && (await answer(asking.id, no)) === undefined) return false
     for (const { image, url } of images) reader.remember(image.id, url)
     const sent = await sending.act(() =>
-      engine.command<Sent>(
+      engine.command(
         "agents.send",
         // A new Thread starts as its composer shows; an existing one runs
         // with its own settings, which the bar changes as it goes.
@@ -494,8 +490,7 @@ function useHarnessDefaults(
       harness === null
         ? null
         : {
-            read: () =>
-              engine.call<Defaults>("agents.defaults", { harness }, { space }),
+            read: () => engine.call("agents.defaults", { harness }, { space }),
             filter: OFFERED,
             apply: () => READ_AGAIN,
           },

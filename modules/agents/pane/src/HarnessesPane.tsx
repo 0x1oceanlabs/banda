@@ -56,7 +56,7 @@ export const harnessesPane = definePane<NoArgs>({
 function HarnessesPane({ engine, space, open }: PaneProps<NoArgs>) {
   const harnesses = useRead(
     useCallback(
-      () => engine.call<HarnessView[]>("agents.harnesses", {}, { space }),
+      () => engine.call("agents.harnesses", {}, { space }),
       [engine, space]
     )
   )
@@ -123,12 +123,7 @@ function HarnessReading({
 }: HarnessProps & { readAgain: () => void }) {
   const account = useRead(
     useCallback(
-      () =>
-        engine.call<Account>(
-          "agents.account",
-          { harness: harness.id },
-          { space }
-        ),
+      () => engine.call("agents.account", { harness: harness.id }, { space }),
       [engine, space, harness.id]
     )
   )

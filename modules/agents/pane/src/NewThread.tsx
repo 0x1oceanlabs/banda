@@ -63,7 +63,7 @@ export function NewThreadBar({
 
 function useSpaces(engine: Engine): SpaceSummary[] {
   const read = useRead(
-    useCallback(() => engine.call<SpaceSummary[]>("spaces.list"), [engine])
+    useCallback(() => engine.call("spaces.list", {}), [engine])
   )
   return read.state === "ready" ? read.value : NONE
 }

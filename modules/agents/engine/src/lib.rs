@@ -12,26 +12,8 @@
 //! - **Harnesses** are reached through ACP, one process per Space and
 //!   Harness entry (`hosts.rs`). ACP's words stop in `acp.rs`.
 //!
-//! | Method | Right | What it does |
-//! |---|---|---|
-//! | `agents.harnesses` | read | the Harnesses this machine can start |
-//! | `agents.account` | manage | a Harness as it says: its program, who is signed in, how to sign in: `{harness}` |
-//! | `agents.sign_in` | manage | signs in with one of those ways, then the Harness starts again, and the `turn` that needed it goes again: `{harness, way, turn?}` |
-//! | `agents.sign_out` | manage | asks the Harness to sign out, then it starts again: `{harness}` |
-//! | `agents.threads` | read | the Space's Threads, the latest first |
-//! | `agents.thread` | read | one Thread as a view: `{thread}` |
-//! | `agents.defaults` | read | what a new Thread on a Harness starts with: `{harness}` |
-//! | `agents.send` | write | a message that queues a turn, or with `steer` joins the one that runs: in a Thread `{thread, …}`, or in a new one on a Harness `{harness, …}`; `{text, images?, settings?, steer?}` |
-//! | `agents.edit` | write | a waiting message's new text: `{turn, text}` |
-//! | `agents.withdraw` | write | takes a waiting message back: `{turn}` |
-//! | `agents.steer` | write | sends a waiting message into the turn that runs: `{turn}` |
-//! | `agents.resume` | write | lets a held queue go on: `{thread}` |
-//! | `agents.configure` | write | the Thread's settings, from its next turn on: `{thread, settings}` |
-//! | `agents.stop` | write | stops a turn: `{turn}` |
-//! | `agents.retry` | write | tries a failed turn's message again: `{turn}` |
-//! | `agents.answer` | decide | answers a Question: `{item, choice, values?}`; `values` fill its form |
-//! | `agents.attach` | write | an image a message will carry: `{mime, data, name?}` |
-//! | `agents.image` | read | an image's bytes: `{image}` |
+//! Its methods, each with its right, params and answer, are the
+//! `methods!` table below (ADR 0014).
 
 mod acp;
 mod between;
@@ -49,16 +31,16 @@ mod turn;
 
 use acp::Connection;
 use banda_kernel::{
-    AgentId, Call, Effect, Error, Module, ModuleSpace, OnRestart, Outcome, Participant, Refusal,
-    Right, Settled, SpaceId, Tx, decode,
+    AgentId, Call, Effect, Error, Module, ModuleSpace, Nothing, OnRestart, Outcome, Participant,
+    Refusal, Right, Settled, SpaceId, Tx,
 };
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as BASE64;
 use images::Images;
 use live::Live;
 use model::{
-    Body, Fact, Image, ImageId, Item, ItemId, Offer, Settings, ThreadId, ThreadList, ThreadSummary,
-    ThreadView, TurnId, TurnState, VERSION,
+    Account, Body, Fact, HarnessView, Image, ImageId, Item, ItemId, Offer, Settings, ThreadId,
+    ThreadList, ThreadSummary, ThreadView, TurnId, TurnState, VERSION,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -115,9 +97,9 @@ impl Agents {
     /// again, so it reads the account anew, in every Space, since they
     /// share it. Then the receipt keeps the answer, and the kernel answers
     /// the same command, sent again, from it.
-    async fn start_again(&self, call: &Call, harness: &str) -> Result<Value, Refusal> {
+    async fn start_again(&self, call: &Call, harness: &str) -> Result<(), Refusal> {
         self.live.let_go(harness).await;
-        call.command(|_| Ok(Value::Null)).await
+        call.command(|_| Ok(())).await
     }
 
     /// Harness entry `id` with its process in `space`, started if need be.
@@ -132,85 +114,61 @@ impl Agents {
     }
 }
 
-enum Method {
-    Harnesses,
-    Account,
-    SignIn,
-    SignOut,
-    Threads,
-    Thread,
-    Defaults,
-    Send,
-    Edit,
-    Withdraw,
-    Steer,
-    Resume,
-    Configure,
-    Stop,
-    Retry,
-    Answer,
-    Attach,
-    Image,
-    /// The files in the Space's folder, for `@` in the composer.
-    Files,
-}
-
-impl Method {
-    fn parse(name: &str) -> Option<Method> {
-        Some(match name {
-            "harnesses" => Method::Harnesses,
-            "account" => Method::Account,
-            "sign_in" => Method::SignIn,
-            "sign_out" => Method::SignOut,
-            "threads" => Method::Threads,
-            "thread" => Method::Thread,
-            "defaults" => Method::Defaults,
-            "send" => Method::Send,
-            "edit" => Method::Edit,
-            "withdraw" => Method::Withdraw,
-            "steer" => Method::Steer,
-            "resume" => Method::Resume,
-            "configure" => Method::Configure,
-            "stop" => Method::Stop,
-            "retry" => Method::Retry,
-            "answer" => Method::Answer,
-            "attach" => Method::Attach,
-            "image" => Method::Image,
-            "files" => Method::Files,
-            _ => return None,
-        })
-    }
-
-    fn right(&self) -> Right {
-        match self {
-            Method::Harnesses
-            | Method::Threads
-            | Method::Thread
-            | Method::Defaults
-            | Method::Image
-            | Method::Files => Right::Read,
-            // A Harness's account serves every Space on this computer.
-            Method::Account | Method::SignIn | Method::SignOut => Right::Manage,
-            Method::Send
-            | Method::Edit
-            | Method::Withdraw
-            | Method::Steer
-            | Method::Resume
-            | Method::Stop
-            | Method::Retry
-            | Method::Attach => Right::Write,
-            // How freely an Agent acts decides what it asks a Person.
-            Method::Configure | Method::Answer => Right::Decide,
-        }
+banda_kernel::methods! {
+    Agents(Call) as "AgentsMethods" in "agents/" {
+        /// The Harnesses this machine can start.
+        call harnesses(Nothing) -> Vec<HarnessView>, Read;
+        /// A Harness as it says: its program, who is signed in, how to sign
+        /// in. A Harness's account serves every Space on this computer.
+        call account(OneHarness) -> Account, Manage;
+        /// Signs in with one of those ways, then the Harness starts again,
+        /// and the `turn` that needed it goes again.
+        command sign_in(SignIn) -> Option<Sent>, Manage;
+        /// Asks the Harness to sign out, then it starts again.
+        command sign_out(OneHarness) -> (), Manage;
+        /// The Space's Threads, the latest first.
+        call threads(Nothing) -> ThreadList, Read;
+        /// One Thread as a view.
+        call thread(OneThread) -> ThreadView, Read;
+        /// What a new Thread on a Harness starts with.
+        call defaults(OneHarness) -> Defaults, Read;
+        /// A message that queues a turn, or with `steer` joins the one that
+        /// runs: in a Thread, or in a new one on a Harness.
+        command send(Send) -> Sent, Write;
+        /// A waiting message's new text.
+        command edit(Edit) -> (), Write;
+        /// Takes a waiting message back.
+        command withdraw(OneTurn) -> (), Write;
+        /// Sends a waiting message into the turn that runs.
+        command steer(OneTurn) -> (), Write;
+        /// Lets a held queue go on.
+        command resume(OneThread) -> (), Write;
+        /// The Thread's settings, from its next turn on. How freely an Agent
+        /// acts decides what it asks a Person.
+        command configure(Configure) -> (), Decide;
+        /// Stops a turn.
+        command stop(OneTurn) -> (), Write;
+        /// Tries a failed turn's message again.
+        command retry(OneTurn) -> Sent, Write;
+        /// Answers a Question; `values` fill its form.
+        command answer(Answer) -> (), Decide;
+        /// An image a message will carry.
+        command attach(Attach) -> Image, Write;
+        /// An image's bytes.
+        call image(OneImage) -> ImageData, Read;
+        /// The files in the Space's folder, for `@` in the composer.
+        call files(FileQuery) -> Vec<String>, Read;
     }
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, TS)]
+#[ts(export_to = "agents/")]
 struct OneHarness {
     harness: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, TS)]
+#[ts(export_to = "agents/")]
 struct SignIn {
     harness: String,
     way: String,
@@ -218,38 +176,48 @@ struct SignIn {
     /// a terminal that sends it once its program ended well sends one
     /// command, which its ID keeps from being done twice.
     #[serde(default)]
+    #[ts(optional = nullable)]
     turn: Option<TurnId>,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, TS)]
+#[ts(export_to = "agents/")]
 struct OneThread {
     thread: ThreadId,
 }
 
 /// A message in a Thread, or the first one of a new Thread on a Harness.
-#[derive(Deserialize)]
+#[derive(Deserialize, TS)]
+#[ts(export_to = "agents/")]
 struct Send {
     #[serde(default)]
+    #[ts(optional = nullable)]
     thread: Option<ThreadId>,
     #[serde(default)]
+    #[ts(optional = nullable)]
     harness: Option<String>,
     #[serde(default)]
+    #[ts(as = "Option<String>", optional)]
     text: String,
     /// The images it carries, each added with `agents.attach` first.
     #[serde(default)]
+    #[ts(as = "Option<Vec<ImageId>>", optional)]
     images: Vec<ImageId>,
     /// What a new Thread starts with, instead of its Harness's defaults;
     /// or the Thread's settings from this turn on.
     #[serde(default)]
+    #[ts(optional = nullable)]
     settings: Option<Settings>,
     /// It goes into the turn that runs, if one does, instead of waiting
     /// for a turn of its own.
     #[serde(default)]
+    #[ts(as = "Option<bool>", optional)]
     steer: bool,
 }
 
 /// A waiting message's new text, by the turn it waits for.
-#[derive(Deserialize)]
+#[derive(Deserialize, TS)]
+#[ts(export_to = "agents/")]
 struct Edit {
     turn: TurnId,
     text: String,
@@ -257,22 +225,26 @@ struct Edit {
 
 /// An image a message will carry: its kind, its bytes in base64, and the
 /// name of its file.
-#[derive(Deserialize)]
+#[derive(Deserialize, TS)]
+#[ts(export_to = "agents/")]
 struct Attach {
     mime: String,
     data: String,
     #[serde(default)]
+    #[ts(optional = nullable)]
     name: Option<String>,
 }
 
 /// What `agents.files` asks: the files in the Space's folder that hold
 /// these words.
-#[derive(Deserialize)]
+#[derive(Deserialize, TS)]
+#[ts(export_to = "agents/")]
 struct FileQuery {
     query: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, TS)]
+#[ts(export_to = "agents/")]
 struct OneImage {
     image: ImageId,
 }
@@ -285,7 +257,8 @@ pub struct ImageData {
     pub data: String,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, TS)]
+#[ts(export_to = "agents/")]
 struct Configure {
     thread: ThreadId,
     settings: Settings,
@@ -313,21 +286,20 @@ pub struct Sent {
     pub item: ItemId,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, TS)]
+#[ts(export_to = "agents/")]
 struct OneTurn {
     turn: TurnId,
 }
 
-#[derive(Deserialize)]
+#[derive(Deserialize, TS)]
+#[ts(export_to = "agents/")]
 struct Answer {
     item: ItemId,
     choice: String,
     #[serde(default)]
+    #[ts(optional = nullable)]
     values: Option<model::Values>,
-}
-
-fn value(answer: impl Serialize) -> Result<Value, Refusal> {
-    Ok(serde_json::to_value(answer).map_err(Error::from)?)
 }
 
 /// Writes one of the module's facts about `subject`.
@@ -344,6 +316,269 @@ fn emit(
     Ok(())
 }
 
+/// The handlers of the module's methods, one each (ADR 0014).
+impl Agents {
+    async fn harnesses(&self, _: Call, _: Nothing) -> Result<Vec<HarnessView>, Refusal> {
+        Ok(self.harnesses.views())
+    }
+
+    async fn account(
+        &self,
+        call: Call,
+        OneHarness { harness }: OneHarness,
+    ) -> Result<Account, Refusal> {
+        let (harness, connection) = self.running(call.space().id(), &harness).await?;
+        connection.account(harness).await.map_err(Refusal::conflict)
+    }
+
+    async fn sign_in(
+        &self,
+        call: Call,
+        SignIn { harness, way, turn }: SignIn,
+    ) -> Result<Option<Sent>, Refusal> {
+        let (harness, connection) = self.running(call.space().id(), &harness).await?;
+        let found = connection
+            .ways()
+            .iter()
+            .find(|w| w.id == way)
+            .ok_or_else(|| {
+                Refusal::not_found(format!("{} offers no such way to sign in.", harness.name))
+            })?;
+        // A way in a terminal ran already: the Person signed in there.
+        if found.terminal.is_none() {
+            connection.sign_in(&way).await.map_err(Refusal::conflict)?;
+        }
+        drop(connection);
+        self.live.let_go(&harness.id).await;
+        let author = call.participant();
+        call.command(move |tx| match turn {
+            // A turn that went again already, or cannot, leaves the
+            // sign-in as it is: the Person is signed in.
+            Some(turn) => match retry(tx, author, turn) {
+                Err(Error::Refused(_)) => Ok(None),
+                answer => answer.map(Some),
+            },
+            None => Ok(None),
+        })
+        .await
+    }
+
+    async fn sign_out(
+        &self,
+        call: Call,
+        OneHarness { harness }: OneHarness,
+    ) -> Result<(), Refusal> {
+        let (harness, connection) = self.running(call.space().id(), &harness).await?;
+        connection.sign_out().await.map_err(Refusal::conflict)?;
+        drop(connection);
+        self.start_again(&call, &harness.id).await
+    }
+
+    async fn threads(&self, call: Call, _: Nothing) -> Result<ThreadList, Refusal> {
+        let (at, threads) = call.space().view(store::threads).await?;
+        Ok(ThreadList { at, threads })
+    }
+
+    async fn thread(
+        &self,
+        call: Call,
+        OneThread { thread }: OneThread,
+    ) -> Result<ThreadView, Refusal> {
+        let (at, found) = call
+            .space()
+            .view(move |sql| {
+                let Some(summary) = store::thread(sql, thread)? else {
+                    return Ok(None);
+                };
+                Ok(Some(ThreadView {
+                    at: 0,
+                    items: store::items(sql, thread)?,
+                    turns: store::turns(sql, thread)?,
+                    settings: store::settings(sql, thread)?,
+                    offer: store::offer(sql, thread)?,
+                    usage: store::usage(sql, thread)?,
+                    held: store::held(sql, thread)?,
+                    thread: summary,
+                }))
+            })
+            .await?;
+        let view = found.ok_or_else(|| Refusal::not_found("There is no such Thread."))?;
+        Ok(ThreadView { at, ..view })
+    }
+
+    async fn defaults(
+        &self,
+        call: Call,
+        OneHarness { harness }: OneHarness,
+    ) -> Result<Defaults, Refusal> {
+        self.harness(&harness)?;
+        let (at, offer) = call
+            .space()
+            .view(move |sql| Ok(store::latest_offer(sql, &harness)?.unwrap_or_default()))
+            .await?;
+        // What the composer shows is what the new Thread gets: the
+        // Harness's own values for its options.
+        let mut settings = Settings::default();
+        for option in &offer.options {
+            settings
+                .options
+                .insert(option.id.clone(), option.value.clone());
+        }
+        Ok(Defaults {
+            at,
+            settings,
+            offer,
+        })
+    }
+
+    async fn send(&self, call: Call, params: Send) -> Result<Sent, Refusal> {
+        let Send {
+            thread,
+            harness,
+            text,
+            images,
+            settings,
+            steer,
+        } = params;
+        rules::may_send(&text, &images)?;
+        let target = match (thread, harness) {
+            (Some(thread), _) => Target::Thread(thread),
+            (None, Some(harness)) => Target::New(self.harness(&harness)?.id.clone()),
+            (None, None) => {
+                return Err(Refusal::invalid(
+                    "A message goes into a Thread, or starts one on a Harness.",
+                ));
+            }
+        };
+        let author = call.participant();
+        if settings.is_some() {
+            rules::may_choose(author)?;
+        }
+        let message = Message { text, images };
+        call.command(move |tx| send(tx, author, target, message, settings, steer))
+            .await
+    }
+
+    async fn edit(&self, call: Call, Edit { turn, text }: Edit) -> Result<(), Refusal> {
+        let author = call.participant();
+        call.command(move |tx| edit(tx, author, turn, text)).await
+    }
+
+    async fn withdraw(&self, call: Call, OneTurn { turn }: OneTurn) -> Result<(), Refusal> {
+        let author = call.participant();
+        call.command(move |tx| withdraw(tx, author, turn)).await
+    }
+
+    async fn steer(&self, call: Call, OneTurn { turn }: OneTurn) -> Result<(), Refusal> {
+        let author = call.participant();
+        call.command(move |tx| send_now(tx, author, turn)).await
+    }
+
+    async fn resume(&self, call: Call, OneThread { thread }: OneThread) -> Result<(), Refusal> {
+        let author = call.participant();
+        call.command(move |tx| {
+            store::thread(tx.sql(), thread)?
+                .ok_or_else(|| Refusal::not_found("There is no such Thread."))?;
+            turn::resume(tx, author, thread)
+        })
+        .await
+    }
+
+    async fn configure(
+        &self,
+        call: Call,
+        Configure { thread, settings }: Configure,
+    ) -> Result<(), Refusal> {
+        let author = call.participant();
+        call.command(move |tx| {
+            store::thread(tx.sql(), thread)?
+                .ok_or_else(|| Refusal::not_found("There is no such Thread."))?;
+            configure(tx, author, thread, settings)
+        })
+        .await
+    }
+
+    async fn stop(&self, call: Call, OneTurn { turn }: OneTurn) -> Result<(), Refusal> {
+        let author = call.participant();
+        call.command(move |tx| stop(tx, author, turn)).await
+    }
+
+    async fn retry(&self, call: Call, OneTurn { turn }: OneTurn) -> Result<Sent, Refusal> {
+        let author = call.participant();
+        call.command(move |tx| retry(tx, author, turn)).await
+    }
+
+    async fn answer(&self, call: Call, params: Answer) -> Result<(), Refusal> {
+        let Answer {
+            item,
+            choice,
+            values,
+        } = params;
+        let author = call.participant();
+        let live = self.live.clone();
+        call.command(move |tx| answer(tx, &live, author, item, choice, values))
+            .await
+    }
+
+    async fn attach(
+        &self,
+        call: Call,
+        Attach { mime, data, name }: Attach,
+    ) -> Result<Image, Refusal> {
+        let bytes = BASE64
+            .decode(data.as_bytes())
+            .map_err(|_| Refusal::invalid("The image's bytes are not base64."))?;
+        rules::may_attach(&mime, &bytes)?;
+        let image = Image {
+            id: ImageId::new(),
+            mime,
+            size: u32::try_from(bytes.len()).unwrap_or(u32::MAX),
+            name,
+        };
+        let space = call.space();
+        let images = Images::of(space.folder());
+        // The file first: a row never names bytes that are not
+        // there. A file left without a row goes with the sweep.
+        images.keep(image.id, bytes).await.map_err(Error::from)?;
+        let author = call.participant();
+        let kept = call
+            .command(move |tx| {
+                store::attach_image(tx.sql(), &image, author, tx.now())?;
+                Ok(image)
+            })
+            .await;
+        tokio::spawn(sweep(space.clone(), images));
+        kept
+    }
+
+    async fn image(&self, call: Call, OneImage { image }: OneImage) -> Result<ImageData, Refusal> {
+        let space = call.space();
+        let kind = space.read(move |sql| store::image_kind(sql, image)).await?;
+        let gone = || Refusal::not_found("There is no such image.");
+        let mime = kind.ok_or_else(gone)?;
+        let bytes = Images::of(space.folder())
+            .read(image)
+            .await
+            .map_err(|_| gone())?;
+        Ok(ImageData {
+            mime,
+            data: BASE64.encode(bytes),
+        })
+    }
+
+    async fn files(
+        &self,
+        call: Call,
+        FileQuery { query }: FileQuery,
+    ) -> Result<Vec<String>, Refusal> {
+        let folder = call.space().folder().to_path_buf();
+        let listings = self.listings.clone();
+        tokio::task::spawn_blocking(move || files::matching(&listings.of(&folder), &query))
+            .await
+            .map_err(|_| Refusal::invalid("The files could not be listed."))
+    }
+}
+
 #[async_trait::async_trait]
 impl Module for Agents {
     fn name(&self) -> &'static str {
@@ -355,244 +590,11 @@ impl Module for Agents {
     }
 
     fn right(&self, method: &str) -> Option<Right> {
-        Method::parse(method).map(|m| m.right())
+        Self::method_right(method)
     }
 
     async fn call(&self, call: Call, method: &str, params: Value) -> Result<Value, Refusal> {
-        let method =
-            Method::parse(method).ok_or_else(|| Refusal::invalid("agents has no such method."))?;
-        let space = call.space();
-        match method {
-            Method::Harnesses => value(self.harnesses.views()),
-            Method::Account => {
-                let OneHarness { harness } = decode(params)?;
-                let (harness, connection) = self.running(space.id(), &harness).await?;
-                let account = connection.account(harness).await;
-                value(account.map_err(Refusal::conflict)?)
-            }
-            Method::SignIn => {
-                let SignIn { harness, way, turn } = decode(params)?;
-                call.command_id()?;
-                let (harness, connection) = self.running(space.id(), &harness).await?;
-                let found = connection
-                    .ways()
-                    .iter()
-                    .find(|w| w.id == way)
-                    .ok_or_else(|| {
-                        Refusal::not_found(format!(
-                            "{} offers no such way to sign in.",
-                            harness.name
-                        ))
-                    })?;
-                // A way in a terminal ran already: the Person signed in there.
-                if found.terminal.is_none() {
-                    connection.sign_in(&way).await.map_err(Refusal::conflict)?;
-                }
-                drop(connection);
-                self.live.let_go(&harness.id).await;
-                let author = call.participant();
-                call.command(move |tx| match turn {
-                    // A turn that went again already, or cannot, leaves the
-                    // sign-in as it is: the Person is signed in.
-                    Some(turn) => match retry(tx, author, turn) {
-                        Err(Error::Refused(_)) => Ok(Value::Null),
-                        answer => answer,
-                    },
-                    None => Ok(Value::Null),
-                })
-                .await
-            }
-            Method::SignOut => {
-                let OneHarness { harness } = decode(params)?;
-                call.command_id()?;
-                let (harness, connection) = self.running(space.id(), &harness).await?;
-                connection.sign_out().await.map_err(Refusal::conflict)?;
-                drop(connection);
-                self.start_again(&call, &harness.id).await
-            }
-            Method::Threads => {
-                let (at, threads) = space.view(store::threads).await?;
-                value(ThreadList { at, threads })
-            }
-            Method::Thread => {
-                let OneThread { thread } = decode(params)?;
-                let (at, found) = space
-                    .view(move |sql| {
-                        let Some(summary) = store::thread(sql, thread)? else {
-                            return Ok(None);
-                        };
-                        Ok(Some(ThreadView {
-                            at: 0,
-                            items: store::items(sql, thread)?,
-                            turns: store::turns(sql, thread)?,
-                            settings: store::settings(sql, thread)?,
-                            offer: store::offer(sql, thread)?,
-                            usage: store::usage(sql, thread)?,
-                            held: store::held(sql, thread)?,
-                            thread: summary,
-                        }))
-                    })
-                    .await?;
-                let view = found.ok_or_else(|| Refusal::not_found("There is no such Thread."))?;
-                value(ThreadView { at, ..view })
-            }
-            Method::Defaults => {
-                let OneHarness { harness } = decode(params)?;
-                self.harness(&harness)?;
-                let (at, offer) = space
-                    .view(move |sql| Ok(store::latest_offer(sql, &harness)?.unwrap_or_default()))
-                    .await?;
-                // What the composer shows is what the new Thread gets: the
-                // Harness's own values for its options.
-                let mut settings = Settings::default();
-                for option in &offer.options {
-                    settings
-                        .options
-                        .insert(option.id.clone(), option.value.clone());
-                }
-                value(Defaults {
-                    at,
-                    settings,
-                    offer,
-                })
-            }
-            Method::Send => {
-                let Send {
-                    thread,
-                    harness,
-                    text,
-                    images,
-                    settings,
-                    steer,
-                } = decode(params)?;
-                rules::may_send(&text, &images)?;
-                let target = match (thread, harness) {
-                    (Some(thread), _) => Target::Thread(thread),
-                    (None, Some(harness)) => Target::New(self.harness(&harness)?.id.clone()),
-                    (None, None) => {
-                        return Err(Refusal::invalid(
-                            "A message goes into a Thread, or starts one on a Harness.",
-                        ));
-                    }
-                };
-                let author = call.participant();
-                if settings.is_some() {
-                    rules::may_choose(author)?;
-                }
-                let message = Message { text, images };
-                call.command(move |tx| send(tx, author, target, message, settings, steer))
-                    .await
-            }
-            Method::Edit => {
-                let Edit { turn, text } = decode(params)?;
-                let author = call.participant();
-                call.command(move |tx| edit(tx, author, turn, text)).await
-            }
-            Method::Withdraw => {
-                let OneTurn { turn } = decode(params)?;
-                let author = call.participant();
-                call.command(move |tx| withdraw(tx, author, turn)).await
-            }
-            Method::Steer => {
-                let OneTurn { turn } = decode(params)?;
-                let author = call.participant();
-                call.command(move |tx| send_now(tx, author, turn)).await
-            }
-            Method::Resume => {
-                let OneThread { thread } = decode(params)?;
-                let author = call.participant();
-                call.command(move |tx| {
-                    store::thread(tx.sql(), thread)?
-                        .ok_or_else(|| Refusal::not_found("There is no such Thread."))?;
-                    turn::resume(tx, author, thread)?;
-                    Ok(Value::Null)
-                })
-                .await
-            }
-            Method::Configure => {
-                let Configure { thread, settings } = decode(params)?;
-                let author = call.participant();
-                call.command(move |tx| {
-                    store::thread(tx.sql(), thread)?
-                        .ok_or_else(|| Refusal::not_found("There is no such Thread."))?;
-                    configure(tx, author, thread, settings)?;
-                    Ok(Value::Null)
-                })
-                .await
-            }
-            Method::Stop => {
-                let OneTurn { turn } = decode(params)?;
-                let author = call.participant();
-                call.command(move |tx| stop(tx, author, turn)).await
-            }
-            Method::Retry => {
-                let OneTurn { turn } = decode(params)?;
-                let author = call.participant();
-                call.command(move |tx| retry(tx, author, turn)).await
-            }
-            Method::Answer => {
-                let Answer {
-                    item,
-                    choice,
-                    values,
-                } = decode(params)?;
-                let author = call.participant();
-                let live = self.live.clone();
-                call.command(move |tx| answer(tx, &live, author, item, choice, values))
-                    .await
-            }
-            Method::Attach => {
-                let Attach { mime, data, name } = decode(params)?;
-                let bytes = BASE64
-                    .decode(data.as_bytes())
-                    .map_err(|_| Refusal::invalid("The image's bytes are not base64."))?;
-                rules::may_attach(&mime, &bytes)?;
-                let image = Image {
-                    id: ImageId::new(),
-                    mime,
-                    size: u32::try_from(bytes.len()).unwrap_or(u32::MAX),
-                    name,
-                };
-                let images = Images::of(space.folder());
-                // The file first: a row never names bytes that are not
-                // there. A file left without a row goes with the sweep.
-                images.keep(image.id, bytes).await.map_err(Error::from)?;
-                let author = call.participant();
-                let kept = call
-                    .command(move |tx| {
-                        store::attach_image(tx.sql(), &image, author, tx.now())?;
-                        Ok(serde_json::to_value(&image)?)
-                    })
-                    .await;
-                tokio::spawn(sweep(space.clone(), images));
-                kept
-            }
-            Method::Files => {
-                let FileQuery { query } = decode(params)?;
-                let folder = space.folder().to_path_buf();
-                let listings = self.listings.clone();
-                let found = tokio::task::spawn_blocking(move || {
-                    files::matching(&listings.of(&folder), &query)
-                })
-                .await
-                .map_err(|_| Refusal::invalid("The files could not be listed."))?;
-                value(found)
-            }
-            Method::Image => {
-                let OneImage { image } = decode(params)?;
-                let kind = space.read(move |sql| store::image_kind(sql, image)).await?;
-                let gone = || Refusal::not_found("There is no such image.");
-                let mime = kind.ok_or_else(gone)?;
-                let bytes = Images::of(space.folder())
-                    .read(image)
-                    .await
-                    .map_err(|_| gone())?;
-                value(ImageData {
-                    mime,
-                    data: BASE64.encode(bytes),
-                })
-            }
-        }
+        self.dispatch(call, method, params).await
     }
 
     async fn run(&self, space: ModuleSpace, effect: Effect) -> Outcome {
@@ -687,7 +689,7 @@ fn send(
     Message { text, images }: Message,
     settings: Option<Settings>,
     steer: bool,
-) -> Result<Value, Error> {
+) -> Result<Sent, Error> {
     let now = tx.now();
     let images = store::unsent_images(tx.sql(), &images, author)?;
     rules::may_carry(&images)?;
@@ -750,7 +752,7 @@ fn send(
             turn: running.id,
             item: item.id,
         };
-        return Ok(serde_json::to_value(sent)?);
+        return Ok(sent);
     }
     turn::resume(tx, author, thread)?;
     let turn = store::Turn {
@@ -780,12 +782,12 @@ fn send(
         &thread.to_string(),
         &TurnEffect { turn: turn.id },
     )?;
-    Ok(serde_json::to_value(sent)?)
+    Ok(sent)
 }
 
 /// Stops a turn: at once if it waits, through the Harness if it runs. A
 /// stop of the turn that runs holds the queue behind it.
-fn stop(tx: &mut Tx<'_>, author: Participant, turn: TurnId) -> Result<Value, Error> {
+fn stop(tx: &mut Tx<'_>, author: Participant, turn: TurnId) -> Result<(), Error> {
     let found = turn_of(tx, turn)?;
     match rules::stop(found.state) {
         rules::Stop::Now => {
@@ -798,7 +800,7 @@ fn stop(tx: &mut Tx<'_>, author: Participant, turn: TurnId) -> Result<Value, Err
         }
         rules::Stop::Nothing => {}
     }
-    Ok(Value::Null)
+    Ok(())
 }
 
 /// The Thread's turn a message can go into. A turn a Person stopped takes
@@ -826,7 +828,7 @@ fn waiting(tx: &mut Tx<'_>, turn: TurnId) -> Result<store::Turn, Error> {
 }
 
 /// Changes the text of the message that waits for `turn`. Its images stay.
-fn edit(tx: &mut Tx<'_>, author: Participant, turn: TurnId, text: String) -> Result<Value, Error> {
+fn edit(tx: &mut Tx<'_>, author: Participant, turn: TurnId, text: String) -> Result<(), Error> {
     let found = waiting(tx, turn)?;
     let first = store::turns_of(tx.sql(), found.message)?
         .first()
@@ -842,31 +844,31 @@ fn edit(tx: &mut Tx<'_>, author: Participant, turn: TurnId, text: String) -> Res
     let carried: Vec<ImageId> = images.iter().map(|image| image.id).collect();
     rules::may_send(&text, &carried)?;
     if *was == text {
-        return Ok(Value::Null);
+        return Ok(());
     }
     was.clone_from(&text);
     store::set_body(tx.sql(), item, &message.body)?;
     emit(tx, author, thread, &Fact::MessageEdited { item, text })?;
-    Ok(Value::Null)
+    Ok(())
 }
 
 /// Takes a waiting message back: its turn never runs, and the Thread no
 /// longer shows it.
-fn withdraw(tx: &mut Tx<'_>, author: Participant, turn: TurnId) -> Result<Value, Error> {
+fn withdraw(tx: &mut Tx<'_>, author: Participant, turn: TurnId) -> Result<(), Error> {
     let found = waiting(tx, turn)?;
     let withdrawn = rules::Ending::new(TurnState::Withdrawn, None);
     turn::end(tx, author, &found, withdrawn)?;
-    Ok(Value::Null)
+    Ok(())
 }
 
 /// Sends a waiting message now: into the turn that runs, whose Harness
 /// takes it as it works. With no turn that can take it, as one a Person
 /// stopped, it waits its turn, and a held queue goes on.
-fn send_now(tx: &mut Tx<'_>, author: Participant, turn: TurnId) -> Result<Value, Error> {
+fn send_now(tx: &mut Tx<'_>, author: Participant, turn: TurnId) -> Result<(), Error> {
     let found = waiting(tx, turn)?;
     let Some(running) = steerable(tx, found.thread)? else {
         turn::resume(tx, author, found.thread)?;
-        return Ok(Value::Null);
+        return Ok(());
     };
     let message = turn::Message::read(tx.sql(), found.message)?
         .ok_or_else(|| Refusal::invalid("Only a message can be sent."))?;
@@ -875,13 +877,13 @@ fn send_now(tx: &mut Tx<'_>, author: Participant, turn: TurnId) -> Result<Value,
     store::set_item_turn(tx.sql(), found.message, Some(running.id))?;
     store::move_last(tx.sql(), found.message)?;
     turn::steer_into(tx, author, &running, found.message, message)?;
-    Ok(Value::Null)
+    Ok(())
 }
 
 /// Tries a failed turn's message again, in a new turn with the Thread's
 /// settings now; a held queue goes on after it. The failed turn stays as
 /// it ended.
-fn retry(tx: &mut Tx<'_>, author: Participant, turn: TurnId) -> Result<Value, Error> {
+fn retry(tx: &mut Tx<'_>, author: Participant, turn: TurnId) -> Result<Sent, Error> {
     let found = turn_of(tx, turn)?;
     if turn::by_itself(tx.sql(), &found)? {
         return Err(Refusal::invalid("Only a turn a Person asked for can be tried again.").into());
@@ -895,12 +897,11 @@ fn retry(tx: &mut Tx<'_>, author: Participant, turn: TurnId) -> Result<Value, Er
     // Queued first, it starts before a held queue goes on.
     let again = turn::queue(tx, author, found.thread, found.agent, found.message)?;
     turn::resume(tx, author, found.thread)?;
-    value(Sent {
+    Ok(Sent {
         thread: found.thread,
         turn: again,
         item: found.message,
     })
-    .map_err(Error::from)
 }
 
 /// A Person's answer to a Question. It goes to the Harness from the outbox.
@@ -911,7 +912,7 @@ fn answer(
     item: ItemId,
     choice: String,
     values: Option<model::Values>,
-) -> Result<Value, Error> {
+) -> Result<(), Error> {
     let (thread, mut found) = store::item(tx.sql(), item)?
         .ok_or_else(|| Refusal::not_found("There is no such Question."))?;
     let filled = rules::answer(&mut found.body, &choice, values)?;
@@ -941,5 +942,5 @@ fn answer(
         secret: kept_secret,
     };
     tx.enqueue(turn::REPLY, &item.to_string(), &reply)?;
-    Ok(Value::Null)
+    Ok(())
 }

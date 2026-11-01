@@ -9,7 +9,7 @@ import { useRead } from "@banda/ui/hooks/use-read"
 export function useHarnesses(engine: Engine, space: SpaceId): HarnessView[] {
   const read = useRead(
     useCallback(
-      () => engine.call<HarnessView[]>("agents.harnesses", {}, { space }),
+      () => engine.call("agents.harnesses", {}, { space }),
       [engine, space]
     )
   )
