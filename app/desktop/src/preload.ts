@@ -32,6 +32,22 @@ const host: Host = {
       }
     },
   },
+  settings: {
+    open: (link) => ipcRenderer.send("settings.open", link ?? ""),
+    close: () => ipcRenderer.send("settings.close"),
+    set: (file, key, value) =>
+      ipcRenderer.invoke("settings.set", file, key, value),
+    reset: (file, key) => ipcRenderer.invoke("settings.reset", file, key),
+    reveal: (file) => ipcRenderer.invoke("settings.reveal", file),
+    themes: () => ipcRenderer.invoke("settings.themes"),
+    listen: (go) => {
+      const heard = (_event: IpcRendererEvent, link: string) => go(link)
+      ipcRenderer.on("settings:go", heard)
+      return () => {
+        ipcRenderer.removeListener("settings:go", heard)
+      }
+    },
+  },
   notify: {
     show: (notice: Notice) => ipcRenderer.send("notify:show", notice),
     withdraw: (key: string) => ipcRenderer.send("notify:withdraw", key),

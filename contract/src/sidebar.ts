@@ -1,10 +1,10 @@
 /**
  * The sidebar's words for TypeScript (ADR 0008): the arrangement
- * `banda look` resolves from `sidebar.toml`, Banda's defaults for before
- * it comes, and how the view menu writes a preset into the file.
+ * `banda look` resolves from `sidebar.toml`, and Banda's defaults for
+ * before it comes. The view menu writes the preset with `banda settings
+ * set` (ADR 0016).
  */
 import type { Sidebar } from "./generated/sidebar/Sidebar"
-import { withTopKey } from "./look"
 
 export type { Sidebar } from "./generated/sidebar/Sidebar"
 export type { Group } from "./generated/sidebar/Group"
@@ -41,10 +41,4 @@ export const DEFAULT_SIDEBAR: Sidebar = {
   sort: { by: "attention" },
   spaces: { list: false, order: "changed", rollup: true, newThread: true },
   row: { lines: 3, hide: [] },
-}
-
-/** `text`, a `sidebar.toml`, naming the preset `name`; nothing else in
- * the file changes. */
-export function withPreset(text: string, name: string): string {
-  return withTopKey(text, "preset", name)
 }
