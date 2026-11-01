@@ -2,7 +2,7 @@ import type { Event } from "@banda/contract"
 import type { TurnView } from "@banda/contract/agents"
 import { expect, test } from "vitest"
 import { event, person } from "./testing"
-import { apply, EMPTY } from "./thread"
+import { apply, EMPTY, NOTHING } from "./thread"
 import { duration, foldTitle, type Line, summary, timeline } from "./timeline"
 
 function play(...events: Event[]) {
@@ -215,7 +215,7 @@ test("a duration reads as a clock would", () => {
 })
 
 test("a folded turn says how long it took, or that a Person stopped it", () => {
-  const turn: TurnView = { id: "u", message: "m", state: "done" }
+  const turn: TurnView = { id: "u", message: "m", state: "done", can: NOTHING }
   expect(foldTitle({ ...turn, started: 0, ended: 65_000 })).toBe(
     "Worked for 1m 05s"
   )

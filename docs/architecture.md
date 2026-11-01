@@ -361,6 +361,10 @@ If Chat is removed, Agents still works through its own Thread.
   that takes no images (ACP's `promptCapabilities.image`) says so in what
   it offers, and the window offers no images; a message with images gets
   the text alone, with a notice, and one of images alone fails its turn.
+- **A turn says what a Person may do with it** (`can`, ADR 0014): stop
+  it, try it again, change, take back or send its message now, or send a
+  message into it. One function in the module's rules decides it from the
+  rules its commands ask, and the window shows only what it allows.
 - **A restart interrupts** the turn it cut short and closes that turn's
   open Questions. Turns that waited stay queued, and the queue is held. A
   message sent into a turn that never got it waits for a turn of its own.
@@ -640,6 +644,11 @@ banda/
   and its icons; the terminal's Pane also Ghostty.
 - **Module tests** run through the module's interface: commands go in and
   events come out. Nothing past the interface is mocked.
+- **Checkpoints** (ADR 0014, decision 3). With `BANDA_CHECKPOINTS` set,
+  as `scripts/check.sh` sets it, the agents module's tests write each
+  Thread they read: its first view, the facts after it, and its last
+  view. The Pane's tests apply those facts to the first view and must get
+  the last one, what a Person may do with each turn (`can`) included.
 - **Adapter tests** run the real engine. Only the Harness's transport is
   replayed: the fake agent plays a recorded conversation
   (`FAKE_AGENT_REPLAY`).

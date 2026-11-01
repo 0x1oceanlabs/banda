@@ -342,6 +342,30 @@ pub struct TurnView {
     #[ts(as = "Option<bool>", optional)]
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub plan: bool,
+    /// What a Person may do with it now.
+    #[serde(default)]
+    pub can: Can,
+}
+
+/// What a Person may do with a turn now, as the rules its commands ask
+/// say (ADR 0014, decision 2). The window shows only what this allows.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "agents/")]
+pub struct Can {
+    /// Stop it: it waits or runs (`agents.stop`).
+    pub stop: bool,
+    /// Try its message again: it failed or was cut short, it is the
+    /// Thread's latest, and a Person asked for it (`agents.retry`).
+    pub retry: bool,
+    /// Change its message: it waits, and no turn ran the message yet
+    /// (`agents.edit`).
+    pub edit: bool,
+    /// Take its message back, or send it now: it waits (`agents.withdraw`,
+    /// `agents.steer`).
+    pub withdraw: bool,
+    /// Take a message sent now: it runs, the queue is not held, and a
+    /// Person asked for it (`agents.send` with `steer`).
+    pub steer: bool,
 }
 
 /// What kind of action a tool call is, as the Harness says.

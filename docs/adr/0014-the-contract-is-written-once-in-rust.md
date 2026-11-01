@@ -59,8 +59,8 @@ brings Agents that call these methods too.
      Thread's view, the facts after it, and the view the engine reads
      then. The Pane's tests apply those facts to the first view and must
      get the last one, `can` included.
-   - The fact kinds the window knows come from the Rust enum, not a list
-     kept by hand.
+   - The fact kinds the window knows are checked against the Rust enum:
+     `tsc` refuses a kind the enum lacks or a kind of it left out.
 
 **Consequences.**
 
