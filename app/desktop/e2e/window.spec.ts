@@ -1084,3 +1084,26 @@ test("the desktop's Do Not Disturb leaves only the Marks", async () => {
   expect((await desktopOf(app)).shown).toEqual([])
   expect(await notes()).toBe(0)
 })
+
+test("[notify] in look.toml chooses where a call is told: always the desktop, never a toast", async () => {
+  window = await startWindow({
+    look: '[notify]\nsystem = "always"\nwindow = "off"\ndetail = false\n',
+  })
+  const { app, page } = window
+  const { composer } = await firstThread(page)
+  await sendAndGoBelow(page, composer, "slow hello")
+
+  // The window is in front, the Thread out of sight: a notice, no toast.
+  await expect.poll(async () => (await desktopOf(app)).shown.length).toBe(1)
+  expect((await desktopOf(app)).shown[0]).toMatchObject({
+    title: "slow hello",
+    body: "Done",
+  })
+  const sidebar = page.getByRole("complementary", { name: "Sidebar" })
+  await expect(
+    sidebar.getByRole("button", { name: /slow hello/ }).getByRole("img", {
+      name: "Done",
+    })
+  ).toBeVisible()
+  await expect(page.getByRole("region", { name: "Calls" })).toBeHidden()
+})

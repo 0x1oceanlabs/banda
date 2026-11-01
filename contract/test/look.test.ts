@@ -22,6 +22,15 @@ const look = (mode: Look["mode"], schemes: Look["schemes"]): Look => ({
     failed: true,
   },
   sidebar: DEFAULT_SIDEBAR,
+  notify: {
+    system: "away",
+    window: "out-of-sight",
+    detail: true,
+    quiet: "desktop",
+    done: true,
+    asking: true,
+    failed: true,
+  },
 })
 const light = { "--background": "#fff" }
 const dark = { "--background": "#000" }

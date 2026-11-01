@@ -11,11 +11,13 @@ import {
   type Look,
   type Motion,
   type Move,
+  type Notify,
   type Problem,
   shown,
 } from "@bandaso/contract/look"
 import { DEFAULT_SIDEBAR, type Sidebar } from "@bandaso/contract/sidebar"
 import { DEFAULT_SOUND, type SoundSettings } from "@bandaso/ui/sound"
+import { DEFAULT_NOTIFY } from "./calls/settings"
 import type { Host } from "./host"
 
 const system = matchMedia("(prefers-color-scheme: dark)")
@@ -24,6 +26,10 @@ const STILL: Move = { kind: "off" }
 let look: Look | null = null
 let applied = new Set<string>()
 const listeners = new Set<() => void>()
+const subscribe = (changed: () => void) => {
+  listeners.add(changed)
+  return () => listeners.delete(changed)
+}
 const NONE: Problem[] = []
 
 /** Paints `root` in `look`, or in the defaults when there is none. */
@@ -78,24 +84,20 @@ export function moveOf(event: keyof Motion): Move {
 
 /** What is wrong in the look's files now, for the bar to say. */
 export function useLookProblems(): Problem[] {
-  return useSyncExternalStore(
-    (changed) => {
-      listeners.add(changed)
-      return () => listeners.delete(changed)
-    },
-    () => look?.problems ?? NONE
-  )
+  return useSyncExternalStore(subscribe, () => look?.problems ?? NONE)
+}
+
+/**
+ * How the window tells its Person of a call, `[notify]` (ADR 0011); the
+ * defaults till the look comes.
+ */
+export function useLookNotify(): Notify {
+  return useSyncExternalStore(subscribe, () => look?.notify ?? DEFAULT_NOTIFY)
 }
 
 /** The sounds the look chose, `[sound]` (ADR 0009); the defaults till then. */
 export function useLookSound(): SoundSettings {
-  return useSyncExternalStore(
-    (changed) => {
-      listeners.add(changed)
-      return () => listeners.delete(changed)
-    },
-    () => look?.sound ?? DEFAULT_SOUND
-  )
+  return useSyncExternalStore(subscribe, () => look?.sound ?? DEFAULT_SOUND)
 }
 
 /** How the sidebar is arranged, from `sidebar.toml` (ADR 0008); Banda's

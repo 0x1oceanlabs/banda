@@ -299,6 +299,33 @@ fn following_prints_each_change_and_keeps_the_last_good_look() {
 }
 
 #[test]
+fn notify_in_look_toml_reaches_the_window_and_a_wrong_value_is_named() {
+    use bandaso_look::notify::{Quiet, System, Toasts};
+    let machine = Machine::new(false);
+    let look = machine.look();
+    assert_eq!(look.notify.system, System::Away);
+    assert_eq!(look.notify.window, Toasts::OutOfSight);
+
+    machine.look_toml("[notify]\nsystem = \"off\"\nquiet = \"never\"\nasking = false\n");
+    let look = machine.look();
+    assert!(look.problems.is_empty(), "{:?}", look.problems);
+    assert_eq!(look.notify.system, System::Off);
+    assert_eq!(look.notify.quiet, Quiet::Never);
+    assert!(!look.notify.asking);
+    assert!(look.notify.done);
+
+    machine.look_toml("[notify]\nwindow = \"sometimes\"\n");
+    let look = machine.look();
+    assert_eq!(look.problems.len(), 1);
+    assert!(
+        look.problems[0].message.contains("out-of-sight"),
+        "{:?}",
+        look.problems
+    );
+    assert_eq!(look.problems[0].line, Some(2), "{:?}", look.problems);
+}
+
+#[test]
 fn sound_in_look_toml_reaches_the_window_and_a_wrong_key_is_named() {
     use bandaso_look::sound::{Call, Families, Family};
     let machine = Machine::new(false);

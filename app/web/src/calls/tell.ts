@@ -6,7 +6,7 @@
 import type { MarkState } from "@bandaso/ui/components/banda-mark"
 import type { Listed, PaneState } from "@bandaso/ui/pane"
 import type { Chime } from "@bandaso/ui/sound"
-import type { NotifySettings } from "./settings"
+import type { Notify } from "@bandaso/contract/look"
 
 /** One thing that calls its Person now, as a module listed it. */
 export type Call = {
@@ -83,7 +83,7 @@ const NOTHING: Telling = { sound: false, toast: false, system: false }
 export function tell(
   chime: Chime,
   sight: Sight,
-  settings: NotifySettings,
+  settings: Notify,
   desktopQuiet: boolean
 ): Telling {
   if (sight === "looking") return NOTHING
