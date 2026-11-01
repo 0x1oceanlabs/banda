@@ -10,7 +10,6 @@ import type {
   Settings,
   ThreadId,
   Sent,
-  ThreadView,
   TurnView,
   Image,
 } from "@bandaso/contract/agents"
@@ -59,8 +58,6 @@ import { lookAt } from "./looking"
 import { settledTurn } from "./marks"
 import { markSeen } from "./seen"
 import {
-  apply,
-  fromView,
   NO_OFFER,
   retryable,
   steerable,
@@ -75,6 +72,8 @@ import { type ImageReader, useImageReader } from "./MessageImages"
 import { AgentMessage, PersonMessage } from "./Messages"
 import { summary, type Values } from "./form"
 import { QuestionForm } from "./QuestionForm"
+import { ChangedFiles } from "./ChangedFiles"
+import { diffPane } from "./DiffPane"
 import { Plan } from "./Plan"
 import { type Line, timeline } from "./timeline"
 import { Fold, key, WorkLine, Working } from "./Work"
@@ -83,6 +82,7 @@ import { ToolCall } from "./ToolCall"
 import { SettingsBar } from "./ThreadSettings"
 import { SignIn, Warning } from "./SignIn"
 import { harnessName, useHarnesses } from "./harnesses"
+import { useThread } from "./live-thread"
 import { NewThreadBar } from "./NewThread"
 
 /**
@@ -118,25 +118,7 @@ function ThreadPane({
   update,
 }: PaneProps<ThreadArgs>) {
   const { thread } = args
-  const source = useMemo(
-    () =>
-      thread === null
-        ? null
-        : {
-            read: async () =>
-              fromView(
-                await engine.call<ThreadView>(
-                  "agents.thread",
-                  { thread },
-                  { space }
-                )
-              ),
-            filter: { module: "agents", subject: thread },
-            apply,
-          },
-    [engine, space, thread]
-  )
-  const live = useLive(engine, space, source)
+  const live = useThread(engine, space, thread)
   const state = live.state === "ready" ? live.view : undefined
   const turn = state && working(state)
   const sending = useAct()
@@ -224,6 +206,13 @@ function ThreadPane({
       update({ thread: sent.thread, harness, title: args.title })
     return sent !== undefined
   }
+  // A turn's changes open in a Diff Pane beside the Thread, or in the one
+  // already open, which then shows them.
+  const openDiff = (turn: string, path?: string) => {
+    if (thread === null) return
+    const title = state?.title ?? args.title
+    open(paneOf(diffPane, { thread, turn, path: path ?? null, title }), "right")
+  }
   const stop = (turn: TurnView) =>
     void acting.act(() =>
       engine.command("agents.stop", { turn: turn.id }, space)
@@ -300,6 +289,7 @@ function ThreadPane({
             answering={acting.busy}
             onAnswer={answer}
             onRetry={retry}
+            onOpenDiff={openDiff}
             signIn={(turn) => (
               <SignIn
                 engine={engine}
@@ -430,6 +420,7 @@ function Transcript({
   name,
   reader,
   onRetry,
+  onOpenDiff,
   signIn,
   queue,
   ...answers
@@ -438,12 +429,13 @@ function Transcript({
   name: string
   reader: ImageReader
   onRetry: (turn: TurnView) => void
+  onOpenDiff: OpenDiff
   /** How a Person signs in again, below a turn that failed for that. */
   signIn: (turn: TurnView) => React.ReactNode
   queue: QueueActions
 }) {
   const turn = working(state)
-  const lines = timeline(state)
+  const lines = useMemo(() => timeline(state), [state])
   const waits = waiting(state)
   const last = state.items.at(-1)
   const render = (line: Line): React.ReactNode => {
@@ -454,7 +446,15 @@ function Transcript({
             item={line.item}
             live={turn?.state === "running" && line.item === last}
             reader={reader}
+            onOpenDiff={onOpenDiff}
             {...answers}
+          />
+        )
+      case "changes":
+        return (
+          <ChangedFiles
+            files={line.files}
+            onOpen={(path) => onOpenDiff(line.turn.id, path)}
           />
         )
       case "work":
@@ -522,10 +522,14 @@ function Transcript({
   )
 }
 
+/** Opens the changes of a turn, on one file if `path` names it. */
+type OpenDiff = (turn: string, path?: string) => void
+
 function Entry({
   item,
   live,
   reader,
+  onOpenDiff,
   answering,
   onAnswer,
 }: Answering & {
@@ -533,6 +537,7 @@ function Entry({
   /** Whether the Agent is still writing it. */
   live: boolean
   reader: ImageReader
+  onOpenDiff: OpenDiff
 }) {
   const body = item.body
   switch (body.kind) {
@@ -567,8 +572,18 @@ function Entry({
           </TraceCollapsible>
         </Trace>
       )
-    case "tool":
-      return <ToolCall tool={body} />
+    case "tool": {
+      // A call that failed changed nothing the turn's changes show.
+      const turn = body.status !== "failed" ? item.turn : undefined
+      return (
+        <ToolCall
+          tool={body}
+          onOpenDiff={
+            turn === undefined ? undefined : (path) => onOpenDiff(turn, path)
+          }
+        />
+      )
+    }
     case "plan":
       return <Plan steps={body.steps} />
     case "question":

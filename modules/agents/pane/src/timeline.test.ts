@@ -23,6 +23,7 @@ const tool = (item: string, tool = "execute", turn = "u") =>
     title: `Tool ${item}`,
     tool,
     status: "running",
+    content: [],
   })
 
 const reply = (item: string, turn = "u") =>
@@ -42,6 +43,8 @@ function shape(lines: Line[]): unknown[] {
         return "working"
       case "ended":
         return `ended ${line.turn.state}`
+      case "changes":
+        return { changes: line.files.map((file) => file.path) }
     }
   })
 }
@@ -165,4 +168,27 @@ test("a folded turn says how long it took, or that a Person stopped it", () => {
   expect(
     foldTitle({ ...turn, state: "stopped", started: 0, ended: 8000 })
   ).toBe("You stopped after 8s")
+})
+
+test("a turn that ended and changed files says which, after its reply", () => {
+  const state = play(
+    asked(),
+    event("turn.started", { turn: "u" }),
+    event("tool.started", {
+      item: "e",
+      turn: "u",
+      title: "Edit a.md",
+      tool: "edit",
+      status: "done",
+      content: [{ kind: "diff", path: "/a.md", old: "one\n", new: "two\n" }],
+    }),
+    reply("r"),
+    event("turn.ended", { turn: "u", state: "done" })
+  )
+  expect(shape(timeline(state))).toEqual([
+    "m",
+    { fold: ["e"] },
+    "r",
+    { changes: ["/a.md"] },
+  ])
 })

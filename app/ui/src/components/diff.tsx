@@ -37,6 +37,17 @@ function DiffHeader({
   )
 }
 
+/** A file's path in a header: its folder quiet, its name plain. */
+function DiffPath({ path }: { path: string }) {
+  const slash = path.lastIndexOf("/") + 1
+  return (
+    <span data-slot="diff-path" className="min-w-0 truncate">
+      <span className="text-muted-foreground">{path.slice(0, slash)}</span>
+      {path.slice(slash)}
+    </span>
+  )
+}
+
 function DiffLines({
   className,
   children,
@@ -114,4 +125,4 @@ function DiffCounts({
   )
 }
 
-export { Diff, DiffCounts, DiffGap, DiffHeader, DiffLine, DiffLines }
+export { Diff, DiffCounts, DiffGap, DiffHeader, DiffLine, DiffLines, DiffPath }

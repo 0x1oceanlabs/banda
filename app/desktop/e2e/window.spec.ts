@@ -521,6 +521,17 @@ test("a tool call opens on what it changed and what it printed", async () => {
   await expect(change.locator("[data-kind=removed]")).toHaveText("−two")
   await expect(change.locator("[data-kind=added]")).toHaveText(["+2", "+four"])
 
+  // Under the reply, the turn's changed files; one opens beside the Thread.
+  const changed = thread.getByRole("region", { name: "Changed files" })
+  await expect(changed).toContainText("1 file changed")
+  await changed.getByRole("button", { name: /notes\.md/ }).click()
+  const diff = page.getByRole("region", { name: "Changes · edit the notes" })
+  await expect(diff.locator("[data-kind=removed]")).toHaveText("−two")
+  await page.screenshot({ path: "test-results/10-diff-pane.png" })
+  await diff
+    .getByRole("button", { name: "Close Changes · edit the notes" })
+    .click()
+
   await composer.fill("run the tests")
   await composer.press("Enter")
   await expect(thread.getByText("The tests passed.")).toBeVisible()

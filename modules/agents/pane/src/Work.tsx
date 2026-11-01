@@ -135,6 +135,8 @@ export function key(line: Line): string {
       return line.id
     case "working":
       return `working-${line.turn.id}`
+    case "changes":
+      return `changes-${line.turn.id}`
     case "ended":
       return `ended-${line.turn.id}`
   }

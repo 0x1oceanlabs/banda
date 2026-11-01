@@ -5,6 +5,7 @@
  * runs says how long it has. Pure, so plain tests cover it.
  */
 import type { Item, ToolKind, TurnView } from "@bandaso/contract/agents"
+import { changes, type FileChange } from "./changes"
 import { type Row, rows, running, type ThreadState } from "./thread"
 
 export type Line =
@@ -16,11 +17,14 @@ export type Line =
   | { kind: "fold"; id: string; turn: TurnView; lines: Line[] }
   /** The turn that runs, where its work starts. */
   | { kind: "working"; turn: TurnView }
+  /** The files a turn that ended changed, after what it wrote. */
+  | { kind: "changes"; turn: TurnView; files: FileChange[] }
 
 /** The Thread's lines, from the rows {@link rows} gives. */
 export function timeline(state: ThreadState): Line[] {
   const turn = running(state)
-  return working(fold(group(rows(state), turn), state.turns), turn)
+  const lines = fold(group(rows(state), turn), state.turns)
+  return working(changed(lines, state), turn)
 }
 
 /** Whether `row` is work: a tool call or a thought. */
@@ -115,6 +119,31 @@ function fold(lines: Line[], turns: TurnView[]): Line[] {
     const start = starts.get(at)
     if (start) return [start]
     return gone.has(at) ? [] : [line]
+  })
+}
+
+/** A turn that no longer runs or waits, and changed files, says which
+ * after the last thing it wrote. */
+function changed(lines: Line[], state: ThreadState): Line[] {
+  const after = new Map<number, Line>()
+  const byTurn = new Map<string | undefined, Item[]>()
+  for (const item of state.items) {
+    const own = byTurn.get(item.turn)
+    if (own) own.push(item)
+    else byTurn.set(item.turn, [item])
+  }
+  for (const turn of state.turns) {
+    if (turn.state === "running" || turn.state === "queued") continue
+    const files = changes(byTurn.get(turn.id) ?? [], turn.id)
+    if (files.length === 0) continue
+    const last = lines.findLastIndex(
+      (line) => line.kind !== "ended" && turnOf(line) === turn.id
+    )
+    if (last >= 0) after.set(last, { kind: "changes", turn, files })
+  }
+  return lines.flatMap((line, at) => {
+    const card = after.get(at)
+    return card ? [line, card] : [line]
   })
 }
 
