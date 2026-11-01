@@ -18,7 +18,8 @@ ADR 0005 promised a theme file (decision 11) and "one look, and honest motion" (
 **What the three teach.**
 
 - **Omarchy.** One palette per theme, `colors.toml`: `mode` (`light` or `dark`), `accent`, `selection`, `muted`, four backgrounds, four foregrounds, eight colours and their bright twins. Every app's file is generated from it by a template, with helpers such as `mix a b 6%`. A theme can ship an app's file of its own to replace the generated one, as `shell.toml`. The current theme sits in `~/.local/state/omarchy/current/theme/`, with `theme.name` and `theme.generation` beside it. T3 Code takes its theme through a template, `t3code.json`.
-- **Hyprland.** `general` holds the gaps (`gaps_in`, `gaps_out`), `border_size` and the border colours, a gradient too. `decoration` holds `rounding`, `dim_inactive`, shadow and blur. `animations` names curves (`bezier`) and gives each event a curve, a speed and a style (`popin 87%`). Omarchy's defaults: `easeOutQuint`, windows 3.79, border 5.39.
+- **Hyprland.** `general` holds the gaps (`gaps_in`, `gaps_out`), `border_size` and the border colours, a gradient too. `decoration` holds `rounding` (Omarchy ships 0; Roma's is 12), `dim_inactive`, shadow and blur. `animations` names curves (`bezier`) and gives each event a curve, a speed and a style (`popin 87%`). Omarchy's defaults: `easeOutQuint`, windows 3.79, border 5.39.
+- **shadcn/ui.** One number, `--radius`, and a ladder made from it: `sm` ×0.6, `md` ×0.8, `lg` ×1, `xl` ×1.4, up to `4xl` ×2.6, and `full` for circles. Controls take `lg`, small ones `md` or `sm`, cards and dialogs `xl`. A small control caps its step (`min(var(--radius-md), 10px)`), and a control tight inside another takes the outer radius less the padding (`calc(var(--radius) - 3px)`), so corners stay concentric.
 - **niri.** `layout` holds `gaps`, `struts`, `preset-column-widths`, `default-column-width`, `center-focused-column` and two distinct frames: the `focus-ring` outside a window and the `border` around it. `animations` has a global `slowdown` and `off`. Each animation is either a spring (`damping-ratio`, `stiffness`, `epsilon`) or an easing (`duration-ms`, `curve`).
 
 **Decision.** Roma decided the points marked _decided_. On 2026-11-01 he accepted the rest as our defaults and asked to build; each stays his to change.
@@ -29,10 +30,11 @@ ADR 0005 promised a theme file (decision 11) and "one look, and honest motion" (
    - **Components** use only tokens, as they do now. No component reads the palette.
    - The tokens are shadcn/ui's own names, and every Pane is built from `@bandaso/ui` (ADR 0005, decision 12). So a Person who wants to restyle further changes a token, and every component of every module follows. A token set made for shadcn elsewhere carries over as it is.
 
-2. **One schema, three layers** (_decided_). The look comes from three places, each over the one before:
+2. **One schema, four layers** (_decided_). The look comes from four places, each over the one before:
    1. Banda's built-in defaults;
    2. the theme: a folder with Omarchy's `colors.toml` and, if its author wants, a `banda.toml`, which may set anything the Person's file sets, square corners or wide gaps too;
-   3. the Person's `~/.config/banda/look.toml`.
+   3. the desktop: Hyprland's own settings, when Banda runs under it (decision 8);
+   4. the Person's `~/.config/banda/look.toml`.
    - `banda.toml` and `look.toml` have the same keys. A Person and an Agent learn one schema.
    - The Person's file always wins, so switching the theme never undoes their gaps or motion.
    - There is no separate `theme.toml` (ADR 0005, decision 11, named one): picking a theme is two lines of `look.toml`, and the colours live in the theme's folder. `keys.toml` stays its own file.
@@ -53,26 +55,39 @@ ADR 0005 promised a theme file (decision 11) and "one look, and honest motion" (
 
 6. **The tiling look, named as Hyprland and niri name it.** In `look.toml`, in pixels:
    - `[gaps]`: `inner` between tiles and `outer` around the Strip (Hyprland's `gaps_in` and `gaps_out`).
-   - `[tile]`: `radius`, `border` width, `dim-inactive` (0 to 1).
+   - `[tile]`: `radius` (a step of the ladder or pixels, decision 7), `border` width, `dim-inactive` (0 to 1).
    - `[focus]`: how the focused tile stands out (_decided_), as in Hyprland by default: its `border` takes the accent, the others keep `inactive-border`. niri's focus ring is a switch: `ring` draws a ring of that width outside the focused tile, in the gap, so nothing moves; `0`, the default, draws none. Colours are palette names or hex. A gradient comes later, written as Hyprland writes it.
    - `[columns]`: `presets` (`[1/3, 1/2, 2/3, 1]`), `default` (`1/2`) and `center` (`never`, `always`, `on-overflow`), as niri's.
    - `[bar]`: `height`. `[font]`: `sans`, `mono`, `size`. With `theme = "omarchy"` the fonts follow Omarchy's too.
 
-7. **Motion, as niri says it.**
+7. **Corners follow shadcn/ui's ladder** (_decided_).
+   - One number, `radius` in `look.toml`, is shadcn's `--radius`. Every corner in Banda is a step of its ladder, so one number rounds or squares the whole window. `radius = 0` makes everything square, as Omarchy's Hyprland is.
+   - **The outer is never rounder than the inner's container** (_decided_): what holds something is at least as round as what it holds. The tile holds cards, so the tile is the top step, `xl` (14 px at the default 10). `[tile] radius` takes a step (`"lg"`, `"xl"`) or pixels.
+   - Components take steps, never pixels of their own. A small one caps its step, and one tight inside another takes the outer radius less the padding, as shadcn's do.
+   - `full` is a shape, not a corner: a dot, an avatar or a radio stays round when `radius = 0`.
+
+8. **Under Hyprland, Banda follows Hyprland** (_decided_).
+   - When Banda runs under Hyprland, it takes the window settings the Person already chose there: `decoration:rounding` becomes the tile's radius, `general:border_size` the tile's border, and `general:gaps_in` both gaps. The tiles inside Banda then look like the windows around it.
+   - The tile is the `xl` step, so `radius` becomes `rounding / 1.4`, and every control keeps its place on the ladder. Roma's 12 gives tiles of 12 px and fields of 8.6 px; Omarchy's 0 makes everything square.
+   - The engine asks Hyprland over its socket (`j/getoption`, what `hyprctl getoption` prints), so any Hyprland config works, Lua or not. It listens for `configreloaded` and repaints.
+   - `look.toml` still wins key by key. `hyprland = false` turns it off.
+   - Only these three: Hyprland's colours come through the Omarchy theme, and its gaps around the screen (`gaps_out`) belong to the desktop, not to the tiles in Banda's window.
+
+9. **Motion, as niri says it.**
    - `[motion]`: `off`, `slowdown` (2 is twice as slow).
    - Each event has its own table: `workspace`, `strip` (scrolling to a column), `open`, `close`, `resize`, `overview`, `focus`.
    - Each is a spring (`damping-ratio`, `stiffness`, `epsilon`) or an easing (`duration-ms`, `curve`). Curves are named: Omarchy's `easeOutQuint`, `easeInOutCubic`, `linear` and a `cubic-bezier(…)`.
    - The system's reduced motion turns it off, as `off` does.
    - Springs run in the window, so a move that is interrupted carries its speed on, as niri's do.
 
-8. **The look is the engine's `look` module, like any other module.**
+10. **The look is the engine's `look` module, like any other module.**
    - It reads `look.toml` and the theme's files, checks them, and resolves one value, the `Look`: tokens, gaps, tiles, focus, columns, fonts and motion, every value already filled in.
    - It watches the files. A saved file applies at once. A broken one leaves the last good `Look` in force, and a notice names the file and the line (ADR 0005, decision 11).
    - Its contract: a stream `look` that starts with the whole `Look` and sends a new one on every change; a command `look.set` that writes keys into `look.toml` and keeps the Person's comments; `look.themes` lists the themes it can find; `bandaso check` validates the file.
    - Its manifest declares MCP tools for the same, so an Agent changes the look as a Person does: "make the gaps bigger", "take Omarchy's theme", "no animations".
    - The look belongs to the machine the window runs on, not to a Space. A Space on another machine is drawn in the local look.
 
-9. **The window only applies it.**
+11. **The window only applies it.**
    - It writes the tokens and the sizes as CSS variables on `:root`: `--gap-inner`, `--gap-outer`, `--tile-radius`, `--tile-border`, `--focus`, `--focus-inactive`, `--focus-ring`, `--bar-height`.
    - The Strip, the frame and the bar take sizes from those variables, not from constants.
    - The terminal takes all 16 colours, the cursor and the selection from the tokens.
@@ -108,13 +123,16 @@ mode = "system"            # "light" or "dark"
 # accent = "orange"
 # attention = "#e07a3f"
 
+radius = 10                # shadcn's --radius: every corner follows; 0 is square
+hyprland = true            # under Hyprland, take its rounding, border and gaps
+
 [gaps]
 inner = 4
 outer = 4
 
 [tile]
-radius = 10
-border = 1
+radius = "xl"              # a step of the ladder, or pixels
+border = 2
 dim-inactive = 0
 
 [focus]
@@ -159,8 +177,8 @@ easing = { duration-ms = 120, curve = "linear" }
 - Words for `GLOSSARY.md`, once built: the look, the theme, the palette.
 - The app is called Banda (_decided_ 2026-11-01). The look lives in `~/.config/banda/`, as ADR 0005 named it. The other places (`~/.config/bandaso/`, `~/.local/state/bandaso/`, `BANDASO_*`, the window title) move in a rename PR of their own.
 - The order of work, each step its own PR:
-  1. **The window reads sizes and colours from variables.** The `Look` type in the contract, the `banda` defaults, `--gap-*`, `--tile-*`, `--focus-*`; the Strip, the frame and the bar take them. Nothing looks different yet.
-  2. **The `look` module.** `look.toml`, the `banda` and `omarchy` themes, the derivation, the stream and the file watch; light and dark; `nativeTheme`.
+  1. **The window reads sizes and colours from variables.** The `banda` defaults, `--gap-*`, `--tile-*`, `--focus-*`; the Strip, the frame and the bar take them. The tile becomes the `xl` step with a 2 px border, and the last corners that ignore the ladder take its steps.
+  2. **The `look` module.** `look.toml`, the `banda` and `omarchy` themes, the derivation, the stream and the file watch; light and dark; `nativeTheme`; Hyprland's rounding, border and gaps.
   3. **The terminal's 16 colours and the focus ring.**
   4. **Motion**: springs in the window, the `[motion]` tables, reduced motion.
   5. **`look.set`, `look.themes` and the MCP tools**, then a settings page on the same file.
