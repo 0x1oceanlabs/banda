@@ -18,19 +18,23 @@ pub struct Client {
 }
 
 impl Client {
-    /// Connects to this machine's engine and says hello.
+    /// Connects to this machine's engine and says hello as its owner.
     pub async fn connect(places: &Places) -> Result<Client, Failure> {
         let running = places.running()?;
-        let (socket, _) = tokio_tungstenite::connect_async(running.url())
-            .await
-            .map_err(|_| {
-                Failure::broken("Banda's engine does not answer. Start it with: banda serve")
-            })?;
+        Client::connect_to(&running.url(), running.secret).await
+    }
+
+    /// Connects to the engine at `url` and says hello with `token`: the
+    /// owner's secret, or an Agent's pass.
+    pub async fn connect_to(url: &str, token: String) -> Result<Client, Failure> {
+        let (socket, _) = tokio_tungstenite::connect_async(url).await.map_err(|_| {
+            Failure::broken("Banda's engine does not answer. Start it with: banda serve")
+        })?;
         let mut client = Client { socket, next_id: 1 };
         client
             .send(&ClientFrame::Hello {
                 protocol: PROTOCOL,
-                token: running.secret,
+                token,
             })
             .await?;
         match client.receive().await? {
@@ -79,32 +83,42 @@ impl Client {
         command: CommandId,
         params: Value,
     ) -> Result<Value, Failure> {
+        self.ask(method, space, command, params)
+            .await
+            .map_err(|failure| failure.cut_short(command))
+    }
+
+    /// Calls one method, and says nothing of how to repeat it.
+    pub async fn ask(
+        &mut self,
+        method: &str,
+        space: Option<SpaceId>,
+        command: CommandId,
+        params: Value,
+    ) -> Result<Value, Failure> {
         let id = self.next_id();
-        let answer = async {
-            self.send(&ClientFrame::Call {
-                id,
-                method: method.to_owned(),
-                space,
-                command: Some(command),
-                params,
-            })
-            .await?;
-            loop {
-                if let EngineFrame::Result {
-                    id: answered,
-                    ok,
-                    error,
-                } = self.receive().await?
-                    && answered == id
-                {
-                    return match error {
-                        Some(refusal) => Err(Failure::Refused(refusal)),
-                        None => Ok(ok.unwrap_or(Value::Null)),
-                    };
-                }
+        self.send(&ClientFrame::Call {
+            id,
+            method: method.to_owned(),
+            space,
+            command: Some(command),
+            params,
+        })
+        .await?;
+        loop {
+            if let EngineFrame::Result {
+                id: answered,
+                ok,
+                error,
+            } = self.receive().await?
+                && answered == id
+            {
+                return match error {
+                    Some(refusal) => Err(Failure::Refused(refusal)),
+                    None => Ok(ok.unwrap_or(Value::Null)),
+                };
             }
-        };
-        answer.await.map_err(|failure| failure.cut_short(command))
+        }
     }
 
     /// Hands each event of `space` after `after` to `each`, until the

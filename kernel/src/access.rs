@@ -4,7 +4,7 @@
 //! [`Module::right`](crate::Module::right) (ADR 0002, decision 9). The
 //! kernel asks here before it runs any of them.
 
-use crate::{Participant, PersonId, Refusal};
+use crate::{Participant, PersonId, Refusal, SpaceId};
 
 /// What a method needs.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -42,6 +42,37 @@ pub fn decide(participant: &Participant, right: Right, owner: PersonId) -> Resul
         (Participant::Agent(_), Right::Run) => Err(Refusal::forbidden(
             "An Agent runs programs through its Harness, not in a terminal.",
         )),
+    }
+}
+
+/// Who calls: a Participant, and the one Space a pass keeps them in. The
+/// owner's secret keeps them in none.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Caller {
+    pub participant: Participant,
+    pub only: Option<SpaceId>,
+}
+
+impl From<Participant> for Caller {
+    fn from(participant: Participant) -> Caller {
+        Caller {
+            participant,
+            only: None,
+        }
+    }
+}
+
+/// The Space wall (ADR 0019, decision 2): a caller with a pass works only
+/// in the Space of its pass, `only`; one with `None` works anywhere.
+/// `space` is the one a call, a subscription or a stream is for. The
+/// kernel gives a walled call for no Space its own Space first; a Space
+/// that is still `None` is refused, since it would reach past the wall.
+pub fn within(only: Option<SpaceId>, space: Option<SpaceId>) -> Result<(), Refusal> {
+    match only {
+        Some(only) if space != Some(only) => {
+            Err(Refusal::forbidden("An Agent works only in its own Space."))
+        }
+        _ => Ok(()),
     }
 }
 
@@ -84,5 +115,22 @@ mod tests {
                 Code::Forbidden
             );
         }
+    }
+
+    #[test]
+    fn an_agent_works_only_in_the_space_of_its_pass() {
+        let (own, other) = (SpaceId::new(), SpaceId::new());
+        assert_eq!(within(Some(own), Some(own)), Ok(()));
+        for space in [Some(other), None] {
+            let refusal = within(Some(own), space).unwrap_err();
+            assert_eq!(refusal.code, Code::Forbidden);
+            assert_eq!(refusal.message, "An Agent works only in its own Space.");
+        }
+    }
+
+    #[test]
+    fn the_owner_has_no_wall() {
+        assert_eq!(within(None, Some(SpaceId::new())), Ok(()));
+        assert_eq!(within(None, None), Ok(()));
     }
 }

@@ -42,11 +42,14 @@ sign_in: CommandMethod<SignIn, Sent | null>,
  */
 sign_out: CommandMethod<OneHarness, null>, 
 /**
- * The Space's Threads, the latest first.
+ * The Threads of this Space, the latest first: each one's ID, title
+ * and Harness, what it was last asked, how its latest turn stands,
+ * and the Questions it waits on.
  */
 threads: CallMethod<Nothing, ThreadList>, 
 /**
- * One Thread as a view.
+ * One Thread of this Space as its Person reads it: its messages and
+ * replies, its turns and what each may do now, and its settings.
  */
 thread: CallMethod<OneThread, ThreadView>, 
 /**

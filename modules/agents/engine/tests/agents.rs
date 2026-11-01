@@ -2735,3 +2735,50 @@ async fn a_recorded_conversation_plays_again_as_it_went() {
     assert_eq!(texts(&replayed), texts(&lived));
     assert_eq!(replayed.turns[0].state, TurnState::Done);
 }
+
+/// `threads` and `read` are tools from the methods table (ADR 0019): their
+/// MCP names, their methods, their `///` and the schema of their params.
+#[tokio::test]
+async fn threads_and_one_thread_are_an_agents_tools() {
+    let root = tempfile::tempdir().unwrap();
+    let owner = PersonId::new();
+    let kernel = Kernel::builder(root.path(), owner)
+        .module(Agents::new(harnesses()))
+        .open()
+        .await
+        .unwrap();
+    let agent = Participant::Agent(AgentId::new());
+    let tools = kernel
+        .call(agent, "spaces.tools", None, None, Value::Null)
+        .await
+        .unwrap();
+    let thread = json!({
+        "type": "string",
+        "format": "uuid",
+        "description": "The Thread's ID, as `threads` lists it."
+    });
+    assert_eq!(
+        tools,
+        json!([
+            {
+                "name": "threads",
+                "method": "agents.threads",
+                "description": "The Threads of this Space, the latest first: each one's ID, \
+                    title and Harness, what it was last asked, how its latest turn stands, and \
+                    the Questions it waits on.",
+                "schema": { "type": "object", "properties": {} }
+            },
+            {
+                "name": "read",
+                "method": "agents.thread",
+                "description": "One Thread of this Space as its Person reads it: its messages \
+                    and replies, its turns and what each may do now, and its settings.",
+                "schema": {
+                    "type": "object",
+                    "properties": { "thread": thread },
+                    "required": ["thread"]
+                }
+            }
+        ])
+    );
+}

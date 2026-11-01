@@ -6,7 +6,8 @@ use ts_rs::TS;
 
 /// Defines an ID type: a UUIDv7 that is text in SQLite and a string on the
 /// wire. A module uses it for its own IDs. The crate that uses it depends on
-/// `serde`, `ts-rs`, `uuid` and `rusqlite`. Pass `export_to = "<dir>/"` to
+/// `serde`, `ts-rs`, `uuid` and `rusqlite`. Its JSON Schema, for a tool's
+/// params, is a string. Pass `export_to = "<dir>/"` to
 /// put its TypeScript type in a module's folder.
 #[macro_export]
 macro_rules! id {
@@ -42,6 +43,20 @@ macro_rules! id {
             type Err = ::uuid::Error;
             fn from_str(s: &str) -> Result<Self, Self::Err> {
                 ::uuid::Uuid::parse_str(s).map(Self)
+            }
+        }
+
+        impl $crate::schemars::JsonSchema for $name {
+            fn schema_name() -> std::borrow::Cow<'static, str> {
+                stringify!($name).into()
+            }
+
+            fn inline_schema() -> bool {
+                true
+            }
+
+            fn json_schema(_: &mut $crate::schemars::SchemaGenerator) -> $crate::schemars::Schema {
+                $crate::schemars::json_schema!({ "type": "string", "format": "uuid" })
             }
         }
 

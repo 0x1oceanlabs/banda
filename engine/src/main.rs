@@ -11,6 +11,8 @@
 //!   no engine: the look is this machine's.
 //! - `banda skill` prints the Banda skill, what an Agent needs to know to
 //!   work in Banda and change it; `banda skill <topic>` prints a topic.
+//! - `banda mcp` speaks MCP on stdio for an Agent in a Thread: the agents
+//!   module hands it to each session, with the Agent's pass (ADR 0019).
 //!
 //! When the engine refuses (the call, the hello or the follow), the CLI
 //! prints `{"error": {"code", "message"}}` and exits 1. When no engine
@@ -18,6 +20,7 @@
 //! exits 2.
 
 mod client;
+mod mcp;
 mod places;
 mod serve;
 
@@ -111,6 +114,10 @@ enum Command {
         #[arg(long, conflicts_with = "topic")]
         export: Option<PathBuf>,
     },
+    /// Speaks MCP on stdio for an Agent in a Thread: the tools of Banda's
+    /// methods, and the Banda skill. The agents module starts it for each
+    /// session, with BANDA_TOKEN and BANDA_ENGINE.
+    Mcp,
 }
 
 #[derive(Subcommand)]
@@ -178,6 +185,14 @@ impl Failure {
         Failure::Broken(error.to_string())
     }
 
+    /// What went wrong, in plain words.
+    pub fn words(self) -> String {
+        match self {
+            Failure::Refused(refusal) => refusal.message,
+            Failure::Broken(words) => words,
+        }
+    }
+
     /// A command that broke off may have run: say how to repeat it safely.
     fn cut_short(self, command: CommandId) -> Failure {
         match self {
@@ -217,10 +232,12 @@ fn main() -> ExitCode {
         )
         .with_writer(std::io::stderr)
         .init();
-    let done = Places::from_env().and_then(|places| {
-        let runtime = tokio::runtime::Runtime::new().map_err(Failure::broken)?;
-        runtime.block_on(run(cli.command, places))
-    });
+    let runtime = || tokio::runtime::Runtime::new().map_err(Failure::broken);
+    let done = match cli.command {
+        // It needs no places: its variables say where the engine is.
+        Command::Mcp => runtime().and_then(|runtime| runtime.block_on(mcp::serve())),
+        command => Places::from_env().and_then(|places| runtime()?.block_on(run(command, places))),
+    };
     match done {
         Ok(()) => ExitCode::SUCCESS,
         Err(failure) => failure.exit(),
@@ -249,6 +266,7 @@ async fn run(command: Command, places: Places) -> Result<(), Failure> {
         Command::Look { .. } => unreachable!("the look runs without the engine"),
         Command::Skill { .. } => unreachable!("the skill runs without the engine"),
         Command::Settings { .. } => unreachable!("the settings run without the engine"),
+        Command::Mcp => unreachable!("banda mcp finds the engine by its variables"),
         Command::Follow {
             space,
             after,
@@ -280,19 +298,9 @@ fn skill(topic: Option<String>, export: Option<PathBuf>) -> ExitCode {
             Err(error) => Failure::Broken(format!("{}: {error}", folder.display())).exit(),
         };
     }
-    let text = match topic {
-        None => banda_skill::core(Reach::Command),
-        Some(name) => match banda_skill::topic(&name) {
-            Some(topic) => topic.body.to_owned(),
-            None => {
-                let names: Vec<_> = banda_skill::topics().iter().map(|t| t.name).collect();
-                return Failure::Broken(format!(
-                    "there is no topic \"{name}\"; the topics are {}",
-                    names.join(", ")
-                ))
-                .exit();
-            }
-        },
+    let text = match banda_skill::read(topic.as_deref(), Reach::Command) {
+        Ok(text) => text,
+        Err(words) => return Failure::Broken(words).exit(),
     };
     let mut out = std::io::stdout().lock();
     // A reader that went away is not an error.

@@ -11,9 +11,16 @@
 //!   `engine.command`.
 //! - `stream`: pieces until it ends (`Module::stream`); its "answer" is
 //!   the piece; `engine.stream`.
+//!
+//! A line that ends `, tool "<name>"` is also a tool an Agent calls
+//! through `banda mcp` (ADR 0019, decision 3): its description is the
+//! method's `///`, and its input the JSON Schema of its params.
 
 use crate::{CommandId, Refusal};
+use schemars::{JsonSchema, Schema, SchemaGenerator, json_schema};
+use serde::Serialize;
 use serde::de::{Deserialize, Deserializer, IgnoredAny};
+use std::borrow::Cow;
 use ts_rs::TS;
 
 /// Who asks for a method, as far as the dispatch needs: the command ID a
@@ -31,6 +38,51 @@ pub struct Nothing {}
 impl<'de> Deserialize<'de> for Nothing {
     fn deserialize<D: Deserializer<'de>>(deserializer: D) -> Result<Self, D::Error> {
         IgnoredAny::deserialize(deserializer).map(|_| Nothing {})
+    }
+}
+
+/// An Agent sends an object with nothing in it.
+impl JsonSchema for Nothing {
+    fn schema_name() -> Cow<'static, str> {
+        "Nothing".into()
+    }
+
+    fn json_schema(_: &mut SchemaGenerator) -> Schema {
+        json_schema!({ "type": "object", "properties": {} })
+    }
+}
+
+/// A method an Agent may call as a tool, as `banda mcp` lists it.
+#[derive(Clone, Debug, PartialEq, Serialize, serde::Deserialize, TS)]
+#[ts(export)]
+pub struct Tool {
+    /// Its name for the Agent: `read`.
+    pub name: String,
+    /// The method it calls: `<module>.<method>`.
+    pub method: String,
+    /// What it does, from the method's `///`.
+    pub description: String,
+    /// The JSON Schema of its params.
+    pub schema: serde_json::Value,
+}
+
+impl Tool {
+    /// A tool from a `methods!` line, its doc lines joined into words.
+    pub fn new(name: &str, method: String, doc: &[&str], mut schema: Schema) -> Tool {
+        let lines: Vec<&str> = doc
+            .iter()
+            .map(|l| l.trim())
+            .filter(|l| !l.is_empty())
+            .collect();
+        // What a reader of the schema needs, without the generator's notes.
+        schema.remove("$schema");
+        schema.remove("title");
+        Tool {
+            name: name.to_owned(),
+            method,
+            description: lines.join(" "),
+            schema: schema.to_value(),
+        }
     }
 }
 
@@ -78,6 +130,8 @@ pub fn answer(answer: impl serde::Serialize) -> Result<serde_json::Value, Refusa
 ///         call open(Open) -> (), Run;
 ///         command close(One) -> (), Run;
 ///         stream watch(One) -> Piece, Run;
+///         /// What the terminal shows now.
+///         call screen(One) -> Screen, Read, tool "screen";
 ///     }
 /// }
 /// ```
@@ -91,6 +145,9 @@ pub fn answer(answer: impl serde::Serialize) -> Result<serde_json::Value, Refusa
 ///   for [`Module::call`](crate::Module::call);
 /// - `async fn dispatch_stream(&self, ask, name, params) -> Result<Stream, Refusal>`,
 ///   for [`Module::stream`](crate::Module::stream);
+/// - `fn method_tools(module) -> Vec<Tool>`, the lines marked `tool`, for
+///   [`Module::tools`](crate::Module::tools); a tool's params implement
+///   `schemars::JsonSchema`;
 ///
 /// and the TypeScript type named after `as`, written in the folder after
 /// `in` when the crate's tests run. A stream's piece is typed for the
@@ -99,7 +156,10 @@ pub fn answer(answer: impl serde::Serialize) -> Result<serde_json::Value, Refusa
 macro_rules! methods {
     (
         $ty:ident($ask:ty) as $ts:literal in $dir:literal {
-            $( $(#[$doc:meta])* $kind:ident $name:ident($params:ty) -> $answer:ty, $right:ident; )*
+            $(
+                $(#[doc = $doc:literal])*
+                $kind:ident $name:ident($params:ty) -> $answer:ty, $right:ident $(, tool $tool:literal)?;
+            )*
         }
     ) => {
         impl $ty {
@@ -134,14 +194,31 @@ macro_rules! methods {
                     _ => Err($crate::Refusal::invalid(format!("There is no stream \"{name}\"."))),
                 }
             }
+
+            #[allow(dead_code, unused_mut, unused_variables)]
+            fn method_tools(module: &str) -> Vec<$crate::methods::Tool> {
+                let mut tools = Vec::new();
+                $( $crate::methods!(@tool tools module $name($params) [$($doc)*] $($tool)?); )*
+                tools
+            }
         }
 
         #[allow(dead_code)]
         #[derive(ts_rs::TS)]
         #[ts(export, export_to = $dir, rename = $ts)]
         struct __Methods {
-            $( $(#[$doc])* $name: $crate::methods::$kind<$params, $answer>, )*
+            $( $(#[doc = $doc])* $name: $crate::methods::$kind<$params, $answer>, )*
         }
+    };
+
+    (@tool $tools:ident $module:ident $name:ident($p:ty) [$($doc:literal)*]) => {};
+    (@tool $tools:ident $module:ident $name:ident($p:ty) [$($doc:literal)*] $tool:literal) => {
+        $tools.push($crate::methods::Tool::new(
+            $tool,
+            format!("{}.{}", $module, stringify!($name)),
+            &[$($doc),*],
+            $crate::schemars::schema_for!($p),
+        ));
     };
 
     (@call stream $self:ident $ask:ident $params:ident $name:ident $p:ty, $a:ty) => {

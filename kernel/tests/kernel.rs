@@ -45,6 +45,7 @@ impl Module for Notes {
             "list" => Some(Right::Read),
             "purge" => Some(Right::Manage),
             "count" => Some(Right::Read),
+            "pass" => Some(Right::Read),
             _ => None,
         }
     }
@@ -85,6 +86,12 @@ impl Module for Notes {
                     Ok(json!({ "seq": seq }))
                 })
                 .await
+            }
+            // The pass of the Agent `agent` in this Space, as the agents
+            // module asks for one when it opens a session.
+            "pass" => {
+                let agent: AgentId = decode(params["agent"].clone())?;
+                Ok(json!(call.space().pass(agent)?))
             }
             "list" => {
                 let (at, items) = call
@@ -507,6 +514,15 @@ impl Identity for Tokens {
 type Socket =
     tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
 
+/// Serves the kernel's API on a free port of this machine.
+async fn serve(kernel: &Arc<Kernel>, owner: PersonId) -> std::net::SocketAddr {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let address = listener.local_addr().unwrap();
+    let app = banda_kernel::api::router(kernel.clone(), Tokens { owner }, "test");
+    tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    address
+}
+
 async fn connect(address: std::net::SocketAddr, hello: Value) -> (Socket, Value) {
     let (mut socket, _) = tokio_tungstenite::connect_async(format!("ws://{address}/ws"))
         .await
@@ -540,10 +556,7 @@ async fn the_api_refuses_strangers_and_follows_events_without_gaps() {
         .await
         .unwrap();
 
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let address = listener.local_addr().unwrap();
-    let app = banda_kernel::api::router(kernel.clone(), Tokens { owner }, "test");
-    tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    let address = serve(&kernel, owner).await;
 
     let (_, refused) = connect(
         address,
@@ -623,10 +636,7 @@ async fn a_stream_says_its_pieces_then_that_it_ended() {
     let notes = Notes::default();
     let kernel = open(root.path(), owner, &notes).await;
     let space = create(&kernel, owner, "Work").await;
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let address = listener.local_addr().unwrap();
-    let app = banda_kernel::api::router(kernel.clone(), Tokens { owner }, "test");
-    tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    let address = serve(&kernel, owner).await;
 
     let count = |id: u64| json!({ "type": "stream", "id": id, "space": space.id, "method": "notes.count", "params": { "to": 3 } });
     let (mut stranger, _) = connect(
@@ -681,10 +691,7 @@ async fn a_subscription_replays_a_long_log_a_page_at_a_time() {
         add(&kernel, person, &space, &n.to_string()).await.unwrap();
     }
 
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let address = listener.local_addr().unwrap();
-    let app = banda_kernel::api::router(kernel.clone(), Tokens { owner }, "test");
-    tokio::spawn(async move { axum::serve(listener, app).await.unwrap() });
+    let address = serve(&kernel, owner).await;
     let (mut socket, _) = connect(
         address,
         json!({ "type": "hello", "protocol": 1, "token": "secret" }),
@@ -707,4 +714,69 @@ async fn a_subscription_replays_a_long_log_a_page_at_a_time() {
     }
     add(&kernel, person, &space, "live").await.unwrap();
     assert_eq!(next(&mut socket).await["event"]["payload"]["text"], "live");
+}
+
+#[tokio::test]
+async fn a_pass_connects_as_its_agent_and_only_in_its_space() {
+    let root = tempfile::tempdir().unwrap();
+    let owner = PersonId::new();
+    let notes = Notes::default();
+    let kernel = open(root.path(), owner, &notes).await;
+    let (work, other) = (
+        create(&kernel, owner, "Work").await,
+        create(&kernel, owner, "Other").await,
+    );
+    let agent = AgentId::new();
+    let person = Participant::Person(owner);
+    let ask = json!({ "agent": agent });
+    let pass = kernel
+        .call(person, "notes.pass", Some(work.id), None, ask)
+        .await
+        .unwrap();
+    let address = serve(&kernel, owner).await;
+
+    let (mut socket, welcome) = connect(
+        address,
+        json!({ "type": "hello", "protocol": 1, "token": pass }),
+    )
+    .await;
+    assert_eq!(welcome["type"], "welcome");
+    let mut ask = async |frame: Value| {
+        socket.send(Message::text(frame.to_string())).await.unwrap();
+        next(&mut socket).await
+    };
+    let add = json!({
+        "type": "call", "id": 1, "method": "notes.add", "space": work.id,
+        "command": CommandId::new(), "params": { "text": "by its agent" }
+    });
+    assert!(ask(add).await["ok"]["seq"].is_number());
+    let space = kernel.space(work.id).await.unwrap();
+    let added = space
+        .events_after(0, Default::default(), 100)
+        .await
+        .unwrap();
+    assert_eq!(added.last().unwrap().author, Participant::Agent(agent));
+
+    let wall = "An Agent works only in its own Space.";
+    let elsewhere = [
+        json!({ "type": "call", "id": 2, "method": "notes.list", "space": other.id }),
+        json!({ "type": "subscribe", "id": 3, "space": other.id, "after": 0 }),
+        json!({ "type": "stream", "id": 4, "space": other.id, "method": "notes.count" }),
+    ];
+    for frame in elsewhere {
+        let refused = ask(frame.clone()).await;
+        assert_eq!(refused["error"]["code"], "forbidden", "{frame}");
+        assert_eq!(refused["error"]["message"], wall, "{frame}");
+    }
+    // A call that names no Space is in its own.
+    let list = ask(json!({ "type": "call", "id": 5, "method": "notes.list" })).await;
+    assert_eq!(list["ok"]["items"], json!(["by its agent"]));
+    let mine = ask(json!({ "type": "call", "id": 6, "method": "spaces.list" })).await;
+    assert_eq!(mine["ok"], json!([work]), "it sees only its own Space");
+    let purge = json!({ "type": "call", "id": 7, "method": "notes.purge", "space": work.id, "command": CommandId::new() });
+    assert_eq!(
+        ask(purge).await["error"]["code"],
+        "forbidden",
+        "nor may it manage it"
+    );
 }

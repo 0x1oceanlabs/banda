@@ -12,7 +12,8 @@
 //!
 //! The same text reaches an Agent in several ways: `banda skill` prints
 //! it, `banda skill --export` writes it as an Agent Skills folder, and
-//! the MCP module will serve it.
+//! `banda mcp` gives the core as its instructions and each topic through
+//! its `skill` tool (ADR 0019).
 
 use std::fmt::Write as _;
 use std::path::Path;
@@ -37,6 +38,8 @@ pub enum Reach {
     Command,
     /// It reads `references/<topic>.md` beside `SKILL.md`.
     Files,
+    /// It calls the `skill` tool of `banda mcp` with the topic.
+    Tool,
 }
 
 const CORE: &str = include_str!("../SKILL.md");
@@ -61,13 +64,32 @@ pub fn topic(name: &str) -> Option<Topic> {
 pub fn core(reach: Reach) -> String {
     let mut text = CORE.trim_end().to_owned();
     text.push_str("\n\n## Topics\n\n");
-    text.push_str(match reach {
+    text.push_str(&list(reach));
+    text
+}
+
+/// A topic's page, or with no topic the core; or, for a topic there is
+/// not, words that say so and list the topics there are.
+pub fn read(name: Option<&str>, reach: Reach) -> Result<String, String> {
+    match name {
+        None => Ok(core(reach)),
+        Some(name) => topic(name)
+            .map(|topic| topic.body.to_owned())
+            .ok_or_else(|| format!("There is no topic \"{name}\".\n\n{}", list(reach))),
+    }
+}
+
+/// How to reach a topic, then every topic with when to read it.
+fn list(reach: Reach) -> String {
+    let mut text = match reach {
         Reach::Command => "Read one with `banda skill <topic>`.\n\n",
         Reach::Files => "Each is a file in `references/`.\n\n",
-    });
+        Reach::Tool => "Read one with the `skill` tool: `{\"topic\": \"<topic>\"}`.\n\n",
+    }
+    .to_owned();
     for topic in topics() {
         let name = match reach {
-            Reach::Command => format!("`{}`", topic.name),
+            Reach::Command | Reach::Tool => format!("`{}`", topic.name),
             Reach::Files => format!("[{0}](references/{0}.md)", topic.name),
         };
         writeln!(text, "- {name}: {}", topic.description).unwrap();
@@ -153,6 +175,15 @@ mod tests {
             assert!(text.contains(&format!("- `{}`: ", topic.name)));
         }
         assert!(core(Reach::Files).contains("(references/sidebar.md)"));
+        assert!(core(Reach::Tool).contains("the `skill` tool"));
+        assert_eq!(read(None, Reach::Tool), Ok(core(Reach::Tool)));
+        assert_eq!(
+            read(Some("look"), Reach::Command),
+            Ok(topic("look").unwrap().body.into())
+        );
+        let none = read(Some("nope"), Reach::Command).unwrap_err();
+        assert!(none.starts_with("There is no topic \"nope\".\n\nRead one with `banda skill"));
+        assert!(none.contains("- `sidebar`: "));
     }
 
     #[test]

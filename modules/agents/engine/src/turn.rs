@@ -668,8 +668,10 @@ async fn run(
         .read(move |sql| store::evidence(sql, thread))
         .await
         .map_err(|e| unplanned(plain(e)))?;
+    // A session that opens reaches Banda with a pass of its own (ADR 0019).
+    let banda = || live.banda(space, turn.agent);
     let (session, opened) = connection
-        .session(thread, space.folder(), earlier.as_ref())
+        .session(thread, space.folder(), earlier.as_ref(), banda)
         .await?;
     if let Opened::New { evidence, lost } = opened {
         let (id, agent) = (turn.id, Participant::Agent(turn.agent));

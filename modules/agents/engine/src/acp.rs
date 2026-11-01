@@ -29,8 +29,9 @@
 
 use crate::model::{
     Account, Adapter, CliView, Cost, Exit, Failure, Field, FieldValue, HarnessOption, Input, Mode,
-    Offer, OptionChoice, OptionValue, PlanStep, Settings, SignInWay, SignedInAs, SlashCommand,
-    StepState, TextFormat, ThreadId, ToolContent, ToolKind, ToolStatus, TurnState, Usage, Values,
+    Offer, OptionChoice, OptionValue, PlanStep, Program, Settings, SignInWay, SignedInAs,
+    SlashCommand, StepState, TextFormat, ThreadId, ToolContent, ToolKind, ToolStatus, TurnState,
+    Usage, Values,
 };
 use crate::record::{Recording, To};
 use crate::rules::{Ending, Offered};
@@ -520,6 +521,21 @@ fn plain(error: impl std::fmt::Display) -> String {
     error.to_string()
 }
 
+/// `banda mcp` as ACP hands an MCP server to a session, named `banda`.
+fn servers(banda: Option<Program>) -> Vec<acp::McpServer> {
+    let server = |Program { program, args, env }: Program| {
+        let env = env
+            .into_iter()
+            .map(|(name, value)| acp::EnvVariable::new(name, value));
+        acp::McpServer::Stdio(
+            acp::McpServerStdio::new("banda", program)
+                .args(args)
+                .env(env.collect()),
+        )
+    };
+    banda.map(server).into_iter().collect()
+}
+
 /// What a Harness's error says, in the words it has for a Person.
 fn in_words(error: &agent_client_protocol::Error) -> &str {
     let said = error.data.as_ref().and_then(|d| d.get("message"));
@@ -636,19 +652,23 @@ impl Connection {
 
     /// The Harness's session for `thread`, opened in `folder` on first use.
     /// A Thread that had a session continues it when the Harness can, by
-    /// resuming it or else by loading it; otherwise a new one opens.
+    /// resuming it or else by loading it; otherwise a new one opens. A
+    /// session that opens, either way, gets `banda()`, the `banda mcp` its
+    /// Agent reaches Banda through, as a stdio MCP server.
     pub async fn session(
         &self,
         thread: ThreadId,
         folder: &Path,
         earlier: Option<&Evidence>,
+        banda: impl FnOnce() -> Option<Program>,
     ) -> Result<(Session, Opened), Ending> {
         let mut sessions = self.sessions.lock().await;
         if let Some(session) = sessions.get(&thread) {
             return Ok((Session(session.clone()), Opened::Known));
         }
+        let servers = servers(banda());
         if let Some(session) = earlier.and_then(|e| e.continued_by(&self.harness))
-            && let Some(options) = self.continue_session(&session, folder).await
+            && let Some(options) = self.continue_session(&session, folder, &servers).await
         {
             opened(&self.learned, &session, options);
             sessions.insert(thread, session.clone());
@@ -656,7 +676,7 @@ impl Connection {
         }
         let opening = self
             .cx
-            .send_request(acp::NewSessionRequest::new(folder))
+            .send_request(acp::NewSessionRequest::new(folder).mcp_servers(servers))
             .block_task();
         let made = match timeout(OPENING, opening).await {
             Ok(made) => made.map_err(|error| failed(&self.name, &error))?,
@@ -690,15 +710,18 @@ impl Connection {
         &self,
         session: &acp::SessionId,
         folder: &Path,
+        servers: &[acp::McpServer],
     ) -> Option<Vec<acp::SessionConfigOption>> {
         let answer = if self.agreed.resumes {
-            let resume = acp::ResumeSessionRequest::new(session.clone(), folder);
+            let resume = acp::ResumeSessionRequest::new(session.clone(), folder)
+                .mcp_servers(servers.to_vec());
             let asked = self.cx.send_request(resume).block_task();
             timeout(OPENING, asked)
                 .await
                 .map(|a| a.map(|r| r.config_options))
         } else if self.agreed.loads {
-            let load = acp::LoadSessionRequest::new(session.clone(), folder);
+            let load =
+                acp::LoadSessionRequest::new(session.clone(), folder).mcp_servers(servers.to_vec());
             let asked = self.cx.send_request(load).block_task();
             timeout(OPENING, asked)
                 .await

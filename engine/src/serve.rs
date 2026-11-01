@@ -4,20 +4,13 @@
 
 use crate::Failure;
 use crate::places::{HOST, Places, Running};
-use banda_agents::Agents;
 use banda_agents::settings::Harnesses;
+use banda_agents::{Agents, Pipe};
 use banda_kernel::api::{self, OwnerSecret};
 use banda_kernel::{Kernel, PROTOCOL};
 use banda_terminal::Terminals;
 use std::fs::{File, TryLockError};
 use std::io::Read;
-
-/// A secret for this run of the engine: whoever has it is the owner.
-fn secret() -> Result<String, Failure> {
-    let mut bytes = [0u8; 32];
-    getrandom::fill(&mut bytes).map_err(Failure::broken)?;
-    Ok(bytes.iter().map(|b| format!("{b:02x}")).collect())
-}
 
 /// Runs until a signal, or until stdin closes when `with_parent` is set: a
 /// window that starts the engine holds its stdin, and reads where the
@@ -41,20 +34,27 @@ pub async fn serve(places: Places, port: u16, with_parent: bool) -> Result<(), F
     }
     let owner = places.owner().map_err(Failure::broken)?;
     let harnesses = Harnesses::load(&places.harnesses()).map_err(Failure::broken)?;
+    let listener = tokio::net::TcpListener::bind((HOST, port))
+        .await
+        .map_err(Failure::broken)?;
+    // A secret for this run of the engine: whoever has it is the owner.
+    let running = Running {
+        protocol: PROTOCOL,
+        port: listener.local_addr().map_err(Failure::broken)?.port(),
+        secret: banda_kernel::secret().map_err(Failure::broken)?,
+    };
+    // Every Thread's session reaches the engine through this program's
+    // `banda mcp` (ADR 0019).
+    let pipe = Pipe {
+        program: std::env::current_exe().map_err(Failure::broken)?,
+        engine: running.url(),
+    };
     let kernel = Kernel::builder(&places.root, owner)
-        .module(Agents::new(harnesses))
+        .module(Agents::new(harnesses).piped(pipe))
         .module(Terminals::new())
         .open()
         .await
         .map_err(Failure::broken)?;
-    let listener = tokio::net::TcpListener::bind((HOST, port))
-        .await
-        .map_err(Failure::broken)?;
-    let running = Running {
-        protocol: PROTOCOL,
-        port: listener.local_addr().map_err(Failure::broken)?.port(),
-        secret: secret()?,
-    };
     let identity = OwnerSecret {
         secret: running.secret.clone(),
         owner,

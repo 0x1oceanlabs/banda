@@ -1,8 +1,9 @@
-use crate::access::{self, Right};
-use crate::methods::{Asks, Nothing};
+use crate::access::{self, Caller, Right};
+use crate::methods::{Asks, Nothing, Tool};
 use crate::module::{Call, Module, Stream};
+use crate::passes::Passes;
 use crate::space::{Created, Space};
-use crate::{CommandId, Error, Participant, PersonId, Refusal, SpaceId};
+use crate::{AgentId, CommandId, Error, Participant, PersonId, Refusal, SpaceId};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -20,6 +21,9 @@ pub struct Kernel {
     boot: String,
     modules: Arc<[Arc<dyn Module>]>,
     spaces: RwLock<BTreeMap<SpaceId, Arc<Space>>>,
+    passes: Arc<Passes>,
+    /// Every module's tools, made once as it opens.
+    tools: Vec<Tool>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -63,8 +67,10 @@ impl KernelBuilder {
             root: self.root,
             owner: self.owner,
             boot: uuid::Uuid::now_v7().to_string(),
+            tools: self.modules.iter().flat_map(|m| m.tools()).collect(),
             modules: self.modules.into(),
             spaces: RwLock::new(BTreeMap::new()),
+            passes: Arc::default(),
         });
         let mut folders: Vec<PathBuf> = std::fs::read_dir(&kernel.root)?
             .filter_map(|entry| entry.ok().map(|e| e.path()))
@@ -101,6 +107,8 @@ crate::methods! {
         call list(Nothing) -> Vec<SpaceSummary>, Read;
         /// Makes a Space: its folder under the root, by its name.
         command create(CreateSpace) -> SpaceSummary, Manage;
+        /// The tools an Agent may call, from every module's methods.
+        call tools(Nothing) -> Vec<Tool>, Read;
     }
 }
 
@@ -108,6 +116,7 @@ crate::methods! {
 struct Own<'a> {
     participant: Participant,
     method: &'a str,
+    only: Option<SpaceId>,
     command: Option<CommandId>,
 }
 
@@ -151,16 +160,26 @@ impl Kernel {
         self.modules.iter().map(|m| m.name()).collect()
     }
 
+    /// The Agent a pass names and the Space it works in, or `None`.
+    pub fn holder(&self, pass: &str) -> Option<(AgentId, SpaceId)> {
+        self.passes.holder(pass)
+    }
+
     /// Routes a call: `spaces.*` to the kernel, `<module>.*` to that module
-    /// in the given Space. Every method passes the access decision first.
+    /// in the given Space. Every method passes the Space wall and the
+    /// access decision first. A caller with a pass that names no Space
+    /// calls in its own.
     pub async fn call(
         &self,
-        participant: Participant,
+        caller: impl Into<Caller>,
         method: &str,
         space: Option<SpaceId>,
         command: Option<CommandId>,
         params: Value,
     ) -> Result<Value, Refusal> {
+        let Caller { participant, only } = caller.into();
+        let space = space.or(only);
+        access::within(only, space)?;
         if let Some(own) = method.strip_prefix("spaces.")
             && let Some(right) = Self::method_right(own)
         {
@@ -168,6 +187,7 @@ impl Kernel {
             let ask = Own {
                 participant,
                 method,
+                only,
                 command,
             };
             return self.dispatch(ask, own, params).await;
@@ -205,11 +225,13 @@ impl Kernel {
     /// allows it.
     pub async fn stream(
         &self,
-        participant: Participant,
+        caller: impl Into<Caller>,
         method: &str,
         space: SpaceId,
         params: Value,
     ) -> Result<Stream, Refusal> {
+        let Caller { participant, only } = caller.into();
+        access::within(only, Some(space))?;
         let (module, rest, right) = self.method(method)?;
         let space = self.space(space).await?;
         access::decide(&participant, right, space.owner())?;
@@ -235,6 +257,20 @@ impl Kernel {
         Ok((module, rest, right))
     }
 
+    /// The Space `caller` follows, once the Space wall and the access
+    /// decision allow it.
+    pub async fn follow(
+        &self,
+        caller: impl Into<Caller>,
+        space: SpaceId,
+    ) -> Result<Arc<Space>, Refusal> {
+        let Caller { participant, only } = caller.into();
+        access::within(only, Some(space))?;
+        let space = self.space(space).await?;
+        access::decide(&participant, Right::Read, space.owner())?;
+        Ok(space)
+    }
+
     pub async fn space(&self, id: SpaceId) -> Result<Arc<Space>, Refusal> {
         self.spaces
             .read()
@@ -254,11 +290,19 @@ impl Kernel {
     }
 
     async fn open_space(&self, folder: PathBuf) -> Result<Arc<Space>, Error> {
-        Space::open(folder, self.owner, self.modules.clone(), &self.boot).await
+        let (modules, passes) = (self.modules.clone(), self.passes.clone());
+        Space::open(folder, self.owner, modules, passes, &self.boot).await
     }
 
-    async fn list(&self, _: Own<'_>, _: Nothing) -> Result<Vec<SpaceSummary>, Refusal> {
-        Ok(self.spaces().await)
+    async fn list(&self, ask: Own<'_>, _: Nothing) -> Result<Vec<SpaceSummary>, Refusal> {
+        let mut spaces = self.spaces().await;
+        // A pass sees only its own Space (ADR 0019, decision 2).
+        spaces.retain(|summary| access::within(ask.only, Some(summary.id)).is_ok());
+        Ok(spaces)
+    }
+
+    async fn tools(&self, _: Own<'_>, _: Nothing) -> Result<Vec<Tool>, Refusal> {
+        Ok(self.tools.clone())
     }
 
     async fn create(
