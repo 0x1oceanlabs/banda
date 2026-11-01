@@ -113,7 +113,7 @@ command (with its ID)
 | The Harness | its session, context and sign-in. We keep only its session ID, as evidence |
 | The OS keychain | secrets you give Bandaso. Its database never holds them |
 | The engine's state folder | the owner's ID; while the engine runs, its port and per-run secret |
-| The window's storage | each Space's Desk: its tiles, their Panes and the focus |
+| The window's storage | each Space's Desk: its tiles, their Panes and the focus; what Enter does while an Agent works |
 | `.bandaso/` SQLite | Threads, Questions and answers, the Agents' queue, Databases' records, receipts, events, outbox |
 | `.bandaso/images/` | the bytes of the images messages carry, one file per image; the SQLite says what each is and which message carries it |
 
@@ -175,7 +175,14 @@ If Chat is removed, Agents still works through its own Thread.
   Harness's options such as its model.
 - **The Harness list is a text file** of the machine. It says how to start
   each Harness. Without one, the engine knows Claude Code and Codex through
-  their ACP adapters on npm. Reading the ACP Registry comes next.
+  their ACP adapters on npm, at exact versions. Reading the ACP Registry
+  comes next.
+  - An entry may name the Person's own CLI the adapter runs (`[harness.cli]`
+    with `program` and `variable`): `claude` through
+    `CLAUDE_CODE_EXECUTABLE`, `codex` through `CODEX_PATH` (ADR 0003,
+    decision 3). Each start finds it on PATH and asks its version; a CLI
+    that is not installed stops the start, so no bundled copy runs in its
+    place. Checking the version against a supported range comes later.
 - **A message queues a turn.** The outbox runs one Thread's turns one at a
   time, in order (`turn.start`, keyed by the Thread). Threads run side by
   side, an Agent's own Threads too. A stop (`turn.stop`) and an answer
@@ -252,8 +259,11 @@ If Chat is removed, Agents still works through its own Thread.
     not yet. A Harness that does not report it shows no one.
   - A Harness that declares ACP's logout signs out when asked
     (`agents.sign_out`), and its processes are let go as after a sign-in.
+    The adapter signs its CLI out, so the Person's own terminal too.
   - The Harnesses Pane, like T3 Code's provider settings, shows each entry
-    with its program, who is signed in, and Sign in or Sign out.
+    with its CLI and adapter versions, who is signed in, Sign in, and Sign
+    out where a logout ends the sign-in: an account's, not a key's. Check
+    again asks the Harness anew.
 - **The Harness's notices**, such as warnings, join the Thread as lines of
   their own.
 - **A Thread has settings: a mode, Plan, and the Harness's options.** The

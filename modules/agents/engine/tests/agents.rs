@@ -6,7 +6,7 @@ use bandaso_agents::model::{
     Body, Exit, Failure, Mode, OptionValue, QuestionState, Settings, StepState, ThreadView,
     ToolContent, ToolStatus, TurnState,
 };
-use bandaso_agents::settings::{Harness, Harnesses};
+use bandaso_agents::settings::{Cli, Harness, Harnesses};
 use bandaso_kernel::{AgentId, Code, CommandId, Kernel, Participant, PersonId, SpaceId};
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as BASE64;
@@ -47,6 +47,7 @@ fn harnesses_with(env: &[(&str, &str)]) -> Harnesses {
             .iter()
             .map(|(k, v)| (k.to_string(), v.to_string()))
             .collect(),
+        cli: None,
     }])
 }
 
@@ -857,13 +858,15 @@ async fn a_harness_says_who_is_signed_in_and_signs_out() {
         account["adapter"]["name"], "bandaso-fake-agent",
         "{account}"
     );
-    assert_eq!(account["signs_out"], true);
+    assert_eq!(account["signs_out"], false, "no one to sign out");
     let no_one = &account["signed_in_as"];
     assert_eq!(no_one["signed_in"], false, "{account}");
     assert_eq!(no_one["label"], "Not logged in");
 
     world.sign_in(world.person(), "fake-browser").await.unwrap();
-    let signed_in = world.account().await["signed_in_as"].clone();
+    let account = world.account().await;
+    assert_eq!(account["signs_out"], true, "an account signs out");
+    let signed_in = &account["signed_in_as"];
     assert_eq!(signed_in["signed_in"], true, "{signed_in}");
     assert_eq!(signed_in["label"], "Fake Pro");
     assert_eq!(signed_in["email"], "person@example.invalid");
@@ -879,6 +882,58 @@ async fn a_harness_says_who_is_signed_in_and_signs_out() {
         view.turns[0].failure,
         Some(Failure::SignIn),
         "it is signed out"
+    );
+}
+
+/// The fake agent as the only Harness, running the CLI `program`.
+fn with_cli(program: &str) -> Agents {
+    Agents::new(Harnesses::new(vec![Harness {
+        id: "fake".into(),
+        name: "Fake".into(),
+        command: fake_agent().display().to_string(),
+        args: Vec::new(),
+        env: Default::default(),
+        cli: Some(Cli {
+            program: program.to_owned(),
+            variable: "FAKE_AGENT_CLI".to_owned(),
+        }),
+    }]))
+}
+
+#[tokio::test]
+async fn a_harness_runs_the_persons_own_cli_and_says_its_version() {
+    let (root, bin) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+    let cli = bin.path().join("fake-cli");
+    std::fs::write(&cli, "#!/bin/sh\necho '9.9.9 (Fake CLI)'\n").unwrap();
+    use std::os::unix::fs::PermissionsExt as _;
+    std::fs::set_permissions(&cli, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let world = World::new_with(root.path(), with_cli(&cli.display().to_string())).await;
+    let account = world.account().await;
+    assert_eq!(
+        account["cli"]["path"],
+        cli.display().to_string(),
+        "{account}"
+    );
+    assert_eq!(account["cli"]["version"], "9.9.9");
+}
+
+#[tokio::test]
+async fn a_harness_whose_cli_is_not_installed_does_not_start() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new_with(root.path(), with_cli("bandaso-no-such-cli")).await;
+    let refused = world
+        .call(
+            world.person(),
+            "agents.account",
+            json!({ "harness": "fake" }),
+        )
+        .await
+        .unwrap_err();
+    assert_eq!(refused.code, Code::Conflict);
+    assert!(
+        refused.message.contains("not installed"),
+        "{}",
+        refused.message
     );
 }
 
@@ -2069,4 +2124,34 @@ async fn a_command_that_ends_after_its_turn_opens_no_turn() {
             "tool: Run the server (Done)"
         ]
     );
+}
+
+/// Starts the real Claude Code and Codex adapters on the Person's own CLIs
+/// and asks what they run and who is signed in; no model is called. Run it
+/// by hand: `cargo test -p bandaso-agents --test agents real -- --ignored
+/// --nocapture`.
+#[tokio::test]
+#[ignore = "starts the real adapters, which npx may download"]
+async fn the_real_harnesses_say_what_they_run_and_who_is_signed_in() {
+    let known = Harnesses::known();
+    let real = ["claude", "codex"].map(|id| known.find(id).unwrap().clone());
+    let fake = Harness {
+        id: "fake".into(),
+        name: "Fake".into(),
+        command: fake_agent().display().to_string(),
+        args: Vec::new(),
+        env: Default::default(),
+        cli: None,
+    };
+    let harnesses = Harnesses::new([vec![fake], real.to_vec()].concat());
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new_with(root.path(), Agents::new(harnesses)).await;
+    for harness in ["claude", "codex"] {
+        let params = json!({ "harness": harness });
+        let account = world.call(world.person(), "agents.account", params).await;
+        println!("{harness}: {account:#?}");
+        let account = account.unwrap();
+        assert!(account["cli"]["version"].is_string(), "{account}");
+        assert!(account["adapter"]["version"].is_string(), "{account}");
+    }
 }

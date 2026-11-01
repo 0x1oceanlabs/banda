@@ -4,6 +4,7 @@ import type { Account, HarnessView } from "@bandaso/contract/agents"
 import { Button } from "@bandaso/ui/components/button"
 import {
   Card,
+  CardAction,
   CardContent,
   CardDescription,
   CardHeader,
@@ -33,7 +34,7 @@ import { useAct } from "@bandaso/ui/hooks/use-act"
 import { useRead } from "@bandaso/ui/hooks/use-read"
 import { definePane, type PaneProps } from "@bandaso/ui/pane"
 import { LogOutIcon, RotateCwIcon, SettingsIcon } from "lucide-react"
-import { type FollowUp, useFollowUp } from "./follow-up"
+import { type EnterKey, useEnterKey } from "./enter-key"
 import { Problem, Ways } from "./SignIn"
 
 type NoArgs = { [key: string]: JsonValue }
@@ -77,7 +78,7 @@ function HarnessesPane({ engine, space }: PaneProps<NoArgs>) {
               />
             ))}
         </section>
-        <FollowUpChoice />
+        <EnterKeyChoice />
       </div>
     </ScrollArea>
   )
@@ -85,21 +86,34 @@ function HarnessesPane({ engine, space }: PaneProps<NoArgs>) {
 
 type HarnessProps = { engine: Engine; space: SpaceId; harness: HarnessView }
 
-/** A Harness entry, looked at again after each sign-in or sign-out. */
+/** What a Harness runs: the Person's CLI with its version, through its
+ * adapter. */
+function runs({ cli, adapter }: Account): string {
+  const own = cli && [cli.path.split("/").pop(), cli.version].filter(Boolean)
+  const through = adapter && `${adapter.name} ${adapter.version}`
+  return [own?.join(" "), through].filter(Boolean).join(" · ")
+}
+
+/** A Harness entry, asked again after each sign-in or sign-out: a new
+ * key mounts a new reading. */
 function HarnessCard(props: HarnessProps) {
-  const [looks, setLooks] = useState(0)
+  const [readings, setReadings] = useState(0)
   return (
-    <HarnessLook key={looks} {...props} again={() => setLooks((n) => n + 1)} />
+    <HarnessReading
+      key={readings}
+      {...props}
+      readAgain={() => setReadings((n) => n + 1)}
+    />
   )
 }
 
-/** One look starts the Harness if it does not run, and asks it. */
-function HarnessLook({
+/** Asks the Harness, which starts it if it does not run. */
+function HarnessReading({
   engine,
   space,
   harness,
-  again,
-}: HarnessProps & { again: () => void }) {
+  readAgain,
+}: HarnessProps & { readAgain: () => void }) {
   const account = useRead(
     useCallback(
       () =>
@@ -115,10 +129,23 @@ function HarnessLook({
     <Card size="sm" role="group" aria-label={harness.name}>
       <CardHeader>
         <CardTitle>{harness.name}</CardTitle>
-        {account.state === "ready" && account.value.adapter && (
-          <CardDescription>
-            {account.value.adapter.name} {account.value.adapter.version}
+        {account.state === "ready" && (
+          <CardDescription title={account.value.cli?.path}>
+            {runs(account.value)}
           </CardDescription>
+        )}
+        {account.state !== "loading" && (
+          <CardAction>
+            <Button
+              variant="ghost"
+              size="icon-xs"
+              aria-label={`Check ${harness.name} again`}
+              title="Check again"
+              onClick={readAgain}
+            >
+              <RotateCwIcon />
+            </Button>
+          </CardAction>
         )}
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
@@ -128,15 +155,9 @@ function HarnessLook({
           </span>
         )}
         {account.state === "refused" && (
-          <div className="flex flex-col items-start gap-2">
-            <Problem>
-              {harness.name} does not start: {account.refusal.message}
-            </Problem>
-            <Button variant="outline" size="xs" onClick={again}>
-              <RotateCwIcon data-icon="inline-start" />
-              Check again
-            </Button>
-          </div>
+          <Problem>
+            {harness.name} does not start: {account.refusal.message}
+          </Problem>
         )}
         {account.state === "ready" && (
           <AccountState
@@ -144,7 +165,7 @@ function HarnessLook({
             space={space}
             harness={harness}
             account={account.value}
-            onChanged={again}
+            onChanged={readAgain}
           />
         )}
       </CardContent>
@@ -158,13 +179,7 @@ function AccountState({
   harness,
   account,
   onChanged,
-}: {
-  engine: Engine
-  space: SpaceId
-  harness: HarnessView
-  account: Account
-  onChanged: () => void
-}) {
+}: HarnessProps & { account: Account; onChanged: () => void }) {
   const who = account.signed_in_as
   if (who?.signed_in)
     return (
@@ -208,12 +223,7 @@ function SignOut({
   space,
   harness,
   onSignedOut,
-}: {
-  engine: Engine
-  space: SpaceId
-  harness: HarnessView
-  onSignedOut: () => void
-}) {
+}: HarnessProps & { onSignedOut: () => void }) {
   const [asking, setAsking] = useState(false)
   const signing = useAct()
   const signOut = async () => {
@@ -235,9 +245,9 @@ function SignOut({
           <DialogHeader>
             <DialogTitle>Sign out of {harness.name}?</DialogTitle>
             <DialogDescription>
-              Every Space on this computer uses this sign-in, so their Agents on{" "}
-              {harness.name} stop working until someone signs in again. Their
-              Threads stay.
+              This signs {harness.name} out on this computer, in your own
+              terminal too. Its Agents in every Space stop until someone signs
+              in again; their Threads stay.
             </DialogDescription>
           </DialogHeader>
           {signing.problem && <Problem>{signing.problem}</Problem>}
@@ -260,7 +270,7 @@ function SignOut({
   )
 }
 
-const FOLLOW_UPS: { value: FollowUp; label: string; about: string }[] = [
+const ENTER_KEYS: { value: EnterKey; label: string; about: string }[] = [
   {
     value: "steer",
     label: "Send it into the turn",
@@ -273,11 +283,11 @@ const FOLLOW_UPS: { value: FollowUp; label: string; about: string }[] = [
   },
 ]
 
-function FollowUpChoice() {
-  const [followUp, choose] = useFollowUp()
+function EnterKeyChoice() {
+  const [enter, choose] = useEnterKey()
   return (
     <FieldSet>
-      <FieldLegend id="follow-up" variant="label">
+      <FieldLegend id="enter-key" variant="label">
         When you press Enter while an Agent works
       </FieldLegend>
       <FieldDescription>
@@ -285,12 +295,12 @@ function FollowUpChoice() {
         choice.
       </FieldDescription>
       <RadioGroup
-        value={followUp}
-        aria-labelledby="follow-up"
-        onValueChange={(next) => choose(next as FollowUp)}
+        value={enter}
+        aria-labelledby="enter-key"
+        onValueChange={(next) => choose(next as EnterKey)}
       >
-        {FOLLOW_UPS.map((choice) => {
-          const id = `follow-up-${choice.value}`
+        {ENTER_KEYS.map((choice) => {
+          const id = `enter-key-${choice.value}`
           return (
             <Field key={choice.value} orientation="horizontal">
               <RadioGroupItem

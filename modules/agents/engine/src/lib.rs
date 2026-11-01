@@ -37,6 +37,7 @@
 
 mod acp;
 mod between;
+mod cli;
 mod hosts;
 mod images;
 mod live;
@@ -110,8 +111,8 @@ impl Agents {
 
     /// After a sign-in or a sign-out: ACP has a client start the Harness
     /// again, so it reads the account anew, in every Space, since they
-    /// share it. The receipt keeps the answer, so the same command sent
-    /// again does not do it twice.
+    /// share it. Then the receipt keeps the answer, and the kernel answers
+    /// the same command, sent again, from it.
     async fn start_again(&self, call: &Call, harness: &str) -> Result<Value, Refusal> {
         self.live.let_go(harness).await;
         call.command(|_| Ok(Value::Null)).await
@@ -187,7 +188,7 @@ impl Method {
             | Method::Thread
             | Method::Defaults
             | Method::Image => Right::Read,
-            // Which account a Space's Agents work under is the Space's own.
+            // A Harness's account serves every Space on this computer.
             Method::Create | Method::Account | Method::SignIn | Method::SignOut => Right::Manage,
             Method::Send
             | Method::Edit
