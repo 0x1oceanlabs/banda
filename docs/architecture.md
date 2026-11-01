@@ -510,7 +510,7 @@ modules/*/pane   each module's Panes
 - **One list of actions** (`app/web/src/shell/actions.ts`) holds what the
   window does, each with a name and a default key, by its physical place.
   Alt is the mod: Arrows focus, Shift+Arrows move, Ctrl+Arrows step the
-  width, Return opens a new Thread, N a new Pane, W closes, O the overview,
+  width, Return opens a new Thread, Shift+Return a new browser, N a new Pane, W closes, O the overview,
   PageUp and PageDown the workspace above or below, 1…9 go to one,
   Shift+1…9 move the Pane there, A shows or hides the sidebar. The window
   takes these keys before any Pane hears them; a terminal gets every other

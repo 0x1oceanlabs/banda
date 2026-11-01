@@ -5,6 +5,7 @@
  */
 import type { SpaceId } from "@banda/contract"
 import { NEW_THREAD, threadPane } from "@banda/agents-pane"
+import { browserPane, NEW_BROWSER } from "@banda/browser-pane"
 import { type PaneState, paneOf, type Place } from "@banda/ui/pane"
 import type { Action } from "../actions/actions"
 import { showing } from "../calls/sight"
@@ -68,6 +69,13 @@ export function newThread(workspaces: Workspaces, space: SpaceId): Workspaces {
   return opening(workspaces, space, thread, undefined, "right")
 }
 
+/** Opens a Pane in the focused Pane's Space, right of it. */
+function beside(shell: Shell, pane: PaneState): void {
+  shell.change((w) =>
+    opening(w, focused(w)?.space ?? shell.home, pane, undefined, "right")
+  )
+}
+
 /**
  * Goes to a thing that calls: to the Pane that shows it, on any
  * workspace, or to a new column that does.
@@ -117,17 +125,14 @@ export const ACTIONS: readonly Action<Shell>[] = [
     id: "pane.new",
     title: "New Pane",
     key: { code: "KeyN", alt: true },
-    // Of the focused Pane's Space, right of it.
-    run: (shell) =>
-      shell.change((w) =>
-        opening(
-          w,
-          focused(w)?.space ?? shell.home,
-          paneOf(launcher, {}),
-          undefined,
-          "right"
-        )
-      ),
+    run: (shell) => beside(shell, paneOf(launcher, {})),
+  },
+  {
+    id: "browser.new",
+    title: "New browser",
+    // As Omarchy's Super+Shift+Return.
+    key: { code: "Enter", alt: true, shift: true },
+    run: (shell) => beside(shell, paneOf(browserPane, NEW_BROWSER)),
   },
   {
     id: "pane.close",
