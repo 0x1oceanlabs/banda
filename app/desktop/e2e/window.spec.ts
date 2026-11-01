@@ -1,7 +1,13 @@
 import { readFileSync, writeFileSync } from "node:fs"
 import { join, resolve } from "node:path"
 import { expect, type Locator, test } from "@playwright/test"
-import { firstThread, startWindow, type Window } from "./window"
+import {
+  countNotes,
+  firstThread,
+  sendAndLeave,
+  startWindow,
+  type Window,
+} from "./window"
 
 let window: Window
 
@@ -831,18 +837,7 @@ test("a Thread that finishes while the Person is elsewhere calls them with a sou
   window = await startWindow()
   const { page } = window
   const { thread, composer } = await firstThread(page)
-  // Playwright hears nothing; it counts the sounds' notes as they start.
-  await page.evaluate(() => {
-    const counted = globalThis as unknown as { notes: number }
-    counted.notes = 0
-    const start = AudioScheduledSourceNode.prototype.start
-    AudioScheduledSourceNode.prototype.start = function (...args) {
-      counted.notes += 1
-      return start.apply(this, args)
-    }
-  })
-  const notes = () =>
-    page.evaluate(() => (globalThis as unknown as { notes: number }).notes)
+  const notes = await countNotes(page)
 
   // A turn the Person watches end makes no sound.
   await composer.fill("hello")
@@ -853,9 +848,7 @@ test("a Thread that finishes while the Person is elsewhere calls them with a sou
   expect(await notes()).toBe(0)
 
   // One that ends while they are in another Thread does.
-  await composer.fill("slow hello")
-  await composer.press("Enter")
-  await page.keyboard.press("Alt+Enter")
+  await sendAndLeave(page, composer, "slow hello")
   await expect(page.getByRole("region", { name: "New Thread" })).toBeVisible()
   const sidebar = page.getByRole("complementary", { name: "Sidebar" })
   await expect(
@@ -864,4 +857,20 @@ test("a Thread that finishes while the Person is elsewhere calls them with a sou
     })
   ).toBeVisible()
   await expect.poll(notes).toBeGreaterThan(0)
+})
+
+test("[sound] in look.toml chooses the sounds: off is silence", async () => {
+  window = await startWindow({ look: '[sound]\nfamily = "off"\n' })
+  const { page } = window
+  const { composer } = await firstThread(page)
+  const notes = await countNotes(page)
+  await sendAndLeave(page, composer, "slow hello")
+  const sidebar = page.getByRole("complementary", { name: "Sidebar" })
+  await expect(
+    sidebar.getByRole("button", { name: /slow hello/ }).getByRole("img", {
+      name: "Done",
+    })
+  ).toBeVisible()
+  await page.waitForTimeout(500)
+  expect(await notes()).toBe(0)
 })

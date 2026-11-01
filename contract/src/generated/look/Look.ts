@@ -3,6 +3,7 @@ import type { Motion } from "./Motion";
 import type { Problem } from "./Problem";
 import type { Schemes } from "./Schemes";
 import type { Shown } from "./Shown";
+import type { Sound } from "./Sound";
 import type { Source } from "./Source";
 
 /**
@@ -31,4 +32,8 @@ sources: Array<Source>,
  * What is wrong in the files. The look still applies: a broken layer
  * is left out, and `--follow` keeps the last good look.
  */
-problems: Array<Problem>, };
+problems: Array<Problem>, 
+/**
+ * Banda's sounds, which the window plays (ADR 0009).
+ */
+sound: Sound, };

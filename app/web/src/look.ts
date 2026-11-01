@@ -14,6 +14,7 @@ import {
   type Problem,
   shown,
 } from "@bandaso/contract/look"
+import { DEFAULT_SOUND, type SoundSettings } from "@bandaso/ui/sound"
 import type { Host } from "./host"
 
 const system = matchMedia("(prefers-color-scheme: dark)")
@@ -82,5 +83,16 @@ export function useLookProblems(): Problem[] {
       return () => listeners.delete(changed)
     },
     () => look?.problems ?? NONE
+  )
+}
+
+/** The sounds the look chose, `[sound]` (ADR 0009); the defaults till then. */
+export function useLookSound(): SoundSettings {
+  return useSyncExternalStore(
+    (changed) => {
+      listeners.add(changed)
+      return () => listeners.delete(changed)
+    },
+    () => look?.sound ?? DEFAULT_SOUND
   )
 }

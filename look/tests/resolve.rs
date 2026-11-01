@@ -297,3 +297,37 @@ fn following_prints_each_change_and_keeps_the_last_good_look() {
     assert_eq!(fixed.vars["--gap-inner"], "12px");
     assert!(fixed.problems.is_empty());
 }
+
+#[test]
+fn sound_in_look_toml_reaches_the_window_and_a_wrong_key_is_named() {
+    use bandaso_look::sound::{Call, Families, Family};
+    let machine = Machine::new(false);
+    let look = machine.look();
+    assert_eq!(look.sound.family, Families::One(Family::Banda));
+    assert_eq!(look.sound.volume, 0.6);
+
+    machine.look_toml("[sound]\nfamily = \"wood\"\nvolume = 0.4\ndone = false\n");
+    let look = machine.look();
+    assert!(look.problems.is_empty(), "{:?}", look.problems);
+    assert_eq!(look.sound.family, Families::One(Family::Wood));
+    assert_eq!(look.sound.volume, 0.4);
+    assert_eq!(look.sound.done, Call::On(false));
+    assert_eq!(look.sound.asking, Call::On(true));
+
+    machine.look_toml("[sound]\nvolume = 2\nasking = \"pop\"\n");
+    let look = machine.look();
+    let words: Vec<_> = look.problems.iter().map(|p| p.message.as_str()).collect();
+    assert_eq!(words, ["sound.volume is from 0 to 1"]);
+    assert_eq!(look.sound.volume, 0.6, "a wrong volume keeps the default");
+    assert_eq!(
+        look.sound.asking,
+        Call::From(Family::Pop),
+        "the rest applies"
+    );
+
+    machine.look_toml("[sound]\nfamily = \"bell\"\n");
+    let look = machine.look();
+    assert_eq!(look.problems.len(), 1);
+    assert!(look.problems[0].message.contains("\"bell\" is no family"));
+    assert_eq!(look.problems[0].line, Some(2), "{:?}", look.problems);
+}

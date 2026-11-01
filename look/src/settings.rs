@@ -3,6 +3,7 @@
 //! and [`Settings::over`] lays one layer over another.
 
 use crate::motion::MotionSettings;
+use crate::sound::SoundSettings;
 use serde::Deserialize;
 use std::collections::BTreeMap;
 use toml::Spanned;
@@ -34,6 +35,9 @@ pub struct Settings {
     pub bar: Bar,
     #[serde(default)]
     pub motion: MotionSettings,
+    /// Banda's sounds (ADR 0009, decision 5).
+    #[serde(default)]
+    pub sound: SoundSettings,
 }
 
 #[derive(Clone, Debug, Deserialize, PartialEq)]
@@ -181,6 +185,7 @@ impl Settings {
                 height: self.bar.height.or(under.bar.height),
             },
             motion: self.motion.over(under.motion),
+            sound: self.sound.over(under.sound),
         }
     }
 
@@ -208,6 +213,7 @@ impl Settings {
             },
             bar: Bar { height: Some(36.0) },
             motion: MotionSettings::defaults(),
+            sound: SoundSettings::defaults(),
         }
     }
 

@@ -8,6 +8,7 @@ import { tmpdir } from "node:os"
 import { join, resolve } from "node:path"
 import {
   _electron as electron,
+  expect,
   type ElectronApplication,
   type Locator,
   type Page,
@@ -119,4 +120,42 @@ export async function firstThread(
   const composer = page.getByRole("textbox", { name: "Message to Fake AI" })
   const thread = page.locator("section").filter({ has: composer })
   return { thread, composer }
+}
+
+/**
+ * Counts the notes of Banda's sounds as they start: Playwright hears
+ * nothing, so a test asks how many began.
+ */
+export async function countNotes(page: Page): Promise<() => Promise<number>> {
+  await page.evaluate(() => {
+    const counted = globalThis as unknown as { notes: number }
+    counted.notes = 0
+    const start = AudioScheduledSourceNode.prototype.start
+    AudioScheduledSourceNode.prototype.start = function (...args) {
+      counted.notes += 1
+      return start.apply(this, args)
+    }
+  })
+  return () =>
+    page.evaluate(() => (globalThis as unknown as { notes: number }).notes)
+}
+
+/**
+ * Sends `text` in `composer`'s Thread and goes to a new Thread as soon as
+ * it started, so the first one ends while the Person is elsewhere. The
+ * Fake AI takes its time over a message that says "slow".
+ */
+export async function sendAndLeave(
+  page: Page,
+  composer: Locator,
+  text: string
+) {
+  await composer.fill(text)
+  await composer.press("Enter")
+  // A Thread not yet started gets the focus instead of a new one, so the
+  // first message must have started it.
+  const thread = composer.locator("xpath=ancestor::section[1]")
+  await expect(thread).not.toHaveAccessibleName("New Thread")
+  await page.keyboard.press("Alt+Enter")
+  await expect(page.getByRole("region", { name: "New Thread" })).toBeVisible()
 }

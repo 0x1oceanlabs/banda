@@ -40,7 +40,9 @@ bandaso call/follow   the CLI: the same API, for people, scripts and Agents
 - **The look is the window's machine's** (ADR 0007). `bandaso look`
   reads Omarchy's theme, Hyprland's windows and `~/.config/banda/look.toml`
   and prints the CSS variables as JSON, with no engine; `--follow` prints
-  each change, and `check` names a broken file's line.
+  each change, and `check` names a broken file's line. Its `[sound]` says
+  which sounds the window plays (ADR 0009); the look's layers apply to it
+  as to every other key.
 - **The CLI prints JSON.** `bandaso call <method>` prints `{"ok": …}`.
   `bandaso follow` prints events, one per line. When the engine refuses
   the call, the hello or the follow, the CLI prints
@@ -542,9 +544,11 @@ modules/*/pane   each module's Panes
     sound, measured so done is the softest and asking the clearest in
     every family. Their noise is seeded, so a sound is the same every
     time.
-  - What the Person chose is `[sound]` in `look.toml`; until the look
-    sends it, the defaults play. Electron lets the page play sound before
-    the first click.
+  - What the Person chose is `[sound]` in `look.toml` (`look/src/sound.rs`):
+    the family, the volume, the room, and each call on, off or borrowed
+    from another family. The page takes it with the look
+    (`useLookSound`); until the first look comes, the defaults play.
+    Electron lets the page play sound before the first click.
 - **Only `window.bandaso` ties the page to the desktop.** It names no
   Electron API, so a browser can host it later; for now the engine lets in
   only `app://bandaso` and pages on localhost.
