@@ -15,8 +15,9 @@
 //! | Method | Right | What it does |
 //! |---|---|---|
 //! | `agents.harnesses` | read | the Harnesses this machine can start |
-//! | `agents.account` | manage | how a Person signs in to a Harness: `{harness}` |
+//! | `agents.account` | manage | a Harness as it says: its program, who is signed in, how to sign in: `{harness}` |
 //! | `agents.sign_in` | manage | signs in with one of those ways, then the Harness starts again: `{harness, way}` |
+//! | `agents.sign_out` | manage | asks the Harness to sign out, then it starts again: `{harness}` |
 //! | `agents.list` | read | the Space's Agents |
 //! | `agents.create` | manage | a new Agent: `{name, harness}` |
 //! | `agents.threads` | read | Threads, the latest first: `{agent?}` |
@@ -55,8 +56,8 @@ use base64::engine::general_purpose::STANDARD as BASE64;
 use images::Images;
 use live::Live;
 use model::{
-    Body, Fact, Image, ImageId, Item, ItemId, Offer, Settings, SignInWay, ThreadId, ThreadList,
-    ThreadSummary, ThreadView, TurnId, TurnState, VERSION,
+    Body, Fact, Image, ImageId, Item, ItemId, Offer, Settings, ThreadId, ThreadList, ThreadSummary,
+    ThreadView, TurnId, TurnState, VERSION,
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -107,6 +108,15 @@ impl Agents {
         })
     }
 
+    /// After a sign-in or a sign-out: ACP has a client start the Harness
+    /// again, so it reads the account anew, in every Space, since they
+    /// share it. The receipt keeps the answer, so the same command sent
+    /// again does not do it twice.
+    async fn start_again(&self, call: &Call, harness: &str) -> Result<Value, Refusal> {
+        self.live.let_go(harness).await;
+        call.command(|_| Ok(Value::Null)).await
+    }
+
     /// Harness entry `id` with its process in `space`, started if need be.
     async fn running(
         &self,
@@ -123,6 +133,7 @@ enum Method {
     Harnesses,
     Account,
     SignIn,
+    SignOut,
     List,
     Create,
     Threads,
@@ -147,6 +158,7 @@ impl Method {
             "harnesses" => Method::Harnesses,
             "account" => Method::Account,
             "sign_in" => Method::SignIn,
+            "sign_out" => Method::SignOut,
             "list" => Method::List,
             "create" => Method::Create,
             "threads" => Method::Threads,
@@ -176,7 +188,7 @@ impl Method {
             | Method::Defaults
             | Method::Image => Right::Read,
             // Which account a Space's Agents work under is the Space's own.
-            Method::Create | Method::Account | Method::SignIn => Right::Manage,
+            Method::Create | Method::Account | Method::SignIn | Method::SignOut => Right::Manage,
             Method::Send
             | Method::Edit
             | Method::Withdraw
@@ -200,14 +212,6 @@ struct OneHarness {
 struct SignIn {
     harness: String,
     way: String,
-}
-
-/// What `agents.account` answers: how a Person signs in to a Harness on
-/// this machine, as the Harness offers it.
-#[derive(Clone, Debug, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "agents/")]
-pub struct Account {
-    pub ways: Vec<SignInWay>,
 }
 
 #[derive(Deserialize)]
@@ -365,9 +369,7 @@ impl Module for Agents {
             Method::Account => {
                 let OneHarness { harness } = decode(params)?;
                 let (_, connection) = self.running(space.id(), &harness).await?;
-                value(Account {
-                    ways: connection.ways().to_vec(),
-                })
+                value(connection.account().await)
             }
             Method::SignIn => {
                 let SignIn { harness, way } = decode(params)?;
@@ -388,13 +390,15 @@ impl Module for Agents {
                     connection.sign_in(&way).await.map_err(Refusal::conflict)?;
                 }
                 drop(connection);
-                // ACP has a client start the Harness again after a sign-in,
-                // so it reads the account anew; in every Space, since they
-                // share the account.
-                self.live.let_go(&harness.id).await;
-                // Its receipt keeps the answer, so the same command sent
-                // again does not sign in again.
-                call.command(|_| Ok(Value::Null)).await
+                self.start_again(&call, &harness.id).await
+            }
+            Method::SignOut => {
+                let OneHarness { harness } = decode(params)?;
+                call.command_id()?;
+                let (harness, connection) = self.running(space.id(), &harness).await?;
+                connection.sign_out().await.map_err(Refusal::conflict)?;
+                drop(connection);
+                self.start_again(&call, &harness.id).await
             }
             Method::Create => {
                 let Create { name, harness } = decode(params)?;

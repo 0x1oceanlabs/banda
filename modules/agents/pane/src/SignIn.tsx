@@ -43,12 +43,37 @@ export function SignIn({
       return { harness, ways: account.ways }
     }, [engine, space, agent])
   )
-  const signing = useAct()
   if (found.state === "loading") return <Spinner />
   if (found.state === "refused")
     return <Problem>{found.refusal.message}</Problem>
   if (found.value === null) return null
   const { harness, ways } = found.value
+  return (
+    <Ways
+      engine={engine}
+      space={space}
+      harness={harness}
+      ways={ways}
+      onSignedIn={onSignedIn}
+    />
+  )
+}
+
+/** The ways a Harness offers to sign in, each with what it takes. */
+export function Ways({
+  engine,
+  space,
+  harness,
+  ways,
+  onSignedIn,
+}: {
+  engine: Engine
+  space: SpaceId
+  harness: string
+  ways: SignInWay[]
+  onSignedIn: () => void
+}) {
+  const signing = useAct()
   const signIn = async (way: SignInWay) => {
     const done = await signing.act(() =>
       engine.command("agents.sign_in", { harness, way: way.id }, space)
@@ -137,7 +162,7 @@ function Copy({ text }: { text: string }) {
   )
 }
 
-function Problem({ children }: { children: React.ReactNode }) {
+export function Problem({ children }: { children: React.ReactNode }) {
   return (
     <p role="alert" className="text-xs text-destructive">
       {children}

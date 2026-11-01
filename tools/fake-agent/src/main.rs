@@ -49,7 +49,9 @@
 //!
 //! With `FAKE_AGENT_HOME` set it has an account, kept as a file there. It
 //! reads it when it starts, and a prompt fails as one whose Person must
-//! sign in until someone has. It offers two ways: `fake-sign-in`, which
+//! sign in until someone has. It says who is signed in as Claude Code's
+//! adapter does (`_auth/status_update`), and signs out when asked. It
+//! offers two ways to sign in: `fake-sign-in`, which
 //! runs `bandaso-fake-agent --sign-in` in a terminal, where the Person
 //! pastes the code `fake-code`, as Claude Code's adapter offers to a client
 //! that runs terminals; and `fake-browser`, which signs in by itself, as
@@ -68,18 +70,19 @@
 
 use agent_client_protocol::schema::ProtocolVersion;
 use agent_client_protocol::schema::v1::{
-    AgentCapabilities, AuthMethod, AuthMethodAgent, AuthMethodTerminal, AuthenticateRequest,
-    AuthenticateResponse, AvailableCommand, AvailableCommandInput, AvailableCommandsUpdate,
-    CancelNotification, ConfigOptionUpdate, ContentBlock, ContentChunk, Cost,
-    CreateElicitationRequest, Diff, ElicitationAction, ElicitationContentValue,
+    AgentAuthCapabilities, AgentCapabilities, AuthMethod, AuthMethodAgent, AuthMethodTerminal,
+    AuthenticateRequest, AuthenticateResponse, AvailableCommand, AvailableCommandInput,
+    AvailableCommandsUpdate, CancelNotification, ConfigOptionUpdate, ContentBlock, ContentChunk,
+    Cost, CreateElicitationRequest, Diff, ElicitationAction, ElicitationContentValue,
     ElicitationFormMode, ElicitationSchema, ElicitationSessionScope, EnumOption, Implementation,
-    InitializeRequest, InitializeResponse, LoadSessionRequest, LoadSessionResponse, MessageId,
-    NewSessionRequest, NewSessionResponse, Notice, NoticeSeverity, PermissionOption,
-    PermissionOptionKind, Plan, PlanEntry, PlanEntryPriority, PlanEntryStatus, PromptCapabilities,
-    PromptRequest, PromptResponse, RequestPermissionOutcome, RequestPermissionRequest,
-    ResumeSessionRequest, ResumeSessionResponse, SessionCapabilities, SessionConfigOption,
-    SessionConfigOptionCategory, SessionConfigOptionValue, SessionConfigSelectOption, SessionId,
-    SessionNotification, SessionResumeCapabilities, SessionUpdate, SetSessionConfigOptionRequest,
+    InitializeRequest, InitializeResponse, LoadSessionRequest, LoadSessionResponse,
+    LogoutCapabilities, LogoutRequest, LogoutResponse, MessageId, NewSessionRequest,
+    NewSessionResponse, Notice, NoticeSeverity, PermissionOption, PermissionOptionKind, Plan,
+    PlanEntry, PlanEntryPriority, PlanEntryStatus, PromptCapabilities, PromptRequest,
+    PromptResponse, RequestPermissionOutcome, RequestPermissionRequest, ResumeSessionRequest,
+    ResumeSessionResponse, SessionCapabilities, SessionConfigOption, SessionConfigOptionCategory,
+    SessionConfigOptionValue, SessionConfigSelectOption, SessionId, SessionNotification,
+    SessionResumeCapabilities, SessionUpdate, SetSessionConfigOptionRequest,
     SetSessionConfigOptionResponse, StopReason, StringPropertySchema, Terminal, TextContent,
     ToolCall, ToolCallContent, ToolCallStatus, ToolCallUpdate, ToolCallUpdateFields, ToolKind,
     UnstructuredCommandInput, UsageUpdate,
@@ -226,6 +229,25 @@ impl Fake {
 
 fn say(cx: &ConnectionTo<Client>, session: &SessionId, update: SessionUpdate) -> Result<(), Error> {
     cx.send_notification(SessionNotification::new(session.clone(), update))
+}
+
+/// Who is signed in, as Claude Code's adapter pushes it.
+#[derive(Clone, Debug, Serialize, Deserialize, agent_client_protocol::JsonRpcNotification)]
+#[notification(method = "_auth/status_update")]
+struct AuthStatusUpdate {
+    #[serde(rename = "authStatus")]
+    status: serde_json::Value,
+}
+
+fn report(cx: &ConnectionTo<Client>, signed_in: bool) -> Result<(), Error> {
+    let status = match signed_in {
+        true => json!({
+            "kind": "account", "label": "Fake Pro",
+            "account": { "email": "person@example.invalid", "plan": "pro" },
+        }),
+        false => json!({ "kind": "none", "label": "Not logged in" }),
+    };
+    cx.send_notification(AuthStatusUpdate { status })
 }
 
 /// Its commands; with `/init` once it has learned that.
@@ -846,7 +868,7 @@ async fn main() -> Result<(), Error> {
                 let fake = fake.clone();
                 async move |request: InitializeRequest,
                             responder: Responder<InitializeResponse>,
-                            _cx: ConnectionTo<Client>| {
+                            cx: ConnectionTo<Client>| {
                     let shows = request.client_capabilities.session.as_ref();
                     let notices = shows.is_some_and(|s| s.notices.is_some());
                     fake.notices.store(notices, Ordering::Relaxed);
@@ -868,14 +890,18 @@ async fn main() -> Result<(), Error> {
                     let images = std::env::var_os("FAKE_AGENT_NO_IMAGES").is_none();
                     let steers = std::env::var_os("FAKE_AGENT_NO_STEERING").is_none();
                     let meta = json!({ "steering": { "supported": steers } });
-                    let capabilities = AgentCapabilities::new()
+                    let mut capabilities = AgentCapabilities::new()
                         .prompt_capabilities(PromptCapabilities::new().image(images))
                         .load_session(true)
                         .session_capabilities(
                             SessionCapabilities::new().resume(SessionResumeCapabilities::new()),
                         );
                     let mut ways = Vec::new();
-                    if account().is_some() {
+                    let has_account = account().is_some();
+                    if has_account {
+                        capabilities = capabilities
+                            .auth(AgentAuthCapabilities::new().logout(LogoutCapabilities::new()))
+                            .meta(json!({ "authStatus": {} }).as_object().cloned());
                         if request.client_capabilities.auth.terminal {
                             ways.push(AuthMethod::Terminal(
                                 AuthMethodTerminal::new("fake-sign-in", "Fake account")
@@ -897,7 +923,12 @@ async fn main() -> Result<(), Error> {
                                 "bandaso-fake-agent",
                                 env!("CARGO_PKG_VERSION"),
                             )),
-                    )
+                    )?;
+                    // Once it started, as Claude Code's adapter does.
+                    match has_account {
+                        true => report(&cx, fake.signed_in.load(Ordering::Relaxed)),
+                        false => Ok(()),
+                    }
                 }
             },
             agent_client_protocol::on_receive_request!(),
@@ -907,16 +938,34 @@ async fn main() -> Result<(), Error> {
                 let fake = fake.clone();
                 async move |request: AuthenticateRequest,
                             responder: Responder<AuthenticateResponse>,
-                            _cx: ConnectionTo<Client>| {
+                            cx: ConnectionTo<Client>| {
                     match account() {
                         Some(signed_in) if &*request.method_id.0 == "fake-browser" => {
                             std::fs::write(signed_in, "yes")
                                 .map_err(|_| Error::internal_error())?;
                             fake.signed_in.store(true, Ordering::Relaxed);
-                            responder.respond(AuthenticateResponse::new())
+                            responder.respond(AuthenticateResponse::new())?;
+                            report(&cx, true)
                         }
                         _ => responder.respond_with_error(Error::invalid_params()),
                     }
+                }
+            },
+            agent_client_protocol::on_receive_request!(),
+        )
+        .on_receive_request(
+            {
+                let fake = fake.clone();
+                async move |_request: LogoutRequest,
+                            responder: Responder<LogoutResponse>,
+                            cx: ConnectionTo<Client>| {
+                    let Some(signed_in) = account() else {
+                        return responder.respond_with_error(Error::method_not_found());
+                    };
+                    let _ = std::fs::remove_file(signed_in);
+                    fake.signed_in.store(false, Ordering::Relaxed);
+                    responder.respond(LogoutResponse::new())?;
+                    report(&cx, false)
                 }
             },
             agent_client_protocol::on_receive_request!(),

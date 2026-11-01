@@ -19,15 +19,18 @@
 //! the loop answers it once the Person decides.
 //!
 //! It declares terminal sign-in too, so a Harness offers the ways it signs
-//! in, Claude Code's in a terminal among them ([`Connection::ways`]).
+//! in, Claude Code's in a terminal among them ([`Connection::ways`]). Who
+//! is signed in comes from the Harness's own reports (`_auth/status_update`,
+//! which Claude Code's and Codex's adapters push), never from its files.
+//! A Harness that does not report it shows no one.
 //!
 //! Starting a Harness and opening a session are bounded; a turn is not: it
 //! runs until the Harness ends it or a Person stops it.
 
 use crate::model::{
-    Cost, Exit, Failure, Field, FieldValue, HarnessOption, Input, Mode, Offer, OptionChoice,
-    OptionValue, PlanStep, Settings, SignInWay, SlashCommand, StepState, TextFormat, ThreadId,
-    ToolContent, ToolKind, ToolStatus, TurnState, Usage, Values,
+    Account, Adapter, Cost, Exit, Failure, Field, FieldValue, HarnessOption, Input, Mode, Offer,
+    OptionChoice, OptionValue, PlanStep, Settings, SignInWay, SignedInAs, SlashCommand, StepState,
+    TextFormat, ThreadId, ToolContent, ToolKind, ToolStatus, TurnState, Usage, Values,
 };
 use crate::rules::{Ending, Offered};
 use crate::settings::Harness;
@@ -42,7 +45,7 @@ use std::path::Path;
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
-use tokio::sync::{mpsc, oneshot};
+use tokio::sync::{mpsc, oneshot, watch};
 use tokio::task::JoinHandle;
 use tokio::time::timeout;
 
@@ -55,6 +58,11 @@ pub const OPENING: Duration = Duration::from_secs(60);
 const STEERING: Duration = Duration::from_secs(30);
 /// How long a Harness that signs in by itself may wait for its Person.
 const SIGNING_IN: Duration = Duration::from_secs(10 * 60);
+/// How long a Harness may take to sign out.
+const SIGNING_OUT: Duration = Duration::from_secs(60);
+/// How long a Harness that reports who is signed in may take to first say
+/// it: Claude Code's adapter asks its CLI, for up to 5 seconds.
+const FIRST_REPORT: Duration = Duration::from_secs(6);
 
 /// What a Harness said during a turn.
 pub enum Said {
@@ -237,6 +245,49 @@ enum SteeringOutcome {
 const STEERING_META: &str = "steering";
 /// An idle session leaves the message to the engine.
 const LEAVE_IT: &str = "promptRequired";
+/// Where a Harness declares that it reports who is signed in.
+const REPORTS_ACCOUNT_META: &str = "authStatus";
+
+/// Who the Harness says is signed in, pushed once it started and at each
+/// change. The adapters' extension, until ACP has it.
+#[derive(Clone, Debug, Serialize, Deserialize, agent_client_protocol::JsonRpcNotification)]
+#[notification(method = "_auth/status_update")]
+struct AuthStatusUpdate {
+    #[serde(rename = "authStatus")]
+    status: AuthStatus,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+struct AuthStatus {
+    /// `account`, `api_key`, `gateway`, `external`, or `none`.
+    kind: String,
+    label: String,
+    #[serde(default)]
+    detail: Option<String>,
+    #[serde(default)]
+    account: Option<AuthAccount>,
+}
+
+#[derive(Clone, Debug, Default, Serialize, Deserialize)]
+struct AuthAccount {
+    #[serde(default)]
+    email: Option<String>,
+    #[serde(default)]
+    organization: Option<String>,
+}
+
+impl From<AuthStatus> for SignedInAs {
+    fn from(status: AuthStatus) -> Self {
+        let account = status.account.unwrap_or_default();
+        SignedInAs {
+            signed_in: status.kind != "none",
+            label: status.label,
+            detail: status.detail,
+            email: account.email,
+            organization: account.organization,
+        }
+    }
+}
 
 /// What a session runs with, as the Harness last said.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
@@ -404,6 +455,9 @@ struct Started {
     cx: ConnectionTo<Agent>,
     agreed: Agreed,
     methods: Vec<acp::AuthMethod>,
+    adapter: Option<Adapter>,
+    signs_out: bool,
+    reports_account: bool,
 }
 
 /// One Harness process and its ACP connection. Dropping it stops the
@@ -416,6 +470,11 @@ pub struct Connection {
     agreed: Agreed,
     /// The ways it offers to sign in.
     ways: Vec<SignInWay>,
+    adapter: Option<Adapter>,
+    signs_out: bool,
+    reports_account: bool,
+    /// Who it last said is signed in.
+    account: watch::Receiver<Option<SignedInAs>>,
     routes: Routes,
     learned: Learned,
     /// When a turn last began or ended here.
@@ -451,6 +510,13 @@ fn plain(error: impl std::fmt::Display) -> String {
     error.to_string()
 }
 
+/// What a Harness's error says, in the words it has for a Person.
+fn in_words(error: &agent_client_protocol::Error) -> &str {
+    let said = error.data.as_ref().and_then(|d| d.get("message"));
+    said.and_then(|m| m.as_str())
+        .unwrap_or(error.message.trim())
+}
+
 impl Connection {
     /// Starts `harness` and agrees on ACP v1 with it.
     pub async fn start(harness: &Harness) -> Result<Arc<Connection>, String> {
@@ -465,11 +531,15 @@ impl Connection {
         });
         let (routes, learned) = (Routes::default(), Learned::default());
         let (ready, started) = oneshot::channel();
-        let driver = tokio::spawn(drive(process, routes.clone(), learned.clone(), ready));
+        let (told, account) = watch::channel(None);
+        let driver = tokio::spawn(drive(process, routes.clone(), learned.clone(), told, ready));
         let Started {
             cx,
             agreed,
             methods,
+            adapter,
+            signs_out,
+            reports_account,
         } = match timeout(STARTING, started).await {
             Ok(Ok(Ok(agreed))) => agreed,
             Ok(Ok(Err(error))) => return Err(error),
@@ -485,6 +555,10 @@ impl Connection {
             name: harness.name.clone(),
             agreed,
             ways: ways(harness, methods),
+            adapter,
+            signs_out,
+            reports_account,
+            account,
             routes,
             learned,
             active: Arc::new(Mutex::new(Instant::now())),
@@ -790,24 +864,49 @@ impl Connection {
 
     /// Signs in with `way`, which the Harness does by itself: Codex opens
     /// the browser and waits there for the Person.
+    /// This Harness entry as its process says, and how to sign in to it.
+    /// A Harness that reports who is signed in says it soon after it
+    /// starts: until then this waits, a few seconds at most.
+    pub async fn account(&self) -> Account {
+        let mut account = self.account.clone();
+        if self.reports_account {
+            let _ = timeout(FIRST_REPORT, account.wait_for(Option::is_some)).await;
+        }
+        let signed_in_as = account.borrow().clone();
+        Account {
+            ways: self.ways.clone(),
+            adapter: self.adapter.clone(),
+            signed_in_as,
+            signs_out: self.signs_out,
+        }
+    }
+
+    /// Asks the Harness to sign out, when it says it does.
+    pub async fn sign_out(&self) -> Result<(), String> {
+        if !self.signs_out {
+            return Err(format!(
+                "{} does not sign out from Bandaso: sign out in a terminal.",
+                self.name
+            ));
+        }
+        let asked = self.cx.send_request(acp::LogoutRequest::new()).block_task();
+        let signed_out = timeout(SIGNING_OUT, asked)
+            .await
+            .map_err(|_| format!("Signing out of {} took too long: try again.", self.name))?;
+        signed_out
+            .map(|_| ())
+            .map_err(|error| format!("{} could not sign out: {}", self.name, in_words(&error)))
+    }
+
     pub async fn sign_in(&self, way: &str) -> Result<(), String> {
         let request = acp::AuthenticateRequest::new(way.to_owned());
         let asked = self.cx.send_request(request).block_task();
         let signed_in = timeout(SIGNING_IN, asked)
             .await
             .map_err(|_| format!("Signing in to {} took too long: try again.", self.name))?;
-        signed_in.map(|_| ()).map_err(|error| {
-            let said = error
-                .data
-                .as_ref()
-                .and_then(|d| d.get("message"))
-                .and_then(|m| m.as_str());
-            format!(
-                "{} could not sign in: {}",
-                self.name,
-                said.unwrap_or(error.message.trim())
-            )
-        })
+        signed_in
+            .map(|_| ())
+            .map_err(|error| format!("{} could not sign in: {}", self.name, in_words(&error)))
     }
 }
 
@@ -838,6 +937,7 @@ async fn drive(
     process: AcpAgent,
     routes: Routes,
     learned: Learned,
+    told: watch::Sender<Option<SignedInAs>>,
     ready: oneshot::Sender<Result<Started, String>>,
 ) {
     let heard = routes.clone();
@@ -846,6 +946,13 @@ async fn drive(
     let served = Client
         .builder()
         .name("bandaso")
+        .on_receive_notification(
+            async move |note: AuthStatusUpdate, _cx: ConnectionTo<Agent>| {
+                told.send_replace(Some(note.status.into()));
+                Ok(())
+            },
+            agent_client_protocol::on_receive_notification!(),
+        )
         .on_receive_notification(
             async move |note: acp::SessionNotification, _cx: ConnectionTo<Agent>| {
                 let said = match note.update {
@@ -1031,9 +1138,20 @@ async fn drive(
                             .and_then(serde_json::Value::as_bool)
                             .unwrap_or(false),
                     };
+                    let reports_account = capabilities
+                        .meta
+                        .as_ref()
+                        .is_some_and(|meta| meta.contains_key(REPORTS_ACCOUNT_META));
+                    let adapter = answer.agent_info.map(|info| Adapter {
+                        name: info.title.unwrap_or(info.name),
+                        version: info.version,
+                    });
                     let _ = ready.send(Ok(Started {
                         cx: cx.clone(),
                         agreed,
+                        signs_out: capabilities.auth.logout.is_some(),
+                        reports_account,
+                        adapter,
                         methods: answer.auth_methods,
                     }));
                 }

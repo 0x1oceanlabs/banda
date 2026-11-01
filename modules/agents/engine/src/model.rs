@@ -182,6 +182,53 @@ pub struct HarnessView {
     pub name: String,
 }
 
+/// What `agents.account` answers: a Harness entry on this computer as its
+/// process says when it starts, and how a Person signs in to it.
+#[derive(Clone, Debug, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "agents/")]
+pub struct Account {
+    pub ways: Vec<SignInWay>,
+    /// What runs, as it names itself.
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub adapter: Option<Adapter>,
+    /// Who it says is signed in; `None` when it does not say.
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub signed_in_as: Option<SignedInAs>,
+    /// It signs out when asked (`agents.sign_out`).
+    pub signs_out: bool,
+}
+
+/// A Harness's program, as it names itself when it starts: for Claude
+/// Code and Codex, their ACP adapter.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "agents/")]
+pub struct Adapter {
+    pub name: String,
+    pub version: String,
+}
+
+/// Who a Harness says is signed in, in its own words: a plan such as
+/// "Claude Max" with its email, an API key, a gateway, or no one. Bandaso
+/// reads none of its files to know.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "agents/")]
+pub struct SignedInAs {
+    /// Whether anyone is: `false` when the Harness says no one is.
+    pub signed_in: bool,
+    pub label: String,
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub detail: Option<String>,
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub email: Option<String>,
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub organization: Option<String>,
+}
+
 /// A way to sign in to a Harness, as the Harness offers it. Bandaso runs
 /// it and holds none of the account's credentials: the Harness keeps them.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]

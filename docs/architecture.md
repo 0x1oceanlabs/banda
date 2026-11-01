@@ -182,11 +182,13 @@ If Chat is removed, Agents still works through its own Thread.
   (`question.reply`) have keys of their own, so neither waits behind the
   turn it is for.
 - **While the Agent works, a message goes into its turn or waits**, as in
-  T3 Code (ADR 0003, decision 8). Enter sends it into the running turn
+  T3 Code (ADR 0003, decision 8). Send now puts it into the running turn
   (steering): the engine hands it over through `_session/steering`, which
   Claude Code's and Codex's adapters share (`turn.steer`, keyed by the
   Thread's steering), and what the Agent says of it follows it in the
-  Thread. Queue, or Ctrl+Enter, has it wait for a turn of its own. A
+  Thread. Queue has it wait for a turn of its own. Enter does one of the
+  two, Send now unless the window chose Queue in the Harnesses Pane, and
+  Ctrl+Enter the other. A
   message the turn cannot take, as when it just ended or a Person stopped
   it, waits for its own turn instead; a Harness that cannot steer stops its
   turn for it, and says so. A message sent into a turn whose Harness still
@@ -243,6 +245,15 @@ If Chat is removed, Agents still works through its own Thread.
     the account when it next starts.
   - A turn that failed for a sign-in offers the ways, and goes again once
     the Person signed in.
+  - Who is signed in comes from the Harness itself: Claude Code's and
+    Codex's adapters push it (`_auth/status_update`, their extension, until
+    ACP has it). `agents.account` gives it with the program's name and
+    version; it waits a few seconds for a Harness that reports it but has
+    not yet. A Harness that does not report it shows no one.
+  - A Harness that declares ACP's logout signs out when asked
+    (`agents.sign_out`), and its processes are let go as after a sign-in.
+  - The Harnesses Pane, like T3 Code's provider settings, shows each entry
+    with its program, who is signed in, and Sign in or Sign out.
 - **The Harness's notices**, such as warnings, join the Thread as lines of
   their own.
 - **A Thread has settings: a mode, Plan, and the Harness's options.** The

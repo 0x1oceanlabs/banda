@@ -741,6 +741,13 @@ impl World {
         self.call(who, "agents.sign_in", params).await
     }
 
+    async fn account(&self) -> Value {
+        let params = json!({ "harness": "fake" });
+        self.call(self.person(), "agents.account", params)
+            .await
+            .unwrap()
+    }
+
     /// Tries the failed turn of `sent` again and waits for it to end:
     /// how it ended, and what was sent to try it.
     async fn retried(&self, sent: &Value) -> (TurnState, Value) {
@@ -839,6 +846,58 @@ async fn a_harness_signs_in_by_itself_for_a_person_only() {
 
     world.sign_in(world.person(), "fake-browser").await.unwrap();
     assert_eq!(world.retried(&sent).await.0, TurnState::Done);
+}
+
+#[tokio::test]
+async fn a_harness_says_who_is_signed_in_and_signs_out() {
+    let (root, home) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
+    let world = signed_out(root.path(), home.path()).await;
+    let account = world.account().await;
+    assert_eq!(
+        account["adapter"]["name"], "bandaso-fake-agent",
+        "{account}"
+    );
+    assert_eq!(account["signs_out"], true);
+    let no_one = &account["signed_in_as"];
+    assert_eq!(no_one["signed_in"], false, "{account}");
+    assert_eq!(no_one["label"], "Not logged in");
+
+    world.sign_in(world.person(), "fake-browser").await.unwrap();
+    let signed_in = world.account().await["signed_in_as"].clone();
+    assert_eq!(signed_in["signed_in"], true, "{signed_in}");
+    assert_eq!(signed_in["label"], "Fake Pro");
+    assert_eq!(signed_in["email"], "person@example.invalid");
+
+    let sign_out = |who| world.call(who, "agents.sign_out", json!({ "harness": "fake" }));
+    let refused = sign_out(Participant::Agent(world.agent)).await.unwrap_err();
+    assert_eq!(refused.code, Code::Forbidden);
+    sign_out(world.person()).await.unwrap();
+    let account = world.account().await;
+    assert_eq!(account["signed_in_as"]["signed_in"], false, "{account}");
+    let (_, view) = failing(&world, "hello").await;
+    assert_eq!(
+        view.turns[0].failure,
+        Some(Failure::SignIn),
+        "it is signed out"
+    );
+}
+
+#[tokio::test]
+async fn a_harness_that_does_not_report_shows_no_one() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let account = world.account().await;
+    assert!(account.get("signed_in_as").is_none(), "{account}");
+    assert_eq!(account["signs_out"], false);
+    let refused = world
+        .call(
+            world.person(),
+            "agents.sign_out",
+            json!({ "harness": "fake" }),
+        )
+        .await
+        .unwrap_err();
+    assert_eq!(refused.code, Code::Conflict, "{refused:?}");
 }
 
 impl World {
