@@ -406,7 +406,9 @@ If Chat is removed, Agents still works through its own Thread.
   engine knows of a turn and what happened (started, stopped, changed,
   taken back, steered, tried again), it says the turn's next state and
   whether the queue is held, or refuses, a late event too. The rules the
-  commands ask are questions to it.
+  commands ask are questions to it. A turn keeps who opened it
+  (`agents_turns.opener`): a Person's message, a retry, a message its turn
+  could not take, or the Agent by itself; "by itself" is read from it.
 - **A turn says what a Person may do with it** (`can`, ADR 0014): stop
   it, try it again, change, take back or send its message now, or send a
   message into it. `rules::can` asks `next` what it accepts, and the

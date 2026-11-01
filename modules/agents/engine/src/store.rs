@@ -3,7 +3,8 @@
 
 use crate::model::{
     Asking, Body, Failure, Image, ImageId, Item, ItemId, LISTED_MESSAGE, LatestTurn, ListedThread,
-    Offer, QuestionState, Settings, ThreadId, ThreadSummary, TurnId, TurnState, TurnView, Usage,
+    Offer, Opener, QuestionState, Settings, ThreadId, ThreadSummary, TurnId, TurnState, TurnView,
+    Usage,
 };
 use banda_kernel::{AgentId, Error, Participant, Refusal};
 use rusqlite::{Connection, OptionalExtension, Row, params};
@@ -99,6 +100,14 @@ ALTER TABLE agents_threads ADD COLUMN harness TEXT;
 ALTER TABLE agents_turns ADD COLUMN started_at INTEGER;
 ALTER TABLE agents_turns ADD COLUMN ended_at INTEGER;
 "#,
+    r#"
+-- Who opened each turn (ADR 0018, decision 2). A turn from
+-- before was the Agent's own when its message is a notice from Banda, and
+-- its Person's otherwise.
+ALTER TABLE agents_turns ADD COLUMN opener TEXT NOT NULL DEFAULT 'person';
+UPDATE agents_turns SET opener = 'by_itself' WHERE message IN
+    (SELECT id FROM agents_items WHERE json_extract(body, '$.kind') = 'notice');
+"#,
 ];
 
 fn json<T: Serialize>(value: &T) -> Result<String, Error> {
@@ -114,15 +123,15 @@ fn column<T: DeserializeOwned>(row: &Row<'_>, index: usize) -> rusqlite::Result<
     serde_json::from_str(&text).map_err(|e| unreadable(index, e))
 }
 
-/// A turn state as its table keeps it: the same word as on the wire.
-fn state_word(state: TurnState) -> String {
-    serde_json::to_value(state)
+/// A turn's state or opener as its table keeps it: the word serde gives.
+fn word<T: Serialize>(value: T) -> String {
+    serde_json::to_value(value)
         .ok()
         .and_then(|v| v.as_str().map(str::to_owned))
         .unwrap_or_default()
 }
 
-fn state_of(row: &Row<'_>, index: usize) -> rusqlite::Result<TurnState> {
+fn word_of<T: DeserializeOwned>(row: &Row<'_>, index: usize) -> rusqlite::Result<T> {
     let word: String = row.get(index)?;
     serde_json::from_value(serde_json::Value::String(word)).map_err(|e| unreadable(index, e))
 }
@@ -431,6 +440,7 @@ pub struct Turn {
     pub agent: AgentId,
     pub message: ItemId,
     pub state: TurnState,
+    pub opener: Opener,
 }
 
 /// A turn, with the settings it runs with: its Thread's when it was sent.
@@ -442,18 +452,20 @@ pub fn insert_turn(
     settings: &Settings,
 ) -> Result<(), Error> {
     sql.execute(
-        "INSERT INTO agents_turns (id, thread, agent, author, message, state, settings, created_at, started_at)
-         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9)",
+        "INSERT INTO agents_turns
+         (id, thread, agent, author, message, state, settings, created_at, started_at, opener)
+         VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10)",
         params![
             turn.id,
             turn.thread,
             turn.agent,
             json(&author)?,
             turn.message,
-            state_word(turn.state),
+            word(turn.state),
             json(settings)?,
             at,
-            (turn.state == TurnState::Running).then_some(at)
+            (turn.state == TurnState::Running).then_some(at),
+            word(turn.opener)
         ],
     )?;
     Ok(())
@@ -473,7 +485,7 @@ pub fn turn_settings(sql: &Connection, turn: &Turn) -> Result<Settings, Error> {
     }
 }
 
-const TURN: &str = "SELECT id, thread, agent, message, state FROM agents_turns";
+const TURN: &str = "SELECT id, thread, agent, message, state, opener FROM agents_turns";
 
 fn read_turn(row: &Row<'_>) -> rusqlite::Result<Turn> {
     Ok(Turn {
@@ -481,7 +493,8 @@ fn read_turn(row: &Row<'_>) -> rusqlite::Result<Turn> {
         thread: row.get(1)?,
         agent: row.get(2)?,
         message: row.get(3)?,
-        state: state_of(row, 4)?,
+        state: word_of(row, 4)?,
+        opener: word_of(row, 5)?,
     })
 }
 
@@ -496,14 +509,14 @@ pub fn turns_in(sql: &Connection, thread: ThreadId, state: TurnState) -> Result<
     let mut statement = sql.prepare(&format!(
         "{TURN} WHERE thread = ?1 AND state = ?2 ORDER BY created_at, id"
     ))?;
-    let rows = statement.query_map(params![thread, state_word(state)], read_turn)?;
+    let rows = statement.query_map(params![thread, word(state)], read_turn)?;
     Ok(rows.collect::<rusqlite::Result<_>>()?)
 }
 
 /// Every Thread's turns that run.
 pub fn every_running(sql: &Connection) -> Result<Vec<Turn>, Error> {
     let mut statement = sql.prepare(&format!("{TURN} WHERE state = ?1"))?;
-    let rows = statement.query_map(params![state_word(TurnState::Running)], read_turn)?;
+    let rows = statement.query_map(params![word(TurnState::Running)], read_turn)?;
     Ok(rows.collect::<rusqlite::Result<_>>()?)
 }
 
@@ -518,7 +531,7 @@ pub fn turns_of(sql: &Connection, message: ItemId) -> Result<Vec<Turn>, Error> {
     let mut statement = sql.prepare(&format!(
         "{TURN} WHERE message = ?1 AND state != ?2 ORDER BY created_at, id"
     ))?;
-    let withdrawn = state_word(TurnState::Withdrawn);
+    let withdrawn = word(TurnState::Withdrawn);
     let rows = statement.query_map(params![message, withdrawn], read_turn)?;
     Ok(rows.collect::<rusqlite::Result<_>>()?)
 }
@@ -541,7 +554,7 @@ pub fn set_turn(
          started_at = COALESCE(?5, started_at), ended_at = ?6 WHERE id = ?1",
         params![
             turn,
-            state_word(state),
+            word(state),
             reason,
             failure,
             started,
@@ -559,15 +572,11 @@ pub fn last_begun(sql: &Connection, thread: ThreadId) -> Result<Option<LatestTur
             "SELECT id, state, COALESCE(started_at, created_at), reason FROM agents_turns
              WHERE thread = ?1 AND state NOT IN (?2, ?3)
              ORDER BY created_at DESC, id DESC LIMIT 1",
-            params![
-                thread,
-                state_word(TurnState::Queued),
-                state_word(TurnState::Withdrawn)
-            ],
+            params![thread, word(TurnState::Queued), word(TurnState::Withdrawn)],
             |row| {
                 Ok(LatestTurn {
                     turn: row.get(0)?,
-                    state: state_of(row, 1)?,
+                    state: word_of(row, 1)?,
                     began: row.get(2)?,
                     reason: row.get(3)?,
                 })
@@ -591,7 +600,7 @@ pub fn turns(sql: &Connection, thread: ThreadId) -> Result<Vec<TurnView>, Error>
         Ok(TurnView {
             id: row.get(0)?,
             message: row.get(1)?,
-            state: state_of(row, 2)?,
+            state: word_of(row, 2)?,
             reason: row.get(3)?,
             failure: failure
                 .map(|text| serde_json::from_str(&text).map_err(|e| unreadable(4, e)))
@@ -602,6 +611,14 @@ pub fn turns(sql: &Connection, thread: ThreadId) -> Result<Vec<TurnView>, Error>
             can: Default::default(),
         })
     })?;
+    Ok(rows.collect::<rusqlite::Result<_>>()?)
+}
+
+/// The Thread's turns the Agent opened by itself.
+pub fn own_turns(sql: &Connection, thread: ThreadId) -> Result<HashSet<TurnId>, Error> {
+    let mut statement =
+        sql.prepare("SELECT id FROM agents_turns WHERE thread = ?1 AND opener = ?2")?;
+    let rows = statement.query_map(params![thread, word(Opener::ByItself)], |row| row.get(0))?;
     Ok(rows.collect::<rusqlite::Result<_>>()?)
 }
 
@@ -763,6 +780,60 @@ mod tests {
     }
 
     #[test]
+    fn a_turn_from_before_was_opened_by_its_message() {
+        let sql = Connection::open_in_memory().unwrap();
+        let at = MIGRATIONS
+            .iter()
+            .position(|m| m.contains("opener"))
+            .unwrap();
+        let (before, from) = MIGRATIONS.split_at(at);
+        for migration in before {
+            sql.execute_batch(migration).unwrap();
+        }
+        let agent = AgentId::new();
+        let summary = ThreadSummary {
+            id: ThreadId::new(),
+            harness: "fake".to_owned(),
+            title: "Hello".to_owned(),
+            updated_at: 0,
+        };
+        let author = Participant::Agent(agent);
+        insert_thread(&sql, &summary, agent, author, &Settings::default()).unwrap();
+        let old = |body: Body| {
+            let item = Item {
+                id: ItemId::new(),
+                turn: None,
+                author,
+                at: 0,
+                body,
+            };
+            insert_item(&sql, summary.id, &item).unwrap();
+            let turn = TurnId::new();
+            sql.execute(
+                "INSERT INTO agents_turns (id, thread, agent, author, message, state, created_at)
+                 VALUES (?1, ?2, ?3, ?4, ?5, 'done', 0)",
+                params![turn, summary.id, agent, json(&author).unwrap(), item.id],
+            )
+            .unwrap();
+            turn
+        };
+        let asked = old(Body::Message {
+            text: "Hi".to_owned(),
+            images: Vec::new(),
+        });
+        let own = old(Body::Notice {
+            text: "It went on by itself.".to_owned(),
+        });
+        for migration in from {
+            sql.execute_batch(migration).unwrap();
+        }
+        let opener = |id| turn(&sql, id).unwrap().unwrap().opener;
+        assert_eq!(opener(asked), Opener::Person);
+        assert_eq!(opener(own), Opener::ByItself, "its message is a notice");
+        assert_eq!(own_turns(&sql, summary.id).unwrap(), HashSet::from([own]));
+    }
+
+    #[test]
     fn a_turn_keeps_when_it_ran() {
         let sql = migrated();
         let agent = AgentId::new();
@@ -786,6 +857,7 @@ mod tests {
             agent,
             message: ItemId::new(),
             state: TurnState::Queued,
+            opener: Opener::Person,
         };
         let settings = Settings::default();
         insert_turn(&sql, &turn, Participant::Agent(agent), 10, &settings).unwrap();
@@ -840,6 +912,7 @@ mod tests {
                 agent,
                 message: ItemId::new(),
                 state,
+                opener: Opener::Person,
             };
             insert_turn(&sql, &turn, author, at, &settings).unwrap();
             turn.id

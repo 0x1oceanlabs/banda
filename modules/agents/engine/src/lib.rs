@@ -42,8 +42,8 @@ use base64::engine::general_purpose::STANDARD as BASE64;
 use images::Images;
 use live::Live;
 use model::{
-    Account, Body, Fact, HarnessView, Image, ImageId, Item, ItemId, Offer, Program, Settings,
-    ThreadId, ThreadList, ThreadSummary, ThreadView, TurnId, TurnState, VERSION,
+    Account, Body, Fact, HarnessView, Image, ImageId, Item, ItemId, Offer, Opener, Program,
+    Settings, ThreadId, ThreadList, ThreadSummary, ThreadView, TurnId, TurnState, VERSION,
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -443,7 +443,7 @@ impl Agents {
                 let items = store::items(sql, thread)?;
                 let mut turns = store::turns(sql, thread)?;
                 let held = store::held(sql, thread)?;
-                rules::can(&mut turns, &items, held);
+                rules::can(&mut turns, &store::own_turns(sql, thread)?, held);
                 Ok(Some(ThreadView {
                     at: 0,
                     items,
@@ -819,6 +819,7 @@ fn send(
         agent,
         message: item.id,
         state: TurnState::Queued,
+        opener: Opener::Person,
     };
     let settings = store::settings(tx.sql(), thread)?;
     store::insert_turn(tx.sql(), &turn, author, now, &settings)?;
@@ -869,8 +870,7 @@ fn steerable(tx: &mut Tx<'_>, thread: ThreadId) -> Result<Option<store::Turn>, E
     let Some(running) = store::running(tx.sql(), thread)? else {
         return Ok(None);
     };
-    let by_itself = turn::by_itself(tx.sql(), &running)?;
-    Ok(rules::steers(running.state, held, by_itself).then_some(running))
+    Ok(rules::steers(running.state, held, running.opener.by_itself()).then_some(running))
 }
 
 fn turn_of(tx: &mut Tx<'_>, turn: TurnId) -> Result<store::Turn, Error> {
@@ -942,10 +942,10 @@ fn retry(tx: &mut Tx<'_>, author: Participant, turn: TurnId) -> Result<Sent, Err
     let found = turn_of(tx, turn)?;
     let turns = store::turns(tx.sql(), found.thread)?;
     let latest = rules::position(&turns, found.id).latest;
-    let by_itself = turn::by_itself(tx.sql(), &found)?;
-    rules::retry(found.state, latest, by_itself)?;
+    rules::retry(found.state, latest, found.opener.by_itself())?;
     // Queued first, it starts before a held queue goes on.
-    let again = turn::queue(tx, author, found.thread, found.agent, found.message)?;
+    let (thread, agent, message) = (found.thread, found.agent, found.message);
+    let again = turn::queue(tx, author, thread, agent, message, Opener::Retry)?;
     turn::resume(tx, author, found.thread)?;
     Ok(Sent {
         thread: found.thread,

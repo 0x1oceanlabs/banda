@@ -370,6 +370,28 @@ pub struct TurnView {
     pub can: Can,
 }
 
+/// Who opened a turn, and how (ADR 0018, decision 2). The turn keeps it,
+/// so "by itself" is read from it, not from the turn's message.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Opener {
+    /// A Person's message.
+    Person,
+    /// A Person tried a turn's message again.
+    Retry,
+    /// A message its turn could not take waits for a turn of its own.
+    Requeue,
+    /// The Agent went on by itself between turns.
+    ByItself,
+}
+
+impl Opener {
+    /// The Agent went on by itself between turns.
+    pub fn by_itself(self) -> bool {
+        self == Opener::ByItself
+    }
+}
+
 /// What a Person may do with a turn now, as the rules its commands ask
 /// say (ADR 0014, decision 2). The window shows only what this allows.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, TS)]

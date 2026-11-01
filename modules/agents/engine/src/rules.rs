@@ -2,7 +2,7 @@
 //! clock, randomness or Harness protocol. IDs come in from the caller.
 
 use crate::model::{
-    Body, Can, Choice, Fact, Failure, Field, FieldValue, Image, ImageId, Input, Item, ItemId, Mode,
+    Body, Can, Choice, Fact, Failure, Field, FieldValue, Image, ImageId, Input, ItemId, Mode,
     QuestionState, ToolContent, ToolKind, TurnId, TurnState, TurnView, Values,
 };
 use banda_kernel::{Participant, Refusal};
@@ -202,19 +202,14 @@ pub fn steers(state: TurnState, held: bool, by_itself: bool) -> bool {
 
 /// What a Person may do with each of a Thread's turns now (ADR 0014,
 /// decision 2): what [`next`] accepts of a Person. `turns` are in the order
-/// they were made, and `items` are the Thread's.
-pub fn can(turns: &mut [TurnView], items: &[Item], held: bool) {
-    let notices: HashSet<ItemId> = items
-        .iter()
-        .filter(|item| matches!(item.body, Body::Notice { .. }))
-        .map(|item| item.id)
-        .collect();
+/// they were made, and `own` are those the Agent opened by itself.
+pub fn can(turns: &mut [TurnView], own: &HashSet<TurnId>, held: bool) {
     let can: Vec<Can> = turns
         .iter()
         .map(|turn| {
             let Position { first, latest } = position(turns, turn.id);
             let facts = TurnFacts {
-                by_itself: notices.contains(&turn.message),
+                by_itself: own.contains(&turn.id),
                 first,
                 latest,
                 held,
@@ -731,23 +726,15 @@ mod tests {
 
     #[test]
     fn a_person_may_do_with_each_turn_what_its_commands_allow() {
-        let (asked, again, notice) = (ItemId::new(), ItemId::new(), ItemId::new());
+        let (asked, again) = (ItemId::new(), ItemId::new());
         let mut turns = vec![
             turn(asked, TurnState::Failed),
             turn(again, TurnState::Done),
             turn(again, TurnState::Queued),
-            turn(notice, TurnState::Running),
+            turn(ItemId::new(), TurnState::Running),
         ];
-        let items = [Item {
-            id: notice,
-            turn: None,
-            author: Participant::Agent(banda_kernel::AgentId::new()),
-            at: 0,
-            body: Body::Notice {
-                text: "It went on.".into(),
-            },
-        }];
-        can(&mut turns, &items, false);
+        let own = HashSet::from([turns[3].id]);
+        can(&mut turns, &own, false);
         let [failed, done, retried, by_itself] = [0, 1, 2, 3].map(|i| turns[i].can);
         assert!(!failed.retry, "a turn began after it");
         assert!(!done.stop && !done.retry);
