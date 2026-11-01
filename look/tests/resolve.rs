@@ -92,6 +92,7 @@ impl Machine {
             border: 2.0,
             gaps: 5.0,
             dim: Some(0.4),
+            animations: true,
         };
         resolve(&self.places, &|| Some(windows)).look
     }

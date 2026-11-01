@@ -172,7 +172,16 @@ test("a sideways swipe moves the Strip and lands on a column; a scroll up and do
   await page.keyboard.press("Alt+Control+ArrowRight")
   const strip = page.locator("[data-column]").first().locator("xpath=..")
   const scrolled = () => strip.evaluate((element) => element.scrollLeft)
-  // It comes to rest at the right end, the launcher whole in view.
+  // It grows to the whole screen and comes to rest at the right end, the
+  // launcher whole in view.
+  const room = () =>
+    launcher.evaluate((e) => {
+      const column = e.closest<HTMLElement>("[data-column]")!
+      const strip = column.parentElement!
+      const pad = parseFloat(getComputedStyle(strip).paddingLeft)
+      return strip.clientWidth - 2 * pad - column.offsetWidth
+    })
+  await expect.poll(room).toBeLessThan(1)
   await expect
     .poll(() =>
       strip.evaluate((e) => e.scrollWidth - e.clientWidth - e.scrollLeft)
@@ -983,6 +992,37 @@ test("tiles without the focus darken as dim-inactive says", async () => {
   await expect.poll(() => veil(thread)).toBe("0.5")
   expect(await veil(launcher)).toBe("0")
   await page.screenshot({ path: "test-results/22-look-dim.png" })
+})
+
+test("columns grow and go to their new places on the look's motion", async () => {
+  const slow = 'easing = { duration-ms = 1500, curve = "linear" }'
+  window = await startWindow({
+    look: `[motion.resize]\n${slow}\n[motion.move]\n${slow}\n`,
+  })
+  const { page } = window
+  const { thread, composer } = await firstThread(page)
+  await expect(composer).toBeFocused()
+  const column = thread.locator("xpath=ancestor::*[@data-column][1]")
+  const share = () =>
+    column.evaluate(
+      (e: HTMLElement) => e.offsetWidth / e.parentElement!.clientWidth
+    )
+
+  // From a half to two thirds: seen on its way, and there in the end.
+  const half = await share()
+  await page.keyboard.press("Alt+Control+ArrowRight")
+  await expect.poll(share).toBeGreaterThan(half + 0.03)
+  expect(await share()).toBeLessThan(0.64)
+  await expect.poll(share).toBeGreaterThan(0.65)
+
+  // The Thread changes places with the column on its right: it goes there.
+  await page.keyboard.press("Alt+KeyN")
+  const launcher = page.getByRole("region", { name: "New Pane" })
+  await expect(launcher).toHaveAttribute("data-focused", "true")
+  await page.keyboard.press("Alt+Shift+ArrowLeft")
+  const slide = () => column.evaluate((e: HTMLElement) => e.style.translate)
+  await expect.poll(slide).not.toBe("")
+  await expect.poll(slide).toBe("")
 })
 
 test("the window takes its look from look.toml, and again on each save", async () => {

@@ -15,6 +15,9 @@ import { RotateCcwIcon, SquareTerminalIcon } from "lucide-react"
 import { Input } from "./input"
 import { fontOf, onThemeChange, themeOf } from "./theme"
 
+/** How long a size holds before the shell hears it, in ms. */
+const SETTLE = 120
+
 /**
  * A terminal: the Person's shell in the Space's folder, or a program
  * another Pane started with `terminal.open`, such as a Harness's sign-in.
@@ -200,6 +203,8 @@ function Screen({
       told({ is: "starting" })
       void start().then(follow, fail)
     }
+    let sized = false
+    let settling: ReturnType<typeof setTimeout> | undefined
     void (async () => {
       const made = await Surface.create(element, {
         theme: themeOf(element),
@@ -207,7 +212,17 @@ function Screen({
         onData: (data) => {
           if (running) input.type(data)
         },
-        onResize: (cols, rows) => input.resize({ cols, rows }),
+        onResize: (cols, rows) => {
+          // The screen redraws at every size as a column grows; the shell
+          // hears the first size at once, and then only where it settles.
+          clearTimeout(settling)
+          if (!sized) {
+            sized = true
+            input.resize({ cols, rows })
+            return
+          }
+          settling = setTimeout(() => input.resize({ cols, rows }), SETTLE)
+        },
         onSelectionChange: () => {},
         // The window's own keys, such as Alt+Arrows, stay the window's.
         beforeKey: (event) => !event.defaultPrevented,
@@ -239,6 +254,7 @@ function Screen({
     })
     return () => {
       left = true
+      clearTimeout(settling)
       stop()
       stopWatchingTheme()
       drawn?.dispose()
