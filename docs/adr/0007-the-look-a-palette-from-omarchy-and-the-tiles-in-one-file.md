@@ -56,7 +56,7 @@ ADR 0005 promised a theme file (decision 11) and "one look, and honest motion" (
 6. **The tiling look, named as Hyprland and niri name it.** In `look.toml`, in pixels:
    - `[gaps]`: `inner` between tiles and `outer` around the Strip (Hyprland's `gaps_in` and `gaps_out`).
    - `[tile]`: `radius` (a step of the ladder or pixels, decision 7), `border` width, `dim-inactive` (0 to 1).
-   - `[focus]`: how the focused tile stands out (_decided_), as in Hyprland by default: its `border` takes the accent, the others keep `inactive-border`. niri's focus ring is a switch: `ring` draws a ring of that width outside the focused tile, in the gap, so nothing moves; `0`, the default, draws none. Colours are palette names or hex. A gradient comes later, written as Hyprland writes it.
+   - `[focus]`: how the focused tile stands out (_decided_), as in Hyprland by default: its `border` takes the accent, the others keep `inactive-border`. niri's focus ring is a switch: `ring` grows the focused tile's frame that far out into the gap, so nothing moves; `0`, the default, draws none. The ring has no colour of its own: it is the border's, drawn as one stroke over it, so the tile has one frame and no seam where two would meet. A border of one colour and a ring of another looked like two frames. Colours are palette names or hex. A gradient comes later, written as Hyprland writes it.
    - `[columns]`: `presets` (`[1/3, 1/2, 2/3, 1]`), `default` (`1/2`) and `center` (`never`, `always`, `on-overflow`), as niri's.
    - `[bar]`: `height`. `[font]`: `sans`, `mono`, `size`. With `theme = "omarchy"` the fonts follow Omarchy's too.
 
@@ -93,7 +93,7 @@ ADR 0005 promised a theme file (decision 11) and "one look, and honest motion" (
    - **Watching is polling.** The few files it read are checked four times a second for a change of time or size. That costs nothing, and survives editors that save by renaming and Omarchy replacing its whole theme folder. Hyprland is heard on its event socket.
 
 11. **The window only applies it.**
-   - It writes the tokens and the sizes as CSS variables on `:root`: `--gap-inner`, `--gap-outer`, `--tile-radius`, `--tile-border`, `--focus`, `--focus-inactive`, `--focus-ring`, `--focus-ring-color`, `--bar-height`.
+   - It writes the tokens and the sizes as CSS variables on `:root`: `--gap-inner`, `--gap-outer`, `--tile-radius`, `--tile-border`, `--focus`, `--focus-inactive`, `--focus-ring`, `--bar-height`.
    - The Strip, the frame and the bar take sizes from those variables, not from constants.
    - The terminal takes all 16 colours, the cursor and the selection from the tokens.
    - Until `bandaso look` answers, the window draws the `banda` defaults from its CSS, the same values Banda's own theme gives.
@@ -105,7 +105,7 @@ ADR 0005 promised a theme file (decision 11) and "one look, and honest motion" (
 | `--background`, `--card` | `background` |
 | `--foreground`, `--card-foreground`, `--popover-foreground` | `foreground` |
 | `--popover` | `lighter_background` |
-| `--primary`, `--ring`, `--focus`, `--focus-ring-color` | `accent` |
+| `--primary`, `--ring`, `--focus` | `accent` |
 | `--primary-foreground` | `background` |
 | `--secondary`, `--muted`, `--accent` | `mix background foreground 8%` |
 | `--muted-foreground` | `dark_foreground` |
@@ -144,8 +144,7 @@ dim-inactive = 0
 [focus]
 border = "accent"          # the focused tile's border
 inactive-border = "border" # every other tile's
-ring = 0                   # niri's ring outside the focused tile; 0 draws none
-ring-color = "accent"
+ring = 0                   # grows the focused frame into the gap, niri's ring; 0 draws none
 
 [columns]
 presets = ["1/3", "1/2", "2/3", "1"]
