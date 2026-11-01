@@ -132,6 +132,7 @@ The evidence is in two notes: [tiling managers](../research/2026-11-01-tiling-ma
 
 12. **Every module, ours too, is built on the contract a module from elsewhere gets.**
    - A module has a `module.toml`. It declares its Panes, actions, commands, events, tables, MCP tools and a settings schema. The window's Pane registry, the palette, the key sheet and the skill's reference are all built from these manifests.
+     - _Changed on 2026-11-02 (ADR 0022):_ what is code is declared in code, once: methods, tools, events and tables in the module's `methods!` table, Panes, actions, Watches and menu sources in its `defineModule`. `module.toml` keeps only the rest: id, name, version, whether it is from Banda, its settings files and its unstable marks. `banda modules` prints them together.
    - No module of ours takes a path that another module lacks. What ours need goes into the contract. An API still settling is marked unstable in the manifest, and the marks are counted, so the debt stays visible.
    - **Panes are React with `@banda/ui`** (_decided_): shadcn/ui on preset b0 and the theme's tokens, the same for every module. Every module follows the theme, and a new block goes into `@banda/ui` before any module uses it.
    - A module from elsewhere runs its engine part as a process that speaks the same engine API. The engine starts and stops it. Our modules stay crates in the one binary for now.
