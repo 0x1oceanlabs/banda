@@ -49,15 +49,28 @@ Roma liked A, B and C, and asked for one thing instead of three: "unify everythi
    new-thread = true           # each Space offers a new Thread in it
 
    [row]
-   size = "card"               # "line": one line, as Herdr's; "card": three, as T3's
-   show = ["mark", "space", "harness", "title", "asks", "time"]
+   lines = 3                   # 1, 2 or 3: the built-in layouts below
+   hide = []                   # parts to leave out of the layout: "space", "harness", "note", …
    time = "changed"            # "changed": since its state changed; "message": the last message
+   # A layout of one's own, part by part; "~" pushes the rest to the right:
+   # line1 = ["space", "~", "status"]
+   # line2 = ["mark", "title"]
+   # line3 = ["note", "~", "harness"]
    ```
 
    - **States** are the marks seen from the sidebar: `needs` (it asks, or it failed), `done` (it finished while the Person was away), `working` and `idle`. A state listed in neither `states` nor `bottom` goes to the last section, so no Thread is ever hidden.
    - **`attention`** sorts `needs`, then `done`, `working` and `idle`, and the latest change first inside each. It is what ADR 0005 named the attention order.
    - **`group.by = "space"`** makes each Space a section; `states`, `bottom` and `folded` then apply inside each Space, and `folded` may name Spaces too.
-   - **`row.show`** lists the parts of a row. The row leaves out what its header already says: no Space under a Space's header.
+   - **A row is one, two or three lines** (_decided_: "how many lines one Thread gets, 1, 2 or 3, and how to show the info"). The line with the title is always the same, the mark and the title, so a Thread looks the same in every density; the other lines add context:
+
+     | `lines` | line 1 | line 2 | line 3 |
+     |---|---|---|---|
+     | 1 | mark, title ~ space's badge, status | | |
+     | 2 | space, harness ~ status | mark, title | |
+     | 3 | space ~ status | mark, title | note ~ harness |
+
+   - **The parts.** `mark`: Banda's mark of the Thread's state. `title`. `space`: the Space's coloured badge, with its name when the row has room. `harness`: Claude's or Codex's icon. `status`: "Asks you", "Failed" or "Done" in their colours, the running turn's timer, or the time since the last change. `note`: what it asks, or why it failed, or else the last message. Later: `branch`, `pr`, `diff`.
+   - `hide` leaves parts out of the built-in layout; `line1` … `line3` replace it. A row leaves out what its header already says: no Space under a Space's header.
    - A Space's own order (`manual`, by dragging) and the Person's marks (pinned, snoozed, settled; ADR 0005, decision 8) come later, as more values of the same keys: `sort.by = "manual"` and a `pinned` state.
 
 5. **The three presets.**
@@ -68,8 +81,7 @@ Roma liked A, B and C, and asked for one thing instead of three: "unify everythi
    | `group.states` | needs, done, idle | needs, done, working, idle | needs, done, working, idle |
    | `group.bottom` | working | none | none |
    | `spaces.list` | no | no (the groups are Spaces) | yes |
-   | `row.size` | `card` | `line` | `line` |
-   | `row.show` | mark, space, harness, title, asks, time | mark, title, harness, time | mark, space, title, time |
+   | `row.lines` | 3 | 1 | 2 |
 
    - `inbox` is the default (_decided_ in ADR 0005, decision 8: "those that need the Person" first).
    - In `places`, a click on a Space in the list shows only its Threads, and a second click shows all again, as Herdr's active Space does.
@@ -93,6 +105,8 @@ Roma liked A, B and C, and asked for one thing instead of three: "unify everythi
 
 **Consequences.**
 
+- The engine's Thread list grows what a row needs and the list lacks today: the latest message's first line, why the latest turn failed, and when the running turn began.
+- **The design every preset shares**, after T3 Code's: a header with search, the view menu (the preset and its keys), a new Space and a new Thread; the current Thread raised as a card; the shelves at the bottom with their counts; the settings at the foot.
 - The sidebar stops drawing one `agents.threads` Pane per Space. It reads the Threads of every Space itself and arranges them, so it can sort across Spaces. The agents module still owns Threads and publishes what happens in them (ADR 0005, decision 8).
 - The bar's waiting dot and the workspace marks take the same states, so the sidebar and the bar never disagree.
 - Words for `GLOSSARY.md`, once built: preset, section, shelf.
