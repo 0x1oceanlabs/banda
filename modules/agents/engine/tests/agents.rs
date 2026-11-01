@@ -2383,6 +2383,60 @@ async fn record_the_real_harnesses_editing_a_file() {
     }
 }
 
+/// Claude Code leaves plan mode by asking to, with the plan: the Question
+/// carries it. It calls the model, which costs money: run it by hand when
+/// the adapter changes, `cargo test -p banda-agents --test agents
+/// claude_asks -- --ignored --nocapture`.
+#[tokio::test]
+#[ignore = "calls the real model, which costs money"]
+async fn claude_asks_to_carry_out_its_plan_with_the_plan() {
+    let known = Harnesses::known();
+    let agents = Agents::new(Harnesses::new(vec![known.find("claude").unwrap().clone()]));
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new_on(root.path(), agents, "claude").await;
+    let space = world.kernel.space(world.space).await.unwrap();
+    std::fs::write(space.folder().join("notes.txt"), "apples\n").unwrap();
+    let params = json!({
+        "harness": "claude",
+        "text": "Plan how to add a line \"pears\" to notes.txt, in two steps at most.",
+        "settings": { "mode": "supervised", "plan": true },
+    });
+    let sent = world
+        .call(world.person(), "agents.send", params)
+        .await
+        .unwrap();
+    let (thread, turn) = (&sent["thread"], &sent["turn"]);
+    loop {
+        let view = world
+            .until_within(Duration::from_secs(300), thread, |v| {
+                open(v).is_some() || !ongoing(v, turn)
+            })
+            .await;
+        let Some((question, choices)) = open(&view) else {
+            panic!("the turn ended without asking: {:#?}", texts(&view));
+        };
+        let plan = view.items.iter().find_map(|item| match &item.body {
+            Body::Question { plan, .. } if item.id == question => plan.clone(),
+            _ => None,
+        });
+        // No to the plan ends the turn, with nothing changed.
+        let choice = match &plan {
+            Some(_) => choices.iter().find(|c| !c.allows).unwrap(),
+            None => choices.iter().find(|c| c.allows && !c.always).unwrap(),
+        };
+        let answer = json!({ "item": question, "choice": choice.id });
+        world
+            .call(world.person(), "agents.answer", answer)
+            .await
+            .unwrap();
+        if let Some(plan) = plan {
+            println!("{plan}");
+            assert!(plan.contains("pears"), "the plan is the one asked for");
+            return;
+        }
+    }
+}
+
 /// The commands Claude Code and Codex have of their own. What else they
 /// list are the Person's skills and plugins.
 const OWN_COMMANDS: [&str; 8] = [
