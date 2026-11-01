@@ -113,6 +113,18 @@ asked for the ADR; the rest are our defaults and stay his to change.
      we try a set: uBlock Origin Lite, Bitwarden, 1Password, Dark Reader and
      Vimium. One that cannot run in Electron is a known gap. Running a real
      Helium as a tile beside Banda is the fallback we keep in mind.
+   - A popup is a view in Banda's window under its button, not a window of
+     its own: Hyprland would tile one. It is as large as its page asks.
+   - Tried on Electron 45.1, 2026-11-01, installed from the Web Store page:
+     - Dark Reader works: its popup, and pages go dark.
+     - Bitwarden installs, its worker runs and its popup shows; signing in
+       was not tried.
+     - 1Password installs and its popup opens, but showed nothing in the
+       test; not settled.
+     - Vimium installs and its popup opens; its link hints did not answer
+       a key sent by the test; not settled.
+     - uBlock Origin Lite installs but blocks nothing: Electron has no
+       `declarativeNetRequest`. A known gap.
 
 7. **Every Agent reaches the whole browser through CDP** (_decided_: "агент
    видит все вкладки", "просто имеет доступ к браузеру").

@@ -14,7 +14,10 @@ import { join, parse } from "node:path"
 import {
   app,
   type BrowserWindow,
+  clipboard,
   dialog,
+  Menu,
+  type MenuItem,
   type DownloadItem,
   type PermissionRequest,
   session,
@@ -28,15 +31,16 @@ import {
   type Pressed,
   taken,
 } from "@banda/browser-pane/desktop"
-import { type Tabs, withTopKey } from "@banda/contract/look"
-import TEMPLATE from "../../../look/browser.toml"
-import { rewrite } from "./whole"
+import type { Extensions } from "./extensions"
 
 /** What a page may open: the web, a blank page and the Person's files. */
 const OPENS = /^(https?|about|file):/i
 
-/** Lets `contents`, Banda's page, show browser pages and nothing else. */
-export function hostPages(contents: WebContents): void {
+/**
+ * Lets `contents`, Banda's page, show browser pages and nothing else;
+ * `extensions` hears of each page as a tab.
+ */
+export function hostPages(contents: WebContents, extensions: Extensions): void {
   contents.on("will-attach-webview", (event, prefs, params) => {
     if (params.partition !== PARTITION || !OPENS.test(params.src)) {
       event.preventDefault()
@@ -49,11 +53,40 @@ export function hostPages(contents: WebContents): void {
     prefs.sandbox = true
     prefs.webSecurity = true
   })
-  contents.on("did-attach-webview", (_event, page) => keep(page, contents))
+  contents.on("did-attach-webview", (_event, page) => {
+    const tell = (news: BrowserNews) => contents.send("browser:news", news)
+    keys(page, contents)
+    keep(page, tell, extensions)
+  })
 }
 
-function keep(page: WebContents, window: WebContents): void {
-  const tell = (news: BrowserNews) => window.send("browser:news", news)
+/** Banda's Alt keys and the browser's own go to the window, from a page
+ * and an extension's popup alike (decision 5). */
+export function keys(page: WebContents, window: WebContents): void {
+  page.on("before-input-event", (event, input) => {
+    if (input.type !== "keyDown") return
+    const key: Pressed = {
+      code: input.code,
+      altKey: input.alt,
+      ctrlKey: input.control,
+      shiftKey: input.shift,
+      metaKey: input.meta,
+    }
+    if (!taken(key)) return
+    event.preventDefault()
+    window.send("browser:key", key)
+  })
+}
+
+function keep(
+  page: WebContents,
+  tell: (news: BrowserNews) => void,
+  extensions: Extensions
+): void {
+  extensions.attached(page)
+  page.on("context-menu", (_event, params) =>
+    menuOf(page, params, tell, extensions).popup()
+  )
   page.setWindowOpenHandler(({ url, disposition }) => {
     if (!OPENS.test(url)) return { action: "deny" }
     // A popup that needs its opener, as a sign-in, opens as a window of
@@ -83,19 +116,82 @@ function keep(page: WebContents, window: WebContents): void {
   page.on("did-create-window", (popup) =>
     popup.webContents.setWindowOpenHandler(() => ({ action: "deny" }))
   )
-  page.on("before-input-event", (event, input) => {
-    if (input.type !== "keyDown") return
-    const key: Pressed = {
-      code: input.code,
-      altKey: input.alt,
-      ctrlKey: input.control,
-      shiftKey: input.shift,
-      metaKey: input.meta,
-    }
-    if (!taken(key)) return
-    event.preventDefault()
-    window.send("browser:key", key)
-  })
+}
+
+/**
+ * A page's menu, as Chrome's in short: the link, the picture, the words or
+ * the field under the pointer, the way back and forward, the extensions'
+ * own items, and Inspect.
+ */
+function menuOf(
+  page: WebContents,
+  params: Electron.ContextMenuParams,
+  tell: (news: BrowserNews) => void,
+  extensions: Extensions
+): Menu {
+  const items: Electron.MenuItemConstructorOptions[][] = []
+  const tab = (url: string) =>
+    tell({ kind: "open", from: page.id, url, background: true })
+  if (params.linkURL && OPENS.test(params.linkURL)) {
+    items.push([
+      { label: "Open Link in New Tab", click: () => tab(params.linkURL) },
+      {
+        label: "Copy Link Address",
+        click: () => clipboard.writeText(params.linkURL),
+      },
+    ])
+  }
+  if (params.mediaType === "image" && OPENS.test(params.srcURL)) {
+    items.push([
+      { label: "Open Image in New Tab", click: () => tab(params.srcURL) },
+      {
+        label: "Copy Image",
+        click: () => page.copyImageAt(params.x, params.y),
+      },
+    ])
+  }
+  const edit = params.editFlags
+  if (params.isEditable) {
+    items.push([
+      { role: "undo", enabled: edit.canUndo },
+      { role: "redo", enabled: edit.canRedo },
+      { role: "cut", enabled: edit.canCut },
+      { role: "copy", enabled: edit.canCopy },
+      { role: "paste", enabled: edit.canPaste },
+      { role: "selectAll", enabled: edit.canSelectAll },
+    ])
+  } else if (params.selectionText.trim()) {
+    items.push([{ role: "copy" }])
+  }
+  const history = page.navigationHistory
+  items.push([
+    {
+      label: "Back",
+      enabled: history.canGoBack(),
+      click: () => history.goBack(),
+    },
+    {
+      label: "Forward",
+      enabled: history.canGoForward(),
+      click: () => history.goForward(),
+    },
+    { label: "Reload", click: () => page.reload() },
+  ])
+  const groups: (Electron.MenuItemConstructorOptions | MenuItem)[][] = [
+    ...items,
+    extensions.menuItems(page, params),
+    [
+      {
+        label: "Inspect",
+        click: () => page.inspectElement(params.x, params.y),
+      },
+    ],
+  ]
+  return Menu.buildFromTemplate(
+    groups
+      .filter((group) => group.length)
+      .flatMap((group, i) => (i ? [{ type: "separator" }, ...group] : group))
+  )
 }
 
 /** The largest icon Banda takes from a site. */
@@ -143,6 +239,15 @@ const GIVEN = new Set([
  */
 export function keepProfile(window: () => BrowserWindow | null): void {
   const profile = session.fromPartition(PARTITION)
+  // Sites see Chrome: some, as Google's sign-in, refuse what says Electron.
+  const agent = profile.getUserAgent()
+  const platform = /^Mozilla\/5\.0 \([^)]*\)/.exec(agent)?.[0]
+  const chrome = /Chrome\/\S+/.exec(agent)?.[0]
+  if (platform && chrome) {
+    profile.setUserAgent(
+      `${platform} AppleWebKit/537.36 (KHTML, like Gecko) ${chrome} Safari/537.36`
+    )
+  }
   // The Person's answers, by site and what it asked, until Banda restarts.
   const answers = new Map<string, boolean>()
   profile.setPermissionCheckHandler(
@@ -215,29 +320,31 @@ export function reveal(path: unknown): void {
   if (typeof path === "string" && saved.has(path)) shell.showItemInFolder(path)
 }
 
-/** Writes where the tabs are into `file`, a `browser.toml`, keeping every
- * other line; a file not there yet starts from Banda's template. */
-export function writeTabs(file: string, where: unknown): void {
-  if (where !== "top" && where !== "left")
-    throw new Error(
-      `The tabs go "top" or "left", not ${JSON.stringify(where)}.`
-    )
-  rewrite(file, TEMPLATE, (text) =>
-    withTopKey(text, "tabs", where satisfies Tabs)
-  )
-}
-
-async function ask(
+function ask(
   window: BrowserWindow | null,
   site: string,
   what: string,
   details: PermissionRequest
 ): Promise<boolean> {
-  const options = {
-    type: "question" as const,
+  return confirm(window, {
     message: `${site} wants to ${what}.`,
     detail: "externalURL" in details ? String(details.externalURL ?? "") : "",
-    buttons: ["Allow", "Block"],
+    yes: "Allow",
+    no: "Block",
+  })
+}
+
+/** Asks the Person a yes or no, over `window` when there is one; no is the
+ * default. */
+export async function confirm(
+  window: BrowserWindow | null,
+  ask: { message: string; detail: string; yes: string; no: string }
+): Promise<boolean> {
+  const options = {
+    type: "question" as const,
+    message: ask.message,
+    detail: ask.detail,
+    buttons: [ask.yes, ask.no],
     defaultId: 1,
     cancelId: 1,
   }

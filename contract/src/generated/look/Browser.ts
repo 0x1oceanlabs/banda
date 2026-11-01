@@ -12,4 +12,8 @@ file: string, tabs: Tabs,
 /**
  * An address with `%s` where the words go.
  */
-search: string, };
+search: string, 
+/**
+ * The extensions whose buttons sit in the row.
+ */
+pinned: Array<string>, };

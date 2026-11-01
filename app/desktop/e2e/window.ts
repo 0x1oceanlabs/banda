@@ -5,7 +5,7 @@
 import { execFileSync } from "node:child_process"
 import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
 import { tmpdir } from "node:os"
-import { join, resolve } from "node:path"
+import { dirname, join, resolve } from "node:path"
 import {
   _electron as electron,
   expect,
@@ -40,15 +40,21 @@ function fakeCli(dir: string, version: string, minimum: string): string {
 /** With `account`, the fake agent has one in the throwaway folders, signed
  * out. With `oldCli`, it runs a CLI that says 1.0.0 where its entry asks for
  * 2.0.0 at least. `look` and `sidebar` are the text of `look.toml` and
- * `sidebar.toml`. */
+ * `sidebar.toml`; `files` are more, by their paths in the throwaway
+ * folder. */
 export async function startWindow({
   account = false,
   oldCli = false,
   look = "",
   sidebar = "",
+  files = {} as Record<string, string>,
 } = {}): Promise<Window> {
   const dir = mkdtempSync(join(tmpdir(), "banda-window-"))
   mkdirSync(join(dir, "config"))
+  for (const [path, text] of Object.entries(files)) {
+    mkdirSync(dirname(join(dir, path)), { recursive: true })
+    writeFileSync(join(dir, path), text)
+  }
   if (look) writeFileSync(join(dir, "config/look.toml"), look)
   if (sidebar) writeFileSync(join(dir, "config/sidebar.toml"), sidebar)
   const fake = join(repository, "target/debug/banda-fake-agent")
@@ -63,6 +69,9 @@ export async function startWindow({
     `[[harness]]\nid = "fake"\nname = "Fake AI"\ncommand = ${JSON.stringify(fake)}\n${env}${cli}`
   )
   const app = await electron.launch({
+    // Banda runs sandboxed, as Electron does by default; extensions' workers
+    // need it for their APIs. Playwright turns it off unless asked.
+    chromiumSandbox: true,
     args: [
       desktop,
       ...(process.env.BANDA_E2E_SHOW ? [] : ["--ozone-platform=headless"]),

@@ -48,7 +48,8 @@ banda call/follow   the CLI: the same API, for people, scripts and Agents
   or `sidebars/<name>.toml`, over the defaults. The view menu asks the
   desktop to write the preset into the file. The browser's
   `~/.config/banda/browser.toml` comes with it too (ADR 0013), and the
-  browser's switch asks the desktop to write `tabs` into it; nothing else
+  browser's switch and its pins ask the desktop to write `tabs` and
+  `pinned` into it, through `banda settings set`; nothing else
   the page asks of Node writes a file. A Pane reads its part of the look
   through `@banda/ui/lib/look`.
 - **The Banda skill is text for Agents** (ADR 0012). `banda skill`

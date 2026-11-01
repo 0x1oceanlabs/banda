@@ -1,6 +1,10 @@
 /** Gives the page its one bridge to the desktop (app/web/src/host.ts). */
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron"
-import type { BrowserNews, Pressed } from "@banda/browser-pane/desktop"
+import {
+  type BrowserNews,
+  PARTITION,
+  type Pressed,
+} from "@banda/browser-pane/desktop"
 import type { Look } from "@banda/contract/look"
 import type { Host, Notice } from "@banda/web/host"
 
@@ -23,6 +27,34 @@ const host: Host = {
   browser: {
     tabs: (where) => ipcRenderer.invoke("browser.tabs", where),
     reveal: (path) => ipcRenderer.send("browser.reveal", path),
+    shown: (contents) => ipcRenderer.send("browser.shown", contents),
+    created: (request, contents) =>
+      ipcRenderer.send("browser.created", request, contents),
+    pin: (extension, pinned) =>
+      ipcRenderer.invoke("browser.pin", extension, pinned),
+    remove: (extension) => ipcRenderer.invoke("browser.remove", extension),
+    // electron-chrome-extensions answers these itself.
+    actions: {
+      state: () => extensions("browserAction.getState"),
+      click: (extensionId, tabId) =>
+        extensions("browserAction.activate", {
+          eventType: "click",
+          extensionId,
+          tabId,
+          anchorRect: { x: 0, y: 0, width: 0, height: 0 },
+        }),
+      popup: (extension, url, under) =>
+        ipcRenderer.send("browser.popup", extension, url, under),
+      listen: (listener) => {
+        const heard = () => listener()
+        ipcRenderer.on("browserAction.update", heard)
+        void extensions("browserAction.addObserver")
+        return () => {
+          ipcRenderer.removeListener("browserAction.update", heard)
+          void extensions("browserAction.removeObserver")
+        }
+      },
+    },
     listen: (listener) => {
       const heard = (_event: IpcRendererEvent, news: BrowserNews) =>
         listener(news)
@@ -63,6 +95,11 @@ const host: Host = {
 }
 
 contextBridge.exposeInMainWorld("banda", host)
+
+/** Asks electron-chrome-extensions about the browser's profile. */
+function extensions(name: string, ...args: unknown[]) {
+  return ipcRenderer.invoke("crx-msg-remote", PARTITION, name, ...args)
+}
 
 // A key the desktop took from a browser page is pressed in the window, so
 // Banda's actions and the browser Pane hear it as their own (browser.ts).

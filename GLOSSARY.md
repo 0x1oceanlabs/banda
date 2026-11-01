@@ -143,6 +143,11 @@ One page of a browser Pane, with its own address and history. A Pane
 keeps its tabs on top of its row or on the left beside the page, as
 `browser.toml` says.
 
+**Extension**:
+A Chrome extension in the browser's one profile, added from the Chrome
+Web Store. Its button sits in every browser Pane's row when it is pinned,
+and behind the Extensions button when it is not.
+
 **Workspace**:
 One screen of Panes. It can hold Panes of any Spaces; it only lays out the
 screen, and the Space stays the boundary. Workspaces sit one under another,

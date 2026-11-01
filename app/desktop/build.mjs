@@ -16,6 +16,12 @@ const common = {
 await Promise.all([
   build({
     ...common,
+    // The extensions' packages find their own preloads in node_modules.
+    external: [
+      ...common.external,
+      "electron-chrome-extensions",
+      "electron-chrome-web-store",
+    ],
     entryPoints: ["src/main.ts"],
     outfile: "out/main.mjs",
     format: "esm",

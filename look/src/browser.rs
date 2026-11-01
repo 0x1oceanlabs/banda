@@ -45,6 +45,9 @@ pub struct BrowserSettings {
     /// with %s where the words go. DuckDuckGo when left out.
     #[schemars(with = "Option<String>")]
     pub search: Option<Spanned<String>>,
+    /// The extensions whose buttons sit in the row, by their IDs; the rest
+    /// are behind the Extensions button. The row's menu writes it.
+    pub pinned: Option<Vec<String>>,
 }
 
 /// How the browser looks and searches, every key resolved.
@@ -56,6 +59,8 @@ pub struct Browser {
     pub tabs: Tabs,
     /// An address with `%s` where the words go.
     pub search: String,
+    /// The extensions whose buttons sit in the row.
+    pub pinned: Vec<String>,
 }
 
 /// Reads a `browser.toml`. A key that is wrong goes to `problems` and is
@@ -106,6 +111,7 @@ pub fn resolve(
     let defaults = BrowserSettings {
         tabs: Some(Tabs::default()),
         search: Some(Spanned::new(0..0, SEARCH.to_owned())),
+        pinned: Some(Vec::new()),
     };
     let layers = [
         Layer::new("defaults", &defaults, None),
@@ -114,6 +120,7 @@ pub fn resolve(
     let merged = BrowserSettings {
         tabs: mine.tabs.or(defaults.tabs),
         search: mine.search.or(defaults.search),
+        pinned: mine.pinned.or(defaults.pinned),
     };
     let keyed = keyed::keyed(&merged, &layers);
     let browser = Browser {
@@ -122,6 +129,7 @@ pub fn resolve(
         search: merged
             .search
             .map_or_else(|| SEARCH.to_owned(), Spanned::into_inner),
+        pinned: merged.pinned.unwrap_or_default(),
     };
     (browser, keyed)
 }
@@ -174,9 +182,10 @@ mod tests {
     #[test]
     fn the_file_chooses_the_tabs_and_the_search() {
         let (browser, problems) = resolved(Some(
-            "tabs = \"left\"\nsearch = \"https://kagi.com/search?q=%s\"\n",
+            "tabs = \"left\"\nsearch = \"https://kagi.com/search?q=%s\"\npinned = [\"abc\"]\n",
         ));
         assert_eq!(browser.tabs, Tabs::Left);
+        assert_eq!(browser.pinned, vec!["abc".to_owned()]);
         assert_eq!(browser.search, "https://kagi.com/search?q=%s");
         assert!(problems.is_empty());
     }
