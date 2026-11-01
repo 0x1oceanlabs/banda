@@ -18,6 +18,10 @@
       "items": {
         "type": "string"
       }
+    },
+    "blocker": {
+      "description": "Whether Banda blocks ads and trackers in the browser, with\nEasyList, EasyPrivacy and uBlock Origin's lists. On when left out.",
+      "type": "boolean"
     }
   },
   "additionalProperties": false,

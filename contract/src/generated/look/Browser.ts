@@ -16,4 +16,8 @@ search: string,
 /**
  * The extensions whose buttons sit in the row.
  */
-pinned: Array<string>, };
+pinned: Array<string>, 
+/**
+ * Whether ads and trackers are blocked.
+ */
+blocker: boolean, };

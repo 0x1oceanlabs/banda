@@ -78,6 +78,7 @@ export const DEFAULT_BROWSER: Browser = {
   tabs: "top",
   search: "https://duckduckgo.com/?q=%s",
   pinned: [],
+  blocker: true,
 }
 
 /**

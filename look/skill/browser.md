@@ -26,6 +26,11 @@ there yet, it starts as this template:
 - `pinned`: the IDs of the extensions whose buttons sit in the row, in
   order, as `["ddkjiahejlhfcafbddmgiahcphecmpfh"]`. The pin in the
   Extensions menu writes it.
+- `blocker = false`: stops Banda's ad blocker. It is on when left out:
+  it drops the requests and hides the elements that EasyList,
+  EasyPrivacy and uBlock Origin's lists name, in every browser Pane. The
+  lists are fetched once a day and kept in `blocker.bin` in the window's
+  folder.
 
 `banda settings check ~/.config/banda/browser.toml` names a wrong key or
 value and its line.
@@ -42,7 +47,8 @@ the button in the row, its cross removes it. A button opens its popup
 under itself; Escape, a click elsewhere or another tab closes it. A
 page's right-click menu has the extensions' items under Chrome's own.
 Most of Chrome's extension APIs work; one that needs more than Electron
-gives does not run.
+gives does not run. uBlock Origin Lite blocks nothing here, as Electron
+has no `declarativeNetRequest`; the built-in blocker does that job.
 
 ## Keys
 

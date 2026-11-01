@@ -23,6 +23,7 @@ import {
   shell,
 } from "electron"
 import type { Notice } from "@banda/web/host"
+import { Blocker } from "./blocker"
 import { hostPages, keepProfile, reveal } from "./browser"
 import { openDoor } from "./door"
 import { Extensions } from "./extensions"
@@ -135,6 +136,8 @@ async function ready(): Promise<void> {
     (_contents, _permission, answer) => answer(false)
   )
   keepProfile(() => window)
+  const blocker = new Blocker()
+  look.listen((now) => void blocker.set(now.browser.blocker))
   const extensions = new Extensions(() => window)
   ipcMain.handle("engine", (event) => {
     const from = event.senderFrame?.url ?? ""

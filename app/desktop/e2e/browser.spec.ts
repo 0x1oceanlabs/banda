@@ -20,14 +20,19 @@ test.afterEach(async () => {
   site?.close()
 })
 
-/** Serves `pages` on 127.0.0.1, a `.bin` one as a file to save; returns
- * its address. */
+/** Serves `pages` on 127.0.0.1, a `.bin` one as a file to save and a
+ * `.js` one as a script; returns its address. */
 async function serve(pages: Record<string, string>): Promise<string> {
   site = createServer((request, response) => {
     const body = pages[request.url ?? "/"]
     const file = request.url?.endsWith(".bin")
+    const script = request.url?.endsWith(".js")
     response.writeHead(body === undefined ? 404 : 200, {
-      "content-type": file ? "application/octet-stream" : "text/html",
+      "content-type": file
+        ? "application/octet-stream"
+        : script
+          ? "text/javascript"
+          : "text/html",
       ...(file && { "content-disposition": "attachment" }),
     })
     response.end(body ?? "<title>Missing</title>")
@@ -317,6 +322,34 @@ test("the Banda menu opens an address, and a file of the focused Space, in a bro
   await search.press("Enter")
   await expect(menu).toBeHidden()
   await expect(page.getByRole("region", { name: "The plan" })).toBeVisible()
+})
+
+test("the blocker drops what its lists name, and browser.toml turns it off", async () => {
+  const address = await serve({
+    "/": '<title>Ads</title><p class="banda-ad">An ad</p><script src="/banda-ad.js"></script>',
+    "/banda-ad.js": "document.title = 'Shown'",
+  })
+  window = await startWindow()
+  const { app, page, dir } = window
+  const { thread: draft } = await firstThread(page)
+  await expect(draft).toBeVisible()
+  const bar = await openBrowser(page)
+  await bar.fill(address.replace("http://", ""))
+  await bar.press("Enter")
+  // The script is dropped and the ad hidden: the startWindow's lists name both.
+  const loaded = "document.readyState === 'complete' && document.title"
+  await expect.poll(() => inPages(app, loaded)).toEqual(["Ads"])
+  const shown = "getComputedStyle(document.querySelector('.banda-ad')).display"
+  await expect.poll(() => inPages(app, shown)).toEqual(["none"])
+
+  writeFileSync(join(dir, "config/browser.toml"), "blocker = false\n")
+  await expect
+    .poll(async () => {
+      await inPages(app, "location.reload()")
+      return inPages(app, loaded)
+    })
+    .toEqual(["Shown"])
+  expect(await inPages(app, shown)).toEqual(["block"])
 })
 
 /**

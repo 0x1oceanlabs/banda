@@ -48,6 +48,9 @@ pub struct BrowserSettings {
     /// The extensions whose buttons sit in the row, by their IDs; the rest
     /// are behind the Extensions button. The row's menu writes it.
     pub pinned: Option<Vec<String>>,
+    /// Whether Banda blocks ads and trackers in the browser, with
+    /// EasyList, EasyPrivacy and uBlock Origin's lists. On when left out.
+    pub blocker: Option<bool>,
 }
 
 /// How the browser looks and searches, every key resolved.
@@ -61,6 +64,8 @@ pub struct Browser {
     pub search: String,
     /// The extensions whose buttons sit in the row.
     pub pinned: Vec<String>,
+    /// Whether ads and trackers are blocked.
+    pub blocker: bool,
 }
 
 /// Reads a `browser.toml`. A key that is wrong goes to `problems` and is
@@ -112,6 +117,7 @@ pub fn resolve(
         tabs: Some(Tabs::default()),
         search: Some(Spanned::new(0..0, SEARCH.to_owned())),
         pinned: Some(Vec::new()),
+        blocker: Some(true),
     };
     let layers = [
         Layer::new("defaults", &defaults, None),
@@ -121,6 +127,7 @@ pub fn resolve(
         tabs: mine.tabs.or(defaults.tabs),
         search: mine.search.or(defaults.search),
         pinned: mine.pinned.or(defaults.pinned),
+        blocker: mine.blocker.or(defaults.blocker),
     };
     let keyed = keyed::keyed(&merged, &layers);
     let browser = Browser {
@@ -130,6 +137,7 @@ pub fn resolve(
             .search
             .map_or_else(|| SEARCH.to_owned(), Spanned::into_inner),
         pinned: merged.pinned.unwrap_or_default(),
+        blocker: merged.blocker.unwrap_or(true),
     };
     (browser, keyed)
 }
@@ -169,6 +177,7 @@ mod tests {
         let (browser, problems) = resolved(None);
         assert_eq!(browser.tabs, Tabs::Top);
         assert_eq!(browser.search, SEARCH);
+        assert!(browser.blocker);
         assert!(problems.is_empty());
     }
 
@@ -182,8 +191,9 @@ mod tests {
     #[test]
     fn the_file_chooses_the_tabs_and_the_search() {
         let (browser, problems) = resolved(Some(
-            "tabs = \"left\"\nsearch = \"https://kagi.com/search?q=%s\"\npinned = [\"abc\"]\n",
+            "tabs = \"left\"\nsearch = \"https://kagi.com/search?q=%s\"\npinned = [\"abc\"]\nblocker = false\n",
         ));
+        assert!(!browser.blocker);
         assert_eq!(browser.tabs, Tabs::Left);
         assert_eq!(browser.pinned, vec!["abc".to_owned()]);
         assert_eq!(browser.search, "https://kagi.com/search?q=%s");
