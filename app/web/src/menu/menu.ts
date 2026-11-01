@@ -91,6 +91,49 @@ export function branchName(branch: Branch): string {
 
 const VIEWS = "Sidebar view"
 
+/** The sidebar's view, as the branch the menu goes into. */
+const VIEWS_BRANCH: Branch = { kind: "views", id: "views" }
+
+/** A Space, as the branch the menu goes into. */
+function spaceBranch(space: SpaceSummary): Branch {
+  return { kind: "space", id: `space:${space.id}`, space }
+}
+
+/** Where the menu opens: at its root or its Actions, inside the
+ * branches of `path`, with `words` typed. Each opening is new: the menu
+ * starts again at it, though it is open. */
+export type Opening = { n: number; at: At; path: Branch[]; words: string }
+
+let openings = 0
+
+/** The menu as Alt+Space opens it, or Alt+K at its Actions. */
+export function openingAt(at: At, path: Branch[] = [], words = ""): Opening {
+  return { n: ++openings, at, path, words }
+}
+
+/**
+ * Where `banda menu ROUTE` opens the menu (ADR 0017, decision 7): an
+ * empty route at its root, `actions` at its Actions, `views` in the
+ * sidebar's view, `space.<name>` (or its ID) in a Space. Any other words
+ * open it with them typed in. Settings routes are the desktop's: it
+ * opens the settings window at them.
+ */
+export function openingOf(
+  route: string,
+  spaces: readonly SpaceSummary[]
+): Opening {
+  const words = route.trim()
+  if (words === "actions") return openingAt("actions")
+  if (words === "views") return openingAt("root", [VIEWS_BRANCH])
+  const named = /^space\.(.+)$/.exec(words)?.[1].toLowerCase()
+  const space = spaces.find(
+    (one) => one.id === named || one.name.toLowerCase() === named
+  )
+  return space
+    ? openingAt("root", [spaceBranch(space)])
+    : openingAt("root", [], words)
+}
+
 /** A group of rows under its heading; the fallback row has none. */
 export type Group = {
   label: string
@@ -148,7 +191,6 @@ export function menuOf({
   const { lists, spaces, actions, presets, files, weight } = sources
   const query = words.trim()
   const byWeight = (row: Choice) => weight(row.id)
-  const views: Choice = { kind: "views", id: "views" }
   // The actions, and the branches among them, as one list.
   const actionRows: Choice[] = [
     ...actions.map((action): Choice => ({
@@ -156,7 +198,7 @@ export function menuOf({
       id: `action:${action.id}`,
       action,
     })),
-    views,
+    VIEWS_BRANCH,
   ]
   const actionTexts = (row: Choice) =>
     row.kind === "action" ? [row.action.title, row.action.id] : [VIEWS]
@@ -245,13 +287,8 @@ export function menuOf({
     },
     {
       label: "Spaces",
-      rows: fitting(
-        spaces.map((space) => ({
-          kind: "space" as const,
-          id: `space:${space.id}`,
-          space,
-        })),
-        (row) => [row.space.name]
+      rows: fitting(spaces.map(spaceBranch), (row) =>
+        row.kind === "space" ? [row.space.name] : []
       ).slice(0, SHOWN.spaces),
     },
     {

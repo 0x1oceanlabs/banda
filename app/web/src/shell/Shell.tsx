@@ -10,7 +10,14 @@ import { SUMMARY } from "../calls/system"
 import { Toasts } from "../calls/Toasts"
 import { first, type Heard, useCalls, type Where } from "../calls/useCalls"
 import { BandaMenu } from "../menu/BandaMenu"
-import type { At, Branch, Choice } from "../menu/menu"
+import {
+  type At,
+  type Branch,
+  type Choice,
+  type Opening,
+  openingAt,
+  openingOf,
+} from "../menu/menu"
 import { columnsOf, useLookNotify, useLookSound } from "../look"
 import { kindOf, showsOf, startable, widthOf } from "../registry"
 import { Sidebar } from "../sidebar/Sidebar"
@@ -78,7 +85,7 @@ export function Shell({
   })
   const [sidebar, setSidebar] = useState(loadSidebar)
   const [overview, setOverview] = useState(false)
-  const [menu, setMenu] = useState<At | null>(null)
+  const [menu, setMenu] = useState<Opening | null>(null)
   const [attention, setAttention] = useState(QUIET)
   const [lists, setLists] = useState<Lists>({})
 
@@ -152,6 +159,18 @@ export function Shell({
       }),
     [answerCall]
   )
+  // `banda menu ROUTE` opens the menu there (ADR 0017, decision 7).
+  const spacesNow = useRef(spaces)
+  useEffect(() => {
+    spacesNow.current = spaces
+  }, [spaces])
+  useEffect(
+    () =>
+      window.banda?.menu.listen((route) =>
+        setMenu(openingOf(route, spacesNow.current))
+      ),
+    []
+  )
   // Alt+S: the Thread in the focused Pane settles, or comes back.
   const listsNow = useRef(lists)
   useEffect(() => {
@@ -167,7 +186,7 @@ export function Shell({
   const closeOverview = useCallback(() => setOverview(false), [])
   // Alt+Space or Alt+K again, or the other of them, closes the menu.
   const toggleMenu = useCallback(
-    (at: At) => setMenu((open) => (open ? null : at)),
+    (at: At) => setMenu((open) => (open ? null : openingAt(at))),
     []
   )
   const closeMenu = useCallback(() => setMenu(null), [])
@@ -294,7 +313,7 @@ export function Shell({
         {sidebar && (
           <Sidebar
             engine={engine}
-            onMenu={() => setMenu("root")}
+            onMenu={() => setMenu(openingAt("root"))}
             spaces={spaces}
             lists={lists}
             home={home}
@@ -331,7 +350,7 @@ export function Shell({
             onHold={hold}
           />
           <BandaMenu
-            at={menu}
+            opening={menu}
             onClose={closeMenu}
             onChoose={choose}
             engine={engine}

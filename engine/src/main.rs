@@ -11,6 +11,8 @@
 //!   no engine: the look is this machine's.
 //! - `banda skill` prints the Banda skill, what an Agent needs to know to
 //!   work in Banda and change it; `banda skill <topic>` prints a topic.
+//! - `banda menu [route]` opens the Banda menu in the window, at a route
+//!   such as `actions` or `space.<name>` (ADR 0017).
 //! - `banda mcp` speaks MCP on stdio for an Agent in a Thread: the agents
 //!   module hands it to each session, with the Agent's pass (ADR 0019).
 //!
@@ -104,6 +106,12 @@ enum Command {
         #[command(subcommand)]
         what: SettingsCommand,
     },
+    /// Opens the Banda menu in Banda's window, as Alt+Space does: at its
+    /// root, or at ROUTE: `actions` (the key sheet), `views` (the
+    /// sidebar's view), `space.<name>` (a Space's Threads), or
+    /// `settings.<section>.<row>` (the settings window there). Other
+    /// words open it with them typed in.
+    Menu { route: Option<String> },
     /// Prints the Banda skill: what an Agent needs to know to work in
     /// Banda and to change it for its Person, then its topics.
     Skill {
@@ -223,6 +231,7 @@ fn main() -> ExitCode {
         Command::Look { what, follow } => return look(what, follow),
         Command::Skill { topic, export } => return skill(topic, export),
         Command::Settings { what } => return settings(what),
+        Command::Menu { route } => return menu(route.unwrap_or_default()),
         _ => {}
     }
     tracing_subscriber::fmt()
@@ -266,6 +275,7 @@ async fn run(command: Command, places: Places) -> Result<(), Failure> {
         Command::Look { .. } => unreachable!("the look runs without the engine"),
         Command::Skill { .. } => unreachable!("the skill runs without the engine"),
         Command::Settings { .. } => unreachable!("the settings run without the engine"),
+        Command::Menu { .. } => unreachable!("the menu is the window's, not the engine's"),
         Command::Mcp => unreachable!("banda mcp finds the engine by its variables"),
         Command::Follow {
             space,
@@ -306,6 +316,42 @@ fn skill(topic: Option<String>, export: Option<PathBuf>) -> ExitCode {
     // A reader that went away is not an error.
     let _ = write!(out, "{}", text.trim_end()).and_then(|()| writeln!(out));
     ExitCode::SUCCESS
+}
+
+/// Asks the window to open its menu at `route`: one JSON line to its
+/// socket, and `ok` back.
+fn menu(route: String) -> ExitCode {
+    let told = Places::from_env()
+        .and_then(|places| tell_window(&places.window(), &json!({ "menu": route })));
+    match told {
+        Ok(()) => ExitCode::SUCCESS,
+        Err(failure) => failure.exit(),
+    }
+}
+
+#[cfg(unix)]
+fn tell_window(socket: &std::path::Path, message: &Value) -> Result<(), Failure> {
+    use std::io::{BufRead, BufReader};
+    use std::os::unix::net::UnixStream;
+    let mut stream = UnixStream::connect(socket)
+        .map_err(|_| Failure::Broken("Banda's window is not open.".into()))?;
+    stream
+        .set_read_timeout(Some(std::time::Duration::from_secs(5)))
+        .map_err(Failure::broken)?;
+    writeln!(stream, "{message}").map_err(Failure::broken)?;
+    let mut answer = String::new();
+    BufReader::new(stream)
+        .read_line(&mut answer)
+        .map_err(|error| Failure::Broken(format!("Banda's window did not answer: {error}")))?;
+    match answer.trim() {
+        "ok" => Ok(()),
+        other => Err(Failure::Broken(format!("Banda's window said: {other}"))),
+    }
+}
+
+#[cfg(not(unix))]
+fn tell_window(_: &std::path::Path, _: &Value) -> Result<(), Failure> {
+    Err(Failure::Broken("banda menu needs a Unix socket.".into()))
 }
 
 /// `banda settings`: no engine, only the files (ADR 0016).

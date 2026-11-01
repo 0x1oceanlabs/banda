@@ -33,13 +33,13 @@ import { useIsSettled } from "../sidebar/settled"
 import {
   type Act,
   actsOf,
-  type At,
   type Branch,
   branchName,
   type Choice,
   isBranch,
   menuOf,
   OPEN,
+  type Opening,
   type Sources,
 } from "./menu"
 import { opened, useOpened, weightOf } from "./opened"
@@ -48,11 +48,12 @@ const ASK: Key = { code: "Enter", alt: true }
 
 /**
  * The Banda menu (ADR 0017): one window in the middle that finds and runs
- * everything, opened by Alt+Space at its root or by Alt+K at its Actions.
- * It goes into branches itself; what else is chosen, the window runs.
+ * everything, opened by Alt+Space at its root, by Alt+K at its Actions,
+ * or by `banda menu` at a route. It goes into branches itself; what else
+ * is chosen, the window runs.
  */
 export function BandaMenu({
-  at,
+  opening,
   onClose,
   onChoose,
   engine,
@@ -62,7 +63,7 @@ export function BandaMenu({
   actions,
 }: {
   /** Where it opens; closed when none. */
-  at: At | null
+  opening: Opening | null
   onClose: () => void
   /** Runs a chosen row, once the menu has closed. */
   onChoose: (row: Exclude<Choice, Branch>) => void
@@ -81,7 +82,7 @@ export function BandaMenu({
   const escapeRef = useRef<() => boolean>(() => false)
   return (
     <Dialog
-      open={at !== null}
+      open={opening !== null}
       onOpenChange={(open, details) => {
         if (open) return
         if (details.reason === "escape-key" && escapeRef.current())
@@ -94,9 +95,10 @@ export function BandaMenu({
         className="top-[12%] translate-y-0 gap-0 overflow-hidden p-0 sm:max-w-xl"
       >
         <DialogTitle className="sr-only">Banda menu</DialogTitle>
-        {at && (
+        {opening && (
           <Menu
-            at={at}
+            key={opening.n}
+            opening={opening}
             engine={engine}
             space={space}
             lists={lists}
@@ -115,9 +117,9 @@ export function BandaMenu({
   )
 }
 
-/** The menu while it is open: it starts empty, at its root, each time. */
+/** The menu while it is open: it starts where it is opened, each time. */
 function Menu({
-  at,
+  opening,
   engine,
   space,
   lists,
@@ -127,7 +129,7 @@ function Menu({
   escapeRef,
   onChoose,
 }: {
-  at: At
+  opening: Opening
   engine: Engine
   space: SpaceId
   lists: Lists
@@ -142,8 +144,9 @@ function Menu({
   const addressOf = useAddressOf()
   const uses = useOpened()
   const [now] = useState(Date.now)
-  const [words, setWords] = useState("")
-  const [path, setPath] = useState<Branch[]>([])
+  const { at } = opening
+  const [words, setWords] = useState(opening.words)
+  const [path, setPath] = useState<Branch[]>(opening.path)
   // The focused Space's files that fit the words, as `@` finds them.
   const query = words.trim()
   const lookFiles = at === "root" && path.length === 0 && query !== ""

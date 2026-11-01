@@ -9,6 +9,7 @@ import {
   type Branch,
   type Choice,
   menuOf,
+  openingOf,
   ranked,
   type Sources,
 } from "./menu"
@@ -277,5 +278,23 @@ describe("ranking", () => {
       ["login", ""],
       ["other", "login"],
     ])
+  })
+})
+
+describe("banda menu ROUTE", () => {
+  const where = (route: string) => {
+    const { at, path, words } = openingOf(route, spaces)
+    return [at, path.map((branch) => branch.id), words]
+  }
+  test("opens at the root, the Actions, the sidebar's view or a Space", () => {
+    expect(where("")).toEqual(["root", [], ""])
+    expect(where("actions")).toEqual(["actions", [], ""])
+    expect(where("views")).toEqual(["root", ["views"], ""])
+    expect(where("space.Banda")).toEqual(["root", ["space:s1"], ""])
+    expect(where("space.s1")).toEqual(["root", ["space:s1"], ""])
+  })
+  test("other words, and a Space there is not, are typed in", () => {
+    expect(where(" fix the login ")).toEqual(["root", [], "fix the login"])
+    expect(where("space.nope")).toEqual(["root", [], "space.nope"])
   })
 })

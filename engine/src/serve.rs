@@ -63,7 +63,10 @@ pub async fn serve(places: Places, port: u16, with_parent: bool) -> Result<(), F
     let app = api::router(kernel, identity, engine);
     places.announce(&running).map_err(Failure::broken)?;
     if with_parent {
-        let line = serde_json::to_string(&running).map_err(Failure::broken)?;
+        // And where the window listens for `banda menu`, so the CLI and
+        // the window find it the same way.
+        let mut line = serde_json::to_value(&running).map_err(Failure::broken)?;
+        line["window"] = places.window().display().to_string().into();
         println!("{line}");
     }
     tracing::info!(port = running.port, root = %places.root.display(), "the engine serves");

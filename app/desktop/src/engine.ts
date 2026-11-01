@@ -8,8 +8,14 @@ import { type ChildProcess, spawn } from "node:child_process"
 import { createInterface } from "node:readline"
 import type { Address } from "@banda/contract"
 
-/** The first line `serve --with-parent` prints. */
-type Running = { protocol: number; port: number; secret: string }
+/** The first line `serve --with-parent` prints; `window` is where the
+ * window listens for `banda menu`. */
+type Running = {
+  protocol: number
+  port: number
+  secret: string
+  window: string
+}
 
 const FIRST_WAIT = 500
 const LONGEST_WAIT = 10_000
@@ -25,9 +31,18 @@ export class EngineProcess {
   #waiting: Array<(address: Address) => void> = []
   #wait = FIRST_WAIT
   #stopping = false
+  #door: Promise<string>
+  #found: (door: string) => void = () => {}
 
   constructor(binary: string) {
     this.#binary = binary
+    this.#door = new Promise((found) => (this.#found = found))
+  }
+
+  /** Where the window listens for `banda menu`, as the engine names it
+   * once it has started. */
+  door(): Promise<string> {
+    return this.#door
   }
 
   /** Where the engine listens; waits while it starts. */
@@ -57,6 +72,7 @@ export class EngineProcess {
         secret: running.secret,
       }
       for (const resolve of this.#waiting.splice(0)) resolve(this.#address)
+      this.#found(running.window)
     })
     child.once("error", (error) => {
       console.error(`banda: the engine did not start: ${error.message}`)

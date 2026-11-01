@@ -30,6 +30,8 @@ export type Window = {
   dir: string
   /** The engine's pid, main's child named `banda`; none while it restarts. */
   engine: () => number | undefined
+  /** Runs the `banda` CLI on this window's folders; what it printed. */
+  banda: (...args: string[]) => string
   close: () => Promise<void>
 }
 
@@ -75,28 +77,29 @@ export async function startWindow({
     join(dir, "config/harnesses.toml"),
     `[[harness]]\nid = "fake"\nname = "Fake AI"\ncommand = ${JSON.stringify(fake)}\n${env}${cli}`
   )
+  const variables = {
+    ...process.env,
+    BANDA_ROOT: join(dir, "root"),
+    BANDA_STATE: join(dir, "state"),
+    // The engine and the look read only this folder: no Omarchy, no
+    // Hyprland.
+    BANDA_CONFIG: join(dir, "config"),
+    BANDA_OMARCHY: "",
+    BANDA_FONTCONFIG: "",
+    HYPRLAND_INSTANCE_SIGNATURE: "",
+    BANDA_LOG: "warn",
+    // Notices go to a list the tests read, never to the Person's screen.
+    BANDA_DESKTOP: "recorded",
+    // A terminal runs the Person's shell: here one every machine has.
+    SHELL: "/bin/sh",
+  }
   const app = await electron.launch({
     chromiumSandbox: SANDBOXED,
     args: [
       desktop,
       ...(process.env.BANDA_E2E_SHOW ? [] : ["--ozone-platform=headless"]),
     ],
-    env: {
-      ...process.env,
-      BANDA_ROOT: join(dir, "root"),
-      BANDA_STATE: join(dir, "state"),
-      // The engine and the look read only this folder: no Omarchy, no
-      // Hyprland.
-      BANDA_CONFIG: join(dir, "config"),
-      BANDA_OMARCHY: "",
-      BANDA_FONTCONFIG: "",
-      HYPRLAND_INSTANCE_SIGNATURE: "",
-      BANDA_LOG: "warn",
-      // Notices go to a list the tests read, never to the Person's screen.
-      BANDA_DESKTOP: "recorded",
-      // A terminal runs the Person's shell: here one every machine has.
-      SHELL: "/bin/sh",
-    },
+    env: variables,
   })
   const page = await app.firstWindow()
   // A headless screen is small; the window takes a laptop's size.
@@ -108,6 +111,11 @@ export async function startWindow({
     app,
     page,
     dir,
+    banda: (...args) =>
+      execFileSync(join(repository, "target/debug/banda"), args, {
+        env: variables,
+        encoding: "utf8",
+      }),
     engine: () => {
       const main = String(app.process().pid)
       try {
