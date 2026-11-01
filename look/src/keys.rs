@@ -134,6 +134,12 @@ fn code_of(name: &str) -> Option<(String, String)> {
 
 /// A key as written: its code, its mods and its name as Banda writes it,
 /// bound to nothing yet; or what is wrong with it.
+/// The key `text` names, as Banda writes it: `Alt+K` for `alt+k`; none
+/// when it names no key.
+pub fn canonical(text: &str) -> Option<String> {
+    parse(text).ok().map(|bind| bind.text)
+}
+
 fn parse(text: &str) -> Result<Bind, String> {
     let text = text.trim();
     let (mods, name) = text.rsplit_once('+').unwrap_or(("", text));

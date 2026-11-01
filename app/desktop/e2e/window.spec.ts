@@ -1282,6 +1282,60 @@ test("keys.toml binds a key, frees one, and the bar names what is wrong", async 
   await expect(thread).toBeVisible()
 })
 
+test("Alt+K is the key sheet: sections and families, and Tab binds or frees a key in keys.toml", async () => {
+  window = await startWindow()
+  const { page, dir } = window
+  const file = join(dir, "config/keys.toml")
+  const { composer } = await firstThread(page)
+  await expect(composer).toBeFocused()
+  const menu = page.getByRole("dialog", { name: "Banda menu" })
+  const search = menu.getByRole("combobox", { name: "Search" })
+
+  // Every action by section; a family is one row, which Enter goes into.
+  await page.keyboard.press("Alt+KeyK")
+  for (const section of ["Threads", "Panes", "Columns", "Workspaces", "Banda"])
+    await expect(menu.getByRole("group", { name: section })).toBeVisible()
+  const focus = menu.getByRole("option", { name: /^Focus a Pane/ })
+  await expect(focus).toContainText("←")
+  await expect(
+    menu.getByRole("option", { name: /^Go to a workspace/ })
+  ).toContainText("1–9")
+  await page.screenshot({ path: "test-results/36-key-sheet.png" })
+  await focus.click()
+  await expect(menu.getByRole("option")).toHaveCount(4)
+  await search.press("Backspace")
+
+  // Tab, then Add a key: the next key pressed is bound, Alt+K too, and
+  // written to keys.toml; the row shows it beside its own.
+  await search.fill("whole screen")
+  await search.press("Tab")
+  const acts = menu.getByRole("listbox", { name: "Actions" })
+  await acts.getByRole("option", { name: "Add a key…" }).click()
+  await expect(search).toHaveAttribute("placeholder", /^Press the keys for/)
+  await search.press("KeyM")
+  await expect(menu.getByRole("status")).toContainText("hold Alt or Ctrl")
+  await search.press("Alt+KeyK")
+  await expect(menu.getByRole("status")).toContainText(
+    "Alt+K runs “The column the whole screen wide, or back” now, not “Every action and its key”"
+  )
+  await expect
+    .poll(() => readFileSync(file, "utf8"))
+    .toContain('"Alt+K" = "column.maximize"')
+  await search.fill("whole screen")
+  const row = menu.getByRole("option").first()
+  const keys = row.locator("[data-slot=kbd-group]")
+  await expect(keys).toHaveCount(2)
+  await expect(keys.last()).toHaveAttribute("title", /^keys\.toml, line \d+$/)
+
+  // Free Alt+K: it goes to the Pane.
+  await search.press("Tab")
+  await acts.getByRole("option", { name: "Free Alt+K" }).click()
+  await expect
+    .poll(() => readFileSync(file, "utf8"))
+    .toContain('"Alt+K" = "none"')
+  await expect(keys).toHaveCount(1)
+})
+
 test("columns and the text size come from look.toml", async () => {
   window = await startWindow({
     look: '[columns]\npresets = ["1/4", "3/4"]\ndefault = "1/4"\nalone = "1/4"\nmin = 0\n[font]\nsize = 16\n',
@@ -1803,7 +1857,7 @@ test("Alt+Space opens the Banda menu: it finds a Thread, and Alt+Enter starts on
 
   // Alt+K opens it at its Actions, each with its key; Alt+K again closes it.
   await page.keyboard.press("Alt+K")
-  await expect(menu.getByRole("group", { name: "Actions" })).toContainText(
+  await expect(menu.getByRole("group", { name: "Threads" })).toContainText(
     "Show or hide the sidebar"
   )
   await page.keyboard.press("Alt+K")
@@ -1881,7 +1935,7 @@ test("banda menu opens the Banda menu at a route, from outside the window", asyn
   const search = menu.getByRole("combobox", { name: "Search" })
   // At its Actions: the key sheet.
   banda("menu", "actions")
-  await expect(menu.getByRole("group", { name: "Actions" })).toContainText(
+  await expect(menu.getByRole("group", { name: "Threads" })).toContainText(
     "Show or hide the sidebar"
   )
   // In a Space, by its name, though the menu is open.

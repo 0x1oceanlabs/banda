@@ -65,7 +65,7 @@ browser: Browser,
  */
 agents: Agents, 
 /**
- * The keys the Person bound in `keys.toml` (ADR 0005, decision 10).
+ * The keys the Person bound in `keys.toml` (ADR 0005, decision 11).
  */
 keys: Keys, 
 /**

@@ -14,6 +14,7 @@ import {
   type At,
   type Branch,
   type Choice,
+  type Keying,
   type Opening,
   openingAt,
   openingOf,
@@ -212,9 +213,10 @@ export function Shell({
     const onKey = (event: KeyboardEvent) => {
       const action = actionFor(keyed.actions, event)
       if (!action) return
-      const inDialog =
-        event.target instanceof Element &&
-        event.target.closest("[role=dialog]") !== null
+      const target = event.target instanceof Element ? event.target : null
+      // A field that takes a key to bind takes every key.
+      if (target?.closest("[data-takes-keys]")) return
+      const inDialog = target?.closest("[role=dialog]") != null
       if (inDialog && !action.overDialogs) return
       // A terminal leaves alone a key that was taken.
       event.preventDefault()
@@ -239,7 +241,7 @@ export function Shell({
   // The Space the focused Pane is in: where the menu's New Thread starts.
   const here = focused(workspaces)?.space ?? home
   const choose = useCallback(
-    (row: Exclude<Choice, Branch>) => {
+    (row: Exclude<Choice, Branch | Keying>) => {
       switch (row.kind) {
         case "thread":
           return row.beside

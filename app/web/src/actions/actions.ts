@@ -16,6 +16,9 @@ export type Action<Context> = {
   title: string
   /** The keys that run it: its own, then the Person's (`keys.toml`). */
   keys?: readonly Key[]
+  /** The family it is one of, as the key sheet folds them: the
+   * family's title, `Focus a Pane` for left, right, up and down. */
+  family?: string
   /** Its key works while a dialog is open, as the Banda menu's own do;
    * any other key there is the dialog's. */
   overDialogs?: true
