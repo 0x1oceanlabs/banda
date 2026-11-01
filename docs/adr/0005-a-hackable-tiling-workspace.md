@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 date: 2026-11-01
 ---
 
@@ -26,7 +26,7 @@ During the same talk Roma decided these points:
 
 The evidence is in two notes: [tiling managers](../research/2026-11-01-tiling-managers.md) (niri, Hyprland, Omarchy, Herdr, Superlogical's Rex, zellij, tmux) and [hackable modules](../research/2026-11-01-hackable-modules.md) (Obsidian, VS Code, Zed, Zellij, Raycast, Notion, MCP Apps, Emacs). The nearest product is Herdr's new desktop app. It is a GPUI window over a server, with Spaces, tabs and split panes. Its whole UI is files, it keeps one list of commands, and it writes notes for Agents. It runs Agents as terminal programs, though, while Banda shows Threads in its own model (ADR 0003).
 
-**Decision.** Roma decided the points marked _decided_. The rest are proposals that wait for his go.
+**Decision.** Roma decided the points marked _decided_. On 2026-11-01 he accepted the rest as our defaults and asked to build; each stays his to change.
 
 1. **The first audience is enthusiasts and AI-native people** (_decided_). Every action still has a mouse path. A wider audience comes later, through the Agent: a Person says what they want, and the Agent changes the workspace. This changes the audience that ADR 0001 and `GLOSSARY.md` name.
 

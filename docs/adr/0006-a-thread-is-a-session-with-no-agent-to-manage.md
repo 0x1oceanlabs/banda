@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 date: 2026-11-01
 ---
 
@@ -9,7 +9,7 @@ The first Banda ran its Agents on a server: each had a name, an identity and Thr
 
 On 2026-11-01 Roma decided to do the same: "the Agents concept from old Banda is not needed as an entity; there are just sessions on the computer, as in Herdr and T3."
 
-**Decision.** Roma decided the points marked _decided_. The rest are proposals that wait for his go.
+**Decision.** Roma decided the points marked _decided_. On 2026-11-01 he accepted the rest as our defaults and asked to build; each stays his to change.
 
 1. **A Thread is one session with a Harness in a Space** (_decided_).
    - Starting a Thread is all it takes. There is no Agent to create, name or configure first.
