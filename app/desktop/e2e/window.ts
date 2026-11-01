@@ -17,6 +17,13 @@ import {
 const repository = resolve(import.meta.dirname, "../../..")
 const desktop = resolve(import.meta.dirname, "..")
 
+/**
+ * Whether the window runs in Chromium's sandbox, as Banda does: extensions'
+ * workers need it for their APIs. CI's containers cannot give it, so there
+ * it runs without, as Playwright does unless asked.
+ */
+export const SANDBOXED = !process.env.CI
+
 export type Window = {
   app: ElectronApplication
   page: Page
@@ -69,9 +76,7 @@ export async function startWindow({
     `[[harness]]\nid = "fake"\nname = "Fake AI"\ncommand = ${JSON.stringify(fake)}\n${env}${cli}`
   )
   const app = await electron.launch({
-    // Banda runs sandboxed, as Electron does by default; extensions' workers
-    // need it for their APIs. Playwright turns it off unless asked.
-    chromiumSandbox: true,
+    chromiumSandbox: SANDBOXED,
     args: [
       desktop,
       ...(process.env.BANDA_E2E_SHOW ? [] : ["--ozone-platform=headless"]),
