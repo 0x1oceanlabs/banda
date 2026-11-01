@@ -165,6 +165,8 @@ export type Listed = {
   said?: string
   /** Who does the work: a Harness's name. */
   by?: string
+  /** That Harness's id, which picks its logo where Banda has one. */
+  harness?: string
   /** What a click on it opens. */
   pane: PaneState
 }
