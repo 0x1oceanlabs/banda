@@ -10,14 +10,15 @@ import {
   paneOf,
 } from "@bandaso/ui/pane"
 import { MessagesSquareIcon } from "lucide-react"
+import { harnessName, useHarnesses } from "./harnesses"
 import { applyThreads, readThreads, THREADS_FILTER } from "./list"
 import { threadPane } from "./ThreadPane"
 
 type NoArgs = { [key: string]: JsonValue }
 
 /**
- * A Space's Threads, the one changed last first: what the window's sidebar
- * shows for each Space (ADR 0005, decision 8). The Person opens it there,
+ * A Space's Threads, the one changed last first, each with its Harness: what
+ * the window's sidebar shows for each Space (ADR 0005, decision 8). The Person opens it there,
  * not from the menu, so it has no start.
  */
 export const threadsPane = definePane<NoArgs>({
@@ -44,6 +45,7 @@ function ThreadsPane({ engine, space, open }: PaneProps<NoArgs>) {
     [engine, space]
   )
   const live = useLive(engine, space, source)
+  const harnesses = useHarnesses(engine, space)
 
   if (live.state === "loading") {
     return (
@@ -84,6 +86,11 @@ function ThreadsPane({ engine, space, open }: PaneProps<NoArgs>) {
             }
           >
             <span className="min-w-0 flex-1 truncate">{thread.title}</span>
+            {thread.harness && (
+              <span className="shrink-0 truncate text-xs">
+                {harnessName(harnesses, thread.harness)}
+              </span>
+            )}
             <span className="shrink-0 text-xs tabular-nums">
               {ago(thread.updated_at)}
             </span>

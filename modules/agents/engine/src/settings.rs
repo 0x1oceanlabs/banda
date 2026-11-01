@@ -8,7 +8,7 @@
 //! Harness; nothing writes them, and nothing removes them.
 
 use crate::model::{HarnessView, Program};
-use bandaso_kernel::{AgentId, Error};
+use bandaso_kernel::AgentId;
 use serde::Deserialize;
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
@@ -157,18 +157,24 @@ struct AgentFile {
     harness: String,
 }
 
-/// Each old Agent of a Space and its Harness. A file that does not parse
-/// is logged and skipped.
-pub fn old_agents(space: &Path) -> Result<Vec<(AgentId, String)>, Error> {
+/// Each old Agent of a Space and its Harness. What cannot be read, a file
+/// or the whole folder, is logged and skipped: the Space opens anyway, and
+/// only the Threads it names miss their Harness.
+pub fn old_agents(space: &Path) -> Vec<(AgentId, String)> {
     let folder = space.join(".bandaso").join("agents");
     let entries = match std::fs::read_dir(&folder) {
         Ok(entries) => entries,
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Ok(Vec::new()),
-        Err(error) => return Err(error.into()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Vec::new(),
+        Err(error) => {
+            tracing::warn!(folder = %folder.display(), %error, "the old Agents' folder cannot be read");
+            return Vec::new();
+        }
     };
     let mut agents = Vec::new();
-    for entry in entries {
-        let path = entry?.path();
+    for path in entries
+        .filter_map(|entry| entry.ok())
+        .map(|entry| entry.path())
+    {
         if path.extension().is_none_or(|e| e != "toml") {
             continue;
         }
@@ -182,7 +188,7 @@ pub fn old_agents(space: &Path) -> Result<Vec<(AgentId, String)>, Error> {
             }
         }
     }
-    Ok(agents)
+    agents
 }
 
 #[cfg(test)]
@@ -210,7 +216,7 @@ mod tests {
     #[test]
     fn old_agent_files_name_their_harness() {
         let space = tempfile::tempdir().unwrap();
-        assert!(old_agents(space.path()).unwrap().is_empty());
+        assert!(old_agents(space.path()).is_empty());
         let folder = space.path().join(".bandaso/agents");
         std::fs::create_dir_all(&folder).unwrap();
         let id = AgentId::new();
@@ -218,9 +224,6 @@ mod tests {
         std::fs::write(folder.join("Writer.toml"), text).unwrap();
         std::fs::write(folder.join("Broken.toml"), "id = 3").unwrap();
         std::fs::write(folder.join("notes.txt"), "not an Agent").unwrap();
-        assert_eq!(
-            old_agents(space.path()).unwrap(),
-            vec![(id, "codex".to_owned())]
-        );
+        assert_eq!(old_agents(space.path()), vec![(id, "codex".to_owned())]);
     }
 }

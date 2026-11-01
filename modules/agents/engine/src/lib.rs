@@ -452,7 +452,7 @@ impl Module for Agents {
                     steer,
                 } = decode(params)?;
                 rules::may_send(&text, &images)?;
-                let into = match (thread, harness) {
+                let target = match (thread, harness) {
                     (Some(thread), _) => Target::Thread(thread),
                     (None, Some(harness)) => Target::New(self.harness(&harness)?.id.clone()),
                     (None, None) => {
@@ -466,7 +466,7 @@ impl Module for Agents {
                     rules::may_choose(author)?;
                 }
                 let message = Message { text, images };
-                call.command(move |tx| send(tx, author, into, message, settings, steer))
+                call.command(move |tx| send(tx, author, target, message, settings, steer))
                     .await
             }
             Method::Edit => {
@@ -581,7 +581,7 @@ impl Module for Agents {
     }
 
     async fn opened(&self, space: ModuleSpace) -> Result<(), Error> {
-        let agents = settings::old_agents(space.folder())?;
+        let agents = settings::old_agents(space.folder());
         space
             .write(move |tx| {
                 store::fill_harnesses(tx.sql(), &agents)?;
@@ -658,7 +658,7 @@ enum Target {
 fn send(
     tx: &mut Tx<'_>,
     author: Participant,
-    into: Target,
+    target: Target,
     Message { text, images }: Message,
     settings: Option<Settings>,
     steer: bool,
@@ -666,7 +666,7 @@ fn send(
     let now = tx.now();
     let images = store::unsent_images(tx.sql(), &images, author)?;
     rules::may_carry(&images)?;
-    let (thread, agent) = match into {
+    let (thread, agent) = match target {
         Target::Thread(id) => {
             let agent = store::agent_of(tx.sql(), id)?
                 .ok_or_else(|| Refusal::not_found("There is no such Thread."))?;

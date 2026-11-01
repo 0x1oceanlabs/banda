@@ -639,16 +639,16 @@ async fn run(
 ) -> Result<Ending, Ending> {
     let unplanned = |reason: String| Ending::failed(reason, None);
     let thread = turn.thread;
-    let named = space
+    let harness_id = space
         .read(move |sql| store::thread(sql, thread))
         .await
         .map_err(|e| unplanned(plain(e)))?
         .map(|summary| summary.harness)
         .unwrap_or_default();
-    let harness = harnesses.find(&named).ok_or_else(|| {
-        unplanned(match named.as_str() {
+    let harness = harnesses.find(&harness_id).ok_or_else(|| {
+        unplanned(match harness_id.as_str() {
             "" => "This Thread names no Harness: its Agent's file is gone.".to_owned(),
-            _ => format!("This computer has no Harness named \"{named}\"."),
+            _ => format!("This computer has no Harness named \"{harness_id}\"."),
         })
     })?;
     // The Agent has no name of its own: its Harness's is the one to show.
