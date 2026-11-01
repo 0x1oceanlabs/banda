@@ -93,7 +93,7 @@ ADR 0005 promised a theme file (decision 11) and "one look, and honest motion" (
    - **Watching is polling.** The few files it read are checked four times a second for a change of time or size. That costs nothing, and survives editors that save by renaming and Omarchy replacing its whole theme folder. Hyprland is heard on its event socket.
 
 11. **The window only applies it.**
-   - It writes the tokens and the sizes as CSS variables on `:root`: `--gap-inner`, `--gap-outer`, `--tile-radius`, `--tile-border`, `--focus`, `--focus-inactive`, `--focus-ring`, `--bar-height`.
+   - It writes the tokens and the sizes as CSS variables on `:root`: `--gap-inner`, `--gap-outer`, `--tile-radius`, `--tile-border`, `--focus`, `--focus-inactive`, `--focus-ring`, `--focus-ring-color`, `--bar-height`.
    - The Strip, the frame and the bar take sizes from those variables, not from constants.
    - The terminal takes all 16 colours, the cursor and the selection from the tokens.
    - Until `bandaso look` answers, the window draws the `banda` defaults from its CSS, the same values Banda's own theme gives.
@@ -105,7 +105,7 @@ ADR 0005 promised a theme file (decision 11) and "one look, and honest motion" (
 | `--background`, `--card` | `background` |
 | `--foreground`, `--card-foreground`, `--popover-foreground` | `foreground` |
 | `--popover` | `lighter_background` |
-| `--primary`, `--ring`, `--focus` | `accent` |
+| `--primary`, `--ring`, `--focus`, `--focus-ring-color` | `accent` |
 | `--primary-foreground` | `background` |
 | `--secondary`, `--muted`, `--accent` | `mix background foreground 8%` |
 | `--muted-foreground` | `dark_foreground` |
@@ -116,7 +116,8 @@ ADR 0005 promised a theme file (decision 11) and "one look, and honest motion" (
 | `--sidebar` | `dark_background` |
 | `--sidebar-accent` | `mix dark_background accent 18%` |
 | `--selection` | `selection` |
-| terminal 0–15 | Omarchy's: `background`, the six colours, `foreground`, `muted`, the bright twins, `bright_foreground` |
+| `--cursor` | `bright_foreground` |
+| `--ansi-0` to `--ansi-15` | Omarchy's: `background`, the six colours, `foreground`, `muted`, the bright twins, `bright_foreground` |
 
 **`look.toml`, the defaults written out.**
 
