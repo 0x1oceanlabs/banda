@@ -3,6 +3,7 @@ import type { Sidebar } from "../sidebar/Sidebar";
 import type { Agents } from "./Agents";
 import type { Browser } from "./Browser";
 import type { Columns } from "./Columns";
+import type { Keys } from "./Keys";
 import type { Motion } from "./Motion";
 import type { Notify } from "./Notify";
 import type { Problem } from "./Problem";
@@ -63,6 +64,10 @@ browser: Browser,
  * How messages to an Agent are sent, from `agents.toml` (ADR 0016).
  */
 agents: Agents, 
+/**
+ * The keys the Person bound in `keys.toml` (ADR 0005, decision 10).
+ */
+keys: Keys, 
 /**
  * Each key of each settings file, by file: its value, and where it
  * comes from (ADR 0016).

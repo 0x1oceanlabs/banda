@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import type { Engine, SpaceId, SpaceSummary, Status } from "@banda/contract"
 import { inFront, useInFront } from "@banda/ui/hooks/use-in-front"
 import { type PaneState, QUIET } from "@banda/ui/pane"
-import { actionFor } from "../actions/actions"
+import { actionFor, rebind } from "../actions/actions"
 import { Bar } from "../bar/Bar"
 import { type Lists, Watches } from "../bar/Watches"
 import { isShowing, sightOf } from "../calls/sight"
@@ -18,7 +18,7 @@ import {
   openingAt,
   openingOf,
 } from "../menu/menu"
-import { columnsOf, useLookNotify, useLookSound } from "../look"
+import { columnsOf, useLookKeys, useLookNotify, useLookSound } from "../look"
 import { kindOf, showsOf, startable, widthOf } from "../registry"
 import { Sidebar } from "../sidebar/Sidebar"
 import { pickPreset } from "../sidebar/settings"
@@ -203,11 +203,14 @@ export function Shell({
     }),
     [change, home, toggleSidebar, toggleOverview, answer, settle, toggleMenu]
   )
+  // The actions, with the Person's keys over their own (keys.toml).
+  const lookKeys = useLookKeys()
+  const keyed = useMemo(() => rebind(ACTIONS, lookKeys), [lookKeys])
   // The keys run the actions, before any Pane hears them. A dialog keeps
   // its keys, as the Banda menu its Alt+Enter, but for the menu's own.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      const action = actionFor(ACTIONS, event)
+      const action = actionFor(keyed.actions, event)
       if (!action) return
       const inDialog =
         event.target instanceof Element &&
@@ -220,7 +223,7 @@ export function Shell({
     }
     window.addEventListener("keydown", onKey, { capture: true })
     return () => window.removeEventListener("keydown", onKey, { capture: true })
-  }, [parts])
+  }, [parts, keyed])
   // A row of the sidebar or the menu opens its Pane, where a workspace
   // shows it or in a new column; a Space gets a new Thread.
   const openPane = useCallback(
@@ -303,6 +306,7 @@ export function Shell({
         current={workspaces.current}
         sidebar={sidebar}
         onSidebar={toggleSidebar}
+        problems={keyed.problems}
         onPick={(index) =>
           index === workspaces.current
             ? toggleOverview()
@@ -357,7 +361,7 @@ export function Shell({
             space={here}
             lists={lists}
             spaces={spaces}
-            actions={ACTIONS}
+            actions={keyed.actions}
           />
           {overview && (
             <Overview

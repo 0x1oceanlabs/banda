@@ -1256,6 +1256,32 @@ test("the sidebar is arranged by sidebar.toml, and its view menu writes the file
   await page.keyboard.press("Escape")
 })
 
+test("keys.toml binds a key, frees one, and the bar names what is wrong", async () => {
+  window = await startWindow({
+    files: {
+      "config/keys.toml":
+        '[binds]\n"Alt+M" = "pane.new"\n"Alt+W" = "none"\n"Alt+J" = "pane.nothing"\n',
+    },
+  })
+  const { page } = window
+  const { thread, composer } = await firstThread(page)
+  await expect(composer).toBeFocused()
+  const problem = page.getByRole("status", { name: /^The look: / })
+  await expect(problem).toHaveAttribute(
+    "aria-label",
+    /keys\.toml:4:1: Alt\+J: Banda has no action pane\.nothing/
+  )
+  // Alt+M opens a Pane, as Alt+N still does.
+  await page.keyboard.press("Alt+KeyM")
+  const launcher = page.getByRole("region", { name: "New Pane" })
+  await expect(launcher).toHaveAttribute("data-focused", "true")
+  // Alt+W is the Pane's now: nothing closes.
+  await page.keyboard.press("Alt+KeyW")
+  await page.waitForTimeout(300)
+  await expect(launcher).toBeVisible()
+  await expect(thread).toBeVisible()
+})
+
 test("columns and the text size come from look.toml", async () => {
   window = await startWindow({
     look: '[columns]\npresets = ["1/4", "3/4"]\ndefault = "1/4"\nalone = "1/4"\nmin = 0\n[font]\nsize = 16\n',

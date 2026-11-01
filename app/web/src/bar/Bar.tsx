@@ -28,6 +28,7 @@ export function Bar({
   sidebar,
   onSidebar,
   onPick,
+  problems,
 }: {
   status: Status
   /** What the modules' work calls the Person for, for the mark to show. */
@@ -38,6 +39,8 @@ export function Bar({
   sidebar: boolean
   onSidebar: () => void
   onPick: (index: number) => void
+  /** What the window finds wrong in the files besides, as in keys.toml. */
+  problems: readonly Problem[]
 }) {
   const mark = loudest([attention.mark, markOf(status)])
   const { waiting } = attention
@@ -87,7 +90,7 @@ export function Bar({
         })}
       </nav>
       <div className="ml-auto flex items-center">
-        <LookProblems />
+        <LookProblems more={problems} />
         <Connection status={status} />
       </div>
     </header>
@@ -136,8 +139,8 @@ export function problemWords(problem: Problem): string {
  * good look stays, and this names the file and the line.
  * `banda look check` says the same in a terminal.
  */
-function LookProblems() {
-  const problems = useLookProblems()
+function LookProblems({ more }: { more: readonly Problem[] }) {
+  const problems = [...useLookProblems(), ...more]
   if (problems.length === 0) return null
   const words = problems.map(problemWords).join("\n")
   return (

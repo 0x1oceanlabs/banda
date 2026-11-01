@@ -10,6 +10,7 @@ use banda_agents::settings::{HarnessFile, Harnesses, template as harness_templat
 use banda_look::Problem;
 use banda_look::agents::AgentsSettings;
 use banda_look::browser::BrowserSettings;
+use banda_look::keys::KeysSettings;
 use banda_look::settings::Settings as LookSettings;
 use banda_look::sidebar::SidebarSettings;
 use banda_look::theme::Places;
@@ -35,7 +36,7 @@ pub struct File {
 const HARNESSES: &str = "harnesses.toml";
 
 /// Every settings file, one per module (ADR 0016, decision 3).
-pub const FILES: [File; 5] = [
+pub const FILES: [File; 6] = [
     File {
         name: "look.toml",
         schema: schema_of::<LookSettings>,
@@ -55,6 +56,11 @@ pub const FILES: [File; 5] = [
         name: "agents.toml",
         schema: schema_of::<AgentsSettings>,
         template: || banda_look::agents::TEMPLATE.to_owned(),
+    },
+    File {
+        name: "keys.toml",
+        schema: schema_of::<KeysSettings>,
+        template: || banda_look::keys::TEMPLATE.to_owned(),
     },
     File {
         name: HARNESSES,

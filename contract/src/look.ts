@@ -3,6 +3,7 @@
  * and which of its schemes shows.
  */
 import type { Browser } from "./generated/look/Browser"
+import type { Keys } from "./generated/look/Keys"
 import type { Look } from "./generated/look/Look"
 import type { Columns } from "./generated/look/Columns"
 import type { Motion } from "./generated/look/Motion"
@@ -27,6 +28,8 @@ export type { Motion } from "./generated/look/Motion"
 export type { Columns } from "./generated/look/Columns"
 export type { Center } from "./generated/look/Center"
 export type { Display } from "./generated/look/Display"
+export type { Bind } from "./generated/look/Bind"
+export type { Keys } from "./generated/look/Keys"
 export type { Move } from "./generated/look/Move"
 export type { Spring } from "./generated/look/Spring"
 export type { Easing } from "./generated/look/Easing"
@@ -70,6 +73,9 @@ export function shown(
   if (wantsDark ? dark : !light) return { dark: true, colors: dark ?? {} }
   return { dark: false, colors: light ?? {} }
 }
+
+/** No keys of the Person's: what `banda look` gives with no keys.toml. */
+export const DEFAULT_KEYS: Keys = { file: "", binds: [] }
 
 /** Banda's browser, as `banda look` gives it with no `browser.toml`: for
  * before the first look and outside the desktop. */

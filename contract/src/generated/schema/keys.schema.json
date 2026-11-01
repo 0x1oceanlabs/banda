@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "keys.toml",
+  "description": "Banda's keys over the window's own. Every key is optional.",
+  "type": "object",
+  "properties": {
+    "binds": {
+      "description": "Keys, such as \"Alt+Shift+R\", each with the id of the action it runs,\nas Alt+K lists them, or \"none\" to free the key for the Pane. A key\nis Alt, Ctrl and Shift, any of them, then a letter, a digit, F1 to\nF24, Left, Right, Up, Down, Return, Space, Tab, Escape, Backspace,\nDelete, Insert, Home, End, PageUp, PageDown or one of [ ] , . / ; '\n- = ` \\. An action keeps the window's own keys besides.",
+      "type": "object",
+      "additionalProperties": {
+        "type": "string"
+      }
+    }
+  },
+  "additionalProperties": false
+}

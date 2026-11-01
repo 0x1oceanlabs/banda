@@ -1,0 +1,15 @@
+#:schema ./schemas/keys.schema.json
+# Banda's keys, over the window's own (ADR 0005), as Hyprland's and niri's
+# binds. Alt+K lists every action with its id and its keys. Check a change
+# with: banda settings check
+#
+# A key is Alt, Ctrl and Shift, any of them, then a letter, a digit, F1 to
+# F24, Left, Right, Up, Down, Return, Space, Tab, Escape, Backspace,
+# Delete, Insert, Home, End, PageUp, PageDown or one of [ ] , . / ; ' - =
+# ` \. Super is the desktop's. An action keeps the window's own keys
+# besides the ones bound here; "none" frees a key, so it goes to the Pane,
+# as Alt+F to a shell.
+
+[binds]
+# "Alt+M" = "column.maximize"
+# "Alt+F" = "none"

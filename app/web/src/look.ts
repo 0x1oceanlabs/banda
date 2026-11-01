@@ -8,7 +8,9 @@
 import {
   type Columns,
   DEFAULT_COLUMNS,
+  DEFAULT_KEYS,
   DEFAULT_MOTION,
+  type Keys,
   type Look,
   type Motion,
   type Move,
@@ -117,6 +119,11 @@ export function useLookSound(): SoundSettings {
  * own till then. */
 export function useLookSidebar(): Sidebar {
   return useLook((look) => look.sidebar, DEFAULT_SIDEBAR)
+}
+
+/** The keys the Person bound in `keys.toml`; none till the look comes. */
+export function useLookKeys(): Keys {
+  return useLook((look) => look.keys, DEFAULT_KEYS)
 }
 
 const NO_SETTINGS: Look["settings"] = {}

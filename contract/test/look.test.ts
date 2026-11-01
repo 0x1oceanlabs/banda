@@ -6,6 +6,7 @@ import { expect, test } from "vitest"
 import {
   DEFAULT_BROWSER,
   DEFAULT_COLUMNS,
+  DEFAULT_KEYS,
   DEFAULT_MOTION,
   type Look,
   shown,
@@ -32,6 +33,7 @@ const look = (mode: Look["mode"], schemes: Look["schemes"]): Look => ({
   sidebar: DEFAULT_SIDEBAR,
   browser: DEFAULT_BROWSER,
   agents: { enter: "steer" },
+  keys: DEFAULT_KEYS,
   notify: {
     system: "away",
     window: "out-of-sight",

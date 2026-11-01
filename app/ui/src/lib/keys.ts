@@ -18,6 +18,16 @@ export type Pressed = Pick<
   "code" | "altKey" | "ctrlKey" | "metaKey" | "shiftKey"
 >
 
+/** Whether `a` and `b` are the same key with the same mods. */
+export function sameKey(a: Key, b: Key): boolean {
+  return (
+    a.code === b.code &&
+    !!a.alt === !!b.alt &&
+    !!a.shift === !!b.shift &&
+    !!a.ctrl === !!b.ctrl
+  )
+}
+
 /** Whether `event` presses `key`, with exactly its mods held. */
 export function matches(event: Pressed, key: Key): boolean {
   return (
