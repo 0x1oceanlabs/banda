@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@banda/agents-pane": "workspace:*",
+    "@banda/browser-pane": "workspace:*",
     "@banda/contract": "workspace:*",
     "@banda/terminal-pane": "workspace:*",
     "@banda/ui": "workspace:*",

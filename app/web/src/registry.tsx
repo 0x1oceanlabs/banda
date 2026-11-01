@@ -4,6 +4,7 @@
  * or a Watch runs only while the engine runs its module.
  */
 import { panes as agentPanes, threadsWatch } from "@banda/agents-pane"
+import { panes as browserPanes } from "@banda/browser-pane"
 import { panes as terminalPanes } from "@banda/terminal-pane"
 import type { JsonValue } from "@banda/contract"
 import { Button } from "@banda/ui/components/button"
@@ -35,7 +36,11 @@ export const launcher: AnyKind = definePane<Args>({
  * The Panes the modules offer. Each kind checks its own args; the window
  * hands it only the args it kept for it.
  */
-const offered = [...agentPanes, ...terminalPanes] as unknown as AnyKind[]
+const offered = [
+  ...agentPanes,
+  ...terminalPanes,
+  ...browserPanes,
+] as unknown as AnyKind[]
 
 /** What the bar's mark hears from the modules (ADR 0005, decision 9). */
 export const watches: Watch[] = [threadsWatch]

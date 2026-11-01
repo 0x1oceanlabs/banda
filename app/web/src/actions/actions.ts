@@ -6,14 +6,7 @@
  * Alt is Banda's mod key (ADR 0005, decision 10). Keys bind by their
  * physical place (`KeyboardEvent.code`), so they work on any layout.
  */
-
-/** A key and the mods held with it. ⌘ counts as Ctrl on a Mac. */
-export type Key = {
-  code: string
-  alt?: boolean
-  shift?: boolean
-  ctrl?: boolean
-}
+import { type Key, matches, type Pressed } from "@banda/ui/lib/keys"
 
 export type Action<Context> = {
   /** Unique, with its owner first: `workspace.close`. */
@@ -22,20 +15,6 @@ export type Action<Context> = {
   title: string
   key?: Key
   run: (context: Context) => void
-}
-
-type Pressed = Pick<
-  KeyboardEvent,
-  "code" | "altKey" | "ctrlKey" | "metaKey" | "shiftKey"
->
-
-export function matches(event: Pressed, key: Key): boolean {
-  return (
-    event.code === key.code &&
-    event.altKey === (key.alt ?? false) &&
-    event.shiftKey === (key.shift ?? false) &&
-    (event.ctrlKey || event.metaKey) === (key.ctrl ?? false)
-  )
 }
 
 /** The action a key press runs, if any. */

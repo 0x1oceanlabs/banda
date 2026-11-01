@@ -1,6 +1,7 @@
 import { expect, test } from "vitest"
 import { ACTIONS } from "../shell/actions"
-import { actionFor, keyName, matches } from "./actions"
+import { matches } from "@banda/ui/lib/keys"
+import { actionFor, keyName } from "./actions"
 
 const press = (code: string, mods: Partial<KeyboardEvent> = {}) => ({
   code,

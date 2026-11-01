@@ -1,8 +1,7 @@
 import { useEffect, useRef } from "react"
 import type { Engine, SpaceId } from "@banda/contract"
-import { Button } from "@banda/ui/components/button"
-import type { PaneState, Place } from "@banda/ui/pane"
-import { XIcon } from "lucide-react"
+import { PaneHeader } from "@banda/ui/components/pane-header"
+import { type PaneState, type Place, within } from "@banda/ui/pane"
 import { kindOf, runs } from "../registry"
 import type { Entry } from "./model"
 
@@ -16,7 +15,8 @@ export type Frame = {
 
 /**
  * One tile: a header with the Pane's icon and title, and its Space when the
- * workspace mixes Spaces; under it, the Pane itself.
+ * workspace mixes Spaces, unless the Pane draws its own; under it, the Pane
+ * itself.
  */
 export function PaneFrame({
   entry,
@@ -42,7 +42,7 @@ export function PaneFrame({
 
   useEffect(() => {
     const own = element.current
-    if (focused && own && !own.contains(document.activeElement)) {
+    if (focused && own && !within(own, document.activeElement)) {
       own.focus({ preventScroll: true })
     }
   }, [focused])
@@ -59,27 +59,19 @@ export function PaneFrame({
       onFocusCapture={take}
       className="group/tile relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-tile border-(length:--tile-border) border-focus-inactive bg-background outline-none after:pointer-events-none after:absolute after:inset-0 after:bg-black after:opacity-(--tile-dim) data-[focused=true]:border-focus data-[focused=true]:outline-[length:calc(var(--tile-border)+var(--focus-ring))] data-[focused=true]:outline-offset-[calc(-1*var(--tile-border))] data-[focused=true]:outline-focus data-[focused=true]:outline-solid data-[focused=true]:after:opacity-0"
     >
-      <header className="flex h-9 shrink-0 items-center gap-2 border-b px-2.5 text-sm">
-        {Icon && <Icon className="size-4 shrink-0 text-muted-foreground" />}
-        <h2 className="min-w-0 truncate font-medium text-muted-foreground group-data-[focused=true]/tile:text-foreground">
-          {title}
-        </h2>
-        {spaceName && (
-          <span className="shrink-0 truncate rounded-sm bg-muted px-1.5 text-xs text-muted-foreground">
-            {spaceName}
-          </span>
-        )}
-        <Button
-          variant="ghost"
-          size="icon-xs"
-          aria-label={`Close ${title}`}
-          title="Close (Alt+W)"
-          className="ml-auto opacity-0 transition-opacity group-hover/tile:opacity-100 group-data-[focused=true]/tile:opacity-100 focus-visible:opacity-100"
-          onClick={() => frame.close(entry.id)}
-        >
-          <XIcon />
-        </Button>
-      </header>
+      {kind?.header !== false && (
+        <PaneHeader title={title} onClose={() => frame.close(entry.id)}>
+          {Icon && <Icon className="size-4 shrink-0 text-muted-foreground" />}
+          <h2 className="min-w-0 truncate font-medium text-muted-foreground group-data-[focused=true]/tile:text-foreground">
+            {title}
+          </h2>
+          {spaceName && (
+            <span className="shrink-0 truncate rounded-sm bg-muted px-1.5 text-xs text-muted-foreground">
+              {spaceName}
+            </span>
+          )}
+        </PaneHeader>
+      )}
       <div className="min-h-0 flex-1">
         {shown ? (
           <shown.Pane

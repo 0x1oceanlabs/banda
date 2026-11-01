@@ -19,6 +19,42 @@ import type { MarkState } from "./components/banda-mark"
  */
 export const PROGRAM_KEYS = { "data-keys": "program" } as const
 
+/**
+ * The window keeps one element with this attribute over its workspaces. It
+ * never moves, so what a Pane puts there is never drawn again: a browser's
+ * page lives there and follows its Pane's slot (ADR 0013, decision 1).
+ */
+export const PANE_LAYER = "data-pane-layer"
+
+/** The window's layer over its workspaces; none outside the window. */
+export function paneLayer(): HTMLElement | null {
+  return document.querySelector<HTMLElement>(`[${PANE_LAYER}]`)
+}
+
+/**
+ * Ties what a Pane draws in the layer to its place in the tile: the place
+ * carries `HOLDS`, the thing in the layer `HELD_BY`, both with one ID.
+ * The window then counts the focus there as the tile's.
+ */
+export const HOLDS = "data-holds"
+export const HELD_BY = "data-held-by"
+
+/** The place in a tile that holds `element`, when it is in the layer. */
+export function holderOf(element: Element | null): Element | null {
+  const id = element?.closest(`[${HELD_BY}]`)?.getAttribute(HELD_BY)
+  return id == null
+    ? null
+    : document.querySelector(`[${HOLDS}="${CSS.escape(id)}"]`)
+}
+
+/** Whether `element` is in `tile`, or in the layer and held by it. */
+export function within(tile: Element, element: Element | null): boolean {
+  return (
+    element != null &&
+    (tile.contains(element) || tile.contains(holderOf(element)))
+  )
+}
+
 /** What one tile shows: a kind of Pane and its args. */
 export type PaneState = { kind: string; args: { [key: string]: JsonValue } }
 
@@ -58,6 +94,11 @@ export type PaneKind<A extends { [key: string]: JsonValue }> = {
   start?: A
   /** A list that sits beside other Panes: it opens a third of the screen wide. */
   narrow?: boolean
+  /**
+   * False when the Pane draws its own header, as the browser's row of tabs
+   * and address: the frame then draws none (`PaneHeader` draws one).
+   */
+  header?: false
   /**
    * The one thing the Pane shows, such as its Thread, by the ID its
    * module lists it with (`Listed.id`): a Person who looks at the Pane sees

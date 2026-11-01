@@ -590,6 +590,19 @@ modules/*/pane   each module's Panes
 - **Only `window.banda` ties the page to the desktop.** It names no
   Electron API, so a browser can host it later; for now the engine lets in
   only `app://banda` and pages on localhost.
+- **The browser's pages** (ADR 0013) are Electron `<webview>`s in the
+  window's layer over its workspaces (`PANE_LAYER`), which never moves:
+  Electron destroys a `<webview>` that moves in the DOM. The browser Pane
+  draws an empty slot, and its page follows the slot on every frame, cut
+  to what the workspace shows of it (`modules/browser/pane/src/pages.ts`).
+  - The desktop attaches a page only in the `persist:browser` profile,
+    sandboxed, with no preload and no Node; a site asks before it uses the
+    camera, the location or another program (`app/desktop/src/browser.ts`).
+  - Banda's Alt keys and the browser's Ctrl keys are taken from the page in
+    `before-input-event` and pressed again in the window, so the actions
+    and the Pane hear them as their own.
+  - A page takes the keys as an iframe does, with no focus event of its
+    own; its tile takes the focus once the window blurs.
 
 ## Repository
 

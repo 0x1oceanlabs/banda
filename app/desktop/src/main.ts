@@ -4,7 +4,8 @@
  * runs `banda look --follow` and hands the page each look (ADR 0007),
  * and writes the preset the page picks into `sidebar.toml` (ADR 0008);
  * nothing else crosses from Node to the page (docs/architecture.md,
- * "Processes").
+ * "Processes"). The page shows the browser's pages, kept apart from it
+ * (browser.ts, ADR 0013).
  */
 import { join, resolve, sep } from "node:path"
 import { pathToFileURL } from "node:url"
@@ -20,6 +21,7 @@ import {
   shell,
 } from "electron"
 import type { Notice } from "@banda/web/host"
+import { hostPages, keepProfile } from "./browser"
 import { EngineProcess } from "./engine"
 import { firstFrame, LookProcess } from "./look"
 import { type Desktop, RecordedDesktop, SystemDesktop } from "./notices"
@@ -113,6 +115,7 @@ async function ready(): Promise<void> {
   session.defaultSession.setPermissionRequestHandler(
     (_contents, _permission, answer) => answer(false)
   )
+  keepProfile(() => window)
   ipcMain.handle("engine", (event) => {
     const from = event.senderFrame?.url ?? ""
     if (!fromPage(from))
@@ -213,11 +216,14 @@ function openWindow(): BrowserWindow {
       nodeIntegration: false,
       // Banda's sounds play before the Person first clicks (ADR 0009).
       autoplayPolicy: "no-user-gesture-required",
+      // The browser's pages (browser.ts).
+      webviewTag: true,
     },
   })
   opened.once("ready-to-show", () => opened.show())
   opened.on("focus", () => opened.flashFrame(false))
   const contents = opened.webContents
+  hostPages(contents)
   // The page never leaves: links open in the browser, nothing navigates.
   contents.setWindowOpenHandler(({ url }) => {
     if (/^https?:\/\//.test(url)) void shell.openExternal(url)
