@@ -14,7 +14,7 @@
 use crate::acp::{Between, Connection, Said, Session};
 use crate::live::Live;
 use crate::model::{
-    Body, Fact, Failure, Item, ItemId, Settings, ThreadId, ToolStatus, TurnId, TurnState,
+    Body, Fact, Failure, Item, ItemId, Opener, Settings, ThreadId, ToolStatus, TurnId, TurnState,
 };
 use crate::rules::{self, Ending};
 use crate::turn::{self, Writer, plain};
@@ -245,6 +245,7 @@ fn open(
         agent,
         message: ItemId::new(),
         state: TurnState::Running,
+        opener: Opener::ByItself,
     };
     let item = Item {
         id: turn.message,
@@ -269,7 +270,7 @@ fn open(
 /// short: no effect ran it, so nothing settled it.
 pub fn cut_short(tx: &mut Tx<'_>) -> Result<(), Error> {
     for running in store::every_running(tx.sql())? {
-        if turn::by_itself(tx.sql(), &running)? {
+        if running.opener.by_itself() {
             let agent = Participant::Agent(running.agent);
             turn::end(tx, agent, &running, Ending::cut_short())?;
         }

@@ -251,6 +251,18 @@ fn state(view: &ThreadView, turn: &Value) -> Option<TurnState> {
         .map(|t| t.state)
 }
 
+/// Who opened `turn`, as the module keeps it in the Space's database: the
+/// window does not read it.
+fn opener(root: &Path, turn: &Value) -> String {
+    let sql = rusqlite::Connection::open(root.join("Work/.banda/space.sqlite3")).unwrap();
+    sql.query_row(
+        "SELECT opener FROM agents_turns WHERE id = ?1",
+        [turn.as_str().unwrap()],
+        |row| row.get(0),
+    )
+    .unwrap()
+}
+
 fn texts(view: &ThreadView) -> Vec<String> {
     view.items
         .iter()
@@ -842,6 +854,8 @@ async fn a_failed_turn_can_be_tried_again_once_it_is_the_latest() {
         })
         .await;
     assert_eq!(state(&view, &sent["turn"]), Some(TurnState::Failed));
+    assert_eq!(opener(root.path(), &sent["turn"]), "person");
+    assert_eq!(opener(root.path(), &again["turn"]), "retry");
     assert_eq!(texts(&view).last().unwrap(), "message: You said: flaky one");
     assert_eq!(
         view.items
@@ -1941,6 +1955,8 @@ async fn a_harness_that_cannot_steer_stops_for_the_message() {
         })
         .await;
     assert_eq!(state(&view, &wait["turn"]), Some(TurnState::Stopped));
+    let requeued = json!(view.turns[1].id);
+    assert_eq!(opener(root.path(), &requeued), "requeue");
     let said = "notice: Fake cannot take a message while it works, \
                 so Banda stopped it to send yours.";
     assert!(position(&view, said) < position(&view, "message: instead this"));
@@ -2175,6 +2191,7 @@ async fn what_a_harness_does_by_itself_shows_in_a_turn_of_the_agents_own() {
         ]
     );
     let own = view.turns[1].id.to_string();
+    assert_eq!(opener(root.path(), &json!(own)), "by_itself");
     assert_eq!(view.usage.map(|u| u.used), Some(60_000));
     let refused = world
         .on_turn("agents.retry", &json!(own))

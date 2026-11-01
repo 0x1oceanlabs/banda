@@ -29,8 +29,8 @@ use crate::between;
 use crate::images::Images;
 use crate::live::Live;
 use crate::model::{
-    Body, Fact, Failure, Image, Item, ItemId, Mode, Offer, PlanStep, QuestionState, Settings,
-    ThreadId, ToolContent, ToolKind, ToolStatus, TurnId, TurnState, Usage,
+    Body, Fact, Failure, Image, Item, ItemId, Mode, Offer, Opener, PlanStep, QuestionState,
+    Settings, ThreadId, ToolContent, ToolKind, ToolStatus, TurnId, TurnState, Usage,
 };
 use crate::rules::{self, Ending, Piece, Pieces, Text};
 use crate::settings::Harnesses;
@@ -184,14 +184,15 @@ fn held_to(
     Ok(true)
 }
 
-/// A new turn for `message`, which waits behind the Thread's earlier turns
-/// and runs with the Thread's settings now.
+/// A new turn for `message`, opened by `opener`, which waits behind the
+/// Thread's earlier turns and runs with the Thread's settings now.
 pub fn queue(
     tx: &mut Tx<'_>,
     author: Participant,
     thread: ThreadId,
     agent: AgentId,
     message: ItemId,
+    opener: Opener,
 ) -> Result<TurnId, Error> {
     let turn = store::Turn {
         id: TurnId::new(),
@@ -199,6 +200,7 @@ pub fn queue(
         agent,
         message,
         state: TurnState::Queued,
+        opener,
     };
     add(tx, author, &turn)?;
     tx.enqueue(START, &thread.to_string(), &TurnEffect { turn: turn.id })?;
@@ -257,7 +259,7 @@ pub fn requeue(tx: &mut Tx<'_>, item: ItemId) -> Result<(), Error> {
         return Ok(());
     };
     store::set_item_turn(tx.sql(), item, None)?;
-    queue(tx, found.author, thread, agent, item)?;
+    queue(tx, found.author, thread, agent, item, Opener::Requeue)?;
     Ok(())
 }
 
@@ -448,7 +450,7 @@ async fn after_questions(live: &Live, space: &ModuleSpace, turn: TurnId) -> Resu
             let Some(running) = store::running(sql, turn.thread)? else {
                 return Ok(None);
             };
-            Ok(by_itself(sql, &running)?.then_some(running.id))
+            Ok(running.opener.by_itself().then_some(running.id))
         })
         .await?;
     if let Some(own) = own {
@@ -457,21 +459,6 @@ async fn after_questions(live: &Live, space: &ModuleSpace, turn: TurnId) -> Resu
         }
     }
     Ok(())
-}
-
-/// Whether the Agent started `turn` by itself: its message is a notice
-/// from Banda, not a Person's.
-pub fn by_itself(sql: &rusqlite::Connection, turn: &store::Turn) -> Result<bool, Error> {
-    Ok(matches!(
-        store::item(sql, turn.message)?,
-        Some((
-            _,
-            Item {
-                body: Body::Notice { .. },
-                ..
-            }
-        ))
-    ))
 }
 
 impl Message {
