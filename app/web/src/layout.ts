@@ -56,6 +56,14 @@ export function samePane(a: PaneState, b: PaneState): boolean {
   return a.kind === b.kind && canonical(a.args) === canonical(b.args)
 }
 
+/** The Panes `before` shows and `after` does not: they left the Desk. */
+export function left(before: Layout, after: Layout): PaneState[] {
+  const stays = tiles(after).map((tile) => tile.pane)
+  return tiles(before)
+    .map((tile) => tile.pane)
+    .filter((pane) => !stays.some((other) => samePane(pane, other)))
+}
+
 function canonical(value: JsonValue | undefined): string {
   if (Array.isArray(value)) return `[${value.map(canonical).join(",")}]`
   if (value && typeof value === "object") {

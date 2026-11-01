@@ -66,6 +66,8 @@ export async function startWindow({
       BANDASO_STATE: join(dir, "state"),
       BANDASO_CONFIG: join(dir, "config"),
       BANDASO_LOG: "warn",
+      // A terminal runs the Person's shell: here one every machine has.
+      SHELL: "/bin/sh",
     },
   })
   const page = await app.firstWindow()

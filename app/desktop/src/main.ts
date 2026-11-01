@@ -28,11 +28,13 @@ const DEV_PAGE = app.isPackaged ? undefined : process.env.BANDASO_PAGE
 
 const CSP = [
   "default-src 'self'",
-  "script-src 'self'",
+  // Ghostty draws terminals from WebAssembly that ships with the page.
+  "script-src 'self' 'wasm-unsafe-eval'",
   "style-src 'self' 'unsafe-inline'",
   "img-src 'self' data:",
   "font-src 'self' data:",
-  "connect-src ws://127.0.0.1:*",
+  // The engine; and the page's own files, as Ghostty fetches its WebAssembly.
+  "connect-src 'self' ws://127.0.0.1:*",
   "object-src 'none'",
   "base-uri 'none'",
   "form-action 'none'",

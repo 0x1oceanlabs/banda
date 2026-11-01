@@ -1,4 +1,5 @@
-import { resolve } from "node:path"
+import { readFileSync } from "node:fs"
+import { join, resolve } from "node:path"
 import { expect, test } from "@playwright/test"
 import { startWindow, type Window } from "./window"
 
@@ -163,8 +164,10 @@ test("a Person signs in from the turn that needed it, and it goes again", async 
   await composer.fill("hello")
   await composer.press("Enter")
   await expect(thread.getByText("needs you to sign in.")).toBeVisible()
-  // A way in a terminal shows what to run, with the Harness's own program.
-  await expect(thread.getByText(/Fake account .*run this in a/)).toBeVisible()
+  // A way in a terminal runs in one, or by hand: the Harness's own program.
+  await expect(
+    thread.getByRole("button", { name: "Sign in with Fake account" })
+  ).toBeVisible()
   await expect(thread.getByText(/bandaso-fake-agent --sign-in$/)).toBeVisible()
   await page.screenshot({ path: "test-results/4-sign-in.png" })
 
@@ -177,6 +180,110 @@ test("a Person signs in from the turn that needed it, and it goes again", async 
     thread.getByRole("button", { name: "Sign in with Fake browser" })
   ).toHaveCount(0)
 })
+
+test("a Person signs in in a terminal below the turn, and it goes again", async () => {
+  window = await startWindow({ account: true })
+  const { page } = window
+  await page.getByLabel("Name").fill("Work")
+  await page.getByRole("button", { name: "Create Space" }).click()
+  await page.getByRole("button", { name: "New Agent" }).click()
+  const dialog = page.getByRole("dialog", { name: "New Agent" })
+  await dialog.getByLabel("Name").fill("Writer")
+  await dialog.getByRole("button", { name: "Create Agent" }).click()
+  const thread = page.getByRole("region", { name: "Writer" })
+  const composer = thread.getByRole("textbox", { name: "Message to Writer" })
+  await composer.fill("hello")
+  await composer.press("Enter")
+  await expect(thread.getByText("needs you to sign in.")).toBeVisible()
+  const signIn = thread.getByRole("button", {
+    name: "Sign in with Fake account",
+  })
+
+  // A wrong code: the program ends with 1, and the turn waits.
+  await signIn.click()
+  const first = page.getByRole("region", { name: "Sign in: Fake account" })
+  const firstScreen = first.getByRole("region", { name: "Terminal screen" })
+  await expect(firstScreen).toHaveAttribute("data-state", "running")
+  await firstScreen.click()
+  await page.keyboard.type("wrong")
+  await page.keyboard.press("Enter")
+  await expect(first.getByText("The program ended with code 1.")).toBeVisible()
+  await expect(
+    thread.getByText("The sign-in ended with code 1. Try again.")
+  ).toBeVisible()
+  await first
+    .getByRole("button", { name: "Close Sign in: Fake account" })
+    .click()
+
+  await signIn.click()
+  const terminal = page.getByRole("region", { name: "Sign in: Fake account" })
+  const screen = terminal.getByRole("region", { name: "Terminal screen" })
+  await expect(screen).toHaveAttribute("data-state", "running")
+  await page.screenshot({ path: "test-results/6-sign-in-terminal.png" })
+  await screen.click()
+  await page.keyboard.type("fake-code")
+  await page.keyboard.press("Enter")
+  await expect(thread.getByText("You said: hello")).toBeVisible()
+  await expect(terminal.getByText("The program ended.")).toBeVisible()
+})
+
+test("a Person works in a terminal in the Space, and closing it stops the shell", async () => {
+  window = await startWindow()
+  const { page, dir } = window
+  await page.getByLabel("Name").fill("Work")
+  await page.getByRole("button", { name: "Create Space" }).click()
+  await expect(page.getByRole("region", { name: "Agents" })).toBeVisible()
+  await page.keyboard.press("Control+Backslash")
+  await page
+    .getByRole("region", { name: "New Pane" })
+    .getByRole("button", { name: "Terminal" })
+    .click()
+
+  const terminal = page.getByRole("region", { name: "Terminal", exact: true })
+  const screen = terminal.getByRole("region", { name: "Terminal screen" })
+  await expect(screen).toHaveAttribute("data-state", "running")
+  await screen.click()
+  await page.keyboard.type("echo $$ > shell.pid; printf 'é 😀' > typed.txt")
+  await page.keyboard.press("Enter")
+  const space = join(dir, "root", "Work")
+  await expect.poll(() => read(join(space, "typed.txt"))).toBe("é 😀")
+  await page.screenshot({ path: "test-results/7-terminal.png" })
+
+  // A split draws it again: the same shell goes on.
+  await page.keyboard.press("Control+Shift+Backslash")
+  await expect(screen).toHaveAttribute("data-state", "running")
+  await screen.click()
+  await page.keyboard.type("echo again >> typed.txt")
+  await page.keyboard.press("Enter")
+  await expect.poll(() => read(join(space, "typed.txt"))).toBe("é 😀again\n")
+
+  // Ctrl+W is the shell's: it deletes a word. Ctrl+Shift+W closes the tile.
+  await page.keyboard.type("echo one > word.txt two")
+  await page.keyboard.press("Control+w")
+  await page.keyboard.press("Enter")
+  await expect.poll(() => read(join(space, "word.txt"))).toBe("one\n")
+  const shell = Number(read(join(space, "shell.pid")))
+  await page.keyboard.press("Control+Shift+w")
+  await expect(terminal).toBeHidden()
+  await expect.poll(() => running(shell)).toBe(false)
+})
+
+function read(path: string): string | undefined {
+  try {
+    return readFileSync(path, "utf8")
+  } catch {
+    return undefined
+  }
+}
+
+function running(pid: number): boolean {
+  try {
+    process.kill(pid, 0)
+    return true
+  } catch {
+    return false
+  }
+}
 
 test("a Person sees who is signed in to a Harness, signs in and out", async () => {
   window = await startWindow({ account: true, oldCli: true })

@@ -45,6 +45,12 @@ export type PaneKind<A extends { [key: string]: JsonValue }> = {
   start?: A
   /** A list that sits beside other Panes: a tile split from it takes most of the room. */
   narrow?: boolean
+  /**
+   * What its module lets go of once the Pane leaves the Desk: the Person
+   * closed it, or another Pane took its tile. A program in a terminal stops
+   * then. A Pane drawn again, as when a split moves it, has not left.
+   */
+  closed?: (left: { engine: Engine; space: SpaceId; args: A }) => void
   Pane: ComponentType<PaneProps<A>>
 }
 

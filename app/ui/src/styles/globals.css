@@ -7,6 +7,7 @@
 @source "../../../web/src/**/*.{ts,tsx}";
 @source "../../../../modules/*/pane/src/**/*.{ts,tsx}";
 @source "../**/*.{ts,tsx}";
+@source "../../../ghostty/src/**/*.ts";
 
 @theme inline {
   --font-heading: var(--font-sans);

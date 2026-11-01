@@ -10,3 +10,5 @@ app/desktop/test-results/
 *.md
 *.rs
 *.toml
+# T3 Code's terminal adapter, vendored as it is: a newer pin is a copy.
+app/ghostty/src/t3/

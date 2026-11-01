@@ -3,6 +3,7 @@
  * launcher. A tile shows a kind only while the engine runs its module.
  */
 import { panes as agentPanes } from "@bandaso/agents-pane"
+import { panes as terminalPanes } from "@bandaso/terminal-pane"
 import type { JsonValue } from "@bandaso/contract"
 import { Button } from "@bandaso/ui/components/button"
 import { useModules } from "@bandaso/ui/hooks/use-status"
@@ -26,8 +27,11 @@ export const launcher: AnyKind = definePane<Args>({
   Pane: Launcher,
 })
 
-/** The Panes the modules offer. */
-const offered: AnyKind[] = [...(agentPanes as AnyKind[])]
+/**
+ * The Panes the modules offer. Each kind checks its own args; the Desk
+ * hands it only the args it kept for it.
+ */
+const offered = [...agentPanes, ...terminalPanes] as unknown as AnyKind[]
 
 export const kinds: AnyKind[] = [launcher, ...offered]
 

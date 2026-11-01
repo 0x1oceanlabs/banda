@@ -1,16 +1,24 @@
 import { expect, test } from "vitest"
 import { keyAction } from "./keys"
 
-const press = (key: string, code: string, mods: Partial<KeyboardEvent> = {}) =>
-  keyAction({
-    key,
-    code,
-    altKey: false,
-    ctrlKey: false,
-    metaKey: false,
-    shiftKey: false,
-    ...mods,
-  })
+const press = (
+  key: string,
+  code: string,
+  mods: Partial<KeyboardEvent> = {},
+  program = false
+) =>
+  keyAction(
+    {
+      key,
+      code,
+      altKey: false,
+      ctrlKey: false,
+      metaKey: false,
+      shiftKey: false,
+      ...mods,
+    },
+    program
+  )
 
 test("the Desk's keys, in any keyboard layout, and nothing else", () => {
   expect(press("ArrowLeft", "ArrowLeft", { altKey: true })).toEqual({
@@ -30,4 +38,16 @@ test("the Desk's keys, in any keyboard layout, and nothing else", () => {
   expect(press("ArrowLeft", "ArrowLeft")).toBeNull()
   expect(press("w", "KeyW")).toBeNull()
   expect(press("a", "KeyA", { ctrlKey: true })).toBeNull()
+})
+
+test("in a terminal, Ctrl+W is the program's and Ctrl+Shift+W closes the tile", () => {
+  expect(press("w", "KeyW", { ctrlKey: true }, true)).toBeNull()
+  expect(press("W", "KeyW", { ctrlKey: true, shiftKey: true }, true)).toEqual({
+    do: "close",
+  })
+  expect(press("W", "KeyW", { ctrlKey: true, shiftKey: true })).toBeNull()
+  expect(press("ArrowLeft", "ArrowLeft", { altKey: true }, true)).toEqual({
+    do: "move",
+    direction: "left",
+  })
 })

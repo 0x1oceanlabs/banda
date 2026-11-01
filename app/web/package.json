@@ -16,6 +16,7 @@
   "dependencies": {
     "@bandaso/agents-pane": "workspace:*",
     "@bandaso/contract": "workspace:*",
+    "@bandaso/terminal-pane": "workspace:*",
     "@bandaso/ui": "workspace:*",
     "lucide-react": "^1.65.0",
     "react": "^19.3.1",
