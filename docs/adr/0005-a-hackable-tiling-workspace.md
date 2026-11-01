@@ -17,6 +17,7 @@ During the same talk Roma decided these points:
 - Everything can be done through an Agent. Each Agent gets a Bandaso skill that says what Bandaso can do, where things are and how to change them.
 - Modules draw their Panes with the same shadcn/ui components that we use, so they follow the theme.
 - The system is open, like Linux. A Person who installs a module from elsewhere does so at their own risk. Our base is checked.
+- A Space is any folder on a machine, this one or another, and Bandaso's data lives outside the folder, as in T3 Code and Herdr.
 
 The evidence is in two notes: [tiling managers](../research/2026-11-01-tiling-managers.md) (niri, Hyprland, Omarchy, Herdr, Superlogical's Rex, zellij, tmux) and [hackable modules](../research/2026-11-01-hackable-modules.md) (Obsidian, VS Code, Zed, Zellij, Raycast, Notion, MCP Apps, Emacs). The nearest product is Herdr's new desktop app. It is a GPUI window over a server, with Spaces, tabs and split panes. Its whole UI is files, it keeps one list of commands, and it writes notes for Agents. It runs Agents as terminal programs, though, while Bandaso shows Threads in its own model (ADR 0003).
 
@@ -48,10 +49,16 @@ The evidence is in two notes: [tiling managers](../research/2026-11-01-tiling-ma
    - Each Desk keeps its choice, and `Alt+V` switches it, as Omarchy switches a workspace's layout.
    - The Strip answers "Agents keep opening things": a new Pane adds a column instead of shrinking the others. A sign-in terminal stacks under its Thread in the same column.
 
-6. **Spaces are the workspaces.**
-   - `Alt+1…9` goes to a Space. There is no second level of workspaces inside a Space.
-   - A drawer slides a quick Thread over the Desk (`Alt+S`), as Omarchy's scratchpad does.
-   - An overview of every Space's Desk comes later.
+6. **A Space is a folder on a machine, and Spaces are the workspaces** (_decided_ for the folder and where the data lives).
+   - **What a Space is.** One folder on one machine, this one or another, plus everything Bandaso keeps for it: its Agents and their Threads, its Desk, its terminals and its browser profile. This is what a project is in T3 Code and a space is in Herdr.
+   - **Which folder.** Any existing folder opens as a Space, a git repository too. `~/Bandaso/<name>/` stays the default place for a new one.
+   - **Where the data lives.** Bandaso's data lives outside the folder, in the engine's state on that machine (`~/.local/share/bandaso/spaces/<id>/`), as in T3 Code and Herdr. The folder holds only the work, so there is nothing to commit by mistake and nothing a sync tool can break.
+     - This changes ADR 0001, decision 5: copying the folder no longer moves the Threads. An export can, once someone needs it.
+     - A Space whose folder moved asks where it went.
+   - **Another machine.** A Space on another machine is one whose engine runs there. The window connects to it over SSH, and the Agents, terminals and files work where the folder is. The Space list names each Space's machine. Where a browser Pane runs for such a Space is still open.
+   - **Switching.** `Alt+1…9` goes to a Space. There is no second level of workspaces inside a Space.
+   - **The drawer.** It slides a quick Thread over the Desk (`Alt+S`), as Omarchy's scratchpad does.
+   - **Later.** An overview of every Space's Desk, and a Thread in its own git worktree of the Space, as T3 Code offers.
 
 7. **Left Alt is the mod** (_decided_), and the binds come in families, as in Omarchy:
 
@@ -96,10 +103,10 @@ The evidence is in two notes: [tiling managers](../research/2026-11-01-tiling-ma
 
 11. **Everything through an Agent** (_decided_). Each Agent gets:
     - Bandaso's MCP server in every session (ACP `session/new` passes it). The actions are its tools, and its `instructions` say what Bandaso is.
-    - **The Bandaso skill** in the Space's folder, where Claude Code and Codex look for skills (`.claude/skills/bandaso/`, `.agents/skills/bandaso/`). It has a short hand-written `SKILL.md`, which covers the words, how to change things safely and where things live. Its reference (actions, commands, tools, config files and their schemas) is generated from the manifests, so it does not go stale.
+    - **The Bandaso skill, through that server.** Its `instructions` are the short hand-written part: the words, how to change things safely and where things live. A guide tool hands out the reference topic by topic: actions, commands, tools, config files and their schemas. The reference is generated from the manifests, so it does not go stale.
     - `bandaso describe`, which shows what is open and running now.
 
-    Nothing is written into a Harness's own config.
+    Nothing is written into the Space's folder or into a Harness's own config.
 
 12. **The base first: Threads, the terminal, the browser** (_decided_). The browser is a module: a Pane with a page that the Person and the Space's Agents share, and one sign-in profile per Space. Agents drive it through its MCP tools. It gets its own ADR when it is built.
 
@@ -119,9 +126,12 @@ The evidence is in two notes: [tiling managers](../research/2026-11-01-tiling-ma
   - every action has a description.
 - The order of work, each step its own PR:
   1. the list of actions, Left Alt, `keys.toml`, the palette and the key sheet;
-  2. the manifests of the agents and terminal modules;
-  3. the Desk in the engine, Bandaso's MCP server for Agents, and calm placement with its marks;
-  4. the browser module;
-  5. the Strip;
-  6. the Bandaso skill and `bandaso describe`;
-  7. the theme file, motion and the drawer.
+  2. a Space on any folder, with its data outside the folder, and existing Spaces moved over;
+  3. the manifests of the agents and terminal modules;
+  4. the Desk in the engine, Bandaso's MCP server for Agents, and calm placement with its marks;
+  5. the browser module;
+  6. the Strip;
+  7. the Bandaso skill and `bandaso describe`;
+  8. the theme file, motion and the drawer.
+
+  Spaces on other machines and Threads in their own worktrees come after these.

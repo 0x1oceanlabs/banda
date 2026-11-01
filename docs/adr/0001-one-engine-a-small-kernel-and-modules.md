@@ -60,6 +60,8 @@ code.
    the files the Agents and the Person work on, plus `.bandaso/` with the
    Space's SQLite and event log. Copying the folder moves the Space, to
    another computer or a server. No vendor holds your work.
+   _Changed by ADR 0005, decision 6: a Space is any folder on a machine,
+   and Bandaso keeps its data outside the folder, in the engine's state._
 
 6. **Our model is at the centre, and ACP is the first adapter.** Threads,
    turns, tool calls and Questions are Bandaso's own model. ACP is the
