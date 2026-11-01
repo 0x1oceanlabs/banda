@@ -192,12 +192,29 @@ pub struct Account {
     #[ts(optional)]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub adapter: Option<Adapter>,
+    /// The Person's own CLI it runs, when it runs one.
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cli: Option<CliView>,
     /// Who it says is signed in; `None` when it does not say.
     #[ts(optional)]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub signed_in_as: Option<SignedInAs>,
-    /// It signs out when asked (`agents.sign_out`).
+    /// Signing out here ends its sign-in (`agents.sign_out`): it declares
+    /// ACP's logout, and an account is signed in. A key in its environment
+    /// outlives a logout.
     pub signs_out: bool,
+}
+
+/// The Person's own CLI that a Harness runs, where it was found and the
+/// version it says.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "agents/")]
+pub struct CliView {
+    pub path: String,
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub version: Option<String>,
 }
 
 /// A Harness's program, as it names itself when it starts: for Claude

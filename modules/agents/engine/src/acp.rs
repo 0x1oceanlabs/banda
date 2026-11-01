@@ -28,9 +28,9 @@
 //! runs until the Harness ends it or a Person stops it.
 
 use crate::model::{
-    Account, Adapter, Cost, Exit, Failure, Field, FieldValue, HarnessOption, Input, Mode, Offer,
-    OptionChoice, OptionValue, PlanStep, Settings, SignInWay, SignedInAs, SlashCommand, StepState,
-    TextFormat, ThreadId, ToolContent, ToolKind, ToolStatus, TurnState, Usage, Values,
+    Account, Adapter, CliView, Cost, Exit, Failure, Field, FieldValue, HarnessOption, Input, Mode,
+    Offer, OptionChoice, OptionValue, PlanStep, Settings, SignInWay, SignedInAs, SlashCommand,
+    StepState, TextFormat, ThreadId, ToolContent, ToolKind, ToolStatus, TurnState, Usage, Values,
 };
 use crate::rules::{Ending, Offered};
 use crate::settings::Harness;
@@ -455,8 +455,15 @@ struct Started {
     cx: ConnectionTo<Agent>,
     agreed: Agreed,
     methods: Vec<acp::AuthMethod>,
+    about: About,
+}
+
+/// What a Harness says of itself and its account when it starts.
+struct About {
     adapter: Option<Adapter>,
+    cli: Option<CliView>,
     signs_out: bool,
+    /// It pushes who is signed in (`_auth/status_update`).
     reports_account: bool,
 }
 
@@ -470,11 +477,9 @@ pub struct Connection {
     agreed: Agreed,
     /// The ways it offers to sign in.
     ways: Vec<SignInWay>,
-    adapter: Option<Adapter>,
-    signs_out: bool,
-    reports_account: bool,
+    about: About,
     /// Who it last said is signed in.
-    account: watch::Receiver<Option<SignedInAs>>,
+    account: watch::Receiver<Option<AuthStatus>>,
     routes: Routes,
     learned: Learned,
     /// When a turn last began or ended here.
@@ -520,6 +525,9 @@ fn in_words(error: &agent_client_protocol::Error) -> &str {
 impl Connection {
     /// Starts `harness` and agrees on ACP v1 with it.
     pub async fn start(harness: &Harness) -> Result<Arc<Connection>, String> {
+        // The entry as it starts, with its CLI's path when it runs one.
+        let (harness, cli) = crate::cli::find(harness).await?;
+        let harness = &harness;
         let config = AcpAgentConfig::new(&harness.command)
             .args(harness.args.iter().cloned())
             .envs(harness.env.clone());
@@ -537,9 +545,7 @@ impl Connection {
             cx,
             agreed,
             methods,
-            adapter,
-            signs_out,
-            reports_account,
+            mut about,
         } = match timeout(STARTING, started).await {
             Ok(Ok(Ok(agreed))) => agreed,
             Ok(Ok(Err(error))) => return Err(error),
@@ -549,15 +555,14 @@ impl Connection {
                 return Err("The Harness did not start within two minutes.".to_owned());
             }
         };
+        about.cli = cli;
         Ok(Arc::new(Connection {
             cx,
             harness: harness.id.clone(),
             name: harness.name.clone(),
             agreed,
             ways: ways(harness, methods),
-            adapter,
-            signs_out,
-            reports_account,
+            about,
             account,
             routes,
             learned,
@@ -862,28 +867,28 @@ impl Connection {
         &self.ways
     }
 
-    /// Signs in with `way`, which the Harness does by itself: Codex opens
-    /// the browser and waits there for the Person.
     /// This Harness entry as its process says, and how to sign in to it.
     /// A Harness that reports who is signed in says it soon after it
     /// starts: until then this waits, a few seconds at most.
     pub async fn account(&self) -> Account {
         let mut account = self.account.clone();
-        if self.reports_account {
+        if self.about.reports_account {
             let _ = timeout(FIRST_REPORT, account.wait_for(Option::is_some)).await;
         }
-        let signed_in_as = account.borrow().clone();
+        let status = account.borrow().clone();
+        let by_account = status.as_ref().is_some_and(|s| s.kind == "account");
         Account {
             ways: self.ways.clone(),
-            adapter: self.adapter.clone(),
-            signed_in_as,
-            signs_out: self.signs_out,
+            adapter: self.about.adapter.clone(),
+            cli: self.about.cli.clone(),
+            signed_in_as: status.map(SignedInAs::from),
+            signs_out: self.about.signs_out && by_account,
         }
     }
 
     /// Asks the Harness to sign out, when it says it does.
     pub async fn sign_out(&self) -> Result<(), String> {
-        if !self.signs_out {
+        if !self.about.signs_out {
             return Err(format!(
                 "{} does not sign out from Bandaso: sign out in a terminal.",
                 self.name
@@ -898,6 +903,8 @@ impl Connection {
             .map_err(|error| format!("{} could not sign out: {}", self.name, in_words(&error)))
     }
 
+    /// Signs in with `way`, which the Harness does by itself: Codex opens
+    /// the browser and waits there for the Person.
     pub async fn sign_in(&self, way: &str) -> Result<(), String> {
         let request = acp::AuthenticateRequest::new(way.to_owned());
         let asked = self.cx.send_request(request).block_task();
@@ -937,7 +944,7 @@ async fn drive(
     process: AcpAgent,
     routes: Routes,
     learned: Learned,
-    told: watch::Sender<Option<SignedInAs>>,
+    told: watch::Sender<Option<AuthStatus>>,
     ready: oneshot::Sender<Result<Started, String>>,
 ) {
     let heard = routes.clone();
@@ -948,7 +955,7 @@ async fn drive(
         .name("bandaso")
         .on_receive_notification(
             async move |note: AuthStatusUpdate, _cx: ConnectionTo<Agent>| {
-                told.send_replace(Some(note.status.into()));
+                told.send_replace(Some(note.status));
                 Ok(())
             },
             agent_client_protocol::on_receive_notification!(),
@@ -1146,13 +1153,17 @@ async fn drive(
                         name: info.title.unwrap_or(info.name),
                         version: info.version,
                     });
+                    let about = About {
+                        adapter,
+                        cli: None,
+                        signs_out: capabilities.auth.logout.is_some(),
+                        reports_account,
+                    };
                     let _ = ready.send(Ok(Started {
                         cx: cx.clone(),
                         agreed,
-                        signs_out: capabilities.auth.logout.is_some(),
-                        reports_account,
-                        adapter,
                         methods: answer.auth_methods,
+                        about,
                     }));
                 }
                 Ok(answer) => {

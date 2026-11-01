@@ -25,6 +25,20 @@ pub struct Harness {
     pub args: Vec<String>,
     #[serde(default)]
     pub env: BTreeMap<String, String>,
+    /// The Person's own CLI the program runs, when it runs one.
+    #[serde(default)]
+    pub cli: Option<Cli>,
+}
+
+/// A CLI the Person installed, which an adapter runs in place of a copy
+/// of its own (ADR 0003, decision 3).
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize)]
+pub struct Cli {
+    /// Its name on PATH, or its path.
+    pub program: String,
+    /// The variable that tells the adapter where it is: Claude Code's
+    /// `CLAUDE_CODE_EXECUTABLE`, Codex's `CODEX_PATH`.
+    pub variable: String,
 }
 
 impl Harness {
@@ -55,23 +69,35 @@ impl Harnesses {
     }
 
     /// The Harnesses Bandaso starts when a machine names none: the ACP
-    /// adapters for Claude Code and Codex, at versions we checked. Each one
-    /// signs in on its own; Bandaso holds no model provider's credentials.
+    /// adapters for Claude Code and Codex, at versions we checked, each
+    /// running the Person's own CLI. Each one signs in on its own; Bandaso
+    /// holds no model provider's credentials.
     pub fn known() -> Self {
-        let npx = |id: &str, name: &str, package: &str| Harness {
-            id: id.to_owned(),
-            name: name.to_owned(),
-            command: "npx".to_owned(),
-            args: vec!["-y".to_owned(), package.to_owned()],
-            env: BTreeMap::new(),
-        };
+        let npx =
+            |id: &str, name: &str, package: &str, (program, variable): (&str, &str)| Harness {
+                id: id.to_owned(),
+                name: name.to_owned(),
+                command: "npx".to_owned(),
+                args: vec!["-y".to_owned(), package.to_owned()],
+                env: BTreeMap::new(),
+                cli: Some(Cli {
+                    program: program.to_owned(),
+                    variable: variable.to_owned(),
+                }),
+            };
         Self::new(vec![
             npx(
                 "claude",
                 "Claude Code",
                 "@agentclientprotocol/claude-agent-acp@0.99.1",
+                ("claude", "CLAUDE_CODE_EXECUTABLE"),
             ),
-            npx("codex", "Codex", "@agentclientprotocol/codex-acp@2.5.0"),
+            npx(
+                "codex",
+                "Codex",
+                "@agentclientprotocol/codex-acp@2.5.0",
+                ("codex", "CODEX_PATH"),
+            ),
         ])
     }
 
