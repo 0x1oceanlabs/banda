@@ -65,8 +65,8 @@ export function useMenu<T>({
         ?.scrollIntoView({ block: "nearest" })
   }, [listId, chosen])
 
-  const onKeyDown = (event: React.KeyboardEvent): boolean => {
-    if (event.nativeEvent.isComposing || word === undefined) return false
+  const onKeyDown = (event: KeyboardEvent): boolean => {
+    if (event.isComposing || word === undefined) return false
     const plain =
       !event.shiftKey && !event.altKey && !event.ctrlKey && !event.metaKey
     if (choices.length > 0 && plain) {

@@ -236,7 +236,7 @@ test("the engine dies mid-work, comes back, and the Thread goes on", async () =>
   process.kill(first, "SIGKILL")
   await expect.poll(() => window.engine() ?? first).not.toBe(first)
 
-  await expect(composer).toHaveValue("half a thought")
+  await expect(composer).toHaveText("half a thought")
   await composer.fill("after the break")
   await composer.press("Enter")
   await expect(thread.getByText("You said: after the break")).toBeVisible()
@@ -547,7 +547,7 @@ test("a plan waits for the Person to implement it", async () => {
   await expect(proposed).toContainText("You said: a plan for the notes")
   const ready = thread.getByRole("group", { name: "Plan ready" })
   await expect(ready).toContainText("You said: a plan for the notes")
-  await expect(composer).toHaveAttribute("placeholder", /refine the plan/)
+  await expect(composer).toHaveAttribute("aria-placeholder", /refine the plan/)
   await page.screenshot({ path: "test-results/7b-plan-ready.png" })
 
   await ready.getByRole("button", { name: "Implement" }).click()
@@ -594,7 +594,7 @@ test("a message sent while the Agent asks says no to it", async () => {
   // The answer the Harness keeps for next time waits under More.
   await expect(question.getByRole("button", { name: "More" })).toBeVisible()
   await expect(composer).toHaveAttribute(
-    "placeholder",
+    "aria-placeholder",
     /^Send a message to say no/
   )
   await composer.fill("something else instead")
@@ -696,7 +696,7 @@ test("a message starts with a slash command its Agent offers", async () => {
   )
   await page.screenshot({ path: "test-results/12-commands.png" })
   await composer.press("Enter")
-  await expect(composer).toHaveValue("/review ")
+  await expect(composer).toHaveText("/review ")
   await expect(commands).toBeHidden()
   await composer.pressSequentially("the notes")
   await composer.press("Enter")
@@ -705,7 +705,7 @@ test("a message starts with a slash command its Agent offers", async () => {
   // The window's own switch plan mode and send nothing.
   await composer.fill("/pl")
   await commands.getByRole("option", { name: /^\/plan/ }).click()
-  await expect(composer).toHaveValue("")
+  await expect(composer).toHaveText("")
   await expect(
     thread.getByRole("button", { name: "Plan", exact: true })
   ).toHaveAttribute("aria-pressed", "true")
@@ -716,7 +716,7 @@ test("a message starts with a slash command its Agent offers", async () => {
   await composer.press("Escape")
   await expect(commands).toBeHidden()
   await composer.press("Enter")
-  await expect(composer).toHaveValue("")
+  await expect(composer).toHaveText("")
   await expect(
     thread.getByRole("button", { name: "Plan", exact: true })
   ).toHaveAttribute("aria-pressed", "false")
@@ -883,12 +883,36 @@ test("the composer walks earlier messages, keeps a draft and edits what waits", 
 
   // ↑ and ↓ in an empty box walk what the Person sent.
   await composer.press("ArrowUp")
-  await expect(composer).toHaveValue("again")
+  await expect(composer).toHaveText("again")
   await composer.press("ArrowUp")
-  await expect(composer).toHaveValue("hello")
+  await expect(composer).toHaveText("hello")
   await composer.press("ArrowDown")
   await composer.press("ArrowDown")
-  await expect(composer).toHaveValue("")
+  await expect(composer).toHaveText("")
+
+  // Shift+Enter starts a line; ↑ on the second line moves the caret
+  // first, and only then walks the history.
+  await composer.pressSequentially("one")
+  await composer.press("Shift+Enter")
+  await composer.pressSequentially("two")
+  await expect(composer.locator("p")).toHaveText(["one", "two"])
+  await composer.press("ArrowUp")
+  await expect(composer.locator("p")).toHaveText(["one", "two"])
+  await composer.press("Enter")
+  await expect(thread.getByText(/You said: one\s+two/)).toBeVisible()
+  await expect(composer).toHaveText("")
+
+  // Pasted text goes in as plain lines.
+  await composer.evaluate((box) => {
+    const data = new DataTransfer()
+    data.setData("text/plain", "pasted\nlines")
+    const paste = { clipboardData: data, bubbles: true, cancelable: true }
+    box.dispatchEvent(new ClipboardEvent("paste", paste))
+  })
+  await expect(composer.locator("p")).toHaveText(["pasted", "lines"])
+  await composer.press("ControlOrMeta+a")
+  await composer.press("Backspace")
+  await expect(composer).toHaveText("")
 
   // What is written waits as the Thread's draft, until it is sent.
   const drafts = () =>
@@ -911,7 +935,7 @@ test("the composer walks earlier messages, keeps a draft and edits what waits", 
   await composer.press("Control+Enter")
   const queue = thread.getByRole("list", { name: "Waiting messages" })
   await expect(queue.getByText("after it")).toBeVisible()
-  await expect(composer).toHaveValue("")
+  await expect(composer).toHaveText("")
   await composer.press("ArrowUp")
   const edit = thread.getByRole("textbox", { name: "Waiting message" })
   await expect(edit).toHaveValue("after it")
@@ -946,7 +970,7 @@ test("a sent message moves near the top, the end says what waits, and a Thread k
   for (const word of ["a", "b"]) {
     await composer.fill(word)
     await composer.press("Control+Enter")
-    await expect(composer).toHaveValue("")
+    await expect(composer).toHaveText("")
   }
   await expect(
     thread.getByRole("list", { name: "Waiting messages" }).getByRole("listitem")
@@ -1032,7 +1056,7 @@ test("@ names a file in the Space's folder, picked from a list", async () => {
   await expect(files.getByRole("option")).toContainText("src")
   await page.screenshot({ path: "test-results/18d-files.png" })
   await composer.press("Enter")
-  await expect(composer).toHaveValue("look at @src/main.ts ")
+  await expect(composer).toHaveText("look at @src/main.ts ")
   await expect(files).toBeHidden()
   await composer.pressSequentially("please")
   await composer.press("Enter")
