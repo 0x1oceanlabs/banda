@@ -36,6 +36,13 @@
 # inactive-border = "border"         # every other tile's
 # ring = 0                           # grows the focused frame into the gap
 
+# A column's width is a share of the screen; Alt+R goes round the presets.
+# [columns]
+# presets = ["1/3", "1/2", "2/3", "1"]
+# default = "1/2"                    # a new column's width
+# center = "never"                   # "never", "always" or "on-overflow"
+# min = 30                           # no column narrower, in rem (a list: half)
+
 # [bar]
 # height = 36
 

@@ -94,6 +94,8 @@ The evidence is in two notes: [tiling managers](../research/2026-11-01-tiling-ma
    | `Alt+Arrows` | focus the Pane that way |
    | `Alt+Shift+Arrows` | move the Pane that way |
    | `Alt+Ctrl+Arrows` | resize it; in the Strip, step the column's width |
+   | `Alt+R`, `Alt+Shift+R` | the column's next or previous width, round, as niri's `Mod+R` |
+   | `Alt+F` | the column the whole screen wide, and back, as niri's `Mod+F` |
    | `Alt+Return` | a new Thread, in the default Space |
    | `Alt+Shift+Return` | a new browser, as Omarchy's `Super+Shift+Return` |
    | `Alt+N`, then a letter | open or focus a kind: `T` terminal, `B` browser, `H` Harnesses; with `Shift`, open another |

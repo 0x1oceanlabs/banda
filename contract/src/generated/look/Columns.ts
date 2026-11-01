@@ -4,4 +4,4 @@ import type { Center } from "./Center";
 /**
  * `[columns]` resolved: valid widths only, narrowest first.
  */
-export type Columns = { presets: Array<string>, default: string, center: Center, };
+export type Columns = { presets: Array<string>, default: string, center: Center, min: number, };

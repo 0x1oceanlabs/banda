@@ -32,6 +32,7 @@ export const DEFAULT_COLUMNS: Columns = {
   presets: ["1/3", "1/2", "2/3", "1"],
   default: "1/2",
   center: "never",
+  min: 30,
 }
 
 /** Banda's own motion, niri's springs: what `banda look` gives with no

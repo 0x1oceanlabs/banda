@@ -58,8 +58,9 @@ ADR 0005 promised a theme file (decision 11) and "one look, and honest motion" (
    - `[tile]`: `radius` (a step of the ladder or pixels, decision 7), `border` width, `dim-inactive` (0 to 1: a black veil over the content of the tiles without the focus, as Hyprland dims its windows; the border stays; _built_).
    - `[focus]`: how the focused tile stands out (_decided_), as in Hyprland by default: its `border` takes the accent, the others keep `inactive-border`. niri's focus ring is a switch: `ring` grows the focused tile's frame that far out into the gap, so nothing moves; `0`, the default, draws none. The ring has no colour of its own: it is the border's, drawn as one stroke over it, so the tile has one frame and no seam where two would meet. A border of one colour and a ring of another looked like two frames. Colours are palette names or hex. A gradient comes later, written as Hyprland writes it.
    - `[columns]`, as niri's (_built_):
-     - `presets` are the widths Alt+Ctrl+Left and Right step through, as fractions of the screen (`"1/3"`, `"2/5"`, `"1"`). A column steps from whatever width it has to the nearest preset past it.
+     - `presets` are the widths Alt+Ctrl+Left and Right step through, as fractions of the screen (`"1/3"`, `"2/5"`, `"1"`). A column steps from whatever width it has to the nearest preset past it. Alt+R and Alt+Shift+R go round them, as niri's Mod+R: past the widest, the narrowest. Alt+F makes the column the whole screen wide and gives it back its width, as niri's Mod+F.
      - `default` is a new column's width. A list Pane opens at the narrowest preset.
+     - `min` (_decided_, 2026-11-01): no column is drawn narrower than this many rem, 30 by default, unless the screen is; a column of lists only, half. A share alone suits a wide window and cramps a narrow one: half of a window beside another is a Thread of 30 letters a line. So in a narrow window a half is the whole Strip, and widens back to a half when the window does; the column keeps its share, only the drawing has a floor. Rem, so it follows `[font] size`. The steps go by what is drawn: a preset the floor draws as the one there is passed over, so every press shows. A width for each window size was weighed: it jumps at the breakpoint, and it gives only new columns their width.
      - `center`: `never` scrolls the least that shows the focused column; `always` puts it in the middle; `on-overflow` puts it in the middle only when it does not fit beside the column focused before, else shows both.
    - `[bar]`: `height`.
    - `[font]`: `sans`, `mono`, `size` (_built_).
@@ -164,6 +165,7 @@ ring = 0                   # grows the focused frame into the gap, niri's ring; 
 
 [columns]
 presets = ["1/3", "1/2", "2/3", "1"]
+min = 30
 default = "1/2"
 center = "never"
 

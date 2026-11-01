@@ -7,6 +7,7 @@ import {
   focused,
   go,
   left,
+  maximize,
   move,
   open,
   parse,
@@ -17,6 +18,7 @@ import {
   step,
   update,
   widen,
+  WIDTHS,
   type Workspaces,
 } from "./model"
 
@@ -226,6 +228,45 @@ describe("focus and moves inside a workspace", () => {
     const kept = open(start(), A, thread("t2"), { width: "2/5" })
     const back = parse(JSON.parse(JSON.stringify(kept)))!
     expect(current(back).columns[0].width).toBe("2/5")
+  })
+
+  test("widths step by what the window draws", () => {
+    // A narrow window: 1/3, 1/2 and 2/3 are all drawn at the floor.
+    const floor = 0.8
+    let state = open(start(), A, thread("t1"), { width: "1/2" })
+    expect(widen(state, -1, WIDTHS, { floor })).toBe(state)
+    state = widen(state, 1, WIDTHS, { floor })
+    expect(current(state).columns[0].width).toBe("1")
+    state = widen(state, -1, WIDTHS, { floor })
+    expect(current(state).columns[0].width).toBe("2/3")
+    // Too narrow for any step to show: it stays.
+    expect(widen(state, 1, WIDTHS, { floor: 1 })).toBe(state)
+  })
+
+  test("Alt+R goes round the widths", () => {
+    const width = (s: ReturnType<typeof start>) => current(s).columns[0].width
+    let state = open(start(), A, thread("t1"), { width: "2/3" })
+    state = widen(state, 1, WIDTHS, { wrap: true })
+    expect(width(state)).toBe("1")
+    state = widen(state, 1, WIDTHS, { wrap: true })
+    expect(width(state)).toBe("1/3")
+    state = widen(state, -1, WIDTHS, { wrap: true })
+    expect(width(state)).toBe("1")
+    // In a narrow window, round from the whole screen to the floor.
+    state = widen(state, 1, WIDTHS, { wrap: true, floor: 0.8 })
+    expect(width(state)).toBe("2/3")
+  })
+
+  test("a column takes the whole screen and gives it back", () => {
+    let state = open(start(), A, thread("t1"), { width: "1/3" })
+    state = maximize(state)
+    expect(current(state).columns[0].width).toBe("1")
+    const back = parse(JSON.parse(JSON.stringify(state)))!
+    expect(current(maximize(back)).columns[0].width).toBe("1/3")
+    // A step forgets the width it had.
+    state = widen(state, -1)
+    expect(current(state).columns[0].width).toBe("2/3")
+    expect(maximize(maximize(state))).toEqual(state)
   })
 })
 

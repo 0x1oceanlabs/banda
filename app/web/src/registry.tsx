@@ -64,11 +64,27 @@ export function runs(
   return needs.module === undefined || engineModules.includes(needs.module)
 }
 
+/** Whether the Pane is a list that sits beside others (`PaneKind.narrow`). */
+function narrow(pane: PaneState): boolean {
+  return kindOf(pane.kind)?.narrow === true
+}
+
 /** How wide a new column for a Pane opens, as the look says: a list at
  * the narrowest preset, the rest at the default width. */
 export function widthOf(pane: PaneState): Width {
   const { presets, default: width } = columnsOf()
-  return kindOf(pane.kind)?.narrow ? (presets[0] ?? width) : width
+  return narrow(pane) ? (presets[0] ?? width) : width
+}
+
+/**
+ * The rem a column is never drawn narrower than, from the look's `min`:
+ * the widest its Panes ask for; a list asks for half.
+ */
+export function minOf(
+  column: { entries: readonly { pane: PaneState }[] },
+  min: number
+): number {
+  return column.entries.some((entry) => !narrow(entry.pane)) ? min : min / 2
 }
 
 /** The Panes a Person can start, in the order the menu lists them. */

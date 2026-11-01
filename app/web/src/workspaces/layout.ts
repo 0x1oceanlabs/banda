@@ -6,7 +6,7 @@
  */
 import { moveOf } from "../look"
 import { Moving } from "../motion"
-import { share, type Width } from "./model"
+import { drawn, share, type Width } from "./model"
 
 /** A column's place once every move is done, in the Strip's scroll. */
 export interface Place {
@@ -25,17 +25,37 @@ function room(strip: HTMLElement) {
 }
 
 /**
+ * The share of the room a column of `min` rem is never drawn narrower
+ * than: the `min-width` the Strip gives it, as a share.
+ */
+function floorIn(room: { gap: number; inner: number }, min: number): number {
+  const rem = parseFloat(getComputedStyle(document.documentElement).fontSize)
+  return room.inner > 0 ? (min * rem + room.gap) / (room.inner + room.gap) : 0
+}
+
+/** The floor of a column of `min` rem in the Strip of workspace `id`; 0
+ * when that Strip is not drawn. */
+export function floorOf(id: string, min: number): number {
+  const strip = document.querySelector<HTMLElement>(`[data-strip="${id}"]`)
+  return strip ? floorIn(room(strip), min) : 0
+}
+
+/**
  * Where the columns end up, from their widths, as CSS lays them out: so a
  * scroll aims at where a column will be, not where a move has it now.
  */
 export function places(
   strip: HTMLElement,
-  columns: readonly { id: string; width: Width }[]
+  columns: readonly { id: string; width: Width; min: number }[]
 ): Place[] {
   const { pad, gap, inner } = room(strip)
   let left = pad
   return columns.map((column) => {
-    const width = (share(column.width) ?? 0.5) * (inner + gap) - gap
+    const at = drawn(
+      share(column.width) ?? 0.5,
+      floorIn({ gap, inner }, column.min)
+    )
+    const width = at * (inner + gap) - gap
     const place = { id: column.id, left, right: left + width }
     left += width + gap
     return place
@@ -45,6 +65,12 @@ export function places(
 /** A column's width at `at`, a share of the room, as the Strip draws it. */
 export function widthAt(at: number): string {
   return `calc(${at} * (100% + var(--gap-inner)) - var(--gap-inner))`
+}
+
+/** The least a column of `min` rem is drawn at: that, unless the room is
+ * narrower. */
+export function minWidthOf(min: number): string {
+  return `min(100%, ${min}rem)`
 }
 
 type Moved = {

@@ -90,6 +90,11 @@ export function columnsOf(): Columns {
   return currentLook()?.columns ?? DEFAULT_COLUMNS
 }
 
+/** `[columns]`, for what draws again when the look changes them. */
+export function useLookColumns(): Columns {
+  return useSyncExternalStore(subscribe, columnsOf)
+}
+
 /** What is wrong in the look's files now, for the bar to say. */
 export function useLookProblems(): Problem[] {
   return useLook((look) => look.problems, NONE)

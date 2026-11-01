@@ -3,7 +3,8 @@
 //! decision 2).
 //!
 //! A width is a share of the screen as a fraction, `"1/3"`, or `"1"` for
-//! all of it.
+//! all of it. `min` keeps a share of a narrow window readable: no column
+//! is drawn narrower than that many rem, unless the screen is.
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -20,6 +21,8 @@ pub struct ColumnsSettings {
     #[schemars(with = "Option<String>")]
     pub default: Option<Spanned<String>>,
     pub center: Option<Center>,
+    /// The narrowest a column is drawn, in rem; a list's is half of it.
+    pub min: Option<Spanned<f64>>,
 }
 
 /// Where the Strip scrolls a focused column to.
@@ -42,10 +45,15 @@ pub struct Columns {
     pub presets: Vec<String>,
     pub default: String,
     pub center: Center,
+    pub min: f64,
 }
 
 const PRESETS: [&str; 4] = ["1/3", "1/2", "2/3", "1"];
 const DEFAULT: &str = "1/2";
+/// A Thread's lines stay readable at 30 rem, about 60 letters.
+const MIN: f64 = 30.0;
+/// Past this a column is the whole screen in any window.
+const MINS: std::ops::RangeInclusive<f64> = 0.0..=200.0;
 
 /// A width's share of the screen: more than 0, at most 1.
 pub fn share(width: &str) -> Option<f64> {
@@ -69,6 +77,7 @@ impl ColumnsSettings {
             presets: self.presets.or(under.presets),
             default: self.default.or(under.default),
             center: self.center.or(under.center),
+            min: self.min.or(under.min),
         }
     }
 
@@ -78,6 +87,7 @@ impl ColumnsSettings {
             presets: Some(PRESETS.iter().map(|p| spanned(p)).collect()),
             default: Some(spanned(DEFAULT)),
             center: Some(Center::Never),
+            min: Some(Spanned::new(0..0, MIN)),
         }
     }
 
@@ -95,6 +105,14 @@ impl ColumnsSettings {
             && share(default.get_ref()).is_none()
         {
             problems.push((Some(default.span()), format!("columns.default {WIDTH}")));
+        }
+        if let Some(min) = &self.min
+            && !MINS.contains(min.get_ref())
+        {
+            problems.push((
+                Some(min.span()),
+                format!("columns.min is from {} to {} rem", MINS.start(), MINS.end()),
+            ));
         }
         problems
     }
@@ -126,6 +144,12 @@ impl ColumnsSettings {
             presets,
             default,
             center: self.center.unwrap_or(Center::Never),
+            min: self
+                .min
+                .as_ref()
+                .map(|m| *m.get_ref())
+                .filter(|m| MINS.contains(m))
+                .unwrap_or(MIN),
         }
     }
 }
@@ -160,5 +184,12 @@ mod tests {
         assert_eq!(columns.center, Center::Never);
         let centred = read("[columns]\ncenter = \"on-overflow\"\n");
         assert_eq!(centred.resolve().center, Center::OnOverflow);
+        assert_eq!(columns.min, 30.0);
+        let wide = read("[columns]\nmin = 40\n");
+        assert_eq!(wide.problems().len(), 0);
+        assert_eq!(wide.resolve().min, 40.0);
+        let wrong = read("[columns]\nmin = -1\n");
+        assert_eq!(wrong.problems().len(), 1);
+        assert_eq!(wrong.resolve().min, 30.0);
     }
 }
