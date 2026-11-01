@@ -1,6 +1,7 @@
-//! A Harness's conversation written down as it happens, when its entry
-//! names a folder to `record` in. Each start writes one file,
-//! `<harness>-<milliseconds since 1970>.jsonl`, with a line per ACP frame:
+//! What Bandaso and a Harness say to each other, written down as it
+//! happens, when a test has the Harness's entry `record` in a folder. Each
+//! start of its program writes one file, `<harness>-<UUIDv7>.jsonl`, named
+//! in the order of the starts, with a line per ACP frame:
 //! `{"to":"agent","frame":…}` for what Bandaso sent and
 //! `{"to":"client","frame":…}` for what the Harness answered. The fake
 //! agent replays such a file (`FAKE_AGENT_REPLAY`), so tests hold what a
@@ -11,23 +12,19 @@ use std::fs::File;
 use std::io::Write as _;
 use std::path::Path;
 use std::sync::Mutex;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 pub struct Recording(Mutex<File>);
 
 impl Recording {
     /// A new file for `harness` in `folder`, which it makes if it must.
     pub fn start(folder: &Path, harness: &str) -> Result<Recording, String> {
-        let since = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .unwrap_or_default();
-        let path = folder.join(format!("{harness}-{}.jsonl", since.as_millis()));
+        let path = folder.join(format!("{harness}-{}.jsonl", uuid::Uuid::now_v7()));
         std::fs::create_dir_all(folder)
             .and_then(|()| File::create_new(&path))
             .map(|file| Recording(Mutex::new(file)))
             .map_err(|error| {
                 format!(
-                    "Bandaso cannot record the conversation in {}: {error}",
+                    "Bandaso cannot record the Harness in {}: {error}",
                     path.display()
                 )
             })
@@ -36,8 +33,8 @@ impl Recording {
     /// Writes down `line`, one frame sent `to` one side.
     pub fn write(&self, to: To, line: &str) {
         let to = match to {
-            To::Agent => "agent",
-            To::Client => "client",
+            To::Harness => "agent",
+            To::Bandaso => "client",
         };
         let frame = serde_json::from_str(line).unwrap_or_else(|_| Value::String(line.to_owned()));
         let mut entry = json!({ "to": to, "frame": frame }).to_string();
@@ -48,8 +45,9 @@ impl Recording {
     }
 }
 
-/// Which side a frame went to: the Harness, or Bandaso.
+/// Which side a frame went to. The file says it in ACP's words: the
+/// Harness is the agent, Bandaso the client.
 pub enum To {
-    Agent,
-    Client,
+    Harness,
+    Bandaso,
 }

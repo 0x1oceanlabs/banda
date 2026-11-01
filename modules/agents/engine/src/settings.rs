@@ -28,10 +28,11 @@ pub struct Harness {
     /// The Person's own CLI the program runs, when it runs one.
     #[serde(default)]
     pub cli: Option<Cli>,
-    /// A folder where each start of the program writes its conversation,
-    /// one ACP frame per line: what tests replay, and what to send with a
-    /// Harness's bug. It holds everything said, files' text too.
-    #[serde(default)]
+    /// A folder where each start of the program writes what Bandaso and
+    /// the Harness say to each other, one ACP frame per line, for tests to
+    /// replay. Only a test sets it, never a Harness list: a recording holds
+    /// everything said, a secret typed into a form too.
+    #[serde(skip)]
     pub record: Option<PathBuf>,
 }
 
@@ -108,7 +109,7 @@ impl Harnesses {
     }
 
     /// Reads a Harness list: `[[harness]]` tables with `id`, `name`,
-    /// `command`, and optional `args`, `env`, `cli` and `record`.
+    /// `command`, and optional `args`, `env` and `cli`.
     pub fn parse(text: &str) -> Result<Self, String> {
         let file: HarnessFile = toml::from_str(text).map_err(|e| e.to_string())?;
         Ok(Self::new(file.harness))

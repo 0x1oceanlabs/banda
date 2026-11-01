@@ -539,8 +539,8 @@ impl Connection {
         let name = harness.id.clone();
         let process = AcpAgent::new(config).with_debug(move |line, direction| {
             let to = match direction {
-                LineDirection::Stdin => To::Agent,
-                LineDirection::Stdout => To::Client,
+                LineDirection::Stdin => To::Harness,
+                LineDirection::Stdout => To::Bandaso,
                 LineDirection::Stderr => {
                     tracing::debug!(harness = %name, "{line}");
                     return;

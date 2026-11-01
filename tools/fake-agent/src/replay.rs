@@ -5,10 +5,16 @@
 //! A recording is what the client sent, each frame followed by what the
 //! Harness said before the client's next one. A frame that arrives takes
 //! the first unused recorded frame of its kind: a request or a
-//! notification by its method, an answer by its ID. What the Harness said
-//! after that one is said again, fitted to this run: answers carry this
-//! run's request IDs, and the recorded session's folder becomes this
-//! session's. A request the recording holds no answer to is refused.
+//! notification by its method, an answer by its ID. It must say what that
+//! one said, its params or its answer, in the recorded session's folder
+//! moved to this session's; only `initialize` may differ, as it changes
+//! with each version of Bandaso. What the Harness said after it is said
+//! again, fitted to this run: answers carry this run's request IDs, and
+//! the folder is this session's.
+//!
+//! A request the recording holds nothing for, or other params than it
+//! holds, is refused. A notification or an answer that differs ends the
+//! replay, as a Harness that stops.
 
 use serde_json::{Map, Value, json};
 use std::collections::HashMap;
@@ -58,17 +64,34 @@ pub async fn replay(recording: &Path) -> std::io::Result<()> {
                     None => h.frame.get("method").is_none() && h.frame.get("id") == frame.get("id"),
                 }
         });
-        if let Some(found) = found {
-            found.used = true;
+        let recorded = found.map(|found| {
             fit.learn(&found.frame, &frame);
-            say(&mut out, &fit, &found.then).await?;
-        } else if let (Some(_), Some(id)) = (method, frame.get("id")) {
-            let refused = json!({
-                "jsonrpc": "2.0",
-                "id": id,
-                "error": { "code": -32603, "message": "The recording holds no answer to this." },
-            });
-            write(&mut out, &refused).await?;
+            (fit.moved(&found.frame), found)
+        });
+        match (recorded, method, frame.get("id")) {
+            (Some((recorded, found)), ..) if same(&recorded, &frame) => {
+                found.used = true;
+                say(&mut out, &fit, &found.then).await?;
+            }
+            (recorded, Some(_), Some(id)) => {
+                let message = match recorded {
+                    Some((recorded, _)) => {
+                        format!("The recording holds other params: {}", recorded["params"])
+                    }
+                    None => "The recording holds nothing for this.".to_owned(),
+                };
+                let refused = json!({
+                    "jsonrpc": "2.0",
+                    "id": id,
+                    "error": { "code": -32603, "message": message },
+                });
+                write(&mut out, &refused).await?;
+            }
+            (Some((recorded, _)), ..) => {
+                let differs = format!("the recording holds {recorded}, not {frame}");
+                return Err(std::io::Error::other(differs));
+            }
+            (None, ..) => {}
         }
     }
     Ok(())
@@ -110,17 +133,36 @@ impl Fit {
         }
     }
 
-    fn fitted(&self, frame: &Value) -> Value {
-        let mut frame = match &self.folder {
+    /// `frame` in this session's folder.
+    fn moved(&self, frame: &Value) -> Value {
+        match &self.folder {
             Some((was, is)) => moved(frame, was, is),
             None => frame.clone(),
-        };
+        }
+    }
+
+    /// `frame` in this session's folder, answering this run's request.
+    fn fitted(&self, frame: &Value) -> Value {
+        let mut frame = self.moved(frame);
         let answer = frame.get("method").is_none();
         let id = frame.get("id").and_then(|id| self.ids.get(&id.to_string()));
         if let (true, Some(id)) = (answer, id) {
             frame["id"] = id.clone();
         }
         frame
+    }
+}
+
+/// Whether `live` says what `recorded` did: the same params, or the same
+/// answer. What a client says when it starts changes with its version.
+fn same(recorded: &Value, live: &Value) -> bool {
+    match recorded.get("method").and_then(Value::as_str) {
+        Some("initialize") => true,
+        Some(_) => recorded.get("params") == live.get("params"),
+        None => {
+            recorded.get("result") == live.get("result")
+                && recorded.get("error") == live.get("error")
+        }
     }
 }
 
