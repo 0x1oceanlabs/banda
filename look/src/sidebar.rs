@@ -8,6 +8,7 @@
 //! problems in the same list. The window only draws what it says.
 
 use crate::Problem;
+use crate::keyed::{self, Keyed, Layer};
 use crate::theme::Places;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -82,7 +83,7 @@ pub enum Part {
 /// How the sidebar arranges Threads: a preset, and the keys that change
 /// it. A preset file in `sidebars/` takes the same keys; every key is
 /// optional.
-#[derive(Clone, Debug, Default, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct SidebarSettings {
     /// `"inbox"`, `"spaces"`, `"places"`, or a file of the Person's.
@@ -98,7 +99,7 @@ pub struct SidebarSettings {
     pub row: RowSettings,
 }
 
-#[derive(Clone, Debug, Default, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct GroupSettings {
     pub by: Option<GroupBy>,
@@ -109,13 +110,13 @@ pub struct GroupSettings {
     pub empty: Option<Empty>,
 }
 
-#[derive(Clone, Debug, Default, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct SortSettings {
     pub by: Option<SortBy>,
 }
 
-#[derive(Clone, Debug, Default, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct SpacesSettings {
     pub list: Option<bool>,
@@ -124,7 +125,7 @@ pub struct SpacesSettings {
     pub new_thread: Option<bool>,
 }
 
-#[derive(Clone, Debug, Default, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct RowSettings {
     #[schemars(with = "Option<u8>")]
@@ -376,13 +377,15 @@ pub fn resolve(
     places: &Places,
     problems: &mut Vec<Problem>,
     watched: &mut Vec<PathBuf>,
-) -> Sidebar {
+) -> (Sidebar, Keyed) {
     let file = places.sidebar_file();
     watched.push(file.clone());
-    let text = std::fs::read_to_string(&file).ok();
-    let mine = text
-        .as_deref()
-        .and_then(|text| read_sidebar(&file, text, false, problems))
+    let mine_file = std::fs::read_to_string(&file)
+        .ok()
+        .map(|text| (file.clone(), text));
+    let mine = mine_file
+        .as_ref()
+        .and_then(|(path, text)| read_sidebar(path, text, false, problems))
         .unwrap_or_default();
 
     let folder = places.own_sidebars();
@@ -416,17 +419,18 @@ pub fn resolve(
         .as_ref()
         .map_or("inbox", |name| name.get_ref().as_str());
     let found = presets.iter().find(|p| p.name == wanted);
-    let (name, layer) = match found {
+    let (name, layer, preset_file) = match found {
         Some(Preset {
             path: Some(path), ..
         }) => {
             let path = PathBuf::from(path);
-            let layer = std::fs::read_to_string(&path)
-                .ok()
-                .and_then(|text| read_sidebar(&path, &text, true, problems));
-            (wanted, layer.unwrap_or_default())
+            let read = std::fs::read_to_string(&path).ok().map(|text| (path, text));
+            let layer = read
+                .as_ref()
+                .and_then(|(path, text)| read_sidebar(path, text, true, problems));
+            (wanted, layer.unwrap_or_default(), read)
         }
-        Some(_) => (wanted, built_in(wanted)),
+        Some(_) => (wanted, built_in(wanted), None),
         None => {
             let names = presets
                 .iter()
@@ -436,15 +440,23 @@ pub fn resolve(
             let span = mine.preset.as_ref().map(Spanned::span);
             problems.push(Problem::at(
                 &file,
-                text.as_deref().unwrap_or(""),
+                mine_file.as_ref().map_or("", |(_, text)| text.as_str()),
                 span,
                 format!("there is no preset \"{wanted}\"; the presets are {names}"),
             ));
-            ("inbox", built_in("inbox"))
+            ("inbox", built_in("inbox"), None)
         }
     };
+    let defaults = SidebarSettings::defaults();
+    let layers = [
+        Layer::new("defaults", &defaults, None),
+        Layer::new("preset", &layer, preset_file.as_ref()),
+        Layer::new("file", &mine, mine_file.as_ref()),
+    ];
     let name = name.to_owned();
-    mine.over(layer).arranged(&file, name, presets)
+    let merged = mine.over(layer).over(defaults);
+    let keyed = keyed::keyed(&merged, &layers);
+    (merged.arranged(&file, name, presets), keyed)
 }
 
 /// Banda's preset of this name; nothing over the defaults when none is.
@@ -503,7 +515,7 @@ mod tests {
 
     fn resolved(config: &Path) -> (Sidebar, Vec<Problem>) {
         let mut problems = Vec::new();
-        let sidebar = resolve(&places(config), &mut problems, &mut Vec::new());
+        let (sidebar, _) = resolve(&places(config), &mut problems, &mut Vec::new());
         (sidebar, problems)
     }
 

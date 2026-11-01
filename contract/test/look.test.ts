@@ -40,6 +40,7 @@ const look = (mode: Look["mode"], schemes: Look["schemes"]): Look => ({
     asking: true,
     failed: true,
   },
+  settings: {},
 })
 const light = { "--background": "#fff" }
 const dark = { "--background": "#000" }

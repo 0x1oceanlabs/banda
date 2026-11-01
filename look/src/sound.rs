@@ -147,7 +147,7 @@ impl TryFrom<toml::Value> for Call {
 }
 
 /// `[sound]` as one layer says it: every key optional.
-#[derive(Clone, Debug, Default, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct SoundSettings {
     pub family: Option<Families>,

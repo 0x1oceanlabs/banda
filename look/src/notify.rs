@@ -43,7 +43,7 @@ pub enum Quiet {
 }
 
 /// `[notify]` as one layer says it: every key optional.
-#[derive(Clone, Debug, Default, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct NotifySettings {
     pub system: Option<System>,

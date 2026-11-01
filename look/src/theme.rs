@@ -118,6 +118,9 @@ pub struct Theme {
     pub folder: Option<PathBuf>,
     pub palette: Palette,
     pub settings: Settings,
+    /// Its `banda.toml` and the text its settings were read from, so each
+    /// key is known by its line; none for Banda's own, or with no file.
+    pub banda_toml: Option<(PathBuf, String)>,
 }
 
 /// Banda's own themes: files in this crate, so they are examples too.
@@ -178,6 +181,7 @@ impl Places {
                 folder: None,
                 palette,
                 settings,
+                banda_toml: None,
             });
         }
         self.candidates(name)
@@ -254,15 +258,19 @@ fn read_folder(
         }
     };
     let banda_path = folder.join("banda.toml");
-    let settings = match std::fs::read_to_string(&banda_path) {
-        Ok(text) => crate::read_settings(&banda_path, &text, problems).unwrap_or_default(),
-        Err(_) => Settings::default(),
-    };
+    let banda_toml = std::fs::read_to_string(&banda_path)
+        .ok()
+        .map(|text| (banda_path, text));
+    let settings = banda_toml
+        .as_ref()
+        .and_then(|(path, text)| crate::read_settings(path, text, problems))
+        .unwrap_or_default();
     Some(Theme {
         name: name.to_owned(),
         origin,
         folder: Some(folder.to_owned()),
         palette,
         settings,
+        banda_toml,
     })
 }

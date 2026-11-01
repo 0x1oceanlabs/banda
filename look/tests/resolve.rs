@@ -5,6 +5,7 @@ use banda_look::hyprland::Windows;
 use banda_look::motion::Move;
 use banda_look::theme::{Origin, Places};
 use banda_look::{Look, Shown, follow, resolve};
+use std::collections::BTreeMap;
 use std::fs;
 use std::path::Path;
 use std::sync::mpsc;
@@ -418,11 +419,43 @@ fn the_template_says_the_defaults() {
     machine.look_toml(&uncommented);
     let template = machine.look();
     assert!(template.problems.is_empty(), "{:?}", template.problems);
+    let values = |look: &Look| {
+        look.settings
+            .iter()
+            .map(|(file, keys)| {
+                let keys: BTreeMap<_, _> = keys
+                    .iter()
+                    .map(|(k, s)| (k.clone(), s.value.clone()))
+                    .collect();
+                (file.clone(), keys)
+            })
+            .collect::<BTreeMap<_, _>>()
+    };
+    assert_eq!(values(&template), values(&defaults));
     assert_eq!(
         Look {
             sources: defaults.sources.clone(),
+            settings: defaults.settings.clone(),
             ..template
         },
         defaults
     );
+}
+
+#[test]
+fn each_key_says_where_its_value_comes_from() {
+    let machine = Machine::new(false);
+    machine.look_toml("# mine\nradius = 4\n\n[tile]\nborder = 3\n");
+    let look = machine.under_hyprland();
+    let keys = &look.settings["look.toml"];
+    let radius = &keys["radius"];
+    assert_eq!(radius.value, serde_json::json!(4.0));
+    assert_eq!(radius.from.layer, "file");
+    assert_eq!(radius.from.line, Some(2));
+    let path = machine.places.look_file().display().to_string();
+    assert_eq!(radius.from.path.as_deref(), Some(path.as_str()));
+    assert_eq!(keys["tile.border"].from.line, Some(5));
+    assert_eq!(keys["tile.dim-inactive"].from.layer, "hyprland");
+    assert_eq!(keys["bar.height"].from.layer, "defaults");
+    assert!(look.settings["sidebar.toml"].contains_key("group.by"));
 }

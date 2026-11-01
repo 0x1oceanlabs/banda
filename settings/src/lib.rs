@@ -18,12 +18,17 @@ use schemars::{JsonSchema, Schema};
 use serde_json::Value;
 use std::path::{Path, PathBuf};
 
+mod write;
+pub use write::{reset, set};
+
 /// A file in `~/.config/banda/` that Banda reads. What it holds is its
 /// root struct's doc comment, the schema's `description`.
 pub struct File {
     /// Its name in the config folder.
     pub name: &'static str,
     schema: fn() -> Schema,
+    /// What a new file starts as, before its first key is written.
+    template: &'static str,
 }
 
 const HARNESSES: &str = "harnesses.toml";
@@ -33,18 +38,22 @@ pub const FILES: [File; 4] = [
     File {
         name: "look.toml",
         schema: schema_of::<LookSettings>,
+        template: banda_look::TEMPLATE,
     },
     File {
         name: "sidebar.toml",
         schema: schema_of::<SidebarSettings>,
+        template: banda_look::sidebar::TEMPLATE,
     },
     File {
         name: "browser.toml",
         schema: schema_of::<BrowserSettings>,
+        template: banda_look::browser::TEMPLATE,
     },
     File {
         name: HARNESSES,
         schema: schema_of::<HarnessFile>,
+        template: "#:schema ./schemas/harnesses.schema.json\n",
     },
 ];
 
@@ -68,6 +77,14 @@ fn no_null(schema: &mut Schema) {
             object.insert("type".into(), only);
         }
     }
+    // A table's default, now its keys serialize: each key unset, which
+    // says nothing.
+    if let Some(Value::Object(default)) = object.get("default")
+        && !default.is_empty()
+        && default.values().all(says_nothing)
+    {
+        object.remove("default");
+    }
     // An optional table: `anyOf: [its $ref, null]`.
     if let Some(Value::Array(options)) = object.get_mut("anyOf") {
         options.retain(|option| option.get("type") != Some(&Value::from("null")));
@@ -80,6 +97,15 @@ fn no_null(schema: &mut Schema) {
                 }
             }
         }
+    }
+}
+
+/// Null, or a table of nothing but.
+fn says_nothing(value: &Value) -> bool {
+    match value {
+        Value::Null => true,
+        Value::Object(table) => table.values().all(says_nothing),
+        _ => false,
     }
 }
 
@@ -136,30 +162,29 @@ pub fn check(places: &Places, paths: &[PathBuf]) -> Vec<Problem> {
         let mut problems = banda_look::resolve(&places, &|| None).look.problems;
         let harnesses = places.config.join(HARNESSES);
         if harnesses.exists() {
-            problems.extend(check_harnesses(&harnesses));
+            problems.extend(check_file(&harnesses));
         }
         return problems;
     }
-    paths
-        .iter()
-        .flat_map(|path| {
-            if path.file_name().is_some_and(|name| name == HARNESSES) {
-                check_harnesses(path)
-            } else {
-                banda_look::check(std::slice::from_ref(path))
-            }
-        })
-        .collect()
+    paths.iter().flat_map(|path| check_file(path)).collect()
 }
 
-/// The Harness list, read as the engine reads it.
-fn check_harnesses(path: &Path) -> Vec<Problem> {
+fn check_file(path: &Path) -> Vec<Problem> {
     match std::fs::read_to_string(path) {
-        Ok(text) => match Harnesses::parse(&text) {
-            Ok(_) => Vec::new(),
-            Err(error) => vec![Problem::toml(path, &text, &error)],
-        },
+        Ok(text) => check_text(path, &text),
         Err(error) => vec![Problem::whole(path, error.to_string())],
+    }
+}
+
+/// Checks `text` as the file at `path` is read: the Harness list as the
+/// engine reads it, anything else as the look does.
+fn check_text(path: &Path, text: &str) -> Vec<Problem> {
+    if path.file_name().is_none_or(|name| name != HARNESSES) {
+        return banda_look::check_text(path, text);
+    }
+    match Harnesses::parse(text) {
+        Ok(_) => Vec::new(),
+        Err(error) => vec![Problem::toml(path, text, &error)],
     }
 }
 

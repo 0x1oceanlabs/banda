@@ -8,6 +8,7 @@
 //! the same list. The window only draws what it says.
 
 use crate::Problem;
+use crate::keyed::{self, Keyed, Layer};
 use crate::theme::Places;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -35,7 +36,7 @@ pub const SEARCH: &str = "https://duckduckgo.com/?q=%s";
 
 /// How Banda's browser shows its tabs and where it searches. Every key is
 /// optional.
-#[derive(Debug, Default, Deserialize, JsonSchema)]
+#[derive(Debug, Default, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct BrowserSettings {
     /// Where the tabs are: a row above the page, or a rail beside it.
@@ -92,20 +93,37 @@ pub fn resolve(
     places: &Places,
     problems: &mut Vec<Problem>,
     watched: &mut Vec<PathBuf>,
-) -> Browser {
+) -> (Browser, Keyed) {
     let file = places.browser_file();
     watched.push(file.clone());
-    let mine = std::fs::read_to_string(&file)
+    let mine_file = std::fs::read_to_string(&file)
         .ok()
-        .and_then(|text| read_browser(&file, &text, problems))
+        .map(|text| (file.clone(), text));
+    let mine = mine_file
+        .as_ref()
+        .and_then(|(path, text)| read_browser(path, text, problems))
         .unwrap_or_default();
-    Browser {
+    let defaults = BrowserSettings {
+        tabs: Some(Tabs::default()),
+        search: Some(Spanned::new(0..0, SEARCH.to_owned())),
+    };
+    let layers = [
+        Layer::new("defaults", &defaults, None),
+        Layer::new("file", &mine, mine_file.as_ref()),
+    ];
+    let merged = BrowserSettings {
+        tabs: mine.tabs.or(defaults.tabs),
+        search: mine.search.or(defaults.search),
+    };
+    let keyed = keyed::keyed(&merged, &layers);
+    let browser = Browser {
         file: file.display().to_string(),
-        tabs: mine.tabs.unwrap_or_default(),
-        search: mine
+        tabs: merged.tabs.unwrap_or_default(),
+        search: merged
             .search
             .map_or_else(|| SEARCH.to_owned(), Spanned::into_inner),
-    }
+    };
+    (browser, keyed)
 }
 
 /// Whether `banda look check` reads `path` as a `browser.toml`.
@@ -133,7 +151,7 @@ mod tests {
         }
         let mut problems = Vec::new();
         let mut watched = Vec::new();
-        let browser = resolve(&places(folder.path()), &mut problems, &mut watched);
+        let (browser, _) = resolve(&places(folder.path()), &mut problems, &mut watched);
         assert_eq!(watched, vec![folder.path().join("browser.toml")]);
         (browser, problems)
     }
