@@ -201,3 +201,17 @@ The Banda note weighs four places (Q1). Two fit Banda's rules:
 6. **Who confirms a risky action?** The Harness's own question before a
    tool call, under the Thread's mode (recommended at first), or a
    question of Banda's before a purchase, a message or a form sent?
+
+## Roma's answers, 2026-11-02
+
+1. **Every tab**, as ADR 0013 decision 7 says.
+2. **Beside the Thread**, in the Pane next to it. The tab shows that an
+   Agent drives it; the look is to be designed.
+3. **Open.** To be weighed with how Codex does it:
+   `2026-11-02-browser-tools-codex.md` and
+   `2026-11-02-browser-tools-takeover-and-confirm.md`.
+4. **The simpler for Agents and the Person**; the difference to be
+   explained.
+5. **The Person's one profile**, as now.
+6. **Open.** The options are in
+   `2026-11-02-browser-tools-takeover-and-confirm.md`.
