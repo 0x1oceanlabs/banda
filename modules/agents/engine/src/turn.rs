@@ -10,8 +10,10 @@
 //!   running turn reach it in order and never wait behind it. A message
 //!   the turn cannot take waits for a turn of its own instead ([`requeue`]).
 //!
-//! A Person's stop and a restart hold the Thread's queue: its waiting
-//! turns start once a Person lets it go ([`resume`]), as in T3 Code.
+//! A turn's state is the writer's to write (`writer.rs`): these effects
+//! give it what happened. A Person's stop and a restart hold the Thread's
+//! queue: its waiting turns start once a Person lets it go
+//! ([`writer::resume`]), as in T3 Code.
 //!
 //! Each one dies with the Harness's process, so a restart abandons it and
 //! [`settle`] writes what that means.
@@ -33,9 +35,9 @@ use crate::model::{
     Body, Fact, Failure, Image, Item, ItemId, Mode, Offer, Opener, PlanStep, QuestionState,
     Settings, ThreadId, ToolContent, ToolKind, ToolStatus, TurnId, TurnState, Usage,
 };
-use crate::rules::{self, Ending, Piece, Pieces, Text};
+use crate::rules::{self, Ending, Event, Piece, Pieces, Text};
 use crate::settings::Harnesses;
-use crate::{emit, store};
+use crate::{emit, store, writer};
 use banda_kernel::{AgentId, Effect, Error, ModuleSpace, Outcome, Participant, Settled, Tx};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
@@ -56,7 +58,7 @@ const STOPPING: Duration = Duration::from_secs(10);
 /// How long a message sent into a turn waits for the turn's Harness to
 /// start and take its prompt, and how often it looks.
 const BEGINNING: Duration = Duration::from_secs(acp::STARTING.as_secs() + acp::OPENING.as_secs());
-const LOOK_AGAIN: Duration = Duration::from_millis(100);
+pub(crate) const LOOK_AGAIN: Duration = Duration::from_millis(100);
 
 #[derive(Serialize, Deserialize)]
 pub struct TurnEffect {
@@ -86,64 +88,6 @@ pub(crate) fn plain(error: impl std::fmt::Display) -> String {
     error.to_string()
 }
 
-/// Ends a turn: its state, its Questions that never got an answer, and the
-/// fact that it ended, which `author` brought about.
-pub fn end(
-    tx: &mut Tx<'_>,
-    author: Participant,
-    turn: &store::Turn,
-    ending: Ending,
-) -> Result<(), Error> {
-    let Ending {
-        state,
-        reason,
-        failure,
-    } = ending;
-    for mut item in store::open_questions(tx.sql(), turn.id)? {
-        rules::close(&mut item.body);
-        store::set_body(tx.sql(), item.id, &item.body)?;
-        emit(
-            tx,
-            author,
-            turn.thread,
-            &Fact::QuestionClosed { item: item.id },
-        )?;
-    }
-    store::set_turn(
-        tx.sql(),
-        turn.id,
-        state,
-        reason.as_deref(),
-        failure,
-        tx.now(),
-    )?;
-    store::touch_thread(tx.sql(), turn.thread, tx.now())?;
-    let ended = Fact::TurnEnded {
-        turn: turn.id,
-        state,
-        reason: reason.clone(),
-        failure,
-    };
-    emit(tx, author, turn.thread, &ended)?;
-    // The answer goes back by itself, as a message from this Thread's
-    // Agent, and waits its turn there (ADR 0019). ADR 0018's writer (step
-    // 3) makes this part of the Step that ends the turn.
-    if let Some(asking) = turn.answers() {
-        let reply = store::last_reply(tx.sql(), turn.thread, turn.id, turn.agent)?;
-        let message = crate::Message {
-            text: rules::answer_of(state, reason.as_deref(), reply),
-            images: Vec::new(),
-        };
-        let (agent, target) = (
-            Participant::Agent(turn.agent),
-            crate::Target::Thread(asking),
-        );
-        let by = Some((Opener::Answered, turn.thread));
-        crate::send(tx, agent, target, message, None, false, by)?;
-    }
-    Ok(())
-}
-
 /// Writes a line from Banda into the Thread.
 fn notice(
     tx: &mut Tx<'_>,
@@ -166,81 +110,6 @@ fn notice(
         text,
     };
     emit(tx, agent, thread, &fact)
-}
-
-/// Holds the Thread's queue: its waiting turns start once a Person lets
-/// it go.
-pub fn hold(tx: &mut Tx<'_>, author: Participant, thread: ThreadId) -> Result<(), Error> {
-    held_to(tx, author, thread, true).map(drop)
-}
-
-/// Lets a held queue go on: its waiting turns start in the order they were
-/// sent, after any turn that was queued before.
-pub fn resume(tx: &mut Tx<'_>, author: Participant, thread: ThreadId) -> Result<(), Error> {
-    if !held_to(tx, author, thread, false)? {
-        return Ok(());
-    }
-    for waiting in store::turns_in(tx.sql(), thread, TurnState::Queued)? {
-        let start = TurnEffect { turn: waiting.id };
-        tx.enqueue(START, &thread.to_string(), &start)?;
-    }
-    Ok(())
-}
-
-/// Whether the Thread's queue was not `held` before.
-fn held_to(
-    tx: &mut Tx<'_>,
-    author: Participant,
-    thread: ThreadId,
-    held: bool,
-) -> Result<bool, Error> {
-    if store::held(tx.sql(), thread)? == held {
-        return Ok(false);
-    }
-    store::set_held(tx.sql(), thread, held)?;
-    emit(tx, author, thread, &Fact::ThreadHeld { thread, held })?;
-    Ok(true)
-}
-
-/// A new turn for `message`, opened by `opener` (from `from_thread`, for
-/// another Thread's Agent), which waits behind the Thread's earlier turns
-/// and runs with the Thread's settings now.
-pub fn queue(
-    tx: &mut Tx<'_>,
-    author: Participant,
-    thread: ThreadId,
-    agent: AgentId,
-    message: ItemId,
-    opener: Opener,
-    from_thread: Option<ThreadId>,
-) -> Result<TurnId, Error> {
-    let turn = store::Turn {
-        id: TurnId::new(),
-        thread,
-        agent,
-        message,
-        state: TurnState::Queued,
-        opener,
-        from_thread,
-    };
-    add(tx, author, &turn)?;
-    tx.enqueue(START, &thread.to_string(), &TurnEffect { turn: turn.id })?;
-    Ok(turn.id)
-}
-
-/// Writes `turn` with the settings its Thread has now, which it answers,
-/// and says it is queued.
-pub fn add(tx: &mut Tx<'_>, author: Participant, turn: &store::Turn) -> Result<Settings, Error> {
-    let now = tx.now();
-    let settings = store::settings(tx.sql(), turn.thread)?;
-    store::insert_turn(tx.sql(), turn, author, now, &settings)?;
-    store::touch_thread(tx.sql(), turn.thread, now)?;
-    let queued = Fact::TurnQueued {
-        turn: turn.id,
-        message: turn.message,
-    };
-    emit(tx, author, turn.thread, &queued)?;
-    Ok(settings)
 }
 
 /// Sends a message into the turn that runs: the Thread shows it there, and
@@ -281,7 +150,7 @@ pub fn requeue(tx: &mut Tx<'_>, item: ItemId) -> Result<(), Error> {
     };
     store::set_item_turn(tx.sql(), item, None)?;
     // A message another Thread's Agent wrote never joins a turn.
-    queue(tx, found.author, thread, agent, item, Opener::Requeue, None)?;
+    writer::queue(tx, found.author, thread, agent, item, Opener::Requeue, None)?;
     Ok(())
 }
 
@@ -310,22 +179,11 @@ pub fn settle(tx: &mut Tx<'_>, effect: &Effect, settled: &Settled) -> Result<(),
             let Some(turn) = store::turn(tx.sql(), start.turn)? else {
                 return Ok(());
             };
-            if !rules::ongoing(turn.state) {
-                return Ok(());
-            }
-            let ending = match settled {
-                Settled::Abandoned => {
-                    // After a restart the queue waits for a Person, and a
-                    // turn that never began waits in it.
-                    hold(tx, Participant::Agent(turn.agent), turn.thread)?;
-                    if turn.state == TurnState::Queued {
-                        return Ok(());
-                    }
-                    Ending::cut_short()
-                }
-                Settled::Failed(reason) => Ending::failed(reason.clone(), None),
+            let event = match settled {
+                Settled::Abandoned => Event::CutShort,
+                Settled::Failed(reason) => Event::End(Ending::failed(reason.clone(), None)),
             };
-            end(tx, Participant::Agent(turn.agent), &turn, ending)
+            writer::tell(tx, Participant::Agent(turn.agent), &turn, event)
         }
         // A message that never reached its turn is not lost.
         STEER => {
@@ -401,18 +259,33 @@ pub async fn start(
     if let Err(error) = after_questions(live, &space, start.turn).await {
         return Outcome::Retry(error.to_string());
     }
+    let stopping = live.clone();
     let begun = space
         .write(move |tx| {
             let Some(turn) = store::turn(tx.sql(), start.turn)? else {
                 return Ok(None);
             };
+            let agent = Participant::Agent(turn.agent);
+            // The Agent's own turn a Person stopped ends stopped, rather
+            // than taken over. Step 4 of ADR 0018 keeps a stop asked in the
+            // turn's state, not in memory.
+            if let Some(own) = store::running(tx.sql(), turn.thread)?
+                && own.opener.by_itself()
+                && stopping.stopping(own.id)
+            {
+                let stopped = Event::End(Ending::new(TurnState::Stopped, None));
+                writer::tell(tx, Participant::Agent(own.agent), &own, stopped)?;
+            }
             // A turn stopped while it waited never runs; one in a held
-            // queue waits until a Person lets the queue go.
-            let held = store::held(tx.sql(), turn.thread)?;
-            if !rules::may_start(turn.state, held) {
+            // queue waits until a Person lets the queue go. The outbox
+            // starts a Thread's turns one at a time, so no turn but the
+            // Agent's own runs beside it.
+            if let Err(refused) = writer::apply(tx, agent, &turn, Event::Start)? {
+                if store::running(tx.sql(), turn.thread)?.is_some() {
+                    tracing::warn!(%refused, "a turn did not start beside another");
+                }
                 return Ok(None);
             }
-            store::set_turn(tx.sql(), turn.id, TurnState::Running, None, None, tx.now())?;
             // A message reads where its turn starts, after what came while
             // it waited; a message tried again stays where it was.
             let first = store::turns_of(tx.sql(), turn.message)?
@@ -433,8 +306,6 @@ pub async fn start(
                 message.text = rules::from_agent(answers, from, &title, &message.text);
             }
             let settings = store::turn_settings(tx.sql(), &turn)?;
-            let started = Fact::TurnStarted { turn: turn.id };
-            emit(tx, Participant::Agent(turn.agent), turn.thread, &started)?;
             Ok(Some((turn, message, settings)))
         })
         .await;
@@ -445,15 +316,11 @@ pub async fn start(
     };
     let ending = work(live, harnesses, &space, &turn, message, settings).await;
     let ending = ending.stop_asked(live.end(turn.id));
-    // Written as the outbox records the turn's end, and tried again with it.
+    // Written as the outbox records the turn's end, and tried again with
+    // it. An ending that comes after the turn ended changes nothing.
     Outcome::done_writing(move |tx| {
         let agent = Participant::Agent(turn.agent);
-        // A Harness that stopped holds the queue, as a restart does: the
-        // turn can be tried again before the next one runs.
-        if rules::holds_queue(&ending) {
-            hold(tx, agent, turn.thread)?;
-        }
-        end(tx, agent, &turn, ending.clone())
+        writer::tell(tx, agent, &turn, Event::End(ending.clone()))
     })
 }
 

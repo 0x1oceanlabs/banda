@@ -35,7 +35,8 @@
 //! - `background`: starts a task, ends the turn, and goes on by itself when
 //!   the task ends, as Claude Code does; `long`, until it is stopped or a
 //!   prompt takes it in; `asks`, asking to run a check; `quiet`, never
-//!   saying what that cost; `dies`, ending its process. `background
+//!   saying what that cost; `dies`, ending its process; `soon`, going on
+//!   at once, before Banda wrote how the turn ended. `background
 //!   detached` runs a command that ends after the turn, and nothing more.
 //! - `later`: says what it used after the turn has ended.
 //! - `edit`: edits a file, and shows the change as a diff.
@@ -543,6 +544,7 @@ async fn turn(
         // background, which ends after the turn, and nothing more.
         let (after, its, fake) = (cx.clone(), session.clone(), fake.clone());
         let long = words.contains("long");
+        let after_ms = if words.contains("soon") { 2 } else { 100 };
         let (asks, quiet, dies) = (
             words.contains("asks"),
             words.contains("quiet"),
@@ -574,7 +576,7 @@ async fn turn(
             return Ok(StopReason::EndTurn);
         }
         tokio::spawn(async move {
-            tokio::time::sleep(Duration::from_millis(100)).await;
+            tokio::time::sleep(Duration::from_millis(after_ms)).await;
             let found = SessionUpdate::AgentMessageChunk(text("The task finished."));
             let _ = say(&after, &its, found);
             if dies {

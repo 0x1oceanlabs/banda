@@ -8,6 +8,11 @@
 //! into what it does; when a Person stops it; or after a minute in which it
 //! says nothing and asks nothing.
 //!
+//! A Thread runs one turn at a time: what the Agent does by itself opens
+//! its turn once the turn that ran has ended ([`Event::Open`]), and a turn
+//! the outbox starts takes the Agent's own over. The writer (`writer.rs`)
+//! makes and ends it.
+//!
 //! What the Harness used, and what it offers, are written at once between
 //! turns too.
 
@@ -16,18 +21,22 @@ use crate::live::Live;
 use crate::model::{
     Body, Fact, Failure, Item, ItemId, Opener, Settings, ThreadId, ToolStatus, TurnId, TurnState,
 };
-use crate::rules::{self, Ending};
-use crate::turn::{self, Writer, plain};
-use crate::{emit, store};
+use crate::rules::{Ending, Event};
+use crate::turn::{self, LOOK_AGAIN, Writer, plain};
+use crate::{emit, store, writer};
 use banda_kernel::{AgentId, Error, ModuleSpace, Participant, Tx};
 use std::collections::HashSet;
 use std::sync::{Arc, Weak};
 use std::time::Duration;
 use tokio::sync::mpsc;
+use tokio::time::Instant;
 
 /// How long a turn the Agent went on with by itself waits for more before
 /// it ends, unless a tool call of it still runs or it asks a Person.
 pub const QUIET: Duration = Duration::from_secs(60);
+/// How long what the Agent does by itself waits for the turn that ran to
+/// be written as ended.
+const ENDING: Duration = Duration::from_secs(10);
 
 /// Who hears a Thread's session between its turns.
 pub struct Listener {
@@ -99,14 +108,7 @@ impl Listener {
         first: Said,
         hear: &mut mpsc::UnboundedReceiver<Between>,
     ) -> Result<(), String> {
-        let (thread, agent) = (self.thread, self.agent);
-        let text = format!("{} went on by itself.", self.name);
-        let opened = self
-            .space
-            .write(move |tx| open(tx, thread, agent, text))
-            .await
-            .map_err(plain)?;
-        let Some(Opened { turn, settings }) = opened else {
+        let Some(Opened { turn, settings }) = self.open(&connection, session).await? else {
             return Ok(());
         };
         let id = turn.id;
@@ -170,9 +172,46 @@ impl Listener {
         };
         let ending = ending.stopped_if_asked(self.live.end(id));
         self.space
-            .write(move |tx| close(tx, agent, &turn, ending))
+            .write(move |tx| {
+                // Unless it ended already, as one a turn the outbox
+                // started took over.
+                let agent = Participant::Agent(turn.agent);
+                writer::tell(tx, agent, &turn, Event::End(ending))
+            })
             .await
             .map_err(plain)
+    }
+}
+
+impl Listener {
+    /// Opens a turn of the Agent's own, once the turn that ran is written
+    /// as ended: the Harness may go on before Banda wrote how that turn
+    /// ended. `None` when the Thread is gone, or a turn's prompt took the
+    /// session over meanwhile, whose turn what it says now is.
+    async fn open(
+        &self,
+        connection: &Connection,
+        session: &Session,
+    ) -> Result<Option<Opened>, String> {
+        let (thread, agent) = (self.thread, self.agent);
+        let given_up = Instant::now() + ENDING;
+        loop {
+            let text = format!("{} went on by itself.", self.name);
+            let opening = self
+                .space
+                .write(move |tx| open(tx, thread, agent, text))
+                .await;
+            // Refused: another turn runs in the Thread, and nothing was
+            // written.
+            match opening {
+                Err(Error::Refused(_)) if connection.prompting(session) => return Ok(None),
+                Err(Error::Refused(refused)) if Instant::now() >= given_up => {
+                    return Err(refused.message);
+                }
+                Err(Error::Refused(_)) => tokio::time::sleep(LOOK_AGAIN).await,
+                opened => return opened.map_err(plain),
+            }
+        }
     }
 }
 
@@ -244,7 +283,7 @@ fn open(
         thread,
         agent,
         message: ItemId::new(),
-        state: TurnState::Running,
+        state: TurnState::Queued,
         opener: Opener::ByItself,
         from_thread: None,
     };
@@ -262,8 +301,11 @@ fn open(
         text,
     };
     emit(tx, by, thread, &posted)?;
-    let settings = turn::add(tx, by, &turn)?;
-    emit(tx, by, thread, &Fact::TurnStarted { turn: turn.id })?;
+    let (settings, step) = writer::make(tx, by, &turn, Event::Open, None)?;
+    let turn = store::Turn {
+        state: step.state,
+        ..turn
+    };
     Ok(Some(Opened { turn, settings }))
 }
 
@@ -273,17 +315,8 @@ pub fn cut_short(tx: &mut Tx<'_>) -> Result<(), Error> {
     for running in store::every_running(tx.sql())? {
         if running.opener.by_itself() {
             let agent = Participant::Agent(running.agent);
-            turn::end(tx, agent, &running, Ending::cut_short())?;
+            writer::tell(tx, agent, &running, Event::CutShort)?;
         }
     }
     Ok(())
-}
-
-/// Ends the Agent's own turn, unless it ended already.
-fn close(tx: &mut Tx<'_>, agent: AgentId, turn: &store::Turn, ending: Ending) -> Result<(), Error> {
-    let now = store::turn(tx.sql(), turn.id)?;
-    if !now.is_some_and(|now| rules::ongoing(now.state)) {
-        return Ok(());
-    }
-    turn::end(tx, Participant::Agent(agent), turn, ending)
 }

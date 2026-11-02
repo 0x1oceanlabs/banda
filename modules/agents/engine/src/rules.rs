@@ -9,7 +9,7 @@ use banda_kernel::{Participant, Refusal};
 use std::collections::{HashMap, HashSet};
 
 mod moves;
-use moves::{Event, Step, TurnFacts, next};
+pub use moves::{Event, Step, Then, TurnFacts, next};
 
 /// How freely an Agent acts is a Person's choice: an Agent sends a message
 /// with the settings its Thread has, and changes none.
@@ -22,46 +22,9 @@ pub fn may_choose(author: Participant) -> Result<(), Refusal> {
     }
 }
 
-/// Whether a turn may start now: it waits, nobody stopped it, and its
-/// Thread's queue is not held.
-pub fn may_start(state: TurnState, held: bool) -> bool {
-    let turn = TurnFacts {
-        held,
-        ..TurnFacts::of(state)
-    };
-    next(&turn, Event::Start).is_ok()
-}
-
-/// Whether a turn that ended so holds the Thread's queue: one whose
-/// Harness stopped, as after a restart. Step 4 (ADR 0018, decision 4)
-/// holds it behind the Agent's own turn too, which `between.rs` ends
-/// without asking this.
-pub fn holds_queue(ending: &Ending) -> bool {
-    ending.failure == Some(Failure::HarnessStopped)
-}
-
 /// Whether a turn has yet to end.
 pub fn ongoing(state: TurnState) -> bool {
     matches!(state, TurnState::Queued | TurnState::Running)
-}
-
-/// What stopping a turn does.
-#[derive(Debug, PartialEq, Eq)]
-pub enum Stop {
-    /// It has not started: it ends now and never runs.
-    Now,
-    /// It runs: the Harness is asked to stop, and the turn ends when it does.
-    AskHarness,
-    /// It has ended already.
-    Nothing,
-}
-
-pub fn stop(state: TurnState) -> Stop {
-    match next(&TurnFacts::of(state), Event::Stop) {
-        Ok(Step { held: true, .. }) => Stop::AskHarness,
-        Ok(_) => Stop::Now,
-        Err(_) => Stop::Nothing,
-    }
 }
 
 /// Whether a Person may still change a message, take it back or send it
@@ -230,23 +193,72 @@ fn facts<'a>(
     openers: &'a HashMap<TurnId, Opener>,
     held: bool,
 ) -> impl Iterator<Item = (&'a TurnView, TurnFacts)> {
-    let any = |state| turns.iter().any(|turn| turn.state == state);
-    let (works, waits) = (any(TurnState::Running), any(TurnState::Queued));
+    let works = Works::of(turns, openers, held);
     turns.iter().map(move |turn| {
-        let Position { first, latest } = position(turns, turn.id);
-        let opener = openers.get(&turn.id).copied().unwrap_or(Opener::Person);
-        let facts = TurnFacts {
+        let opener = opener_of(openers, turn.id);
+        (
+            turn,
+            works.facts(turn.state, opener, position(turns, turn.id)),
+        )
+    })
+}
+
+/// What the rules know of `turn`, opened by `opener`, among its Thread's
+/// `turns`, who opened each in `openers`. A turn not among them yet is
+/// new: it waits.
+pub fn known(
+    turns: &[TurnView],
+    openers: &HashMap<TurnId, Opener>,
+    held: bool,
+    turn: TurnId,
+    opener: Opener,
+) -> TurnFacts {
+    let found = turns.iter().find(|one| one.id == turn);
+    let state = found.map_or(TurnState::Queued, |one| one.state);
+    Works::of(turns, openers, held).facts(state, opener, position(turns, turn))
+}
+
+fn opener_of(openers: &HashMap<TurnId, Opener>, turn: TurnId) -> Opener {
+    openers.get(&turn).copied().unwrap_or(Opener::Person)
+}
+
+/// What the rules know of a Thread, whichever of its turns they look at:
+/// whether its queue is held, whether a turn runs, whose, and whether one
+/// waits.
+#[derive(Clone, Copy)]
+struct Works {
+    held: bool,
+    works: bool,
+    own_works: bool,
+    waits: bool,
+}
+
+impl Works {
+    fn of(turns: &[TurnView], openers: &HashMap<TurnId, Opener>, held: bool) -> Works {
+        let running = turns.iter().find(|turn| turn.state == TurnState::Running);
+        Works {
+            held,
+            works: running.is_some(),
+            own_works: running.is_some_and(|turn| opener_of(openers, turn.id).by_itself()),
+            waits: turns.iter().any(|turn| turn.state == TurnState::Queued),
+        }
+    }
+
+    /// What the rules know of one of its turns, in `state`, opened by
+    /// `opener`, standing at `position`.
+    fn facts(self, state: TurnState, opener: Opener, position: Position) -> TurnFacts {
+        TurnFacts {
             by_itself: opener.by_itself(),
             by_person: opener.by_person(),
-            first,
-            latest,
-            held,
-            works,
-            waits,
-            ..TurnFacts::of(turn.state)
-        };
-        (turn, facts)
-    })
+            first: position.first,
+            latest: position.latest,
+            held: self.held,
+            works: self.works,
+            own_works: self.own_works,
+            waits: self.waits,
+            ..TurnFacts::of(state)
+        }
+    }
 }
 
 /// What a Person may do with each of a Thread's turns now (ADR 0014,
@@ -940,7 +952,7 @@ mod tests {
     }
 
     #[test]
-    fn a_turn_stops_when_a_person_asked_and_a_stopped_harness_holds_the_queue() {
+    fn a_turn_stops_when_a_person_asked() {
         use TurnState::{Done, Failed, Stopped};
         let cancelled = || Ending::new(Stopped, None);
         assert_eq!(cancelled().stop_asked(true).state, Stopped);
@@ -948,14 +960,6 @@ mod tests {
         let done = || Ending::new(Done, None);
         assert_eq!(done().stopped_if_asked(true).state, Stopped);
         assert_eq!(done().stopped_if_asked(false).state, Done);
-        assert!(holds_queue(&Ending::failed(
-            "Gone.",
-            Some(Failure::HarnessStopped)
-        )));
-        assert!(!holds_queue(&Ending::failed(
-            "Down.",
-            Some(Failure::Provider)
-        )));
     }
 
     #[test]

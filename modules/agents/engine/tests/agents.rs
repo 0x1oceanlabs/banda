@@ -2335,6 +2335,24 @@ async fn what_a_harness_does_by_itself_shows_in_a_turn_of_the_agents_own() {
 }
 
 #[tokio::test]
+async fn what_the_agent_does_at_once_after_a_turn_waits_for_that_turn_to_end() {
+    for _ in 0..5 {
+        let root = tempfile::tempdir().unwrap();
+        let world = World::new(root.path()).await;
+        let sent = world.send(None, "background soon").await;
+        let view = world
+            .until(&sent["thread"], |v| {
+                texts(v).contains(&"message: The task finished.".to_owned())
+                    && v.turns.iter().all(|t| t.state == TurnState::Done)
+            })
+            .await;
+        // The Harness's words reach the Thread, in whichever turn they
+        // came, and never with two turns running.
+        assert!(view.turns.len() <= 2, "{:?}", view.turns);
+    }
+}
+
+#[tokio::test]
 async fn a_message_sent_while_the_agent_goes_on_by_itself_goes_at_once() {
     let root = tempfile::tempdir().unwrap();
     let world = World::new(root.path()).await;
@@ -2362,6 +2380,20 @@ async fn a_person_stops_what_the_agent_does_by_itself() {
             state(v, &own) == Some(TurnState::Stopped)
         })
         .await;
+}
+
+#[tokio::test]
+async fn what_the_agent_does_by_itself_stays_stopped_when_a_message_follows_the_stop() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let sent = world.send(None, "background long").await;
+    let view = went_on(&world, &sent, "The task finished.").await;
+    let own = json!(view.turns[1].id);
+    world.on_turn("agents.stop", &own).await.unwrap();
+    let next = world.send(Some(&sent["thread"]), "and this").await;
+    let view = world.ended(&next).await;
+    assert_eq!(state(&view, &own), Some(TurnState::Stopped));
+    assert_eq!(last_reply(&view), "message: You said: and this");
 }
 
 #[test]
