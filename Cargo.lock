@@ -319,6 +319,7 @@ dependencies = [
  "banda-kernel",
  "banda-look",
  "base64 0.22.1",
+ "dirs",
  "rusqlite",
  "schemars 1.2.3",
  "serde",

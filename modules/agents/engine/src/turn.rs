@@ -513,11 +513,12 @@ async fn prompt_of(
     let mut refused = Vec::new();
     let mut prompt = Prompt {
         text,
+        command: None,
         images: Vec::new(),
     };
     if running.offer.no_images && !images.is_empty() {
         refused.push(rules::without_images(harness, &prompt.text)?);
-        return Ok((prompt, refused));
+        return Ok((as_skill(prompt, running), refused));
     }
     let files = Images::of(space.data());
     for image in images {
@@ -532,7 +533,23 @@ async fn prompt_of(
             )),
         }
     }
-    Ok((prompt, refused))
+    Ok((as_skill(prompt, running), refused))
+}
+
+/// The prompt with the skills it names that are slash commands run as
+/// one, as Claude Code runs its skills (issue #149).
+fn as_skill(prompt: Prompt, running: &Running) -> Prompt {
+    let Some(said) = &running.commands else {
+        return prompt;
+    };
+    match crate::skills::dispatch(&prompt.text, &said.slashed) {
+        Some((lead, command)) => Prompt {
+            text: lead,
+            command: Some(command),
+            ..prompt
+        },
+        None => prompt,
+    }
 }
 
 /// Sends a message into the turn it was sent to. A turn that cannot take
