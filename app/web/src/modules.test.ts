@@ -1,4 +1,8 @@
+import { existsSync, readFileSync, writeFileSync } from "node:fs"
+import { join } from "node:path"
+import type { Module } from "@banda/ui/module"
 import { expect, test } from "vitest"
+import { keyName } from "./actions/actions"
 import { modules } from "./modules"
 import { kindRuns, kinds, watches } from "./registry"
 
@@ -34,4 +38,37 @@ test("a module's new action's id starts with its module's id", () => {
   expect(modules.flatMap((m) => m.actions.map((a) => a.id))).toEqual(
     expect.arrayContaining(KEPT)
   )
+})
+
+/** What a module's window part offers, as `banda modules` prints it: its
+ * code says it; this is a copy for the engine, which has no window. */
+function windowOf(module: Module) {
+  return {
+    panes: module.panes.map((pane) => pane.kind),
+    actions: module.actions.map((action) => ({
+      id: action.id,
+      title: action.title,
+      section: action.section,
+      keys: (action.keys ?? []).map(keyName),
+      ...(action.family && { family: action.family }),
+      ...(action.unlisted && { unlisted: true }),
+    })),
+    sources: module.sources.map(({ id, label }) => ({ id, label })),
+    watches: module.watches.length,
+  }
+}
+
+test("each module's window part is written beside its module.toml, for banda modules (ADR 0022, decision 1)", () => {
+  const stale: string[] = []
+  for (const module of modules) {
+    const folder = join(import.meta.dirname, "../../../modules", module.id)
+    expect(existsSync(join(folder, "module.toml")), module.id).toBe(true)
+    const file = join(folder, "window.json")
+    const text = `${JSON.stringify(windowOf(module), null, 2)}\n`
+    if (existsSync(file) && readFileSync(file, "utf8") === text) continue
+    writeFileSync(file, text)
+    stale.push(module.id)
+  }
+  // Written now: review it and run again, as cargo test does the types.
+  expect(stale).toEqual([])
 })

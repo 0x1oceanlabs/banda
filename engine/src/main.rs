@@ -13,6 +13,8 @@
 //!   work in Banda and change it; `banda skill <topic>` prints a topic.
 //! - `banda menu [route]` opens the Banda menu in the window, at a route
 //!   such as `actions` or `space.<name>` (ADR 0017).
+//! - `banda modules` prints what each module offers, one JSON object per
+//!   line; `--unstable` lists the paths not in the contract yet (ADR 0022).
 //! - `banda mcp` speaks MCP on stdio for an Agent in a Thread: the agents
 //!   module hands it to each session, with the Agent's pass (ADR 0019).
 //!
@@ -23,6 +25,7 @@
 
 mod client;
 mod mcp;
+mod modules;
 mod places;
 mod serve;
 
@@ -121,6 +124,15 @@ enum Command {
         /// SKILL.md and references/, for a Harness to load.
         #[arg(long, conflicts_with = "topic")]
         export: Option<PathBuf>,
+    },
+    /// Prints what each module offers, one JSON object per line: its
+    /// module.toml, its engine part's methods and its window part's
+    /// Panes, actions and sources.
+    Modules {
+        /// Prints its unstable marks instead, the paths a module takes that
+        /// are not in the contract yet, and how many against the ceiling.
+        #[arg(long)]
+        unstable: bool,
     },
     /// Speaks MCP on stdio for an Agent in a Thread: the tools of Banda's
     /// methods, and the Banda skill. The agents module starts it for each
@@ -241,6 +253,7 @@ fn main() -> ExitCode {
         Command::Skill { topic, export } => return skill(topic, export),
         Command::Settings { what } => return settings(what),
         Command::Menu { route } => return menu(route.unwrap_or_default()),
+        Command::Modules { unstable } => return print_modules(unstable),
         _ => {}
     }
     tracing_subscriber::fmt()
@@ -285,6 +298,9 @@ async fn run(command: Command, places: Places) -> Result<(), Failure> {
         Command::Skill { .. } => unreachable!("the skill runs without the engine"),
         Command::Settings { .. } => unreachable!("the settings run without the engine"),
         Command::Menu { .. } => unreachable!("the menu is the window's, not the engine's"),
+        Command::Modules { .. } => {
+            unreachable!("the modules say what they offer without the engine")
+        }
         Command::Mcp => unreachable!("banda mcp finds the engine by its variables"),
         Command::Follow {
             space,
@@ -305,6 +321,33 @@ async fn run(command: Command, places: Places) -> Result<(), Failure> {
                 .await
         }
     }
+}
+
+/// `banda modules`: what each module offers, no engine.
+fn print_modules(unstable: bool) -> ExitCode {
+    let offers = modules::offers();
+    let mut out = std::io::stdout().lock();
+    let lines: Vec<String> = if unstable {
+        let marks = modules::marks(&offers);
+        let mut lines: Vec<String> = marks
+            .iter()
+            .map(|(mark, why)| format!("{mark}: {why}"))
+            .collect();
+        lines.push(format!(
+            "{} unstable marks, ceiling {}",
+            marks.len(),
+            modules::CEILING
+        ));
+        lines
+    } else {
+        offers
+            .iter()
+            .map(|offer| serde_json::to_string(offer).expect("an offer encodes"))
+            .collect()
+    };
+    // A reader that went away is not an error.
+    let _ = lines.iter().try_for_each(|line| writeln!(out, "{line}"));
+    ExitCode::SUCCESS
 }
 
 /// `banda skill`: text built into the program, no engine.

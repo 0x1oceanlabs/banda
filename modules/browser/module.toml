@@ -1,0 +1,14 @@
+# The browser module, as it declares itself (ADR 0022). It has no engine
+# part; its Pane, actions and sources its code declares.
+id = "browser"
+name = "Browser"
+about = "Chromium pages in the window, for the Person and every Agent: tabs, extensions, and a blocker of ads and trackers."
+version = "0.1.0"
+from-banda = true
+# The settings files it owns, in ~/.config/banda.
+settings = ["browser.toml"]
+
+# Paths it takes that a module from elsewhere would lack (ADR 0022,
+# decision 6), each with why. One that gets its place in the contract goes.
+[unstable]
+desktop-main = "pages live in the window's main process (app/desktop/src, app/web/src/host.ts; ADR 0013): no contract for it yet"

@@ -188,15 +188,21 @@ modules/<name>/
   engine/      Rust crate: rules · store · operation · adapters
   pane/        React package: its window part, one defineModule
   module.toml  id, name, version, from Banda, settings files, unstable marks
+  window.json  its window part as the engine reads it, written by the window's tests
 ```
 
 A module declares itself in its code and a short `module.toml` (ADR 0022).
 Its engine part is the `Module` it gives the kernel, with its `methods!`
 table. Its window part is one
-`defineModule({ id, engine, panes, watches, actions })` exported from its
-Pane package; the window lists these in
+`defineModule({ id, engine, panes, watches, actions, sources })` exported
+from its Pane package; the window lists these in
 `app/web/src/modules.ts`, the one place that names a module, and builds its
-registries from them. `module.toml` comes in ADR 0022's step 5.
+registries from them. `module.toml` holds only what no code says.
+`banda modules` prints the three as one JSON per module
+(`engine/src/modules.rs`), and the skill's `modules` topic is written
+from it. A path a module takes that the contract lacks is an unstable mark
+in its `module.toml`, with why; the tests hold the count at a ceiling that
+only falls, and `scripts/check.sh` prints them.
 
 **Its contract** is everything it shows outward:
 

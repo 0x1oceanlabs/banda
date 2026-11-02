@@ -1,0 +1,8 @@
+# The terminal module, as it declares itself (ADR 0022). What its code
+# says, its methods and its Pane, its code declares; this holds the rest.
+id = "terminal"
+name = "Terminal"
+about = "Programs the Person runs in a terminal: a shell, or a Harness's sign-in."
+version = "0.1.0"
+from-banda = true
+settings = []

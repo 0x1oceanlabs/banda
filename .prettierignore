@@ -6,6 +6,8 @@ coverage/
 pnpm-lock.yaml
 .pnpm-store/
 contract/src/generated/
+# Written by app/web's modules test, for banda modules (ADR 0022).
+modules/*/window.json
 app/desktop/test-results/
 *.md
 *.rs
