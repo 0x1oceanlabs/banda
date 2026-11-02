@@ -134,6 +134,10 @@ function host(
     prefs.contextIsolation = true
     prefs.sandbox = true
     prefs.webSecurity = true
+    // A page paints its own canvas, as in a browser: white unless it asks
+    // for dark (#194). Transparent, it showed Banda's background under
+    // black text.
+    prefs.transparent = false
   })
   contents.on("did-attach-webview", (_event, page) => {
     const tell = (news: BrowserNews) =>
