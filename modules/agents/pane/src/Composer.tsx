@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useEffectEvent, useRef, useState } from "react"
 import type { TurnView, Usage } from "@banda/contract/agents"
 import type { Enter } from "@banda/contract/look"
 import {
@@ -28,6 +28,7 @@ import { imagesAmong, KINDS } from "./images"
 import { ownCommand, type Suggested } from "./slash"
 import { type FindFiles, useFileMenu } from "./FileMenu"
 import { useSlashMenu } from "./SlashMenu"
+import { stray, typed } from "./stray"
 
 /**
  * Where a Person writes to the Agent: the text, with the slash commands
@@ -111,6 +112,41 @@ export function Composer({
   useEffect(() => {
     if (focused) field.current?.focus()
   }, [focused])
+  // Images pasted, here or anywhere in the Pane, join the message.
+  const pasteImages = (event: ClipboardEvent) => {
+    const pasted = imagesAmong(event.clipboardData?.files ?? [])
+    if (pasted.length === 0) return false
+    event.preventDefault()
+    images.add(pasted)
+    return true
+  }
+  const pasteImagesLater = useEffectEvent(pasteImages)
+  // While its Pane is the one in use, what is typed or pasted in it
+  // outside a field comes here.
+  const form = useRef<HTMLFormElement>(null)
+  useEffect(() => {
+    const box = form.current
+    if (!focused || !box) return
+    const onKey = (event: KeyboardEvent) => {
+      const text = typed(event, box)
+      if (text === undefined) return
+      event.preventDefault()
+      field.current?.add(text)
+    }
+    const onPaste = (event: ClipboardEvent) => {
+      if (!stray(event, box) || pasteImagesLater(event)) return
+      const text = event.clipboardData?.getData("text/plain")
+      if (!text) return
+      event.preventDefault()
+      field.current?.add(text)
+    }
+    window.addEventListener("keydown", onKey)
+    window.addEventListener("paste", onPaste)
+    return () => {
+      window.removeEventListener("keydown", onKey)
+      window.removeEventListener("paste", onPaste)
+    }
+  }, [focused])
 
   // The word being typed that asks for suggestions: `/` or `@`.
   const [typing, setTyping] = useState<Typing>()
@@ -136,8 +172,11 @@ export function Composer({
     onPick: (path) => field.current?.complete({ chip: "file", value: path }),
   })
 
-  const written = text.trim() !== "" || images.adding.length > 0
-  const ready = written && !busy && !images.busy
+  const trimmed = text.trim().length
+  const written = trimmed > 0 || images.adding.length > 0
+  // How far past the longest message a Harness takes it is, if it is.
+  const over = trimmed - LONGEST
+  const ready = written && over <= 0 && !busy && !images.busy
   const send = async (steer: boolean) => {
     if (!ready) return
     // A message that is only `/plan` or `/default` switches plan mode.
@@ -161,6 +200,7 @@ export function Composer({
     PRIMARY[!steering ? "send" : steers(enter, false) ? "steer" : "queue"]
   return (
     <form
+      ref={form}
       className="relative flex flex-col gap-1.5"
       onSubmit={(event) => {
         event.preventDefault()
@@ -198,7 +238,7 @@ export function Composer({
         <PromptEditor
           ref={field}
           value={text}
-          placeholder={placeholder ?? `Write to ${name}`}
+          placeholder={placeholder ?? `Write to ${name}. @ files, / commands`}
           attributes={{
             "aria-label": `Message to ${name}`,
             "data-slot": "input-group-control",
@@ -211,12 +251,7 @@ export function Composer({
             setText(value)
             setBack(0)
           }}
-          onPaste={(event) => {
-            const pasted = imagesAmong(event.clipboardData?.files ?? [])
-            if (pasted.length === 0) return
-            event.preventDefault()
-            images.add(pasted)
-          }}
+          onPaste={pasteImages}
           onKeyDown={(event) => {
             if (slash.onKeyDown(event) || fileMenu.onKeyDown(event)) return
             if (event.key === "Tab" && event.shiftKey && plan !== undefined) {
@@ -296,9 +331,20 @@ export function Composer({
           )}
         </InputGroupAddon>
       </InputGroup>
+      {over > 0 && (
+        <p role="alert" className="px-1 text-xs text-destructive">
+          The message is {over.toLocaleString("en-US")}{" "}
+          {over === 1 ? "character" : "characters"} over the{" "}
+          {LONGEST.toLocaleString("en-US")}-character limit. Shorten or split it
+          before sending.
+        </p>
+      )}
     </form>
   )
 }
+
+/** The longest message a Harness takes, as in T3 Code. */
+const LONGEST = 120_000
 
 /** What the primary button does with a message, and says so. */
 const PRIMARY: Record<

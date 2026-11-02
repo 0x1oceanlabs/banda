@@ -1259,6 +1259,63 @@ test("typed over chosen text, * styles it and ( goes round it; Shift+Tab takes a
   )
 })
 
+test("the box behaves: words typed or pasted in the Thread reach it, a long message waits, an IME's Enter is its own", async () => {
+  window = await startWindow()
+  const { page } = window
+  const { thread, composer } = await firstThread(page)
+  await expect(composer).toHaveAttribute(
+    "aria-placeholder",
+    /^Write to Fake AI\. @ files, \/ commands$/
+  )
+  await composer.fill("hello")
+  await composer.press("Enter")
+  const said = thread.getByText("You said: hello")
+  await expect(said).toBeVisible()
+
+  // A key typed after a click in the Thread goes into the box, and so
+  // does text pasted there.
+  await said.click()
+  await expect(composer).not.toBeFocused()
+  await page.keyboard.type("more")
+  await expect(composer).toBeFocused()
+  await expect(composer).toHaveText("more")
+  await said.click()
+  await page.evaluate(() => {
+    const data = new DataTransfer()
+    data.setData("text/plain", " words")
+    const paste = { clipboardData: data, bubbles: true, cancelable: true }
+    document.activeElement?.dispatchEvent(new ClipboardEvent("paste", paste))
+  })
+  await expect(composer).toHaveText("more words")
+
+  // Enter while an IME composes is the IME's.
+  await composer.evaluate((field) =>
+    field.dispatchEvent(
+      new KeyboardEvent("keydown", {
+        key: "Enter",
+        isComposing: true,
+        bubbles: true,
+        cancelable: true,
+      })
+    )
+  )
+  await expect(composer).toHaveText("more words")
+
+  // A message longer than a Harness takes says so, and is not sent.
+  await composer.fill("x".repeat(120_001))
+  const long = page.getByRole("alert").filter({ hasText: "limit" })
+  await expect(long).toHaveText(
+    "The message is 1 character over the 120,000-character limit. Shorten or split it before sending."
+  )
+  await expect(thread.getByRole("button", { name: "Send" })).toBeDisabled()
+  await composer.press("End")
+  await composer.press("Backspace")
+  await expect(long).toBeHidden()
+  await composer.fill("more words")
+  await composer.press("Enter")
+  await expect(thread.getByText("You said: more words")).toBeVisible()
+})
+
 test("what the Agent does by itself shows in a turn of its own", async () => {
   window = await startWindow()
   const { page } = window
