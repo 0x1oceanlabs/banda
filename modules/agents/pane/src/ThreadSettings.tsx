@@ -14,6 +14,10 @@ import {
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
   DropdownMenuSeparator,
+  DropdownMenuSub,
+  DropdownMenuSubContent,
+  DropdownMenuSubTrigger,
+  DropdownMenuCheckboxItem,
   DropdownMenuTrigger,
 } from "@banda/ui/components/dropdown-menu"
 import {
@@ -28,32 +32,193 @@ import {
 import { choose, chosen } from "./thread"
 
 /** The modes in the order of how freely the Agent acts (ADR 0003, decision 9). */
-const MODES: { mode: Mode; name: string; about: string; icon: LucideIcon }[] = [
+const MODES: (Choice & { id: Mode; icon: LucideIcon })[] = [
   {
-    mode: "supervised",
+    id: "supervised",
     name: "Supervised",
     about: "Asks before it changes anything.",
     icon: ShieldIcon,
   },
   {
-    mode: "accept_edits",
+    id: "accept_edits",
     name: "Auto-accept edits",
     about: "Edits files without asking, and asks before anything else.",
     icon: ShieldCheckIcon,
   },
   {
-    mode: "auto",
+    id: "auto",
     name: "Auto",
     about: "Decides itself what to ask about.",
     icon: ShieldEllipsisIcon,
   },
   {
-    mode: "full_access",
+    id: "full_access",
     name: "Full access",
     about: "Never asks.",
     icon: ShieldAlertIcon,
   },
 ]
+
+/** A choice in a menu: its icon, its name, and what it means under it. */
+type Choice = {
+  id: string
+  name: string
+  about?: string
+  icon?: LucideIcon
+}
+
+/** `choices` as a menu's radio items, `value` checked. */
+function ChoiceItems({
+  value,
+  choices,
+  onChange,
+}: {
+  value: string
+  choices: Choice[]
+  onChange: (id: string) => void
+}) {
+  return (
+    <DropdownMenuRadioGroup value={value} onValueChange={onChange}>
+      {choices.map(({ id, name, about, icon: Icon }) => (
+        <DropdownMenuRadioItem key={id} value={id} closeOnClick>
+          {Icon && <Icon />}
+          <span className="flex flex-col">
+            <span>{name}</span>
+            {about && (
+              <span className="text-xs text-muted-foreground">{about}</span>
+            )}
+          </span>
+        </DropdownMenuRadioItem>
+      ))}
+    </DropdownMenuRadioGroup>
+  )
+}
+
+/** The mode `settings` name, as {@link MODES} words it. */
+function modeOf(settings: Settings) {
+  return MODES.find((m) => m.id === settings.mode) ?? MODES[3]
+}
+
+/** A Harness's option's choices, as a menu shows them. */
+function choicesOf(option: HarnessOption): Choice[] {
+  return option.choices.map((choice) => ({
+    id: choice.value,
+    name: choice.name,
+    about: choice.description,
+  }))
+}
+
+/** The name of the choice `value` is, or `value` if none is. */
+function nameOf(choices: Choice[], value: string): string {
+  return choices.find((choice) => choice.id === value)?.name ?? value
+}
+
+/**
+ * What a Thread runs with, as one quiet trigger beside the send button
+ * (ADR 0031, decision 3): the mode's icon, the model, then the other
+ * values chosen, muted. One menu sets them all, each option a submenu.
+ * Plan is not here: `/plan`, `/default` and Shift+Tab switch it.
+ */
+export function SettingsMenu({
+  settings,
+  offer,
+  disabled,
+  onChange,
+}: {
+  settings: Settings
+  offer: Offer
+  disabled: boolean
+  onChange: (settings: Settings) => void
+}) {
+  const mode = modeOf(settings)
+  // The values shown: each choice's name, and the name of each option on.
+  const shown = offer.options.flatMap((option) => {
+    const value = chosen(settings, option)
+    if (option.choices.length === 0) return value === true ? [option.name] : []
+    return [nameOf(choicesOf(option), String(value))]
+  })
+  const [first = mode.name, ...rest] = shown
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        disabled={disabled}
+        render={
+          <Button
+            variant="ghost"
+            size="sm"
+            className="min-w-0 font-normal text-foreground/75"
+            aria-label={`Runs with ${[...shown, mode.name].join(", ")}`}
+          />
+        }
+      >
+        <mode.icon data-icon="inline-start" className="text-muted-foreground" />
+        <span className="truncate">
+          {first}
+          {rest.length > 0 && (
+            <span className="text-muted-foreground"> {rest.join(" ")}</span>
+          )}
+        </span>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent side="top" align="end" className="w-auto min-w-56">
+        {offer.options.map((option) =>
+          option.choices.length > 0 ? (
+            <Submenu
+              key={option.id}
+              what={option.name}
+              value={String(chosen(settings, option))}
+              choices={choicesOf(option)}
+              onChange={(next) => onChange(choose(settings, option.id, next))}
+            />
+          ) : (
+            <DropdownMenuCheckboxItem
+              key={option.id}
+              checked={chosen(settings, option) === true}
+              onCheckedChange={(on) =>
+                onChange(choose(settings, option.id, on))
+              }
+            >
+              {option.name}
+            </DropdownMenuCheckboxItem>
+          )
+        )}
+        {offer.options.length > 0 && <DropdownMenuSeparator />}
+        <Submenu
+          what="Mode"
+          value={settings.mode}
+          choices={MODES}
+          onChange={(next) => onChange({ ...settings, mode: next as Mode })}
+        />
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
+/** One option in {@link SettingsMenu}: its name, what is chosen, and the
+ * choices beside. */
+function Submenu({
+  what,
+  value,
+  choices,
+  onChange,
+}: {
+  what: string
+  value: string
+  choices: Choice[]
+  onChange: (id: string) => void
+}) {
+  const now = nameOf(choices, value)
+  return (
+    <DropdownMenuSub>
+      <DropdownMenuSubTrigger aria-label={`${what}: ${now}`}>
+        <span className="flex-1">{what}</span>
+        <span className="pl-4 text-muted-foreground">{now}</span>
+      </DropdownMenuSubTrigger>
+      <DropdownMenuSubContent className="min-w-48">
+        <ChoiceItems value={value} choices={choices} onChange={onChange} />
+      </DropdownMenuSubContent>
+    </DropdownMenuSub>
+  )
+}
 
 /** What a Thread runs with, under its message box: the Harness's options,
  * the model first, then Plan and the mode. A change goes to `onChange`. */
@@ -118,11 +283,7 @@ function Choices({
     <Pick
       what={option.name}
       value={String(chosen(settings, option))}
-      choices={option.choices.map((choice) => ({
-        id: choice.value,
-        name: choice.name,
-        about: choice.description,
-      }))}
+      choices={choicesOf(option)}
       disabled={disabled}
       onChange={(next) => onChange(choose(settings, option.id, next))}
     />
@@ -142,13 +303,13 @@ export function Pick({
   what: string
   icon?: React.ReactNode
   value: string
-  choices: { id: string; name: string; about?: string }[]
+  choices: Choice[]
   disabled: boolean
   onChange: (id: string) => void
   /** One more row after the choices, which does rather than picks. */
   more?: { title: string; icon: React.ReactNode; run: () => void }
 }) {
-  const now = choices.find((choice) => choice.id === value)
+  const now = nameOf(choices, value)
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -158,35 +319,18 @@ export function Pick({
             type="button"
             variant="ghost"
             size="xs"
-            aria-label={`${what}: ${now?.name ?? value}`}
+            aria-label={`${what}: ${now}`}
           />
         }
       >
         {icon}
-        {now?.name ?? value}
+        {now}
         <ChevronDownIcon data-icon="inline-end" />
       </DropdownMenuTrigger>
       <DropdownMenuContent side="top" className="w-auto min-w-48">
         <DropdownMenuGroup>
           <DropdownMenuLabel>{what}</DropdownMenuLabel>
-          <DropdownMenuRadioGroup value={value} onValueChange={onChange}>
-            {choices.map((choice) => (
-              <DropdownMenuRadioItem
-                key={choice.id}
-                value={choice.id}
-                closeOnClick
-              >
-                <span className="flex flex-col">
-                  <span>{choice.name}</span>
-                  {choice.about && (
-                    <span className="text-xs text-muted-foreground">
-                      {choice.about}
-                    </span>
-                  )}
-                </span>
-              </DropdownMenuRadioItem>
-            ))}
-          </DropdownMenuRadioGroup>
+          <ChoiceItems value={value} choices={choices} onChange={onChange} />
         </DropdownMenuGroup>
         {more && (
           <>
@@ -240,7 +384,7 @@ function Modes({
   disabled: boolean
   onChange: (settings: Settings) => void
 }) {
-  const now = MODES.find((m) => m.mode === settings.mode) ?? MODES[3]
+  const now = modeOf(settings)
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -261,20 +405,11 @@ function Modes({
       <DropdownMenuContent side="top" className="w-auto min-w-64">
         <DropdownMenuGroup>
           <DropdownMenuLabel>How freely it acts</DropdownMenuLabel>
-          <DropdownMenuRadioGroup
+          <ChoiceItems
             value={settings.mode}
-            onValueChange={(mode: Mode) => onChange({ ...settings, mode })}
-          >
-            {MODES.map(({ mode, name, about, icon: Icon }) => (
-              <DropdownMenuRadioItem key={mode} value={mode} closeOnClick>
-                <Icon />
-                <span className="flex flex-col">
-                  <span>{name}</span>
-                  <span className="text-xs text-muted-foreground">{about}</span>
-                </span>
-              </DropdownMenuRadioItem>
-            ))}
-          </DropdownMenuRadioGroup>
+            choices={MODES}
+            onChange={(mode) => onChange({ ...settings, mode: mode as Mode })}
+          />
         </DropdownMenuGroup>
       </DropdownMenuContent>
     </DropdownMenu>

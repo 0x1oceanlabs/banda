@@ -116,8 +116,6 @@ export function useAttachments({
       ...going,
     ],
     problem,
-    /** Why no image can be added, if none can. */
-    closed,
     reader,
     /** Adds the files that can go; says why of one that cannot. */
     add: (files: File[]) => {

@@ -60,7 +60,9 @@ or Plan ready as part of the card). Roma did not want it now.
 ## Consequences
 
 - The composer no longer uses `InputGroup`; it is its own surface in the
-  agents Pane. `SettingsBar` becomes one trigger and one menu.
+  agents Pane. Beside the send button
+  `SettingsMenu` is one trigger and one menu; the settings page keeps its
+  bar of a Harness's defaults, Plan among them.
 - The look follows the theme's tokens only, so light and dark, Omarchy
   themes and the glass (ADR 0023) need nothing of their own.
 
