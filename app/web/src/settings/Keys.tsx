@@ -1,9 +1,9 @@
 /**
  * Keys (ADR 0016; ADR 0005, decision 11): the lines of the Person's
- * `keys.toml`, each a key and the action it runs. A line takes another key,
- * or ↶ takes it out. Every action and all its keys are the key sheet's,
- * Alt+K in the window (ADR 0017, decision 9), so there is one list of
- * keys; this opens it there. `banda settings` writes the file and checks
+ * `keys.toml`, each a key and the action it runs, in the frame every row
+ * has. A line takes another key where it is, or ↶ takes it out. Every
+ * action and all its keys are the key sheet's, Alt+K in the window (ADR
+ * 0017, decision 9), so there is one list of keys; this opens it there. `banda settings` writes the file and checks
  * the key, and the look brings the keys back to both windows.
  */
 import { useEffect, useState } from "react"
@@ -13,16 +13,10 @@ import { Card } from "@banda/ui/components/card"
 import { Kbd } from "@banda/ui/components/kbd"
 import { useWrite } from "@banda/ui/hooks/use-write"
 import { keyToBind } from "@banda/ui/lib/keys"
-import { cn } from "@banda/ui/lib/utils"
-import { KeyboardIcon, Undo2Icon } from "lucide-react"
-import {
-  bindPath,
-  KEYS_FILE,
-  keyName,
-  RESET_KEY,
-  writeBind,
-} from "../actions/actions"
+import { KeyboardIcon } from "lucide-react"
+import { bindPath, KEYS_FILE, keyName, RESET_KEY } from "../actions/actions"
 import { useLookKeys } from "../look"
+import { RowFrame } from "./SettingRow"
 
 export function Keys({ lit }: { lit?: string }) {
   const keys = useLookKeys()
@@ -85,8 +79,8 @@ function Line({
   const { refused, write } = useWrite()
   const settings = window.banda?.settings
 
-  // While it asks, the next key pressed is the line's, the action kept;
-  // the old line goes once the new one is written. Esc stops.
+  // While it asks, the next key pressed is the line's: the line takes it
+  // where it is, its action and comment kept. Esc stops.
   useEffect(() => {
     if (!asking || !settings) return
     const onKey = (event: KeyboardEvent) => {
@@ -98,69 +92,49 @@ function Line({
       ask(false)
       if ("refused" in pressed) return write(Promise.resolve([pressed.refused]))
       if (keyName(pressed.key) === bind.text) return
-      write(
-        writeBind(pressed.key, bind.action ?? "none").then((wrong) =>
-          wrong.length > 0 ? wrong : settings.reset(KEYS_FILE, bindPath(bind))
-        )
-      )
+      write(settings.rename(KEYS_FILE, bindPath(bind), keyName(pressed.key)))
     }
     window.addEventListener("keydown", onKey, { capture: true })
     return () => window.removeEventListener("keydown", onKey, { capture: true })
   }, [asking, ask, settings, bind, write])
 
   return (
-    <div
-      data-key={bind.text}
-      className={cn(
-        "flex flex-col gap-1 px-4 py-2.5 transition-colors",
-        lit && "bg-accent/60"
-      )}
+    <RowFrame
+      dataKey={bind.text}
+      lit={lit}
+      title={
+        bind.action ? (
+          <span>
+            <span className="font-normal">runs</span>{" "}
+            <span className="font-mono text-xs">{bind.action}</span>
+          </span>
+        ) : (
+          <span className="font-normal text-muted-foreground">
+            goes to the Pane
+          </span>
+        )
+      }
+      file={KEYS_FILE}
+      from={{ layer: "file", line: bind.line }}
+      onReset={() =>
+        settings && write(settings.reset(KEYS_FILE, bindPath(bind)))
+      }
+      wrong={refused}
     >
-      <div className="flex items-center gap-3">
-        <Button
-          variant="outline"
-          size="sm"
-          className="min-w-28"
-          aria-label={`Change ${bind.text}`}
-          title="Press another key for this line"
-          onClick={() => ask(!asking)}
-        >
-          {asking ? (
-            <span className="text-muted-foreground">Press a key…</span>
-          ) : (
-            <Kbd>{bind.text}</Kbd>
-          )}
-        </Button>
-        <div className="min-w-0 flex-1 text-sm">
-          {bind.action ? (
-            <>
-              runs <span className="font-mono text-xs">{bind.action}</span>
-            </>
-          ) : (
-            <span className="text-muted-foreground">goes to the Pane</span>
-          )}
-        </div>
-        <span className="font-mono text-[11px] text-muted-foreground">
-          {KEYS_FILE}:{bind.line}
-        </span>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          className="text-muted-foreground"
-          aria-label={`Reset ${bind.text}`}
-          title="Reset: take the line out"
-          onClick={() =>
-            settings && write(settings.reset(KEYS_FILE, bindPath(bind)))
-          }
-        >
-          <Undo2Icon />
-        </Button>
-      </div>
-      {[...new Set(refused)].map((message) => (
-        <p key={message} role="alert" className="text-xs text-destructive">
-          {message}
-        </p>
-      ))}
-    </div>
+      <Button
+        variant="outline"
+        size="sm"
+        className="min-w-28"
+        aria-label={`Change ${bind.text}`}
+        title="Press another key for this line"
+        onClick={() => ask(!asking)}
+      >
+        {asking ? (
+          <span className="text-muted-foreground">Press a key…</span>
+        ) : (
+          <Kbd>{bind.text}</Kbd>
+        )}
+      </Button>
+    </RowFrame>
   )
 }

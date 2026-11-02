@@ -21,7 +21,7 @@ use serde_json::Value;
 use std::path::{Path, PathBuf};
 
 mod write;
-pub use write::{reset, set};
+pub use write::{rename, reset, set};
 
 /// A file in `~/.config/banda/` that Banda reads. What it holds is its
 /// root struct's doc comment, the schema's `description`.

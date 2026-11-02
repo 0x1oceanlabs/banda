@@ -70,6 +70,8 @@ const host: Host = {
     set: (file, key, value) =>
       ipcRenderer.invoke("settings.set", file, key, value),
     reset: (file, key) => ipcRenderer.invoke("settings.reset", file, key),
+    rename: (file, key, to) =>
+      ipcRenderer.invoke("settings.rename", file, key, to),
     reveal: (file) => ipcRenderer.invoke("settings.reveal", file),
     themes: () => ipcRenderer.invoke("settings.themes"),
     listen: (go) => {

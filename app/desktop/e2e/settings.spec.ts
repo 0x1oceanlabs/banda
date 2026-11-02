@@ -221,7 +221,8 @@ test("General, the sidebar's presets, and hearing a sound", async () => {
 test("Keys: the lines of keys.toml, a key changed and taken out, and the reset chord (ADR 0005, decision 11)", async () => {
   window = await startWindow({
     files: {
-      "config/keys.toml": '[binds]\n"Alt+J" = "pane.close"\n"Alt+W" = "none"\n',
+      "config/keys.toml":
+        '[binds]\n# mine\n"Alt+J" = "pane.close"\n"Alt+W" = "none"\n',
     },
   })
   const { app, page, dir } = window
@@ -237,7 +238,7 @@ test("Keys: the lines of keys.toml, a key changed and taken out, and the reset c
   // Each line: its key, what it runs, and where it is.
   const close = settings.locator('[data-key="Alt+J"]')
   await expect(close).toContainText("pane.close")
-  await expect(close).toContainText("keys.toml:2")
+  await expect(close).toContainText("keys.toml:3")
   await expect(settings.locator('[data-key="Alt+W"]')).toContainText(
     "goes to the Pane"
   )
@@ -250,7 +251,8 @@ test("Keys: the lines of keys.toml, a key changed and taken out, and the reset c
   await settings.keyboard.press("Alt+KeyQ")
   await expect
     .poll(() => readFileSync(file, "utf8"))
-    .toBe('[binds]\n"Alt+W" = "none"\n"Alt+Q" = "pane.close"\n')
+    .toBe('[binds]\n# mine\n"Alt+Q" = "pane.close"\n"Alt+W" = "none"\n')
+  // It stays on its line, its comment above it.
   await expect(settings.locator('[data-key="Alt+Q"]')).toContainText(
     "keys.toml:3"
   )
@@ -271,5 +273,5 @@ test("Keys: the lines of keys.toml, a key changed and taken out, and the reset c
     .click()
   await expect
     .poll(() => readFileSync(file, "utf8"))
-    .toBe('[binds]\n"Alt+Q" = "pane.close"\n')
+    .toBe('[binds]\n# mine\n"Alt+Q" = "pane.close"\n')
 })

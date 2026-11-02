@@ -253,6 +253,7 @@ async function ready(): Promise<void> {
   })
   pageOnly("settings.set", (file, key, value) => settings.set(file, key, value))
   pageOnly("settings.reset", (file, key) => settings.reset(file, key))
+  pageOnly("settings.rename", (file, key, to) => settings.rename(file, key, to))
   pageOnly("settings.themes", () => settings.themes())
   pageOnly("settings.reveal", (file) => {
     const sidebar = lookNow()?.sidebar

@@ -35,7 +35,9 @@ Banda is changed through text files, the same way the Person changes it.
    key, and refuse a value the file would not take. A Harness is named by
    its ID: `banda settings set harnesses.toml harness.codex.enabled false`;
    `harness.<id>` set to an inline table adds a whole entry, and reset
-   takes it out. For more than a key,
+   takes it out. `banda settings rename <file> <key> <to>` gives a key
+   another name where it is, as a line of keys.toml another key:
+   `banda settings rename keys.toml 'binds."Alt+J"' Alt+Q`. For more than a key,
    edit the file: keep the Person's comments and every key you were not
    asked to change. Every key is optional: write only what changes.
 3. Check it: `banda settings check` prints `path:line:column: problem`
