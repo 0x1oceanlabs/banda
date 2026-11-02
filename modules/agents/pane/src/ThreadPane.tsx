@@ -57,7 +57,7 @@ import {
   working,
   writerOf,
 } from "./thread"
-import { threadsSource } from "./list"
+import { applyThreads, threadsSource } from "./list"
 import { threadPaneOf } from "./rows"
 import { suggested } from "./slash"
 import { Composer, type ComposerHandle } from "./Composer"
@@ -747,7 +747,11 @@ function useWriters(
   space: SpaceId,
   thread: string | null
 ): Listing {
-  const source = useMemo(() => threadsSource(engine, space), [engine, space])
+  // Who writes stays as a rewind leaves it: no need to read the list again.
+  const source = useMemo(
+    () => ({ ...threadsSource(engine, space), apply: applyThreads }),
+    [engine, space]
+  )
   const live = useLive(engine, space, source)
   const threads = live.state === "ready" ? live.view.threads : undefined
   return useMemo(() => {

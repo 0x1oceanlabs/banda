@@ -2778,6 +2778,8 @@ test("Edit from here takes the Thread back to before a message, as in T3 Code, a
   )
   await expect(composer).toHaveText("remember pears")
   await expect(composer).toBeFocused()
+  // The sidebar's row no longer says it was the latest message either.
+  await expect(page.getByText("remember pears", { exact: true })).toHaveCount(1)
 
   // The Agent knows only what came before it.
   await composer.press("Control+a")
