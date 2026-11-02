@@ -2418,6 +2418,47 @@ test("banda menu opens the Banda menu at a route, from outside the window", asyn
   ).toBeVisible()
 })
 
+test("Add Space adds a folder on disk from the Banda menu, and one banda space add made shows as the window comes back", async () => {
+  window = await startWindow()
+  const { page, dir, banda } = window
+  await firstThread(page)
+  const work = join(dir, "work")
+  for (const folder of ["app", "api", "cli"])
+    mkdirSync(join(work, folder), { recursive: true })
+  const menu = page.getByRole("dialog", { name: "Banda menu" })
+  const search = menu.getByRole("combobox", { name: "Search" })
+  const sidebar = page.getByRole("complementary", { name: "Sidebar" })
+
+  // The sidebar's folder button opens "Add Space"; "Local folder" starts
+  // the path at ~ and lists the folders that fit what is typed.
+  await sidebar.getByRole("button", { name: "Add Space" }).click()
+  await expect(menu.getByRole("option", { name: /New Space/ })).toBeVisible()
+  await search.fill("local")
+  await search.press("Enter")
+  await expect(search).toHaveValue("~/")
+  await search.fill(`${work}/ap`)
+  await expect(menu.getByRole("option").first()).toContainText("Create & Add")
+  await expect(menu.getByRole("option", { name: "api" })).toBeVisible()
+  await page.screenshot({ path: "test-results/30-add-space-folder.png" })
+  await menu.getByRole("option", { name: "app" }).click()
+  await expect(search).toHaveValue(`${work}/app/`)
+  await expect(menu.getByRole("option").first()).toHaveText(/^Add/)
+
+  // Enter adds it, and its new Thread opens.
+  await search.press("Enter")
+  await expect(menu).toBeHidden()
+  await expect(page.getByRole("button", { name: "Space: app" })).toBeVisible()
+
+  // A Space added from a terminal shows once the window comes back to
+  // the front.
+  banda("space", "add", join(work, "cli"))
+  await setInFront(page, false)
+  await setInFront(page, true)
+  await page.keyboard.press("Alt+Space")
+  await search.fill("cli")
+  await expect(menu.getByRole("group", { name: "Spaces" })).toContainText("cli")
+})
+
 test("text selected in a reply is quoted in the composer, a line apart from what is written after it", async () => {
   window = await startWindow()
   const { page } = window

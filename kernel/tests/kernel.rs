@@ -1168,6 +1168,9 @@ async fn the_owner_browses_the_folders_as_a_path_is_typed() {
 
     let typed = browse(format!("{base}/al")).await.unwrap();
     assert_eq!(typed["parent"], json!(base));
+    assert_eq!(typed["exists"], json!(false), "\"al\" is no folder");
+    let named = browse(format!("{base}/beta")).await.unwrap();
+    assert_eq!(named["exists"], json!(true));
     assert_eq!(
         names(typed.clone()),
         ["Alpha", "alps", "also"],

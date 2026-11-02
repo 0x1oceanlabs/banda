@@ -51,6 +51,9 @@ export type Shell = WindowApi & {
   settle: () => void
   /** Opens the Banda menu, or closes it when it is open (ADR 0017). */
   menu: (at: At) => void
+  /** Opens the Banda menu at a route, or the settings at theirs, as
+   * `banda menu ROUTE` does (ADR 0017, decision 7). */
+  route: (route: string) => void
   /** The window's own keys again, until keys.toml changes; the settings
    * open at Keys to mend it (ADR 0005, decision 11). */
   ownKeys: () => void
@@ -294,6 +297,14 @@ export const ACTIONS: readonly Action<Shell>[] = [
     keys: [{ code: "KeyK", alt: true }],
     overDialogs: true,
     run: (shell) => shell.menu("actions"),
+  },
+  {
+    id: "space.add",
+    section: "Banda",
+    title: "Add Space",
+    // The menu lists "Add Space" as its own branch; this opens it there.
+    unlisted: true,
+    run: (shell) => shell.route("space.add"),
   },
   {
     id: "settings.open",

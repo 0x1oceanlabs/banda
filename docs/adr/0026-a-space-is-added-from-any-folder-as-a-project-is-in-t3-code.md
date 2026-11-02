@@ -125,6 +125,18 @@ every proposal:
    - A folder that already is a Space is not an error: that Space opens.
      If it was archived, it comes back first.
    - `banda space add <path> [--name]` does the same from a terminal.
+   - _Built on 2026-11-02, in step 4:_
+     - The first screen offers the two ways as tabs, "New Space" and
+       "Local folder".
+     - A Space added elsewhere, as by `banda space add`, shows once the
+       window comes to the front: it reads the Spaces again then.
+     - The window already lists pinned Spaces first and leaves out
+       archived ones, though only step 6 lets a Person pin or archive.
+     - A Pane runs "Add Space" through `PaneProps.run`, as a module's
+       action runs through `WindowApi.run`: so does "New Thread"'s
+       Space list.
+     - The menu's "Add Space" branch shows in its Actions and in the key
+       sheet's "Banda" section.
 
 4. **The engine's methods.**
    - `spaces.add {folder, name?, create?}`: adds the folder as a Space.

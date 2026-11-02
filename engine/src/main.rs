@@ -118,7 +118,8 @@ enum Command {
     },
     /// Opens the Banda menu in Banda's window, as Alt+Space does: at its
     /// root, or at ROUTE: `actions` (the key sheet), `views` (the
-    /// sidebar's view), `space.<name>` (a Space's Threads), or
+    /// sidebar's view), `space.add` ("Add Space"), `space.<name>` (a
+    /// Space's Threads), or
     /// `settings.<section>.<row>` (the settings Pane there). Other
     /// words open it with them typed in.
     Menu { route: Option<String> },

@@ -1,5 +1,5 @@
 import { useMemo, useState } from "react"
-import type { Engine, SpaceId, SpaceSummary } from "@banda/contract"
+import type { SpaceId, SpaceSummary } from "@banda/contract"
 import { BandaMark, MARK_WORDS } from "@banda/ui/components/banda-mark"
 import { Button } from "@banda/ui/components/button"
 import {
@@ -36,7 +36,6 @@ import {
 import { keyName } from "../actions/actions"
 import type { Lists } from "../bar/Watches"
 import { MENU_KEY } from "../menu/menu"
-import { NewSpace } from "../Spaces"
 import {
   arrange,
   type Row as Arranged,
@@ -56,7 +55,6 @@ import { settle, settles, useIsSettled } from "./settled"
  * desktop, and the new arrangement comes back with the look.
  */
 export function Sidebar({
-  engine,
   spaces,
   lists,
   home,
@@ -65,9 +63,8 @@ export function Sidebar({
   onSettings,
   onOpen,
   onNewThread,
-  onCreated,
+  onAddSpace,
 }: {
-  engine: Engine
   spaces: SpaceSummary[]
   lists: Lists
   /** The Space a new Thread from the header starts in. */
@@ -84,9 +81,9 @@ export function Sidebar({
    */
   onOpen: (space: SpaceId, pane: PaneState) => void
   onNewThread: (space: SpaceId) => void
-  onCreated: (space: SpaceSummary) => void
+  /** Opens "Add Space" in the Banda menu (ADR 0026). */
+  onAddSpace: () => void
 }) {
-  const [creating, setCreating] = useState(false)
   const settings = useLookSidebar()
   const { preset, presets } = settings
   const host = window.banda
@@ -204,9 +201,9 @@ export function Sidebar({
           variant="ghost"
           size="icon-sm"
           className="text-muted-foreground"
-          aria-label="New Space"
-          title="New Space"
-          onClick={() => setCreating(true)}
+          aria-label="Add Space"
+          title="Add Space"
+          onClick={onAddSpace}
         >
           <FolderPlusIcon />
         </Button>
@@ -260,12 +257,6 @@ export function Sidebar({
           Settings
         </Button>
       </div>
-      <NewSpace
-        engine={engine}
-        open={creating}
-        onOpenChange={setCreating}
-        onCreated={onCreated}
-      />
     </aside>
   )
 }

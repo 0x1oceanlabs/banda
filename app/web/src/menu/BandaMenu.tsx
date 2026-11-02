@@ -16,6 +16,7 @@ import {
   SuggestionList,
   Suggestions,
 } from "@banda/ui/components/suggestions"
+import { useAct } from "@banda/ui/hooks/use-act"
 import { useWrite } from "@banda/ui/hooks/use-write"
 import { type Key, keyToBind, matches, sameKey } from "@banda/ui/lib/keys"
 import type { Action, Here, MenuRow, Source } from "@banda/ui/module"
@@ -23,7 +24,12 @@ import {
   CheckIcon,
   ChevronRightIcon,
   CornerDownLeftIcon,
+  CornerLeftUpIcon,
+  FolderIcon,
+  FolderOpenIcon,
+  FolderPlusIcon,
   ListFilterIcon,
+  PlusIcon,
   SearchIcon,
 } from "lucide-react"
 import { KEYS_FILE, keyName, writeBind } from "../actions/actions"
@@ -37,18 +43,23 @@ import { useIsSettled } from "../sidebar/settled"
 import {
   type Act,
   actsOf,
+  type Adding,
   type Branch,
   branchName,
   type Choice,
   isBranch,
-  isKeying,
-  type Keying,
+  isOwn,
   menuOf,
   OPEN,
   type Found,
   type Opening,
+  type Own,
+  SOURCES,
   type Sources,
+  wordsIn,
+  isPathField,
 } from "./menu"
+import { PATH_PLACEHOLDER, useBrowsed } from "./browse"
 import { opened, useOpened, weightOf } from "./opened"
 
 const ASK: Key = { code: "Enter", alt: true }
@@ -63,6 +74,7 @@ export function BandaMenu({
   opening,
   onClose,
   onChoose,
+  onAdded,
   engine,
   modules,
   space,
@@ -75,7 +87,9 @@ export function BandaMenu({
   opening: Opening | null
   onClose: () => void
   /** Runs a chosen row, once the menu has closed. */
-  onChoose: (row: Exclude<Choice, Branch | Keying>) => void
+  onChoose: (row: Exclude<Choice, Branch | Own>) => void
+  /** Hears a Space the menu added, once it has closed (ADR 0026). */
+  onAdded: (space: SpaceSummary) => void
   engine: Engine
   /** The modules the engine runs: the sources of the others find nothing. */
   modules: readonly string[]
@@ -154,6 +168,7 @@ export function BandaMenu({
           {opening && (
             <Menu
               key={opening.n}
+              engine={engine}
               opening={opening}
               lists={lists}
               spaces={spaces}
@@ -165,6 +180,10 @@ export function BandaMenu({
               onChoose={(row) => {
                 onClose()
                 onChoose(row)
+              }}
+              onAdded={(space) => {
+                onClose()
+                onAdded(space)
               }}
             />
           )}
@@ -203,6 +222,7 @@ const NOWHERE: Looking = { words: "" }
 
 /** The menu while it is open: it starts where it is opened, each time. */
 function Menu({
+  engine,
   opening,
   lists,
   spaces,
@@ -212,7 +232,9 @@ function Menu({
   onLooking,
   escapeRef,
   onChoose,
+  onAdded,
 }: {
+  engine: Engine
   opening: Opening
   lists: Lists
   spaces: readonly SpaceSummary[]
@@ -223,7 +245,8 @@ function Menu({
   found: readonly Found[]
   onLooking: (looking: Looking) => void
   escapeRef: React.RefObject<() => boolean>
-  onChoose: (row: Exclude<Choice, Branch | Keying>) => void
+  onChoose: (row: Exclude<Choice, Branch | Own>) => void
+  onAdded: (space: SpaceSummary) => void
 }) {
   const { preset, presets } = useLookSidebar()
   const settled = useIsSettled()
@@ -250,6 +273,8 @@ function Menu({
     [onLooking, entered, atRoot, query]
   )
   useEffect(() => () => onLooking(NOWHERE), [onLooking])
+  // The path field's folders, from the engine, as the path is typed.
+  const browsed = useBrowsed(engine, isPathField(inside) ? words : undefined)
   const sources: Sources = useMemo(
     () => ({
       lists,
@@ -259,8 +284,20 @@ function Menu({
       settled,
       found,
       weight: (id) => weightOf(uses[id], now),
+      browsed,
     }),
-    [lists, spaces, actions, presets, preset, settled, found, uses, now]
+    [
+      lists,
+      spaces,
+      actions,
+      presets,
+      preset,
+      settled,
+      found,
+      uses,
+      now,
+      browsed,
+    ]
   )
   const [index, setIndex] = useState(0)
   // The row's acts that Tab shows, and the one chosen among them.
@@ -290,7 +327,7 @@ function Menu({
 
   const restart = (next: Branch[]) => {
     setPath(next)
-    setWords("")
+    setWords(wordsIn(next))
     setIndex(0)
     setActing(undefined)
   }
@@ -307,22 +344,48 @@ function Menu({
     setNote(undefined)
     writing(writeBind(key, action))
   }
-  const keying = (row: Keying) => {
-    setActing(undefined)
-    if (row.kind === "bind") {
-      setTaking(row.action)
-      setNote(undefined)
-      return
-    }
-    write(row.key, "none", `${keyName(row.key)} goes to the Pane now`)
+  // A Space added here opens its new Thread, as the menu closes; what the
+  // engine refused shows, and the field stays as it was.
+  const { busy: adding, problem, act } = useAct()
+  const add = async (how: Adding) => {
+    if (adding) return
+    setNote(undefined)
+    const space = await act(() =>
+      "name" in how
+        ? engine.command("spaces.create", { name: how.name })
+        : engine.command("spaces.add", how)
+    )
+    if (space) onAdded(space)
   }
-  // A branch opens in the menu, and the keys change in it; any other row
-  // runs. Each counts for the order next time.
+  const own = (row: Own) => {
+    setActing(undefined)
+    switch (row.kind) {
+      case "bind":
+        setTaking(row.action)
+        setNote(undefined)
+        return
+      case "free":
+        return write(
+          row.key,
+          "none",
+          `${keyName(row.key)} goes to the Pane now`
+        )
+      case "folder":
+        setWords(row.path)
+        setIndex(0)
+        return
+      case "adding":
+        return void add(row.how)
+    }
+  }
+  // A branch opens in the menu, and the menu does its own rows; any other
+  // row runs. Each counts for the order next time, but a folder or a Space
+  // to add, which are the Person's own.
   const choose = (row: Choice) => {
     if (isBranch(row)) restart([...path, row])
-    else if (isKeying(row)) keying(row)
+    else if (isOwn(row)) own(row)
     else onChoose(row)
-    opened(row.id)
+    if (row.kind !== "folder" && row.kind !== "adding") opened(row.id)
   }
 
   // The key pressed while an action waits for one: bound to it, unless
@@ -420,15 +483,7 @@ function Menu({
             setActing(undefined)
           }}
           onKeyDown={onKeyDown}
-          placeholder={
-            taking
-              ? `Press the keys for “${taking.title}”…`
-              : inside
-                ? "Search…"
-                : at === "actions"
-                  ? "Search actions…"
-                  : "Search actions, Spaces, Threads and files…"
-          }
+          placeholder={placeholderOf(taking, inside, at)}
           aria-label="Search"
           role="combobox"
           aria-expanded
@@ -437,12 +492,14 @@ function Menu({
           className="h-11 min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-muted-foreground"
         />
       </div>
-      {(note || refused.length > 0) && (
+      {(note || problem || adding || refused.length > 0) && (
         <div
           role="status"
           className="border-b px-3 py-1.5 text-xs text-muted-foreground"
         >
-          {note ?? refused.join("; ")}
+          {note ??
+            problem ??
+            (adding ? "Adding the Space…" : refused.join("; "))}
         </div>
       )}
       <SuggestionList
@@ -653,12 +710,74 @@ function RowView({
         </>
       )
     }
+    case "add":
+      return (
+        <>
+          <FolderPlusIcon className="size-4 shrink-0 text-muted-foreground" />
+          <span className="min-w-0 flex-1 truncate">{branchName(row)}</span>
+          <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground" />
+        </>
+      )
+    case "source": {
+      const Icon = row.source === "new" ? PlusIcon : FolderOpenIcon
+      return (
+        <>
+          <Icon className="size-4 shrink-0 text-muted-foreground" />
+          <span className="min-w-0 truncate">{branchName(row)}</span>
+          <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+            {SOURCES[row.source].about}
+          </span>
+          <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground" />
+        </>
+      )
+    }
+    case "adding": {
+      const { how } = row
+      const [title, detail] =
+        "name" in how
+          ? ["Create Space", how.name]
+          : [how.create ? "Create & Add" : "Add", how.folder]
+      return (
+        <>
+          <FolderPlusIcon className="size-4 shrink-0 text-muted-foreground" />
+          <span className="shrink-0">{title}</span>
+          <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
+            {detail}
+          </span>
+        </>
+      )
+    }
+    case "folder": {
+      const Icon = row.up ? CornerLeftUpIcon : FolderIcon
+      return (
+        <>
+          <Icon className="size-4 shrink-0 text-muted-foreground" />
+          <span className="min-w-0 flex-1 truncate">{row.name}</span>
+          {row.up && <Detail>{row.path}</Detail>}
+        </>
+      )
+    }
     case "ask":
     case "settle":
     case "bind":
     case "free":
       return null
   }
+}
+
+/** The field's words before it is typed into. */
+function placeholderOf(
+  taking: Action<Shell> | undefined,
+  inside: Branch | undefined,
+  at: string
+): string {
+  if (taking) return `Press the keys for “${taking.title}”…`
+  if (inside?.kind === "source")
+    return inside.source === "new" ? "Space name" : PATH_PLACEHOLDER
+  if (inside) return "Search…"
+  return at === "actions"
+    ? "Search actions…"
+    : "Search actions, Spaces, Threads and files…"
 }
 
 const NO_ROWS: readonly MenuRow[] = []

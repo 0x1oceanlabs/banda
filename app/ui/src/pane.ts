@@ -84,6 +84,10 @@ export type PaneProps<A> = {
   update: (args: A) => void
   /** Closes this Pane, as one that finished its job does. */
   close: () => void
+  /** Runs an action by its id, as `WindowApi.run` does: "Add Space" from
+   * a Space picker. None where no window runs actions, as in a dialog of
+   * the settings. */
+  run?: (action: string, args?: { [key: string]: JsonValue }) => void
 }
 
 export type PaneKind<A extends { [key: string]: JsonValue }> = {

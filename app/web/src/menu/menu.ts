@@ -7,7 +7,7 @@
  * Omarchy's menu does, and `Tab` shows what can be done with a row. Plain
  * data, so the window only draws it. It knows no module.
  */
-import type { SpaceId, SpaceSummary } from "@banda/contract"
+import type { Browsed, SpaceId, SpaceSummary } from "@banda/contract"
 import { waits } from "@banda/ui/components/banda-mark"
 import type { Key } from "@banda/ui/lib/keys"
 import type { Listed } from "@banda/ui/pane"
@@ -58,19 +58,41 @@ export type Choice =
   | { kind: "preset"; id: string; name: string; current: boolean }
   /** Settles a Thread, or brings it back. */
   | { kind: "settle"; id: string; space: SpaceId; listed: Listed }
+  /** A branch: the ways to add a Space (ADR 0026). */
+  | { kind: "add"; id: string }
+  /** A branch: one way to add a Space; the field takes its name or path. */
+  | { kind: "source"; id: string; source: Source }
+  /** Adds a Space: a new one by its name, or a folder on disk. */
+  | { kind: "adding"; id: string; how: Adding }
+  /** A folder the path field lists, or the one above (`up`): choosing it
+   * types `path`, as the Person typed the path, to go on in. */
+  | { kind: "folder"; id: string; name: string; path: string; up?: true }
+
+/** How a Space is added: a new folder by its name, or a folder on disk,
+ * made first when it does not exist. */
+export type Adding = { name: string } | { folder: string; create: boolean }
+
+/** The ways to add a Space, as T3 Code's "Add project" lists them, in
+ * their order. */
+export const SOURCE_ORDER = ["new", "folder"] as const
+export type Source = (typeof SOURCE_ORDER)[number]
+
+const BRANCHES = ["space", "views", "family", "add", "source"] as const
+const OWN = ["bind", "free", "adding", "folder"] as const
 
 /** A row the menu goes into rather than runs. */
-export type Branch = Extract<Choice, { kind: "space" | "views" | "family" }>
+export type Branch = Extract<Choice, { kind: (typeof BRANCHES)[number] }>
 
 export function isBranch(row: Choice): row is Branch {
-  return row.kind === "space" || row.kind === "views" || row.kind === "family"
+  return (BRANCHES as readonly string[]).includes(row.kind)
 }
 
-/** A row that changes the keys, which the menu does itself, staying open. */
-export type Keying = Extract<Choice, { kind: "bind" | "free" }>
+/** A row the menu runs itself: a key to change, a Space to add, a folder
+ * to type. */
+export type Own = Extract<Choice, { kind: (typeof OWN)[number] }>
 
-export function isKeying(row: Choice): row is Keying {
-  return row.kind === "bind" || row.kind === "free"
+export function isOwn(row: Choice): row is Own {
+  return (OWN as readonly string[]).includes(row.kind)
 }
 
 /** A branch's name, as its chip in the field shows it. */
@@ -82,10 +104,39 @@ export function branchName(branch: Branch): string {
       return branch.title
     case "views":
       return VIEWS
+    case "add":
+      return ADD_SPACE
+    case "source":
+      return SOURCES[branch.source].title
   }
 }
 
 const VIEWS = "Sidebar view"
+const ADD_SPACE = "Add Space"
+
+/** Each way to add a Space: its row's words. */
+export const SOURCES: Record<Source, { title: string; about: string }> = {
+  new: { title: "New Space", about: "Start a new Space from a name" },
+  folder: { title: "Local folder", about: "Browse a folder on disk" },
+}
+
+/** "Add Space", as the branch the menu goes into. */
+const ADD_BRANCH: Branch = { kind: "add", id: "space.add" }
+
+function sourceBranch(source: Source): Branch {
+  return { kind: "source", id: `space.add.${source}`, source }
+}
+
+/** Whether the field is a path, as in "Local folder". */
+export function isPathField(inside: Branch | undefined): boolean {
+  return inside?.kind === "source" && inside.source === "folder"
+}
+
+/** What the field holds as the menu goes into `path`: the path field
+ * starts at the home folder. */
+export function wordsIn(path: readonly Branch[]): string {
+  return isPathField(path.at(-1)) ? "~/" : ""
+}
 
 /** The sidebar's view, as the branch the menu goes into. */
 const VIEWS_BRANCH: Branch = { kind: "views", id: "views" }
@@ -117,9 +168,10 @@ export function settingsLinkOf(route: string): string | undefined {
 /**
  * Where `banda menu ROUTE` opens the menu (ADR 0017, decision 7): an
  * empty route at its root, `actions` at its Actions, `views` in the
- * sidebar's view, `space.<name>` (or its ID) in a Space. Any other words
- * open it with them typed in. A settings route opens the settings Pane
- * instead (`settingsLinkOf`).
+ * sidebar's view, `space.add` in "Add Space" (`space.add.new`,
+ * `space.add.folder` at one of its ways, ADR 0026), `space.<name>` (or
+ * its ID) in a Space. Any other words open it with them typed in. A
+ * settings route opens the settings Pane instead (`settingsLinkOf`).
  */
 export function openingOf(
   route: string,
@@ -128,6 +180,12 @@ export function openingOf(
   const words = route.trim()
   if (words === "actions") return openingAt("actions")
   if (words === "views") return openingAt("root", [VIEWS_BRANCH])
+  const adding = /^space\.add(?:\.(new|folder))?$/.exec(words)
+  if (adding) {
+    const way = adding[1] as Source | undefined
+    const path = way ? [ADD_BRANCH, sourceBranch(way)] : [ADD_BRANCH]
+    return openingAt("root", path, wordsIn(path))
+  }
   const named = /^space\.(.+)$/.exec(words)?.[1].toLowerCase()
   const space = spaces.find(
     (one) => one.id === named || one.name.toLowerCase() === named
@@ -158,7 +216,13 @@ export type Sources = {
   /** How often and lately a row was chosen, by its id: more ranks first
    * among equal matches. */
   weight: (id: string) => number
+  /** The folders that fit the path typed, once the engine said them. */
+  browsed?: Browsing
 }
+
+/** What the engine said for the path `partial`: while the next path is
+ * read, its folders still show, but not whether the path exists. */
+export type Browsing = Browsed & { partial: string }
 
 /** The rows one source found, under its heading. */
 export type Found = { label: string; rows: readonly MenuRow[] }
@@ -199,7 +263,11 @@ export function menuOf({
   const byWeight = (row: Choice) => weight(row.id)
   // The actions, and the branches among them, as one list.
   const actions = sources.actions.filter((action) => !action.unlisted)
-  const actionRows: Choice[] = [...actions.map(actionRow), VIEWS_BRANCH]
+  const actionRows: Choice[] = [
+    ...actions.map(actionRow),
+    VIEWS_BRANCH,
+    ADD_BRANCH,
+  ]
   // What the sources found: the groups with a heading, by it in the
   // modules' order, and the rows with none.
   const headed = new Map<string, Choice[]>()
@@ -214,7 +282,11 @@ export function menuOf({
       .flatMap((one) => one.rows.map(foundRow)),
   }
   const actionTexts = (row: Choice) =>
-    row.kind === "action" ? [row.action.title, row.action.id] : [VIEWS]
+    row.kind === "action"
+      ? [row.action.title, row.action.id]
+      : isBranch(row)
+        ? [branchName(row)]
+        : []
   const threadsOf = (space: string, listed: readonly Listed[]) =>
     listed.map((one) => ({
       kind: "thread" as const,
@@ -258,6 +330,18 @@ export function menuOf({
     ])
   }
 
+  if (inside?.kind === "add")
+    return nonEmpty([
+      {
+        label: "",
+        rows: fitting(SOURCE_ORDER.map(sourceBranch), actionTexts),
+      },
+    ])
+  if (inside?.kind === "source")
+    return nonEmpty([
+      { label: "", rows: addRows(inside.source, query, sources.browsed) },
+    ])
+
   if (inside?.kind === "family")
     return nonEmpty([
       { label: "", rows: fitting(inside.actions.map(actionRow), actionTexts) },
@@ -291,6 +375,7 @@ export function menuOf({
       }
     }
     sections.get("Threads")?.push(VIEWS_BRANCH)
+    sections.get("Banda")?.push(ADD_BRANCH)
     return nonEmpty([...sections].map(([label, rows]) => ({ label, rows })))
   }
 
@@ -414,6 +499,62 @@ export function actsOf(row: Choice, sources: Sources): Act[] {
     default:
       return []
   }
+}
+
+/** The rows of one way to add a Space, for what is typed: the Space to
+ * add first, then for a path the folder above and the folders that fit. */
+function addRows(
+  source: Source,
+  query: string,
+  browsed: Browsing | undefined
+): Choice[] {
+  if (source === "new")
+    return query ? [{ kind: "adding", id: "adding", how: { name: query } }] : []
+  const { create, folders } = folderRows(query, browsed)
+  const adding: Choice = {
+    kind: "adding",
+    id: "adding",
+    how: { folder: query, create },
+  }
+  return query ? [adding, ...folders] : folders
+}
+
+export type Folder = Extract<Choice, { kind: "folder" }>
+
+/**
+ * For the path `query`: whether adding it makes its folder first, as the
+ * engine said for that path, and the folders to go into: the one above,
+ * then those that fit. Each is written as the path was typed, `~/code/`
+ * from `~/co`; the one above a path typed at `~/` is whole.
+ */
+export function folderRows(
+  query: string,
+  browsed: Browsing | undefined
+): { create: boolean; folders: Folder[] } {
+  if (!browsed) return { create: false, folders: [] }
+  const cut = query.lastIndexOf("/")
+  const typed = cut === -1 ? `${query}/` : query.slice(0, cut + 1)
+  const folders: Folder[] = []
+  if (browsed.parent !== "/") {
+    const above = typed.replace(/[^/]+\/$/, "")
+    const whole = `${browsed.parent.replace(/\/[^/]*$/, "")}/`
+    const path = above || whole
+    folders.push({
+      kind: "folder",
+      id: "folder:..",
+      name: "..",
+      path,
+      up: true,
+    })
+  }
+  for (const { name } of browsed.entries)
+    folders.push({
+      kind: "folder",
+      id: `folder:${name}`,
+      name,
+      path: `${typed}${name}/`,
+    })
+  return { create: browsed.partial === query && !browsed.exists, folders }
 }
 
 function actionRow(action: Action<Shell>): Choice {

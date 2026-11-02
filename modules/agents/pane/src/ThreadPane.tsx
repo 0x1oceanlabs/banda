@@ -91,7 +91,7 @@ export const threadPane = definePane<ThreadArgs>({
 })
 
 function ThreadPane(props: PaneProps<ThreadArgs>) {
-  const { engine, space, args, focused, open, update } = props
+  const { engine, space, args, focused, open, update, run } = props
   const { thread } = args
   const {
     live,
@@ -288,6 +288,7 @@ function ThreadPane(props: PaneProps<ThreadArgs>) {
                 open(paneOf(threadPane, { ...args, harness }), "here", other)
               }
               onHarness={(next) => update({ ...args, harness: next })}
+              onAddSpace={run && (() => run("space.add"))}
             />
           )}
           {settings && (

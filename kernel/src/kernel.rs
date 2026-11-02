@@ -244,6 +244,9 @@ struct Browse {
 pub struct Browsed {
     /// The folder the entries are in.
     pub parent: String,
+    /// Whether the path as typed is a folder already: "Add" it, or else
+    /// "Create & Add".
+    pub exists: bool,
     /// Its subfolders that match, by name. Hidden ones only once a dot is
     /// typed.
     pub entries: Vec<BrowsedFolder>,
@@ -636,12 +639,15 @@ impl Kernel {
             None => (partial, ""),
         };
         let (parent, prefix) = (from_home(parent)?, prefix.to_owned());
-        let parent_shown = parent.clone();
-        let entries = tokio::task::spawn_blocking(move || subfolders(&parent, &prefix))
-            .await
-            .map_err(|_| Error::Closed)?;
+        let typed = from_home(partial)?;
+        let parent_shown = parent.display().to_string();
+        let (exists, entries) =
+            tokio::task::spawn_blocking(move || (typed.is_dir(), subfolders(&parent, &prefix)))
+                .await
+                .map_err(|_| Error::Closed)?;
         Ok(Browsed {
-            parent: parent_shown.display().to_string(),
+            parent: parent_shown,
+            exists,
             entries,
         })
     }

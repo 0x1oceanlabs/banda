@@ -2,6 +2,7 @@ import { type ReactNode, useEffect, useRef } from "react"
 import type { Engine, SpaceId } from "@banda/contract"
 import { PaneHeader } from "@banda/ui/components/pane-header"
 import { type PaneState, type Place, within } from "@banda/ui/pane"
+import type { Args } from "@banda/ui/module"
 import { kindOf, kindRuns, labelOf } from "../registry"
 import type { Entry } from "./model"
 
@@ -11,6 +12,8 @@ export type Frame = {
   open: (space: SpaceId, pane: PaneState, from: string, place?: Place) => void
   update: (entry: string, pane: PaneState) => void
   close: (entry: string) => void
+  /** Runs an action by its id, as a key would. */
+  run: (action: string, args?: Args) => void
 }
 
 /**
@@ -94,6 +97,7 @@ export function PaneFrame({
               frame.update(entry.id, { kind: entry.pane.kind, args })
             }
             close={() => frame.close(entry.id)}
+            run={frame.run}
           />
         ) : (
           <p className="p-4 text-sm text-muted-foreground">
