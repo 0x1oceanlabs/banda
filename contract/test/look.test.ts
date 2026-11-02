@@ -6,6 +6,7 @@ import { expect, test } from "vitest"
 import { AGENTS_FILE } from "../src/agents"
 import {
   BROWSER_FILE,
+  DEFAULT_BAR,
   DEFAULT_COLUMNS,
   DEFAULT_KEYS,
   DEFAULT_MOTION,
@@ -21,6 +22,7 @@ const look = (mode: Look["mode"], schemes: Look["schemes"]): Look => ({
   desk: { glass: false, material: "banda", sidebar: "panel" },
   motion: DEFAULT_MOTION,
   columns: DEFAULT_COLUMNS,
+  bar: DEFAULT_BAR,
   sources: [],
   problems: [],
   sound: {
@@ -69,7 +71,7 @@ test("a theme with one scheme shows it whatever the system says", () => {
   })
 })
 
-test("the window's own motion and columns are what banda look gives with no files", () => {
+test("the window's own motion, columns and bar are what banda look gives with no files", () => {
   const repository = join(import.meta.dirname, "../..")
   const printed = execFileSync(
     join(repository, "target/debug/banda"),
@@ -89,6 +91,7 @@ test("the window's own motion and columns are what banda look gives with no file
   const look = JSON.parse(printed) as Look
   expect(look.motion).toEqual(DEFAULT_MOTION)
   expect(look.columns).toEqual(DEFAULT_COLUMNS)
+  expect(look.bar).toEqual(DEFAULT_BAR)
 })
 
 test("the window's own module files are what banda look gives with none", () => {

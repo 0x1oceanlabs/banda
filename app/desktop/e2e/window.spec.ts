@@ -176,22 +176,21 @@ test("a Pane moves to another workspace, and the overview shows them all", async
   const draft = page.getByRole("region", { name: "New Thread" })
   await expect(draft).toBeVisible()
   const numbers = page.getByRole("navigation", { name: "Workspaces" })
-  await expect(numbers.getByRole("button")).toHaveText(["1"])
+  const names = () =>
+    numbers
+      .getByRole("button")
+      .evaluateAll((buttons) => buttons.map((b) => b.ariaLabel))
+  await expect.poll(names).toEqual(["Workspace 1", "New workspace"])
 
-  // The + goes to a new workspace, the empty one at the bottom, and is off
-  // while the Person is there.
+  // The + is the empty workspace at the bottom: a click goes there, and
+  // there it is the one marked.
   const fresh = page.getByRole("button", { name: "New workspace" })
   await fresh.click()
-  await expect(numbers.getByRole("button")).toHaveText(["1", "2"])
-  await expect(numbers.getByRole("button", { name: "2" })).toHaveAttribute(
-    "aria-current",
-    "true"
-  )
-  await expect(fresh).toBeDisabled()
+  await expect(fresh).toHaveAttribute("aria-current", "true")
+  await expect.poll(names).toEqual(["Workspace 1", "New workspace"])
   await page.screenshot({ path: "test-results/2-new-workspace.png" })
   await page.keyboard.press("Alt+PageUp")
-  await expect(numbers.getByRole("button")).toHaveText(["1"])
-  await expect(fresh).toBeEnabled()
+  await expect(fresh).not.toHaveAttribute("aria-current")
   await expect(draft).toBeVisible()
 
   // The Pane goes to the workspace below, and the window follows it.
@@ -200,11 +199,12 @@ test("a Pane moves to another workspace, and the overview shows them all", async
   const launcher = page.getByRole("region", { name: "New Pane" })
   await expect(launcher).toHaveAttribute("data-focused", "true")
   await expect(draft).toBeHidden()
-  await expect(numbers.getByRole("button")).toHaveText(["1", "2"])
-  await expect(numbers.getByRole("button", { name: "2" })).toHaveAttribute(
-    "aria-current",
-    "true"
-  )
+  await expect
+    .poll(names)
+    .toEqual(["Workspace 1", "Workspace 2", "New workspace"])
+  await expect(
+    numbers.getByRole("button", { name: "Workspace 2" })
+  ).toHaveAttribute("aria-current", "true")
   await page.keyboard.press("Alt+PageUp")
   await expect(draft).toBeVisible()
   await expect(launcher).toBeHidden()
@@ -220,7 +220,7 @@ test("a Pane moves to another workspace, and the overview shows them all", async
   await expect(launcher).toHaveAttribute("data-focused", "true")
 
   // A click on the current number opens it too; Esc goes back.
-  await numbers.getByRole("button", { name: "2" }).click()
+  await numbers.getByRole("button", { name: "Workspace 2" }).click()
   await expect(overview).toBeVisible()
   await page.keyboard.press("Escape")
   await expect(overview).toBeHidden()
@@ -229,6 +229,54 @@ test("a Pane moves to another workspace, and the overview shows them all", async
   await expect(sidebar).toBeVisible()
   await page.keyboard.press("Alt+KeyA")
   await expect(sidebar).toBeHidden()
+})
+
+test("the bar's workspaces come and go on the look's motion, as numbers or dots", async () => {
+  const slow = 'easing = { duration-ms = 1500, curve = "linear" }'
+  window = await startWindow({ look: `[motion.workspace]\n${slow}\n` })
+  const { page } = window
+  const { composer } = await firstThread(page)
+  await expect(composer).toBeFocused()
+  const numbers = page.getByRole("navigation", { name: "Workspaces" })
+  const width = (cell: Locator) =>
+    cell.evaluate((e) => e.getBoundingClientRect().width)
+  const x = async (cell: Locator) => (await cell.boundingBox())!.x
+
+  // One that comes widens from nothing, and the mark goes to it.
+  await page.keyboard.press("Alt+KeyN")
+  const launcher = page.getByRole("region", { name: "New Pane" })
+  await expect(launcher).toHaveAttribute("data-focused", "true")
+  await page.keyboard.press("Alt+Shift+Digit2")
+  const two = numbers.getByRole("button", { name: "Workspace 2" })
+  await expect(two).toHaveAttribute("aria-current", "true")
+  expect(await width(two)).toBeLessThan(20)
+  await expect.poll(() => width(two)).toBe(26)
+  const mark = numbers.locator(":scope > span[aria-hidden]")
+  await expect
+    .poll(async () => Math.round((await x(mark)) - (await x(two))))
+    .toBe(1)
+
+  // Emptied, it is still there while the Person is; left, it narrows
+  // where it was, out of reach.
+  await page.keyboard.press("Alt+KeyW")
+  await expect(two.locator(".border-dashed")).toBeVisible()
+  await page.keyboard.press("Alt+PageUp")
+  const gone = numbers.locator("[inert]")
+  await expect(gone).toHaveCount(1)
+  await expect(gone).toHaveCount(0)
+  await expect(two).toHaveCount(0)
+
+  // As dots, the one shown is drawn long.
+  await window.close()
+  window = await startWindow({ look: '[bar]\nworkspaces = "dots"\n' })
+  await firstThread(window.page)
+  const dots = window.page.getByRole("navigation", { name: "Workspaces" })
+  const one = dots.getByRole("button", { name: "Workspace 1" })
+  await expect(one).toHaveAttribute("aria-current", "true")
+  await expect.poll(() => width(one)).toBe(30)
+  await expect
+    .poll(() => width(dots.getByRole("button", { name: "New workspace" })))
+    .toBe(14)
 })
 
 test("a sideways swipe moves the Strip and lands on a column; a scroll up and down leaves it be", async () => {
@@ -283,21 +331,19 @@ test("a sideways swipe moves the Strip and lands on a column; a scroll up and do
   await page.keyboard.press("Alt+Shift+Digit2")
   await page.keyboard.press("Alt+PageUp")
   const numbers = page.getByRole("navigation", { name: "Workspaces" })
-  await expect(numbers.getByRole("button", { name: "1" })).toHaveAttribute(
-    "aria-current",
-    "true"
-  )
+  await expect(
+    numbers.getByRole("button", { name: "Workspace 1" })
+  ).toHaveAttribute("aria-current", "true")
   await page.keyboard.down("Alt")
   for (let i = 0; i < 8; i++) {
     await page.mouse.wheel(0, 30)
     await page.waitForTimeout(60)
   }
   await page.keyboard.up("Alt")
-  await expect(numbers.getByRole("button", { name: "2" })).toHaveAttribute(
-    "aria-current",
-    "true"
-  )
-  await expect(numbers.getByRole("button")).toHaveText(["1", "2"])
+  await expect(
+    numbers.getByRole("button", { name: "Workspace 2" })
+  ).toHaveAttribute("aria-current", "true")
+  await expect(numbers.getByRole("button")).toHaveText(["1", "2", ""])
 })
 
 test("the engine dies mid-work, comes back, and the Thread goes on", async () => {

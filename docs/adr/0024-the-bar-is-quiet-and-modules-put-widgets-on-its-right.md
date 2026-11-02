@@ -42,12 +42,23 @@ Codex, `codex app-server`'s rate limits.
 
 1. **The bar has three parts, as Omarchy's has: left, middle and right.**
    - Left: the Mark, the sidebar's button, as it is (ADR 0005, decision 9;
-     ADR 0008), then the workspaces' numbers as they are: those with
-     Panes and the current one, nothing on them, and a `+` after them.
-     The `+` goes to a new workspace: the empty one at the bottom, as niri
-     keeps it (ADR 0005, decision 7). It is the action `workspace.new`, so
-     a key can do it too, and it is off while the Person is there. Roma:
-     "there will be the mouse too, it seems logical."
+     ADR 0008), then the workspaces: those with Panes and the current
+     one, nothing on them, and a `+` after them. The `+` is the empty
+     workspace at the bottom, as niri keeps it (ADR 0005, decision 7): a
+     click goes there, and while the Person is there it is the one marked
+     as shown. The action `workspace.new` goes there too, so a key can.
+     Roma: "there will be the mouse too, it seems logical."
+   - The workspaces show as `[bar] workspaces` in `look.toml` says:
+     `"numbers"` (the default), the one shown on a mark; or `"dots"`, the
+     one shown drawn long, as GNOME's and Noctalia's. They move on the
+     look's `workspace` move, with the screen: the mark goes from one to
+     the next, one that comes widens from nothing, and one that goes
+     narrows where it was. They are known by the workspace's ID, not its
+     number, as niri's bars know them. An emptied workspace the Person is
+     still on is drawn dashed: it goes once they leave. Roma tried five
+     ways in a mockup on 2026-11-02 and kept these two. The first `+`, a
+     button of its own that was off on the empty workspace, showed two
+     signs for one place, and moved right whenever a number came.
    - Middle: empty. The focused Pane's header already names what it
      shows.
    - Right: the widgets, then, as now, the engine's connection and the
@@ -141,9 +152,9 @@ Codex, `codex app-server`'s rate limits.
      already take a Pane dragged over them (ADR 0025, decision 5); the
      `+` is the same target for the empty workspace at the bottom. It
      comes with ADR 0025's step 6, the mouse's moving.
-   - **An action can say it does nothing now.** The `+` is off while the
-     Person is on the empty workspace, but the Banda menu and the key
-     sheet still offer `workspace.new` there, and it does nothing. An
+   - **An action can say it does nothing now.** On the empty workspace
+     the Banda menu and the key sheet still offer `workspace.new`, and it
+     does nothing. An
      action would get a check, such as `enabled(context)`, that the
      bar, the menu and the key sheet all read, so each place that can be
      off needs no check of its own. It changes the `Action` of

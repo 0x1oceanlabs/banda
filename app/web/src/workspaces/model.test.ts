@@ -19,12 +19,11 @@ import {
   left,
   maximize,
   move,
-  onFresh,
   open,
   parse,
   send,
   shift,
-  shown,
+  inBar,
   start,
   step,
   tabs,
@@ -76,7 +75,9 @@ describe("a start", () => {
     const state = start()
     expect(state.list).toHaveLength(1)
     expect(focused(state)).toBeUndefined()
-    expect(shown(state)).toEqual([0])
+    expect(inBar(state)).toEqual([
+      { id: state.list[0]!.id, index: 0, empty: true, bottom: true },
+    ])
   })
 })
 
@@ -194,10 +195,9 @@ describe("the empty workspace at the bottom", () => {
 
   test("is the new workspace the bar's + goes to", () => {
     let state = open(start(), A, thread("t1"))
-    expect(onFresh(state)).toBe(false)
     state = fresh(state)
     expect(state.current).toBe(1)
-    expect(onFresh(state)).toBe(true)
+    expect(inBar(state).at(-1)).toMatchObject({ index: 1, bottom: true })
     expect(fresh(state)).toBe(state)
     // From an empty one above others, it goes down, and the empty one
     // goes.
@@ -211,7 +211,7 @@ describe("the empty workspace at the bottom", () => {
     state = fresh(state)
     expect(columns(state, 0)).toEqual([["x1"]])
     expect(state.current).toBe(1)
-    expect(onFresh(state)).toBe(true)
+    expect(state.list).toHaveLength(2)
   })
 
   test("the current empty one stays until the Person leaves it", () => {
@@ -230,7 +230,7 @@ describe("moving between workspaces", () => {
     let state = open(start(), A, thread("t1"))
     state = go(state, 8)
     expect(state.current).toBe(1)
-    expect(shown(state)).toEqual([0, 1])
+    expect(inBar(state).map((w) => w.index)).toEqual([0, 1])
   })
 
   test("steps up and down, and stops at the ends", () => {

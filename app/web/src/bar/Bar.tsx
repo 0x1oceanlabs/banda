@@ -7,41 +7,44 @@ import {
 } from "@banda/ui/components/banda-mark"
 import { Button } from "@banda/ui/components/button"
 import { Spinner } from "@banda/ui/components/spinner"
+import { cn } from "@banda/ui/lib/utils"
 import { type Attention, QUIET } from "@banda/ui/pane"
 import { PlusIcon, TriangleAlertIcon } from "lucide-react"
-import type { Problem } from "@banda/contract/look"
-import { useLookProblems } from "../look"
+import { useEffect, useLayoutEffect, useRef } from "react"
+import type { Problem, Workspaces } from "@banda/contract/look"
+import { useLookBar, useLookProblems } from "../look"
+import type { InBar } from "../workspaces/model"
+import { BarMotion } from "./motion"
 
 /**
  * The bar across the window's top (ADR 0005, decision 9): the sidebar's
  * button on the left, which is Banda's mark and shows the loudest state of
  * the work, with how many things wait for the Person when more than one
- * does; then the workspaces' numbers. A click on another
- * number goes there; on the current one, opens the overview. More comes
- * later as small icons, once real use asks for them.
+ * does; then the workspaces, as numbers or dots, and the empty one at the
+ * bottom as a `+`. A click on another goes there; on the current one,
+ * opens the overview. More comes later as small icons, once real use asks
+ * for them.
  */
 export function Bar({
   status,
   attention = QUIET,
-  numbers,
+  workspaces,
   current,
   sidebar,
   onSidebar,
   onPick,
-  onNew,
   problems,
 }: {
   status: Status
   /** What the modules' work calls the Person for, for the mark to show. */
   attention?: Attention
-  /** The workspaces it shows: those with Panes, and the current one. */
-  numbers: number[]
+  /** The workspaces it shows: those with Panes, the current one, and the
+   * empty one at the bottom. */
+  workspaces: readonly InBar[]
   current: number
   sidebar: boolean
   onSidebar: () => void
   onPick: (index: number) => void
-  /** Goes to a new workspace; `undefined` while the Person is on it. */
-  onNew?: () => void
   /** What the window finds wrong in the files besides, as in keys.toml. */
   problems: readonly Problem[]
 }) {
@@ -71,43 +74,117 @@ export function Bar({
           </span>
         )}
       </Button>
-      <nav aria-label="Workspaces" className="flex items-center gap-0.5">
-        {numbers.map((index) => {
-          const here = index === current
-          return (
-            <button
-              key={index}
-              type="button"
-              aria-current={here || undefined}
-              title={
-                here
-                  ? "Overview (Alt+O)"
-                  : `Workspace ${index + 1} (Alt+${index + 1})`
-              }
-              className="flex h-6 min-w-6 items-center justify-center rounded-md px-1.5 text-xs text-muted-foreground tabular-nums outline-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 aria-[current]:bg-muted aria-[current]:font-medium aria-[current]:text-foreground"
-              onClick={() => onPick(index)}
-            >
-              {index + 1}
-            </button>
-          )
-        })}
-      </nav>
-      <Button
-        variant="ghost"
-        size="icon-xs"
-        aria-label="New workspace"
-        title="New workspace"
-        disabled={!onNew}
-        className="text-muted-foreground"
-        onClick={onNew}
-      >
-        <PlusIcon />
-      </Button>
+      <WorkspaceList
+        workspaces={workspaces}
+        current={current}
+        onPick={onPick}
+      />
       <div className="ml-auto flex items-center">
         <LookProblems more={problems} />
         <Connection status={status} />
       </div>
     </header>
+  )
+}
+
+/** How wide a workspace is drawn in the bar, in rem: a number, the
+ * mark's 1.5rem and a hair each side; a dot, long when shown. */
+function widthOf(style: Workspaces, here: boolean): number {
+  if (style === "numbers") return 1.625
+  return here ? 1.875 : 0.875
+}
+
+/**
+ * The workspaces, as `[bar] workspaces` says: numbers, the one on screen
+ * marked, or dots, the one on screen drawn long. They come, go and mark
+ * the one on screen on the look's `workspace` move, with the screen.
+ */
+function WorkspaceList({
+  workspaces,
+  current,
+  onPick,
+}: {
+  workspaces: readonly InBar[]
+  current: number
+  onPick: (index: number) => void
+}) {
+  const style = useLookBar().workspaces
+  const nav = useRef<HTMLElement>(null)
+  const mark = useRef<HTMLSpanElement>(null)
+  const motion = useRef<BarMotion>(null)
+  motion.current ??= new BarMotion()
+  const cells = workspaces.map((w) => ({
+    id: w.id,
+    width: widthOf(style, w.index === current),
+  }))
+  const at = workspaces.findIndex((w) => w.index === current)
+  const left = cells.slice(0, at).reduce((sum, c) => sum + c.width, 0)
+  useLayoutEffect(() => {
+    motion.current?.sync(nav.current, cells, mark.current, left)
+  })
+  useEffect(() => () => motion.current?.stop(), [])
+  return (
+    <nav
+      ref={nav}
+      aria-label="Workspaces"
+      className="relative flex items-center"
+    >
+      <span
+        ref={mark}
+        aria-hidden
+        hidden={style !== "numbers"}
+        className="pointer-events-none absolute top-1/2 left-[0.0625rem] -mt-3 size-6 rounded-md bg-muted"
+      />
+      {workspaces.map((w) => {
+        const here = w.index === current
+        const number = String(w.index + 1)
+        const name = w.bottom ? "New workspace" : `Workspace ${number}`
+        const dot = here
+          ? "bg-foreground"
+          : w.empty
+            ? "ring-1 ring-muted-foreground/60 ring-inset"
+            : "bg-muted-foreground/60"
+        return (
+          <button
+            key={w.id}
+            data-workspace={w.id}
+            type="button"
+            aria-current={here || undefined}
+            aria-label={name}
+            title={
+              here
+                ? "Overview (Alt+O)"
+                : w.bottom
+                  ? name
+                  : `${name} (Alt+${number})`
+            }
+            className="relative flex h-6 shrink-0 items-center justify-center overflow-hidden rounded-md text-xs text-muted-foreground tabular-nums outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 aria-[current]:font-medium aria-[current]:text-foreground"
+            onClick={() => onPick(w.index)}
+          >
+            {style === "dots" ? (
+              <span
+                className={cn(
+                  "h-1.5 w-[calc(100%-0.5rem)] shrink-0 rounded-full",
+                  dot
+                )}
+              />
+            ) : w.bottom ? (
+              <PlusIcon className="size-3.5 shrink-0" />
+            ) : (
+              <span
+                className={cn(
+                  "flex size-6 shrink-0 items-center justify-center rounded-md",
+                  // Emptied, it goes once the Person leaves it.
+                  w.empty && "border border-dashed border-muted-foreground/50"
+                )}
+              >
+                {number}
+              </span>
+            )}
+          </button>
+        )
+      })}
+    </nav>
   )
 }
 

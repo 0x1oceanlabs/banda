@@ -277,9 +277,21 @@
           "type": "number",
           "format": "double",
           "minimum": 0
+        },
+        "workspaces": {
+          "description": "How the bar shows the workspaces: `\"numbers\"`, or `\"dots\"` with the\none shown drawn long, as GNOME's.",
+          "$ref": "#/$defs/Workspaces"
         }
       },
       "additionalProperties": false
+    },
+    "Workspaces": {
+      "description": "How the bar shows the workspaces.",
+      "type": "string",
+      "enum": [
+        "numbers",
+        "dots"
+      ]
     },
     "MotionSettings": {
       "description": "`[motion]` in a `look.toml` or a theme's `banda.toml`.",

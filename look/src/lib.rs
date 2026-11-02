@@ -40,7 +40,7 @@ use hyprland::Windows;
 use motion::Motion;
 use palette::Palette;
 use serde::Serialize;
-use settings::{Corner, Material, ModeChoice, Settings, SidebarStyle, ThemeChoice};
+use settings::{Corner, Material, ModeChoice, Settings, SidebarStyle, ThemeChoice, Workspaces};
 use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::fmt;
@@ -88,6 +88,8 @@ pub struct Look {
     pub motion: Motion,
     /// The widths columns take, and where the focused one scrolls to.
     pub columns: columns::Columns,
+    /// The bar, besides its height.
+    pub bar: Bar,
     /// The layers it came from, bottom first.
     pub sources: Vec<Source>,
     /// What is wrong in the files. The look still applies: a value that
@@ -131,6 +133,13 @@ pub struct Desk {
     #[ts(optional)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub wallpaper_dark: Option<Wallpaper>,
+}
+
+/// The bar as the window draws it; its height is a CSS variable.
+#[derive(Clone, Debug, PartialEq, Serialize, TS)]
+#[ts(export, export_to = "look/")]
+pub struct Bar {
+    pub workspaces: Workspaces,
 }
 
 /// A picture Banda's glass is made of (ADR 0030).
@@ -660,6 +669,9 @@ pub fn resolve(
             },
             motion: all.motion.resolve(),
             columns: all.columns.resolve(),
+            bar: Bar {
+                workspaces: all.bar.workspaces.unwrap_or(Workspaces::Numbers),
+            },
             sources,
             problems,
             sound: all.sound.resolved(),
