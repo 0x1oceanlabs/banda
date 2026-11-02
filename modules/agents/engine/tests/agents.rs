@@ -3068,7 +3068,7 @@ async fn a_recorded_conversation_plays_again_as_it_went() {
 /// 0019): their MCP names, their methods, their `///` and the schema of
 /// their params, with only what an Agent sets.
 #[tokio::test]
-async fn threads_one_thread_send_and_show_visual_are_an_agents_tools() {
+async fn threads_one_thread_send_show_visual_and_preview_visual_are_an_agents_tools() {
     let root = tempfile::tempdir().unwrap();
     let owner = PersonId::new();
     let kernel = World::open(root.path(), owner).await;
@@ -3077,6 +3077,17 @@ async fn threads_one_thread_send_and_show_visual_are_an_agents_tools() {
         .call(agent, "spaces.tools", None, None, Value::Null)
         .await
         .unwrap();
+    let preview = tools.as_array_mut().unwrap().pop().unwrap();
+    assert_eq!(
+        (&preview["name"], &preview["method"]),
+        (&json!("preview_visual"), &json!("agents.preview_visual"))
+    );
+    assert!(
+        preview["description"]
+            .as_str()
+            .unwrap()
+            .contains("before show_visual")
+    );
     let show = tools.as_array_mut().unwrap().pop().unwrap();
     assert_eq!(
         (&show["name"], &show["method"]),
@@ -3283,6 +3294,33 @@ async fn an_agent_shows_its_person_a_visual_in_its_own_turn() {
         .flat_map(|space| std::fs::read_dir(space.unwrap().path().join("visuals")).unwrap())
         .count();
     assert_eq!(kept, 1, "only the Visual that showed keeps its page");
+}
+
+#[tokio::test]
+async fn the_check_of_a_visual_needs_a_page_and_banda_s_window() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let agent = world.agent();
+    let check = |html: &str| {
+        world.call(
+            agent,
+            "agents.preview_visual",
+            json!({ "html": html, "width": 9_000 }),
+        )
+    };
+    let empty = check(" ").await.unwrap_err();
+    assert_eq!(
+        empty.message,
+        "A Visual needs its page: a whole HTML document."
+    );
+    // The window lays pages out; with none open, nothing is checked.
+    let alone = check("<p>Hi</p>").await.unwrap_err();
+    assert_eq!(alone.code, Code::Conflict);
+    assert!(
+        alone.message.starts_with("Banda's window is not open."),
+        "{}",
+        alone.message
+    );
 }
 
 #[tokio::test]

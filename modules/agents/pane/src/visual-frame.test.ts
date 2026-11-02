@@ -1,3 +1,4 @@
+import type { Look } from "@banda/contract/look"
 import { expect, test } from "vitest"
 import {
   heard,
@@ -6,6 +7,7 @@ import {
   lookMessage,
   visualAddress,
   visualLook,
+  visualLookOf,
 } from "./visual-frame"
 
 const TOKENS: Record<string, string> = {
@@ -73,4 +75,26 @@ test("a page's height is taken within bounds, and only web links", () => {
   expect(link("javascript:alert(1)")).toBeNull()
   expect(heard("hi")).toBeNull()
   expect(heard({ method: "tools/call", params: {} })).toBeNull()
+})
+
+test("main's look for a page comes from the look's scheme asked, its vars and its fonts", () => {
+  const look = {
+    schemes: {
+      light: { "--background": "white", "--added": "green" },
+      dark: { "--background": "black" },
+    },
+    vars: { "--radius": "4px", "--font-family-sans": "Inter" },
+  } as unknown as Look
+  const dark = visualLookOf(look, true)
+  expect(dark.variables["--background"]).toBe("black")
+  expect(dark.variables["--radius"]).toBe("4px")
+  expect(dark.variables["--font-sans"]).toBe("Inter")
+  expect(visualLookOf(look, false).variables["--success"]).toBe("green")
+  // One scheme serves both; no look gives none.
+  const one = { ...look, schemes: { light: { "--background": "white" } } }
+  expect(visualLookOf(one as Look, true)).toMatchObject({
+    theme: "light",
+    variables: { "--background": "white" },
+  })
+  expect(visualLookOf(null, true)).toEqual({ theme: "dark", variables: {} })
 })

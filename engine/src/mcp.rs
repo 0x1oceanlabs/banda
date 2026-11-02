@@ -19,7 +19,7 @@
 
 use crate::Failure;
 use crate::client::Client;
-use banda_kernel::{Code, CommandId, Refusal, Tool};
+use banda_kernel::{Code, CommandId, Picture, Refusal, Tool};
 use banda_skill::Reach;
 use serde_json::{Value, json};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
@@ -159,9 +159,7 @@ impl Mcp {
             .ask(&method, None, CommandId::new(), arguments)
             .await
         {
-            // A text, as a page's tree, is said as it is.
-            Ok(Value::String(text)) => Ok(said(text, false)),
-            Ok(answer) => Ok(said(answer.to_string(), false)),
+            Ok(answer) => Ok(answered(answer)),
             Err(Failure::Refused(refusal)) => Ok(refused(&refusal)),
             Err(broken) => {
                 // The next call connects again.
@@ -181,6 +179,27 @@ fn initialize(params: &Value) -> Value {
         "serverInfo": { "name": "banda", "version": env!("BANDA_VERSION") },
         "instructions": banda_skill::core(Reach::Tool),
     })
+}
+
+/// What a tool answered, as MCP says it: a text, as a page's tree, as it
+/// is; the `pictures` an answer holds as images, after the rest of it.
+fn answered(answer: Value) -> Value {
+    let mut answer = match answer {
+        Value::String(text) => return said(text, false),
+        answer => answer,
+    };
+    let pictures = answer
+        .as_object_mut()
+        .and_then(|fields| fields.remove("pictures"))
+        .and_then(|pictures| serde_json::from_value::<Vec<Picture>>(pictures).ok())
+        .unwrap_or_default();
+    let mut content = vec![json!({ "type": "text", "text": answer.to_string() })];
+    content.extend(
+        pictures.into_iter().map(
+            |picture| json!({ "type": "image", "data": picture.data, "mimeType": picture.mime }),
+        ),
+    );
+    json!({ "content": content, "isError": false })
 }
 
 /// A tool's answer: one text.
@@ -224,6 +243,29 @@ fn skill(arguments: &Value) -> Value {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn an_answer_says_its_text_and_shows_its_pictures() {
+        assert_eq!(answered(json!("- a tree")), said("- a tree".into(), false));
+        assert_eq!(
+            answered(json!({ "height": 3 })),
+            said(r#"{"height":3}"#.into(), false)
+        );
+        let shown = answered(json!({
+            "height": 3,
+            "pictures": [{ "mime": "image/png", "data": "iVBO" }],
+        }));
+        assert_eq!(
+            shown,
+            json!({
+                "content": [
+                    { "type": "text", "text": r#"{"height":3}"# },
+                    { "type": "image", "data": "iVBO", "mimeType": "image/png" },
+                ],
+                "isError": false,
+            })
+        );
+    }
 
     #[test]
     fn it_answers_the_version_a_client_asks_for_if_it_speaks_it() {

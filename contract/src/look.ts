@@ -92,6 +92,11 @@ export function shown(
   return { dark: false, colors: light ?? {} }
 }
 
+/** A colour as a window's ground takes it before the page paints: a
+ * six-digit hex colour, or none. */
+export const windowGround = (colour: string | undefined): string | undefined =>
+  colour && /^#[0-9a-f]{6}$/i.test(colour) ? colour : undefined
+
 /** No keys of the Person's: what `banda look` gives with no keys.toml. */
 export const DEFAULT_KEYS: Keys = { file: "", binds: [] }
 

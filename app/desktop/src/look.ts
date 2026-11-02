@@ -4,7 +4,11 @@
  * keeps the last one and hands each new one to whoever listens. The look
  * is this machine's, so it needs no engine.
  */
-import { type Look as LookValue, shown } from "@banda/contract/look"
+import {
+  type Look as LookValue,
+  shown,
+  windowGround,
+} from "@banda/contract/look"
 import { Look } from "@banda/desktop-kit"
 import {
   Console,
@@ -66,8 +70,5 @@ export function firstFrame(
   look: LookValue,
   systemDark: boolean
 ): string | undefined {
-  const background = shown(look, systemDark).colors["--background"]
-  return background && /^#[0-9a-f]{6}$/i.test(background)
-    ? background
-    : undefined
+  return windowGround(shown(look, systemDark).colors["--background"])
 }
