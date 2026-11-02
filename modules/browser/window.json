@@ -1,0 +1,29 @@
+{
+  "panes": [
+    "browser.browser"
+  ],
+  "actions": [
+    {
+      "id": "browser.new",
+      "title": "New browser",
+      "section": "Panes",
+      "keys": [
+        "Alt+Shift+Return"
+      ]
+    },
+    {
+      "id": "browser.open",
+      "title": "Open in a browser",
+      "section": "Panes",
+      "keys": [],
+      "unlisted": true
+    }
+  ],
+  "sources": [
+    {
+      "id": "browser.web",
+      "label": ""
+    }
+  ],
+  "watches": 0
+}

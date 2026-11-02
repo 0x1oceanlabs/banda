@@ -38,6 +38,10 @@ rust() {
   rm -rf "$BANDA_CHECKPOINTS" && mkdir -p "$BANDA_CHECKPOINTS"
   cargo test --workspace --quiet
 
+  step "The modules' unstable marks (ADR 0022, decision 6)"
+  # cargo test built it, and holds the count at its ceiling.
+  target/debug/banda modules --unstable
+
   step "The TypeScript types match the Rust"
   if [[ "$before" != "$(types)" ]]; then
     echo "cargo test rewrote contract/src/generated: review it and run again." >&2

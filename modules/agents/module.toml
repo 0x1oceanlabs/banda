@@ -1,0 +1,14 @@
+# The agents module, as it declares itself (ADR 0022). What its code says,
+# its methods and its Panes, its code declares; this holds the rest.
+id = "agents"
+name = "Agents"
+about = "Threads with Agents on their Harnesses: what each says and does, and what it asks the Person."
+version = "0.1.0"
+from-banda = true
+# The settings files it owns, in ~/.config/banda.
+settings = ["agents.toml", "harnesses.toml"]
+
+# Paths it takes that a module from elsewhere would lack (ADR 0022,
+# decision 6), each with why. One that gets its place in the contract goes.
+[unstable]
+settings-section = "the settings window draws its Harnesses section (app/web/src/settings/Agents.tsx): a module cannot declare a section yet (ADR 0016)"

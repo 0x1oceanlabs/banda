@@ -189,6 +189,17 @@ from the first. Roma chose to declare in code what is code, and to keep
   5. `module.toml` for each module, `banda modules`, the unstable marks
      counted against a ceiling; the skill's reference lists the modules,
      their actions and their tools from it.
+     - _Done._ agents, terminal and browser each have a `module.toml`.
+       The `methods!` table also gives `method_list()`. The engine has no
+       window, so the window's tests copy each `defineModule` into
+       `window.json` beside the `module.toml`, and fail while it was
+       stale, as `cargo test` does the types. `banda modules` puts the
+       three together (`--unstable`: the marks and the ceiling); the
+       engine's tests write the skill's `modules` topic from it. The two
+       marks are the agents module's settings section and the browser's
+       main process; the architecture test's list names them, and the
+       ceiling is 2 and only falls. The window's own actions are the key
+       sheet's, not a module's, so the topic leaves them out.
   - **Later, not forgotten:**
     - the browser's tabs and history as a source of the Banda menu;
     - the settings window's rows as a source, once ADR 0016 has them.

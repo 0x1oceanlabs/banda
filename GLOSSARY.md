@@ -110,6 +110,19 @@ accepts, the events it publishes, its own tables, its MCP tools and its
 Panes. A module can be removed without breaking the others.
 _Avoid_: plugin (that is a module written by someone else, later), feature.
 
+**Manifest**:
+What a module offers, as it declares it (ADR 0022): its engine part's
+`methods!` table, its window part's `defineModule`, and its short
+`module.toml` for what no code says. `banda modules` prints all three.
+
+**Source**:
+Where the Banda menu finds a module's rows: Files, or New Thread with the
+words typed (ADR 0022, decision 4).
+
+**Unstable mark**:
+A path a module of Banda's takes that a module from elsewhere would lack,
+named in its `module.toml` with why. Their count only falls.
+
 **Command**:
 A request to a module to change something. It passes the access decision and
 returns a result or a refusal.

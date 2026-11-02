@@ -69,21 +69,42 @@ pub struct Tool {
 impl Tool {
     /// A tool from a `methods!` line, its doc lines joined into words.
     pub fn new(name: &str, method: String, doc: &[&str], mut schema: Schema) -> Tool {
-        let lines: Vec<&str> = doc
-            .iter()
-            .map(|l| l.trim())
-            .filter(|l| !l.is_empty())
-            .collect();
         // What a reader of the schema needs, without the generator's notes.
         schema.remove("$schema");
         schema.remove("title");
         Tool {
             name: name.to_owned(),
             method,
-            description: lines.join(" "),
+            description: words(doc),
             schema: schema.to_value(),
         }
     }
+}
+
+/// A method's `///` lines, joined into words.
+pub fn words(doc: &[&str]) -> String {
+    let lines: Vec<&str> = doc
+        .iter()
+        .map(|l| l.trim())
+        .filter(|l| !l.is_empty())
+        .collect();
+    lines.join(" ")
+}
+
+/// One line of a module's `methods!` table, as `banda modules` prints it
+/// (ADR 0022, decision 1).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize)]
+pub struct Method {
+    /// Without the module's prefix: `send`.
+    pub name: &'static str,
+    /// `call`, `command` or `stream`.
+    pub kind: &'static str,
+    /// The right it needs.
+    pub right: crate::Right,
+    /// Its tool's name, when an Agent may call it as one.
+    pub tool: Option<&'static str>,
+    /// What it does, from its `///`.
+    pub about: String,
 }
 
 /// How the window types one kind of method: its params, its answer, and
@@ -148,6 +169,8 @@ pub fn answer(answer: impl serde::Serialize) -> Result<serde_json::Value, Refusa
 /// - `fn method_tools(module) -> Vec<Tool>`, the lines marked `tool`, for
 ///   [`Module::tools`](crate::Module::tools); a tool's params implement
 ///   `schemars::JsonSchema`;
+/// - `pub fn method_list() -> Vec<Method>`, every line, for `banda
+///   modules`;
 ///
 /// and the TypeScript type named after `as`, written in the folder after
 /// `in` when the crate's tests run. A stream's piece is typed for the
@@ -195,6 +218,19 @@ macro_rules! methods {
                 }
             }
 
+            /// Every line of its `methods!` table (ADR 0022, decision 1).
+            pub fn method_list() -> Vec<$crate::methods::Method> {
+                vec![$(
+                    $crate::methods::Method {
+                        name: stringify!($name),
+                        kind: stringify!($kind),
+                        right: $crate::Right::$right,
+                        tool: $crate::methods!(@tool_name $($tool)?),
+                        about: $crate::methods::words(&[$($doc),*]),
+                    },
+                )*]
+            }
+
             #[allow(dead_code, unused_mut, unused_variables)]
             fn method_tools(module: &str) -> Vec<$crate::methods::Tool> {
                 let mut tools = Vec::new();
@@ -211,6 +247,8 @@ macro_rules! methods {
         }
     };
 
+    (@tool_name) => { None };
+    (@tool_name $tool:literal) => { Some($tool) };
     (@tool $tools:ident $module:ident $name:ident($p:ty) [$($doc:literal)*]) => {};
     (@tool $tools:ident $module:ident $name:ident($p:ty) [$($doc:literal)*] $tool:literal) => {
         $tools.push($crate::methods::Tool::new(

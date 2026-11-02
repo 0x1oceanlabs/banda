@@ -34,7 +34,7 @@ pub use error::{Code, Error, Refusal};
 pub use events::{Event, EventFilter};
 pub use ids::{AgentId, CommandId, EventId, Participant, PersonId, SpaceId};
 pub use kernel::{Kernel, KernelBuilder, SpaceSummary, decode};
-pub use methods::{Nothing, Tool};
+pub use methods::{Method, Nothing, Tool};
 pub use module::{Call, Module, Scope, Stream};
 pub use outbox::{Effect, OnRestart, Outcome, Settled};
 pub use passes::secret;
