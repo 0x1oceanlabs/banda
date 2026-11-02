@@ -584,8 +584,8 @@ fn look(what: Option<LookCommand>, follow: bool) -> ExitCode {
             if let Err(error) = banda_settings::export(&schemas) {
                 eprintln!("banda: {}: {error}", schemas.display());
             }
-            // The Harness list is the agents module's, and the window shows
-            // what is wrong in it as in the look's own files.
+            // The modules' files come with the look: the window reads the
+            // browser's and the agents', and shows what is wrong in each.
             banda_look::follow(
                 &places,
                 Hyprland::from_env(),
