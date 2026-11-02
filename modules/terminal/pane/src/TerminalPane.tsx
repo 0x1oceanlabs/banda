@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useEffectEvent, useRef, useState } from "react"
 import {
   type CommandCall,
   type Engine,
@@ -7,12 +7,12 @@ import {
   type Params,
   type SpaceId,
 } from "@banda/contract"
-import type { Ended, Piece, TerminalId } from "@banda/contract/terminal"
+import type { Ended, Piece, TerminalId, Title } from "@banda/contract/terminal"
 import { Surface } from "@banda/ghostty"
 import { Button } from "@banda/ui/components/button"
 import { problem as words } from "@banda/ui/lib/words"
 import { definePane, type PaneProps, PROGRAM_KEYS } from "@banda/ui/pane"
-import { RotateCcwIcon, SquareTerminalIcon } from "lucide-react"
+import { RotateCcwIcon, TerminalIcon } from "lucide-react"
 import { Input } from "./input"
 import { fontOf, onThemeChange, themeOf } from "./theme"
 
@@ -24,12 +24,16 @@ const SETTLE = 120
  * another Pane started with `terminal.open`, such as a Harness's sign-in.
  * That Pane opens this one as `{kind: "terminal.terminal", args:
  * {terminal, title, shell: false, done}}`. The engine runs the program;
- * Ghostty draws it. Closing the Pane stops the program.
+ * Ghostty draws it. Closing the Pane stops the program. A shell's header
+ * says what runs in it and where, as `pnpm dev` in `~/code/banda`; another
+ * program's keeps the title it was opened with.
  */
 export type TerminalArgs = {
   /** `null` until the Pane picks the ID of the shell it starts. */
   terminal: TerminalId | null
   title: string
+  /** Where what runs in front works, once the engine said. */
+  folder?: string | null
   /** It runs the Person's shell, which starts again when it is gone. */
   shell: boolean
   /** What to send once the program ended with code 0; then the Pane closes. */
@@ -46,7 +50,10 @@ export type Done = CommandCall
 export const terminalPane = definePane<TerminalArgs>({
   kind: "terminal.terminal",
   title: (args) => args.title,
-  icon: SquareTerminalIcon,
+  detail: (args) => args.folder ?? null,
+  // Its title and folder change as it runs; its terminal does not.
+  identity: (args) => args.terminal,
+  icon: TerminalIcon,
   start: { terminal: null, title: "Terminal", shell: true, done: null },
   letter: "T",
   closed: ({ engine, space, args }) => {
@@ -70,6 +77,11 @@ function TerminalPane({
   useEffect(() => {
     if (args.terminal === null) update({ ...args, terminal: chosen })
   })
+  // Only a shell's: the engine follows what runs in front of a shell.
+  const titled = (title: Title) => {
+    if (args.title === title.program && args.folder === title.folder) return
+    update({ ...args, title: title.program, folder: title.folder })
+  }
   if (args.terminal === null) return null
   return (
     <Screen
@@ -81,6 +93,7 @@ function TerminalPane({
       done={args.done}
       focused={focused}
       close={close}
+      titled={titled}
     />
   )
 }
@@ -99,6 +112,7 @@ function Screen({
   done,
   focused,
   close,
+  titled,
 }: {
   engine: Engine
   space: SpaceId
@@ -107,7 +121,11 @@ function Screen({
   done: Done | null
   focused: boolean
   close: () => void
+  titled: (title: Title) => void
 }) {
+  // The newest, so a title heard in a stream started earlier sees the
+  // newest args.
+  const heardTitle = useEffectEvent(titled)
   const mount = useRef<HTMLDivElement>(null)
   const surface = useRef<Surface | null>(null)
   const focusedNow = useRef(focused)
@@ -175,6 +193,9 @@ function Screen({
           break
         case "exited":
           told({ is: "ended", ended: piece.ended })
+          break
+        case "titled":
+          heardTitle(piece.title)
           break
       }
     }

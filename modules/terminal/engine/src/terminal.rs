@@ -8,8 +8,9 @@
 //! ended. When the engine stops, the PTY closes and the program hears the
 //! hangup.
 
+use crate::front::Front;
 use crate::history::{Decoder, History, Since};
-use crate::model::{Ended, Open, Piece, Size};
+use crate::model::{Ended, Open, Piece, Size, Title};
 use banda_kernel::{SpaceId, Stream};
 use pty_process::{OwnedReadPty, OwnedWritePty};
 use rustix::process::{Pid, Signal, kill_process_group};
@@ -28,6 +29,10 @@ const GRACE: Duration = Duration::from_secs(1);
 const LAST_WORDS: Duration = Duration::from_millis(200);
 /// How long typing may wait for a program that does not read.
 const TYPING: Duration = Duration::from_secs(5);
+/// When, after a shell printed, its terminal looks what runs in front: a
+/// command typed has mostly started at the first, and one whose shell is
+/// slow to start it at the second.
+const LOOKS: [Duration; 2] = [Duration::from_millis(250), Duration::from_secs(1)];
 
 pub struct Terminal {
     pub space: SpaceId,
@@ -43,6 +48,7 @@ struct Now {
     history: History,
     size: Size,
     ended: Option<Ended>,
+    title: Option<Title>,
     closed: bool,
 }
 
@@ -71,6 +77,12 @@ impl Terminal {
             .id()
             .and_then(|id| i32::try_from(id).ok())
             .and_then(Pid::from_raw);
+        // A shell's header says what runs in it; another program's keeps
+        // the title it was opened with.
+        let front = match open.program {
+            None => Some(rustix::io::dup(&pty).map_err(plain)?),
+            Some(_) => None,
+        };
         let (output, input) = pty.into_split();
         let terminal = Arc::new(Terminal {
             space,
@@ -83,6 +95,10 @@ impl Terminal {
             changed: watch::Sender::new(()),
         });
         let reading = tokio::spawn(terminal.clone().read(output));
+        if let Some(front) = front {
+            let shell = group.map(Pid::as_raw_pid);
+            tokio::spawn(terminal.clone().title(Front::new(front, shell)));
+        }
         tokio::spawn(terminal.clone().wait(child, reading));
         Ok(terminal)
     }
@@ -96,6 +112,30 @@ impl Terminal {
             if !text.is_empty() {
                 self.now.lock().unwrap().history.add(text);
                 self.changed.send_replace(());
+            }
+        }
+    }
+
+    /// Follows what runs in front of a shell until it ends: a shell
+    /// prints as a command starts and as it ends, so it looks a moment
+    /// after something changed, and at most that often.
+    async fn title(self: Arc<Self>, mut front: Front) {
+        let mut changed = self.changed.subscribe();
+        while changed.changed().await.is_ok() {
+            for wait in LOOKS {
+                tokio::time::sleep(wait).await;
+                if self.ended() {
+                    return;
+                }
+                let Some(title) = front.look() else {
+                    continue;
+                };
+                let mut now = self.now.lock().unwrap();
+                if now.title.as_ref() != Some(&title) {
+                    now.title = Some(title);
+                    drop(now);
+                    self.changed.send_replace(());
+                }
             }
         }
     }
@@ -208,11 +248,12 @@ impl Terminal {
             None | Some(Since::Gone) => {
                 told.size = Some(now.size);
                 told.end = now.ended.is_some();
-                return Some(vec![Piece::Snapshot {
+                // Its title, if it has one, comes next.
+                pieces.push(Piece::Snapshot {
                     history: now.history.all(),
                     size: now.size,
                     ended: now.ended,
-                }]);
+                });
             }
             Some(Since::Pieces(texts)) if !texts.is_empty() => pieces.push(Piece::Output {
                 text: texts.concat(),
@@ -222,6 +263,12 @@ impl Terminal {
         if told.size != Some(now.size) {
             told.size = Some(now.size);
             pieces.push(Piece::Resized { size: now.size });
+        }
+        if told.title != now.title
+            && let Some(title) = now.title.clone()
+        {
+            told.title = Some(title.clone());
+            pieces.push(Piece::Titled { title });
         }
         if let Some(ended) = now.ended
             && !told.end
@@ -239,6 +286,7 @@ struct Told {
     /// The number of the first piece of output it has not heard.
     up_to: Option<u64>,
     size: Option<Size>,
+    title: Option<Title>,
     end: bool,
 }
 

@@ -29,7 +29,14 @@ import {
 } from "../menu/menu"
 import { columnsOf, useLookKeys, useLookNotify, useLookSound } from "../look"
 import { modules as known } from "../modules"
-import { kindOf, runs, showsOf, startable, widthOf } from "../registry"
+import {
+  identityOf,
+  kindOf,
+  runs,
+  showsOf,
+  startable,
+  widthOf,
+} from "../registry"
 import { Sidebar } from "../sidebar/Sidebar"
 import { pickPreset } from "../sidebar/settings"
 import { toggleSettled } from "../sidebar/settled"
@@ -284,7 +291,7 @@ export function Shell({
   // terminal stops its program; one moved elsewhere has not left.
   const before = useRef(workspaces)
   useEffect(() => {
-    for (const entry of left(before.current, workspaces)) {
+    for (const entry of left(before.current, workspaces, identityOf)) {
       kindOf(entry.pane.kind)?.closed?.({
         engine,
         space: entry.space,

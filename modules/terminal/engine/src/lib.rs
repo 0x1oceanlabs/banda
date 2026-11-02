@@ -9,6 +9,7 @@
 
 pub mod model;
 
+mod front;
 mod history;
 mod terminal;
 

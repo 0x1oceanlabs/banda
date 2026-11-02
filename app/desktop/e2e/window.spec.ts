@@ -468,7 +468,7 @@ test("a Person works in a terminal in the Space, and closing it stops the shell"
     .getByRole("button", { name: "Terminal" })
     .click()
 
-  const terminal = page.getByRole("region", { name: "Terminal", exact: true })
+  const terminal = terminalTile(page)
   const screen = terminal.getByRole("region", { name: "Terminal screen" })
   await expect(screen).toHaveAttribute("data-state", "running")
   await screen.click()
@@ -507,11 +507,25 @@ test("a Person works in a terminal in the Space, and closing it stops the shell"
   await expect.poll(() => read(join(space, "alt.txt"))).toBe("\x1bw\x1b\x02")
   await expect(terminal).toBeVisible()
 
+  // Its header says what runs in it, and where.
+  const header = terminal.locator("header")
+  await expect(header).toContainText("root/Work")
+  await page.keyboard.type("cat")
+  await page.keyboard.press("Enter")
+  await expect(header.getByRole("heading")).toHaveText("cat")
+
   const shell = Number(read(join(space, "shell.pid")))
   await page.keyboard.press("Alt+KeyW")
   await expect(terminal).toBeHidden()
   await expect.poll(() => running(shell)).toBe(false)
 })
+
+/** A terminal's tile: its title follows what runs in it. */
+function terminalTile(page: Page): Locator {
+  return page.locator("section[data-tile]").filter({
+    has: page.getByRole("region", { name: "Terminal screen" }),
+  })
+}
 
 function read(path: string): string | undefined {
   try {
@@ -1926,7 +1940,7 @@ test("niri's keys: a launcher's letters, heights, the Strip's edges, the room le
   const { thread, composer } = await firstThread(page)
   await expect(composer).toBeFocused()
   const launcher = page.getByRole("region", { name: "New Pane" })
-  const terminal = page.getByRole("region", { name: "Terminal", exact: true })
+  const terminal = terminalTile(page)
   const x = async (tile: Locator) => (await tile.boundingBox())!.x
   const high = async (tile: Locator) => (await tile.boundingBox())!.height
 
@@ -2097,7 +2111,7 @@ test("the mouse sizes as niri's: the gaps, Alt and the right button, a double cl
   await page.keyboard.press("Alt+KeyN")
   await expect(launcher).toHaveAttribute("data-focused", "true")
   await page.keyboard.press("KeyT")
-  const terminal = page.getByRole("region", { name: "Terminal", exact: true })
+  const terminal = terminalTile(page)
   await expect(terminal).toHaveAttribute("data-focused", "true")
   await expect.poll(() => sharesOf(page)).toEqual([50, 50])
   const middle = async (tile: Locator) => {

@@ -113,14 +113,10 @@ impl World {
 async fn until(stream: &mut Stream, done: impl Fn(&str) -> bool) -> (String, Option<Piece>) {
     let mut screen = String::new();
     loop {
-        let piece = tokio::time::timeout(Duration::from_secs(5), stream.recv())
-            .await
-            .expect("the terminal said something in time")
-            .map(|v| serde_json::from_value::<Piece>(v).unwrap());
-        match piece {
+        match piece(stream).await {
             Some(Piece::Snapshot { history, .. }) => screen = history,
             Some(Piece::Output { text }) => screen.push_str(&text),
-            Some(Piece::Resized { .. }) => {}
+            Some(Piece::Resized { .. } | Piece::Titled { .. }) => {}
             ended @ (Some(Piece::Exited { .. }) | None) => return (screen, ended),
         }
         if done(&screen) {
@@ -203,6 +199,77 @@ async fn only_a_person_runs_a_terminal() {
     assert_eq!(refused.code, Code::Invalid);
 }
 
+/// What the stream says next; `None` once it ended.
+async fn piece(stream: &mut Stream) -> Option<Piece> {
+    tokio::time::timeout(Duration::from_secs(5), stream.recv())
+        .await
+        .expect("the terminal said something in time")
+        .map(|v| serde_json::from_value::<Piece>(v).unwrap())
+}
+
+/// The next piece the stream says that `wanted` holds for.
+async fn next(stream: &mut Stream, wanted: impl Fn(&Piece) -> bool) -> Option<Piece> {
+    loop {
+        let piece = piece(stream).await;
+        if piece.as_ref().is_none_or(&wanted) {
+            return piece;
+        }
+    }
+}
+
+#[cfg(target_os = "linux")]
+#[tokio::test]
+async fn a_shell_says_what_runs_in_front_and_where() {
+    let world = World::new().await;
+    // No program: the Person's shell.
+    let terminal = TerminalId::new();
+    let open = json!({ "terminal": terminal, "size": { "cols": 100, "rows": 30 } });
+    world.call("terminal.open", open).await.unwrap();
+    let mut watching = world.watch(terminal).await;
+    let titled = |piece: &Piece| matches!(piece, Piece::Titled { .. });
+    let heard = next(&mut watching, titled).await;
+    let Some(Piece::Titled { title: shell }) = heard else {
+        panic!("it heard a title: {heard:?}")
+    };
+    assert!(!shell.folder.is_empty());
+    world
+        .call(
+            "terminal.write",
+            json!({ "terminal": terminal, "data": "cat\r" }),
+        )
+        .await
+        .unwrap();
+    let heard = next(&mut watching, titled).await;
+    let Some(Piece::Titled { title }) = heard else {
+        panic!("it heard what runs: {heard:?}")
+    };
+    assert_eq!(title.program, "cat");
+    assert_eq!(title.folder, shell.folder);
+    // A window that watches later hears it right after the screen.
+    let mut later = world.watch(terminal).await;
+    let first = piece(&mut later).await;
+    assert!(matches!(first, Some(Piece::Snapshot { .. })), "{first:?}");
+    assert_eq!(piece(&mut later).await, Some(Piece::Titled { title }));
+    world
+        .call("terminal.close", json!({ "terminal": terminal }))
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn a_program_has_no_title() {
+    let world = World::new().await;
+    let terminal = world
+        .run("echo started; sleep 1; echo more; sleep 1; exit 3")
+        .await;
+    let mut watching = world.watch(terminal).await;
+    let ended = next(&mut watching, |piece| {
+        matches!(piece, Piece::Titled { .. } | Piece::Exited { .. })
+    })
+    .await;
+    assert!(matches!(ended, Some(Piece::Exited { .. })), "{ended:?}");
+}
+
 #[tokio::test]
 async fn a_window_resizes_a_terminal_and_every_watcher_hears_it() {
     let world = World::new().await;
@@ -217,10 +284,10 @@ async fn a_window_resizes_a_terminal_and_every_watcher_hears_it() {
         )
         .await
         .unwrap();
-    let heard = tokio::time::timeout(Duration::from_secs(5), watching.recv())
-        .await
-        .unwrap()
-        .map(|v| serde_json::from_value::<Piece>(v).unwrap());
+    let heard = next(&mut watching, |piece| {
+        !matches!(piece, Piece::Titled { .. })
+    })
+    .await;
     let Some(Piece::Resized { size }) = heard else {
         panic!("it heard the size: {heard:?}")
     };

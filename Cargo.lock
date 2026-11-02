@@ -420,6 +420,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "banda-kernel",
+ "dirs",
  "pty-process",
  "rusqlite",
  "rustix",

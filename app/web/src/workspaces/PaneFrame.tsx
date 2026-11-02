@@ -83,7 +83,7 @@ export function PaneFrame({
   const kind = kindOf(entry.pane.kind)
   const shown = kind && kindRuns(entry.pane.kind, modules) ? kind : undefined
   const element = useRef<HTMLElement>(null)
-  const { title, Icon } = labelOf(entry.pane)
+  const { title, detail, Icon } = labelOf(entry.pane)
 
   useEffect(() => {
     const own = element.current
@@ -138,6 +138,11 @@ export function PaneFrame({
             <h2 className="min-w-0 truncate font-medium text-muted-foreground group-data-[focused=true]/tile:text-foreground">
               {title}
             </h2>
+            {detail && (
+              <span className="min-w-0 shrink-[2] truncate text-xs text-muted-foreground">
+                {detail}
+              </span>
+            )}
             {mixed && !listed && (
               <span className="shrink-0 truncate rounded-sm bg-muted px-1.5 text-xs text-muted-foreground">
                 {spaceName}

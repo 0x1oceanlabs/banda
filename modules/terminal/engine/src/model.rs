@@ -93,4 +93,20 @@ pub enum Piece {
     Exited {
         ended: Ended,
     },
+    /// Another program runs in front, or in another folder.
+    Titled {
+        title: Title,
+    },
+}
+
+/// What runs in front in a terminal, and in which folder: what its Pane's
+/// header says, as `pnpm dev` in `~/code/banda`.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "terminal/")]
+pub struct Title {
+    /// The program and its arguments; a script's name stands for the
+    /// program that runs it, as `pnpm dev` for `node /usr/bin/pnpm dev`.
+    pub program: String,
+    /// Its folder, with `~` for the home folder.
+    pub folder: String,
 }

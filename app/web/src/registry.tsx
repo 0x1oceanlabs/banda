@@ -77,11 +77,20 @@ export function showsOf(pane: PaneState): string | null {
   return kindOf(pane.kind)?.shows?.(pane.args) ?? null
 }
 
-/** A Pane's title and icon, as its kind gives them. */
+/** A Pane as what makes it that one Pane (`PaneKind.identity`). */
+export function identityOf(pane: PaneState): PaneState {
+  const identity = kindOf(pane.kind)?.identity
+  return identity
+    ? { kind: pane.kind, args: { identity: identity(pane.args) } }
+    : pane
+}
+
+/** A Pane's title, quieter detail and icon, as its kind gives them. */
 export function labelOf(pane: PaneState) {
   const kind = kindOf(pane.kind)
   return {
     title: kind ? kind.title(pane.args) : "Unknown Pane",
+    detail: kind?.detail?.(pane.args) ?? null,
     Icon: kind?.icon,
   }
 }

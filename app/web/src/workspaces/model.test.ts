@@ -504,6 +504,18 @@ describe("closing", () => {
     ])
     expect(left(before, send(before, 1))).toEqual([])
   })
+
+  test("a Pane whose args change but not what makes it that Pane stays", () => {
+    const before = open(start(), A, terminal("x1"))
+    const after = structuredClone(before)
+    after.list[0].columns[0].entries[0].pane.args.title = "cat"
+    expect(left(before, after)).toHaveLength(1)
+    const identity = (pane: PaneState): PaneState => ({
+      kind: pane.kind,
+      args: { terminal: pane.args.terminal },
+    })
+    expect(left(before, after, identity)).toEqual([])
+  })
 })
 
 describe("what was kept", () => {
