@@ -132,6 +132,20 @@ Codex, `codex app-server`'s rate limits.
      a Harness's sign-in or update, for Do not disturb (ADR 0011), and
      for the engine's machine once Spaces live on other machines.
 
+7. **Kept for later, so they are not lost.**
+   - **A Pane dropped on the `+` goes to a new workspace.** The numbers
+     already take a Pane dragged over them (ADR 0025, decision 5); the
+     `+` is the same target for the empty workspace at the bottom. It
+     comes with ADR 0025's step 6, the mouse's moving.
+   - **An action can say it does nothing now.** The `+` is off while the
+     Person is on the empty workspace, but the Banda menu and the key
+     sheet still offer `workspace.new` there, and it does nothing. An
+     action would get a check, such as `enabled(context)`, that the
+     bar, the menu and the key sheet all read, so each place that can be
+     off needs no check of its own. It changes the `Action` of
+     `@banda/ui/module` (ADR 0022, decision 3), so it waits for a second
+     action that needs it.
+
 **Consequences.**
 
 - **ADR 0005, decision 9, changes:** no marks on the numbers; widgets
