@@ -14,10 +14,14 @@ import type { MarkState } from "./components/banda-mark"
 
 /**
  * Marks where a program reads the keys, as in a terminal. Banda's Alt keys
- * still work there; everything else is the program's. Spread it on the
- * element: `<div {...PROGRAM_KEYS} />`.
+ * still work there; everything else is the program's, and the window
+ * hands it a key Banda takes when Ctrl is added: Ctrl+Alt+F reaches the
+ * program as Alt+F. Spread it on the element: `<div {...PROGRAM_KEYS} />`.
  */
 export const PROGRAM_KEYS = { "data-keys": "program" } as const
+
+/** Where a program reads the keys, as a selector. */
+export const IN_PROGRAM = "[data-keys=program]"
 
 /**
  * The window keeps one element with this attribute over its workspaces. It

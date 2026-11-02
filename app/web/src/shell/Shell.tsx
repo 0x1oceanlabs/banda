@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import type { Engine, SpaceId, SpaceSummary, Status } from "@banda/contract"
 import { inFront, useInFront } from "@banda/ui/hooks/use-in-front"
-import { type PaneState, QUIET } from "@banda/ui/pane"
+import { IN_PROGRAM, type PaneState, QUIET } from "@banda/ui/pane"
 import { DEFAULT_KEYS } from "@banda/contract/look"
-import { actionFor, rebind } from "../actions/actions"
+import { type Action, actionFor, rebind } from "../actions/actions"
 import { Bar } from "../bar/Bar"
 import { type Lists, Watches } from "../bar/Watches"
 import { isShowing, sightOf } from "../calls/sight"
@@ -65,6 +65,42 @@ type Change = (workspaces: State) => State
  * Person for, tells them of each call where they will notice it, and runs
  * the actions that change them.
  */
+/**
+ * Ctrl added to a key the window takes hands that key to a program
+ * (ADR 0005, decision 10): Ctrl+Alt+F reaches a shell as Alt+F. The
+ * program reads the press without Ctrl, as if Banda took nothing, so it
+ * comes in whatever form the program asked its terminal for.
+ */
+function handOn(
+  event: KeyboardEvent,
+  target: Element | null,
+  actions: readonly Action<Parts>[]
+): void {
+  if (!event.ctrlKey || !event.altKey || event.metaKey) return
+  if (!target?.closest(IN_PROGRAM)) return
+  const plain = {
+    key: event.key,
+    code: event.code,
+    altKey: true,
+    shiftKey: event.shiftKey,
+    ctrlKey: false,
+    metaKey: false,
+  }
+  if (!actionFor(actions, plain)) return
+  event.preventDefault()
+  event.stopPropagation()
+  const handed = new KeyboardEvent("keydown", {
+    ...plain,
+    bubbles: true,
+    cancelable: true,
+  })
+  HANDED.add(handed)
+  target.dispatchEvent(handed)
+}
+
+/** The presses the window made to hand a key on, which it leaves alone. */
+const HANDED = new WeakSet<Event>()
+
 export function Shell({
   engine,
   status,
@@ -235,11 +271,13 @@ export function Shell({
   // its keys, as the Banda menu its Alt+Enter, but for the menu's own.
   useEffect(() => {
     const onKey = (event: KeyboardEvent) => {
-      const action = actionFor(keyed.actions, event)
-      if (!action) return
+      // A press the window handed on is the program's.
+      if (HANDED.has(event)) return
       const target = event.target instanceof Element ? event.target : null
       // A field that takes a key to bind takes every key.
       if (target?.closest("[data-takes-keys]")) return
+      const action = actionFor(keyed.actions, event)
+      if (!action) return handOn(event, target, keyed.actions)
       const inDialog = target?.closest("[role=dialog]") != null
       if (inDialog && !action.overDialogs) return
       // A terminal leaves alone a key that was taken.

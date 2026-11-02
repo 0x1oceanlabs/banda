@@ -117,7 +117,11 @@ The evidence is in two notes: [tiling managers](../research/2026-11-01-tiling-ma
    - _Changed on 2026-11-01, by ADR 0017._ The palette is the Banda menu, "our Raycast" as Roma put it, and the key sheet is that menu opened at its Actions, so there is one list of keys.
 
    - **Reading the key.** Electron's main process reads the keys before the page does (`before-input-event`) and acts only when the Alt held down is the left one. AltGr stays free for typing on European layouts. Keys bind by their physical place, so they work on any layout. There is no app menu, so a lone Alt does nothing.
-   - **Terminal Panes keep the shell's Alt keys.** Banda takes only letters readline leaves free (`a e h i j k m o q s v w z`), and `n`. `Alt+1…9` takes readline's numeric argument and `Alt+N` its search forward through history, both rarely used. A per-Pane switch sends every key to the program, for tmux, zellij or Emacs.
+   - **Banda's Alt keys are niri's, in every Pane; a program gets them with Ctrl added** (_changed_ 2026-11-02). Banda first took only the letters readline leaves free (`a e h i j k m o q s v w z`, and `n`). Roma chose niri's binds instead, as `Alt+R`, `Alt+F` and `Alt+G` are, though a shell's readline has them too: `Alt+F` a word forward, `Alt+R` the line undone, `Alt+G` a glob, `Alt+U` a word in capitals. So a terminal's program still reaches every Alt key:
+     - `Ctrl+Alt` and a key Banda takes sends the program that key with Alt: `Ctrl+Alt+F` is the shell's `Alt+F`. Only a key Banda takes, as it binds them now with `keys.toml`; any other `Ctrl+Alt` key is the program's as it was. A `Ctrl+Alt` key Banda binds itself stays Banda's: the arrows that widen a column, and `Ctrl+Alt+Shift+K`, which brings its keys back.
+     - `Ctrl+←` and `Ctrl+→` move by words, as Arch's `/etc/inputrc` binds them, so `Alt+F` is rarely wanted.
+     - Escape, then the key, is the key with Alt to readline, in any terminal.
+     - `"Alt+F" = "none"` in `keys.toml` gives a key back to the program for good, and a per-Pane switch sends every key to the program, for tmux, zellij or Emacs.
    - **Today's `Ctrl+\` and `Ctrl+W` move to Alt.** In a terminal they are the program's: quit and word erase.
    - **On a Mac the mod is Cmd**, because Option types characters there.
 
