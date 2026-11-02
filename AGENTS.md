@@ -34,7 +34,8 @@ green. A red `ci` is yours to fix, on the PR or, after a merge, on `main`.
 Renovate opens the dependency PRs
 ([`.github/renovate.json5`](.github/renovate.json5)); the ones that don't
 merge themselves are on its Dependency Dashboard issue. Fix one on its branch
-or close it with the reason.
+or close it with the reason. A major waits there unopened: tick its box to
+get the PR.
 
 ## Effect in the window's main process
 
