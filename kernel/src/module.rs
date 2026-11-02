@@ -6,6 +6,7 @@ use crate::{CommandId, Error, Participant, Refusal, SpaceId, Tx};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
+use std::time::Duration;
 use tokio::sync::mpsc;
 
 /// What a module says now and keeps nowhere, such as a terminal's output:
@@ -153,6 +154,21 @@ impl Call {
 
     pub fn space(&self) -> &ModuleSpace {
         &self.space
+    }
+
+    /// Asks the window `what`, under this module's name, for this call's
+    /// caller in its Space, and waits for the answer at most `within`
+    /// (ADR 0029, decision 2). With no window, or none that answers in
+    /// time, it is refused, and the refusal says whether it may have run.
+    pub async fn ask_window(
+        &self,
+        what: &str,
+        params: Value,
+        within: Duration,
+    ) -> Result<Value, Refusal> {
+        (self.space)
+            .ask_window(self.participant, what, params, within)
+            .await
     }
 
     /// The ID this call runs under as a command. A module whose command

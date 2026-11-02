@@ -68,10 +68,12 @@ and stay Roma's to change.
    - **Main holds the stream**, as an API client of its own: it has the
      engine's port and secret, and the stream is a scoped resource that
      ends with the window (ADR 0020). The page is not on the road.
-   - **A call knows its Thread.** The agents module names the Thread when
-     it asks for a pass, and the kernel's `Call` carries it, so the
-     browser's engine part tells the window which Thread acts. The window
-     reads the Thread's title by `agents.thread`, for the tab.
+   - **A call knows its Thread.** Each Thread has an Agent of its own,
+     and the call carries that Agent, so the browser's engine part tells
+     the window which Thread acts with no change to passes. The window
+     finds the Thread and its title by the Agent in `agents.threads`, for
+     the tab. (Amended in step 2: a pass naming its Thread proved
+     needless.)
    - Main does the work with `playwright-core`, loaded on the first call.
      It keeps one connection to its own CDP endpoint, attached only to the
      tabs a Thread acts on, and keeps which Thread drives which tab.
@@ -186,7 +188,7 @@ and stay Roma's to change.
 
 1. This ADR, with the mockup.
 2. The road: `window.requests` and `window.answer` in the kernel; a
-   `Call` that knows its Thread; main as an API client holding the
+   `Call::ask_window`; main as an API client holding the
    stream; the browser's engine part with `browser_tabs` and
    `browser_snapshot`, Playwright in main; the refusal with no window.
 3. Acting: `browser_open`, `browser_navigate`, `browser_act`,
@@ -209,7 +211,6 @@ and stay Roma's to change.
 - The kernel gains a road from a module to the window, and the window's
   main process becomes an API client. The terminal's tools can use the
   road too.
-- A pass names its Thread, and `Call` carries it.
 - `banda mcp` stays a pipe; the tools are the browser module's methods.
 - Main ships `playwright-core`, loaded on the first tool call.
 - `GLOSSARY.md` gets "drives" (a Thread drives a Tab) and "hand to the

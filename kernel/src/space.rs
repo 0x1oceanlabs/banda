@@ -8,6 +8,7 @@ use crate::module::Module;
 use crate::outbox;
 use crate::passes::Passes;
 use crate::store::{Receipt, Store};
+use crate::window::Window;
 use crate::{
     AgentId, CommandId, Error, Participant, PersonId, Refusal, SpaceId, SpaceSummary, Tx, now_ms,
 };
@@ -16,6 +17,7 @@ use serde_json::Value;
 use std::fs::{File, TryLockError};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
+use std::time::Duration;
 use tokio::sync::broadcast;
 
 pub(crate) const MANIFEST: &str = "space.json";
@@ -150,6 +152,7 @@ pub struct Space {
     store: Store,
     modules: Arc<[Arc<dyn Module>]>,
     passes: Arc<Passes>,
+    window: Arc<Window>,
     /// Held while the Space is open, so one engine at a time writes it.
     _lock: File,
 }
@@ -195,6 +198,7 @@ impl Space {
         owner: PersonId,
         modules: Arc<[Arc<dyn Module>]>,
         passes: Arc<Passes>,
+        window: Arc<Window>,
         boot: &str,
     ) -> Result<Arc<Space>, Error> {
         let folder = manifest.folder.clone();
@@ -221,6 +225,7 @@ impl Space {
             store,
             modules,
             passes,
+            window,
             _lock: lock,
         });
         outbox::recover(&space, boot).await?;
@@ -376,6 +381,20 @@ impl ModuleSpace {
     /// the engine through `banda mcp` (ADR 0019, decision 2).
     pub fn pass(&self, agent: AgentId) -> Result<String, Error> {
         self.space.passes.issue(agent, self.space.id)
+    }
+
+    /// Asks the window `what`, under this module's name, for `by` in this
+    /// Space (ADR 0029, decision 2).
+    pub(crate) async fn ask_window(
+        &self,
+        by: Participant,
+        what: &str,
+        params: Value,
+        within: Duration,
+    ) -> Result<Value, Refusal> {
+        let method = format!("{}.{what}", self.module);
+        let window = &self.space.window;
+        (window.ask(method, self.space.id, by, params, within)).await
     }
 
     /// One change in one transaction, outside any command: what a module

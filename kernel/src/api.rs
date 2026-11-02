@@ -18,7 +18,9 @@
 //! 4. `stream` hears what a module says now and keeps nowhere, such as a
 //!    terminal's output: `piece` after `piece`, until `ended` says the
 //!    module ended it. Heard again after a reconnect, it starts again.
-//!    `unsubscribe` stops a stream as it stops a subscription.
+//!    `unsubscribe` stops a stream as it stops a subscription. A stream
+//!    of this machine's names no Space: `window.requests`, where the window
+//!    hears what modules ask it (ADR 0029), or a module of the machine's.
 //!
 //! Unknown fields are ignored on both sides, so either side can be newer.
 
@@ -87,7 +89,11 @@ pub enum ClientFrame {
     Stream {
         #[ts(type = "number")]
         id: u64,
-        space: SpaceId,
+        /// None for a stream of this machine's: `window.requests`, or a
+        /// module of the machine's.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        space: Option<SpaceId>,
         method: String,
         #[serde(default)]
         params: Value,

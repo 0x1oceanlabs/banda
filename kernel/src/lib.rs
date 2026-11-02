@@ -14,6 +14,8 @@
 //!   do something, and [`access::within`] keeps an Agent in its Space.
 //! - A pass names an Agent's session in its Space, for `banda mcp`
 //!   ([`ModuleSpace::pass`]).
+//! - The window's road lets a module ask the window and await its answer
+//!   ([`Call::ask_window`]).
 //! - [`api`] serves all of it over WebSocket.
 
 pub mod access;
@@ -29,6 +31,7 @@ mod outbox;
 mod passes;
 mod space;
 mod store;
+mod window;
 
 pub use access::{Caller, Right};
 pub use error::{Code, Error, Refusal};
@@ -43,6 +46,7 @@ pub use passes::secret;
 pub use schemars;
 pub use space::{ModuleSpace, Space};
 pub use store::Tx;
+pub use window::{WindowAnswer, WindowRequest};
 
 /// The version of the API's wire protocol. A window that speaks another
 /// version is refused before anything else (ADR 0002, decision 8).

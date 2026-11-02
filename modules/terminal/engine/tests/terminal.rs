@@ -100,7 +100,7 @@ impl World {
             .stream(
                 person,
                 "terminal.watch",
-                self.space,
+                Some(self.space),
                 json!({ "terminal": terminal }),
             )
             .await
