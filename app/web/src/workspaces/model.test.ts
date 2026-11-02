@@ -7,10 +7,15 @@ import {
   consume,
   current,
   displayOf,
+  edge,
   entries,
+  even,
+  fill,
   focused,
   fresh,
   go,
+  heighten,
+  heightsOf,
   left,
   maximize,
   move,
@@ -23,6 +28,7 @@ import {
   start,
   step,
   tabs,
+  toEdge,
   SIZES,
   type Width,
   widen,
@@ -360,6 +366,67 @@ describe("focus and moves inside a workspace", () => {
     state = widen(state, -1)
     expect(width(state)).toBe("2/3")
     expect(maximize(maximize(state))).toEqual(state)
+  })
+})
+
+describe("heights, and the edges of a Strip", () => {
+  const stacked = () => {
+    let state = open(start(), A, thread("t1"))
+    state = open(state, A, terminal("x1"), { place: "below" })
+    return open(state, A, terminal("x2"), { place: "below" })
+  }
+  const heights = (state: Workspaces) =>
+    heightsOf(current(state).columns[current(state).focus]).map(
+      (at) => Math.round(at * 100) / 100
+    )
+
+  test("a Pane steps its height; the others share what it leaves", () => {
+    let state = stacked()
+    expect(heights(state)).toEqual([0.33, 0.33, 0.33])
+    state = heighten(state, 1)
+    expect(focused(state)?.height).toBe("1/2")
+    expect(heights(state)).toEqual([0.25, 0.25, 0.5])
+    state = heighten(heighten(state, 1), 1)
+    expect(focused(state)?.height).toBe("2/3")
+    // Round, past the highest to the lowest.
+    state = heighten(state, 1, DEFAULT_COLUMNS, { wrap: true })
+    expect(focused(state)?.height).toBe("1/3")
+    expect(heighten(state, -1)).toBe(state)
+    state = even(heighten(state, 1))
+    expect(heights(state)).toEqual([0.33, 0.33, 0.33])
+    expect(
+      current(state).columns[0].entries.every((e) => !("height" in e))
+    ).toBe(true)
+    expect(even(state)).toBe(state)
+  })
+
+  test("a Pane alone or in tabs has no height of its own", () => {
+    const alone = open(start(), A, thread("t1"))
+    expect(heighten(alone, 1)).toBe(alone)
+    const tabbed = tabs(stacked())
+    expect(heighten(tabbed, 1)).toBe(tabbed)
+  })
+
+  test("Home and End focus the edges, and with Shift move the column there", () => {
+    let state = open(start(), A, thread("t1"))
+    state = open(state, A, thread("t2"), { place: "right" })
+    state = open(state, A, thread("t3"), { place: "right" })
+    state = edge(state, "first")
+    expect(focusName(state)).toBe("t1")
+    expect(edge(state, "first")).toBe(state)
+    state = toEdge(state, "last")
+    expect(columns(state)).toEqual([["t2"], ["t3"], ["t1"]])
+    expect(focusName(state)).toBe("t1")
+    state = toEdge(edge(state, "first"), "last")
+    expect(columns(state)).toEqual([["t3"], ["t1"], ["t2"]])
+  })
+
+  test("a column fills the room left, and leaves the whole screen", () => {
+    const state = maximize(open(start(), A, thread("t1"), { width: "1/3" }))
+    const filled = fill(state, "0.667")
+    expect(width(filled)).toBe("0.667")
+    expect(current(filled).columns[0].full).toBeUndefined()
+    expect(fill(filled, "0.667")).toBe(filled)
   })
 })
 

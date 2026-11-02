@@ -89,6 +89,8 @@ export const threadPane = definePane<ThreadArgs>({
   shows: (args) => args.thread,
   icon: MessageSquareIcon,
   start: NEW_THREAD,
+  // A Thread starts with its Harness.
+  letter: "H",
   Pane: ThreadPane,
 })
 

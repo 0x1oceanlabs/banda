@@ -48,6 +48,7 @@ export const terminalPane = definePane<TerminalArgs>({
   title: (args) => args.title,
   icon: SquareTerminalIcon,
   start: { terminal: null, title: "Terminal", shell: true, done: null },
+  letter: "T",
   closed: ({ engine, space, args }) => {
     if (args.terminal === null) return
     engine

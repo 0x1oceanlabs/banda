@@ -26,6 +26,8 @@ export function Workspaces({
   spaceName,
   called,
   marked,
+  zoomed,
+  center,
   frame,
   onStep,
   onStart,
@@ -40,6 +42,10 @@ export function Workspaces({
   called: (entry: Entry) => Chime | undefined
   /** An Agent opened it, and the Person has not looked at it yet. */
   marked: (entry: Entry) => boolean
+  /** The Pane shown over the whole window, if one is. */
+  zoomed: string | undefined
+  /** Counts Alt+C, for the current workspace's Strip. */
+  center: number
   frame: Frame
   /** A swipe up or down with Alt held steps once, however long it is. */
   onStep: (by: 1 | -1) => void
@@ -128,6 +134,8 @@ export function Workspaces({
               spaceName={spaceName}
               called={called}
               marked={marked}
+              zoomed={zoomed}
+              center={center}
               frame={frame}
               onStart={onStart}
             />

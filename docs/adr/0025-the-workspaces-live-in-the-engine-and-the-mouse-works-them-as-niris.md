@@ -155,6 +155,16 @@ On the list, Roma decided:
      launcher, and the launcher takes letters: `T` a terminal, `B` a
      browser, `H` the Harnesses; with `Shift`, one more beside the one
      shown. Each button shows its letter.
+   - _Built_ 2026-11-02, as above, but for the drawer (decision 8). A
+     Pane's height is the engine's, beside the column's width
+     (`workspaces.height`, `workspaces.even`); one moved to another
+     column leaves it behind. The zoom is the window's alone and does not
+     outlive it: the focus on another Pane, or the overview, brings the
+     Pane back. `Alt+Ctrl+F` counts the columns wholly in view where the
+     Strip is headed, not where a move has them now. Since `Ctrl+Alt+F`
+     and `Ctrl+Alt+R` are Banda's now, a shell's `Alt+F` no longer comes
+     through with Ctrl added (ADR 0005, decision 10); `"Alt+F" = "none"`
+     in `keys.toml` gives it back.
 
 5. **The mouse, as niri's, with one grammar.**
    - **Moving a Pane.** `Alt` and the left button anywhere on it, or its
@@ -255,7 +265,7 @@ On the list, Roma decided:
   3. an Agent's tools on its own Space's Panes, and the others' when its
      Person lets it (ADR 0032; _built_ 2026-11-02);
   4. the keys: heights, the zoom, `Alt+Ctrl+F`, `Alt+C`, Home and End,
-     the launcher's letters;
+     the launcher's letters (_built_ 2026-11-02);
   5. the mouse's sizing: the gaps, `Alt` and the right button, the
      double click, the steps;
   6. the mouse's moving: the insert hint, the Strip's edge, the bar's

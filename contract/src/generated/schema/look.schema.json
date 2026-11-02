@@ -382,6 +382,13 @@
             "type": "string"
           }
         },
+        "heights": {
+          "description": "What Alt+Shift+R and Alt+Ctrl+Up and Down step a Pane's height\nthrough, as shares of its column.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
         "default": {
           "description": "A new column's width, where its Pane does not ask for its own.",
           "type": "string"

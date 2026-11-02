@@ -2,16 +2,24 @@ import { Component, useEffect, useLayoutEffect, useRef } from "react"
 import type { Engine, SpaceId } from "@banda/contract"
 import type { PaneState } from "@banda/ui/pane"
 import { columnsOf, moveOf, useLookColumns } from "../look"
-import { Moving } from "../motion"
-import { Choices, minOf } from "../registry"
+import { Choices } from "../registry"
 import type { Chime } from "@banda/ui/sound"
-import { displayOf, type Entry, share, widthIn, type Workspace } from "./model"
+import type { Columns } from "@banda/contract/look"
+import {
+  displayOf,
+  type Entry,
+  heightsOf,
+  share,
+  type Workspace,
+} from "./model"
 import {
   ColumnMotion,
   minWidthOf,
   type Place,
   places,
   room,
+  scrollOf,
+  sized,
   widthAt,
 } from "./layout"
 import { type Frame, PaneFrame } from "./PaneFrame"
@@ -37,6 +45,8 @@ export function Strip({
   spaceName,
   called,
   marked,
+  zoomed,
+  center,
   frame,
   onStart,
 }: {
@@ -53,6 +63,11 @@ export function Strip({
   called: (entry: Entry) => Chime | undefined
   /** An Agent opened it, and the Person has not looked at it yet. */
   marked: (entry: Entry) => boolean
+  /** The Pane shown over the whole window, if one is (`Alt+Shift+F`). */
+  zoomed: string | undefined
+  /** Counts Alt+C: each time it does, the focused column goes to the
+   * middle of the screen, once. */
+  center: number
   frame: Frame
   /** Opens a first Pane on this empty workspace. */
   onStart: (pane: PaneState) => void
@@ -60,12 +75,10 @@ export function Strip({
   const scroller = useRef<HTMLDivElement>(null)
   const focus = workspace.columns[workspace.focus]?.id
   const look = useLookColumns()
-  const columns = workspace.columns.map((column) => ({
-    ...column,
-    width: widthIn(workspace, column, look),
-    tabbed: displayOf(column, look) === "tabs",
-    min: minOf(column, look.min),
-  }))
+  const columns = drawnColumns(workspace, look)
+  // The zoomed Pane, the focused one, covers the workspace; the rest
+  // hide under it, their pages too.
+  const zooms = live && zoomed !== undefined
   const widths = columns.map((c) => `${c.width} ${c.min}`).join()
   const empty = workspace.columns.length === 0
 
@@ -103,6 +116,17 @@ export function Strip({
     watch.observe(strip)
     return () => watch.disconnect()
   }, [])
+  // Alt+C: the focused column to the middle, once.
+  const centered = useRef(center)
+  useLayoutEffect(() => {
+    const strip = scroller.current
+    if (center === centered.current) return
+    centered.current = center
+    if (strip && live) {
+      const all = places(strip, now.current.columns)
+      reveal(strip, all, now.current.focus, undefined, "always")
+    }
+  }, [center, live])
   useEffect(() => {
     const strip = scroller.current
     if (!strip) return
@@ -182,11 +206,17 @@ export function Strip({
               modules={modules}
               focused={live && workspace.focus === c && column.active === e}
               marked={marked(entry)}
+              zoomed={entry.id === zoomed}
+              height={column.tabbed ? undefined : column.heights[e]}
               spaceName={mixed ? spaceName(entry.space) : undefined}
               frame={frame}
-              hidden={column.tabbed && column.active !== e}
+              hidden={
+                zooms
+                  ? entry.id !== zoomed
+                  : column.tabbed && column.active !== e
+              }
               header={
-                column.tabbed && column.active === e ? (
+                column.tabbed && column.active === e && !zooms ? (
                   <Tabs
                     entries={column.entries}
                     active={column.active}
@@ -218,21 +248,13 @@ class Before extends Component<{ read: () => void }> {
   }
 }
 
-const scrolls = new WeakMap<HTMLElement, Moving>()
-
-/** The Strip's scroll, moving on the look's spring. */
-function scrollOf(strip: HTMLElement): Moving {
-  let scroll = scrolls.get(strip)
-  if (!scroll) {
-    scroll = new Moving(
-      (left) => {
-        strip.scrollLeft = left
-      },
-      () => strip.scrollLeft
-    )
-    scrolls.set(strip, scroll)
-  }
-  return scroll
+/** The columns of `workspace` as the Strip draws them, by the look. */
+function drawnColumns(workspace: Workspace, look: Columns) {
+  return sized(workspace, look).map((column) => ({
+    ...column,
+    tabbed: displayOf(column, look) === "tabs",
+    heights: heightsOf(column),
+  }))
 }
 
 /**
@@ -246,7 +268,8 @@ function reveal(
   strip: HTMLElement,
   all: readonly Place[],
   id: string | undefined,
-  before?: string
+  before?: string,
+  center = columnsOf().center
 ) {
   const column = all.find((place) => place.id === id)
   if (!column) return
@@ -262,7 +285,6 @@ function reveal(
         ? right - pad - inner
         : at
   const middle = (column.left + column.right - inner) / 2 - pad
-  const { center } = columnsOf()
   let to = least(column.left, column.right)
   if (center === "always") to = middle
   const previous = all.find((place) => place.id === before)

@@ -13,7 +13,13 @@ export type Pane = { id: PaneId,
  * The Agent that opened it, which alone of the Agents moves and
  * closes it (ADR 0032). Left out, its Person opened it.
  */
-by?: AgentId, space: SpaceId, 
+by?: AgentId, 
+/**
+ * The share of its column's height the Person gave it, such as
+ * `"1/3"`. Left out, it shares what the others leave evenly with the
+ * rest left out (ADR 0025, decision 4).
+ */
+height?: string, space: SpaceId, 
 /**
  * Its kind, `<module>.<pane>`.
  */

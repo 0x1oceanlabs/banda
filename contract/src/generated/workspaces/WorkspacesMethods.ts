@@ -4,10 +4,12 @@ import type { CommandMethod } from "../CommandMethod";
 import type { Nothing } from "../Nothing";
 import type { Arranged } from "./Arranged";
 import type { Done } from "./Done";
+import type { Height } from "./Height";
 import type { Maximize } from "./Maximize";
 import type { MoveColumn } from "./MoveColumn";
 import type { MoveOwn } from "./MoveOwn";
 import type { MovePane } from "./MovePane";
+import type { OneColumn } from "./OneColumn";
 import type { OnePane } from "./OnePane";
 import type { Open } from "./Open";
 import type { OpenPane } from "./OpenPane";
@@ -50,6 +52,15 @@ move_column: CommandMethod<MoveColumn, Done>,
  * Gives a column its width; it no longer takes the whole screen.
  */
 size: CommandMethod<Size, Done>, 
+/**
+ * Gives a Pane its share of its column's height; left out, an
+ * even one.
+ */
+height: CommandMethod<Height, Done>, 
+/**
+ * Makes every Pane of a column as high as the others.
+ */
+even: CommandMethod<OneColumn, Done>, 
 /**
  * Whether a column takes the whole screen.
  */

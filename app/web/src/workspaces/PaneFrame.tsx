@@ -3,7 +3,9 @@ import type { Engine, SpaceId } from "@banda/contract"
 import { PaneHeader } from "@banda/ui/components/pane-header"
 import { type PaneState, type Place, within } from "@banda/ui/pane"
 import type { Args } from "@banda/ui/module"
+import { Minimize2Icon } from "lucide-react"
 import { kindOf, kindRuns, labelOf } from "../registry"
+import { widthAt } from "./layout"
 import type { Entry } from "./model"
 
 /** What a framed Pane asks of the workspaces. */
@@ -41,6 +43,8 @@ export function PaneFrame({
   modules,
   focused,
   marked,
+  zoomed = false,
+  height,
   spaceName,
   frame,
   header,
@@ -52,6 +56,11 @@ export function PaneFrame({
   focused: boolean
   /** An Agent opened it, and the Person has not looked at it yet. */
   marked: boolean
+  /** Over the whole window (`Alt+Shift+F`): its header says so, even a
+   * Pane that draws its own, and takes it back. */
+  zoomed?: boolean
+  /** Its share of its column's height; left out, an even one. */
+  height?: number
   /** Shown in the header when the workspace mixes Spaces. */
   spaceName: string | undefined
   frame: Frame
@@ -83,18 +92,22 @@ export function PaneFrame({
       aria-label={title}
       data-focused={focused}
       data-marked={marked || undefined}
+      data-zoomed={zoomed || undefined}
       data-tile={entry.id}
       hidden={hidden}
       onPointerDownCapture={take}
       onFocusCapture={take}
-      className="group/tile relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-tile border-(length:--tile-border) border-focus-inactive bg-tile shadow-(--tile-shadow) outline-none after:pointer-events-none after:absolute after:inset-0 after:bg-black after:opacity-(--tile-dim) data-marked:border-attention data-[focused=true]:border-focus data-[focused=true]:outline-[length:calc(var(--tile-border)+var(--focus-ring))] data-[focused=true]:outline-offset-[calc(-1*var(--tile-border))] data-[focused=true]:outline-focus data-[focused=true]:outline-solid data-[focused=true]:after:opacity-0"
+      style={
+        height === undefined ? undefined : { flex: `0 1 ${widthAt(height)}` }
+      }
+      className="group/tile relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-tile border-(length:--tile-border) border-focus-inactive bg-tile shadow-(--tile-shadow) outline-none after:pointer-events-none after:absolute after:inset-0 after:bg-black after:opacity-(--tile-dim) data-marked:border-attention data-zoomed:fixed data-zoomed:inset-0 data-zoomed:z-10 data-zoomed:rounded-none data-zoomed:border-0 data-zoomed:shadow-none data-zoomed:outline-none data-[focused=true]:border-focus data-[focused=true]:outline-[length:calc(var(--tile-border)+var(--focus-ring))] data-[focused=true]:outline-offset-[calc(-1*var(--tile-border))] data-[focused=true]:outline-focus data-[focused=true]:outline-solid data-[focused=true]:after:opacity-0"
     >
       {/* On the border, where no page covers it. */}
       {marked && (
         <AgentMark className="pointer-events-none absolute top-1.5 right-1.5 z-10" />
       )}
       {header ??
-        (kind?.header !== false && (
+        ((zoomed || kind?.header !== false) && (
           <PaneHeader title={title} onClose={() => frame.close(entry.id)}>
             {Icon && <Icon className="size-4 shrink-0 text-muted-foreground" />}
             <h2 className="min-w-0 truncate font-medium text-muted-foreground group-data-[focused=true]/tile:text-foreground">
@@ -104,6 +117,17 @@ export function PaneFrame({
               <span className="shrink-0 truncate rounded-sm bg-muted px-1.5 text-xs text-muted-foreground">
                 {spaceName}
               </span>
+            )}
+            {zoomed && (
+              <button
+                type="button"
+                title="Back in its column (Alt+Shift+F)"
+                className="flex shrink-0 items-center gap-1 rounded-sm bg-muted px-1.5 text-xs text-muted-foreground hover:text-foreground"
+                onClick={() => frame.run("pane.zoom")}
+              >
+                <Minimize2Icon className="size-3" />
+                Zoomed
+              </button>
             )}
           </PaneHeader>
         ))}

@@ -84,6 +84,7 @@ export const browserPane = definePane<BrowserArgs>({
   },
   icon: GlobeIcon,
   start: NEW_BROWSER,
+  letter: "B",
   header: false,
   closed: ({ args }) => {
     for (const tab of args.tabs) drop(tab.id)

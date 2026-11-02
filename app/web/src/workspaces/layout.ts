@@ -4,9 +4,11 @@
  * `resize`, and the columns a change puts elsewhere go there on its
  * `move`, as niri's do, instead of jumping.
  */
-import { moveOf } from "../look"
+import type { Columns as Look } from "@banda/contract/look"
+import { columnsOf, moveOf } from "../look"
 import { Moving } from "../motion"
-import { drawn, share, type Width } from "./model"
+import { minOf } from "../registry"
+import { drawn, share, type Width, widthIn, type Workspace } from "./model"
 
 /** A column's place once every move is done, in the Strip's scroll. */
 export interface Place {
@@ -34,11 +36,71 @@ function floorIn(room: { gap: number; inner: number }, min: number): number {
   return room.inner > 0 ? (min * rem + room.gap) / (room.inner + room.gap) : 0
 }
 
+/** The Strip of workspace `id`, while it is drawn. */
+export function stripOf(id: string): HTMLElement | null {
+  return document.querySelector<HTMLElement>(`[data-strip="${id}"]`)
+}
+
 /** The floor of a column of `min` rem in the Strip of workspace `id`; 0
  * when that Strip is not drawn. */
 export function floorOf(id: string, min: number): number {
-  const strip = document.querySelector<HTMLElement>(`[data-strip="${id}"]`)
+  const strip = stripOf(id)
   return strip ? floorIn(room(strip), min) : 0
+}
+
+/** The columns of `workspace` as the look sizes them: the width each is
+ * drawn at, and the least, in rem. */
+export function sized(workspace: Workspace, look: Look) {
+  return workspace.columns.map((column) => ({
+    ...column,
+    width: widthIn(workspace, column, look),
+    min: minOf(column, look.min),
+  }))
+}
+
+const scrolls = new WeakMap<HTMLElement, Moving>()
+
+/** A Strip's scroll, moving on the look's spring. */
+export function scrollOf(strip: HTMLElement): Moving {
+  let scroll = scrolls.get(strip)
+  if (!scroll) {
+    scroll = new Moving(
+      (left) => {
+        strip.scrollLeft = left
+      },
+      () => strip.scrollLeft
+    )
+    scrolls.set(strip, scroll)
+  }
+  return scroll
+}
+
+/**
+ * The width the focused column of `workspace` takes to fill the room the
+ * columns wholly in view beside it leave, as niri's
+ * expand-column-to-available-width: by where the columns and the scroll
+ * are headed; none when its Strip is not drawn.
+ */
+export function roomLeft(
+  workspace: Workspace,
+  look: Look = columnsOf()
+): Width | undefined {
+  const strip = stripOf(workspace.id)
+  const focused = workspace.columns[workspace.focus]
+  if (!strip || !focused) return undefined
+  const { pad, gap, inner } = room(strip)
+  const from = scrollOf(strip).target + pad
+  const taken = places(strip, sized(workspace, look))
+    .filter(
+      (place) =>
+        place.id !== focused.id &&
+        place.left >= from - 1 &&
+        place.right <= from + inner + 1
+    )
+    .reduce((sum, place) => sum + place.right - place.left + gap, 0)
+  // The share whose width, as `widthAt` draws it, is what is left.
+  const at = Math.min(1, (inner - taken + gap) / (inner + gap))
+  return at > 0 ? String(Math.round(at * 1000) / 1000) : undefined
 }
 
 /**
@@ -63,7 +125,8 @@ export function places(
   })
 }
 
-/** A column's width at `at`, a share of the room, as the Strip draws it. */
+/** A column's width at `at`, a share of the room, as the Strip draws it;
+ * a Pane's height in its column too, the gaps coming out of it alike. */
 export function widthAt(at: number): string {
   return `calc(${at} * (100% + var(--gap-inner)) - var(--gap-inner))`
 }

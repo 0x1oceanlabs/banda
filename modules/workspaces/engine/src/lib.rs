@@ -56,6 +56,11 @@ banda_kernel::methods! {
         command move_column(MoveColumn) -> Done, Write;
         /// Gives a column its width; it no longer takes the whole screen.
         command size(Size) -> Done, Write;
+        /// Gives a Pane its share of its column's height; left out, an
+        /// even one.
+        command height(Height) -> Done, Write;
+        /// Makes every Pane of a column as high as the others.
+        command even(OneColumn) -> Done, Write;
         /// Whether a column takes the whole screen.
         command maximize(Maximize) -> Done, Write;
         /// Shows a column's Panes one above another or as tabs.
@@ -270,6 +275,22 @@ pub struct Size {
 
 #[derive(Deserialize, TS)]
 #[ts(export_to = "workspaces/")]
+pub struct Height {
+    pub pane: PaneId,
+    /// A share of its column's height, such as `"1/3"`; left out, even.
+    #[serde(default)]
+    #[ts(optional)]
+    pub height: Option<String>,
+}
+
+#[derive(Deserialize, TS)]
+#[ts(export_to = "workspaces/")]
+pub struct OneColumn {
+    pub column: ColumnId,
+}
+
+#[derive(Deserialize, TS)]
+#[ts(export_to = "workspaces/")]
 pub struct Maximize {
     pub column: ColumnId,
     pub full: bool,
@@ -411,6 +432,22 @@ impl Workspaces {
         let Size { column, width } = size;
         done(&call, "sized", column, Say::Whole, move |list, _| {
             Ok(model::size(list, column, width)?)
+        })
+        .await
+    }
+
+    async fn height(&self, call: Call, height: Height) -> Result<Done, Refusal> {
+        let Height { pane, height } = height;
+        done(&call, "heightened", pane, Say::Whole, move |list, _| {
+            Ok(model::height(list, pane, height)?)
+        })
+        .await
+    }
+
+    async fn even(&self, call: Call, one: OneColumn) -> Result<Done, Refusal> {
+        let column = one.column;
+        done(&call, "evened", column, Say::Whole, move |list, _| {
+            Ok(model::even(list, column)?)
         })
         .await
     }

@@ -25,14 +25,17 @@ import {
 import type { PaneState, Place } from "@banda/ui/pane"
 
 /**
- * One Pane on a workspace: what it shows, the Space it belongs to, and
- * the Agent that opened it, if one did (ADR 0032).
+ * One Pane on a workspace: what it shows, the Space it belongs to, the
+ * Agent that opened it, if one did (ADR 0032), and the share of its
+ * column's height the Person gave it (ADR 0025, decision 4).
  */
 export type Entry = {
   id: string
   space: SpaceId
   pane: PaneState
   by?: AgentId
+  /** Left out, it shares evenly what the Panes given one leave. */
+  height?: Width
 }
 
 /**
@@ -44,6 +47,8 @@ export type Width = string
 /** What the look says of widths (`[columns]`): the steps, a new column's,
  * and a column's alone on its workspace. Banda's own till the look comes. */
 export type Sizes = Pick<Columns, "presets" | "default" | "alone">
+/** What the look says of heights: the steps, and how a column shows. */
+export type Heights = Pick<Columns, "heights" | "display">
 export const SIZES: Sizes = DEFAULT_COLUMNS
 
 /** A width's share of the screen, more than 0 and at most 1; `undefined`
@@ -475,20 +480,37 @@ export function widen(
   if (!column) return state
   const now = drawn(share(widthIn(workspace, column, sizes)) ?? 0.5, floor)
   // Of the presets drawn alike, the widest stands for them all.
-  const steps = sizes.presets
-    .flatMap((width) => {
-      const at = share(width)
-      return at === undefined ? [] : [{ width, at, shows: drawn(at, floor) }]
+  const next = nextStep(sizes.presets, now, by, wrap, (at) => drawn(at, floor))
+  if (next === undefined) return state
+  return withFocused(state, { ...column, width: next, full: undefined })
+}
+
+/**
+ * The share past `now` in `steps`, by what each `shows` as: from any
+ * share, the nearest one past it, up or down; with `wrap`, past the last
+ * to the first. Of the steps that show alike, the last stands for them
+ * all. None when no step shows another share.
+ */
+function nextStep(
+  steps: readonly Width[],
+  now: number,
+  by: 1 | -1,
+  wrap: boolean,
+  shows: (at: number) => number = (at) => at
+): Width | undefined {
+  const all = steps
+    .flatMap((step) => {
+      const at = share(step)
+      return at === undefined ? [] : [{ step, at, shows: shows(at) }]
     })
     .sort((a, b) => a.at - b.at)
     .filter((step, i, all) => !alike(step.shows, all[i + 1]?.shows))
   let next =
     by > 0
-      ? steps.find((step) => step.shows > now + EPSILON)
-      : steps.findLast((step) => step.shows < now - EPSILON)
-  if (!next && wrap) next = by > 0 ? steps[0] : steps.at(-1)
-  if (!next || alike(next.shows, now)) return state
-  return withFocused(state, { ...column, width: next.width, full: undefined })
+      ? all.find((step) => step.shows > now + EPSILON)
+      : all.findLast((step) => step.shows < now - EPSILON)
+  if (!next && wrap) next = by > 0 ? all[0] : all.at(-1)
+  return next && !alike(next.shows, now) ? next.step : undefined
 }
 
 /**
@@ -500,6 +522,92 @@ export function maximize(state: Workspaces): Workspaces {
   const column = workspace.columns[workspace.focus]
   if (!column) return state
   return withFocused(state, { ...column, full: column.full ? undefined : true })
+}
+
+/**
+ * The share of its column's height each entry is drawn at: its own, or
+ * an even share of what those leave; one alone fills the column.
+ */
+export function heightsOf(column: Column): number[] {
+  if (column.entries.length === 1) return [1]
+  const own = column.entries.map((entry) =>
+    entry.height === undefined ? undefined : share(entry.height)
+  )
+  const taken = own.reduce((sum: number, at) => sum + (at ?? 0), 0)
+  const rest = own.filter((at) => at === undefined).length
+  const each = rest > 0 ? Math.max(0, 1 - taken) / rest : 0
+  return own.map((at) => at ?? each)
+}
+
+/**
+ * Steps the focused Pane's height to the next of the look's `heights`,
+ * higher or lower, from the height it is drawn at; with `wrap`, past the
+ * last to the first, as niri's Mod+Shift+R. A Pane alone in its column,
+ * or one of tabs, has no height of its own.
+ */
+export function heighten(
+  state: Workspaces,
+  by: 1 | -1,
+  look: Heights = DEFAULT_COLUMNS,
+  { wrap = false }: { wrap?: boolean } = {}
+): Workspaces {
+  const workspace = current(state)
+  const column = workspace.columns[workspace.focus]
+  const entry = column?.entries[column.active]
+  if (!entry || column.entries.length < 2) return state
+  if (displayOf(column, look) === "tabs") return state
+  const now = heightsOf(column)[column.active]
+  const height = nextStep(look.heights, now, by, wrap)
+  if (height === undefined) return state
+  const entries = replace(column.entries, column.active, { ...entry, height })
+  return withFocused(state, { ...column, entries })
+}
+
+/** Makes every Pane of the focused column as high as the others, as
+ * niri's Mod+Ctrl+R. */
+export function even(state: Workspaces): Workspaces {
+  const workspace = current(state)
+  const column = workspace.columns[workspace.focus]
+  if (!column?.entries.some((entry) => entry.height !== undefined)) return state
+  const entries = column.entries.map((entry) => {
+    const even = { ...entry }
+    delete even.height
+    return even
+  })
+  return withFocused(state, { ...column, entries })
+}
+
+/** Gives the focused column `width`, the room the others leave, as niri's
+ * expand-column-to-available-width. */
+export function fill(state: Workspaces, width: Width): Workspaces {
+  const workspace = current(state)
+  const column = workspace.columns[workspace.focus]
+  if (!column || (column.width === width && !column.full)) return state
+  return withFocused(state, { ...column, width, full: undefined })
+}
+
+/** Focuses the first or the last column, as niri's Mod+Home and Mod+End. */
+export function edge(state: Workspaces, side: "first" | "last"): Workspaces {
+  const workspace = current(state)
+  const focus = side === "first" ? 0 : workspace.columns.length - 1
+  if (focus < 0 || focus === workspace.focus) return state
+  return setWorkspace(state, state.current, { ...workspace, focus })
+}
+
+/** Moves the focused column to the first or the last place, and keeps the
+ * focus on it, as niri's Mod+Ctrl+Home and Mod+Ctrl+End. */
+export function toEdge(state: Workspaces, side: "first" | "last"): Workspaces {
+  const workspace = current(state)
+  const column = workspace.columns[workspace.focus]
+  const to = side === "first" ? 0 : workspace.columns.length - 1
+  if (!column || to === workspace.focus) return state
+  const columns = workspace.columns.filter((other) => other !== column)
+  columns.splice(to, 0, column)
+  return setWorkspace(state, state.current, {
+    ...workspace,
+    columns,
+    focus: to,
+  })
 }
 
 /** Puts `column` in the place of the focused one. */

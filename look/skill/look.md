@@ -30,6 +30,7 @@ Every key, with its default:
 - "Orange focus": `[colors]` `accent = "orange"`, or a hex.
 - "Columns too narrow in a small window": `[columns]` `min = 36`.
 - "Tabs instead of Panes one above another": `[columns]` `display = "tabs"`.
+- "Other heights for Alt+Shift+R": `[columns]` `heights = ["1/4", "1/2", "3/4"]`.
 - "More space between the windows": `[gaps]` `inner = 16`, `outer = 16`.
 - "More glass", "see the wallpaper more": `[desk]` `opacity = 0.25`;
   "glassier windows": `[tile]` `opacity = 0.75`. Solid: `[desk]`

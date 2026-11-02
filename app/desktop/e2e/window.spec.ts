@@ -445,7 +445,7 @@ test("a Person works in a terminal in the Space, and closing it stops the shell"
   await expect.poll(() => read(join(space, "word.txt"))).toBe("one\n")
 
   // Ctrl added to a key Banda takes hands the shell that key with Alt:
-  // Ctrl+Alt+F is Alt+F, Escape and f. A key Banda leaves free is sent as
+  // Ctrl+Alt+W is Alt+W, Escape and w. A key Banda leaves free is sent as
   // it was: Ctrl+Alt+B is Escape and Ctrl+B.
   // The keys wait for read: the shell drops what was typed ahead.
   await page.keyboard.type(
@@ -453,10 +453,10 @@ test("a Person works in a terminal in the Space, and closing it stops the shell"
   )
   await page.keyboard.press("Enter")
   await expect.poll(() => read(join(space, "reading"))).toBe("")
-  await page.keyboard.press("Control+Alt+KeyF")
+  await page.keyboard.press("Control+Alt+KeyW")
   await page.keyboard.press("Control+Alt+KeyB")
   await page.keyboard.press("Enter")
-  await expect.poll(() => read(join(space, "alt.txt"))).toBe("\x1bf\x1b\x02")
+  await expect.poll(() => read(join(space, "alt.txt"))).toBe("\x1bw\x1b\x02")
   await expect(terminal).toBeVisible()
 
   const shell = Number(read(join(space, "shell.pid")))
@@ -1875,6 +1875,111 @@ test("a column alone fills its workspace, and a second halves it", async () => {
   await page.keyboard.press("Alt+KeyW")
   await expect(thread).toBeVisible()
   await expect.poll(shares).toEqual([100])
+})
+
+test("niri's keys: a launcher's letters, heights, the Strip's edges, the room left, the middle and the zoom", async () => {
+  // Narrow columns, so a third of this window is a third.
+  window = await startWindow({ look: "[columns]\nmin = 10\n" })
+  const { page } = window
+  const { thread, composer } = await firstThread(page)
+  await expect(composer).toBeFocused()
+  const launcher = page.getByRole("region", { name: "New Pane" })
+  const terminal = page.getByRole("region", { name: "Terminal", exact: true })
+  const x = async (tile: Locator) => (await tile.boundingBox())!.x
+  const high = async (tile: Locator) => (await tile.boundingBox())!.height
+
+  // Alt+N, then a letter: T makes the launcher a terminal.
+  await page.keyboard.press("Alt+KeyN")
+  await expect(launcher.locator("kbd", { hasText: "T" })).toBeVisible()
+  await page.screenshot({ path: "test-results/4a-launcher-letters.png" })
+  await page.keyboard.press("KeyT")
+  await expect(terminal).toHaveAttribute("data-focused", "true")
+  await expect(launcher).toHaveCount(0)
+
+  // Heights, in a column of two: the next, even again, a step lower.
+  await page.keyboard.press("Alt+KeyN")
+  await page.keyboard.press("Alt+BracketLeft")
+  await expect(launcher).toHaveAttribute("data-focused", "true")
+  const ratio = async () => (await high(launcher)) / (await high(terminal))
+  await expect.poll(ratio).toBeCloseTo(1, 1)
+  await page.keyboard.press("Alt+Shift+KeyR")
+  await expect.poll(ratio).toBeGreaterThan(1.8)
+  await page.screenshot({ path: "test-results/4b-heights.png" })
+  await page.keyboard.press("Alt+Control+KeyR")
+  await expect.poll(ratio).toBeCloseTo(1, 1)
+  await page.keyboard.press("Alt+Control+ArrowUp")
+  await expect.poll(ratio).toBeLessThan(0.6)
+  await page.keyboard.press("Alt+KeyW")
+  await expect(launcher).toHaveCount(0)
+
+  // Home and End: the first and the last column; with Shift, there.
+  await page.keyboard.press("Alt+Home")
+  await expect(thread).toHaveAttribute("data-focused", "true")
+  await page.keyboard.press("Alt+End")
+  await expect(terminal).toHaveAttribute("data-focused", "true")
+  await page.keyboard.press("Alt+Shift+Home")
+  await expect
+    .poll(async () => (await x(terminal)) < (await x(thread)))
+    .toBe(true)
+
+  // The room the others leave: the Thread a third, the terminal the rest.
+  const shares = () =>
+    page.locator("[data-column]").evaluateAll((columns) =>
+      columns.map((e) => {
+        const strip = e.parentElement!
+        const style = getComputedStyle(strip)
+        const gap = parseFloat(style.columnGap) || 0
+        const room =
+          strip.clientWidth -
+          parseFloat(style.paddingLeft) -
+          parseFloat(style.paddingRight) +
+          gap
+        return Math.round((((e as HTMLElement).offsetWidth + gap) / room) * 100)
+      })
+    )
+  await page.keyboard.press("Alt+End")
+  await page.keyboard.press("Alt+Control+ArrowLeft")
+  await page.keyboard.press("Alt+Home")
+  await expect(terminal).toHaveAttribute("data-focused", "true")
+  await page.keyboard.press("Alt+Control+KeyF")
+  await expect.poll(shares).toEqual([67, 33])
+
+  // Alt+C: the column in the middle of the screen.
+  await page.keyboard.press("Alt+KeyN")
+  await expect(launcher).toHaveAttribute("data-focused", "true")
+  const strip = page.locator("[data-column]").first().locator("xpath=..")
+  const scrolled = () => strip.evaluate((element) => element.scrollLeft)
+  await page.waitForTimeout(500)
+  const least = await scrolled()
+  await page.keyboard.press("Alt+KeyC")
+  await expect.poll(scrolled).toBeGreaterThan(least + 50)
+
+  // Shift and a letter: one more beside it, and the launcher stays.
+  await page.keyboard.press("Shift+KeyH")
+  const fresh = page.getByRole("region", { name: "New Thread" })
+  await expect(fresh).toHaveAttribute("data-focused", "true")
+  await expect(launcher).toHaveCount(1)
+
+  // The zoom: over the whole window, the sidebar away, and back.
+  const sidebar = page.getByRole("complementary", { name: "Sidebar" })
+  const main = page.locator("main")
+  await page.keyboard.press("Alt+Shift+KeyF")
+  await expect(fresh).toHaveAttribute("data-zoomed", "true")
+  await expect(sidebar).toBeHidden()
+  await expect(launcher).toBeHidden()
+  await expect
+    .poll(async () => (await fresh.boundingBox())!.width)
+    .toBeCloseTo((await main.boundingBox())!.width, 0)
+  await page.screenshot({ path: "test-results/4c-zoom.png" })
+  await fresh.getByRole("button", { name: "Zoomed" }).click()
+  await expect(fresh).not.toHaveAttribute("data-zoomed")
+  await expect(sidebar).toBeVisible()
+  // The focus elsewhere brings it back too.
+  await page.keyboard.press("Alt+Shift+KeyF")
+  await expect(fresh).toHaveAttribute("data-zoomed", "true")
+  await page.keyboard.press("Alt+ArrowLeft")
+  await expect(launcher).toHaveAttribute("data-focused", "true")
+  await expect(fresh).not.toHaveAttribute("data-zoomed")
 })
 
 test("Alt+[ takes a Pane into a column, Alt+G shows it as tabs", async () => {

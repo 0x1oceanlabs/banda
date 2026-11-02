@@ -132,7 +132,7 @@ function refused(error: unknown): void {
  */
 /**
  * Ctrl added to a key the window takes hands that key to a program
- * (ADR 0005, decision 10): Ctrl+Alt+F reaches a shell as Alt+F. The
+ * (ADR 0005, decision 10): Ctrl+Alt+W reaches a shell as Alt+W. The
  * program reads the press without Ctrl, as if Banda took nothing, so it
  * comes in whatever form the program asked its terminal for.
  */
@@ -410,6 +410,24 @@ export function Shell({
   }, [])
   const toggleSidebar = useCallback(() => setSidebar((shows) => !shows), [])
   const toggleOverview = useCallback(() => setOverview((opens) => !opens), [])
+  // The Pane zoomed over the whole window, while it keeps the focus: the
+  // focus elsewhere, or the overview, brings it back (ADR 0025, decision 4).
+  const [zoom, setZoom] = useState<string>()
+  const zoomed =
+    zoom !== undefined && !overview && focused(workspaces)?.id === zoom
+      ? zoom
+      : undefined
+  if (zoom !== undefined && zoomed === undefined) setZoom(undefined)
+  // Each Alt+C brings the focused column to the middle, once.
+  const [center, setCenter] = useState(0)
+  const toCenter = useCallback(() => setCenter((n) => n + 1), [])
+  const toggleZoom = useCallback(
+    () =>
+      setZoom((was) =>
+        was === undefined ? focused(seenNow.current.state)?.id : undefined
+      ),
+    []
+  )
   const closeOverview = useCallback(() => setOverview(false), [])
   // Alt+Space or Alt+K again, or the other of them, closes the menu.
   const toggleMenu = useCallback(
@@ -464,6 +482,8 @@ export function Shell({
         ),
       toggleSidebar,
       toggleOverview,
+      zoom: toggleZoom,
+      center: toCenter,
       answer,
       settle,
       menu: toggleMenu,
@@ -478,6 +498,8 @@ export function Shell({
     home,
     toggleSidebar,
     toggleOverview,
+    toggleZoom,
+    toCenter,
     answer,
     settle,
     toggleMenu,
@@ -631,9 +653,9 @@ export function Shell({
       />
       <div
         className="relative flex min-h-0 flex-1"
-        data-sidebar-shown={sidebar || undefined}
+        data-sidebar-shown={(sidebar && !zoomed) || undefined}
       >
-        {sidebar && (
+        {sidebar && !zoomed && (
           <Sidebar
             onMenu={() => setMenu(openingAt("root"))}
             onSettings={() => settings()}
@@ -666,6 +688,8 @@ export function Shell({
               spaceName={spaceName}
               called={called}
               marked={marked}
+              zoomed={zoomed}
+              center={center}
               frame={frame}
               onStep={(by) => change((w) => step(w, by))}
               onStart={(pane) => parts.open(pane)}

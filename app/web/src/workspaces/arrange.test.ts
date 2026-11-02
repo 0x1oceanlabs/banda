@@ -17,7 +17,9 @@ import {
 import {
   close,
   current,
+  even,
   focused,
+  heighten,
   maximize,
   open,
   send,
@@ -232,6 +234,30 @@ describe("plans", () => {
       params: { column, display: "tabs" },
     })
     expect(resized(before, before)).toBeUndefined()
+  })
+
+  test("a Pane's height, and the column even again", () => {
+    const before = arranged()
+    const three = focused(before)?.id
+    const taller = heighten(before, 1)
+    expect(resized(before, taller)?.command).toEqual({
+      method: "workspaces.height",
+      params: { pane: three, height: "2/3" },
+    })
+    const column = current(before).columns[1].id
+    expect(resized(taller, even(taller))?.command).toEqual({
+      method: "workspaces.even",
+      params: { column },
+    })
+    // The engine's heights are drawn, each Pane anew only when it changed.
+    const kept = keptOf(taller)
+    expect(kept[0].columns[1].panes[1].height).toBe("2/3")
+    const drawnBefore = drawn(before)
+    const after = resolve(kept, viewOf(taller), drawnBefore)
+    expect(after.list[0].columns[1].entries[1].height).toBe("2/3")
+    expect(after.list[0].columns[1].entries[0]).toBe(
+      drawnBefore.list[0].columns[1].entries[0]
+    )
   })
 
   test("tidies only empty workspaces the Person has left", () => {
