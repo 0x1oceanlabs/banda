@@ -91,7 +91,9 @@ export function AgentMessage({
     <Message>
       <MessageContent>
         {from}
-        <Markdown streaming={live}>{text}</Markdown>
+        <div data-quotable>
+          <Markdown streaming={live}>{text}</Markdown>
+        </div>
         {!live && <Meta at={at} text={text} align="start" />}
       </MessageContent>
     </Message>

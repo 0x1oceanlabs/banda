@@ -117,6 +117,18 @@ rest are our defaults and stay his to change.
    once a Harness says which skills it has; quoting a reply's selected
    text into the composer as a chip; undoing a chip's removal with what
    it carried.
+   - Text selected in one of the Agent's replies shows a Quote button by
+     its end, as T3 Code's Cite. It puts the text in the composer as a
+     markdown quote, `> ` on each line, on lines of its own after the
+     caret's, and the caret a line below it: not a chip. T3 Code's chip
+     is a link in the text the server expands for the provider; a quote
+     is text the Agent reads as it is, the transcript shows as it was
+     written, and the Person trims before sending, with nothing new for
+     the engine.
+   - A chip's removal, by Backspace, Delete, a cut or typing over it, is
+     a step of its own to undo, so Mod+Z brings back the chip with what
+     it pointed at, not the typing before it too.
+   - `$` skills wait for a Harness that says which skills it has.
 
 **Build order.** One PR each: (1) the prompt editor in place of the
 textarea, nothing else changing, (2) chips for `@` files and `/` anywhere
