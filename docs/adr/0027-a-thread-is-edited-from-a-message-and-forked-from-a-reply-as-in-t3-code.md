@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 date: 2026-11-02
 ---
 
@@ -55,9 +55,11 @@ codex-acp 2.5.0, the versions Banda runs):
 - Engine today: it reads `messageId` only to tell one reply from the
   next, and keeps no Harness's ID on an Item.
 
-**Decision.** Our defaults, as T3 Code does; Roma's to change.
+**Decision.** Roma decided the points marked _decided_ on 2026-11-02;
+the rest are our defaults, as T3 Code does, and stay his to change.
 
-1. **Edit from here, on the Person's messages, rewinds the Thread.**
+1. **Edit from here, on the Person's messages, rewinds the Thread**
+   (_decided_), not a new Thread.
    - A pencil on hover beside Copy, "Edit from here", on a message the
      Person sent that a turn ran. It asks, as T3 Code does, but with one
      way on: "Edit from here? The Thread goes back to before this
@@ -70,7 +72,7 @@ codex-acp 2.5.0, the versions Banda runs):
    - The message's text and images go into the composer as `↑` puts a
      waiting message back (ADR 0010, decision 6): after the draft, the
      caret at its end.
-   - Files are not put back. Banda keeps no checkpoint of a Space's files,
+   - Files are not put back (_decided_). Banda keeps no checkpoint of a Space's files,
      and a Space is a folder that a Person and other Agents share, where
      T3 Code too reverts files only in a worktree of the thread's own
      (ADR 0010, decision 10, leaves out reverting files).
@@ -100,7 +102,8 @@ codex-acp 2.5.0, the versions Banda runs):
 4. **Not while a turn runs.** Both wait for the Thread's turn to end, or
    to be stopped: the buttons are disabled while it runs, as in T3 Code.
    A message that waits in the queue is edited as now, with `↑`.
-5. **Checked with the Harnesses first.** The fork point rides on an
+5. **Checked with the Harnesses first** (_decided_, with the paid runs
+   it takes). The fork point rides on an
    extension of JetBrains', in an unstable part of ACP. Before the
    engine relies on it, one run each of Claude Code and Codex forks a
    session at a reply and asks what came after it, which the fork must
