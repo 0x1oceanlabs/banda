@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync } from "node:fs"
+import { existsSync, readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import {
   type ElectronApplication,
@@ -7,6 +7,11 @@ import {
   test,
 } from "@playwright/test"
 import { firstThread, startWindow, type Window } from "./window"
+
+/** A file's text, empty until it is written: `expect.poll` stops at a
+ * throw, so a file the next click creates is read this way. */
+const textOf = (file: string) =>
+  existsSync(file) ? readFileSync(file, "utf8") : ""
 
 let window: Window
 
@@ -168,7 +173,7 @@ test("Agents show who is signed in to each Harness, and write harnesses.toml", a
   await expect(enter).toContainText(/while the Agent works/)
   await enter.getByRole("radio", { name: "queue" }).click()
   await expect
-    .poll(() => readFileSync(join(dir, "config/agents.toml"), "utf8"))
+    .poll(() => textOf(join(dir, "config/agents.toml")))
     .toContain('\nenter = "queue"\n')
   await expect(enter.getByRole("radio", { name: "queue" })).toHaveAttribute(
     "aria-checked",
@@ -196,7 +201,7 @@ test("General, the sidebar's presets, and hearing a sound", async () => {
   )
   await preset.getByRole("radio", { name: "spaces" }).click()
   await expect
-    .poll(() => readFileSync(join(dir, "config/sidebar.toml"), "utf8"))
+    .poll(() => textOf(join(dir, "config/sidebar.toml")))
     .toContain('preset = "spaces"')
   // Each key says what it does.
   await expect(settings.locator('[data-key="group.by"]')).toContainText(
