@@ -30,6 +30,7 @@ const host: Host = {
     shown: (contents) => ipcRenderer.send("browser.shown", contents),
     created: (request, contents) =>
       ipcRenderer.send("browser.created", request, contents),
+    stop: (contents) => ipcRenderer.send("browser.stop", contents),
     pin: (extension, pinned) =>
       ipcRenderer.invoke("browser.pin", extension, pinned),
     remove: (extension) => ipcRenderer.invoke("browser.remove", extension),

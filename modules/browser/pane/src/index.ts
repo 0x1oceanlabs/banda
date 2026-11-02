@@ -6,6 +6,7 @@ import { defineModule } from "@banda/ui/module"
 import { paneOf } from "@banda/ui/pane"
 import { fileAddress } from "./address"
 import { browserPane } from "./BrowserPane"
+import { openWith } from "./pages"
 import { webSource } from "./sources"
 import { browserAt, NEW_BROWSER } from "./tabs"
 
@@ -45,4 +46,12 @@ export const browser = defineModule({
     },
   ],
   sources: [webSource],
+  // A tab an Agent or an extension opens with no browser Pane to take it
+  // gets one, beside the Person's Pane, which keeps the focus.
+  start: (window) =>
+    openWith((url) => {
+      const args = browserAt(url)
+      window.open(paneOf(browserPane, args), undefined, { focus: false })
+      return args.tabs[0].id
+    }),
 })

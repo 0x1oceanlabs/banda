@@ -132,6 +132,20 @@ describe("opening", () => {
     const state = open(start(), A, thread("t1"), { width: "1/3" })
     expect(width(state)).toBe("1/3")
   })
+
+  test("without the focus, the Pane shows and the focus stays", () => {
+    let state = open(start(), A, thread("t1"))
+    state = open(state, A, terminal("x1"), { place: "right", focus: false })
+    expect(columns(state)).toEqual([["t1"], ["x1"]])
+    expect(focusName(state)).toBe("t1")
+    // On another workspace, the Person stays where they are.
+    state = send(state, 5)
+    state = open(state, A, terminal("x1"), { focus: false })
+    expect(state.current).toBe(1)
+    expect(focusName(state)).toBe("t1")
+    // A Pane shown already stays as it is.
+    expect(open(state, A, terminal("x1"), { focus: false })).toBe(state)
+  })
 })
 
 describe("the empty workspace at the bottom", () => {

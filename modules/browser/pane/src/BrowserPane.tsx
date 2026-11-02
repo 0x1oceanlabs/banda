@@ -35,6 +35,7 @@ import { definePane, HOLDS, type PaneProps } from "@banda/ui/pane"
 import {
   ArrowLeftIcon,
   ArrowRightIcon,
+  BotIcon,
   DownloadIcon,
   GlobeIcon,
   PanelLeftIcon,
@@ -465,7 +466,8 @@ function TabStrip({
   )
 }
 
-/** One tab: its site's icon, its title, and its close button on hover. */
+/** One tab: its site's icon, its title, and its close button on hover;
+ * the Agent's mark while one drives it. */
 function TabItem({
   tab,
   shown,
@@ -481,8 +483,12 @@ function TabItem({
   iconOnly?: boolean
   className?: string
 }) {
-  const state = pageAt(tab.id)?.state
+  const page = pageAt(tab.id)
+  const state = page?.state
   const words = state?.title || titleOf(tab)
+  const mark = state?.driven && (
+    <Driven contents={page?.contents} words={words} />
+  )
   return (
     <div
       role="tab"
@@ -505,8 +511,9 @@ function TabItem({
         className
       )}
     >
-      <TabIcon state={state} />
+      {(iconOnly && mark) || <TabIcon state={state} />}
       {!iconOnly && <span className="min-w-0 flex-1 truncate">{words}</span>}
+      {!iconOnly && mark}
       {!iconOnly && (
         <button
           type="button"
@@ -525,6 +532,31 @@ function TabItem({
         </button>
       )}
     </div>
+  )
+}
+
+/** The mark of an Agent that drives the tab over CDP; a click stops it,
+ * as its sessions on the tab end (ADR 0013, decision 7). */
+function Driven({
+  contents,
+  words,
+}: {
+  contents: number | null | undefined
+  words: string
+}) {
+  return (
+    <button
+      type="button"
+      aria-label={`Stop the Agent in ${words}`}
+      title="An Agent drives this tab: click to stop it"
+      onClick={(event) => {
+        event.stopPropagation()
+        if (contents != null) browserHost()?.stop(contents)
+      }}
+      className="flex size-5 shrink-0 items-center justify-center rounded text-primary hover:bg-foreground/10 [&_svg]:size-3.5"
+    >
+      <BotIcon />
+    </button>
   )
 }
 

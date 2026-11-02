@@ -38,6 +38,8 @@ export type BrowserNews =
   /** An extension shows a tab, or closes one. */
   | { kind: "select"; from: number }
   | { kind: "close"; from: number }
+  /** An Agent drives the tab over CDP, or no longer does. */
+  | { kind: "driven"; from: number; driven: boolean }
 
 /** An extension's button, as Chrome's `action` says it, for every tab and
  * for some tabs alone (electron-chrome-extensions' `getState`). */
@@ -75,6 +77,8 @@ export type BrowserHost = {
   shown: (contents: number) => void
   /** The page made for a `create`; none when no browser could take it. */
   created: (request: string, contents: number | null) => void
+  /** Stops the Agents that drive the page: their sessions on it end. */
+  stop: (contents: number) => void
   /** The extensions' buttons. */
   actions: {
     state: () => Promise<Actions>
