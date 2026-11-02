@@ -6,7 +6,9 @@
  * the defaults show in the system's light or dark.
  */
 import {
+  type Bar,
   type Columns,
+  DEFAULT_BAR,
   DEFAULT_COLUMNS,
   DEFAULT_KEYS,
   DEFAULT_MOTION,
@@ -109,6 +111,11 @@ export function columnsOf(): Columns {
 /** `[columns]`, for what draws again when the look changes them. */
 export function useLookColumns(): Columns {
   return useLook((look) => look.columns, DEFAULT_COLUMNS)
+}
+
+/** `[bar]`: how it shows the workspaces. */
+export function useLookBar(): Bar {
+  return useLook((look) => look.bar, DEFAULT_BAR)
 }
 
 /** What is wrong in the look's files now, for the bar to say. */

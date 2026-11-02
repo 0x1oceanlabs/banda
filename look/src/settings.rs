@@ -206,6 +206,18 @@ pub struct Focus {
 pub struct Bar {
     #[schemars(range(min = 0))]
     pub height: Option<f64>,
+    /// How the bar shows the workspaces: `"numbers"`, or `"dots"` with the
+    /// one shown drawn long, as GNOME's.
+    pub workspaces: Option<Workspaces>,
+}
+
+/// How the bar shows the workspaces.
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "lowercase")]
+#[ts(export, export_to = "look/")]
+pub enum Workspaces {
+    Numbers,
+    Dots,
 }
 
 /// Whether `v` is a share: from 0 to 1.
@@ -342,6 +354,7 @@ impl Settings {
             },
             bar: Bar {
                 height: self.bar.height.or(under.bar.height),
+                workspaces: self.bar.workspaces.or(under.bar.workspaces),
             },
             motion: self.motion.over(under.motion),
             columns: self.columns.over(under.columns),
@@ -388,7 +401,10 @@ impl Settings {
                 inactive_border: Some(Spanned::new(0..0, "border".to_owned())),
                 ring: Some(0.0),
             },
-            bar: Bar { height: Some(36.0) },
+            bar: Bar {
+                height: Some(36.0),
+                workspaces: Some(Workspaces::Numbers),
+            },
             motion: MotionSettings::defaults(),
             columns: ColumnsSettings::defaults(),
             font: FontSettings::defaults(),

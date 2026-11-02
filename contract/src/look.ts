@@ -5,6 +5,7 @@
 import type { Browser } from "./generated/look/Browser"
 import type { Keys } from "./generated/look/Keys"
 import type { Look } from "./generated/look/Look"
+import type { Bar } from "./generated/look/Bar"
 import type { Columns } from "./generated/look/Columns"
 import type { Motion } from "./generated/look/Motion"
 
@@ -28,6 +29,8 @@ export type { Source } from "./generated/look/Source"
 export type { Listed } from "./generated/look/Listed"
 export type { Motion } from "./generated/look/Motion"
 export type { Columns } from "./generated/look/Columns"
+export type { Bar } from "./generated/look/Bar"
+export type { Workspaces } from "./generated/look/Workspaces"
 export type { Center } from "./generated/look/Center"
 export type { Display } from "./generated/look/Display"
 export type { Bind } from "./generated/look/Bind"
@@ -41,6 +44,9 @@ export type { Easing } from "./generated/look/Easing"
  * look's wallpaper and no other file (ADR 0023).
  */
 export const WALLPAPER_URL = "app://banda/desk/wallpaper"
+
+/** The bar, as `banda look` gives it with no files. */
+export const DEFAULT_BAR: Bar = { workspaces: "numbers" }
 
 /** Banda's own columns, niri's: what `banda look` gives with no files. */
 export const DEFAULT_COLUMNS: Columns = {

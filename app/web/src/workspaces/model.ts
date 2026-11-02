@@ -148,11 +148,25 @@ export function shownIn(
     : column.entries
 }
 
-/** The workspaces that hold Panes, and the current one: the bar's numbers. */
-export function shown(state: Workspaces): number[] {
-  return state.list.flatMap((workspace, i) =>
-    workspace.columns.length > 0 || i === state.current ? [i] : []
-  )
+/** A workspace as the bar shows it. */
+export type InBar = {
+  id: string
+  index: number
+  /** It holds no Pane: the current one, emptied, or the one at the bottom. */
+  empty: boolean
+  /** The empty one at the bottom, which the bar shows as its `+`. */
+  bottom: boolean
+}
+
+/** The workspaces the bar shows: those that hold Panes, the current one,
+ * and the empty one at the bottom. */
+export function inBar(state: Workspaces): InBar[] {
+  const last = state.list.length - 1
+  return state.list.flatMap((workspace, index) => {
+    const empty = workspace.columns.length === 0
+    if (empty && index !== state.current && index !== last) return []
+    return [{ id: workspace.id, index, empty, bottom: index === last }]
+  })
 }
 
 export type Spot = { workspace: number; column: number; entry: number }
@@ -678,12 +692,6 @@ export function go(state: Workspaces, index: number): Workspaces {
  * `+` makes. */
 export function fresh(state: Workspaces): Workspaces {
   return go(state, state.list.length - 1)
-}
-
-/** Whether the workspace on screen is the empty one at the bottom, so
- * there is no newer one to go to. */
-export function onFresh(state: Workspaces): boolean {
-  return state.current === state.list.length - 1
 }
 
 /** Goes to the workspace above or below. */

@@ -51,10 +51,9 @@ import {
   focused,
   focusEntry,
   go,
+  inBar,
   left,
-  onFresh,
   samePane,
-  shown,
   step,
   type Workspaces as State,
 } from "../workspaces/model"
@@ -646,7 +645,7 @@ export function Shell({
       <Bar
         status={status}
         attention={attention}
-        numbers={shown(workspaces)}
+        workspaces={inBar(workspaces)}
         current={workspaces.current}
         sidebar={sidebar}
         onSidebar={toggleSidebar}
@@ -655,9 +654,6 @@ export function Shell({
           index === workspaces.current
             ? toggleOverview()
             : change((w) => go(w, index))
-        }
-        onNew={
-          onFresh(workspaces) ? undefined : () => parts.run("workspace.new")
         }
       />
       <div
