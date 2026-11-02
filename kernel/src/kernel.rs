@@ -1,6 +1,6 @@
 use crate::access::{self, Caller, Right};
 use crate::methods::{Asks, Nothing, Tool};
-use crate::module::{Call, Module, Stream};
+use crate::module::{Call, Module, Scope, Stream};
 use crate::passes::Passes;
 use crate::space::{Created, Space};
 use crate::{AgentId, CommandId, Error, Participant, PersonId, Refusal, SpaceId};
@@ -20,9 +20,14 @@ pub struct Kernel {
     /// cut short by a restart.
     boot: String,
     modules: Arc<[Arc<dyn Module>]>,
+    /// The modules each Space runs: those of the Space's scope.
+    in_spaces: Arc<[Arc<dyn Module>]>,
     spaces: RwLock<BTreeMap<SpaceId, Arc<Space>>>,
+    /// This machine's scope (ADR 0025, decision 1): a store and a log like
+    /// a Space's, for the modules of the machine. None while no module is.
+    machine: Option<Arc<Space>>,
     passes: Arc<Passes>,
-    /// Every module's tools, made once as it opens.
+    /// The tools of the modules in Spaces, made once as it opens.
     tools: Vec<Tool>,
 }
 
@@ -39,11 +44,19 @@ pub struct KernelBuilder {
     root: PathBuf,
     owner: PersonId,
     modules: Vec<Arc<dyn Module>>,
+    machine: Option<PathBuf>,
 }
 
 impl KernelBuilder {
     pub fn module(mut self, module: impl Module) -> Self {
         self.modules.push(Arc::new(module));
+        self
+    }
+
+    /// The folder that keeps this machine's scope, made on first use: the
+    /// engine's state folder's `machine`. A module of the machine needs it.
+    pub fn machine(mut self, folder: impl Into<PathBuf>) -> Self {
+        self.machine = Some(folder.into());
         self
     }
 
@@ -63,14 +76,36 @@ impl KernelBuilder {
             }
         }
         std::fs::create_dir_all(&self.root)?;
+        let (of_machine, in_spaces): (Vec<_>, Vec<_>) =
+            (self.modules.iter().cloned()).partition(|module| module.scope() == Scope::Machine);
+        let boot = uuid::Uuid::now_v7().to_string();
+        let passes = Arc::<Passes>::default();
+        let machine = if of_machine.is_empty() {
+            None
+        } else {
+            let folder = self.machine.as_ref().ok_or_else(|| {
+                Refusal::invalid("A module of this machine needs the machine's folder.")
+            })?;
+            if Space::id_of(folder).is_none() {
+                if let Some(parent) = folder.parent() {
+                    std::fs::create_dir_all(parent)?;
+                }
+                let author = Participant::Person(self.owner);
+                Space::create(folder, "machine", author, CommandId::new())?;
+            }
+            let modules = of_machine.into();
+            Some(Space::open(folder.clone(), self.owner, modules, passes.clone(), &boot).await?)
+        };
         let kernel = Arc::new(Kernel {
             root: self.root,
             owner: self.owner,
-            boot: uuid::Uuid::now_v7().to_string(),
-            tools: self.modules.iter().flat_map(|m| m.tools()).collect(),
+            boot,
+            tools: in_spaces.iter().flat_map(|m| m.tools()).collect(),
             modules: self.modules.into(),
+            in_spaces: in_spaces.into(),
             spaces: RwLock::new(BTreeMap::new()),
-            passes: Arc::default(),
+            machine,
+            passes,
         });
         let mut folders: Vec<PathBuf> = std::fs::read_dir(&kernel.root)?
             .filter_map(|entry| entry.ok().map(|e| e.path()))
@@ -107,7 +142,8 @@ crate::methods! {
         call list(Nothing) -> Vec<SpaceSummary>, Read;
         /// Makes a Space: its folder under the root, by its name.
         command create(CreateSpace) -> SpaceSummary, Manage;
-        /// The tools an Agent may call, from every module's methods.
+        /// The tools an Agent may call, from the methods of the modules in
+        /// Spaces.
         call tools(Nothing) -> Vec<Tool>, Read;
     }
 }
@@ -136,6 +172,17 @@ struct CreateSpace {
     name: String,
 }
 
+/// A pass is for its Space, so it stops at this machine's scope: what an
+/// Agent may do with the workspaces comes with its tools (ADR 0025, step 3).
+fn outside_machine(only: Option<SpaceId>) -> Result<(), Refusal> {
+    match only {
+        Some(_) => Err(Refusal::forbidden(
+            "An Agent's pass is for its Space, not this machine.",
+        )),
+        None => Ok(()),
+    }
+}
+
 fn no_method(method: &str) -> Refusal {
     Refusal::invalid(format!("There is no method \"{method}\"."))
 }
@@ -148,6 +195,7 @@ impl Kernel {
             root: root.into(),
             owner,
             modules: Vec::new(),
+            machine: None,
         }
     }
 
@@ -178,11 +226,10 @@ impl Kernel {
         params: Value,
     ) -> Result<Value, Refusal> {
         let Caller { participant, only } = caller.into();
-        let space = space.or(only);
-        access::within(only, space)?;
         if let Some(own) = method.strip_prefix("spaces.")
             && let Some(right) = Self::method_right(own)
         {
+            access::within(only, space.or(only))?;
             access::decide(&participant, right, self.owner)?;
             let ask = Own {
                 participant,
@@ -193,9 +240,7 @@ impl Kernel {
             return self.dispatch(ask, own, params).await;
         }
         let (module, rest, right) = self.method(method)?;
-        let space = self
-            .space(space.ok_or_else(|| Refusal::invalid(format!("{method} needs a Space.")))?)
-            .await?;
+        let space = self.place(&**module, method, space, only).await?;
         let scope = space.module(module.name());
         // A read is not a command: it keeps no receipt, so its ID is free.
         let command = command.filter(|_| right != Right::Read);
@@ -231,9 +276,8 @@ impl Kernel {
         params: Value,
     ) -> Result<Stream, Refusal> {
         let Caller { participant, only } = caller.into();
-        access::within(only, Some(space))?;
         let (module, rest, right) = self.method(method)?;
-        let space = self.space(space).await?;
+        let space = self.place(&**module, method, Some(space), only).await?;
         access::decide(&participant, right, space.owner())?;
         let call = Call::new(
             participant,
@@ -265,10 +309,52 @@ impl Kernel {
         space: SpaceId,
     ) -> Result<Arc<Space>, Refusal> {
         let Caller { participant, only } = caller.into();
-        access::within(only, Some(space))?;
-        let space = self.space(space).await?;
+        let space = match &self.machine {
+            Some(machine) if machine.id() == space => {
+                outside_machine(only)?;
+                machine.clone()
+            }
+            _ => {
+                access::within(only, Some(space))?;
+                self.space(space).await?
+            }
+        };
         access::decide(&participant, Right::Read, space.owner())?;
         Ok(space)
+    }
+
+    /// The ID a window follows and streams this machine's modules by, as
+    /// a Space's; none while no module is the machine's.
+    pub fn machine(&self) -> Option<SpaceId> {
+        self.machine.as_ref().map(|machine| machine.id())
+    }
+
+    /// Where a method of `module` runs. A module of the machine runs in
+    /// this machine's scope, and its method names no Space, or the
+    /// machine's own ID, as a stream does. Any other runs in the Space it
+    /// names, or its caller's pass names, behind the Space wall.
+    async fn place(
+        &self,
+        module: &dyn Module,
+        method: &str,
+        named: Option<SpaceId>,
+        only: Option<SpaceId>,
+    ) -> Result<Arc<Space>, Refusal> {
+        if module.scope() == Scope::Space {
+            let id = named.or(only);
+            access::within(only, id)?;
+            let id = id.ok_or_else(|| Refusal::invalid(format!("{method} needs a Space.")))?;
+            return self.space(id).await;
+        }
+        let machine = (self.machine.as_ref())
+            .ok_or_else(|| Refusal::not_found("This engine has no machine's scope."))?;
+        if named.is_some_and(|id| id != machine.id()) {
+            return Err(Refusal::invalid(format!(
+                "{method} is this machine's: it names no Space."
+            )));
+        }
+        outside_machine(only)?;
+        Ok(machine.clone())
     }
 
     pub async fn space(&self, id: SpaceId) -> Result<Arc<Space>, Refusal> {
@@ -290,7 +376,7 @@ impl Kernel {
     }
 
     async fn open_space(&self, folder: PathBuf) -> Result<Arc<Space>, Error> {
-        let (modules, passes) = (self.modules.clone(), self.passes.clone());
+        let (modules, passes) = (self.in_spaces.clone(), self.passes.clone());
         Space::open(folder, self.owner, modules, passes, &self.boot).await
     }
 

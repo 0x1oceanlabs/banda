@@ -4,7 +4,7 @@
 //! | Place | Default | Holds |
 //! |---|---|---|
 //! | root | `~/Banda` | the Spaces' folders |
-//! | state | `~/.local/state/banda` | the owner's ID, the lock, `engine.json` |
+//! | state | `~/.local/state/banda` | the owner's ID, the lock, `engine.json`, this machine's scope (`machine/`) |
 //! | config | `~/.config/banda` | `harnesses.toml` |
 //!
 //! `BANDA_ROOT`, `BANDA_STATE` and `BANDA_CONFIG` move each one, so a
@@ -72,6 +72,13 @@ impl Places {
 
     pub fn harnesses(&self) -> PathBuf {
         self.config.join("harnesses.toml")
+    }
+
+    /// This machine's scope: the store and log of its modules, as the
+    /// workspaces (ADR 0025, decision 1). It is laid out as a Space's
+    /// folder is: `.banda/` holds the manifest, the store and the lock.
+    pub fn machine(&self) -> PathBuf {
+        self.state.join("machine")
     }
 
     /// Where the window listens for `banda menu` while it is open.

@@ -243,6 +243,8 @@ impl ModuleSpace {
         self.space.id
     }
 
+    /// The Space's work folder. A module of this machine gets the
+    /// machine's state folder: no work of a Person's is there.
     pub fn folder(&self) -> &Path {
         &self.space.folder
     }

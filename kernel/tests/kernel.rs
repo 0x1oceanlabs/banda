@@ -3,8 +3,9 @@
 
 use banda_kernel::api::Identity;
 use banda_kernel::{
-    AgentId, Call, Code, CommandId, Effect, Error, Kernel, Module, ModuleSpace, OnRestart, Outcome,
-    Participant, PersonId, Refusal, Right, Settled, SpaceSummary, Stream, Tx, decode,
+    AgentId, Call, Caller, Code, CommandId, Effect, Error, Kernel, Module, ModuleSpace, OnRestart,
+    Outcome, Participant, PersonId, Refusal, Right, Scope, Settled, SpaceSummary, Stream, Tx,
+    decode,
 };
 use futures::{SinkExt, StreamExt};
 use serde::Deserialize;
@@ -154,6 +155,56 @@ impl Module for Notes {
             &json!({ "kind": effect.kind, "how": how }),
         )?;
         Ok(())
+    }
+}
+
+/// Desk: a module of this machine, as the workspaces are (ADR 0025).
+struct Desk;
+
+#[async_trait::async_trait]
+impl Module for Desk {
+    fn name(&self) -> &'static str {
+        "desk"
+    }
+
+    fn scope(&self) -> Scope {
+        Scope::Machine
+    }
+
+    fn migrations(&self) -> &'static [&'static str] {
+        &["CREATE TABLE desk_panes (id INTEGER PRIMARY KEY, kind TEXT NOT NULL)"]
+    }
+
+    fn right(&self, method: &str) -> Option<Right> {
+        match method {
+            "open" => Some(Right::Write),
+            "list" => Some(Right::Read),
+            _ => None,
+        }
+    }
+
+    async fn call(&self, call: Call, method: &str, params: Value) -> Result<Value, Refusal> {
+        if method == "open" {
+            let kind = params["kind"].as_str().unwrap_or_default().to_owned();
+            let author = call.participant();
+            return call
+                .command(move |tx| {
+                    tx.sql()
+                        .execute("INSERT INTO desk_panes (kind) VALUES (?1)", [&kind])?;
+                    tx.emit("opened", 1, None, author, &json!({ "kind": kind }))?;
+                    Ok(Value::Null)
+                })
+                .await;
+        }
+        let (_, kinds) = call
+            .space()
+            .view(|sql| {
+                let mut statement = sql.prepare("SELECT kind FROM desk_panes ORDER BY id")?;
+                let kinds = statement.query_map([], |row| row.get::<_, String>(0))?;
+                Ok(kinds.collect::<rusqlite::Result<Vec<_>>>()?)
+            })
+            .await?;
+        Ok(json!(kinds))
     }
 }
 
@@ -779,4 +830,77 @@ async fn a_pass_connects_as_its_agent_and_only_in_its_space() {
         "forbidden",
         "nor may it manage it"
     );
+}
+
+#[tokio::test]
+async fn a_module_of_the_machine_names_no_space_and_keeps_its_own_log() {
+    let dir = tempfile::tempdir().unwrap();
+    let owner = PersonId::new();
+    let person = Participant::Person(owner);
+    let open = || {
+        Kernel::builder(dir.path().join("root"), owner)
+            .module(Notes::default())
+            .module(Desk)
+            .machine(dir.path().join("state").join("machine"))
+            .open()
+    };
+    let kernel = open().await.unwrap();
+    let machine = kernel.machine().unwrap();
+    let work = create(&kernel, owner, "Work").await;
+
+    // Its methods name no Space, and a command runs once.
+    let command = Some(CommandId::new());
+    let terminal = json!({ "kind": "terminal" });
+    for _ in 0..2 {
+        let call = kernel.call(person, "desk.open", None, command, terminal.clone());
+        call.await.unwrap();
+    }
+    let list = kernel.call(person, "desk.list", None, None, Value::Null);
+    assert_eq!(list.await.unwrap(), json!(["terminal"]));
+
+    // It is no Space: a Space's ID is refused to it, and its ID to a
+    // Space's module, and the Spaces' list leaves it out.
+    let in_work = kernel.call(person, "desk.list", Some(work.id), None, Value::Null);
+    assert_eq!(in_work.await.unwrap_err().code, Code::Invalid);
+    let notes = kernel.call(person, "notes.list", Some(machine), None, Value::Null);
+    assert_eq!(notes.await.unwrap_err().code, Code::NotFound);
+    assert!(
+        kernel
+            .spaces()
+            .await
+            .iter()
+            .all(|space| space.id != machine)
+    );
+
+    // Its log is followed as a Space's is.
+    let log = kernel.follow(person, machine).await.unwrap();
+    let events = log.events_after(0, Default::default(), 100).await.unwrap();
+    let kinds: Vec<_> = events.iter().map(|e| e.kind.as_str()).collect();
+    assert_eq!(kinds, ["opened"]);
+
+    // An Agent's pass is for its Space: the machine is past its wall.
+    let agent = Caller {
+        participant: Participant::Agent(AgentId::new()),
+        only: Some(work.id),
+    };
+    let by_agent = kernel.call(agent, "desk.list", None, None, Value::Null);
+    assert_eq!(by_agent.await.unwrap_err().code, Code::Forbidden);
+
+    // After a restart, it is the same machine, with what it kept.
+    drop(log);
+    drop(kernel);
+    let kernel = open().await.unwrap();
+    assert_eq!(kernel.machine(), Some(machine));
+    let list = kernel.call(person, "desk.list", None, None, Value::Null);
+    assert_eq!(list.await.unwrap(), json!(["terminal"]));
+}
+
+#[tokio::test]
+async fn a_module_of_the_machine_needs_the_machines_folder() {
+    let dir = tempfile::tempdir().unwrap();
+    let opened = Kernel::builder(dir.path(), PersonId::new())
+        .module(Desk)
+        .open()
+        .await;
+    assert!(opened.is_err());
 }

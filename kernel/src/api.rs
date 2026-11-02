@@ -6,7 +6,8 @@
 //!    Space ([`crate::access::within`]), and calls there when it names
 //!    none. A wrong version or an unknown token gets
 //!    `goodbye`. `welcome` lists the engine's modules, so a window shows
-//!    only what the engine has (ADR 0002, decision 8).
+//!    only what the engine has (ADR 0002, decision 8), and the ID this
+//!    machine's modules are followed by (ADR 0025).
 //! 2. `call` runs a method and gets one `result` with the same `id`.
 //! 3. `subscribe` follows a Space's events after a position. The window first
 //!    reads a view with its position, then subscribes after it (ADR 0002,
@@ -102,6 +103,11 @@ pub enum EngineFrame {
         engine: String,
         /// The modules this engine runs.
         modules: Vec<String>,
+        /// What this machine's modules are followed and streamed by, as a
+        /// Space is (ADR 0025, decision 1); none while no module is.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        #[ts(optional)]
+        machine: Option<SpaceId>,
     },
     Result {
         #[ts(type = "number")]
@@ -311,6 +317,7 @@ async fn serve(api: Arc<Api>, socket: WebSocket) {
             .into_iter()
             .map(str::to_owned)
             .collect(),
+        machine: api.kernel.machine(),
     };
     if sink.send(text(&welcome)).await.is_err() {
         return;
