@@ -501,9 +501,17 @@ fn tell_window(_: &std::path::Path, _: &Value) -> Result<(), Failure> {
     Err(Failure::Broken("banda menu needs a Unix socket.".into()))
 }
 
+/// The look's places, in this Banda's config folder.
+fn look_places() -> Result<banda_look::theme::Places, Failure> {
+    Places::from_env().map(|places| banda_look::theme::Places::from_env(places.config))
+}
+
 /// `banda settings`: no engine, only the files (ADR 0016).
 fn settings(what: SettingsCommand) -> ExitCode {
-    let places = banda_look::theme::Places::from_env();
+    let places = match look_places() {
+        Ok(places) => places,
+        Err(failure) => return failure.exit(),
+    };
     match what {
         SettingsCommand::Check { files } => report(banda_settings::check(&places, &files)),
         SettingsCommand::Set { file, key, value } => {
@@ -559,9 +567,10 @@ fn report(problems: Vec<banda_look::Problem>) -> ExitCode {
 /// `banda look`: no engine, no runtime, only files and Hyprland's socket.
 fn look(what: Option<LookCommand>, follow: bool) -> ExitCode {
     use banda_look::hyprland::Hyprland;
-    use banda_look::theme::Places;
-
-    let places = Places::from_env();
+    let places = match look_places() {
+        Ok(places) => places,
+        Err(failure) => return failure.exit(),
+    };
     let mut out = std::io::stdout().lock();
     // A reader that went away is not an error: the window closed.
     let mut print =

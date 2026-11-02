@@ -17,7 +17,14 @@ cargo build                              # the engine and the fake agent
 pnpm --filter @banda/desktop start     # builds the page and opens the window
 ```
 
-Without `~/.config/banda/harnesses.toml` the engine offers Claude Code
+A build from a checkout is Banda Local: it keeps its things in folders of
+its own (`~/.config/banda-local`, `~/.local/share/banda-local`,
+`~/.local/state/banda-local`) and its window's class is `banda-local`, so
+it runs beside an installed Banda without touching its Spaces (ADR 0033).
+`BANDA_CHANNEL=stable` or `dev`, set for `cargo build` and the window's
+build alike, makes it Banda or Banda Dev instead.
+
+Without `~/.config/banda-local/harnesses.toml` the engine offers Claude Code
 and Codex. To try the window without a paid model, list the fake agent
 there instead:
 

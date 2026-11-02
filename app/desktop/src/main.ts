@@ -43,6 +43,7 @@ import { openDoor } from "./door"
 import { engineLayer } from "./engine"
 import { firstFrame, firstLook, lookLayer } from "./look"
 import { modules } from "./modules"
+import { channel, stateFolder } from "./channel"
 import { NoticeArg, Notices, RecordedDesktop } from "./notices"
 import { settingsLayer } from "./settings"
 import { ensure } from "./sidebar"
@@ -82,20 +83,13 @@ const engineBinary =
     ? join(process.resourcesPath, "banda")
     : resolve(here, "../../target/debug/banda"))
 
-// The window keeps its own state beside the engine's when that moves, so
-// a test or a second setup never shares a profile with the first.
-// Otherwise it is pinned where it was, `~/.config/@banda/desktop`, before
-// the name below can move it.
-app.setPath(
-  "userData",
-  process.env.BANDA_STATE
-    ? join(process.env.BANDA_STATE, "window")
-    : app.getPath("userData")
-)
-// The name the desktop's notices and the Web Store show. The window's
-// class, `banda-desktop`, still comes from the package's name, so window
-// rules that match it keep working.
-app.setName("Banda")
+// The window keeps its profile in the engine's state folder, so Banda,
+// Banda Dev, a checkout and a test never share one (ADR 0033).
+app.setPath("userData", join(stateFolder(app.getPath("appData")), "window"))
+// The name the desktop's notices and the Web Store show, and the
+// window's class (Wayland's app ID), which window rules match.
+app.setName(channel.name)
+app.setDesktopName(`${channel.folder}.desktop`)
 
 protocol.registerSchemesAsPrivileged([
   {
