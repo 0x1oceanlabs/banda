@@ -4,4 +4,9 @@
  * Something wrong in a file, where it is: `path:line:column: message`, as
  * compilers say it, so editors can jump there.
  */
-export type Problem = { path: string, line?: number, column?: number, message: string, };
+export type Problem = { path: string, line?: number, column?: number, 
+/**
+ * The dotted key it is about, `tile.border`, when it is at one: the
+ * settings Pane shows it at that key's row.
+ */
+key?: string, message: string, };

@@ -131,6 +131,37 @@ fn line_of(table: &dyn TableLike, key: &str, text: &str) -> Option<u32> {
     }
 }
 
+/// The dotted key at `offset` in `text`, from its name to the end of its
+/// value: where a value that does not read is. An entry of a list of
+/// tables is named by its `id`, as `banda settings` names it:
+/// `harness.codex.enabled`. None when the text is not TOML, or the place
+/// is no key's.
+pub fn key_at(text: &str, offset: usize) -> Option<String> {
+    let document = toml_edit::Document::parse(text).ok()?;
+    key_in(document.as_table(), offset)
+}
+
+fn key_in(table: &dyn TableLike, offset: usize) -> Option<String> {
+    table.iter().find_map(|(name, item)| {
+        if let toml_edit::Item::ArrayOfTables(list) = item {
+            return list.iter().find_map(|entry| {
+                let rest = key_in(entry, offset)?;
+                Some(match entry.get("id").and_then(|id| id.as_str()) {
+                    Some(id) => format!("{name}.{id}.{rest}"),
+                    None => format!("{name}.{rest}"),
+                })
+            });
+        }
+        if let Some(inner) = item.as_table_like() {
+            return key_in(inner, offset).map(|rest| format!("{name}.{rest}"));
+        }
+        let (key, _) = table.get_key_value(name)?;
+        (key.span()?.start..item.span()?.end)
+            .contains(&offset)
+            .then(|| name.to_owned())
+    })
+}
+
 /// Settings as values; nothing when they cannot be written.
 fn values(settings: &impl Serialize) -> Value {
     serde_json::to_value(settings).unwrap_or(Value::Object(Map::new()))
@@ -164,6 +195,27 @@ mod tests {
         assert_eq!(keyed["tile.border"].from.line, Some(4));
         assert_eq!(keyed["radius"].from.line, Some(1));
         assert_eq!(keyed["radius"].from.path.as_deref(), Some("/c/look.toml"));
+    }
+
+    #[test]
+    fn a_place_in_a_file_is_a_key_s() {
+        let text = "radius = \"x\"\n\n[tile]\nborder = 3\nglass = { blur = \"no\" }\n";
+        let at = |words: &str| key_at(text, text.find(words).unwrap());
+        assert_eq!(at("\"x\"").as_deref(), Some("radius"));
+        assert_eq!(at("3").as_deref(), Some("tile.border"));
+        assert_eq!(at("\"no\"").as_deref(), Some("tile.glass.blur"));
+        assert_eq!(at("[tile]"), None, "a table's header is no key's");
+        assert_eq!(key_at("a = \n", 0), None, "not TOML");
+        let list = "[[harness]]\nid = \"codex\"\nenabled = 3\n";
+        assert_eq!(
+            key_at(list, list.find('3').unwrap()).as_deref(),
+            Some("harness.codex.enabled")
+        );
+        let binds = "[binds]\n\"Alt+M\" = \"nope\"\n";
+        assert_eq!(
+            key_at(binds, binds.find("nope").unwrap()).as_deref(),
+            Some("binds.Alt+M")
+        );
     }
 
     #[test]

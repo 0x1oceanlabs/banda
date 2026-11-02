@@ -162,6 +162,11 @@ pub struct Problem {
     #[ts(optional)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub column: Option<u32>,
+    /// The dotted key it is about, `tile.border`, when it is at one: the
+    /// settings Pane shows it at that key's row.
+    #[ts(optional)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub key: Option<String>,
     pub message: String,
 }
 
@@ -183,15 +188,20 @@ impl Problem {
         span: Option<std::ops::Range<usize>>,
         message: impl Into<String>,
     ) -> Problem {
-        let (line, column) = span.map_or((None, None), |span| {
-            let before = &text[..span.start.min(text.len())];
-            let column = before.rsplit('\n').next().map_or(0, |l| l.chars().count()) + 1;
-            (Some(line_at(text, span.start)), Some(column as u32))
+        let start = span.map(|span| span.start.min(text.len()));
+        let (line, column) = start.map_or((None, None), |start| {
+            let column = text[..start]
+                .rsplit('\n')
+                .next()
+                .map_or(0, |l| l.chars().count())
+                + 1;
+            (Some(line_at(text, start)), Some(column as u32))
         });
         Problem {
             path: path.display().to_string(),
             line,
             column,
+            key: start.and_then(|start| keyed::key_at(text, start)),
             message: message.into(),
         }
     }
@@ -203,6 +213,14 @@ impl Problem {
     /// A problem with the whole file, such as one that cannot be read.
     pub fn whole(path: &Path, message: impl Into<String>) -> Problem {
         Problem::at(path, "", None, message)
+    }
+
+    /// A problem with `key`, wherever in the file it is.
+    pub fn of_key(path: &Path, key: &str, message: impl Into<String>) -> Problem {
+        Problem {
+            key: Some(key.to_owned()),
+            ..Problem::whole(path, message)
+        }
     }
 }
 
@@ -218,10 +236,14 @@ pub fn read_settings(path: &Path, text: &str, problems: &mut Vec<Problem>) -> Op
         }
     };
     for key in settings.negative_sizes() {
-        problems.push(Problem::whole(path, format!("{key} cannot be negative")));
+        problems.push(Problem::of_key(
+            path,
+            key,
+            format!("{key} cannot be negative"),
+        ));
     }
     for key in settings.shares_out_of_range() {
-        problems.push(Problem::whole(path, format!("{key} is from 0 to 1")));
+        problems.push(Problem::of_key(path, key, format!("{key} is from 0 to 1")));
     }
     for (span, message) in settings.columns.problems() {
         problems.push(Problem::at(path, text, span, message));
@@ -233,7 +255,11 @@ pub fn read_settings(path: &Path, text: &str, problems: &mut Vec<Problem>) -> Op
         problems.push(Problem::at(path, text, span, message));
     }
     if settings.sound.volume_wrong() {
-        problems.push(Problem::whole(path, "sound.volume is from 0 to 1"));
+        problems.push(Problem::of_key(
+            path,
+            "sound.volume",
+            "sound.volume is from 0 to 1",
+        ));
     }
     let named = |value: &Spanned<String>| {
         let v = value.get_ref();

@@ -121,5 +121,10 @@ mod tests {
         let (agents, _, problems) = resolved(Some("enter = \"send\"\n"));
         assert_eq!(agents.enter, Enter::Steer);
         assert_eq!(problems.len(), 1);
+        assert_eq!(
+            problems[0].key.as_deref(),
+            Some("enter"),
+            "its row shows it"
+        );
     }
 }
