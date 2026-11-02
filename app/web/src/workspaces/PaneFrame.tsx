@@ -1,4 +1,4 @@
-import { Component, type ReactNode, useEffect, useRef } from "react"
+import { Component, type ReactNode, useLayoutEffect, useRef } from "react"
 import type { Engine, SpaceId } from "@banda/contract"
 import { Button } from "@banda/ui/components/button"
 import {
@@ -92,7 +92,9 @@ export function PaneFrame({
   const { title, detail, Icon } = labelOf(entry.pane)
   const close = () => frame.close(entry.id)
 
-  useEffect(() => {
+  // As it is drawn focused, not a frame later: a key pressed meanwhile
+  // would go to the tile that had the focus.
+  useLayoutEffect(() => {
     const own = element.current
     if (focused && own && !within(own, document.activeElement)) {
       own.focus({ preventScroll: true })
