@@ -9,7 +9,7 @@ import {
   type ListedThread,
   type ThreadList,
 } from "@banda/contract/agents"
-import type { Source } from "@banda/ui/hooks/use-live"
+import { READ_AGAIN, type Source } from "@banda/ui/hooks/use-live"
 
 /** How much of a message the list keeps, as the engine does. */
 export const LISTED_MESSAGE = 200
@@ -32,6 +32,7 @@ export const THREADS_FILTER = {
     "message.posted",
     "turn.started",
     "turn.ended",
+    "thread.rewound",
     "question.asked",
     "question.answered",
     "question.closed",
@@ -46,8 +47,22 @@ export function threadsSource(
   return {
     read: () => readThreads(engine, space),
     filter: THREADS_FILTER,
-    apply: applyThreads,
+    apply: (state, event) =>
+      rewound(state, event) ? READ_AGAIN : applyThreads(state, event),
   }
+}
+
+/**
+ * Whether a Thread of the list went back to before a message (ADR 0027):
+ * its latest turn and message are then earlier ones, which only the
+ * engine knows, so the list is read again. It seldom happens.
+ */
+export function rewound(state: ThreadList, event: Event): boolean {
+  const fact = decodeFact(event)
+  return (
+    fact?.kind === "thread.rewound" &&
+    state.threads.some((thread) => thread.id === fact.payload.thread)
+  )
 }
 
 /**

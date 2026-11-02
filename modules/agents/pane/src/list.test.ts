@@ -1,6 +1,6 @@
 import type { ThreadList } from "@banda/contract/agents"
 import { expect, test } from "vitest"
-import { applyThreads } from "./list"
+import { applyThreads, rewound } from "./list"
 import { event, person } from "./testing"
 
 const empty: ThreadList = { at: 0, threads: [] }
@@ -147,4 +147,13 @@ test("a Thread's Questions ask until they are answered or closed", () => {
 test("a fact about a Thread the list does not have changes nothing", () => {
   const started = event("turn.started", { turn: "u" }, { subject: "t9" })
   expect(applyThreads(one, started)).toBe(one)
+})
+
+test("a Thread that goes back to before a message has the list read again", () => {
+  const back = (thread: string) =>
+    event("thread.rewound", { thread, turn: "u2" }, { subject: thread })
+  expect(rewound(one, back("t1"))).toBe(true)
+  expect(rewound(one, back("t2"))).toBe(false)
+  // Only the engine knows the message before; the list alone keeps it.
+  expect(applyThreads(one, back("t1"))).toBe(one)
 })
