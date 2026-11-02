@@ -1826,14 +1826,50 @@ test("a tile fades in as it opens and fades out where it was as it closes", asyn
   expect(await opacity(launcher)).toBeLessThan(0.9)
   await expect.poll(() => opacity(launcher)).toBe(1)
 
-  // Closed, it is gone from the window at once, and its look fades out.
+  // Closed, it is gone from the window at once, and its look fades out
+  // where it was, though the Thread left alone widens at once.
+  const column = launcher.locator("xpath=..")
+  const left = await column.evaluate((e: HTMLElement) => e.offsetLeft)
   await page.keyboard.press("Alt+KeyW")
   await expect(launcher).toBeHidden()
   const ghost = page.locator("[aria-hidden=true][inert]", {
     hasText: "What should this tile show?",
   })
   await expect(ghost).toHaveCount(1)
+  expect(await ghost.evaluate((e: HTMLElement) => e.style.left)).toBe(
+    `${left}px`
+  )
   await expect(ghost).toHaveCount(0)
+
+  // A terminal fades out with its screen on it.
+  await page.keyboard.press("Alt+KeyN")
+  await launcher.getByRole("button", { name: "Terminal" }).click()
+  const screen = page.getByRole("region", { name: "Terminal screen" })
+  await expect(screen).toHaveAttribute("data-state", "running")
+  await page.keyboard.type("echo drawn\n")
+  await page.waitForTimeout(300)
+  await page.keyboard.press("Alt+KeyW")
+  const still = page.locator("[aria-hidden=true][inert] canvas")
+  await expect(still.first()).toBeAttached()
+  const drawn = await still.evaluateAll((canvases: HTMLCanvasElement[]) =>
+    canvases.some((canvas) => {
+      const { data } = canvas
+        .getContext("2d")!
+        .getImageData(0, 0, canvas.width, canvas.height)
+      return new Set(data).size > 2
+    })
+  )
+  expect(drawn).toBe(true)
+  await expect(still).toHaveCount(0)
+
+  // The last Pane of a workspace fades out too, over the empty workspace.
+  await page.keyboard.press("Alt+KeyW")
+  await expect(page.getByText("This workspace is empty.")).toBeVisible()
+  const last = page.locator("[aria-hidden=true][inert]", {
+    hasText: "Write to Fake AI",
+  })
+  await expect(last).toHaveCount(1)
+  await expect(last).toHaveCount(0)
 })
 
 test("the desk is Banda's own glass, made of the wallpaper", async () => {

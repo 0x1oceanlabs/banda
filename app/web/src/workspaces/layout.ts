@@ -107,7 +107,6 @@ export class ColumnMotion {
   #columns = new Map<string, Moved>()
   #tiles = new Map<string, Tile>()
   #started = false
-  #strip: HTMLElement | null = null
 
   /**
    * After each drawing: a column whose width changed grows to it from the
@@ -118,21 +117,30 @@ export class ColumnMotion {
   sync(strip: HTMLElement | null, columns: Columns) {
     const first = !this.#started
     this.#started = true
-    // An emptied workspace drew no Strip: what was in the last one is gone.
-    if (strip !== this.#strip) {
-      this.stop()
-      this.#columns.clear()
-      this.#tiles.clear()
-      this.#strip = strip
-    }
     if (!strip) return
-    const seen = new Set<string>()
-    for (const column of columns) {
+    const found = columns.flatMap((column) => {
       const element = strip.querySelector<HTMLElement>(
         `:scope > [data-column="${column.id}"]`
       )
-      if (!element) continue
-      seen.add(column.id)
+      return element ? [{ column, element }] : []
+    })
+    const seen = new Set(found.map(({ column }) => column.id))
+    // A column that went fades out where it was last seen: before one that
+    // stays grows, and moves the rest.
+    for (const [id, moved] of this.#columns) {
+      if (seen.has(id)) continue
+      moved.size.stop()
+      moved.slide.stop()
+      this.#columns.delete(id)
+      const pad = parseFloat(getComputedStyle(strip).paddingTop) || 0
+      go(moved.element, strip, {
+        top: pad,
+        height: strip.clientHeight - 2 * pad,
+        left: moved.left + moved.slide.value,
+        width: moved.width,
+      })
+    }
+    for (const { column, element } of found) {
       const target = share(column.width) ?? 0.5
       const known = this.#columns.get(column.id)
       if (!known) {
@@ -167,19 +175,6 @@ export class ColumnMotion {
           width: column.width,
         })
       }
-    }
-    for (const [id, moved] of this.#columns) {
-      if (seen.has(id)) continue
-      moved.size.stop()
-      moved.slide.stop()
-      this.#columns.delete(id)
-      const pad = parseFloat(getComputedStyle(strip).paddingTop) || 0
-      go(moved.element, strip, {
-        top: pad,
-        height: strip.clientHeight - 2 * pad,
-        left: moved.left + moved.slide.value,
-        width: moved.width,
-      })
     }
     // The widths are as drawn now: what moved the rest is a column that
     // opened, closed or changed its place.
@@ -254,6 +249,20 @@ function come(element: HTMLElement) {
 }
 
 /**
+ * Puts a still copy in place of each canvas `element` holds, as a
+ * terminal's screen: the Pane lets go of its canvas a moment later, and
+ * the copy is how it looked.
+ */
+function freeze(element: HTMLElement) {
+  for (const canvas of element.querySelectorAll("canvas")) {
+    if (canvas.width === 0 || canvas.height === 0) continue
+    const still = canvas.cloneNode(false) as HTMLCanvasElement
+    still.getContext("2d")?.drawImage(canvas, 0, 0)
+    canvas.replaceWith(still)
+  }
+}
+
+/**
  * Shows a tile or a column going, after the window let it go: the element
  * it was is put back where it was, over its old place, out of reach, and
  * fades out a little smaller. Whatever it held is gone already; this is
@@ -266,6 +275,7 @@ function go(
 ) {
   const move = moveOf("close")
   if (move.kind === "off") return
+  freeze(element)
   element.inert = true
   element.setAttribute("aria-hidden", "true")
   element.removeAttribute("data-column")
