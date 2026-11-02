@@ -15,7 +15,7 @@ pinned: boolean,
  */
 archived: boolean, 
 /**
- * Its Agents see the other Spaces' Panes (ADR 0029). Only the Person
+ * Its Agents see the other Spaces' Panes (ADR 0032). Only the Person
  * sets it.
  */
 sees_others: boolean, };

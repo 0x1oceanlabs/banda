@@ -46,7 +46,7 @@ pub struct SpaceSummary {
     pub pinned: bool,
     /// Hidden from the Space pickers; its Threads and files are kept.
     pub archived: bool,
-    /// Its Agents see the other Spaces' Panes (ADR 0029). Only the Person
+    /// Its Agents see the other Spaces' Panes (ADR 0032). Only the Person
     /// sets it.
     pub sees_others: bool,
 }
@@ -288,7 +288,7 @@ struct OneSpace {
 const BROWSED: usize = 200;
 
 /// A pass is for its Space, so it stops at this machine's scope but for
-/// the tools (ADR 0029).
+/// the tools (ADR 0032).
 fn outside_machine() -> Refusal {
     Refusal::forbidden("An Agent's pass is for its Space, not this machine.")
 }
@@ -455,7 +455,7 @@ impl Kernel {
     /// machine's own ID, as a stream does. Any other runs in the Space it
     /// names, or its caller's pass names, behind the Space wall. A pass
     /// reaches the machine only through its tools, which are handed the
-    /// wall they see behind (ADR 0029).
+    /// wall they see behind (ADR 0032).
     async fn place(
         &self,
         module: &dyn Module,

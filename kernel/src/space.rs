@@ -47,7 +47,7 @@ pub(crate) struct Manifest {
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub archived: bool,
     /// Its Agents see the other Spaces' Panes, as their Person let them
-    /// (ADR 0029).
+    /// (ADR 0032).
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub sees_others: bool,
 }
@@ -233,7 +233,7 @@ impl Space {
         self.owner
     }
 
-    /// Whether its Agents see the other Spaces' Panes (ADR 0029).
+    /// Whether its Agents see the other Spaces' Panes (ADR 0032).
     pub fn sees_others(&self) -> bool {
         self.manifest.lock().unwrap().sees_others
     }

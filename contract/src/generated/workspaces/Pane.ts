@@ -11,7 +11,7 @@ import type { PaneId } from "./PaneId";
 export type Pane = { id: PaneId, 
 /**
  * The Agent that opened it, which alone of the Agents moves and
- * closes it (ADR 0029). Left out, its Person opened it.
+ * closes it (ADR 0032). Left out, its Person opened it.
  */
 by?: AgentId, space: SpaceId, 
 /**
