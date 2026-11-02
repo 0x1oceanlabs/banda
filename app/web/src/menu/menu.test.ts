@@ -1,13 +1,13 @@
 import { describe, expect, test } from "vitest"
-import type { SpaceId, SpaceSummary } from "@banda/contract"
-import type { BrowserArgs } from "@banda/browser-pane"
-import type { Listed, PaneState } from "@banda/ui/pane"
-import type { Action } from "@banda/ui/module"
+import type { SpaceSummary } from "@banda/contract"
+import type { Listed } from "@banda/ui/pane"
+import type { Action, MenuAct, MenuRow } from "@banda/ui/module"
 import type { Shell } from "../shell/actions"
 import {
   actsOf,
   type Branch,
   type Choice,
+  type Found,
   isBranch,
   menuOf,
   openingOf,
@@ -51,16 +51,43 @@ const sources: Sources = {
   spaces,
   actions,
   presets: { names: ["inbox", "spaces", "places"], current: "inbox" },
-  harnesses: [
-    { id: "claude", name: "Claude Code" },
-    { id: "codex", name: "Codex" },
-  ],
   settled: (listed) => listed.id === "t3",
-  files: { space: "s1" as SpaceId, paths: [] },
-  addressOf: (typed) =>
-    typed.includes(".") ? `https://${typed}` : `search:${typed}`,
+  found: [],
   weight: () => 0,
 }
+
+const row = (id: string, title: string, acts?: MenuAct[]): MenuRow => ({
+  id,
+  title,
+  run: () => {},
+  acts,
+})
+
+/** What the modules' sources find, as they would: files under their
+ * heading, then New Thread and the web with none. */
+const foundFor = (words: string, entered?: string): Found[] => [
+  { label: "Files", rows: [] },
+  {
+    label: "",
+    rows:
+      words || entered
+        ? [
+            row(
+              entered ? `agents.ask.${entered}` : "agents.ask",
+              words ? `ask: ${words}` : "ask here",
+              [
+                { title: "Start on Claude Code", run: () => {} },
+                { title: "Start on Codex", run: () => {} },
+              ]
+            ),
+          ]
+        : [],
+  },
+  {
+    label: "",
+    rows: words && !entered ? [row("browser.web", `web: ${words}`)] : [],
+  },
+]
 
 function nameOf(row: Choice): string {
   switch (row.kind) {
@@ -80,12 +107,8 @@ function nameOf(row: Choice): string {
       return row.current ? `${row.name} ✓` : row.name
     case "settle":
       return `settle ${row.listed.id}`
-    case "file":
-      return `file ${row.path}`
-    case "web":
-      return row.address ? `open ${urlOf(row.pane)}` : `search: ${row.words}`
-    case "copy":
-      return `copy ${row.text}`
+    case "found":
+      return row.row.title
     case "family":
       return `${row.title} ›`
     case "bind":
@@ -95,18 +118,29 @@ function nameOf(row: Choice): string {
   }
 }
 
-/** The page a browser Pane opens at. */
-const urlOf = (pane: PaneState) => (pane.args as BrowserArgs).tabs[0].url
+/** The menu's sources for `words`, with what the modules find. */
+const sourcesFor = (
+  words: string,
+  inside?: Branch,
+  more: Partial<Sources> = {}
+): Sources => ({
+  ...sources,
+  found: foundFor(
+    words,
+    inside?.kind === "space" ? inside.space.id : undefined
+  ),
+  ...more,
+})
 
-const labels = (
+const menuFor = (
   words: string,
   at: "root" | "actions" = "root",
   inside?: Branch,
   more: Partial<Sources> = {}
-) =>
-  menuOf({ words, at, inside, sources: { ...sources, ...more } }).map(
-    (group) => [group.label, group.rows.map(nameOf)]
-  )
+) => menuOf({ words, at, inside, sources: sourcesFor(words, inside, more) })
+
+const labels = (...args: Parameters<typeof menuFor>) =>
+  menuFor(...args).map((group) => [group.label, group.rows.map(nameOf)])
 
 describe("the Banda menu", () => {
   test("empty, it shows the Recent Threads, what waits first, and Actions", () => {
@@ -119,53 +153,57 @@ describe("the Banda menu", () => {
     ])
   })
 
-  test("typed into, it finds Threads, Spaces and Actions, then New Thread and the web with the words", () => {
+  test("typed into, it finds Threads, Spaces and Actions, then what the sources find with no heading", () => {
     expect(labels("hello")).toEqual([
       ["Threads", ["hello from claude", "slow hello"]],
-      ["", ["ask: hello", "search: hello"]],
+      ["", ["ask: hello", "web: hello"]],
     ])
     expect(labels("ban")).toEqual([
       ["Spaces", ["banda"]],
-      ["", ["ask: ban", "search: ban"]],
+      ["", ["ask: ban", "web: ban"]],
     ])
     expect(labels("new")).toEqual([
       ["Actions", ["New Thread", "New browser"]],
-      ["", ["ask: new", "search: new"]],
+      ["", ["ask: new", "web: new"]],
     ])
   })
 
-  test("an address typed opens; words search the web where the browser says", () => {
-    expect(labels("banda.so").at(-1)).toEqual([
-      "",
-      ["ask: banda.so", "open https://banda.so"],
-    ])
-    const web = menuOf({ words: "two words", at: "root", sources })
-      .at(-1)!
-      .rows.at(-1)
-    expect(web).toMatchObject({ kind: "web", address: false })
-    expect(web?.kind === "web" && urlOf(web.pane)).toBe("search:two words")
-  })
-
-  test("the focused Space's files come between its Spaces and the Actions", () => {
-    const files = { space: "s1" as SpaceId, paths: ["src/new.ts", "a b#.md"] }
-    expect(labels("new", "root", undefined, { files })).toEqual([
-      ["Files", ["file src/new.ts", "file a b#.md"]],
+  test("a source's rows go under its heading, between the Spaces and the Actions; Tab lists their acts", () => {
+    const open = { title: "Open", key: { code: "Enter" }, run: () => {} }
+    const copy = { title: "Copy path", run: () => {} }
+    const found: Found[] = [
+      {
+        label: "Files",
+        rows: [row("agents.file.s1.src/new.ts", "new.ts", [open, copy])],
+      },
+      { label: "Files", rows: [row("other.file.a", "a")] },
+      { label: "", rows: [row("agents.ask", "ask: new")] },
+    ]
+    expect(labels("new", "root", undefined, { found })).toEqual([
+      ["Files", ["new.ts", "a"]],
       ["Actions", ["New Thread", "New browser"]],
-      ["", ["ask: new", "search: new"]],
+      ["", ["ask: new"]],
     ])
-    const [, odd] = menuOf({
-      words: "new",
-      at: "root",
-      sources: { ...sources, files },
-    })[0].rows
-    expect(odd).toMatchObject({ full: "/home/r/banda/a b#.md" })
-    expect(odd.kind === "file" && urlOf(odd.pane)).toBe(
-      "file:///home/r/banda/a%20b%23.md"
-    )
-    expect(actsOf(odd, sources).map((act) => nameOf(act.row))).toEqual([
-      "file a b#.md",
-      "copy /home/r/banda/a b#.md",
+    const file = menuFor("new", "root", undefined, { found })[0].rows[0]
+    expect(actsOf(file, sources).map((act) => act.title)).toEqual([
+      "Open",
+      "Copy path",
     ])
+    expect(actsOf(file, sources)[0].key).toEqual({ code: "Enter" })
+  })
+
+  test("an action run by its id alone is not listed", () => {
+    const opens = {
+      ...action("browser.open", "Open in a browser"),
+      unlisted: true as const,
+    }
+    const more = { actions: [...actions, opens] }
+    expect(labels("open", "root", undefined, more)).toEqual([
+      ["", ["ask: open", "web: open"]],
+    ])
+    expect(
+      labels("", "actions", undefined, more).flatMap(([, rows]) => rows)
+    ).not.toContain("Open in a browser")
   })
 
   test("what is chosen often and lately ranks first among equals, and leads the empty Actions", () => {
@@ -240,12 +278,12 @@ describe("the Banda menu", () => {
   })
 
   test("its rows run in the order the list shows", () => {
-    const groups = menuOf({ words: "hello", at: "root", sources })
+    const groups = menuFor("hello")
     expect(groups.flatMap((g) => g.rows).map((row) => row.id)).toEqual([
       "thread:s1:t2",
       "thread:s1:t3",
-      "ask",
-      "web",
+      "agents.ask",
+      "browser.web",
     ])
   })
 })
@@ -254,12 +292,21 @@ describe("its branches and acts", () => {
   const space: Branch = { kind: "space", id: "space:s1", space: spaces[0] }
   test("a Space holds a new Thread there, then its Threads", () => {
     expect(labels("", "root", space)).toEqual([
-      ["", ["ask: in s1"]],
+      ["", ["ask here"]],
       ["Threads", ["slow hello", "hello from claude", "Fix the login form"]],
     ])
     expect(labels("form", "root", space)).toEqual([
-      ["", ["ask: form in s1"]],
+      ["", ["ask: form"]],
       ["Threads", ["Fix the login form"]],
+    ])
+  })
+
+  test("Tab on a Space opens it, or starts a new Thread there", () => {
+    expect(
+      actsOf(space, sources).map((act) => [act.title, nameOf(act.row)])
+    ).toEqual([
+      ["Open", "banda"],
+      ["New Thread here", "ask: in s1"],
     ])
   })
 
@@ -281,13 +328,11 @@ describe("its branches and acts", () => {
     expect(actsOf(t3, sources).at(-1)?.title).toBe("Un-settle thread")
   })
 
-  test("Tab on New Thread starts it on any Harness", () => {
-    const ask = menuOf({ words: "x", at: "root", sources }).at(-1)!.rows[0]
-    expect(
-      actsOf(ask, sources).map((act) => [act.title, nameOf(act.row)])
-    ).toEqual([
-      ["Start on Claude Code", "ask: x"],
-      ["Start on Codex", "ask: x"],
+  test("Tab on New Thread lists what its source says: each Harness", () => {
+    const ask = menuFor("x").at(-1)!.rows[0]
+    expect(actsOf(ask, sources).map((act) => act.title)).toEqual([
+      "Start on Claude Code",
+      "Start on Codex",
     ])
   })
 })

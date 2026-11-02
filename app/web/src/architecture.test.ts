@@ -25,14 +25,10 @@ const packages = readdirSync(join(root, "modules")).flatMap((module) => {
 const reachesModule = (name: string) =>
   packages.some((pkg) => name === pkg || name.startsWith(`${pkg}/`))
 
-const SOURCES = "the menu's rows come from sources (ADR 0022, step 4)"
 const MAIN =
   "the browser's part in the window's main process, an unstable path (ADR 0022, decision 6)"
 
 const STILL: Record<string, string> = {
-  "web/src/menu/menu.ts": SOURCES,
-  "web/src/menu/menu.test.ts": SOURCES,
-  "web/src/menu/BandaMenu.tsx": SOURCES,
   "web/src/settings/Agents.tsx":
     "the settings window draws the agents module's section (ADR 0016) until a module declares its own",
   "web/src/host.ts": MAIN,

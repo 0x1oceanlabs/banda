@@ -1,5 +1,6 @@
-/** The agents module's window part: its Panes, and its Watch on what
- * calls for the Person (ADR 0022). */
+/** The agents module's window part: its Panes, its Watch on what calls
+ * for the Person, its action and what the Banda menu finds of it (ADR
+ * 0022). */
 import type { SpaceId } from "@banda/contract"
 import { type Action, defineModule } from "@banda/ui/module"
 import { paneOf } from "@banda/ui/pane"
@@ -7,10 +8,8 @@ import { diffPane } from "./DiffPane"
 import { threadPane } from "./ThreadPane"
 import { threadsPane } from "./ThreadsPane"
 import { threadsWatch } from "./ThreadsWatch"
+import { askSource, filesSource } from "./sources"
 import { NEW_THREAD } from "./session"
-
-export { useSpaceFiles } from "./FileMenu"
-export { useHarnesses } from "./harnesses"
 
 /**
  * A new Thread, in a new column, on this computer's first Harness (ADR
@@ -43,4 +42,5 @@ export const agents = defineModule({
   panes: [threadPane, threadsPane, diffPane],
   watches: [threadsWatch],
   actions: [newThread],
+  sources: [filesSource, askSource],
 })

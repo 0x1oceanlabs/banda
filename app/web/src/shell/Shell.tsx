@@ -246,8 +246,8 @@ export function Shell({
     window.banda?.settings.open("keys")
   }, [])
 
-  const parts: Parts = useMemo(
-    () => ({
+  const parts: Parts = useMemo(() => {
+    const parts: Parts = {
       change,
       home,
       open: (pane, space) =>
@@ -266,18 +266,19 @@ export function Shell({
       settle,
       menu: toggleMenu,
       ownKeys,
-    }),
-    [
-      change,
-      home,
-      toggleSidebar,
-      toggleOverview,
-      answer,
-      settle,
-      toggleMenu,
-      ownKeys,
-    ]
-  )
+      run: (action, args) => runAction(parts, action, args),
+    }
+    return parts
+  }, [
+    change,
+    home,
+    toggleSidebar,
+    toggleOverview,
+    answer,
+    settle,
+    toggleMenu,
+    ownKeys,
+  ])
   // The keys run the actions, before any Pane hears them. A dialog keeps
   // its keys, as the Banda menu its Alt+Enter, but for the menu's own.
   useEffect(() => {
@@ -307,12 +308,8 @@ export function Shell({
   )
   // A new Thread is the agents module's, as its key's (`thread.new`).
   const newThreadIn = useCallback(
-    (space: SpaceId, ask?: string, harness?: string) =>
-      runAction(parts, "thread.new", {
-        space,
-        ...(ask && { ask }),
-        ...(harness && { harness }),
-      }),
+    (space: SpaceId, ask?: string) =>
+      parts.run("thread.new", { space, ...(ask && { ask }) }),
     [parts]
   )
   // The Space the focused Pane is in: where the menu's New Thread starts.
@@ -327,22 +324,13 @@ export function Shell({
         case "action":
           return row.action.run(parts)
         case "ask":
-          return newThreadIn(
-            row.space ?? here,
-            row.words || undefined,
-            row.harness
-          )
+          return newThreadIn(row.space ?? here, row.words || undefined)
         case "settle":
           return toggleSettled(listsNow.current, row.space, row.listed.id)
         case "preset":
           return pickPreset(row.name)
-        case "file":
-        case "web":
-          return openPane(row.kind === "file" ? row.space : here, row.pane)
-        case "copy":
-          return void navigator.clipboard
-            .writeText(row.text)
-            .catch((error: unknown) => console.error("copy:", error))
+        case "found":
+          return row.row.run(parts)
       }
     },
     [change, openPane, newThreadIn, parts, here]
@@ -440,6 +428,7 @@ export function Shell({
             onClose={closeMenu}
             onChoose={choose}
             engine={engine}
+            modules={modules}
             space={here}
             lists={lists}
             spaces={spaces}

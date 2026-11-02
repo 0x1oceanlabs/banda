@@ -7,7 +7,12 @@
 import type { JsonValue } from "@banda/contract"
 import { Button } from "@banda/ui/components/button"
 import { useModules } from "@banda/ui/hooks/use-status"
-import { type AnyPaneKind, defineModule, type Module } from "@banda/ui/module"
+import {
+  type AnyPaneKind,
+  defineModule,
+  type Module,
+  type Source,
+} from "@banda/ui/module"
 import {
   definePane,
   type PaneProps,
@@ -54,6 +59,10 @@ const byKind = new Map(
 export const watches: readonly { watch: Watch; module: Module }[] = all.flatMap(
   (module) => module.watches.map((watch) => ({ watch, module }))
 )
+
+/** Where the Banda menu finds the modules' rows, each with its module. */
+export const sources: readonly { source: Source; module: Module }[] =
+  all.flatMap((module) => module.sources.map((source) => ({ source, module })))
 
 export function kindOf(kind: string): AnyPaneKind | undefined {
   return byKind.get(kind)?.kind
