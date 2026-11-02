@@ -8,12 +8,20 @@
 //! whole arrangement after it in one event, so a window that follows
 //! draws what the event holds; new args for a Pane, the change made most,
 //! say only those. A command that changes nothing says nothing.
+//!
+//! An Agent arranges through its tools alone (ADR 0029): it sees its
+//! Space's Panes, and the other Spaces' outlines when its Person lets it;
+//! it opens Panes of its Space that run nothing as the Person, and moves
+//! and closes only those it opened.
 
 pub mod model;
 
-use banda_kernel::{Call, Error, Module, ModuleSpace, Nothing, Refusal, Right, Scope, Tx};
+use banda_kernel::{
+    AgentId, Call, Error, Module, ModuleSpace, Nothing, Refusal, Right, Scope, Tool, Tx, Wall,
+};
 use banda_look::columns::Display;
-use model::{Arrangement, ColumnId, PaneId, Place, Shown, WorkspaceId};
+use model::{Arrangement, ColumnId, PaneId, Place, Shown, Side, Sight, WorkspaceId};
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use serde_json::Value;
 use ts_rs::TS;
@@ -58,7 +66,100 @@ banda_kernel::methods! {
         /// Puts a window's arrangement over the engine's, once (ADR 0025,
         /// decision 2).
         command take(Take) -> Done, Write;
+        /// The Panes on the workspaces, from the top down and from the
+        /// left: your Space's with their args, and, when your Person lets
+        /// you see the other Spaces, theirs without. `yours` marks the
+        /// ones you opened, which alone you move and close.
+        call panes(Nothing) -> Vec<SeenWorkspace>, Read, tool "panes";
+        /// Opens a Pane of your Space for your Person to see: a Thread
+        /// (`agents.thread`, args `{"thread": "<id>"}`), a diff, or a
+        /// browser (`browser.browser`). Beside a Pane `panes` lists, or,
+        /// left out, beside your Space's Panes. It takes no focus; the
+        /// Person sees a mark on it until they look.
+        command open_pane(OpenPane) -> Opened, Write, tool "open_pane";
+        /// Moves a Pane you opened beside another that `panes` lists.
+        command move_own(MoveOwn) -> Done, Write, tool "move_pane";
+        /// Closes a Pane you opened.
+        command close_own(OnePane) -> Done, Write, tool "close_pane";
     }
+}
+
+/// The kinds of Pane an Agent may open: ones that show, and run nothing as
+/// the Person. A terminal's runs the Person's shell, and the command its
+/// `done` sends goes as the Person (ADR 0029).
+const AGENT_KINDS: &[&str] = &["agents.thread", "agents.diff", "browser.browser"];
+
+/// A workspace as an Agent sees it: only the columns with a Pane it sees.
+#[derive(Serialize, TS)]
+#[ts(export_to = "workspaces/")]
+pub struct SeenWorkspace {
+    pub id: WorkspaceId,
+    pub columns: Vec<SeenColumn>,
+}
+
+#[derive(Serialize, TS)]
+#[ts(export_to = "workspaces/")]
+pub struct SeenColumn {
+    pub id: ColumnId,
+    pub panes: Vec<SeenPane>,
+}
+
+#[derive(Serialize, TS)]
+#[ts(export_to = "workspaces/")]
+pub struct SeenPane {
+    pub id: PaneId,
+    pub space: banda_kernel::SpaceId,
+    pub kind: String,
+    /// Its args, for a Pane of your Space; none for another Space's.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub args: Option<Value>,
+    /// You opened it.
+    pub yours: bool,
+}
+
+#[derive(Deserialize, TS, JsonSchema)]
+#[ts(export_to = "workspaces/")]
+pub struct OpenPane {
+    /// The kind: `agents.thread`, `agents.diff` or `browser.browser`.
+    pub kind: String,
+    /// The kind's own, an object, as `panes` shows them.
+    #[schemars(with = "serde_json::Map<String, Value>")]
+    pub args: Value,
+    /// A Pane `panes` lists, to open it beside.
+    #[serde(default)]
+    #[ts(optional)]
+    pub beside: Option<Beside>,
+}
+
+#[derive(Deserialize, TS, JsonSchema)]
+#[ts(export_to = "workspaces/")]
+pub struct Beside {
+    /// The Pane's ID, as `panes` lists it.
+    pub pane: PaneId,
+    /// `left` or `right`: a column of its own; `above` or `below`: in
+    /// that Pane's column.
+    pub side: Side,
+}
+
+impl Beside {
+    /// Its place, by a Pane the caller behind `wall` sees.
+    fn place(self, list: &Arrangement, wall: Wall) -> Result<Place, Refusal> {
+        model::seen(list, wall, self.pane)?;
+        Ok(Place::Beside {
+            pane: self.pane,
+            side: self.side,
+        })
+    }
+}
+
+#[derive(Deserialize, TS, JsonSchema)]
+#[ts(export_to = "workspaces/")]
+pub struct MoveOwn {
+    /// A Pane you opened.
+    pub pane: PaneId,
+    /// Where it goes.
+    pub beside: Beside,
 }
 
 /// The arrangement, and the log's position it is current at.
@@ -126,9 +227,10 @@ pub struct Done {
     pub at: Option<i64>,
 }
 
-#[derive(Deserialize, TS)]
+#[derive(Deserialize, TS, JsonSchema)]
 #[ts(export_to = "workspaces/")]
 pub struct OnePane {
+    /// The Pane's ID, as `panes` lists it.
     pub pane: PaneId,
 }
 
@@ -236,6 +338,10 @@ impl Module for Workspaces {
         Self::method_right(method)
     }
 
+    fn tools(&self) -> Vec<Tool> {
+        Self::method_tools(self.name())
+    }
+
     async fn call(&self, call: Call, method: &str, params: Value) -> Result<Value, Refusal> {
         self.dispatch(call, method, params).await
     }
@@ -258,7 +364,7 @@ impl Workspaces {
                 width,
                 ..
             } = open;
-            let pane = model::open(list, shows, place, instead, width, again)?;
+            let pane = model::open(list, shows, place, instead, width, again, None)?;
             Ok((pane, new))
         })
         .await?;
@@ -355,6 +461,106 @@ impl Workspaces {
         })
         .await
         .map(|((), at)| Done { at })
+    }
+}
+
+impl Workspaces {
+    async fn panes(&self, call: Call, _: Nothing) -> Result<Vec<SeenWorkspace>, Refusal> {
+        let wall = call.wall();
+        let me = call.participant().agent();
+        let (_, list) = call.space().view(load).await?;
+        let seen = |pane: &model::Pane| {
+            let sight = model::sight(wall, pane);
+            (sight != Sight::Hidden).then(|| SeenPane {
+                id: pane.id,
+                space: pane.shows.space,
+                kind: pane.shows.kind.clone(),
+                args: (sight == Sight::Whole).then(|| pane.shows.args.clone()),
+                yours: me.is_some() && pane.by == me,
+            })
+        };
+        Ok(list
+            .iter()
+            .map(|workspace| SeenWorkspace {
+                id: workspace.id,
+                columns: (workspace.columns.iter())
+                    .filter_map(|column| {
+                        let panes: Vec<_> = column.panes.iter().filter_map(seen).collect();
+                        (!panes.is_empty()).then_some(SeenColumn {
+                            id: column.id,
+                            panes,
+                        })
+                    })
+                    .collect(),
+            })
+            .filter(|workspace| !workspace.columns.is_empty())
+            .collect())
+    }
+
+    async fn open_pane(&self, call: Call, open: OpenPane) -> Result<Opened, Refusal> {
+        let (wall, me) = walled(&call)?;
+        if !AGENT_KINDS.contains(&open.kind.as_str()) {
+            return Err(Refusal::invalid(format!(
+                "An Agent opens only {}: they run nothing as your Person.",
+                AGENT_KINDS.join(", ")
+            )));
+        }
+        let shows = Shown {
+            space: wall.space,
+            kind: open.kind,
+            args: open.args,
+        };
+        let beside = open.beside;
+        let ((pane, new), at) = change(&call, "opened", None, Say::Whole, move |list, _| {
+            let place = beside.map(|b| b.place(list, wall)).transpose()?;
+            let new = model::showing(list, &shows).is_none();
+            let pane = model::open(list, shows, place, None, None, false, Some(me))?;
+            Ok((pane, new))
+        })
+        .await?;
+        Ok(Opened { pane, new, at })
+    }
+
+    async fn move_own(&self, call: Call, moving: MoveOwn) -> Result<Done, Refusal> {
+        let (wall, me) = walled(&call)?;
+        let MoveOwn { pane, beside } = moving;
+        done(&call, "moved", pane, Say::Whole, move |list, _| {
+            own(list, wall, me, pane)?;
+            let place = beside.place(list, wall)?;
+            Ok(model::move_pane(list, pane, &place)?)
+        })
+        .await
+    }
+
+    async fn close_own(&self, call: Call, one: OnePane) -> Result<Done, Refusal> {
+        let (wall, me) = walled(&call)?;
+        let pane = one.pane;
+        done(&call, "closed", pane, Say::Whole, move |list, _| {
+            own(list, wall, me, pane)?;
+            Ok(model::close(list, pane)?)
+        })
+        .await
+    }
+}
+
+/// The wall and the Agent of a call to an Agent's tool.
+fn walled(call: &Call) -> Result<(Wall, AgentId), Refusal> {
+    match (call.wall(), call.participant().agent()) {
+        (Some(wall), Some(agent)) => Ok((wall, agent)),
+        _ => Err(Refusal::invalid(
+            "This is an Agent's tool: a Person arranges with open, move_pane and close.",
+        )),
+    }
+}
+
+/// Refuses a Pane `agent` did not open.
+fn own(list: &Arrangement, wall: Wall, agent: AgentId, pane: PaneId) -> Result<(), Refusal> {
+    if model::seen(list, wall, pane)?.by == Some(agent) {
+        Ok(())
+    } else {
+        Err(Refusal::forbidden(
+            "An Agent moves and closes only the Panes it opened; ask your Person for the rest.",
+        ))
     }
 }
 

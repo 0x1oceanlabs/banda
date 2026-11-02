@@ -1550,6 +1550,51 @@ test("an Agent starts a Thread, its answer comes back, and each names the other'
   await expect(hello).toHaveAttribute("data-focused", "true")
 })
 
+test("an Agent opens a Pane beside its Thread without the focus, marked until the Person looks, and closes it", async () => {
+  window = await startWindow()
+  const { page } = window
+  const { thread, composer } = await firstThread(page)
+  await composer.fill("hello")
+  await composer.press("Enter")
+  await expect(thread.getByText("You said: hello")).toBeVisible()
+  const hello = page.getByRole("region", { name: "hello" })
+  await expect(hello).toHaveAttribute("data-focused", "true")
+
+  // It sees its Space's Panes, with what they show; it opened none.
+  const answer = (said: { isError?: boolean; content: { text: string }[] }) => {
+    expect(said.isError, said.content[0]?.text).toBeFalsy()
+    return JSON.parse(said.content[0]!.text)
+  }
+  const seen = answer(agentCalls(window, "panes", {}))
+  const mine = seen[0].columns[0].panes[0]
+  expect(mine).toMatchObject({ kind: "agents.thread", yours: false })
+
+  const browser = { kind: "browser.browser", args: { tabs: [], shown: 0 } }
+  const beside = { pane: mine.id, side: "right" }
+  const { pane } = answer(
+    agentCalls(window, "open_pane", { ...browser, beside })
+  )
+  const opened = page.locator(`[data-tile="${pane}"]`)
+  await expect(opened).toHaveAttribute("data-marked", "true")
+  await expect(hello).toHaveAttribute("data-focused", "true")
+  await page.screenshot({ path: "test-results/18l-agent-opened.png" })
+  // A terminal would run as the Person: not an Agent's to open.
+  const terminal = agentCalls(window, "open_pane", {
+    kind: "terminal.terminal",
+    args: {},
+  })
+  expect(terminal.isError).toBe(true)
+  // Nor is the Person's Pane its to close.
+  expect(agentCalls(window, "close_pane", { pane: mine.id }).isError).toBe(true)
+
+  await opened.click()
+  await expect(opened).toHaveAttribute("data-focused", "true")
+  await expect(opened).not.toHaveAttribute("data-marked")
+  answer(agentCalls(window, "close_pane", { pane }))
+  await expect(opened).toHaveCount(0)
+  await expect(hello).toBeVisible()
+})
+
 test("an answer that comes while its Thread works waits in the queue, named by the Thread it comes from", async () => {
   window = await startWindow()
   const { page } = window

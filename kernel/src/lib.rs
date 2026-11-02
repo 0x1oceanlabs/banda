@@ -36,7 +36,7 @@ pub use events::{Event, EventFilter};
 pub use ids::{AgentId, CommandId, EventId, Participant, PersonId, SpaceId};
 pub use kernel::{Kernel, KernelBuilder, SpaceSummary, decode};
 pub use methods::{Method, Nothing, Tool};
-pub use module::{Call, Module, Scope, Stream};
+pub use module::{Call, Module, Scope, Stream, Wall};
 pub use outbox::{Effect, OnRestart, Outcome, Settled};
 pub use passes::secret;
 /// For `methods!` and `id!`, which name it from a module's crate.

@@ -45,6 +45,7 @@ import {
 import {
   current,
   type Entry,
+  entries,
   focused,
   focusEntry,
   go,
@@ -58,8 +59,10 @@ import {
 import { Overview } from "../workspaces/Overview"
 import type { Frame } from "../workspaces/PaneFrame"
 import {
+  keepLooked,
   keepSidebar,
   keepView,
+  loadLooked,
   loadSidebar,
   loadView,
   moveOver,
@@ -255,6 +258,22 @@ export function Shell({
   }, [calling, workspaces, front, seen])
   const toasts = calls.toasts
   useEffect(() => keepSidebar(sidebar), [sidebar])
+  // A Pane an Agent opened is marked until the Person looks at it: has
+  // it in focus, the window in front (ADR 0029).
+  const [looked, setLooked] = useState(loadLooked)
+  const lookedAt = (front && !overview && focused(workspaces)) || undefined
+  if (lookedAt?.by && !looked.has(lookedAt.id)) {
+    // Only the Panes still there are kept.
+    const now = new Set([lookedAt.id])
+    for (const entry of entries(workspaces))
+      if (looked.has(entry.id)) now.add(entry.id)
+    setLooked(now)
+  }
+  useEffect(() => keepLooked(looked), [looked])
+  const marked = useCallback(
+    (entry: Entry) => entry.by !== undefined && !looked.has(entry.id),
+    [looked]
+  )
 
   // A Pane that leaves every workspace lets its module let go, as a
   // terminal stops its program; one moved elsewhere has not left.
@@ -626,6 +645,7 @@ export function Shell({
               modules={modules}
               spaceName={spaceName}
               called={called}
+              marked={marked}
               frame={frame}
               onStep={(by) => change((w) => step(w, by))}
               onStart={(pane) => parts.open(pane)}

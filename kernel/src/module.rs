@@ -2,7 +2,7 @@ use crate::access::Right;
 use crate::methods::Tool;
 use crate::outbox::{Effect, OnRestart, Outcome, Settled};
 use crate::space::ModuleSpace;
-use crate::{CommandId, Error, Participant, Refusal, Tx};
+use crate::{CommandId, Error, Participant, Refusal, SpaceId, Tx};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
@@ -105,6 +105,16 @@ pub trait Module: Send + Sync + 'static {
     }
 }
 
+/// The wall a pass keeps an Agent behind (ADR 0019, decision 2): the one
+/// Space it works in, and whether its Person lets that Space's Agents see
+/// the other Spaces' Panes (ADR 0029). A module of this machine answers a
+/// walled call with what it may see.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct Wall {
+    pub space: SpaceId,
+    pub sees_others: bool,
+}
+
 /// One allowed call to a module's method: who makes it, in which Space, and
 /// the command ID that makes it run once.
 pub struct Call {
@@ -112,6 +122,7 @@ pub struct Call {
     space: ModuleSpace,
     method: String,
     command: Option<CommandId>,
+    wall: Option<Wall>,
 }
 
 impl Call {
@@ -120,17 +131,24 @@ impl Call {
         space: ModuleSpace,
         method: String,
         command: Option<CommandId>,
+        wall: Option<Wall>,
     ) -> Self {
         Self {
             participant,
             space,
             method,
             command,
+            wall,
         }
     }
 
     pub fn participant(&self) -> Participant {
         self.participant
+    }
+
+    /// The wall its caller's pass keeps it behind; none for the owner.
+    pub fn wall(&self) -> Option<Wall> {
+        self.wall
     }
 
     pub fn space(&self) -> &ModuleSpace {

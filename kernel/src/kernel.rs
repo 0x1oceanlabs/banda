@@ -1,6 +1,6 @@
 use crate::access::{self, Caller, Right};
 use crate::methods::{Asks, Nothing, Tool};
-use crate::module::{Call, Module, Scope, Stream};
+use crate::module::{Call, Module, Scope, Stream, Wall};
 use crate::passes::Passes;
 use crate::space::{GONE, Manifest, Space, UNFINISHED};
 use crate::{AgentId, CommandId, Error, Participant, PersonId, Refusal, SpaceId};
@@ -46,6 +46,9 @@ pub struct SpaceSummary {
     pub pinned: bool,
     /// Hidden from the Space pickers; its Threads and files are kept.
     pub archived: bool,
+    /// Its Agents see the other Spaces' Panes (ADR 0029). Only the Person
+    /// sets it.
+    pub sees_others: bool,
 }
 
 pub struct KernelBuilder {
@@ -119,7 +122,7 @@ impl KernelBuilder {
             spaces_data,
             owner: self.owner,
             boot,
-            tools: in_spaces.iter().flat_map(|m| m.tools()).collect(),
+            tools: self.modules.iter().flat_map(|m| m.tools()).collect(),
             modules: self.modules.into(),
             in_spaces: in_spaces.into(),
             spaces: RwLock::new(BTreeMap::new()),
@@ -182,13 +185,13 @@ crate::methods! {
         /// The folders that match a path as it is typed, for the field
         /// that picks a Space's folder. Only the owner browses.
         call browse(Browse) -> Browsed, Manage;
-        /// Renames, pins or archives a Space.
+        /// Renames, pins or archives a Space, or lets its Agents see the
+        /// other Spaces' Panes.
         command update(UpdateSpace) -> SpaceSummary, Manage;
         /// Forgets a Space and deletes its Threads; its folder and the
         /// files in it stay as they are.
         command remove(OneSpace) -> (), Manage;
-        /// The tools an Agent may call, from the methods of the modules in
-        /// Spaces.
+        /// The tools an Agent may call, from the methods of the modules.
         call tools(Nothing) -> Vec<Tool>, Read;
     }
 }
@@ -271,6 +274,9 @@ struct UpdateSpace {
     #[serde(default)]
     #[ts(optional)]
     archived: Option<bool>,
+    #[serde(default)]
+    #[ts(optional)]
+    sees_others: Option<bool>,
 }
 
 #[derive(Deserialize, TS)]
@@ -281,15 +287,10 @@ struct OneSpace {
 /// The most folders `spaces.browse` answers.
 const BROWSED: usize = 200;
 
-/// A pass is for its Space, so it stops at this machine's scope: what an
-/// Agent may do with the workspaces comes with its tools (ADR 0025, step 3).
-fn outside_machine(only: Option<SpaceId>) -> Result<(), Refusal> {
-    match only {
-        Some(_) => Err(Refusal::forbidden(
-            "An Agent's pass is for its Space, not this machine.",
-        )),
-        None => Ok(()),
-    }
+/// A pass is for its Space, so it stops at this machine's scope but for
+/// the tools (ADR 0029).
+fn outside_machine() -> Refusal {
+    Refusal::forbidden("An Agent's pass is for its Space, not this machine.")
 }
 
 fn no_method(method: &str) -> Refusal {
@@ -356,7 +357,7 @@ impl Kernel {
             return self.dispatch(ask, own, params).await;
         }
         let (module, rest, right) = self.method(method)?;
-        let space = self.place(&**module, method, space, only).await?;
+        let (space, wall) = self.place(&**module, method, space, only).await?;
         let scope = space.module(module.name());
         // A read is not a command: it keeps no receipt, so its ID is free.
         let command = command.filter(|_| right != Right::Read);
@@ -369,7 +370,7 @@ impl Kernel {
         }
         let answer = match access::decide(&participant, right, space.owner()) {
             Ok(()) => {
-                let call = Call::new(participant, scope, method.to_owned(), command);
+                let call = Call::new(participant, scope, method.to_owned(), command, wall);
                 module.call(call, rest, params).await
             }
             Err(refusal) => Err(refusal),
@@ -393,13 +394,14 @@ impl Kernel {
     ) -> Result<Stream, Refusal> {
         let Caller { participant, only } = caller.into();
         let (module, rest, right) = self.method(method)?;
-        let space = self.place(&**module, method, Some(space), only).await?;
+        let (space, wall) = self.place(&**module, method, Some(space), only).await?;
         access::decide(&participant, right, space.owner())?;
         let call = Call::new(
             participant,
             space.module(module.name()),
             method.to_owned(),
             None,
+            wall,
         );
         module.stream(call, rest, params).await
     }
@@ -427,7 +429,10 @@ impl Kernel {
         let Caller { participant, only } = caller.into();
         let space = match &self.machine {
             Some(machine) if machine.id() == space => {
-                outside_machine(only)?;
+                // Its log holds every Space's Panes: no pass follows it.
+                if only.is_some() {
+                    return Err(outside_machine());
+                }
                 machine.clone()
             }
             _ => {
@@ -448,19 +453,21 @@ impl Kernel {
     /// Where a method of `module` runs. A module of the machine runs in
     /// this machine's scope, and its method names no Space, or the
     /// machine's own ID, as a stream does. Any other runs in the Space it
-    /// names, or its caller's pass names, behind the Space wall.
+    /// names, or its caller's pass names, behind the Space wall. A pass
+    /// reaches the machine only through its tools, which are handed the
+    /// wall they see behind (ADR 0029).
     async fn place(
         &self,
         module: &dyn Module,
         method: &str,
         named: Option<SpaceId>,
         only: Option<SpaceId>,
-    ) -> Result<Arc<Space>, Refusal> {
+    ) -> Result<(Arc<Space>, Option<Wall>), Refusal> {
         if module.scope() == Scope::Space {
             let id = named.or(only);
             access::within(only, id)?;
             let id = id.ok_or_else(|| Refusal::invalid(format!("{method} needs a Space.")))?;
-            return self.space(id).await;
+            return Ok((self.space(id).await?, None));
         }
         let machine = (self.machine.as_ref())
             .ok_or_else(|| Refusal::not_found("This engine has no machine's scope."))?;
@@ -469,8 +476,15 @@ impl Kernel {
                 "{method} is this machine's: it names no Space."
             )));
         }
-        outside_machine(only)?;
-        Ok(machine.clone())
+        let wall = match only {
+            None => None,
+            Some(space) if self.tools.iter().any(|tool| tool.method == method) => {
+                let sees_others = self.space(space).await?.sees_others();
+                Some(Wall { space, sees_others })
+            }
+            Some(_) => return Err(outside_machine()),
+        };
+        Ok((machine.clone(), wall))
     }
 
     pub async fn space(&self, id: SpaceId) -> Result<Arc<Space>, Refusal> {
@@ -664,6 +678,9 @@ impl Kernel {
             }
             if let Some(archived) = update.archived {
                 manifest.archived = archived;
+            }
+            if let Some(sees_others) = update.sees_others {
+                manifest.sees_others = sees_others;
             }
         })?)
     }

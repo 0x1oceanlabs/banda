@@ -17,8 +17,9 @@
 //! rules. A refused change may leave it half done: the module keeps it
 //! only when the change is done.
 
-use banda_kernel::{Refusal, SpaceId};
+use banda_kernel::{AgentId, Refusal, SpaceId, Wall};
 use banda_look::columns::{Display, share};
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use ts_rs::TS;
@@ -67,7 +68,8 @@ pub struct Column {
     pub display: Option<Display>,
 }
 
-/// One Pane: what it shows, and the Space it belongs to.
+/// One Pane: what it shows, the Space it belongs to, and the Agent that
+/// opened it, if one did.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 #[ts(export_to = "workspaces/")]
 pub struct Pane {
@@ -75,6 +77,41 @@ pub struct Pane {
     #[serde(flatten)]
     #[ts(flatten)]
     pub shows: Shown,
+    /// The Agent that opened it, which alone of the Agents moves and
+    /// closes it (ADR 0029). Left out, its Person opened it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub by: Option<AgentId>,
+}
+
+/// How much of a Pane a caller sees (ADR 0029).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Sight {
+    /// All of it: the owner, or an Agent of its Space.
+    Whole,
+    /// Where it is and what it is, not its args: an Agent of another
+    /// Space whose Person lets it see the others.
+    Outline,
+    /// Nothing: behind the wall.
+    Hidden,
+}
+
+/// How much of `pane` a caller behind `wall` sees.
+pub fn sight(wall: Option<Wall>, pane: &Pane) -> Sight {
+    match wall {
+        None => Sight::Whole,
+        Some(wall) if wall.space == pane.shows.space => Sight::Whole,
+        Some(wall) if wall.sees_others => Sight::Outline,
+        Some(_) => Sight::Hidden,
+    }
+}
+
+/// The Pane `pane`, when a caller behind `wall` sees it; a Pane it does
+/// not is as if the workspaces did not show it.
+pub fn seen(list: &Arrangement, wall: Wall, pane: PaneId) -> Result<&Pane, Refusal> {
+    panes(list)
+        .find(|other| other.id == pane && sight(Some(wall), other) != Sight::Hidden)
+        .ok_or_else(|| Refusal::not_found("The workspaces show no such Pane."))
 }
 
 /// What a Pane shows: two Panes are the same when this is.
@@ -105,7 +142,7 @@ pub enum Place {
     Beside { pane: PaneId, side: Side },
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS, JsonSchema)]
 #[serde(rename_all = "lowercase")]
 #[ts(export_to = "workspaces/")]
 pub enum Side {
@@ -194,9 +231,10 @@ pub fn showing<'a>(list: &'a Arrangement, shown: &Shown) -> Option<&'a Pane> {
 
 /// Shows a Pane at `place`, or `instead` of another, which leaves; and
 /// names it. One the workspaces show already stays where it is, and is
-/// named, unless it opens `again` or `instead`. Left with neither, it opens as a column on the right of the top
-/// workspace that shows a Pane of its Space, or else on the empty one at
-/// the bottom. `width` is a new column's.
+/// named, unless it opens `again` or `instead`. Left with neither, it
+/// opens as a column on the right of the top workspace that shows a Pane
+/// of its Space, or else on the empty one at the bottom. `width` is a new
+/// column's; `by`, the Agent that opens a new one.
 pub fn open(
     list: &mut Arrangement,
     shown: Shown,
@@ -204,6 +242,7 @@ pub fn open(
     instead: Option<PaneId>,
     width: Option<String>,
     again: bool,
+    by: Option<AgentId>,
 ) -> Result<PaneId, Refusal> {
     check_shown(&shown)?;
     check_width(width.as_deref())?;
@@ -218,6 +257,7 @@ pub fn open(
     let pane = Pane {
         id: PaneId::new(),
         shows: shown,
+        by,
     };
     let id = pane.id;
     if let Some(other) = instead {
@@ -501,7 +541,7 @@ mod tests {
     const EMPTY: Vec<Vec<u64>> = Vec::new();
 
     fn opened(list: &mut Arrangement, shown: Shown, place: Option<Place>) -> PaneId {
-        open(list, shown, place, None, None, false).unwrap()
+        open(list, shown, place, None, None, false, None).unwrap()
     }
 
     fn beside(pane: PaneId, side: Side) -> Option<Place> {
@@ -574,6 +614,7 @@ mod tests {
             Some(one),
             None,
             false,
+            None,
         )
         .unwrap();
         assert_eq!(
@@ -587,6 +628,7 @@ mod tests {
             Some(one),
             None,
             false,
+            None,
         );
         assert!(both.is_err());
     }
@@ -597,7 +639,16 @@ mod tests {
         let work = SpaceId::new();
         let one = opened(&mut list, shown(work, "a.a", 1), None);
         assert_eq!(opened(&mut list, shown(work, "a.a", 1), None), one);
-        let two = open(&mut list, shown(work, "a.a", 1), None, None, None, true).unwrap();
+        let two = open(
+            &mut list,
+            shown(work, "a.a", 1),
+            None,
+            None,
+            None,
+            true,
+            None,
+        )
+        .unwrap();
         assert_ne!(two, one);
         assert_eq!(layout(&list), [vec![vec![1], vec![1]], vec![]]);
     }
@@ -613,6 +664,7 @@ mod tests {
             None,
             Some("1/3".into()),
             false,
+            None,
         )
         .unwrap();
         assert_eq!(list[0].columns[0].width.as_deref(), Some("1/3"));
@@ -624,15 +676,27 @@ mod tests {
                 None,
                 Some(bad.into()),
                 false,
+                None,
             );
             assert!(refused.is_err(), "{bad}");
         }
-        assert!(open(&mut list, shown(work, "a", 2), None, None, None, false).is_err());
+        assert!(
+            open(
+                &mut list,
+                shown(work, "a", 2),
+                None,
+                None,
+                None,
+                false,
+                None
+            )
+            .is_err()
+        );
         let listed = Shown {
             args: json!([1]),
             ..shown(work, "a.a", 2)
         };
-        assert!(open(&mut list, listed, None, None, None, false).is_err());
+        assert!(open(&mut list, listed, None, None, None, false, None).is_err());
     }
 
     #[test]
@@ -757,6 +821,40 @@ mod tests {
     }
 
     #[test]
+    fn a_wall_shows_its_space_whole_and_the_others_only_when_let() {
+        let mut list = start();
+        let (mine, other) = (SpaceId::new(), SpaceId::new());
+        let a = opened(&mut list, shown(mine, "a.a", 1), None);
+        let b = opened(&mut list, shown(other, "a.a", 2), None);
+        let walled = Wall {
+            space: mine,
+            sees_others: false,
+        };
+        let let_see = Wall {
+            sees_others: true,
+            ..walled
+        };
+        let pane = |id| panes(&list).find(|p| p.id == id).unwrap();
+        assert_eq!(sight(None, pane(b)), Sight::Whole);
+        assert_eq!(sight(Some(walled), pane(a)), Sight::Whole);
+        assert_eq!(sight(Some(walled), pane(b)), Sight::Hidden);
+        assert_eq!(sight(Some(let_see), pane(b)), Sight::Outline);
+        assert!(seen(&list, walled, b).is_err());
+        assert!(seen(&list, let_see, b).is_ok());
+        let agent = AgentId::new();
+        let c = open(
+            &mut list,
+            shown(mine, "a.a", 3),
+            None,
+            None,
+            None,
+            false,
+            Some(agent),
+        );
+        assert_eq!(seen(&list, walled, c.unwrap()).unwrap().by, Some(agent));
+    }
+
+    #[test]
     fn update_keeps_new_args_in_place() {
         let mut list = start();
         let one = opened(&mut list, shown(SpaceId::new(), "a.a", 1), None);
@@ -772,6 +870,7 @@ mod tests {
         let pane = |n: u32| Pane {
             id: PaneId::new(),
             shows: shown(work, "a.a", n),
+            by: None,
         };
         let column = |panes| Column {
             id: ColumnId::new(),

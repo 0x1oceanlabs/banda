@@ -31,7 +31,8 @@ add: CommandMethod<AddSpace, SpaceSummary>,
  */
 browse: CallMethod<Browse, Browsed>, 
 /**
- * Renames, pins or archives a Space.
+ * Renames, pins or archives a Space, or lets its Agents see the
+ * other Spaces' Panes.
  */
 update: CommandMethod<UpdateSpace, SpaceSummary>, 
 /**
@@ -40,7 +41,6 @@ update: CommandMethod<UpdateSpace, SpaceSummary>,
  */
 remove: CommandMethod<OneSpace, null>, 
 /**
- * The tools an Agent may call, from the methods of the modules in
- * Spaces.
+ * The tools an Agent may call, from the methods of the modules.
  */
 tools: CallMethod<Nothing, Array<Tool>>, };

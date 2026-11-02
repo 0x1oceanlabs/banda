@@ -2,7 +2,9 @@
 //! it: in this machine's scope, its arrangement read at the log's position
 //! and each change said in one event.
 
-use banda_kernel::{Code, CommandId, Kernel, Participant, PersonId, Refusal, SpaceId};
+use banda_kernel::{
+    AgentId, Caller, Code, CommandId, Kernel, Participant, PersonId, Refusal, SpaceId,
+};
 use banda_workspaces::Workspaces;
 use banda_workspaces::model::{ColumnId, PaneId, WorkspaceId};
 use serde_json::{Value, json};
@@ -31,6 +33,29 @@ impl Machine {
         self.kernel
             .call(person, method, None, command, params)
             .await
+    }
+
+    /// A command by an Agent whose pass is for `space`.
+    async fn agent(
+        &self,
+        agent: AgentId,
+        space: SpaceId,
+        method: &str,
+        params: Value,
+    ) -> Result<Value, Refusal> {
+        let caller = Caller {
+            participant: Participant::Agent(agent),
+            only: Some(space),
+        };
+        let command = Some(CommandId::new());
+        self.kernel
+            .call(caller, method, None, command, params)
+            .await
+    }
+
+    async fn space(&self, name: &str) -> SpaceId {
+        let made = self.command("spaces.create", json!({ "name": name }));
+        serde_json::from_value(made.await.unwrap()["id"].clone()).unwrap()
     }
 
     async fn list(&self) -> Value {
@@ -142,4 +167,117 @@ async fn a_windows_arrangement_is_taken_once() {
         .unwrap_err();
     assert_eq!(twice.code, Code::Conflict);
     assert_eq!(machine.list().await, arranged);
+}
+
+#[tokio::test]
+async fn an_agent_arranges_its_own_spaces_panes_and_sees_the_others_when_let() {
+    let root = tempfile::tempdir().unwrap();
+    let machine = Machine::open(root.path(), PersonId::new()).await;
+    let (work, home) = (machine.space("Work").await, machine.space("Home").await);
+    let page =
+        |space, url| json!({ "space": space, "kind": "browser.browser", "args": { "url": url } });
+    let theirs = machine
+        .command("workspaces.open", page(home, "secret"))
+        .await
+        .unwrap();
+    let person = machine
+        .command("workspaces.open", page(work, "mine"))
+        .await
+        .unwrap();
+    let agent = AgentId::new();
+    let as_agent = |method: &'static str, params| machine.agent(agent, work, method, params);
+
+    // Behind the wall, it sees its own Space's Panes only, with their args.
+    let seen = as_agent("workspaces.panes", json!({})).await.unwrap();
+    let panes = |seen: &Value| -> Vec<Value> {
+        let workspaces = seen.as_array().unwrap().iter();
+        let columns = workspaces.flat_map(|w| w["columns"].as_array().unwrap().clone());
+        columns
+            .flat_map(|c| c["panes"].as_array().unwrap().clone())
+            .collect()
+    };
+    let only = panes(&seen);
+    assert_eq!(only.len(), 1);
+    assert_eq!(only[0]["args"]["url"], "mine");
+    assert_eq!(only[0]["yours"], false);
+    // Nothing beside another Space's Pane while the wall stands.
+    let beside = |pane: &Value| json!({ "pane": pane, "side": "right" });
+    let thread = json!({ "thread": "t" });
+    let hidden = as_agent(
+        "workspaces.open_pane",
+        json!({ "kind": "agents.thread", "args": thread, "beside": beside(&theirs["pane"]) }),
+    );
+    assert_eq!(hidden.await.unwrap_err().code, Code::NotFound);
+    // Any other method of the machine stays past the wall.
+    let list = as_agent("workspaces.list", json!({})).await;
+    assert_eq!(list.unwrap_err().code, Code::Forbidden);
+    // A terminal runs as the Person: an Agent opens none.
+    let terminal = json!({ "kind": "terminal.terminal", "args": {} });
+    let refused = as_agent("workspaces.open_pane", terminal).await;
+    assert_eq!(refused.unwrap_err().code, Code::Invalid);
+    // A Person arranges with their own methods.
+    let by_person = machine.command(
+        "workspaces.open_pane",
+        json!({ "kind": "agents.thread", "args": {} }),
+    );
+    assert_eq!(by_person.await.unwrap_err().code, Code::Invalid);
+
+    // The Person lets the Space see the others: their outline, no args.
+    let let_see = json!({ "space": work, "sees_others": true });
+    machine.command("spaces.update", let_see).await.unwrap();
+    let all = panes(&as_agent("workspaces.panes", json!({})).await.unwrap());
+    let home_pane = all.iter().find(|p| p["id"] == theirs["pane"]).unwrap();
+    assert_eq!(home_pane["kind"], "browser.browser");
+    assert!(
+        home_pane.get("args").is_none(),
+        "no Space is told another's args"
+    );
+
+    // It opens its Thread beside the other Space's Pane, in its own Space.
+    let opened = as_agent(
+        "workspaces.open_pane",
+        json!({ "kind": "agents.thread", "args": thread, "beside": beside(&theirs["pane"]) }),
+    )
+    .await
+    .unwrap();
+    assert_eq!(opened["new"], true);
+    let arranged = machine.list().await;
+    let kept = arranged.to_string();
+    assert!(
+        kept.contains(&agent.to_string()),
+        "the engine keeps who opened it"
+    );
+    let mine = panes(&as_agent("workspaces.panes", json!({})).await.unwrap());
+    let mine = mine.iter().find(|p| p["id"] == opened["pane"]).unwrap();
+    assert_eq!(
+        (mine["space"].clone(), mine["yours"].clone()),
+        (json!(work), json!(true))
+    );
+
+    // It moves and closes what it opened, and nothing else.
+    let moving = |pane: &Value| json!({ "pane": pane, "beside": beside(&person["pane"]) });
+    as_agent("workspaces.move_own", moving(&opened["pane"]))
+        .await
+        .unwrap();
+    let not_its = as_agent(
+        "workspaces.move_own",
+        json!({ "pane": person["pane"], "beside": beside(&opened["pane"]) }),
+    );
+    assert_eq!(not_its.await.unwrap_err().code, Code::Forbidden);
+    let other = as_agent("workspaces.close_own", json!({ "pane": theirs["pane"] }));
+    assert_eq!(other.await.unwrap_err().code, Code::Forbidden);
+    let another = machine.agent(
+        AgentId::new(),
+        work,
+        "workspaces.close_own",
+        json!({ "pane": opened["pane"] }),
+    );
+    assert_eq!(another.await.unwrap_err().code, Code::Forbidden);
+    as_agent("workspaces.close_own", json!({ "pane": opened["pane"] }))
+        .await
+        .unwrap();
+    assert_eq!(
+        panes(&as_agent("workspaces.panes", json!({})).await.unwrap()).len(),
+        2
+    );
 }

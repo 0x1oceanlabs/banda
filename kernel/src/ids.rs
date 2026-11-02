@@ -110,6 +110,14 @@ pub enum Participant {
 }
 
 impl Participant {
+    /// The Agent, if an Agent it is.
+    pub fn agent(&self) -> Option<AgentId> {
+        match self {
+            Participant::Agent(agent) => Some(*agent),
+            Participant::Person(_) => None,
+        }
+    }
+
     pub(crate) fn kind(&self) -> &'static str {
         match self {
             Participant::Person(_) => "person",

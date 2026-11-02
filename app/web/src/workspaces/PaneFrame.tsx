@@ -16,6 +16,19 @@ export type Frame = {
   run: (action: string, args?: Args) => void
 }
 
+/** Says an Agent opened the Pane and the Person has not looked at it. */
+export function AgentMark({ className = "" }: { className?: string }) {
+  return (
+    <span
+      role="status"
+      title="An Agent opened this Pane"
+      className={`size-2 shrink-0 rounded-full bg-attention ${className}`}
+    >
+      <span className="sr-only">Opened by an Agent</span>
+    </span>
+  )
+}
+
 /**
  * One tile: a header with the Pane's icon and title, and its Space when the
  * workspace mixes Spaces, unless the Pane draws its own; under it, the Pane
@@ -27,6 +40,7 @@ export function PaneFrame({
   engine,
   modules,
   focused,
+  marked,
   spaceName,
   frame,
   header,
@@ -36,6 +50,8 @@ export function PaneFrame({
   engine: Engine
   modules: readonly string[]
   focused: boolean
+  /** An Agent opened it, and the Person has not looked at it yet. */
+  marked: boolean
   /** Shown in the header when the workspace mixes Spaces. */
   spaceName: string | undefined
   frame: Frame
@@ -66,12 +82,17 @@ export function PaneFrame({
       tabIndex={-1}
       aria-label={title}
       data-focused={focused}
+      data-marked={marked || undefined}
       data-tile={entry.id}
       hidden={hidden}
       onPointerDownCapture={take}
       onFocusCapture={take}
-      className="group/tile relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-tile border-(length:--tile-border) border-focus-inactive bg-tile shadow-(--tile-shadow) outline-none after:pointer-events-none after:absolute after:inset-0 after:bg-black after:opacity-(--tile-dim) data-[focused=true]:border-focus data-[focused=true]:outline-[length:calc(var(--tile-border)+var(--focus-ring))] data-[focused=true]:outline-offset-[calc(-1*var(--tile-border))] data-[focused=true]:outline-focus data-[focused=true]:outline-solid data-[focused=true]:after:opacity-0"
+      className="group/tile relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-tile border-(length:--tile-border) border-focus-inactive bg-tile shadow-(--tile-shadow) outline-none after:pointer-events-none after:absolute after:inset-0 after:bg-black after:opacity-(--tile-dim) data-marked:border-attention data-[focused=true]:border-focus data-[focused=true]:outline-[length:calc(var(--tile-border)+var(--focus-ring))] data-[focused=true]:outline-offset-[calc(-1*var(--tile-border))] data-[focused=true]:outline-focus data-[focused=true]:outline-solid data-[focused=true]:after:opacity-0"
     >
+      {/* On the border, where no page covers it. */}
+      {marked && (
+        <AgentMark className="pointer-events-none absolute top-1.5 right-1.5 z-10" />
+      )}
       {header ??
         (kind?.header !== false && (
           <PaneHeader title={title} onClose={() => frame.close(entry.id)}>

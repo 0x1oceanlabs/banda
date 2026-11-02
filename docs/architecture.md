@@ -123,8 +123,14 @@ The kernel holds only what every module needs, and it names no module.
   receipts, event log and outbox; a Space's modules never open there, nor
   the machine's in a Space. Their methods name no Space. The machine is
   no Space in `spaces.list`; `welcome` names its ID, which a window
-  follows and streams by. An Agent's pass stops at it, until the
-  workspaces give Agents their tools.
+  follows and streams by. An Agent's pass stops at it, but for the
+  methods marked `tool` (ADR 0029): the kernel hands each call the pass's
+  wall (`Call::wall`: its Space, and whether that Space's `sees_others`
+  is on), and the module answers with what the wall shows. The
+  workspaces' tools show an Agent its Space's Panes, the others' outline
+  when let, and let it open, move and close only its Space's Panes of
+  the kinds that run nothing as the Person, moving and closing only the
+  ones it opened (`Pane.by`).
 - **Identity.** A port: it says which Participant a connection's token names.
   On one computer, whoever holds the engine's secret is the owner. Later it
   is OIDC, or our accounts.
@@ -187,7 +193,7 @@ command (with its ID)
 | The Harness | its session, context and sign-in. We keep only its session ID, as evidence |
 | The OS keychain | secrets you give Banda. Its database never holds them |
 | The engine's state folder | the owner's ID; while the engine runs, its port and per-run secret |
-| The window's storage | the view of the workspaces: the one on screen, each one's focused column and each column's shown Pane; whether the sidebar shows; which finished turn of each Thread the Person has seen |
+| The window's storage | the view of the workspaces: the one on screen, each one's focused column and each column's shown Pane; whether the sidebar shows; which finished turn of each Thread the Person has seen; which Panes an Agent opened the Person has looked at |
 | `machine/` SQLite, in the engine's state | this machine's, in no Space: the workspaces, their columns, each Pane with its Space and the widths (ADR 0025) |
 | `spaces/<id>/` SQLite, in the engine's data | Threads, Questions and answers, the Agents' queue, Databases' records, receipts, events, outbox |
 | `spaces/<id>/images/` and `files/` | the bytes of the images messages carry, one file per image, the SQLite saying what each is and which message carries it; the files a message keeps (a dropped file, a long paste), which each Thread's session gets as an extra root |
@@ -634,7 +640,9 @@ modules/*/desktop  a module's part in Electron main
     that comes back. A Pane's new args are drawn at once and kept over
     the arrangement until their event is, since a Pane works out its next
     args from the ones it drew. What a window kept before moves over once
-    (`workspaces/store.ts`).
+    (`workspaces/store.ts`). A Pane an Agent opened is marked until the
+    Person has it in focus; the window keeps which of them they have
+    looked at (`banda.looked`).
 - **One list of actions** (`app/web/src/shell/actions.ts`) holds what the
   window does, the modules' actions and its own, each with a name, its
   key sheet section and a default key, by its physical place.

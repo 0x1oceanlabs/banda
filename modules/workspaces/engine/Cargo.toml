@@ -12,6 +12,7 @@ async-trait.workspace = true
 banda-kernel = { path = "../../../kernel" }
 banda-look = { path = "../../../look" }
 rusqlite.workspace = true
+schemars.workspace = true
 serde.workspace = true
 serde_json.workspace = true
 ts-rs.workspace = true

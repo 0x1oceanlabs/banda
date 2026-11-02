@@ -6,10 +6,13 @@ import type { Arranged } from "./Arranged";
 import type { Done } from "./Done";
 import type { Maximize } from "./Maximize";
 import type { MoveColumn } from "./MoveColumn";
+import type { MoveOwn } from "./MoveOwn";
 import type { MovePane } from "./MovePane";
 import type { OnePane } from "./OnePane";
 import type { Open } from "./Open";
+import type { OpenPane } from "./OpenPane";
 import type { Opened } from "./Opened";
+import type { SeenWorkspace } from "./SeenWorkspace";
 import type { ShowAs } from "./ShowAs";
 import type { Size } from "./Size";
 import type { Take } from "./Take";
@@ -64,4 +67,27 @@ tidy: CommandMethod<Tidy, Done>,
  * Puts a window's arrangement over the engine's, once (ADR 0025,
  * decision 2).
  */
-take: CommandMethod<Take, Done>, };
+take: CommandMethod<Take, Done>, 
+/**
+ * The Panes on the workspaces, from the top down and from the
+ * left: your Space's with their args, and, when your Person lets
+ * you see the other Spaces, theirs without. `yours` marks the
+ * ones you opened, which alone you move and close.
+ */
+panes: CallMethod<Nothing, Array<SeenWorkspace>>, 
+/**
+ * Opens a Pane of your Space for your Person to see: a Thread
+ * (`agents.thread`, args `{"thread": "<id>"}`), a diff, or a
+ * browser (`browser.browser`). Beside a Pane `panes` lists, or,
+ * left out, beside your Space's Panes. It takes no focus; the
+ * Person sees a mark on it until they look.
+ */
+open_pane: CommandMethod<OpenPane, Opened>, 
+/**
+ * Moves a Pane you opened beside another that `panes` lists.
+ */
+move_own: CommandMethod<MoveOwn, Done>, 
+/**
+ * Closes a Pane you opened.
+ */
+close_own: CommandMethod<OnePane, Done>, };

@@ -25,6 +25,7 @@ export function Workspaces({
   modules,
   spaceName,
   called,
+  marked,
   frame,
   onStep,
   onStart,
@@ -37,6 +38,8 @@ export function Workspaces({
   spaceName: (space: SpaceId) => string
   /** How the Thread a Pane shows calls the Person, if it does. */
   called: (entry: Entry) => Chime | undefined
+  /** An Agent opened it, and the Person has not looked at it yet. */
+  marked: (entry: Entry) => boolean
   frame: Frame
   /** A swipe up or down with Alt held steps once, however long it is. */
   onStep: (by: 1 | -1) => void
@@ -124,6 +127,7 @@ export function Workspaces({
               modules={modules}
               spaceName={spaceName}
               called={called}
+              marked={marked}
               frame={frame}
               onStart={onStart}
             />
