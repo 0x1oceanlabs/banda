@@ -354,7 +354,7 @@
           "const": "hide"
         },
         {
-          "description": "A sleeping mark.",
+          "description": "The calm square: the counts stay in their place.",
           "type": "string",
           "const": "mark"
         }

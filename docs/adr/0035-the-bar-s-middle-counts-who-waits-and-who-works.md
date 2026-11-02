@@ -27,7 +27,11 @@ decided.
    - **working**: those at work; the circle, muted.
 
    A count of none is left out (Roma: "if there are no failures, don't
-   show it"), and with nothing to count the middle is empty.
+   show it"). With nothing to count, the calm square stays: the Agent's
+   mark at rest, muted, so the counts never vanish from their place
+   (Roma, 2026-11-02: "I want the widget not to disappear; if nothing
+   goes on, let the square of calm hang there"). Seen Threads are
+   counted no more: the number is all the bar shows, not their names.
 2. **The counts are the sidebar's**: the same lists every module's Watch
    gives (ADR 0008), over every open Space, and a settled Thread is not
    counted, as the sidebar shelves it. So they show while the sidebar is
@@ -51,7 +55,7 @@ decided.
    counts = ["asking", "done", "working"]  # also "waiting": asking and done as one
    color = true                        # false: the counts in the text's colours
    words = false                       # words beside the numbers
-   empty = "hide"                      # "mark": a sleeping mark when nothing is counted
+   empty = "mark"                      # the calm square when nothing is counted; "hide": nothing
    ```
 
    The settings Pane shows them from the schema (ADR 0016).
