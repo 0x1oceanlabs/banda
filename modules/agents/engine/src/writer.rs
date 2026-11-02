@@ -210,7 +210,7 @@ fn end(
     {
         let reply = store::last_reply(tx.sql(), turn.thread, turn.id, turn.agent)?;
         let message = crate::Message {
-            text: rules::answer_of(state, reason.as_deref(), reply),
+            text: rules::to_thread::answer_of(state, reason.as_deref(), reply),
             images: Vec::new(),
         };
         let (agent, target) = (

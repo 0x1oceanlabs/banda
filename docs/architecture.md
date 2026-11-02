@@ -509,11 +509,11 @@ If Chat is removed, Agents still works through its own Thread.
   or how it ended and why, goes back into A as a message by B's Agent, in
   a turn opened as answered, which answers nothing back; a Person's retry
   of an asked turn still answers. An Agent writes only from its own
-  Thread. Three rules, in
-  `rules::may_write`: no circle (an Agent cannot write to its own Thread,
-  nor to one up the chain of asked turns still going that waits for its
-  answer), not over a Person's Question (a Thread with an open Question),
-  and only its own Space (the kernel's wall). A message's author is
+  Thread. Three rules, in `rules::to_thread::may_write`: no circle (an
+  Agent cannot write to its own Thread, nor to one up the chain of asked
+  turns still going that waits for its answer), not over a Person's
+  Question (a Thread with an open Question), and only its own Space (the
+  kernel's wall). A message's author is
   the other Thread's Agent, which the Thread list names (`agent`); an
   answer says so (`answers`). The Thread Pane shows that Thread's Harness
   and title over the message, in the queue too ("Asked by …" or
