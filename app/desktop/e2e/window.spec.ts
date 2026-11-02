@@ -2233,6 +2233,16 @@ test("the desk is Banda's own glass, made of the wallpaper", async () => {
   const menu = page.getByRole("dialog", { name: "Banda menu" })
   const { composer } = await firstThread(page)
   await expect(composer).toBeVisible()
+  // The mark under the current workspace's number is the text's colour,
+  // thinned, not a grey made for a solid page: it takes the glass's
+  // colour under it and shows on any wallpaper (ADR 0036).
+  const mark = page
+    .getByRole("navigation", { name: "Workspaces" })
+    .locator(":scope > span[aria-hidden]")
+  const fill = () =>
+    mark.evaluate((under) => getComputedStyle(under).backgroundColor)
+  const thinned = /\/ 0\.1\)$/
+  await expect.poll(fill).toMatch(thinned)
   await page.keyboard.press("Alt+Space")
   await expect(menu).toHaveCSS("backdrop-filter", /blur/)
   await page.keyboard.press("Escape")
@@ -2249,6 +2259,8 @@ test("the desk is Banda's own glass, made of the wallpaper", async () => {
 
   writeFileSync(join(dir, "config/look.toml"), `${GLASS}glass = false\n`)
   await expect(root).not.toHaveAttribute("data-glass")
+  // Solid, it is shadcn's own grey again.
+  await expect.poll(fill).not.toMatch(thinned)
   await page.keyboard.press("Alt+Space")
   await expect(menu).toHaveCSS("backdrop-filter", "none")
 })

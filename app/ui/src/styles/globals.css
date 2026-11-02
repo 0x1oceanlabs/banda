@@ -278,6 +278,25 @@ html[data-glass] {
     0 2px 6px rgb(0 0 0 / calc(var(--tile-shadow-strength) * 0.36));
   --panel-shadow: 0 12px 32px -14px rgb(0 0 0 / var(--sidebar-shadow-strength));
   --bar-rule: transparent;
+  /* shadcn's fills, lines and quiet text are the text's own colour,
+     thinned, not greys made for a solid page: they take the colour of the
+     glass under them, so a current number or tab shows on any wallpaper
+     and never sits on it as a patch (ADR 0036). Important, as the theme's
+     colours are set on the root itself. */
+  --muted: color-mix(in oklab, var(--foreground) 10%, transparent) !important;
+  --accent: color-mix(in oklab, var(--foreground) 10%, transparent) !important;
+  --secondary: color-mix(
+    in oklab,
+    var(--foreground) 10%,
+    transparent
+  ) !important;
+  --muted-foreground: color-mix(
+    in oklab,
+    var(--foreground) 62%,
+    transparent
+  ) !important;
+  --border: color-mix(in oklab, var(--foreground) 10%, transparent) !important;
+  --input: color-mix(in oklab, var(--foreground) 12%, transparent) !important;
 }
 /* Whatever floats over the desk frosts what is under it, as the desk
    frosts the wallpaper: the sidebar's panel, and every bg-popover, so a
