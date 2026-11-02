@@ -126,15 +126,6 @@ impl Places {
         self.config.join("sidebar.toml")
     }
 
-    pub fn browser_file(&self) -> PathBuf {
-        self.config.join("browser.toml")
-    }
-
-    /// How messages to an Agent are sent (ADR 0016).
-    pub fn agents_file(&self) -> PathBuf {
-        self.config.join("agents.toml")
-    }
-
     /// The keys the Person binds (ADR 0005, decision 11).
     pub fn keys_file(&self) -> PathBuf {
         self.config.join("keys.toml")

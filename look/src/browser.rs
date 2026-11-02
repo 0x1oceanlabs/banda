@@ -8,11 +8,10 @@
 //! the same list. The window only draws what it says.
 
 use crate::Problem;
-use crate::keyed::{self, Keyed, Layer};
-use crate::theme::Places;
+use crate::file::OneFile;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::path::{Path, PathBuf};
+use std::path::Path;
 use toml::Spanned;
 use ts_rs::TS;
 
@@ -66,14 +65,43 @@ pub struct Browser {
     pub blocker: bool,
 }
 
-/// Reads a `browser.toml`, as [`crate::read`] reads a file.
-pub fn read_browser(
-    path: &Path,
-    text: &str,
-    problems: &mut Vec<Problem>,
-) -> Option<BrowserSettings> {
-    let mut settings: BrowserSettings = crate::read(path, text, problems)?;
-    if let Some(search) = &settings.search {
+impl OneFile for BrowserSettings {
+    const NAME: &'static str = "browser.toml";
+    const TEMPLATE: &'static str = TEMPLATE;
+    type Resolved = Browser;
+
+    fn defaults() -> Self {
+        BrowserSettings {
+            tabs: Some(Tabs::default()),
+            search: Some(Spanned::new(0..0, SEARCH.to_owned())),
+            pinned: Some(Vec::new()),
+            blocker: Some(true),
+        }
+    }
+
+    fn over(self, under: Self) -> Self {
+        BrowserSettings {
+            tabs: self.tabs.or(under.tabs),
+            search: self.search.or(under.search),
+            pinned: self.pinned.or(under.pinned),
+            blocker: self.blocker.or(under.blocker),
+        }
+    }
+
+    fn resolved(self) -> Browser {
+        Browser {
+            tabs: self.tabs.unwrap_or_default(),
+            search: self
+                .search
+                .map_or_else(|| SEARCH.to_owned(), Spanned::into_inner),
+            pinned: self.pinned.unwrap_or_default(),
+            blocker: self.blocker.unwrap_or(true),
+        }
+    }
+
+    /// The search is an http or https address with `%s` in it.
+    fn check(&mut self, path: &Path, text: &str, problems: &mut Vec<Problem>) {
+        let Some(search) = &self.search else { return };
         let address = search.get_ref();
         let web = address.starts_with("https://") || address.starts_with("http://");
         if !web || !address.contains("%s") {
@@ -83,67 +111,15 @@ pub fn read_browser(
                 Some(search.span()),
                 "search is an http or https address with %s where the words go",
             ));
-            settings.search = None;
+            self.search = None;
         }
     }
-    Some(settings)
-}
-
-/// The browser's settings on this machine; `browser.toml` is watched.
-pub fn resolve(
-    places: &Places,
-    problems: &mut Vec<Problem>,
-    watched: &mut Vec<PathBuf>,
-) -> (Browser, Keyed) {
-    let file = places.browser_file();
-    watched.push(file.clone());
-    let mine_file = std::fs::read_to_string(&file)
-        .ok()
-        .map(|text| (file.clone(), text));
-    let mine = mine_file
-        .as_ref()
-        .and_then(|(path, text)| read_browser(path, text, problems))
-        .unwrap_or_default();
-    let defaults = BrowserSettings {
-        tabs: Some(Tabs::default()),
-        search: Some(Spanned::new(0..0, SEARCH.to_owned())),
-        pinned: Some(Vec::new()),
-        blocker: Some(true),
-    };
-    let layers = [
-        Layer::new("defaults", &defaults, None),
-        Layer::new("file", &mine, mine_file.as_ref()),
-    ];
-    let merged = BrowserSettings {
-        tabs: mine.tabs.or(defaults.tabs),
-        search: mine.search.or(defaults.search),
-        pinned: mine.pinned.or(defaults.pinned),
-        blocker: mine.blocker.or(defaults.blocker),
-    };
-    let keyed = keyed::keyed(&merged, &layers);
-    let browser = Browser {
-        tabs: merged.tabs.unwrap_or_default(),
-        search: merged
-            .search
-            .map_or_else(|| SEARCH.to_owned(), Spanned::into_inner),
-        pinned: merged.pinned.unwrap_or_default(),
-        blocker: merged.blocker.unwrap_or(true),
-    };
-    (browser, keyed)
-}
-
-/// Whether `banda look check` reads `path` as a `browser.toml`.
-pub fn is_browser_file(path: &Path) -> bool {
-    path.file_name().is_some_and(|n| n == "browser.toml")
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-
-    fn places(config: &Path) -> Places {
-        Places::at(config)
-    }
+    use crate::theme::Places;
 
     fn resolved(text: Option<&str>) -> (Browser, Vec<Problem>) {
         let folder = tempfile::tempdir().unwrap();
@@ -152,7 +128,11 @@ mod tests {
         }
         let mut problems = Vec::new();
         let mut watched = Vec::new();
-        let (browser, _) = resolve(&places(folder.path()), &mut problems, &mut watched);
+        let (browser, _) = crate::file::resolve::<BrowserSettings>(
+            &Places::at(folder.path()),
+            &mut problems,
+            &mut watched,
+        );
         assert_eq!(watched, vec![folder.path().join("browser.toml")]);
         (browser, problems)
     }

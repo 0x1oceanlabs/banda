@@ -3,8 +3,9 @@
 //! changes one key and leaves every other line, comment and blank as it was,
 //! and writes nothing the file's own check would refuse.
 
-use crate::{File, check_text, file};
+use crate::{check_text, file};
 use banda_look::Problem;
+use banda_look::SettingsFile;
 use std::path::{Path, PathBuf};
 use toml_edit::{DocumentMut, Item, Key, TableLike, Value};
 
@@ -318,9 +319,9 @@ fn whole(path: &Path, message: impl ToString) -> Vec<Problem> {
 }
 
 /// The file's text; its template when it is not there yet.
-fn read(path: &Path, file: &File) -> std::io::Result<String> {
+fn read(path: &Path, file: &SettingsFile) -> std::io::Result<String> {
     match std::fs::read_to_string(path) {
-        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok((file.template)()),
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => Ok(file.template()),
         read => read,
     }
 }
