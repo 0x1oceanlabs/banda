@@ -120,6 +120,44 @@ test("a workspace opens Panes side by side, moves the focus by keys, and comes b
   await expect(page.getByRole("region", { name: "New Thread" })).toBeVisible()
 })
 
+test("New Pane and New Thread open a new tile at each press, as a browser's new window", async () => {
+  window = await startWindow()
+  const { page } = window
+  await page.getByLabel("Name").fill("Work")
+  await page.getByRole("button", { name: "Create Space" }).click()
+  const drafts = page.getByRole("region", { name: "New Thread" })
+  const launchers = page.getByRole("region", { name: "New Pane" })
+  await expect(drafts).toHaveCount(1)
+
+  await page.keyboard.press("Alt+KeyN")
+  await page.keyboard.press("Alt+KeyN")
+  await expect(launchers).toHaveCount(2)
+  await expect(launchers.last()).toHaveAttribute("data-focused", "true")
+
+  // A launcher becomes a new Thread, though another waits unstarted.
+  await launchers.last().getByRole("button", { name: "New Thread" }).click()
+  await expect(launchers).toHaveCount(1)
+  await expect(drafts).toHaveCount(2)
+
+  await page.keyboard.press("Alt+Enter")
+  await page.keyboard.press("Alt+Enter")
+  await expect(drafts).toHaveCount(4)
+  await expect(drafts.last()).toHaveAttribute("data-focused", "true")
+  await page.screenshot({ path: "test-results/2-many-new.png" })
+
+  // An empty workspace's New Thread starts one there, not elsewhere.
+  await page.getByRole("button", { name: "New workspace" }).click()
+  await page
+    .getByRole("main")
+    .getByRole("button", { name: "New Thread", exact: true })
+    .click()
+  // The others wait on workspace 1, out of sight.
+  await expect(drafts).toHaveCount(1)
+  await expect(drafts).toHaveAttribute("data-focused", "true")
+  const numbers = page.getByRole("navigation", { name: "Workspaces" })
+  await expect(numbers.locator("[aria-current]")).toHaveText("2")
+})
+
 test("a Pane moves to another workspace, and the overview shows them all", async () => {
   window = await startWindow()
   const { page } = window

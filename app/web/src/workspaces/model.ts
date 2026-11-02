@@ -211,13 +211,16 @@ export type Opening = {
   width?: Width
   /** False leaves the focus where it is. */
   focus?: boolean
+  /** A new tile even when one shows the same Pane: New Thread, New Pane,
+   * as a browser's new window. */
+  again?: true
 }
 
 /**
  * Shows a Pane of a Space and focuses it.
  *
  * - An entry already showing the same Pane gets the focus instead, on
- *   whichever workspace it is.
+ *   whichever workspace it is, unless it opens `again` or `here`.
  * - `here` replaces the opener's Pane; `below` adds it under the opener,
  *   in the same column; `right` adds a column right of the opener's.
  * - Left out, the Pane takes the place of the one of its kind that the
@@ -241,9 +244,11 @@ function placed(
   pane: PaneState,
   opening: Opening
 ): Workspaces {
-  const showing = entries(state).find((entry) =>
-    samePane(entry, { space, pane })
-  )
+  const place = opening.place
+  const showing =
+    !opening.again &&
+    place !== "here" &&
+    entries(state).find((entry) => samePane(entry, { space, pane }))
   if (showing)
     return opening.focus === false ? state : focusEntry(state, showing.id)
 
@@ -251,7 +256,6 @@ function placed(
   const w = from?.workspace ?? state.current
   const workspace = state.list[w]
   const entry: Entry = { id: newId(), space, pane }
-  const place = opening.place
 
   if (from && place === "here") {
     return showIn(state, from, entry)

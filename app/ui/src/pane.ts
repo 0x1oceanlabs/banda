@@ -77,7 +77,7 @@ export type PaneProps<A> = {
   focused: boolean
   /**
    * Opens a Pane of this Pane's Space, or of `space` when it is given; a
-   * Pane already shown gets the focus instead.
+   * Pane already shown gets the focus instead, unless it opens `here`.
    */
   open: (pane: PaneState, place?: Place, space?: SpaceId) => void
   /** Keeps new args for this Pane. */

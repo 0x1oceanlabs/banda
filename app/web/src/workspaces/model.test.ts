@@ -122,6 +122,22 @@ describe("opening", () => {
     expect(entries(state)).toHaveLength(2)
   })
 
+  test("again, the same Pane opens as a new tile each time, as New Thread does", () => {
+    let state = open(start(), A, thread("new"))
+    state = open(state, A, thread("new"), { place: "right", again: true })
+    state = open(state, A, thread("new"), { place: "right", again: true })
+    expect(columns(state)).toEqual([["new"], ["new"], ["new"]])
+    expect(current(state).focus).toBe(2)
+  })
+
+  test("here, the Pane takes the opener's place though another shows it", () => {
+    let state = open(start(), A, thread("t1"))
+    state = open(state, A, terminal("launcher"), { place: "right" })
+    state = open(state, A, thread("t1"), { place: "here" })
+    expect(columns(state)).toEqual([["t1"], ["t1"]])
+    expect(current(state).focus).toBe(1)
+  })
+
   test("the same Pane in another Space is another Pane", () => {
     let state = open(start(), A, terminal("x1"))
     state = open(state, B, terminal("x1"), { place: "right" })
