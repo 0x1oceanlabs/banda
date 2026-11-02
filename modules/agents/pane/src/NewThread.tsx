@@ -3,7 +3,7 @@ import { useMemo } from "react"
 import type { Engine, SpaceId, SpaceSummary } from "@banda/contract"
 import type { HarnessView } from "@banda/contract/agents"
 import { useSpaces } from "@banda/ui/hooks/use-spaces"
-import { shownSpaces } from "@banda/ui/lib/spaces"
+import { openSpaces, shownSpaces } from "@banda/ui/lib/spaces"
 import { BotIcon, FolderIcon, FolderPlusIcon } from "lucide-react"
 import { Pick } from "./ThreadSettings"
 
@@ -74,9 +74,11 @@ export function NewThreadBar({
 
 function useShownSpaces(engine: Engine): SpaceSummary[] {
   const { listed } = useSpaces(engine)
-  // As the window lists them: pinned first, archived ones not at all.
+  // As the window lists them: pinned first, archived ones not at all;
+  // nor one whose folder is missing, where no Thread starts.
   return useMemo(
-    () => (listed.state === "ready" ? shownSpaces(listed.value) : NONE),
+    () =>
+      listed.state === "ready" ? openSpaces(shownSpaces(listed.value)) : NONE,
     [listed]
   )
 }

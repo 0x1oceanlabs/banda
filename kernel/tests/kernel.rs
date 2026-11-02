@@ -1232,6 +1232,121 @@ async fn a_removed_space_loses_its_threads_but_keeps_its_files() {
 }
 
 #[tokio::test]
+async fn a_space_whose_folder_went_waits_to_be_located_where_it_is_now() {
+    let root = tempfile::tempdir().unwrap();
+    let (owner, notes) = (PersonId::new(), Notes::default());
+    let person = Participant::Person(owner);
+    let kernel = open(root.path(), owner, &notes).await;
+    let space = create(&kernel, owner, "Work").await;
+    add(&kernel, person, &space, "kept").await.unwrap();
+    let other = create(&kernel, owner, "Other").await;
+    drop(kernel);
+    std::fs::rename(root.path().join("Work"), root.path().join("Moved")).unwrap();
+
+    // Still listed, missing, and nothing of it opens; but the Person still
+    // names, pins or archives it.
+    let kernel = reopen(root.path(), owner, &notes, 2).await;
+    let listed = kernel.spaces().await;
+    let missing = listed.iter().find(|s| s.id == space.id).unwrap();
+    assert!(missing.missing);
+    assert!(!listed.iter().find(|s| s.id == other.id).unwrap().missing);
+    let refused = add(&kernel, person, &space, "more").await.unwrap_err();
+    assert_eq!(refused.code, Code::NotFound);
+    assert!(refused.message.contains("locate it first"), "{refused:?}");
+    let pinned = spaces(
+        &kernel,
+        owner,
+        "update",
+        json!({ "space": space.id, "pinned": true }),
+    )
+    .await
+    .unwrap();
+    assert_eq!(
+        (pinned["pinned"].clone(), pinned["missing"].clone()),
+        (json!(true), json!(true))
+    );
+
+    // A folder that is not there, or that already is a Space, is refused;
+    // a Space that is not missing has nothing to locate.
+    let locate = |space: SpaceId, folder: &str| {
+        let folder = root.path().join(folder);
+        spaces(
+            &kernel,
+            owner,
+            "locate",
+            json!({ "space": space, "folder": folder }),
+        )
+    };
+    assert_eq!(
+        locate(space.id, "Nowhere").await.unwrap_err().code,
+        Code::NotFound
+    );
+    assert_eq!(
+        locate(space.id, "Other").await.unwrap_err().code,
+        Code::Conflict
+    );
+    assert_eq!(
+        locate(other.id, "Moved").await.unwrap_err().code,
+        Code::Conflict
+    );
+
+    // Located, it opens there with its Threads, and stays there.
+    let located: SpaceSummary =
+        serde_json::from_value(locate(space.id, "Moved").await.unwrap()).unwrap();
+    assert!(!located.missing && located.pinned);
+    let moved = std::fs::canonicalize(root.path().join("Moved")).unwrap();
+    assert_eq!(located.folder, moved.display().to_string());
+    let notes_of = |kernel: Arc<Kernel>| async move {
+        let listed = kernel
+            .call(person, "notes.list", Some(space.id), None, Value::Null)
+            .await
+            .unwrap();
+        listed["items"].to_string()
+    };
+    assert!(notes_of(kernel.clone()).await.contains("kept"));
+    drop(kernel);
+    let kernel = reopen(root.path(), owner, &notes, 2).await;
+    assert!(kernel.spaces().await.iter().all(|s| !s.missing));
+    assert!(notes_of(kernel.clone()).await.contains("kept"));
+}
+
+#[tokio::test]
+async fn a_missing_folder_added_back_opens_its_space_again() {
+    let root = tempfile::tempdir().unwrap();
+    let (owner, notes) = (PersonId::new(), Notes::default());
+    let kernel = open(root.path(), owner, &notes).await;
+    let space = create(&kernel, owner, "Work").await;
+    drop(kernel);
+    let folder = root.path().join("Work");
+    std::fs::rename(&folder, root.path().join("Away")).unwrap();
+    let kernel = reopen(root.path(), owner, &notes, 1).await;
+    assert!(kernel.spaces().await[0].missing);
+    std::fs::rename(root.path().join("Away"), &folder).unwrap();
+    let again = add_folder(&kernel, owner, json!({ "folder": folder }))
+        .await
+        .unwrap();
+    assert_eq!(again.id, space.id, "the Space it was, not a new one");
+    assert!(!again.missing);
+}
+
+#[tokio::test]
+async fn a_missing_space_is_removed_with_its_data() {
+    let root = tempfile::tempdir().unwrap();
+    let (owner, notes) = (PersonId::new(), Notes::default());
+    let kernel = open(root.path(), owner, &notes).await;
+    let space = create(&kernel, owner, "Work").await;
+    drop(kernel);
+    std::fs::remove_dir(root.path().join("Work")).unwrap();
+    let kernel = reopen(root.path(), owner, &notes, 1).await;
+    spaces(&kernel, owner, "remove", json!({ "space": space.id }))
+        .await
+        .unwrap();
+    assert!(kernel.spaces().await.is_empty());
+    let spaces_data = root.path().join(".data/spaces");
+    eventually(|| async { std::fs::read_dir(&spaces_data).unwrap().count() == 0 }).await;
+}
+
+#[tokio::test]
 async fn a_removed_space_left_half_deleted_is_cleared_on_start() {
     let root = tempfile::tempdir().unwrap();
     let (owner, notes) = (PersonId::new(), Notes::default());

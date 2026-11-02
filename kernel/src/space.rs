@@ -68,10 +68,36 @@ impl Manifest {
         }
     }
 
+    /// What the window lists of it; `missing` when its folder is gone.
+    pub fn summary(&self, missing: bool) -> SpaceSummary {
+        SpaceSummary {
+            id: self.id,
+            name: self.name.clone(),
+            folder: self.folder.display().to_string(),
+            pinned: self.pinned,
+            archived: self.archived,
+            sees_others: self.sees_others,
+            missing,
+        }
+    }
+
     pub fn read(data: &Path) -> Result<Manifest, Error> {
         Ok(serde_json::from_slice(&std::fs::read(
             data.join(MANIFEST),
         )?)?)
+    }
+
+    /// Changes it with `change`, kept only once it is written to `data`.
+    pub fn change_in(
+        &mut self,
+        data: &Path,
+        change: impl FnOnce(&mut Manifest),
+    ) -> Result<(), Error> {
+        let mut changed = self.clone();
+        change(&mut changed);
+        changed.write(data)?;
+        *self = changed;
+        Ok(())
     }
 
     /// Writes it whole or not at all: beside, then renamed over the old.
@@ -239,26 +265,12 @@ impl Space {
     }
 
     pub fn summary(&self) -> SpaceSummary {
-        let manifest = self.manifest.lock().unwrap();
-        SpaceSummary {
-            id: self.id,
-            name: manifest.name.clone(),
-            folder: self.folder.display().to_string(),
-            pinned: manifest.pinned,
-            archived: manifest.archived,
-            sees_others: manifest.sees_others,
-        }
+        self.manifest.lock().unwrap().summary(false)
     }
 
     /// Changes its `space.json` with `change`, and keeps it once written.
     pub(crate) fn change(&self, change: impl FnOnce(&mut Manifest)) -> Result<SpaceSummary, Error> {
-        {
-            let mut kept = self.manifest.lock().unwrap();
-            let mut changed = kept.clone();
-            change(&mut changed);
-            changed.write(&self.data)?;
-            *kept = changed;
-        }
+        (self.manifest.lock().unwrap()).change_in(&self.data, change)?;
         Ok(self.summary())
     }
 

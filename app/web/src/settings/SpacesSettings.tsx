@@ -28,7 +28,9 @@ import { Switch } from "@banda/ui/components/switch"
 import { useAct } from "@banda/ui/hooks/use-act"
 import { useSpaces } from "@banda/ui/hooks/use-spaces"
 import { removeSpace, updateSpace } from "@banda/ui/lib/spaces"
-import { Trash2Icon } from "lucide-react"
+import { cn } from "@banda/ui/lib/utils"
+import { FolderSearchIcon, Trash2Icon } from "lucide-react"
+import { LOCATE, locateRoute } from "../menu/menu"
 import { Field, Group, RowFrame, Rows } from "./SettingRow"
 
 /** The Space a removal asks about, and how many Threads go with it, if
@@ -99,7 +101,10 @@ export function SpacesSettings({
           </SelectContent>
         </Select>
         <span
-          className="min-w-0 truncate font-mono text-xs text-muted-foreground"
+          className={cn(
+            "min-w-0 truncate font-mono text-xs text-muted-foreground",
+            space.missing && "text-attention line-through"
+          )}
           title={space.folder}
         >
           {space.folder}
@@ -111,6 +116,22 @@ export function SpacesSettings({
         </p>
       )}
       <Rows>
+        {space.missing && (
+          <RowFrame
+            dataKey="folder"
+            title="Folder is missing"
+            about="Its Threads open again once you locate the folder its work is in now."
+          >
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={() => window.banda?.menu.open(locateRoute(space.id))}
+            >
+              <FolderSearchIcon />
+              {LOCATE}
+            </Button>
+          </RowFrame>
+        )}
         <RowFrame
           dataKey="name"
           title="Name"
@@ -153,23 +174,21 @@ export function SpacesSettings({
         </RowFrame>
       </Rows>
       <Group title="Danger">
-        <Rows>
-          <RowFrame
-            dataKey="remove"
-            title="Remove Space"
-            about="Deletes the Space entry and its Threads. Files on disk are not touched."
+        <RowFrame
+          dataKey="remove"
+          title="Remove Space"
+          about="Deletes the Space entry and its Threads. Files on disk are not touched."
+        >
+          <Button
+            size="sm"
+            variant="destructive"
+            disabled={busy}
+            onClick={() => void ask()}
           >
-            <Button
-              size="sm"
-              variant="destructive"
-              disabled={busy}
-              onClick={() => void ask()}
-            >
-              <Trash2Icon />
-              Remove Space
-            </Button>
-          </RowFrame>
-        </Rows>
+            <Trash2Icon />
+            Remove Space
+          </Button>
+        </RowFrame>
       </Group>
       <Dialog
         open={removing !== undefined}

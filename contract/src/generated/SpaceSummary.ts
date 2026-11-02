@@ -18,4 +18,9 @@ archived: boolean,
  * Its Agents see the other Spaces' Panes (ADR 0032). Only the Person
  * sets it.
  */
-sees_others: boolean, };
+sees_others: boolean, 
+/**
+ * Its folder was gone as the engine started: none of its Threads
+ * open until the Person locates it (`spaces.locate`).
+ */
+missing: boolean, };

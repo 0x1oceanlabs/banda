@@ -5,6 +5,7 @@ import type { Browsed } from "./Browsed";
 import type { CallMethod } from "./CallMethod";
 import type { CommandMethod } from "./CommandMethod";
 import type { CreateSpace } from "./CreateSpace";
+import type { LocateSpace } from "./LocateSpace";
 import type { Nothing } from "./Nothing";
 import type { OneSpace } from "./OneSpace";
 import type { SpaceSummary } from "./SpaceSummary";
@@ -35,6 +36,11 @@ browse: CallMethod<Browse, Browsed>,
  * other Spaces' Panes.
  */
 update: CommandMethod<UpdateSpace, SpaceSummary>, 
+/**
+ * Names the folder a missing Space's work is in now, and opens
+ * the Space there.
+ */
+locate: CommandMethod<LocateSpace, SpaceSummary>, 
 /**
  * Forgets a Space and deletes its Threads; its folder and the
  * files in it stay as they are.

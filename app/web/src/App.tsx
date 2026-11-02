@@ -31,8 +31,9 @@ export function App({ engine }: { engine: Engine }) {
     )
   }
   const spaces = shownSpaces(listed.value)
-  // The first Space is home until Banda makes a default one (ADR 0006).
-  const home = spaces[0]
+  // The first Space is home until Banda makes a default one (ADR 0006);
+  // one whose folder is missing opens nothing.
+  const home = spaces.find((space) => !space.missing)
   if (!home) {
     return (
       <div className="h-svh bg-muted/40">

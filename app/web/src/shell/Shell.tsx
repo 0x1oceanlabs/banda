@@ -3,7 +3,7 @@ import type { Engine, SpaceId, SpaceSummary, Status } from "@banda/contract"
 import { inFront, useInFront } from "@banda/ui/hooks/use-in-front"
 import { useLive } from "@banda/ui/hooks/use-live"
 import { useMachine } from "@banda/ui/hooks/use-status"
-import { updateSpace } from "@banda/ui/lib/spaces"
+import { openSpaces, updateSpace } from "@banda/ui/lib/spaces"
 import { IN_PROGRAM, type PaneState, QUIET } from "@banda/ui/pane"
 import { DEFAULT_KEYS } from "@banda/contract/look"
 import type { Action, WindowApi } from "@banda/ui/module"
@@ -20,6 +20,7 @@ import {
   type Branch,
   type Choice,
   type Own,
+  locateRoute,
   type Opening,
   openingAt,
   openingOf,
@@ -181,6 +182,9 @@ export function Shell({
   home: SpaceId
   onCreated: (space: SpaceSummary) => void
 }) {
+  // A Space whose folder is missing lists nothing and starts nothing
+  // until the Person locates it (ADR 0026, decision 6).
+  const open = useMemo(() => openSpaces(spaces), [spaces])
   // The arrangement is the engine's; the view, the window's (ADR 0025).
   const machine = useMachine(engine)
   const source = useMemo(
@@ -533,10 +537,18 @@ export function Shell({
     [change]
   )
   // A new Thread is the agents module's, as its key's (`thread.new`).
-  const newThreadIn = useCallback(
+  const startThread = useCallback(
     (space: SpaceId, ask?: string) =>
       parts.run("thread.new", { space, ...(ask && { ask }) }),
     [parts]
+  )
+  // A Space whose folder is missing finds it first (ADR 0026).
+  const newThreadIn = useCallback(
+    (space: SpaceId, ask?: string) =>
+      spacesNow.current.find((one) => one.id === space)?.missing
+        ? route(locateRoute(space))
+        : startThread(space, ask),
+    [startThread, route]
   )
   // The Space the focused Pane is in: where the menu's New Thread starts.
   const here = focused(workspaces)?.space ?? home
@@ -595,7 +607,7 @@ export function Shell({
       <Watches
         engine={engine}
         modules={modules}
-        spaces={spaces}
+        spaces={open}
         onChange={setAttention}
         onLists={setLists}
         listening={listening}
@@ -641,6 +653,7 @@ export function Shell({
               )
             }
             onSpaceSettings={(space) => settings(`spaces/${space}`)}
+            onLocate={(space) => route(locateRoute(space))}
           />
         )}
         <main className="relative min-h-0 min-w-0 flex-1">
@@ -671,8 +684,9 @@ export function Shell({
             onClose={closeMenu}
             onChoose={choose}
             onAdded={(space) => {
+              // As the engine answered it: the list may not know it yet.
               onCreated(space)
-              newThreadIn(space.id)
+              startThread(space.id)
             }}
             engine={engine}
             modules={modules}

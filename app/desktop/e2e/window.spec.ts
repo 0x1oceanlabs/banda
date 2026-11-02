@@ -2659,6 +2659,47 @@ test("a Space is pinned, named, archived and removed from its row's menu and the
   expect(existsSync(lab)).toBe(true)
 })
 
+test("a Space whose folder is gone shows as missing, and Locate folder opens it where its work is now", async () => {
+  // A Space from before, whose folder is no longer there.
+  const id = "01a192e5-5e2b-76a7-931a-79a494cb1801"
+  const manifest = {
+    id,
+    name: "old",
+    folder: "/nonexistent/banda-old",
+    author: { kind: "person", id: "01a192e5-416d-7657-825a-a16f9f43fba6" },
+    command: "01a192e5-5e28-794a-b76c-76ef600978a9",
+    created_at: 1,
+  }
+  window = await startWindow({
+    files: { [`data/spaces/${id}/space.json`]: JSON.stringify(manifest) },
+  })
+  const { page, dir } = window
+  // It opens nothing, so the first screen asks for a Space of its own.
+  await firstThread(page)
+  const moved = join(dir, "moved")
+  mkdirSync(moved)
+  const sidebar = page.getByRole("complementary", { name: "Sidebar" })
+  await sidebar.getByRole("button", { name: /^View: / }).click()
+  await page.getByRole("menuitemradio", { name: /^places/ }).click()
+  const old = sidebar
+    .getByRole("group", { name: "Spaces" })
+    .getByRole("button", { name: /^old/ })
+  await expect(old).toContainText("Missing")
+
+  // Its row opens "Locate folder" where the folder was.
+  await old.click()
+  const menu = page.getByRole("dialog", { name: "Banda menu" })
+  const search = menu.getByRole("combobox", { name: "Search" })
+  await expect(search).toHaveValue("/nonexistent/")
+  await search.fill(moved)
+  await expect(menu.getByRole("option").first()).toHaveText(/^Locate/)
+  await page.screenshot({ path: "test-results/35-locate-folder.png" })
+  await search.press("Enter")
+  await expect(menu).toBeHidden()
+  await expect(old).not.toContainText("Missing")
+  await expect(page.getByRole("button", { name: "Space: old" })).toBeVisible()
+})
+
 test("text selected in a reply is quoted in the composer, a line apart from what is written after it", async () => {
   window = await startWindow()
   const { page } = window

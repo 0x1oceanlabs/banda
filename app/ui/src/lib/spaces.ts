@@ -14,6 +14,12 @@ export function shownSpaces(spaces: readonly SpaceSummary[]): SpaceSummary[] {
     .toSorted((a, b) => Number(b.pinned) - Number(a.pinned))
 }
 
+/** The Spaces whose folder is there: a missing one opens nothing until
+ * the Person locates it (ADR 0026, decision 6). */
+export function openSpaces(spaces: readonly SpaceSummary[]): SpaceSummary[] {
+  return spaces.filter((space) => !space.missing)
+}
+
 /** Whether two lists say the same Spaces, as a picker shows them. */
 export function sameSpaces(
   a: readonly SpaceSummary[],
@@ -27,7 +33,8 @@ export function sameSpaces(
         one.name === b[n].name &&
         one.folder === b[n].folder &&
         one.pinned === b[n].pinned &&
-        one.archived === b[n].archived
+        one.archived === b[n].archived &&
+        one.missing === b[n].missing
     )
   )
 }

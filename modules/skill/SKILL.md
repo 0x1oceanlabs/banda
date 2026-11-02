@@ -80,6 +80,9 @@ data elsewhere.
 A Space's name, pin and archive, and its removal, are the Person's: they
 change them in the settings, which `banda menu settings.spaces.<id>`
 opens at that Space, or from the Space's menu in the sidebar.
+A Space whose folder is gone is listed `missing`, and every call into it
+is refused until the Person locates the folder: `banda menu
+space.locate.<id>` opens "Locate folder" for them.
 
 ## Driving the browser's tabs
 
