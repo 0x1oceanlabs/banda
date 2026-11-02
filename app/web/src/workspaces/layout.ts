@@ -15,8 +15,9 @@ export interface Place {
   right: number
 }
 
-/** The Strip's room, as CSS has it. */
-function room(strip: HTMLElement) {
+/** The Strip's room, as CSS has it: what shows of it starts `pad` in from
+ * its left, past the sidebar floating there, and is `inner` wide. */
+export function room(strip: HTMLElement) {
   const style = getComputedStyle(strip)
   const pad = parseFloat(style.paddingLeft) || 0
   const gap = parseFloat(style.columnGap) || 0

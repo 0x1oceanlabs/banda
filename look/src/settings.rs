@@ -11,6 +11,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use toml::Spanned;
+use ts_rs::TS;
 
 /// How Banda looks and sounds: the theme, tiles, columns, font, motion,
 /// sounds and calls. A theme's `banda.toml` takes the same keys.
@@ -37,6 +38,9 @@ pub struct Settings {
     pub tokens: BTreeMap<String, Spanned<String>>,
     #[serde(default)]
     pub gaps: Gaps,
+    /// The desk the tiles float over (ADR 0023).
+    #[serde(default)]
+    pub desk: Desk,
     #[serde(default)]
     pub tile: Tile,
     #[serde(default)]
@@ -91,6 +95,87 @@ pub struct Tile {
     /// Hyprland's `dim_inactive` and `dim_strength`.
     #[schemars(range(min = 0, max = 1))]
     pub dim_inactive: Option<f64>,
+    /// How solid a tile is over a glass desk, from 0 to 1: 1 is solid.
+    /// Without glass the tiles are solid.
+    #[schemars(range(min = 0, max = 1))]
+    pub opacity: Option<f64>,
+    /// The shadow a tile casts on a glass desk, from 0 (none) to 1 (the
+    /// darkest).
+    #[schemars(range(min = 0, max = 1))]
+    pub shadow: Option<f64>,
+}
+
+/// The desk: the bar, and the space around and between the tiles.
+#[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields, rename_all = "kebab-case")]
+pub struct Desk {
+    /// Glass: the desk shows the wallpaper behind it, blurred. Off, the
+    /// desk is solid.
+    pub glass: Option<bool>,
+    /// `"banda"`: Banda draws the glass itself, from the wallpaper, the
+    /// same everywhere. `"system"`: the window lets the desktop through,
+    /// for the compositor to blur; it shows from Banda's next start.
+    pub material: Option<Material>,
+    /// The picture Banda's glass is made of: a path, `~/` for home. Unset,
+    /// the desktop's own wallpaper, where Banda knows it.
+    pub wallpaper: Option<String>,
+    /// How frosted Banda's glass is: the blur's radius, in pixels.
+    #[schemars(range(min = 0))]
+    pub blur: Option<f64>,
+    /// How vivid the wallpaper's colours stay under the glass: 1 as they
+    /// are, more is richer, 0 is grey.
+    #[schemars(range(min = 0))]
+    pub saturation: Option<f64>,
+    /// A fine grain over the glass, from 0 (none) to 1, so it reads as a
+    /// material rather than a blurred photo.
+    #[schemars(range(min = 0, max = 1))]
+    pub grain: Option<f64>,
+    /// The desk's tint over the blurred desktop, from 0 (clear) to 1
+    /// (solid), with glass on.
+    #[schemars(range(min = 0, max = 1))]
+    pub opacity: Option<f64>,
+    /// `"panel"`: the sidebar floats as a glass panel. `"desk"`: its rows
+    /// sit right on the desk.
+    pub sidebar: Option<SidebarStyle>,
+    /// The shadow the sidebar's panel casts on a glass desk, from 0 (none)
+    /// to 1 (the darkest).
+    #[schemars(range(min = 0, max = 1))]
+    pub sidebar_shadow: Option<f64>,
+}
+
+impl Desk {
+    /// This layer's keys over `under`'s, key by key.
+    pub fn over(self, under: Desk) -> Desk {
+        Desk {
+            glass: self.glass.or(under.glass),
+            material: self.material.or(under.material),
+            wallpaper: self.wallpaper.or(under.wallpaper),
+            blur: self.blur.or(under.blur),
+            saturation: self.saturation.or(under.saturation),
+            grain: self.grain.or(under.grain),
+            opacity: self.opacity.or(under.opacity),
+            sidebar: self.sidebar.or(under.sidebar),
+            sidebar_shadow: self.sidebar_shadow.or(under.sidebar_shadow),
+        }
+    }
+}
+
+/// Who makes the desk's glass (ADR 0023).
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "lowercase")]
+#[ts(export, export_to = "look/")]
+pub enum Material {
+    Banda,
+    System,
+}
+
+/// How the sidebar sits on the desk.
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "lowercase")]
+#[ts(export, export_to = "look/")]
+pub enum SidebarStyle {
+    Panel,
+    Desk,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
@@ -114,6 +199,11 @@ pub struct Focus {
 pub struct Bar {
     #[schemars(range(min = 0))]
     pub height: Option<f64>,
+}
+
+/// Whether `v` is a share: from 0 to 1.
+pub fn is_share(v: f64) -> bool {
+    v.is_finite() && (0.0..=1.0).contains(&v)
 }
 
 /// A corner: a step of shadcn's ladder, or pixels.
@@ -230,10 +320,13 @@ impl Settings {
                 inner: self.gaps.inner.or(under.gaps.inner),
                 outer: self.gaps.outer.or(under.gaps.outer),
             },
+            desk: self.desk.over(under.desk),
             tile: Tile {
                 radius: self.tile.radius.or(under.tile.radius),
                 border: self.tile.border.or(under.tile.border),
                 dim_inactive: self.tile.dim_inactive.or(under.tile.dim_inactive),
+                opacity: self.tile.opacity.or(under.tile.opacity),
+                shadow: self.tile.shadow.or(under.tile.shadow),
             },
             focus: Focus {
                 border: self.focus.border.or(under.focus.border),
@@ -261,13 +354,26 @@ impl Settings {
             colors: BTreeMap::new(),
             tokens: BTreeMap::new(),
             gaps: Gaps {
-                inner: Some(4.0),
-                outer: Some(4.0),
+                inner: Some(12.0),
+                outer: Some(12.0),
+            },
+            desk: Desk {
+                glass: Some(true),
+                material: Some(Material::Banda),
+                wallpaper: None,
+                blur: Some(40.0),
+                saturation: Some(1.4),
+                grain: Some(0.04),
+                opacity: Some(0.4),
+                sidebar: Some(SidebarStyle::Panel),
+                sidebar_shadow: Some(0.45),
             },
             tile: Tile {
                 radius: Some(Corner::Step(Step::Xl)),
                 border: Some(2.0),
                 dim_inactive: Some(0.0),
+                opacity: Some(0.95),
+                shadow: Some(0.0),
             },
             focus: Focus {
                 border: Some(Spanned::new(0..0, "accent".to_owned())),
@@ -292,9 +398,27 @@ impl Settings {
             ("tile.border", self.tile.border),
             ("bar.height", self.bar.height),
             ("focus.ring", self.focus.ring),
+            ("desk.blur", self.desk.blur),
+            ("desk.saturation", self.desk.saturation),
         ]
         .into_iter()
         .filter(|(_, v)| v.is_some_and(|v| !(v.is_finite() && v >= 0.0)))
+        .map(|(key, _)| key)
+        .collect()
+    }
+
+    /// Shares outside 0 to 1, which the schema alone does not refuse.
+    pub fn shares_out_of_range(&self) -> Vec<&'static str> {
+        [
+            ("tile.dim-inactive", self.tile.dim_inactive),
+            ("tile.opacity", self.tile.opacity),
+            ("tile.shadow", self.tile.shadow),
+            ("desk.opacity", self.desk.opacity),
+            ("desk.grain", self.desk.grain),
+            ("desk.sidebar-shadow", self.desk.sidebar_shadow),
+        ]
+        .into_iter()
+        .filter(|(_, v)| v.is_some_and(|v| !is_share(v)))
         .map(|(key, _)| key)
         .collect()
     }

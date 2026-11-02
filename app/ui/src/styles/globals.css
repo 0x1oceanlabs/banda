@@ -5,6 +5,9 @@
 @import "streamdown/styles.css";
 
 @custom-variant dark (&:is(.dark *));
+/* A sidebar right on the desk, not a panel (ADR 0023). */
+@custom-variant sidebar-desk (&:is([data-sidebar="desk"] *));
+@custom-variant glass (&:is([data-glass] *));
 @source "../../../web/src/**/*.{ts,tsx}";
 @source "../../../../modules/*/pane/src/**/*.{ts,tsx}";
 @source "../**/*.{ts,tsx}";
@@ -21,6 +24,9 @@
   --color-sidebar-primary: var(--sidebar-primary);
   --color-sidebar-foreground: var(--sidebar-foreground);
   --color-sidebar: var(--sidebar);
+  --color-desk: var(--desk);
+  --color-panel: var(--panel);
+  --color-tile: var(--tile);
   --color-chart-5: var(--chart-5);
   --color-chart-4: var(--chart-4);
   --color-chart-3: var(--chart-3);
@@ -146,8 +152,8 @@
  */
 :root {
   /* Between tiles, and between the tiles and the window's edge. */
-  --gap-inner: 4px;
-  --gap-outer: 4px;
+  --gap-inner: 12px;
+  --gap-outer: 12px;
   /* The tile holds cards (xl), and the outer is never rounder than what
      it holds, so the tile is the top step of shadcn's ladder. */
   --tile-radius: calc(var(--radius) * 1.4);
@@ -164,6 +170,30 @@
   /* [tile] dim-inactive: a black veil over the tiles without the focus,
      as Hyprland dims its windows. 0 is none. */
   --tile-dim: 0;
+  /* The three surfaces (ADR 0023): the desk, the sidebar's panel over
+     it, and the tiles. Solid; html[data-glass] below makes them glass. */
+  --desk-opacity: 40%;
+  --tile-opacity: 95%;
+  --desk: color-mix(in oklab, var(--muted) 40%, var(--background));
+  --panel: var(--sidebar);
+  --tile: var(--background);
+  /* [tile] shadow and [desk] sidebar-shadow: how dark, from 0 to 1. Only
+     glass casts them: a solid desk shows none. */
+  --tile-shadow-strength: 0;
+  --sidebar-shadow-strength: 0.45;
+  /* Banda's own glass (ADR 0023): the wallpaper the desktop serves, how
+     frosted it is, how vivid its colours stay, and a grain over it. */
+  --desk-wallpaper: none;
+  --desk-blur: 40px;
+  --desk-saturation: 1.4;
+  --desk-grain: 0.04;
+  --tile-shadow: none;
+  --panel-shadow: none;
+  --bar-rule: var(--border);
+  /* The sidebar floats over the Strip's left: the Strip's columns start
+     past it, and scroll on under it. */
+  --sidebar-width: 16rem;
+  --sidebar-inset: 0px;
   --bar-height: 2.25rem;
   /* [font]: the two families, and the root's size that makes the usual
      text (text-sm) 14px. Everything measured in rem grows with it. */
@@ -188,6 +218,63 @@
   body {
     @apply bg-background text-foreground;
   }
+}
+
+/* Glass (ADR 0023), only where the window lets the desktop through: the
+   page paints nothing under the desk, for the compositor to blur. The
+   panel is halfway between the desk and the tiles: the desk is the
+   clearest, the tiles the densest. */
+html[data-glass],
+html[data-glass] body {
+  background: transparent;
+}
+/* Banda's glass: the wallpaper, blurred, under everything, its edges past
+   the window's so the blur does not fade at them; a grain over it. The
+   desk's tint lies on top. */
+html[data-glass][data-material="banda"]::before,
+html[data-glass][data-material="banda"] body::before {
+  content: "";
+  position: fixed;
+  z-index: -1;
+  pointer-events: none;
+}
+html[data-glass][data-material="banda"]::before {
+  inset: calc(-2 * var(--desk-blur));
+  background: var(--desk-wallpaper) center / cover no-repeat;
+  filter: blur(var(--desk-blur)) saturate(var(--desk-saturation));
+}
+html[data-glass][data-material="banda"] body::before {
+  inset: 0;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  opacity: var(--desk-grain);
+}
+html[data-glass] {
+  --desk: color-mix(
+    in oklab,
+    var(--background) var(--desk-opacity),
+    transparent
+  );
+  --panel: color-mix(
+    in oklab,
+    var(--sidebar) calc((var(--desk-opacity) + var(--tile-opacity)) / 2),
+    transparent
+  );
+  --tile: color-mix(
+    in oklab,
+    var(--background) var(--tile-opacity),
+    transparent
+  );
+  --tile-shadow:
+    0 18px 40px -12px rgb(0 0 0 / var(--tile-shadow-strength)),
+    0 2px 6px rgb(0 0 0 / calc(var(--tile-shadow-strength) * 0.36));
+  --panel-shadow: 0 12px 32px -14px rgb(0 0 0 / var(--sidebar-shadow-strength));
+  --bar-rule: transparent;
+}
+[data-sidebar-shown] {
+  --sidebar-inset: calc(var(--sidebar-width) + var(--gap-outer));
+}
+html[data-sidebar="desk"] [data-sidebar-shown] {
+  --sidebar-inset: var(--sidebar-width);
 }
 
 /* Without these, Chromium on Linux draws its own scrollbar: a wide light

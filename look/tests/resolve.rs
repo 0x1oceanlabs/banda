@@ -3,11 +3,12 @@
 
 use banda_look::hyprland::Windows;
 use banda_look::motion::Move;
+use banda_look::settings::{Material, SidebarStyle};
 use banda_look::theme::{Origin, Places};
 use banda_look::{Look, Shown, follow, resolve};
 use std::collections::BTreeMap;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 use std::time::Duration;
 
@@ -71,7 +72,11 @@ impl Machine {
         Machine {
             places: Places {
                 config,
+                omarchy_background: omarchy_current
+                    .as_ref()
+                    .map(|theme: &PathBuf| theme.parent().unwrap().join("background")),
                 omarchy_current,
+                home: None,
                 omarchy_themes: vec![omarchy_themes],
                 fontconfig: None,
             },
@@ -96,6 +101,17 @@ impl Machine {
             animations: true,
         };
         resolve(&self.places, &|| Some(windows)).look
+    }
+
+    /// Omarchy's current background, beside its current theme, as a link
+    /// to the picture: returns the picture.
+    fn background(&self, name: &str) -> PathBuf {
+        let link = self.places.omarchy_background.as_ref().unwrap();
+        let picture = link.with_file_name("theme/backgrounds").join(name);
+        write(&picture, "a picture");
+        let _ = fs::remove_file(link);
+        std::os::unix::fs::symlink(&picture, link).unwrap();
+        fs::canonicalize(picture).unwrap()
     }
 }
 
@@ -122,7 +138,7 @@ fn without_omarchy_banda_shows_its_own_light_and_dark_as_today() {
     assert_eq!(look.vars["--radius"], "10px");
     assert_eq!(look.vars["--tile-radius"], "14px");
     assert_eq!(look.vars["--tile-border"], "2px");
-    assert_eq!(look.vars["--gap-inner"], "4px");
+    assert_eq!(look.vars["--gap-inner"], "12px");
     assert_eq!(look.vars["--bar-height"], "36px");
     assert_eq!(look.vars["--tile-dim"], "0");
     // shadcn's own tokens, as globals.css has them today.
@@ -169,6 +185,96 @@ fn under_hyprland_the_tiles_look_like_its_windows() {
     // Hyprland dims windows without the focus: so do the tiles.
     assert_eq!(look.vars["--tile-dim"], "0.4");
     assert!(look.sources.iter().any(|s| s.layer == "hyprland"));
+}
+
+#[test]
+fn the_desk_is_banda_glass_made_of_the_wallpaper() {
+    let machine = Machine::new(true);
+    // No wallpaper Banda knows of: the desk is solid, and the tiles keep
+    // Hyprland's gaps.
+    let solid = machine.under_hyprland();
+    assert!(!solid.desk.glass);
+    assert_eq!(solid.desk.wallpaper, None);
+    assert_eq!(solid.vars["--gap-inner"], "5px");
+
+    // Omarchy's background: Banda's glass is made of it, the same
+    // everywhere, and the tiles float in Banda's own gaps.
+    let picture = machine.background("1-mountains.jpg");
+    let glass = machine.under_hyprland();
+    assert!(glass.desk.glass);
+    assert_eq!(glass.desk.material, Material::Banda);
+    assert_eq!(glass.desk.wallpaper, Some(picture.display().to_string()));
+    assert_eq!(glass.desk.sidebar, SidebarStyle::Panel);
+    assert_eq!(glass.vars["--gap-inner"], "12px");
+    assert_eq!(glass.vars["--desk-blur"], "40px");
+    assert_eq!(glass.vars["--desk-saturation"], "1.4");
+    assert_eq!(glass.vars["--desk-grain"], "0.04");
+    assert_eq!(glass.vars["--desk-opacity"], "40%");
+    assert_eq!(glass.vars["--tile-opacity"], "95%");
+    // Only the sidebar's panel casts a shadow by default, not the tiles.
+    assert_eq!(glass.vars["--tile-shadow-strength"], "0");
+    assert_eq!(glass.vars["--sidebar-shadow-strength"], "0.45");
+
+    // The background changes: so does the glass.
+    let next = machine.background("2-sea.jpg");
+    assert_eq!(
+        machine.look().desk.wallpaper,
+        Some(next.display().to_string())
+    );
+
+    machine.look_toml(concat!(
+        "[desk]\nopacity = 0.2\nsidebar = \"desk\"\nblur = 64\nsaturation = 1\ngrain = 0\n",
+        "[tile]\nopacity = 1\nshadow = 0.5\n",
+    ));
+    let mine = machine.look();
+    assert_eq!(mine.vars["--desk-opacity"], "20%");
+    assert_eq!(mine.vars["--desk-blur"], "64px");
+    assert_eq!(mine.vars["--desk-saturation"], "1");
+    assert_eq!(mine.vars["--desk-grain"], "0");
+    assert_eq!(mine.vars["--tile-opacity"], "100%");
+    assert_eq!(mine.vars["--tile-shadow-strength"], "0.5");
+    assert_eq!(mine.desk.sidebar, SidebarStyle::Desk);
+
+    // A picture of the Person's own, from the config folder.
+    write(&machine.places.config.join("walls/mine.png"), "a picture");
+    machine.look_toml("[desk]\nwallpaper = \"walls/mine.png\"\n");
+    let own = machine.look().desk.wallpaper.unwrap();
+    assert!(own.ends_with("walls/mine.png"), "{own}");
+
+    machine.look_toml("[desk]\nwallpaper = \"walls/none.png\"\n");
+    let missing = machine.look();
+    assert!(!missing.desk.glass);
+    assert!(
+        missing.problems.iter().any(|p| p
+            .message
+            .starts_with("desk.wallpaper: there is no picture at")),
+        "{:?}",
+        missing.problems
+    );
+
+    // The system's glass needs no picture: the compositor blurs.
+    machine.look_toml("[desk]\nmaterial = \"system\"\nwallpaper = \"walls/none.png\"\n");
+    let system = machine.look();
+    assert!(system.desk.glass);
+    assert_eq!(system.desk.material, Material::System);
+    assert_eq!(system.desk.wallpaper, None);
+    assert!(system.problems.is_empty(), "{:?}", system.problems);
+
+    machine.look_toml("[desk]\nglass = false\n");
+    assert!(!machine.under_hyprland().desk.glass);
+
+    machine.look_toml("[desk]\nopacity = 1.5\nblur = -1\n");
+    let wrong = machine.look();
+    for message in [
+        "desk.opacity is from 0 to 1",
+        "desk.blur cannot be negative",
+    ] {
+        assert!(
+            wrong.problems.iter().any(|p| p.message == message),
+            "{message}: {:?}",
+            wrong.problems
+        );
+    }
 }
 
 #[test]
@@ -299,7 +405,7 @@ fn a_broken_file_is_named_by_line_and_the_rest_still_applies() {
     assert!(problem.to_string().contains("look.toml:5:1: "), "{problem}");
     // The broken file is left out; Omarchy's theme still shows.
     assert_eq!(color(&look, true, "--primary"), "#a3b88c");
-    assert_eq!(look.vars["--gap-inner"], "4px");
+    assert_eq!(look.vars["--gap-inner"], "12px");
 }
 
 #[test]
@@ -409,7 +515,8 @@ fn the_template_says_the_defaults() {
     }
     let uncommented: String = banda_look::TEMPLATE
         .lines()
-        .filter(|line| !line.starts_with("# theme"))
+        // Examples, not defaults: a theme's name, a picture of one's own.
+        .filter(|line| !line.starts_with("# theme") && !line.starts_with("# wallpaper"))
         .map(|line| key(line).unwrap_or(line))
         .collect::<Vec<_>>()
         .join("\n");

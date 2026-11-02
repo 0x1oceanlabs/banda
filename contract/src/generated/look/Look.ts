@@ -3,6 +3,7 @@ import type { Sidebar } from "../sidebar/Sidebar";
 import type { Agents } from "./Agents";
 import type { Browser } from "./Browser";
 import type { Columns } from "./Columns";
+import type { Desk } from "./Desk";
 import type { Keys } from "./Keys";
 import type { Motion } from "./Motion";
 import type { Notify } from "./Notify";
@@ -27,6 +28,11 @@ schemes: Schemes,
  * Sizes, the same in light and dark.
  */
 vars: { [key in string]: string }, 
+/**
+ * Whether the desk is glass, what of, and how the sidebar sits on it
+ * (ADR 0023).
+ */
+desk: Desk, 
 /**
  * How each event moves, already slowed down or turned off.
  */

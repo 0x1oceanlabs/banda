@@ -24,12 +24,28 @@
 # [tokens]
 
 # [gaps]
-# inner = 4                          # between tiles, in pixels
-# outer = 4                          # around the Strip
+# inner = 12                         # between tiles, in pixels
+# outer = 12                         # around the Strip
+
+# The desk the tiles float over. Its glass is Banda's own, the same on
+# every desktop: the wallpaper, blurred and tinted. Unset, the wallpaper is
+# the desktop's (Omarchy's current background); without one, it is solid.
+# [desk]
+# glass = true
+# material = "banda"                 # "system": the compositor blurs, from the next start
+# wallpaper = "~/Pictures/wall.jpg"  # a picture of your own
+# blur = 40                          # how frosted: the blur, in pixels
+# saturation = 1.4                   # the wallpaper's colours: 1 as they are, 0 grey
+# grain = 0.04                       # a fine grain over the glass: 0 none
+# opacity = 0.4                      # the desk's tint: 0 clear, 1 solid
+# sidebar = "panel"                  # "panel" floats as glass; "desk" sits on it
+# sidebar-shadow = 0.45              # the panel's shadow: 0 none, 1 the darkest
 
 # [tile]
 # radius = "xl"                      # a step ("sm" … "4xl") or pixels
 # border = 2
+# opacity = 0.95                     # over a glass desk; 1 is solid
+# shadow = 0                         # over a glass desk: 0 none, 1 the darkest
 
 # [focus]
 # border = "accent"                  # the focused tile's border

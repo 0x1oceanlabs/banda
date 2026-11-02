@@ -185,8 +185,13 @@ test("a sideways swipe moves the Strip and lands on a column; a scroll up and do
     launcher.evaluate((e) => {
       const column = e.closest<HTMLElement>("[data-column]")!
       const strip = column.parentElement!
-      const pad = parseFloat(getComputedStyle(strip).paddingLeft)
-      return strip.clientWidth - 2 * pad - column.offsetWidth
+      const { paddingLeft, paddingRight } = getComputedStyle(strip)
+      return (
+        strip.clientWidth -
+        parseFloat(paddingLeft) -
+        parseFloat(paddingRight) -
+        column.offsetWidth
+      )
     })
   await expect.poll(room).toBeLessThan(1)
   await expect
@@ -1495,9 +1500,15 @@ test("columns and the text size come from look.toml", async () => {
   await expect(composer).toBeFocused()
   const column = thread.locator("xpath=ancestor::*[@data-column][1]")
   const share = () =>
-    column.evaluate(
-      (e: HTMLElement) => e.offsetWidth / e.parentElement!.clientWidth
-    )
+    column.evaluate((e: HTMLElement) => {
+      // The room beside the sidebar, which floats over the Strip's left.
+      const strip = getComputedStyle(e.parentElement!)
+      const room =
+        e.parentElement!.clientWidth -
+        parseFloat(strip.paddingLeft) -
+        parseFloat(strip.paddingRight)
+      return e.offsetWidth / room
+    })
   // A new column opens at the look's default, a quarter.
   await expect.poll(share).toBeLessThan(0.3)
   await page.keyboard.press("Alt+Control+ArrowRight")
@@ -1572,9 +1583,13 @@ test("a column alone fills its workspace, and a second halves it", async () => {
     page.locator("[data-column]").evaluateAll((columns) =>
       columns.map((e) => {
         const strip = e.parentElement!
-        const pad = parseFloat(getComputedStyle(strip).paddingLeft)
-        const gap = parseFloat(getComputedStyle(strip).columnGap) || 0
-        const room = strip.clientWidth - 2 * pad + gap
+        const style = getComputedStyle(strip)
+        const gap = parseFloat(style.columnGap) || 0
+        const room =
+          strip.clientWidth -
+          parseFloat(style.paddingLeft) -
+          parseFloat(style.paddingRight) +
+          gap
         return Math.round((((e as HTMLElement).offsetWidth + gap) / room) * 100)
       })
     )
@@ -1636,9 +1651,15 @@ test("columns grow and go to their new places on the look's motion", async () =>
   await expect(composer).toBeFocused()
   const column = thread.locator("xpath=ancestor::*[@data-column][1]")
   const share = () =>
-    column.evaluate(
-      (e: HTMLElement) => e.offsetWidth / e.parentElement!.clientWidth
-    )
+    column.evaluate((e: HTMLElement) => {
+      // The room beside the sidebar, which floats over the Strip's left.
+      const strip = getComputedStyle(e.parentElement!)
+      const room =
+        e.parentElement!.clientWidth -
+        parseFloat(strip.paddingLeft) -
+        parseFloat(strip.paddingRight)
+      return e.offsetWidth / room
+    })
 
   // From a half to two thirds: seen on its way, and there in the end.
   const half = await share()
@@ -1682,6 +1703,47 @@ test("a tile fades in as it opens and fades out where it was as it closes", asyn
   })
   await expect(ghost).toHaveCount(1)
   await expect(ghost).toHaveCount(0)
+})
+
+test("the desk is Banda's own glass, made of the wallpaper", async () => {
+  window = await startWindow({ look: '[desk]\nwallpaper = "wall.png"\n' })
+  const { page, dir } = window
+  const root = page.locator("html")
+  // No picture yet: the desk is solid.
+  await expect(root).toHaveAttribute("data-material", "banda")
+  await expect(root).not.toHaveAttribute("data-glass")
+  // A 1×1 sky-blue PNG.
+  const picture = Buffer.from(
+    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGOImHkHAAOAAg7PaQnHAAAAAElFTkSuQmCC",
+    "base64"
+  )
+  writeFileSync(join(dir, "config/wall.png"), picture)
+  await expect(root).toHaveAttribute("data-glass", "")
+  const drawn = () =>
+    page.evaluate(
+      () =>
+        getComputedStyle(document.documentElement, "::before").backgroundImage
+    )
+  await expect.poll(drawn).toContain("app://banda/desk/wallpaper")
+  // The desktop serves the look's picture, and no other file, whatever the
+  // address asks for.
+  const served = await page.evaluate(
+    () =>
+      new Promise<number>((done) => {
+        const image = new Image()
+        image.onload = () => done(image.naturalWidth)
+        image.onerror = () => done(-1)
+        image.src = "app://banda/desk/wallpaper?of=%2Fetc%2Fpasswd"
+      })
+  )
+  expect(served).toBe(1)
+  await page.screenshot({ path: "test-results/19b-banda-glass.png" })
+
+  writeFileSync(
+    join(dir, "config/look.toml"),
+    '[desk]\nwallpaper = "wall.png"\nglass = false\n'
+  )
+  await expect(root).not.toHaveAttribute("data-glass")
 })
 
 test("the window takes its look from look.toml, and again on each save", async () => {

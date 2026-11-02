@@ -155,6 +155,8 @@ mod tests {
         Places {
             config: config.to_owned(),
             omarchy_current: None,
+            omarchy_background: None,
+            home: None,
             omarchy_themes: Vec::new(),
             fontconfig: None,
         }

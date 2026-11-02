@@ -10,6 +10,9 @@ import type { Motion } from "./generated/look/Motion"
 
 export type { Look } from "./generated/look/Look"
 export type { Agents } from "./generated/look/Agents"
+export type { Desk } from "./generated/look/Desk"
+export type { Material } from "./generated/look/Material"
+export type { SidebarStyle } from "./generated/look/SidebarStyle"
 export type { Browser } from "./generated/look/Browser"
 export type { Enter } from "./generated/look/Enter"
 export type { Tabs } from "./generated/look/Tabs"
@@ -35,6 +38,12 @@ export type { Spring } from "./generated/look/Spring"
 export type { Easing } from "./generated/look/Easing"
 
 /** Banda's own columns, niri's: what `banda look` gives with no files. */
+/**
+ * Where the desktop serves the picture Banda's glass is made of, the
+ * look's wallpaper and no other file (ADR 0023).
+ */
+export const WALLPAPER_URL = "app://banda/desk/wallpaper"
+
 export const DEFAULT_COLUMNS: Columns = {
   presets: ["1/3", "1/2", "2/3", "1"],
   default: "1/2",

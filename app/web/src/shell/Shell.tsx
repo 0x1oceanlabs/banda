@@ -354,7 +354,7 @@ export function Shell({
   )
 
   return (
-    <div className="flex h-svh flex-col bg-muted/40 text-foreground">
+    <div className="flex h-svh flex-col bg-desk text-foreground">
       <Watches
         engine={engine}
         modules={modules}
@@ -377,7 +377,10 @@ export function Shell({
             : change((w) => go(w, index))
         }
       />
-      <div className="flex min-h-0 flex-1">
+      <div
+        className="relative flex min-h-0 flex-1"
+        data-sidebar-shown={sidebar || undefined}
+      >
         {sidebar && (
           <Sidebar
             engine={engine}

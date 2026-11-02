@@ -30,6 +30,19 @@ Every key, with its default:
 - "Orange focus": `[colors]` `accent = "orange"`, or a hex.
 - "Columns too narrow in a small window": `[columns]` `min = 36`.
 - "Tabs instead of Panes one above another": `[columns]` `display = "tabs"`.
+- "More space between the windows": `[gaps]` `inner = 16`, `outer = 16`.
+- "More glass", "see the wallpaper more": `[desk]` `opacity = 0.25`;
+  "glassier windows": `[tile]` `opacity = 0.75`. Solid: `[desk]`
+  `glass = false`.
+- "More frosted", "less blur": `[desk]` `blur = 64` or `blur = 20`;
+  "duller colours under the glass": `saturation = 1`; "no grain":
+  `grain = 0`. "Glass from this picture": `wallpaper = "~/Pictures/x.jpg"`.
+  "Real see-through, the compositor's blur": `material = "system"` (from
+  Banda's next start).
+- "Shadow under the windows": `[tile]` `shadow = 0.4`; none under the
+  sidebar: `[desk]` `sidebar-shadow = 0`.
+- "Sidebar right on the glass": `[desk]` `sidebar = "desk"`; a floating
+  panel is `"panel"`.
 - "Less motion": `[motion]` `slowdown = 2`, or `off = true`.
 - "No sounds": `[sound]` `family = "off"`. Only when something fails:
   `done = false` and `asking = false`.
