@@ -2095,6 +2095,7 @@ async fn a_harness_that_cannot_steer_stops_for_the_message() {
                 so Banda stopped it to send yours.";
     assert!(position(&view, said) < position(&view, "message: instead this"));
     assert_eq!(last_reply(&view), "message: You said: instead this");
+    assert!(!view.held, "a stop Banda made holds nothing");
 }
 
 #[tokio::test]
@@ -2342,12 +2343,13 @@ async fn what_the_agent_does_at_once_after_a_turn_waits_for_that_turn_to_end() {
         let sent = world.send(None, "background soon").await;
         let view = world
             .until(&sent["thread"], |v| {
-                texts(v).contains(&"message: The task finished.".to_owned())
+                texts(v).iter().any(|t| t.contains("The task finished."))
                     && v.turns.iter().all(|t| t.state == TurnState::Done)
             })
             .await;
         // The Harness's words reach the Thread, in whichever turn they
-        // came, and never with two turns running.
+        // came: they may come before its turn ended, and join its reply.
+        // Never with two turns running.
         assert!(view.turns.len() <= 2, "{:?}", view.turns);
     }
 }
@@ -2489,7 +2491,8 @@ async fn what_the_agent_does_by_itself_ends_when_it_goes_quiet_and_asks_nothing(
 }
 
 #[tokio::test]
-async fn a_harness_that_stops_while_the_agent_goes_on_by_itself_fails_that_turn() {
+async fn a_harness_that_stops_while_the_agent_goes_on_by_itself_fails_that_turn_and_holds_the_queue()
+ {
     let root = tempfile::tempdir().unwrap();
     let world = World::new(root.path()).await;
     let sent = world.send(None, "background dies").await;
@@ -2499,6 +2502,9 @@ async fn a_harness_that_stops_while_the_agent_goes_on_by_itself_fails_that_turn(
         })
         .await;
     assert_eq!(view.turns[1].failure, Some(Failure::HarnessStopped));
+    // A message that waits does not start on a Harness that just died
+    // without the Person seeing it (ADR 0018, decision 4).
+    assert!(view.held);
 }
 
 #[tokio::test]

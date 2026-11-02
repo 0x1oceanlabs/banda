@@ -21,6 +21,9 @@ pub struct TurnFacts {
     pub latest: bool,
     /// Its Thread's queue waits for a Person.
     pub held: bool,
+    /// It runs and was asked to stop: by a Person, or by Banda for a
+    /// message its Harness cannot take while it works.
+    pub stopping: bool,
     /// A turn of its Thread runs.
     pub works: bool,
     /// The turn that runs is one the Agent opened by itself.
@@ -40,6 +43,7 @@ impl TurnFacts {
             first: true,
             latest: true,
             held: false,
+            stopping: false,
             works: false,
             own_works: false,
             waits: false,
@@ -66,6 +70,9 @@ pub enum Event {
     Withdraw,
     /// A message sent now goes into it.
     Steer,
+    /// Banda stops it for a message its Harness cannot take while it
+    /// works: the message gets a turn of its own.
+    GiveWay,
     /// A Person tries it again: a new turn runs its message, and it stays
     /// as it ended.
     Retry,
@@ -99,8 +106,8 @@ pub struct Step {
 pub enum Then {
     /// The outbox starts it, after the Thread's earlier turns.
     Start,
-    /// The outbox asks its Harness to stop it; it ends when the Harness
-    /// does.
+    /// It is stopping: the outbox asks its Harness to stop it, and it
+    /// ends when the Harness does.
     AskStop,
     /// The Agent's own turn that runs ends: the Harness takes this turn's
     /// prompt into what it does.
@@ -182,16 +189,18 @@ pub fn next(turn: &TurnFacts, event: Event) -> Result<Step, Refusal> {
         // It runs, its queue is not held, and a Person asked for it: one
         // the Agent went on with by itself takes a message as a turn of
         // its own.
-        Event::Steer if state != Running => {
+        Event::Steer | Event::GiveWay if state != Running => {
             Err(Refusal::conflict("Only a turn that runs takes a message."))
         }
-        Event::Steer if turn.by_itself => Err(Refusal::invalid(
+        Event::Steer | Event::GiveWay if turn.by_itself => Err(Refusal::invalid(
             "The Agent went on by itself, so a message waits for a turn of its own.",
         )),
-        Event::Steer if turn.held => Err(Refusal::conflict(
+        Event::Steer | Event::GiveWay if turn.held || turn.stopping => Err(Refusal::conflict(
             "This turn is stopping, so a message waits for a turn of its own.",
         )),
         Event::Steer => to(Running),
+        // Stopped for a message, it holds nothing: the message runs next.
+        Event::GiveWay => Ok(Step::to(Running).then(Then::AskStop)),
         // A Person asked for it, it failed or was cut short, and nothing
         // came after it in its Thread.
         Event::Retry if turn.by_itself => Err(Refusal::invalid(
@@ -224,16 +233,27 @@ pub fn next(turn: &TurnFacts, event: Event) -> Result<Step, Refusal> {
             "The Thread can go back once nothing runs or waits in it.",
         )),
         Event::Rewind => to(state),
-        // A turn ends once. A Harness that stopped holds the queue behind
-        // a turn a Person or an Agent sent, so the turn can be tried again
-        // before the next one runs; ADR 0018's step 4 holds it behind the
-        // Agent's own too.
+        // A turn ends once, and the queue waits behind it when its Harness
+        // stopped, whoever opened it (ADR 0018, decision 4), so a waiting
+        // message does not start on a Harness that just died unseen.
         Event::End(_) | Event::CutShort if !matches!(state, Queued | Running) => {
             Err(Refusal::conflict(ENDED))
         }
         Event::End(ending) => {
-            let stopped = ending.failure == Some(Failure::HarnessStopped);
-            Ok(Step::ended(ending).holding(stopped && !turn.by_itself))
+            let ending = match ending.state {
+                // What the Agent did by itself was stopped once a stop was
+                // asked, however its Harness ended it.
+                _ if turn.by_itself && turn.stopping => Ending::new(Stopped, None),
+                // A Harness that cancels a turn nobody stopped failed it, so
+                // nobody reads a stop that no one made.
+                Stopped if !turn.stopping => Ending::failed(
+                    "The Harness ended the turn by itself.",
+                    Some(Failure::Provider),
+                ),
+                _ => ending,
+            };
+            let died = ending.failure == Some(Failure::HarnessStopped);
+            Ok(Step::ended(ending).holding(died))
         }
         // After a restart the queue waits for a Person, behind what was
         // sent to the Agent; a turn that never began waits in it.
@@ -269,6 +289,24 @@ mod tests {
 
     fn done() -> Event {
         Event::End(Ending::new(Done, None))
+    }
+
+    fn own(state: TurnState) -> TurnFacts {
+        TurnFacts {
+            by_itself: true,
+            ..TurnFacts::of(state)
+        }
+    }
+
+    fn stopping(turn: TurnFacts) -> TurnFacts {
+        TurnFacts {
+            stopping: true,
+            ..turn
+        }
+    }
+
+    fn cancelled() -> Event {
+        Event::End(Ending::new(Stopped, None))
     }
 
     fn harness_stopped() -> Event {
@@ -321,10 +359,6 @@ mod tests {
             held: true,
             ..of(state)
         };
-        let own = |state| TurnFacts {
-            by_itself: true,
-            ..of(state)
-        };
         let works = |state| TurnFacts {
             works: true,
             ..of(state)
@@ -354,11 +388,43 @@ mod tests {
             ("an Agent's word",  TurnFacts { by_person: false, ..of(Done) }, Event::Rewind,    "-"),
             ("tried again",      TurnFacts { first: false, ..of(Done) },    Event::Rewind,     "-"),
             ("its Harness died", of(Running),                               harness_stopped(), "Failed H"),
-            ("the Agent's own",  own(Running),                              harness_stopped(), "Failed"),
             ("the Agent's own",  own(Running),                              Event::CutShort,   "Interrupted"),
+            ("its Harness died", own(Running),                              harness_stopped(), "Failed H"),
+            ("cancelled unasked", of(Running),                              cancelled(),       "Failed"),
+            ("cancelled asked",  stopping(of(Running)),                     cancelled(),       "Stopped"),
+            ("asked, then done", stopping(of(Running)),                     done(),            "Done"),
+            ("the Agent's own",  stopping(own(Running)),                    done(),            "Stopped"),
+            ("for a message",    of(Running),                               Event::GiveWay,    "Running AskStop"),
+            ("the Agent's own",  own(Running),                              Event::GiveWay,    "-"),
+            ("a stop asked",     stopping(of(Running)),                     Event::GiveWay,    "-"),
+            ("a stop asked",     stopping(of(Running)),                     Event::Steer,      "-"),
+            ("it ended",         of(Done),                                  Event::GiveWay,    "-"),
         ];
         for (why, turn, event, want) in cases {
             assert_eq!(moved(&turn, event), want, "{why}");
+        }
+    }
+
+    /// ADR 0018, decision 4: a row each.
+    #[test]
+    fn when_the_queue_waits_for_a_person_is_one_rule() {
+        let of = TurnFacts::of;
+        let asked = stopping(of(Running));
+        #[rustfmt::skip]
+        let rows = [
+            ("a Person stopped it",                     of(Running),  Event::Stop,       true),
+            ("its Harness stopped",                     of(Running),  harness_stopped(), true),
+            ("its Harness stopped, the Agent's own",    own(Running), harness_stopped(), true),
+            ("a restart, a Person's turn ran",          of(Running),  Event::CutShort,   true),
+            ("a restart, a Person's turn was starting", of(Queued),   Event::CutShort,   true),
+            ("a restart, the Agent's own ran",          own(Running), Event::CutShort,   false),
+            ("Banda stopped it for a message",          of(Running),  Event::GiveWay,    false),
+            ("its Harness stopped it, as asked",        asked,        cancelled(),       false),
+            ("it ended",                                of(Running),  done(),            false),
+            ("it failed",                               of(Running),  Event::End(Ending::failed("No.", None)), false),
+        ];
+        for (why, turn, event, holds) in rows {
+            assert_eq!(next(&turn, event).unwrap().held, holds, "{why}");
         }
     }
 

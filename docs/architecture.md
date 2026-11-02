@@ -329,9 +329,13 @@ If Chat is removed, Agents still works through its own Thread.
 - **The queue shows after the Thread.** A waiting message can be changed
   (`agents.edit`), taken back (`agents.withdraw`) or sent now into the
   running turn (`agents.steer`). It reads where its turn starts. A Person's
-  stop, a restart and a Harness that stopped hold the queue
+  stop, a restart while a turn sent to the Agent ran or started, and a
+  Harness that stopped, whoever opened its turn, hold the queue
   (`thread.held`) until the Person continues (`agents.resume`), sends
-  another message or tries the failed turn again, which goes first.
+  another message or tries the failed turn again, which goes first. A
+  restart while only the Agent's own turn ran, and a stop Banda made for a
+  message, hold nothing (ADR 0018, decision 4; `rules::next` holds the
+  table, a test a row).
 - **The Agent can go on by itself between turns**, as Claude Code does when
   a background task it started ends or a wakeup fires. Each session that
   ran a turn has a listener (`between.rs`): what the session says then
@@ -471,8 +475,18 @@ If Chat is removed, Agents still works through its own Thread.
   the commands ask are questions to it. **One writer applies it**
   (`writer.rs`): the commands, the outbox's effects and the listener
   between turns make and move turns only through `writer::make` and
-  `writer::apply`, which write the step in the caller's transaction. A
-  Thread runs one turn at a time (a unique index on its running turn):
+  `writer::apply`, which write the step in the caller's transaction. The
+  I/O only runs effects and says what happened: `effects.rs` runs START,
+  STOP, STEER and REPLY on the Harness, `transcript.rs` writes what the
+  Harness says, and `between.rs` turns what it says between turns into
+  events. Whether a turn was asked to stop is its own state
+  (`agents_turns.stopping`), which the rules read: a Harness that cancels
+  a turn nobody stopped failed it, and the Agent's own turn ends stopped
+  once a stop was asked, however its Harness ended it; `live.rs` keeps
+  only whether the Harness was told. A restart is one event, `cut short`,
+  given by the outbox to the turns its effects ran and by `opened` to
+  every turn still running, which a module's `opened` sees before any
+  effect runs. A Thread runs one turn at a time (a unique index on its running turn):
   what the Agent does by itself opens its turn once the turn that ran is
   written as ended, and a turn the outbox starts takes the Agent's own
   over. A turn keeps who opened it

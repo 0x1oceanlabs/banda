@@ -33,6 +33,7 @@ use crate::model::{
     SlashCommand, StepState, TextFormat, ThreadId, ToolContent, ToolKind, ToolStatus, TurnState,
     Usage, Values,
 };
+use crate::plain;
 use crate::record::{Recording, To};
 use crate::rules::{Ending, Offered};
 use crate::settings::Harness;
@@ -574,10 +575,6 @@ impl Drop for Kept {
         *self.active.lock().unwrap() = Instant::now();
         self.kept.fetch_sub(1, Ordering::SeqCst);
     }
-}
-
-fn plain(error: impl std::fmt::Display) -> String {
-    error.to_string()
 }
 
 /// `banda mcp` as ACP hands an MCP server to a session, named `banda`.

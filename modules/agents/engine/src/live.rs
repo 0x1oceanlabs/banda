@@ -2,8 +2,11 @@
 //! they run and the Questions they wait on. A restart loses it, and the
 //! outbox settles what that cut short.
 //!
-//! One lock holds the running turns, the stops and the Questions together,
-//! so a stop that comes while a turn starts, or while it asks, is never lost.
+//! One lock holds the running turns, the cancels and the Questions
+//! together, so a stop that comes while a turn starts, or while it asks, is
+//! never lost. Whether a turn was asked to stop is the turn's own state
+//! (`agents_turns.stopping`), which the rules read; memory only keeps
+//! whether its Harness was told.
 
 use crate::Pipe;
 use crate::acp::{Answer, Connection, Session};
@@ -28,9 +31,9 @@ pub struct Live {
 #[derive(Default)]
 struct Turns {
     running: HashMap<TurnId, (Arc<Connection>, Session)>,
-    /// Turns a Person stopped. A turn that is still starting sees its stop
-    /// when it begins.
-    stopping: HashSet<TurnId>,
+    /// Turns whose Harness was told to stop them. One that is still
+    /// starting hears it when it begins.
+    cancelled: HashSet<TurnId>,
     /// Turns a message was just sent into: what the Agent says next reads
     /// after it.
     steered: HashSet<TurnId>,
@@ -113,11 +116,11 @@ impl Live {
         }
     }
 
-    /// The turn's prompt went to the Harness in `session`. If a Person
-    /// stopped the turn while it started, the Harness hears the stop now.
+    /// The turn's prompt went to the Harness in `session`. If the turn was
+    /// stopped while it started, the Harness hears the stop now.
     pub fn begin(&self, turn: TurnId, connection: Arc<Connection>, session: Session) {
         let mut turns = self.turns.lock().unwrap();
-        if turns.stopping.contains(&turn)
+        if turns.cancelled.contains(&turn)
             && let Err(error) = connection.cancel(&session)
         {
             tracing::warn!(%error, "a stopped turn could not be cancelled");
@@ -146,11 +149,11 @@ impl Live {
         self.turns.lock().unwrap().steered.remove(&turn)
     }
 
-    /// A Person stops a turn the engine runs: its Harness hears the stop
-    /// first, then that nobody will answer its Questions.
+    /// Stops a turn the engine runs: its Harness hears the stop first, then
+    /// that nobody will answer its Questions.
     pub fn stop(&self, turn: TurnId) -> Result<(), String> {
         let mut turns = self.turns.lock().unwrap();
-        turns.stopping.insert(turn);
+        turns.cancelled.insert(turn);
         if let Some((connection, session)) = turns.running.get(&turn) {
             connection.cancel(session)?;
         }
@@ -164,16 +167,11 @@ impl Live {
         turns.questions.values().any(|(of, _)| *of == turn)
     }
 
-    /// Whether the turn was asked to stop.
-    pub fn stopping(&self, turn: TurnId) -> bool {
-        self.turns.lock().unwrap().stopping.contains(&turn)
-    }
-
-    /// Holds a Question until a Person answers it. False when the turn is
-    /// stopping: the Harness hears at once that nobody will answer.
+    /// Holds a Question until a Person answers it. False when the turn was
+    /// stopped: the Harness hears at once that nobody will answer.
     pub fn ask(&self, turn: TurnId, item: ItemId, answer: oneshot::Sender<Answer>) -> bool {
         let mut turns = self.turns.lock().unwrap();
-        if turns.stopping.contains(&turn) {
+        if turns.cancelled.contains(&turn) {
             let _ = answer.send(Answer::Cancelled);
             return false;
         }
@@ -210,13 +208,12 @@ impl Live {
         self.turns.lock().unwrap().secrets.remove(&item)
     }
 
-    /// The turn ended: lets go of it and its Questions. Whether a Person
-    /// stopped it.
-    pub fn end(&self, turn: TurnId) -> bool {
+    /// The turn ended: lets go of it and its Questions.
+    pub fn end(&self, turn: TurnId) {
         let mut turns = self.turns.lock().unwrap();
         turns.running.remove(&turn);
         turns.steered.remove(&turn);
+        turns.cancelled.remove(&turn);
         turns.release(turn);
-        turns.stopping.remove(&turn)
     }
 }
