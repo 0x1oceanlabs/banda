@@ -87,12 +87,19 @@ export function shown(
 export const DEFAULT_KEYS: Keys = { file: "", binds: [] }
 
 /**
- * A module's settings file as the look resolved it, by its name: what
- * `files` holds, typed as its module says, or `before` when the look has
- * none of it yet.
+ * A module's settings file the look resolves into `files`: its name, and
+ * Banda's own for before the first look. Its module exports it, typed as
+ * the file's value.
  */
-export function fileOf<T>(files: Look["files"], name: string, before: T): T {
-  return (files[name] as T | undefined) ?? before
+export interface ModuleFile<T> {
+  readonly name: string
+  readonly before: T
+}
+
+/** `file` as the look resolved it, or its `before` when the look has none
+ * of it yet. */
+export function fileOf<T>(files: Look["files"], file: ModuleFile<T>): T {
+  return (files[file.name] as T | undefined) ?? file.before
 }
 
 /** Banda's browser, as `banda look` gives it with no `browser.toml`: for
@@ -102,4 +109,10 @@ export const DEFAULT_BROWSER: Browser = {
   search: "https://duckduckgo.com/?q=%s",
   pinned: [],
   blocker: true,
+}
+
+/** The browser's `browser.toml`. */
+export const BROWSER_FILE: ModuleFile<Browser> = {
+  name: "browser.toml",
+  before: DEFAULT_BROWSER,
 }

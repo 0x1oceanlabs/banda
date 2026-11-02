@@ -5,7 +5,7 @@
  * desktop, there is none and each reader takes Banda's own.
  */
 import { useSyncExternalStore } from "react"
-import type { Look } from "@banda/contract/look"
+import { fileOf, type Look, type ModuleFile } from "@banda/contract/look"
 
 let look: Look | null = null
 const listeners = new Set<() => void>()
@@ -31,4 +31,10 @@ export function takeLook(next: Look): void {
  * object until the look changes. */
 export function useLook<T>(pick: (look: Look) => T, before: T): T {
   return useSyncExternalStore(subscribe, () => (look ? pick(look) : before))
+}
+
+/** A module's settings file as the look resolves it, again on each new
+ * look; its `before` till it comes. */
+export function useFile<T>(file: ModuleFile<T>): T {
+  return useLook((look) => fileOf(look.files, file), file.before)
 }

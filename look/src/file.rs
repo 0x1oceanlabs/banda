@@ -171,7 +171,8 @@ fn resolve_value<T: OneFile>(
     watched: &mut Vec<PathBuf>,
 ) -> (Value, Keyed) {
     let (resolved, keyed) = resolve::<T>(places, problems, watched);
-    (serde_json::to_value(resolved).unwrap_or_default(), keyed)
+    let value = serde_json::to_value(resolved).expect("settings are plain data");
+    (value, keyed)
 }
 
 fn template_of<T: OneFile>() -> String {
