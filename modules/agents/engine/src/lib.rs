@@ -917,7 +917,7 @@ fn show_visual(
     title: String,
     height: u32,
 ) -> Result<(), Error> {
-    let thread = rules::own_thread(store::thread_of(tx.sql(), agent)?)?;
+    let thread = rules::to_thread::own_thread(store::thread_of(tx.sql(), agent)?)?;
     let turn = store::running(tx.sql(), thread)?
         .ok_or_else(|| Refusal::conflict("A Visual shows in a turn that runs."))?
         .id;
