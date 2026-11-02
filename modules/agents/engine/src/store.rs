@@ -123,6 +123,25 @@ ALTER TABLE agents_items ADD COLUMN harness_message TEXT;
 -- The Thread a Thread was forked from (ADR 0027, decision 3).
 ALTER TABLE agents_threads ADD COLUMN forked_from TEXT;
 "#,
+    r#"
+-- A Thread runs one turn at a time (ADR 0018, decision 2). A Thread that
+-- ran two, as the Agent's own turn beside one the outbox ran, keeps the
+-- latter, and the other was cut short.
+UPDATE agents_turns
+SET state = 'interrupted', reason = 'Banda stopped while the Agent worked.',
+    ended_at = COALESCE(started_at, created_at)
+WHERE state = 'running' AND id NOT IN (
+    SELECT id FROM (
+        SELECT id, ROW_NUMBER() OVER (
+            PARTITION BY thread
+            ORDER BY opener = 'by_itself', created_at DESC, id DESC
+        ) AS kept
+        FROM agents_turns WHERE state = 'running'
+    ) WHERE kept = 1
+);
+CREATE UNIQUE INDEX agents_turns_one_running ON agents_turns (thread)
+    WHERE state = 'running';
+"#,
 ];
 
 fn json<T: Serialize>(value: &T) -> Result<String, Error> {
@@ -1049,6 +1068,54 @@ mod tests {
             sql.execute_batch(migration).unwrap();
         }
         sql
+    }
+
+    #[test]
+    fn a_thread_runs_one_turn_and_one_that_ran_two_keeps_the_outboxs() {
+        let sql = Connection::open_in_memory().unwrap();
+        let (before, from) = MIGRATIONS.split_at(MIGRATIONS.len() - 1);
+        for migration in before {
+            sql.execute_batch(migration).unwrap();
+        }
+        let agent = AgentId::new();
+        let thread = ThreadId::new();
+        let summary = ThreadSummary {
+            id: thread,
+            harness: "fake".to_owned(),
+            title: "Hello".to_owned(),
+            updated_at: 0,
+        };
+        let author = Participant::Agent(agent);
+        insert_thread(&sql, &summary, agent, author, &Settings::default()).unwrap();
+        let running = |opener: Opener, at: i64| {
+            let turn = Turn {
+                id: TurnId::new(),
+                thread,
+                agent,
+                message: ItemId::new(),
+                state: TurnState::Running,
+                opener,
+                from_thread: None,
+            };
+            insert_turn(&sql, &turn, author, at, &Settings::default()).unwrap();
+            turn.id
+        };
+        let sent = running(Opener::Person, 1);
+        let own = running(Opener::ByItself, 2);
+        for migration in from {
+            sql.execute_batch(migration).unwrap();
+        }
+        let state = |id| turn(&sql, id).unwrap().unwrap().state;
+        assert_eq!(state(sent), TurnState::Running);
+        assert_eq!(state(own), TurnState::Interrupted);
+        assert!(
+            sql.execute(
+                "UPDATE agents_turns SET state = 'running' WHERE id = ?1",
+                params![own],
+            )
+            .is_err(),
+            "a second turn cannot run"
+        );
     }
 
     #[test]

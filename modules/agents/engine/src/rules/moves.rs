@@ -1,10 +1,10 @@
 //! A turn's moves (ADR 0018, decision 1): one pure function, [`next`],
-//! says what each event does to a turn. The rules a Person's commands ask
-//! (`can`, `may_start`, `stop`, `waits`, `may_change`, `retry`, `steers`)
-//! are questions to it. Step 3 adds the events the writer gives, with the
-//! facts and effects of each step.
+//! says what each event does to a turn, and the writer (`writer.rs`)
+//! writes the [`Step`] it gives. The rules a Person's commands ask (`can`,
+//! `waits`, `may_change`, `retry`, `steers`) are questions to it.
 
-use crate::model::TurnState;
+use super::Ending;
+use crate::model::{Failure, TurnState};
 use banda_kernel::Refusal;
 
 /// What the engine knows of a turn when something happens to it.
@@ -23,6 +23,8 @@ pub struct TurnFacts {
     pub held: bool,
     /// A turn of its Thread runs.
     pub works: bool,
+    /// The turn that runs is one the Agent opened by itself.
+    pub own_works: bool,
     /// A turn of its Thread waits in its queue.
     pub waits: bool,
 }
@@ -39,14 +41,21 @@ impl TurnFacts {
             latest: true,
             held: false,
             works: false,
+            own_works: false,
             waits: false,
         }
     }
 }
 
 /// What happened to a turn.
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Debug)]
 pub enum Event {
+    /// A new turn waits behind its Thread's earlier turns, for the outbox
+    /// to start it.
+    Queue,
+    /// The Agent opens a new turn by itself, between turns: it runs from
+    /// now.
+    Open,
     /// The outbox starts it (`turn.start`).
     Start,
     /// A Person stops it.
@@ -66,6 +75,10 @@ pub enum Event {
     /// A Person takes its Thread back to before its message, to edit it
     /// (ADR 0027); it leaves the Thread, with every turn after it.
     Rewind,
+    /// Its Harness ended it so, or Banda did for it.
+    End(Ending),
+    /// A restart cut it short: the Harness that ran it is gone.
+    CutShort,
 }
 
 /// What an event does to a turn.
@@ -75,6 +88,53 @@ pub struct Step {
     pub state: TurnState,
     /// It holds the Thread's queue now.
     pub held: bool,
+    /// How it ended, when this step ends it.
+    pub ending: Option<Ending>,
+    /// What the step sets going.
+    pub then: Option<Then>,
+}
+
+/// What a step sets going, besides the turn's own state.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Then {
+    /// The outbox starts it, after the Thread's earlier turns.
+    Start,
+    /// The outbox asks its Harness to stop it; it ends when the Harness
+    /// does.
+    AskStop,
+    /// The Agent's own turn that runs ends: the Harness takes this turn's
+    /// prompt into what it does.
+    HandOver,
+}
+
+impl Step {
+    fn to(state: TurnState) -> Step {
+        Step {
+            state,
+            held: false,
+            ending: None,
+            then: None,
+        }
+    }
+
+    fn ended(ending: Ending) -> Step {
+        let state = ending.state;
+        Step {
+            ending: Some(ending),
+            ..Step::to(state)
+        }
+    }
+
+    fn holding(self, held: bool) -> Step {
+        Step { held, ..self }
+    }
+
+    fn then(self, then: Then) -> Step {
+        Step {
+            then: Some(then),
+            ..self
+        }
+    }
 }
 
 const ENDED: &str = "This turn has ended.";
@@ -82,30 +142,43 @@ const TAKEN: &str = "The Agent has taken this message, so it can no longer be ch
 const READ: &str = "The Agent has read this message, so it can no longer be changed.";
 
 /// What `event` does to `turn`, or why it cannot happen. A late event, as
-/// a steer into a turn that ended, is refused like any other.
+/// a steer into a turn that ended, or a Harness ending a turn that ended,
+/// is refused like any other.
 pub fn next(turn: &TurnFacts, event: Event) -> Result<Step, Refusal> {
     use TurnState::{Failed, Interrupted, Queued, Running, Stopped, Withdrawn};
-    let to = |state| Ok(Step { state, held: false });
+    let to = |state| Ok(Step::to(state));
     let state = turn.state;
+    // A Thread runs one turn at a time.
+    let other = || Err(Refusal::conflict("Another turn runs in this Thread."));
     match event {
+        Event::Queue | Event::Open | Event::Start if state != Queued => {
+            Err(Refusal::conflict("This turn no longer waits."))
+        }
+        Event::Queue => Ok(Step::to(Queued).then(Then::Start)),
+        // What the Agent does by itself opens a turn once the one that ran
+        // has ended, held queue or not: it already works.
+        Event::Open if turn.works => other(),
+        Event::Open => to(Running),
         // A turn stopped while it waited never runs; one in a held queue
-        // waits until a Person lets the queue go. Step 3 makes a START
-        // that finds another turn running wait for its end too.
-        Event::Start if state != Queued => Err(Refusal::conflict("This turn no longer waits.")),
+        // waits until a Person lets the queue go. One that finds the
+        // Agent's own turn running takes it over, as the Harness takes its
+        // prompt into what it does.
         Event::Start if turn.held => {
             Err(Refusal::conflict("The Thread's queue waits for a Person."))
         }
+        Event::Start if turn.own_works => Ok(Step::to(Running).then(Then::HandOver)),
+        Event::Start if turn.works => other(),
         Event::Start => to(Running),
         // A turn that waits ends now and never runs; one that runs is
         // asked to stop, and holds the queue behind it.
-        Event::Stop if state == Queued => to(Stopped),
-        Event::Stop if state == Running => Ok(Step { state, held: true }),
+        Event::Stop if state == Queued => Ok(Step::ended(Ending::new(Stopped, None))),
+        Event::Stop if state == Running => Ok(Step::to(Running).holding(true).then(Then::AskStop)),
         Event::Stop => Err(Refusal::conflict(ENDED)),
         Event::Change | Event::Withdraw if state != Queued => Err(Refusal::invalid(TAKEN)),
         // One tried again cannot change: a turn already ran its message.
         Event::Change if !turn.first => Err(Refusal::invalid(READ)),
         Event::Change => to(Queued),
-        Event::Withdraw => to(Withdrawn),
+        Event::Withdraw => Ok(Step::ended(Ending::new(Withdrawn, None))),
         // It runs, its queue is not held, and a Person asked for it: one
         // the Agent went on with by itself takes a message as a turn of
         // its own.
@@ -151,6 +224,26 @@ pub fn next(turn: &TurnFacts, event: Event) -> Result<Step, Refusal> {
             "The Thread can go back once nothing runs or waits in it.",
         )),
         Event::Rewind => to(state),
+        // A turn ends once. A Harness that stopped holds the queue behind
+        // a turn a Person or an Agent sent, so the turn can be tried again
+        // before the next one runs; ADR 0018's step 4 holds it behind the
+        // Agent's own too.
+        Event::End(_) | Event::CutShort if !matches!(state, Queued | Running) => {
+            Err(Refusal::conflict(ENDED))
+        }
+        Event::End(ending) => {
+            let stopped = ending.failure == Some(Failure::HarnessStopped);
+            Ok(Step::ended(ending).holding(stopped && !turn.by_itself))
+        }
+        // After a restart the queue waits for a Person, behind what was
+        // sent to the Agent; a turn that never began waits in it.
+        Event::CutShort => {
+            let step = match state {
+                Queued => Step::to(Queued),
+                _ => Step::ended(Ending::cut_short()),
+            };
+            Ok(step.holding(!turn.by_itself))
+        }
     }
 }
 
@@ -159,34 +252,64 @@ mod tests {
     use super::*;
     use TurnState::{Done, Failed, Interrupted, Queued, Running, Stopped, Withdrawn};
 
-    /// The state a step moves to, `H` when it holds the queue, `-` when
-    /// the event is refused.
+    /// The state a step moves to, `H` when it holds the queue, and what it
+    /// sets going; `-` when the event is refused.
     fn moved(turn: &TurnFacts, event: Event) -> String {
         match next(turn, event) {
-            Ok(Step { state, held }) => format!("{state:?}{}", if held { " H" } else { "" }),
+            Ok(Step {
+                state, held, then, ..
+            }) => {
+                let held = if held { " H" } else { "" };
+                let then = then.map_or(String::new(), |then| format!(" {then:?}"));
+                format!("{state:?}{held}{then}")
+            }
             Err(_) => "-".to_owned(),
         }
     }
 
+    fn done() -> Event {
+        Event::End(Ending::new(Done, None))
+    }
+
+    fn harness_stopped() -> Event {
+        Event::End(Ending::failed("It stopped.", Some(Failure::HarnessStopped)))
+    }
+
     #[test]
     fn every_event_moves_each_state_of_a_turn_or_is_refused() {
-        use Event::{Change, Fork, Retry, Rewind, Start, Steer, Stop, Withdraw};
+        use Event::{
+            Change, CutShort, Fork, Open, Queue, Retry, Rewind, Start, Steer, Stop, Withdraw,
+        };
         #[rustfmt::skip]
         let table = [
-            //            Start      Stop         Change    Withdraw     Steer      Retry          Fork           Rewind
-            (Queued,      ["Running", "Stopped",   "Queued", "Withdrawn", "-",       "-",           "-",           "-"]),
-            (Running,     ["-",       "Running H", "-",      "-",         "Running", "-",           "-",           "-"]),
-            (Done,        ["-",       "-",         "-",      "-",         "-",       "-",           "Done",        "Done"]),
-            (Stopped,     ["-",       "-",         "-",      "-",         "-",       "-",           "Stopped",     "Stopped"]),
-            (Failed,      ["-",       "-",         "-",      "-",         "-",       "Failed",      "Failed",      "Failed"]),
-            (Interrupted, ["-",       "-",         "-",      "-",         "-",       "Interrupted", "Interrupted", "Interrupted"]),
-            (Withdrawn,   ["-",       "-",         "-",      "-",         "-",       "-",           "-",           "-"]),
+            //            Queue           Open       Start      Stop                 Change    Withdraw     Steer      Retry          Fork           Rewind         End     CutShort
+            (Queued,      ["Queued Start", "Running", "Running", "Stopped",           "Queued", "Withdrawn", "-",       "-",           "-",           "-",           "Done", "Queued H"]),
+            (Running,     ["-",            "-",       "-",       "Running H AskStop", "-",      "-",         "Running", "-",           "-",           "-",           "Done", "Interrupted H"]),
+            (Done,        ["-",            "-",       "-",       "-",                 "-",      "-",         "-",       "-",           "Done",        "Done",        "-",    "-"]),
+            (Stopped,     ["-",            "-",       "-",       "-",                 "-",      "-",         "-",       "-",           "Stopped",     "Stopped",     "-",    "-"]),
+            (Failed,      ["-",            "-",       "-",       "-",                 "-",      "-",         "-",       "Failed",      "Failed",      "Failed",      "-",    "-"]),
+            (Interrupted, ["-",            "-",       "-",       "-",                 "-",      "-",         "-",       "Interrupted", "Interrupted", "Interrupted", "-",    "-"]),
+            (Withdrawn,   ["-",            "-",       "-",       "-",                 "-",      "-",         "-",       "-",           "-",           "-",           "-",    "-"]),
         ];
         for (state, row) in table {
-            let events = [Start, Stop, Change, Withdraw, Steer, Retry, Fork, Rewind];
+            let events = [
+                Queue,
+                Open,
+                Start,
+                Stop,
+                Change,
+                Withdraw,
+                Steer,
+                Retry,
+                Fork,
+                Rewind,
+                done(),
+                CutShort,
+            ];
             for (event, want) in events.into_iter().zip(row) {
                 let turn = TurnFacts::of(state);
-                assert_eq!(moved(&turn, event), want, "{state:?} {event:?}");
+                let what = format!("{state:?} {event:?}");
+                assert_eq!(moved(&turn, event), want, "{what}");
             }
         }
     }
@@ -202,24 +325,53 @@ mod tests {
             by_itself: true,
             ..of(state)
         };
+        let works = |state| TurnFacts {
+            works: true,
+            ..of(state)
+        };
+        let own_works = |state| TurnFacts {
+            own_works: true,
+            ..works(state)
+        };
         #[rustfmt::skip]
         let cases = [
-            ("a held queue",     held(Queued),                              Event::Start,  "-"),
-            ("a turn ran it",    TurnFacts { first: false, ..of(Queued) },  Event::Change, "-"),
-            ("a stop asked",     held(Running),                             Event::Steer,  "-"),
-            ("the Agent's own",  own(Running),                              Event::Steer,  "-"),
-            ("the Agent's own",  own(Running),                              Event::Stop,   "Running H"),
-            ("the Agent's own",  own(Failed),                               Event::Retry,  "-"),
-            ("not the latest",   TurnFacts { latest: false, ..of(Failed) }, Event::Retry,  "-"),
-            ("its Thread works", TurnFacts { works: true, ..of(Done) },     Event::Fork,   "-"),
-            ("its Thread works", TurnFacts { works: true, ..of(Done) },     Event::Rewind, "-"),
-            ("a turn waits",     TurnFacts { waits: true, ..of(Done) },     Event::Rewind, "-"),
-            ("a waiting fork",   TurnFacts { waits: true, ..of(Done) },     Event::Fork,   "Done"),
-            ("an Agent's word",  TurnFacts { by_person: false, ..of(Done) }, Event::Rewind, "-"),
-            ("tried again",      TurnFacts { first: false, ..of(Done) },    Event::Rewind, "-"),
+            ("a held queue",     held(Queued),                              Event::Start,      "-"),
+            ("one runs",         works(Queued),                             Event::Start,      "-"),
+            ("the Agent's runs", own_works(Queued),                         Event::Start,      "Running HandOver"),
+            ("one runs",         works(Queued),                             Event::Open,       "-"),
+            ("the Agent's runs", own_works(Queued),                         Event::Open,       "-"),
+            ("a held queue",     held(Queued),                              Event::Open,       "Running"),
+            ("a turn ran it",    TurnFacts { first: false, ..of(Queued) },  Event::Change,     "-"),
+            ("a stop asked",     held(Running),                             Event::Steer,      "-"),
+            ("the Agent's own",  own(Running),                              Event::Steer,      "-"),
+            ("the Agent's own",  own(Running),                              Event::Stop,       "Running H AskStop"),
+            ("the Agent's own",  own(Failed),                               Event::Retry,      "-"),
+            ("not the latest",   TurnFacts { latest: false, ..of(Failed) }, Event::Retry,      "-"),
+            ("its Thread works", works(Done),                               Event::Fork,       "-"),
+            ("its Thread works", works(Done),                               Event::Rewind,     "-"),
+            ("a turn waits",     TurnFacts { waits: true, ..of(Done) },     Event::Rewind,     "-"),
+            ("a waiting fork",   TurnFacts { waits: true, ..of(Done) },     Event::Fork,       "Done"),
+            ("an Agent's word",  TurnFacts { by_person: false, ..of(Done) }, Event::Rewind,    "-"),
+            ("tried again",      TurnFacts { first: false, ..of(Done) },    Event::Rewind,     "-"),
+            ("its Harness died", of(Running),                               harness_stopped(), "Failed H"),
+            ("the Agent's own",  own(Running),                              harness_stopped(), "Failed"),
+            ("the Agent's own",  own(Running),                              Event::CutShort,   "Interrupted"),
         ];
         for (why, turn, event, want) in cases {
             assert_eq!(moved(&turn, event), want, "{why}");
         }
+    }
+
+    #[test]
+    fn a_step_that_ends_a_turn_says_how() {
+        let stopped = next(&TurnFacts::of(Running), harness_stopped()).unwrap();
+        assert_eq!(
+            stopped.ending.and_then(|e| e.failure),
+            Some(Failure::HarnessStopped)
+        );
+        let cut = next(&TurnFacts::of(Running), Event::CutShort).unwrap();
+        assert_eq!(cut.ending, Some(Ending::cut_short()));
+        let asked = next(&TurnFacts::of(Running), Event::Stop).unwrap();
+        assert_eq!(asked.ending, None, "it ends when its Harness does");
     }
 }

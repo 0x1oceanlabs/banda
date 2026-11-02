@@ -463,10 +463,19 @@ If Chat is removed, Agents still works through its own Thread.
   it offers, and the window offers no images; a message with images gets
   the text alone, with a notice, and one of images alone fails its turn.
 - **One function moves a turn** (`rules::next`, ADR 0018): given what the
-  engine knows of a turn and what happened (started, stopped, changed,
-  taken back, steered, tried again), it says the turn's next state and
-  whether the queue is held, or refuses, a late event too. The rules the
-  commands ask are questions to it. A turn keeps who opened it
+  engine knows of a turn and what happened (queued, opened by the Agent,
+  started, stopped, changed, taken back, steered, tried again, ended,
+  cut short by a restart), it says the turn's next state, how it ended,
+  whether the queue is held and what the outbox does next, or refuses, a
+  late event too, such as a Harness ending a turn that ended. The rules
+  the commands ask are questions to it. **One writer applies it**
+  (`writer.rs`): the commands, the outbox's effects and the listener
+  between turns make and move turns only through `writer::make` and
+  `writer::apply`, which write the step in the caller's transaction. A
+  Thread runs one turn at a time (a unique index on its running turn):
+  what the Agent does by itself opens its turn once the turn that ran is
+  written as ended, and a turn the outbox starts takes the Agent's own
+  over. A turn keeps who opened it
   (`agents_turns.opener`): a Person's message, a retry, a message its turn
   could not take, the Agent by itself, or another Thread's Agent that
   asked or answered (`from_thread` names that Thread); "by itself" is read
@@ -478,7 +487,7 @@ If Chat is removed, Agents still works through its own Thread.
   never lets a held queue go on nor joins the turn that runs. The Harness
   reads a first line naming A's title and ID and that it is not its
   Person's word; the Thread keeps the plain text. When that turn ends,
-  however it ends (`turn::end`, in the same transaction), its last reply,
+  however it ends (the writer, in the same transaction), its last reply,
   or how it ended and why, goes back into A as a message by B's Agent, in
   a turn opened as answered, which answers nothing back; a Person's retry
   of an asked turn still answers. An Agent writes only from its own

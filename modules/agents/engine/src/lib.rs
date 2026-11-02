@@ -33,6 +33,7 @@ pub mod settings;
 mod skills;
 mod store;
 mod turn;
+mod writer;
 
 use acp::Connection;
 use banda_kernel::{
@@ -47,6 +48,7 @@ use model::{
     Account, Body, Fact, HarnessView, Image, ImageId, Item, ItemId, Offer, Opener, Program,
     Settings, ThreadId, ThreadList, ThreadSummary, ThreadView, TurnId, TurnState, VERSION,
 };
+use rules::Event;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -56,7 +58,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 use ts_rs::TS;
-use turn::{ReplyEffect, TurnEffect};
+use turn::ReplyEffect;
 
 pub struct Agents {
     harnesses: Harnesses,
@@ -588,7 +590,7 @@ impl Agents {
         call.command(move |tx| {
             store::thread(tx.sql(), thread)?
                 .ok_or_else(|| Refusal::not_found("There is no such Thread."))?;
-            turn::resume(tx, author, thread)
+            writer::resume(tx, author, thread)
         })
         .await
     }
@@ -914,7 +916,7 @@ fn send(
         return Ok(sent);
     }
     if by_person {
-        turn::resume(tx, author, thread)?;
+        writer::resume(tx, author, thread)?;
     }
     let turn = store::Turn {
         id: TurnId::new(),
@@ -925,46 +927,27 @@ fn send(
         opener,
         from_thread: by.map(|(_, from)| from),
     };
-    let settings = store::settings(tx.sql(), thread)?;
-    store::insert_turn(tx.sql(), &turn, author, now, &settings)?;
-    store::touch_thread(tx.sql(), thread, now)?;
-    let sent = Sent {
-        thread,
-        turn: turn.id,
-        item: item.id,
-    };
-    let fact = Fact::MessagePosted {
+    let posted = Fact::MessagePosted {
         item: item.id,
         turn: turn.id,
         text,
         images,
         answers,
     };
-    emit(tx, author, thread, &fact)?;
-    tx.enqueue(
-        turn::START,
-        &thread.to_string(),
-        &TurnEffect { turn: turn.id },
-    )?;
-    Ok(sent)
+    writer::make(tx, author, &turn, Event::Queue, Some(posted))?;
+    Ok(Sent {
+        thread,
+        turn: turn.id,
+        item: item.id,
+    })
 }
 
 /// Stops a turn: at once if it waits, through the Harness if it runs. A
-/// stop of the turn that runs holds the queue behind it.
+/// stop of the turn that runs holds the queue behind it. A turn that ended
+/// already stays as it ended.
 fn stop(tx: &mut Tx<'_>, author: Participant, turn: TurnId) -> Result<(), Error> {
     let found = turn_of(tx, turn)?;
-    match rules::stop(found.state) {
-        rules::Stop::Now => {
-            let stopped = rules::Ending::new(TurnState::Stopped, None);
-            turn::end(tx, author, &found, stopped)?;
-        }
-        rules::Stop::AskHarness => {
-            turn::hold(tx, author, found.thread)?;
-            tx.enqueue(turn::STOP, &turn.to_string(), &TurnEffect { turn })?;
-        }
-        rules::Stop::Nothing => {}
-    }
-    Ok(())
+    writer::tell(tx, author, &found, Event::Stop)
 }
 
 /// The Thread's turn a message can go into. A turn a Person stopped takes
@@ -1094,9 +1077,8 @@ fn edit(tx: &mut Tx<'_>, author: Participant, turn: TurnId, text: String) -> Res
 /// Takes a waiting message back: its turn never runs, and the Thread no
 /// longer shows it.
 fn withdraw(tx: &mut Tx<'_>, author: Participant, turn: TurnId) -> Result<(), Error> {
-    let found = waiting(tx, turn)?;
-    let withdrawn = rules::Ending::new(TurnState::Withdrawn, None);
-    turn::end(tx, author, &found, withdrawn)?;
+    let found = turn_of(tx, turn)?;
+    writer::apply(tx, author, &found, Event::Withdraw)??;
     Ok(())
 }
 
@@ -1106,13 +1088,12 @@ fn withdraw(tx: &mut Tx<'_>, author: Participant, turn: TurnId) -> Result<(), Er
 fn send_now(tx: &mut Tx<'_>, author: Participant, turn: TurnId) -> Result<(), Error> {
     let found = waiting(tx, turn)?;
     let Some(running) = steerable(tx, found.thread)? else {
-        turn::resume(tx, author, found.thread)?;
+        writer::resume(tx, author, found.thread)?;
         return Ok(());
     };
     let message = turn::Message::read(tx.sql(), found.message)?
         .ok_or_else(|| Refusal::invalid("Only a message can be sent."))?;
-    let withdrawn = rules::Ending::new(TurnState::Withdrawn, None);
-    turn::end(tx, author, &found, withdrawn)?;
+    writer::apply(tx, author, &found, Event::Withdraw)??;
     store::set_item_turn(tx.sql(), found.message, Some(running.id))?;
     store::move_last(tx.sql(), found.message)?;
     turn::steer_into(tx, author, &running, found.message, message)?;
@@ -1131,8 +1112,8 @@ fn retry(tx: &mut Tx<'_>, author: Participant, turn: TurnId) -> Result<Sent, Err
     // One another Thread's Agent asked for still answers that Thread.
     let (thread, agent, message) = (found.thread, found.agent, found.message);
     let from = found.answers();
-    let again = turn::queue(tx, author, thread, agent, message, Opener::Retry, from)?;
-    turn::resume(tx, author, found.thread)?;
+    let again = writer::queue(tx, author, thread, agent, message, Opener::Retry, from)?;
+    writer::resume(tx, author, found.thread)?;
     Ok(Sent {
         thread: found.thread,
         turn: again,
