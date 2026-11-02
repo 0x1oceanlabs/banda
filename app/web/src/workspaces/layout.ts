@@ -8,7 +8,14 @@ import type { Columns as Look } from "@banda/contract/look"
 import { columnsOf, moveOf } from "../look"
 import { Moving } from "../motion"
 import { minOf } from "../registry"
-import { drawn, share, type Width, widthIn, type Workspace } from "./model"
+import {
+  drawn,
+  free,
+  share,
+  type Width,
+  widthIn,
+  type Workspace,
+} from "./model"
 
 /** A column's place once every move is done, in the Strip's scroll. */
 export interface Place {
@@ -31,7 +38,10 @@ export function room(strip: HTMLElement) {
  * The share of the room a column of `min` rem is never drawn narrower
  * than: the `min-width` the Strip gives it, as a share.
  */
-function floorIn(room: { gap: number; inner: number }, min: number): number {
+export function floorIn(
+  room: { gap: number; inner: number },
+  min: number
+): number {
   const rem = parseFloat(getComputedStyle(document.documentElement).fontSize)
   return room.inner > 0 ? (min * rem + room.gap) / (room.inner + room.gap) : 0
 }
@@ -39,6 +49,11 @@ function floorIn(room: { gap: number; inner: number }, min: number): number {
 /** The Strip of workspace `id`, while it is drawn. */
 export function stripOf(id: string): HTMLElement | null {
   return document.querySelector<HTMLElement>(`[data-strip="${id}"]`)
+}
+
+/** The column `id` of `strip`, while it is drawn. */
+export function columnIn(strip: HTMLElement, id: string): HTMLElement | null {
+  return strip.querySelector<HTMLElement>(`:scope > [data-column="${id}"]`)
 }
 
 /** The floor of a column of `min` rem in the Strip of workspace `id`; 0
@@ -100,7 +115,7 @@ export function roomLeft(
     .reduce((sum, place) => sum + place.right - place.left + gap, 0)
   // The share whose width, as `widthAt` draws it, is what is left.
   const at = Math.min(1, (inner - taken + gap) / (inner + gap))
-  return at > 0 ? String(Math.round(at * 1000) / 1000) : undefined
+  return at > 0 ? free(at) : undefined
 }
 
 /**
@@ -131,6 +146,11 @@ export function widthAt(at: number): string {
   return `calc(${at} * (100% + var(--gap-inner)) - var(--gap-inner))`
 }
 
+/** A Pane's `flex` at `at`, a share of its column's height. */
+export function heightAt(at: number): string {
+  return `0 1 ${widthAt(at)}`
+}
+
 /** The least a column of `min` rem is drawn at: that, unless the room is
  * narrower. */
 export function minWidthOf(min: number): string {
@@ -146,6 +166,8 @@ type Moved = {
   /** Its place and size in the layout, as last seen. */
   left: number
   width: number
+  /** Its share as the Strip last drew it. */
+  drawn: number
 }
 
 type Tile = {
@@ -171,6 +193,8 @@ export class ColumnMotion {
   #tiles = new Map<string, Tile>()
   #started = false
   #scroll: number | undefined
+  /** The column a hand sizes: the Strip's width for it waits. */
+  #held: string | undefined
 
   /** Notes how far the Strip is scrolled, just before React changes it. */
   before(strip: HTMLElement | null) {
@@ -193,9 +217,7 @@ export class ColumnMotion {
     const shifted = (this.#scroll ?? strip.scrollLeft) - strip.scrollLeft
     this.#scroll = undefined
     const found = columns.flatMap((column) => {
-      const element = strip.querySelector<HTMLElement>(
-        `:scope > [data-column="${column.id}"]`
-      )
+      const element = columnIn(strip, column.id)
       return element ? [{ column, element }] : []
     })
     const seen = new Set(found.map(({ column }) => column.id))
@@ -222,6 +244,8 @@ export class ColumnMotion {
         continue
       }
       known.element = element
+      known.drawn = target
+      if (this.#held === column.id) continue
       if (Math.abs(known.size.target - target) > 1e-9) {
         known.size.to(target, moveOf("resize"))
       }
@@ -267,6 +291,23 @@ export class ColumnMotion {
     this.#tiles = tiles
   }
 
+  /** A hand sizes column `id`: it is drawn at `at` at once, whatever the
+   * Strip draws meanwhile. */
+  hand(id: string, at: number) {
+    this.#held = id
+    this.#columns.get(id)?.size.to(at, { kind: "off" })
+  }
+
+  /** The hand let go, and what it asked is drawn or refused: the column
+   * goes to the width the Strip draws, if it is not there. */
+  letGo() {
+    const moved = this.#held && this.#columns.get(this.#held)
+    this.#held = undefined
+    if (moved && Math.abs(moved.size.target - moved.drawn) > 1e-9) {
+      moved.size.to(moved.drawn, moveOf("resize"))
+    }
+  }
+
   stop() {
     for (const moved of this.#columns.values()) {
       moved.size.stop()
@@ -300,6 +341,7 @@ export class ColumnMotion {
       ),
       left: element.offsetLeft,
       width: element.offsetWidth,
+      drawn: at,
     }
     return moved
   }

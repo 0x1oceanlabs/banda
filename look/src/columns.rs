@@ -6,9 +6,13 @@
 //! A width is a share of the screen as a fraction, `"1/3"`, or `"1"` for
 //! all of it. `min` keeps a share of a narrow window readable: no column
 //! is drawn narrower than that many rem, unless the screen is.
+//!
+//! `snap` is how near, in pixels, a size dragged with the mouse holds at
+//! one of `presets` or `heights` (ADR 0025, decision 5); 0 never holds.
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use std::ops::RangeInclusive;
 use toml::Spanned;
 use ts_rs::TS;
 
@@ -35,6 +39,10 @@ pub struct ColumnsSettings {
     /// The narrowest a column is drawn, in rem; a list's is half of it.
     #[schemars(with = "Option<f64>", range(min = 0, max = 200))]
     pub min: Option<Spanned<f64>>,
+    /// How near, in pixels, a size dragged with the mouse holds at a
+    /// preset or a height; 0 never.
+    #[schemars(with = "Option<f64>", range(min = 0, max = 64))]
+    pub snap: Option<Spanned<f64>>,
 }
 
 /// Where the Strip scrolls a focused column to.
@@ -73,6 +81,7 @@ pub struct Columns {
     pub center: Center,
     pub display: Display,
     pub min: f64,
+    pub snap: f64,
 }
 
 const PRESETS: [&str; 4] = ["1/3", "1/2", "2/3", "1"];
@@ -82,7 +91,11 @@ const ALONE: &str = "1";
 /// A Thread's lines stay readable at 30 rem, about 60 letters.
 const MIN: f64 = 30.0;
 /// Past this a column is the whole screen in any window.
-const MINS: std::ops::RangeInclusive<f64> = 0.0..=200.0;
+const MINS: RangeInclusive<f64> = 0.0..=200.0;
+/// Near enough to hit a step without trying, far enough to leave the
+/// sizes between free.
+const SNAP: f64 = 8.0;
+const SNAPS: RangeInclusive<f64> = 0.0..=64.0;
 
 /// A width's share of the screen: more than 0, at most 1.
 pub fn share(width: &str) -> Option<f64> {
@@ -115,6 +128,15 @@ fn steps(list: &Option<Vec<Spanned<String>>>, or: &[&str]) -> Vec<String> {
     steps.into_iter().map(|(_, text)| text).collect()
 }
 
+/// The number written, when it lies in `range`; `or` when it does not.
+fn within(value: &Option<Spanned<f64>>, range: &RangeInclusive<f64>, or: f64) -> f64 {
+    value
+        .as_ref()
+        .map(|v| *v.get_ref())
+        .filter(|v| range.contains(v))
+        .unwrap_or(or)
+}
+
 /// A width as written, trimmed, when it is one.
 fn valid(width: &Spanned<String>) -> Option<String> {
     let text = width.get_ref().trim();
@@ -133,6 +155,7 @@ impl ColumnsSettings {
             center: self.center.or(under.center),
             display: self.display.or(under.display),
             min: self.min.or(under.min),
+            snap: self.snap.or(under.snap),
         }
     }
 
@@ -146,6 +169,7 @@ impl ColumnsSettings {
             center: Some(Center::Never),
             display: Some(Display::Stack),
             min: Some(Spanned::new(0..0, MIN)),
+            snap: Some(Spanned::new(0..0, SNAP)),
         }
     }
 
@@ -168,13 +192,22 @@ impl ColumnsSettings {
                 problems.push((Some(width.span()), format!("columns.{key} {WIDTH}")));
             }
         }
-        if let Some(min) = &self.min
-            && !MINS.contains(min.get_ref())
-        {
-            problems.push((
-                Some(min.span()),
-                format!("columns.min is from {} to {} rem", MINS.start(), MINS.end()),
-            ));
+        for (key, value, range, unit) in [
+            ("min", &self.min, &MINS, "rem"),
+            ("snap", &self.snap, &SNAPS, "pixels"),
+        ] {
+            if let Some(value) = value
+                && !range.contains(value.get_ref())
+            {
+                problems.push((
+                    Some(value.span()),
+                    format!(
+                        "columns.{key} is from {} to {} {unit}",
+                        range.start(),
+                        range.end()
+                    ),
+                ));
+            }
         }
         problems
     }
@@ -193,12 +226,8 @@ impl ColumnsSettings {
             alone: width(&self.alone, ALONE),
             center: self.center.unwrap_or(Center::Never),
             display: self.display.unwrap_or(Display::Stack),
-            min: self
-                .min
-                .as_ref()
-                .map(|m| *m.get_ref())
-                .filter(|m| MINS.contains(m))
-                .unwrap_or(MIN),
+            min: within(&self.min, &MINS, MIN),
+            snap: within(&self.snap, &SNAPS, SNAP),
         }
     }
 }
@@ -251,5 +280,10 @@ mod tests {
         let wrong = read("[columns]\nmin = -1\n");
         assert_eq!(wrong.problems().len(), 1);
         assert_eq!(wrong.resolve().min, 30.0);
+        assert_eq!(columns.snap, 8.0);
+        assert_eq!(read("[columns]\nsnap = 0\n").resolve().snap, 0.0);
+        let far = read("[columns]\nsnap = 100\n");
+        assert_eq!(far.problems().len(), 1);
+        assert_eq!(far.resolve().snap, 8.0);
     }
 }

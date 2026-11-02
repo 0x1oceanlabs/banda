@@ -422,6 +422,13 @@
           "format": "double",
           "minimum": 0,
           "maximum": 200
+        },
+        "snap": {
+          "description": "How near, in pixels, a size dragged with the mouse holds at a\npreset or a height; 0 never.",
+          "type": "number",
+          "format": "double",
+          "minimum": 0,
+          "maximum": 64
         }
       },
       "additionalProperties": false

@@ -5,8 +5,9 @@ import { type Listed, type PaneState, type Place, within } from "@banda/ui/pane"
 import type { Args } from "@banda/ui/module"
 import { Minimize2Icon } from "lucide-react"
 import { kindOf, kindRuns, labelOf } from "../registry"
-import { widthAt } from "./layout"
+import { heightAt } from "./layout"
 import { ThreadMark } from "../sidebar/Row"
+import type { Plan } from "./arrange"
 import type { Entry } from "./model"
 
 /** What a framed Pane asks of the workspaces. */
@@ -17,6 +18,9 @@ export type Frame = {
   close: (entry: string) => void
   /** Runs an action by its id, as a key would. */
   run: (action: string, args?: Args) => void
+  /** Sends the engine a change, as the mouse's sizing does; done once
+   * it is drawn, or refused. */
+  arrange: (plan: Plan) => Promise<void>
 }
 
 /** Says an Agent opened the Pane and the Person has not looked at it. */
@@ -104,9 +108,7 @@ export function PaneFrame({
       hidden={hidden}
       onPointerDownCapture={take}
       onFocusCapture={take}
-      style={
-        height === undefined ? undefined : { flex: `0 1 ${widthAt(height)}` }
-      }
+      style={height === undefined ? undefined : { flex: heightAt(height) }}
       className="group/tile relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-tile border-(length:--tile-border) border-focus-inactive bg-tile shadow-(--tile-shadow) outline-none after:pointer-events-none after:absolute after:inset-0 after:bg-black after:opacity-(--tile-dim) data-marked:border-attention data-zoomed:fixed data-zoomed:inset-0 data-zoomed:z-10 data-zoomed:rounded-none data-zoomed:border-0 data-zoomed:shadow-none data-zoomed:outline-none data-[focused=true]:border-focus data-[focused=true]:outline-[length:calc(var(--tile-border)+var(--focus-ring))] data-[focused=true]:outline-offset-[calc(-1*var(--tile-border))] data-[focused=true]:outline-focus data-[focused=true]:outline-solid data-[focused=true]:after:opacity-0"
     >
       {/* On the border, where no page covers it. */}

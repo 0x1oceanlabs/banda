@@ -62,6 +62,7 @@
 # center = "never"                   # "never", "always" or "on-overflow"
 # display = "stack"                  # "stack" or "tabs": how a new column shows its Panes
 # min = 30                           # no column narrower, in rem (a list: half)
+# snap = 8                           # a size dragged with the mouse holds this near a preset or height, in pixels; 0 never
 
 # [bar]
 # height = 36

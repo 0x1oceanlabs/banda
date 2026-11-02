@@ -57,6 +57,7 @@ export const DEFAULT_COLUMNS: Columns = {
   center: "never",
   display: "stack",
   min: 30,
+  snap: 8,
 }
 
 /** Banda's own motion, niri's springs: what `banda look` gives with no

@@ -14,6 +14,7 @@ import {
 } from "./model"
 import {
   ColumnMotion,
+  columnIn,
   minWidthOf,
   type Place,
   places,
@@ -25,6 +26,7 @@ import {
 import { type Frame, PaneFrame } from "./PaneFrame"
 import { Tabs } from "./Tabs"
 import { pixels, scrollsSideways, SWIPE_END, Swipe } from "./swipe"
+import { useSizing } from "./useSizing"
 
 /**
  * One workspace, as niri's Strip: columns side by side, each its share of
@@ -93,11 +95,12 @@ export function Strip({
   useEffect(() => () => motion.current.stop(), [])
 
   // What a scroll needs, as it is now: the columns, and for a swipe's end
-  // the focus and the frame.
-  const now = useRef({ focus, frame, columns })
+  // the focus and the frame; what the mouse's sizing reads too.
+  const now = useRef({ focus, frame, columns, look, on: false })
   useLayoutEffect(() => {
-    now.current = { focus, frame, columns }
+    now.current = { focus, frame, columns, look, on: live && !zooms }
   })
+  useSizing(scroller, motion, now)
 
   // The column focused before, for `center = "on-overflow"`.
   const before = useRef(focus)
@@ -332,8 +335,6 @@ function land(
     .sort((a, b) => Math.abs(a.i - at) - Math.abs(b.i - at))[0]?.place
   if (!picked) return
   reveal(strip, all, picked.id, focus)
-  const entry = strip.querySelector<HTMLElement>(
-    `:scope > [data-column="${picked.id}"]`
-  )?.dataset.entry
+  const entry = columnIn(strip, picked.id)?.dataset.entry
   if (picked.id !== focus && entry) frame.focus(entry)
 }

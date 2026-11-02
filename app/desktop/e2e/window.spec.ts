@@ -2024,6 +2024,181 @@ test("niri's keys: a launcher's letters, heights, the Strip's edges, the room le
   await expect(fresh).not.toHaveAttribute("data-zoomed")
 })
 
+/** Each column's share of the room, in hundredths, as the Strip draws it. */
+function sharesOf(page: Page) {
+  return page.locator("[data-column]").evaluateAll((columns) =>
+    columns.map((e) => {
+      const strip = e.parentElement!
+      const style = getComputedStyle(strip)
+      const gap = parseFloat(style.columnGap) || 0
+      const room =
+        strip.clientWidth -
+        parseFloat(style.paddingLeft) -
+        parseFloat(style.paddingRight) +
+        gap
+      return Math.round((((e as HTMLElement).offsetWidth + gap) / room) * 100)
+    })
+  )
+}
+
+/** Where the right edge of the first column is drawn at `at` of the room,
+ * the middle of the gap after it, and the room's scale, in pixels. */
+async function edgeAt(page: Page, at: number) {
+  return page
+    .locator("[data-column]")
+    .first()
+    .evaluate((column, at) => {
+      const strip = column.parentElement!
+      const style = getComputedStyle(strip)
+      const gap = parseFloat(style.columnGap) || 0
+      const inner =
+        strip.clientWidth -
+        parseFloat(style.paddingLeft) -
+        parseFloat(style.paddingRight)
+      const left = column.getBoundingClientRect().left
+      return { x: left + at * (inner + gap) - gap / 2, scale: inner + gap }
+    }, at)
+}
+
+/** Waits until `tiles` stand still: each where and as big as it was. */
+async function settled(...tiles: Locator[]) {
+  let was = ""
+  await expect
+    .poll(async () => {
+      const boxes = await Promise.all(tiles.map((tile) => tile.boundingBox()))
+      const now = JSON.stringify(
+        boxes.map((box) => box && [box.x, box.y, box.width, box.height])
+      )
+      const still = now === was
+      was = now
+      return still
+    })
+    .toBe(true)
+}
+
+/** A Pane's share of its column's height, in hundredths. */
+function heightOf(tile: Locator) {
+  return tile.evaluate((element: HTMLElement) => {
+    const column = element.parentElement!
+    const gap = parseFloat(getComputedStyle(column).rowGap) || 0
+    return Math.round(
+      ((element.offsetHeight + gap) / (column.clientHeight + gap)) * 100
+    )
+  })
+}
+
+test("the mouse sizes as niri's: the gaps, Alt and the right button, a double click", async () => {
+  // Narrow columns, so a third of this window is a third.
+  window = await startWindow({ look: "[columns]\nmin = 10\n" })
+  const { page } = window
+  const { thread, composer } = await firstThread(page)
+  await expect(composer).toBeFocused()
+  const launcher = page.getByRole("region", { name: "New Pane" })
+  await page.keyboard.press("Alt+KeyN")
+  await expect(launcher).toHaveAttribute("data-focused", "true")
+  await page.keyboard.press("KeyT")
+  const terminal = page.getByRole("region", { name: "Terminal", exact: true })
+  await expect(terminal).toHaveAttribute("data-focused", "true")
+  await expect.poll(() => sharesOf(page)).toEqual([50, 50])
+  const middle = async (tile: Locator) => {
+    const box = (await tile.boundingBox())!
+    return { x: box.x + box.width / 2, y: box.y + box.height / 2 }
+  }
+  const { y } = await middle(thread)
+
+  // The gap right of the Thread, dragged near a third, holds there; the
+  // focus stays where it was.
+  const half = await edgeAt(page, 1 / 2)
+  const third = await edgeAt(page, 1 / 3)
+  await page.mouse.move(half.x, y)
+  await page.mouse.down()
+  await page.mouse.move(third.x + 4, y, { steps: 6 })
+  await expect.poll(() => sharesOf(page)).toEqual([33, 50])
+  await page.screenshot({ path: "test-results/5a-gap-drag.png" })
+  await page.mouse.up()
+  await expect.poll(() => sharesOf(page)).toEqual([33, 50])
+  await expect(terminal).toHaveAttribute("data-focused", "true")
+
+  // Between the steps, it is as dragged; Esc puts it back.
+  await page.mouse.move(third.x, y)
+  await page.mouse.down()
+  await page.mouse.move((await edgeAt(page, 0.42)).x, y, { steps: 6 })
+  await page.mouse.up()
+  await expect.poll(() => sharesOf(page)).toEqual([42, 50])
+  const at42 = await edgeAt(page, 0.42)
+  await page.mouse.move(at42.x, y)
+  await page.mouse.down()
+  await page.mouse.move(at42.x + 120, y, { steps: 6 })
+  await expect.poll(() => sharesOf(page)).not.toEqual([42, 50])
+  await page.keyboard.press("Escape")
+  await page.mouse.up()
+  await expect.poll(() => sharesOf(page)).toEqual([42, 50])
+
+  // A double click on the gap: the column the whole screen wide, and back.
+  await page.mouse.dblclick(at42.x, y)
+  await expect.poll(() => sharesOf(page)).toEqual([100, 50])
+  await expect(thread).toHaveAttribute("data-focused", "true")
+  await settled(page.locator("[data-column]").first())
+  const whole = await edgeAt(page, 1)
+  await page.mouse.dblclick(whole.x, y)
+  await expect.poll(() => sharesOf(page)).toEqual([42, 50])
+  await settled(page.locator("[data-column]").first())
+
+  // Alt and the right button, anywhere on the Thread: sideways its width,
+  // held at a half; the Thread takes the focus.
+  const on = await middle(thread)
+  await page.keyboard.down("Alt")
+  await page.mouse.move(on.x, on.y)
+  await page.mouse.down({ button: "right" })
+  await page.mouse.move(on.x + (0.5 - 0.42) * at42.scale + 4, on.y, {
+    steps: 6,
+  })
+  await page.mouse.up({ button: "right" })
+  await page.keyboard.up("Alt")
+  await expect.poll(() => sharesOf(page)).toEqual([50, 50])
+  await expect(thread).toHaveAttribute("data-focused", "true")
+
+  // A column of two: the gap between them sizes their heights.
+  await page.keyboard.press("Alt+ArrowRight")
+  await page.keyboard.press("Alt+KeyN")
+  await page.keyboard.press("Alt+BracketLeft")
+  await expect(launcher).toHaveAttribute("data-focused", "true")
+  await expect.poll(() => heightOf(terminal)).toBe(50)
+  await settled(terminal, launcher)
+  const top = (await terminal.boundingBox())!
+  const under = (await launcher.boundingBox())!
+  const [upper, lower] =
+    top.y < under.y ? [terminal, launcher] : [launcher, terminal]
+  const a = (await upper.boundingBox())!
+  const b = (await lower.boundingBox())!
+  const gapY = (a.y + a.height + b.y) / 2
+  const column = a.height + b.height + (b.y - a.y - a.height)
+  await page.mouse.move(a.x + 40, gapY)
+  await page.mouse.down()
+  await page.mouse.move(a.x + 40, gapY + column / 6 + 3, { steps: 6 })
+  await page.mouse.up()
+  await expect.poll(() => heightOf(upper)).toBe(67)
+  await page.screenshot({ path: "test-results/5b-heights.png" })
+
+  // Alt and the right button on the lower one: up makes it shorter.
+  await settled(upper, lower)
+  const low = await middle(lower)
+  await page.keyboard.down("Alt")
+  await page.mouse.move(low.x, low.y)
+  await page.mouse.down({ button: "right" })
+  await page.mouse.move(low.x, low.y - column / 4, { steps: 6 })
+  await page.mouse.up({ button: "right" })
+  await page.keyboard.up("Alt")
+  await expect.poll(() => heightOf(lower)).toBeLessThan(20)
+
+  // A double click on that gap: even again.
+  await settled(upper, lower)
+  const c = (await upper.boundingBox())!
+  const d = (await lower.boundingBox())!
+  await page.mouse.dblclick(c.x + 40, (c.y + c.height + d.y) / 2)
+  await expect.poll(() => heightOf(upper)).toBe(50)
+})
+
 test("Alt+[ takes a Pane into a column, Alt+G shows it as tabs", async () => {
   window = await startWindow()
   const { page } = window

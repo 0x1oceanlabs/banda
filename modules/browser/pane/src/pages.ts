@@ -99,7 +99,7 @@ export class Page {
     this.state = { ...BLANK, url, loading: true }
     this.box = document.createElement("div")
     this.box.style.cssText =
-      "position:absolute;top:0;left:0;background:var(--background);transform-origin:0 0;pointer-events:auto"
+      "position:absolute;top:0;left:0;background:var(--background);transform-origin:0 0"
     this.box.setAttribute(HELD_BY, id)
     this.view = document.createElement("webview") as View
     this.view.setAttribute("partition", PARTITION)

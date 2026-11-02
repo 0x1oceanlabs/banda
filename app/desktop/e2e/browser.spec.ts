@@ -182,6 +182,42 @@ test("a Person browses in a Pane that keeps its page wherever it moves", async (
   await expect.poll(() => inPages(app, "1")).toEqual([])
 })
 
+test("a gap dragged over a browser's page sizes the column: the page lets the pointer by", async () => {
+  const address = await serve({ "/": "<title>Alpha</title><p>A page</p>" })
+  window = await startWindow({ look: "[columns]\nmin = 10\n" })
+  const { page } = window
+  const { thread: draft } = await firstThread(page)
+  await expect(draft).toBeVisible()
+  const bar = await openBrowser(page)
+  await bar.fill(address.replace("http://", ""))
+  await bar.press("Enter")
+  const alpha = page.getByRole("region", { name: "Alpha" })
+  await expect(alpha).toBeVisible()
+  const held = page.locator("[data-held-by]")
+  await expect(held).toBeVisible()
+
+  // The gap right of the Thread, dragged far into the page: the page
+  // lets it by while it moves, and takes the pointer again after.
+  const thread = (await draft.boundingBox())!
+  const shown = (await held.boundingBox())!
+  const from = { x: thread.x + thread.width + 6, y: shown.y + shown.height / 2 }
+  await page.mouse.move(from.x, from.y)
+  await page.mouse.down()
+  await expect(page.locator("html[data-sizing]")).toHaveCount(1)
+  await expect
+    .poll(() => held.evaluate((e) => getComputedStyle(e).pointerEvents))
+    .toBe("none")
+  await page.mouse.move(shown.x + shown.width / 2, from.y, { steps: 12 })
+  await page.mouse.up()
+  await expect(page.locator("html[data-sizing]")).toHaveCount(0)
+  await expect
+    .poll(async () => (await draft.boundingBox())!.width)
+    .toBeGreaterThan(thread.width + shown.width / 3)
+  await expect
+    .poll(() => held.evaluate((e) => getComputedStyle(e).pointerEvents))
+    .toBe("auto")
+})
+
 test("a browser page is kept apart from Banda", async () => {
   const address = await serve({ "/": "<title>Alpha</title>" })
   window = await startWindow()
