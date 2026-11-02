@@ -1,16 +1,16 @@
 /**
  * What the window does, as one list of actions (ADR 0005, decisions 2 and
- * 10): the keys run them now; the palette, the key sheet and `keys.toml`
- * read the same list later.
+ * 10): the modules' own and the window's (ADR 0022, decision 3). The keys,
+ * the Banda menu, its key sheet and `keys.toml` read the same list.
  */
 import type { SpaceId } from "@banda/contract"
-import { NEW_THREAD, threadPane } from "@banda/agents-pane"
-import { browserPane, NEW_BROWSER } from "@banda/browser-pane"
+import type { Action, Args, WindowApi } from "@banda/ui/module"
 import { type PaneState, paneOf, type Place } from "@banda/ui/pane"
-import { type Action, RESET_KEY } from "../actions/actions"
+import { RESET_KEY } from "../actions/actions"
 import { showing } from "../calls/sight"
 import { columnsOf } from "../look"
 import { type At, MENU_KEY } from "../menu/menu"
+import { modules } from "../modules"
 import { launcher, minOf, showsOf, widthOf } from "../registry"
 import { floorOf } from "../workspaces/layout"
 import {
@@ -33,12 +33,11 @@ import {
   type Workspaces,
 } from "../workspaces/model"
 
-/** What an action can change: the window's parts. */
-export type Shell = {
+/** What the window's own actions can change: its parts, more than a
+ * module's get (`WindowApi`). */
+export type Shell = WindowApi & {
   /** Changes the workspaces. */
   change: (how: (workspaces: Workspaces) => Workspaces) => void
-  /** The Space a new Thread starts in. */
-  home: SpaceId
   toggleSidebar: () => void
   toggleOverview: () => void
   /** Goes to what calls the Person first (ADR 0011, decision 5). */
@@ -101,33 +100,6 @@ export function bringing(
 }
 
 /**
- * A new Thread in a Space, in a new column, on this computer's first
- * Harness (ADR 0006). One not yet started there gets the focus instead.
- * With `ask`, it starts at once with those words, and with `harness` on
- * that Harness: the Banda menu's "New Thread" (ADR 0017, decision 6).
- */
-export function newThread(
-  workspaces: Workspaces,
-  space: SpaceId,
-  ask?: string,
-  harness?: string
-): Workspaces {
-  const thread = paneOf(threadPane, {
-    ...NEW_THREAD,
-    ...(ask && { ask }),
-    ...(harness && { harness }),
-  })
-  return opening(workspaces, space, thread, undefined, "right")
-}
-
-/** Opens a Pane in the focused Pane's Space, right of it. */
-function beside(shell: Shell, pane: PaneState): void {
-  shell.change((w) =>
-    opening(w, focused(w)?.space ?? shell.home, pane, undefined, "right")
-  )
-}
-
-/**
  * Goes to a thing that calls: to the Pane that shows it, on any
  * workspace, or to a new column that does.
  */
@@ -141,9 +113,12 @@ export function answering(
     : opening(workspaces, thing.space, thing.pane, undefined, "right")
 }
 
+/** Every action: the modules' (`modules.ts`), then the window's own. */
 export const ACTIONS: readonly Action<Shell>[] = [
+  ...modules.flatMap((module) => module.actions),
   ...DIRECTIONS.map((direction) => ({
     id: `pane.focus-${direction}`,
+    section: "Panes",
     family: "Focus a Pane",
     title: `Focus the Pane ${direction}`,
     keys: [{ code: ARROWS[direction], alt: true }],
@@ -151,6 +126,7 @@ export const ACTIONS: readonly Action<Shell>[] = [
   })),
   ...DIRECTIONS.map((direction) => ({
     id: `pane.move-${direction}`,
+    section: "Panes",
     family: "Move the Pane",
     title: `Move the Pane ${direction}`,
     keys: [{ code: ARROWS[direction], alt: true, shift: true }],
@@ -158,18 +134,21 @@ export const ACTIONS: readonly Action<Shell>[] = [
   })),
   {
     id: "column.wider",
+    section: "Columns",
     title: "Make the column wider",
     keys: [{ code: "ArrowRight", alt: true, ctrl: true }],
     run: (shell) => resize(shell, 1),
   },
   {
     id: "column.narrower",
+    section: "Columns",
     title: "Make the column narrower",
     keys: [{ code: "ArrowLeft", alt: true, ctrl: true }],
     run: (shell) => resize(shell, -1),
   },
   {
     id: "column.next-width",
+    section: "Columns",
     title: "The column's next width, round",
     // As niri's Mod+R and Mod+Shift+R.
     keys: [{ code: "KeyR", alt: true }],
@@ -177,12 +156,14 @@ export const ACTIONS: readonly Action<Shell>[] = [
   },
   {
     id: "column.previous-width",
+    section: "Columns",
     title: "The column's previous width, round",
     keys: [{ code: "KeyR", alt: true, shift: true }],
     run: (shell) => resize(shell, -1, true),
   },
   {
     id: "column.tabs",
+    section: "Columns",
     title: "The column's Panes as tabs, or one above another",
     // As Omarchy's Super+G, a group; niri's Mod+W.
     keys: [{ code: "KeyG", alt: true }],
@@ -190,6 +171,7 @@ export const ACTIONS: readonly Action<Shell>[] = [
   },
   {
     id: "pane.consume-left",
+    section: "Panes",
     title: "Take the Pane into the column on the left, or out of its own",
     // As niri's Mod+[.
     keys: [{ code: "BracketLeft", alt: true }],
@@ -197,38 +179,29 @@ export const ACTIONS: readonly Action<Shell>[] = [
   },
   {
     id: "pane.consume-right",
+    section: "Panes",
     title: "Take the Pane into the column on the right, or out of its own",
     keys: [{ code: "BracketRight", alt: true }],
     run: (shell) => shell.change((w) => consume(w, "right")),
   },
   {
     id: "column.maximize",
+    section: "Columns",
     title: "The column the whole screen wide, or back",
     // As niri's Mod+F.
     keys: [{ code: "KeyF", alt: true }],
     run: (shell) => shell.change(maximize),
   },
   {
-    id: "thread.new",
-    title: "New Thread",
-    keys: [{ code: "Enter", alt: true }],
-    run: (shell) => shell.change((w) => newThread(w, shell.home)),
-  },
-  {
     id: "pane.new",
+    section: "Panes",
     title: "New Pane",
     keys: [{ code: "KeyN", alt: true }],
-    run: (shell) => beside(shell, paneOf(launcher, {})),
-  },
-  {
-    id: "browser.new",
-    title: "New browser",
-    // As Omarchy's Super+Shift+Return.
-    keys: [{ code: "Enter", alt: true, shift: true }],
-    run: (shell) => beside(shell, paneOf(browserPane, NEW_BROWSER)),
+    run: (shell) => shell.open(paneOf(launcher, {})),
   },
   {
     id: "pane.close",
+    section: "Panes",
     title: "Close the Pane",
     keys: [{ code: "KeyW", alt: true }],
     run: (shell) =>
@@ -239,36 +212,42 @@ export const ACTIONS: readonly Action<Shell>[] = [
   },
   {
     id: "overview.toggle",
+    section: "Workspaces",
     title: "Overview of every window",
     keys: [{ code: "KeyO", alt: true }],
     run: (shell) => shell.toggleOverview(),
   },
   {
     id: "workspace.up",
+    section: "Workspaces",
     title: "The workspace above",
     keys: [{ code: "PageUp", alt: true }],
     run: (shell) => shell.change((w) => step(w, -1)),
   },
   {
     id: "workspace.down",
+    section: "Workspaces",
     title: "The workspace below",
     keys: [{ code: "PageDown", alt: true }],
     run: (shell) => shell.change((w) => step(w, 1)),
   },
   {
     id: "calls.answer",
+    section: "Threads",
     title: "Go to what calls you",
     keys: [{ code: "KeyU", alt: true }],
     run: (shell) => shell.answer(),
   },
   {
     id: "sidebar.settle",
+    section: "Threads",
     title: "Settle the Thread you look at, or bring it back",
     keys: [{ code: "KeyS", alt: true }],
     run: (shell) => shell.settle(),
   },
   {
     id: "menu.open",
+    section: "Banda",
     title: "Banda menu",
     keys: [MENU_KEY],
     overDialogs: true,
@@ -276,6 +255,7 @@ export const ACTIONS: readonly Action<Shell>[] = [
   },
   {
     id: "menu.keys",
+    section: "Banda",
     title: "Every action and its key",
     keys: [{ code: "KeyK", alt: true }],
     overDialogs: true,
@@ -283,12 +263,14 @@ export const ACTIONS: readonly Action<Shell>[] = [
   },
   {
     id: "settings.open",
+    section: "Banda",
     title: "Open the settings",
     keys: [{ code: "Comma", alt: true }],
     run: () => window.banda?.settings.open(),
   },
   {
     id: "keys.reset",
+    section: "Banda",
     title: "Banda's own keys, until keys.toml changes",
     // No file binds it, so keys bound away can always be mended.
     keys: [RESET_KEY],
@@ -297,12 +279,14 @@ export const ACTIONS: readonly Action<Shell>[] = [
   },
   {
     id: "sidebar.toggle",
+    section: "Threads",
     title: "Show or hide the sidebar",
     keys: [{ code: "KeyA", alt: true }],
     run: (shell) => shell.toggleSidebar(),
   },
   ...NUMBERS.map((n) => ({
     id: `workspace.go-${n}`,
+    section: "Workspaces",
     family: "Go to a workspace",
     title: `Go to workspace ${n}`,
     keys: [{ code: `Digit${n}`, alt: true }],
@@ -310,9 +294,17 @@ export const ACTIONS: readonly Action<Shell>[] = [
   })),
   ...NUMBERS.map((n) => ({
     id: `pane.send-${n}`,
+    section: "Panes",
     family: "Move the Pane to a workspace",
     title: `Move the Pane to workspace ${n}`,
     keys: [{ code: `Digit${n}`, alt: true, shift: true }],
     run: (shell: Shell) => shell.change((w) => send(w, n - 1)),
   })),
 ]
+
+/** Runs the action `id` as its key would, with `args`. */
+export function runAction(shell: Shell, id: string, args?: Args): void {
+  const action = ACTIONS.find((action) => action.id === id)
+  if (!action) throw new Error(`Banda has no action ${id}`)
+  action.run(shell, args)
+}

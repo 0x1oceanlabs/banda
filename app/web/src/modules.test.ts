@@ -21,3 +21,17 @@ test("a Pane shows while the engine runs its module, or always for a module with
   expect(kindRuns("nobody.knows", ["nobody"])).toBe(false)
   expect(watches.map(({ module }) => module.id)).toEqual(["agents"])
 })
+
+/** Ids an action kept as it moved to its module, so `keys.toml` stays
+ * right (ADR 0022, decision 3). */
+const KEPT = ["thread.new"]
+
+test("a module's new action's id starts with its module's id", () => {
+  for (const m of modules)
+    for (const action of m.actions)
+      if (!KEPT.includes(action.id))
+        expect(action.id.startsWith(`${m.id}.`)).toBe(true)
+  expect(modules.flatMap((m) => m.actions.map((a) => a.id))).toEqual(
+    expect.arrayContaining(KEPT)
+  )
+})

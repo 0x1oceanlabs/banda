@@ -183,8 +183,9 @@ modules/<name>/
 
 A module declares itself in its code and a short `module.toml` (ADR 0022).
 Its engine part is the `Module` it gives the kernel, with its `methods!`
-table. Its window part is one `defineModule({ id, engine, panes, watches })`
-exported from its Pane package; the window lists these in
+table. Its window part is one
+`defineModule({ id, engine, panes, watches, actions })` exported from its
+Pane package; the window lists these in
 `app/web/src/modules.ts`, the one place that names a module, and builds its
 registries from them. `module.toml` comes in ADR 0022's step 5.
 
@@ -585,7 +586,8 @@ modules/*/pane   each module's Panes
     engine (ADR 0005, decision 3); `workspaces/store.ts` is the one place
     that changes then.
 - **One list of actions** (`app/web/src/shell/actions.ts`) holds what the
-  window does, each with a name and a default key, by its physical place.
+  window does, the modules' actions and its own, each with a name, its
+  key sheet section and a default key, by its physical place.
   Alt is the mod: Arrows focus, Shift+Arrows move, Ctrl+Arrows step the
   width, Return opens a new Thread, Shift+Return a new browser, N a new Pane, W closes, O the overview,
   PageUp and PageDown the workspace above or below, 1…9 go to one,

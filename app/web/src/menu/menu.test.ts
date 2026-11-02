@@ -2,7 +2,7 @@ import { describe, expect, test } from "vitest"
 import type { SpaceId, SpaceSummary } from "@banda/contract"
 import type { BrowserArgs } from "@banda/browser-pane"
 import type { Listed, PaneState } from "@banda/ui/pane"
-import type { Action } from "../actions/actions"
+import type { Action } from "@banda/ui/module"
 import type { Shell } from "../shell/actions"
 import {
   actsOf,
@@ -35,15 +35,15 @@ const lists = {
 const spaces = [
   { id: "s1", name: "banda", folder: "/home/r/banda" },
 ] as unknown as SpaceSummary[]
-const action = (id: string, title: string): Action<Shell> => ({
-  id,
-  title,
-  run: () => {},
-})
+const action = (
+  id: string,
+  title: string,
+  section = "Banda"
+): Action<Shell> => ({ id, title, section, run: () => {} })
 const actions = [
-  action("thread.new", "New Thread"),
-  action("browser.new", "New browser"),
-  action("sidebar.toggle", "Show or hide the sidebar"),
+  action("thread.new", "New Thread", "Threads"),
+  action("browser.new", "New browser", "Panes"),
+  action("sidebar.toggle", "Show or hide the sidebar", "Threads"),
 ]
 
 const sources: Sources = {
@@ -197,7 +197,7 @@ describe("the Banda menu", () => {
 
   test("the key sheet folds a family into one row, which it goes into; a search finds each", () => {
     const go = (n: number): Action<Shell> => ({
-      ...action(`workspace.go-${n}`, `Go to workspace ${n}`),
+      ...action(`workspace.go-${n}`, `Go to workspace ${n}`, "Workspaces"),
       family: "Go to a workspace",
     })
     const more = { actions: [...actions, go(1), go(2), go(3)] }
