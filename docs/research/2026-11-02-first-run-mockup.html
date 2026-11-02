@@ -1,0 +1,519 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <title>Banda first run: mockup</title>
+    <style>
+      :root {
+        --bg: var(--background, #1a1b26);
+        --fg: var(--foreground, #c0caf5);
+        --mut: var(--muted-foreground, #7a819e);
+        --card-bg: var(--card, #20222f);
+        --line: var(--border, #2f3347);
+        --pri: var(--primary, #7aa2f7);
+        --ok: var(--success, #9ece6a);
+        --warn: var(--warning, #e0af68);
+        --att: #ff9e64;
+        --mono: var(
+          --font-mono,
+          ui-monospace,
+          "JetBrainsMono Nerd Font",
+          monospace
+        );
+        --sans: var(--font-sans, ui-sans-serif, system-ui, sans-serif);
+      }
+      body {
+        margin: 0;
+        color: var(--fg);
+        font: 13px/1.45 var(--sans);
+      }
+      h2 {
+        font-size: 11px;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        color: var(--mut);
+        font-weight: 600;
+        margin: 28px 0 10px;
+      }
+      h2:first-child {
+        margin-top: 4px;
+      }
+      .win {
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        overflow: hidden;
+        display: grid;
+        grid-template-columns: 170px 1fr;
+        background: color-mix(in oklab, var(--bg) 92%, black);
+      }
+      .side {
+        border-right: 1px solid var(--line);
+        padding: 12px 10px;
+        color: var(--mut);
+        font-size: 12px;
+      }
+      .side .ghost {
+        height: 9px;
+        border-radius: 4px;
+        background: var(--line);
+        opacity: 0.5;
+        margin: 10px 4px;
+      }
+      .main {
+        display: flex;
+        justify-content: center;
+        overflow: hidden;
+      }
+      .col {
+        width: 480px;
+        padding: 40px 0 24px;
+      }
+      .mark {
+        display: flex;
+        gap: 4px;
+        margin-bottom: 18px;
+      }
+      .mark i {
+        display: block;
+        width: 14px;
+        height: 14px;
+        border-radius: 3px;
+        background: var(--fg);
+      }
+      .mark .two {
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .mark .two i {
+        height: 5px;
+      }
+      .title {
+        font-size: 18px;
+        font-weight: 600;
+        margin: 0 0 4px;
+      }
+      .sub {
+        color: var(--mut);
+        margin: 0 0 22px;
+      }
+      .label {
+        font-size: 12px;
+        color: var(--mut);
+        margin: 18px 0 8px;
+        display: flex;
+        justify-content: space-between;
+      }
+      .card {
+        border: 1px solid var(--line);
+        background: var(--card-bg);
+        border-radius: 8px;
+      }
+      .row {
+        display: grid;
+        grid-template-columns: 22px 1fr auto;
+        gap: 10px;
+        align-items: center;
+        padding: 10px 12px;
+      }
+      .row + .row,
+      .row + .more,
+      .more + .row {
+        border-top: 1px solid var(--line);
+      }
+      .logo {
+        width: 22px;
+        height: 22px;
+        border-radius: 5px;
+        display: grid;
+        place-items: center;
+        font-weight: 700;
+        font-size: 12px;
+      }
+      .claude {
+        background: #d97757;
+        color: #fff;
+      }
+      .codex {
+        background: #f0f0f0;
+        color: #111;
+      }
+      .name {
+        font-weight: 600;
+      }
+      .meta {
+        color: var(--mut);
+        font-size: 12px;
+      }
+      .state {
+        font-size: 12px;
+        display: flex;
+        gap: 6px;
+        align-items: center;
+        white-space: nowrap;
+      }
+      .dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 2px;
+        background: currentColor;
+      }
+      .ok {
+        color: var(--ok);
+      }
+      .warn {
+        color: var(--warn);
+      }
+      .att {
+        color: var(--att);
+      }
+      .mut {
+        color: var(--mut);
+      }
+      .btn {
+        font: inherit;
+        font-size: 12px;
+        border-radius: 6px;
+        padding: 4px 10px;
+        border: 1px solid var(--line);
+        background: transparent;
+        color: var(--fg);
+        cursor: default;
+        white-space: nowrap;
+      }
+      .btn.pri {
+        background: var(--pri);
+        color: #111;
+        border-color: transparent;
+        font-weight: 600;
+      }
+      .more {
+        padding: 8px 12px 12px 44px;
+      }
+      .cmd {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        font: 12px var(--mono);
+        background: color-mix(in oklab, var(--bg) 70%, black);
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 6px 8px;
+      }
+      .cmd code {
+        flex: 1;
+        overflow: hidden;
+        white-space: nowrap;
+        text-overflow: ellipsis;
+      }
+      .copy {
+        color: var(--mut);
+        font-family: var(--sans);
+      }
+      .hint {
+        color: var(--mut);
+        font-size: 12px;
+        margin-top: 6px;
+      }
+      .hint a {
+        color: var(--fg);
+        text-decoration: underline;
+        text-decoration-color: var(--line);
+      }
+      .term {
+        font: 11.5px/1.5 var(--mono);
+        background: #0f1017;
+        border: 1px solid var(--line);
+        border-radius: 6px;
+        padding: 8px 10px;
+        color: #a9b1d6;
+        height: 92px;
+        overflow: hidden;
+      }
+      .term .p {
+        color: var(--ok);
+      }
+      .folders .row {
+        grid-template-columns: 16px 1fr auto;
+        padding: 8px 12px;
+      }
+      .folders .ic {
+        width: 14px;
+        height: 11px;
+        border: 1.5px solid var(--mut);
+        border-radius: 2px;
+      }
+      .foot {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-top: 18px;
+        color: var(--mut);
+        font-size: 12px;
+      }
+      .kbd {
+        font: 11px var(--mono);
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        padding: 0 4px;
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+      }
+      .grid .card .row {
+        grid-template-columns: 22px 1fr;
+      }
+      .grid .act {
+        grid-column: 2;
+        display: flex;
+        gap: 6px;
+        margin-top: 4px;
+      }
+      .composer {
+        border: 1px solid var(--line);
+        background: var(--card-bg);
+        border-radius: 12px;
+        padding: 12px;
+        width: 460px;
+      }
+      .composer .ph {
+        color: var(--mut);
+        margin-bottom: 18px;
+      }
+      .composer .bar {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .thread {
+        height: 230px;
+        display: flex;
+        flex-direction: column;
+        justify-content: flex-end;
+        align-items: center;
+        padding: 16px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+      }
+      .notice {
+        font-size: 12px;
+        color: var(--mut);
+        margin-bottom: 10px;
+        display: flex;
+        gap: 8px;
+        align-items: center;
+      }
+    </style>
+  </head>
+  <body>
+    <h2>1 · First run: Claude Code is ready, Codex is missing</h2>
+    <div class="win">
+      <div class="side">
+        <div class="ghost" style="width: 60%"></div>
+        <div class="ghost" style="width: 80%"></div>
+        <div class="ghost" style="width: 45%"></div>
+      </div>
+      <div class="main">
+        <div class="col">
+          <div class="mark">
+            <i></i><span class="two"><i></i><i></i></span>
+          </div>
+          <p class="title">Banda is ready when an Agent is</p>
+          <p class="sub">
+            Banda runs the Claude Code and Codex on this computer. It found
+            what's below.
+          </p>
+
+          <div class="label">
+            <span>Agents</span><span>checked just now</span>
+          </div>
+          <div class="card">
+            <div class="row">
+              <div class="logo claude">✳</div>
+              <div>
+                <div class="name">Claude Code</div>
+                <div class="meta">2.1.316 · signed in · Max</div>
+              </div>
+              <div class="state ok"><span class="dot"></span>Ready</div>
+            </div>
+            <div class="row">
+              <div class="logo codex">◎</div>
+              <div>
+                <div class="name">Codex</div>
+                <div class="meta">Not on this computer</div>
+              </div>
+              <button class="btn pri">Install</button>
+            </div>
+            <div class="more">
+              <div class="cmd">
+                <code>curl -fsSL https://chatgpt.com/codex/install.sh | sh</code
+                ><span class="copy">Copy</span>
+              </div>
+              <div class="hint">
+                OpenAI's own installer. It runs in a terminal here, and you'll
+                sign in after it. <a>Other ways</a>
+              </div>
+            </div>
+          </div>
+
+          <div class="label"><span>Where to work</span></div>
+          <div class="card folders">
+            <div class="row">
+              <span class="ic"></span>
+              <div>
+                banda
+                <span class="meta"
+                  >~/code/banda · used with Claude Code yesterday</span
+                >
+              </div>
+              <button class="btn">Open</button>
+            </div>
+            <div class="row">
+              <span class="ic"></span>
+              <div>site <span class="meta">~/code/site · 3 days ago</span></div>
+              <button class="btn">Open</button>
+            </div>
+            <div class="row">
+              <span class="ic"></span>
+              <div class="meta">Any folder, or a new one in ~/Banda</div>
+              <button class="btn">Add Space</button>
+            </div>
+          </div>
+
+          <div class="foot">
+            <span
+              >Later: <span class="kbd">Alt Space</span> → Agents, or Settings →
+              Agents</span
+            ><span>Skip</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <h2>
+      2 · Install runs in place, then sign-in follows in the same terminal
+    </h2>
+    <div class="card" style="width: 480px">
+      <div class="row">
+        <div class="logo codex">◎</div>
+        <div>
+          <div class="name">Codex</div>
+          <div class="meta">Installing…</div>
+        </div>
+        <button class="btn">Stop</button>
+      </div>
+      <div class="more">
+        <div class="term">
+          <span class="p">$</span> curl -fsSL
+          https://chatgpt.com/codex/install.sh | sh<br />
+          Downloading codex 0.166.0 for x86_64-unknown-linux-musl…<br />
+          Installed to ~/.local/bin/codex<br />
+          <span class="p">✓</span> Codex 0.166.0 found. Signing in: a browser
+          page opens…<br />
+          <span style="color: var(--pri); text-decoration: underline"
+            >https://auth.openai.com/oauth/authorize?…</span
+          >
+        </div>
+        <div class="hint">
+          No browser here? <a>Sign in with a code instead</a>
+        </div>
+      </div>
+    </div>
+
+    <h2>
+      3 · One card, every state (the same card in Settings → Agents and in a
+      Thread)
+    </h2>
+    <div class="grid">
+      <div class="card">
+        <div class="row">
+          <div class="logo claude">✳</div>
+          <div>
+            <div class="name">Checking…</div>
+            <div class="meta">Looking for claude in your shell's PATH</div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="row">
+          <div class="logo claude">✳</div>
+          <div>
+            <div class="name att">Not on this computer</div>
+            <div class="meta">
+              curl -fsSL https://claude.ai/install.sh | bash
+            </div>
+            <div class="act">
+              <button class="btn pri">Install</button
+              ><button class="btn">Copy</button>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="row">
+          <div class="logo claude">✳</div>
+          <div>
+            <div class="name warn">Older than Banda needs</div>
+            <div class="meta">
+              2.1.309 from Homebrew · Banda's adapter wants 2.1.312
+            </div>
+            <div class="act">
+              <button class="btn pri">Update</button
+              ><span class="meta">brew upgrade --cask claude-code@latest</span>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="row">
+          <div class="logo codex">◎</div>
+          <div>
+            <div class="name att">Not signed in</div>
+            <div class="meta">0.166.0 · ~/.local/bin/codex</div>
+            <div class="act"><button class="btn pri">Sign in</button></div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="row">
+          <div class="logo claude">✳</div>
+          <div>
+            <div class="name warn">Uses an API key</div>
+            <div class="meta">
+              ANTHROPIC_API_KEY is set in your shell, so Claude Code bills that
+              key, not your plan
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="card">
+        <div class="row">
+          <div class="logo codex">◎</div>
+          <div>
+            <div class="name mut">Can't tell if signed in</div>
+            <div class="meta">
+              Codex didn't say. Threads still start; it asks when it must
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <h2>4 · Nothing ready: Banda still opens; only sending waits</h2>
+    <div class="thread">
+      <div class="notice">
+        <span class="dot att" style="color: var(--att)"></span>No Agent can
+        start a Thread yet.
+      </div>
+      <div class="composer">
+        <div class="ph">Ask anything, @ to add files, / for commands</div>
+        <div class="bar">
+          <button class="btn pri">Set up an Agent</button
+          ><span class="meta">↵</span>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>
