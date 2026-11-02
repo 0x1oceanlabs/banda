@@ -51,6 +51,10 @@
         "cli": {
           "description": "The Person's own CLI the program runs, when it runs one.",
           "$ref": "#/$defs/Cli"
+        },
+        "start": {
+          "description": "What a new Thread on it starts with.",
+          "$ref": "#/$defs/Start"
         }
       },
       "required": [
@@ -77,6 +81,59 @@
       "required": [
         "program",
         "variable"
+      ]
+    },
+    "Start": {
+      "description": "What a new Thread on a Harness starts with, over the Harness's own:\nwhat it leaves out, the Harness chooses.",
+      "type": "object",
+      "properties": {
+        "mode": {
+          "description": "How freely its Agent acts: \"supervised\", \"accept_edits\", \"auto\" or\n\"full_access\".",
+          "$ref": "#/$defs/Mode"
+        },
+        "plan": {
+          "description": "The Agent makes a plan before it changes anything.",
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": {
+        "$ref": "#/$defs/OptionValue"
+      }
+    },
+    "Mode": {
+      "description": "How freely an Agent acts in a Thread (ADR 0003, decision 9). A Harness\nthat has modes of its own enforces the mode; for any other, the engine\nanswers the Harness's Questions by it.",
+      "oneOf": [
+        {
+          "description": "It asks before it changes anything.",
+          "type": "string",
+          "const": "supervised"
+        },
+        {
+          "description": "It edits files without asking, and asks before anything else.",
+          "type": "string",
+          "const": "accept_edits"
+        },
+        {
+          "description": "It decides itself what to ask about.",
+          "type": "string",
+          "const": "auto"
+        },
+        {
+          "description": "It never asks.",
+          "type": "string",
+          "const": "full_access"
+        }
+      ]
+    },
+    "OptionValue": {
+      "description": "A value of one of the Harness's options: a choice's ID, or on or off.",
+      "anyOf": [
+        {
+          "type": "string"
+        },
+        {
+          "type": "boolean"
+        }
       ]
     }
   }

@@ -1,6 +1,11 @@
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react"
 import type { Engine, SpaceId } from "@banda/contract"
-import type { Account, HarnessView } from "@banda/contract/agents"
+import type {
+  Account,
+  Defaults,
+  HarnessView,
+  Settings,
+} from "@banda/contract/agents"
 import { tomlOf } from "@banda/contract/settings"
 import { Button } from "@banda/ui/components/button"
 import {
@@ -49,9 +54,11 @@ import {
   PlusIcon,
   RotateCwIcon,
   Trash2Icon,
+  Undo2Icon,
 } from "lucide-react"
 import { commandLine, wordsOf } from "./sign-in"
 import { type Open, Problem, Warning, Ways } from "./SignIn"
+import { SettingsBar } from "./ThreadSettings"
 
 /**
  * `harnesses.toml`, as the settings Pane writes it (ADR 0016): through
@@ -158,7 +165,12 @@ function HarnessCard({
         }
       />
     ),
-    starts: <HowItStarts harness={harness} file={file} write={write} />,
+    starts: (
+      <>
+        {harness.enabled && <NewThreads {...props} write={write} />}
+        <HowItStarts harness={harness} file={file} write={write} />
+      </>
+    ),
   }
   return harness.enabled ? (
     <Reading
@@ -300,6 +312,74 @@ function Reading({
         />
       )}
     </Frame>
+  )
+}
+
+/** What a new Thread on the Harness starts with, its entry's `start`:
+ * the composer's own bar, over what the Harness offered in this Space. */
+function NewThreads({
+  engine,
+  space,
+  harness,
+  file,
+  write,
+}: HarnessProps & { write: (said: Promise<string[]>) => void }) {
+  // Asked again after its own writes, and as the window comes to the
+  // front, for the Person's own edits.
+  const [writes, setWrites] = useState(0)
+  const front = useInFront()
+  const read = useRead(
+    useCallback(
+      () => engine.call("agents.defaults", { harness: harness.id }, { space }),
+      // eslint-disable-next-line react-hooks/exhaustive-deps -- asked again on purpose
+      [engine, space, harness.id, writes, front]
+    )
+  )
+  // What it was shows while it is asked again.
+  const [shown, setShown] = useState<Defaults>()
+  if (read.state === "ready" && read.value !== shown) setShown(read.value)
+  if (!shown) return null
+  const { settings, offer } = shown
+  const start = `harness.${harness.id}.start`
+  const change = (said: Promise<string[]>) =>
+    write(said.finally(() => setWrites((n) => n + 1)))
+  const onChange = (next: Settings) => {
+    const changed = changeOf(settings, next)
+    if (changed) change(file.set(`${start}.${changed[0]}`, tomlOf(changed[1])))
+  }
+  return (
+    <Row
+      title="New Threads"
+      about={`What a new Thread on it starts with.${offer.options.length > 0 ? "" : ` Its model shows once a Thread here has run on ${harness.name}.`}`}
+    >
+      <SettingsBar
+        settings={settings}
+        offer={offer}
+        disabled={false}
+        onChange={onChange}
+      />
+      <Button
+        variant="ghost"
+        size="icon-xs"
+        aria-label={`${harness.name}'s own`}
+        title="The Harness's own"
+        onClick={() => change(file.reset(start))}
+      >
+        <Undo2Icon />
+      </Button>
+    </Row>
+  )
+}
+
+/** The one key `next` changed from `settings`, and its value. */
+function changeOf(
+  settings: Settings,
+  next: Settings
+): [string, string | boolean] | undefined {
+  if (next.mode !== settings.mode) return ["mode", next.mode]
+  if (next.plan !== settings.plan) return ["plan", next.plan]
+  return Object.entries(next.options).find(
+    ([id, value]) => settings.options[id] !== value
   )
 }
 

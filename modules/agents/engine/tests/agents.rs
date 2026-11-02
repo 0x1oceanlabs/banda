@@ -6,7 +6,7 @@ use banda_agents::model::{
     Body, Choice, Exit, Failure, ItemId, Mode, OptionValue, QuestionState, Settings, StepState,
     ThreadList, ThreadView, ToolContent, ToolStatus, TurnId, TurnState,
 };
-use banda_agents::settings::{Cli, Harness, Harnesses};
+use banda_agents::settings::{Cli, Harness, Harnesses, Start};
 use banda_kernel::{
     AgentId, Caller, Code, CommandId, EventFilter, Kernel, Participant, PersonId, SpaceId,
 };
@@ -52,6 +52,7 @@ fn harnesses_with(env: &[(&str, &str)]) -> Harnesses {
             .map(|(k, v)| (k.to_string(), v.to_string()))
             .collect(),
         cli: None,
+        start: Default::default(),
         record: None,
     }])
 }
@@ -1103,6 +1104,7 @@ fn with_cli_since(program: &str, minimum: Option<&str>) -> Agents {
             variable: "FAKE_AGENT_CLI".to_owned(),
             minimum: minimum.map(str::to_owned),
         }),
+        start: Default::default(),
         record: None,
     }]))
 }
@@ -1366,6 +1368,37 @@ async fn a_new_thread_starts_with_full_access_and_what_its_harness_offers() {
         .await
         .unwrap_err();
     assert_eq!(elsewhere.code, Code::Invalid);
+}
+
+#[tokio::test]
+async fn a_new_thread_starts_as_its_harness_entry_says() {
+    let root = tempfile::tempdir().unwrap();
+    let mut fake = harnesses().find("fake").unwrap();
+    fake.start = Start {
+        mode: Some(Mode::Auto),
+        options: BTreeMap::from([
+            ("model".to_owned(), OptionValue::Choice("smart".to_owned())),
+            ("nothing".to_owned(), OptionValue::Toggle(true)),
+        ]),
+        ..Start::default()
+    };
+    let world = World::new_with(root.path(), Agents::new(Harnesses::new(vec![fake]))).await;
+
+    // Sent with no settings, as an Agent or the CLI sends: the entry's.
+    let sent = world.send(None, "which settings").await;
+    let view = world
+        .until(&sent["thread"], |v| {
+            state(v, &sent["turn"]) == Some(TurnState::Done)
+        })
+        .await;
+    assert_eq!(view.settings.mode, Mode::Auto);
+    assert!(last_reply(&view).starts_with("message: Mode auto, model smart"));
+
+    // The composer shows it, with only what the Harness offers.
+    let defaults = world.defaults().await;
+    assert_eq!(defaults["settings"]["mode"], "auto");
+    assert_eq!(defaults["settings"]["options"]["model"], "smart");
+    assert!(defaults["settings"]["options"].get("nothing").is_none());
 }
 
 #[tokio::test]
@@ -2429,6 +2462,7 @@ async fn the_real_harnesses_say_what_they_run_and_who_is_signed_in() {
         args: Vec::new(),
         env: Default::default(),
         cli: None,
+        start: Default::default(),
         record: None,
     };
     let harnesses = Harnesses::new([vec![fake], real.to_vec()].concat());

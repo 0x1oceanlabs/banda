@@ -47,7 +47,9 @@ pub struct Image {
 /// How freely an Agent acts in a Thread (ADR 0003, decision 9). A Harness
 /// that has modes of its own enforces the mode; for any other, the engine
 /// answers the Harness's Questions by it.
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(
+    Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, TS, schemars::JsonSchema,
+)]
 #[serde(rename_all = "snake_case")]
 #[ts(export, export_to = "agents/")]
 pub enum Mode {
@@ -75,7 +77,7 @@ impl Mode {
 }
 
 /// A value of one of the Harness's options: a choice's ID, or on or off.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS, schemars::JsonSchema)]
 #[serde(untagged)]
 #[ts(export, export_to = "agents/")]
 pub enum OptionValue {
@@ -116,6 +118,17 @@ pub struct HarnessOption {
     /// The values to choose from; none for an option that is on or off.
     #[serde(default)]
     pub choices: Vec<OptionChoice>,
+}
+
+impl HarnessOption {
+    /// Whether `value` is one it takes: one of its choices, or on or off
+    /// for one that has none.
+    pub fn takes(&self, value: &OptionValue) -> bool {
+        match value {
+            OptionValue::Choice(choice) => self.choices.iter().any(|c| c.value == *choice),
+            OptionValue::Toggle(_) => self.choices.is_empty(),
+        }
+    }
 }
 
 /// What the Harness offers a Person to choose in a Thread.
