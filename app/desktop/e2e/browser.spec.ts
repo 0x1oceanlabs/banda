@@ -20,6 +20,7 @@ import {
 import {
   agentAnswers,
   agentCalls,
+  agentSays,
   firstThread,
   GLASS,
   SANDBOXED,
@@ -479,14 +480,14 @@ test("an Agent sees the browser's tabs, the Person's too, through its own tools"
   await composer.press("Enter")
   await expect(thread.getByText("You said: hello")).toBeVisible()
   const tabs = () => agentAnswers(window, "browser_tabs", {})
-  expect(tabs()).toEqual([])
+  expect(await tabs()).toEqual([])
 
   // The Person's tab: the Agent sees it, driven by no one.
   const bar = await openBrowser(page)
   await bar.fill(address.replace("http://", ""))
   await bar.press("Enter")
   await expect(page.getByRole("region", { name: "Seen" })).toBeVisible()
-  const [seen] = tabs()
+  const [seen] = await tabs()
   expect(seen).toMatchObject({
     url: `${address}/`,
     title: "Seen",
@@ -497,9 +498,9 @@ test("an Agent sees the browser's tabs, the Person's too, through its own tools"
   // Driven over CDP, it says so.
   const browser = await chromium.connectOverCDP(banda("browser").trim())
   expect(browser.contexts()[0]!.pages()).toHaveLength(1)
-  await expect.poll(() => tabs()[0].driven).toBe(true)
+  await expect.poll(async () => (await tabs())[0].driven).toBe(true)
   await browser.close()
-  await expect.poll(() => tabs()[0].driven).toBe(false)
+  await expect.poll(async () => (await tabs())[0].driven).toBe(false)
 })
 
 test("an Agent reads a tab's tree with refs and new errors, until the Person stops it there", async () => {
@@ -514,15 +515,11 @@ test("an Agent reads a tab's tree with refs and new errors, until the Person sto
   await bar.fill(address.replace("http://", ""))
   await bar.press("Enter")
   await expect(page.getByRole("region", { name: "Read" })).toBeVisible()
-  const [{ id }] = agentAnswers(window, "browser_tabs", {})
-  const snapshot = () => {
-    const said = agentCalls(window, "browser_snapshot", { tab: id })
-    expect(said.isError, said.content[0]?.text).toBeFalsy()
-    return said.content[0]!.text
-  }
+  const [{ id }] = await agentAnswers(window, "browser_tabs", {})
+  const snapshot = () => agentSays(window, "browser_snapshot", { tab: id })
 
   // The tree comes as text, with the page's address and title, and refs.
-  const first = snapshot()
+  const first = await snapshot()
   expect(first).toContain(`Page: ${address}/\nTitle: Read\n`)
   expect(first).toMatch(/button "Go" \[ref=e\d+\]/)
   expect(first).not.toContain("errors since")
@@ -536,17 +533,71 @@ test("an Agent reads a tab's tree with refs and new errors, until the Person sto
   await expect
     .poll(snapshot)
     .toContain("errors since the last snapshot:\n- nope")
-  expect(snapshot()).not.toContain("- nope")
+  expect(await snapshot()).not.toContain("- nope")
 
   // The Person stops the Agent there; the next snapshot connects again.
   await stop.click()
   await expect(stop).toBeHidden()
-  expect(snapshot()).toMatch(/button "Go" \[ref=e\d+\]/)
+  expect(await snapshot()).toMatch(/button "Go" \[ref=e\d+\]/)
 
   // A tab there is not is refused, and says where the tabs are.
-  const none = agentCalls(window, "browser_snapshot", { tab: 999999 })
+  const none = await agentCalls(window, "browser_snapshot", { tab: 999999 })
   expect(none.isError).toBe(true)
   expect(none.content[0]!.text).toContain("browser_tabs lists them")
+})
+
+test("an Agent opens a tab and takes it to an address, back, forward and again", async () => {
+  const address = await serve({
+    "/": "<title>First</title>",
+    "/second": "<title>Second</title>",
+  })
+  window = await startWindow()
+  const { page } = window
+  const { thread, composer } = await firstThread(page)
+  await composer.fill("hello")
+  await composer.press("Enter")
+  await expect(thread.getByText("You said: hello")).toBeVisible()
+  // With no browser, the tab gets a Pane of its own, and the answer is a
+  // line: the tab, where it is, its title.
+  const opened = await agentSays(window, "browser_open", { url: `${address}/` })
+  const id = Number(/^Opened tab (\d+)\./.exec(opened)?.[1])
+  expect(opened).toBe(
+    `Opened tab ${id}. Tab ${id} shows ${address}/, titled "First".`
+  )
+  await expect(page.getByRole("region", { name: "First" })).toBeVisible()
+
+  const go = (to: string) =>
+    agentSays(window, "browser_navigate", { tab: id, to })
+  const second = `Tab ${id} shows ${address}/second, titled "Second".`
+  expect(await go(`${address}/second`)).toBe(`Went to the address. ${second}`)
+  await expect(page.getByRole("region", { name: "Second" })).toBeVisible()
+  expect(await go("back")).toBe(
+    `Went back. Tab ${id} shows ${address}/, titled "First".`
+  )
+  expect(await go("forward")).toBe(`Went forward. ${second}`)
+  expect(await go("reload")).toBe(`Reloaded. ${second}`)
+
+  // Where there is nowhere to go, nothing is done, and it says so.
+  const further = await agentCalls(window, "browser_navigate", {
+    tab: id,
+    to: "forward",
+  })
+  expect(further.isError).toBe(true)
+  expect(further.content[0]!.text).toBe(
+    `Refused (conflict): Tab ${id} has nowhere to go forward. Nothing was done.`
+  )
+  // The Person's files are not the Agent's to open.
+  const file = await agentCalls(window, "browser_open", {
+    url: "file:///etc/hostname",
+  })
+  expect(file.isError).toBe(true)
+  expect(file.content[0]!.text).toContain("http:// or https://")
+
+  // A blank tab, beside the first.
+  expect(await agentSays(window, "browser_open", {})).toMatch(
+    /^Opened tab (\d+)\. Tab \1 shows about:blank, untitled\.$/
+  )
+  expect(await agentAnswers(window, "browser_tabs", {})).toHaveLength(2)
 })
 
 /**

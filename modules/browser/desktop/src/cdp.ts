@@ -57,7 +57,13 @@ const BROWSER = "banda"
 /** What the endpoint uses of a tab's web contents. */
 type Page = Pick<
   WebContents,
-  "id" | "getURL" | "getTitle" | "isDestroyed" | "setBackgroundThrottling"
+  | "id"
+  | "getURL"
+  | "getTitle"
+  | "isDestroyed"
+  | "setBackgroundThrottling"
+  | "reload"
+  | "reloadIgnoringCache"
 > & {
   readonly debugger: Pick<
     Debugger,
@@ -565,6 +571,14 @@ export class Cdp extends Context.Service<
             // The tab is the Pane's: closing its page closes the tab.
             if (method === "Page.close") {
               tabs.tell({ kind: "close", from: route.page.id })
+              answer({})
+              return Effect.void
+            }
+            // Electron's debugger lets go of a tab its Page.reload
+            // reloads: the tab reloads itself, as its Reload button does.
+            if (method === "Page.reload") {
+              if (params.ignoreCache) route.page.reloadIgnoringCache()
+              else route.page.reload()
               answer({})
               return Effect.void
             }

@@ -19,7 +19,7 @@
 
 use crate::Failure;
 use crate::client::Client;
-use banda_kernel::{CommandId, Refusal, Tool};
+use banda_kernel::{Code, CommandId, Refusal, Tool};
 use banda_skill::Reach;
 use serde_json::{Value, json};
 use tokio::io::{AsyncBufReadExt, AsyncWriteExt, BufReader};
@@ -190,8 +190,8 @@ fn said(text: String, error: bool) -> Value {
 
 fn refused(refusal: &Refusal) -> Value {
     // One that may have run, as a window that answered late, says so
-    // itself: it ends in "may have been done."
-    let nothing = if refusal.message.ends_with("may have been done.") {
+    // itself.
+    let nothing = if refusal.code == Code::MayHaveRun {
         ""
     } else {
         " Nothing was done."

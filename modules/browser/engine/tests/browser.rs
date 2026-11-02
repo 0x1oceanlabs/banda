@@ -1,10 +1,11 @@
 //! The browser's tools through the kernel, as an Agent's session calls
 //! them, with a window that answers on the road, or none.
 
-use banda_browser::{Browser, ReadTab, SeenTab};
+use banda_browser::{Browser, ReadTab, SeenTab, Shown};
 use banda_kernel::{
     AgentId, Caller, Code, Kernel, Participant, PersonId, Refusal, SpaceId, Stream,
 };
+use serde::Serialize;
 use serde_json::{Value, json};
 use std::sync::Arc;
 use tokio::task::JoinHandle;
@@ -80,7 +81,15 @@ async fn with_no_window_the_tools_are_listed_and_refuse() {
     let names: Vec<String> = (tools.await.unwrap().as_array().unwrap().iter())
         .map(|tool| tool["name"].as_str().unwrap().to_owned())
         .collect();
-    assert_eq!(names, ["browser_tabs", "browser_snapshot"]);
+    assert_eq!(
+        names,
+        [
+            "browser_tabs",
+            "browser_snapshot",
+            "browser_open",
+            "browser_navigate"
+        ]
+    );
     let refused = kernel.call(agent(space), "browser.tabs", None, None, Value::Null);
     let refused = refused.await.unwrap_err();
     assert_eq!(refused.code, Code::Conflict);
@@ -120,19 +129,26 @@ async fn a_window_that_answers_amiss_is_refused_not_passed_on() {
     assert_eq!(asking.await.unwrap().unwrap_err().code, Code::Invalid);
 }
 
-/// What `browser_snapshot` says of a tab the window read as `read`.
-async fn snapshot_said(read: ReadTab) -> String {
+/// What `method` says once the window answered it `answered`; and what
+/// the window was asked.
+async fn told(method: &'static str, params: Value, answered: impl Serialize) -> (Value, String) {
     let root = tempfile::tempdir().unwrap();
     let owner = PersonId::new();
     let (kernel, space) = open(root.path(), owner).await;
     let mut hear = window(&kernel, owner).await;
-    let asking = ask(&kernel, space, "browser.snapshot", json!({ "tab": 7 }));
+    let asking = ask(&kernel, space, method, params);
     let asked = hear.recv().await.unwrap();
-    assert_eq!(asked["method"], "browser.snapshot");
-    assert_eq!(asked["params"], json!({ "tab": 7 }));
-    answer(&kernel, owner, &asked, json!(read)).await;
+    assert_eq!(asked["method"], method);
+    answer(&kernel, owner, &asked, json!(answered)).await;
     let said = asking.await.unwrap().unwrap();
-    said.as_str().unwrap().to_owned()
+    (asked, said.as_str().unwrap().to_owned())
+}
+
+/// What `browser_snapshot` says of a tab the window read as `read`.
+async fn snapshot_said(read: ReadTab) -> String {
+    let (asked, said) = told("browser.snapshot", json!({ "tab": 7 }), read).await;
+    assert_eq!(asked["params"], json!({ "tab": 7 }));
+    said
 }
 
 fn read(title: &str, tree: String, errors: Vec<String>) -> ReadTab {
@@ -168,4 +184,73 @@ async fn a_long_tree_is_cut_at_a_line_and_many_errors_are_counted() {
     )));
     assert!(cut.contains("- error 9\n- and 15 more.\n"));
     assert!(!cut.contains("error 10"));
+}
+
+fn shown(title: &str, loading: bool) -> Shown {
+    Shown {
+        tab: 9,
+        url: "https://example.com/".into(),
+        title: title.into(),
+        loading,
+    }
+}
+
+#[tokio::test]
+async fn an_opened_tab_answers_in_a_line() {
+    let params = json!({ "url": "https://example.com/" });
+    let (asked, said) = told("browser.open", params.clone(), shown("Example", false)).await;
+    assert_eq!(asked["method"], "browser.open");
+    assert_eq!(asked["params"], params);
+    assert_eq!(
+        said,
+        "Opened tab 9. Tab 9 shows https://example.com/, titled \"Example\"."
+    );
+    let (asked, said) = told("browser.open", json!({}), shown("", true)).await;
+    assert_eq!(asked["params"], json!({}));
+    assert_eq!(
+        said,
+        "Opened tab 9. Tab 9 shows https://example.com/, untitled. It is still loading: \
+         a snapshot shows what it has by then."
+    );
+}
+
+#[tokio::test]
+async fn a_navigated_tab_says_how_it_went() {
+    for (to, done) in [
+        ("back", "Went back."),
+        ("forward", "Went forward."),
+        ("reload", "Reloaded."),
+        ("HTTPS://example.com/", "Went to the address."),
+    ] {
+        let params = json!({ "tab": 9, "to": to });
+        let (asked, said) = told("browser.navigate", params.clone(), shown("Ex", false)).await;
+        assert_eq!(asked["params"], params);
+        assert_eq!(
+            said,
+            format!("{done} Tab 9 shows https://example.com/, titled \"Ex\".")
+        );
+    }
+}
+
+#[tokio::test]
+async fn only_the_web_s_addresses_are_asked_for() {
+    let root = tempfile::tempdir().unwrap();
+    let owner = PersonId::new();
+    let (kernel, space) = open(root.path(), owner).await;
+    // A window holds the road, and hears none of these.
+    let _hear = window(&kernel, owner).await;
+    for (method, params) in [
+        ("browser.open", json!({ "url": "file:///etc/passwd" })),
+        ("browser.open", json!({ "url": "example.com" })),
+        (
+            "browser.navigate",
+            json!({ "tab": 9, "to": "javascript:alert(1)" }),
+        ),
+        ("browser.navigate", json!({ "tab": 9, "to": "about:blank" })),
+    ] {
+        let refused = ask(&kernel, space, method, params).await.unwrap();
+        let refused = refused.unwrap_err();
+        assert_eq!(refused.code, Code::Invalid, "{refused:?}");
+        assert!(refused.message.contains("http:// or https://"));
+    }
 }

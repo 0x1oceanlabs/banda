@@ -106,7 +106,7 @@ impl Module for Notes {
             }
             // Asks the window to show what it is given, as the browser asks
             // it for a page.
-            "show" => (call.ask_window("show", params, Duration::from_secs(5))).await,
+            "show" => (call.ask_window("show", &params, Duration::from_secs(5))).await,
             "list" => {
                 let (at, items) = call
                     .space()

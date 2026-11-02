@@ -24,6 +24,9 @@ pub enum Code {
     Forbidden,
     /// The state does not allow it now: read again, then decide.
     Conflict,
+    /// No answer came in time, and what was asked may have been done:
+    /// look before asking again, as a second click may click twice.
+    MayHaveRun,
     /// The window and the engine speak different protocol versions.
     Protocol,
     /// Something broke inside the engine. The details are in its log.
@@ -37,6 +40,7 @@ impl std::fmt::Display for Code {
             Code::NotFound => "not_found",
             Code::Forbidden => "forbidden",
             Code::Conflict => "conflict",
+            Code::MayHaveRun => "may_have_run",
             Code::Protocol => "protocol",
             Code::Internal => "internal",
         })
@@ -65,6 +69,10 @@ impl Refusal {
 
     pub fn conflict(message: impl Into<String>) -> Self {
         Self::new(Code::Conflict, message)
+    }
+
+    pub fn may_have_run(message: impl Into<String>) -> Self {
+        Self::new(Code::MayHaveRun, message)
     }
 
     pub fn internal() -> Self {

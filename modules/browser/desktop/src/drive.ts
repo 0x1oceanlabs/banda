@@ -7,28 +7,81 @@
  * the Agent there, or no call came for a while: a held tab draws as a
  * driven one does, unthrottled.
  */
-import type { ReadTab } from "@banda/contract/browser"
+import type { Navigate, ReadTab, Shown } from "@banda/contract/browser"
 import { Refused } from "@banda/desktop-kit"
 import { Context, Effect, FiberSet, Layer, RcMap } from "effect"
 import type { Page } from "playwright-core"
 import { Cdp, messageOf } from "./cdp"
+import { pageOf as contentsOf, Tabs } from "./tabs"
 
 /** How long a tab no call came for stays held. */
 const IDLE = "5 minutes"
+/** How long an address has to answer, and its page then to load: the
+ * engine waits 40 s for both (ADR 0029, decision 2). */
+const ANSWERING = 15_000
+const LOADING = 15_000
 
 /** What Playwright threw, as the Agent hears it. */
-const refused = (error: unknown) => new Refused({ message: messageOf(error) })
+const refused = (error: unknown) =>
+  error instanceof Refused ? error : new Refused({ message: messageOf(error) })
+
+const timedOut = (error: unknown) =>
+  error instanceof Error && error.name === "TimeoutError"
+
+/** Where `page` is once it loaded, or `LOADING` passed. */
+const shown = async (tab: number, page: Page): Promise<Shown> => {
+  const loading = await page
+    .waitForLoadState("load", { timeout: LOADING })
+    .then(
+      () => false,
+      (error) => {
+        if (timedOut(error)) return true
+        throw error
+      }
+    )
+  return { tab, url: page.url(), title: await page.title(), loading }
+}
+
+/** Takes `page` where `to` says, once its address answered. */
+const go = async (page: Page, { tab, to }: Navigate) => {
+  const options = { waitUntil: "commit", timeout: ANSWERING } as const
+  const history = contentsOf(tab)?.navigationHistory
+  try {
+    if (to === "back") {
+      if (!history?.canGoBack()) throw nowhere(tab, to)
+      await page.goBack(options)
+    } else if (to === "forward") {
+      if (!history?.canGoForward()) throw nowhere(tab, to)
+      await page.goForward(options)
+    } else if (to === "reload") await page.reload(options)
+    else await page.goto(to, options)
+  } catch (error) {
+    if (!timedOut(error)) throw error
+    throw new Refused({
+      code: "may_have_run",
+      message: `Tab ${tab}'s address did not answer within ${ANSWERING / 1000} s, and may still.`,
+    })
+  }
+}
+
+const nowhere = (tab: number, to: string) =>
+  new Refused({ message: `Tab ${tab} has nowhere to go ${to}.` })
 
 export class Drive extends Context.Service<
   Drive,
   {
     /** The tab's tree with its refs, address, title and new errors. */
     snapshot(tab: number): Effect.Effect<ReadTab, Refused>
+    /** A new tab, at `url` or blank, once it loaded. */
+    open(url?: string): Effect.Effect<Shown, Refused>
+    /** The tab, where `to` says, once it loaded. */
+    navigate(to: Navigate): Effect.Effect<Shown, Refused>
   }
 >()("banda/Drive") {
   static readonly layer = Layer.effect(Drive)(
     Effect.gen(function* () {
       const cdp = yield* Cdp
+      const tabs = yield* Tabs
       // What Playwright's callbacks run stops with the layer.
       const run = yield* FiberSet.makeRuntime()
       const held = yield* RcMap.make({
@@ -57,8 +110,7 @@ export class Drive extends Context.Service<
                 connection.on("disconnected", drop)
                 return { connection, page }
               },
-              catch: (error) =>
-                error instanceof Refused ? error : refused(error),
+              catch: refused,
             }),
             ({ connection }) => Effect.promise(() => connection.close())
           ),
@@ -103,6 +155,15 @@ export class Drive extends Context.Service<
               ...thrown.map((error) => error.message),
             ]
             return { url: page.url(), title, tree, errors }
+          }),
+        open: (url) =>
+          Effect.flatMap(tabs.create(url), ({ id }) =>
+            inTab(id, (page) => shown(id, page))
+          ),
+        navigate: (to) =>
+          inTab(to.tab, async (page) => {
+            await go(page, to)
+            return shown(to.tab, page)
           }),
       }
     })

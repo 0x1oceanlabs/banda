@@ -2,7 +2,7 @@
  * What the browser's part in main answers its engine part (ADR 0029): the
  * browser's tools for Agents ask the window, which holds the pages.
  */
-import type { OneTab, SeenTab } from "@banda/contract/browser"
+import type { Navigate, OneTab, Open, SeenTab } from "@banda/contract/browser"
 import type { Asked } from "@banda/desktop-kit"
 import { Effect } from "effect"
 import { Cdp } from "./cdp"
@@ -27,4 +27,12 @@ export const browserAsked: Asked<Tabs | Cdp | Drive> = {
    * params. */
   snapshot: (request) =>
     Drive.use((drive) => drive.snapshot((request.params as OneTab).tab)),
+  /** A new tab, for `browser_open`: in the Pane in front, as one the CDP
+   * endpoint opens, until a Thread's tab opens beside it (step 4). */
+  open: (request) =>
+    Drive.use((drive) => drive.open((request.params as Open).url)),
+  /** A tab to an address, back, forward or again, for
+   * `browser_navigate`; the engine checked the address. */
+  navigate: (request) =>
+    Drive.use((drive) => drive.navigate(request.params as Navigate)),
 }

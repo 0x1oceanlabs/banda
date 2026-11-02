@@ -21,6 +21,8 @@ function fakeTab(id: number) {
   const listeners = new Map<string, Set<Listener>>()
   /** Whether it may slow down while hidden, as it was last set. */
   const throttled: boolean[] = []
+  /** How it was reloaded, each time. */
+  const reloaded: string[] = []
   const sessions = new Set<string>()
   let attached = false
   let made = 0
@@ -73,6 +75,8 @@ function fakeTab(id: number) {
     getTitle: () => `Tab ${id}`,
     isDestroyed: () => false,
     setBackgroundThrottling: (allowed: boolean) => throttled.push(allowed),
+    reload: () => reloaded.push("reload"),
+    reloadIgnoringCache: () => reloaded.push("ignoring cache"),
     debugger: debuggee,
   }
   return {
@@ -81,6 +85,7 @@ function fakeTab(id: number) {
     emit,
     debuggee,
     throttled,
+    reloaded,
   }
 }
 
@@ -204,6 +209,14 @@ it.live(
         result: { result: { value: `1 + 1 in ${mine}` } },
         sessionId: mine,
       })
+      // The tab reloads itself: Electron's debugger lets go of a tab its
+      // Page.reload reloads.
+      yield* Effect.promise(() => first.send("Page.reload", {}, mine))
+      yield* Effect.promise(() =>
+        first.send("Page.reload", { ignoreCache: true }, mine)
+      )
+      expect(one.reloaded).toEqual(["reload", "ignoring cache"])
+      expect(one.debuggee.isAttached()).toBe(true)
       // A client cannot speak in another's session.
       const refused = yield* Effect.promise(() =>
         first.send("Runtime.evaluate", { expression: "1" }, theirs)
