@@ -5,7 +5,7 @@
  */
 import { lazy, Suspense } from "react"
 import { Spinner } from "@banda/ui/components/spinner"
-import { definePane, type PaneProps } from "@banda/ui/pane"
+import { definePane } from "@banda/ui/pane"
 import { SettingsIcon } from "lucide-react"
 
 /** Where the Pane is: a section and a row, `appearance/radius`. */
@@ -21,7 +21,7 @@ export const settingsPane = definePane<SettingsArgs>({
   icon: SettingsIcon,
   // Its own header says where it is, and closes it.
   header: false,
-  Pane: (props: PaneProps<SettingsArgs>) => (
+  Pane: (props) => (
     <Suspense fallback={<Spinner className="m-6" />}>
       <Settings {...props} />
     </Suspense>

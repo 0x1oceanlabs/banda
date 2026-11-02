@@ -12,6 +12,7 @@ import {
   menuOf,
   openingOf,
   ranked,
+  settingsLinkOf,
   type Sources,
 } from "./menu"
 
@@ -385,5 +386,11 @@ describe("banda menu ROUTE", () => {
   test("other words, and a Space there is not, are typed in", () => {
     expect(where(" fix the login ")).toEqual(["root", [], "fix the login"])
     expect(where("space.nope")).toEqual(["root", [], "space.nope"])
+  })
+  test("a settings route is the settings Pane's link, not the menu's", () => {
+    expect(settingsLinkOf("settings")).toBe("")
+    expect(settingsLinkOf(" settings.agents.codex ")).toBe("agents/codex")
+    expect(settingsLinkOf("space.settings")).toBeUndefined()
+    expect(settingsLinkOf("fix the settings")).toBeUndefined()
   })
 })

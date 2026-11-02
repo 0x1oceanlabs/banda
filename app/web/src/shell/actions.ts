@@ -133,8 +133,9 @@ export function settingsAt(
     (entry) => entry.pane.kind === settingsPane.kind
   )
   if (!shown) return opening(workspaces, space, pane, undefined, "right")
+  const moved = link && link !== shown.pane.args.link
   return focusEntry(
-    link ? update(workspaces, shown.id, pane) : workspaces,
+    moved ? update(workspaces, shown.id, pane) : workspaces,
     shown.id
   )
 }

@@ -65,7 +65,6 @@ const host: Host = {
     },
   },
   settings: {
-    open: (link) => ipcRenderer.send("settings.open", link ?? ""),
     set: (file, key, value) =>
       ipcRenderer.invoke("settings.set", file, key, value),
     reset: (file, key) => ipcRenderer.invoke("settings.reset", file, key),
@@ -73,13 +72,6 @@ const host: Host = {
       ipcRenderer.invoke("settings.rename", file, key, to),
     reveal: (file) => ipcRenderer.invoke("settings.reveal", file),
     themes: () => ipcRenderer.invoke("settings.themes"),
-    listen: (go) => {
-      const heard = (_event: IpcRendererEvent, link: string) => go(link)
-      ipcRenderer.on("settings:open", heard)
-      return () => {
-        ipcRenderer.removeListener("settings:open", heard)
-      }
-    },
   },
   menu: {
     open: (route) => ipcRenderer.send("menu.open", route),

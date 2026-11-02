@@ -20,6 +20,7 @@ import {
   type Opening,
   openingAt,
   openingOf,
+  settingsLinkOf,
 } from "../menu/menu"
 import { columnsOf, useLookKeys, useLookNotify, useLookSound } from "../look"
 import { kindOf, showsOf, startable, widthOf } from "../registry"
@@ -205,13 +206,6 @@ export function Shell({
   useEffect(() => {
     spacesNow.current = spaces
   }, [spaces])
-  useEffect(
-    () =>
-      window.banda?.menu.listen((route) =>
-        setMenu(openingOf(route, spacesNow.current))
-      ),
-    []
-  )
   // Alt+S: the Thread in the focused Pane settles, or comes back.
   const listsNow = useRef(lists)
   useEffect(() => {
@@ -243,14 +237,22 @@ export function Shell({
   useEffect(() => {
     saidNow.current = said
   }, [said])
-  // The settings Pane (ADR 0016), in the focused Pane's Space; the
-  // desktop's links open it too, as `banda menu settings.keys`.
+  // The settings Pane (ADR 0016), in the focused Pane's Space.
   const settings = useCallback(
     (link?: string) =>
       change((w) => settingsAt(w, focused(w)?.space ?? home, link)),
     [change, home]
   )
-  useEffect(() => window.banda?.settings.listen(settings), [settings])
+  // A settings route opens the settings there; any other, the menu.
+  useEffect(
+    () =>
+      window.banda?.menu.listen((route) => {
+        const link = settingsLinkOf(route)
+        if (link === undefined) setMenu(openingOf(route, spacesNow.current))
+        else settings(link)
+      }),
+    [settings]
+  )
   const ownKeys = useCallback(() => {
     setShipped(saidNow.current)
     settings("keys")
@@ -403,6 +405,7 @@ export function Shell({
           <Sidebar
             engine={engine}
             onMenu={() => setMenu(openingAt("root"))}
+            onSettings={() => settings()}
             spaces={spaces}
             lists={lists}
             home={home}
