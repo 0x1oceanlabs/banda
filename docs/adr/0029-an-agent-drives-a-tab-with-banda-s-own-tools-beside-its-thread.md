@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 date: 2026-11-02
 ---
 
@@ -38,7 +38,8 @@ In short:
 
 **Decision.** Roma decided the points marked _decided_ on 2026-11-02 and
 saw [a mockup](../research/2026-11-02-browser-tools-mockup.html) of the
-tab. The rest are our defaults and stay Roma's to change.
+tab, and accepted the whole on 2026-11-02. The rest are our defaults
+and stay Roma's to change.
 
 1. **Every tab** (_decided_), as ADR 0013 decision 7 says. A Thread's
    Agent may read and drive any tab, the Person's signed-in ones too, in
