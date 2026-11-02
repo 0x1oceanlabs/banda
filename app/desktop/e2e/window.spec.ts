@@ -1684,6 +1684,58 @@ test("an Agent shows a Visual in its Thread: its page runs apart from Banda, in 
   await page.screenshot({ path: "test-results/18m-visual.png" })
 })
 
+test("an Agent checks a Visual before it shows: its picture, its height and its console, in a window never shown", async () => {
+  window = await startWindow()
+  const { page, app } = window
+  const { thread, composer } = await firstThread(page)
+  await composer.fill("hello")
+  await composer.press("Enter")
+  await expect(thread.getByText("You said: hello")).toBeVisible()
+  const windows = () =>
+    app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length)
+  const before = await windows()
+
+  const html = `<!doctype html><html><head><style>
+    .box { height: 300px; background: var(--primary) }
+  </style></head><body><div class="box"></div><script>
+    console.log("only said")
+    console.warn("careful")
+    console.error("boom")
+    nope()
+  </script></body></html>`
+  const said = await agentCalls(window, "preview_visual", {
+    html,
+    width: 390,
+    appearance: "dark",
+  })
+  expect(said.isError, said.content[0]?.text).toBeFalsy()
+  const [text, picture] = said.content as {
+    type: string
+    text?: string
+    data?: string
+    mimeType?: string
+  }[]
+  const checked = JSON.parse(text!.text!)
+  expect(checked.width).toBe(390)
+  // The box and the 8px gutter above and below it.
+  expect(checked.height).toBe(316)
+  expect(checked.console.map((line: { level: string }) => line.level)).toEqual([
+    "warning",
+    "error",
+    "error",
+  ])
+  expect(checked.console[2].text).toContain("nope is not defined")
+  expect(picture).toMatchObject({ type: "image", mimeType: "image/png" })
+  const png = Buffer.from(picture!.data!, "base64")
+  expect(png.subarray(1, 4).toString()).toBe("PNG")
+  writeFileSync("test-results/18n-visual-checked.png", png)
+  // The picture is as wide as asked and as tall as the page.
+  expect([png.readUInt32BE(16), png.readUInt32BE(20)]).toEqual([390, 316])
+  // The window it took is gone, and the Thread shows nothing.
+  expect(await windows()).toBe(before)
+  await expect(thread.locator("iframe")).toHaveCount(0)
+})
+
 test("an Agent opens a Pane beside its Thread without the focus, marked until the Person looks, and closes it", async () => {
   window = await startWindow()
   const { page } = window

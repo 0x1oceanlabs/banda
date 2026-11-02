@@ -19,7 +19,7 @@ Its actions, which `keys.toml` binds by id:
 
 - New Thread (`thread.new`), Alt+Return
 
-Its methods, `banda call agents.<method>`: `harnesses`, `account`, `sign_in`, `sign_out`, `threads`, `thread`, `defaults`, `changes`, `write`, `send`, `edit`, `withdraw`, `steer`, `resume`, `configure`, `stop`, `retry`, `fork`, `rewind`, `answer`, `attach`, `image`, `keep`, `files`, `show_visual`, `visual`.
+Its methods, `banda call agents.<method>`: `harnesses`, `account`, `sign_in`, `sign_out`, `threads`, `thread`, `defaults`, `changes`, `write`, `send`, `edit`, `withdraw`, `steer`, `resume`, `configure`, `stop`, `retry`, `fork`, `rewind`, `answer`, `attach`, `image`, `keep`, `files`, `show_visual`, `preview_visual`, `visual`.
 
 What an Agent in a Thread may call as a tool of `banda mcp`:
 
@@ -27,6 +27,7 @@ What an Agent in a Thread may call as a tool of `banda mcp`:
 - `read`: One Thread of this Space as its Person reads it: its messages and replies, its turns and what each may do now, and its settings.
 - `send`: Writes into a Thread of this Space, or starts a new Thread on a Harness. Its Agent reads that the message is from your Thread's Agent, not its Person; when the turn it asks for ends, its last reply comes back to your Thread by itself. A message waits its turn in a Thread that works; a Person's with `steer` joins the turn that runs.
 - `show_visual`: Shows your Person a finished HTML page in your Thread, above your reply: a mockup, a chart, a diagram, how a feature works, an animation, a sound. Don't announce or describe it after; say only what it doesn't. The frame is your reply's width, on the Thread's own background, and fits the page's height up to 20000px. Leave html, body and the outer element with no background colour, no outer card, border, banner title or side padding; Banda adds an 8px gutter for focus rings and shadows. A box that needs its own background gets 16px padding and var(--radius) corners. Give charts fixed pixel heights and let the content set the height: no vh units and no height:100% on html or body, as the frame grows to fit the page. Use the window's colours as CSS variables on :root, not fixed colours: --background, --foreground, --muted, --card, --popover, --secondary, --border, --input, --ring, --primary, --accent, --destructive, --warning, --success, --info, --code-background (most have a matching -foreground; accent, destructive and warning also have -surface), --chart-1 to --chart-6, --radius, --font-sans, --font-mono. Banda's sheet sets the text colour and font. Inline <style> and <script>; web addresses load as they are. Sound plays once your Person clicks in the page.
+- `preview_visual`: Lays out an HTML page as show_visual would show it, and answers its picture, its height and what its console said: errors and warnings. Check every Visual with it before show_visual, fix what it shows, and pass show_visual its height. It shows your Person nothing and keeps nothing. The page's rules are show_visual's.
 
 ## Terminal (`terminal`)
 

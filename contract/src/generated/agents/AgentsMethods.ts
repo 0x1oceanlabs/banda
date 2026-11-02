@@ -21,6 +21,8 @@ import type { OneImage } from "./OneImage";
 import type { OneThread } from "./OneThread";
 import type { OneTurn } from "./OneTurn";
 import type { OneVisual } from "./OneVisual";
+import type { PreviewVisual } from "./PreviewVisual";
+import type { Previewed } from "./Previewed";
 import type { Send } from "./Send";
 import type { Sent } from "./Sent";
 import type { ShowVisual } from "./ShowVisual";
@@ -173,6 +175,15 @@ files: CallMethod<FileQuery, Array<string>>,
  * they are. Sound plays once your Person clicks in the page.
  */
 show_visual: CommandMethod<ShowVisual, string>, 
+/**
+ * Lays out an HTML page as show_visual would show it, and
+ * answers its picture, its height and what its console said:
+ * errors and warnings. Check every Visual with it before
+ * show_visual, fix what it shows, and pass show_visual its
+ * height. It shows your Person nothing and keeps nothing. The
+ * page's rules are show_visual's.
+ */
+preview_visual: CallMethod<PreviewVisual, Previewed>, 
 /**
  * A Visual's page, as the window serves it.
  */

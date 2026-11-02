@@ -47,7 +47,7 @@ use banda_harnesses::model::{Account, HarnessView, Program};
 use banda_harnesses::{Harness, Harnesses};
 use banda_kernel::{
     AgentId, Call, Effect, Error, Module, ModuleSpace, Nothing, OnRestart, Outcome, Participant,
-    Refusal, Right, Settled, SpaceId, Tool, Tx,
+    Picture, Refusal, Right, Settled, SpaceId, Tool, Tx,
 };
 use banda_look::OneFile as _;
 use base64::Engine as _;
@@ -295,6 +295,13 @@ banda_kernel::methods! {
         /// and font. Inline <style> and <script>; web addresses load as
         /// they are. Sound plays once your Person clicks in the page.
         command show_visual(ShowVisual) -> String, Write, tool "show_visual";
+        /// Lays out an HTML page as show_visual would show it, and
+        /// answers its picture, its height and what its console said:
+        /// errors and warnings. Check every Visual with it before
+        /// show_visual, fix what it shows, and pass show_visual its
+        /// height. It shows your Person nothing and keeps nothing. The
+        /// page's rules are show_visual's.
+        call preview_visual(PreviewVisual) -> Previewed, Read, tool "preview_visual";
         /// A Visual's page, as the window serves it.
         call visual(OneVisual) -> VisualPage, Read;
     }
@@ -433,6 +440,67 @@ struct ShowVisual {
     /// Its height in CSS pixels, 80 to 2000.
     height: u32,
 }
+
+/// A page to lay out as a Visual.
+#[derive(Deserialize, TS, JsonSchema)]
+#[ts(export_to = "agents/")]
+struct PreviewVisual {
+    /// A complete, self-contained HTML document.
+    html: String,
+    /// CSS pixels, 240 to 1600; 728 by default, your reply's width. About
+    /// 390 for a phone.
+    #[serde(default)]
+    #[ts(optional = nullable)]
+    width: Option<u32>,
+    /// The window's colours to lay it out in; dark by default.
+    #[serde(default)]
+    #[ts(optional = nullable)]
+    appearance: Option<Appearance>,
+}
+
+/// Light or dark, as the window shows a Visual.
+#[derive(Clone, Copy, Debug, Default, Serialize, Deserialize, TS, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+#[ts(export, export_to = "agents/")]
+pub enum Appearance {
+    Light,
+    #[default]
+    Dark,
+}
+
+/// What the window asks main to lay out (ADR 0037, decision 3).
+#[derive(Clone, Debug, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "agents/")]
+pub struct LayOut {
+    pub html: String,
+    pub width: u32,
+    pub appearance: Appearance,
+}
+
+/// A line the page's console said.
+#[derive(Clone, Debug, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "agents/")]
+pub struct Logged {
+    /// `error` or `warning`.
+    pub level: String,
+    pub text: String,
+}
+
+/// What `preview_visual` answers, as main lays the page out: its width
+/// and height, and its picture.
+#[derive(Serialize, Deserialize, TS)]
+#[ts(export, export_to = "agents/")]
+pub struct Previewed {
+    pub width: u32,
+    /// What to pass show_visual.
+    pub height: u32,
+    /// Its console's errors and warnings, the first 20.
+    pub console: Vec<Logged>,
+    pub pictures: Vec<Picture>,
+}
+
+/// How long main has to lay a page out.
+const LAYING_OUT: Duration = Duration::from_secs(20);
 
 #[derive(Deserialize, TS)]
 #[ts(export_to = "agents/")]
@@ -906,6 +974,28 @@ impl Agents {
         }
         tokio::spawn(sweep_visuals(space.clone(), visuals));
         shown.map(|()| SHOWN.to_owned())
+    }
+
+    async fn preview_visual(
+        &self,
+        call: Call,
+        params: PreviewVisual,
+    ) -> Result<Previewed, Refusal> {
+        let PreviewVisual {
+            html,
+            width,
+            appearance,
+        } = params;
+        visuals::may_lay_out(&html)?;
+        let width = width
+            .unwrap_or(visuals::WIDTH)
+            .clamp(visuals::NARROWEST, visuals::WIDEST);
+        let asked = LayOut {
+            html,
+            width,
+            appearance: appearance.unwrap_or_default(),
+        };
+        call.ask_window("lay_out", &asked, LAYING_OUT).await
     }
 
     async fn visual(

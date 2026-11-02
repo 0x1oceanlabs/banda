@@ -7,6 +7,8 @@
  * other side. Pure, so plain tests cover it.
  */
 
+import { type Look, shown } from "@banda/contract/look"
+
 /** The host of `app://` that serves Visuals: an origin apart from
  * Banda's page. */
 export const VISUALS = "visuals"
@@ -110,6 +112,26 @@ export function visualLook(
         `color-mix(in oklab, ${colour} 16%, transparent)`
   }
   return { theme: dark ? "dark" : "light", variables }
+}
+
+/** The look for a page from the look's own values, light or dark as
+ * asked, as main lays a page out with no window to read it from: the
+ * scheme the window would show (`shown`) over the look's vars, as the
+ * window applies them. */
+export function visualLookOf(look: Look | null, dark: boolean): VisualLook {
+  if (!look) return visualLook(() => "", dark)
+  const scheme = shown({ ...look, mode: dark ? "dark" : "light" }, dark)
+  const tokens = { ...look.vars, ...scheme.colors }
+  // The look names the font families under longer names than the page's,
+  // as globals.css does.
+  const families: Record<string, string> = {
+    "--font-sans": tokens["--font-family-sans"] ?? "",
+    "--font-mono": tokens["--font-family-mono"] ?? "",
+  }
+  return visualLook(
+    (token) => tokens[token] ?? families[token] ?? "",
+    scheme.dark
+  )
 }
 
 /** The look as MCP Apps' host context says it, in the address's fragment

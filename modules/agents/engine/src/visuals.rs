@@ -73,10 +73,29 @@ impl Visuals {
     }
 }
 
+/// How wide the check lays a page out, in pixels: T3 Code's widths, a
+/// Thread's reply by default.
+pub const NARROWEST: u32 = 240;
+pub const WIDEST: u32 = 1_600;
+pub const WIDTH: u32 = 728;
+
 /// What an Agent may show: a page of up to [`LONGEST`] characters, with a
 /// title. It answers the title trimmed and cut at [`TITLE`], and the
 /// height brought within [`LOWEST`] and [`HIGHEST`].
 pub fn may_show(html: &str, title: &str, height: u32) -> Result<(String, u32), Refusal> {
+    may_lay_out(html)?;
+    let title = title.trim();
+    if title.is_empty() {
+        return Err(Refusal::invalid("A Visual needs a title."));
+    }
+    Ok((
+        title.chars().take(TITLE).collect(),
+        height.clamp(LOWEST, HIGHEST),
+    ))
+}
+
+/// What the check lays out: a page as [`may_show`] takes it.
+pub fn may_lay_out(html: &str) -> Result<(), Refusal> {
     if html.trim().is_empty() {
         return Err(Refusal::invalid(
             "A Visual needs its page: a whole HTML document.",
@@ -88,14 +107,7 @@ pub fn may_show(html: &str, title: &str, height: u32) -> Result<(String, u32), R
             "The page has {long} characters; a Visual takes {LONGEST} at most."
         )));
     }
-    let title = title.trim();
-    if title.is_empty() {
-        return Err(Refusal::invalid("A Visual needs a title."));
-    }
-    Ok((
-        title.chars().take(TITLE).collect(),
-        height.clamp(LOWEST, HIGHEST),
-    ))
+    Ok(())
 }
 
 #[cfg(test)]

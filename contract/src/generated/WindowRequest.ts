@@ -22,4 +22,9 @@ space: SpaceId,
 /**
  * Who made the call that asks.
  */
-by: Participant, params: JsonValue, };
+by: Participant, params: JsonValue, 
+/**
+ * How long the asking call waits, in milliseconds: past it, the
+ * window may stop what it does, as no one hears the answer.
+ */
+within: number, };

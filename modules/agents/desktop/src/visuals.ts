@@ -35,6 +35,11 @@ export async function serve(address: string, read: Read): Promise<Response> {
   const asked = named(address)
   const html = asked && (await read(asked.space, asked.visual))
   if (html === null) return new Response("Not found", { status: 404 })
+  return pageResponse(html)
+}
+
+/** A Visual's page as a frame or the check loads it. */
+export function pageResponse(html: string): Response {
   return new Response(dressed(html), {
     headers: {
       "Content-Type": "text/html; charset=utf-8",

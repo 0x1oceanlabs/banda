@@ -159,6 +159,8 @@ The kernel holds only what every module needs, and it names no module.
   them. The latest window to ask holds the road, and what the one before
   had not answered is refused. With no window, or none that answers in
   time, the ask is refused, and says whether the work may have run.
+  Each request carries that time, and the window stops its handler past
+  it, so what the handler holds goes.
 - **Receipts and outbox.** These carry every command along one path (below).
 
 ### The command path

@@ -39,6 +39,10 @@ pub struct WindowRequest {
     pub by: Participant,
     #[serde(default)]
     pub params: Value,
+    /// How long the asking call waits, in milliseconds: past it, the
+    /// window may stop what it does, as no one hears the answer.
+    #[ts(type = "number")]
+    pub within: u64,
 }
 
 /// The window's answer to one request: what it gives, or why not.
@@ -179,6 +183,7 @@ impl Window {
             space,
             by,
             params,
+            within: u64::try_from(within.as_millis()).unwrap_or(u64::MAX),
         };
         let asked = async {
             let request = crate::methods::answer(request)?;

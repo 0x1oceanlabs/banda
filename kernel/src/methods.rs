@@ -14,7 +14,9 @@
 //!
 //! A line that ends `, tool "<name>"` is also a tool an Agent calls
 //! through `banda mcp` (ADR 0019, decision 3): its description is the
-//! method's `///`, and its input the JSON Schema of its params.
+//! method's `///`, and its input the JSON Schema of its params. A tool's
+//! answer that holds `pictures` shows them to the Agent as images, beside
+//! the rest of it as text (ADR 0037, decision 3).
 
 use crate::{CommandId, Refusal};
 use schemars::{JsonSchema, Schema, SchemaGenerator, json_schema};
@@ -50,6 +52,18 @@ impl JsonSchema for Nothing {
     fn json_schema(_: &mut SchemaGenerator) -> Schema {
         json_schema!({ "type": "object", "properties": {} })
     }
+}
+
+/// A picture a tool's answer shows its Agent, in a field `pictures`:
+/// `banda mcp` passes each on as an MCP image. A window or `banda call`
+/// reads it as it is.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, serde::Deserialize, TS)]
+#[ts(export)]
+pub struct Picture {
+    /// Its kind, as `image/png`.
+    pub mime: String,
+    /// Its bytes in base64.
+    pub data: String,
 }
 
 /// A method an Agent may call as a tool, as `banda mcp` lists it.

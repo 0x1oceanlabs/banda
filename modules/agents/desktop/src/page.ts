@@ -20,6 +20,13 @@ const BASE = [
   "body{margin:0}",
 ].join("")
 
+/** The page's own height, as a script reads it with `root` its root:
+ * past the frame, what scrolls; within it, what it lays out, so it can
+ * shrink too. The check reads it as the frame does. */
+export const HEIGHT = `Math.ceil(root.scrollHeight > root.clientHeight
+  ? root.scrollHeight
+  : root.getBoundingClientRect().height)`
+
 /** The page's side of the frame, as visual-frame.ts says the words. */
 const BRIDGE = `(() => {
   const root = document.documentElement
@@ -48,15 +55,9 @@ const BRIDGE = `(() => {
     if (event.source === parent && said && said.method === "${SAID.look}")
       wear(said.params)
   })
-  // The page's own height: past the frame, what scrolls; within it, what
-  // it lays out, so it can shrink too.
   let told = 0
   const size = () => {
-    const height = Math.ceil(
-      root.scrollHeight > root.clientHeight
-        ? root.scrollHeight
-        : root.getBoundingClientRect().height
-    )
+    const height = ${HEIGHT}
     if (height === told) return
     told = height
     say("${SAID.size}", { height })

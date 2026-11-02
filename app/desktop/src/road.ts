@@ -9,10 +9,14 @@ import type { JsonValue, Refusal, WindowRequest } from "@banda/contract"
 import { type Asked, Engine, type Refused } from "@banda/desktop-kit"
 import { Cause, Effect, Layer, Option, Queue, Stream } from "effect"
 
-/** Why a handler gave no answer: what it refused, or that it broke. */
-const refusalOf = (cause: Cause.Cause<Refused>): Refusal =>
+/** Why a handler gave no answer: what it refused, that it took too
+ * long, or that it broke. */
+const refusalOf = (cause: Cause.Cause<Refused | Cause.TimeoutError>): Refusal =>
   Option.match(Cause.findErrorOption(cause), {
-    onSome: ({ code = "conflict", message }) => ({ code, message }),
+    onSome: (error) =>
+      Cause.isTimeoutError(error)
+        ? { code: "conflict", message: "Banda's window took too long." }
+        : { code: error.code ?? "conflict", message: error.message },
     onNone: () => ({
       code: "internal",
       message: "Banda's window broke while it answered.",
@@ -52,6 +56,9 @@ export const roadLayer = <R>(asked: Readonly<Record<string, Asked<R>>>) =>
             asked[request.method.slice(0, dot)]?.[request.method.slice(dot + 1)]
           const answered = yield* handler
             ? handler(request).pipe(
+                // Past the engine's time no one hears the answer: the
+                // handler stops, and what it holds goes.
+                Effect.timeout(request.within),
                 Effect.matchCause({
                   onSuccess: (ok) => ({ ok: ok as JsonValue }),
                   onFailure: (cause) => ({ error: refusalOf(cause) }),
