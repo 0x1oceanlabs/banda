@@ -43,13 +43,10 @@ export type Host = {
   /** The browser's pages: their tabs, icons and downloads. */
   browser: BrowserHost
   /**
-   * The settings (ADR 0016), a Pane of the window: the desktop changes the
-   * files through `banda settings`; the look brings each change back.
+   * The settings' files (ADR 0016): the desktop changes them through
+   * `banda settings`; the look brings each change back.
    */
   settings: {
-    /** Opens the settings Pane at `link`, a section and a row:
-     * `appearance/radius`; the window comes to the front. */
-    open: (link?: string) => void
     /** Sets `key` in `file` to `value`, TOML; what was wrong, if refused. */
     set: (file: string, key: string, value: string) => Promise<string[]>
     /** Takes `key` out of `file`; what was wrong, if refused. */
@@ -61,9 +58,6 @@ export type Host = {
     reveal: (file: string) => Promise<void>
     /** The themes there are. */
     themes: () => Promise<Listed[]>
-    /** Calls `go` with each link the settings are asked to open at, as
-     * by `open` or `banda menu settings.<section>.<row>`. */
-    listen: (go: (link: string) => void) => () => void
   }
   /** The Banda menu, as `banda menu [route]` opens it (ADR 0017). */
   menu: {

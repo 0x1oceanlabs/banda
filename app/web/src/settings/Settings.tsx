@@ -14,10 +14,11 @@ import {
   InputGroupAddon,
   InputGroupInput,
 } from "@banda/ui/components/input-group"
+import { PaneHeader } from "@banda/ui/components/pane-header"
 import { ScrollArea } from "@banda/ui/components/scroll-area"
 import { cn } from "@banda/ui/lib/utils"
 import type { PaneProps } from "@banda/ui/pane"
-import { ExternalLinkIcon, SearchIcon, XIcon } from "lucide-react"
+import { ExternalLinkIcon, SearchIcon } from "lucide-react"
 import { problemWords } from "../bar/Bar"
 import { useLookProblems, useLookSettings } from "../look"
 import { groupsOf, parseLink, search, type Section, SECTIONS } from "./sections"
@@ -34,7 +35,7 @@ export function Settings({
   close,
 }: PaneProps<SettingsArgs>) {
   // Where it is lives in its args, so it comes back there.
-  const at = useMemo(() => parseLink(args.link ?? ""), [args.link])
+  const at = useMemo(() => parseLink(args.link), [args.link])
   const [words, setWords] = useState("")
   const field = useRef<HTMLInputElement>(null)
   const keyed = useLookSettings()
@@ -84,7 +85,8 @@ export function Settings({
   const found = useMemo(() => (words.trim() ? search(words) : []), [words])
   const go = (next: Section, key?: string) => {
     setWords("")
-    update({ link: key ? `${next.id}/${key}` : next.id })
+    const link = key ? `${next.id}/${key}` : next.id
+    if (link !== args.link) update({ link })
   }
   // A problem at a line a row's value is on shows at that row; the rest,
   // above the section.
@@ -189,21 +191,16 @@ export function Settings({
           </div>
         </nav>
         <main className="flex min-h-0 min-w-0 flex-1 flex-col">
-          <header className="flex h-10 shrink-0 items-center gap-1.5 border-b px-4 text-sm text-muted-foreground">
+          <PaneHeader
+            title="Settings"
+            onClose={close}
+            className="gap-1.5 text-muted-foreground"
+          >
             Settings <span>/</span>
             <b className="font-medium text-foreground">
               {words ? "Search" : section.title}
             </b>
-            <Button
-              variant="ghost"
-              size="sm"
-              className="ml-auto text-muted-foreground"
-              aria-label="Close settings"
-              onClick={close}
-            >
-              <XIcon />
-            </Button>
-          </header>
+          </PaneHeader>
           <ScrollArea className="min-h-0 flex-1">
             <div className="mx-auto flex max-w-2xl flex-col gap-4 px-6 py-6">
               {words ? (

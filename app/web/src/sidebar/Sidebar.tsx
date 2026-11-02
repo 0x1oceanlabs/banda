@@ -62,6 +62,7 @@ export function Sidebar({
   home,
   isCurrent,
   onMenu,
+  onSettings,
   onOpen,
   onNewThread,
   onCreated,
@@ -75,6 +76,8 @@ export function Sidebar({
   isCurrent: (space: SpaceId, pane: PaneState) => boolean
   /** Opens the Banda menu, as Alt+Space does (ADR 0017). */
   onMenu: () => void
+  /** Opens the settings, as Alt+, does (ADR 0016). */
+  onSettings: () => void
   /**
    * Opens a Pane a row stands for: where a workspace shows it, or in a new
    * column of the current one.
@@ -250,9 +253,8 @@ export function Sidebar({
           variant="ghost"
           size="sm"
           className="w-full justify-start text-muted-foreground"
-          disabled={!host}
           title="Settings (Alt+,)"
-          onClick={() => host?.settings.open()}
+          onClick={onSettings}
         >
           <SettingsIcon />
           Settings

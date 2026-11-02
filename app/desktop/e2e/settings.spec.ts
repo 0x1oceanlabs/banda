@@ -94,7 +94,7 @@ test("Alt+, opens the settings Pane, which writes the files and follows them (AD
     settings.getByRole("heading", { name: "Sounds & calls" })
   ).toBeVisible()
   expect(app.windows()).toHaveLength(1)
-  await settings.getByRole("button", { name: "Close settings" }).click()
+  await settings.getByRole("button", { name: "Close Settings" }).click()
   await expect(settings).toHaveCount(0)
 })
 

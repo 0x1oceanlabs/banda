@@ -1,8 +1,8 @@
 /**
  * The desktop's side of the settings Pane (ADR 0016): the page asks, and
  * `banda settings set|reset` changes the file, keeping the Person's text
- * (decision 5). `banda look --follow` sees the change and hands both
- * windows the new look, so the page never reads or writes a file itself.
+ * (decision 5). `banda look --follow` sees the change and hands the
+ * window the new look, so the page never reads or writes a file itself.
  * `banda settings` checks the file and the key; this hands them on.
  */
 import { existsSync } from "node:fs"

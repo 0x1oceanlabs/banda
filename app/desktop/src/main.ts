@@ -230,9 +230,6 @@ async function ready(): Promise<void> {
       Extensions.use((extensions) => extensions.created(request, page))
   )
   // The settings' (ADR 0016) and the Banda menu's (ADR 0017).
-  on("settings.open", text, ([link]) =>
-    Effect.sync(() => openSettings(linkOf(link)))
-  )
   on("menu.open", text, ([route]) => Effect.sync(() => openMenu(route)))
   handle(
     "settings.set",
@@ -278,7 +275,7 @@ async function ready(): Promise<void> {
   Menu.setApplicationMenu(process.platform === "darwin" ? macMenu() : null)
   window = openWindow()
   // `banda menu [route]` opens the Banda menu here, or the settings at a
-  // route of their own (ADR 0017).
+  // route of their own (ADR 0017): the page tells them apart.
   void runtime.runPromise(Engine.use((engine) => engine.door)).then((path) => {
     shutDoor = openDoor(path, { menu: openMenu })
   })
@@ -287,14 +284,10 @@ async function ready(): Promise<void> {
 /** Shuts the door `banda menu` knocks at. */
 let shutDoor: (() => void) | null = null
 
-/** Opens the menu at `route`, or the settings at `settings.<section>.<row>`. */
+/** Opens the menu at `route` in the window, brought to the front; the
+ * page tells the routes apart, the settings' too. */
 function openMenu(route: unknown): string {
   if (typeof route !== "string") return "the route is not a string"
-  const [first, ...rest] = route.trim().split(".")
-  if (first === "settings") {
-    openSettings(linkOf(rest.join("/")))
-    return "ok"
-  }
   const shown = inFront()
   if (!shown) return "no window"
   shown.webContents.send("menu:open", route)
@@ -388,16 +381,6 @@ function openWindow(): BrowserWindow {
     if (clear === opened) clear = null
   })
   return opened
-}
-
-/** A section and a row, `agents/codex`; nothing else is a link. */
-function linkOf(link: unknown): string {
-  return typeof link === "string" && /^[a-z0-9./_-]*$/i.test(link) ? link : ""
-}
-
-/** Opens the settings Pane at `link` in the window, brought to the front. */
-function openSettings(link: string) {
-  inFront()?.webContents.send("settings:open", link)
 }
 
 /** A window that shows Banda's page, in the look's first colour. */

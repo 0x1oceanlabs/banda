@@ -107,12 +107,19 @@ export function openingAt(at: At, path: Branch[] = [], words = ""): Opening {
   return { n: ++openings, at, path, words }
 }
 
+/** The settings Pane's link a route names, `settings.agents.codex` as
+ * `agents/codex`; none for a route of the menu's. */
+export function settingsLinkOf(route: string): string | undefined {
+  const [first, ...rest] = route.trim().split(".")
+  return first === "settings" ? rest.join("/") : undefined
+}
+
 /**
  * Where `banda menu ROUTE` opens the menu (ADR 0017, decision 7): an
  * empty route at its root, `actions` at its Actions, `views` in the
  * sidebar's view, `space.<name>` (or its ID) in a Space. Any other words
- * open it with them typed in. Settings routes are the desktop's: it
- * opens the settings Pane at them.
+ * open it with them typed in. A settings route opens the settings Pane
+ * instead (`settingsLinkOf`).
  */
 export function openingOf(
   route: string,
