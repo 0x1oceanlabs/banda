@@ -698,6 +698,24 @@ async fn turn(
         run(&fake, &cx, &session, how).await?;
         return Ok(StopReason::EndTurn);
     }
+    // Each text block apart, to see a skill sent as Claude Code runs one.
+    if words.contains("blocks") {
+        let blocks: Vec<String> = prompt
+            .prompt
+            .iter()
+            .filter_map(|block| match block {
+                ContentBlock::Text(text) => Some(format!("[{}]", text.text)),
+                _ => None,
+            })
+            .collect();
+        let reply = format!("Blocks: {}", blocks.join(" "));
+        say(
+            &cx,
+            &session,
+            SessionUpdate::AgentMessageChunk(text(&reply)),
+        )?;
+        return Ok(StopReason::EndTurn);
+    }
     if words.contains("which session") {
         let reply = format!("Session {} in process {}", session.0, std::process::id());
         say(

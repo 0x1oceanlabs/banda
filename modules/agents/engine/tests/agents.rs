@@ -1225,6 +1225,19 @@ impl World {
             .await;
         (sent["thread"].clone(), view)
     }
+
+    /// Sends `text` to a real Harness and waits, as a model may, for its
+    /// turn to end done.
+    async fn finish_real(&self, thread: Option<&Value>, text: &str) -> (Value, ThreadView) {
+        let sent = self.send(thread, text).await;
+        let view = self
+            .until_within(Duration::from_secs(300), &sent["thread"], |v| {
+                !ongoing(v, &sent["turn"])
+            })
+            .await;
+        assert_eq!(state(&view, &sent["turn"]), Some(TurnState::Done));
+        (sent["thread"].clone(), view)
+    }
 }
 
 fn last_reply(view: &ThreadView) -> String {
@@ -1729,6 +1742,37 @@ async fn the_slash_commands_and_skills_a_harness_says_on_opening_reach_its_threa
     };
     assert_eq!(explain.name, "explain", "its skill, named without the `$`");
     assert_eq!(explain.description, "Explain the code it is pointed at");
+}
+
+/// Claude Code says its skills as slash commands: one is a skill where
+/// its `SKILL.md` is, and named with `$` it runs as Claude Code runs one,
+/// `/name` starting the last text block (issue #149).
+#[tokio::test]
+async fn a_slash_command_with_a_skill_file_is_a_skill_that_runs_named_anywhere() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let space = world.kernel.space(world.space).await.unwrap();
+    let skill = space.folder().join(".claude/skills/review");
+    std::fs::create_dir_all(&skill).unwrap();
+    std::fs::write(skill.join("SKILL.md"), "---\nname: review\n---\n").unwrap();
+    let (thread, view) = world.finish(None, "please $review the blocks").await;
+    assert_eq!(
+        slash_commands(&view),
+        ["review", "compact"],
+        "still under `/`"
+    );
+    let skills: Vec<&str> = view.offer.skills.iter().map(|s| s.name.as_str()).collect();
+    assert_eq!(skills, ["review", "explain"], "in the order it says them");
+    assert_eq!(
+        texts(&view)[1..],
+        ["message: Blocks: [please /review the blocks] [/review the blocks]"]
+    );
+    // A skill of Codex's own is not a slash command: its text goes as it is.
+    let (_, view) = world.finish(Some(&thread), "$explain the blocks").await;
+    assert_eq!(
+        texts(&view)[3..],
+        ["message: Blocks: [$explain the blocks]"]
+    );
 }
 
 #[tokio::test]
@@ -3350,6 +3394,43 @@ async fn the_real_harnesses_go_back_to_before_a_message() {
     .await;
 }
 
+/// A skill of the Person's that Claude Code says as a slash command runs
+/// named with `$` mid-message; the model may not run it of itself, so the
+/// word it answers comes of the skill run alone (issue #149). It calls the
+/// model, which costs money: run it by hand when the adapter changes,
+/// `cargo test -p banda-agents --test agents claude_runs -- --ignored`.
+#[tokio::test]
+#[ignore = "calls the real model, which costs money"]
+async fn claude_runs_a_skill_named_with_a_dollar_mid_message() {
+    let known = Harnesses::known();
+    let agents = Agents::new(Harnesses::new(vec![known.find("claude").unwrap().clone()]));
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new_on(root.path(), agents, "claude").await;
+    let space = world.kernel.space(world.space).await.unwrap();
+    let skill = space.folder().join(".claude/skills/banda-echo");
+    std::fs::create_dir_all(&skill).unwrap();
+    std::fs::write(
+        skill.join("SKILL.md"),
+        "---\nname: banda-echo\ndescription: Answers with a fixed word.\n\
+         disable-model-invocation: true\n---\n\nReply with only the word MANGOES.\n",
+    )
+    .unwrap();
+    let (thread, view) = world
+        .finish_real(None, "Do not use any tools. Reply with only: OK")
+        .await;
+    assert!(
+        view.offer.skills.iter().any(|s| s.name == "banda-echo"),
+        "its skill: {:?}",
+        view.offer.skills
+    );
+    let (_, view) = world
+        .finish_real(Some(&thread), "Please run $banda-echo now.")
+        .await;
+    let said = texts(&view);
+    eprintln!("claude: {}", said.last().unwrap());
+    assert!(said.last().unwrap().contains("MANGOES"), "{said:?}");
+}
+
 /// Tells each real Harness to remember APPLES, then PEARS; `back` takes
 /// the Thread to after the first, and answers the Thread to ask what it
 /// remembers there: APPLES alone.
@@ -3359,30 +3440,22 @@ async fn told_apples_then_pears(back: impl AsyncFn(&World, &Value, &ThreadView) 
         let agents = Agents::new(Harnesses::new(vec![known.find(harness).unwrap().clone()]));
         let root = tempfile::tempdir().unwrap();
         let world = World::new_on(root.path(), agents, harness).await;
-        let finish = async |thread: Option<&Value>, text: &str| {
-            let sent = world.send(thread, text).await;
-            let view = world
-                .until_within(Duration::from_secs(300), &sent["thread"], |v| {
-                    !ongoing(v, &sent["turn"])
-                })
-                .await;
-            assert_eq!(state(&view, &sent["turn"]), Some(TurnState::Done));
-            (sent["thread"].clone(), view)
-        };
-        let (thread, _) = finish(
-            None,
-            "Remember the word APPLES. Do not use any tools. Reply with only: OK",
-        )
-        .await;
-        let (_, view) = finish(
-            Some(&thread),
-            "Remember the word PEARS too. Do not use any tools. Reply with only: OK",
-        )
-        .await;
+        let (thread, _) = world
+            .finish_real(
+                None,
+                "Remember the word APPLES. Do not use any tools. Reply with only: OK",
+            )
+            .await;
+        let (_, view) = world
+            .finish_real(
+                Some(&thread),
+                "Remember the word PEARS too. Do not use any tools. Reply with only: OK",
+            )
+            .await;
         let asked = back(&world, &thread, &view).await;
         let ask = "Which words did I ask you to remember? Do not use any tools. \
                    Reply with only the words, comma separated.";
-        let (_, view) = finish(Some(&asked), ask).await;
+        let (_, view) = world.finish_real(Some(&asked), ask).await;
         let reply = last_reply(&view);
         println!("{harness}: {reply}");
         assert!(reply.contains("APPLES"), "{harness} remembers: {reply}");

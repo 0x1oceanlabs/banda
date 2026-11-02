@@ -30,6 +30,7 @@ pub mod model;
 mod record;
 mod rules;
 pub mod settings;
+mod skills;
 mod store;
 mod turn;
 

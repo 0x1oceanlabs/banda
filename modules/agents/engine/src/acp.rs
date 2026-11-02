@@ -221,6 +221,9 @@ enum Lasts {
 /// What a turn sends the Harness: its message's text and images.
 pub struct Prompt {
     pub text: String,
+    /// A skill the message names, as Claude Code runs one: `/name` and
+    /// what follows, after the text (issue #149).
+    pub command: Option<String>,
     pub images: Vec<PromptImage>,
 }
 
@@ -343,6 +346,8 @@ pub struct Running {
 pub struct Commands {
     pub slash_commands: Vec<SlashCommand>,
     pub skills: Vec<Skill>,
+    /// The skills it runs as slash commands, as Claude Code does.
+    pub slashed: Vec<String>,
 }
 
 /// Each mode as the Harnesses with modes of their own name it, Claude
@@ -429,6 +434,12 @@ struct Known {
     native: bool,
     options: Vec<acp::SessionConfigOption>,
     usage: Option<Usage>,
+    /// The commands it said, or `None` before it has.
+    said: Option<Vec<acp::AvailableCommand>>,
+    /// The folder it works in, where its project's skills are.
+    folder: Option<PathBuf>,
+    /// What it said, its skills told by their files: read again only as
+    /// what it said or its folder changes, which may come in either order.
     commands: Option<Commands>,
 }
 
@@ -439,6 +450,10 @@ impl Known {
             options,
             ..Known::default()
         }
+    }
+
+    fn read_commands(&mut self) {
+        self.commands = (self.said.as_ref()).map(|said| commands(said, self.folder.as_deref()));
     }
 }
 
@@ -451,11 +466,18 @@ fn update<R>(
     change(learned.lock().unwrap().entry(session.clone()).or_default())
 }
 
-/// Keeps the options a session opened with.
-fn opened(learned: &Learned, session: &acp::SessionId, now: Vec<acp::SessionConfigOption>) {
+/// Keeps the options a session opened with, in `folder`.
+fn opened(
+    learned: &Learned,
+    session: &acp::SessionId,
+    now: Vec<acp::SessionConfigOption>,
+    folder: &Path,
+) {
     update(learned, session, |known| {
         known.native = native(&now);
         known.options = now;
+        known.folder = Some(folder.to_owned());
+        known.read_commands();
     });
 }
 
@@ -731,14 +753,14 @@ impl Connection {
                 .meta(fork_meta(message));
             let made = self.open(fork, "fork this Thread's conversation").await?;
             let (session, options) = (made.session_id, made.config_options);
-            return Ok(self.opened(thread, &mut sessions, session, options, false));
+            return Ok(self.opened(thread, &mut sessions, session, options, folder, false));
         }
         if let Some(session) = earlier.and_then(|e| e.continued_by(&self.harness))
             && let Some(options) = self
                 .continue_session(&session, folder, roots, &servers)
                 .await
         {
-            opened(&self.learned, &session, options);
+            opened(&self.learned, &session, options, folder);
             sessions.insert(thread, session.clone());
             return Ok((Session(session), Opened::Continued));
         }
@@ -747,7 +769,14 @@ impl Connection {
             .mcp_servers(servers);
         let made = self.open(new, "open a session").await?;
         let (session, options) = (made.session_id, made.config_options);
-        Ok(self.opened(thread, &mut sessions, session, options, earlier.is_some()))
+        Ok(self.opened(
+            thread,
+            &mut sessions,
+            session,
+            options,
+            folder,
+            earlier.is_some(),
+        ))
     }
 
     /// Asks the Harness for a session, `doing` that in plain words if it
@@ -774,9 +803,10 @@ impl Connection {
         sessions: &mut HashMap<ThreadId, acp::SessionId>,
         session: acp::SessionId,
         options: Option<Vec<acp::SessionConfigOption>>,
+        folder: &Path,
         lost: bool,
     ) -> (Session, Opened) {
-        opened(&self.learned, &session, options.unwrap_or_default());
+        opened(&self.learned, &session, options.unwrap_or_default(), folder);
         sessions.insert(thread, session.clone());
         let evidence = Evidence {
             harness: self.harness.clone(),
@@ -1106,9 +1136,9 @@ async fn drive(
                         Some(Said::Runs(running(&known)))
                     }
                     acp::SessionUpdate::AvailableCommandsUpdate(now) => {
-                        let commands = commands(&now.available_commands);
                         Some(Said::Runs(update(&learned, &note.session_id, |known| {
-                            known.commands = Some(commands);
+                            known.said = Some(now.available_commands);
+                            known.read_commands();
                             running(known)
                         })))
                     }
@@ -1325,9 +1355,19 @@ async fn drive(
     routes.clear();
 }
 
-/// A prompt as ACP content: its text, then its images.
-fn blocks(Prompt { text, images }: &Prompt) -> Vec<acp::ContentBlock> {
-    let text = (!text.is_empty()).then(|| acp::ContentBlock::Text(acp::TextContent::new(text)));
+/// A prompt as ACP content: its text, its command, then its images.
+fn blocks(
+    Prompt {
+        text,
+        command,
+        images,
+    }: &Prompt,
+) -> Vec<acp::ContentBlock> {
+    let texts = (!text.is_empty())
+        .then_some(text)
+        .into_iter()
+        .chain(command);
+    let text = texts.map(|text| acp::ContentBlock::Text(acp::TextContent::new(text)));
     let images = images.iter().map(|image| {
         acp::ContentBlock::Image(acp::ImageContent::new(
             BASE64.encode(&image.bytes),
@@ -1544,20 +1584,29 @@ fn running(known: &Known) -> Running {
     }
 }
 
-/// The commands a session said, its slash commands apart from its
-/// skills: Codex says each of its skills as a command named `$` and the
-/// skill's name, which a message names anywhere in its text. Claude
-/// Code's skills are slash commands, as it runs them.
-fn commands(said: &[acp::AvailableCommand]) -> Commands {
+/// The commands a session in `folder` said, its slash commands apart
+/// from its skills: Codex says each of its skills as a command named `$`
+/// and the skill's name, which a message names anywhere in its text.
+/// Claude Code says its skills as slash commands: one whose `SKILL.md` is
+/// in the folder or the home folder is a skill too (issue #149).
+fn commands(said: &[acp::AvailableCommand], folder: Option<&Path>) -> Commands {
+    let home = dirs::home_dir();
     let mut commands = Commands::default();
     for command in said {
+        let skill = |name: &str| Skill {
+            name: name.to_owned(),
+            description: command.description.clone(),
+        };
         match command.name.strip_prefix('$') {
             Some("") => {}
-            Some(name) => commands.skills.push(Skill {
-                name: name.to_owned(),
-                description: command.description.clone(),
-            }),
-            None => commands.slash_commands.push(slash_command(command)),
+            Some(name) => commands.skills.push(skill(name)),
+            None => {
+                if crate::skills::file(&command.name, folder, home.as_deref()).is_some() {
+                    commands.skills.push(skill(&command.name));
+                    commands.slashed.push(command.name.clone());
+                }
+                commands.slash_commands.push(slash_command(command));
+            }
         }
     }
     commands
