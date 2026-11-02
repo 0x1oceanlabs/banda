@@ -179,6 +179,23 @@ every proposal:
    - Pinned Spaces come first in the sidebar's Space list, the Banda
      menu's Spaces and "New Thread"'s list; archived ones are in none of
      them, only in the settings, where they can come back.
+   - _Built on 2026-11-02, in step 6:_
+     - The menu is on a Space's row wherever the sidebar shows one: the
+       "places" view's Space list and a Space's section header.
+     - The "Spaces" section picks one Space at a time, as T3 Code's
+       project settings do; `spaces/<id>` links to it. An archived Space
+       says so in the picker.
+     - Remove asks in a dialog of the window's. The Threads it counts
+       are the agents module's (`agents.threads`): the window calls a
+       module by name there, around ADR 0022, until a module can say
+       what goes with a Space.
+     - Every list of the Spaces in the window (`useSpaces`) reads them
+       again once one is changed here, so the sidebar, the settings and
+       "New Thread" follow at once. The engine has no event for it yet,
+       so a change made elsewhere shows as the window comes to the
+       front.
+     - "Copy path" needed the page to write to the clipboard: the window
+       now grants it that one permission, and still not reading it.
 
 6. **A Space whose folder is gone asks where it went** (ADR 0005,
    decision 6). The engine still lists it, `missing`, and opens none of

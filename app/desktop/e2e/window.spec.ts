@@ -2538,6 +2538,82 @@ test("Open in Files adds the folder picked in the system's picker, opened where 
   ).toBe(work)
 })
 
+test("a Space is pinned, named, archived and removed from its row's menu and the settings, as in T3 Code", async () => {
+  window = await startWindow()
+  const { page, dir, app, banda } = window
+  const { thread, composer } = await firstThread(page)
+  await composer.fill("hello")
+  await composer.press("Enter")
+  await expect(thread).not.toHaveAccessibleName("New Thread")
+  const lab = join(dir, "lab")
+  mkdirSync(lab)
+  banda("space", "add", lab)
+  await setInFront(page, false)
+  await setInFront(page, true)
+  // The places view lists every Space, each a row with its menu.
+  const sidebar = page.getByRole("complementary", { name: "Sidebar" })
+  await sidebar.getByRole("button", { name: /^View: / }).click()
+  await page.getByRole("menuitemradio", { name: /^places/ }).click()
+  const spaces = sidebar.getByRole("group", { name: "Spaces" })
+  const header = spaces.getByRole("button", { name: /^Work/ })
+
+  // The row's menu: Copy path, and Pin Space, which turns to Unpin.
+  await header.click({ button: "right" })
+  await page.screenshot({ path: "test-results/32-space-menu.png" })
+  await page.getByRole("menuitem", { name: "Copy path" }).click()
+  await expect
+    .poll(() => app.evaluate(({ clipboard }) => clipboard.readText()))
+    .toMatch(/\/Work$/)
+  await header.click({ button: "right" })
+  await page.getByRole("menuitem", { name: "Pin Space" }).click()
+  await header.click({ button: "right" })
+  await expect(
+    page.getByRole("menuitem", { name: "Unpin Space" })
+  ).toBeVisible()
+
+  // Space settings opens the settings at the Space, pinned.
+  await page.getByRole("menuitem", { name: "Space settings" }).click()
+  const settings = page.getByRole("main").filter({ hasText: "Settings" })
+  await expect(settings.getByRole("heading", { name: "Spaces" })).toBeVisible()
+  const picker = settings.getByRole("combobox", { name: "Space" })
+  await expect(picker).toContainText("Work")
+  await expect(
+    settings.getByRole("switch", { name: "Pin Space" })
+  ).toBeChecked()
+
+  // A new name shows in the sidebar.
+  const name = settings.getByRole("textbox", { name: "Space name" })
+  await name.fill("Home")
+  await name.press("Enter")
+  await expect(spaces.getByRole("button", { name: /^Home/ })).toBeVisible()
+
+  // Archived, lab stays only in the settings, where it can come back.
+  await picker.click()
+  await page.getByRole("option", { name: "lab" }).click()
+  await settings.getByRole("button", { name: "Archive" }).click()
+  await expect(picker).toContainText("lab (archived)")
+  await expect(
+    settings.getByRole("button", { name: "Unarchive" })
+  ).toBeVisible()
+  await page.screenshot({ path: "test-results/33-space-settings.png" })
+
+  // Remove asks first, then the Space goes and its folder stays.
+  await settings.getByRole("button", { name: "Remove Space" }).click()
+  const ask = page.getByRole("dialog", {
+    name: 'Remove Space "lab" and delete its 0 Threads?',
+  })
+  await expect(ask).toContainText(lab)
+  await expect(ask).toContainText("This action cannot be undone.")
+  await page.screenshot({ path: "test-results/34-remove-space.png" })
+  await ask.getByRole("button", { name: "Remove Space" }).click()
+  await expect(ask).toBeHidden()
+  await expect(picker).toContainText("Home")
+  await picker.click()
+  await expect(page.getByRole("option", { name: /lab/ })).toBeHidden()
+  await page.keyboard.press("Escape")
+  expect(existsSync(lab)).toBe(true)
+})
+
 test("text selected in a reply is quoted in the composer, a line apart from what is written after it", async () => {
   window = await startWindow()
   const { page } = window

@@ -4,11 +4,10 @@
  * (docs/adr/0016-settings-window.html). It keeps no setting of its own:
  * every value is the look's, as `banda look --follow` read the files.
  */
-import { type ReactNode, useEffect, useMemo, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import type { Problem } from "@banda/contract/look"
 import { aboutOf, type Row, SCHEMAS } from "@banda/contract/settings"
 import { Button } from "@banda/ui/components/button"
-import { Card } from "@banda/ui/components/card"
 import {
   InputGroup,
   InputGroupAddon,
@@ -23,7 +22,7 @@ import { problemWords } from "../bar/Bar"
 import { useLookProblems, useLookSettings } from "../look"
 import { groupsOf, parseLink, search, type Section, SECTIONS } from "./sections"
 import type { SettingsArgs } from "./pane"
-import { SettingRow } from "./SettingRow"
+import { Group, Rows, SettingRow } from "./SettingRow"
 
 const NONE: Problem[] = []
 
@@ -108,14 +107,9 @@ export function Settings({
     sectionGroups.flatMap((g) => g.rows.map((r) => `${r.file}:${r.key}`))
   )
   const groups = sectionGroups.map((group) => (
-    <div key={group.title} className="flex flex-col gap-1.5">
-      {group.title && (
-        <h2 className="px-1 text-xs font-medium text-muted-foreground">
-          {group.title}
-        </h2>
-      )}
-      <Rows>{group.rows.map(row)}</Rows>
-    </div>
+    <Group key={group.title} title={group.title}>
+      {group.rows.map(row)}
+    </Group>
   ))
   const above = [section.file, section.also?.file].flatMap((file) =>
     file
@@ -264,11 +258,6 @@ export function Settings({
       </div>
     </div>
   )
-}
-
-/** Rows in a card, a line between each. */
-function Rows({ children }: { children: ReactNode }) {
-  return <Card className="gap-0 divide-y py-0">{children}</Card>
 }
 
 function OpenFile({ file, words }: { file: string; words: string }) {

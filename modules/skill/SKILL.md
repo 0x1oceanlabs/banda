@@ -74,6 +74,10 @@ When the Person asks for a folder to become a Space, `banda space add
 prints that Space. The folder is not changed: Banda keeps the Space's
 data elsewhere.
 
+A Space's name, pin and archive, and its removal, are the Person's: they
+change them in the settings, which `banda menu settings.spaces.<id>`
+opens at that Space, or from the Space's menu in the sidebar.
+
 ## Driving the browser's tabs
 
 `banda browser` prints the CDP endpoint of the browser in Banda's
