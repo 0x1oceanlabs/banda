@@ -5,7 +5,7 @@
  */
 import { existsSync } from "node:fs"
 import TEMPLATE from "../../../look/sidebar.toml"
-import { writeWhole } from "./whole"
+import { writeWhole } from "@banda/desktop-kit"
 
 /** `file`, there for the Person to edit: the template when it was not. */
 export function ensure(file: string): void {

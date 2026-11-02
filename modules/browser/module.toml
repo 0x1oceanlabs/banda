@@ -1,5 +1,6 @@
 # The browser module, as it declares itself (ADR 0022). It has no engine
-# part; its Pane, actions and sources its code declares.
+# part: its Pane, actions and sources its code declares, and its part in
+# the window's main process is `desktop` (ADR 0028).
 id = "browser"
 name = "Browser"
 about = "Chromium pages in the window, for the Person and every Agent: tabs, extensions, and a blocker of ads and trackers."
@@ -11,4 +12,4 @@ settings = ["browser.toml"]
 # Paths it takes that a module from elsewhere would lack (ADR 0022,
 # decision 6), each with why. One that gets its place in the contract goes.
 [unstable]
-desktop-main = "pages live in the window's main process (app/desktop/src, app/web/src/host.ts; ADR 0013): no contract for it yet"
+desktop-preload = "the preload calls the extensions' buttons on electron-chrome-extensions' own channels, and presses the keys taken from a page, by hand (app/desktop/src/preload.ts; ADR 0028)"

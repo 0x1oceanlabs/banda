@@ -40,11 +40,8 @@ import {
 import { HttpServerRequest, HttpServerResponse } from "effect/http"
 import { Socket } from "effect/socket"
 import type { Debugger, WebContents } from "electron"
-import { Engine } from "./engine"
-import { Refused } from "./errors"
+import { Engine, Refused, Window, writeWhole } from "@banda/desktop-kit"
 import { type Change, Tabs } from "./tabs"
-import { writeWhole } from "./whole"
-import { Window } from "./window"
 
 /** The protocol's version, as Chromium names it. */
 const PROTOCOL = "1.3"

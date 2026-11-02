@@ -1,7 +1,7 @@
 /**
  * Banda's window, for the services that show something over it or tell
- * its page something (ADR 0020). `main.ts` opens and closes it; this only
- * says which it is now.
+ * its page something (ADR 0020). Main opens and closes it, and gives this
+ * layer, which only says which it is now.
  */
 import { Context, Layer } from "effect"
 import type { BrowserWindow } from "electron"

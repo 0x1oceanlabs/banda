@@ -15,9 +15,7 @@ import {
   Stream,
 } from "effect"
 import { type WebContents, webContents } from "electron"
-import { Refused } from "./errors"
-import { tellPage } from "./ipc"
-import { Window } from "./window"
+import { Refused, tellPage, Window } from "@banda/desktop-kit"
 
 /** How long a Pane has to make a tab it was asked for. */
 const CREATING = "10 seconds"

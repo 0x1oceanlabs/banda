@@ -5,9 +5,10 @@
  * writes the preset the page picks into `sidebar.toml` (ADR 0008), and
  * opens the system's folder picker for "Add Space" (ADR 0026); nothing
  * else crosses from Node to the page (docs/architecture.md,
- * "Processes"). The page shows the browser's pages, kept apart from it
- * (browser.ts, ADR 0013). Settings are a Pane of the page; the desktop
- * writes their files (settings.ts, ADR 0016).
+ * "Processes"). The modules' parts in main run here too, as the
+ * browser's pages, kept apart from the page (modules.ts, ADR 0013, ADR
+ * 0028). Settings are a Pane of the page; the desktop writes their files
+ * (settings.ts, ADR 0016).
  */
 import { join, resolve, sep } from "node:path"
 import { pathToFileURL } from "node:url"
@@ -25,21 +26,26 @@ import {
 import { type Look as LookValue, WALLPAPER_URL } from "@banda/contract/look"
 import { NodeServices } from "@effect/platform-node"
 import { Effect, Layer, ManagedRuntime, Schema, Stream } from "effect"
-import { Browser, browserAnswers, userAgent } from "./browser"
-import { Cdp } from "./cdp"
-import { openDoor } from "./door"
-import { pickFolder } from "./dialog"
-import { Extensions } from "./extensions"
-import { Engine } from "./engine"
-import { firstFrame, Look } from "./look"
-import { Refused } from "./errors"
-import { none, serve, tellPage, text } from "./ipc"
-import { NoticeArg, Notices, RecordedDesktop } from "./notices"
-import { Settings } from "./settings"
-import { Tabs } from "./tabs"
+import {
+  Engine,
+  Look,
+  none,
+  pickFolder,
+  Refused,
+  serve,
+  Settings,
+  tellPage,
+  text,
+  Window,
+} from "@banda/desktop-kit"
 import { BRIDGE } from "@banda/web/host"
+import { openDoor } from "./door"
+import { engineLayer } from "./engine"
+import { firstFrame, firstLook, lookLayer } from "./look"
+import { modules } from "./modules"
+import { NoticeArg, Notices, RecordedDesktop } from "./notices"
+import { settingsLayer } from "./settings"
 import { ensure } from "./sidebar"
-import { Window } from "./window"
 
 /** The page's origin; the engine lets it in (kernel/src/api.rs, APP_ORIGIN). */
 const ORIGIN = "app://banda"
@@ -56,7 +62,8 @@ const CSP = [
   // Ghostty draws terminals from WebAssembly that ships with the page.
   "script-src 'self' 'wasm-unsafe-eval'",
   "style-src 'self' 'unsafe-inline'",
-  // An extension's button shows its icon from crx:// (extensions.ts).
+  // An extension's button shows its icon from crx:// (the browser's
+  // extensions, @banda/browser-desktop).
   "img-src 'self' data: crx:",
   "font-src 'self' data:",
   // The engine; and the page's own files, as Ghostty fetches its WebAssembly.
@@ -110,18 +117,16 @@ const notices =
     : Notices.system
 
 /** Main's services (ADR 0020): the engine and the look as children, the
- * settings, the notices, and the browser with its tabs, its extensions
- * and its CDP endpoint. They start with the first effect run, and stop
- * when it is disposed. */
+ * settings, the notices, and over them the modules' own, the browser's
+ * (modules.ts). They start with the first effect run, and stop when it is
+ * disposed. */
 const runtime = ManagedRuntime.make(
-  Layer.mergeAll(Browser.layer, Cdp.layer(userAgent)).pipe(
-    Layer.provideMerge(Extensions.layer),
-    Layer.provideMerge(Tabs.layer),
+  modules.layer.pipe(
     Layer.provideMerge(
       Layer.mergeAll(
-        Engine.layer(engineBinary),
-        Look.layer(engineBinary),
-        Settings.layer(engineBinary),
+        engineLayer(engineBinary),
+        lookLayer(engineBinary),
+        settingsLayer(engineBinary),
         notices,
         Window.layer(() => window)
       )
@@ -215,8 +220,8 @@ async function ready(): Promise<void> {
           }),
       ],
     },
-    // The browser's own (ADR 0013).
-    browser: browserAnswers,
+    // The modules' own: the browser's (ADR 0013).
+    ...modules.answers,
     // The settings' (ADR 0016) and the Banda menu's (ADR 0017).
     settings: {
       set: [
@@ -274,7 +279,7 @@ async function ready(): Promise<void> {
       ],
     },
   })
-  const first = await runtime.runPromise(Look.first(LOOK_WAIT))
+  const first = await runtime.runPromise(firstLook(LOOK_WAIT))
   if (first) nativeTheme.themeSource = first.mode
   Menu.setApplicationMenu(process.platform === "darwin" ? macMenu() : null)
   window = openWindow()
@@ -378,7 +383,7 @@ function openWindow(): BrowserWindow {
     // sets this once, so turning it on shows from the next start.
     systemGlass(lookNow())
   )
-  runtime.runSync(Browser.use((browser) => browser.host(opened.webContents)))
+  runtime.runSync(modules.opened(opened.webContents))
   void opened.loadURL(PAGE)
   opened.on("closed", () => {
     window = null
@@ -411,7 +416,7 @@ function pageWindow(
       nodeIntegration: false,
       // Banda's sounds play before the Person first clicks (ADR 0009).
       autoplayPolicy: "no-user-gesture-required",
-      // The browser's pages (browser.ts).
+      // The browser's pages (@banda/browser-desktop).
       webviewTag: true,
     },
   })

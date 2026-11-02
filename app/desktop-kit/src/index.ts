@@ -1,0 +1,16 @@
+/**
+ * What a module's part in the window's main process may use of main
+ * (ADR 0028, decision 4): Banda's window, the look, the settings and the
+ * engine as services, which main gives as layers; the dialogs over the
+ * window; the errors main's effects fail with; and the bridge's answers
+ * and `tellPage`. Written in Effect, as main is (ADR 0020).
+ */
+export { confirm, pickFolder, type Ask } from "./dialog"
+export { Engine } from "./engine"
+export type { DesktopModule } from "./module"
+export { Broke, NotFromPage, Refused } from "./errors"
+export { type Answer, type Answers, none, serve, tellPage, text } from "./ipc"
+export { Look } from "./look"
+export { Settings } from "./settings"
+export { writeWhole } from "./whole"
+export { Window } from "./window"

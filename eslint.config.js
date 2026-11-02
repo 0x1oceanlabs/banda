@@ -34,7 +34,11 @@ export default defineConfig([
   {
     // The window's main process has no React; Effect's `Service.use` is
     // not a hook (ADR 0020).
-    files: ["app/desktop/src/**/*.ts"],
+    files: [
+      "app/desktop/src/**/*.ts",
+      "app/desktop-kit/src/**/*.ts",
+      "modules/*/desktop/src/**/*.ts",
+    ],
     rules: { "react-hooks/rules-of-hooks": "off" },
   },
 ])

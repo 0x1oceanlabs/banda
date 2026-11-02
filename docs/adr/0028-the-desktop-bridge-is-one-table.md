@@ -59,8 +59,8 @@ Issue #161, from the architecture review of 2026-11-02 (#168).
    - The browser's leaves are `BROWSER_BRIDGE`, in its
      `modules/browser/pane/src/desktop.ts`, which `BRIDGE` takes in under
      `browser`.
-   - Its answers are one object from `app/desktop/src/browser.ts`, which
-     `main.ts` puts under `browser` without naming its channels.
+   - Its answers come with its part in main (below), and main puts them
+     under `browser` without naming its channels.
    - The browser's main-process code (`browser.ts`, `cdp.ts`, `tabs.ts`,
      `extensions.ts`, `popup.ts`, `blocker.ts`) moves into the module, as
      `modules/browser/desktop`, with its layer and its answers.

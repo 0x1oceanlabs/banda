@@ -54,12 +54,18 @@ importers:
         specifier: 0.13.0
         version: 0.13.0
     devDependencies:
+      '@banda/browser-desktop':
+        specifier: workspace:*
+        version: link:../../modules/browser/desktop
       '@banda/browser-pane':
         specifier: workspace:*
         version: link:../../modules/browser/pane
       '@banda/contract':
         specifier: workspace:*
         version: link:../../contract
+      '@banda/desktop-kit':
+        specifier: workspace:*
+        version: link:../desktop-kit
       '@banda/web':
         specifier: workspace:*
         version: link:../web
@@ -69,9 +75,6 @@ importers:
       '@playwright/test':
         specifier: 1.64.1
         version: 1.64.1
-      '@types/chrome':
-        specifier: ^0.3.7
-        version: 0.3.7
       '@types/node':
         specifier: ^24
         version: 24.19.2
@@ -87,6 +90,25 @@ importers:
       vitest:
         specifier: ^5.0.5
         version: 5.0.5(@types/node@24.19.2)(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0))
+
+  app/desktop-kit:
+    dependencies:
+      '@banda/contract':
+        specifier: workspace:*
+        version: link:../../contract
+      effect:
+        specifier: 4.1.1
+        version: 4.1.1
+    devDependencies:
+      '@types/node':
+        specifier: ^24
+        version: 24.19.2
+      electron:
+        specifier: 45.1.0
+        version: 45.1.0
+      typescript:
+        specifier: ~6.0.2
+        version: 6.0.3
 
   app/ghostty:
     dependencies:
@@ -306,6 +328,52 @@ importers:
         version: 6.0.3
       vitest:
         specifier: ^5
+        version: 5.0.5(@types/node@24.19.2)(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0))
+
+  modules/browser/desktop:
+    dependencies:
+      '@banda/browser-pane':
+        specifier: workspace:*
+        version: link:../pane
+      '@banda/desktop-kit':
+        specifier: workspace:*
+        version: link:../../../app/desktop-kit
+      '@effect/platform-node':
+        specifier: 4.1.1
+        version: 4.1.1(effect@4.1.1)(redis@6.3.1)
+      '@ghostery/adblocker-electron':
+        specifier: 2.20.3
+        version: 2.20.3(electron@45.1.0)
+      effect:
+        specifier: 4.1.1
+        version: 4.1.1
+      electron-chrome-extensions:
+        specifier: 4.10.0
+        version: 4.10.0
+      electron-chrome-web-store:
+        specifier: 0.13.0
+        version: 0.13.0
+    devDependencies:
+      '@banda/ui':
+        specifier: workspace:*
+        version: link:../../../app/ui
+      '@effect/vitest':
+        specifier: 4.1.1
+        version: 4.1.1(effect@4.1.1)(vitest@5.0.5(@types/node@24.19.2)(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)))
+      '@types/chrome':
+        specifier: ^0.3.7
+        version: 0.3.7
+      '@types/node':
+        specifier: ^24
+        version: 24.19.2
+      electron:
+        specifier: 45.1.0
+        version: 45.1.0
+      typescript:
+        specifier: ~6.0.2
+        version: 6.0.3
+      vitest:
+        specifier: ^5.0.5
         version: 5.0.5(@types/node@24.19.2)(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0))
 
   modules/browser/pane:

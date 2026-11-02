@@ -1,0 +1,32 @@
+{
+  "name": "@banda/browser-desktop",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "The browser's part in the window's main process (ADR 0013, ADR 0028): its pages kept apart, their tabs, extensions and blocker, and the CDP endpoint.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --dir src"
+  },
+  "dependencies": {
+    "@banda/browser-pane": "workspace:*",
+    "@banda/desktop-kit": "workspace:*",
+    "@effect/platform-node": "4.1.1",
+    "@ghostery/adblocker-electron": "2.20.3",
+    "effect": "4.1.1",
+    "electron-chrome-extensions": "4.10.0",
+    "electron-chrome-web-store": "0.13.0"
+  },
+  "devDependencies": {
+    "@banda/ui": "workspace:*",
+    "@effect/vitest": "4.1.1",
+    "@types/chrome": "^0.3.7",
+    "@types/node": "^24",
+    "electron": "45.1.0",
+    "typescript": "~6.0.2",
+    "vitest": "^5.0.5"
+  }
+}

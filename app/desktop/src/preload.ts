@@ -35,7 +35,8 @@ const banda = mapTable(BRIDGE, call) as HostOf<typeof BRIDGE>
 const { key, ...browser } = banda.browser
 
 // A key the desktop took from a browser page is pressed in the window, so
-// Banda's actions and the browser Pane hear it as their own (browser.ts).
+// Banda's actions and the browser Pane hear it as their own
+// (@banda/browser-desktop).
 key((pressed) => {
   window.dispatchEvent(
     new KeyboardEvent("keydown", {

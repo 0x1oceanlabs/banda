@@ -50,7 +50,7 @@ banda call/follow   the CLI: the same API, for people, scripts and Agents
   `~/.config/banda/browser.toml` comes with it too (ADR 0013), and the
   browser's switch and its pins ask the desktop to write `tabs` and
   `pinned` into it, through `banda settings set`; its `blocker` turns
-  the desktop's ad blocker (`app/desktop/src/blocker.ts`) on and off.
+  the desktop's ad blocker (`modules/browser/desktop/src/blocker.ts`) on and off.
   The agents module's
   `agents.toml`, what Enter does in the composer, comes with it the same
   way (ADR 0016). The settings Pane writes every file through `banda
@@ -563,10 +563,12 @@ module reaches a Harness through an adapter:
 
 ```
 app/desktop      Electron main: starts the engine, serves the page, hands it the address
+app/desktop-kit  what a module's part in main may use of main: its services, dialogs, errors, the bridge's answers
 app/web          the page: the bar, the sidebar, the workspaces and the overview; the actions; the Pane registry
 app/ui           shadcn/ui (preset b0, on Base UI), Banda's Mark and sounds, and the Pane contract
 app/ghostty      T3 Code's Ghostty adapter: a terminal on a canvas
 modules/*/pane   each module's Panes
+modules/*/desktop  a module's part in Electron main
 ```
 
 - **The page reaches the engine only through the API.** Electron main gives
@@ -724,9 +726,13 @@ modules/*/pane   each module's Panes
     Electron lets the page play sound before the first click.
 - **Only `window.banda` ties the page to the desktop.** It names no
   Electron API, so a browser can host it later; for now the engine lets in
-  only `app://banda` and pages on localhost. In main, each of its
-  channels answers Banda's page alone, decodes its arguments with a
-  `Schema` and runs one effect (`app/desktop/src/ipc.ts`, ADR 0020).
+  only `app://banda` and pages on localhost. Its channels are one table,
+  `BRIDGE` in `app/web/src/host.ts`, each named by its path (ADR 0028):
+  the preload builds `window.banda` from it, and in main each channel
+  answers Banda's page alone, decodes its arguments with a `Schema` and
+  runs one effect (`serve` in `@banda/desktop-kit`, ADR 0020). A module
+  brings its part of the table and of main; `app/desktop/src/modules.ts`
+  is the one file in main that names one.
 - **The browser's pages** (ADR 0013) are Electron `<webview>`s in the
   window's layer over its workspaces (`PANE_LAYER`), which never moves:
   Electron destroys a `<webview>` that moves in the DOM. The browser Pane
@@ -735,8 +741,8 @@ modules/*/pane   each module's Panes
   - The desktop attaches a page only in the `persist:browser` profile,
     sandboxed, with no preload and no Node; a site asks before it uses the
     camera, the location or another program (the `Browser` service,
-    `app/desktop/src/browser.ts`; the extensions are `Extensions`, ADR
-    0020).
+    `modules/browser/desktop/src/browser.ts`; the extensions are
+    `Extensions`, ADR 0020).
   - Banda's Alt keys and the browser's Ctrl keys are taken from the page in
     `before-input-event` and pressed again in the window, so the actions
     and the Pane hear them as their own.
@@ -745,11 +751,11 @@ modules/*/pane   each module's Panes
   - A Pane keeps its tabs in its args, and holds their pages while it
     has them: only the shown tab's page follows the slot, and a tab is
     made a page the first time it shows. A page's new tabs, its icon and
-    the downloads come from the desktop as `browser:news`, by the page's
+    the downloads come from the desktop as `browser.listen`, by the page's
     web contents ID; Banda's page shows no remote image, so the desktop
     fetches the icon in the browser's profile.
   - Agents drive the tabs through the window's CDP endpoint
-    (`app/desktop/src/cdp.ts`, ADR 0013 decision 7): an Effect HTTP
+    (`modules/browser/desktop/src/cdp.ts`, ADR 0013 decision 7): an Effect HTTP
     server on 127.0.0.1 with a random token in its path, which answers
     as a whole Chrome whose targets are the tabs. A tab's
     `webContents.debugger` is attached while a client uses it, and each
@@ -773,6 +779,7 @@ banda/
     terminal/engine/  Rust: Terminals, their PTYs and what they printed
     terminal/pane/    React: a terminal, drawn by Ghostty
     browser/pane/     React: the browser Pane, its tabs and row (ADR 0013)
+    browser/desktop/  Electron main: the browser's pages, extensions, blocker and CDP endpoint (ADR 0028)
     skill/            Rust: the Banda skill, its core and the topics it gathers (ADR 0012)
   look/               Rust: banda look, the look, the sidebar's arrangement and the browser's; skill/ its topics
   engine/             the banda program: serve (the kernel and its modules), call, follow, look, skill, mcp, menu, browser
@@ -780,6 +787,7 @@ banda/
   app/ghostty/        T3 Code's Ghostty adapter and its WebAssembly, vendored
   app/web/            React: the shell (bar, sidebar, workspaces, overview), the actions, the Pane registry
   app/desktop/        Electron: the window and the engine's start; e2e tests
+  app/desktop-kit/    what a module's part in main may use of main (ADR 0028)
   contract/           the engine's API for TypeScript: generated types and the client
   tools/fake-agent/   a scripted ACP agent for tests and window checks; it replays recordings too
   scripts/check.sh    every check a change must pass

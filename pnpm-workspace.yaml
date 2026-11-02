@@ -2,6 +2,7 @@ packages:
   - contract
   - app/*
   - modules/*/pane
+  - modules/*/desktop
 
 allowBuilds:
   electron: true

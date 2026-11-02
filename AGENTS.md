@@ -39,11 +39,15 @@ get the PR.
 
 ## Effect in the window's main process
 
-`app/desktop/src` (not the preload, not the page) is written in Effect 4
+Electron main is written in Effect 4: `app/desktop/src` (not the
+preload), `app/desktop-kit` and the modules' `desktop` parts, never the
+page
 ([ADR 0020](docs/adr/0020-the-windows-main-process-is-written-in-effect.md)):
 
 - A part of main is a service: `class X extends Context.Service<X, {…}>()("banda/X")`,
-  with a `static layer` that builds it. What it starts it starts in the
+  with a `static layer` that builds it. A service a module uses of main
+  is a tag in `@banda/desktop-kit`, and main builds its layer
+  (`Window`'s, which only says which window it is, comes with it). What it starts it starts in the
   layer's scope (`Effect.forkScoped`), so disposing the runtime stops it.
 - Electron's callbacks are the edge: each runs one effect. Those
   `main.ts` registers run on its runtime (`runtime.runPromise`,
