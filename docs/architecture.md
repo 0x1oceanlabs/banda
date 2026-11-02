@@ -493,7 +493,11 @@ If Chat is removed, Agents still works through its own Thread.
   effect runs. A Thread runs one turn at a time (a unique index on its running turn):
   what the Agent does by itself opens its turn once the turn that ran is
   written as ended, and a turn the outbox starts takes the Agent's own
-  over. A turn keeps who opened it
+  over. Nothing waits by reading again: what waits on memory (a turn's
+  prompt going out, a Question's answer) is told by `Live` when that
+  changes, and what waits for a turn to be written as ended follows the
+  module's committed `turn.ended` facts about the Thread (the kernel's
+  `ModuleSpace::committed`). A turn keeps who opened it
   (`agents_turns.opener`): a Person's message, a retry, a message its turn
   could not take, the Agent by itself, or another Thread's Agent that
   asked or answered (`from_thread` names that Thread); "by itself" is read

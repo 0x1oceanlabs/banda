@@ -17,7 +17,6 @@
 //! turns too.
 
 use crate::acp::{Between, Connection, Said, Session};
-use crate::effects::LOOK_AGAIN;
 use crate::live::Live;
 use crate::model::{
     Body, Fact, Failure, Item, ItemId, Opener, Settings, ThreadId, ToolStatus, TurnId, TurnState,
@@ -198,6 +197,9 @@ impl Listener {
     ) -> Result<Option<Opened>, String> {
         let (thread, agent) = (self.thread, self.agent);
         let given_up = Instant::now() + ENDING;
+        // Following the Thread's turn endings before the first try, so the
+        // end is not missed between the two.
+        let mut ended = self.space.committed(thread, &[writer::ENDED]);
         loop {
             let text = format!("{} went on by itself.", self.name);
             let opening = self
@@ -208,10 +210,16 @@ impl Listener {
             // written.
             match opening {
                 Err(Error::Refused(_)) if connection.prompting(session) => return Ok(None),
-                Err(Error::Refused(refused)) if Instant::now() >= given_up => {
-                    return Err(refused.message);
+                // It tries again once a turn of the Thread is written as
+                // ended.
+                Err(Error::Refused(refused)) => {
+                    if tokio::time::timeout_at(given_up, ended.next())
+                        .await
+                        .is_err()
+                    {
+                        return Err(refused.message);
+                    }
                 }
-                Err(Error::Refused(_)) => tokio::time::sleep(LOOK_AGAIN).await,
                 opened => return opened.map_err(plain),
             }
         }
