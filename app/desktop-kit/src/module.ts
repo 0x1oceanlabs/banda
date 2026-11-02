@@ -19,10 +19,19 @@ export type Asked<R> = Readonly<
   Record<string, (request: WindowRequest) => Effect.Effect<unknown, Refused, R>>
 >
 
+/**
+ * What a module's part serves at `app://<host>/…`, by host: an origin of
+ * its own, apart from Banda's page, which may show it in a frame.
+ */
+export type Served<R> = Readonly<
+  Record<string, (request: Request) => Effect.Effect<Response, never, R>>
+>
+
 export type DesktopModule<Table, Services, Needs> = {
   readonly layer: Layer.Layer<Services, never, Needs>
   readonly answers: Answers<Table, Services | Needs>
   readonly asked: Asked<Services | Needs>
+  readonly served: Served<Services | Needs>
   /** Runs as Banda's window opens, its page in `contents`. */
   readonly opened: (
     contents: WebContents

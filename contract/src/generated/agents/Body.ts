@@ -9,6 +9,7 @@ import type { QuestionState } from "./QuestionState";
 import type { ToolContent } from "./ToolContent";
 import type { ToolKind } from "./ToolKind";
 import type { ToolStatus } from "./ToolStatus";
+import type { VisualId } from "./VisualId";
 
 /**
  * What one Thread entry holds.
@@ -40,4 +41,4 @@ plan?: string, state: QuestionState, answer?: string,
 /**
  * What the Person filled in the form.
  */
-values?: { [key in string]: FieldValue }, } | { "kind": "notice", text: string, };
+values?: { [key in string]: FieldValue }, } | { "kind": "notice", text: string, } | { "kind": "visual", visual: VisualId, title: string, height: number, };

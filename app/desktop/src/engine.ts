@@ -4,7 +4,7 @@
  * forgets it while the engine is down, and stops the engine with the
  * window (child.ts).
  */
-import type { Address } from "@banda/contract"
+import { type Address, Engine as Client } from "@banda/contract"
 import { Engine } from "@banda/desktop-kit"
 import {
   Data,
@@ -84,10 +84,16 @@ export const engineLayer = (binary: string) =>
           }
         )
       )
+      const at = known(address).pipe(
+        Stream.runHead,
+        Effect.map(Option.getOrThrow)
+      )
+      let client: Client | undefined
+      yield* Effect.addFinalizer(() => Effect.sync(() => client?.close()))
       return {
-        address: known(address).pipe(
-          Stream.runHead,
-          Effect.map(Option.getOrThrow)
+        address: at,
+        client: Effect.sync(
+          () => (client ??= new Client(() => Effect.runPromise(at)))
         ),
         door: Effect.map(Deferred.await(door), (running) => running.window),
         browser: Effect.map(Deferred.await(door), (running) => running.browser),

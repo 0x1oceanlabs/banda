@@ -57,14 +57,3 @@ function rgb(css: string): Color {
   const [r, g, b] = probe.getImageData(0, 0, 1, 1).data
   return { r, g, b }
 }
-
-/** Calls `onChange` when the window turns light or dark, or its look
- * sets new colours on the root (ADR 0007). */
-export function onThemeChange(onChange: () => void): () => void {
-  const watching = new MutationObserver(onChange)
-  watching.observe(document.documentElement, {
-    attributes: true,
-    attributeFilter: ["class", "style"],
-  })
-  return () => watching.disconnect()
-}

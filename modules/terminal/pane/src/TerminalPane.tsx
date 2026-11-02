@@ -14,7 +14,8 @@ import { problem as words } from "@banda/ui/lib/words"
 import { definePane, type PaneProps, PROGRAM_KEYS } from "@banda/ui/pane"
 import { RotateCcwIcon, TerminalIcon } from "lucide-react"
 import { Input } from "./input"
-import { fontOf, onThemeChange, themeOf } from "./theme"
+import { onThemeChange } from "@banda/ui/lib/look"
+import { fontOf, themeOf } from "./theme"
 
 /** How long a size holds before the shell hears it, in ms. */
 const SETTLE = 120

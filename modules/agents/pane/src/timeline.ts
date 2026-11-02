@@ -45,6 +45,11 @@ function isWork(line: Line): line is Extract<Row, { kind: "item" }> {
   )
 }
 
+/** Whether `line` is a Visual the Agent showed. */
+function isVisual(line: Line): boolean {
+  return line.kind === "item" && line.item.body.kind === "visual"
+}
+
 /** The turn a line belongs to, if any. */
 function turnOf(line: Line): string | undefined {
   switch (line.kind) {
@@ -100,9 +105,12 @@ function fold(lines: Line[], turns: TurnView[]): Line[] {
   const gone = new Set<number>()
   for (const turn of turns) {
     if (!FOLDS.has(turn.state)) continue
+    // A Visual stays out, as the turn's message does: the Agent showed it
+    // to be seen (ADR 0037), as T3 Code keeps its pages out of a fold.
     const own = lines.flatMap((line, at) =>
       turnOf(line) === turn.id &&
       line.kind !== "ended" &&
+      !isVisual(line) &&
       !(line.kind === "item" && line.item.id === turn.message)
         ? [at]
         : []

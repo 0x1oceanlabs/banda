@@ -103,6 +103,27 @@ test("a turn that ended folds its work, and its last reply stays", () => {
   ])
 })
 
+test("a Visual stays out of its turn's fold, where the Agent showed it", () => {
+  const visual = (item: string) =>
+    event("visual.shown", {
+      item,
+      turn: "u",
+      visual: `v-${item}`,
+      title: "A mockup",
+      height: 300,
+    })
+  const state = play(
+    asked(),
+    event("turn.started", { turn: "u" }),
+    tool("a"),
+    visual("v"),
+    tool("b"),
+    reply("r"),
+    event("turn.ended", { turn: "u", state: "done" })
+  )
+  expect(shape(timeline(state))).toEqual(["m", { fold: ["a", "b"] }, "v", "r"])
+})
+
 test("the reply a turn in plan mode ended with is its plan", () => {
   const planning = { ...EMPTY, settings: { ...EMPTY.settings, plan: true } }
   const state = [

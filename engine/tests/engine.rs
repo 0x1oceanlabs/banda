@@ -342,6 +342,7 @@ fn an_agent_reaches_banda_through_banda_mcp() {
                 "threads",
                 "read",
                 "send",
+                "show_visual",
                 "browser_tabs",
                 "browser_snapshot"
             ][..],

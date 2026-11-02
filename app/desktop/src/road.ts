@@ -5,12 +5,7 @@
  * names (modules.ts), by `window.answer`. The page has no part in it: a
  * module's engine part asks main, which holds the module's pages.
  */
-import {
-  Engine as Client,
-  type JsonValue,
-  type Refusal,
-  type WindowRequest,
-} from "@banda/contract"
+import type { JsonValue, Refusal, WindowRequest } from "@banda/contract"
 import { type Asked, Engine, type Refused } from "@banda/desktop-kit"
 import { Cause, Effect, Layer, Option, Queue, Stream } from "effect"
 
@@ -29,11 +24,7 @@ const refusalOf = (cause: Cause.Cause<Refused>): Refusal =>
 export const roadLayer = <R>(asked: Readonly<Record<string, Asked<R>>>) =>
   Layer.effectDiscard(
     Effect.gen(function* () {
-      const engine = yield* Engine
-      const client = yield* Effect.acquireRelease(
-        Effect.sync(() => new Client(() => Effect.runPromise(engine.address))),
-        (client) => Effect.sync(() => client.close())
-      )
+      const client = yield* Engine.use((engine) => engine.client)
       // The client hears the stream again after the engine restarts; it
       // ends only when a newer window takes the road.
       const requests = Stream.callback<WindowRequest>((queue) =>

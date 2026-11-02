@@ -60,6 +60,10 @@ const DEV_PAGE = app.isPackaged ? undefined : process.env.BANDA_PAGE
 /** Where the windows load the page from. */
 const PAGE = DEV_PAGE ?? `${ORIGIN}/index.html`
 
+/** The hosts of `app://` the modules serve, beside Banda's own page. */
+const hosts = new Map(Object.entries(modules.served))
+const framed = [...hosts.keys()].map((host) => `app://${host}`)
+
 const CSP = [
   "default-src 'self'",
   // Ghostty draws terminals from WebAssembly that ships with the page.
@@ -71,6 +75,9 @@ const CSP = [
   "font-src 'self' data:",
   // The engine; and the page's own files, as Ghostty fetches its WebAssembly.
   "connect-src 'self' ws://127.0.0.1:*",
+  // The modules' pages a Pane shows in a frame, each on an origin of its
+  // own, as a Thread's Visuals (ADR 0037).
+  `frame-src ${framed.join(" ") || "'none'"}`,
   "object-src 'none'",
   "base-uri 'none'",
   "form-action 'none'",
@@ -167,11 +174,13 @@ async function ready(): Promise<void> {
       )
     )
   )
-  protocol.handle("app", (request) =>
-    request.url.split("?")[0] === WALLPAPER_URL
+  protocol.handle("app", (request) => {
+    const served = hosts.get(new URL(request.url).host)
+    if (served) return runtime.runPromise(served(request))
+    return request.url.split("?")[0] === WALLPAPER_URL
       ? wallpaper(request.url)
       : page(request)
-  )
+  })
   // The page asks for nothing but to write to the clipboard, as "Copy
   // path" and a terminal's copy do: no camera, no notifications, no
   // location, no reading the clipboard. Its system notifications go through the desktop

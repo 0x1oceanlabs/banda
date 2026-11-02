@@ -58,6 +58,8 @@ export type { ToolContent } from "./generated/agents/ToolContent"
 export type { ToolKind } from "./generated/agents/ToolKind"
 export type { ToolStatus } from "./generated/agents/ToolStatus"
 export type { TurnId } from "./generated/agents/TurnId"
+export type { VisualId } from "./generated/agents/VisualId"
+export type { VisualPage } from "./generated/agents/VisualPage"
 export type { TurnState } from "./generated/agents/TurnState"
 export type { TurnView } from "./generated/agents/TurnView"
 export type { Usage } from "./generated/agents/Usage"
@@ -90,6 +92,7 @@ const KINDS: ReadonlySet<string> = new Set(
     "question.answered": true,
     "question.closed": true,
     "notice.posted": true,
+    "visual.shown": true,
   } satisfies Record<Fact["kind"], true>)
 )
 

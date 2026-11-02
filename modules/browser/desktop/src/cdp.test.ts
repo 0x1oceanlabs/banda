@@ -98,6 +98,7 @@ function endpointOver(pages: WebContents[], told: BrowserNews[] = []) {
   })
   const engine = Layer.succeed(Engine)({
     address: Effect.never,
+    client: Effect.never,
     door: Effect.never,
     browser: Effect.succeed(file),
   })
