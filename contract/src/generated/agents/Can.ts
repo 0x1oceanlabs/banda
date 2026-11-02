@@ -33,4 +33,10 @@ steer: boolean,
  * Fork its Thread at its end: it ran and ended, and no turn of the
  * Thread runs (`agents.fork`).
  */
-fork: boolean, };
+fork: boolean, 
+/**
+ * Take its Thread back to before its message, which a Person sent
+ * and it ran first, to edit it: it ended, and nothing runs or waits
+ * in the Thread (`agents.rewind`).
+ */
+rewind: boolean, };

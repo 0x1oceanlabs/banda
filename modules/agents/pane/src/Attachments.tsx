@@ -152,6 +152,14 @@ export function useAttachments({
       setKept((all) => all.filter((one) => one.id !== key))
       reader.forget(key)
     },
+    /** Adds the images a message put back carried, as many as fit. */
+    putBack: (images: Image[]) =>
+      setKept((all) =>
+        [
+          ...all,
+          ...images.filter((one) => !all.some((k) => k.id === one.id)),
+        ].slice(0, MOST_IMAGES)
+      ),
     /** Takes away the images a message carried once it went. */
     sent: (images: Image[]) => {
       const ids = new Set(images.map(({ id }) => id))

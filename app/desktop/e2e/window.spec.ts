@@ -2623,3 +2623,45 @@ test("a reply forks its Thread, as in T3 Code: the fork opens in its Pane and na
   })
   await expect(source).toHaveAttribute("data-focused", "true")
 })
+
+test("Edit from here takes the Thread back to before a message, as in T3 Code, and the message goes back to the composer", async () => {
+  window = await startWindow()
+  const { page } = window
+  const { thread, composer } = await firstThread(page)
+  await composer.fill("remember apples")
+  await composer.press("Enter")
+  await expect(thread.getByText("I will remember apples.")).toBeVisible()
+  await composer.fill("remember pears")
+  await composer.press("Enter")
+  const pears = thread.getByText("I will remember pears.")
+  await expect(pears).toBeVisible()
+
+  // The pencil shows by Copy on hover or focus, and asks first.
+  const edit = thread.getByRole("button", { name: "Edit from here" }).last()
+  await edit.focus()
+  await expect(edit).toBeEnabled()
+  await page.screenshot({ path: "test-results/edit-from-here.png" })
+  await edit.click()
+  const asking = page.getByRole("dialog", { name: "Edit from here?" })
+  await expect(asking).toContainText(
+    "Files the Agent changed stay as they are."
+  )
+  await page.screenshot({ path: "test-results/edit-from-here-asks.png" })
+  await asking.getByRole("button", { name: "Edit from here" }).click()
+
+  // The message and what came after it leave; its text is in the box.
+  await expect(pears).toBeHidden()
+  // Only the composer has its text now.
+  await expect(thread.getByText("remember pears", { exact: true })).toHaveCount(
+    1
+  )
+  await expect(composer).toHaveText("remember pears")
+  await expect(composer).toBeFocused()
+
+  // The Agent knows only what came before it.
+  await composer.press("Control+a")
+  await composer.press("Backspace")
+  await page.keyboard.type("what do you remember")
+  await composer.press("Enter")
+  await expect(thread.getByText("I remember: apples.")).toBeVisible()
+})

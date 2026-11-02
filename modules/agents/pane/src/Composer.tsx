@@ -146,6 +146,10 @@ export function Composer({
     // A line apart from what is written after it, which would else run on
     // in it.
     quote: (quote) => field.current?.putLines(`${quoted(quote)}\n\n`),
+    putBack: (back, carried) => {
+      images.putBack(carried)
+      field.current?.add(text && back ? `\n${back}` : back)
+    },
   }))
   // Whether the paste coming is Mod+Shift+V's, which pastes a long text as
   // text: the last key pressed says.
@@ -414,6 +418,9 @@ export type ComposerHandle = {
   take: (files: File[]) => void
   /** Quotes `text` in the message, on lines of its own. */
   quote: (text: string) => void
+  /** Puts a message back, after what is written, the caret at its end:
+   * its text, and the images it carried (ADR 0027, decision 1). */
+  putBack: (text: string, images: Image[]) => void
 }
 
 /** A pasted text this long or longer is kept as a file, as in T3 Code. */

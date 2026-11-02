@@ -294,6 +294,12 @@ export function useThreadSession({
     retry,
     /** Forks the Thread at the end of `turn` and opens the fork. */
     fork,
+    /** Takes the Thread back to before `turn`'s message; resolves
+     * whether it went. */
+    rewind: async (turn: TurnView) =>
+      (await acting.act(() =>
+        engine.command("agents.rewind", { turn: turn.id }, space)
+      )) !== undefined,
     queue,
     /** Opens the last waiting message to edit, from ↑ in the composer. */
     editLast: last && (() => setEditing(last.item.id)),

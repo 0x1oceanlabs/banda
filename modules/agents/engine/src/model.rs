@@ -440,6 +440,10 @@ pub struct Can {
     /// Fork its Thread at its end: it ran and ended, and no turn of the
     /// Thread runs (`agents.fork`).
     pub fork: bool,
+    /// Take its Thread back to before its message, which a Person sent
+    /// and it ran first, to edit it: it ended, and nothing runs or waits
+    /// in the Thread (`agents.rewind`).
+    pub rewind: bool,
 }
 
 /// What kind of action a tool call is, as the Harness says.
@@ -928,6 +932,11 @@ pub enum Fact {
     /// The Thread's queue waits for a Person, or goes on.
     #[serde(rename = "thread.held")]
     ThreadHeld { thread: ThreadId, held: bool },
+    /// The Thread went back to before `turn`'s message, to edit it (ADR
+    /// 0027): that turn and every turn after it leave it, with their
+    /// items. The Space's log keeps what they said.
+    #[serde(rename = "thread.rewound")]
+    ThreadRewound { thread: ThreadId, turn: TurnId },
     /// The Thread's settings changed, by a Person or by the Harness.
     #[serde(rename = "thread.configured")]
     ThreadConfigured {

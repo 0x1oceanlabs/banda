@@ -1,9 +1,18 @@
 import { useState } from "react"
-import { GitForkIcon } from "lucide-react"
+import { GitForkIcon, PencilIcon } from "lucide-react"
 import type { Image, ListedThread } from "@banda/contract/agents"
 import { Bubble, BubbleContent } from "@banda/ui/components/bubble"
 import { Button } from "@banda/ui/components/button"
 import { CopyButton } from "@banda/ui/components/copy-button"
+import {
+  Dialog,
+  DialogClose,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@banda/ui/components/dialog"
 import { HarnessLogo } from "@banda/ui/components/harness-logo"
 import { Markdown } from "@banda/ui/components/markdown"
 import { Message, MessageContent } from "@banda/ui/components/message"
@@ -22,11 +31,16 @@ export function PersonMessage({
   images,
   at,
   reader,
+  onEdit,
 }: {
   text: string
   images: Image[]
   at: number
   reader: ImageReader
+  /** Takes the Thread back to before it, its text and images back in the
+   * composer, as T3 Code's "Edit from here" (ADR 0027, decision 1); null
+   * while it cannot. */
+  onEdit?: (() => void) | null
 }) {
   const clamp = useClamp(text, "max-h-44", "Show full message")
   return (
@@ -42,11 +56,60 @@ export function PersonMessage({
             </BubbleContent>
           </Bubble>
         )}
-        <Meta at={at} text={text} align="end">
+        <Meta
+          at={at}
+          text={text}
+          align="end"
+          actions={onEdit !== undefined && <EditFromHere onEdit={onEdit} />}
+        >
           {clamp.toggle}
         </Meta>
       </MessageContent>
     </Message>
+  )
+}
+
+/** The pencil of a Person's message, which asks first, as T3 Code's. */
+function EditFromHere({ onEdit }: { onEdit: (() => void) | null }) {
+  const [asking, setAsking] = useState(false)
+  return (
+    <>
+      <Button
+        variant="ghost"
+        size="icon-xs"
+        aria-label="Edit from here"
+        title="Edit from here"
+        disabled={onEdit === null}
+        onClick={() => setAsking(true)}
+      >
+        <PencilIcon />
+      </Button>
+      <Dialog open={asking} onOpenChange={setAsking}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Edit from here?</DialogTitle>
+            <DialogDescription>
+              The Thread goes back to before this message, and its text and
+              images return to the composer. Files the Agent changed stay as
+              they are.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <DialogClose render={<Button variant="outline" />}>
+              Cancel
+            </DialogClose>
+            <Button
+              onClick={() => {
+                setAsking(false)
+                onEdit?.()
+              }}
+            >
+              Edit from here
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }
 

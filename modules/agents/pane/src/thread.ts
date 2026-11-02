@@ -133,7 +133,10 @@ function moveLast(items: Item[], moved: Item): Item[] {
 
 /** The turn that first ran or will run `message`. A turn a Person took
  * back never ran it. */
-function firstTurnOf(turns: TurnView[], message: string): TurnView | undefined {
+export function firstTurnOf(
+  turns: TurnView[],
+  message: string
+): TurnView | undefined {
   return turns.find(
     (turn) => turn.message === message && turn.state !== "withdrawn"
   )
@@ -172,10 +175,18 @@ function withCan(state: ThreadState): ThreadState {
   const counted = state.turns.filter((turn) => turn.state !== "withdrawn")
   const begun = counted.findLast((turn) => turn.state !== "queued")?.id
   const works = state.turns.some((turn) => turn.state === "running")
+  const anyWaits = state.turns.some((turn) => turn.state === "queued")
+  // The messages a Person wrote, not an Agent.
+  const persons = new Set(
+    state.items
+      .filter((item) => item.author.kind === "person")
+      .map((item) => item.id)
+  )
   const turns = state.turns.map((turn) => {
     const its = counted.filter((t) => t.message === turn.message)
     const byItself = notices.has(turn.message)
     const waits = turn.state === "queued"
+    const fork = !works && !waits && turn.state !== "withdrawn"
     const can: Can = {
       stop: waits || turn.state === "running",
       retry:
@@ -186,7 +197,12 @@ function withCan(state: ThreadState): ThreadState {
       edit: waits && its[0]?.id === turn.id,
       withdraw: waits,
       steer: turn.state === "running" && !state.held && !byItself,
-      fork: !works && !waits && turn.state !== "withdrawn",
+      fork,
+      rewind:
+        fork &&
+        !anyWaits &&
+        persons.has(turn.message) &&
+        its[0]?.id === turn.id,
     }
     const same = (Object.keys(can) as (keyof Can)[]).every(
       (key) => turn.can[key] === can[key]
@@ -206,6 +222,7 @@ export const NOTHING: Can = {
   withdraw: false,
   steer: false,
   fork: false,
+  rewind: false,
 }
 
 function project(state: ThreadState, event: Event): ThreadState {
@@ -307,6 +324,24 @@ function project(state: ThreadState, event: Event): ThreadState {
     }
     case "thread.held":
       return { ...next, held: fact.payload.held }
+    case "thread.rewound": {
+      // The turn and every one after it leave, with their messages and
+      // what the Agent wrote in them.
+      const from = state.turns.findIndex((t) => t.id === fact.payload.turn)
+      if (from < 0) return next
+      const gone = state.turns.slice(from)
+      const turns = new Set(gone.map((turn) => turn.id))
+      const messages = new Set(gone.map((turn) => turn.message))
+      return {
+        ...next,
+        turns: state.turns.slice(0, from),
+        items: state.items.filter(
+          (item) =>
+            !messages.has(item.id) &&
+            (item.turn === undefined || !turns.has(item.turn))
+        ),
+      }
+    }
     case "reply.grew":
     case "thought.grew": {
       const { item: id, turn, text } = fact.payload

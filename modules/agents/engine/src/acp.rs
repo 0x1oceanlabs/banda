@@ -160,7 +160,8 @@ pub struct Evidence {
     session: String,
     lasts: Lasts,
     /// The Thread's next session is to be a fork of `session` at this
-    /// reply (ADR 0027): its conversation to there, and no further.
+    /// reply (ADR 0027): its conversation to there, and no further. It
+    /// goes before a session open in this process, which knows more.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     fork: Option<ForkAt>,
 }
@@ -168,17 +169,18 @@ pub struct Evidence {
 /// A reply of a session, which a fork of it goes to: by the ID the
 /// Harness gave its message, as Claude Code's and Codex's adapters find it
 /// in the request's `_meta.jetbrains.air.fork`, JetBrains AIR's extension.
+/// None goes back before the first reply: a new session, as a Thread
+/// edited from its first message is.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct ForkAt {
-    pub message: String,
+    pub message: Option<String>,
 }
 
-impl ForkAt {
-    fn meta(&self) -> acp::Meta {
-        let fork = serde_json::json!({ "version": 1, "messageId": self.message });
-        let meta = serde_json::json!({ "jetbrains": { "air": { "fork": fork } } });
-        meta.as_object().cloned().unwrap_or_default()
-    }
+/// The request's `_meta` that forks a session at `message`.
+fn fork_meta(message: &str) -> acp::Meta {
+    let fork = serde_json::json!({ "version": 1, "messageId": message });
+    let meta = serde_json::json!({ "jetbrains": { "air": { "fork": fork } } });
+    meta.as_object().cloned().unwrap_or_default()
 }
 
 impl Evidence {
@@ -700,12 +702,22 @@ impl Connection {
         banda: impl FnOnce() -> Option<Program>,
     ) -> Result<(Session, Opened), Ending> {
         let mut sessions = self.sessions.lock().await;
-        if let Some(session) = sessions.get(&thread) {
+        // A session to fork goes before one open here, which knows more;
+        // with no fork, the Thread goes on in the one it had.
+        let fork = earlier.and_then(|earlier| Some((earlier, earlier.fork.as_ref()?)));
+        let earlier = earlier.filter(|_| fork.is_none());
+        if fork.is_none()
+            && let Some(session) = sessions.get(&thread)
+        {
             return Ok((Session(session.clone()), Opened::Known));
         }
         let servers = servers(banda());
-        if let Some(earlier) = earlier
-            && let Some(at) = &earlier.fork
+        if let Some((
+            earlier,
+            ForkAt {
+                message: Some(message),
+            },
+        )) = fork
         {
             if !self.agreed.forks {
                 return Err(Ending::failed(
@@ -716,7 +728,7 @@ impl Connection {
             let fork = acp::ForkSessionRequest::new(earlier.session.clone(), folder)
                 .additional_directories(roots.to_vec())
                 .mcp_servers(servers)
-                .meta(at.meta());
+                .meta(fork_meta(message));
             let made = self.open(fork, "fork this Thread's conversation").await?;
             let (session, options) = (made.session_id, made.config_options);
             return Ok(self.opened(thread, &mut sessions, session, options, false));

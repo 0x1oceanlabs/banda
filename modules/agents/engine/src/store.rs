@@ -667,11 +667,10 @@ pub fn turns(sql: &Connection, thread: ThreadId) -> Result<Vec<TurnView>, Error>
     Ok(rows.collect::<rusqlite::Result<_>>()?)
 }
 
-/// The Thread's turns the Agent opened by itself.
-pub fn own_turns(sql: &Connection, thread: ThreadId) -> Result<HashSet<TurnId>, Error> {
-    let mut statement =
-        sql.prepare("SELECT id FROM agents_turns WHERE thread = ?1 AND opener = ?2")?;
-    let rows = statement.query_map(params![thread, word(Opener::ByItself)], |row| row.get(0))?;
+/// Who opened each of the Thread's turns.
+pub fn openers(sql: &Connection, thread: ThreadId) -> Result<HashMap<TurnId, Opener>, Error> {
+    let mut statement = sql.prepare("SELECT id, opener FROM agents_turns WHERE thread = ?1")?;
+    let rows = statement.query_map(params![thread], |row| Ok((row.get(0)?, word_of(row, 1)?)))?;
     Ok(rows.collect::<rusqlite::Result<_>>()?)
 }
 
@@ -797,6 +796,50 @@ pub fn last_named_reply(
             |row| row.get(0),
         )
         .optional()?)
+}
+
+/// The ID the Harness gave the last reply it named before `message`.
+pub fn named_reply_before(
+    sql: &Connection,
+    thread: ThreadId,
+    message: ItemId,
+) -> Result<Option<String>, Error> {
+    Ok(sql
+        .query_row(
+            "SELECT harness_message FROM agents_items
+             WHERE thread = ?1 AND harness_message IS NOT NULL
+             AND rowid < (SELECT rowid FROM agents_items WHERE id = ?2)
+             ORDER BY rowid DESC LIMIT 1",
+            params![thread, message],
+            |row| row.get(0),
+        )
+        .optional()?)
+}
+
+/// Takes `turn` and every turn of the Thread after it out, with their
+/// items. The images their messages carried wait from `now` as a draft's
+/// do, so a message put back in the composer keeps them.
+pub fn rewind(sql: &Connection, thread: ThreadId, turn: TurnId, now: i64) -> Result<(), Error> {
+    const LATER: &str = "SELECT id FROM agents_turns WHERE thread = ?1
+        AND rowid >= (SELECT rowid FROM agents_turns WHERE id = ?2)";
+    // Their messages, and what the Agent wrote in them.
+    let items = format!(
+        "SELECT id FROM agents_items WHERE thread = ?1 AND (turn IN ({LATER})
+         OR id IN (SELECT message FROM agents_turns WHERE id IN ({LATER})))"
+    );
+    sql.execute(
+        &format!("UPDATE agents_images SET item = NULL, added_at = ?3 WHERE item IN ({items})"),
+        params![thread, turn, now],
+    )?;
+    sql.execute(
+        &format!("DELETE FROM agents_items WHERE id IN ({items})"),
+        params![thread, turn],
+    )?;
+    sql.execute(
+        &format!("DELETE FROM agents_turns WHERE id IN ({LATER})"),
+        params![thread, turn],
+    )?;
+    Ok(())
 }
 
 /// Which turn an item belongs to, if any.
@@ -1060,7 +1103,11 @@ mod tests {
         let opener = |id| turn(&sql, id).unwrap().unwrap().opener;
         assert_eq!(opener(asked), Opener::Person);
         assert_eq!(opener(own), Opener::ByItself, "its message is a notice");
-        assert_eq!(own_turns(&sql, summary.id).unwrap(), HashSet::from([own]));
+        let openers = openers(&sql, summary.id).unwrap();
+        assert_eq!(
+            openers,
+            HashMap::from([(asked, Opener::Person), (own, Opener::ByItself)])
+        );
     }
 
     #[test]
