@@ -6,16 +6,23 @@
  * downloads go to the Person's Downloads; Banda's Alt keys and the
  * browser's own go to the window instead of the page (decision 5). The
  * Pane hears of new tabs, icons and downloads as `BrowserNews`, and the
- * switch writes `browser.toml`.
+ * switch writes `browser.toml`. The blocker follows the look's
+ * `blocker` (blocker.ts). All of it is the `Browser` service (ADR 0020).
  */
 import { randomUUID } from "node:crypto"
 import { existsSync } from "node:fs"
 import { join, parse } from "node:path"
 import {
+  type BrowserNews,
+  type Download,
+  PARTITION,
+  type Pressed,
+  taken,
+} from "@banda/browser-pane/desktop"
+import { Context, Effect, FiberSet, Layer, Stream } from "effect"
+import {
   app,
-  type BrowserWindow,
   clipboard,
-  dialog,
   Menu,
   type MenuItem,
   type DownloadItem,
@@ -24,23 +31,83 @@ import {
   shell,
   type WebContents,
 } from "electron"
-import {
-  type BrowserNews,
-  type Download,
-  PARTITION,
-  type Pressed,
-  taken,
-} from "@banda/browser-pane/desktop"
-import type { Extensions } from "./extensions"
+import { Blocker } from "./blocker"
+import { type Ask, confirm } from "./dialog"
+import type { Broke, Refused } from "./errors"
+import { Extensions } from "./extensions"
+import { Look } from "./look"
+import { Settings } from "./settings"
+import { Window } from "./window"
 
 /** What a page may open: the web, a blank page and the Person's files. */
 const OPENS = /^(https?|about|file):/i
 
-/**
- * Lets `contents`, Banda's page, show browser pages and nothing else;
- * `extensions` hears of each page as a tab.
- */
-export function hostPages(contents: WebContents, extensions: Extensions): void {
+/** Changes `browser.toml`; refused when the value is not one it takes. */
+type Changes = Effect.Effect<void, Refused | Broke>
+
+export class Browser extends Context.Service<
+  Browser,
+  {
+    /** Lets `contents`, Banda's page, show browser pages and nothing
+     * else; the extensions hear of each page as a tab. */
+    host(contents: WebContents): Effect.Effect<void>
+    /** Shows the tabs on top of the pages or left of them. */
+    tabs(where: "top" | "left"): Changes
+    /** Pins the extension `id` to the browser's row, or takes it off. */
+    pin(id: string, pinned: boolean): Changes
+    /** Removes the extension `id`, once the Person says so, and its
+     * button from the row. */
+    remove(id: string): Changes
+    /** Shows a file Banda downloaded in its folder; nothing for any
+     * other. */
+    reveal(path: string): Effect.Effect<void>
+  }
+>()("banda/Browser") {
+  static readonly layer = Layer.effect(Browser)(
+    Effect.gen(function* () {
+      const extensions = yield* Extensions
+      const window = yield* Window
+      const settings = yield* Settings
+      const look = yield* Look
+      const blocker = new Blocker()
+      // What a site's question runs stops with the layer.
+      const run = yield* FiberSet.makeRuntimePromise()
+      keepProfile(window.now, (asked) => run(confirm(window.now(), asked)))
+      // The blocker follows browser.toml, a change at a time, in order.
+      yield* Effect.forkScoped(
+        look.changes.pipe(
+          Stream.map((now) => now.browser.blocker),
+          Stream.changes,
+          Stream.runForEach((on) => Effect.promise(() => blocker.set(on)))
+        )
+      )
+      const write = (key: string, value: unknown) =>
+        settings.write("browser.toml", key, value)
+      const pin = (id: string, pinned: boolean) =>
+        Effect.gen(function* () {
+          const browser = yield* Look.part("browser", "The browser's file")
+          const others = browser.pinned.filter((each) => each !== id)
+          yield* write("pinned", pinned ? [...others, id] : others)
+        }).pipe(Effect.provideService(Look, look))
+      return {
+        host: (contents) => Effect.sync(() => host(contents, extensions)),
+        tabs: (where) => write("tabs", where),
+        pin: (id, pinned) =>
+          Effect.andThen(extensions.named(id), pin(id, pinned)),
+        remove: (id) =>
+          Effect.flatMap(extensions.remove(id), (removed) =>
+            removed ? pin(id, false) : Effect.void
+          ),
+        reveal: (path) =>
+          Effect.sync(() => {
+            if (saved.has(path)) shell.showItemInFolder(path)
+          }),
+      }
+    })
+  )
+}
+
+function host(contents: WebContents, extensions: Extensions["Service"]): void {
   contents.on("will-attach-webview", (event, prefs, params) => {
     if (params.partition !== PARTITION || !OPENS.test(params.src)) {
       event.preventDefault()
@@ -81,7 +148,7 @@ export function keys(page: WebContents, window: WebContents): void {
 function keep(
   page: WebContents,
   tell: (news: BrowserNews) => void,
-  extensions: Extensions
+  extensions: Extensions["Service"]
 ): void {
   extensions.attached(page)
   page.on("context-menu", (_event, params) =>
@@ -127,7 +194,7 @@ function menuOf(
   page: WebContents,
   params: Electron.ContextMenuParams,
   tell: (news: BrowserNews) => void,
-  extensions: Extensions
+  extensions: Extensions["Service"]
 ): Menu {
   const items: Electron.MenuItemConstructorOptions[][] = []
   const tab = (url: string) =>
@@ -235,9 +302,12 @@ const GIVEN = new Set([
 
 /**
  * Sets up the browser's profile: what sites may do, and where downloads
- * go. `window` is the one a question shows over.
+ * go. `window` hears of downloads; `confirm` asks the Person.
  */
-export function keepProfile(window: () => BrowserWindow | null): void {
+function keepProfile(
+  window: Window["Service"]["now"],
+  confirm: (ask: Ask) => Promise<boolean>
+): void {
   const profile = session.fromPartition(PARTITION)
   // Sites see Chrome: some, as Google's sign-in, refuse what says Electron.
   const agent = profile.getUserAgent()
@@ -263,7 +333,7 @@ export function keepProfile(window: () => BrowserWindow | null): void {
       const key = `${site} ${permission}`
       const known = answers.get(key)
       if (known !== undefined) return answer(known)
-      void ask(window(), site, what, details).then((yes) => {
+      void confirm(question(site, what, details)).then((yes) => {
         answers.set(key, yes)
         answer(yes)
       })
@@ -315,43 +385,14 @@ function downloadOf(id: string, path: string, item: DownloadItem): Download {
   }
 }
 
-/** Shows a file Banda downloaded in its folder; nothing for any other. */
-export function reveal(path: unknown): void {
-  if (typeof path === "string" && saved.has(path)) shell.showItemInFolder(path)
-}
-
-function ask(
-  window: BrowserWindow | null,
-  site: string,
-  what: string,
-  details: PermissionRequest
-): Promise<boolean> {
-  return confirm(window, {
+/** What a site's request asks the Person. */
+function question(site: string, what: string, details: PermissionRequest): Ask {
+  return {
     message: `${site} wants to ${what}.`,
     detail: "externalURL" in details ? String(details.externalURL ?? "") : "",
     yes: "Allow",
     no: "Block",
-  })
-}
-
-/** Asks the Person a yes or no, over `window` when there is one; no is the
- * default. */
-export async function confirm(
-  window: BrowserWindow | null,
-  ask: { message: string; detail: string; yes: string; no: string }
-): Promise<boolean> {
-  const options = {
-    type: "question" as const,
-    message: ask.message,
-    detail: ask.detail,
-    buttons: [ask.yes, ask.no],
-    defaultId: 1,
-    cancelId: 1,
   }
-  const { response } = window
-    ? await dialog.showMessageBox(window, options)
-    : await dialog.showMessageBox(options)
-  return response === 0
 }
 
 function originOf(url: string): string {

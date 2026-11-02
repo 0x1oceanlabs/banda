@@ -24,10 +24,9 @@ import {
 import { type Look as LookValue, WALLPAPER_URL } from "@banda/contract/look"
 import { NodeServices } from "@effect/platform-node"
 import { Effect, Layer, ManagedRuntime, Schema, Stream } from "effect"
-import { Blocker } from "./blocker"
-import { hostPages, keepProfile, reveal } from "./browser"
+import { Browser } from "./browser"
 import { openDoor } from "./door"
-import { Extensions } from "./extensions"
+import { BoxArg, Extensions } from "./extensions"
 import { Engine } from "./engine"
 import { firstFrame, Look } from "./look"
 import { Refused } from "./errors"
@@ -35,6 +34,7 @@ import { channels } from "./ipc"
 import { NoticeArg, Notices, RecordedDesktop } from "./notices"
 import { Settings } from "./settings"
 import { ensure } from "./sidebar"
+import { Window } from "./window"
 
 /** The page's origin; the engine lets it in (kernel/src/api.rs, APP_ORIGIN). */
 const ORIGIN = "app://banda"
@@ -105,15 +105,22 @@ const notices =
     : Notices.system
 
 /** Main's services (ADR 0020): the engine and the look as children, the
- * settings and the notices. They start with the first effect run, and
- * stop when it is disposed. */
+ * settings, the notices, and the browser with its extensions. They start
+ * with the first effect run, and stop when it is disposed. */
 const runtime = ManagedRuntime.make(
-  Layer.mergeAll(
-    Engine.layer(engineBinary),
-    Look.layer(engineBinary),
-    Settings.layer(engineBinary),
-    notices
-  ).pipe(Layer.provide(NodeServices.layer))
+  Browser.layer.pipe(
+    Layer.provideMerge(Extensions.layer),
+    Layer.provideMerge(
+      Layer.mergeAll(
+        Engine.layer(engineBinary),
+        Look.layer(engineBinary),
+        Settings.layer(engineBinary),
+        notices,
+        Window.layer(() => window)
+      )
+    ),
+    Layer.provide(NodeServices.layer)
+  )
 )
 /** The last look, for what reads it at once; none before the first.
  * The window opens once the runtime is built (`ready`). */
@@ -135,9 +142,7 @@ if (!app.requestSingleInstanceLock()) {
 }
 
 async function ready(): Promise<void> {
-  const blocker = new Blocker()
   const listen = (now: LookValue) => {
-    void blocker.set(now.browser.blocker)
     // Native parts (scrollbars, menus) and the page's own
     // prefers-color-scheme follow the look's mode.
     nativeTheme.themeSource = now.mode
@@ -163,19 +168,11 @@ async function ready(): Promise<void> {
   session.defaultSession.setPermissionRequestHandler(
     (_contents, _permission, answer) => answer(false)
   )
-  keepProfile(() => window)
-  const extensions = new Extensions(() => window)
   const { handle, on } = channels(runtime, fromPage)
   const none = Schema.Tuple([])
   const text = Schema.Tuple([Schema.String])
   const write = (file: string, key: string, value: unknown) =>
     Settings.use((settings) => settings.write(file, key, value))
-  /** Pins the extension `id` to the browser's row, or takes it off. */
-  const pin = (id: string, pinned: boolean) =>
-    Effect.flatMap(Look.part("browser", "The browser's file"), (browser) => {
-      const others = browser.pinned.filter((each) => each !== id)
-      return write("browser.toml", "pinned", pinned ? [...others, id] : others)
-    })
 
   handle("engine", none, () => Engine.use((engine) => engine.address))
   handle("look", none, (_, event) =>
@@ -207,47 +204,40 @@ async function ready(): Promise<void> {
   handle(
     "browser.tabs",
     Schema.Tuple([Schema.Literals(["top", "left"])]),
-    ([where]) => write("browser.toml", "tabs", where)
+    ([where]) => Browser.use((browser) => browser.tabs(where))
   )
   handle(
     "browser.pin",
     Schema.Tuple([Schema.String, Schema.Boolean]),
-    ([id, pinned]) =>
-      extensions.has(id)
-        ? pin(id, pinned)
-        : Effect.fail(new Refused({ message: `There is no extension ${id}.` }))
+    ([id, pinned]) => Browser.use((browser) => browser.pin(id, pinned))
   )
   handle("browser.remove", text, ([id]) =>
-    Effect.promise(() => extensions.remove(id)).pipe(
-      // A removed extension's button leaves the row too.
-      Effect.flatMap((removed) => (removed ? pin(id, false) : Effect.void))
-    )
+    Browser.use((browser) => browser.remove(id))
   )
-  on("browser.reveal", text, ([path]) => Effect.sync(() => reveal(path)))
-  // What an extension's button and the tabs send; extensions.ts checks it.
-  const anything = Schema.Unknown
+  on("browser.reveal", text, ([path]) =>
+    Browser.use((browser) => browser.reveal(path))
+  )
+  // What an extension's button and the tabs send.
   on(
     "browser.popup",
-    Schema.Tuple([anything, anything, anything]),
+    Schema.Tuple([Schema.String, Schema.String, BoxArg]),
     ([extension, url, under]) =>
-      Effect.sync(() => extensions.popup(extension, url, under))
+      Extensions.use((extensions) => extensions.popup(extension, url, under))
   )
-  on("browser.shown", Schema.Tuple([anything]), ([contents]) =>
-    Effect.sync(() => extensions.shown(contents))
+  on("browser.shown", Schema.Tuple([Schema.Number]), ([page]) =>
+    Extensions.use((extensions) => extensions.shown(page))
   )
   on(
     "browser.created",
-    Schema.Tuple([anything, anything]),
-    ([request, contents]) =>
-      Effect.sync(() => extensions.created(request, contents))
+    Schema.Tuple([Schema.String, Schema.NullOr(Schema.Number)]),
+    ([request, page]) =>
+      Extensions.use((extensions) => extensions.created(request, page))
   )
   // The settings window's (ADR 0016) and the Banda menu's (ADR 0017).
   on("settings.open", text, ([link]) =>
     Effect.sync(() => openSettings(linkOf(link)))
   )
-  on("menu.open", Schema.Tuple([anything]), ([route]) =>
-    Effect.sync(() => openMenu(route))
-  )
+  on("menu.open", text, ([route]) => Effect.sync(() => openMenu(route)))
   on("settings.close", none, () => Effect.sync(() => settingsWindow?.close()))
   handle(
     "settings.set",
@@ -291,7 +281,7 @@ async function ready(): Promise<void> {
   const first = await runtime.runPromise(Look.first(LOOK_WAIT))
   if (first) nativeTheme.themeSource = first.mode
   Menu.setApplicationMenu(process.platform === "darwin" ? macMenu() : null)
-  window = openWindow(extensions)
+  window = openWindow()
   // `banda menu [route]` opens the Banda menu here, or the settings
   // window at a route of its own (ADR 0017).
   void runtime.runPromise(Engine.use((engine) => engine.door)).then((path) => {
@@ -383,7 +373,7 @@ function fromPage(url: string): boolean {
   return url === ORIGIN || url.startsWith(`${ORIGIN}/`)
 }
 
-function openWindow(extensions: Extensions): BrowserWindow {
+function openWindow(): BrowserWindow {
   const opened = pageWindow(
     {
       width: 1280,
@@ -396,7 +386,7 @@ function openWindow(extensions: Extensions): BrowserWindow {
     // sets this once, so turning it on shows from the next start.
     systemGlass(lookNow())
   )
-  hostPages(opened.webContents, extensions)
+  runtime.runSync(Browser.use((browser) => browser.host(opened.webContents)))
   void opened.loadURL(PAGE)
   opened.on("closed", () => {
     window = null
