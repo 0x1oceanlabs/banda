@@ -152,6 +152,16 @@ from the first. Roma chose to declare in code what is code, and to keep
        ends it, and fails once one no longer does.
   3. The actions move to their modules; the window API moves into
      `@banda/ui`; the window stops importing modules.
+     - _Done._ New Thread is the agents module's and New browser the
+       browser's, with the ids and keys they had. `Action` and the window
+       API (`WindowApi`: the home Space, and opening a Pane right of the
+       focused one) are `@banda/ui/module`'s. An action names its key
+       sheet section. The sidebar's and the menu's new Thread run
+       `thread.new` by its id, with the Space, the words and the Harness
+       as its args. The window's own actions take more of the window than
+       the API gives, so they stay in `shell/actions.ts`, and the list
+       there is the modules' actions, then the window's. The Banda menu
+       still reaches the agents and browser modules, until step 4.
   4. Sources: the Banda menu's Threads, files, Spaces and actions come
      from sources, with dotted ids as routes.
   5. `module.toml` for each module, `banda modules`, the unstable marks

@@ -3,7 +3,8 @@ import type { Engine, SpaceId, SpaceSummary, Status } from "@banda/contract"
 import { inFront, useInFront } from "@banda/ui/hooks/use-in-front"
 import { IN_PROGRAM, type PaneState, QUIET } from "@banda/ui/pane"
 import { DEFAULT_KEYS } from "@banda/contract/look"
-import { type Action, actionFor, rebind } from "../actions/actions"
+import type { Action } from "@banda/ui/module"
+import { actionFor, rebind } from "../actions/actions"
 import { Bar } from "../bar/Bar"
 import { type Lists, Watches } from "../bar/Watches"
 import { isShowing, sightOf } from "../calls/sight"
@@ -51,8 +52,8 @@ import {
   ACTIONS,
   answering,
   bringing,
-  newThread,
   opening,
+  runAction,
   type Shell as Parts,
 } from "./actions"
 
@@ -249,6 +250,16 @@ export function Shell({
     () => ({
       change,
       home,
+      open: (pane, space) =>
+        change((w) =>
+          opening(
+            w,
+            space ?? focused(w)?.space ?? home,
+            pane,
+            undefined,
+            "right"
+          )
+        ),
       toggleSidebar,
       toggleOverview,
       answer,
@@ -291,14 +302,18 @@ export function Shell({
   // A row of the sidebar or the menu opens its Pane, where a workspace
   // shows it or in a new column; a Space gets a new Thread.
   const openPane = useCallback(
-    (space: SpaceId, pane: PaneState) =>
-      change((w) => opening(w, space, pane, undefined, "right")),
-    [change]
+    (space: SpaceId, pane: PaneState) => parts.open(pane, space),
+    [parts]
   )
+  // A new Thread is the agents module's, as its key's (`thread.new`).
   const newThreadIn = useCallback(
     (space: SpaceId, ask?: string, harness?: string) =>
-      change((w) => newThread(w, space, ask, harness)),
-    [change]
+      runAction(parts, "thread.new", {
+        space,
+        ...(ask && { ask }),
+        ...(harness && { harness }),
+      }),
+    [parts]
   )
   // The Space the focused Pane is in: where the menu's New Thread starts.
   const here = focused(workspaces)?.space ?? home

@@ -1,7 +1,7 @@
 /**
- * The one list of actions (ADR 0005, decision 2). An action has a name, a
- * description in plain words and a default key; keys, buttons and later
- * the palette, the key sheet, the CLI and Agents all run the same actions.
+ * What the window does with the actions (ADR 0005, decision 2; their
+ * type is `@banda/ui/module`'s): which one a key runs, and the Person's
+ * keys over their own.
  *
  * Alt is Banda's mod key (ADR 0005, decision 10). Keys bind by their
  * physical place (`KeyboardEvent.code`), so they work on any layout.
@@ -9,22 +9,7 @@
 import type { Keys, Problem } from "@banda/contract/look"
 import { tomlOf } from "@banda/contract/settings"
 import { type Key, matches, type Pressed, sameKey } from "@banda/ui/lib/keys"
-
-export type Action<Context> = {
-  /** Unique, with its owner first: `workspace.close`. */
-  id: string
-  /** The words a menu, a tooltip and the palette show. */
-  title: string
-  /** The keys that run it: its own, then the Person's (`keys.toml`). */
-  keys?: readonly Key[]
-  /** The family it is one of, as the key sheet folds them: the
-   * family's title, `Focus a Pane` for left, right, up and down. */
-  family?: string
-  /** Its key works while a dialog is open, as the Banda menu's own do;
-   * any other key there is the dialog's. */
-  overDialogs?: true
-  run: (context: Context) => void
-}
+import type { Action } from "@banda/ui/module"
 
 /** The action a key press runs, if any. */
 export function actionFor<Context>(

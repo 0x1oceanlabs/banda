@@ -17,7 +17,8 @@ import {
 import { waits } from "@banda/ui/components/banda-mark"
 import type { Key } from "@banda/ui/lib/keys"
 import { type Listed, type PaneState, paneOf } from "@banda/ui/pane"
-import { type Action, keyName } from "../actions/actions"
+import type { Action } from "@banda/ui/module"
+import { keyName } from "../actions/actions"
 import type { Lists } from "../bar/Watches"
 import type { Shell } from "../shell/actions"
 import { settles } from "../sidebar/settled"
@@ -195,20 +196,9 @@ export const ROOT_ACTIONS = [
   "overview.toggle",
 ]
 
-/** The key sheet's sections, each with the owners whose actions it lists
- * (an id's first part); what is left goes under "More". */
-const SECTIONS: readonly (readonly [string, readonly string[]])[] = [
-  ["Threads", ["thread", "calls", "sidebar"]],
-  ["Panes", ["pane", "browser"]],
-  ["Columns", ["column"]],
-  ["Workspaces", ["workspace", "overview"]],
-  ["Banda", ["menu", "settings", "keys"]],
-]
-
-function sectionOf(id: string): string {
-  const owner = id.split(".")[0]
-  return SECTIONS.find(([, owners]) => owners.includes(owner))?.[0] ?? "More"
-}
+/** The key sheet's sections first, in this order; a module's own section
+ * (`Action.section`) after them. */
+const SECTIONS = ["Threads", "Panes", "Columns", "Workspaces", "Banda"]
 
 /** How many rows of each group a search shows. */
 const SHOWN = { threads: 8, spaces: 5, files: 6, actions: 8, recent: 6 }
@@ -291,18 +281,19 @@ export function menuOf({
     // The key sheet: every action by section, a family as one row, and
     // the sidebar's view with the Threads.
     const sections = new Map<string, Choice[]>(
-      [...SECTIONS.map(([label]) => label), "More"].map((label) => [label, []])
+      SECTIONS.map((label) => [label, []])
     )
     const families = new Map<string, Action<Shell>[]>()
     for (const action of actions) {
-      const rows = sections.get(sectionOf(action.id))
+      if (!sections.has(action.section)) sections.set(action.section, [])
+      const rows = sections.get(action.section) ?? []
       const { family } = action
-      if (!family) rows?.push(actionRow(action))
+      if (!family) rows.push(actionRow(action))
       else if (families.has(family)) families.get(family)?.push(action)
       else {
         const members = [action]
         families.set(family, members)
-        rows?.push({
+        rows.push({
           kind: "family",
           id: `family:${family}`,
           title: family,

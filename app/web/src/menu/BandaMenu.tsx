@@ -25,7 +25,8 @@ import {
   SearchIcon,
   SquarePenIcon,
 } from "lucide-react"
-import { type Action, KEYS_FILE, keyName, writeBind } from "../actions/actions"
+import type { Action } from "@banda/ui/module"
+import { KEYS_FILE, keyName, writeBind } from "../actions/actions"
 import type { Lists } from "../bar/Watches"
 import { useLookSidebar } from "../look"
 import type { Shell } from "../shell/actions"

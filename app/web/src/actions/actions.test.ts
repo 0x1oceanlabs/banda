@@ -35,7 +35,7 @@ test("a key reads as a Person writes it", () => {
   expect(keyName({ code: "Enter", alt: true })).toBe("Alt+Return")
 })
 
-test("the window's actions each have their own name and key", () => {
+test("every action, a module's or the window's, has its own id and key", () => {
   const ids = ACTIONS.map((action) => action.id)
   expect(new Set(ids).size).toBe(ids.length)
   const keys = ACTIONS.flatMap((action) => (action.keys ?? []).map(keyName))

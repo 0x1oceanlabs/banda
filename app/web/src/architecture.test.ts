@@ -30,8 +30,6 @@ const MAIN =
   "the browser's part in the window's main process, an unstable path (ADR 0022, decision 6)"
 
 const STILL: Record<string, string> = {
-  "web/src/shell/actions.ts":
-    "the actions move to their modules (ADR 0022, step 3)",
   "web/src/menu/menu.ts": SOURCES,
   "web/src/menu/menu.test.ts": SOURCES,
   "web/src/menu/BandaMenu.tsx": SOURCES,
