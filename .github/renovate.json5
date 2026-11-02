@@ -43,6 +43,12 @@
       groupName: null,
     },
     {
+      // A major waits on the Dependency Dashboard until an agent takes it,
+      // so it doesn't sit in one of the three slots.
+      matchUpdateTypes: ["major"],
+      dependencyDashboardApproval: true,
+    },
+    {
       // The runners are rebuilt by hand (ci/README.md), and `ci` never
       // builds their image: these wait on the Dependency Dashboard.
       matchFileNames: ["ci/**"],
