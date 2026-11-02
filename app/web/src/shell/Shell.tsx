@@ -16,7 +16,7 @@ import {
   type At,
   type Branch,
   type Choice,
-  type Keying,
+  type Own,
   type Opening,
   openingAt,
   openingOf,
@@ -245,15 +245,15 @@ export function Shell({
     [change, home]
   )
   // A settings route opens the settings there; any other, the menu.
-  useEffect(
-    () =>
-      window.banda?.menu.listen((route) => {
-        const link = settingsLinkOf(route)
-        if (link === undefined) setMenu(openingOf(route, spacesNow.current))
-        else settings(link)
-      }),
+  const route = useCallback(
+    (route: string) => {
+      const link = settingsLinkOf(route)
+      if (link === undefined) setMenu(openingOf(route, spacesNow.current))
+      else settings(link)
+    },
     [settings]
   )
+  useEffect(() => window.banda?.menu.listen(route), [route])
   const ownKeys = useCallback(() => {
     setShipped(saidNow.current)
     settings("keys")
@@ -276,6 +276,7 @@ export function Shell({
       answer,
       settle,
       menu: toggleMenu,
+      route,
       ownKeys,
       settings,
       run: (action, args) => runAction(parts, action, args),
@@ -289,6 +290,7 @@ export function Shell({
     answer,
     settle,
     toggleMenu,
+    route,
     ownKeys,
     settings,
   ])
@@ -352,7 +354,7 @@ export function Shell({
   // The Space the focused Pane is in: where the menu's New Thread starts.
   const here = focused(workspaces)?.space ?? home
   const choose = useCallback(
-    (row: Exclude<Choice, Branch | Keying>) => {
+    (row: Exclude<Choice, Branch | Own>) => {
       switch (row.kind) {
         case "thread":
           return row.beside
@@ -380,8 +382,9 @@ export function Shell({
         change((w) => opening(w, space, pane, { from, place })),
       update: (entry, pane) => change((w) => update(w, entry, pane)),
       close: (entry) => change((w) => close(w, entry)),
+      run: parts.run,
     }),
-    [change]
+    [change, parts]
   )
   const called = useCallback(
     (entry: Entry) =>
@@ -426,7 +429,6 @@ export function Shell({
       >
         {sidebar && (
           <Sidebar
-            engine={engine}
             onMenu={() => setMenu(openingAt("root"))}
             onSettings={() => settings()}
             spaces={spaces}
@@ -438,10 +440,7 @@ export function Shell({
             }}
             onOpen={openPane}
             onNewThread={newThreadIn}
-            onCreated={(space) => {
-              onCreated(space)
-              newThreadIn(space.id)
-            }}
+            onAddSpace={() => parts.run("space.add")}
           />
         )}
         <main className="relative min-h-0 min-w-0 flex-1">
@@ -468,6 +467,10 @@ export function Shell({
             opening={menu}
             onClose={closeMenu}
             onChoose={choose}
+            onAdded={(space) => {
+              onCreated(space)
+              newThreadIn(space.id)
+            }}
             engine={engine}
             modules={modules}
             space={here}

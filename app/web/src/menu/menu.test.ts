@@ -5,6 +5,7 @@ import type { Action, MenuAct, MenuRow } from "@banda/ui/module"
 import type { Shell } from "../shell/actions"
 import {
   actsOf,
+  branchName,
   type Branch,
   type Choice,
   type Found,
@@ -116,6 +117,15 @@ function nameOf(row: Choice): string {
       return `bind ${row.action.id}`
     case "free":
       return `free ${row.action.id}`
+    case "add":
+    case "source":
+      return branchName(row)
+    case "adding":
+      return "name" in row.how
+        ? `create ${row.how.name}`
+        : `${row.how.create ? "create & add" : "add"} ${row.how.folder}`
+    case "folder":
+      return row.up ? `.. ${row.path}` : row.path
   }
 }
 
@@ -228,6 +238,7 @@ describe("the Banda menu", () => {
     expect(labels("", "actions")).toEqual([
       ["Threads", ["New Thread", "Show or hide the sidebar", "Sidebar view"]],
       ["Panes", ["New browser"]],
+      ["Banda", ["Add Space"]],
     ])
     expect(labels("side", "actions")).toEqual([
       ["Actions", ["Sidebar view", "Show or hide the sidebar"]],
@@ -240,7 +251,7 @@ describe("the Banda menu", () => {
       family: "Go to a workspace",
     })
     const more = { actions: [...actions, go(1), go(2), go(3)] }
-    expect(labels("", "actions", undefined, more).at(-1)).toEqual([
+    expect(labels("", "actions", undefined, more).at(-2)).toEqual([
       "Workspaces",
       ["Go to a workspace ›"],
     ])
@@ -338,6 +349,67 @@ describe("its branches and acts", () => {
   })
 })
 
+describe("Add Space (ADR 0026)", () => {
+  const add: Branch = { kind: "add", id: "space.add" }
+  const way = (source: "new" | "folder"): Branch => ({
+    kind: "source",
+    id: `space.add.${source}`,
+    source,
+  })
+  const browsed = (
+    partial: string,
+    parent: string,
+    exists: boolean,
+    ...names: string[]
+  ) => ({
+    partial,
+    parent,
+    exists,
+    entries: names.map((name) => ({ name, path: `${parent}/${name}` })),
+  })
+
+  test("it is an Action, and lists its ways", () => {
+    expect(labels("add sp")).toContainEqual(["Actions", ["Add Space"]])
+    expect(labels("", "root", add)).toEqual([
+      ["", ["New Space", "Local folder"]],
+    ])
+    expect(labels("local", "root", add)).toEqual([["", ["Local folder"]]])
+  })
+
+  test("a new Space is made from the name typed", () => {
+    expect(labels("", "root", way("new"))).toEqual([])
+    expect(labels(" Work ", "root", way("new"))).toEqual([
+      ["", ["create Work"]],
+    ])
+  })
+
+  test("a folder is added, or made and added, then the folders that fit, as typed", () => {
+    const home = browsed("~/co", "/home/r", false, "code", "colors")
+    expect(labels("~/co", "root", way("folder"), { browsed: home })).toEqual([
+      ["", ["create & add ~/co", ".. /home/", "~/code/", "~/colors/"]],
+    ])
+    const deeper = browsed("~/code/a", "/home/r/code", false, "app")
+    expect(
+      labels("~/code/a", "root", way("folder"), { browsed: deeper })
+    ).toEqual([["", ["create & add ~/code/a", ".. ~/", "~/code/app/"]]])
+    const there = browsed("/srv/www/", "/srv/www", true)
+    expect(
+      labels("/srv/www/", "root", way("folder"), { browsed: there })
+    ).toEqual([["", ["add /srv/www/", ".. /srv/"]]])
+    const root = browsed("/", "/", true)
+    expect(labels("/", "root", way("folder"), { browsed: root })).toEqual([
+      ["", ["add /"]],
+    ])
+  })
+
+  test("a path not yet read is added, not made", () => {
+    const before = browsed("~/c", "/home/r", false, "code")
+    expect(
+      labels("~/co", "root", way("folder"), { browsed: before })[0][1][0]
+    ).toBe("add ~/co")
+  })
+})
+
 describe("ranking", () => {
   const titles = ["a slow hello", "hello world", "hello", "say hellos", "help"]
   test("the text itself, then its start, then a word's start, then every word in it", () => {
@@ -382,6 +454,19 @@ describe("banda menu ROUTE", () => {
     expect(where("views")).toEqual(["root", ["views"], ""])
     expect(where("space.Banda")).toEqual(["root", ["space:s1"], ""])
     expect(where("space.s1")).toEqual(["root", ["space:s1"], ""])
+  })
+  test("space.add opens Add Space, or one of its ways", () => {
+    expect(where("space.add")).toEqual(["root", ["space.add"], ""])
+    expect(where("space.add.folder")).toEqual([
+      "root",
+      ["space.add", "space.add.folder"],
+      "~/",
+    ])
+    expect(where("space.add.new")).toEqual([
+      "root",
+      ["space.add", "space.add.new"],
+      "",
+    ])
   })
   test("other words, and a Space there is not, are typed in", () => {
     expect(where(" fix the login ")).toEqual(["root", [], "fix the login"])

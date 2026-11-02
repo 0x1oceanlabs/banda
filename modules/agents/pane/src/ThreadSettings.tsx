@@ -9,9 +9,11 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuGroup,
+  DropdownMenuItem,
   DropdownMenuLabel,
   DropdownMenuRadioGroup,
   DropdownMenuRadioItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@banda/ui/components/dropdown-menu"
 import {
@@ -135,6 +137,7 @@ export function Pick({
   choices,
   disabled,
   onChange,
+  more,
 }: {
   what: string
   icon?: React.ReactNode
@@ -142,6 +145,8 @@ export function Pick({
   choices: { id: string; name: string; about?: string }[]
   disabled: boolean
   onChange: (id: string) => void
+  /** One more row after the choices, which does rather than picks. */
+  more?: { title: string; icon: React.ReactNode; run: () => void }
 }) {
   const now = choices.find((choice) => choice.id === value)
   return (
@@ -183,6 +188,15 @@ export function Pick({
             ))}
           </DropdownMenuRadioGroup>
         </DropdownMenuGroup>
+        {more && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem onClick={more.run}>
+              {more.icon}
+              {more.title}
+            </DropdownMenuItem>
+          </>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   )

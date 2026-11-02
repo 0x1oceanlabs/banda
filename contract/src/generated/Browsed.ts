@@ -7,6 +7,11 @@ export type Browsed = {
  */
 parent: string, 
 /**
+ * Whether the path as typed is a folder already: "Add" it, or else
+ * "Create & Add".
+ */
+exists: boolean, 
+/**
  * Its subfolders that match, by name. Hidden ones only once a dot is
  * typed.
  */

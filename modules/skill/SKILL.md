@@ -58,6 +58,8 @@ yours to read.
 `banda menu [route]` opens the Banda menu in the window, as Alt+Space
 does: `banda menu actions` at its Actions, each with its key;
 `banda menu space.<name>` in a Space, its Threads and a new one there;
+`banda menu space.add` at "Add Space" (`space.add.folder` at its path
+field, `space.add.new` at a new Space's name);
 `banda menu views` at the sidebar's presets; `banda menu
 settings.<section>.<row>` opens the settings Pane there. Other words
 open it with them typed in, as a search. It exits 2 when the window is

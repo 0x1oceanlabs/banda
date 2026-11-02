@@ -1,9 +1,10 @@
 /** Where a new Thread starts: its Space and its Harness (ADR 0006). */
-import { useCallback } from "react"
+import { useCallback, useMemo } from "react"
 import type { Engine, SpaceId, SpaceSummary } from "@banda/contract"
 import type { HarnessView } from "@banda/contract/agents"
 import { useRead } from "@banda/ui/hooks/use-read"
-import { BotIcon, FolderIcon } from "lucide-react"
+import { shownSpaces } from "@banda/ui/lib/spaces"
+import { BotIcon, FolderIcon, FolderPlusIcon } from "lucide-react"
 import { Pick } from "./ThreadSettings"
 
 /**
@@ -18,6 +19,7 @@ export function NewThreadBar({
   disabled,
   onSpace,
   onHarness,
+  onAddSpace,
 }: {
   engine: Engine
   space: SpaceId
@@ -26,6 +28,8 @@ export function NewThreadBar({
   disabled: boolean
   onSpace: (space: SpaceId) => void
   onHarness: (harness: string) => void
+  /** Opens "Add Space" in the Banda menu (ADR 0026), from the Space list. */
+  onAddSpace?: () => void
 }) {
   const spaces = useSpaces(engine)
   return (
@@ -42,6 +46,13 @@ export function NewThreadBar({
           }))}
           disabled={disabled}
           onChange={(id) => onSpace(id as SpaceId)}
+          more={
+            onAddSpace && {
+              title: "Add Space",
+              icon: <FolderPlusIcon />,
+              run: onAddSpace,
+            }
+          }
         />
       )}
       {harnesses.length > 0 && (
@@ -65,7 +76,11 @@ function useSpaces(engine: Engine): SpaceSummary[] {
   const read = useRead(
     useCallback(() => engine.call("spaces.list", {}), [engine])
   )
-  return read.state === "ready" ? read.value : NONE
+  // As the window lists them: pinned first, archived ones not at all.
+  return useMemo(
+    () => (read.state === "ready" ? shownSpaces(read.value) : NONE),
+    [read]
+  )
 }
 
 const NONE: SpaceSummary[] = []

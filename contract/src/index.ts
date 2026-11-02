@@ -13,6 +13,8 @@ export type { PersonId } from "./generated/PersonId"
 export type { Refusal } from "./generated/Refusal"
 export type { SpaceId } from "./generated/SpaceId"
 export type { SpaceSummary } from "./generated/SpaceSummary"
+export type { Browsed } from "./generated/Browsed"
+export type { BrowsedFolder } from "./generated/BrowsedFolder"
 export type { JsonValue } from "./generated/serde_json/JsonValue"
 export {
   Engine,
