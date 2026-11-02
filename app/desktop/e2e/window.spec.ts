@@ -480,10 +480,11 @@ test("a Person chooses the model and the mode under the message box", async () =
   window = await startWindow()
   const { page } = window
   const { thread, composer } = await firstThread(page)
+  // One trigger beside the send button names what the Thread runs with,
+  // and one menu sets it (ADR 0031).
+  const runsWith = (what: RegExp) => thread.getByRole("button", { name: what })
 
-  await expect(
-    thread.getByRole("button", { name: "Mode: Full access" })
-  ).toBeVisible()
+  await expect(runsWith(/^Runs with Full access$/)).toBeVisible()
   await composer.fill("which settings")
   await composer.press("Enter")
   await expect(
@@ -491,29 +492,34 @@ test("a Person chooses the model and the mode under the message box", async () =
   ).toBeVisible()
 
   // The Harness offered its options with its first turn.
-  await thread.getByRole("button", { name: "Model: Fast" }).click()
+  await runsWith(/^Runs with Fast/).click()
+  await page.getByRole("menuitem", { name: "Model: Fast" }).click()
   await page.getByRole("menuitemradio", { name: "Smart" }).click()
-  await expect(
-    thread.getByRole("button", { name: "Model: Smart" })
-  ).toBeVisible()
-  await thread.getByRole("button", { name: "Mode: Full access" }).click()
+  await expect(runsWith(/^Runs with Smart, Full access$/)).toBeVisible()
+  await runsWith(/^Runs with/).click()
+  await page.getByRole("menuitem", { name: "Mode: Full access" }).click()
   await expect(
     page.getByRole("menuitemradio", { name: /Supervised/ })
   ).toBeVisible()
   await page.screenshot({ path: "test-results/6-modes.png" })
   await page.getByRole("menuitemradio", { name: /Supervised/ }).click()
-  await thread.getByRole("button", { name: "Brief" }).click()
-  await expect(thread.getByRole("button", { name: "Brief" })).toHaveAttribute(
-    "aria-pressed",
-    "true"
-  )
+  await runsWith(/^Runs with/).click()
+  const brief = page.getByRole("menuitemcheckbox", { name: "Brief" })
+  await brief.click()
+  await expect(brief).toHaveAttribute("aria-checked", "true")
+  await page.keyboard.press("Escape")
+  await expect(runsWith(/^Runs with Smart, Brief, Supervised$/)).toBeVisible()
   await composer.fill("which settings now")
   await composer.press("Enter")
   await expect(
     thread.getByText("Mode default, model smart, brief true")
   ).toBeVisible()
 
-  await thread.getByRole("button", { name: "Plan", exact: true }).click()
+  // Plan shows only while it is on.
+  const planMode = thread.getByRole("button", { name: "Plan", exact: true })
+  await expect(planMode).toBeHidden()
+  await composer.press("Shift+Tab")
+  await expect(planMode).toBeVisible()
   await composer.fill("which settings in a plan")
   await composer.press("Enter")
   // A reply in plan mode is the plan.
@@ -523,12 +529,8 @@ test("a Person chooses the model and the mode under the message box", async () =
   await composer.fill("plan done")
   await composer.press("Enter")
   await expect(thread.getByText("The plan is ready.")).toBeVisible()
-  await expect(
-    thread.getByRole("button", { name: "Mode: Auto-accept edits" })
-  ).toBeVisible()
-  await expect(
-    thread.getByRole("button", { name: "Plan", exact: true })
-  ).toHaveAttribute("aria-pressed", "false")
+  await expect(runsWith(/Auto-accept edits$/)).toBeVisible()
+  await expect(planMode).toBeHidden()
   await page.mouse.move(0, 0)
   await page.screenshot({ path: "test-results/7-after-the-plan.png" })
 })
@@ -575,7 +577,7 @@ async function planning(page: Page) {
   await expect(thread.getByText("You said: hello")).toBeVisible()
   const planMode = thread.getByRole("button", { name: "Plan", exact: true })
   await composer.press("Shift+Tab")
-  await expect(planMode).toHaveAttribute("aria-pressed", "true")
+  await expect(planMode).toBeVisible()
   return { thread, composer, planMode }
 }
 
@@ -594,7 +596,7 @@ test("a plan waits for the Person to implement it", async () => {
 
   await ready.getByRole("button", { name: "Implement" }).click()
   await expect(thread.getByText("You said: Implement the plan.")).toBeVisible()
-  await expect(planMode).toHaveAttribute("aria-pressed", "false")
+  await expect(planMode).toBeHidden()
   await expect(ready).toBeHidden()
 })
 
@@ -619,7 +621,7 @@ test("a plan Claude Code asks to carry out shows in its card, answered there", a
   await expect(thread.getByText("The notes are tidy.")).toBeVisible()
   await expect(proposed).toContainText("You chose: Yes, manually approve edits")
   // The Thread follows the Harness out of plan mode; nothing waits.
-  await expect(planMode).toHaveAttribute("aria-pressed", "false")
+  await expect(planMode).toBeHidden()
   await expect(thread.getByRole("group", { name: "Plan ready" })).toBeHidden()
   await expect(
     thread.getByRole("group", { name: "Proposed plan" })
@@ -706,10 +708,14 @@ test("an Agent's plan shows its steps, and the context how full it is", async ()
     /Fix the typo/,
     /Check the result/,
   ])
+  // How full the context is shows from half full (ADR 0031).
   const meter = thread.getByRole("meter", { name: "Context used" })
-  await expect(meter).toHaveAttribute("aria-valuetext", /^26% of the context/)
+  await expect(meter).toBeHidden()
   await page.mouse.move(0, 0)
   await page.screenshot({ path: "test-results/11-plan.png" })
+  await composer.fill("later")
+  await composer.press("Enter")
+  await expect(meter).toHaveAttribute("aria-valuetext", /^75% of the context/)
 })
 
 test("a message starts with a slash command its Agent offers", async () => {
@@ -750,7 +756,7 @@ test("a message starts with a slash command its Agent offers", async () => {
   await expect(composer).toHaveText("")
   await expect(
     thread.getByRole("button", { name: "Plan", exact: true })
-  ).toHaveAttribute("aria-pressed", "true")
+  ).toBeVisible()
   await expect(composer).toBeFocused()
 
   await composer.fill("/default")
@@ -761,7 +767,7 @@ test("a message starts with a slash command its Agent offers", async () => {
   await expect(composer).toHaveText("")
   await expect(
     thread.getByRole("button", { name: "Plan", exact: true })
-  ).toHaveAttribute("aria-pressed", "false")
+  ).toBeHidden()
   await expect(thread.getByText("You said: /default")).toBeHidden()
 
   // A command starts any line, not only the message.
@@ -835,13 +841,13 @@ test("a message carries images to its Agent", async () => {
   await waiting.getByRole("button", { name: "Remove shot.png" }).click()
   await expect(waiting).toBeHidden()
 
-  // A file that is not an image of the four kinds stays out.
+  // Any other file is kept in the Space and named, as when dropped.
   await files.setInputFiles({
     name: "notes.txt",
     mimeType: "text/plain",
     buffer: Buffer.from("notes"),
   })
-  await expect(thread.getByRole("alert")).toHaveText(/PNG, JPEG, GIF and WebP/)
+  await expect(composer.locator("[data-chip=file]")).toContainText("notes.txt")
 
   await files.setInputFiles(shot)
   await expect(waiting.getByRole("img", { name: "shot.png" })).toBeVisible()
@@ -1381,9 +1387,9 @@ test("typed over chosen text, * styles it and ( goes round it; Shift+Tab takes a
   await composer.press("Shift+Tab")
   await expect(item).toHaveCSS("padding-inline-start", "0px")
   const planMode = thread.getByRole("button", { name: "Plan", exact: true })
-  await expect(planMode).toHaveAttribute("aria-pressed", "false")
+  await expect(planMode).toBeHidden()
   await composer.press("Shift+Tab")
-  await expect(planMode).toHaveAttribute("aria-pressed", "true")
+  await expect(planMode).toBeVisible()
   // With a file's name being typed, Tab picks it, as the list says.
   await composer.pressSequentially(" @mai")
   const files = page.getByRole("listbox", { name: "Files" })

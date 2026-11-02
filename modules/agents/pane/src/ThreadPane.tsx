@@ -78,7 +78,7 @@ import { FindBar, useFound } from "./Find"
 import { holds } from "./find"
 import { Minimap } from "./Minimap"
 import { ToolCall } from "./ToolCall"
-import { SettingsBar } from "./ThreadSettings"
+import { SettingsMenu } from "./ThreadSettings"
 import { SignIn, Warning } from "./SignIn"
 import { NewThreadBar } from "./NewThread"
 import { NEW_THREAD, type ThreadArgs, useThreadSession } from "./session"
@@ -291,22 +291,8 @@ function ThreadPane(props: PaneProps<ThreadArgs>) {
           onSend={send}
           onStop={stop}
         >
-          {thread === null && (
-            <NewThreadBar
-              engine={engine}
-              space={space}
-              harness={harness}
-              harnesses={harnesses}
-              disabled={sending}
-              onSpace={(other) =>
-                open(paneOf(threadPane, { ...args, harness }), "here", other)
-              }
-              onHarness={(next) => update({ ...args, harness: next })}
-              onAddSpace={run && (() => run("space.add"))}
-            />
-          )}
           {settings && (
-            <SettingsBar
+            <SettingsMenu
               settings={settings}
               offer={offer}
               disabled={acting}
@@ -314,6 +300,21 @@ function ThreadPane(props: PaneProps<ThreadArgs>) {
             />
           )}
         </Composer>
+        {/* A new Thread's Space and Harness, bare under the card. */}
+        {thread === null && (
+          <NewThreadBar
+            engine={engine}
+            space={space}
+            harness={harness}
+            harnesses={harnesses}
+            disabled={sending}
+            onSpace={(other) =>
+              open(paneOf(threadPane, { ...args, harness }), "here", other)
+            }
+            onHarness={(next) => update({ ...args, harness: next })}
+            onAddSpace={run && (() => run("space.add"))}
+          />
+        )}
       </div>
     </div>
   )

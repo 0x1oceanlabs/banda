@@ -33,7 +33,7 @@ export function NewThreadBar({
 }) {
   const spaces = useShownSpaces(engine)
   return (
-    <div className="flex min-w-0 items-center gap-0.5">
+    <div className="flex min-w-0 items-center gap-0.5 px-1 text-muted-foreground">
       {spaces.length > 0 && (
         <Pick
           what="Space"

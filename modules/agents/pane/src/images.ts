@@ -8,7 +8,7 @@ const MB = 1024 * 1024
 /** The kinds the engine takes; the largest image, the most per message
  * and the most of their bytes together, as in T3 Code. The engine checks
  * them too. */
-export const KINDS = ["image/png", "image/jpeg", "image/gif", "image/webp"]
+const KINDS = ["image/png", "image/jpeg", "image/gif", "image/webp"]
 const LARGEST = 10 * MB
 export const MOST_IMAGES = 100
 const MOST_BYTES = 80 * MB

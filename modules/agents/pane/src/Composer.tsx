@@ -20,7 +20,7 @@ import { Spinner } from "@banda/ui/components/spinner"
 import {
   ArrowUpIcon,
   CornerUpRightIcon,
-  ImagePlusIcon,
+  PlusIcon,
   ListPlusIcon,
   SquareIcon,
 } from "lucide-react"
@@ -28,7 +28,7 @@ import { AttachmentList, type Attachments } from "./Attachments"
 import { useDraft } from "./drafts"
 import { keyFor, steers, useEnterKey } from "./enter-key"
 import { recall } from "./history"
-import { imagesAmong, KINDS } from "./images"
+import { imagesAmong } from "./images"
 import { ownCommand, type Suggested } from "./slash"
 import { type FindFiles, useFileMenu } from "./FileMenu"
 import { useSkillMenu, useSlashMenu } from "./SlashMenu"
@@ -279,12 +279,12 @@ export function Composer({
       <input
         ref={files}
         type="file"
-        accept={KINDS.join(",")}
         multiple
         hidden
-        aria-label="Images to add"
+        aria-label="Files to add"
         onChange={(event) => {
-          images.add([...(event.target.files ?? [])])
+          // As when dropped: images as images, any other file named.
+          void take([...(event.target.files ?? [])], "caret")
           event.target.value = ""
         }}
       />
@@ -351,22 +351,32 @@ export function Composer({
             }}
           />
         </div>
-        <div className="flex items-center gap-2 px-2 pb-2">
-          {!images.closed && (
+        {/* One row: + on the left, what is on beside it; what the Thread
+            runs with and the button on the right (ADR 0031). */}
+        <div className="flex items-center gap-1 px-2 pb-2">
+          <Button
+            variant="ghost"
+            size="icon"
+            className="text-muted-foreground"
+            aria-label="Add files"
+            title="Add images and files"
+            onClick={() => files.current?.click()}
+          >
+            <PlusIcon />
+          </Button>
+          {plan && (
             <Button
               variant="ghost"
-              size="icon"
+              size="xs"
               className="text-muted-foreground"
-              aria-label="Add images"
-              title="Add images"
-              onClick={() => files.current?.click()}
+              aria-label="Plan"
+              title="Plan mode is on. Click, Shift+Tab or /default turns it off."
+              onClick={() => onPlanMode(false)}
             >
-              <ImagePlusIcon />
+              Plan
             </Button>
           )}
-          {/* What the Thread runs with rests, faded, while the box is not
-              in use. */}
-          <div className="min-w-0 flex-1 opacity-60 transition-opacity group-focus-within/composer:opacity-100 group-hover/composer:opacity-100">
+          <div className="flex min-w-0 flex-1 items-center justify-end">
             {children}
           </div>
           {usage && <ContextUsed usage={usage} />}
@@ -471,14 +481,18 @@ function plain(event: KeyboardEvent): boolean {
   return !event.altKey && !event.shiftKey && !event.ctrlKey && !event.metaKey
 }
 
+/** From this share of its context used, how full it is shows. */
+const HALF_FULL = 50
+
 /** From this share of its context used, an Agent is near the point where
  * its Harness compacts or stops: the share shows as a warning. */
 const NEARLY_FULL = 80
 
-/** How full the Agent's context is: a ring, and the share; what it cost
- * so far on hover, when the Harness says. */
+/** How full the Agent's context is, from half full: a ring, and the
+ * share; what it cost so far on hover, when the Harness says. */
 function ContextUsed({ usage: { used, size, cost } }: { usage: Usage }) {
   const share = size > 0 ? Math.round((used / size) * 100) : 0
+  if (share < HALF_FULL) return null
   const tokens = new Intl.NumberFormat("en", { notation: "compact" })
   const spent =
     cost &&
