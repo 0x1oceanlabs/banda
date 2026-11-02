@@ -78,4 +78,8 @@ keys: Keys,
  * Each key of each settings file, by file: its value, and where it
  * comes from (ADR 0016).
  */
-settings: { [key in string]: { [key in string]: Setting } }, };
+settings: { [key in string]: { [key in string]: Setting } }, 
+/**
+ * The folder the settings files are in: `~/.config/banda`.
+ */
+config: string, };

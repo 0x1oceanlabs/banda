@@ -103,6 +103,8 @@ pub struct Look {
     /// Each key of each settings file, by file: its value, and where it
     /// comes from (ADR 0016).
     pub settings: BTreeMap<String, keyed::Keyed>,
+    /// The folder the settings files are in: `~/.config/banda`.
+    pub config: String,
 }
 
 /// The desk as the window makes it (ADR 0023). Its opacities are CSS
@@ -571,6 +573,7 @@ pub fn resolve(places: &Places, windows: &dyn Fn() -> Option<Windows>, also: &[A
             agents,
             keys,
             settings,
+            config: places.config.display().to_string(),
         },
         watched,
         followed,

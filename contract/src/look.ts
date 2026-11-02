@@ -89,36 +89,8 @@ export const DEFAULT_KEYS: Keys = { file: "", binds: [] }
 /** Banda's browser, as `banda look` gives it with no `browser.toml`: for
  * before the first look and outside the desktop. */
 export const DEFAULT_BROWSER: Browser = {
-  file: "",
   tabs: "top",
   search: "https://duckduckgo.com/?q=%s",
   pinned: [],
   blocker: true,
-}
-
-/**
- * `text`, one of the look's TOML files, with the key `key` of its top set
- * to the string `value`: the line that sets it now changes, its comment
- * kept, or a line goes in at the top, under its `#:schema` line. Nothing
- * else in the file changes.
- */
-export function withTopKey(text: string, key: string, value: string): string {
-  const line = `${key} = ${JSON.stringify(value)}`
-  const keyed = new RegExp(
-    `^(\\s*)${key}\\s*=\\s*("(?:[^"\\\\]|\\\\.)*"|'[^']*')(.*)$`
-  )
-  const lines = text.split("\n")
-  for (const [at, now] of lines.entries()) {
-    // A key of the file's top comes before any table.
-    if (/^\s*\[/.test(now)) break
-    const set = keyed.exec(now)
-    if (set) {
-      lines[at] = `${set[1]}${line}${set[3]}`
-      return lines.join("\n")
-    }
-  }
-  // An editor reads a `#:schema` line only at the very top.
-  const at = lines[0]?.startsWith("#:schema") ? 1 : 0
-  lines.splice(at, 0, line)
-  return text === "" ? `${line}\n` : lines.join("\n")
 }

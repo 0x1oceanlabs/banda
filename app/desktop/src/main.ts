@@ -244,8 +244,8 @@ async function ready(): Promise<void> {
       reveal: [
         text,
         ([file]) =>
-          Effect.flatMap(Look.part("sidebar", "The config folder"), (sidebar) =>
-            Settings.use((settings) => settings.reveal(sidebar.file, file))
+          Effect.flatMap(Look.part("config", "The config folder"), (config) =>
+            Settings.use((settings) => settings.reveal(config, file))
           ),
       ],
       themes: [none, () => Settings.use((settings) => settings.themes)],

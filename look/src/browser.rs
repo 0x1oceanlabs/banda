@@ -57,8 +57,6 @@ pub struct BrowserSettings {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, TS)]
 #[ts(export, export_to = "look/")]
 pub struct Browser {
-    /// The file the switch writes into.
-    pub file: String,
     pub tabs: Tabs,
     /// An address with `%s` where the words go.
     pub search: String,
@@ -131,7 +129,6 @@ pub fn resolve(
     };
     let keyed = keyed::keyed(&merged, &layers);
     let browser = Browser {
-        file: file.display().to_string(),
         tabs: merged.tabs.unwrap_or_default(),
         search: merged
             .search
