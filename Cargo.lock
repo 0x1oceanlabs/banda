@@ -290,6 +290,7 @@ version = "0.1.0"
 dependencies = [
  "axum",
  "banda-agents",
+ "banda-browser",
  "banda-kernel",
  "banda-look",
  "banda-settings",
@@ -330,6 +331,20 @@ dependencies = [
  "tracing",
  "ts-rs",
  "uuid",
+]
+
+[[package]]
+name = "banda-browser"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "banda-kernel",
+ "schemars 1.2.3",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "ts-rs",
 ]
 
 [[package]]

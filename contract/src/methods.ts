@@ -7,6 +7,7 @@ import type { CommandId } from "./generated/CommandId"
 import type { SpacesMethods } from "./generated/SpacesMethods"
 import type { WindowMethods } from "./generated/WindowMethods"
 import type { AgentsMethods } from "./generated/agents/AgentsMethods"
+import type { BrowserMethods } from "./generated/browser/BrowserMethods"
 import type { TerminalMethods } from "./generated/terminal/TerminalMethods"
 import type { WorkspacesMethods } from "./generated/workspaces/WorkspacesMethods"
 
@@ -18,6 +19,7 @@ type Prefixed<P extends string, M> = {
 export type Methods = Prefixed<"spaces", SpacesMethods> &
   Prefixed<"window", WindowMethods> &
   Prefixed<"agents", AgentsMethods> &
+  Prefixed<"browser", BrowserMethods> &
   Prefixed<"terminal", TerminalMethods> &
   Prefixed<"workspaces", WorkspacesMethods>
 

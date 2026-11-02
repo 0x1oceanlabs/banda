@@ -93,7 +93,9 @@ and stay Roma's to change.
    | `browser_wait_for` | Until a text, a ref or an address shows; 15 s by default, 60 s at most. |
    | `browser_handoff` | Hands the tab to the Person for a step that is theirs (decision 6). |
 
-   - A tab's id is the Pane's tab id, which survives a restart.
+   - A tab's id is its page's, for as long as Banda runs (amended in step
+     2b): a page knows no Pane's tab id, and an Agent lists the tabs again
+     after a restart anyway. Which Pane and Space come with step 4.
    - The snapshot is Playwright's `ariaSnapshot({ mode: "ai" })`, as T3
      Code makes it. A ref lives as long as its element. A stale ref
      refuses with "take a new snapshot".
@@ -187,10 +189,11 @@ and stay Roma's to change.
 **Build order.** One PR each; `scripts/check.sh` passes after each.
 
 1. This ADR, with the mockup.
-2. The road: `window.requests` and `window.answer` in the kernel; a
-   `Call::ask_window`; main as an API client holding the
-   stream; the browser's engine part with `browser_tabs` and
-   `browser_snapshot`, Playwright in main; the refusal with no window.
+2. The road, in three PRs. 2a: `window.requests` and `window.answer` in
+   the kernel, and a `Call::ask_window`. 2b: main as an API client
+   holding the stream; the browser's engine part with `browser_tabs`;
+   the refusal with no window. 2c: `browser_snapshot`, Playwright in
+   main.
 3. Acting: `browser_open`, `browser_navigate`, `browser_act`,
    `browser_wait_for`; the short answers; the Person's input noted
    (decision 5); E's refused and masked fields.

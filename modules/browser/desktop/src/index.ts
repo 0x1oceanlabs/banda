@@ -2,7 +2,8 @@
  * The browser's part in the window's main process (ADR 0013, ADR 0028):
  * its services as one layer, which needs main's window, look, settings
  * and engine (@banda/desktop-kit); its answers to the bridge's
- * `browser` channels; and what it does as Banda's window opens.
+ * `browser` channels and to what its engine part asks (ADR 0029); and
+ * what it does as Banda's window opens.
  */
 import type { BROWSER_BRIDGE } from "@banda/browser-pane/desktop"
 import type {
@@ -14,6 +15,7 @@ import type {
 } from "@banda/desktop-kit"
 import { Layer } from "effect"
 import type { WebContents } from "electron"
+import { browserAsked } from "./asked"
 import { Browser, browserAnswers, userAgent } from "./browser"
 import { Cdp } from "./cdp"
 import { Extensions } from "./extensions"
@@ -29,6 +31,7 @@ export const browserDesktop: DesktopModule<
     Layer.provideMerge(Tabs.layer)
   ),
   answers: browserAnswers,
+  asked: browserAsked,
   // Banda's page may show browser pages, and nothing else.
   opened: (contents: WebContents) =>
     Browser.use((browser) => browser.host(contents)),

@@ -88,7 +88,7 @@ crate::methods! {
 }
 
 fn not_open() -> Refusal {
-    Refusal::conflict("Banda's window is not open. Nothing was done.")
+    Refusal::conflict("Banda's window is not open.")
 }
 
 fn closed() -> Refusal {

@@ -7,6 +7,7 @@
   "exports": {
     ".": "./src/index.ts",
     "./agents": "./src/agents.ts",
+    "./browser": "./src/browser.ts",
     "./terminal": "./src/terminal.ts",
     "./workspaces": "./src/workspaces.ts",
     "./look": "./src/look.ts",

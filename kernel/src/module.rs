@@ -159,16 +159,19 @@ impl Call {
     /// Asks the window `what`, under this module's name, for this call's
     /// caller in its Space, and waits for the answer at most `within`
     /// (ADR 0029, decision 2). With no window, or none that answers in
-    /// time, it is refused, and the refusal says whether it may have run.
-    pub async fn ask_window(
+    /// time, it is refused, and the refusal says whether it may have run;
+    /// an answer that is not a `T` is refused too.
+    pub async fn ask_window<T: serde::de::DeserializeOwned>(
         &self,
         what: &str,
         params: Value,
         within: Duration,
-    ) -> Result<Value, Refusal> {
-        (self.space)
+    ) -> Result<T, Refusal> {
+        let answer = (self.space)
             .ask_window(self.participant, what, params, within)
-            .await
+            .await?;
+        serde_json::from_value(answer)
+            .map_err(|e| Refusal::invalid(format!("Banda's window answered amiss: {e}.")))
     }
 
     /// The ID this call runs under as a command. A module whose command

@@ -17,6 +17,8 @@ export type { Browsed } from "./generated/Browsed"
 export type { BrowsedFolder } from "./generated/BrowsedFolder"
 export type { UpdateSpace } from "./generated/UpdateSpace"
 export type { JsonValue } from "./generated/serde_json/JsonValue"
+export type { WindowAnswer } from "./generated/WindowAnswer"
+export type { WindowRequest } from "./generated/WindowRequest"
 export {
   Engine,
   Lost,

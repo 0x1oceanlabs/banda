@@ -45,6 +45,7 @@ import { firstFrame, firstLook, lookLayer } from "./look"
 import { modules } from "./modules"
 import { channel, stateFolder } from "./channel"
 import { NoticeArg, Notices, RecordedDesktop } from "./notices"
+import { roadLayer } from "./road"
 import { settingsLayer } from "./settings"
 import { ensure } from "./sidebar"
 
@@ -111,11 +112,13 @@ const notices =
     : Notices.system
 
 /** Main's services (ADR 0020): the engine and the look as children, the
- * settings, the notices, and over them the modules' own, the browser's
- * (modules.ts). They start with the first effect run, and stop when it is
- * disposed. */
+ * settings, the notices, over them the modules' own, the browser's
+ * (modules.ts), and the road that answers what the modules' engine parts
+ * ask (road.ts). They start with the first effect run, and stop when it
+ * is disposed. */
 const runtime = ManagedRuntime.make(
-  modules.layer.pipe(
+  roadLayer(modules.asked).pipe(
+    Layer.provideMerge(modules.layer),
     Layer.provideMerge(
       Layer.mergeAll(
         engineLayer(engineBinary),

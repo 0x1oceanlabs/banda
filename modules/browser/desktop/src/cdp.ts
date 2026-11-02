@@ -124,6 +124,8 @@ export class Cdp extends Context.Service<
     /** Ends every client's sessions on the tab: the Person stops the
      * Agents that drive it. */
     readonly stop: (page: number) => Effect.Effect<void>
+    /** Whether an Agent drives the tab now. */
+    readonly drives: (page: Page) => boolean
   }
 >()("banda/Cdp") {
   /** `userAgent` is the browser's, as its pages send it. */
@@ -603,7 +605,8 @@ export class Cdp extends Context.Service<
             const page = pageWith(id)
             return page ? endOn(page) : Effect.void
           })
-        if (Option.isNone(listening)) return { endpoint: "", stop }
+        const drives = (page: Page) => driven.has(page)
+        if (Option.isNone(listening)) return { endpoint: "", stop, drives }
         const server = listening.value
         const port = "port" in server.address ? server.address.port : 0
         const endpoint = `http://127.0.0.1:${port}/${token}`
@@ -684,7 +687,7 @@ export class Cdp extends Context.Service<
             ).pipe(Effect.andThen(Effect.never), Effect.scoped)
           )
         )
-        return { endpoint, stop }
+        return { endpoint, stop, drives }
       })
     )
 }

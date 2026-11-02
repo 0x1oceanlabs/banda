@@ -337,7 +337,12 @@ fn an_agent_reaches_banda_through_banda_mcp() {
     let arranging = ["panes", "open_pane", "move_pane", "close_pane"];
     assert_eq!(
         names,
-        [&["threads", "read", "send"][..], &arranging, &["skill"]].concat()
+        [
+            &["threads", "read", "send", "browser_tabs"][..],
+            &arranging,
+            &["skill"]
+        ]
+        .concat()
     );
     assert_eq!(tools[1]["inputSchema"]["required"], json!(["thread"]));
 

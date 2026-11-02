@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@banda/browser-pane": "workspace:*",
+    "@banda/contract": "workspace:*",
     "@banda/desktop-kit": "workspace:*",
     "@effect/platform-node": "4.1.1",
     "@ghostery/adblocker-electron": "2.20.3",

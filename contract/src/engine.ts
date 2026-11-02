@@ -62,7 +62,7 @@ type Following = {
 }
 
 type Hearing = {
-  space: SpaceId
+  space: SpaceId | undefined
   method: string
   params: JsonValue
   onPiece: (piece: unknown) => void
@@ -200,10 +200,10 @@ export class Engine {
    * Hears a module's stream, such as a terminal's output: what it says now
    * and keeps nowhere. After a reconnect the engine says it again from its
    * start. `onEnd` hears when the module ends it, or refuses it. Returns how
-   * to stop.
+   * to stop. A stream of this machine's, `window.requests`, has no Space.
    */
   stream<M extends MethodOf<"stream">>(
-    space: SpaceId,
+    space: SpaceId | undefined,
     method: M,
     params: Params<M>,
     onPiece: (piece: Answer<M>) => void,

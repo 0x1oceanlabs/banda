@@ -187,10 +187,14 @@ fn said(text: String, error: bool) -> Value {
 }
 
 fn refused(refusal: &Refusal) -> Value {
-    let text = format!(
-        "Refused ({}): {} Nothing was done.",
-        refusal.code, refusal.message
-    );
+    // One that may have run, as a window that answered late, says so
+    // itself: it ends in "may have been done."
+    let nothing = if refusal.message.ends_with("may have been done.") {
+        ""
+    } else {
+        " Nothing was done."
+    };
+    let text = format!("Refused ({}): {}{nothing}", refusal.code, refusal.message);
     said(text, true)
 }
 
