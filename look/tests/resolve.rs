@@ -423,8 +423,16 @@ fn a_broken_file_is_named_by_line_and_the_rest_still_applies() {
     assert_eq!((problem.line, problem.column), (Some(5), Some(1)));
     assert!(problem.message.contains("radiuss"), "{}", problem.message);
     assert!(problem.to_string().contains("look.toml:5:1: "), "{problem}");
-    // The broken file is left out; Omarchy's theme still shows.
+    assert_eq!(problem.key.as_deref(), Some("tile.radiuss"));
+    // Only the wrong key is left out: the file's gap applies, and
+    // Omarchy's theme still shows.
     assert_eq!(color(&look, true, "--primary"), "#a3b88c");
+    assert_eq!(look.vars["--gap-inner"], "6px");
+
+    // TOML written wrong leaves the whole file out.
+    machine.look_toml("[gaps]\ninner = 6\n\n[tile\n");
+    let look = machine.look();
+    assert_eq!(look.problems[0].key, None);
     assert_eq!(look.vars["--gap-inner"], "12px");
 }
 

@@ -46,8 +46,9 @@ columns: Columns,
  */
 sources: Array<Source>, 
 /**
- * What is wrong in the files. The look still applies: a broken layer
- * is left out, and `--follow` keeps the last good look.
+ * What is wrong in the files. The look still applies: a value that
+ * does not read is left out; a file that does not read at all is,
+ * and `--follow` keeps the last good look.
  */
 problems: Array<Problem>, 
 /**

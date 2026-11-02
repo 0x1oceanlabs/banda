@@ -47,12 +47,9 @@ pub struct Agents {
     pub enter: Enter,
 }
 
-/// Reads an `agents.toml`; `None`, with the problem, when it cannot be
-/// read as the schema.
+/// Reads an `agents.toml`, as [`crate::read`] reads a file.
 pub fn read_agents(path: &Path, text: &str, problems: &mut Vec<Problem>) -> Option<AgentsSettings> {
-    toml::from_str(text)
-        .map_err(|error| problems.push(Problem::toml(path, text, &error)))
-        .ok()
+    crate::read(path, text, problems)
 }
 
 /// The settings on this machine; `agents.toml` is watched.

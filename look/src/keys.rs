@@ -204,19 +204,13 @@ fn chord(text: &str) -> Result<Bind, String> {
 }
 
 /// Reads a `keys.toml`. A key written wrong goes to `problems` and is left
-/// out; `None` when the file cannot be read as the schema at all.
+/// out; `None` when it is not TOML at all.
 pub fn read_keys(
     path: &Path,
     text: &str,
     problems: &mut Vec<Problem>,
 ) -> Option<(KeysSettings, Vec<Bind>)> {
-    let settings: KeysSettings = match toml::from_str(text) {
-        Ok(settings) => settings,
-        Err(error) => {
-            problems.push(Problem::toml(path, text, &error));
-            return None;
-        }
-    };
+    let settings: KeysSettings = crate::read(path, text, problems)?;
     let mut lines: Vec<_> = settings.binds.iter().flatten().collect();
     lines.sort_by_key(|(key, _)| key.span().start);
     let mut binds: Vec<Bind> = Vec::new();

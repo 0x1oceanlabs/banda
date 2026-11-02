@@ -67,19 +67,13 @@ pub struct Browser {
 }
 
 /// Reads a `browser.toml`. A key that is wrong goes to `problems` and is
-/// left out; `None` when the file cannot be read as the schema at all.
+/// left out; `None` when it is not TOML at all.
 pub fn read_browser(
     path: &Path,
     text: &str,
     problems: &mut Vec<Problem>,
 ) -> Option<BrowserSettings> {
-    let mut settings: BrowserSettings = match toml::from_str(text) {
-        Ok(settings) => settings,
-        Err(error) => {
-            problems.push(Problem::toml(path, text, &error));
-            return None;
-        }
-    };
+    let mut settings: BrowserSettings = crate::read(path, text, problems)?;
     if let Some(search) = &settings.search {
         let address = search.get_ref();
         let web = address.starts_with("https://") || address.starts_with("http://");
