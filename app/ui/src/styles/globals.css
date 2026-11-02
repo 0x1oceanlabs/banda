@@ -318,27 +318,41 @@ html[data-glass] [data-held-by] {
   opacity: var(--tile-opacity);
 }
 /* What a Pane keeps in the window's layer takes the pointer, as the layer
-   itself does not; while the mouse sizes a column or a Pane (ADR 0025,
-   decision 5) the pointer is the window's: nothing there takes it, nothing
-   is selected, and the cursor says which way the size goes. */
+   itself does not. While the mouse drags a size or a Pane, or Alt is held
+   for one (ADR 0025, decision 5), the pointer is the window's: nothing
+   there takes it, nothing is selected, and the cursor says what it does. */
 [data-held-by] {
   pointer-events: auto;
 }
-html[data-sizing] [data-held-by] {
+html[data-drag] [data-held-by],
+html[data-alt] [data-held-by] {
   pointer-events: none;
 }
-html[data-sizing],
-html[data-sizing] * {
+html[data-drag],
+html[data-drag] * {
   user-select: none;
 }
-html[data-sizing="width"] * {
+html[data-drag="width"] * {
   cursor: col-resize !important;
 }
-html[data-sizing="height"] * {
+html[data-drag="height"] * {
   cursor: row-resize !important;
 }
-html[data-sizing="both"] * {
+html[data-drag="both"] * {
   cursor: nwse-resize !important;
+}
+html[data-drag="move"] *,
+html[data-drag="view"] * {
+  cursor: grabbing !important;
+}
+/* The tile a Pane is carried from, and the workspace number it would go
+   to on letting go. */
+[data-lifted] {
+  opacity: 0.4;
+}
+[data-workspace][data-drop] {
+  color: var(--foreground);
+  box-shadow: inset 0 0 0 2px var(--focus);
 }
 [data-sidebar-shown] {
   --sidebar-inset: calc(var(--sidebar-width) + var(--gap-outer));

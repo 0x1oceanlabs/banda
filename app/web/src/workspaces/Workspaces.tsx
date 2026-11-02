@@ -12,7 +12,9 @@ import type { Chime } from "@banda/ui/sound"
 import type { Entry, Workspaces as State } from "./model"
 import type { Frame } from "./PaneFrame"
 import { Strip } from "./Strip"
+import { useAltHeld } from "./alt"
 import { pixels, Swipe } from "./swipe"
+import { type Carrying, useMoving } from "./useMoving"
 
 /** How far a swipe goes, in pixels, before it moves a workspace. */
 const STEP = 24
@@ -36,6 +38,7 @@ export function Workspaces({
   listed,
   frame,
   onStep,
+  onGo,
   onStart,
 }: {
   workspaces: State
@@ -57,6 +60,9 @@ export function Workspaces({
   frame: Frame
   /** A swipe up or down with Alt held steps once, however long it is. */
   onStep: (by: 1 | -1) => void
+  /** Goes to workspace `id`, as a Pane carried and held over its number
+   * in the bar does. */
+  onGo: (id: string) => void
   onStart: (pane: PaneState) => void
 }) {
   const root = useRef<HTMLDivElement>(null)
@@ -94,9 +100,24 @@ export function Workspaces({
     }
   }, [frame])
   const step = useRef(onStep)
+  // What the mouse's moving reads as it goes.
+  const carrying = useRef<Carrying>({
+    on: false,
+    workspace: undefined,
+    frame,
+    go: onGo,
+  })
   useLayoutEffect(() => {
     step.current = onStep
+    carrying.current = {
+      on: !covered && zoomed === undefined,
+      workspace: workspaces.list[workspaces.current]?.id,
+      frame,
+      go: onGo,
+    }
   })
+  useMoving(root, carrying)
+  useAltHeld()
   useEffect(() => {
     const element = root.current
     if (!element) return
@@ -146,6 +167,7 @@ export function Workspaces({
               center={center}
               listed={listed}
               frame={frame}
+              onStep={onStep}
               onStart={onStart}
             />
           </div>

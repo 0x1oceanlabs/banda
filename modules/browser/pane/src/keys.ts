@@ -6,10 +6,10 @@
  * Pane run them; every other key stays the page's.
  */
 
-import { type Key, matches, type Pressed } from "@banda/ui/lib/keys"
+import { isAlt, type Key, matches, type Pressed } from "@banda/ui/lib/keys"
 import type { TabKey } from "./tabs"
 
-export type { Pressed }
+export { isAlt, type Pressed }
 
 /** What the browser Pane does on one of its keys. */
 export type Does =

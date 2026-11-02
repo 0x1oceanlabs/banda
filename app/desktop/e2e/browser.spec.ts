@@ -80,18 +80,20 @@ function inPages(app: ElectronApplication, code: string): Promise<unknown[]> {
 async function pressInPage(
   app: ElectronApplication,
   keyCode: string,
-  modifiers: ("alt" | "shift" | "control")[]
+  modifiers: ("alt" | "shift" | "control")[],
+  types: ("keyDown" | "keyUp")[] = ["keyDown", "keyUp"]
 ) {
   await app.evaluate(
-    ({ webContents }, { keyCode, modifiers }) => {
+    ({ webContents }, { keyCode, modifiers, types }) => {
       const pages = webContents
         .getAllWebContents()
         .filter((contents) => contents.getType() === "webview")
       const page = pages.find((each) => each.isFocused()) ?? pages[0]!
-      page.sendInputEvent({ type: "keyDown", keyCode, modifiers })
-      page.sendInputEvent({ type: "keyUp", keyCode, modifiers })
+      for (const type of types) {
+        page.sendInputEvent({ type, keyCode, modifiers })
+      }
     },
-    { keyCode, modifiers }
+    { keyCode, modifiers, types }
   )
 }
 
@@ -204,19 +206,70 @@ test("a gap dragged over a browser's page sizes the column: the page lets the po
   const from = { x: thread.x + thread.width + 6, y: shown.y + shown.height / 2 }
   await page.mouse.move(from.x, from.y)
   await page.mouse.down()
-  await expect(page.locator("html[data-sizing]")).toHaveCount(1)
+  await expect(page.locator("html[data-drag]")).toHaveCount(1)
   await expect
     .poll(() => held.evaluate((e) => getComputedStyle(e).pointerEvents))
     .toBe("none")
   await page.mouse.move(shown.x + shown.width / 2, from.y, { steps: 12 })
   await page.mouse.up()
-  await expect(page.locator("html[data-sizing]")).toHaveCount(0)
+  await expect(page.locator("html[data-drag]")).toHaveCount(0)
   await expect
     .poll(async () => (await draft.boundingBox())!.width)
     .toBeGreaterThan(thread.width + shown.width / 3)
   await expect
     .poll(() => held.evaluate((e) => getComputedStyle(e).pointerEvents))
     .toBe("auto")
+})
+
+test("with Alt held in a browser's page, the mouse moves its Pane from the page", async () => {
+  const address = await serve({ "/": "<title>Alpha</title><p>A page</p>" })
+  window = await startWindow({ look: "[columns]\nmin = 10\n" })
+  const { app, page } = window
+  const { thread: draft } = await firstThread(page)
+  await expect(draft).toBeVisible()
+  const bar = await openBrowser(page)
+  await bar.fill(address.replace("http://", ""))
+  await bar.press("Enter")
+  const alpha = page.getByRole("region", { name: "Alpha" })
+  await expect(alpha).toBeVisible()
+  const held = page.locator("[data-held-by]")
+  await expect(held).toBeVisible()
+  const pointer = () => held.evaluate((e) => getComputedStyle(e).pointerEvents)
+
+  // Alt pressed in the page stays the page's, and the window hears it:
+  // the page lets the mouse through while it is held.
+  await held.click()
+  await expect.poll(() => inPages(app, "document.hasFocus()")).toEqual([true])
+  const alt = (type: "keyDown" | "keyUp") =>
+    pressInPage(app, "Alt", ["alt"], [type])
+  await alt("keyDown")
+  await expect(page.locator("html[data-alt]")).toHaveCount(1)
+  await expect.poll(pointer).toBe("none")
+  await alt("keyUp")
+  await expect(page.locator("html[data-alt]")).toHaveCount(0)
+  await expect.poll(pointer).toBe("auto")
+
+  // Alt and the left button on the page carry its Pane: to the Thread's
+  // left, a column of its own there. The page hears Alt as the keyboard
+  // presses it; the mouse holds it as Playwright's.
+  const shown = (await held.boundingBox())!
+  const thread = (await draft.boundingBox())!
+  await alt("keyDown")
+  await expect.poll(pointer).toBe("none")
+  await page.keyboard.down("Alt")
+  await page.mouse.move(shown.x + shown.width / 2, shown.y + shown.height / 2)
+  await page.mouse.down()
+  await page.mouse.move(thread.x + 10, thread.y + thread.height / 2, {
+    steps: 10,
+  })
+  await page.mouse.up()
+  await page.keyboard.up("Alt")
+  await expect
+    .poll(async () =>
+      Math.sign((await draft.boundingBox())!.x - (await alpha.boundingBox())!.x)
+    )
+    .toBe(1)
+  await expect(alpha).toHaveAttribute("data-focused", "true")
 })
 
 test("a browser page is kept apart from Banda", async () => {

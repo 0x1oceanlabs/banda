@@ -37,9 +37,9 @@ const { key, ...browser } = banda.browser
 // A key the desktop took from a browser page is pressed in the window, so
 // Banda's actions and the browser Pane hear it as their own
 // (@banda/browser-desktop).
-key((pressed) => {
+key(({ up, ...pressed }) => {
   window.dispatchEvent(
-    new KeyboardEvent("keydown", {
+    new KeyboardEvent(up ? "keyup" : "keydown", {
       ...pressed,
       bubbles: true,
       cancelable: true,

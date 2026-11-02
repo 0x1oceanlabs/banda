@@ -8,7 +8,7 @@ import type { Tabs } from "@banda/contract/browser"
 
 import type { Pressed } from "./keys"
 
-export { type Pressed, taken } from "./keys"
+export { isAlt, type Pressed, taken } from "./keys"
 
 /** The profile every page shares (ADR 0013, decision 2). */
 export const PARTITION = "persist:browser"
@@ -97,8 +97,9 @@ export const BROWSER_BRIDGE = {
     popup: send<[extension: string, url: string, under: Box]>(),
   },
   /** A key main took from a browser page: the preload presses it in the
-   * window, so Banda's actions and the Pane hear it as their own. */
-  key: push<Pressed>(),
+   * window, so Banda's actions and the Pane hear it as their own; Alt let
+   * go is `up`. */
+  key: push<Pressed & { up?: true }>(),
 }
 
 /** The desktop's side of the browser, on `window.banda.browser`. */

@@ -25,8 +25,13 @@ import {
 } from "./layout"
 import { type Frame, PaneFrame } from "./PaneFrame"
 import { Tabs } from "./Tabs"
-import { pixels, scrollsSideways, SWIPE_END, Swipe } from "./swipe"
+import { pixels, scrollsSideways, SWIPE_END, Swipe, type Way } from "./swipe"
+import { THRESHOLD } from "./sizing"
 import { useSizing } from "./useSizing"
+
+/** How far, in pixels, `Alt` and the middle button go up or down to step
+ * to the next workspace. */
+const VIEW_STEP = 48
 
 /**
  * One workspace, as niri's Strip: columns side by side, each its share of
@@ -38,6 +43,10 @@ import { useSizing } from "./useSizing"
  * view. Over what scrolls sideways by itself, a swipe without Alt is that
  * Pane's. A swipe up or down is the Pane's under the pointer: the Strip
  * never moves by itself.
+ *
+ * `Alt` and the middle button drag the view, as niri's `Mod` and the
+ * middle button: sideways the Strip follows the pointer, and lands as a
+ * swipe does; up or down, the workspaces step once.
  */
 export function Strip({
   workspace,
@@ -51,6 +60,7 @@ export function Strip({
   center,
   listed,
   frame,
+  onStep,
   onStart,
 }: {
   workspace: Workspace
@@ -74,6 +84,8 @@ export function Strip({
   /** The listed thing a Pane shows, as its module lists it. */
   listed: (entry: Entry) => Listed | undefined
   frame: Frame
+  /** `Alt` and the middle button dragged up or down step once. */
+  onStep: (by: 1 | -1) => void
   /** Opens a first Pane on this empty workspace. */
   onStart: (pane: PaneState) => void
 }) {
@@ -96,9 +108,9 @@ export function Strip({
 
   // What a scroll needs, as it is now: the columns, and for a swipe's end
   // the focus and the frame; what the mouse's sizing reads too.
-  const now = useRef({ focus, frame, columns, look, on: false })
+  const now = useRef({ focus, frame, columns, look, on: false, onStep })
   useLayoutEffect(() => {
-    now.current = { focus, frame, columns, look, on: live && !zooms }
+    now.current = { focus, frame, columns, look, on: live && !zooms, onStep }
   })
   useSizing(scroller, motion, now)
 
@@ -167,6 +179,68 @@ export function Strip({
     return () => {
       strip.removeEventListener("wheel", onWheel)
       clearTimeout(ending)
+    }
+  }, [])
+
+  useEffect(() => {
+    const strip = scroller.current
+    if (!strip) return
+    const root = document.documentElement
+    let drag:
+      | { pointer: number; x: number; y: number; scroll: number; way?: Way }
+      | undefined
+    const onDown = (event: PointerEvent) => {
+      if (event.button !== 1 || !event.altKey || event.ctrlKey) return
+      if (!now.current.on || drag) return
+      event.preventDefault()
+      event.stopPropagation()
+      strip.setPointerCapture(event.pointerId)
+      scrollOf(strip).stop()
+      drag = {
+        pointer: event.pointerId,
+        x: event.clientX,
+        y: event.clientY,
+        scroll: strip.scrollLeft,
+      }
+      root.dataset.drag = "view"
+    }
+    const onMove = (event: PointerEvent) => {
+      if (drag?.pointer !== event.pointerId) return
+      const dx = event.clientX - drag.x
+      const dy = event.clientY - drag.y
+      if (!drag.way && Math.max(Math.abs(dx), Math.abs(dy)) >= THRESHOLD) {
+        drag.way = Math.abs(dx) >= Math.abs(dy) ? "sideways" : "upright"
+      }
+      if (drag.way === "sideways") strip.scrollLeft = drag.scroll - dx
+      if (drag.way === "upright" && Math.abs(dy) >= VIEW_STEP) {
+        // Pulled up, the next one comes up from below.
+        now.current.onStep(dy < 0 ? 1 : -1)
+        finish()
+      }
+    }
+    const finish = () => {
+      if (!drag) return
+      const { way } = drag
+      drag = undefined
+      delete root.dataset.drag
+      if (way === "sideways") {
+        const { columns, focus, frame } = now.current
+        land(strip, places(strip, columns), focus, frame)
+      }
+    }
+    const onUp = (event: PointerEvent) => {
+      if (drag?.pointer === event.pointerId) finish()
+    }
+    strip.addEventListener("pointerdown", onDown, true)
+    strip.addEventListener("pointermove", onMove)
+    strip.addEventListener("pointerup", onUp)
+    strip.addEventListener("lostpointercapture", onUp)
+    return () => {
+      finish()
+      strip.removeEventListener("pointerdown", onDown, true)
+      strip.removeEventListener("pointermove", onMove)
+      strip.removeEventListener("pointerup", onUp)
+      strip.removeEventListener("lostpointercapture", onUp)
     }
   }, [])
 

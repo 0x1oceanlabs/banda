@@ -38,6 +38,11 @@ export function matches(event: Pressed, key: Key): boolean {
   )
 }
 
+/** Whether `code` is an Alt key, left or right. */
+export function isAlt(code: string): boolean {
+  return code === "AltLeft" || code === "AltRight"
+}
+
 /** Keys that are only mods: a key to bind comes with them, not alone. */
 const MODS = new Set(["Alt", "AltGraph", "Control", "Shift", "Meta"])
 

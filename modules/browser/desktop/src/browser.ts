@@ -18,6 +18,7 @@ import {
   type Download,
   PARTITION,
   type Pressed,
+  isAlt,
   taken,
 } from "@banda/browser-pane/desktop"
 import { BROWSER_FILE } from "@banda/contract/browser"
@@ -160,7 +161,6 @@ export function userAgent(): string {
  * and an extension's popup alike (decision 5). */
 export function keys(page: WebContents, window: WebContents): void {
   page.on("before-input-event", (event, input) => {
-    if (input.type !== "keyDown") return
     const key: Pressed = {
       code: input.code,
       altKey: input.alt,
@@ -168,6 +168,19 @@ export function keys(page: WebContents, window: WebContents): void {
       shiftKey: input.shift,
       metaKey: input.meta,
     }
+    // Alt pressed or let go stays the page's, and the window hears it too:
+    // with it held, the mouse moves and sizes Panes over a page as well
+    // (ADR 0025, decisions 5 and 6).
+    if (isAlt(input.code)) {
+      if (!input.isAutoRepeat) {
+        tellPage(window, BROWSER_BRIDGE.key, {
+          ...key,
+          ...(input.type === "keyUp" && { up: true as const }),
+        })
+      }
+      return
+    }
+    if (input.type !== "keyDown") return
     if (!taken(key)) return
     event.preventDefault()
     tellPage(window, BROWSER_BRIDGE.key, key)

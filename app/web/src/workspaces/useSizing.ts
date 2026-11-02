@@ -15,7 +15,14 @@ import type { Plan } from "./arrange"
 import { type ColumnMotion, columnIn, floorIn, heightAt, room } from "./layout"
 import { drawn, type Entry, heightsOf, share, type Width } from "./model"
 import type { Frame } from "./PaneFrame"
-import { type Box, grabAt, heightsFor, REACH, widthFor } from "./sizing"
+import {
+  type Box,
+  grabAt,
+  heightsFor,
+  REACH,
+  THRESHOLD,
+  widthFor,
+} from "./sizing"
 
 /** A column as the Strip draws it. */
 export type Sized = {
@@ -38,10 +45,6 @@ export type Sizing = {
   look: Look
   frame: Pick<Frame, "arrange">
 }
-
-/** How far, in pixels, the pointer goes before `Alt` and the right button
- * size anything that way: a click alone sizes nothing. */
-const THRESHOLD = 4
 
 /** The least a Pane is dragged to, in pixels: its header and a line. */
 const LEAST = 48
@@ -225,7 +228,7 @@ export function useSizing(
       event.preventDefault()
       event.stopPropagation()
       element.setPointerCapture(event.pointerId)
-      root.dataset.sizing = way
+      root.dataset.drag = way
       drag = { pointer: event.pointerId, part }
       window.addEventListener("keydown", onKey, true)
     }
@@ -234,7 +237,7 @@ export function useSizing(
       if (!drag) return
       const { part } = drag
       drag = undefined
-      delete root.dataset.sizing
+      delete root.dataset.drag
       window.removeEventListener("keydown", onKey, true)
       const plans = keep ? part.plans() : []
       if (!plans.length) part.undo()
