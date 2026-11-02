@@ -1,0 +1,28 @@
+{
+  "name": "@banda/git-pane",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "The git module's Panes: the Diff of a Space's repository, as T3 Code's.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@banda/contract": "workspace:*",
+    "@banda/ui": "workspace:*",
+    "lucide-react": "^1.65.0",
+    "react": "^19.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "typescript": "~6.0.2",
+    "vite": "^8",
+    "vitest": "^5"
+  }
+}

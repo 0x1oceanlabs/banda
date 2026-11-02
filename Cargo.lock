@@ -291,6 +291,7 @@ dependencies = [
  "axum",
  "banda-agents",
  "banda-browser",
+ "banda-git",
  "banda-kernel",
  "banda-look",
  "banda-settings",
@@ -357,6 +358,21 @@ dependencies = [
  "serde",
  "serde_json",
  "tokio",
+]
+
+[[package]]
+name = "banda-git"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "banda-kernel",
+ "futures",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tracing",
+ "ts-rs",
 ]
 
 [[package]]

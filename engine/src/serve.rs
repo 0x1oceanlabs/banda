@@ -7,6 +7,7 @@ use crate::places::{HOST, Places, Running};
 use banda_agents::settings::Harnesses;
 use banda_agents::{Agents, Pipe};
 use banda_browser::Browser;
+use banda_git::Git;
 use banda_kernel::api::{self, OwnerSecret};
 use banda_kernel::{Kernel, PROTOCOL};
 use banda_terminal::Terminals;
@@ -56,6 +57,7 @@ pub async fn serve(places: Places, port: u16, with_parent: bool) -> Result<(), F
         .module(Agents::new(harnesses).piped(pipe))
         .module(Terminals::new())
         .module(Browser::new())
+        .module(Git::new())
         .module(Workspaces::new())
         .open()
         .await

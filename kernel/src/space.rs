@@ -472,6 +472,12 @@ impl ModuleSpace {
             .await
     }
 
+    /// The log position now: what a view read now is current at, for an
+    /// answer read outside the Space's data, as git's.
+    pub async fn at(&self) -> Result<i64, Error> {
+        self.space.store.read(|sql| Ok(events::head(sql)?)).await
+    }
+
     /// The receipt of `command`, made by `author` for `method`.
     pub(crate) fn receipt(&self, command: CommandId, method: &str, author: Participant) -> Receipt {
         Receipt {

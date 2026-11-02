@@ -11,6 +11,7 @@
 
 use banda_agents::Agents;
 use banda_browser::Browser;
+use banda_git::Git;
 use banda_kernel::Method;
 use banda_terminal::Terminals;
 use banda_workspaces::Workspaces;
@@ -51,6 +52,12 @@ const FILES: &[Files] = &[
         toml: include_str!("../../modules/browser/module.toml"),
         window: Some(include_str!("../../modules/browser/window.json")),
         methods: Some(Browser::method_list),
+    },
+    Files {
+        folder: "git",
+        toml: include_str!("../../modules/git/module.toml"),
+        window: Some(include_str!("../../modules/git/window.json")),
+        methods: Some(Git::method_list),
     },
     Files {
         folder: "workspaces",
@@ -250,6 +257,7 @@ mod tests {
             Agents::new(Default::default()).name(),
             Terminals::new().name(),
             Browser::new().name(),
+            Git::new().name(),
             Workspaces::new().name(),
         ];
         assert_eq!(with_engine, engine);
