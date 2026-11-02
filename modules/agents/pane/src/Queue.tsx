@@ -17,8 +17,9 @@ import {
   XIcon,
 } from "lucide-react"
 import { type ImageReader, MessageImages } from "./MessageImages"
-import type { ItemId } from "@banda/contract/agents"
-import type { Waiting } from "./thread"
+import type { ItemId, ListedThread } from "@banda/contract/agents"
+import { type Waiting, writerOf } from "./thread"
+import { Writer, type Writers } from "./Messages"
 
 /** What a Person does with a message that waits, as T3 Code offers it. */
 export type QueueActions = {
@@ -46,16 +47,19 @@ export function Queue({
   name,
   busy,
   reader,
+  writers,
+  onOpenThread,
   ...actions
-}: QueueActions & {
-  waiting: Waiting[]
-  held: boolean
-  /** A turn runs that a message can go into now. */
-  steerable: boolean
-  name: string
-  busy: boolean
-  reader: ImageReader
-}) {
+}: QueueActions &
+  Writers & {
+    waiting: Waiting[]
+    held: boolean
+    /** A turn runs that a message can go into now. */
+    steerable: boolean
+    name: string
+    busy: boolean
+    reader: ImageReader
+  }) {
   if (waiting.length === 0) return null
   const count =
     waiting.length === 1
@@ -95,6 +99,8 @@ export function Queue({
               steerable={steerable}
               busy={busy}
               reader={reader}
+              writer={writerOf(writers, one.item)}
+              onOpenThread={onOpenThread}
               {...actions}
             />
           </li>
@@ -115,12 +121,17 @@ function WaitingMessage({
   onRemove,
   editing,
   onEditing,
+  writer,
+  onOpenThread,
 }: Omit<QueueActions, "onContinue"> & {
   waiting: Waiting
   name: string
   steerable: boolean
   busy: boolean
   reader: ImageReader
+  /** The other Thread whose Agent wrote it, if one did. */
+  writer?: ListedThread
+  onOpenThread: Writers["onOpenThread"]
 }) {
   const body = waiting.item.body
   if (body.kind !== "message") return null
@@ -128,6 +139,14 @@ function WaitingMessage({
   return (
     <Message align="end">
       <MessageContent>
+        {writer && (
+          <Writer
+            thread={writer}
+            answers={body.answers}
+            align="end"
+            onOpen={onOpenThread}
+          />
+        )}
         <MessageImages images={body.images} reader={reader} />
         {open ? (
           <EditWaiting

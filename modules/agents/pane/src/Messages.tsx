@@ -1,8 +1,9 @@
 import { useState } from "react"
-import type { Image } from "@banda/contract/agents"
+import type { Image, ListedThread } from "@banda/contract/agents"
 import { Bubble, BubbleContent } from "@banda/ui/components/bubble"
 import { Button } from "@banda/ui/components/button"
 import { CopyButton } from "@banda/ui/components/copy-button"
+import { HarnessLogo } from "@banda/ui/components/harness-logo"
 import { Markdown } from "@banda/ui/components/markdown"
 import { Message, MessageContent } from "@banda/ui/components/message"
 import { cn } from "@banda/ui/lib/utils"
@@ -76,19 +77,66 @@ export function AgentMessage({
   text,
   at,
   live,
+  from,
 }: {
   text: string
   at: number
   /** Whether the Agent is still writing it. */
   live: boolean
+  /** Another Thread's Agent wrote it: the {@link Writer} over it. */
+  from?: React.ReactNode
 }) {
   return (
     <Message>
       <MessageContent>
+        {from}
         <Markdown streaming={live}>{text}</Markdown>
         {!live && <Meta at={at} text={text} align="start" />}
       </MessageContent>
     </Message>
+  )
+}
+
+/** The Space's other Threads by their Agents' IDs, and how one opens: what
+ * a {@link Writer} needs. */
+export type Writers = {
+  writers: ReadonlyMap<string, ListedThread>
+  onOpenThread: (thread: ListedThread) => void
+}
+
+/**
+ * The other Thread whose Agent wrote a message, over it: whether it asks
+ * or answers, and that Thread's Harness and title, which opens it (ADR
+ * 0019).
+ */
+export function Writer({
+  thread,
+  answers = false,
+  align = "start",
+  onOpen,
+}: {
+  thread: ListedThread
+  /** It answers what this Thread's Agent asked; else it asks. */
+  answers?: boolean
+  align?: "start" | "end"
+  onOpen: (thread: ListedThread) => void
+}) {
+  return (
+    <Button
+      variant="ghost"
+      size="xs"
+      className={cn(
+        "-mb-1.5 max-w-full text-muted-foreground",
+        align === "end" ? "-mr-2 self-end" : "-ml-2 self-start"
+      )}
+      onClick={() => onOpen(thread)}
+    >
+      <HarnessLogo id={thread.harness} name={thread.harness} fallback={null} />
+      {answers ? "Answered by" : "Asked by"}
+      <span className="truncate font-medium text-foreground">
+        {thread.title || "New Thread"}
+      </span>
+    </Button>
   )
 }
 

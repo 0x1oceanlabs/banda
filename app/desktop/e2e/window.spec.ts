@@ -2,6 +2,7 @@ import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
 import { join, resolve } from "node:path"
 import { expect, type Locator, type Page, test } from "@playwright/test"
 import {
+  agentCalls,
   clickNotice,
   countNotes,
   desktopOf,
@@ -1399,6 +1400,32 @@ test("what the Agent does by itself shows in a turn of its own", async () => {
   await composer.press("Enter")
   await expect(thread.getByText("You said: and this")).toBeVisible()
   await expect(thread.getByText(/^Working for/)).toBeHidden()
+})
+
+test("an Agent starts a Thread, its answer comes back, and each names the other's Thread, which opens it", async () => {
+  window = await startWindow()
+  const { page } = window
+  const { thread, composer } = await firstThread(page)
+  await composer.fill("hello")
+  await composer.press("Enter")
+  await expect(thread.getByText("You said: hello")).toBeVisible()
+
+  // The Agent of "hello" calls `send`, as its Harness would.
+  const sent = agentCalls(window, "send", {
+    harness: "fake",
+    text: "look around",
+  })
+  expect(sent.isError, sent.content[0]?.text).toBeFalsy()
+  const answer = thread.getByRole("button", {
+    name: "Answered by look around",
+  })
+  await expect(answer).toBeVisible()
+  await page.screenshot({ path: "test-results/18j-answer-from.png" })
+  await answer.click()
+  const asked = page.getByRole("region", { name: "look around" })
+  await asked.getByRole("button", { name: "Asked by hello" }).click()
+  const hello = page.getByRole("region", { name: "hello" })
+  await expect(hello).toHaveAttribute("data-focused", "true")
 })
 
 test("the sidebar is arranged by sidebar.toml, and its view menu writes the file", async () => {

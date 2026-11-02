@@ -1,7 +1,7 @@
 //! The agents module's published language: its IDs, the facts it publishes
 //! and the views a window reads. TypeScript types come from here.
 
-use banda_kernel::Participant;
+use banda_kernel::{AgentId, Participant};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use ts_rs::TS;
@@ -673,6 +673,11 @@ pub enum Body {
         text: String,
         #[serde(default)]
         images: Vec<Image>,
+        /// It answers what this Thread's Agent asked another Thread's
+        /// (ADR 0019); its author is that Thread's Agent.
+        #[ts(as = "Option<bool>", optional)]
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        answers: bool,
     },
     Thought {
         text: String,
@@ -788,6 +793,8 @@ pub struct ThreadList {
 pub struct ListedThread {
     #[serde(flatten)]
     pub thread: ThreadSummary,
+    /// Its Agent: the author of what it writes into other Threads.
+    pub agent: AgentId,
     /// Its latest turn that began. None has yet.
     #[ts(optional)]
     #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -845,6 +852,10 @@ pub enum Fact {
         #[ts(optional)]
         #[serde(default, skip_serializing_if = "Option::is_none")]
         harness: Option<String>,
+        /// Its Agent. Older logs leave it out.
+        #[ts(optional)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        agent: Option<AgentId>,
     },
     /// A message to the Agent, which queues a turn.
     #[serde(rename = "message.posted")]
@@ -854,6 +865,11 @@ pub enum Fact {
         text: String,
         #[serde(default)]
         images: Vec<Image>,
+        /// It answers what this Thread's Agent asked another Thread's
+        /// (ADR 0019); its author is that Thread's Agent.
+        #[ts(as = "Option<bool>", optional)]
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        answers: bool,
     },
     /// A message into the turn that runs, which it joins instead of
     /// queuing one; or a waiting message a Person sent now. It reads after

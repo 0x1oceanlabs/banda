@@ -431,7 +431,11 @@ If Chat is removed, Agents still works through its own Thread.
   `rules::may_write`: no circle (an Agent cannot write to its own Thread,
   nor to one up the chain of asked turns still going that waits for its
   answer), not over a Person's Question (a Thread with an open Question),
-  and only its own Space (the kernel's wall).
+  and only its own Space (the kernel's wall). A message's author is
+  the other Thread's Agent, which the Thread list names (`agent`); an
+  answer says so (`answers`). The Thread Pane shows that Thread's Harness
+  and title over the message, in the queue too ("Asked by …" or
+  "Answered by …"), and a click opens it beside.
 - **A turn says what a Person may do with it** (`can`, ADR 0014): stop
   it, try it again, change, take back or send its message now, or send a
   message into it. `rules::can` asks `next` what it accepts, and the

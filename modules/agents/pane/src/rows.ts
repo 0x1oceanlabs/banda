@@ -5,7 +5,7 @@
  * plain tests cover it.
  */
 import type { ListedThread } from "@banda/contract/agents"
-import { type Listed, paneOf } from "@banda/ui/pane"
+import { type Listed, paneOf, type PaneState } from "@banda/ui/pane"
 import { markOf, type Seen } from "./marks"
 import { threadPane } from "./ThreadPane"
 
@@ -38,10 +38,12 @@ export function listedOf(
     ...(said ? { said } : {}),
     ...(harness ? { by: harness } : {}),
     ...(thread.harness ? { harness: thread.harness } : {}),
-    pane: paneOf(threadPane, {
-      thread: thread.id,
-      harness: thread.harness,
-      title: thread.title,
-    }),
+    pane: threadPaneOf(thread),
   }
+}
+
+/** The Thread Pane that shows `thread`. */
+export function threadPaneOf(thread: ListedThread): PaneState {
+  const { id, harness, title } = thread
+  return paneOf(threadPane, { thread: id, harness, title })
 }

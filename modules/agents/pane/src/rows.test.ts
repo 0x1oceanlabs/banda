@@ -4,6 +4,7 @@ import { FAILED, listedOf } from "./rows"
 
 const thread = (more: Partial<ListedThread> = {}): ListedThread => ({
   id: "t1",
+  agent: "a1",
   harness: "claude",
   title: "Hello",
   updated_at: 5,

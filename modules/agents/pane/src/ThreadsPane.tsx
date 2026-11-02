@@ -10,13 +10,13 @@ import { Spinner } from "@banda/ui/components/spinner"
 import { useLive } from "@banda/ui/hooks/use-live"
 import { ago } from "@banda/ui/lib/words"
 import { cn } from "@banda/ui/lib/utils"
-import { definePane, type PaneProps, type Place, paneOf } from "@banda/ui/pane"
+import { definePane, type PaneProps, type Place } from "@banda/ui/pane"
 import { MessagesSquareIcon } from "lucide-react"
 import { harnessName, useHarnesses } from "./harnesses"
 import { threadsSource } from "./list"
 import { markOf, needsPerson } from "./marks"
 import { useSeen } from "./seen"
-import { threadPane } from "./ThreadPane"
+import { threadPaneOf } from "./rows"
 
 type NoArgs = { [key: string]: JsonValue }
 
@@ -73,16 +73,7 @@ function ThreadsPane({ engine, space, open }: PaneProps<NoArgs>) {
             thread={thread}
             mark={markOf(thread, seen)}
             harness={thread.harness && harnessName(harnesses, thread.harness)}
-            onClick={(event) =>
-              open(
-                paneOf(threadPane, {
-                  thread: thread.id,
-                  harness: thread.harness,
-                  title: thread.title,
-                }),
-                placeOf(event)
-              )
-            }
+            onClick={(event) => open(threadPaneOf(thread), placeOf(event))}
           />
         </li>
       ))}

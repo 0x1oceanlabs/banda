@@ -1,5 +1,5 @@
-import type { Event } from "@banda/contract"
-import type { TurnView } from "@banda/contract/agents"
+import type { Event, Participant } from "@banda/contract"
+import type { ListedThread, TurnView } from "@banda/contract/agents"
 import { expect, test } from "vitest"
 import { agent, event, person } from "./testing"
 import {
@@ -16,6 +16,7 @@ import {
   type ThreadState,
   waiting,
   working,
+  writerOf,
 } from "./thread"
 
 /** `turn` as `state` has it now. */
@@ -62,6 +63,39 @@ test("a turn's facts build the Thread a Person reads", () => {
   // It ran from its start to its end, as the log's times say.
   expect(turn.started).toBeLessThan(turn.ended!)
   expect(working(state)).toBeUndefined()
+})
+
+test("a message names the other Thread whose Agent wrote it, and whether it answers", () => {
+  const other: Participant = { kind: "agent", id: "b" }
+  const state = play(
+    event("message.posted", { item: "m", turn: "u", text: "hi", images: [] }),
+    event(
+      "message.posted",
+      { item: "n", turn: "v", text: "go", images: [] },
+      { author: person }
+    ),
+    event(
+      "message.posted",
+      { item: "r", turn: "w", text: "12 files", images: [], answers: true },
+      { author: other }
+    )
+  )
+  const [own, said, answer] = state.items
+  expect(answer.body).toMatchObject({ kind: "message", answers: true })
+  expect(own.body).not.toHaveProperty("answers")
+  // The Space's other Threads, by their Agents: never this Thread's own.
+  const listed = (id: string): ListedThread => ({
+    id,
+    agent: id,
+    harness: "fake",
+    title: `Thread ${id}`,
+    updated_at: 1,
+    asking: [],
+  })
+  const writers = new Map([["b", listed("b")]])
+  expect(writerOf(writers, answer)?.title).toBe("Thread b")
+  expect(writerOf(writers, own)).toBeUndefined()
+  expect(writerOf(writers, said)).toBeUndefined()
 })
 
 test("a Question opens, then is answered or closed", () => {

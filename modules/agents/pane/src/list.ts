@@ -61,9 +61,10 @@ export function applyThreads(state: ThreadList, event: Event): ThreadList {
   if (!fact) return state
   switch (fact.kind) {
     case "thread.started": {
-      const { thread: id, title, harness = "" } = fact.payload
+      const { thread: id, title, harness = "", agent = "" } = fact.payload
       if (state.threads.some((thread) => thread.id === id)) return state
-      const started = { id, harness, title, updated_at: event.at, asking: [] }
+      const at = event.at
+      const started = { id, harness, title, agent, updated_at: at, asking: [] }
       return { ...state, threads: [started, ...state.threads] }
     }
     case "message.posted": {
