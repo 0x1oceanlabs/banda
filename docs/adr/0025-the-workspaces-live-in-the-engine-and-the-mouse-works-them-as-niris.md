@@ -103,7 +103,10 @@ On the list, Roma decided:
      once its event is drawn.
    - **An Agent arranges its own Space's Panes, and calmly** (ADR 0005,
      decision 4; ADR 0019). Behind the Space wall it sees only the Panes
-     of its pass's Space, and opens, moves and closes only those. It
+     of its pass's Space, and opens, moves and closes only those (ADR
+     0029: its Person may let it see the other Spaces' Panes, and it then
+     opens its own beside them; it moves and closes only those it
+     opened). It
      reads them through its tools, never the machine's log, whose events
      hold every Space's Panes. What
      it opens never takes the focus and carries a mark until the Person
@@ -249,7 +252,8 @@ On the list, Roma decided:
   1. the machine's scope in the kernel;
   2. the `workspaces` module: the arrangement, its commands and events,
      the window drawing them, and the move from the window's storage;
-  3. an Agent's tools on its own Space's Panes;
+  3. an Agent's tools on its own Space's Panes, and the others' when its
+     Person lets it (ADR 0029);
   4. the keys: heights, the zoom, `Alt+Ctrl+F`, `Alt+C`, Home and End,
      the launcher's letters;
   5. the mouse's sizing: the gaps, `Alt` and the right button, the
