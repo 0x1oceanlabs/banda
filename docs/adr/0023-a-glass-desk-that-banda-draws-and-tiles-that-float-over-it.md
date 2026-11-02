@@ -78,8 +78,13 @@ The first build made the glass Hyprland's. Roma, seeing that its blur is Hyprlan
    - `o.transparent_window` fades everything: the tiles, the text and the code. Banda's glass is in the page, only where it should be.
    - Roma's `looknfeel.lua` drops `banda-desktop` from it.
 
-6. **Not here, next.**
-   - Glass menus, popovers and toasts, by `backdrop-filter` over the desk.
+6. **What floats over the window is glass too** (_built_, 2026-11-02). Roma, asked what the window still lacks, chose this first.
+   - Menus, dialogs, the Banda menu, the composer's suggestions and toasts are all `bg-popover`. Their surface is a fourth token, `--floating`: the popover's colour, solid, and on glass as clear as the sidebar's panel (halfway between the desk and the tiles), frosted by `desk.blur` and `desk.saturation`.
+   - One rule frosts the sidebar's panel and every `bg-popover` under `html[data-glass]`, by the same blur and saturation, so a new menu is glass without a class of its own. A popover inside another is frosted by it, not twice.
+   - The current row in the sidebar, and the chosen Space, are drawn as tiles (`bg-tile`), not as the background: on glass a block of solid black in the panel was the one heavy thing in it. On a solid desk they look as before.
+   - No new key: a floating surface takes the panel's glass, so `desk.opacity` and `tile.opacity` tune it too.
+
+7. **Not here, next.**
    - A terminal whose canvas takes the tile's opacity.
    - The rail sidebar (the mock's third one).
    - The wallpaper on other desktops: GNOME's and KDE's settings, macOS's and Windows' own. Until then, `desk.wallpaper` names it.
