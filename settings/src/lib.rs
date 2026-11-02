@@ -7,152 +7,24 @@
 //! of them, with no list kept by hand.
 
 use banda_agents::settings::{HarnessFile, Harnesses, template as harness_template};
-use banda_look::agents::AgentsSettings;
-use banda_look::browser::BrowserSettings;
-use banda_look::keys::KeysSettings;
-use banda_look::settings::Settings as LookSettings;
-use banda_look::sidebar::SidebarSettings;
 use banda_look::theme::Places;
-use banda_look::{Also, Problem};
-use schemars::generate::SchemaSettings;
-use schemars::transform::RecursiveTransform;
-use schemars::{JsonSchema, Schema};
-use serde_json::Value;
+use banda_look::{Problem, SettingsFile};
 use std::path::{Path, PathBuf};
 
 mod write;
 pub use write::{rename, reset, set};
 
-/// A file in `~/.config/banda/` that Banda reads. What it holds is its
-/// root struct's doc comment, the schema's `description`.
-pub struct File {
-    /// Its name in the config folder.
-    pub name: &'static str,
-    schema: fn() -> Schema,
-    /// What a new file starts as, before its first key is written.
-    template: fn() -> String,
-    /// What is wrong in its text, for a file another module reads: the
-    /// look reads the rest itself.
-    check: Option<fn(&Path, &str) -> Vec<Problem>>,
-}
-
-const HARNESSES: &str = "harnesses.toml";
-
-/// Every settings file, one per module (ADR 0016, decision 3).
-pub const FILES: [File; 6] = [
-    File {
-        name: "look.toml",
-        schema: schema_of::<LookSettings>,
-        template: || banda_look::TEMPLATE.to_owned(),
-        check: None,
-    },
-    File {
-        name: "sidebar.toml",
-        schema: schema_of::<SidebarSettings>,
-        template: || banda_look::sidebar::TEMPLATE.to_owned(),
-        check: None,
-    },
-    File {
-        name: "browser.toml",
-        schema: schema_of::<BrowserSettings>,
-        template: || banda_look::browser::TEMPLATE.to_owned(),
-        check: None,
-    },
-    File {
-        name: "agents.toml",
-        schema: schema_of::<AgentsSettings>,
-        template: || banda_look::agents::TEMPLATE.to_owned(),
-        check: None,
-    },
-    File {
-        name: "keys.toml",
-        schema: schema_of::<KeysSettings>,
-        template: || banda_look::keys::TEMPLATE.to_owned(),
-        check: None,
-    },
-    File {
-        name: HARNESSES,
-        schema: schema_of::<HarnessFile>,
-        template: harness_template,
-        check: Some(check_harnesses),
-    },
-];
-
-fn schema_of<T: JsonSchema>() -> Schema {
-    SchemaSettings::draft2020_12()
-        .with_transform(RecursiveTransform(no_null))
-        .into_generator()
-        .into_root_schema_for::<T>()
-}
-
-/// TOML has no null: a key left out is how a file says nothing. So an
-/// `Option`'s null is taken out of its schema.
-fn no_null(schema: &mut Schema) {
-    let Some(object) = schema.as_object_mut() else {
-        return;
-    };
-    if let Some(Value::Array(types)) = object.get_mut("type") {
-        types.retain(|t| t != "null");
-        if types.len() == 1 {
-            let only = types.remove(0);
-            object.insert("type".into(), only);
-        }
-    }
-    // A table's default, now its keys serialize: each key unset, which
-    // says nothing.
-    if let Some(Value::Object(default)) = object.get("default")
-        && !default.is_empty()
-        && default.values().all(says_nothing)
-    {
-        object.remove("default");
-    }
-    // An optional table: `anyOf: [its $ref, null]`.
-    if let Some(Value::Array(options)) = object.get_mut("anyOf") {
-        options.retain(|option| option.get("type") != Some(&Value::from("null")));
-        if options.len() == 1 {
-            let only = options.remove(0);
-            object.remove("anyOf");
-            if let Value::Object(only) = only {
-                for (name, value) in only {
-                    object.entry(name).or_insert(value);
-                }
-            }
-        }
-    }
-}
-
-/// Null, or a table of nothing but.
-fn says_nothing(value: &Value) -> bool {
-    match value {
-        Value::Null => true,
-        Value::Object(table) => table.values().all(says_nothing),
-        _ => false,
-    }
-}
-
-impl File {
-    /// The file's JSON Schema, titled with its name.
-    pub fn schema(&self) -> Schema {
-        let mut schema = (self.schema)();
-        schema.insert("title".into(), self.name.into());
-        schema
-    }
-
-    /// What it holds: its root struct's doc comment.
-    pub fn about(&self) -> String {
-        let schema = (self.schema)();
-        let about = schema.get("description").and_then(Value::as_str);
-        about.unwrap_or_default().replace('\n', " ")
-    }
-
-    /// Where its schema is kept: `look.schema.json`.
-    pub fn schema_name(&self) -> String {
-        format!("{}.schema.json", self.name.trim_end_matches(".toml"))
-    }
-}
+/// Every settings file, one per module (ADR 0016, decision 3): the look's,
+/// then the files the look does not read, which other crates do.
+pub const FILES: [SettingsFile; 6] = {
+    let [look, sidebar, browser, agents, keys] = banda_look::FILES;
+    let harnesses =
+        SettingsFile::new::<HarnessFile>("harnesses.toml", harness_template, check_harnesses);
+    [look, sidebar, browser, agents, keys, harnesses]
+};
 
 /// The file called `name`.
-pub fn file(name: &str) -> Option<&'static File> {
+pub fn file(name: &str) -> Option<&'static SettingsFile> {
     FILES.iter().find(|file| file.name == name)
 }
 
@@ -173,16 +45,8 @@ pub fn export(folder: &Path) -> std::io::Result<()> {
 
 /// The files the look does not read, which it watches and names the
 /// problems of all the same: the Harness list, as the engine reads it.
-pub fn also() -> Vec<Also> {
-    FILES
-        .iter()
-        .filter_map(|file| {
-            Some(Also {
-                name: file.name,
-                check: file.check?,
-            })
-        })
-        .collect()
+pub fn also() -> &'static [SettingsFile] {
+    &FILES[banda_look::FILES.len()..]
 }
 
 /// Checks `paths`, or with none every file Banda reads: the look's, the
@@ -194,9 +58,7 @@ pub fn check(places: &Places, paths: &[PathBuf]) -> Vec<Problem> {
             fontconfig: None,
             ..places.clone()
         };
-        return banda_look::resolve(&places, &|| None, &also())
-            .look
-            .problems;
+        return banda_look::resolve(&places, &|| None, also()).look.problems;
     }
     paths.iter().flat_map(|path| check_file(path)).collect()
 }
@@ -212,8 +74,8 @@ fn check_file(path: &Path) -> Vec<Problem> {
 /// engine reads it, anything else as the look does.
 fn check_text(path: &Path, text: &str) -> Vec<Problem> {
     let name = path.file_name().and_then(|name| name.to_str());
-    match name.and_then(file).and_then(|file| file.check) {
-        Some(check) => check(path, text),
+    match name.and_then(file) {
+        Some(file) => file.check(path, text),
         None => banda_look::check_text(path, text),
     }
 }
@@ -293,7 +155,7 @@ mod tests {
         let folder = tempfile::tempdir().unwrap();
         let places = Places::at(folder.path());
         let path = folder.path().join("harnesses.toml");
-        let resolved = banda_look::resolve(&places, &|| None, &also());
+        let resolved = banda_look::resolve(&places, &|| None, also());
         assert!(resolved.look.problems.is_empty());
         assert!(
             resolved.watched.contains(&path),
@@ -305,9 +167,7 @@ mod tests {
             "[[harness]]\nid = \"claude\"\n\n[[harness]]\nid = \"x\"\n",
         )
         .unwrap();
-        let problems = banda_look::resolve(&places, &|| None, &also())
-            .look
-            .problems;
+        let problems = banda_look::resolve(&places, &|| None, also()).look.problems;
         assert_eq!(problems.len(), 1, "{problems:?}");
         assert_eq!(problems[0].line, Some(4));
         assert!(problems[0].message.contains("needs a name and a command"));
@@ -331,6 +191,7 @@ mod tests {
 #[cfg(test)]
 mod every_key {
     use super::*;
+    use serde_json::Value;
 
     /// The keys that may have no value when the file does not say one,
     /// each for its reason. Any other key of a schema shows in the
@@ -394,7 +255,7 @@ mod every_key {
         let look = banda_look::resolve(&Places::at(folder.path()), &|| None, &[]).look;
         let mut named = Vec::new();
         // Another module's file has no keys in the look.
-        for file in FILES.iter().filter(|file| file.check.is_none()) {
+        for file in &banda_look::FILES {
             let name = file.name;
             let keyed = &look.settings[name];
             let schema = serde_json::to_value(file.schema()).unwrap();

@@ -19,6 +19,7 @@ pub mod agents;
 pub mod browser;
 pub mod color;
 pub mod columns;
+pub mod file;
 pub mod fonts;
 pub mod hyprland;
 pub mod keyed;
@@ -34,6 +35,7 @@ pub mod tokens;
 mod wallpaper;
 
 use color::{is_css_color, is_hex};
+pub use file::{OneFile, SettingsFile};
 use hyprland::Windows;
 use motion::Motion;
 use palette::Palette;
@@ -396,21 +398,35 @@ pub struct Resolved {
     pub followed: Vec<PathBuf>,
 }
 
-/// A settings file another crate reads, as `harnesses.toml` is the
-/// agents module's: the look watches it and names its problems with its
-/// own, so the window shows what is wrong in every file (ADR 0016).
-#[derive(Clone, Copy)]
-pub struct Also {
-    /// Its name in the config folder.
-    pub name: &'static str,
-    /// What is wrong in its text, as the crate that reads it finds it.
-    pub check: fn(&Path, &str) -> Vec<Problem>,
-}
+/// The files the look reads: its own, the sidebar's and the keys', and
+/// the agents' and the browser's, which the window draws (ADR 0016).
+pub const FILES: [SettingsFile; 5] = [
+    SettingsFile::new::<Settings>("look.toml", || TEMPLATE.to_owned(), check_text),
+    SettingsFile::new::<sidebar::SidebarSettings>(
+        "sidebar.toml",
+        || sidebar::TEMPLATE.to_owned(),
+        check_text,
+    ),
+    ONE_FILES[0],
+    ONE_FILES[1],
+    SettingsFile::new::<keys::KeysSettings>("keys.toml", || keys::TEMPLATE.to_owned(), check_text),
+];
+
+/// The look's files that are one layer over Banda's defaults.
+const ONE_FILES: [SettingsFile; 2] = [
+    SettingsFile::of::<browser::BrowserSettings>(),
+    SettingsFile::of::<agents::AgentsSettings>(),
+];
 
 /// Resolves the look on this machine. `windows` asks Hyprland for its
 /// window settings, and is asked only when `look.toml` lets it. The
-/// files in `also` are watched, and their problems named, too.
-pub fn resolve(places: &Places, windows: &dyn Fn() -> Option<Windows>, also: &[Also]) -> Resolved {
+/// files in `also`, other crates' to read, are watched, and their problems
+/// named, too.
+pub fn resolve(
+    places: &Places,
+    windows: &dyn Fn() -> Option<Windows>,
+    also: &[SettingsFile],
+) -> Resolved {
     let mut problems = Vec::new();
     let mut watched = Vec::new();
     let mut followed = Vec::new();
@@ -594,8 +610,10 @@ pub fn resolve(places: &Places, windows: &dyn Fn() -> Option<Windows>, also: &[A
     }
 
     let (sidebar, sidebar_keys) = sidebar::resolve(places, &mut problems, &mut watched);
-    let (browser, browser_keys) = browser::resolve(places, &mut problems, &mut watched);
-    let (agents, agents_keys) = agents::resolve(places, &mut problems, &mut watched);
+    let (browser, browser_keys) =
+        file::resolve::<browser::BrowserSettings>(places, &mut problems, &mut watched);
+    let (agents, agents_keys) =
+        file::resolve::<agents::AgentsSettings>(places, &mut problems, &mut watched);
     let (keys, keys_keys) = keys::resolve(places, &mut problems, &mut watched);
     let settings = BTreeMap::from([
         ("look.toml".to_owned(), keyed::keyed(&all, &keyed_layers)),
@@ -622,7 +640,7 @@ pub fn resolve(places: &Places, windows: &dyn Fn() -> Option<Windows>, also: &[A
     for file in also {
         let path = places.config.join(file.name);
         if let Ok(text) = std::fs::read_to_string(&path) {
-            problems.extend((file.check)(&path, &text));
+            problems.extend(file.check(&path, &text));
         }
         watched.push(path);
     }
@@ -854,7 +872,7 @@ fn thousandths(v: f64) -> f64 {
 pub fn follow(
     places: &Places,
     hyprland: Option<hyprland::Hyprland>,
-    also: &[Also],
+    also: &[SettingsFile],
     mut emit: impl FnMut(&Look) -> bool,
 ) {
     let (tell, changes) = std::sync::mpsc::channel::<()>();
@@ -966,16 +984,17 @@ pub(crate) fn line_at(text: &str, offset: usize) -> u32 {
 
 /// Checks `text` as the file at `path` would be read: a `colors.toml` as
 /// a palette, a `sidebar.toml` or a file in `sidebars/` as the sidebar's
-/// schema, a `browser.toml` as the browser's, an `agents.toml` as the
-/// agents module's, anything else as `look.toml`'s.
+/// schema, one of the look's [`FILES`] as that file, anything else as
+/// `look.toml`'s.
 pub fn check_text(path: &Path, text: &str) -> Vec<Problem> {
     let mut problems = Vec::new();
     if let Some(preset) = sidebar::is_sidebar_file(path) {
         sidebar::read_sidebar(path, text, preset, &mut problems);
-    } else if browser::is_browser_file(path) {
-        browser::read_browser(path, text, &mut problems);
-    } else if agents::is_agents_file(path) {
-        agents::read_agents(path, text, &mut problems);
+    } else if let Some(file) = ONE_FILES
+        .iter()
+        .find(|file| path.file_name().is_some_and(|name| name == file.name))
+    {
+        return file.check(path, text);
     } else if keys::is_keys_file(path) {
         keys::read_keys(path, text, &mut problems);
     } else if path.file_name().is_some_and(|n| n == "colors.toml") {

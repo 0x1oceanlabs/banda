@@ -7,12 +7,9 @@
 //! look, watches it with the look's files, and names its problems in the
 //! same list, as it does `browser.toml`.
 
-use crate::Problem;
-use crate::keyed::{self, Keyed, Layer};
-use crate::theme::Places;
+use crate::file::OneFile;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::path::{Path, PathBuf};
 use ts_rs::TS;
 
 /// Where a message written while the Agent works goes when sent with
@@ -47,46 +44,36 @@ pub struct Agents {
     pub enter: Enter,
 }
 
-/// Reads an `agents.toml`, as [`crate::read`] reads a file.
-pub fn read_agents(path: &Path, text: &str, problems: &mut Vec<Problem>) -> Option<AgentsSettings> {
-    crate::read(path, text, problems)
-}
+impl OneFile for AgentsSettings {
+    const NAME: &'static str = "agents.toml";
+    const TEMPLATE: &'static str = TEMPLATE;
+    type Resolved = Agents;
 
-/// The settings on this machine; `agents.toml` is watched.
-pub fn resolve(
-    places: &Places,
-    problems: &mut Vec<Problem>,
-    watched: &mut Vec<PathBuf>,
-) -> (Agents, Keyed) {
-    let file = places.agents_file();
-    watched.push(file.clone());
-    let mine_file = std::fs::read_to_string(&file)
-        .ok()
-        .map(|text| (file.clone(), text));
-    let mine = mine_file
-        .as_ref()
-        .and_then(|(path, text)| read_agents(path, text, problems))
-        .unwrap_or_default();
-    let defaults = AgentsSettings {
-        enter: Some(Enter::default()),
-    };
-    let layers = [
-        Layer::new("defaults", &defaults, None),
-        Layer::new("file", &mine, mine_file.as_ref()),
-    ];
-    let enter = mine.enter.unwrap_or_default();
-    let keyed = keyed::keyed(&AgentsSettings { enter: Some(enter) }, &layers);
-    (Agents { enter }, keyed)
-}
+    fn defaults() -> Self {
+        AgentsSettings {
+            enter: Some(Enter::default()),
+        }
+    }
 
-/// Whether `banda look check` reads `path` as an `agents.toml`.
-pub fn is_agents_file(path: &Path) -> bool {
-    path.file_name().is_some_and(|n| n == "agents.toml")
+    fn over(self, under: Self) -> Self {
+        AgentsSettings {
+            enter: self.enter.or(under.enter),
+        }
+    }
+
+    fn resolved(self) -> Agents {
+        Agents {
+            enter: self.enter.unwrap_or_default(),
+        }
+    }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::Problem;
+    use crate::keyed::Keyed;
+    use crate::theme::Places;
 
     fn resolved(text: Option<&str>) -> (Agents, Keyed, Vec<Problem>) {
         let folder = tempfile::tempdir().unwrap();
@@ -94,7 +81,11 @@ mod tests {
             std::fs::write(folder.path().join("agents.toml"), text).unwrap();
         }
         let (mut problems, mut watched) = (Vec::new(), Vec::new());
-        let (agents, keyed) = resolve(&Places::at(folder.path()), &mut problems, &mut watched);
+        let (agents, keyed) = crate::file::resolve::<AgentsSettings>(
+            &Places::at(folder.path()),
+            &mut problems,
+            &mut watched,
+        );
         assert_eq!(watched, vec![folder.path().join("agents.toml")]);
         (agents, keyed, problems)
     }
