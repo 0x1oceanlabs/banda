@@ -37,6 +37,7 @@ import type { Broke, Refused } from "./errors"
 import { Extensions } from "./extensions"
 import { Look } from "./look"
 import { Settings } from "./settings"
+import { Tabs } from "./tabs"
 import { Window } from "./window"
 
 /** What a page may open: the web, a blank page and the Person's files. */
@@ -66,6 +67,7 @@ export class Browser extends Context.Service<
   static readonly layer = Layer.effect(Browser)(
     Effect.gen(function* () {
       const extensions = yield* Extensions
+      const tabs = yield* Tabs
       const window = yield* Window
       const settings = yield* Settings
       const look = yield* Look
@@ -90,7 +92,7 @@ export class Browser extends Context.Service<
           yield* write("pinned", pinned ? [...others, id] : others)
         }).pipe(Effect.provideService(Look, look))
       return {
-        host: (contents) => Effect.sync(() => host(contents, extensions)),
+        host: (contents) => Effect.sync(() => host(contents, tabs, extensions)),
         tabs: (where) => write("tabs", where),
         pin: (id, pinned) =>
           Effect.andThen(extensions.named(id), pin(id, pinned)),
@@ -107,7 +109,11 @@ export class Browser extends Context.Service<
   )
 }
 
-function host(contents: WebContents, extensions: Extensions["Service"]): void {
+function host(
+  contents: WebContents,
+  tabs: Tabs["Service"],
+  extensions: Extensions["Service"]
+): void {
   contents.on("will-attach-webview", (event, prefs, params) => {
     if (params.partition !== PARTITION || !OPENS.test(params.src)) {
       event.preventDefault()
@@ -122,9 +128,15 @@ function host(contents: WebContents, extensions: Extensions["Service"]): void {
   })
   contents.on("did-attach-webview", (_event, page) => {
     const tell = (news: BrowserNews) => contents.send("browser:news", news)
+    tabs.attached(page)
     keys(page, contents)
     keep(page, tell, extensions)
   })
+}
+
+/** The user agent the browser's pages send: Chrome's (`keepProfile`). */
+export function userAgent(): string {
+  return session.fromPartition(PARTITION).getUserAgent()
 }
 
 /** Banda's Alt keys and the browser's own go to the window, from a page

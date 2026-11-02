@@ -139,7 +139,10 @@ asked for the ADR; the rest are our defaults and stay his to change.
    - So every tool that speaks CDP works with it as it is: Playwright's
      `connectOverCDP`, Playwright MCP's `--cdp-endpoint`, Chrome DevTools
      MCP's `--browser-url`, browser-use.
-   - The window writes the endpoint to `$XDG_RUNTIME_DIR/banda/browser.json`,
+   - The window writes the endpoint to `$XDG_RUNTIME_DIR/banda/browser.json`
+     (built as `browser.json` in Banda's state folder instead, beside
+     `engine.json` and `window.sock`, so `BANDA_STATE` moves it as it
+     moves them),
      readable by the Person alone, and removes it when it closes.
      `banda browser` prints it. The Banda skill gets a `browser` topic
      that tells an Agent how to use it (ADR 0012).

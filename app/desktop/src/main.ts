@@ -24,7 +24,8 @@ import {
 import { type Look as LookValue, WALLPAPER_URL } from "@banda/contract/look"
 import { NodeServices } from "@effect/platform-node"
 import { Effect, Layer, ManagedRuntime, Schema, Stream } from "effect"
-import { Browser } from "./browser"
+import { Browser, userAgent } from "./browser"
+import { Cdp } from "./cdp"
 import { openDoor } from "./door"
 import { BoxArg, Extensions } from "./extensions"
 import { Engine } from "./engine"
@@ -33,6 +34,7 @@ import { Refused } from "./errors"
 import { channels } from "./ipc"
 import { NoticeArg, Notices, RecordedDesktop } from "./notices"
 import { Settings } from "./settings"
+import { Tabs } from "./tabs"
 import { ensure } from "./sidebar"
 import { Window } from "./window"
 
@@ -105,11 +107,13 @@ const notices =
     : Notices.system
 
 /** Main's services (ADR 0020): the engine and the look as children, the
- * settings, the notices, and the browser with its extensions. They start
- * with the first effect run, and stop when it is disposed. */
+ * settings, the notices, and the browser with its tabs, its extensions
+ * and its CDP endpoint. They start with the first effect run, and stop
+ * when it is disposed. */
 const runtime = ManagedRuntime.make(
-  Browser.layer.pipe(
+  Layer.mergeAll(Browser.layer, Cdp.layer(userAgent)).pipe(
     Layer.provideMerge(Extensions.layer),
+    Layer.provideMerge(Tabs.layer),
     Layer.provideMerge(
       Layer.mergeAll(
         Engine.layer(engineBinary),
@@ -226,8 +230,7 @@ async function ready(): Promise<void> {
   on(
     "browser.created",
     Schema.Tuple([Schema.String, Schema.NullOr(Schema.Number)]),
-    ([request, page]) =>
-      Extensions.use((extensions) => extensions.created(request, page))
+    ([request, page]) => Tabs.use((tabs) => tabs.created(request, page))
   )
   // The settings' (ADR 0016) and the Banda menu's (ADR 0017).
   on("menu.open", text, ([route]) => Effect.sync(() => openMenu(route)))

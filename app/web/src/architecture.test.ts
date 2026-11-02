@@ -37,6 +37,7 @@ const STILL: Record<string, string> = {
   "desktop/src/browser.ts": MAIN,
   "desktop/src/extensions.ts": MAIN,
   "desktop/src/popup.ts": MAIN,
+  "desktop/src/tabs.ts": MAIN,
   "desktop/src/preload.ts": MAIN,
 }
 

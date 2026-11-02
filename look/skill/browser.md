@@ -1,6 +1,6 @@
 ---
 name: browser
-description: Banda's browser - its tabs on top or on the left, its search, its keys - and ~/.config/banda/browser.toml.
+description: Banda's browser - its tabs on top or on the left, its search, its keys, how an Agent drives it over CDP - and ~/.config/banda/browser.toml.
 ---
 
 # The browser
@@ -71,3 +71,37 @@ with Ctrl:
 
 A link that opens a new tab opens one beside its page; with Ctrl or the
 middle button it opens behind it. Downloads go to `~/Downloads`.
+
+## An Agent drives it
+
+Every Agent on this machine reaches the browser's tabs through one CDP
+endpoint. It looks like a whole Chrome whose targets are the tabs and
+nothing else, never Banda's own page. `banda browser` prints it while
+Banda's window is open, `http://127.0.0.1:<port>/<token>`, and
+`banda browser --web-socket` the browser's WebSocket; both exit 2 when
+the window is not open. Hand it to a tool that speaks CDP:
+
+```sh
+npx @playwright/mcp --cdp-endpoint "$(banda browser)"
+npx chrome-devtools-mcp --browser-url "$(banda browser)"
+```
+
+```js
+const browser = await chromium.connectOverCDP(endpoint)
+const [context] = browser.contexts()
+const tabs = context.pages()
+```
+
+- The pages are the Person's tabs, signed in as the Person is: do there
+  what the Person asked, and nothing more.
+- `context.newPage()` opens a tab in the browser Pane in front, and
+  closing the page closes the tab. There is one profile:
+  `browser.newContext()` is refused.
+- `browser.close()` only leaves: Banda and its tabs stay.
+- Downloads still go to `~/Downloads`, and a site that asks for the
+  camera or the location still asks the Person.
+- Whoever has the token drives the browser. It changes each time the
+  window starts, and only the Person can read the file it is in,
+  `browser.json` in Banda's state folder. Pages on the web cannot reach
+  it.
+- DevTools opened on a tab (`F12`) ends the Agents' sessions on it.
