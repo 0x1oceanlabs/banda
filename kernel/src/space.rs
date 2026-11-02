@@ -46,6 +46,10 @@ pub(crate) struct Manifest {
     /// Hidden from the Space pickers; its Threads and files are kept.
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub archived: bool,
+    /// Its Agents see the other Spaces' Panes, as their Person let them
+    /// (ADR 0029).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub sees_others: bool,
 }
 
 impl Manifest {
@@ -60,6 +64,7 @@ impl Manifest {
             created_at: now_ms(),
             pinned: false,
             archived: false,
+            sees_others: false,
         }
     }
 
@@ -228,6 +233,11 @@ impl Space {
         self.owner
     }
 
+    /// Whether its Agents see the other Spaces' Panes (ADR 0029).
+    pub fn sees_others(&self) -> bool {
+        self.manifest.lock().unwrap().sees_others
+    }
+
     pub fn summary(&self) -> SpaceSummary {
         let manifest = self.manifest.lock().unwrap();
         SpaceSummary {
@@ -236,6 +246,7 @@ impl Space {
             folder: self.folder.display().to_string(),
             pinned: manifest.pinned,
             archived: manifest.archived,
+            sees_others: manifest.sees_others,
         }
     }
 

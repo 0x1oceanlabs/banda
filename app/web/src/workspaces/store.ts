@@ -13,6 +13,7 @@ import { focused, open, parse, start, type Width } from "./model"
 const WORKSPACES = "banda.workspaces"
 const VIEW = "banda.view"
 const SIDEBAR = "banda.sidebar"
+const LOOKED = "banda.looked"
 
 /**
  * Moves the window's arrangement to the engine, which takes one once: the
@@ -66,6 +67,21 @@ export function loadSidebar(): boolean {
 
 export function keepSidebar(shows: boolean): void {
   keep(SIDEBAR, shows ? "shown" : "hidden")
+}
+
+/**
+ * The Panes an Agent opened that the Person has looked at: the others
+ * carry a mark (ADR 0029).
+ */
+export function loadLooked(): ReadonlySet<string> {
+  const ids = parsed(read(LOOKED))
+  return new Set(
+    Array.isArray(ids) ? ids.filter((id) => typeof id === "string") : []
+  )
+}
+
+export function keepLooked(ids: ReadonlySet<string>): void {
+  keep(LOOKED, JSON.stringify([...ids]))
 }
 
 function isView(value: unknown): value is View {

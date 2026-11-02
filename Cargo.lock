@@ -420,6 +420,7 @@ dependencies = [
  "banda-kernel",
  "banda-look",
  "rusqlite",
+ "schemars 1.2.3",
  "serde",
  "serde_json",
  "tempfile",

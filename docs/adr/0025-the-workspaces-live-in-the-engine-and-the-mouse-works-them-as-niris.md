@@ -253,7 +253,7 @@ On the list, Roma decided:
   2. the `workspaces` module: the arrangement, its commands and events,
      the window drawing them, and the move from the window's storage;
   3. an Agent's tools on its own Space's Panes, and the others' when its
-     Person lets it (ADR 0029);
+     Person lets it (ADR 0029; _built_ 2026-11-02);
   4. the keys: heights, the zoom, `Alt+Ctrl+F`, `Alt+C`, Home and End,
      the launcher's letters;
   5. the mouse's sizing: the gaps, `Alt` and the right button, the

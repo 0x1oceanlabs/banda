@@ -334,7 +334,11 @@ fn an_agent_reaches_banda_through_banda_mcp() {
         .iter()
         .map(|t| text(&t["name"]))
         .collect();
-    assert_eq!(names, ["threads", "read", "send", "skill"]);
+    let arranging = ["panes", "open_pane", "move_pane", "close_pane"];
+    assert_eq!(
+        names,
+        [&["threads", "read", "send"][..], &arranging, &["skill"]].concat()
+    );
     assert_eq!(tools[1]["inputSchema"]["required"], json!(["thread"]));
 
     let (error, threads) = mcp.call(4, "threads", json!({}));
@@ -363,6 +367,28 @@ fn an_agent_reaches_banda_through_banda_mcp() {
     assert!(!error, "{said}");
     let started = serde_json::from_str::<Value>(&said).unwrap()["thread"].clone();
     assert_ne!(started, thread);
+
+    // It puts its Thread on the screen, in its Space, without the focus.
+    let shown = json!({ "kind": "agents.thread", "args": { "thread": thread } });
+    let (error, said) = mcp.call(12, "open_pane", shown);
+    assert!(!error, "{said}");
+    let (error, said) = mcp.call(13, "panes", json!({}));
+    assert!(!error, "{said}");
+    let seen: Value = serde_json::from_str(&said).unwrap();
+    let pane = &seen[0]["columns"][0]["panes"][0];
+    assert_eq!(
+        (pane["space"].clone(), pane["yours"].clone()),
+        (json!(work), json!(true))
+    );
+    let (error, said) = mcp.call(
+        14,
+        "open_pane",
+        json!({ "kind": "terminal.terminal", "args": {} }),
+    );
+    assert!(
+        error && said.contains("run nothing as your Person"),
+        "{said}"
+    );
 
     let (error, said) = mcp.call(9, "skill", json!({ "topic": "sidebar" }));
     assert!(!error);

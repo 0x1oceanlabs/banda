@@ -11,7 +11,12 @@
  * Every change is a pure function from one state to the next, so plain
  * tests cover the rules; the window only draws the state.
  */
-import { type JsonValue, newId, type SpaceId } from "@banda/contract"
+import {
+  type AgentId,
+  type JsonValue,
+  newId,
+  type SpaceId,
+} from "@banda/contract"
 import {
   type Columns,
   DEFAULT_COLUMNS,
@@ -19,8 +24,16 @@ import {
 } from "@banda/contract/look"
 import type { PaneState, Place } from "@banda/ui/pane"
 
-/** One Pane on a workspace: what it shows, and the Space it belongs to. */
-export type Entry = { id: string; space: SpaceId; pane: PaneState }
+/**
+ * One Pane on a workspace: what it shows, the Space it belongs to, and
+ * the Agent that opened it, if one did (ADR 0029).
+ */
+export type Entry = {
+  id: string
+  space: SpaceId
+  pane: PaneState
+  by?: AgentId
+}
 
 /**
  * A column's share of the screen's width, as a fraction such as `"1/3"`,

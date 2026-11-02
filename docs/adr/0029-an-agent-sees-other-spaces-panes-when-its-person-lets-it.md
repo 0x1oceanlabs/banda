@@ -47,6 +47,12 @@ defaults and stay Roma's to change.
    - It opens a Pane of its own Space anywhere a place names: a column of
      a workspace, a column's stack, beside a Pane (_decided_: beside
      another Space's too, which it sees with `sees_others`).
+   - It opens only the kinds that show and run nothing as the Person: a
+     Thread, a diff, a browser. A terminal runs the Person's shell, and
+     the command its `done` names is sent with the Person's rights when
+     its program ends, so an Agent that could open one could run
+     anything as its Person. Settings and the launcher are the Person's
+     too. A kind joins the list when it shows and runs nothing.
    - It moves and closes only the Panes it opened. The Panes its Person
      opened, and other Agents', are theirs; it asks in its Thread.
    - It never moves, sizes or closes another Space's Pane, nor sends to
@@ -70,6 +76,12 @@ defaults and stay Roma's to change.
 - ADR 0019's decision 2 holds for every module of a Space; this ADR opens
   one view, at this machine's scope, and only by the Person's hand.
 - ADR 0025's step 3 builds this: the kernel's part, the `workspaces`
-  module's tools (`panes`, `open`, `move`, `close`) and who opened a Pane,
-  the mark in the window, and `sees_others` on the Space.
+  module's tools (`panes`, `open_pane`, `move_pane`, `close_pane`) and
+  who opened a Pane, the mark in the window, and `sees_others` on the
+  Space. _Built_ 2026-11-02, places by a Pane's side alone (`beside`):
+  without one, the engine puts it as it puts a Pane the CLI opens. The
+  mark is the tile's border and a dot, in the attention colour, until the
+  Person has the Pane in focus with the window in front. The Person sets
+  `sees_others` with `banda call spaces.update` until the Space's
+  settings come (ADR 0026, step 6).
 - A Space made from now on, and every Space today, has it off.

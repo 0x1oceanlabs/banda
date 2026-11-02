@@ -99,6 +99,17 @@ describe("resolve", () => {
     expect(focused(after)?.pane.kind).toBe("a.one")
   })
 
+  test("keeps the Agent that opened a Pane, both ways", () => {
+    const before = arranged()
+    const kept = keptOf(before)
+    const pane = { ...kept[0].columns[0].panes[0], by: "agent-1" }
+    kept[0].columns[0].panes[0] = pane
+    const state = resolve(kept, viewOf(before))
+    expect(state.list[0].columns[0].entries[0].by).toBe("agent-1")
+    expect(keptOf(state)[0].columns[0].panes[0]).toEqual(pane)
+    expect(state.list[0].columns[1].entries[0]).not.toHaveProperty("by")
+  })
+
   test("looks at the Pane wanted once the arrangement stands past it", () => {
     const state = arranged()
     const one = current(state).columns[0].entries[0].id

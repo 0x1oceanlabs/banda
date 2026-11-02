@@ -4,7 +4,7 @@ import { Button } from "@banda/ui/components/button"
 import type { Chime } from "@banda/ui/sound"
 import { labelOf } from "../registry"
 import type { Entry } from "./model"
-import type { Frame } from "./PaneFrame"
+import { AgentMark, type Frame } from "./PaneFrame"
 
 /**
  * A tabbed column's row of tabs, in place of its tile's header (ADR 0005,
@@ -16,11 +16,14 @@ export function Tabs({
   entries,
   active,
   called,
+  marked,
   frame,
 }: {
   entries: readonly Entry[]
   active: number
   called: (entry: Entry) => Chime | undefined
+  /** An Agent opened it, and the Person has not looked at it yet. */
+  marked: (entry: Entry) => boolean
   frame: Frame
 }) {
   return (
@@ -60,6 +63,7 @@ export function Tabs({
                 Icon && <Icon className="size-4 shrink-0" />
               )}
               <span className="min-w-0 truncate">{title}</span>
+              {marked(entry) && <AgentMark />}
             </button>
             <Button
               variant="ghost"

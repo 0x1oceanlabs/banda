@@ -13,4 +13,9 @@ pinned: boolean,
 /**
  * Hidden from the Space pickers; its Threads and files are kept.
  */
-archived: boolean, };
+archived: boolean, 
+/**
+ * Its Agents see the other Spaces' Panes (ADR 0029). Only the Person
+ * sets it.
+ */
+sees_others: boolean, };

@@ -74,6 +74,7 @@ export function resolve(
           space: pane.space,
           pane: { kind: pane.kind, args: pane.args as PaneState["args"] },
         }
+        if (pane.by !== undefined) next.by = pane.by
         const old = was.entries.get(pane.id)
         return old && samePane(old, next) ? old : next
       })
@@ -273,6 +274,7 @@ export function keptOf(state: Workspaces): Kept[] {
         space: entry.space,
         kind: entry.pane.kind,
         args: entry.pane.args,
+        ...(entry.by !== undefined && { by: entry.by }),
       })),
       ...(column.width !== undefined && { width: column.width }),
       full: column.full === true,

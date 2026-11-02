@@ -36,6 +36,7 @@ export function Strip({
   modules,
   spaceName,
   called,
+  marked,
   frame,
   onStart,
 }: {
@@ -50,6 +51,8 @@ export function Strip({
   spaceName: (space: SpaceId) => string
   /** How the Thread a Pane shows calls the Person, if it does. */
   called: (entry: Entry) => Chime | undefined
+  /** An Agent opened it, and the Person has not looked at it yet. */
+  marked: (entry: Entry) => boolean
   frame: Frame
   /** Opens a first Pane on this empty workspace. */
   onStart: (pane: PaneState) => void
@@ -178,6 +181,7 @@ export function Strip({
               engine={engine}
               modules={modules}
               focused={live && workspace.focus === c && column.active === e}
+              marked={marked(entry)}
               spaceName={mixed ? spaceName(entry.space) : undefined}
               frame={frame}
               hidden={column.tabbed && column.active !== e}
@@ -187,6 +191,7 @@ export function Strip({
                     entries={column.entries}
                     active={column.active}
                     called={called}
+                    marked={marked}
                     frame={frame}
                   />
                 ) : undefined

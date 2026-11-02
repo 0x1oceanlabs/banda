@@ -47,4 +47,11 @@ Its actions, which `keys.toml` binds by id:
 
 How this machine's Panes are arranged: workspaces one under another, each a Strip of columns.
 
-Its methods, `banda call workspaces.<method>`: `list`, `open`, `close`, `update`, `move_pane`, `move_column`, `size`, `maximize`, `display`, `tidy`, `take`.
+Its methods, `banda call workspaces.<method>`: `list`, `open`, `close`, `update`, `move_pane`, `move_column`, `size`, `maximize`, `display`, `tidy`, `take`, `panes`, `open_pane`, `move_own`, `close_own`.
+
+What an Agent in a Thread may call as a tool of `banda mcp`:
+
+- `panes`: The Panes on the workspaces, from the top down and from the left: your Space's with their args, and, when your Person lets you see the other Spaces, theirs without. `yours` marks the ones you opened, which alone you move and close.
+- `open_pane`: Opens a Pane of your Space for your Person to see: a Thread (`agents.thread`, args `{"thread": "<id>"}`), a diff, or a browser (`browser.browser`). Beside a Pane `panes` lists, or, left out, beside your Space's Panes. It takes no focus; the Person sees a mark on it until they look.
+- `move_pane`: Moves a Pane you opened beside another that `panes` lists.
+- `close_pane`: Closes a Pane you opened.
