@@ -5,11 +5,13 @@
 //! |---|---|---|
 //! | root | `~/Banda` | where a new Space's folder goes |
 //! | data | `~/.local/share/banda` | each Space's data, in `spaces/<id>/` (ADR 0026) |
-//! | state | `~/.local/state/banda` | the owner's ID, the lock, `engine.json`, this machine's scope (`machine/`) |
+//! | state | `~/.local/state/banda` | the owner's ID, the lock, `engine.json`, this machine's scope (`machine/`), the window's profile (`window/`) |
 //! | config | `~/.config/banda` | `harnesses.toml` |
 //!
-//! `BANDA_ROOT`, `BANDA_DATA`, `BANDA_STATE` and `BANDA_CONFIG` move each one, so a
-//! test or a trial window runs beside the real engine.
+//! `banda` is Banda's folder: Banda Dev keeps its things in `banda-dev`, and
+//! a build from a checkout in `banda-local` ([`FOLDER`], ADR 0033). The root is theirs together. `BANDA_ROOT`, `BANDA_DATA`,
+//! `BANDA_STATE` and `BANDA_CONFIG` move each one, so a test or a trial
+//! window runs beside the real engine.
 
 use crate::Failure;
 use banda_kernel::{PersonId, api};
@@ -43,6 +45,13 @@ impl Running {
     }
 }
 
+/// Which Banda this is (ADR 0033, decision 1), fixed when it is built by
+/// `BANDA_CHANNEL` (build.rs): the folder Banda, Banda Dev or a build from
+/// a checkout keeps its things in, so they never share a data, state or
+/// config folder, a lock or a socket. The window names the same
+/// (`app/desktop/src/channel.ts`).
+pub const FOLDER: &str = env!("BANDA_FOLDER");
+
 const RUNNING: &str = "engine.json";
 const OWNER: &str = "owner.json";
 
@@ -67,9 +76,9 @@ impl Places {
         let state = dirs::state_dir().or_else(dirs::data_local_dir);
         Ok(Places {
             root: place("BANDA_ROOT", dirs::home_dir(), "Banda")?,
-            data: place("BANDA_DATA", dirs::data_dir(), "banda")?,
-            state: place("BANDA_STATE", state, "banda")?,
-            config: place("BANDA_CONFIG", dirs::config_dir(), "banda")?,
+            data: place("BANDA_DATA", dirs::data_dir(), FOLDER)?,
+            state: place("BANDA_STATE", state, FOLDER)?,
+            config: place("BANDA_CONFIG", dirs::config_dir(), FOLDER)?,
         })
     }
 

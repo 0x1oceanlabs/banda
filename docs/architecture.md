@@ -89,7 +89,8 @@ The kernel holds only what every module needs, and it names no module.
 
 - **Space.** A folder on disk (a new one goes in `~/Banda/<name>/`) and
   its data in the engine's data folder, `~/.local/share/banda/spaces/<id>/`
-  (ADR 0026): `space.json`, which names the folder, the Space's SQLite with
+  (ADR 0026; Banda Dev's is `banda-dev`, a checkout's `banda-local`, ADR
+  0033): `space.json`, which names the folder, the Space's SQLite with
   the modules' migrations and the event log, and the modules' files. The
   folder holds the work alone. One engine at a time opens a Space: it holds
   a lock on `spaces/<id>/space.lock` while the Space is open. Spaces from

@@ -55,18 +55,18 @@ impl Places {
         }
     }
 
-    /// The places on this machine. `BANDA_CONFIG` moves the config folder
-    /// and `BANDA_OMARCHY` Omarchy's current theme (empty: no Omarchy);
+    /// The places on this machine, with Banda's config folder as the
+    /// engine finds it (`engine/src/places.rs`, ADR 0033). `BANDA_OMARCHY`
+    /// moves Omarchy's current theme (empty: no Omarchy);
     /// an empty `BANDA_FONTCONFIG` leaves the system's fonts unasked, and
     /// `BANDA_GSETTINGS` names `gsettings` (empty: none). So a test or a
     /// trial window runs beside the real one.
-    pub fn from_env() -> Places {
+    pub fn from_env(config: PathBuf) -> Places {
         let var = |name: &str| std::env::var_os(name).map(PathBuf::from);
         let home_set = var("HOME");
         let home = home_set.clone().unwrap_or_default();
         let config_home = var("XDG_CONFIG_HOME").unwrap_or_else(|| home.join(".config"));
         let state_home = var("XDG_STATE_HOME").unwrap_or_else(|| home.join(".local/state"));
-        let config = var("BANDA_CONFIG").unwrap_or_else(|| config_home.join("banda"));
         let omarchy_current = match var("BANDA_OMARCHY") {
             Some(set) if set.as_os_str().is_empty() => None,
             Some(set) => Some(set),

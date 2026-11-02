@@ -1,6 +1,6 @@
 /**
  * What the window keeps between runs in its own storage on this computer
- * (`$BANDA_STATE/window` when that is set): the view, the focus and
+ * (in the engine's state folder, `window/`): the view, the focus and
  * whether the sidebar shows. The workspaces themselves are the engine's
  * (ADR 0025, decisions 1 and 2): the arrangement the window kept before
  * moves over once.

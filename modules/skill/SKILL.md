@@ -93,7 +93,9 @@ it. It exits 2 when the window is not open.
 
 ## Where things live
 
-`~/.config/banda/` (or `$BANDA_CONFIG`) holds what belongs to this machine:
+`~/.config/banda/` (or `$BANDA_CONFIG`) holds what belongs to this machine.
+Banda Dev keeps it in `~/.config/banda-dev/`, a Banda built from a checkout
+in `~/.config/banda-local/`, as their data and state too:
 
 | File | What it sets |
 |---|---|
