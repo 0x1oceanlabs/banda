@@ -1,0 +1,7 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" width="512" height="512">
+  <!-- Banda's mark, one tile and two (brand: banda-mark-states.png, rest; orange as when it asks, for Dev). -->
+  <rect x="16" y="16" width="480" height="480" rx="112" fill="#f26b1d"/>
+  <rect x="120" y="112" width="120" height="288" rx="44" fill="#ffffff"/>
+  <rect x="276" y="112" width="120" height="120" rx="40" fill="#ffffff" transform="rotate(-8 336 172)"/>
+  <rect x="276" y="280" width="120" height="120" rx="40" fill="#ffffff"/>
+</svg>

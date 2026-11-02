@@ -38,6 +38,18 @@ command = "/path/to/banda/target/debug/banda-fake-agent"
 For the page with live reload, run `pnpm --filter @banda/web dev` and,
 beside it, `pnpm --filter @banda/desktop dev`.
 
+## Pack it
+
+```sh
+scripts/package.sh dev    # or stable, or local: app/desktop/dist/*.AppImage
+```
+
+It builds the engine for release, the page and the window, and packs them
+into an AppImage (ADR 0033). `BANDA_VERSION` names its version, `0.X.Y` or
+`0.X.Y-dev.N`; unset, it is the workspace's, marked local. On its first
+start the AppImage lists itself among the desktop's apps. The ways to bring
+Banda to Linux: [`docs/research/2026-11-02-linux-distribution.md`](docs/research/2026-11-02-linux-distribution.md).
+
 ## Check it
 
 ```sh

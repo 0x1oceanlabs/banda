@@ -64,7 +64,7 @@ pub async fn serve(places: Places, port: u16, with_parent: bool) -> Result<(), F
         secret: running.secret.clone(),
         owner,
     };
-    let engine = format!("banda {}", env!("CARGO_PKG_VERSION"));
+    let engine = format!("banda {}", env!("BANDA_VERSION"));
     let app = api::router(kernel, identity, engine);
     places.announce(&running).map_err(Failure::broken)?;
     if with_parent {

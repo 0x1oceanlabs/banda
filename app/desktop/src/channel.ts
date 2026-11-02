@@ -7,10 +7,32 @@
 import { homedir } from "node:os"
 import { isAbsolute, join } from "node:path"
 
-const CHANNELS = {
-  stable: { name: "Banda", folder: "banda" },
-  dev: { name: "Banda Dev", folder: "banda-dev" },
-  local: { name: "Banda Local", folder: "banda-local" },
+/** What Banda says it is, where an app is listed. */
+export const DESCRIPTION = "A tiling workspace for working with Agents"
+
+/**
+ * Each channel's name, folder, app ID and icon (build.mjs,
+ * electron-builder.config.mjs).
+ */
+export const CHANNELS = {
+  stable: {
+    name: "Banda",
+    folder: "banda",
+    appId: "so.banda.app",
+    icon: "icons/banda.png",
+  },
+  dev: {
+    name: "Banda Dev",
+    folder: "banda-dev",
+    appId: "so.banda.dev",
+    icon: "icons/banda-dev.png",
+  },
+  local: {
+    name: "Banda Local",
+    folder: "banda-local",
+    appId: "so.banda.local",
+    icon: "icons/banda-dev.png",
+  },
 } as const
 
 export const channel =

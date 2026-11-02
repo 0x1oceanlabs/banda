@@ -176,7 +176,7 @@ fn initialize(params: &Value) -> Value {
     json!({
         "protocolVersion": version,
         "capabilities": { "tools": {} },
-        "serverInfo": { "name": "banda", "version": env!("CARGO_PKG_VERSION") },
+        "serverInfo": { "name": "banda", "version": env!("BANDA_VERSION") },
         "instructions": banda_skill::core(Reach::Tool),
     })
 }

@@ -6,4 +6,6 @@ packages:
 
 allowBuilds:
   electron: true
+  # electron-builder's Windows installer; Banda isn't built for Windows (ADR 0033).
+  electron-winstaller: false
   esbuild: true

@@ -52,6 +52,20 @@ pub use window::{WindowAnswer, WindowRequest};
 /// version is refused before anything else (ADR 0002, decision 8).
 pub const PROTOCOL: u32 = 1;
 
+static VERSION: std::sync::OnceLock<&'static str> = std::sync::OnceLock::new();
+
+/// Banda's version, as its app says it (ADR 0033, decision 2): the one
+/// the engine was built with (`engine/build.rs`), told as it starts, so a
+/// new version rebuilds the engine alone. The workspace's until then.
+pub fn version() -> &'static str {
+    VERSION.get().copied().unwrap_or(env!("CARGO_PKG_VERSION"))
+}
+
+/// Tells the modules Banda's version; the engine does, once, as it starts.
+pub fn set_version(version: &'static str) {
+    let _ = VERSION.set(version);
+}
+
 /// A name that works as one file or folder name: 1 to 64 characters, with
 /// no slashes and no leading dot. Returns it without surrounding spaces.
 pub fn plain_name(name: &str) -> Option<&str> {

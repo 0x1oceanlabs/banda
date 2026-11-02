@@ -1294,7 +1294,7 @@ async fn drive(
                 .meta(output);
             let hello = acp::InitializeRequest::new(ProtocolVersion::V1)
                 .client_capabilities(shows)
-                .client_info(acp::Implementation::new("banda", env!("CARGO_PKG_VERSION")));
+                .client_info(acp::Implementation::new("banda", banda_kernel::version()));
             let agreed = cx.send_request(hello).block_task().await;
             match agreed {
                 Ok(answer) if answer.protocol_version == ProtocolVersion::V1 => {
