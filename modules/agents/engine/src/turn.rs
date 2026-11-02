@@ -445,20 +445,16 @@ pub async fn start(
     };
     let ending = work(live, harnesses, &space, &turn, message, settings).await;
     let ending = ending.stop_asked(live.end(turn.id));
-    let written = space.write(move |tx| {
+    // Written as the outbox records the turn's end, and tried again with it.
+    Outcome::done_writing(move |tx| {
         let agent = Participant::Agent(turn.agent);
         // A Harness that stopped holds the queue, as a restart does: the
         // turn can be tried again before the next one runs.
         if rules::holds_queue(&ending) {
             hold(tx, agent, turn.thread)?;
         }
-        end(tx, agent, &turn, ending)
-    });
-    match written.await {
-        Ok(()) => Outcome::Done,
-        // The outbox settles it as failed.
-        Err(error) => Outcome::Fail(error.to_string()),
-    }
+        end(tx, agent, &turn, ending.clone())
+    })
 }
 
 /// The message a turn sends: its text and the images it carries.
@@ -560,18 +556,14 @@ pub async fn steer(live: &Live, space: ModuleSpace, effect: &Effect) -> Outcome 
         Ok(None) => return Outcome::Done,
         Err(error) => return Outcome::Retry(error.to_string()),
     };
-    let requeued = |space: ModuleSpace| async move {
-        match space.write(move |tx| requeue(tx, item)).await {
-            Ok(()) => Outcome::Done,
-            Err(error) => Outcome::Retry(error.to_string()),
-        }
-    };
+    // Written as the outbox records the effect's end, and tried again with it.
+    let requeued = || Outcome::done_writing(move |tx| requeue(tx, item));
     let Some((connection, session)) = begun(live, &space, &turn).await else {
-        return requeued(space).await;
+        return requeued();
     };
     // A turn a Person stopped takes nothing more.
     if live.stopping(turn.id) {
-        return requeued(space).await;
+        return requeued();
     }
     if !connection.steers() {
         let text = format!(
@@ -584,12 +576,12 @@ pub async fn steer(live: &Live, space: ModuleSpace, effect: &Effect) -> Outcome 
         if let Err(error) = live.stop(turn.id) {
             tracing::warn!(%error, "a turn could not be stopped for a new message");
         }
-        return requeued(space).await;
+        return requeued();
     }
     let running = connection.running(&session);
     let Ok((prompt, refused)) = prompt_of(&space, connection.name(), &running, message).await
     else {
-        return requeued(space).await;
+        return requeued();
     };
     if let Err(error) = notices(&space, &turn, refused).await {
         return Outcome::Retry(error.to_string());
@@ -598,10 +590,10 @@ pub async fn steer(live: &Live, space: ModuleSpace, effect: &Effect) -> Outcome 
     live.mark_steered(turn.id);
     match connection.steer(&session, &prompt).await {
         Ok(Steered::Joined) => Outcome::Done,
-        Ok(Steered::NotNow) => requeued(space).await,
+        Ok(Steered::NotNow) => requeued(),
         Err(error) => {
             tracing::warn!(%error, "a message could not join its turn");
-            requeued(space).await
+            requeued()
         }
     }
 }

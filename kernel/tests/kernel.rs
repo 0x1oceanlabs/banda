@@ -13,6 +13,7 @@ use serde_json::{Value, json};
 use std::collections::VecDeque;
 use std::future::Future;
 use std::path::Path;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use tokio_tungstenite::tungstenite::Message;
@@ -23,6 +24,8 @@ struct Notes {
     published: Arc<Mutex<Vec<String>>>,
     /// How the next runs of `publish` end; `Done` once the script is empty.
     script: Arc<Mutex<VecDeque<Outcome>>>,
+    /// Whether the next run of `publish` panics.
+    panics: Arc<AtomicBool>,
     /// The Spaces it was told were removed.
     closed: Arc<Mutex<Vec<SpaceId>>>,
 }
@@ -123,13 +126,17 @@ impl Module for Notes {
     }
 
     async fn run(&self, _space: ModuleSpace, effect: Effect) -> Outcome {
+        assert!(
+            !self.panics.swap(false, Ordering::SeqCst),
+            "a scripted panic"
+        );
         let outcome = self
             .script
             .lock()
             .unwrap()
             .pop_front()
             .unwrap_or(Outcome::Done);
-        if outcome == Outcome::Done {
+        if matches!(outcome, Outcome::Done) {
             let text = effect.payload["text"]
                 .as_str()
                 .unwrap_or_default()
@@ -320,6 +327,17 @@ async fn kinds(kernel: &Kernel, space: &SpaceSummary) -> Vec<String> {
     events.into_iter().map(|e| e.kind).collect()
 }
 
+/// How the effect its module settled was lost, as the `lost` event says.
+async fn lost_how(kernel: &Kernel, space: &SpaceSummary) -> Value {
+    let space = kernel.space(space.id).await.unwrap();
+    let events = space
+        .events_after(0, Default::default(), 100)
+        .await
+        .unwrap();
+    let lost = events.into_iter().find(|e| e.kind == "lost");
+    lost.expect("an effect was settled").payload["how"].clone()
+}
+
 #[tokio::test]
 async fn a_space_is_a_folder_and_opens_again_after_a_restart() {
     let root = tempfile::tempdir().unwrap();
@@ -486,13 +504,94 @@ async fn an_effect_that_fails_is_settled_by_its_module() {
         .await
         .unwrap();
     eventually(|| async { kinds(&kernel, &space).await == ["added", "lost"] }).await;
-    let space = kernel.space(space.id).await.unwrap();
-    let lost = space
-        .events_after(1, Default::default(), 10)
-        .await
+    assert_eq!(lost_how(&kernel, &space).await, "failed: the feed is gone");
+}
+
+/// A disk that failed a write once, as SQLite says it.
+fn disk_failed() -> Error {
+    Error::Database(rusqlite::Error::SqliteFailure(
+        rusqlite::ffi::Error::new(rusqlite::ffi::SQLITE_IOERR),
+        Some("disk I/O error".into()),
+    ))
+}
+
+/// `publish` ends done, writing a `noted` event, after `failures` tries of
+/// that write fail.
+fn noted_after(failures: usize, author: Participant) -> Outcome {
+    let tried = Arc::new(Mutex::new(0));
+    Outcome::done_writing(move |tx| {
+        let mut tried = tried.lock().unwrap();
+        *tried += 1;
+        if *tried <= failures {
+            return Err(disk_failed());
+        }
+        tx.emit("noted", 1, Some("feed"), author, &json!({}))?;
+        Ok(())
+    })
+}
+
+#[tokio::test]
+async fn an_end_whose_write_fails_once_is_written_and_its_key_goes_on() {
+    let root = tempfile::tempdir().unwrap();
+    let owner = PersonId::new();
+    let person = Participant::Person(owner);
+    let notes = Notes::default();
+    notes
+        .script
+        .lock()
         .unwrap()
-        .remove(0);
-    assert_eq!(lost.payload["how"], "failed: the feed is gone");
+        .push_back(noted_after(1, person));
+    let kernel = open(root.path(), owner, &notes).await;
+    let space = create(&kernel, owner, "Work").await;
+
+    add(&kernel, person, &space, "a").await.unwrap();
+    add(&kernel, person, &space, "b").await.unwrap();
+    // The next effect of the feed waited for the first one's end.
+    eventually(|| async { *notes.published.lock().unwrap() == ["b"] }).await;
+    let mut kinds = kinds(&kernel, &space).await;
+    kinds.sort();
+    assert_eq!(kinds, ["added", "added", "noted"]);
+}
+
+#[tokio::test]
+async fn an_end_whose_write_keeps_failing_is_settled_as_failed() {
+    let root = tempfile::tempdir().unwrap();
+    let owner = PersonId::new();
+    let person = Participant::Person(owner);
+    let notes = Notes::default();
+    notes
+        .script
+        .lock()
+        .unwrap()
+        .push_back(noted_after(usize::MAX, person));
+    let kernel = open(root.path(), owner, &notes).await;
+    let space = create(&kernel, owner, "Work").await;
+
+    add(&kernel, person, &space, "a").await.unwrap();
+    eventually(|| async { kinds(&kernel, &space).await == ["added", "lost"] }).await;
+    assert_eq!(
+        lost_how(&kernel, &space).await,
+        "failed: Banda could not write how it ended."
+    );
+}
+
+#[tokio::test]
+async fn an_effect_that_panics_is_settled_as_failed() {
+    let root = tempfile::tempdir().unwrap();
+    let owner = PersonId::new();
+    let person = Participant::Person(owner);
+    let notes = Notes::default();
+    notes.panics.store(true, Ordering::SeqCst);
+    let kernel = open(root.path(), owner, &notes).await;
+    let space = create(&kernel, owner, "Work").await;
+
+    add(&kernel, person, &space, "a").await.unwrap();
+    add(&kernel, person, &space, "b").await.unwrap();
+    eventually(|| async { *notes.published.lock().unwrap() == ["b"] }).await;
+    assert_eq!(
+        lost_how(&kernel, &space).await,
+        "failed: The engine broke off while it ran this."
+    );
 }
 
 #[tokio::test]

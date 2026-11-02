@@ -153,8 +153,15 @@ command (with its ID)
   → module operation: rules decide, store writes
   → one transaction: receipt · events · view tables · outbox rows
   → publish: one ordered lane per Space
-  → outbox worker: side effects in order per target, leased, retried
+  → outbox worker: side effects in order per target, claimed by this boot, retried
+  → how one ended: one transaction with what its module writes of it, tried until it commits
 ```
+
+- An effect's end and what its module writes of it, such as how a turn
+  ended, commit together. A write that fails is tried again; one that
+  keeps failing settles the effect as failed, and a run that panics is
+  failed too. So no effect stays running, holding its key, until a
+  restart.
 
 - A repeated command returns its first result, a refusal included. A
   receipt names its author: the same command ID from someone else, or for

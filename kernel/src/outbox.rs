@@ -9,14 +9,21 @@
 //! again or is abandoned, and writes what that means. Outbox rows are the
 //! kernel's bookkeeping, not records of the work: what a Person sees of an
 //! effect is the events its module writes.
+//!
+//! How a run ended is written in one transaction with what its module
+//! writes of it, and that transaction is tried again until it commits: a
+//! write that fails once never leaves an effect running, which would hold
+//! its key, and every effect after it, until the engine starts again.
 
 use crate::events::json_column;
 use crate::module::Module;
 use crate::space::Space;
 use crate::store::KERNEL;
 use crate::{Error, Tx, now_ms};
+use futures::FutureExt;
 use rusqlite::{Connection, params};
 use serde_json::Value;
+use std::panic::AssertUnwindSafe;
 use std::sync::{Arc, Weak};
 use std::time::Duration;
 
@@ -32,14 +39,40 @@ pub struct Effect {
 }
 
 /// How a run of an effect ended.
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Debug)]
 pub enum Outcome {
     Done,
+    /// It is done, and its module writes what came of it in the transaction
+    /// that records that, as [`Outcome::done_writing`] says.
+    DoneWriting(Writing),
     /// It may work later. The worker waits longer after each try, and gives
     /// up after [`ATTEMPTS`] tries.
     Retry(String),
     /// It will never work.
     Fail(String),
+}
+
+impl Outcome {
+    /// Done, with `write` in the transaction that records it. The kernel
+    /// tries that transaction again until it commits, so `write` may run
+    /// more than once, and only its last run stays. After [`ATTEMPTS`]
+    /// tries the effect is settled as failed instead (see [`Settled`]).
+    pub fn done_writing(
+        write: impl Fn(&mut Tx<'_>) -> Result<(), Error> + Send + Sync + 'static,
+    ) -> Self {
+        Self::DoneWriting(Writing(Box::new(write)))
+    }
+}
+
+/// What a module writes as an effect ends: see [`Outcome::done_writing`].
+pub struct Writing(Box<Write>);
+
+type Write = dyn Fn(&mut Tx<'_>) -> Result<(), Error> + Send + Sync;
+
+impl std::fmt::Debug for Writing {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str("Writing")
+    }
 }
 
 /// What an effect that a restart cut short becomes.
@@ -59,14 +92,29 @@ pub enum Settled {
     Failed(String),
 }
 
-/// Tries before an effect that keeps asking to retry, or that restarts keep
-/// cutting short, is failed.
+/// Tries before an effect that keeps asking to retry, that restarts keep
+/// cutting short, or whose module's writing keeps failing, is failed.
 pub const ATTEMPTS: u32 = 5;
 
 const LONGEST_WAIT_MS: i64 = 30_000;
 
+/// How long the worker waits when it could not read the outbox.
+const READ_AGAIN: Duration = Duration::from_secs(1);
+
+/// `first`, doubled after each try, up to thirty seconds.
+fn doubling_ms(first: i64, tries: u32) -> i64 {
+    (first << tries.min(10)).min(LONGEST_WAIT_MS)
+}
+
+/// How long an effect that asked to retry waits.
 fn backoff_ms(attempts: u32) -> i64 {
-    (500_i64 << attempts.min(10)).min(LONGEST_WAIT_MS)
+    doubling_ms(500, attempts)
+}
+
+/// How long recording an effect's end waits before it tries again: short at
+/// first, as a write that failed once mostly works the next time.
+fn record_wait(tries: u32) -> Duration {
+    Duration::from_millis(doubling_ms(50, tries).unsigned_abs())
 }
 
 fn find<'m>(modules: &'m [Arc<dyn Module>], name: &str) -> Option<&'m Arc<dyn Module>> {
@@ -121,28 +169,32 @@ pub(crate) async fn work(space: Weak<Space>, boot: String) {
     };
     loop {
         let Some(open) = space.upgrade() else { return };
-        let claimed = {
-            let boot = boot.clone();
-            open.store().write(KERNEL, move |tx| claim(tx, &boot)).await
-        };
-        match claimed {
-            Ok(claimed) => {
-                for (module_name, effect) in claimed {
-                    start(&open, module_name, effect);
-                }
-            }
-            Err(error) => tracing::error!(%error, "the outbox could not claim its effects"),
-        }
-        let next_due = open.store().read(next_due).await.ok().flatten();
+        let wait = start_ready(&open, &boot).await.unwrap_or_else(|error| {
+            tracing::error!(%error, "the outbox could not claim its effects");
+            READ_AGAIN
+        });
         drop(open);
-        let wait = next_due
-            .map(|at| Duration::from_millis(u64::try_from((at - now_ms()).max(0)).unwrap_or(0)))
-            .unwrap_or(Duration::from_secs(3600));
         tokio::select! {
             () = signal.notified() => {}
             () = tokio::time::sleep(wait) => {}
         }
     }
+}
+
+/// Starts what is ready, and answers how long until the next effect is due.
+async fn start_ready(space: &Arc<Space>, boot: &str) -> Result<Duration, Error> {
+    let boot = boot.to_owned();
+    let claimed = space
+        .store()
+        .write(KERNEL, move |tx| claim(tx, &boot))
+        .await?;
+    for (module_name, effect) in claimed {
+        start(space, module_name, effect);
+    }
+    Ok(match space.store().read(next_due).await? {
+        Some(at) => Duration::from_millis(u64::try_from((at - now_ms()).max(0)).unwrap_or(0)),
+        None => Duration::from_secs(3600),
+    })
 }
 
 fn start(space: &Arc<Space>, module_name: String, effect: Effect) {
@@ -152,19 +204,58 @@ fn start(space: &Arc<Space>, module_name: String, effect: Effect) {
             tracing::error!(module = %module_name, "a claimed effect has no module");
             return;
         };
-        let outcome = module
-            .run(space.module(module.name()), effect.clone())
-            .await;
-        let name = module.name();
-        let recorded = space
-            .store()
-            .write(name, move |tx| finish(tx, &*module, &effect, outcome))
-            .await;
-        if let Err(error) = recorded {
-            tracing::error!(%error, "the outbox could not record how an effect ended");
-        }
-        space.store().outbox_signal().notify_one();
+        // A run that panics ends as failed, not running forever.
+        let run = module.run(space.module(module.name()), effect.clone());
+        let outcome = AssertUnwindSafe(run)
+            .catch_unwind()
+            .await
+            .unwrap_or_else(|_| {
+                tracing::error!(kind = %effect.kind, "an effect panicked");
+                Outcome::Fail("The engine broke off while it ran this.".to_owned())
+            });
+        let weak = Arc::downgrade(&space);
+        drop(space);
+        record(weak, module, effect, outcome).await;
     });
+}
+
+/// Records how a run of `effect` ended, trying again with a wait until it
+/// commits or the Space closes. A module whose own writing keeps failing has
+/// its effect settled as failed instead, which it writes too.
+async fn record(space: Weak<Space>, module: Arc<dyn Module>, effect: Effect, outcome: Outcome) {
+    let effect = Arc::new(effect);
+    let mut outcome = Arc::new(outcome);
+    let mut tries = 0;
+    loop {
+        if tries == ATTEMPTS && matches!(*outcome, Outcome::DoneWriting(_)) {
+            let reason = "Banda could not write how it ended.".to_owned();
+            outcome = Arc::new(Outcome::Fail(reason));
+        }
+        let Some(open) = space.upgrade() else { return };
+        let written = {
+            let module = module.clone();
+            let effect = effect.clone();
+            let outcome = outcome.clone();
+            open.store()
+                .write(module.name(), move |tx| {
+                    finish(tx, &*module, &effect, &outcome)
+                })
+                .await
+        };
+        match written {
+            Ok(()) => {
+                open.store().outbox_signal().notify_one();
+                return;
+            }
+            Err(Error::Closed) => return,
+            Err(error) => {
+                tracing::error!(%error, id = effect.id, tries, "the outbox could not record how an effect ended");
+            }
+        }
+        drop(open);
+        tokio::time::sleep(record_wait(tries)).await;
+        tries += 1;
+    }
 }
 
 fn running_before(sql: &Connection, boot: &str) -> Result<Vec<(String, Effect)>, Error> {
@@ -205,14 +296,18 @@ fn finish(
     tx: &mut Tx<'_>,
     module: &dyn Module,
     effect: &Effect,
-    outcome: Outcome,
+    outcome: &Outcome,
 ) -> Result<(), Error> {
     match outcome {
-        Outcome::Done => {
+        Outcome::Done | Outcome::DoneWriting(_) => {
             tx.sql().execute(
                 "UPDATE kernel_outbox SET state = 'done', settled_at = ?1 WHERE id = ?2",
                 params![tx.now(), effect.id],
             )?;
+            if let Outcome::DoneWriting(Writing(write)) = outcome {
+                debug_assert_eq!(tx.module(), module.name());
+                write(tx)?;
+            }
             Ok(())
         }
         Outcome::Retry(reason) if effect.attempts + 1 < ATTEMPTS => {
@@ -224,7 +319,7 @@ fn finish(
             Ok(())
         }
         Outcome::Retry(reason) | Outcome::Fail(reason) => {
-            settle(tx, module, effect, Settled::Failed(reason))
+            settle(tx, module, effect, Settled::Failed(reason.clone()))
         }
     }
 }
@@ -270,7 +365,15 @@ fn read_effect(row: &rusqlite::Row<'_>) -> rusqlite::Result<(String, Effect)> {
 
 #[cfg(test)]
 mod tests {
-    use super::backoff_ms;
+    use super::{backoff_ms, record_wait};
+    use std::time::Duration;
+
+    #[test]
+    fn recording_an_end_tries_again_soon_then_every_thirty_seconds() {
+        assert_eq!(record_wait(0), Duration::from_millis(50));
+        assert_eq!(record_wait(4), Duration::from_millis(800));
+        assert_eq!(record_wait(20), Duration::from_secs(30));
+    }
 
     #[test]
     fn the_wait_doubles_and_stops_at_thirty_seconds() {

@@ -82,7 +82,7 @@ pub fn may_change(first: bool) -> Result<(), Refusal> {
 
 /// How a turn ended: its state, in plain words why, and what kind of
 /// failure it was.
-#[derive(Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Ending {
     pub state: TurnState,
     pub reason: Option<String>,
