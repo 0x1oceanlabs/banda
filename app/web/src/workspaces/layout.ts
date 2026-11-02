@@ -291,6 +291,11 @@ export class ColumnMotion {
     this.#tiles = tiles
   }
 
+  /** Column `id`'s share as drawn, or as it is headed. */
+  shareOf(id: string): number | undefined {
+    return this.#columns.get(id)?.size.target
+  }
+
   /** A hand sizes column `id`: it is drawn at `at` at once, whatever the
    * Strip draws meanwhile. */
   hand(id: string, at: number) {
