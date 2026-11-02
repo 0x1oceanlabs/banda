@@ -26,8 +26,8 @@ extensions. On 2026-11-02 Roma asked for the next step; this is it.
 - **Fork from this response.** A git-fork icon on each of the Agent's
   finished replies, "Fork from this response"
   (`TimelineAssistantRows.tsx`). It makes a new thread titled
-  "<title> fork", with the conversation up to and with that reply, and
-  opens it. The fork names its parent ("Forked from conversation", "Open
+  "<title> fork", with the conversation up to the end of that reply's
+  turn (its `run`), and opens it. The fork names its parent ("Forked from conversation", "Open
   source conversation"), and the parent lists its forks.
 - Files: "Revert files too" restores T3 Code's git checkpoint of the turn,
   only in a worktree of the thread's own. A fork never touches files.
@@ -66,7 +66,7 @@ the rest are our defaults, as T3 Code does, and stay his to change.
      message, and its text and images return to the composer. Files the
      Agent changed stay as they are." Cancel, "Edit from here".
    - The turns from that message on leave the Thread's conversation:
-     `agents.rewind { thread, message }` marks them rewound. They stay in
+     `agents.rewind { turn }`, the message's turn, marks them rewound. They stay in
      the Space's record, as all of a Thread's history does, and the Pane
      no longer shows them.
    - The message's text and images go into the composer as `↑` puts a
@@ -78,7 +78,7 @@ the rest are our defaults, as T3 Code does, and stay his to change.
      (ADR 0010, decision 10, leaves out reverting files).
 2. **Under it, the engine forks the session at the reply before.** With no
    rewind in ACP, the Thread's session becomes a fork of itself:
-   `session/fork` at the last reply before the message, by its message
+   `session/fork` at the last reply of the turn before, by its message
    ID, and its fingerprint and occurrence besides, so the next turn runs
    in the fork,
    which knows nothing after it. A rewind to the Thread's first message
@@ -92,9 +92,11 @@ the rest are our defaults, as T3 Code does, and stay his to change.
 3. **Fork from this response, on the Agent's replies, makes a new
    Thread.**
    - A git-fork icon on a finished reply, "Fork from this response". The
-     new Thread, `agents.fork { thread, item }`, is "<title> fork", on the
-     same Harness, settings and Space, with a copy of the Thread's items
-     up to and with the reply, and a session forked at it. It opens in
+     new Thread, `agents.fork { turn }`, the reply's turn, is
+     "<title> fork", on the same Harness, settings and Space, with a copy
+     of the Thread's turns and items to the end of that turn, and a
+     session forked at its last reply. A fork is of a whole turn, as T3
+     Code's is, since Codex forks only at a turn's end. It opens in
      the Pane, as a Thread picked in the sidebar does.
    - The fork names its parent: a line at its top, "Forked from <title>",
      which opens it; the parent shows nothing of its forks yet.
@@ -109,9 +111,10 @@ the rest are our defaults, as T3 Code does, and stay his to change.
    session at a reply and asks what came after it, which the fork must
    not know; ignored tests, as for the plan (ADR 0010).
 
-**Build order.** One PR each: (1) the check with Claude Code and Codex,
-and the engine keeping each reply's message ID; (2) `agents.fork` and
-Fork from this response; (3) `agents.rewind` and Edit from here.
+**Build order.** One PR each: (1) the engine keeping each reply's message
+ID and forking a session, `agents.fork`, checked with Claude Code and
+Codex; (2) Fork from this response in the Pane; (3) `agents.rewind` and
+Edit from here.
 
 **Consequences.**
 
