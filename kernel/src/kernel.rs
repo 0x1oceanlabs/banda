@@ -2,12 +2,12 @@ use crate::access::{self, Caller, Right};
 use crate::methods::{Asks, Nothing, Tool};
 use crate::module::{Call, Module, Scope, Stream};
 use crate::passes::Passes;
-use crate::space::{Manifest, Space, UNFINISHED};
+use crate::space::{GONE, Manifest, Space, UNFINISHED};
 use crate::{AgentId, CommandId, Error, Participant, PersonId, Refusal, SpaceId};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use std::collections::BTreeMap;
-use std::path::PathBuf;
+use std::collections::{BTreeMap, HashMap};
+use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use tokio::sync::RwLock;
 use ts_rs::TS;
@@ -25,6 +25,8 @@ pub struct Kernel {
     /// The modules each Space runs: those of the Space's scope.
     in_spaces: Arc<[Arc<dyn Module>]>,
     spaces: RwLock<BTreeMap<SpaceId, Arc<Space>>>,
+    /// Held while a Space is added, so one folder never becomes two.
+    adding: tokio::sync::Mutex<()>,
     /// This machine's scope (ADR 0025, decision 1): a store and a log like
     /// a Space's, for the modules of the machine. None while no module is.
     machine: Option<Arc<Space>>,
@@ -40,6 +42,10 @@ pub struct SpaceSummary {
     pub name: String,
     /// Where the Space's folder is on this machine.
     pub folder: String,
+    /// Pinned Spaces come first in the Space pickers.
+    pub pinned: bool,
+    /// Hidden from the Space pickers; its Threads and files are kept.
+    pub archived: bool,
 }
 
 pub struct KernelBuilder {
@@ -117,6 +123,7 @@ impl KernelBuilder {
             modules: self.modules.into(),
             in_spaces: in_spaces.into(),
             spaces: RwLock::new(BTreeMap::new()),
+            adding: Default::default(),
             machine,
             passes,
         });
@@ -124,11 +131,12 @@ impl KernelBuilder {
             .filter_map(|entry| entry.ok().map(|e| e.path()))
             .collect();
         found.sort();
-        let mut folders: std::collections::HashMap<PathBuf, PathBuf> = Default::default();
+        let mut folders: HashMap<PathBuf, PathBuf> = Default::default();
         for data in found {
             let name = data.file_name().unwrap_or_default().to_string_lossy();
-            if name.ends_with(UNFINISHED) {
-                // Cut short while it was written: it never was a Space.
+            if name.ends_with(UNFINISHED) || name.ends_with(GONE) {
+                // Cut short while it was written, it never was a Space; or
+                // it was removed before its data was all gone.
                 let _ = std::fs::remove_dir_all(&data);
                 continue;
             }
@@ -168,6 +176,17 @@ crate::methods! {
         call list(Nothing) -> Vec<SpaceSummary>, Read;
         /// Makes a Space: a new folder under the root, by its name.
         command create(CreateSpace) -> SpaceSummary, Manage;
+        /// Adds a folder as a Space. A folder that already is one answers
+        /// that Space, back from the archive if it was there.
+        command add(AddSpace) -> SpaceSummary, Manage;
+        /// The folders that match a path as it is typed, for the field
+        /// that picks a Space's folder. Only the owner browses.
+        call browse(Browse) -> Browsed, Manage;
+        /// Renames, pins or archives a Space.
+        command update(UpdateSpace) -> SpaceSummary, Manage;
+        /// Forgets a Space and deletes its Threads; its folder and the
+        /// files in it stay as they are.
+        command remove(OneSpace) -> (), Manage;
         /// The tools an Agent may call, from the methods of the modules in
         /// Spaces.
         call tools(Nothing) -> Vec<Tool>, Read;
@@ -197,6 +216,67 @@ impl Asks for Own<'_> {
 struct CreateSpace {
     name: String,
 }
+
+#[derive(Deserialize, TS)]
+struct AddSpace {
+    /// Absolute, or from the home folder: `~/code/app`.
+    folder: String,
+    /// The folder's name when none is given.
+    #[serde(default)]
+    #[ts(optional)]
+    name: Option<String>,
+    /// Makes the folder, and the folders above it, when it does not exist.
+    #[serde(default)]
+    #[ts(optional)]
+    create: Option<bool>,
+}
+
+#[derive(Deserialize, TS)]
+struct Browse {
+    /// The path as typed: absolute, or from the home folder. One that ends
+    /// in `/` lists that folder; another lists the folders beside it whose
+    /// names start with its last part.
+    partial: String,
+}
+
+#[derive(Serialize, TS)]
+#[ts(export)]
+pub struct Browsed {
+    /// The folder the entries are in.
+    pub parent: String,
+    /// Its subfolders that match, by name. Hidden ones only once a dot is
+    /// typed.
+    pub entries: Vec<BrowsedFolder>,
+}
+
+#[derive(Serialize, TS)]
+#[ts(export)]
+pub struct BrowsedFolder {
+    pub name: String,
+    pub path: String,
+}
+
+#[derive(Deserialize, TS)]
+struct UpdateSpace {
+    space: SpaceId,
+    #[serde(default)]
+    #[ts(optional)]
+    name: Option<String>,
+    #[serde(default)]
+    #[ts(optional)]
+    pinned: Option<bool>,
+    #[serde(default)]
+    #[ts(optional)]
+    archived: Option<bool>,
+}
+
+#[derive(Deserialize, TS)]
+struct OneSpace {
+    space: SpaceId,
+}
+
+/// The most folders `spaces.browse` answers.
+const BROWSED: usize = 200;
 
 /// A pass is for its Space, so it stops at this machine's scope: what an
 /// Agent may do with the workspaces comes with its tools (ADR 0025, step 3).
@@ -433,6 +513,8 @@ impl Kernel {
             .await
     }
 
+    /// `spaces.add` of a new folder `~/Banda/<name>`; one already there
+    /// is refused, unless this command made its Space.
     async fn create_space(
         &self,
         name: &str,
@@ -441,37 +523,218 @@ impl Kernel {
     ) -> Result<SpaceSummary, Refusal> {
         let name = Space::plain_name(name)?;
         let folder = self.root.join(name);
-        match std::fs::create_dir(&folder) {
-            Ok(()) => {}
-            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
-                // The same command again: the Space it made.
-                let folder = std::fs::canonicalize(&folder).map_err(Error::from)?;
-                let spaces = self.spaces.read().await;
-                return match spaces.values().find(|s| s.folder() == folder) {
-                    Some(made) if made.command() == command => Ok(made.summary()),
-                    _ => Err(Refusal::conflict(format!(
-                        "A folder named \"{name}\" already exists in this place."
-                    ))),
+        if let Ok(canonical) = std::fs::canonicalize(&folder) {
+            return match self.at(&canonical).await {
+                Some(made) if made.command() == command => Ok(made.summary()),
+                _ => Err(Refusal::conflict(format!(
+                    "A folder named \"{name}\" already exists in this place."
+                ))),
+            };
+        }
+        self.add_at(&folder, Some(name), true, author, command)
+            .await
+    }
+
+    async fn add(&self, ask: Own<'_>, add: AddSpace) -> Result<SpaceSummary, Refusal> {
+        let command = ask.command_id()?;
+        let folder = from_home(&add.folder)?;
+        let create = add.create == Some(true);
+        (self.add_at(
+            &folder,
+            add.name.as_deref(),
+            create,
+            ask.participant,
+            command,
+        ))
+        .await
+    }
+
+    /// Adds `folder` as a Space, made first if `create` says so; the
+    /// Space it already is comes back from the archive instead. A folder
+    /// this call made is taken back when the Space is not.
+    async fn add_at(
+        &self,
+        folder: &Path,
+        name: Option<&str>,
+        create: bool,
+        author: Participant,
+        command: CommandId,
+    ) -> Result<SpaceSummary, Refusal> {
+        let _adding = self.adding.lock().await;
+        let made = create && !folder.exists();
+        if made {
+            std::fs::create_dir_all(folder).map_err(Error::from)?;
+        }
+        let added = async {
+            let canonical = match std::fs::canonicalize(folder) {
+                Ok(canonical) => canonical,
+                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+                    let there = format!("There is no folder {}.", folder.display());
+                    return Err(Refusal::not_found(there));
+                }
+                Err(error) => return Err(Error::from(error).into()),
+            };
+            if !canonical.is_dir() {
+                let what = format!("{} is not a folder.", folder.display());
+                return Err(Refusal::invalid(what));
+            }
+            if let Some(space) = self.at(&canonical).await {
+                return match space.summary().archived {
+                    true => Ok(space.change(|manifest| manifest.archived = false)?),
+                    false => Ok(space.summary()),
                 };
             }
-            Err(error) => return Err(Error::from(error).into()),
+            let named = canonical.file_name().map(|n| n.to_string_lossy());
+            let name = match (name, &named) {
+                (Some(name), _) => name,
+                (None, Some(named)) => named,
+                (None, None) => "/",
+            };
+            let name = Space::name_of(name)?;
+            self.place_space(&canonical, name, author, command).await
         }
-        let made = std::fs::canonicalize(&folder)
-            .map_err(Error::from)
-            .and_then(|folder| Space::create(&self.spaces_data, &folder, name, author, command));
-        let (data, manifest) = match made {
-            Ok(made) => made,
+        .await;
+        if made && added.is_err() {
+            let _ = std::fs::remove_dir(folder);
+        }
+        added
+    }
+
+    /// The open Space whose folder is `folder`, absolute and resolved.
+    async fn at(&self, folder: &Path) -> Option<Arc<Space>> {
+        let spaces = self.spaces.read().await;
+        spaces.values().find(|s| s.folder() == folder).cloned()
+    }
+
+    /// Makes the data of a new Space for `folder`, opens it and lists it.
+    async fn place_space(
+        &self,
+        folder: &Path,
+        name: &str,
+        author: Participant,
+        command: CommandId,
+    ) -> Result<SpaceSummary, Refusal> {
+        let (data, manifest) = Space::create(&self.spaces_data, folder, name, author, command)?;
+        let space = match self.open_space(data.clone(), manifest).await {
+            Ok(space) => space,
             Err(error) => {
-                // Take back the folder this call made, while it is empty.
-                let _ = std::fs::remove_dir(&folder);
+                let _ = std::fs::remove_dir_all(&data);
                 return Err(error.into());
             }
         };
-        let space = self.open_space(data, manifest).await?;
         let summary = space.summary();
         self.spaces.write().await.insert(space.id(), space);
         Ok(summary)
     }
+
+    async fn browse(&self, _: Own<'_>, Browse { partial }: Browse) -> Result<Browsed, Refusal> {
+        // By the text: a path ends its `.` and `..` as it reads, not as typed.
+        let partial = partial.trim();
+        let (parent, prefix) = match partial.rsplit_once('/') {
+            Some(("", prefix)) => ("/", prefix),
+            Some(split) => split,
+            None => (partial, ""),
+        };
+        let (parent, prefix) = (from_home(parent)?, prefix.to_owned());
+        let parent_shown = parent.clone();
+        let entries = tokio::task::spawn_blocking(move || subfolders(&parent, &prefix))
+            .await
+            .map_err(|_| Error::Closed)?;
+        Ok(Browsed {
+            parent: parent_shown.display().to_string(),
+            entries,
+        })
+    }
+
+    async fn update(&self, _: Own<'_>, update: UpdateSpace) -> Result<SpaceSummary, Refusal> {
+        let name = update.name.as_deref().map(Space::name_of).transpose()?;
+        let space = self.space(update.space).await?;
+        Ok(space.change(|manifest| {
+            if let Some(name) = name {
+                manifest.name = name.to_owned();
+            }
+            if let Some(pinned) = update.pinned {
+                manifest.pinned = pinned;
+            }
+            if let Some(archived) = update.archived {
+                manifest.archived = archived;
+            }
+        })?)
+    }
+
+    /// Takes the Space out of the list at once, and its data out of the
+    /// engine's sight: `<id>.gone`, deleted once nothing holds the Space,
+    /// or else on the next start. Its modules stop what runs there first.
+    /// A Space that is already gone is what was asked for.
+    async fn remove(&self, _: Own<'_>, OneSpace { space }: OneSpace) -> Result<(), Refusal> {
+        let Some(space) = self.spaces.write().await.remove(&space) else {
+            return Ok(());
+        };
+        let gone = self.spaces_data.join(format!("{}{GONE}", space.id()));
+        match std::fs::rename(space.data(), &gone) {
+            Ok(()) => space.delete_when_closed(gone),
+            Err(error) => {
+                let data = space.data().display();
+                tracing::warn!(%data, %error, "a removed Space's data stayed in place");
+                space.delete_when_closed(space.data().to_owned());
+            }
+        }
+        for module in space.modules() {
+            module.closing(space.module(module.name())).await;
+        }
+        Ok(())
+    }
+}
+
+/// `~` or `~/…` from the home folder; any other path must be absolute.
+fn from_home(path: &str) -> Result<PathBuf, Refusal> {
+    let home = || dirs::home_dir().ok_or_else(|| Refusal::not_found("There is no home folder."));
+    let path = match path.trim() {
+        "~" => home()?,
+        path => match path.strip_prefix("~/") {
+            Some(rest) => home()?.join(rest),
+            None => PathBuf::from(path),
+        },
+    };
+    if !path.is_absolute() {
+        return Err(Refusal::invalid(format!(
+            "{} is not a whole path: start it at / or ~.",
+            path.display()
+        )));
+    }
+    Ok(path)
+}
+
+/// The subfolders of `parent` whose names start with `prefix`, any case,
+/// by name; hidden ones only when `prefix` starts with a dot. A folder
+/// that cannot be read has none.
+fn subfolders(parent: &Path, prefix: &str) -> Vec<BrowsedFolder> {
+    let Ok(read) = std::fs::read_dir(parent) else {
+        return Vec::new();
+    };
+    let prefix = prefix.to_lowercase();
+    let mut entries: Vec<BrowsedFolder> = read
+        .filter_map(|entry| entry.ok())
+        .filter_map(|entry| {
+            let name = entry.file_name().to_string_lossy().into_owned();
+            let shown = name.to_lowercase().starts_with(&prefix)
+                && (prefix.starts_with('.') || !name.starts_with('.'));
+            if !shown {
+                return None;
+            }
+            // The listing says what each is; only a link is looked through.
+            let path = entry.path();
+            let kind = entry.file_type().ok()?;
+            let folder = kind.is_dir() || (kind.is_symlink() && path.is_dir());
+            folder.then(|| BrowsedFolder {
+                path: path.display().to_string(),
+                name,
+            })
+        })
+        .collect();
+    entries.sort_by_key(|entry| entry.name.to_lowercase());
+    entries.truncate(BROWSED);
+    entries
 }
 
 /// Reads a method's parameters. Unknown fields are ignored, so an older

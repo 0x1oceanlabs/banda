@@ -63,6 +63,14 @@ settings.<section>.<row>` opens the settings Pane there. Other words
 open it with them typed in, as a search. It exits 2 when the window is
 not open.
 
+## Adding a folder as a Space
+
+When the Person asks for a folder to become a Space, `banda space add
+<path>` adds it and prints the Space as JSON; `--name` names it, and
+`--create` makes the folder first. A folder that already is a Space
+prints that Space. The folder is not changed: Banda keeps the Space's
+data elsewhere.
+
 ## Driving the browser's tabs
 
 `banda browser` prints the CDP endpoint of the browser in Banda's

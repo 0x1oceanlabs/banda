@@ -65,6 +65,11 @@ pub trait Module: Send + Sync + 'static {
         Ok(())
     }
 
+    /// Runs as the Space is removed (ADR 0026): a module stops what it
+    /// runs there, its turns and its programs, before the Space's data
+    /// goes.
+    async fn closing(&self, _space: ModuleSpace) {}
+
     /// One of its methods, already allowed. `method` comes without the
     /// module's prefix.
     async fn call(&self, call: Call, method: &str, params: Value) -> Result<Value, Refusal>;

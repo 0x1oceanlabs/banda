@@ -723,6 +723,10 @@ impl Module for Agents {
             .await
     }
 
+    async fn closing(&self, space: ModuleSpace) {
+        self.live.close(space.id()).await;
+    }
+
     /// Every effect of this module dies with the Harness's process.
     fn on_restart(&self, _kind: &str) -> OnRestart {
         OnRestart::Abandon

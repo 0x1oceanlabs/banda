@@ -98,6 +98,21 @@ impl Live {
         self.hosts.let_go(harness).await;
     }
 
+    /// Stops every turn that runs on a Harness of `space`, as the Space is
+    /// removed, and lets go of its Harnesses.
+    pub async fn close(&self, space: SpaceId) {
+        let hosts = self.hosts.forget(space).await;
+        let turns: Vec<TurnId> = (self.turns.lock().unwrap().running.iter())
+            .filter(|(_, (connection, _))| hosts.iter().any(|h| Arc::ptr_eq(h, connection)))
+            .map(|(turn, _)| *turn)
+            .collect();
+        for turn in turns {
+            if let Err(error) = self.stop(turn) {
+                tracing::warn!(%error, "a turn of a removed Space could not be stopped");
+            }
+        }
+    }
+
     /// The turn's prompt went to the Harness in `session`. If a Person
     /// stopped the turn while it started, the Harness hears the stop now.
     pub fn begin(&self, turn: TurnId, connection: Arc<Connection>, session: Session) {

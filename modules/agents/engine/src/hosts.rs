@@ -136,6 +136,20 @@ impl Hosts {
         }
     }
 
+    /// Forgets every host of `space`, as the Space is removed, and answers
+    /// them, so the turns they run can be stopped.
+    pub async fn forget(&self, space: SpaceId) -> Vec<Arc<Connection>> {
+        let slots: Vec<_> = (self.slots.lock().unwrap())
+            .extract_if(|(of, _), _| *of == space)
+            .map(|(_, slot)| slot)
+            .collect();
+        let mut hosts = Vec::new();
+        for slot in slots {
+            hosts.extend(slot.lock().await.host.take());
+        }
+        hosts
+    }
+
     /// Lets go of every host that has had nothing to do for `idle`.
     fn release_idle(&self) {
         let slots: Vec<_> = self.slots.lock().unwrap().values().cloned().collect();

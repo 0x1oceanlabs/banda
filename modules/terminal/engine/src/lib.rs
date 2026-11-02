@@ -12,7 +12,7 @@ pub mod model;
 mod history;
 mod terminal;
 
-use banda_kernel::{Call, Module, Refusal, Right, SpaceId, Stream};
+use banda_kernel::{Call, Module, ModuleSpace, Refusal, Right, SpaceId, Stream};
 use model::{Open, Piece, Size, TerminalId};
 use serde::Deserialize;
 use serde_json::Value;
@@ -114,6 +114,17 @@ impl Module for Terminals {
 
     async fn stream(&self, call: Call, method: &str, params: Value) -> Result<Stream, Refusal> {
         self.dispatch_stream(call, method, params).await
+    }
+
+    /// A removed Space's programs stop, as `close` stops one.
+    async fn closing(&self, space: ModuleSpace) {
+        let closed: Vec<_> = (self.open.lock().unwrap())
+            .extract_if(|_, terminal| terminal.space == space.id())
+            .map(|(_, terminal)| terminal)
+            .collect();
+        for terminal in closed {
+            terminal.close();
+        }
     }
 }
 

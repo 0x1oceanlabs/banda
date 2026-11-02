@@ -3074,3 +3074,29 @@ async fn an_agent_writes_neither_over_a_persons_question_nor_into_another_space(
         .unwrap_err();
     assert_eq!(refused.code, Code::Forbidden);
 }
+
+#[tokio::test]
+async fn a_removed_space_stops_its_turns_before_its_data_goes() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    world.waiting(None).await;
+    let params = json!({ "space": world.space });
+    let removed = world.kernel.call(
+        world.person(),
+        "spaces.remove",
+        None,
+        Some(CommandId::new()),
+        params,
+    );
+    removed.await.unwrap();
+    // A turn that kept running would hold the data until it ended.
+    let spaces = root.path().join(".data/spaces");
+    let since = std::time::Instant::now();
+    while spaces.read_dir().unwrap().next().is_some() {
+        assert!(
+            since.elapsed() < Duration::from_secs(5),
+            "the turn never stopped"
+        );
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+}

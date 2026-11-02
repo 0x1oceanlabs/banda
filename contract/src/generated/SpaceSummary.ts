@@ -5,4 +5,12 @@ export type SpaceSummary = { id: SpaceId, name: string,
 /**
  * Where the Space's folder is on this machine.
  */
-folder: string, };
+folder: string, 
+/**
+ * Pinned Spaces come first in the Space pickers.
+ */
+pinned: boolean, 
+/**
+ * Hidden from the Space pickers; its Threads and files are kept.
+ */
+archived: boolean, };

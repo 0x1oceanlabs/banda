@@ -4,6 +4,8 @@
 //! - `banda call <method>` calls one API method and prints `{"ok": …}`.
 //! - `banda follow --space <id>` prints the Space's events, one JSON
 //!   object per line.
+//! - `banda space add <path>` adds a folder as a Space (ADR 0026) and
+//!   prints it, as `banda call spaces.add` does.
 //! - `banda look` prints the window's look, resolved from Omarchy's
 //!   theme, Hyprland and `~/.config/banda/look.toml`, with the sidebar's
 //!   arrangement from `sidebar.toml` and the browser's from
@@ -74,6 +76,11 @@ enum Command {
         /// Repeats an earlier command safely: it runs once per ID.
         #[arg(long)]
         command: Option<CommandId>,
+    },
+    /// Adds a Space, as the window's "Add Space" does.
+    Space {
+        #[command(subcommand)]
+        what: SpaceCommand,
     },
     /// Prints a Space's events, one JSON object per line.
     Follow {
@@ -148,6 +155,22 @@ enum Command {
     /// methods, and the Banda skill. The agents module starts it for each
     /// session, with BANDA_TOKEN and BANDA_ENGINE.
     Mcp,
+}
+
+#[derive(Subcommand)]
+enum SpaceCommand {
+    /// Adds a folder as a Space and prints it. A folder that already is
+    /// one prints that Space, back from the archive if it was there.
+    Add {
+        /// The folder: absolute, from ~, or from where this runs.
+        path: PathBuf,
+        /// The Space's name; the folder's name when none is given.
+        #[arg(long)]
+        name: Option<String>,
+        /// Makes the folder first when it does not exist.
+        #[arg(long)]
+        create: bool,
+    },
 }
 
 #[derive(Subcommand)]
@@ -298,12 +321,22 @@ async fn run(command: Command, places: Places) -> Result<(), Failure> {
             let params: Value = serde_json::from_str(&params).map_err(|error| {
                 Failure::Refused(Refusal::invalid(format!("--params is not JSON: {error}")))
             })?;
-            let answer = Client::connect(&places)
-                .await?
-                .call(&method, space, command.unwrap_or_default(), params)
-                .await?;
-            println!("{}", json!({ "ok": answer }));
-            Ok(())
+            print_call(&places, &method, space, command.unwrap_or_default(), params).await
+        }
+        Command::Space {
+            what: SpaceCommand::Add { path, name, create },
+        } => {
+            // `~` stays for the engine to read; a relative path is from here.
+            let folder = match path.starts_with("~") {
+                true => path,
+                false => std::path::absolute(&path).map_err(Failure::broken)?,
+            };
+            let params = json!({
+                "folder": folder.display().to_string(),
+                "name": name,
+                "create": create,
+            });
+            print_call(&places, "spaces.add", None, CommandId::new(), params).await
         }
         Command::Look { .. } => unreachable!("the look runs without the engine"),
         Command::Skill { .. } => unreachable!("the skill runs without the engine"),
@@ -333,6 +366,22 @@ async fn run(command: Command, places: Places) -> Result<(), Failure> {
                 .await
         }
     }
+}
+
+/// Calls one method and prints its answer as `{"ok": …}`.
+async fn print_call(
+    places: &Places,
+    method: &str,
+    space: Option<SpaceId>,
+    command: CommandId,
+    params: Value,
+) -> Result<(), Failure> {
+    let answer = Client::connect(places)
+        .await?
+        .call(method, space, command, params)
+        .await?;
+    println!("{}", json!({ "ok": answer }));
+    Ok(())
 }
 
 /// `banda modules`: what each module offers, no engine.
