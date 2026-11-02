@@ -33,6 +33,7 @@ import {
   focusEntry,
   go,
   left,
+  onFresh,
   samePane,
   shown,
   step,
@@ -378,6 +379,9 @@ export function Shell({
           index === workspaces.current
             ? toggleOverview()
             : change((w) => go(w, index))
+        }
+        onNew={
+          onFresh(workspaces) ? undefined : () => parts.run("workspace.new")
         }
       />
       <div

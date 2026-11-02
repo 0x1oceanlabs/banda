@@ -130,6 +130,22 @@ test("a Pane moves to another workspace, and the overview shows them all", async
   const numbers = page.getByRole("navigation", { name: "Workspaces" })
   await expect(numbers.getByRole("button")).toHaveText(["1"])
 
+  // The + goes to a new workspace, the empty one at the bottom, and is off
+  // while the Person is there.
+  const fresh = page.getByRole("button", { name: "New workspace" })
+  await fresh.click()
+  await expect(numbers.getByRole("button")).toHaveText(["1", "2"])
+  await expect(numbers.getByRole("button", { name: "2" })).toHaveAttribute(
+    "aria-current",
+    "true"
+  )
+  await expect(fresh).toBeDisabled()
+  await page.screenshot({ path: "test-results/2-new-workspace.png" })
+  await page.keyboard.press("Alt+PageUp")
+  await expect(numbers.getByRole("button")).toHaveText(["1"])
+  await expect(fresh).toBeEnabled()
+  await expect(draft).toBeVisible()
+
   // The Pane goes to the workspace below, and the window follows it.
   await page.keyboard.press("Alt+KeyN")
   await page.keyboard.press("Alt+Shift+Digit2")

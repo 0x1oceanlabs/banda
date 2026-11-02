@@ -9,10 +9,12 @@ import {
   displayOf,
   entries,
   focused,
+  fresh,
   go,
   left,
   maximize,
   move,
+  onFresh,
   open,
   parse,
   send,
@@ -153,6 +155,28 @@ describe("the empty workspace at the bottom", () => {
     expect(state.list).toHaveLength(2)
     expect(columns(state, 0)).toEqual([["t1"]])
     expect(state.current).toBe(0)
+  })
+
+  test("is the new workspace the bar's + goes to", () => {
+    let state = open(start(), A, thread("t1"))
+    expect(onFresh(state)).toBe(false)
+    state = fresh(state)
+    expect(state.current).toBe(1)
+    expect(onFresh(state)).toBe(true)
+    expect(fresh(state)).toBe(state)
+    // From an empty one above others, it goes down, and the empty one
+    // goes.
+    state = open(start(), A, thread("t1"))
+    state = open(state, A, terminal("x1"), { place: "right" })
+    state = send(state, 1)
+    state = go(state, 0)
+    state = close(state, focused(state)!.id)
+    expect(state.current).toBe(0)
+    expect(state.list).toHaveLength(3)
+    state = fresh(state)
+    expect(columns(state, 0)).toEqual([["x1"]])
+    expect(state.current).toBe(1)
+    expect(onFresh(state)).toBe(true)
   })
 
   test("the current empty one stays until the Person leaves it", () => {
