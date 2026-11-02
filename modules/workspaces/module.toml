@@ -1,0 +1,8 @@
+# The workspaces module, as it declares itself (ADR 0022). Its methods its
+# code declares; the window draws its workspaces itself (ADR 0025).
+id = "workspaces"
+name = "Workspaces"
+about = "How this machine's Panes are arranged: workspaces one under another, each a Strip of columns."
+version = "0.1.0"
+from-banda = true
+settings = []

@@ -607,7 +607,10 @@ modules/*/pane   each module's Panes
   - The window keeps the workspaces in its storage
     (`$BANDA_STATE/window` when that is set) until they move into the
     engine (ADR 0005, decision 3); `workspaces/store.ts` is the one place
-    that changes then.
+    that changes then. The engine's side is built: the `workspaces`
+    module of this machine (`modules/workspaces/engine`, ADR 0025) keeps
+    the arrangement and its rules, and says each change in one event
+    that holds it whole.
 - **One list of actions** (`app/web/src/shell/actions.ts`) holds what the
   window does, the modules' actions and its own, each with a name, its
   key sheet section and a default key, by its physical place.

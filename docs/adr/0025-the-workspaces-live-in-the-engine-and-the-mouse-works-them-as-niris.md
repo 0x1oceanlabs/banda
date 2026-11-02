@@ -65,7 +65,16 @@ On the list, Roma decided:
      view. Commands: open a Pane at a place, close one, move one to a
      place, size a column or a Pane, show a column stacked or as tabs,
      take the window's arrangement once (decision 2). A place is a
-     workspace, a column and an index in it, or beside a Pane.
+     workspace, a column and an index in it, or beside a Pane. _Built_
+     2026-11-02 in `modules/workspaces/engine`: `workspaces.list`, and
+     the commands `open` (at a place or `instead` of a Pane), `close`,
+     `update`, `move_pane`, `move_column`, `size`, `maximize`, `display`,
+     `tidy` (every empty workspace goes but the one looked at and the
+     last) and `take` (once, over what the engine has). An event holds the
+     whole arrangement after it, or for `updated` only the Pane's new
+     args, the change made most; a command that changes nothing says
+     nothing. The window draws them next. The log keeps every event, so
+     the machine's log grows with each change; it may want cutting later.
    - **Commands carry what was decided.** What depends on the look stays
      the window's: the presets, `alone`, `min`, `display`. So `Alt+R`
      works out the next width in the window and sends it, `"1/2"`, and
@@ -84,7 +93,9 @@ On the list, Roma decided:
      while the pointer moves and sends one command when it lets go.
    - **An Agent arranges its own Space's Panes, and calmly** (ADR 0005,
      decision 4; ADR 0019). Behind the Space wall it sees only the Panes
-     of its pass's Space, and opens, moves and closes only those. What
+     of its pass's Space, and opens, moves and closes only those. It
+     reads them through its tools, never the machine's log, whose events
+     hold every Space's Panes. What
      it opens never takes the focus and carries a mark until the Person
      looks. Its tools are `methods!` lines marked `tool`, as the agents
      module's are.

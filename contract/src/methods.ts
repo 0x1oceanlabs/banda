@@ -7,6 +7,7 @@ import type { CommandId } from "./generated/CommandId"
 import type { SpacesMethods } from "./generated/SpacesMethods"
 import type { AgentsMethods } from "./generated/agents/AgentsMethods"
 import type { TerminalMethods } from "./generated/terminal/TerminalMethods"
+import type { WorkspacesMethods } from "./generated/workspaces/WorkspacesMethods"
 
 /** A module's methods under its prefix: `send` becomes `agents.send`. */
 type Prefixed<P extends string, M> = {
@@ -15,7 +16,8 @@ type Prefixed<P extends string, M> = {
 
 export type Methods = Prefixed<"spaces", SpacesMethods> &
   Prefixed<"agents", AgentsMethods> &
-  Prefixed<"terminal", TerminalMethods>
+  Prefixed<"terminal", TerminalMethods> &
+  Prefixed<"workspaces", WorkspacesMethods>
 
 type Kind = Methods[keyof Methods]["kind"]
 
