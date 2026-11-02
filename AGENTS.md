@@ -31,6 +31,11 @@ the window's end-to-end tests too, on runners on devbox
 `gh pr merge --auto --rebase` and go on: the PR merges itself once `ci` is
 green. A red `ci` is yours to fix, on the PR or, after a merge, on `main`.
 
+Renovate opens the dependency PRs
+([`.github/renovate.json5`](.github/renovate.json5)); the ones that don't
+merge themselves are on its Dependency Dashboard issue. Fix one on its branch
+or close it with the reason.
+
 ## Effect in the window's main process
 
 `app/desktop/src` (not the preload, not the page) is written in Effect 4
