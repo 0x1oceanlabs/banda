@@ -208,7 +208,7 @@ pub async fn start(
                 let title = store::thread(tx.sql(), from)?.map(|t| t.title);
                 let answers = turn.opener == Opener::Answered;
                 let title = title.unwrap_or_default();
-                message.text = rules::from_agent(answers, from, &title, &message.text);
+                message.text = rules::to_thread::from_agent(answers, from, &title, &message.text);
             }
             let settings = store::turn_settings(tx.sql(), &turn)?;
             Ok(Some((turn, message, settings)))
@@ -290,7 +290,7 @@ async fn prompt_of(
         images: Vec::new(),
     };
     if running.offer.no_images && !images.is_empty() {
-        refused.push(rules::without_images(harness, &prompt.text)?);
+        refused.push(rules::message::without_images(harness, &prompt.text)?);
         return Ok((as_skill(prompt, running), refused));
     }
     let files = Images::of(space.data());

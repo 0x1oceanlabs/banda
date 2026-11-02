@@ -559,7 +559,7 @@ impl Agents {
             settings,
             steer,
         } = params;
-        rules::may_send(&text, &images)?;
+        rules::message::may_send(&text, &images)?;
         let target = match (thread, harness) {
             (Some(thread), _) => Target::Thread(thread),
             (None, Some(harness)) => {
@@ -574,14 +574,14 @@ impl Agents {
         };
         let author = call.participant();
         if settings.is_some() {
-            rules::may_choose(author)?;
+            rules::message::may_choose(author)?;
         }
         let message = Message { text, images };
         call.command(move |tx| {
             // An Agent writes from its Thread, which waits for the answer.
             let by = match author {
                 Participant::Agent(agent) => {
-                    let from = rules::own_thread(store::thread_of(tx.sql(), agent)?)?;
+                    let from = rules::to_thread::own_thread(store::thread_of(tx.sql(), agent)?)?;
                     Some((Opener::Asked, from))
                 }
                 Participant::Person(_) => None,
@@ -668,7 +668,7 @@ impl Agents {
         Attach { mime, data, name }: Attach,
     ) -> Result<Image, Refusal> {
         let bytes = decoded(&data, "image")?;
-        rules::may_attach(&mime, &bytes)?;
+        rules::message::may_attach(&mime, &bytes)?;
         let image = Image {
             id: ImageId::new(),
             mime,
@@ -693,7 +693,7 @@ impl Agents {
 
     async fn keep(&self, call: Call, Keep { name, data }: Keep) -> Result<Kept, Refusal> {
         let bytes = decoded(&data, "file")?;
-        let name = rules::kept_name(&name, &bytes)?;
+        let name = rules::message::kept_name(&name, &bytes)?;
         let path = kept::keep(call.space().data(), name, bytes)
             .await
             .map_err(Error::from)?;
@@ -880,7 +880,7 @@ fn send(
     let answers = opener == Opener::Answered;
     let by_person = opener.by_person();
     let images = store::unsent_images(tx.sql(), &images, author)?;
-    rules::may_carry(&images)?;
+    rules::message::may_carry(&images)?;
     let (thread, agent) = match target {
         Target::Thread(id) => {
             let (title, agent) = store::title_and_agent(tx.sql(), id)?
@@ -890,7 +890,7 @@ fn send(
                     store::asks(tx.sql(), id)?,
                     store::waiting_for(tx.sql(), from)?,
                 );
-                rules::may_write(from, id, &title, asks, &waiting)?;
+                rules::to_thread::may_write(from, id, &title, asks, &waiting)?;
             }
             if let Some(settings) = settings {
                 configure(tx, author, id, settings)?;
@@ -898,7 +898,7 @@ fn send(
             (id, agent)
         }
         Target::New(harness, start) => {
-            let title = rules::title(&text, &images);
+            let title = rules::message::title(&text, &images);
             // No one chose: as the composer would have shown it.
             let settings = match settings {
                 Some(settings) => settings,
@@ -1089,7 +1089,7 @@ fn edit(tx: &mut Tx<'_>, author: Participant, turn: TurnId, text: String) -> Res
         return Err(Refusal::invalid("Only a message can be changed.").into());
     };
     let carried: Vec<ImageId> = images.iter().map(|image| image.id).collect();
-    rules::may_send(&text, &carried)?;
+    rules::message::may_send(&text, &carried)?;
     if *was == text {
         return Ok(());
     }

@@ -4,15 +4,17 @@
 //! its plan and its notices; and what it uses and offers, between turns
 //! too. The turn's own state is the writer's (`writer.rs`).
 
+mod output;
+
 use crate::acp::{Answer, Running, Said, ToolChange};
 use crate::live::Live;
 use crate::model::{
     Body, Fact, Item, ItemId, Mode, Offer, PlanStep, Settings, ThreadId, ToolContent, ToolKind,
     ToolStatus, TurnId, Usage,
 };
-use crate::rules::{self, Piece, Pieces, Text};
 use crate::{emit, plain, questions, store};
 use banda_kernel::{AgentId, Error, ModuleSpace, Participant, Tx};
+use output::{Piece, Pieces, Text};
 use std::collections::HashMap;
 use std::time::Duration;
 use tokio::sync::mpsc;
@@ -119,7 +121,7 @@ struct Shown {
     item: ItemId,
     title: String,
     kind: ToolKind,
-    printed: rules::Printed,
+    printed: output::Printed,
 }
 
 /// Writes what the Harness says into the Thread.
@@ -384,10 +386,10 @@ impl Transcript {
             item: id,
             title: title.clone(),
             kind: tool,
-            printed: rules::Printed::default(),
+            printed: output::Printed::default(),
         };
         self.tools.insert(call, shown);
-        let content = rules::kept(content);
+        let content = output::bound(content);
         let started = Fact::ToolStarted {
             item: id,
             turn: self.turn,
@@ -414,7 +416,7 @@ impl Transcript {
             content,
             exit,
         } = change;
-        let content = content.map(rules::kept);
+        let content = content.map(output::bound);
         self.space
             .write(move |tx| {
                 if let Some((_, mut item)) = store::item(tx.sql(), id)?
