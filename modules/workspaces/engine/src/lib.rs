@@ -9,7 +9,7 @@
 //! draws what the event holds; new args for a Pane, the change made most,
 //! say only those. A command that changes nothing says nothing.
 //!
-//! An Agent arranges through its tools alone (ADR 0029): it sees its
+//! An Agent arranges through its tools alone (ADR 0032): it sees its
 //! Space's Panes, and the other Spaces' outlines when its Person lets it;
 //! it opens Panes of its Space that run nothing as the Person, and moves
 //! and closes only those it opened.
@@ -86,7 +86,7 @@ banda_kernel::methods! {
 
 /// The kinds of Pane an Agent may open: ones that show, and run nothing as
 /// the Person. A terminal's runs the Person's shell, and the command its
-/// `done` sends goes as the Person (ADR 0029).
+/// `done` sends goes as the Person (ADR 0032).
 const AGENT_KINDS: &[&str] = &["agents.thread", "agents.diff", "browser.browser"];
 
 /// A workspace as an Agent sees it: only the columns with a Pane it sees.

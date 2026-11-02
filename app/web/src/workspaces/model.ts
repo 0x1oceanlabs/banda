@@ -26,7 +26,7 @@ import type { PaneState, Place } from "@banda/ui/pane"
 
 /**
  * One Pane on a workspace: what it shows, the Space it belongs to, and
- * the Agent that opened it, if one did (ADR 0029).
+ * the Agent that opened it, if one did (ADR 0032).
  */
 export type Entry = {
   id: string

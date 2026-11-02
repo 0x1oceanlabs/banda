@@ -107,7 +107,7 @@ pub trait Module: Send + Sync + 'static {
 
 /// The wall a pass keeps an Agent behind (ADR 0019, decision 2): the one
 /// Space it works in, and whether its Person lets that Space's Agents see
-/// the other Spaces' Panes (ADR 0029). A module of this machine answers a
+/// the other Spaces' Panes (ADR 0032). A module of this machine answers a
 /// walled call with what it may see.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Wall {

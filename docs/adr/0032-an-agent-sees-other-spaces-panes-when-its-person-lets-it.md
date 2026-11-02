@@ -5,6 +5,9 @@ date: 2026-11-02
 
 # An Agent sees other Spaces' Panes when its Person lets it
 
+_Numbered 0029 when it was merged, beside two others of that number;
+renumbered on 2026-11-02. Code and commits before then say ADR 0029._
+
 ADR 0019 put each Agent behind its Space's wall: its token names its
 Thread's Space, and the kernel refuses its call to any other (decision 2).
 It left other Spaces for later (decision 5). ADR 0025 gave the workspaces

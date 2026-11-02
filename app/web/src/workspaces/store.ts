@@ -71,7 +71,7 @@ export function keepSidebar(shows: boolean): void {
 
 /**
  * The Panes an Agent opened that the Person has looked at: the others
- * carry a mark (ADR 0029).
+ * carry a mark (ADR 0032).
  */
 export function loadLooked(): ReadonlySet<string> {
   const ids = parsed(read(LOOKED))

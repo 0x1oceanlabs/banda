@@ -260,7 +260,7 @@ export function Shell({
   const toasts = calls.toasts
   useEffect(() => keepSidebar(sidebar), [sidebar])
   // A Pane an Agent opened is marked until the Person looks at it: has
-  // it in focus, the window in front (ADR 0029).
+  // it in focus, the window in front (ADR 0032).
   const [looked, setLooked] = useState(loadLooked)
   const lookedAt = (front && !overview && focused(workspaces)) || undefined
   if (lookedAt?.by && !looked.has(lookedAt.id)) {

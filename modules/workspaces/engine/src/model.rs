@@ -78,13 +78,13 @@ pub struct Pane {
     #[ts(flatten)]
     pub shows: Shown,
     /// The Agent that opened it, which alone of the Agents moves and
-    /// closes it (ADR 0029). Left out, its Person opened it.
+    /// closes it (ADR 0032). Left out, its Person opened it.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub by: Option<AgentId>,
 }
 
-/// How much of a Pane a caller sees (ADR 0029).
+/// How much of a Pane a caller sees (ADR 0032).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Sight {
     /// All of it: the owner, or an Agent of its Space.

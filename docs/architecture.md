@@ -124,7 +124,7 @@ The kernel holds only what every module needs, and it names no module.
   the machine's in a Space. Their methods name no Space. The machine is
   no Space in `spaces.list`; `welcome` names its ID, which a window
   follows and streams by. An Agent's pass stops at it, but for the
-  methods marked `tool` (ADR 0029): the kernel hands each call the pass's
+  methods marked `tool` (ADR 0032): the kernel hands each call the pass's
   wall (`Call::wall`: its Space, and whether that Space's `sees_others`
   is on), and the module answers with what the wall shows. The
   workspaces' tools show an Agent its Space's Panes, the others' outline
