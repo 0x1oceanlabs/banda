@@ -55,6 +55,9 @@ export type Host = {
     set: (file: string, key: string, value: string) => Promise<string[]>
     /** Takes `key` out of `file`; what was wrong, if refused. */
     reset: (file: string, key: string) => Promise<string[]>
+    /** Names `key` in `file` `to` instead, where it is, its value and
+     * comments kept; what was wrong, if refused. */
+    rename: (file: string, key: string, to: string) => Promise<string[]>
     /** Opens `file` in the Person's editor; its folder when it is not there. */
     reveal: (file: string) => Promise<void>
     /** The themes there are. */

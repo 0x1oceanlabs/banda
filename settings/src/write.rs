@@ -62,6 +62,45 @@ pub fn set(config: &Path, name: &str, key: &str, value: &str) -> Result<(), Vec<
     open.save(Some(&alone))
 }
 
+/// Names `key` in the file called `name` `to` instead, where it is, its
+/// value and comments kept: as a line of `keys.toml` takes another key.
+/// Refuses when the file has `to` already, or would then be wrong.
+pub fn rename(config: &Path, name: &str, key: &str, to: &str) -> Result<(), Vec<Problem>> {
+    let mut open = Open::new(config, name, key)?;
+    let there = written_as(&open.document, name, &open.tables, to);
+    let leaf = &open.leaf;
+    let table = walk(&mut open.document, &open.tables, &open.path)?;
+    if !table.contains_key(leaf) {
+        return Err(whole(&open.path, format!("{key} is not in {name}")));
+    }
+    // Another line names it already; the same line written otherwise is
+    // only written as `to` now.
+    if there != *leaf && table.contains_key(&there) {
+        return Err(whole(&open.path, format!("{to} is in {name} already")));
+    }
+    // Each key from this one on goes to the end, in order, so this one is
+    // back where it was under its new name; each keeps its comments.
+    let names: Vec<String> = table
+        .iter()
+        .map(|(name, _)| name.to_owned())
+        .skip_while(|name| name != leaf)
+        .collect();
+    for name in names {
+        let Some(key) = table.key(&name).cloned() else {
+            continue;
+        };
+        let key = if name == *leaf {
+            Key::new(to).with_leaf_decor(key.leaf_decor().clone())
+        } else {
+            key
+        };
+        if let Some(item) = table.remove(&name) {
+            table.entry_format(&key).or_insert(item);
+        }
+    }
+    open.save(None)
+}
+
 /// Takes `key` out of the file called `name`, so the layer under it
 /// shows; an entry of a list of tables, `harness.gemini`, goes whole. A
 /// key or file not there is already reset.
@@ -154,8 +193,6 @@ impl Open {
     }
 }
 
-/// The table `tables` name in `document`, made when it is not there; in a
-/// list of tables, the entry the next name is the `id` of.
 /// The name `leaf` has in the file. A key of `keys.toml` goes by the key
 /// it names, so `Alt+K` changes the line written `alt+k`, as one file has
 /// one line for a key.
@@ -177,6 +214,8 @@ fn written_as(document: &DocumentMut, name: &str, tables: &[Key], leaf: &str) ->
         .to_owned()
 }
 
+/// The table `tables` name in `document`, made when it is not there; in a
+/// list of tables, the entry the next name is the `id` of.
 fn walk<'d>(
     document: &'d mut DocumentMut,
     tables: &[Key],
@@ -386,6 +425,32 @@ mod tests {
             std::fs::read_to_string(&keys).unwrap(),
             "[binds]\n\"alt+k\" = \"none\" # mine\n\"Alt+M\" = \"pane.new\"\n"
         );
+    }
+
+    #[test]
+    fn a_line_takes_another_key_where_it_is() {
+        let config = tempfile::tempdir().unwrap();
+        let keys = config.path().join("keys.toml");
+        std::fs::write(
+            &keys,
+            "[binds]\n# close\n\"alt+j\" = \"pane.close\" # mine\n\"Alt+W\" = \"none\"\n",
+        )
+        .unwrap();
+        rename(config.path(), "keys.toml", "binds.\"Alt+J\"", "Alt+Q").unwrap();
+        assert_eq!(
+            std::fs::read_to_string(&keys).unwrap(),
+            "[binds]\n# close\n\"Alt+Q\" = \"pane.close\" # mine\n\"Alt+W\" = \"none\"\n"
+        );
+        // A key the file has, or one that is no key, is refused.
+        let had = rename(config.path(), "keys.toml", "binds.\"Alt+Q\"", "alt+w").unwrap_err();
+        assert!(had[0].message.contains("already"), "{had:?}");
+        let wrong = rename(config.path(), "keys.toml", "binds.\"Alt+Q\"", "Alt+Nope").unwrap_err();
+        assert!(wrong[0].message.contains("Nope"), "{wrong:?}");
+        let gone = rename(config.path(), "keys.toml", "binds.\"Alt+X\"", "Alt+Y").unwrap_err();
+        assert!(gone[0].message.contains("not in"), "{gone:?}");
+        // In any file, a key there already is refused.
+        let look = self::config("radius = 4 # small\ngap = 2\n");
+        rename(look.path(), "look.toml", "radius", "gap").unwrap_err();
     }
 
     #[test]

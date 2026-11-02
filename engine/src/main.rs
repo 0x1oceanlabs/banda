@@ -173,6 +173,15 @@ enum SettingsCommand {
         file: String,
         key: String,
     },
+    /// Names one key otherwise, where it is, its value and comments kept:
+    /// `rename keys.toml 'binds."Alt+J"' Alt+Q` gives a line another key.
+    Rename {
+        #[arg(value_parser = file_names())]
+        file: String,
+        key: String,
+        /// The key's new name, as is: `Alt+Q`.
+        to: String,
+    },
 }
 
 fn file_names() -> clap::builder::PossibleValuesParser {
@@ -364,6 +373,9 @@ fn settings(what: SettingsCommand) -> ExitCode {
         }
         SettingsCommand::Reset { file, key } => {
             report_done(banda_settings::reset(&places.config, &file, &key))
+        }
+        SettingsCommand::Rename { file, key, to } => {
+            report_done(banda_settings::rename(&places.config, &file, &key, &to))
         }
         SettingsCommand::Schema { export: true, .. } => {
             let folder = places.config.join("schemas");

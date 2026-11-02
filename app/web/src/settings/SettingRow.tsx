@@ -6,7 +6,9 @@
  */
 import type { JsonValue } from "@banda/contract"
 import type { Problem } from "@banda/contract/look"
+import type { ReactNode } from "react"
 import {
+  type From,
   type Option,
   type Row,
   type Setting,
@@ -49,12 +51,62 @@ export function SettingRow({
   const set = (value: string) =>
     settings && write(settings.set(row.file, row.key, value))
   const reset = () => settings && write(settings.reset(row.file, row.key))
-  const mine = setting?.from.layer === "file"
   const control = <Control row={row} value={setting?.value} onSet={set} />
-  const wrong = [...problems.map((p) => p.message), ...refused]
+  return (
+    <RowFrame
+      dataKey={row.key}
+      lit={lit}
+      title={row.title}
+      about={row.about}
+      file={row.file}
+      from={setting?.from}
+      onReset={reset}
+      wrong={[...problems.map((p) => p.message), ...refused]}
+    >
+      {Custom ? (
+        <Custom row={row} setting={setting} set={set} control={control} />
+      ) : (
+        control
+      )}
+    </RowFrame>
+  )
+}
+
+/**
+ * The frame of every row, the schema's or a section's own: what it is,
+ * where its value comes from, a ↶ for the Person's line, its control, and
+ * what is wrong.
+ */
+export function RowFrame({
+  dataKey,
+  lit,
+  title,
+  about,
+  file,
+  from,
+  onReset,
+  wrong,
+  children,
+}: {
+  /** What a link names it by. */
+  dataKey: string
+  /** A link named it: it shows lit. */
+  lit?: boolean
+  title: ReactNode
+  about?: string
+  file: string
+  from?: From
+  /** Takes the Person's line out; shown when the value is theirs. */
+  onReset: () => void
+  /** What was wrong, a message a line; each once. */
+  wrong: string[]
+  /** Its control. */
+  children: ReactNode
+}) {
+  const mine = from?.layer === "file"
   return (
     <div
-      data-key={row.key}
+      data-key={dataKey}
       className={cn(
         "flex flex-col gap-1 px-4 py-3 transition-colors",
         lit && "bg-accent/60"
@@ -69,11 +121,11 @@ export function SettingRow({
                 className="size-1.5 shrink-0 self-center rounded-full bg-primary"
               />
             )}
-            {row.title}
-            <Origin setting={setting} file={row.file} />
+            {title}
+            <Origin from={from} file={file} />
           </div>
-          {row.about && (
-            <div className="text-xs text-muted-foreground">{row.about}</div>
+          {about && (
+            <div className="text-xs text-muted-foreground">{about}</div>
           )}
         </div>
         {mine && (
@@ -81,20 +133,14 @@ export function SettingRow({
             variant="ghost"
             size="icon-sm"
             className="text-muted-foreground"
-            aria-label={`Reset ${row.key}`}
+            aria-label={`Reset ${dataKey}`}
             title="Reset: take your line out"
-            onClick={reset}
+            onClick={onReset}
           >
             <Undo2Icon />
           </Button>
         )}
-        <div className="flex shrink-0 items-center">
-          {Custom ? (
-            <Custom row={row} setting={setting} set={set} control={control} />
-          ) : (
-            control
-          )}
-        </div>
+        <div className="flex shrink-0 items-center">{children}</div>
       </div>
       {[...new Set(wrong)].map((message) => (
         <p key={message} role="alert" className="text-xs text-destructive">
@@ -106,8 +152,7 @@ export function SettingRow({
 }
 
 /** Where the value comes from, when it is not Banda's own. */
-function Origin({ setting, file }: { setting?: Setting; file: string }) {
-  const from = setting?.from
+function Origin({ from, file }: { from?: From; file: string }) {
   if (!from || from.layer === "defaults") return null
   const words =
     from.layer === "file"

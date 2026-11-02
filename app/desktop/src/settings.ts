@@ -33,6 +33,11 @@ export class Settings {
     return this.#settings(["reset", text(file), text(key)])
   }
 
+  /** Names `key` in `file` `to` instead, where it is, comments kept. */
+  rename(file: unknown, key: unknown, to: unknown): Promise<string[]> {
+    return this.#settings(["rename", text(file), text(key), text(to)])
+  }
+
   /** The themes there are, as `banda look themes` lists them; once. */
   themes(): Promise<Listed[]> {
     this.#themes ??= run(this.#binary, ["look", "themes"]).then(

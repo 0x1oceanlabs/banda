@@ -82,6 +82,28 @@ fn settings_set_and_reset_change_one_key() {
         "{said}"
     );
 
+    let keys = config.path().join("keys.toml");
+    std::fs::write(&keys, "[binds]\n\"Alt+J\" = \"pane.close\" # mine\n").unwrap();
+    let out = banda(
+        config.path(),
+        &[
+            "settings",
+            "rename",
+            "keys.toml",
+            "binds.\"Alt+J\"",
+            "Alt+Q",
+        ],
+    );
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert_eq!(
+        std::fs::read_to_string(&keys).unwrap(),
+        "[binds]\n\"Alt+Q\" = \"pane.close\" # mine\n"
+    );
+
     let out = banda(config.path(), &["settings", "reset", "look.toml", "radius"]);
     assert!(out.status.success());
     assert_eq!(
