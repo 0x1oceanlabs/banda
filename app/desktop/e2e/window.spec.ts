@@ -2697,8 +2697,12 @@ test("the bar's middle counts who works and who waits while the sidebar is close
   await row.click()
   const thread = page.getByRole("region", { name: "slow hello" })
   await expect(thread).toHaveAttribute("data-focused", "true")
-  // Seen, it is counted no more, and with nothing to count the middle is empty.
+  // Seen, it is counted no more; with nothing to count, the calm square
+  // stays where the counts were.
   await expect(counts).toBeHidden()
+  await expect(
+    bar.getByRole("img", { name: "Nothing waits for you, nothing works" })
+  ).toBeVisible()
 })
 
 test("a Thread that finishes behind another window sends a system notification, and its click goes there", async () => {

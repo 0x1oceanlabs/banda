@@ -40,4 +40,4 @@ preset = "inbox"
 # counts = ["asking", "done", "working"]  # in this order: "asking" (asks or failed), "done", "waiting" (both), "working"
 # color = true                       # a question in orange, a failure in red, done in green
 # words = false                      # words beside the numbers
-# empty = "hide"                     # nothing to count: "hide", or "mark" a sleeping mark
+# empty = "mark"                     # nothing to count: the calm square ("mark"), or nothing ("hide")

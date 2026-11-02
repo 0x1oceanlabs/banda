@@ -64,14 +64,17 @@ export function Counts({
   if (!shows) return null
   if (tallies.length === 0) {
     if (settings.empty === "hide") return null
+    // The calm square, where the counts come.
     return (
-      <BandaMark
-        variant="agent"
-        state="rest"
-        playful={0}
-        label="Nothing waits for you, nothing works"
-        className="size-4 text-muted-foreground"
-      />
+      <span className="flex h-6 items-center px-2">
+        <BandaMark
+          variant="agent"
+          state="rest"
+          playful={0}
+          label="Nothing waits for you, nothing works"
+          className="size-4 text-muted-foreground"
+        />
+      </span>
     )
   }
   const words = tallies

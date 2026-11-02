@@ -50,6 +50,6 @@ export const DEFAULT_SIDEBAR: Sidebar = {
     counts: ["asking", "done", "working"],
     color: true,
     words: false,
-    empty: "hide",
+    empty: "mark",
   },
 }

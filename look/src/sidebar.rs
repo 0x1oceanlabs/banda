@@ -116,7 +116,7 @@ pub enum BarShow {
 pub enum BarEmpty {
     /// Nothing.
     Hide,
-    /// A sleeping mark.
+    /// The calm square: the counts stay in their place.
     Mark,
 }
 
@@ -410,7 +410,7 @@ impl SidebarSettings {
                 counts: Some(vec![Count::Asking, Count::Done, Count::Working]),
                 color: Some(true),
                 words: Some(false),
-                empty: Some(BarEmpty::Hide),
+                empty: Some(BarEmpty::Mark),
             },
         }
     }
@@ -453,7 +453,7 @@ impl SidebarSettings {
                 counts: all.bar.counts.unwrap_or_default(),
                 color: all.bar.color.unwrap_or(true),
                 words: all.bar.words.unwrap_or(false),
-                empty: all.bar.empty.unwrap_or(BarEmpty::Hide),
+                empty: all.bar.empty.unwrap_or(BarEmpty::Mark),
             },
         }
     }
@@ -687,7 +687,7 @@ mod tests {
         assert_eq!(sidebar.bar.counts, [Count::Waiting, Count::Working]);
         assert!(sidebar.bar.words);
         assert!(sidebar.bar.color, "Banda's");
-        assert_eq!(sidebar.bar.empty, BarEmpty::Hide, "Banda's");
+        assert_eq!(sidebar.bar.empty, BarEmpty::Mark, "Banda's");
     }
 
     #[test]
