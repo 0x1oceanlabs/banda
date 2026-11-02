@@ -1,4 +1,5 @@
-// What an agent does with these PRs: AGENTS.md, Workflow.
+// Renovate only opens PRs; an agent merges or closes each one
+// (AGENTS.md, Workflow).
 {
   $schema: "https://docs.renovatebot.com/renovate-schema.json",
   extends: [
@@ -13,18 +14,7 @@
   // A release that is pulled or poisoned is usually gone within days.
   minimumReleaseAge: "3 days",
 
-  // main takes rebased commits only. `ci` runs on main after every merge,
-  // so a branch behind main needs no rebase until it conflicts.
-  automergeStrategy: "rebase",
-  rebaseWhen: "conflicted",
-  lockFileMaintenance: { automerge: true },
-
   packageRules: [
-    {
-      // Whatever isn't a major merges itself once `ci` is green.
-      matchUpdateTypes: ["minor", "patch"],
-      automerge: true,
-    },
     {
       // One PR a week for the crates, one for npm.
       matchManagers: ["cargo"],
@@ -52,7 +42,6 @@
       // The runners are rebuilt by hand (ci/README.md), and `ci` never
       // builds their image: these wait on the Dependency Dashboard.
       matchFileNames: ["ci/**"],
-      automerge: false,
       dependencyDashboardApproval: true,
     },
   ],

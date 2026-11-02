@@ -31,11 +31,12 @@ the window's end-to-end tests too, on runners on devbox
 `gh pr merge --auto --rebase` and go on: the PR merges itself once `ci` is
 green. A red `ci` is yours to fix, on the PR or, after a merge, on `main`.
 
-Renovate opens the dependency PRs
-([`.github/renovate.json5`](.github/renovate.json5)); the ones that don't
-merge themselves are on its Dependency Dashboard issue. Fix one on its branch
-or close it with the reason. A major waits there unopened: tick its box to
-get the PR.
+Renovate opens the dependency PRs on Mondays
+([`.github/renovate.json5`](.github/renovate.json5)), and none merges
+itself. An agent takes one: reads what changed in the release notes, makes
+`ci` green on its branch, then merges it as above, or closes it with the
+reason. A major waits unopened on the Dependency Dashboard issue: tick its
+box to get the PR.
 
 ## Effect in the window's main process
 
