@@ -23,7 +23,6 @@ import {
   start,
   step,
   tabs,
-  update,
   SIZES,
   type Width,
   widen,
@@ -437,16 +436,6 @@ describe("closing", () => {
       terminal("x1"),
     ])
     expect(left(before, send(before, 1))).toEqual([])
-  })
-})
-
-describe("new args", () => {
-  test("keep the Pane where it is", () => {
-    let state = open(start(), A, thread("t1"))
-    state = open(state, A, terminal("x1"), { place: "right" })
-    const id = focused(state)!.id
-    state = update(state, id, terminal("x9"))
-    expect(columns(state)).toEqual([["t1"], ["x9"]])
   })
 })
 

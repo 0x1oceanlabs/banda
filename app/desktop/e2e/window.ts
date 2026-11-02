@@ -4,6 +4,7 @@
  */
 import { execFileSync } from "node:child_process"
 import {
+  existsSync,
   mkdirSync,
   mkdtempSync,
   readFileSync,
@@ -51,6 +52,11 @@ function fakeCli(dir: string, version: string, minimum: string): string {
   const program = JSON.stringify(path)
   return `cli = { program = ${program}, variable = "FAKE_AGENT_CLI", minimum = ${JSON.stringify(minimum)} }\n`
 }
+
+/** A file's text, empty until it is written: `expect.poll` stops at a
+ * throw, so a file the next click creates is read this way. */
+export const textOf = (file: string) =>
+  existsSync(file) ? readFileSync(file, "utf8") : ""
 
 /** With `account`, the fake agent has one in the throwaway folders, signed
  * out. With `oldCli`, it runs a CLI that says 1.0.0 where its entry asks for

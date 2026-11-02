@@ -39,25 +39,25 @@ banda_kernel::methods! {
         /// names it. One shown already stays where it is, and is named.
         command open(Open) -> Opened, Write;
         /// Closes a Pane; its column goes when it was the last there.
-        command close(OnePane) -> (), Write;
+        command close(OnePane) -> Done, Write;
         /// Keeps new args for a Pane, which stays where it is.
-        command update(Update) -> (), Write;
+        command update(Update) -> Done, Write;
         /// Moves a Pane to a place, counted as if it had left its own.
-        command move_pane(MovePane) -> (), Write;
+        command move_pane(MovePane) -> Done, Write;
         /// Moves a column, its Panes and all, to a workspace.
-        command move_column(MoveColumn) -> (), Write;
+        command move_column(MoveColumn) -> Done, Write;
         /// Gives a column its width; it no longer takes the whole screen.
-        command size(Size) -> (), Write;
+        command size(Size) -> Done, Write;
         /// Whether a column takes the whole screen.
-        command maximize(Maximize) -> (), Write;
+        command maximize(Maximize) -> Done, Write;
         /// Shows a column's Panes one above another or as tabs.
-        command display(ShowAs) -> (), Write;
+        command display(ShowAs) -> Done, Write;
         /// Lets every empty workspace go but the one the Person looks at
         /// and the last.
-        command tidy(Tidy) -> (), Write;
+        command tidy(Tidy) -> Done, Write;
         /// Puts a window's arrangement over the engine's, once (ADR 0025,
         /// decision 2).
-        command take(Take) -> (), Write;
+        command take(Take) -> Done, Write;
     }
 }
 
@@ -99,6 +99,11 @@ pub struct Open {
     #[serde(default)]
     #[ts(optional)]
     pub width: Option<String>,
+    /// A new Pane even when one shows the same: a New Thread, a New Pane,
+    /// as a browser's new window.
+    #[serde(default)]
+    #[ts(optional)]
+    pub again: Option<bool>,
 }
 
 #[derive(Serialize, Deserialize, TS)]
@@ -107,6 +112,18 @@ pub struct Opened {
     pub pane: PaneId,
     /// False when the workspaces showed it already.
     pub new: bool,
+    /// Where its event stands in the log, as `Done`'s.
+    #[ts(type = "number | null")]
+    pub at: Option<i64>,
+}
+
+/// What a change answers: where its event stands in the log, so a window
+/// draws it before it works out the next; none when nothing changed.
+#[derive(Serialize, Deserialize, TS)]
+#[ts(export_to = "workspaces/")]
+pub struct Done {
+    #[ts(type = "number | null")]
+    pub at: Option<i64>,
 }
 
 #[derive(Deserialize, TS)]
@@ -231,141 +248,113 @@ impl Workspaces {
     }
 
     async fn open(&self, call: Call, open: Open) -> Result<Opened, Refusal> {
-        change(
-            &call,
-            "opened",
-            None::<String>,
-            Say::Whole,
-            move |list, _| {
-                let new = model::showing(list, &open.shows).is_none();
-                let pane = model::open(list, open.shows, open.place, open.instead, open.width)?;
-                Ok(Opened { pane, new })
-            },
-        )
+        let ((pane, new), at) = change(&call, "opened", None, Say::Whole, move |list, _| {
+            let again = open.again == Some(true) || open.instead.is_some();
+            let new = again || model::showing(list, &open.shows).is_none();
+            let Open {
+                shows,
+                place,
+                instead,
+                width,
+                ..
+            } = open;
+            let pane = model::open(list, shows, place, instead, width, again)?;
+            Ok((pane, new))
+        })
+        .await?;
+        Ok(Opened { pane, new, at })
+    }
+
+    async fn close(&self, call: Call, one: OnePane) -> Result<Done, Refusal> {
+        let pane = one.pane;
+        done(&call, "closed", pane, Say::Whole, move |list, _| {
+            Ok(model::close(list, pane)?)
+        })
         .await
     }
 
-    async fn close(&self, call: Call, one: OnePane) -> Result<(), Refusal> {
-        change(
-            &call,
-            "closed",
-            Some(one.pane),
-            Say::Whole,
-            move |list, _| Ok(model::close(list, one.pane)?),
-        )
+    async fn update(&self, call: Call, update: Update) -> Result<Done, Refusal> {
+        let Update { pane, args } = update;
+        done(&call, "updated", pane, Say::Args(pane), move |list, _| {
+            Ok(model::update(list, pane, args)?)
+        })
         .await
     }
 
-    async fn update(&self, call: Call, update: Update) -> Result<(), Refusal> {
-        let (pane, args) = (update.pane, update.args);
-        change(
-            &call,
-            "updated",
-            Some(pane),
-            Say::Args(pane),
-            move |list, _| Ok(model::update(list, pane, args)?),
-        )
+    async fn move_pane(&self, call: Call, moving: MovePane) -> Result<Done, Refusal> {
+        let MovePane { pane, place } = moving;
+        done(&call, "moved", pane, Say::Whole, move |list, _| {
+            Ok(model::move_pane(list, pane, &place)?)
+        })
         .await
     }
 
-    async fn move_pane(&self, call: Call, moving: MovePane) -> Result<(), Refusal> {
-        change(
-            &call,
-            "moved",
-            Some(moving.pane),
-            Say::Whole,
-            move |list, _| Ok(model::move_pane(list, moving.pane, &moving.place)?),
-        )
-        .await
-    }
-
-    async fn move_column(&self, call: Call, moving: MoveColumn) -> Result<(), Refusal> {
+    async fn move_column(&self, call: Call, moving: MoveColumn) -> Result<Done, Refusal> {
         let MoveColumn {
             column,
             workspace,
             index,
         } = moving;
-        change(&call, "moved", Some(column), Say::Whole, move |list, _| {
+        done(&call, "moved", column, Say::Whole, move |list, _| {
             Ok(model::move_column(list, column, workspace, index)?)
         })
         .await
     }
 
-    async fn size(&self, call: Call, size: Size) -> Result<(), Refusal> {
-        change(
-            &call,
-            "sized",
-            Some(size.column),
-            Say::Whole,
-            move |list, _| Ok(model::size(list, size.column, size.width)?),
-        )
+    async fn size(&self, call: Call, size: Size) -> Result<Done, Refusal> {
+        let Size { column, width } = size;
+        done(&call, "sized", column, Say::Whole, move |list, _| {
+            Ok(model::size(list, column, width)?)
+        })
         .await
     }
 
-    async fn maximize(&self, call: Call, maximize: Maximize) -> Result<(), Refusal> {
+    async fn maximize(&self, call: Call, maximize: Maximize) -> Result<Done, Refusal> {
         let Maximize { column, full } = maximize;
-        change(
-            &call,
-            "maximized",
-            Some(column),
-            Say::Whole,
-            move |list, _| Ok(model::maximize(list, column, full)?),
-        )
+        done(&call, "maximized", column, Say::Whole, move |list, _| {
+            Ok(model::maximize(list, column, full)?)
+        })
         .await
     }
 
-    async fn display(&self, call: Call, show: ShowAs) -> Result<(), Refusal> {
+    async fn display(&self, call: Call, show: ShowAs) -> Result<Done, Refusal> {
         let ShowAs { column, display } = show;
-        change(
-            &call,
-            "displayed",
-            Some(column),
-            Say::Whole,
-            move |list, _| Ok(model::display(list, column, display)?),
-        )
+        done(&call, "displayed", column, Say::Whole, move |list, _| {
+            Ok(model::display(list, column, display)?)
+        })
         .await
     }
 
-    async fn tidy(&self, call: Call, tidy: Tidy) -> Result<(), Refusal> {
-        change(
-            &call,
-            "tidied",
-            None::<String>,
-            Say::Whole,
-            move |list, _| {
-                model::tidy(list, tidy.keep);
-                Ok(())
-            },
-        )
+    async fn tidy(&self, call: Call, tidy: Tidy) -> Result<Done, Refusal> {
+        change(&call, "tidied", None, Say::Whole, move |list, _| {
+            model::tidy(list, tidy.keep);
+            Ok(())
+        })
         .await
+        .map(|((), at)| Done { at })
     }
 
-    async fn take(&self, call: Call, take: Take) -> Result<(), Refusal> {
-        change(
-            &call,
-            "taken",
-            None::<String>,
-            Say::Whole,
-            move |list, tx| {
-                let taken: bool = tx.sql().query_row(
-                    "SELECT taken FROM workspaces_arrangement WHERE one = 1",
-                    [],
-                    |row| row.get(0),
-                )?;
-                if taken {
-                    return Err(Refusal::conflict(
-                        "The engine took a window's workspaces already: it takes them once.",
-                    )
-                    .into());
-                }
-                tx.sql().execute(
-                    "UPDATE workspaces_arrangement SET taken = 1 WHERE one = 1",
-                    [],
-                )?;
-                Ok(model::take(list, take.workspaces)?)
-            },
-        )
+    async fn take(&self, call: Call, take: Take) -> Result<Done, Refusal> {
+        change(&call, "taken", None, Say::Whole, move |list, tx| {
+            let taken: bool = tx.sql().query_row(
+                "SELECT taken FROM workspaces_arrangement WHERE one = 1",
+                [],
+                |row| row.get(0),
+            )?;
+            if taken {
+                return Err(Refusal::conflict(
+                    "The engine took a window's workspaces already: it takes them once.",
+                )
+                .into());
+            }
+            tx.sql().execute(
+                "UPDATE workspaces_arrangement SET taken = 1 WHERE one = 1",
+                [],
+            )?;
+            Ok(model::take(list, take.workspaces)?)
+        })
         .await
+        .map(|((), at)| Done { at })
     }
 }
 
@@ -377,36 +366,50 @@ enum Say {
     Args(PaneId),
 }
 
+/// A change about one thing, which answers only where it stands.
+async fn done(
+    call: &Call,
+    kind: &'static str,
+    subject: impl ToString,
+    say: Say,
+    how: impl FnOnce(&mut Arrangement, &mut Tx<'_>) -> Result<(), Error> + Send + 'static,
+) -> Result<Done, Refusal> {
+    let subject = Some(subject.to_string());
+    let ((), at) = change(call, kind, subject, say, how).await?;
+    Ok(Done { at })
+}
+
 /// Runs a command on the arrangement, and keeps and says it when it
-/// changed: one no change touched says nothing.
+/// changed, with where its event stands in the log; one no change touched
+/// says nothing.
 async fn change<T>(
     call: &Call,
     kind: &'static str,
-    subject: Option<impl ToString>,
+    subject: Option<String>,
     say: Say,
     how: impl FnOnce(&mut Arrangement, &mut Tx<'_>) -> Result<T, Error> + Send + 'static,
-) -> Result<T, Refusal>
+) -> Result<(T, Option<i64>), Refusal>
 where
     T: Serialize + DeserializeOwned + Send + 'static,
 {
     let author = call.participant();
-    let subject = subject.map(|s| s.to_string());
     call.command(move |tx| {
         let before = load(tx.sql())?;
         let mut list = before.clone();
         let answer = how(&mut list, tx)?;
-        if list != before {
-            keep(tx, &list)?;
-            let said = match say {
-                Say::Args(pane) => Changed::Args {
-                    pane,
-                    args: model::args_of(&list, pane).cloned().unwrap_or_default(),
-                },
-                Say::Whole => Changed::Whole { workspaces: list },
-            };
-            tx.emit(kind, VERSION, subject.as_deref(), author, &said)?;
+        if list == before {
+            return Ok((answer, None));
         }
-        Ok(answer)
+        keep(tx, &list)?;
+        let said = match say {
+            Say::Args(pane) => Changed::Args {
+                pane,
+                args: model::args_of(&list, pane).cloned().unwrap_or_default(),
+            },
+            Say::Whole => Changed::Whole { workspaces: list },
+        };
+        let event = tx.emit(kind, VERSION, subject.as_deref(), author, &said)?;
+        Ok((answer, Some(event.seq)))
     })
     .await
 }

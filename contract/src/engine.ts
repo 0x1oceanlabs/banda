@@ -17,7 +17,14 @@ export type Address = { url: string; secret: string }
 
 export type Status =
   | { state: "connecting" }
-  | { state: "open"; engine: string; modules: string[] }
+  | {
+      state: "open"
+      engine: string
+      modules: string[]
+      /** The ID this machine's modules are followed by, as a Space's
+       * (ADR 0025, decision 1); none when no module is the machine's. */
+      machine?: SpaceId
+    }
   /** The connection broke; the client tries again after `retryIn` ms. */
   | { state: "lost"; retryIn: number }
   /** The engine said goodbye, for example to an older window. */
@@ -310,6 +317,7 @@ export class Engine {
           state: "open",
           engine: frame.engine,
           modules: frame.modules,
+          ...(frame.machine && { machine: frame.machine }),
         })
         for (const [id, following] of this.#following) {
           this.#subscribe(id, following)

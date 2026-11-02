@@ -17,7 +17,13 @@ import {
   type Page,
   test,
 } from "@playwright/test"
-import { firstThread, SANDBOXED, startWindow, type Window } from "./window"
+import {
+  firstThread,
+  SANDBOXED,
+  startWindow,
+  textOf,
+  type Window,
+} from "./window"
 
 let window: Window
 let site: Server | undefined
@@ -251,7 +257,7 @@ test("tabs open, show and close as Chrome's, on top or on the left", async () =>
   // The switch puts the tabs on the left, in browser.toml.
   const file = join(dir, "config/browser.toml")
   await page.getByRole("button", { name: "Tabs on the left" }).click()
-  await expect.poll(() => readFileSync(file, "utf8")).toMatch(/^tabs = "left"/m)
+  await expect.poll(() => textOf(file)).toMatch(/^tabs = "left"/m)
   await expect(tabs).toHaveAttribute("aria-orientation", "vertical")
   await page.screenshot({ path: "test-results/browser-tabs-left.png" })
   // The rail opens to titles over the page while the pointer rests on it.
@@ -265,7 +271,7 @@ test("tabs open, show and close as Chrome's, on top or on the left", async () =>
   await expect(titles).toBeHidden()
   await expect(tab("Beta")).toHaveAttribute("aria-selected", "true")
   await page.getByRole("button", { name: "Tabs on top" }).click()
-  await expect.poll(() => readFileSync(file, "utf8")).toMatch(/^tabs = "top"/m)
+  await expect.poll(() => textOf(file)).toMatch(/^tabs = "top"/m)
   await expect(tabs).not.toHaveAttribute("aria-orientation", "vertical")
 
   // A download goes to Downloads, and the row shows it.
@@ -483,7 +489,7 @@ test("an extension's button shows its popup, which opens a tab", async () => {
   await page.getByRole("button", { name: "Pin Fixture" }).click()
   const file = join(dir, "config/browser.toml")
   await expect
-    .poll(() => readFileSync(file, "utf8"))
+    .poll(() => textOf(file))
     .toContain(`pinned = ["${extension.id}"]`)
   await page.keyboard.press("Escape")
   // Its worker sets the badge: workers have their APIs only in the sandbox.

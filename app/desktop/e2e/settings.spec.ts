@@ -1,12 +1,7 @@
-import { existsSync, readFileSync, writeFileSync } from "node:fs"
+import { readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { expect, type Locator, type Page, test } from "@playwright/test"
-import { firstThread, startWindow, type Window } from "./window"
-
-/** A file's text, empty until it is written: `expect.poll` stops at a
- * throw, so a file the next click creates is read this way. */
-const textOf = (file: string) =>
-  existsSync(file) ? readFileSync(file, "utf8") : ""
+import { firstThread, startWindow, textOf, type Window } from "./window"
 
 let window: Window
 

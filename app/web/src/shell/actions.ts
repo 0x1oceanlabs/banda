@@ -13,10 +13,16 @@ import { type At, MENU_KEY } from "../menu/menu"
 import { modules } from "../modules"
 import { launcher, minOf, showsOf, widthOf } from "../registry"
 import { settingsPane } from "../settings/pane"
+import {
+  columnMoved,
+  moved,
+  opened,
+  type Plan,
+  resized,
+} from "../workspaces/arrange"
 import { floorOf } from "../workspaces/layout"
 import {
   bring,
-  close,
   consume,
   current,
   type Direction,
@@ -29,20 +35,27 @@ import {
   move,
   open,
   type Opening,
+  samePane,
   send,
   shift,
   step,
   tabs,
-  update,
   widen,
   type Workspaces,
 } from "../workspaces/model"
+
+/**
+ * What a change of the workspaces comes to: the view alone, as the
+ * workspaces the window shows next, or a plan for the engine, which
+ * arranges them (ADR 0025, decision 1); nothing when nothing changes.
+ */
+export type Step = Workspaces | Plan | undefined
 
 /** What the window's own actions can change: its parts, more than a
  * module's get (`WindowApi`). */
 export type Shell = WindowApi & {
   /** Changes the workspaces. */
-  change: (how: (workspaces: Workspaces) => Workspaces) => void
+  change: (how: (workspaces: Workspaces) => Step) => void
   toggleSidebar: () => void
   toggleOverview: () => void
   /** Goes to what calls the Person first (ADR 0011, decision 5). */
@@ -78,11 +91,30 @@ function resize(shell: Shell, by: 1 | -1, wrap = false) {
   shell.change((w) => {
     const workspace = current(w)
     const column = workspace.columns[workspace.focus]
-    if (!column) return w
+    if (!column) return undefined
     const look = columnsOf()
     const floor = floorOf(workspace.id, minOf(column, look.min))
-    return widen(w, by, look, { floor, wrap })
+    return resized(w, widen(w, by, look, { floor, wrap }))
   })
+}
+
+/** Moves the focused Pane as `how` would: sideways its whole column. */
+function shifting(w: Workspaces, direction: Direction): Step {
+  const workspace = current(w)
+  const column = workspace.columns[workspace.focus]
+  const entry = focused(w)
+  const next = shift(w, direction)
+  if (!column || !entry || next === w) return undefined
+  return direction === "left" || direction === "right"
+    ? columnMoved(next, column.id)
+    : moved(next, entry.id)
+}
+
+/** Moves the focused Pane where `how` puts it, and follows it. */
+function moving(w: Workspaces, how: (w: Workspaces) => Workspaces): Step {
+  const entry = focused(w)
+  const next = how(w)
+  return entry && next !== w ? moved(next, entry.id) : undefined
 }
 
 /** Shows a Pane of a Space and focuses it, as `how` says; a new column
@@ -92,8 +124,11 @@ export function opening(
   space: SpaceId,
   pane: PaneState,
   how: Omit<Opening, "width"> = {}
-): Workspaces {
-  return open(workspaces, space, pane, { ...how, width: widthOf(pane) })
+): Step {
+  const next = open(workspaces, space, pane, { ...how, width: widthOf(pane) })
+  const plan = opened(workspaces, next)
+  if (!plan) return next
+  return how.focus === false ? { ...plan, focus: false } : plan
 }
 
 /** Shows a Pane here, right of the focused one, with its width; one
@@ -102,11 +137,21 @@ export function bringing(
   workspaces: Workspaces,
   space: SpaceId,
   pane: PaneState
-): Workspaces {
-  return bring(workspaces, space, pane, {
+): Step {
+  const next = bring(workspaces, space, pane, {
     place: "right",
     width: widthOf(pane),
   })
+  const away = entries(workspaces).find(
+    (entry) =>
+      samePane(entry, { space, pane }) &&
+      !current(workspaces).columns.some((c) => c.entries.includes(entry))
+  )
+  // The one that moved here shows anew in `next`, under another ID.
+  const was = new Set(entries(workspaces).map((entry) => entry.id))
+  const here = entries(next).find((entry) => !was.has(entry.id))
+  if (away && here) return moved(next, away.id, here.id)
+  return opened(workspaces, next) ?? next
 }
 
 /**
@@ -116,7 +161,7 @@ export function bringing(
 export function answering(
   workspaces: Workspaces,
   thing: { space: SpaceId; about: string; pane: PaneState }
-): Workspaces {
+): Step {
   const entry = showing(workspaces, thing, showsOf)
   return entry
     ? focusEntry(workspaces, entry.id)
@@ -131,17 +176,27 @@ export function settingsAt(
   workspaces: Workspaces,
   space: SpaceId,
   link = ""
-): Workspaces {
+): Step {
   const pane = paneOf(settingsPane, { link })
   const shown = entries(workspaces).find(
     (entry) => entry.pane.kind === settingsPane.kind
   )
   if (!shown) return opening(workspaces, space, pane, { place: "right" })
-  const moved = link && link !== shown.pane.args.link
-  return focusEntry(
-    moved ? update(workspaces, shown.id, pane) : workspaces,
-    shown.id
-  )
+  if (!link || link === shown.pane.args.link) {
+    return focusEntry(workspaces, shown.id)
+  }
+  return {
+    command: {
+      method: "workspaces.update",
+      params: { pane: shown.id, args: pane.args },
+    },
+    want: shown.id,
+  }
+}
+
+/** Closes a Pane; its neighbour takes the focus. */
+export function closing(pane: string): Plan {
+  return { command: { method: "workspaces.close", params: { pane } } }
 }
 
 /** Every action: the modules' (`modules.ts`), then the window's own. */
@@ -161,7 +216,7 @@ export const ACTIONS: readonly Action<Shell>[] = [
     family: "Move the Pane",
     title: `Move the Pane ${direction}`,
     keys: [{ code: ARROWS[direction], alt: true, shift: true }],
-    run: (shell: Shell) => shell.change((w) => shift(w, direction)),
+    run: (shell: Shell) => shell.change((w) => shifting(w, direction)),
   })),
   {
     id: "column.wider",
@@ -198,7 +253,7 @@ export const ACTIONS: readonly Action<Shell>[] = [
     title: "The column's Panes as tabs, or one above another",
     // As Omarchy's Super+G, a group; niri's Mod+W.
     keys: [{ code: "KeyG", alt: true }],
-    run: (shell) => shell.change((w) => tabs(w, columnsOf())),
+    run: (shell) => shell.change((w) => resized(w, tabs(w, columnsOf()))),
   },
   {
     id: "pane.consume-left",
@@ -206,14 +261,14 @@ export const ACTIONS: readonly Action<Shell>[] = [
     title: "Take the Pane into the column on the left, or out of its own",
     // As niri's Mod+[.
     keys: [{ code: "BracketLeft", alt: true }],
-    run: (shell) => shell.change((w) => consume(w, "left")),
+    run: (shell) => shell.change((w) => moving(w, (w) => consume(w, "left"))),
   },
   {
     id: "pane.consume-right",
     section: "Panes",
     title: "Take the Pane into the column on the right, or out of its own",
     keys: [{ code: "BracketRight", alt: true }],
-    run: (shell) => shell.change((w) => consume(w, "right")),
+    run: (shell) => shell.change((w) => moving(w, (w) => consume(w, "right"))),
   },
   {
     id: "column.maximize",
@@ -221,7 +276,7 @@ export const ACTIONS: readonly Action<Shell>[] = [
     title: "The column the whole screen wide, or back",
     // As niri's Mod+F.
     keys: [{ code: "KeyF", alt: true }],
-    run: (shell) => shell.change(maximize),
+    run: (shell) => shell.change((w) => resized(w, maximize(w))),
   },
   {
     id: "pane.new",
@@ -238,7 +293,7 @@ export const ACTIONS: readonly Action<Shell>[] = [
     run: (shell) =>
       shell.change((w) => {
         const entry = focused(w)
-        return entry ? close(w, entry.id) : w
+        return entry && closing(entry.id)
       }),
   },
   {
@@ -343,7 +398,8 @@ export const ACTIONS: readonly Action<Shell>[] = [
     family: "Move the Pane to a workspace",
     title: `Move the Pane to workspace ${n}`,
     keys: [{ code: `Digit${n}`, alt: true, shift: true }],
-    run: (shell: Shell) => shell.change((w) => send(w, n - 1)),
+    run: (shell: Shell) =>
+      shell.change((w) => moving(w, (w) => send(w, n - 1))),
   })),
 ]
 
