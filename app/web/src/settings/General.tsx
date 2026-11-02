@@ -13,14 +13,12 @@ import {
   ItemTitle,
 } from "@banda/ui/components/item"
 import { useStatus } from "@banda/ui/hooks/use-status"
-import { nameAndFolder } from "@banda/ui/lib/paths"
 import { FolderOpenIcon } from "lucide-react"
-import { useLookSidebar } from "../look"
+import { useLookConfig } from "../look"
 
 export function General({ engine }: { engine: Engine }) {
   const status = useStatus(engine)
-  // Every settings file is beside `sidebar.toml`.
-  const { folder } = nameAndFolder(useLookSidebar().file)
+  const folder = useLookConfig()
   return (
     <Card className="gap-0 divide-y py-0">
       <Item className="rounded-none px-4">
@@ -54,9 +52,10 @@ export function General({ engine }: { engine: Engine }) {
       </Item>
       <Item className="rounded-none px-4">
         <ItemContent>
-          <ItemTitle>This window</ItemTitle>
+          <ItemTitle>These settings</ItemTitle>
           <ItemDescription className="text-xs">
-            Alt+, opens it, from the window or the Banda menu; Esc closes it.
+            A Pane: Alt+, opens it, from the window or the Banda menu; its ×
+            closes it.
           </ItemDescription>
         </ItemContent>
       </Item>

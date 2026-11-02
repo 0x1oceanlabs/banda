@@ -4,11 +4,7 @@ import type { Tabs } from "./Tabs";
 /**
  * How the browser looks and searches, every key resolved.
  */
-export type Browser = { 
-/**
- * The file the switch writes into.
- */
-file: string, tabs: Tabs, 
+export type Browser = { tabs: Tabs, 
 /**
  * An address with `%s` where the words go.
  */

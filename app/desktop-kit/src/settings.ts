@@ -33,8 +33,8 @@ export class Settings extends Context.Service<
     ): Effect.Effect<string[], Broke>
     /** The themes there are, as `banda look themes` lists them; read once. */
     readonly themes: Effect.Effect<Listed[], Broke>
-    /** Opens `file`, beside `sidebar.toml` in the config folder, in the
-     * Person's editor; the folder when it is not there yet, or for "". */
-    reveal(sidebarFile: string, file: string): Effect.Effect<void, Refused>
+    /** Opens `file`, in the config folder `config`, in the Person's
+     * editor; the folder when it is not there yet, or for "". */
+    reveal(config: string, file: string): Effect.Effect<void, Refused>
   }
 >()("banda/Settings") {}

@@ -327,3 +327,89 @@ mod tests {
         );
     }
 }
+
+#[cfg(test)]
+mod every_key {
+    use super::*;
+
+    /// The keys that may have no value when the file does not say one,
+    /// each for its reason. Any other key of a schema shows in the
+    /// settings Pane with its value and where it comes from.
+    const UNSET: &[&str] = &[
+        // The theme is Omarchy's when there is one, else Banda's: the
+        // machine says it, not a default.
+        "look.toml:theme",
+        // None: the desktop's own background.
+        "look.toml:desk.wallpaper",
+        // None: the file's own keys, with no preset under them.
+        "sidebar.toml:preset",
+        // Each line says nothing unless the Person or a preset fills it.
+        "sidebar.toml:row.line1",
+        "sidebar.toml:row.line2",
+        "sidebar.toml:row.line3",
+    ];
+
+    /// An event moves with an easing or a spring: the keys of the one
+    /// out of force are not keyed, when the other one's are.
+    fn out_of_force(key: &str, keyed: &banda_look::keyed::Keyed) -> bool {
+        let other = |this: &str, that: &str| {
+            let (event, _) = key.split_once(this)?;
+            let that = format!("{event}{that}");
+            Some(keyed.keys().any(|k| k.starts_with(&that)))
+        };
+        key.starts_with("motion.")
+            && (other(".easing.", ".spring.") == Some(true)
+                || other(".spring.", ".easing.") == Some(true))
+    }
+
+    /// Each leaf key of a schema, dotted, through `$ref`s. A table of any
+    /// keys, as `binds` or `colors`, is none of them: its keys are the
+    /// Person's.
+    fn leaves(schema: &Value, defs: &Value, prefix: &str, out: &mut Vec<String>) {
+        let schema = match schema.get("$ref").and_then(Value::as_str) {
+            Some(path) => &defs[path.trim_start_matches("#/$defs/")],
+            None => schema,
+        };
+        if let Some(properties) = schema.get("properties").and_then(Value::as_object) {
+            for (name, value) in properties {
+                let key = if prefix.is_empty() {
+                    name.clone()
+                } else {
+                    format!("{prefix}.{name}")
+                };
+                leaves(value, defs, &key, out);
+            }
+        } else if !schema
+            .get("additionalProperties")
+            .is_some_and(Value::is_object)
+        {
+            out.push(prefix.to_owned());
+        }
+    }
+
+    #[test]
+    fn every_key_of_a_schema_has_a_value_and_where_it_comes_from() {
+        let folder = tempfile::tempdir().unwrap();
+        let look = banda_look::resolve(&Places::at(folder.path()), &|| None, &[]).look;
+        let mut named = Vec::new();
+        // Another module's file has no keys in the look.
+        for file in FILES.iter().filter(|file| file.check.is_none()) {
+            let name = file.name;
+            let keyed = &look.settings[name];
+            let schema = serde_json::to_value(file.schema()).unwrap();
+            let mut keys = Vec::new();
+            leaves(&schema, &schema["$defs"], "", &mut keys);
+            named.extend(keys.iter().map(|key| format!("{name}:{key}")));
+            let missing: Vec<_> = keys
+                .iter()
+                .filter(|key| !keyed.contains_key(*key))
+                .filter(|key| !UNSET.contains(&format!("{name}:{key}").as_str()))
+                .filter(|key| !out_of_force(key, keyed))
+                .collect();
+            assert!(missing.is_empty(), "{name}: no default for {missing:?}");
+        }
+        for unset in UNSET {
+            assert!(named.iter().any(|key| key == unset), "{unset} is no key");
+        }
+    }
+}

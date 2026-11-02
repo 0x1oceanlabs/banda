@@ -80,11 +80,11 @@ export const settingsLayer = (binary: string) =>
         reset: (file, key) => settings(["reset", file, key]),
         rename: (file, key, to) => settings(["rename", file, key, to]),
         themes,
-        reveal: (sidebarFile, file) =>
+        reveal: (config, file) =>
           Effect.gen(function* () {
             if (file && !/^[a-z-]+\.toml$/.test(file))
               return yield* new Refused({ message: `${file} is not one.` })
-            const path = join(dirname(sidebarFile), file)
+            const path = join(config, file)
             const failed = yield* Effect.promise(() =>
               shell.openPath(existsSync(path) ? path : dirname(path))
             )

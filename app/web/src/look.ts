@@ -137,6 +137,11 @@ export function useLookKeys(): Keys {
   return useLook((look) => look.keys, DEFAULT_KEYS)
 }
 
+/** The folder the settings files are in; none till the look comes. */
+export function useLookConfig(): string {
+  return useLook((look) => look.config, "")
+}
+
 const NO_SETTINGS: Look["settings"] = {}
 
 /** Each key of each settings file, and where it comes from (ADR 0016). */
