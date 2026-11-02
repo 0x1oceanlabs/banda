@@ -7,6 +7,8 @@
 //!
 //! With no window open, a tool is refused, and says so.
 
+pub mod settings;
+
 use banda_kernel::{Call, Module, Nothing, Refusal, Right, Tool};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -14,6 +16,11 @@ use serde_json::Value;
 use std::fmt::Write;
 use std::time::Duration;
 use ts_rs::TS;
+
+/// The module's settings file in `~/.config/banda` (ADR 0016): how the
+/// browser looks and searches, which the look resolves for the window.
+pub const SETTINGS: [banda_look::SettingsFile; 1] =
+    [banda_look::SettingsFile::of::<settings::BrowserSettings>()];
 
 /// How long the window has to list its tabs.
 const LISTING: Duration = Duration::from_secs(10);

@@ -5,10 +5,10 @@
 //!
 //! It is this machine's, as the look is, so `banda look` resolves it with
 //! the look, watches it with the look's files, and names its problems in
-//! the same list. The window only draws what it says.
+//! the same list: the look carries it as `files["browser.toml"]`. The
+//! window only draws what it says.
 
-use crate::Problem;
-use crate::file::OneFile;
+use banda_look::{OneFile, Problem};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::path::Path;
@@ -18,7 +18,7 @@ use ts_rs::TS;
 /// Where a browser Pane shows its tabs.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize, Serialize, TS, JsonSchema)]
 #[serde(rename_all = "lowercase")]
-#[ts(export, export_to = "look/")]
+#[ts(export, export_to = "browser/")]
 pub enum Tabs {
     /// A row above the page.
     #[default]
@@ -54,7 +54,7 @@ pub struct BrowserSettings {
 
 /// How the browser looks and searches, every key resolved.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, TS)]
-#[ts(export, export_to = "look/")]
+#[ts(export, export_to = "browser/")]
 pub struct Browser {
     pub tabs: Tabs,
     /// An address with `%s` where the words go.
@@ -119,7 +119,7 @@ impl OneFile for BrowserSettings {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::theme::Places;
+    use banda_look::theme::Places;
 
     fn resolved(text: Option<&str>) -> (Browser, Vec<Problem>) {
         let folder = tempfile::tempdir().unwrap();
@@ -128,7 +128,7 @@ mod tests {
         }
         let mut problems = Vec::new();
         let mut watched = Vec::new();
-        let (browser, _) = crate::file::resolve::<BrowserSettings>(
+        let (browser, _) = banda_look::file::resolve::<BrowserSettings>(
             &Places::at(folder.path()),
             &mut problems,
             &mut watched,

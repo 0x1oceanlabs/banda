@@ -4,8 +4,8 @@ import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { expect, test } from "vitest"
 import { AGENTS_FILE } from "../src/agents"
+import { BROWSER_FILE } from "../src/browser"
 import {
-  BROWSER_FILE,
   DEFAULT_BAR,
   DEFAULT_COLUMNS,
   DEFAULT_KEYS,

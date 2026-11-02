@@ -9,9 +9,10 @@ import { imports, sources } from "@banda/ui/testing/architecture"
 import { expect, test } from "vitest"
 
 const PANE = [
-  // The look brings `browser.toml`: where the tabs go, and the search. The
-  // bridge says what the desktop does for the browser (ADR 0028).
-  /^@banda\/contract(\/look|\/bridge)?$/,
+  // The browser's contract and the look bring `browser.toml`: where the
+  // tabs go, and the search. The bridge says what the desktop does for the
+  // browser (ADR 0028).
+  /^@banda\/contract(\/browser|\/look|\/bridge)?$/,
   /^@banda\/ui\//,
   /^react$/,
   /^lucide-react$/,

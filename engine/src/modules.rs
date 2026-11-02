@@ -256,15 +256,24 @@ mod tests {
     }
 
     #[test]
-    fn a_module_owns_settings_files_banda_has() {
-        for offer in offers() {
-            for file in &offer.manifest.settings {
-                assert!(
-                    banda_settings::file(file).is_some(),
-                    "{}: no settings file {file}",
-                    offer.manifest.id
-                );
-            }
+    fn a_module_owns_the_settings_files_its_crate_describes() {
+        let offers = offers();
+        for offer in &offers {
+            let id = &offer.manifest.id;
+            let described: Vec<&str> = banda_settings::of_module(id)
+                .iter()
+                .map(|file| file.name)
+                .collect();
+            assert_eq!(
+                offer.manifest.settings, described,
+                "modules/{id}/module.toml"
+            );
+        }
+        for owner in banda_settings::owners() {
+            assert!(
+                offers.iter().any(|offer| offer.manifest.id == owner),
+                "{owner} describes settings files but is no module"
+            );
         }
     }
 

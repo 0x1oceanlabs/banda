@@ -13,13 +13,34 @@ use std::path::{Path, PathBuf};
 mod write;
 pub use write::{rename, reset, set};
 
-/// Every settings file, one per module (ADR 0016, decision 3), by the
-/// crate that describes them: the look's first, as the look reads them.
-const GROUPS: [&[SettingsFile]; 2] = [&banda_look::FILES, &banda_agents::SETTINGS];
+/// Each module's settings files, by its ID, as its crate describes them
+/// (ADR 0016, decision 3): what its `module.toml` says it owns.
+const MODULES: [(&str, &[SettingsFile]); 2] = [
+    ("agents", &banda_agents::SETTINGS),
+    ("browser", &banda_browser::SETTINGS),
+];
 
-/// Every settings file.
+/// Every settings file: the look's, which it reads itself, then the
+/// modules'.
 pub fn files() -> impl Iterator<Item = &'static SettingsFile> {
-    GROUPS.into_iter().flatten()
+    banda_look::FILES.iter().chain(modules_files())
+}
+
+/// The settings files the module `id` owns; none when it owns none.
+pub fn of_module(id: &str) -> &'static [SettingsFile] {
+    MODULES
+        .iter()
+        .find(|(module, _)| *module == id)
+        .map_or(&[], |(_, files)| files)
+}
+
+/// The modules that own settings files, by their IDs.
+pub fn owners() -> impl Iterator<Item = &'static str> {
+    MODULES.iter().map(|(id, _)| *id)
+}
+
+fn modules_files() -> impl Iterator<Item = &'static SettingsFile> {
+    MODULES.iter().flat_map(|(_, files)| files.iter())
 }
 
 /// The file called `name`.
@@ -43,13 +64,10 @@ pub fn export(folder: &Path) -> std::io::Result<()> {
 }
 
 /// The modules' files, which the look watches too: it resolves the ones
-/// the window reads, `agents.toml`, and names the problems of the rest,
-/// as the Harness list, as the engine reads it.
+/// the window reads, as `browser.toml`, and names the problems of the
+/// rest, as the Harness list, as the engine reads it.
 pub fn also() -> Vec<SettingsFile> {
-    GROUPS[1..]
-        .iter()
-        .flat_map(|group| group.iter().copied())
-        .collect()
+    modules_files().copied().collect()
 }
 
 /// Checks `paths`, or with none every file Banda reads: the look's, the

@@ -12,7 +12,7 @@ import {
   useSyncExternalStore,
 } from "react"
 import { newId } from "@banda/contract"
-import { BROWSER_FILE, type Browser as Settings } from "@banda/contract/look"
+import { BROWSER_FILE, type Browser as Settings } from "@banda/contract/browser"
 import { Button } from "@banda/ui/components/button"
 import {
   DropdownMenu,

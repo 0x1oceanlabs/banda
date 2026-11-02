@@ -2,7 +2,6 @@
  * The look's words for TypeScript (ADR 0007): what `banda look` prints,
  * and which of its schemes shows.
  */
-import type { Browser } from "./generated/look/Browser"
 import type { Keys } from "./generated/look/Keys"
 import type { Look } from "./generated/look/Look"
 import type { Bar } from "./generated/look/Bar"
@@ -14,8 +13,6 @@ export type { Desk } from "./generated/look/Desk"
 export type { Wallpaper } from "./generated/look/Wallpaper"
 export type { Material } from "./generated/look/Material"
 export type { SidebarStyle } from "./generated/look/SidebarStyle"
-export type { Browser } from "./generated/look/Browser"
-export type { Tabs } from "./generated/look/Tabs"
 export type { Problem } from "./generated/look/Problem"
 export type { Call } from "./generated/look/Call"
 export type { Families } from "./generated/look/Families"
@@ -107,19 +104,4 @@ export interface ModuleFile<T> {
  * of it yet. */
 export function fileOf<T>(files: Look["files"], file: ModuleFile<T>): T {
   return (files[file.name] as T | undefined) ?? file.before
-}
-
-/** Banda's browser, as `banda look` gives it with no `browser.toml`: for
- * before the first look and outside the desktop. */
-export const DEFAULT_BROWSER: Browser = {
-  tabs: "top",
-  search: "https://duckduckgo.com/?q=%s",
-  pinned: [],
-  blocker: true,
-}
-
-/** The browser's `browser.toml`. */
-export const BROWSER_FILE: ModuleFile<Browser> = {
-  name: "browser.toml",
-  before: DEFAULT_BROWSER,
 }

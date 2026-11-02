@@ -5,7 +5,7 @@
  */
 
 import { useCallback } from "react"
-import { BROWSER_FILE, DEFAULT_BROWSER } from "@banda/contract/look"
+import { BROWSER_FILE, DEFAULT_BROWSER } from "@banda/contract/browser"
 import { useFile } from "@banda/ui/lib/look"
 
 const LOCAL =

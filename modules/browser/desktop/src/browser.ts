@@ -20,7 +20,8 @@ import {
   type Pressed,
   taken,
 } from "@banda/browser-pane/desktop"
-import { BROWSER_FILE, fileOf } from "@banda/contract/look"
+import { BROWSER_FILE } from "@banda/contract/browser"
+import { fileOf } from "@banda/contract/look"
 import { Context, Effect, FiberSet, Layer, Schema, Stream } from "effect"
 import {
   app,
