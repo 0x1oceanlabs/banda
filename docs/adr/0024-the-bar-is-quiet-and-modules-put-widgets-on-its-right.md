@@ -43,7 +43,11 @@ Codex, `codex app-server`'s rate limits.
 1. **The bar has three parts, as Omarchy's has: left, middle and right.**
    - Left: the Mark, the sidebar's button, as it is (ADR 0005, decision 9;
      ADR 0008), then the workspaces' numbers as they are: those with
-     Panes and the current one, nothing on them.
+     Panes and the current one, nothing on them, and a `+` after them.
+     The `+` goes to a new workspace: the empty one at the bottom, as niri
+     keeps it (ADR 0005, decision 7). It is the action `workspace.new`, so
+     a key can do it too, and it is off while the Person is there. Roma:
+     "there will be the mouse too, it seems logical."
    - Middle: empty. The focused Pane's header already names what it
      shows.
    - Right: the widgets, then, as now, the engine's connection and the

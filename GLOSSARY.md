@@ -187,7 +187,7 @@ as a Person's `group.bottom` asks; none of Banda's presets has one.
 
 **Bar**:
 The line across the window's top: the Mark, which is the sidebar's button,
-and the numbers of the workspaces on its left; widgets on its right
+the numbers of the workspaces and a `+` for a new one on its left; widgets on its right
 (ADR 0024).
 
 **Widget**:

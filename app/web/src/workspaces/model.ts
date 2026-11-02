@@ -553,6 +553,18 @@ export function go(state: Workspaces, index: number): Workspaces {
   return normalize({ ...state, current: to })
 }
 
+/** Goes to the empty workspace at the bottom: a new one, as the bar's
+ * `+` makes. */
+export function fresh(state: Workspaces): Workspaces {
+  return go(state, state.list.length - 1)
+}
+
+/** Whether the workspace on screen is the empty one at the bottom, so
+ * there is no newer one to go to. */
+export function onFresh(state: Workspaces): boolean {
+  return state.current === state.list.length - 1
+}
+
 /** Goes to the workspace above or below. */
 export function step(state: Workspaces, by: 1 | -1): Workspaces {
   return go(state, state.current + by)

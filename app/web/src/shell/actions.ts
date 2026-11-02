@@ -21,6 +21,7 @@ import {
   type Direction,
   focusEntry,
   focused,
+  fresh,
   go,
   maximize,
   move,
@@ -230,6 +231,12 @@ export const ACTIONS: readonly Action<Shell>[] = [
     title: "The workspace below",
     keys: [{ code: "PageDown", alt: true }],
     run: (shell) => shell.change((w) => step(w, 1)),
+  },
+  {
+    id: "workspace.new",
+    section: "Workspaces",
+    title: "A new workspace: the empty one at the bottom",
+    run: (shell) => shell.change(fresh),
   },
   {
     id: "calls.answer",

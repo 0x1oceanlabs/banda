@@ -8,7 +8,7 @@ import {
 import { Button } from "@banda/ui/components/button"
 import { Spinner } from "@banda/ui/components/spinner"
 import { type Attention, QUIET } from "@banda/ui/pane"
-import { TriangleAlertIcon } from "lucide-react"
+import { PlusIcon, TriangleAlertIcon } from "lucide-react"
 import type { Problem } from "@banda/contract/look"
 import { useLookProblems } from "../look"
 
@@ -28,6 +28,7 @@ export function Bar({
   sidebar,
   onSidebar,
   onPick,
+  onNew,
   problems,
 }: {
   status: Status
@@ -39,6 +40,8 @@ export function Bar({
   sidebar: boolean
   onSidebar: () => void
   onPick: (index: number) => void
+  /** Goes to a new workspace; `undefined` while the Person is on it. */
+  onNew?: () => void
   /** What the window finds wrong in the files besides, as in keys.toml. */
   problems: readonly Problem[]
 }) {
@@ -89,6 +92,17 @@ export function Bar({
           )
         })}
       </nav>
+      <Button
+        variant="ghost"
+        size="icon-xs"
+        aria-label="New workspace"
+        title="New workspace"
+        disabled={!onNew}
+        className="text-muted-foreground"
+        onClick={onNew}
+      >
+        <PlusIcon />
+      </Button>
       <div className="ml-auto flex items-center">
         <LookProblems more={problems} />
         <Connection status={status} />
