@@ -582,7 +582,7 @@ pub fn resolve(
     // The desk, which Hyprland leaves alone: glass when there is a picture
     // to make Banda's of, or when the system makes it.
     let desk = mine.desk.clone().over(layers.desk.clone());
-    let material = desk.material.unwrap_or(Material::Banda);
+    let material = desk.material.unwrap_or(Material::PLATFORM);
     let wanted = desk.glass.unwrap_or(true);
     let (wallpaper, wallpaper_dark) = if wanted && material == Material::Banda {
         wallpapers(places, &desk, &look_file, &mut problems, &mut followed)

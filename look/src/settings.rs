@@ -116,8 +116,11 @@ pub struct Desk {
     /// desk is solid.
     pub glass: Option<bool>,
     /// `"banda"`: Banda draws the glass itself, from the wallpaper, the
-    /// same everywhere. `"system"`: the window lets the desktop through,
-    /// for the compositor to blur; it shows from Banda's next start.
+    /// same everywhere. `"system"`: the system's own material, vibrancy on
+    /// macOS and acrylic on Windows 11, or on Linux the compositor's blur
+    /// of the desktop; it shows from Banda's next start. Unset, the
+    /// platform's: the system's on macOS and Windows, Banda's on Linux
+    /// (ADR 0030).
     pub material: Option<Material>,
     /// The picture Banda's glass is made of: a path, `~/` for home. With
     /// neither this nor `wallpaper-dark` set, the desktop's own wallpaper:
@@ -177,6 +180,16 @@ impl Desk {
 pub enum Material {
     Banda,
     System,
+}
+
+impl Material {
+    /// The platform's own glass (ADR 0030): the system's on macOS and
+    /// Windows, which have a material for it, Banda's on Linux.
+    pub const PLATFORM: Material = if cfg!(any(target_os = "macos", target_os = "windows")) {
+        Material::System
+    } else {
+        Material::Banda
+    };
 }
 
 /// How the sidebar sits on the desk.
@@ -399,7 +412,7 @@ impl Settings {
             },
             desk: Desk {
                 glass: Some(true),
-                material: Some(Material::Banda),
+                material: Some(Material::PLATFORM),
                 wallpaper: None,
                 wallpaper_dark: None,
                 blur: Some(40.0),

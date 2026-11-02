@@ -238,10 +238,10 @@ html[data-glass] body {
   background: transparent;
 }
 /* Banda's glass: the wallpaper, blurred, under everything, its edges past
-   the window's so the blur does not fade at them; a grain over it. The
-   desk's tint lies on top. */
+   the window's so the blur does not fade at them. The desk's tint lies
+   on top. */
 html[data-glass][data-material="banda"]::before,
-html[data-glass][data-material="banda"] body::before {
+html[data-glass] body::before {
   content: "";
   position: fixed;
   z-index: -1;
@@ -252,7 +252,9 @@ html[data-glass][data-material="banda"]::before {
   background: var(--desk-wallpaper) center / cover no-repeat;
   filter: blur(var(--desk-blur)) saturate(var(--desk-saturation));
 }
-html[data-glass][data-material="banda"] body::before {
+/* The grain lies over any glass, Banda's or the system's material, so
+   it reads as one material everywhere (ADR 0030). */
+html[data-glass] body::before {
   inset: 0;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='2' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
   opacity: var(--desk-grain);
