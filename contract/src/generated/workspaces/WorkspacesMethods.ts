@@ -91,7 +91,8 @@ panes: CallMethod<Nothing, Array<SeenWorkspace>>,
  * (`agents.thread`, args `{"thread": "<id>"}`), the Diff
  * (`git.diff`, args `{"scope": {"kind": "changes"}}`, or `uncommitted`,
  * `staged`, or `{"kind": "commit", "sha": "<sha>"}`), or a
- * browser (`browser.browser`). Beside a Pane `panes` lists, or,
+ * browser at a web address (`browser.browser`, args
+ * `{"url": "https://…"}`). Beside a Pane `panes` lists, or,
  * left out, beside your Space's Panes. It takes no focus; the
  * Person sees a mark on it until they look.
  */

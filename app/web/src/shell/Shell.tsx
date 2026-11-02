@@ -30,8 +30,8 @@ import {
 import { columnsOf, useLookKeys, useLookNotify, useLookSound } from "../look"
 import { modules as known } from "../modules"
 import {
+  closedOf,
   identityOf,
-  kindOf,
   runs,
   showsOf,
   startable,
@@ -292,11 +292,7 @@ export function Shell({
   const before = useRef(workspaces)
   useEffect(() => {
     for (const entry of left(before.current, workspaces, identityOf)) {
-      kindOf(entry.pane.kind)?.closed?.({
-        engine,
-        space: entry.space,
-        args: entry.pane.args,
-      })
+      closedOf(engine, entry)
     }
     before.current = workspaces
   }, [engine, workspaces])

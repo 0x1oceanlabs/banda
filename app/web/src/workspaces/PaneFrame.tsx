@@ -1,5 +1,11 @@
-import { type ReactNode, useEffect, useRef } from "react"
+import { Component, type ReactNode, useEffect, useRef } from "react"
 import type { Engine, SpaceId } from "@banda/contract"
+import { Button } from "@banda/ui/components/button"
+import {
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+} from "@banda/ui/components/empty"
 import { PaneHeader } from "@banda/ui/components/pane-header"
 import { type Listed, type PaneState, type Place, within } from "@banda/ui/pane"
 import type { Args } from "@banda/ui/module"
@@ -84,6 +90,7 @@ export function PaneFrame({
   const shown = kind && kindRuns(entry.pane.kind, modules) ? kind : undefined
   const element = useRef<HTMLElement>(null)
   const { title, detail, Icon } = labelOf(entry.pane)
+  const close = () => frame.close(entry.id)
 
   useEffect(() => {
     const own = element.current
@@ -119,7 +126,7 @@ export function PaneFrame({
         ((zoomed || kind?.header !== false) && (
           <PaneHeader
             title={title}
-            onClose={() => frame.close(entry.id)}
+            onClose={close}
             className={kind?.header === "bare" ? "border-b-0" : undefined}
           >
             {listed ? (
@@ -163,20 +170,22 @@ export function PaneFrame({
         ))}
       <div className="min-h-0 flex-1">
         {shown ? (
-          <shown.Pane
-            engine={engine}
-            space={entry.space}
-            args={entry.pane.args}
-            focused={focused}
-            open={(pane, place, space) =>
-              frame.open(space ?? entry.space, pane, entry.id, place)
-            }
-            update={(args) =>
-              frame.update(entry.id, { kind: entry.pane.kind, args })
-            }
-            close={() => frame.close(entry.id)}
-            run={frame.run}
-          />
+          <Broken close={close}>
+            <shown.Pane
+              engine={engine}
+              space={entry.space}
+              args={entry.pane.args}
+              focused={focused}
+              open={(pane, place, space) =>
+                frame.open(space ?? entry.space, pane, entry.id, place)
+              }
+              update={(args) =>
+                frame.update(entry.id, { kind: entry.pane.kind, args })
+              }
+              close={close}
+              run={frame.run}
+            />
+          </Broken>
         ) : (
           <p className="p-4 text-sm text-muted-foreground">
             {kind
@@ -187,4 +196,35 @@ export function PaneFrame({
       </div>
     </section>
   )
+}
+
+/**
+ * A Pane that broke, as on args its kind cannot read, says so in its tile
+ * and can be closed: the other Panes and the window go on.
+ */
+class Broken extends Component<
+  { close: () => void; children: ReactNode },
+  { error?: Error }
+> {
+  state: { error?: Error } = {}
+
+  static getDerivedStateFromError(error: Error) {
+    return { error }
+  }
+
+  render() {
+    if (!this.state.error) return this.props.children
+    return (
+      <Empty className="h-full">
+        <EmptyDescription>
+          This Pane could not show what it keeps.
+        </EmptyDescription>
+        <EmptyContent>
+          <Button variant="outline" size="sm" onClick={this.props.close}>
+            Close it
+          </Button>
+        </EmptyContent>
+      </Empty>
+    )
+  }
 }

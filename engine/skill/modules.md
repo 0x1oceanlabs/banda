@@ -68,6 +68,6 @@ Its methods, `banda call workspaces.<method>`: `list`, `open`, `close`, `update`
 What an Agent in a Thread may call as a tool of `banda mcp`:
 
 - `panes`: The Panes on the workspaces, from the top down and from the left: your Space's with their args, and, when your Person lets you see the other Spaces, theirs without. `yours` marks the ones you opened, which alone you move and close.
-- `open_pane`: Opens a Pane of your Space for your Person to see: a Thread (`agents.thread`, args `{"thread": "<id>"}`), the Diff (`git.diff`, args `{"scope": {"kind": "changes"}}`, or `uncommitted`, `staged`, or `{"kind": "commit", "sha": "<sha>"}`), or a browser (`browser.browser`). Beside a Pane `panes` lists, or, left out, beside your Space's Panes. It takes no focus; the Person sees a mark on it until they look.
+- `open_pane`: Opens a Pane of your Space for your Person to see: a Thread (`agents.thread`, args `{"thread": "<id>"}`), the Diff (`git.diff`, args `{"scope": {"kind": "changes"}}`, or `uncommitted`, `staged`, or `{"kind": "commit", "sha": "<sha>"}`), or a browser at a web address (`browser.browser`, args `{"url": "https://…"}`). Beside a Pane `panes` lists, or, left out, beside your Space's Panes. It takes no focus; the Person sees a mark on it until they look.
 - `move_pane`: Moves a Pane you opened beside another that `panes` lists.
 - `close_pane`: Closes a Pane you opened.

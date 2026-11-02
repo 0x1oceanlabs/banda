@@ -6,6 +6,8 @@ import {
   writeFileSync,
 } from "node:fs"
 import { join, resolve } from "node:path"
+import { createServer } from "node:http"
+import type { AddressInfo } from "node:net"
 import { expect, type Locator, type Page, test } from "@playwright/test"
 import {
   agentAnswers,
@@ -1694,7 +1696,17 @@ test("an Agent opens a Pane beside its Thread without the focus, marked until th
   const mine = seen[0].columns[0].panes[0]
   expect(mine).toMatchObject({ kind: "agents.thread", yours: false })
 
-  const browser = { kind: "browser.browser", args: { tabs: [], shown: 0 } }
+  // A browser at a web address, as its tool says: its one tab shows it.
+  const site = createServer((_, response) => {
+    response.writeHead(200, { "content-type": "text/html" })
+    response.end("<title>The Agent's page</title><p>Look</p>")
+  })
+  await new Promise<void>((done) => site.listen(0, "127.0.0.1", done))
+  const port = (site.address() as AddressInfo).port
+  const browser = {
+    kind: "browser.browser",
+    args: { url: `http://127.0.0.1:${port}/` },
+  }
   const beside = { pane: mine.id, side: "right" }
   const { pane } = await agentAnswers(window, "open_pane", {
     ...browser,
@@ -1702,6 +1714,7 @@ test("an Agent opens a Pane beside its Thread without the focus, marked until th
   })
   const opened = page.locator(`[data-tile="${pane}"]`)
   await expect(opened).toHaveAttribute("data-marked", "true")
+  await expect(opened.getByText("The Agent's page")).toBeVisible()
   await expect(hello).toHaveAttribute("data-focused", "true")
   await page.screenshot({ path: "test-results/18l-agent-opened.png" })
   // A terminal would run as the Person: not an Agent's to open.
@@ -1715,12 +1728,14 @@ test("an Agent opens a Pane beside its Thread without the focus, marked until th
     (await agentCalls(window, "close_pane", { pane: mine.id })).isError
   ).toBe(true)
 
-  await opened.click()
+  // Its page covers the tile; its tab is the tile's own.
+  await opened.getByText("The Agent's page").click()
   await expect(opened).toHaveAttribute("data-focused", "true")
   await expect(opened).not.toHaveAttribute("data-marked")
   await agentAnswers(window, "close_pane", { pane })
   await expect(opened).toHaveCount(0)
   await expect(hello).toBeVisible()
+  site.close()
 })
 
 test("an answer that comes while its Thread works waits in the queue, named by the Thread it comes from", async () => {

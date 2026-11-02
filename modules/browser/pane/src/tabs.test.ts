@@ -4,6 +4,7 @@ import {
   type BrowserArgs,
   keepClosed,
   lastClosed,
+  readArgs,
   showing,
   stepped,
   type Tab,
@@ -74,4 +75,14 @@ test("the tab keys do what Chrome's do", () => {
   expect(ids(afterTabKey(closed!, "tab-reopen", "r"))).toBe("acr:2")
   expect(afterTabKey(of("a", 0), "tab-close", "n")).toBeNull()
   lastClosed()
+})
+
+test("an address alone is a browser at it; the Pane's own args stay as they are", () => {
+  const own = of("ab", 1)
+  expect(readArgs(own, "x")).toBe(own)
+  expect(readArgs({ url: "https://a.test/" }, "x")).toEqual({
+    tabs: [{ id: "x", url: "https://a.test/", title: "" }],
+    shown: 0,
+  })
+  expect(readArgs({ url: "" }, "x")).toEqual({ tabs: [], shown: 0 })
 })

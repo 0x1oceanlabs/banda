@@ -129,7 +129,23 @@ export function afterTabKey(
   }
 }
 
-/** A browser that opens `url` in its one tab. */
-export function browserAt(url: string): BrowserArgs {
-  return { tabs: [{ ...blankTab(newId()), url }], shown: 0 }
+/**
+ * A browser Pane's args as the window keeps them: its own, or a web
+ * address alone, as an Agent opens a browser with `open_pane` (ADR 0032).
+ */
+export type KeptArgs = BrowserArgs | { url: string }
+
+/**
+ * `kept` as the Pane's own args: an address alone is a browser at it,
+ * whose one tab is `id`; args with no tabs, a browser with none yet.
+ */
+export function readArgs(kept: KeptArgs, id: string): BrowserArgs {
+  if ("tabs" in kept && Array.isArray(kept.tabs)) return kept
+  const url = "url" in kept && typeof kept.url === "string" ? kept.url : ""
+  return url ? browserAt(url, id) : NEW_BROWSER
+}
+
+/** A browser that opens `url` in its one tab, `id`. */
+export function browserAt(url: string, id = newId()): BrowserArgs {
+  return { tabs: [{ ...blankTab(id), url }], shown: 0 }
 }
