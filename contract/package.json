@@ -8,6 +8,7 @@
     ".": "./src/index.ts",
     "./agents": "./src/agents.ts",
     "./terminal": "./src/terminal.ts",
+    "./workspaces": "./src/workspaces.ts",
     "./look": "./src/look.ts",
     "./sidebar": "./src/sidebar.ts",
     "./settings": "./src/settings.ts"

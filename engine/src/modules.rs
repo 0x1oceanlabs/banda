@@ -5,12 +5,14 @@
 //! - its `module.toml`: its id, name, version, the settings files it owns,
 //!   and its unstable marks;
 //! - its engine part's `methods!` table, when it has one;
-//! - its window part's `defineModule`, which the window's tests copy into
-//!   `window.json` beside the `module.toml`, as the engine has no window.
+//! - its window part's `defineModule`, when it has one, which the window's
+//!   tests copy into `window.json` beside the `module.toml`, as the engine
+//!   has no window.
 
 use banda_agents::Agents;
 use banda_kernel::Method;
 use banda_terminal::Terminals;
+use banda_workspaces::Workspaces;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::BTreeMap;
@@ -20,12 +22,12 @@ use std::collections::BTreeMap;
 /// fewer fails them until it is lowered, so the count only falls.
 pub const CEILING: usize = 2;
 
-/// One module's folder: its `module.toml`, its `window.json`, and its
-/// engine part's methods when it has one.
+/// One module's folder: its `module.toml`, and its `window.json` and its
+/// engine part's methods when it has them.
 struct Files {
     folder: &'static str,
     toml: &'static str,
-    window: &'static str,
+    window: Option<&'static str>,
     methods: Option<fn() -> Vec<Method>>,
 }
 
@@ -34,20 +36,26 @@ const FILES: &[Files] = &[
     Files {
         folder: "agents",
         toml: include_str!("../../modules/agents/module.toml"),
-        window: include_str!("../../modules/agents/window.json"),
+        window: Some(include_str!("../../modules/agents/window.json")),
         methods: Some(Agents::method_list),
     },
     Files {
         folder: "terminal",
         toml: include_str!("../../modules/terminal/module.toml"),
-        window: include_str!("../../modules/terminal/window.json"),
+        window: Some(include_str!("../../modules/terminal/window.json")),
         methods: Some(Terminals::method_list),
     },
     Files {
         folder: "browser",
         toml: include_str!("../../modules/browser/module.toml"),
-        window: include_str!("../../modules/browser/window.json"),
+        window: Some(include_str!("../../modules/browser/window.json")),
         methods: None,
+    },
+    Files {
+        folder: "workspaces",
+        toml: include_str!("../../modules/workspaces/module.toml"),
+        window: None,
+        methods: Some(Workspaces::method_list),
     },
 ];
 
@@ -78,8 +86,9 @@ pub struct Offer {
     manifest: Manifest,
     /// Its engine part's methods; none when it has no engine part.
     engine: Option<Vec<Method>>,
-    /// Its window part: its Panes, actions, sources and Watches.
-    window: Window,
+    /// Its window part: its Panes, actions, sources and Watches; none when
+    /// the window draws it itself, as the workspaces.
+    window: Option<Window>,
 }
 
 /// What a module's `defineModule` offers, as `window.json` copies it.
@@ -117,8 +126,10 @@ pub fn offers() -> Vec<Offer> {
                 manifest: toml::from_str(files.toml)
                     .unwrap_or_else(|error| panic!("modules/{folder}/module.toml: {error}")),
                 engine: files.methods.map(|methods| methods()),
-                window: serde_json::from_str(files.window)
-                    .unwrap_or_else(|error| panic!("modules/{folder}/window.json: {error}")),
+                window: files.window.map(|window| {
+                    serde_json::from_str(window)
+                        .unwrap_or_else(|error| panic!("modules/{folder}/window.json: {error}"))
+                }),
             }
         })
         .collect()
@@ -172,8 +183,8 @@ fn topic(offers: &[Offer]) -> String {
         }
         let actions: Vec<&Action> = offer
             .window
-            .actions
             .iter()
+            .flat_map(|window| &window.actions)
             .filter(|a| !a.unlisted)
             .collect();
         if !actions.is_empty() {
@@ -237,6 +248,7 @@ mod tests {
         let engine = [
             Agents::new(Default::default()).name(),
             Terminals::new().name(),
+            Workspaces::new().name(),
         ];
         assert_eq!(with_engine, engine);
     }

@@ -295,6 +295,7 @@ dependencies = [
  "banda-settings",
  "banda-skill",
  "banda-terminal",
+ "banda-workspaces",
  "clap",
  "dirs",
  "futures",
@@ -401,6 +402,22 @@ dependencies = [
  "pty-process",
  "rusqlite",
  "rustix",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "ts-rs",
+ "uuid",
+]
+
+[[package]]
+name = "banda-workspaces"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "banda-kernel",
+ "banda-look",
+ "rusqlite",
  "serde",
  "serde_json",
  "tempfile",

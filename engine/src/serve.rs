@@ -9,6 +9,7 @@ use banda_agents::{Agents, Pipe};
 use banda_kernel::api::{self, OwnerSecret};
 use banda_kernel::{Kernel, PROTOCOL};
 use banda_terminal::Terminals;
+use banda_workspaces::Workspaces;
 use std::fs::{File, TryLockError};
 use std::io::Read;
 
@@ -53,6 +54,7 @@ pub async fn serve(places: Places, port: u16, with_parent: bool) -> Result<(), F
         .machine(places.machine())
         .module(Agents::new(harnesses).piped(pipe))
         .module(Terminals::new())
+        .module(Workspaces::new())
         .open()
         .await
         .map_err(Failure::broken)?;

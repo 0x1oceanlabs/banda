@@ -11,6 +11,7 @@ publish.workspace = true
 axum.workspace = true
 banda-agents = { path = "../modules/agents/engine" }
 banda-terminal = { path = "../modules/terminal/engine" }
+banda-workspaces = { path = "../modules/workspaces/engine" }
 banda-kernel = { path = "../kernel" }
 banda-look = { path = "../look" }
 banda-settings = { path = "../settings" }

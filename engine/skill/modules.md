@@ -42,3 +42,9 @@ Its settings: `browser.toml`.
 Its actions, which `keys.toml` binds by id:
 
 - New browser (`browser.new`), Alt+Shift+Return
+
+## Workspaces (`workspaces`)
+
+How this machine's Panes are arranged: workspaces one under another, each a Strip of columns.
+
+Its methods, `banda call workspaces.<method>`: `list`, `open`, `close`, `update`, `move_pane`, `move_column`, `size`, `maximize`, `display`, `tidy`, `take`.
