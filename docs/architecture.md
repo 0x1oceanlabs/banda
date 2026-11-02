@@ -676,7 +676,9 @@ modules/*/pane   each module's Panes
     Electron lets the page play sound before the first click.
 - **Only `window.banda` ties the page to the desktop.** It names no
   Electron API, so a browser can host it later; for now the engine lets in
-  only `app://banda` and pages on localhost.
+  only `app://banda` and pages on localhost. In main, each of its
+  channels answers Banda's page alone, decodes its arguments with a
+  `Schema` and runs one effect (`app/desktop/src/ipc.ts`, ADR 0020).
 - **The browser's pages** (ADR 0013) are Electron `<webview>`s in the
   window's layer over its workspaces (`PANE_LAYER`), which never moves:
   Electron destroys a `<webview>` that moves in the DOM. The browser Pane

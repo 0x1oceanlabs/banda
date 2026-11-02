@@ -4,85 +4,108 @@
  * the Person clicks it, and reads whether the desktop is quiet. The page
  * decides what to say and when; this only speaks to the desktop.
  */
-import { execFile } from "node:child_process"
-import { Notification, nativeImage } from "electron"
 import type { Notice } from "@banda/web/host"
+import { Context, Effect, Layer, Schema } from "effect"
+import { ChildProcess, ChildProcessSpawner } from "effect/process"
+import { Notification, nativeImage } from "electron"
 
-/** What shows the page's notices, and hears the desktop's quiet. */
-export interface Desktop {
-  show(notice: Notice, answered: (key: string) => void): void
-  withdraw(key: string): void
-  quiet(): Promise<boolean>
-}
+/** A notice the page asks the desktop to show. */
+export const NoticeArg = Schema.Struct({
+  key: Schema.String,
+  title: Schema.String,
+  body: Schema.optional(Schema.String),
+  icon: Schema.optional(Schema.String),
+  answer: Schema.String,
+  lasts: Schema.Boolean,
+}) satisfies Schema.Decoder<Notice>
 
-/** How long a reading of the desktop's quiet holds, in ms. */
-const QUIET_HOLDS = 2000
-
-/**
- * The Person's desktop: its notification server, through Electron, and
- * Omarchy's Do Not Disturb, when Omarchy is there.
- */
-export class SystemDesktop implements Desktop {
-  readonly #shown = new Map<string, Notification>()
-  #quiet: { at: number; is: Promise<boolean> } | undefined
-
-  show(notice: Notice, answered: (key: string) => void) {
-    this.withdraw(notice.key)
-    const shown = new Notification({
-      title: notice.title,
-      body: notice.body ?? "",
-      // Banda plays its own sound (ADR 0009).
-      silent: true,
-      icon: notice.icon
-        ? nativeImage.createFromDataURL(notice.icon)
-        : undefined,
-      // A call that waits for the Person stays until they see it.
-      timeoutType: notice.lasts ? "never" : "default",
-      urgency: "normal",
-      actions: [{ type: "button", text: notice.answer }],
+export class Notices extends Context.Service<
+  Notices,
+  {
+    /** Shows `notice`, replacing the last of its key; `answered` hears a
+     * click on it. */
+    show(notice: Notice, answered: (key: string) => void): Effect.Effect<void>
+    /** Takes the notice of `key` back. */
+    withdraw(key: string): Effect.Effect<void>
+    /** Whether the desktop is quiet now. */
+    readonly quiet: Effect.Effect<boolean>
+  }
+>()("banda/Notices") {
+  /**
+   * The Person's desktop: its notification server, through Electron, and
+   * Omarchy's Do Not Disturb, when Omarchy is there.
+   */
+  static readonly system = Layer.effect(Notices)(
+    Effect.gen(function* () {
+      const spawner = yield* ChildProcessSpawner.ChildProcessSpawner
+      const shown = new Map<string, Notification>()
+      const withdraw = (key: string) =>
+        Effect.sync(() => {
+          const notification = shown.get(key)
+          shown.delete(key)
+          notification?.close()
+        })
+      // Whether Omarchy's Do Not Disturb is on, read at most every two
+      // seconds. A desktop without Omarchy, or one that does not answer
+      // quickly, is not quiet.
+      const quiet = yield* Effect.cachedWithTTL(
+        spawner
+          .string(
+            ChildProcess.make("omarchy-shell", ["notifications", "isDnd"])
+          )
+          .pipe(
+            Effect.map((said) => said.trim() === "on"),
+            Effect.timeout("500 millis"),
+            Effect.orElseSucceed(() => false)
+          ),
+        "2 seconds"
+      )
+      return {
+        withdraw,
+        quiet,
+        show: (notice, answered) =>
+          Effect.andThen(
+            withdraw(notice.key),
+            Effect.sync(() => {
+              const notification = new Notification({
+                title: notice.title,
+                body: notice.body ?? "",
+                // Banda plays its own sound (ADR 0009).
+                silent: true,
+                icon: notice.icon
+                  ? nativeImage.createFromDataURL(notice.icon)
+                  : undefined,
+                // A call that waits for the Person stays until they see it.
+                timeoutType: notice.lasts ? "never" : "default",
+                urgency: "normal",
+                actions: [{ type: "button", text: notice.answer }],
+              })
+              const answer = () => {
+                shown.delete(notice.key)
+                answered(notice.key)
+              }
+              notification.on("click", answer)
+              notification.on("action", answer)
+              notification.on("close", () => {
+                if (shown.get(notice.key) === notification)
+                  shown.delete(notice.key)
+              })
+              shown.set(notice.key, notification)
+              notification.show()
+            })
+          ),
+      }
     })
-    const answer = () => {
-      this.#shown.delete(notice.key)
-      answered(notice.key)
-    }
-    shown.on("click", answer)
-    shown.on("action", answer)
-    shown.on("close", () => {
-      if (this.#shown.get(notice.key) === shown) this.#shown.delete(notice.key)
+  )
+
+  /** `desktop`, for the end-to-end tests. */
+  static readonly recorded = (desktop: RecordedDesktop) =>
+    Layer.succeed(Notices)({
+      show: (notice, answered) =>
+        Effect.sync(() => desktop.show(notice, answered)),
+      withdraw: (key) => Effect.sync(() => desktop.withdraw(key)),
+      quiet: Effect.sync(() => desktop.isQuiet),
     })
-    this.#shown.set(notice.key, shown)
-    shown.show()
-  }
-
-  withdraw(key: string) {
-    const shown = this.#shown.get(key)
-    if (!shown) return
-    this.#shown.delete(key)
-    shown.close()
-  }
-
-  quiet(): Promise<boolean> {
-    const now = Date.now()
-    if (this.#quiet && now - this.#quiet.at < QUIET_HOLDS) return this.#quiet.is
-    const is = omarchyQuiet()
-    this.#quiet = { at: now, is }
-    return is
-  }
-}
-
-/**
- * Whether Omarchy's Do Not Disturb is on. A desktop without Omarchy, or
- * one that does not answer quickly, is not quiet.
- */
-function omarchyQuiet(): Promise<boolean> {
-  return new Promise((done) => {
-    execFile(
-      "omarchy-shell",
-      ["notifications", "isDnd"],
-      { timeout: 500 },
-      (failed, out) => done(!failed && String(out).trim() === "on")
-    )
-  })
 }
 
 /**
@@ -90,7 +113,7 @@ function omarchyQuiet(): Promise<boolean> {
  * tests: they read it, click it and turn the quiet on through
  * `globalThis.bandaDesktop`, and nothing reaches the Person's screen.
  */
-export class RecordedDesktop implements Desktop {
+export class RecordedDesktop {
   readonly shown: Notice[] = []
   readonly withdrawn: string[] = []
   isQuiet = false
@@ -104,10 +127,6 @@ export class RecordedDesktop implements Desktop {
   withdraw(key: string) {
     this.withdrawn.push(key)
     this.#answers.delete(key)
-  }
-
-  quiet() {
-    return Promise.resolve(this.isQuiet)
   }
 
   /** The Person clicks the notice of `key`. */

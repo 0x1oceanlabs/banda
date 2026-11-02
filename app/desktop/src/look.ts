@@ -16,6 +16,7 @@ import {
   SubscriptionRef,
 } from "effect"
 import { command, keepRunning, known, lines } from "./child"
+import { Refused } from "./errors"
 
 /** A line the program printed: JSON, taken as the look it is. The look
  * is Banda's own program's, so it is not checked key by key; the page
@@ -56,6 +57,16 @@ export class Look extends Context.Service<
           changes: known(look),
         }
       })
+    )
+
+  /** The look's `part`, or a refusal naming `what` before the first look. */
+  static readonly part = <K extends keyof LookValue>(part: K, what: string) =>
+    Effect.flatMap(
+      Look.use((look) => look.current),
+      (now) =>
+        now
+          ? Effect.succeed(now[part])
+          : Effect.fail(new Refused({ message: `${what} is not known yet.` }))
     )
 
   /** The first look, or none once `within` ms went by without one: the
