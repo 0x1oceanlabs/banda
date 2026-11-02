@@ -37,7 +37,6 @@ use banda_kernel::{Effect, Error, ModuleSpace, Outcome, Participant, Settled, Tx
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::time::Instant;
 
 pub const START: &str = "turn.start";
 pub const STOP: &str = "turn.stop";
@@ -46,9 +45,8 @@ pub const STEER: &str = "turn.steer";
 /// How long a Harness may take to stop a turn that cannot go on.
 const STOPPING: Duration = Duration::from_secs(10);
 /// How long a message sent into a turn waits for the turn's Harness to
-/// start and take its prompt, and how often it looks.
+/// start and take its prompt.
 const BEGINNING: Duration = Duration::from_secs(acp::STARTING.as_secs() + acp::OPENING.as_secs());
-pub(crate) const LOOK_AGAIN: Duration = Duration::from_millis(100);
 
 #[derive(Serialize, Deserialize)]
 pub struct TurnEffect {
@@ -252,9 +250,7 @@ async fn after_questions(live: &Live, space: &ModuleSpace, turn: TurnId) -> Resu
         })
         .await?;
     if let Some(own) = own {
-        while live.asking(own) {
-            tokio::time::sleep(LOOK_AGAIN).await;
-        }
+        live.answered(own).await;
     }
     Ok(())
 }
@@ -414,25 +410,26 @@ async fn begun(
     space: &ModuleSpace,
     turn: &store::Turn,
 ) -> Option<(Arc<Connection>, Session)> {
-    let given_up = Instant::now() + BEGINNING;
-    let mut state = turn.state;
-    loop {
-        if state != TurnState::Running {
-            return None;
+    // Following the Thread's turn endings before it reads, so an end
+    // between the two is not missed.
+    let mut ended = space.committed(turn.thread, &[writer::ENDED]);
+    let id = turn.id;
+    let ended = async {
+        loop {
+            let state = space
+                .read(move |sql| Ok(store::turn(sql, id)?.map(|turn| turn.state)))
+                .await;
+            if !matches!(state, Ok(Some(TurnState::Running))) {
+                return;
+            }
+            ended.next().await;
         }
-        if let Some(begun) = live.running(turn.id) {
-            return Some(begun);
-        }
-        if Instant::now() >= given_up {
-            return None;
-        }
-        tokio::time::sleep(LOOK_AGAIN).await;
-        let id = turn.id;
-        state = space
-            .read(move |sql| Ok(store::turn(sql, id)?.map(|turn| turn.state)))
-            .await
-            .ok()
-            .flatten()?;
+    };
+    tokio::select! {
+        biased;
+        begun = live.begun(id) => Some(begun),
+        () = ended => None,
+        () = tokio::time::sleep(BEGINNING) => None,
     }
 }
 

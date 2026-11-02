@@ -14,6 +14,7 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::fmt::Display;
 use std::fs::{File, TryLockError};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
@@ -350,6 +351,28 @@ impl Drop for Space {
     }
 }
 
+/// A module's events as they are committed: see [`ModuleSpace::committed`].
+pub struct Committed {
+    events: broadcast::Receiver<Arc<Event>>,
+    filter: EventFilter,
+}
+
+impl Committed {
+    /// Returns once one is committed, or when some were missed, so the
+    /// caller reads again. Once the Space closes it never returns: the
+    /// caller bounds the wait.
+    pub async fn next(&mut self) {
+        loop {
+            match self.events.recv().await {
+                Ok(event) if self.filter.matches(&event) => return,
+                Ok(_) => {}
+                Err(broadcast::error::RecvError::Lagged(_)) => return,
+                Err(broadcast::error::RecvError::Closed) => std::future::pending().await,
+            }
+        }
+    }
+}
+
 /// A Space as one module sees it: it writes under that module's name, so
 /// it emits only that module's events.
 #[derive(Clone)]
@@ -406,6 +429,21 @@ impl ModuleSpace {
         change: impl FnOnce(&mut Tx<'_>) -> Result<T, Error> + Send + 'static,
     ) -> Result<T, Error> {
         self.space.store.write(self.module, change).await
+    }
+
+    /// This module's events of `kinds` about `subject`, from now on, as
+    /// each is committed: a module waits on them for what was written, in
+    /// place of reading again. Made before the read it waits after, so
+    /// nothing committed between the two is missed.
+    pub fn committed(&self, subject: impl Display, kinds: &[&str]) -> Committed {
+        Committed {
+            events: self.space.subscribe(),
+            filter: EventFilter {
+                module: Some(self.module.to_owned()),
+                subject: Some(subject.to_string()),
+                kinds: Some(kinds.iter().map(|&kind| kind.to_owned()).collect()),
+            },
+        }
     }
 
     /// A read on the Space's reader connection.

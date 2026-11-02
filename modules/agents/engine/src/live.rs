@@ -17,11 +17,14 @@ use banda_kernel::{AgentId, ModuleSpace, SpaceId};
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use tokio::sync::oneshot;
+use tokio::sync::{Notify, oneshot};
 
 pub struct Live {
     hosts: Arc<Hosts>,
     turns: Mutex<Turns>,
+    /// Told each time a turn begins or ends, or a Question stops waiting:
+    /// what waits on that ([`Live::until`]) looks again then.
+    changed: Notify,
     /// How long a turn the Agent went on with by itself waits for more.
     quiet: Duration,
     /// How a session's Agent reaches Banda, if it does.
@@ -44,6 +47,10 @@ struct Turns {
 }
 
 impl Turns {
+    fn asking(&self, turn: TurnId) -> bool {
+        self.questions.values().any(|(of, _)| *of == turn)
+    }
+
     /// The Harness hears that nobody will answer the turn's Questions.
     fn release(&mut self, turn: TurnId) {
         let asked: Vec<ItemId> = self
@@ -68,6 +75,7 @@ impl Live {
         Live {
             hosts: Hosts::new(idle),
             turns: Mutex::default(),
+            changed: Notify::new(),
             quiet,
             pipe,
         }
@@ -126,11 +134,7 @@ impl Live {
             tracing::warn!(%error, "a stopped turn could not be cancelled");
         }
         turns.running.insert(turn, (connection, session));
-    }
-
-    /// The Harness and session that run the turn, once its prompt went.
-    pub fn running(&self, turn: TurnId) -> Option<(Arc<Connection>, Session)> {
-        self.turns.lock().unwrap().running.get(&turn).cloned()
+        self.changed.notify_waiters();
     }
 
     /// The turn's session went on with another turn: a stop of this one
@@ -158,13 +162,38 @@ impl Live {
             connection.cancel(session)?;
         }
         turns.release(turn);
+        self.changed.notify_waiters();
         Ok(())
     }
 
     /// Whether the turn waits for a Person's answer.
     pub fn asking(&self, turn: TurnId) -> bool {
-        let turns = self.turns.lock().unwrap();
-        turns.questions.values().any(|(of, _)| *of == turn)
+        self.turns.lock().unwrap().asking(turn)
+    }
+
+    /// Returns once the turn waits for no Person's answer.
+    pub async fn answered(&self, turn: TurnId) {
+        self.until(|turns| (!turns.asking(turn)).then_some(()))
+            .await;
+    }
+
+    /// The Harness and session of the turn, once its prompt went to them.
+    pub async fn begun(&self, turn: TurnId) -> (Arc<Connection>, Session) {
+        self.until(|turns| turns.running.get(&turn).cloned()).await
+    }
+
+    /// Waits until `ready` finds what it looks for in what runs now, which
+    /// it is asked again each time that changes.
+    async fn until<T>(&self, ready: impl Fn(&Turns) -> Option<T>) -> T {
+        loop {
+            // Listening before it looks, so no change between is missed:
+            // `notify_waiters` reaches a listener made before it.
+            let changed = self.changed.notified();
+            if let Some(found) = ready(&self.turns.lock().unwrap()) {
+                return found;
+            }
+            changed.await;
+        }
     }
 
     /// Holds a Question until a Person answers it. False when the turn was
@@ -183,6 +212,7 @@ impl Live {
     pub fn forget(&self, item: ItemId) {
         if let Some((_, answer)) = self.turns.lock().unwrap().questions.remove(&item) {
             let _ = answer.send(Answer::Cancelled);
+            self.changed.notify_waiters();
         }
     }
 
@@ -190,6 +220,7 @@ impl Live {
     /// values. Whether it still waited.
     pub fn answer(&self, item: ItemId, choice: String, values: Option<Values>) -> bool {
         let waiting = self.turns.lock().unwrap().questions.remove(&item);
+        self.changed.notify_waiters();
         let given = match values {
             Some(values) => Answer::Filled(values),
             None => Answer::Chose(choice),
@@ -215,5 +246,6 @@ impl Live {
         turns.steered.remove(&turn);
         turns.cancelled.remove(&turn);
         turns.release(turn);
+        self.changed.notify_waiters();
     }
 }
