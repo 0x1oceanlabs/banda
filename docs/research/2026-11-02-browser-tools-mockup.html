@@ -1,0 +1,1348 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <title>Banda — вкладка, которой управляет агент</title>
+    <style>
+      :root {
+        color-scheme: dark light;
+      }
+      body {
+        margin: 0;
+        font-family: var(--font-sans, system-ui, sans-serif);
+      }
+      .wrap {
+        display: flex;
+        flex-direction: column;
+        gap: 14px;
+      }
+
+      /* controls */
+      .row {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        align-items: center;
+      }
+      .label {
+        font-size: 12px;
+        color: var(--muted-foreground, #888);
+        width: 64px;
+        flex-shrink: 0;
+      }
+      .seg {
+        display: inline-flex;
+        flex-wrap: wrap;
+        gap: 2px;
+        padding: 3px;
+        border-radius: 9px;
+        background: var(--muted, #2224);
+        border: 1px solid var(--border, #4444);
+      }
+      .seg button {
+        all: unset;
+        cursor: pointer;
+        font-size: 12.5px;
+        padding: 5px 10px;
+        border-radius: 6px;
+        color: var(--muted-foreground, #999);
+      }
+      .seg button:hover {
+        color: var(--foreground);
+      }
+      .seg button[aria-pressed="true"] {
+        background: var(--background, #111);
+        color: var(--foreground);
+        box-shadow: 0 1px 2px #0003;
+      }
+      .note {
+        font-size: 13px;
+        line-height: 1.5;
+        color: var(--foreground);
+      }
+      .note b {
+        font-weight: 600;
+      }
+      .note .muted {
+        color: var(--muted-foreground, #999);
+      }
+
+      /* ---------- the Banda window (its own palette: Omarchy Tokyo Night) ---------- */
+      .desk {
+        --bg: #1a1b26;
+        --tile: #1f2030;
+        --raise: #24283b;
+        --line: #2f3449;
+        --fg: #c0caf5;
+        --dim: #7c82a6;
+        --accent: #7aa2f7;
+        --attention: #ff9e64;
+        --ok: #9ece6a;
+        --bad: #f7768e;
+        position: relative;
+        border-radius: 14px;
+        padding: 12px;
+        overflow: hidden;
+        background:
+          radial-gradient(120% 90% at 10% 0%, #3b3f6e 0%, transparent 55%),
+          radial-gradient(90% 80% at 100% 100%, #5a3a5e 0%, transparent 60%),
+          #14151f;
+        font-family: Inter, system-ui, sans-serif;
+        color: var(--fg);
+        font-size: 12px;
+      }
+      .desk.light {
+        --bg: #e1e2e7;
+        --tile: #f4f5f9;
+        --raise: #e9eaf0;
+        --line: #d0d3df;
+        --fg: #343b58;
+        --dim: #6a7091;
+        --accent: #2e7de9;
+        --attention: #b15c00;
+        --ok: #587539;
+        --bad: #c64343;
+        background:
+          radial-gradient(120% 90% at 10% 0%, #c3cdf3 0%, transparent 55%),
+          radial-gradient(90% 80% at 100% 100%, #f0c9dc 0%, transparent 60%),
+          #dadce6;
+      }
+      .tiles {
+        display: grid;
+        grid-template-columns: 236px 1fr;
+        gap: 12px;
+        height: 430px;
+      }
+      .tile {
+        background: color-mix(in srgb, var(--tile) 95%, transparent);
+        border: 2px solid var(--line);
+        border-radius: 12px;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+        transition:
+          border-color 0.25s,
+          box-shadow 0.25s;
+      }
+      .tile.focus {
+        border-color: var(--accent);
+      }
+      .tile.flash {
+        box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 35%, transparent);
+      }
+      .head {
+        height: 32px;
+        flex-shrink: 0;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 0 8px;
+        border-bottom: 1px solid var(--line);
+      }
+      .title {
+        font-weight: 600;
+        font-size: 12px;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .ico {
+        width: 14px;
+        height: 14px;
+        flex-shrink: 0;
+      }
+      .btn {
+        all: unset;
+        cursor: pointer;
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        font-size: 11.5px;
+        padding: 3px 8px;
+        border-radius: 6px;
+        white-space: nowrap;
+      }
+      .btn.ghost {
+        color: var(--dim);
+      }
+      .btn.ghost:hover {
+        background: var(--raise);
+        color: var(--fg);
+      }
+      .btn.solid {
+        background: var(--accent);
+        color: #fff;
+        font-weight: 600;
+      }
+      .btn.line {
+        border: 1px solid var(--line);
+        color: var(--fg);
+      }
+      .btn.line:hover {
+        background: var(--raise);
+      }
+      .btn.stop {
+        color: var(--fg);
+        background: color-mix(in srgb, var(--fg) 10%, transparent);
+      }
+      .btn.stop:hover {
+        background: color-mix(in srgb, var(--bad) 25%, transparent);
+      }
+
+      /* Thread */
+      .chat {
+        flex: 1;
+        overflow: hidden;
+        padding: 10px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+      }
+      .you {
+        align-self: flex-end;
+        max-width: 85%;
+        background: var(--raise);
+        padding: 6px 9px;
+        border-radius: 10px;
+        line-height: 1.4;
+      }
+      .say {
+        line-height: 1.45;
+      }
+      .call {
+        display: flex;
+        align-items: flex-start;
+        line-height: 1.35;
+        gap: 6px;
+        color: var(--dim);
+        font-size: 11px;
+        font-family: ui-monospace, "JetBrains Mono", monospace;
+      }
+      .call .dot {
+        margin-top: 5px;
+        width: 5px;
+        height: 5px;
+        border-radius: 50%;
+        background: var(--dim);
+        flex-shrink: 0;
+      }
+      .call.live .dot {
+        background: var(--accent);
+        animation: pulse 1.2s infinite;
+      }
+      .call.live {
+        color: var(--fg);
+      }
+      .tabchip {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 2px 7px;
+        border-radius: 6px;
+        border: 1px solid var(--line);
+        font-size: 11px;
+        cursor: pointer;
+        color: var(--fg);
+        width: fit-content;
+      }
+      .tabchip:hover {
+        border-color: var(--accent);
+      }
+      .card {
+        border: 1px solid var(--line);
+        background: var(--raise);
+        border-radius: 10px;
+        padding: 9px;
+        display: flex;
+        flex-direction: column;
+        gap: 7px;
+      }
+      .card.turn {
+        border-color: color-mix(in srgb, var(--attention) 60%, transparent);
+      }
+      .card .q {
+        font-weight: 600;
+        line-height: 1.35;
+      }
+      .card .s {
+        color: var(--dim);
+        font-size: 11px;
+        line-height: 1.4;
+      }
+      .card .acts {
+        display: flex;
+        gap: 5px;
+        flex-wrap: wrap;
+      }
+      .composer {
+        margin: 8px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        padding: 8px 9px;
+        color: var(--dim);
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
+      .working {
+        display: inline-flex;
+        align-items: center;
+        gap: 6px;
+        color: var(--dim);
+        font-size: 11px;
+      }
+      .working i {
+        width: 6px;
+        height: 6px;
+        border-radius: 50%;
+        background: var(--accent);
+        animation: pulse 1.2s infinite;
+      }
+      .working.wait i {
+        background: var(--attention);
+      }
+
+      /* Browser */
+      .tabs {
+        display: flex;
+        gap: 2px;
+        min-width: 0;
+      }
+      .tab {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 3px 7px;
+        border-radius: 6px;
+        color: var(--dim);
+        max-width: 150px;
+        white-space: nowrap;
+      }
+      .tab span {
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .tab.on {
+        background: var(--raise);
+        color: var(--fg);
+      }
+      .tab .fav {
+        width: 12px;
+        height: 12px;
+        border-radius: 3px;
+        flex-shrink: 0;
+      }
+      .agentmark {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 16px;
+        height: 16px;
+        border-radius: 4px;
+        color: var(--accent);
+        flex-shrink: 0;
+        position: relative;
+        cursor: pointer;
+      }
+      .agentmark:hover {
+        background: color-mix(in srgb, var(--bad) 25%, transparent);
+        color: var(--bad);
+      }
+      .agentmark.wait {
+        color: var(--attention);
+      }
+      .addr {
+        flex: 1;
+        min-width: 60px;
+        height: 22px;
+        border-radius: 6px;
+        background: var(--raise);
+        display: flex;
+        align-items: center;
+        padding: 0 8px;
+        color: var(--dim);
+        font-size: 11.5px;
+        gap: 0;
+        white-space: nowrap;
+        overflow: hidden;
+      }
+      .addr b {
+        color: var(--fg);
+        font-weight: 500;
+      }
+
+      .strip {
+        display: none;
+        align-items: center;
+        gap: 8px;
+        padding: 5px 8px;
+        font-size: 11.5px;
+        flex-shrink: 0;
+        background: color-mix(in srgb, var(--accent) 13%, var(--tile));
+        border-bottom: 1px solid
+          color-mix(in srgb, var(--accent) 30%, transparent);
+      }
+      .strip.wait {
+        background: color-mix(in srgb, var(--attention) 14%, var(--tile));
+        border-bottom-color: color-mix(
+          in srgb,
+          var(--attention) 35%,
+          transparent
+        );
+      }
+      .strip .grow {
+        flex: 1;
+        min-width: 0;
+        white-space: nowrap;
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+
+      .viewport {
+        position: relative;
+        flex: 1;
+        overflow: hidden;
+        background: #fbfbfd;
+      }
+      .frame {
+        position: absolute;
+        inset: 0;
+        pointer-events: none;
+        border-radius: 0 0 10px 10px;
+        box-shadow:
+          inset 0 0 0 2px var(--accent),
+          inset 0 0 24px color-mix(in srgb, var(--accent) 35%, transparent);
+        opacity: 0;
+        transition: opacity 0.3s;
+        animation: breathe 2.6s ease-in-out infinite;
+      }
+      .frame.wait {
+        box-shadow:
+          inset 0 0 0 2px var(--attention),
+          inset 0 0 24px color-mix(in srgb, var(--attention) 35%, transparent);
+      }
+      .frame.soft {
+        box-shadow: inset 0 0 30px
+          color-mix(in srgb, var(--accent) 40%, transparent);
+      }
+
+      /* the page inside: a light web app */
+      .site {
+        position: absolute;
+        inset: 0;
+        color: #1f2330;
+        font-size: 12px;
+        transition: opacity 0.3s;
+      }
+      .site nav {
+        height: 34px;
+        display: flex;
+        align-items: center;
+        gap: 14px;
+        padding: 0 16px;
+        border-bottom: 1px solid #eceef3;
+      }
+      .site nav .logo {
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .site nav .logo i {
+        width: 14px;
+        height: 14px;
+        border-radius: 4px;
+        background: #5b5bd6;
+        display: inline-block;
+      }
+      .site nav span {
+        color: #6b7080;
+      }
+      .form {
+        width: 220px;
+        margin: 34px auto 0;
+        display: flex;
+        flex-direction: column;
+        gap: 10px;
+      }
+      .form h3 {
+        margin: 0 0 4px;
+        font-size: 16px;
+      }
+      .form label {
+        font-size: 11px;
+        color: #5c6170;
+        display: flex;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .input {
+        height: 28px;
+        border: 1px solid #d8dbe4;
+        border-radius: 7px;
+        padding: 0 9px;
+        display: flex;
+        align-items: center;
+        font-size: 12px;
+        background: #fff;
+        transition:
+          border-color 0.2s,
+          box-shadow 0.2s;
+        color: #1f2330;
+      }
+      .input.hot {
+        border-color: #5b5bd6;
+        box-shadow: 0 0 0 3px #5b5bd622;
+      }
+      .input .caret {
+        width: 1px;
+        height: 14px;
+        background: #1f2330;
+        margin-left: 1px;
+        animation: blink 1s steps(1) infinite;
+      }
+      .submit {
+        height: 30px;
+        border-radius: 7px;
+        background: #5b5bd6;
+        color: #fff;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-weight: 600;
+        transition:
+          transform 0.1s,
+          filter 0.2s;
+      }
+      .submit.press {
+        transform: scale(0.97);
+        filter: brightness(0.9);
+      }
+      .form .small {
+        font-size: 11px;
+        color: #8a8fa0;
+        text-align: center;
+      }
+
+      .gh {
+        position: absolute;
+        inset: 0;
+        background: #fff;
+        display: none;
+      }
+      .gh nav {
+        height: 34px;
+        background: #24292f;
+        color: #fff;
+        display: flex;
+        align-items: center;
+        padding: 0 14px;
+        gap: 10px;
+        font-weight: 600;
+      }
+
+      /* the Agent's cursor */
+      .cursor {
+        position: absolute;
+        left: 0;
+        top: 0;
+        pointer-events: none;
+        z-index: 5;
+        transition:
+          transform 0.7s cubic-bezier(0.3, 0.7, 0.2, 1),
+          opacity 0.3s;
+        display: flex;
+        align-items: flex-start;
+      }
+      .cursor svg {
+        filter: drop-shadow(0 1px 2px #0005);
+      }
+      .cursor .name {
+        margin: 13px 0 0 -5px;
+        background: var(--accent);
+        color: #fff;
+        font-size: 10.5px;
+        font-weight: 600;
+        padding: 1px 6px;
+        border-radius: 6px;
+        white-space: nowrap;
+      }
+      .cursor.wait .name {
+        background: var(--attention);
+      }
+      .ripple {
+        position: absolute;
+        width: 26px;
+        height: 26px;
+        margin: -13px 0 0 -13px;
+        border-radius: 50%;
+        border: 2px solid var(--accent);
+        pointer-events: none;
+        z-index: 4;
+        animation: ripple 0.5s ease-out forwards;
+      }
+      .person {
+        position: absolute;
+        left: 0;
+        top: 0;
+        z-index: 6;
+        pointer-events: none;
+        transition: transform 0.6s cubic-bezier(0.3, 0.7, 0.2, 1);
+      }
+
+      /* pill */
+      .pill {
+        position: absolute;
+        left: 50%;
+        bottom: 12px;
+        transform: translateX(-50%);
+        z-index: 7;
+        display: none;
+        align-items: center;
+        gap: 8px;
+        padding: 5px 5px 5px 10px;
+        border-radius: 999px;
+        max-width: calc(100% - 24px);
+        background: color-mix(in srgb, #1a1b26 82%, transparent);
+        color: #e4e7f7;
+        backdrop-filter: blur(10px);
+        box-shadow:
+          0 6px 20px #0004,
+          0 0 0 1px #ffffff14;
+        font-size: 11.5px;
+        white-space: nowrap;
+      }
+      .pill .grow {
+        overflow: hidden;
+        text-overflow: ellipsis;
+      }
+      .pill .dot,
+      .strip .dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--accent);
+        flex-shrink: 0;
+        animation: pulse 1.2s infinite;
+      }
+      .pill.wait .dot,
+      .strip.wait .dot {
+        background: var(--attention);
+      }
+      .pill .btn.stop {
+        color: #e4e7f7;
+        background: #ffffff18;
+      }
+
+      .ask {
+        position: absolute;
+        left: 50%;
+        bottom: 12px;
+        transform: translateX(-50%);
+        z-index: 8;
+        display: none;
+        align-items: center;
+        gap: 7px;
+        padding: 5px 5px 5px 10px;
+        border-radius: 999px;
+        white-space: nowrap;
+        background: color-mix(in srgb, #1a1b26 88%, transparent);
+        color: #e4e7f7;
+        backdrop-filter: blur(10px);
+        box-shadow:
+          0 6px 20px #0004,
+          0 0 0 1px color-mix(in srgb, var(--attention) 60%, transparent);
+        font-size: 11.5px;
+      }
+      .ask .dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--attention);
+        animation: pulse 1.2s infinite;
+      }
+      .ask .btn.solid {
+        background: var(--attention);
+        color: #1a1b26;
+      }
+      .ask .btn.line {
+        color: #e4e7f7;
+        border-color: #ffffff30;
+      }
+      /* handoff banner (shared by every variant) */
+      .handoff {
+        position: absolute;
+        left: 12px;
+        right: 12px;
+        top: 44px;
+        z-index: 8;
+        display: none;
+        gap: 10px;
+        align-items: center;
+        padding: 8px 8px 8px 11px;
+        border-radius: 10px;
+        background: #1a1b26;
+        color: #e4e7f7;
+        box-shadow:
+          0 8px 26px #0005,
+          0 0 0 1px color-mix(in srgb, var(--attention) 60%, transparent);
+      }
+      .handoff .t {
+        flex: 1;
+        line-height: 1.35;
+        font-size: 11.5px;
+      }
+      .handoff .t b {
+        color: var(--attention);
+      }
+      .handoff .btn.solid {
+        background: var(--attention);
+        color: #1a1b26;
+      }
+
+      .toast {
+        position: absolute;
+        right: 10px;
+        top: 8px;
+        z-index: 7;
+        background: #1a1b26ee;
+        color: #e4e7f7;
+        font-size: 11px;
+        padding: 5px 9px;
+        border-radius: 8px;
+        display: none;
+        box-shadow: 0 4px 14px #0004;
+      }
+
+      .stopped {
+        position: absolute;
+        left: 50%;
+        bottom: 12px;
+        transform: translateX(-50%);
+        z-index: 7;
+        display: none;
+        background: #1a1b26e6;
+        color: #e4e7f7;
+        padding: 5px 5px 5px 11px;
+        border-radius: 999px;
+        font-size: 11.5px;
+        align-items: center;
+        gap: 8px;
+        white-space: nowrap;
+        box-shadow:
+          0 6px 20px #0004,
+          0 0 0 1px color-mix(in srgb, var(--attention) 60%, transparent);
+      }
+      .stopped .btn.line {
+        color: #e4e7f7;
+        border-color: #ffffff30;
+      }
+
+      @keyframes pulse {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.35;
+        }
+      }
+      @keyframes blink {
+        50% {
+          opacity: 0;
+        }
+      }
+      @keyframes breathe {
+        0%,
+        100% {
+          filter: brightness(1);
+        }
+        50% {
+          filter: brightness(1.25);
+        }
+      }
+      @keyframes ripple {
+        from {
+          transform: scale(0.4);
+          opacity: 1;
+        }
+        to {
+          transform: scale(1.6);
+          opacity: 0;
+        }
+      }
+
+      table {
+        border-collapse: collapse;
+        width: 100%;
+        font-size: 12.5px;
+      }
+      th,
+      td {
+        text-align: left;
+        padding: 7px 8px;
+        border-bottom: 1px solid var(--border, #4444);
+        vertical-align: top;
+        line-height: 1.4;
+      }
+      th {
+        color: var(--muted-foreground, #999);
+        font-weight: 500;
+      }
+      tr.rec td:first-child {
+        font-weight: 600;
+      }
+      .tag {
+        display: inline-block;
+        font-size: 11px;
+        padding: 1px 6px;
+        border-radius: 5px;
+        background: var(--accent-surface, #7aa2f733);
+        color: var(--accent-foreground, inherit);
+        margin-left: 4px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <div class="row">
+        <span class="label">Вариант</span>
+        <div class="seg" id="variants">
+          <button data-v="frame">1 · Рамка</button>
+          <button data-v="pill">2 · Пилюля</button>
+          <button data-v="strip">3 · Полоса</button>
+        </div>
+        <div class="seg" id="mode" style="margin-left: auto">
+          <button data-m="dark">Тёмная</button
+          ><button data-m="light">Светлая</button>
+        </div>
+      </div>
+      <div class="row">
+        <span class="label">Момент</span>
+        <div class="seg" id="states">
+          <button data-s="work">Агент работает</button>
+          <button data-s="both">Ты тоже кликаешь</button>
+          <button data-s="site">Новый сайт</button>
+          <button data-s="turn">Твой ход</button>
+          <button data-s="stop">Остановлен</button>
+        </div>
+      </div>
+
+      <div class="desk" id="desk">
+        <div class="tiles">
+          <!-- Thread -->
+          <section class="tile" id="thread">
+            <div class="head">
+              <svg
+                class="ico"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path
+                  d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"
+                />
+              </svg>
+              <span class="title">Fix sign-in redirect</span>
+              <span style="margin-left: auto" class="working" id="threadState"
+                ><i></i><span>Working</span></span
+              >
+            </div>
+            <div class="chat" id="chat"></div>
+            <div class="composer">
+              <span>Ask for follow-up…</span>
+              <svg
+                class="ico"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+              >
+                <path d="M12 19V5M5 12l7-7 7 7" />
+              </svg>
+            </div>
+          </section>
+
+          <!-- Browser -->
+          <section class="tile focus" id="browser">
+            <div class="head" style="gap: 4px">
+              <div class="tabs">
+                <div class="tab on" id="agentTab">
+                  <span
+                    class="agentmark"
+                    id="mark"
+                    title="Fix sign-in redirect drives this tab — click to stop"
+                  >
+                    <svg
+                      class="ico"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                    >
+                      <rect x="4" y="8" width="16" height="12" rx="3" />
+                      <path d="M12 4v4M9 13v1M15 13v1" />
+                    </svg>
+                  </span>
+                  <span class="fav" id="fav" style="background: #5b5bd6"></span>
+                  <span id="tabTitle">Acme · Sign in</span>
+                </div>
+                <div class="tab">
+                  <span class="fav" style="background: #e5534b"></span
+                  ><span>Docs</span>
+                </div>
+              </div>
+              <span class="btn ghost" style="padding: 3px">
+                <svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path d="M19 12H5M12 19l-7-7 7-7" /></svg
+              ></span>
+              <span class="btn ghost" style="padding: 3px">
+                <svg
+                  class="ico"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                >
+                  <path d="M21 12a9 9 0 1 1-3-6.7L21 8M21 3v5h-5" /></svg
+              ></span>
+              <div class="addr" id="addr"></div>
+            </div>
+            <div class="strip" id="strip">
+              <span class="dot"></span>
+              <span class="grow" id="stripText"></span>
+              <span class="btn ghost" id="stripOpen">Open Thread</span>
+              <span class="btn stop" id="stripStop">Stop</span>
+            </div>
+            <div class="viewport" id="vp">
+              <div class="site" id="site">
+                <nav>
+                  <span class="logo"><i></i>Acme</span><span>Pricing</span
+                  ><span>Docs</span>
+                </nav>
+                <div class="form">
+                  <h3>Sign in</h3>
+                  <label
+                    >Email
+                    <div class="input" id="email">
+                      <span id="emailText"></span></div
+                  ></label>
+                  <label
+                    >Password
+                    <div class="input" id="pass">
+                      <span id="passText"></span></div
+                  ></label>
+                  <div class="submit" id="submit">Sign in</div>
+                  <div class="small">or continue with GitHub</div>
+                </div>
+              </div>
+              <div class="gh" id="gh">
+                <nav>● GitHub</nav>
+                <div class="form" style="margin-top: 28px">
+                  <h3>Sign in to GitHub</h3>
+                  <label
+                    >Username or email
+                    <div class="input hot">roma@banda.so</div></label
+                  >
+                  <label
+                    >Password
+                    <div class="input" id="ghPass">
+                      <span class="caret"></span></div
+                  ></label>
+                  <div class="submit" style="background: #1f883d">Sign in</div>
+                </div>
+              </div>
+              <div class="frame" id="frame"></div>
+              <div class="cursor" id="cursor">
+                <svg width="18" height="18" viewBox="0 0 24 24">
+                  <path
+                    d="M4 2l16 9-7 2-3 7z"
+                    fill="var(--accent)"
+                    stroke="#fff"
+                    stroke-width="1.6"
+                    stroke-linejoin="round"
+                    id="cursorFill"
+                  />
+                </svg>
+                <span class="name">Fix sign-in</span>
+              </div>
+              <svg
+                class="person"
+                id="person"
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                style="display: none"
+              >
+                <path
+                  d="M4 2l16 9-7 2-3 7z"
+                  fill="#111"
+                  stroke="#fff"
+                  stroke-width="1.6"
+                  stroke-linejoin="round"
+                />
+              </svg>
+              <div class="toast" id="toast"></div>
+              <div class="pill" id="pill">
+                <span class="dot"></span><span class="grow" id="pillText"></span
+                ><span class="btn stop" id="pillStop">Stop</span>
+              </div>
+              <div class="ask" id="ask">
+                <span class="dot"></span
+                ><span
+                  >Let <b>Fix sign-in redirect</b> use <b>github.com</b>?</span
+                >
+                <span class="btn solid" id="askOnce">Once</span
+                ><span class="btn line" id="askAlways">Always</span
+                ><span class="btn line">Deny</span>
+              </div>
+              <div class="handoff" id="handoff">
+                <div class="t">
+                  <b>Your turn.</b> Sign in to GitHub here. The Agent never sees
+                  what you type in a password field.
+                </div>
+                <span class="btn solid" id="handBack">Done — hand back</span>
+              </div>
+              <div class="stopped" id="stopped">
+                <span>Stopped <b>Fix sign-in redirect</b></span
+                ><span class="btn line" id="letDrive">Let drive again</span>
+              </div>
+            </div>
+          </section>
+        </div>
+      </div>
+
+      <div class="note" id="explain"></div>
+
+      <table>
+        <tr>
+          <th></th>
+          <th>Что видно</th>
+          <th>Плюсы</th>
+          <th>Минусы</th>
+        </tr>
+        <tr>
+          <td>1 · Рамка</td>
+          <td>
+            Значок агента на вкладке, рамка вокруг страницы, курсор с именем
+            Thread.
+          </td>
+          <td>Тише всех, страницу ничем не закрывает.</td>
+          <td>
+            Что агент делает сейчас, видно только в Thread. Стоп — мелкий значок
+            на вкладке.
+          </td>
+        </tr>
+        <tr class="rec">
+          <td>2 · Пилюля <span class="tag">советую</span></td>
+          <td>
+            То же плюс стеклянная пилюля внизу: Thread, текущий шаг, «Stop».
+          </td>
+          <td>
+            Шаг и стоп прямо у страницы, как в Codex, Gemini и Atlas. Пилюля —
+            общее место для ожидания и передачи.
+          </td>
+          <td>Закрывает полоску страницы снизу (можно сдвинуть в угол).</td>
+        </tr>
+        <tr>
+          <td>3 · Полоса</td>
+          <td>
+            Цветная полоса под адресом: Thread, шаг, «Open Thread», «Stop».
+          </td>
+          <td>Самая явная, страницу не перекрывает.</td>
+          <td>Отнимает высоту, а при нескольких вкладках с агентами шумит.</td>
+        </tr>
+      </table>
+    </div>
+
+    <script>
+      const $ = (id) => document.getElementById(id)
+      const THREAD = "Fix sign-in redirect"
+      let variant = "pill",
+        state = "work",
+        timers = []
+      const later = (ms, f) => timers.push(setTimeout(f, ms))
+      const clear = () => {
+        timers.forEach(clearTimeout)
+        timers = []
+      }
+
+      const STEPS = {
+        work: "Typing in “Email”",
+        both: "Clicking “Sign in”",
+        site: "Waiting: allow github.com?",
+        turn: "Waiting for you: sign in",
+      }
+
+      const EXPLAIN = {
+        work: `<b>Агент работает.</b> Вкладка открылась в Pane рядом с его Thread. На вкладке значок агента: наведи, и он станет кнопкой стопа. Курсор с именем Thread сначала доезжает до цели и только потом кликает, поэтому каждое действие видно. В Thread у вызова есть чип вкладки: клик по нему подсвечивает Pane.`,
+        both: `<b>Ты тоже кликаешь (ответ 3а, без блокировки).</b> Твой ввод проходит сразу, агента никто не ставит на паузу. Агент увидит новое состояние при следующем снимке, а в ответе на его следующий шаг Banda пишет «Человек тоже менял страницу, сними снимок заново». Это дёшево: окно и так видит ввод в webview.`,
+        site: `<b>Новый сайт (B).</b> Агент дошёл до github.com. Banda в коде отказывает в вызове и спрашивает тебя прямо на вкладке: один раз, всегда или нет. Агенту говорят ждать. Твой ответ приходит в Thread сообщением от тебя, и агент продолжает. localhost не спрашивает. Ни один вызов не висит в ожидании, поэтому таймауты Harness не мешают.`,
+        turn: `<b>Твой ход (E).</b> Логин, пароль, оплата, регистрация и принятие условий — всегда твои. Агент вызывает browser_handoff, и над страницей появляется баннер. Вводить в поле пароля или карты агенту запрещено кодом, а снимки такие поля маскируют, так что пароль до модели не доходит. Кнопка «Done — hand back» пишет в Thread «Done: … Carry on» от тебя, и агент продолжает.`,
+        stop: `<b>Остановлен.</b> После клика по «Stop» (или по значку на вкладке, или по стопу хода в Thread) рамка и курсор исчезают, вкладка твоя. На этой вкладке агенту отказывают, пока ты не нажмёшь «Let drive again» (issue #154). Это одно из трёх ожиданий: остановлен, новый сайт, твой ход. У каждого своя оранжевая пилюля и своя кнопка, и Banda зовёт тебя звуком и уведомлением, как на вопрос Harness.`,
+      }
+
+      function chat() {
+        const live = (t) =>
+          `<div class="call live"><span class="dot"></span>${t}</div>`
+        const done = (t) =>
+          `<div class="call"><span class="dot"></span>${t}</div>`
+        const chip = `<span class="tabchip" id="chip"><span class="fav" style="width:10px;height:10px;border-radius:3px;background:${state === "turn" || state === "site" ? "#24292f" : "#5b5bd6"}"></span>${state === "turn" ? "GitHub · Sign in" : "Acme · Sign in"}</span>`
+        let h = `<div class="you">Sign-in after OAuth lands on /404. Check it in the browser.</div>
+    <div class="say">I'll reproduce it on the local app first, then read the OAuth callback.</div>
+    ${done("browser_open localhost:5173/login")}${chip}${done("browser_snapshot · 41 refs")}`
+        if (state === "work") h += live("browser_act type e7 “test@acme.dev”")
+        if (state === "both")
+          h +=
+            done("browser_act type e7 “test@acme.dev”") +
+            live("browser_act click e12 “Sign in”")
+        if (state === "site")
+          h +=
+            done("browser_act click e14 “continue with GitHub”") +
+            done(
+              "browser_snapshot → refused: github.com needs the Person's yes"
+            ) +
+            `<div class="say">Banda asked you on the tab whether I may use github.com. I'll wait for your answer.</div>`
+        if (state === "turn")
+          h +=
+            `<div class="you">github.com: allowed once.</div>` +
+            done("browser_handoff “sign in to GitHub”") +
+            `<div class="say">Signing in is yours. I handed you the tab and will carry on after your message.</div>`
+        if (state === "stop")
+          h +=
+            done("browser_act click e12 “Sign in”") +
+            `<div class="say" style="color:var(--dim)">■ You stopped me on this tab. I'll wait until you let me drive again.</div>`
+        $("chat").innerHTML = h
+        $("chip").onmouseenter = () => $("browser").classList.add("flash")
+        $("chip").onmouseleave = () => $("browser").classList.remove("flash")
+      }
+
+      function place(el, x, y) {
+        el.style.transform = `translate(${x}px, ${y}px)`
+      }
+      function at(id, dx = 0.5, dy = 0.5) {
+        const r = $(id).getBoundingClientRect(),
+          v = $("vp").getBoundingClientRect()
+        return [r.left - v.left + r.width * dx, r.top - v.top + r.height * dy]
+      }
+      function click(x, y) {
+        const r = document.createElement("div")
+        r.className = "ripple"
+        r.style.left = x + "px"
+        r.style.top = y + "px"
+        $("vp").appendChild(r)
+        setTimeout(() => r.remove(), 600)
+      }
+      function type(el, text, ms = 60, then) {
+        let i = 0
+        const step = () => {
+          el.textContent = text.slice(0, ++i)
+          if (i < text.length) later(ms, step)
+          else then && then()
+        }
+        step()
+      }
+
+      function run() {
+        clear()
+        const waiting = state === "site" || state === "turn"
+        const driving = state !== "stop"
+        const onGh = state === "turn"
+
+        $("desk")
+          .querySelectorAll(".ripple")
+          .forEach((r) => r.remove())
+        $("site").style.display = onGh ? "none" : "block"
+        $("gh").style.display = onGh ? "block" : "none"
+        $("site").style.opacity = state === "site" ? 0.55 : 1
+        $("addr").innerHTML = onGh
+          ? `<svg class="ico" style="width:11px" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="5" y="11" width="14" height="10" rx="2"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/></svg><b style="margin-left:5px">github.com</b>/login`
+          : `<b>localhost:5173</b>/login`
+        $("tabTitle").textContent = onGh ? "GitHub · Sign in" : "Acme · Sign in"
+        $("fav").style.background = onGh ? "#24292f" : "#5b5bd6"
+
+        // the tab's mark: every variant
+        $("mark").style.display = driving ? "inline-flex" : "none"
+        $("mark").classList.toggle("wait", waiting)
+
+        // the frame: variant 1 strong, 2 soft glow, 3 none
+        const f = $("frame")
+        f.className =
+          "frame" +
+          (waiting ? " wait" : "") +
+          (variant === "pill" ? " soft" : "")
+        f.style.opacity = driving && variant !== "strip" ? 1 : 0
+
+        // the pill and the strip
+        const step = STEPS[state] || ""
+        $("pill").style.display =
+          driving && variant === "pill" ? "flex" : "none"
+        $("pill").classList.toggle("wait", waiting)
+        $("pillText").innerHTML =
+          `<b>${THREAD}</b> <span style="opacity:.7">· ${step}</span>`
+        $("pillStop").style.display = waiting ? "none" : ""
+        $("strip").style.display =
+          driving && variant === "strip" ? "flex" : "none"
+        $("strip").classList.toggle("wait", waiting)
+        $("stripText").innerHTML = `Driven by <b>${THREAD}</b> · ${step}`
+        $("stripStop").style.display = waiting ? "none" : ""
+
+        $("handoff").style.display = state === "turn" ? "flex" : "none"
+        $("ask").style.display = state === "site" ? "flex" : "none"
+        if (state === "site") {
+          $("pill").style.display = "none"
+          $("strip").style.display = "none"
+        }
+        $("stopped").style.display = state === "stop" ? "flex" : "none"
+        $("toast").style.display = "none"
+
+        const ts = $("threadState")
+        ts.style.display = state === "stop" ? "none" : "inline-flex"
+        ts.classList.toggle("wait", waiting)
+        ts.querySelector("span").textContent =
+          state === "site"
+            ? "Needs approval"
+            : state === "turn"
+              ? "Waiting for you"
+              : "Working"
+        $("thread").classList.toggle("focus", waiting)
+        $("browser").classList.toggle("focus", !waiting)
+
+        const cur = $("cursor"),
+          person = $("person")
+        cur.classList.toggle("wait", waiting)
+        cur.style.opacity = driving && !onGh ? 1 : 0
+        person.style.display = "none"
+        $("email").classList.remove("hot")
+        $("submit").classList.remove("press")
+        $("emailText").textContent = ""
+        $("passText").textContent = ""
+        chat()
+
+        if (state === "work") {
+          place(cur, ...at("email", 0.3))
+          const loop = () => {
+            $("emailText").textContent = ""
+            $("email").classList.remove("hot")
+            const [x, y] = at("email", 0.3)
+            place(cur, x, y)
+            later(800, () => {
+              click(x, y)
+              $("email").classList.add("hot")
+              type($("emailText"), "test@acme.dev", 70, () =>
+                later(1500, () => {
+                  place(cur, ...at("submit", 0.7, 2.2))
+                  later(900, loop)
+                })
+              )
+            })
+          }
+          later(200, loop)
+        }
+        if (state === "both") {
+          $("emailText").textContent = "test@acme.dev"
+          $("passText").textContent = "••••••••"
+          const [ex, ey] = at("pass", 0.8)
+          place(cur, ex - 60, ey)
+          person.style.display = "block"
+          place(person, ex + 50, ey + 90)
+          const loop = () => {
+            $("submit").classList.remove("press")
+            const [sx, sy] = at("submit", 0.55)
+            place(cur, sx, sy)
+            later(300, () => place(person, ...at("email", 0.85)))
+            later(900, () => {
+              click(...at("email", 0.85))
+              $("email").classList.add("hot")
+            })
+            later(1300, () => {
+              click(sx, sy)
+              $("submit").classList.add("press")
+            })
+            later(3200, () => {
+              $("email").classList.remove("hot")
+              place(cur, ex - 60, ey)
+              place(person, ex + 50, ey + 90)
+            })
+            later(4200, loop)
+          }
+          later(200, loop)
+        }
+        if (state === "site") {
+          const [x, y] = at("submit", 0.5, 2.4)
+          place(cur, x, y)
+        }
+        if (state === "turn") {
+          $("ghPass").innerHTML = '<span class="caret"></span>'
+        }
+
+        $("explain").innerHTML = EXPLAIN[state]
+        document
+          .querySelectorAll("#variants button")
+          .forEach((b) =>
+            b.setAttribute("aria-pressed", b.dataset.v === variant)
+          )
+        document
+          .querySelectorAll("#states button")
+          .forEach((b) => b.setAttribute("aria-pressed", b.dataset.s === state))
+      }
+
+      document.querySelectorAll("#variants button").forEach(
+        (b) =>
+          (b.onclick = () => {
+            variant = b.dataset.v
+            run()
+          })
+      )
+      document.querySelectorAll("#states button").forEach(
+        (b) =>
+          (b.onclick = () => {
+            state = b.dataset.s
+            run()
+          })
+      )
+      document.querySelectorAll("#mode button").forEach(
+        (b) =>
+          (b.onclick = () => {
+            $("desk").classList.toggle("light", b.dataset.m === "light")
+            document
+              .querySelectorAll("#mode button")
+              .forEach((x) => x.setAttribute("aria-pressed", x === b))
+          })
+      )
+      $("mode").firstElementChild.setAttribute("aria-pressed", true)
+      const stop = () => {
+        state = "stop"
+        run()
+      }
+      $("pillStop").onclick = stop
+      $("stripStop").onclick = stop
+      $("mark").onclick = stop
+      $("askOnce").onclick = $("askAlways").onclick = () => {
+        state = "turn"
+        run()
+      }
+      $("letDrive").onclick = () => {
+        state = "work"
+        run()
+      }
+      $("handBack").onclick = () => {
+        state = "work"
+        run()
+      }
+      $("stripOpen").onclick = () => {
+        $("thread").classList.add("flash")
+        setTimeout(() => $("thread").classList.remove("flash"), 700)
+      }
+      run()
+    </script>
+  </body>
+</html>

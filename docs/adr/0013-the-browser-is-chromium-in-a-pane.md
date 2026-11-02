@@ -196,7 +196,8 @@ asked for the ADR; the rest are our defaults and stay his to change.
        a `start` with the window API to open that Pane, and the window
        API's `open` a `focus: false`.
 - **Later:**
-  - Banda's own browser tools, with the MCP module;
+  - Banda's own browser tools, with the MCP module: ADR 0029 (proposed),
+    which gives the browser an engine part (against decision 3);
   - a Space on another machine and a window in a plain browser: a headless
     Chromium where the engine is, streamed as T3 Code does;
   - a tab in a Pane of its own, sleeping tabs, cookies imported from
