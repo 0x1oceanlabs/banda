@@ -87,6 +87,7 @@ The evidence is in two notes: [tiling managers](../research/2026-11-01-tiling-ma
    - On the left, above the sidebar: the sidebar's button, an icon with a dot while any Thread waits for the Person.
    - Beside it: the workspaces' numbers, the ones that hold Panes and the current one, each marked while a Thread there waits for the Person.
    - Nothing else for now. More items come as icons from modules' manifests, once real use shows they are needed.
+   - _Changed by ADR 0024_ (2026-11-02): nothing goes on the numbers, and modules put widgets on the bar's right.
 
 10. **Left Alt is the mod, and the binds come in families, as in Omarchy** (_decided_):
 

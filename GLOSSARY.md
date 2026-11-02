@@ -187,7 +187,13 @@ as a Person's `group.bottom` asks; none of Banda's presets has one.
 
 **Bar**:
 The line across the window's top: the Mark, which is the sidebar's button,
-and the numbers of the workspaces.
+and the numbers of the workspaces on its left; widgets on its right
+(ADR 0024).
+
+**Widget**:
+A module's item on the bar's right: an icon, maybe a number, that shows
+only while it has something to say. A click runs one of its module's
+actions. The look's `[bar]` says which widgets stand where.
 
 **Mark**:
 Banda's sign: three tiles, the top one an Agent with eyes. Its shape and
