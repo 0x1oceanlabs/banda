@@ -8,11 +8,7 @@ import {
 } from "react"
 import type { Image, Skill, TurnView, Usage } from "@banda/contract/agents"
 import type { Enter } from "@banda/contract/look"
-import {
-  InputGroup,
-  InputGroupAddon,
-  InputGroupButton,
-} from "@banda/ui/components/input-group"
+import { Button } from "@banda/ui/components/button"
 import {
   PromptEditor,
   type PromptEditorHandle,
@@ -292,100 +288,104 @@ export function Composer({
           event.target.value = ""
         }}
       />
-      <InputGroup
+      {/* A card raised a little above the tile: focus brightens its
+          outline, files dragged over tint it (ADR 0031). */}
+      <div
         data-dropping={dropping || undefined}
-        className="data-dropping:border-ring data-dropping:ring-3 data-dropping:ring-ring/50"
+        className="group/composer flex flex-col rounded-lg bg-foreground/4 shadow-xs ring-1 ring-foreground/8 transition-colors ring-inset focus-within:ring-foreground/16 data-dropping:bg-accent/45 data-dropping:ring-primary/70 dark:shadow-[0_12px_28px_-18px_rgb(0_0_0/0.8)] dark:inset-shadow-[0_1px_0_rgb(255_255_255/0.035)]"
       >
         {images.adding.length > 0 && (
-          <InputGroupAddon align="block-start">
+          <div className="px-3 pt-3">
             <AttachmentList images={images} />
-          </InputGroupAddon>
+          </div>
         )}
-        <PromptEditor
-          ref={field}
-          value={text}
-          placeholder={
-            placeholder ??
-            `Write to ${name}. @ files, / commands${skills.length > 0 ? ", $ skills" : ""}`
-          }
-          skills={skillNames}
-          attributes={{
-            "aria-label": `Message to ${name}`,
-            "data-slot": "input-group-control",
-            ...Object.assign({}, ...menus.map((menu) => menu.field)),
-          }}
-          className="max-h-48 min-h-10"
-          onTyping={setTyping}
-          onChange={(value) => {
-            setText(value)
-            setBack(0)
-          }}
-          onPaste={(event) => takePaste(event, "caret")}
-          onKeyDown={(event) => {
-            if (menus.some((menu) => menu.onKeyDown(event))) return
-            if (event.key === "Tab" && event.shiftKey && plan !== undefined) {
-              event.preventDefault()
-              onPlanMode(!plan)
-              return
+        <div className="px-1.5 pt-1.5">
+          <PromptEditor
+            ref={field}
+            value={text}
+            placeholder={
+              placeholder ??
+              `Write to ${name}. @ files, / commands${skills.length > 0 ? ", $ skills" : ""}`
             }
-            const up = event.key === "ArrowUp"
-            if (plain(event) && (up || event.key === "ArrowDown")) {
-              // Within a message of more lines, the caret moves first.
-              if (!(field.current?.atEdge(up) ?? true)) return
-              const waits = onEditLast !== undefined
-              const step = recall(history(), back, text, up, waits)
-              if (!step) return
-              event.preventDefault()
-              if (step === "edit") return onEditLast?.()
-              setText(step.text)
-              setBack(step.back)
-              return
-            }
-            if (
-              event.key === "Enter" &&
-              !event.shiftKey &&
-              !event.isComposing
-            ) {
-              event.preventDefault()
-              // Ctrl (⌘ on a Mac) does the other thing.
-              void send(steers(enter, event.ctrlKey || event.metaKey))
-            }
-          }}
-        />
-        <InputGroupAddon align="block-end" className="justify-between gap-2">
+            skills={skillNames}
+            attributes={{
+              "aria-label": `Message to ${name}`,
+              ...Object.assign({}, ...menus.map((menu) => menu.field)),
+            }}
+            className="max-h-48 min-h-10"
+            onTyping={setTyping}
+            onChange={(value) => {
+              setText(value)
+              setBack(0)
+            }}
+            onPaste={(event) => takePaste(event, "caret")}
+            onKeyDown={(event) => {
+              if (menus.some((menu) => menu.onKeyDown(event))) return
+              if (event.key === "Tab" && event.shiftKey && plan !== undefined) {
+                event.preventDefault()
+                onPlanMode(!plan)
+                return
+              }
+              const up = event.key === "ArrowUp"
+              if (plain(event) && (up || event.key === "ArrowDown")) {
+                // Within a message of more lines, the caret moves first.
+                if (!(field.current?.atEdge(up) ?? true)) return
+                const waits = onEditLast !== undefined
+                const step = recall(history(), back, text, up, waits)
+                if (!step) return
+                event.preventDefault()
+                if (step === "edit") return onEditLast?.()
+                setText(step.text)
+                setBack(step.back)
+                return
+              }
+              if (
+                event.key === "Enter" &&
+                !event.shiftKey &&
+                !event.isComposing
+              ) {
+                event.preventDefault()
+                // Ctrl (⌘ on a Mac) does the other thing.
+                void send(steers(enter, event.ctrlKey || event.metaKey))
+              }
+            }}
+          />
+        </div>
+        <div className="flex items-center gap-2 px-2 pb-2">
           {!images.closed && (
-            <InputGroupButton
-              type="button"
+            <Button
               variant="ghost"
-              size="icon-sm"
+              size="icon"
+              className="text-muted-foreground"
               aria-label="Add images"
               title="Add images"
               onClick={() => files.current?.click()}
             >
               <ImagePlusIcon />
-            </InputGroupButton>
+            </Button>
           )}
           {/* What the Thread runs with rests, faded, while the box is not
               in use. */}
-          <div className="min-w-0 flex-1 opacity-60 transition-opacity group-focus-within/input-group:opacity-100 group-hover/input-group:opacity-100">
+          <div className="min-w-0 flex-1 opacity-60 transition-opacity group-focus-within/composer:opacity-100 group-hover/composer:opacity-100">
             {children}
           </div>
           {usage && <ContextUsed usage={usage} />}
           {working && !written ? (
-            <InputGroupButton
-              type="button"
-              variant="secondary"
-              size="icon-sm"
+            <Button
+              variant="ghost"
+              size="icon"
+              className="rounded-full bg-foreground/12 hover:bg-foreground/16"
               aria-label="Stop"
               onClick={() => onStop(working)}
             >
-              <SquareIcon className="fill-current" />
-            </InputGroupButton>
+              <SquareIcon className="size-2.5 fill-current" />
+            </Button>
           ) : (
-            <InputGroupButton
+            <Button
               type="submit"
-              variant="default"
-              size="icon-sm"
+              size="icon"
+              // With nothing to send it is not faded but quiet (ADR 0031).
+              className="rounded-full inset-shadow-[0_1px_0_rgb(255_255_255/0.3)] hover:scale-105 hover:bg-primary/90 disabled:bg-foreground/10 disabled:text-muted-foreground disabled:opacity-100 disabled:inset-shadow-none"
               aria-label={look.label}
               title={look.title?.(name, enter)}
               disabled={!ready}
@@ -396,10 +396,10 @@ export function Composer({
               }}
             >
               {busy ? <Spinner /> : look.icon}
-            </InputGroupButton>
+            </Button>
           )}
-        </InputGroupAddon>
-      </InputGroup>
+        </div>
+      </div>
       {over > 0 && (
         <p role="alert" className="px-1 text-xs text-destructive">
           The message is {over.toLocaleString("en-US")}{" "}
@@ -447,7 +447,11 @@ const PRIMARY: Record<
     title?: (name: string, enter: Enter) => string
   }
 > = {
-  send: { label: "Send", icon: <ArrowUpIcon /> },
+  send: {
+    label: "Send",
+    // Small and firm, as T3 Code's.
+    icon: <ArrowUpIcon absoluteStrokeWidth strokeWidth={1.8} />,
+  },
   steer: {
     label: "Steer",
     icon: <CornerUpRightIcon />,
