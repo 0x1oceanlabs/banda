@@ -7,11 +7,11 @@
 use crate::acp::{Answer, Running, Said, ToolChange};
 use crate::live::Live;
 use crate::model::{
-    Body, Fact, Item, ItemId, Mode, Offer, PlanStep, QuestionState, Settings, ThreadId,
-    ToolContent, ToolKind, ToolStatus, TurnId, Usage,
+    Body, Fact, Item, ItemId, Mode, Offer, PlanStep, Settings, ThreadId, ToolContent, ToolKind,
+    ToolStatus, TurnId, Usage,
 };
 use crate::rules::{self, Piece, Pieces, Text};
-use crate::{emit, plain, store};
+use crate::{emit, plain, questions, store};
 use banda_kernel::{AgentId, Error, ModuleSpace, Participant, Tx};
 use std::collections::HashMap;
 use std::time::Duration;
@@ -265,46 +265,25 @@ impl Transcript {
                 self.close().await?;
                 let known = self.tools.get(&call);
                 let tool = tool.or(known.map(|shown| shown.kind));
-                // A form asks what only the Person knows: no mode answers it.
-                if form.is_none()
-                    && !self.running.native
-                    && rules::disposition(self.settings.mode, tool.unwrap_or(ToolKind::Other))
-                        == rules::Disposition::Allow
-                    && let Some(once) = rules::allow_once(&offered)
-                {
-                    let _ = answer.send(Answer::Chose(once.to_owned()));
-                    return Ok(());
-                }
-                let title = title
-                    .or_else(|| known.map(|shown| shown.title.clone()))
-                    .unwrap_or_else(|| "The Agent asks before it goes on.".to_owned());
-                let choices = rules::choices(offered);
-                if choices.is_empty() {
-                    let _ = answer.send(Answer::Cancelled);
-                    return Err("The Harness asked without offering any answer.".to_owned());
-                }
-                let id = ItemId::new();
+                let title = title.or_else(|| known.map(|shown| shown.title.clone()));
+                let by_mode = (!self.running.native).then_some(self.settings.mode);
+                let tool = tool.unwrap_or(ToolKind::Other);
+                let asked = questions::ask(self.turn, by_mode, tool, title, offered, form, plan);
+                let (id, body, asked) = match asked {
+                    Ok(questions::Asked::Open(opened)) => *opened,
+                    Ok(questions::Asked::ByMode(once)) => {
+                        let _ = answer.send(Answer::Chose(once));
+                        return Ok(());
+                    }
+                    Err(error) => {
+                        let _ = answer.send(Answer::Cancelled);
+                        return Err(error);
+                    }
+                };
                 // Held before it is written, so an answer finds it.
                 if !live.ask(self.turn, id, answer) {
                     return Ok(());
                 }
-                let asked = Fact::QuestionAsked {
-                    item: id,
-                    turn: self.turn,
-                    title: title.clone(),
-                    choices: choices.clone(),
-                    form: form.clone(),
-                    plan: plan.clone(),
-                };
-                let body = Body::Question {
-                    title,
-                    choices,
-                    form,
-                    plan,
-                    state: QuestionState::Open,
-                    answer: None,
-                    values: None,
-                };
                 let written = self.put(id, body, asked, None).await;
                 if written.is_err() {
                     live.forget(id);
@@ -318,18 +297,9 @@ impl Transcript {
                     return Ok(());
                 };
                 live.forget(id);
-                let (thread, agent) = (self.thread, Participant::Agent(self.agent));
+                let agent = Participant::Agent(self.agent);
                 self.space
-                    .write(move |tx| {
-                        let Some((_, mut item)) = store::item(tx.sql(), id)? else {
-                            return Ok(());
-                        };
-                        if !rules::close(&mut item.body) {
-                            return Ok(());
-                        }
-                        store::set_body(tx.sql(), id, &item.body)?;
-                        emit(tx, agent, thread, &Fact::QuestionClosed { item: id })
-                    })
+                    .write(move |tx| questions::withdrawn(tx, agent, id))
                     .await
                     .map_err(plain)
             }

@@ -30,6 +30,7 @@ mod images;
 mod kept;
 mod live;
 pub mod model;
+mod questions;
 mod record;
 mod rules;
 pub mod sending;
@@ -46,7 +47,6 @@ use banda_kernel::{
 };
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as BASE64;
-use effects::ReplyEffect;
 use images::Images;
 use live::Live;
 use model::{
@@ -658,7 +658,7 @@ impl Agents {
         } = params;
         let author = call.participant();
         let live = self.live.clone();
-        call.command(move |tx| answer(tx, &live, author, item, choice, values))
+        call.command(move |tx| questions::answer(tx, &live, author, item, choice, values))
             .await
     }
 
@@ -754,7 +754,7 @@ impl Module for Agents {
         match effect.kind.as_str() {
             effects::START => effects::start(&self.live, &self.harnesses, space, &effect).await,
             effects::STOP => effects::stop(&self.live, space, &effect).await,
-            effects::REPLY => effects::reply(&self.live, &effect),
+            questions::REPLY => questions::reply(&self.live, &effect),
             effects::STEER => effects::steer(&self.live, space, &effect).await,
             other => Outcome::Fail(format!("agents runs no effect of kind {other}")),
         }
@@ -780,7 +780,11 @@ impl Module for Agents {
     }
 
     fn settle(&self, tx: &mut Tx<'_>, effect: &Effect, settled: &Settled) -> Result<(), Error> {
-        effects::settle(tx, effect, settled)
+        match effect.kind.as_str() {
+            // An answer that never reached the Harness closes its Question.
+            questions::REPLY => questions::abandoned(tx, effect),
+            _ => effects::settle(tx, effect, settled),
+        }
     }
 }
 
@@ -1140,45 +1144,4 @@ fn retry(tx: &mut Tx<'_>, author: Participant, turn: TurnId) -> Result<Sent, Err
         turn: again,
         item: found.message,
     })
-}
-
-/// A Person's answer to a Question. It goes to the Harness from the outbox.
-fn answer(
-    tx: &mut Tx<'_>,
-    live: &Live,
-    author: Participant,
-    item: ItemId,
-    choice: String,
-    values: Option<model::Values>,
-) -> Result<(), Error> {
-    let (thread, mut found) = store::item(tx.sql(), item)?
-        .ok_or_else(|| Refusal::not_found("There is no such Question."))?;
-    let filled = rules::answer(&mut found.body, &choice, values)?;
-    store::set_body(tx.sql(), item, &found.body)?;
-    let fact = Fact::QuestionAnswered {
-        item,
-        choice: choice.clone(),
-        values: filled.as_ref().map(|f| f.kept.clone()),
-    };
-    emit(tx, author, thread, &fact)?;
-    // Neither the log nor the outbox holds a secret: memory does.
-    let (values, secret) = match filled {
-        Some(rules::Filled { mut kept, secret }) => {
-            kept.retain(|id, _| !secret.contains_key(id));
-            (Some(kept), secret)
-        }
-        None => (None, model::Values::new()),
-    };
-    let kept_secret = !secret.is_empty();
-    if kept_secret {
-        live.keep_secret(item, secret);
-    }
-    let reply = ReplyEffect {
-        item,
-        choice,
-        values,
-        secret: kept_secret,
-    };
-    tx.enqueue(effects::REPLY, &item.to_string(), &reply)?;
-    Ok(())
 }

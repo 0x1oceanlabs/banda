@@ -5,8 +5,7 @@
 //!   time and in order, while Threads run side by side: the outbox is each
 //!   Thread's queue.
 //! - `turn.stop`, keyed by the turn: it asks the Harness to stop.
-//! - `question.reply`, keyed by the Question, so an answer never waits
-//!   behind the turn that asked.
+//! - `question.reply`, a Person's answer: `questions.rs` runs it.
 //! - `turn.steer`, keyed by the Thread's steering, so messages sent into a
 //!   running turn reach it in order and never wait behind it. A message
 //!   the turn cannot take waits for a turn of its own instead ([`requeue`]).
@@ -42,7 +41,6 @@ use tokio::time::Instant;
 
 pub const START: &str = "turn.start";
 pub const STOP: &str = "turn.stop";
-pub const REPLY: &str = "question.reply";
 pub const STEER: &str = "turn.steer";
 
 /// How long a Harness may take to stop a turn that cannot go on.
@@ -62,18 +60,6 @@ pub struct TurnEffect {
 pub struct SteerEffect {
     pub item: ItemId,
     pub turn: TurnId,
-}
-
-#[derive(Serialize, Deserialize)]
-pub struct ReplyEffect {
-    pub item: ItemId,
-    pub choice: String,
-    /// What the Person filled in, for a form Question, but its secret
-    /// fields: [`Live`] holds those.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub values: Option<crate::model::Values>,
-    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-    pub secret: bool,
 }
 
 /// Sends a message into the turn that runs: the Thread shows it there, and
@@ -154,41 +140,7 @@ pub fn settle(tx: &mut Tx<'_>, effect: &Effect, settled: &Settled) -> Result<(),
             let steer: SteerEffect = serde_json::from_value(effect.payload.clone())?;
             requeue(tx, steer.item)
         }
-        REPLY => {
-            let reply: ReplyEffect = serde_json::from_value(effect.payload.clone())?;
-            let Some((thread, mut item)) = store::item(tx.sql(), reply.item)? else {
-                return Ok(());
-            };
-            if !rules::close(&mut item.body) {
-                return Ok(());
-            }
-            store::set_body(tx.sql(), item.id, &item.body)?;
-            let agent = store::agent_of(tx.sql(), thread)?;
-            let author = agent.map_or(item.author, Participant::Agent);
-            emit(tx, author, thread, &Fact::QuestionClosed { item: item.id })
-        }
         _ => Ok(()),
-    }
-}
-
-/// Hands a Person's answer to the Harness that waits for it.
-pub fn reply(live: &Live, effect: &Effect) -> Outcome {
-    let Ok(reply) = serde_json::from_value::<ReplyEffect>(effect.payload.clone()) else {
-        return Outcome::Fail("The answer could not be read.".to_owned());
-    };
-    let mut values = reply.values;
-    if reply.secret {
-        // Only memory held the secret: after a restart it is gone, and
-        // so is the turn that asked.
-        let Some(secret) = live.take_secret(reply.item) else {
-            return Outcome::Fail("The turn that asked has ended.".to_owned());
-        };
-        values.get_or_insert_default().extend(secret);
-    }
-    if live.answer(reply.item, reply.choice, values) {
-        Outcome::Done
-    } else {
-        Outcome::Fail("The turn that asked has ended.".to_owned())
     }
 }
 
