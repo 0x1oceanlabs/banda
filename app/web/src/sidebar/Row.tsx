@@ -1,5 +1,10 @@
 import type { SpaceSummary } from "@banda/contract"
-import { BandaMark, MARK_WORDS, waits } from "@banda/ui/components/banda-mark"
+import {
+  BandaMark,
+  MARK_WORDS,
+  type MarkState,
+  waits,
+} from "@banda/ui/components/banda-mark"
 import { HarnessLogo } from "@banda/ui/components/harness-logo"
 import { ago } from "@banda/ui/lib/words"
 import { cn } from "@banda/ui/lib/utils"
@@ -118,7 +123,7 @@ function Piece({
       return name ? <HarnessLogo id={listed.harness} name={name} /> : null
     }
     case "status":
-      return <Status row={row} />
+      return <Status listed={row.listed} />
     case "note": {
       const text = listed.calls ?? listed.said
       if (!text) return <span className="min-w-0 flex-1" />
@@ -144,8 +149,8 @@ function Piece({
  * What calls the Person, in its colour; the running turn's timer; or how
  * long ago it last changed.
  */
-function Status({ row }: { row: Arranged }) {
-  const { mark, changed, began } = row.listed
+export function Status({ listed }: { listed: Listed }) {
+  const { mark, changed, began } = listed
   switch (mark) {
     case "asking":
       return <Word className="text-attention">{MARK_WORDS.asking}</Word>
@@ -206,13 +211,24 @@ export function elapsed(ms: number): string {
 const HUES = [350, 25, 85, 160, 210, 280]
 
 /** A Space's badge: its initials on its own hue. */
-/** A Thread's mark, as the sidebar and the Banda menu show it: green
- * once done. */
+/** The colour a mark calls in: a question's, a failure's, done's green. */
+export function toneOf(mark: MarkState): string | undefined {
+  if (mark === "asking") return "text-attention"
+  if (mark === "failed" || mark === "offline") return "text-destructive"
+  if (mark === "done") return "text-added"
+  return undefined
+}
+
+/** A Thread's mark, as the sidebar and the Banda menu show it, in its
+ * colour. */
 export function ThreadMark({
   listed,
+  news,
   className,
 }: {
   listed: Listed
+  /** As `BandaMark`'s. */
+  news?: boolean
   className?: string
 }) {
   return (
@@ -220,12 +236,9 @@ export function ThreadMark({
       variant="agent"
       state={listed.mark}
       playful={0}
+      news={news}
       label={MARK_WORDS[listed.mark]}
-      className={cn(
-        "size-4 shrink-0",
-        listed.mark === "done" && "text-added",
-        className
-      )}
+      className={cn("size-4 shrink-0", toneOf(listed.mark), className)}
     />
   )
 }

@@ -2416,6 +2416,38 @@ test("Alt+U goes to the Thread that calls", async () => {
   await expect(calls).toBeHidden()
 })
 
+test("the bar's middle counts who works and who waits while the sidebar is closed, and a row opens its Thread", async () => {
+  window = await startWindow()
+  const { page } = window
+  const { composer } = await firstThread(page)
+  const bar = page.getByRole("banner")
+  const counts = bar.getByRole("button", { name: /working|done/ })
+  await sendAndGoBelow(page, composer, "slow hello")
+  // The sidebar shows the same, so the bar leaves it out.
+  await expect(
+    page.getByRole("complementary", { name: "Sidebar" })
+  ).toBeVisible()
+  await expect(counts).toBeHidden()
+
+  await bar.getByRole("button", { name: /^Sidebar/ }).click()
+  await expect(bar.getByRole("button", { name: "1 working" })).toBeVisible()
+  const done = bar.getByRole("button", { name: "1 done" })
+  await expect(done).toBeVisible()
+  await page.screenshot({ path: "test-results/25-bar-counts.png" })
+
+  await done.click()
+  const row = page.getByRole("menuitem", { name: /slow hello/ })
+  await expect(page.getByRole("group", { name: "Wait for you" })).toContainText(
+    "slow hello"
+  )
+  await page.screenshot({ path: "test-results/25-bar-counts-list.png" })
+  await row.click()
+  const thread = page.getByRole("region", { name: "slow hello" })
+  await expect(thread).toHaveAttribute("data-focused", "true")
+  // Seen, it is counted no more, and with nothing to count the middle is empty.
+  await expect(counts).toBeHidden()
+})
+
 test("a Thread that finishes behind another window sends a system notification, and its click goes there", async () => {
   window = await startWindow()
   const { app, page } = window

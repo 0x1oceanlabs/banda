@@ -21,6 +21,7 @@ decided:
 - Nothing goes on the workspaces' numbers for now.
 - The middle stays empty. "A Pane has its own header; I don't see the
   point of repeating it in the bar."
+  ADR 0035 later put the sidebar's counts there, and nothing else.
 - The widgets on the right are good, and the limits are Banda's own, not
   read from Omarchy's records.
 - The numbers stay as niri has them (ADR 0005, decision 7). Roma first

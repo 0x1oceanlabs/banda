@@ -23,6 +23,10 @@
     "row": {
       "description": "What a Thread's row shows.",
       "$ref": "#/$defs/RowSettings"
+    },
+    "bar": {
+      "description": "The counts in the bar's middle: who waits for you, who works.",
+      "$ref": "#/$defs/BarSettings"
     }
   },
   "additionalProperties": false,
@@ -264,6 +268,95 @@
           "description": "Pushes the rest of the line to the right.",
           "type": "string",
           "const": "~"
+        }
+      ]
+    },
+    "BarSettings": {
+      "type": "object",
+      "properties": {
+        "show": {
+          "description": "When they show.",
+          "$ref": "#/$defs/BarShow"
+        },
+        "counts": {
+          "description": "What is counted, in this order; a count of none is left out.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/Count"
+          }
+        },
+        "color": {
+          "description": "A question in the attention colour, a failure in red, done in green.",
+          "type": "boolean"
+        },
+        "words": {
+          "description": "Words beside the numbers.",
+          "type": "boolean"
+        },
+        "empty": {
+          "description": "What shows with nothing to count.",
+          "$ref": "#/$defs/BarEmpty"
+        }
+      },
+      "additionalProperties": false
+    },
+    "BarShow": {
+      "description": "When the bar's middle shows the sidebar's counts.",
+      "oneOf": [
+        {
+          "description": "While the sidebar is closed: it shows the same.",
+          "type": "string",
+          "const": "closed"
+        },
+        {
+          "description": "Always, the sidebar open or not.",
+          "type": "string",
+          "const": "always"
+        },
+        {
+          "description": "Never.",
+          "type": "string",
+          "const": "never"
+        }
+      ]
+    },
+    "Count": {
+      "description": "What the bar's middle counts, each with its mark.",
+      "oneOf": [
+        {
+          "description": "Threads that ask the Person, or failed: they need an answer.",
+          "type": "string",
+          "const": "asking"
+        },
+        {
+          "description": "Threads that finished and the Person has not seen.",
+          "type": "string",
+          "const": "done"
+        },
+        {
+          "description": "Both of those: every Thread that waits for the Person.",
+          "type": "string",
+          "const": "waiting"
+        },
+        {
+          "description": "Threads at work.",
+          "type": "string",
+          "const": "working"
+        }
+      ]
+    },
+    "BarEmpty": {
+      "description": "What the bar's middle shows with nothing to count.",
+      "oneOf": [
+        {
+          "description": "Nothing.",
+          "type": "string",
+          "const": "hide"
+        },
+        {
+          "description": "A sleeping mark.",
+          "type": "string",
+          "const": "mark"
         }
       ]
     }

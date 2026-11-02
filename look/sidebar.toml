@@ -34,3 +34,10 @@ preset = "inbox"
 # line1 = ["mark", "space", "~", "status"]
 # line2 = ["title"]
 # line3 = ["note", "~", "harness"]
+
+# [bar]                              # who waits for you and who works, in the bar's middle
+# show = "closed"                    # "closed" (while the sidebar is), "always" or "never"
+# counts = ["asking", "done", "working"]  # in this order: "asking" (asks or failed), "done", "waiting" (both), "working"
+# color = true                       # a question in orange, a failure in red, done in green
+# words = false                      # words beside the numbers
+# empty = "hide"                     # nothing to count: "hide", or "mark" a sleeping mark

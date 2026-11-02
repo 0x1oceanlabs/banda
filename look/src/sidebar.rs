@@ -96,6 +96,45 @@ pub enum Part {
     Push,
 }
 
+/// When the bar's middle shows the sidebar's counts.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize, TS, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+#[ts(export, export_to = "sidebar/")]
+pub enum BarShow {
+    /// While the sidebar is closed: it shows the same.
+    Closed,
+    /// Always, the sidebar open or not.
+    Always,
+    /// Never.
+    Never,
+}
+
+/// What the bar's middle shows with nothing to count.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize, TS, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+#[ts(export, export_to = "sidebar/")]
+pub enum BarEmpty {
+    /// Nothing.
+    Hide,
+    /// A sleeping mark.
+    Mark,
+}
+
+/// What the bar's middle counts, each with its mark.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize, TS, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+#[ts(export, export_to = "sidebar/")]
+pub enum Count {
+    /// Threads that ask the Person, or failed: they need an answer.
+    Asking,
+    /// Threads that finished and the Person has not seen.
+    Done,
+    /// Both of those: every Thread that waits for the Person.
+    Waiting,
+    /// Threads at work.
+    Working,
+}
+
 /// How the sidebar arranges Threads: a preset, and the keys that change
 /// it. A preset file in sidebars/ takes the same keys; every key is
 /// optional.
@@ -117,6 +156,9 @@ pub struct SidebarSettings {
     /// What a Thread's row shows.
     #[serde(default)]
     pub row: RowSettings,
+    /// The counts in the bar's middle: who waits for you, who works.
+    #[serde(default)]
+    pub bar: BarSettings,
 }
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
@@ -172,6 +214,21 @@ pub struct RowSettings {
     pub line3: Option<Vec<Part>>,
 }
 
+#[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields, rename_all = "kebab-case")]
+pub struct BarSettings {
+    /// When they show.
+    pub show: Option<BarShow>,
+    /// What is counted, in this order; a count of none is left out.
+    pub counts: Option<Vec<Count>>,
+    /// A question in the attention colour, a failure in red, done in green.
+    pub color: Option<bool>,
+    /// Words beside the numbers.
+    pub words: Option<bool>,
+    /// What shows with nothing to count.
+    pub empty: Option<BarEmpty>,
+}
+
 /// The arrangement the window draws, every key resolved.
 #[derive(Clone, Debug, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
@@ -188,6 +245,7 @@ pub struct Sidebar {
     pub sort: Sort,
     pub spaces: Spaces,
     pub row: Row,
+    pub bar: BarCounts,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, TS)]
@@ -257,6 +315,18 @@ pub struct Row {
     pub layout: Option<Vec<Vec<Part>>>,
 }
 
+/// The counts in the bar's middle, as the window draws them.
+#[derive(Clone, Debug, PartialEq, Serialize, TS)]
+#[ts(export, export_to = "sidebar/")]
+pub struct BarCounts {
+    pub show: BarShow,
+    /// What is counted, in this order.
+    pub counts: Vec<Count>,
+    pub color: bool,
+    pub words: bool,
+    pub empty: BarEmpty,
+}
+
 /// Banda's presets: files in this crate, so they are examples too.
 pub const BUILT_IN: [(&str, &str); 3] = [
     ("inbox", include_str!("../sidebars/inbox.toml")),
@@ -297,6 +367,13 @@ impl SidebarSettings {
                 line2: self.row.line2.or(under.row.line2),
                 line3: self.row.line3.or(under.row.line3),
             },
+            bar: BarSettings {
+                show: self.bar.show.or(under.bar.show),
+                counts: self.bar.counts.or(under.bar.counts),
+                color: self.bar.color.or(under.bar.color),
+                words: self.bar.words.or(under.bar.words),
+                empty: self.bar.empty.or(under.bar.empty),
+            },
         }
     }
 
@@ -327,6 +404,13 @@ impl SidebarSettings {
                 line1: None,
                 line2: None,
                 line3: None,
+            },
+            bar: BarSettings {
+                show: Some(BarShow::Closed),
+                counts: Some(vec![Count::Asking, Count::Done, Count::Working]),
+                color: Some(true),
+                words: Some(false),
+                empty: Some(BarEmpty::Hide),
             },
         }
     }
@@ -363,6 +447,13 @@ impl SidebarSettings {
                 lines: all.row.lines.map_or(3, Spanned::into_inner),
                 hide: all.row.hide.unwrap_or_default(),
                 layout: (!layout.is_empty()).then_some(layout),
+            },
+            bar: BarCounts {
+                show: all.bar.show.unwrap_or(BarShow::Closed),
+                counts: all.bar.counts.unwrap_or_default(),
+                color: all.bar.color.unwrap_or(true),
+                words: all.bar.words.unwrap_or(false),
+                empty: all.bar.empty.unwrap_or(BarEmpty::Hide),
             },
         }
     }
@@ -558,6 +649,11 @@ mod tests {
         assert_eq!(sidebar.group.bottom, vec![State::Working, State::Settled]);
         assert_eq!(sidebar.group.folded, ["settled"]);
         assert_eq!(sidebar.row.lines, 3);
+        assert_eq!(sidebar.bar.show, BarShow::Closed);
+        assert_eq!(
+            sidebar.bar.counts,
+            [Count::Asking, Count::Done, Count::Working]
+        );
         let names: Vec<_> = sidebar.presets.iter().map(|p| p.name.as_str()).collect();
         assert_eq!(names, ["inbox", "spaces", "places"]);
     }
@@ -575,6 +671,23 @@ mod tests {
         assert_eq!(sidebar.preset, "spaces");
         assert_eq!(sidebar.group.by, GroupBy::Space, "from the preset");
         assert_eq!(sidebar.row.lines, 2, "the Person's key");
+    }
+
+    #[test]
+    fn the_bar_s_counts_are_the_person_s_to_change() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("sidebar.toml"),
+            "[bar]\nshow = \"always\"\ncounts = [\"waiting\", \"working\"]\nwords = true\n",
+        )
+        .unwrap();
+        let (sidebar, problems) = resolved(dir.path());
+        assert!(problems.is_empty(), "{problems:?}");
+        assert_eq!(sidebar.bar.show, BarShow::Always);
+        assert_eq!(sidebar.bar.counts, [Count::Waiting, Count::Working]);
+        assert!(sidebar.bar.words);
+        assert!(sidebar.bar.color, "Banda's");
+        assert_eq!(sidebar.bar.empty, BarEmpty::Hide, "Banda's");
     }
 
     #[test]

@@ -10,7 +10,7 @@ import { Spinner } from "@banda/ui/components/spinner"
 import { cn } from "@banda/ui/lib/utils"
 import { type Attention, QUIET } from "@banda/ui/pane"
 import { PlusIcon, TriangleAlertIcon } from "lucide-react"
-import { useEffect, useLayoutEffect, useRef } from "react"
+import { type ReactNode, useEffect, useLayoutEffect, useRef } from "react"
 import type { Problem, Workspaces } from "@banda/contract/look"
 import { useLookBar, useLookProblems } from "../look"
 import type { InBar } from "../workspaces/model"
@@ -22,8 +22,8 @@ import { BarMotion } from "./motion"
  * the work, with how many things wait for the Person when more than one
  * does; then the workspaces, as numbers or dots, and the empty one at the
  * bottom as a `+`. A click on another goes there; on the current one,
- * opens the overview. More comes later as small icons, once real use asks
- * for them.
+ * opens the overview. The middle holds the sidebar's counts (ADR 0035),
+ * centred on the window whatever the sides hold.
  */
 export function Bar({
   status,
@@ -34,6 +34,7 @@ export function Bar({
   onSidebar,
   onPick,
   problems,
+  middle,
 }: {
   status: Status
   /** What the modules' work calls the Person for, for the mark to show. */
@@ -47,6 +48,8 @@ export function Bar({
   onPick: (index: number) => void
   /** What the window finds wrong in the files besides, as in keys.toml. */
   problems: readonly Problem[]
+  /** What sits in the bar's middle. */
+  middle?: ReactNode
 }) {
   const mark = loudest([attention.mark, markOf(status)])
   const { waiting } = attention
@@ -54,7 +57,7 @@ export function Bar({
     (mark === "rest" ? "" : ` · ${MARK_WORDS[mark]}`) +
     (waiting > 1 ? ` · ${waiting} wait for you` : "")
   return (
-    <header className="flex h-(--bar-height) shrink-0 items-center gap-1 border-b border-(--bar-rule) px-1.5">
+    <header className="relative flex h-(--bar-height) shrink-0 items-center gap-1 border-b border-(--bar-rule) px-1.5">
       <Button
         variant="ghost"
         size="icon-sm"
@@ -79,6 +82,9 @@ export function Bar({
         current={current}
         onPick={onPick}
       />
+      <div className="absolute top-1/2 left-1/2 flex -translate-1/2 items-center">
+        {middle}
+      </div>
       <div className="ml-auto flex items-center">
         <LookProblems more={problems} />
         <Connection status={status} />

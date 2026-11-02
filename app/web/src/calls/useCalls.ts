@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import type { SpaceId } from "@banda/contract"
-import { MARK_ORDER } from "@banda/ui/components/banda-mark"
+import { callOrder } from "@banda/ui/components/banda-mark"
 import type { Listed } from "@banda/ui/pane"
 import { type Chime, player, type SoundSettings } from "@banda/ui/sound"
 import type { Notify } from "@banda/contract/look"
@@ -228,12 +228,12 @@ export function useCalls(
   return { hear, leave, calling, toasts, hold, dismiss, seen }
 }
 
-/**
- * The call to answer first: the loudest, then the one that called first,
- * as Hyprland's `focusurgentorlast` goes (ADR 0011, decision 5).
- */
+/** The call to answer first, in the order calls are answered. */
 export function first(calling: readonly Heard[]): Heard | undefined {
   return [...calling].sort(
-    (a, b) => MARK_ORDER[b.chime] - MARK_ORDER[a.chime] || a.since - b.since
+    callOrder(
+      (call) => call.chime,
+      (call) => call.since
+    )
   )[0]
 }
