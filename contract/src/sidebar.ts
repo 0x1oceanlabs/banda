@@ -19,6 +19,10 @@ export type { State } from "./generated/sidebar/State"
 export type { Empty } from "./generated/sidebar/Empty"
 export type { Preset } from "./generated/sidebar/Preset"
 export type { PresetOrigin } from "./generated/sidebar/PresetOrigin"
+export type { BarCounts } from "./generated/sidebar/BarCounts"
+export type { BarShow } from "./generated/sidebar/BarShow"
+export type { BarEmpty } from "./generated/sidebar/BarEmpty"
+export type { Count } from "./generated/sidebar/Count"
 
 /** Banda's arrangement, the `inbox` preset: what `banda look` gives with
  * no files, for before the first look and outside the desktop. */
@@ -41,4 +45,11 @@ export const DEFAULT_SIDEBAR: Sidebar = {
   sort: { by: "attention" },
   spaces: { list: false, order: "changed", rollup: true, newThread: true },
   row: { lines: 3, hide: [] },
+  bar: {
+    show: "closed",
+    counts: ["asking", "done", "working"],
+    color: true,
+    words: false,
+    empty: "hide",
+  },
 }

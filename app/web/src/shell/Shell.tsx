@@ -9,6 +9,7 @@ import { DEFAULT_KEYS } from "@banda/contract/look"
 import type { Action, WindowApi } from "@banda/ui/module"
 import { actionFor, rebind } from "../actions/actions"
 import { Bar } from "../bar/Bar"
+import { Counts } from "../bar/Counts"
 import { type Lists, Watches } from "../bar/Watches"
 import { isShowing, sightOf } from "../calls/sight"
 import { SUMMARY } from "../calls/system"
@@ -418,6 +419,7 @@ export function Shell({
       ? zoom
       : undefined
   if (zoom !== undefined && zoomed === undefined) setZoom(undefined)
+  const sidebarShown = sidebar && !zoomed
   // Each Alt+C brings the focused column to the middle, once.
   const [center, setCenter] = useState(0)
   const toCenter = useCallback(() => setCenter((n) => n + 1), [])
@@ -652,6 +654,14 @@ export function Shell({
         sidebar={sidebar}
         onSidebar={toggleSidebar}
         problems={keyed.problems}
+        middle={
+          <Counts
+            lists={lists}
+            spaces={spaces}
+            sidebarShown={sidebarShown}
+            onOpen={openPane}
+          />
+        }
         onPick={(index) =>
           index === workspaces.current
             ? toggleOverview()
@@ -660,9 +670,9 @@ export function Shell({
       />
       <div
         className="relative flex min-h-0 flex-1"
-        data-sidebar-shown={(sidebar && !zoomed) || undefined}
+        data-sidebar-shown={sidebarShown || undefined}
       >
-        {sidebar && !zoomed && (
+        {sidebarShown && (
           <Sidebar
             onMenu={() => setMenu(openingAt("root"))}
             onSettings={() => settings()}

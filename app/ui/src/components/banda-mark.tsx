@@ -68,6 +68,19 @@ export function works(state: MarkState): boolean {
   return state === "running" || state === "thinking"
 }
 
+/**
+ * The order things that call are answered in: the loudest, then the one
+ * that called first, as Hyprland's `focusurgentorlast` goes (ADR 0011,
+ * decision 5).
+ */
+export function callOrder<T>(
+  mark: (thing: T) => MarkState,
+  since: (thing: T) => number
+): (a: T, b: T) => number {
+  return (a, b) =>
+    MARK_ORDER[mark(b)] - MARK_ORDER[mark(a)] || since(a) - since(b)
+}
+
 /** Plain words for each state, for a title or a screen reader. */
 export const MARK_WORDS: Record<MarkState, string> = {
   rest: "Nothing runs",
@@ -84,6 +97,7 @@ export function BandaMark({
   state = "rest",
   variant = "logo",
   playful = 30,
+  news = true,
   label,
   className,
 }: {
@@ -92,6 +106,11 @@ export function BandaMark({
   variant?: "logo" | "agent"
   /** Seconds between the logo's tricks while at rest; 0 for none. */
   playful?: number
+  /**
+   * Whether the state it is first drawn in is news: `done` flips into it.
+   * False for a mark drawn again for what already was, as a list opening.
+   */
+  news?: boolean
   /** Names the mark for a screen reader; without it the mark is decoration. */
   label?: string
   className?: string
@@ -112,8 +131,8 @@ export function BandaMark({
   }, [variant])
 
   useEffect(() => {
-    animator.current?.set({ state, playful })
-  }, [state, playful, variant])
+    animator.current?.set({ state, playful, news })
+  }, [state, playful, news, variant])
 
   const logo = variant === "logo"
   return (
@@ -431,7 +450,7 @@ const STATES: Record<Exclude<MarkState, "rest">, Motion> = {
   },
   // Once: a flip, then it smiles until the state changes.
   done: (t, time) => {
-    if (t < 1.9) return TRICKS.flip(t)
+    if (t < TRICK_LENGTH.flip) return TRICKS.flip(t)
     const b = sin((2 * PI * time) / 2.4)
     return {
       ...BASE,
@@ -819,7 +838,15 @@ class Animator {
     this.svg.removeEventListener("pointerleave", this.leave)
   }
 
-  set({ state, playful }: { state: MarkState; playful: number }) {
+  set({
+    state,
+    playful,
+    news,
+  }: {
+    state: MarkState
+    playful: number
+    news: boolean
+  }) {
     const now = performance.now() / 1000
     this.playful = playful
     const shown = this.logo && state === "idle" ? "rest" : state
@@ -842,7 +869,10 @@ class Animator {
       this.later(now)
     } else {
       this.next = Infinity
-      this.go(STATES[shown], now, LEAP * 0.8)
+      // Done that is no news smiles without the flip.
+      const flipped =
+        !this.began && !news && shown === "done" ? TRICK_LENGTH.flip : 0
+      this.go(STATES[shown], now - flipped, LEAP * 0.8)
     }
   }
 
