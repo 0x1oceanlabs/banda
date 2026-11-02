@@ -11,4 +11,12 @@ fn main() {
         other => panic!("BANDA_CHANNEL is stable, dev or local, not {other:?}."),
     };
     println!("cargo::rustc-env=BANDA_FOLDER={folder}");
+
+    // Its version (decision 2): 0.X.Y or 0.X.Y-dev.N, or the workspace's.
+    println!("cargo::rerun-if-env-changed=BANDA_VERSION");
+    let version = std::env::var("BANDA_VERSION")
+        .ok()
+        .filter(|v| !v.is_empty())
+        .unwrap_or_else(|| std::env::var("CARGO_PKG_VERSION").unwrap());
+    println!("cargo::rustc-env=BANDA_VERSION={version}");
 }

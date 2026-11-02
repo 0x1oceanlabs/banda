@@ -44,7 +44,7 @@ use std::process::ExitCode;
 #[derive(Parser)]
 #[command(
     name = "banda",
-    version,
+    version = env!("BANDA_VERSION"),
     about = "Banda: a tiling workspace for working with Agents."
 )]
 struct Cli {
@@ -281,6 +281,7 @@ impl Failure {
 }
 
 fn main() -> ExitCode {
+    banda_kernel::set_version(env!("BANDA_VERSION"));
     let cli = Cli::parse();
     match cli.command {
         Command::Look { what, follow } => return look(what, follow),

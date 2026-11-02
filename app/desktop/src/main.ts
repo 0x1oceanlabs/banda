@@ -44,6 +44,7 @@ import { engineLayer } from "./engine"
 import { firstFrame, firstLook, lookLayer } from "./look"
 import { modules } from "./modules"
 import { channel, stateFolder } from "./channel"
+import { listApp } from "./entry"
 import { NoticeArg, Notices, RecordedDesktop } from "./notices"
 import { settingsLayer } from "./settings"
 import { ensure } from "./sidebar"
@@ -142,6 +143,7 @@ if (!app.requestSingleInstanceLock()) {
   app.quit()
 } else {
   app.on("second-instance", () => inFront())
+  listApp()
   void app.whenReady().then(ready)
 }
 

@@ -1,0 +1,39 @@
+// Packs the window, the engine and the page into one app (ADR 0033, step 2):
+// scripts/package.sh runs it once the engine, the page and main are built,
+// with the same BANDA_CHANNEL and BANDA_VERSION.
+import { CHANNELS, DESCRIPTION } from "./src/channel.ts"
+
+const channel = CHANNELS[process.env.BANDA_CHANNEL || "local"]
+if (!channel) throw new Error("BANDA_CHANNEL is stable, dev or local.")
+const version = process.env.BANDA_VERSION
+if (!version) throw new Error("BANDA_VERSION names the version to pack.")
+
+/** @type {import("electron-builder").Configuration} */
+export default {
+  appId: channel.appId,
+  productName: channel.name,
+  executableName: channel.folder,
+  // The packed package.json: the app's name, version and description, and
+  // its entry's name, as main names the window's class (src/main.ts).
+  extraMetadata: {
+    name: channel.folder,
+    version,
+    description: DESCRIPTION,
+    desktopName: `${channel.folder}.desktop`,
+  },
+  // Main and its preload are bundled (build.mjs); the packages it leaves
+  // out of the bundle come from node_modules.
+  files: ["out/**"],
+  // Where main looks for them packed: resources/banda and resources/web/dist.
+  extraResources: [
+    { from: "../../target/release/banda", to: "banda" },
+    { from: "../web/dist", to: "web/dist" },
+  ],
+  artifactName: `${channel.folder}-\${version}-\${arch}.\${ext}`,
+  linux: { icon: channel.icon, category: "Development" },
+  // The static runtime, with FUSE 3 inside: it runs where only fuse3 is,
+  // as on Omarchy, with no libfuse2.
+  toolsets: { appimage: "1.0.3" },
+  // Releases are published by the release workflow (step 3), not here.
+  publish: null,
+}
