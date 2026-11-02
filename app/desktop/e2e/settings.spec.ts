@@ -1,11 +1,6 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
-import {
-  type ElectronApplication,
-  expect,
-  type Page,
-  test,
-} from "@playwright/test"
+import { expect, type Locator, type Page, test } from "@playwright/test"
 import { firstThread, startWindow, type Window } from "./window"
 
 /** A file's text, empty until it is written: `expect.poll` stops at a
@@ -15,31 +10,30 @@ const textOf = (file: string) =>
 
 let window: Window
 
-/** Alt+, in `page`, and the settings window it opens. */
-async function openSettings(
-  app: ElectronApplication,
-  page: Page
-): Promise<Page> {
+/** The settings Pane in `page`. */
+const settingsIn = (page: Page): Locator =>
+  page.getByRole("region", { name: "Settings", exact: true })
+
+/** Alt+, in `page`, and the settings Pane it opens. */
+async function openSettings(page: Page): Promise<Locator> {
   await page.keyboard.press("Alt+Comma")
-  const settingsPage = () =>
-    app.windows().find((shown) => shown.url().includes("#settings"))
-  await expect.poll(settingsPage).toBeTruthy()
-  return settingsPage()!
+  const settings = settingsIn(page)
+  await expect(settings).toBeVisible()
+  return settings
 }
 
 test.afterEach(async () => {
   await window?.close()
 })
 
-test("Alt+, opens the settings window, which writes the files and follows them (ADR 0016)", async () => {
+test("Alt+, opens the settings Pane, which writes the files and follows them (ADR 0016)", async () => {
   window = await startWindow({ look: "# Mine.\nradius = 6\n" })
   const { app, page, dir } = window
   const file = join(dir, "config/look.toml")
   const { composer } = await firstThread(page)
   await expect(composer).toBeVisible()
 
-  const settings = await openSettings(app, page)
-  await expect(settings).toHaveTitle("Banda Settings")
+  const settings = await openSettings(page)
   await expect(settings.getByRole("heading", { name: "General" })).toBeVisible()
   await settings
     .getByRole("navigation", { name: "Settings sections" })
@@ -63,7 +57,7 @@ test("Alt+, opens the settings window, which writes the files and follows them (
     .toBe("# Mine.\nradius = 6\n\n[tile]\nborder = 3\n")
   await expect(page.locator("html")).toHaveCSS("--tile-border", "3px")
   await expect(border).toContainText("look.toml:5")
-  await settings.screenshot({ path: "test-results/settings-appearance.png" })
+  await page.screenshot({ path: "test-results/settings-appearance.png" })
 
   // A value the file would not take is refused, said at the row.
   await field.fill("-1")
@@ -82,31 +76,35 @@ test("Alt+, opens the settings window, which writes the files and follows them (
   )
 
   // The search finds a row in any section, and goes to it.
-  await settings.keyboard.press("/")
-  await settings.keyboard.type("volume")
+  await page.keyboard.press("/")
+  await page.keyboard.type("volume")
   await settings.getByRole("button", { name: /Volume/ }).click()
   await expect(
     settings.getByRole("heading", { name: "Sounds & calls" })
   ).toBeVisible()
 
-  // One window: the sidebar's gear brings it forward, Esc closes it.
+  // One Pane, in the window: the sidebar's gear goes to it, where it is,
+  // and its × closes it.
   await page
     .getByRole("complementary", { name: "Sidebar" })
     .getByRole("button", { name: "Settings" })
     .click()
-  await expect.poll(() => app.windows().length).toBe(2)
-  // The window goes as the key goes down, so the press may not finish.
-  await settings.keyboard.down("Escape").catch(() => undefined)
-  await expect.poll(() => app.windows().length).toBe(1)
+  await expect(settings).toHaveCount(1)
+  await expect(
+    settings.getByRole("heading", { name: "Sounds & calls" })
+  ).toBeVisible()
+  expect(app.windows()).toHaveLength(1)
+  await settings.getByRole("button", { name: "Close settings" }).click()
+  await expect(settings).toHaveCount(0)
 })
 
 test("Agents show who is signed in to each Harness, and write harnesses.toml", async () => {
   window = await startWindow({ account: true, oldCli: true })
-  const { app, page, dir } = window
+  const { page, dir } = window
   const file = join(dir, "config/harnesses.toml")
   const { composer } = await firstThread(page)
   await expect(composer).toBeVisible()
-  const settings = await openSettings(app, page)
+  const settings = await openSettings(page)
   await settings
     .getByRole("navigation", { name: "Settings sections" })
     .getByRole("button", { name: /Agents/ })
@@ -130,7 +128,7 @@ test("Agents show who is signed in to each Harness, and write harnesses.toml", a
   await settings.screenshot({ path: "test-results/settings-agents.png" })
 
   await fake.getByRole("button", { name: "Sign out" }).click()
-  const asking = settings.getByRole("dialog", { name: "Sign out of Fake AI?" })
+  const asking = page.getByRole("dialog", { name: "Sign out of Fake AI?" })
   await asking.getByRole("button", { name: "Sign out" }).click()
   await expect(fake.getByText("Not signed in.")).toBeVisible()
 
@@ -145,7 +143,7 @@ test("Agents show who is signed in to each Harness, and write harnesses.toml", a
 
   // A new entry, and taking it out.
   await settings.getByRole("button", { name: /Add a Harness/ }).click()
-  const adding = settings.getByRole("dialog", { name: "Add a Harness" })
+  const adding = page.getByRole("dialog", { name: "Add a Harness" })
   await adding.getByLabel("Name").fill("Other Agent")
   await expect(adding.getByLabel("ID")).toHaveValue("other-agent")
   await adding.getByLabel("Command").fill("other-acp --stdio 'a b'")
@@ -160,7 +158,7 @@ test("Agents show who is signed in to each Harness, and write harnesses.toml", a
     other.getByRole("textbox", { name: "Other Agent command" })
   ).toHaveValue("other-acp --stdio 'a b'")
   await other.getByRole("button", { name: "Remove" }).click()
-  await settings
+  await page
     .getByRole("dialog", { name: "Remove Other Agent?" })
     .getByRole("button", { name: "Remove" })
     .click()
@@ -183,10 +181,10 @@ test("Agents show who is signed in to each Harness, and write harnesses.toml", a
 
 test("General, the sidebar's presets, and hearing a sound", async () => {
   window = await startWindow()
-  const { app, page, dir } = window
+  const { page, dir } = window
   const { composer } = await firstThread(page)
   await expect(composer).toBeVisible()
-  const settings = await openSettings(app, page)
+  const settings = await openSettings(page)
   const sections = settings.getByRole("navigation", {
     name: "Settings sections",
   })
@@ -225,11 +223,11 @@ test("Keys: the lines of keys.toml, a key changed and taken out, and the reset c
         '[binds]\n# mine\n"Alt+J" = "pane.close"\n"Alt+W" = "none"\n',
     },
   })
-  const { app, page, dir } = window
+  const { page, dir } = window
   const file = join(dir, "config/keys.toml")
   const { composer } = await firstThread(page)
   await expect(composer).toBeVisible()
-  const settings = await openSettings(app, page)
+  const settings = await openSettings(page)
   await settings
     .getByRole("navigation", { name: "Settings sections" })
     .getByRole("button", { name: /Keys/ })
@@ -245,10 +243,10 @@ test("Keys: the lines of keys.toml, a key changed and taken out, and the reset c
 
   // The next key pressed is the line's; one that would be typed is not.
   await close.getByRole("button", { name: "Change Alt+J" }).click()
-  await settings.keyboard.press("KeyQ")
+  await page.keyboard.press("KeyQ")
   await expect(close.getByRole("alert")).toContainText("would be typed")
   await close.getByRole("button", { name: "Change Alt+J" }).click()
-  await settings.keyboard.press("Alt+KeyQ")
+  await page.keyboard.press("Alt+KeyQ")
   await expect
     .poll(() => readFileSync(file, "utf8"))
     .toBe('[binds]\n# mine\n"Alt+Q" = "pane.close"\n"Alt+W" = "none"\n')
@@ -257,10 +255,12 @@ test("Keys: the lines of keys.toml, a key changed and taken out, and the reset c
     "keys.toml:3"
   )
 
-  // The reset chord brings the window's own keys back: Alt+Q is nothing
-  // again, and Alt+W closes the Pane.
+  // The reset chord brings the window's own keys back, and goes to Keys:
+  // Alt+Q is nothing again, and Alt+W closes the Pane.
   await composer.click()
   await page.keyboard.press("Control+Alt+Shift+KeyK")
+  await expect(settings).toHaveAttribute("data-focused", "true")
+  await composer.click()
   await page.keyboard.press("Alt+KeyQ")
   await expect(composer).toBeVisible()
   await page.keyboard.press("Alt+KeyW")

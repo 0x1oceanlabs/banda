@@ -1,5 +1,5 @@
 //! Each key of a settings file: the value it has, and the layer it comes
-//! from (ADR 0016, decision 6). The settings window shows both beside a
+//! from (ADR 0016, decision 6). The settings Pane shows both beside a
 //! row, and a ↶ for a key the Person's file sets.
 
 use crate::line_at;

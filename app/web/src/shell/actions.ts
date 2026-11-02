@@ -12,6 +12,7 @@ import { columnsOf } from "../look"
 import { type At, MENU_KEY } from "../menu/menu"
 import { modules } from "../modules"
 import { launcher, minOf, showsOf, widthOf } from "../registry"
+import { settingsPane } from "../settings/pane"
 import { floorOf } from "../workspaces/layout"
 import {
   bring,
@@ -19,6 +20,7 @@ import {
   consume,
   current,
   type Direction,
+  entries,
   focusEntry,
   focused,
   fresh,
@@ -30,6 +32,7 @@ import {
   shift,
   step,
   tabs,
+  update,
   widen,
   type Workspaces,
 } from "../workspaces/model"
@@ -50,6 +53,8 @@ export type Shell = WindowApi & {
   /** The window's own keys again, until keys.toml changes; the settings
    * open at Keys to mend it (ADR 0005, decision 11). */
   ownKeys: () => void
+  /** Opens the settings at `link`, a section and a row (ADR 0016). */
+  settings: (link?: string) => void
 }
 
 const ARROWS: Record<Direction, string> = {
@@ -112,6 +117,26 @@ export function answering(
   return entry
     ? focusEntry(workspaces, entry.id)
     : opening(workspaces, thing.space, thing.pane, undefined, "right")
+}
+
+/**
+ * Opens the settings Pane at `link` in `space`, or goes to the one a
+ * workspace shows, there when a link is given: one at a time.
+ */
+export function settingsAt(
+  workspaces: Workspaces,
+  space: SpaceId,
+  link = ""
+): Workspaces {
+  const pane = paneOf(settingsPane, { link })
+  const shown = entries(workspaces).find(
+    (entry) => entry.pane.kind === settingsPane.kind
+  )
+  if (!shown) return opening(workspaces, space, pane, undefined, "right")
+  return focusEntry(
+    link ? update(workspaces, shown.id, pane) : workspaces,
+    shown.id
+  )
 }
 
 /** Every action: the modules' (`modules.ts`), then the window's own. */
@@ -273,7 +298,7 @@ export const ACTIONS: readonly Action<Shell>[] = [
     section: "Banda",
     title: "Open the settings",
     keys: [{ code: "Comma", alt: true }],
-    run: () => window.banda?.settings.open(),
+    run: (shell) => shell.settings(),
   },
   {
     id: "keys.reset",

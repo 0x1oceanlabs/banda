@@ -1,5 +1,5 @@
 /**
- * The settings files, as the settings window reads them (ADR 0016): each
+ * The settings files, as the settings Pane reads them (ADR 0016): each
  * file's JSON Schema from its Rust structs, turned into rows. A new key in
  * Rust is a new row here, with no list kept by hand (decision 4).
  */

@@ -5,8 +5,8 @@
  * and writes the preset the page picks into `sidebar.toml` (ADR 0008);
  * nothing else crosses from Node to the page (docs/architecture.md,
  * "Processes"). The page shows the browser's pages, kept apart from it
- * (browser.ts, ADR 0013). Settings open in a window of their own, the same
- * page at `#settings` (settings.ts, ADR 0016).
+ * (browser.ts, ADR 0013). Settings are a Pane of the page; the desktop
+ * writes their files (settings.ts, ADR 0016).
  */
 import { join, resolve, sep } from "node:path"
 import { pathToFileURL } from "node:url"
@@ -128,8 +128,6 @@ const lookNow = () => runtime.runSync(Look.use((look) => look.current))
 let window: BrowserWindow | null = null
 /** The window that lets the desktop through, if one does (ADR 0023). */
 let clear: BrowserWindow | null = null
-/** The settings window; one at a time (ADR 0016, decision 1). */
-let settingsWindow: BrowserWindow | null = null
 
 /** How long the window waits for its look, so it opens in its colours. */
 const LOOK_WAIT = 300
@@ -147,11 +145,9 @@ async function ready(): Promise<void> {
     // prefers-color-scheme follow the look's mode.
     nativeTheme.themeSource = now.mode
     const background = firstFrame(now, nativeTheme.shouldUseDarkColors)
-    for (const shown of [window, settingsWindow]) {
-      if (background && shown && shown !== clear)
-        shown.setBackgroundColor(background)
-      shown?.webContents.send("look", lookIn(shown, now))
-    }
+    if (!window) return
+    if (background && window !== clear) window.setBackgroundColor(background)
+    window.webContents.send("look", lookIn(window, now))
   }
   runtime.runFork(
     Look.use((look) =>
@@ -233,12 +229,11 @@ async function ready(): Promise<void> {
     ([request, page]) =>
       Extensions.use((extensions) => extensions.created(request, page))
   )
-  // The settings window's (ADR 0016) and the Banda menu's (ADR 0017).
+  // The settings' (ADR 0016) and the Banda menu's (ADR 0017).
   on("settings.open", text, ([link]) =>
     Effect.sync(() => openSettings(linkOf(link)))
   )
   on("menu.open", text, ([route]) => Effect.sync(() => openMenu(route)))
-  on("settings.close", none, () => Effect.sync(() => settingsWindow?.close()))
   handle(
     "settings.set",
     Schema.Tuple([Schema.String, Schema.String, Schema.String]),
@@ -282,8 +277,8 @@ async function ready(): Promise<void> {
   if (first) nativeTheme.themeSource = first.mode
   Menu.setApplicationMenu(process.platform === "darwin" ? macMenu() : null)
   window = openWindow()
-  // `banda menu [route]` opens the Banda menu here, or the settings
-  // window at a route of its own (ADR 0017).
+  // `banda menu [route]` opens the Banda menu here, or the settings at a
+  // route of their own (ADR 0017).
   void runtime.runPromise(Engine.use((engine) => engine.door)).then((path) => {
     shutDoor = openDoor(path, { menu: openMenu })
   })
@@ -400,29 +395,9 @@ function linkOf(link: unknown): string {
   return typeof link === "string" && /^[a-z0-9./_-]*$/i.test(link) ? link : ""
 }
 
-/**
- * Opens the settings at `link`, or brings them forward there: one window,
- * the page at `#settings/<link>`. Hyprland tells it by its title.
- */
+/** Opens the settings Pane at `link` in the window, brought to the front. */
 function openSettings(link: string) {
-  if (settingsWindow) {
-    if (settingsWindow.isMinimized()) settingsWindow.restore()
-    settingsWindow.focus()
-    if (link) settingsWindow.webContents.send("settings:go", link)
-    return
-  }
-  const opened = pageWindow({
-    width: 960,
-    height: 680,
-    minWidth: 560,
-    minHeight: 400,
-    title: "Banda Settings",
-  })
-  void opened.loadURL(`${PAGE}#settings/${link}`)
-  opened.on("closed", () => {
-    settingsWindow = null
-  })
-  settingsWindow = opened
+  inFront()?.webContents.send("settings:open", link)
 }
 
 /** A window that shows Banda's page, in the look's first colour. */

@@ -3,8 +3,9 @@
  * `keys.toml`, each a key and the action it runs, in the frame every row
  * has. A line takes another key where it is, or ↶ takes it out. Every
  * action and all its keys are the key sheet's, Alt+K in the window (ADR
- * 0017, decision 9), so there is one list of keys; this opens it there. `banda settings` writes the file and checks
- * the key, and the look brings the keys back to both windows.
+ * 0017, decision 9), so there is one list of keys; this opens it there.
+ * `banda settings` writes the file and checks the key, and the look
+ * brings the keys back to the window.
  */
 import { useEffect, useState } from "react"
 import type { Bind } from "@banda/contract/look"
@@ -127,6 +128,8 @@ function Line({
         className="min-w-28"
         aria-label={`Change ${bind.text}`}
         title="Press another key for this line"
+        // While it asks, it takes every key, the window's own too.
+        data-takes-keys={asking ? "" : undefined}
         onClick={() => ask(!asking)}
       >
         {asking ? (

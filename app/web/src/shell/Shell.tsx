@@ -55,6 +55,7 @@ import {
   bringing,
   opening,
   runAction,
+  settingsAt,
   type Shell as Parts,
 } from "./actions"
 
@@ -242,10 +243,18 @@ export function Shell({
   useEffect(() => {
     saidNow.current = said
   }, [said])
+  // The settings Pane (ADR 0016), in the focused Pane's Space; the
+  // desktop's links open it too, as `banda menu settings.keys`.
+  const settings = useCallback(
+    (link?: string) =>
+      change((w) => settingsAt(w, focused(w)?.space ?? home, link)),
+    [change, home]
+  )
+  useEffect(() => window.banda?.settings.listen(settings), [settings])
   const ownKeys = useCallback(() => {
     setShipped(saidNow.current)
-    window.banda?.settings.open("keys")
-  }, [])
+    settings("keys")
+  }, [settings])
 
   const parts: Parts = useMemo(() => {
     const parts: Parts = {
@@ -267,6 +276,7 @@ export function Shell({
       settle,
       menu: toggleMenu,
       ownKeys,
+      settings,
       run: (action, args) => runAction(parts, action, args),
     }
     return parts
@@ -279,6 +289,7 @@ export function Shell({
     settle,
     toggleMenu,
     ownKeys,
+    settings,
   ])
   // The keys run the actions, before any Pane hears them. A dialog keeps
   // its keys, as the Banda menu its Alt+Enter, but for the menu's own.

@@ -1,5 +1,5 @@
 /**
- * The settings window's sections (ADR 0016, decision 8). Sections follow
+ * The settings Pane's sections (ADR 0016, decision 8). Sections follow
  * what a Person looks for, not the files: Sounds & calls is a section, yet
  * its keys stay in `look.toml`. A section names its file and the tables of
  * it that it shows; one that names none shows the tables no other section

@@ -5,7 +5,6 @@
  * every value is the look's, as `banda look --follow` read the files.
  */
 import { type ReactNode, useEffect, useMemo, useRef, useState } from "react"
-import type { Engine } from "@banda/contract"
 import type { Problem } from "@banda/contract/look"
 import { aboutOf, type Row, SCHEMAS } from "@banda/contract/settings"
 import { Button } from "@banda/ui/components/button"
@@ -17,34 +16,30 @@ import {
 } from "@banda/ui/components/input-group"
 import { ScrollArea } from "@banda/ui/components/scroll-area"
 import { cn } from "@banda/ui/lib/utils"
+import type { PaneProps } from "@banda/ui/pane"
 import { ExternalLinkIcon, SearchIcon, XIcon } from "lucide-react"
 import { problemWords } from "../bar/Bar"
 import { useLookProblems, useLookSettings } from "../look"
 import { groupsOf, parseLink, search, type Section, SECTIONS } from "./sections"
+import type { SettingsArgs } from "./pane"
 import { SettingRow } from "./SettingRow"
 
 const NONE: Problem[] = []
 
 export function Settings({
   engine,
-  link,
-  onClose,
-}: {
-  engine: Engine
-  /** Where it opens: a section and a row, `appearance/radius`. */
-  link: string
-  onClose: () => void
-}) {
-  const [at, setAt] = useState(() => parseLink(link))
+  args,
+  focused,
+  update,
+  close,
+}: PaneProps<SettingsArgs>) {
+  // Where it is lives in its args, so it comes back there.
+  const at = useMemo(() => parseLink(args.link ?? ""), [args.link])
   const [words, setWords] = useState("")
   const field = useRef<HTMLInputElement>(null)
   const keyed = useLookSettings()
   const problems = useLookProblems()
 
-  useEffect(
-    () => window.banda?.settings.listen((next) => setAt(parseLink(next))),
-    []
-  )
   // A link's row comes into view, lit.
   useEffect(() => {
     if (!at.key) return
@@ -52,7 +47,9 @@ export function Settings({
       .querySelector(`[data-key="${CSS.escape(at.key)}"]`)
       ?.scrollIntoView({ block: "center" })
   }, [at])
+  // While the Pane has the focus, / searches and Esc clears the search.
   useEffect(() => {
+    if (!focused) return
     const onKey = (event: KeyboardEvent) => {
       // A dialog over the window takes its own keys, Esc first.
       if (
@@ -61,17 +58,15 @@ export function Settings({
       )
         return
       const typing = event.target instanceof HTMLInputElement
-      if (event.key === "Escape") {
-        if (typing && field.current?.value) return setWords("")
-        onClose()
-      } else if (event.key === "/" && !typing) {
+      if (event.key === "Escape" && event.target === field.current) setWords("")
+      else if (event.key === "/" && !typing) {
         event.preventDefault()
         field.current?.focus()
       }
     }
     window.addEventListener("keydown", onKey)
     return () => window.removeEventListener("keydown", onKey)
-  }, [onClose])
+  }, [focused])
 
   // What is wrong in each settings file, and at which of its lines.
   const wrong = useMemo(() => {
@@ -89,7 +84,7 @@ export function Settings({
   const found = useMemo(() => (words.trim() ? search(words) : []), [words])
   const go = (next: Section, key?: string) => {
     setWords("")
-    setAt({ section: next, key })
+    update({ link: key ? `${next.id}/${key}` : next.id })
   }
   // A problem at a line a row's value is on shows at that row; the rest,
   // above the section.
@@ -127,138 +122,150 @@ export function Settings({
     (p) => !p.line || !atRows.has(p.line)
   )
 
+  // A Pane as wide as a column: in a narrow one, the sections are a row
+  // of icons over the page; in a wide one, a list beside it.
   return (
-    <div className="flex h-full bg-background text-foreground">
-      <nav
-        aria-label="Settings sections"
-        className="flex w-56 shrink-0 flex-col gap-0.5 border-r bg-sidebar/60 p-2"
-      >
-        <InputGroup className="mb-2">
-          <InputGroupAddon>
-            <SearchIcon />
-          </InputGroupAddon>
-          <InputGroupInput
-            ref={field}
-            value={words}
-            onChange={(event) => setWords(event.target.value)}
-            placeholder="Search settings"
-            aria-label="Search settings"
-          />
-          <InputGroupAddon align="inline-end">
-            <kbd className="text-[10px]">/</kbd>
-          </InputGroupAddon>
-        </InputGroup>
-        {SECTIONS.map((s) => (
-          <button
-            key={s.id}
-            type="button"
-            aria-current={s === section && !words ? "page" : undefined}
-            onClick={() => go(s)}
-            className={cn(
-              "flex items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-muted-foreground hover:bg-accent/60",
-              s === section && !words && "bg-accent text-foreground"
-            )}
-          >
-            <s.icon className="size-4" />
-            <span className="flex-1">{s.title}</span>
-            {s.file && (
-              <span className="font-mono text-[10px] opacity-70">{s.file}</span>
-            )}
-          </button>
-        ))}
-        <div
-          className={cn(
-            "mt-auto flex items-center gap-2 px-2 pt-2 text-xs text-muted-foreground",
-            first && "text-attention"
-          )}
+    <div className="@container h-full bg-background text-foreground">
+      <div className="flex h-full flex-col @3xl:flex-row">
+        <nav
+          aria-label="Settings sections"
+          className="flex shrink-0 flex-col gap-0.5 border-b bg-sidebar/60 p-2 @3xl:w-56 @3xl:border-r @3xl:border-b-0"
         >
-          <span
-            className={cn(
-              "size-1.5 rounded-full",
-              first ? "bg-attention" : "bg-primary"
-            )}
-          />
-          {first
-            ? `${nameOf(first.path)}${first.line ? `:${first.line}` : ""} is wrong`
-            : "Every file reads"}
-        </div>
-      </nav>
-      <main className="flex min-w-0 flex-1 flex-col">
-        <header className="flex h-10 shrink-0 items-center gap-1.5 border-b px-4 text-sm text-muted-foreground">
-          Settings <span>/</span>
-          <b className="font-medium text-foreground">
-            {words ? "Search" : section.title}
-          </b>
-          <Button
-            variant="ghost"
-            size="sm"
-            className="ml-auto text-muted-foreground"
-            aria-label="Close settings"
-            onClick={onClose}
-          >
-            <kbd className="text-[10px]">Esc</kbd>
-            <XIcon />
-          </Button>
-        </header>
-        <ScrollArea className="min-h-0 flex-1">
-          <div className="mx-auto flex max-w-2xl flex-col gap-4 px-6 py-6">
-            {words ? (
-              <Rows>
-                {found.length === 0 ? (
-                  <p className="px-4 py-3 text-sm text-muted-foreground">
-                    No setting says “{words.trim()}”.
-                  </p>
-                ) : (
-                  found.map(({ section: s, row: r }) => (
-                    <button
-                      key={`${s.id}:${r.key}`}
-                      type="button"
-                      className="flex w-full flex-col px-4 py-2 text-left hover:bg-accent/60"
-                      onClick={() => go(s, r.key)}
-                    >
-                      <span className="text-sm">{r.title}</span>
-                      <span className="text-xs text-muted-foreground">
-                        {s.title} · {r.file} · {r.key}
-                      </span>
-                    </button>
-                  ))
+          <InputGroup className="mb-1 @3xl:mb-2">
+            <InputGroupAddon>
+              <SearchIcon />
+            </InputGroupAddon>
+            <InputGroupInput
+              ref={field}
+              value={words}
+              onChange={(event) => setWords(event.target.value)}
+              placeholder="Search settings"
+              aria-label="Search settings"
+            />
+            <InputGroupAddon align="inline-end">
+              <kbd className="text-[10px]">/</kbd>
+            </InputGroupAddon>
+          </InputGroup>
+          <div className="flex gap-0.5 overflow-x-auto @3xl:flex-col">
+            {SECTIONS.map((s) => (
+              <button
+                key={s.id}
+                type="button"
+                title={s.title}
+                aria-current={s === section && !words ? "page" : undefined}
+                onClick={() => go(s)}
+                className={cn(
+                  "flex shrink-0 items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-muted-foreground hover:bg-accent/60",
+                  s === section && !words && "bg-accent text-foreground"
                 )}
-              </Rows>
-            ) : (
-              <>
-                <div className="flex items-start gap-4">
-                  <div className="flex-1">
-                    <h1 className="text-xl font-semibold">{section.title}</h1>
-                    <p className="text-sm text-muted-foreground">
-                      {section.about}
-                    </p>
-                  </div>
-                  {section.file && (
-                    <OpenFile file={section.file} words="Open file" />
-                  )}
-                </div>
-                {section.Body && <section.Body engine={engine} lit={at.key} />}
-                {groups}
-                {above.length > 0 && (
-                  <div
-                    role="alert"
-                    className="order-first rounded-lg border border-destructive/40 px-4 py-2 text-xs text-destructive"
-                  >
-                    {above.map((p) => (
-                      <p key={problemWords(p)}>{problemWords(p)}</p>
-                    ))}
-                  </div>
+              >
+                <s.icon className="size-4" />
+                <span className="sr-only flex-1 @3xl:not-sr-only">
+                  {s.title}
+                </span>
+                {s.file && (
+                  <span className="hidden font-mono text-[10px] opacity-70 @3xl:inline">
+                    {s.file}
+                  </span>
                 )}
-                {!section.file && !section.Body && <Files wrong={wrong} />}
-              </>
-            )}
+              </button>
+            ))}
           </div>
-        </ScrollArea>
-        <footer className="border-t px-4 py-2 text-xs text-muted-foreground">
-          Changes apply as you make them, written to the file with its comments
-          kept. Edit a file by hand and this window follows.
-        </footer>
-      </main>
+          <div
+            className={cn(
+              "mt-auto hidden items-center gap-2 px-2 pt-2 text-xs text-muted-foreground @3xl:flex",
+              first && "text-attention"
+            )}
+          >
+            <span
+              className={cn(
+                "size-1.5 rounded-full",
+                first ? "bg-attention" : "bg-primary"
+              )}
+            />
+            {first
+              ? `${nameOf(first.path)}${first.line ? `:${first.line}` : ""} is wrong`
+              : "Every file reads"}
+          </div>
+        </nav>
+        <main className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <header className="flex h-10 shrink-0 items-center gap-1.5 border-b px-4 text-sm text-muted-foreground">
+            Settings <span>/</span>
+            <b className="font-medium text-foreground">
+              {words ? "Search" : section.title}
+            </b>
+            <Button
+              variant="ghost"
+              size="sm"
+              className="ml-auto text-muted-foreground"
+              aria-label="Close settings"
+              onClick={close}
+            >
+              <XIcon />
+            </Button>
+          </header>
+          <ScrollArea className="min-h-0 flex-1">
+            <div className="mx-auto flex max-w-2xl flex-col gap-4 px-6 py-6">
+              {words ? (
+                <Rows>
+                  {found.length === 0 ? (
+                    <p className="px-4 py-3 text-sm text-muted-foreground">
+                      No setting says “{words.trim()}”.
+                    </p>
+                  ) : (
+                    found.map(({ section: s, row: r }) => (
+                      <button
+                        key={`${s.id}:${r.key}`}
+                        type="button"
+                        className="flex w-full flex-col px-4 py-2 text-left hover:bg-accent/60"
+                        onClick={() => go(s, r.key)}
+                      >
+                        <span className="text-sm">{r.title}</span>
+                        <span className="text-xs text-muted-foreground">
+                          {s.title} · {r.file} · {r.key}
+                        </span>
+                      </button>
+                    ))
+                  )}
+                </Rows>
+              ) : (
+                <>
+                  <div className="flex items-start gap-4">
+                    <div className="flex-1">
+                      <h1 className="text-xl font-semibold">{section.title}</h1>
+                      <p className="text-sm text-muted-foreground">
+                        {section.about}
+                      </p>
+                    </div>
+                    {section.file && (
+                      <OpenFile file={section.file} words="Open file" />
+                    )}
+                  </div>
+                  {section.Body && (
+                    <section.Body engine={engine} lit={at.key} />
+                  )}
+                  {groups}
+                  {above.length > 0 && (
+                    <div
+                      role="alert"
+                      className="order-first rounded-lg border border-destructive/40 px-4 py-2 text-xs text-destructive"
+                    >
+                      {above.map((p) => (
+                        <p key={problemWords(p)}>{problemWords(p)}</p>
+                      ))}
+                    </div>
+                  )}
+                  {!section.file && !section.Body && <Files wrong={wrong} />}
+                </>
+              )}
+            </div>
+          </ScrollArea>
+          <footer className="border-t px-4 py-2 text-xs text-muted-foreground">
+            Changes apply as you make them, written to the file with its
+            comments kept. Edit a file by hand and the settings follow.
+          </footer>
+        </main>
+      </div>
     </div>
   )
 }

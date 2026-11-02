@@ -3,7 +3,7 @@ status: accepted
 date: 2026-11-01
 ---
 
-# Settings is a window that edits the files
+# Settings is a Pane that edits the files
 
 ADR 0005 (decision 11) made Banda's config text files in `~/.config/banda/` and promised that "the settings page edits the same files, so there is one source of truth". ADR 0007 put that page last, after a `look.set` and MCP tools. Roma then dropped those: "всё делать через конфиг файлы", so Agents and people edit the files themselves.
 
@@ -15,7 +15,7 @@ By 2026-11-01 there are three files:
 
 Only the sidebar's view menu writes a file from the window. The Harnesses Pane shows each Harness and signs in and out. What Enter does in the composer is kept in the window's localStorage, outside every file.
 
-Roma asked for a visual settings module where Claude Code, Codex and the rest are connected too, looking at how T3 Code does it. Roma decided it opens as a window.
+Roma asked for a visual settings module where Claude Code, Codex and the rest are connected too, looking at how T3 Code does it. Roma first decided it opens as a window, then, once it was built, that it opens in a Pane (decision 1).
 
 **What T3 Code does.** Read from its source on 2026-11-01:
 
@@ -34,20 +34,22 @@ Roma asked for a visual settings module where Claude Code, Codex and the rest ar
 
 **Decision.**
 
-1. **Settings is a window of its own** (_decided_: "отдельное окно").
-   - It is a second Electron window, class `banda-settings`. Only one is open at a time, and opening it again brings it forward. Esc closes it.
+1. **Settings is a Pane** (_decided_ 2026-11-02: "настройки должны открываться в пайне не отдельным окном"; first "отдельное окно").
+   - It is the window's own Pane, `window.settings`, opened as any Pane is: right of the focused Pane, in its Space. Only one is open at a time; opening it again goes to it, on whatever workspace it is. Its × closes it, as the Pane's close key does.
+   - **Why not a window.** Banda is where a Person works, in its workspaces and with its keys. A second window was one more for the desktop to place, outside both; a Pane sits beside the Thread it is changing, moves and widens as every other, and the keys stay Banda's.
    - **Ways to open it:**
      - Alt+, (comma).
      - The Banda menu (ADR 0017), which also finds each row.
      - A gear at the bottom of the sidebar (_decided_).
      - Wherever a setting is the answer: a Thread's "Sign in" opens Agents at that Harness.
-   - A link names a section and a row, such as `agents/codex`.
-   - What the window shows is a Pane, `settings`, built like every other Pane, so it can also open in the Strip. The Harnesses Pane becomes its Agents section.
+   - A link names a section and a row, such as `agents/codex`. The Pane keeps its link in its args, so it comes back where it was.
+   - In a narrow column the sections are a row of icons over the page; from 48 rem wide, a list beside it, as the mockup has it.
+   - The Harnesses Pane becomes its Agents section.
 
-2. **The files stay the one source, and the window only edits them.**
+2. **The files stay the one source, and the Pane only edits them.**
    - The window keeps no setting of its own. Its storage keeps state only: workspaces, drafts and what was seen. The Enter key's choice moves into a file.
    - A change applies at once, with no Save button. A text field writes on Enter or when it loses focus.
-   - A hand edit shows as soon as the file is saved. The window shows what the follower read, never a copy of its own.
+   - A hand edit shows as soon as the file is saved. The Pane shows what the follower read, never a copy of its own.
    - A file with a mistake is not hidden. Its row names the file, the line and what is wrong. The last good value stays in force (ADR 0005, decision 11), and "Show line" opens the file at that line.
 
 3. **One file per module** (_decided_: "по файлу на модуль").
@@ -63,11 +65,11 @@ Roma asked for a visual settings module where Claude Code, Codex and the rest ar
 4. **Each setting is described once, in Rust.**
    - Each file's settings are already Rust structs with a doc comment on each key. They also derive a JSON Schema with `schemars`: each key's type, its default, the values or range it allows, and its doc comment as the description.
    - **The schemas go into the contract**, as ts-rs exports the types (ADR 0014). From them:
-     - the window builds its rows, its search and its ↶;
+     - the Pane builds its rows, its search and its ↶;
      - Banda's skill shows every key (ADR 0012);
      - each template file starts with a `#:schema` line, so an editor completes and checks the keys as the Person types.
    - **Custom rows.** A row that a schema cannot draw well comes as a component the module gives for that section, such as a theme with its preview or a Harness with its sign-in. One row component draws everything else.
-   - So a new key shows in the window, the search and the skill with no list kept by hand.
+   - So a new key shows in the Pane, its search and the skill with no list kept by hand.
 
 5. **One program writes, and keeps the Person's text.**
    - `banda settings` runs without the engine, as `banda look` does (ADR 0007, decision 10).
@@ -75,11 +77,11 @@ Roma asked for a visual settings module where Claude Code, Codex and the rest ar
      - `reset <file> <key>` takes the key out, and the layer below shows again.
      - `check [files]` checks every file Banda reads; `banda look check` stays.
    - It writes whole or not at all: a new file, then a rename. A file that is a link stays one, as `sidebar.toml` is written today.
-   - The desktop calls it for the window, and the page never touches a file.
+   - The desktop calls it for the Pane, and the page never touches a file.
    - An Agent need not use it. It edits the file and checks it, as Roma decided for the look.
 
 6. **Each value says where it comes from.**
-   - For each key, the follower reports the layer that set it: Banda's default, the theme, Hyprland, or the Person's file and its line. The window shows this beside the control.
+   - For each key, the follower reports the layer that set it: Banda's default, the theme, Hyprland, or the Person's file and its line. The Pane shows this beside the control.
    - A key the Person set has a dot and a ↶. One that follows Hyprland or the theme says so.
 
 7. **Agents, as T3 Code's providers.**
@@ -117,3 +119,4 @@ Roma asked for a visual settings module where Claude Code, Codex and the rest ar
   5. Agents: the Harnesses Pane moves in, the window writes `harnesses.toml`, and the engine reads it again on a change.
   6. Sidebar, Sounds & calls, and General, with the Enter key moving into `agents.toml`.
   7. Keys, with `keys.toml`: the file's lines, each a key and its action, a key changed or taken out; the key sheet (Alt+K) keeps the one list of every action, and the section opens it; and the reset chord.
+  8. Settings move from their own window into a Pane (decision 1, 2026-11-02).
