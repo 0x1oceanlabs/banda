@@ -658,8 +658,12 @@ modules/*/desktop  a module's part in Electron main
 - **One list of actions** (`app/web/src/shell/actions.ts`) holds what the
   window does, the modules' actions and its own, each with a name, its
   key sheet section and a default key, by its physical place.
-  Alt is the mod: Arrows focus, Shift+Arrows move, Ctrl+Arrows step the
-  width, Return opens a new Thread, Shift+Return a new browser, N a new Pane, W closes, O the overview,
+  Alt is the mod: Arrows focus, Shift+Arrows move, Ctrl+Left and Right
+  step the width and Ctrl+Up and Down the Pane's height, Shift+R its next
+  height, Ctrl+R even ones, Ctrl+F the room left, C the middle, Home and
+  End the first and last column (with Shift, moved there), Shift+F the
+  zoom, Return opens a new Thread, Shift+Return a new browser, N a new
+  Pane (then a letter picks it), W closes, O the overview,
   PageUp and PageDown the workspace above or below, 1…9 go to one,
   Shift+1…9 move the Pane there, A shows or hides the sidebar. The window
   takes these keys before any Pane hears them; a terminal gets every other

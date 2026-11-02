@@ -38,15 +38,16 @@ export type { Move } from "./generated/look/Move"
 export type { Spring } from "./generated/look/Spring"
 export type { Easing } from "./generated/look/Easing"
 
-/** Banda's own columns, niri's: what `banda look` gives with no files. */
 /**
  * Where the desktop serves the picture Banda's glass is made of, the
  * look's wallpaper and no other file (ADR 0023).
  */
 export const WALLPAPER_URL = "app://banda/desk/wallpaper"
 
+/** Banda's own columns, niri's: what `banda look` gives with no files. */
 export const DEFAULT_COLUMNS: Columns = {
   presets: ["1/3", "1/2", "2/3", "1"],
+  heights: ["1/3", "1/2", "2/3"],
   default: "1/2",
   alone: "1",
   center: "never",

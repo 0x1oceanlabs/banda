@@ -75,8 +75,11 @@ export function resolve(
           pane: { kind: pane.kind, args: pane.args as PaneState["args"] },
         }
         if (pane.by !== undefined) next.by = pane.by
+        if (pane.height !== undefined) next.height = pane.height
         const old = was.entries.get(pane.id)
-        return old && samePane(old, next) ? old : next
+        return old && samePane(old, next) && old.height === next.height
+          ? old
+          : next
       })
       const next: Column = {
         id: column.id,
@@ -275,6 +278,7 @@ export function keptOf(state: Workspaces): Kept[] {
         kind: entry.pane.kind,
         args: entry.pane.args,
         ...(entry.by !== undefined && { by: entry.by }),
+        ...(entry.height !== undefined && { height: entry.height }),
       })),
       ...(column.width !== undefined && { width: column.width }),
       full: column.full === true,
@@ -398,8 +402,8 @@ export function columnMoved(
   }
 }
 
-/** What changed of the focused column, its width, the whole screen or
- * how it shows its Panes, as a command. */
+/** What changed of the focused column, its width, the whole screen, how
+ * it shows its Panes or its Panes' heights, as a command. */
 export function resized(
   before: Workspaces,
   next: Workspaces
@@ -439,7 +443,22 @@ export function resized(
       },
     }
   }
-  return undefined
+  const changed = now.entries.find(
+    (entry, e) => entry.height !== was.entries[e]?.height
+  )
+  if (!changed) return undefined
+  if (now.entries.every((entry) => entry.height === undefined)) {
+    return { command: { method: "workspaces.even", params: { column } } }
+  }
+  return {
+    command: {
+      method: "workspaces.height",
+      params: {
+        pane: changed.id,
+        ...(changed.height !== undefined && { height: changed.height }),
+      },
+    },
+  }
 }
 
 /**

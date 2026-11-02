@@ -15,8 +15,8 @@ import type { MarkState } from "./components/banda-mark"
 /**
  * Marks where a program reads the keys, as in a terminal. Banda's Alt keys
  * still work there; everything else is the program's, and the window
- * hands it a key Banda takes when Ctrl is added: Ctrl+Alt+F reaches the
- * program as Alt+F. Spread it on the element: `<div {...PROGRAM_KEYS} />`.
+ * hands it a key Banda takes when Ctrl is added: Ctrl+Alt+W reaches the
+ * program as Alt+W. Spread it on the element: `<div {...PROGRAM_KEYS} />`.
  */
 export const PROGRAM_KEYS = { "data-keys": "program" } as const
 
@@ -101,6 +101,9 @@ export type PaneKind<A extends { [key: string]: JsonValue }> = {
   icon: LucideIcon
   /** When set, a Person can open the Pane from the menu with these args. */
   start?: A
+  /** The letter that opens it from the launcher, after Alt+N (ADR 0025,
+   * decision 4): `T`. */
+  letter?: string
   /** A list that sits beside other Panes: it opens a third of the screen wide. */
   narrow?: boolean
   /**

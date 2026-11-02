@@ -172,6 +172,11 @@ _Avoid_: Desk.
 How a workspace lays out its Panes: columns side by side that scroll
 sideways, each holding Panes one above another.
 
+**Zoom**:
+One Pane over the whole window, with no gaps and no sidebar, until the
+Person zooms it back or looks at another (`Alt+Shift+F`). Only the window
+knows it; the arrangement stays as it was.
+
 **Overview**:
 Every workspace zoomed out at once, to pick a Pane or a workspace.
 

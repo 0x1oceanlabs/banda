@@ -20,17 +20,21 @@ import {
   type Plan,
   resized,
 } from "../workspaces/arrange"
-import { floorOf } from "../workspaces/layout"
+import { floorOf, roomLeft } from "../workspaces/layout"
 import {
   bring,
   consume,
   current,
   type Direction,
+  edge,
   entries,
+  even,
+  fill,
   focusEntry,
   focused,
   fresh,
   go,
+  heighten,
   maximize,
   move,
   open,
@@ -40,6 +44,7 @@ import {
   shift,
   step,
   tabs,
+  toEdge,
   widen,
   type Workspaces,
 } from "../workspaces/model"
@@ -58,6 +63,10 @@ export type Shell = WindowApi & {
   change: (how: (workspaces: Workspaces) => Step) => void
   toggleSidebar: () => void
   toggleOverview: () => void
+  /** Shows the focused Pane over the whole window, or brings it back. */
+  zoom: () => void
+  /** Brings the focused column to the middle of the screen, once. */
+  center: () => void
   /** Goes to what calls the Person first (ADR 0011, decision 5). */
   answer: () => void
   /** Settles what the Person looks at, or brings it back (ADR 0008). */
@@ -82,6 +91,10 @@ const ARROWS: Record<Direction, string> = {
 }
 const DIRECTIONS = Object.keys(ARROWS) as Direction[]
 const NUMBERS = [1, 2, 3, 4, 5, 6, 7, 8, 9]
+const EDGES = [
+  { side: "first", code: "Home" },
+  { side: "last", code: "End" },
+] as const
 
 /**
  * Steps the focused column's width through the look's presets, by what
@@ -98,6 +111,11 @@ function resize(shell: Shell, by: 1 | -1, wrap = false) {
   })
 }
 
+/** Steps the focused Pane's height through the look's `heights`. */
+function heightening(shell: Shell, by: 1 | -1, wrap = false) {
+  shell.change((w) => resized(w, heighten(w, by, columnsOf(), { wrap })))
+}
+
 /** Moves the focused Pane as `how` would: sideways its whole column. */
 function shifting(w: Workspaces, direction: Direction): Step {
   const workspace = current(w)
@@ -108,6 +126,14 @@ function shifting(w: Workspaces, direction: Direction): Step {
   return direction === "left" || direction === "right"
     ? columnMoved(next, column.id)
     : moved(next, entry.id)
+}
+
+/** Moves the focused column to the first or the last place. */
+function movedTo(w: Workspaces, side: "first" | "last"): Step {
+  const workspace = current(w)
+  const column = workspace.columns[workspace.focus]
+  const next = toEdge(w, side)
+  return column && next !== w ? columnMoved(next, column.id) : undefined
 }
 
 /** Moves the focused Pane where `how` puts it, and follows it. */
@@ -244,8 +270,83 @@ export const ACTIONS: readonly Action<Shell>[] = [
     id: "column.previous-width",
     section: "Columns",
     title: "The column's previous width, round",
-    keys: [{ code: "KeyR", alt: true, shift: true }],
+    // Alt+Shift+R is the height now, as niri's; Alt+Ctrl+Left steps back.
     run: (shell) => resize(shell, -1, true),
+  },
+  {
+    id: "column.fill",
+    section: "Columns",
+    title: "The column as wide as the room the others leave",
+    // As niri's Mod+Ctrl+F.
+    keys: [{ code: "KeyF", alt: true, ctrl: true }],
+    run: (shell) =>
+      shell.change((w) => {
+        const width = roomLeft(current(w))
+        return width === undefined ? undefined : resized(w, fill(w, width))
+      }),
+  },
+  {
+    id: "column.center",
+    section: "Columns",
+    title: "The column in the middle of the screen",
+    // As niri's Mod+C.
+    keys: [{ code: "KeyC", alt: true }],
+    run: (shell) => shell.center(),
+  },
+  // As niri's Mod+Home and End, and Mod+Ctrl+Home and End.
+  ...EDGES.flatMap(({ side, code }) => [
+    {
+      id: `column.${side}`,
+      section: "Columns",
+      title: `Focus the ${side} column`,
+      keys: [{ code, alt: true }],
+      run: (shell: Shell) => shell.change((w) => edge(w, side)),
+    },
+    {
+      id: `column.move-${side}`,
+      section: "Columns",
+      title: `Move the column to the ${side} place`,
+      keys: [{ code, alt: true, shift: true }],
+      run: (shell: Shell) => shell.change((w) => movedTo(w, side)),
+    },
+  ]),
+  {
+    id: "pane.next-height",
+    section: "Panes",
+    title: "The Pane's next height in its column, round",
+    // As niri's Mod+Shift+R.
+    keys: [{ code: "KeyR", alt: true, shift: true }],
+    run: (shell) => heightening(shell, 1, true),
+  },
+  {
+    id: "pane.taller",
+    section: "Panes",
+    title: "Make the Pane taller",
+    keys: [{ code: "ArrowDown", alt: true, ctrl: true }],
+    run: (shell) => heightening(shell, 1),
+  },
+  {
+    id: "pane.shorter",
+    section: "Panes",
+    title: "Make the Pane shorter",
+    keys: [{ code: "ArrowUp", alt: true, ctrl: true }],
+    run: (shell) => heightening(shell, -1),
+  },
+  {
+    id: "column.even",
+    section: "Columns",
+    title: "Every Pane of the column as high as the others",
+    // As niri's Mod+Ctrl+R.
+    keys: [{ code: "KeyR", alt: true, ctrl: true }],
+    run: (shell) => shell.change((w) => resized(w, even(w))),
+  },
+  {
+    id: "pane.zoom",
+    section: "Panes",
+    title: "The Pane over the whole window, or back",
+    // As niri's Mod+Shift+F, fullscreen in the window.
+    keys: [{ code: "KeyF", alt: true, shift: true }],
+    run: (shell) => shell.zoom(),
   },
   {
     id: "column.tabs",

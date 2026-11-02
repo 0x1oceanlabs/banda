@@ -1,6 +1,7 @@
 //! `[columns]`, as niri's: the widths a column steps through, the width a
-//! new one opens at, and whether the focused one stays centred (ADR 0007,
-//! decision 2).
+//! new one opens at, whether the focused one stays centred (ADR 0007,
+//! decision 2), and the heights a Pane steps through in its column (ADR
+//! 0025, decision 4).
 //!
 //! A width is a share of the screen as a fraction, `"1/3"`, or `"1"` for
 //! all of it. `min` keeps a share of a narrow window readable: no column
@@ -17,6 +18,10 @@ pub struct ColumnsSettings {
     /// What Alt+Ctrl+Left and Right step through.
     #[schemars(with = "Option<Vec<String>>")]
     pub presets: Option<Vec<Spanned<String>>>,
+    /// What Alt+Shift+R and Alt+Ctrl+Up and Down step a Pane's height
+    /// through, as shares of its column.
+    #[schemars(with = "Option<Vec<String>>")]
+    pub heights: Option<Vec<Spanned<String>>>,
     /// A new column's width, where its Pane does not ask for its own.
     #[schemars(with = "Option<String>")]
     pub default: Option<Spanned<String>>,
@@ -62,6 +67,7 @@ pub enum Display {
 #[ts(export, export_to = "look/")]
 pub struct Columns {
     pub presets: Vec<String>,
+    pub heights: Vec<String>,
     pub default: String,
     pub alone: String,
     pub center: Center,
@@ -70,6 +76,7 @@ pub struct Columns {
 }
 
 const PRESETS: [&str; 4] = ["1/3", "1/2", "2/3", "1"];
+const HEIGHTS: [&str; 3] = ["1/3", "1/2", "2/3"];
 const DEFAULT: &str = "1/2";
 const ALONE: &str = "1";
 /// A Thread's lines stay readable at 30 rem, about 60 letters.
@@ -91,6 +98,23 @@ pub fn share(width: &str) -> Option<f64> {
     (value.is_finite() && value > 0.0 && value <= 1.0).then_some(value)
 }
 
+/// The valid shares of `list`, smallest first and each once; `or` when
+/// none is.
+fn steps(list: &Option<Vec<Spanned<String>>>, or: &[&str]) -> Vec<String> {
+    let mut steps: Vec<(f64, String)> = (list.iter().flatten())
+        .filter_map(|p| {
+            let text = valid(p)?;
+            Some((share(&text)?, text))
+        })
+        .collect();
+    steps.sort_by(|a, b| a.0.total_cmp(&b.0));
+    steps.dedup_by(|a, b| (a.0 - b.0).abs() < 1e-9);
+    if steps.is_empty() {
+        return or.iter().map(|p| (*p).to_owned()).collect();
+    }
+    steps.into_iter().map(|(_, text)| text).collect()
+}
+
 /// A width as written, trimmed, when it is one.
 fn valid(width: &Spanned<String>) -> Option<String> {
     let text = width.get_ref().trim();
@@ -103,6 +127,7 @@ impl ColumnsSettings {
     pub fn over(self, under: ColumnsSettings) -> ColumnsSettings {
         ColumnsSettings {
             presets: self.presets.or(under.presets),
+            heights: self.heights.or(under.heights),
             default: self.default.or(under.default),
             alone: self.alone.or(under.alone),
             center: self.center.or(under.center),
@@ -115,6 +140,7 @@ impl ColumnsSettings {
         let spanned = |s: &str| Spanned::new(0..0, s.to_owned());
         ColumnsSettings {
             presets: Some(PRESETS.iter().map(|p| spanned(p)).collect()),
+            heights: Some(HEIGHTS.iter().map(|p| spanned(p)).collect()),
             default: Some(spanned(DEFAULT)),
             alone: Some(spanned(ALONE)),
             center: Some(Center::Never),
@@ -125,13 +151,15 @@ impl ColumnsSettings {
 
     pub fn problems(&self) -> Vec<(Option<std::ops::Range<usize>>, String)> {
         let mut problems = Vec::new();
-        for preset in self.presets.iter().flatten() {
-            if share(preset.get_ref()).is_none() {
-                problems.push((Some(preset.span()), format!("columns.presets: {WIDTH}")));
+        for (key, list) in [("presets", &self.presets), ("heights", &self.heights)] {
+            for preset in list.iter().flatten() {
+                if share(preset.get_ref()).is_none() {
+                    problems.push((Some(preset.span()), format!("columns.{key}: {WIDTH}")));
+                }
             }
-        }
-        if self.presets.as_ref().is_some_and(Vec::is_empty) {
-            problems.push((None, "columns.presets needs one width at least".to_owned()));
+            if list.as_ref().is_some_and(Vec::is_empty) {
+                problems.push((None, format!("columns.{key} needs one share at least")));
+            }
         }
         for (key, width) in [("default", &self.default), ("alone", &self.alone)] {
             if let Some(width) = width
@@ -152,22 +180,6 @@ impl ColumnsSettings {
     }
 
     pub fn resolve(&self) -> Columns {
-        let mut presets: Vec<(f64, String)> = self
-            .presets
-            .iter()
-            .flatten()
-            .filter_map(|p| {
-                let text = valid(p)?;
-                Some((share(&text)?, text))
-            })
-            .collect();
-        presets.sort_by(|a, b| a.0.total_cmp(&b.0));
-        presets.dedup_by(|a, b| (a.0 - b.0).abs() < 1e-9);
-        let presets = if presets.is_empty() {
-            PRESETS.iter().map(|p| (*p).to_owned()).collect()
-        } else {
-            presets.into_iter().map(|(_, text)| text).collect()
-        };
         let width = |width: &Option<Spanned<String>>, or: &str| {
             width
                 .as_ref()
@@ -175,7 +187,8 @@ impl ColumnsSettings {
                 .unwrap_or_else(|| or.to_owned())
         };
         Columns {
-            presets,
+            presets: steps(&self.presets, &PRESETS),
+            heights: steps(&self.heights, &HEIGHTS),
             default: width(&self.default, DEFAULT),
             alone: width(&self.alone, ALONE),
             center: self.center.unwrap_or(Center::Never),
@@ -216,6 +229,10 @@ mod tests {
         assert_eq!(mine.problems().len(), 1);
         let columns = mine.over(ColumnsSettings::defaults()).resolve();
         assert_eq!(columns.presets, ["2/5", "1"]);
+        assert_eq!(columns.heights, ["1/3", "1/2", "2/3"]);
+        let tall = read("[columns]\nheights = [\"3/4\", \"1/4\", \"tall\"]\n");
+        assert_eq!(tall.problems().len(), 1);
+        assert_eq!(tall.resolve().heights, ["1/4", "3/4"]);
         assert_eq!(columns.default, "1/2");
         assert_eq!(columns.alone, "1");
         assert_eq!(columns.display, Display::Stack);

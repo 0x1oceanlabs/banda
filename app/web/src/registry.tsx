@@ -6,6 +6,7 @@
  */
 import type { JsonValue } from "@banda/contract"
 import { Button } from "@banda/ui/components/button"
+import { Kbd } from "@banda/ui/components/kbd"
 import { useModules } from "@banda/ui/hooks/use-status"
 import {
   type AnyPaneKind,
@@ -21,6 +22,7 @@ import {
   type Watch,
 } from "@banda/ui/pane"
 import { LayoutGridIcon } from "lucide-react"
+import { useEffect, useLayoutEffect, useRef } from "react"
 import { columnsOf } from "./look"
 import { modules } from "./modules"
 import { settingsPane } from "./settings/pane"
@@ -125,14 +127,42 @@ export function startable(engineModules: readonly string[]): PaneState[] {
     .map((kind) => paneOf(kind, kind.start!))
 }
 
-function Launcher({ engine, open }: PaneProps<Args>) {
+/**
+ * The launcher: a button for each Pane, which it becomes. While it has the
+ * focus a letter picks one, as each button shows, Alt held or not; with
+ * Shift the Pane opens beside it, and the launcher stays (ADR 0025,
+ * decision 4).
+ */
+function Launcher({ engine, open, focused }: PaneProps<Args>) {
+  const modules = useModules(engine)
+  const now = useRef({ modules, open })
+  useLayoutEffect(() => {
+    now.current = { modules, open }
+  })
+  useEffect(() => {
+    if (!focused) return
+    const onKey = (event: KeyboardEvent) => {
+      // Alt may still be held from Alt+N; a key an action took is its.
+      if (event.ctrlKey || event.metaKey || event.repeat) return
+      if (event.defaultPrevented) return
+      const pane = startable(now.current.modules).find(
+        (pane) => event.code === `Key${kindOf(pane.kind)?.letter}`
+      )
+      if (!pane) return
+      event.preventDefault()
+      now.current.open(pane, event.shiftKey ? "right" : "here")
+    }
+    window.addEventListener("keydown", onKey)
+    return () => window.removeEventListener("keydown", onKey)
+  }, [focused])
   return (
     <div className="flex h-full flex-col items-center justify-center gap-3 p-6">
       <p className="text-sm text-muted-foreground">
         What should this tile show?
       </p>
       <Choices
-        modules={useModules(engine)}
+        modules={modules}
+        letters
         onPick={(pane) => open(pane, "here")}
       />
     </div>
@@ -142,9 +172,12 @@ function Launcher({ engine, open }: PaneProps<Args>) {
 /** A button for each Pane a Person can start. */
 export function Choices({
   modules,
+  letters = false,
   onPick,
 }: {
   modules: readonly string[]
+  /** Each button shows the letter that picks it. */
+  letters?: boolean
   onPick: (pane: PaneState) => void
 }) {
   return (
@@ -160,6 +193,9 @@ export function Choices({
           >
             <Icon />
             {kind.title(pane.args)}
+            {letters && kind.letter && (
+              <Kbd className="ml-1">{kind.letter}</Kbd>
+            )}
           </Button>
         )
       })}

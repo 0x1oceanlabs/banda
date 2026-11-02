@@ -82,6 +82,12 @@ pub struct Pane {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub by: Option<AgentId>,
+    /// The share of its column's height the Person gave it, such as
+    /// `"1/3"`. Left out, it shares what the others leave evenly with the
+    /// rest left out (ADR 0025, decision 4).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub height: Option<String>,
 }
 
 /// How much of a Pane a caller sees (ADR 0032).
@@ -258,6 +264,7 @@ pub fn open(
         id: PaneId::new(),
         shows: shown,
         by,
+        height: None,
     };
     let id = pane.id;
     if let Some(other) = instead {
@@ -361,7 +368,9 @@ pub fn move_pane(list: &mut Arrangement, pane: PaneId, place: &Place) -> Result<
     }
     let at = spot(list, pane)?;
     let from = &mut list[at.workspace].columns;
-    let moving = from[at.column].panes.remove(at.pane);
+    let mut moving = from[at.column].panes.remove(at.pane);
+    // Its height was of the column it leaves.
+    moving.height = None;
     let column = if from[at.column].panes.is_empty() {
         if matches!(*place, Place::Stack { column, .. } if column == from[at.column].id) {
             from[at.column].panes.push(moving);
@@ -404,6 +413,23 @@ pub fn size(
     let column = column_mut(list, column)?;
     column.width = width;
     column.full = false;
+    Ok(())
+}
+
+/// Gives a Pane its share of its column's height, left out for an even
+/// one, as niri's window heights.
+pub fn height(list: &mut Arrangement, pane: PaneId, height: Option<String>) -> Result<(), Refusal> {
+    check_height(height.as_deref())?;
+    let at = spot(list, pane)?;
+    list[at.workspace].columns[at.column].panes[at.pane].height = height;
+    Ok(())
+}
+
+/// Makes every Pane of a column as high as the others.
+pub fn even(list: &mut Arrangement, column: ColumnId) -> Result<(), Refusal> {
+    for pane in &mut column_mut(list, column)?.panes {
+        pane.height = None;
+    }
     Ok(())
 }
 
@@ -456,6 +482,7 @@ pub fn take(list: &mut Arrangement, taken: Arrangement) -> Result<(), Refusal> {
             fresh &= ids.insert(column.id.to_string());
             for pane in &column.panes {
                 check_shown(&pane.shows)?;
+                check_height(pane.height.as_deref())?;
                 fresh &= ids.insert(pane.id.to_string());
             }
         }
@@ -500,9 +527,17 @@ fn check_shown(shown: &Shown) -> Result<(), Refusal> {
 }
 
 fn check_width(width: Option<&str>) -> Result<(), Refusal> {
-    match width {
-        Some(width) if share(width).is_none() => Err(Refusal::invalid(format!(
-            "\"{width}\" is no width: a share of the screen, such as \"1/2\" or \"1\"."
+    check_share(width, "width", "screen")
+}
+
+fn check_height(height: Option<&str>) -> Result<(), Refusal> {
+    check_share(height, "height", "column")
+}
+
+fn check_share(value: Option<&str>, what: &str, of: &str) -> Result<(), Refusal> {
+    match value {
+        Some(value) if share(value).is_none() => Err(Refusal::invalid(format!(
+            "\"{value}\" is no {what}: a share of the {of}, such as \"1/2\" or \"1\"."
         ))),
         _ => Ok(()),
     }
@@ -546,6 +581,33 @@ mod tests {
 
     fn beside(pane: PaneId, side: Side) -> Option<Place> {
         Some(Place::Beside { pane, side })
+    }
+
+    #[test]
+    fn a_pane_keeps_its_height_in_its_column_until_it_leaves_or_all_are_even() {
+        let mut list = start();
+        let work = SpaceId::new();
+        let one = opened(&mut list, shown(work, "a.a", 1), None);
+        let two = opened(&mut list, shown(work, "a.a", 2), beside(one, Side::Below));
+        let three = opened(&mut list, shown(work, "a.a", 3), beside(two, Side::Below));
+        let height_of = |list: &Arrangement, pane| {
+            let at = spot(list, pane).unwrap();
+            list[at.workspace].columns[at.column].panes[at.pane]
+                .height
+                .clone()
+        };
+        height(&mut list, two, Some("1/3".into())).unwrap();
+        height(&mut list, three, Some("1/2".into())).unwrap();
+        assert_eq!(height_of(&list, two).as_deref(), Some("1/3"));
+        assert!(height(&mut list, one, Some("3/2".into())).is_err());
+        assert_eq!(height_of(&list, one), None);
+
+        // Moved to a column of its own, it leaves its height behind.
+        move_pane(&mut list, three, &beside(one, Side::Right).unwrap()).unwrap();
+        assert_eq!(height_of(&list, three), None);
+        let column = list[0].columns[0].id;
+        even(&mut list, column).unwrap();
+        assert_eq!(height_of(&list, two), None);
     }
 
     #[test]
@@ -871,6 +933,7 @@ mod tests {
             id: PaneId::new(),
             shows: shown(work, "a.a", n),
             by: None,
+            height: None,
         };
         let column = |panes| Column {
             id: ColumnId::new(),
