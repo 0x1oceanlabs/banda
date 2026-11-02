@@ -12,11 +12,7 @@ import {
   useSyncExternalStore,
 } from "react"
 import { newId } from "@banda/contract"
-import {
-  type Browser as Settings,
-  DEFAULT_BROWSER,
-  fileOf,
-} from "@banda/contract/look"
+import { BROWSER_FILE, type Browser as Settings } from "@banda/contract/look"
 import { Button } from "@banda/ui/components/button"
 import {
   DropdownMenu,
@@ -33,7 +29,7 @@ import { PaneHeader } from "@banda/ui/components/pane-header"
 import { RingMeter } from "@banda/ui/components/ring-meter"
 import { Spinner } from "@banda/ui/components/spinner"
 import { TopLayer } from "@banda/ui/components/top-layer"
-import { useLook } from "@banda/ui/lib/look"
+import { useFile } from "@banda/ui/lib/look"
 import { cn } from "@banda/ui/lib/utils"
 import { definePane, HOLDS, type PaneProps } from "@banda/ui/pane"
 import {
@@ -109,10 +105,7 @@ function titleOf(tab: Tab): string {
 }
 
 function BrowserPane({ args, focused, update, close }: PaneProps<BrowserArgs>) {
-  const settings = useLook(
-    (look) => fileOf(look.files, "browser.toml", DEFAULT_BROWSER),
-    DEFAULT_BROWSER
-  )
+  const settings = useFile(BROWSER_FILE)
   // Any page's change draws the tabs again: their titles, icons, loads.
   const version = useSyncExternalStore(watchPages, pagesVersion)
   const [first] = useState(newId)

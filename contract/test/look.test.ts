@@ -3,14 +3,13 @@ import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { expect, test } from "vitest"
-import { DEFAULT_AGENTS } from "../src/agents"
+import { AGENTS_FILE } from "../src/agents"
 import {
-  DEFAULT_BROWSER,
+  BROWSER_FILE,
   DEFAULT_COLUMNS,
   DEFAULT_KEYS,
   DEFAULT_MOTION,
   type Look,
-  fileOf,
   shown,
 } from "../src/look"
 import { DEFAULT_SIDEBAR } from "../src/sidebar"
@@ -110,6 +109,6 @@ test("the window's own module files are what banda look gives with none", () => 
     }
   )
   const { files } = JSON.parse(printed) as Look
-  expect(fileOf(files, "browser.toml", null)).toEqual(DEFAULT_BROWSER)
-  expect(fileOf(files, "agents.toml", null)).toEqual(DEFAULT_AGENTS)
+  expect(files[BROWSER_FILE.name]).toEqual(BROWSER_FILE.before)
+  expect(files[AGENTS_FILE.name]).toEqual(AGENTS_FILE.before)
 })

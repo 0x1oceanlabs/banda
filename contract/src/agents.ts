@@ -5,6 +5,7 @@
 import type { Event } from "./generated/Event"
 import type { Agents } from "./generated/agents/Agents"
 import type { Fact } from "./generated/agents/Fact"
+import type { ModuleFile } from "./look"
 import { VERSION } from "./generated/agents/VERSION"
 
 export type { Account } from "./generated/agents/Account"
@@ -110,3 +111,9 @@ export function decodeFact(event: Event): Fact | null {
 /** How messages are sent with no `agents.toml`, as `banda look` gives it:
  * for before the first look. */
 export const DEFAULT_AGENTS: Agents = { enter: "steer" }
+
+/** The agents module's `agents.toml`. */
+export const AGENTS_FILE: ModuleFile<Agents> = {
+  name: "agents.toml",
+  before: DEFAULT_AGENTS,
+}

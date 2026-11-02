@@ -61,6 +61,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 use ts_rs::TS;
+use turn::ReplyEffect;
 
 /// The module's settings files in `~/.config/banda` (ADR 0016): how
 /// messages are sent, which the look resolves for the window, and the
@@ -73,7 +74,6 @@ pub const SETTINGS: [banda_look::SettingsFile; 2] = [
         settings::check,
     ),
 ];
-use turn::ReplyEffect;
 
 pub struct Agents {
     harnesses: Harnesses,

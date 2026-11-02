@@ -278,11 +278,13 @@ mod every_key {
     #[test]
     fn every_key_of_a_schema_has_a_value_and_where_it_comes_from() {
         let folder = tempfile::tempdir().unwrap();
-        let look = banda_look::resolve(&Places::at(folder.path()), &|| None, &also()).look;
+        let also = also();
+        let look = banda_look::resolve(&Places::at(folder.path()), &|| None, &also).look;
         let mut named = Vec::new();
-        // A file the look only checks, as the Harness list, has no keys
-        // in it.
-        for file in files().filter(|file| file.name != "harnesses.toml") {
+        // The look's files and the modules' it resolves; one it only
+        // checks, as the Harness list, has no keys in it.
+        let resolved = also.iter().filter(|file| file.resolves());
+        for file in banda_look::FILES.iter().chain(resolved) {
             let name = file.name;
             let keyed = &look.settings[name];
             let schema = serde_json::to_value(file.schema()).unwrap();

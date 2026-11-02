@@ -10,10 +10,11 @@
 //! It is the window's machine's, not a Space's, so it is no module of the
 //! engine: `banda look` prints it, and `banda look --follow` prints it
 //! again on every change. The window runs that and applies what it reads.
-//! The sidebar's `sidebar.toml` (ADR 0008), the browser's `browser.toml`
-//! (ADR 0013) and the agents module's `agents.toml` (ADR 0016) are this
-//! machine's too, so they come with the look: [`sidebar`], [`browser`],
-//! [`agents`]; so do its keys, [`keys`].
+//! The sidebar's `sidebar.toml` (ADR 0008) and the browser's
+//! `browser.toml` (ADR 0013) are this machine's too, so they come with the
+//! look: [`sidebar`], [`browser`]; so do its keys, [`keys`]. A module's own
+//! file the window reads, as the agents module's `agents.toml`, comes in
+//! [`Look::files`], by its name ([`file`]).
 
 pub mod browser;
 pub mod color;
