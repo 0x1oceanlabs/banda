@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react"
 import type { SpaceId } from "@banda/contract"
-import { kindOf } from "../registry"
+import { labelOf } from "../registry"
 import { useLookColumns } from "../look"
 import { share, widthIn, type Workspaces } from "./model"
 
@@ -87,9 +87,7 @@ export function Overview({
                     }}
                   >
                     {column.entries.map((entry) => {
-                      const kind = kindOf(entry.pane.kind)
-                      const Icon = kind?.icon
-                      const title = kind ? kind.title(entry.pane.args) : "Pane"
+                      const { title, Icon } = labelOf(entry.pane)
                       return (
                         <button
                           key={entry.id}

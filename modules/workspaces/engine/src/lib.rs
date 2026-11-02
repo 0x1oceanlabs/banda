@@ -80,7 +80,8 @@ banda_kernel::methods! {
         /// (`agents.thread`, args `{"thread": "<id>"}`), the Diff
         /// (`git.diff`, args `{"scope": {"kind": "changes"}}`, or `uncommitted`,
         /// `staged`, or `{"kind": "commit", "sha": "<sha>"}`), or a
-        /// browser (`browser.browser`). Beside a Pane `panes` lists, or,
+        /// browser at a web address (`browser.browser`, args
+        /// `{"url": "https://…"}`). Beside a Pane `panes` lists, or,
         /// left out, beside your Space's Panes. It takes no focus; the
         /// Person sees a mark on it until they look.
         command open_pane(OpenPane) -> Opened, Write, tool "open_pane";
@@ -95,6 +96,28 @@ banda_kernel::methods! {
 /// the Person. A terminal's runs the Person's shell, and the command its
 /// `done` sends goes as the Person (ADR 0032).
 const AGENT_KINDS: &[&str] = &["agents.thread", "git.diff", "browser.browser"];
+
+/// Refuses a browser an Agent opens anywhere but at a web address, as
+/// `browser_open` does: never at the Person's files (ADR 0029, decision 3).
+fn web_address(args: &Value) -> Result<(), Refusal> {
+    let url = args
+        .as_object()
+        .filter(|args| args.len() == 1)
+        .and_then(|args| args.get("url"));
+    let scheme = url
+        .and_then(Value::as_str)
+        .and_then(|url| url.split_once("://"));
+    match scheme {
+        Some((scheme, _))
+            if scheme.eq_ignore_ascii_case("http") || scheme.eq_ignore_ascii_case("https") =>
+        {
+            Ok(())
+        }
+        _ => Err(Refusal::invalid(
+            "A browser opens at a web address: args {\"url\": \"https://…\"}.",
+        )),
+    }
+}
 
 /// A workspace as an Agent sees it: only the columns with a Pane it sees.
 #[derive(Serialize, TS)]
@@ -543,6 +566,9 @@ impl Workspaces {
                 "An Agent opens only {}: they run nothing as your Person.",
                 AGENT_KINDS.join(", ")
             )));
+        }
+        if open.kind == "browser.browser" {
+            web_address(&open.args)?;
         }
         let shows = Shown {
             space: wall.space,

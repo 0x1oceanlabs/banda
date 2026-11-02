@@ -66,8 +66,10 @@ import {
   afterTabKey,
   type BrowserArgs,
   blankTab,
+  type KeptArgs,
   keepClosed,
   NEW_BROWSER,
+  readArgs,
   showing,
   type Tab,
   type TabKey,
@@ -76,9 +78,10 @@ import {
   withTab,
 } from "./tabs"
 
-export const browserPane = definePane<BrowserArgs>({
+export const browserPane = definePane<KeptArgs>({
   kind: "browser.browser",
-  title: (args) => {
+  title: (kept) => {
+    const args = readArgs(kept, "")
     const tab = args.tabs[args.shown]
     return tab ? titleOf(tab) : "Browser"
   },
@@ -87,7 +90,7 @@ export const browserPane = definePane<BrowserArgs>({
   letter: "B",
   header: false,
   closed: ({ args }) => {
-    for (const tab of args.tabs) drop(tab.id)
+    for (const tab of readArgs(args, "").tabs) drop(tab.id)
   },
   Pane: BrowserPane,
 })
@@ -104,11 +107,17 @@ function titleOf(tab: Tab): string {
   return tab.title || (tab.url ? siteOf(tab.url) : "New Tab")
 }
 
-function BrowserPane({ args, focused, update, close }: PaneProps<BrowserArgs>) {
+function BrowserPane({
+  args: kept,
+  focused,
+  update,
+  close,
+}: PaneProps<KeptArgs>) {
   const settings = useFile(BROWSER_FILE)
   // Any page's change draws the tabs again: their titles, icons, loads.
   const version = useSyncExternalStore(watchPages, pagesVersion)
   const [first] = useState(newId)
+  const args = readArgs(kept, first)
   const now = useRef({ args, update, close })
   useEffect(() => {
     now.current = { args, update, close }
@@ -116,6 +125,7 @@ function BrowserPane({ args, focused, update, close }: PaneProps<BrowserArgs>) {
 
   useEffect(() => {
     if (!args.tabs.length) update(withTab(args, blankTab(first)))
+    else if (args !== kept) update(args)
   })
 
   // The Pane holds its tabs' pages; a page opened from one is a tab

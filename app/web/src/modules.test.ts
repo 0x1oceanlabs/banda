@@ -4,7 +4,7 @@ import type { Module } from "@banda/ui/module"
 import { expect, test } from "vitest"
 import { keyName } from "./actions/actions"
 import { modules } from "./modules"
-import { kindRuns, kinds, watches } from "./registry"
+import { kindRuns, kinds, labelOf, showsOf, watches } from "./registry"
 
 test("each module has its own id, and its Panes' kinds start with it (ADR 0022, decision 5)", () => {
   const ids = modules.map((m) => m.id)
@@ -71,4 +71,11 @@ test("each module's window part is written beside its module.toml, for banda mod
   }
   // Written now: review it and run again, as cargo test does the types.
   expect(stale).toEqual([])
+})
+
+test("a Pane whose args its kind cannot read is named plainly, and the window goes on", () => {
+  const broken = { kind: "browser.browser", args: null as never }
+  expect(labelOf(broken)).toMatchObject({ title: "Pane", detail: null })
+  expect(showsOf(broken)).toBeNull()
+  expect(labelOf({ kind: "nobody.knows", args: {} }).title).toBe("Unknown Pane")
 })

@@ -215,6 +215,15 @@ async fn an_agent_arranges_its_own_spaces_panes_and_sees_the_others_when_let() {
     let terminal = json!({ "kind": "terminal.terminal", "args": {} });
     let refused = as_agent("workspaces.open_pane", terminal).await;
     assert_eq!(refused.unwrap_err().code, Code::Invalid);
+    // A browser opens at a web address, never at the Person's files.
+    for args in [
+        json!({ "url": "file:///etc/passwd" }),
+        json!({ "tabs": [], "shown": 0 }),
+    ] {
+        let browser = json!({ "kind": "browser.browser", "args": args });
+        let refused = as_agent("workspaces.open_pane", browser).await;
+        assert_eq!(refused.unwrap_err().code, Code::Invalid);
+    }
     // A Person arranges with their own methods.
     let by_person = machine.command(
         "workspaces.open_pane",

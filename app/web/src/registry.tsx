@@ -4,7 +4,7 @@
  * own, the launcher. A Pane or a Watch runs only while the engine runs
  * its module.
  */
-import type { JsonValue } from "@banda/contract"
+import type { Engine, JsonValue } from "@banda/contract"
 import { Button } from "@banda/ui/components/button"
 import { Kbd } from "@banda/ui/components/kbd"
 import { useModules } from "@banda/ui/hooks/use-status"
@@ -26,7 +26,7 @@ import { useEffect, useLayoutEffect, useRef } from "react"
 import { columnsOf } from "./look"
 import { modules } from "./modules"
 import { settingsPane } from "./settings/pane"
-import type { Width } from "./workspaces/model"
+import type { Entry, Width } from "./workspaces/model"
 
 type Args = { [key: string]: JsonValue }
 
@@ -72,27 +72,69 @@ export function kindOf(kind: string): AnyPaneKind | undefined {
   return byKind.get(kind)?.kind
 }
 
+/** What broke a kind's words, each said once, not at every drawing. */
+const broke = new Set<string>()
+
+/**
+ * What a kind says of a Pane, or `otherwise` when the Pane's args break
+ * it: an Agent or an older Banda may have kept args the kind cannot read,
+ * and one such Pane never takes the window down.
+ */
+function told<T>(say: () => T, otherwise: T): T {
+  try {
+    return say()
+  } catch (error) {
+    if (!broke.has(String(error))) {
+      broke.add(String(error))
+      console.error(error)
+    }
+    return otherwise
+  }
+}
+
 /** The one thing a Pane shows, as its kind names it (`PaneKind.shows`). */
 export function showsOf(pane: PaneState): string | null {
-  return kindOf(pane.kind)?.shows?.(pane.args) ?? null
+  return told(() => kindOf(pane.kind)?.shows?.(pane.args) ?? null, null)
 }
 
 /** A Pane as what makes it that one Pane (`PaneKind.identity`). */
 export function identityOf(pane: PaneState): PaneState {
   const identity = kindOf(pane.kind)?.identity
-  return identity
-    ? { kind: pane.kind, args: { identity: identity(pane.args) } }
-    : pane
+  return told(
+    () =>
+      identity
+        ? { kind: pane.kind, args: { identity: identity(pane.args) } }
+        : pane,
+    pane
+  )
 }
 
 /** A Pane's title, quieter detail and icon, as its kind gives them. */
 export function labelOf(pane: PaneState) {
   const kind = kindOf(pane.kind)
-  return {
-    title: kind ? kind.title(pane.args) : "Unknown Pane",
-    detail: kind?.detail?.(pane.args) ?? null,
-    Icon: kind?.icon,
-  }
+  const Icon = kind?.icon
+  if (!kind) return { title: "Unknown Pane", detail: null, Icon }
+  return told(
+    () => ({
+      title: kind.title(pane.args),
+      detail: kind.detail?.(pane.args) ?? null,
+      Icon,
+    }),
+    { title: "Pane", detail: null, Icon }
+  )
+}
+
+/** Lets a Pane's module let go of it (`PaneKind.closed`). */
+export function closedOf(engine: Engine, entry: Entry): void {
+  told(
+    () =>
+      kindOf(entry.pane.kind)?.closed?.({
+        engine,
+        space: entry.space,
+        args: entry.pane.args,
+      }),
+    undefined
+  )
 }
 
 /** Whether `module` runs: always, with no engine part; else while the
