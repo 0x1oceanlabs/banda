@@ -17,6 +17,7 @@ test("the window's own arrangement is what banda look gives with no files", () =
         ...process.env,
         BANDA_CONFIG: config,
         BANDA_OMARCHY: "",
+        XDG_CURRENT_DESKTOP: "",
         HYPRLAND_INSTANCE_SIGNATURE: "",
       },
       encoding: "utf8",

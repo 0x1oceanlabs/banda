@@ -48,11 +48,12 @@ export function apply(
   const { dark, colors } = shown(look, systemDark)
   const next: Record<string, string> = { ...look.vars, ...colors }
   // The picture Banda's glass is made of, which the desktop serves; its
-  // path in the address, so a new wallpaper is a new picture (ADR 0023).
+  // path and time in the address, so a new wallpaper, or one rewritten in
+  // place, is a new picture (ADR 0023, ADR 0030).
   const { wallpaper } = look.desk
   if (wallpaper) {
     next["--desk-wallpaper"] =
-      `url("${WALLPAPER_URL}?of=${encodeURIComponent(wallpaper)}")`
+      `url("${WALLPAPER_URL}?of=${encodeURIComponent(wallpaper.path)}&at=${wallpaper.modified}")`
   }
   for (const name of before) {
     if (!(name in next)) root.style.removeProperty(name)

@@ -29,7 +29,8 @@
 
 # The desk the tiles float over. Its glass is Banda's own, the same on
 # every desktop: the wallpaper, blurred and tinted. Unset, the wallpaper is
-# the desktop's (Omarchy's current background); without one, it is solid.
+# the desktop's (Omarchy, GNOME, KDE, XFCE, hyprpaper); without one, it is
+# solid.
 # [desk]
 # glass = true
 # material = "banda"                 # "system": the compositor blurs, from the next start

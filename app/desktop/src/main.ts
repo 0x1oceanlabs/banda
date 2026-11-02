@@ -337,7 +337,7 @@ async function page(request: Request): Promise<Response> {
  * file, whatever the address asks (ADR 0023).
  */
 async function wallpaper(): Promise<Response> {
-  const file = lookNow()?.desk.wallpaper
+  const file = lookNow()?.desk.wallpaper?.path
   if (!file) return new Response("Not found", { status: 404 })
   return served(file)
 }

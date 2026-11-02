@@ -43,7 +43,7 @@ Roma, 2026-11-02: "let's combine: on Mac and Windows take it natively, on Linux 
 
 4. **macOS and Windows ask for their material** (with `material = "system"`): the window is transparent, with `vibrancy: "under-window"` on macOS and `backgroundMaterial: "acrylic"` on Windows 11. The page's tint and grain lie over it, as on Banda's glass. Windows 10 has no material: the desk is solid there. `blur` and `saturation` are the system's on these.
 
-5. **What the page cannot draw stays solid, and says so.** It draws JPEG, PNG, WebP, AVIF, GIF, BMP and SVG. A HEIC or JPEG XL picture, or a desktop's solid colour, leaves the desk solid with a problem naming it. A small blurred copy made once by the desktop (ADR 0023, later) would draw them all.
+5. **What the page cannot draw stays solid, and says so.** It draws JPEG, PNG, WebP, AVIF, JPEG XL (GNOME's own wallpapers are JPEG XL; Electron 45 draws it, tried), GIF, BMP and SVG. A HEIC picture, or a desktop's solid colour, leaves the desk solid with a problem naming it. A small blurred copy made once by the desktop (ADR 0023, later) would draw them all.
 
 ## Steps
 

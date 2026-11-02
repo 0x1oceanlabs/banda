@@ -105,6 +105,8 @@ export async function startWindow({
     BANDA_OMARCHY: "",
     BANDA_FONTCONFIG: "",
     HYPRLAND_INSTANCE_SIGNATURE: "",
+    // Nor the desktop's wallpaper (ADR 0030).
+    XDG_CURRENT_DESKTOP: "",
     BANDA_LOG: "warn",
     BANDA_BLOCK_LIST: join(dir, "blocker.txt"),
     // Notices go to a list the tests read, never to the Person's screen.

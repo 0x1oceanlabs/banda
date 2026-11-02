@@ -28,6 +28,15 @@ pub struct Places {
     /// Omarchy sets the system's monospace font. `None`: generic names
     /// stay generic.
     pub fontconfig: Option<PathBuf>,
+    /// The desktop's names, lowercased, as `XDG_CURRENT_DESKTOP` lists
+    /// them: which reader finds its wallpaper (ADR 0030).
+    pub desktops: Vec<String>,
+    /// The Person's config folder, `~/.config`, where KDE, XFCE and
+    /// hyprpaper keep their wallpaper, and dconf GNOME's.
+    pub config_home: Option<PathBuf>,
+    /// The `gsettings` program, which reads GNOME's and its family's
+    /// settings with their schemas' defaults.
+    pub gsettings: Option<PathBuf>,
 }
 
 impl Places {
@@ -40,13 +49,17 @@ impl Places {
             home: None,
             omarchy_themes: Vec::new(),
             fontconfig: None,
+            desktops: Vec::new(),
+            config_home: None,
+            gsettings: None,
         }
     }
 
     /// The places on this machine. `BANDA_CONFIG` moves the config folder
     /// and `BANDA_OMARCHY` Omarchy's current theme (empty: no Omarchy);
-    /// an empty `BANDA_FONTCONFIG` leaves the system's fonts unasked. So a
-    /// test or a trial window runs beside the real one.
+    /// an empty `BANDA_FONTCONFIG` leaves the system's fonts unasked, and
+    /// `BANDA_GSETTINGS` names `gsettings` (empty: none). So a test or a
+    /// trial window runs beside the real one.
     pub fn from_env() -> Places {
         let var = |name: &str| std::env::var_os(name).map(PathBuf::from);
         let home_set = var("HOME");
@@ -81,6 +94,22 @@ impl Places {
                 Some(set) => Some(set),
                 None => Some(config_home.join("fontconfig")),
             },
+            desktops: std::env::var("XDG_CURRENT_DESKTOP")
+                .unwrap_or_default()
+                .split(':')
+                .filter(|name| !name.is_empty())
+                .map(str::to_lowercase)
+                .collect(),
+            gsettings: match var("BANDA_GSETTINGS") {
+                Some(set) if set.as_os_str().is_empty() => None,
+                Some(set) => Some(set),
+                None => std::env::var_os("PATH").and_then(|path| {
+                    std::env::split_paths(&path)
+                        .map(|folder| folder.join("gsettings"))
+                        .find(|program| program.is_file())
+                }),
+            },
+            config_home: Some(config_home),
         }
     }
 

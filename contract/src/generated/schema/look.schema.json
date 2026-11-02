@@ -132,7 +132,7 @@
           "$ref": "#/$defs/Material"
         },
         "wallpaper": {
-          "description": "The picture Banda's glass is made of: a path, `~/` for home. Unset,\nthe desktop's own wallpaper, where Banda knows it.",
+          "description": "The picture Banda's glass is made of: a path, `~/` for home. Unset,\nthe desktop's own wallpaper: Omarchy's, GNOME's and its family's,\nKDE's, XFCE's or hyprpaper's (ADR 0030).",
           "type": "string"
         },
         "blur": {
