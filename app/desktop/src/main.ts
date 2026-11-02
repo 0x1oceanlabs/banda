@@ -232,6 +232,9 @@ async function ready(): Promise<void> {
     Schema.Tuple([Schema.String, Schema.NullOr(Schema.Number)]),
     ([request, page]) => Tabs.use((tabs) => tabs.created(request, page))
   )
+  on("browser.stop", Schema.Tuple([Schema.Number]), ([page]) =>
+    Cdp.use((cdp) => cdp.stop(page))
+  )
   // The settings' (ADR 0016) and the Banda menu's (ADR 0017).
   on("menu.open", text, ([route]) => Effect.sync(() => openMenu(route)))
   handle(

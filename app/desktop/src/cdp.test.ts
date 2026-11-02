@@ -10,6 +10,8 @@ import { Tabs } from "./tabs"
 import { Window } from "./window"
 
 type Listener = (...args: unknown[]) => void
+/** What the desktop tells the browser's Panes. */
+type BrowserNews = Parameters<Tabs["Service"]["tell"]>[0]
 
 /**
  * A tab whose debugger answers as Chromium's does, in short: its target
@@ -18,6 +20,8 @@ type Listener = (...args: unknown[]) => void
  */
 function fakeTab(id: number) {
   const listeners = new Map<string, Set<Listener>>()
+  /** Whether it may slow down while hidden, as it was last set. */
+  const throttled: boolean[] = []
   const sessions = new Set<string>()
   let attached = false
   let made = 0
@@ -69,13 +73,21 @@ function fakeTab(id: number) {
     getURL: () => `https://example.com/${id}`,
     getTitle: () => `Tab ${id}`,
     isDestroyed: () => false,
+    setBackgroundThrottling: (allowed: boolean) => throttled.push(allowed),
     debugger: debuggee,
   }
-  return { page: page as unknown as WebContents, sessions, emit, debuggee }
+  return {
+    page: page as unknown as WebContents,
+    sessions,
+    emit,
+    debuggee,
+    throttled,
+  }
 }
 
-/** The endpoint over `pages`, its file in a folder of its own. */
-function endpointOver(pages: WebContents[]) {
+/** The endpoint over `pages`, its file in a folder of its own; what it
+ * tells the Panes goes to `told`. */
+function endpointOver(pages: WebContents[], told: BrowserNews[] = []) {
   const file = join(mkdtempSync(join(tmpdir(), "banda-cdp-")), "browser.json")
   const tabs = Layer.succeed(Tabs)({
     all: () => pages,
@@ -83,7 +95,7 @@ function endpointOver(pages: WebContents[]) {
     attached: () => {},
     create: () => Effect.never,
     created: () => Effect.void,
-    tell: () => {},
+    tell: (news) => void told.push(news),
   })
   const engine = Layer.succeed(Engine)({
     address: Effect.never,
@@ -233,6 +245,41 @@ it.live(
       // The file goes with the endpoint.
       Effect.andThen(Effect.sync(() => expect(existsSync(file)).toBe(false)))
     )
+  }
+)
+
+it.live(
+  "a driven tab is marked and keeps drawing, until the Person stops it",
+  () => {
+    const one = fakeTab(1)
+    const told: BrowserNews[] = []
+    const { layer } = endpointOver([one.page], told)
+    return Effect.gen(function* () {
+      const cdp = yield* Cdp
+      const { webSocketDebuggerUrl } = yield* versionOf(cdp.endpoint)
+      const client = yield* Effect.promise(() => connect(webSocketDebuggerUrl))
+      const answer = yield* Effect.promise(() =>
+        client.send("Target.attachToTarget", { targetId: "T1", flatten: true })
+      )
+      const { sessionId } = answer.result as { sessionId: string }
+      expect(told).toEqual([{ kind: "driven", from: 1, driven: true }])
+      expect(one.throttled).toEqual([false])
+
+      yield* cdp.stop(1)
+      const detached = yield* Effect.promise(() =>
+        client.hear((message) => message.method === "Target.detachedFromTarget")
+      )
+      expect(detached.params).toEqual({ sessionId, targetId: "T1" })
+      expect(one.sessions.size).toBe(0)
+      expect(told.at(-1)).toEqual({ kind: "driven", from: 1, driven: false })
+      expect(one.throttled).toEqual([false, true])
+      // The client stays, and may drive the tab again.
+      const again = yield* Effect.promise(() =>
+        client.send("Target.attachToTarget", { targetId: "T1", flatten: true })
+      )
+      expect(again.result).toMatchObject({ sessionId: expect.any(String) })
+      client.socket.close()
+    }).pipe(Effect.provide(layer))
   }
 )
 

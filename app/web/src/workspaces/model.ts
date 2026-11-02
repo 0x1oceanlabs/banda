@@ -209,6 +209,8 @@ export type Opening = {
   place?: Place
   /** A new column's width; the look's when left out (`Column.width`). */
   width?: Width
+  /** False leaves the focus where it is. */
+  focus?: boolean
 }
 
 /**
@@ -220,6 +222,7 @@ export type Opening = {
  *   in the same column; `right` adds a column right of the opener's.
  * - Left out, the Pane takes the place of the one of its kind that the
  *   opener's workspace shows, or adds a column on the right.
+ * - With `focus: false` the focus goes back where it was.
  */
 export function open(
   state: Workspaces,
@@ -227,10 +230,22 @@ export function open(
   pane: PaneState,
   opening: Opening = {}
 ): Workspaces {
+  const next = placed(state, space, pane, opening)
+  const was = opening.focus === false && focused(state)
+  return was ? focusEntry(next, was.id) : next
+}
+
+function placed(
+  state: Workspaces,
+  space: SpaceId,
+  pane: PaneState,
+  opening: Opening
+): Workspaces {
   const showing = entries(state).find((entry) =>
     samePane(entry, { space, pane })
   )
-  if (showing) return focusEntry(state, showing.id)
+  if (showing)
+    return opening.focus === false ? state : focusEntry(state, showing.id)
 
   const from = (opening.from && find(state, opening.from)) || focusedSpot(state)
   const w = from?.workspace ?? state.current

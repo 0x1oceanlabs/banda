@@ -54,7 +54,10 @@ const CONTEXT = "banda"
 const BROWSER = "banda"
 
 /** What the endpoint uses of a tab's web contents. */
-type Page = Pick<WebContents, "id" | "getURL" | "getTitle" | "isDestroyed"> & {
+type Page = Pick<
+  WebContents,
+  "id" | "getURL" | "getTitle" | "isDestroyed" | "setBackgroundThrottling"
+> & {
   readonly debugger: Pick<
     Debugger,
     "attach" | "detach" | "isAttached" | "sendCommand" | "on" | "removeListener"
@@ -121,6 +124,9 @@ export class Cdp extends Context.Service<
   {
     /** `http://127.0.0.1:<port>/<token>`, as a CDP client takes it. */
     readonly endpoint: string
+    /** Ends every client's sessions on the tab: the Person stops the
+     * Agents that drive it. */
+    readonly stop: (page: number) => Effect.Effect<void>
   }
 >()("banda/Cdp") {
   /** `userAgent` is the browser's, as its pages send it. */
@@ -162,13 +168,15 @@ export class Cdp extends Context.Service<
           route.client.send({ method, params, sessionId })
         }
 
+        const pageWith = (id: number): Page | undefined =>
+          tabs.all().find((each) => each.id === id)
         /** A tab's debugger, attached while a session uses it. */
         const debuggees = yield* RcMap.make({
           lookup: (id: number) =>
             Effect.acquireRelease(
               Effect.tryPromise({
                 try: async () => {
-                  const page = tabs.all().find((each) => each.id === id)
+                  const page = pageWith(id)
                   if (!page) throw new Error(`There is no tab ${id}.`)
                   page.debugger.attach(PROTOCOL)
                   if (!ids.has(page))
@@ -225,6 +233,18 @@ export class Cdp extends Context.Service<
               return true
           return false
         }
+        /** The tabs an Agent drives, as their Pane was last told. */
+        const driven = new WeakSet<Page>()
+        /** Tells the tab's Pane whether an Agent drives it, for its mark;
+         * a driven tab keeps drawing while the Pane shows another. */
+        const drive = (page: Page) => {
+          const now = isUsed(page)
+          if (page.isDestroyed() || now === driven.has(page)) return
+          if (now) driven.add(page)
+          else driven.delete(page)
+          page.setBackgroundThrottling(!now)
+          tabs.tell({ kind: "driven", from: page.id, driven: now })
+        }
         /** The tabs as targets; one whose debugger refuses is left out. */
         const targets = Effect.suspend(() =>
           Effect.forEach(
@@ -269,12 +289,14 @@ export class Cdp extends Context.Service<
               const route = { client, page, targetId, root: sessionId, scope }
               routes.set(sessionId, route)
               client.sessions.add(sessionId)
+              drive(page)
               yield* Scope.addFinalizer(
                 scope,
                 Effect.sync(() => {
                   for (const [id, each] of routes)
                     if (each === route) routes.delete(id)
                   client.sessions.delete(sessionId)
+                  drive(page)
                   if (!page.isDestroyed() && page.debugger.isAttached())
                     page.debugger
                       .sendCommand("Target.detachFromTarget", { sessionId })
@@ -579,7 +601,12 @@ export class Cdp extends Context.Service<
           ),
           Effect.option
         )
-        if (Option.isNone(listening)) return { endpoint: "" }
+        const stop = (id: number) =>
+          Effect.suspend(() => {
+            const page = pageWith(id)
+            return page ? endOn(page) : Effect.void
+          })
+        if (Option.isNone(listening)) return { endpoint: "", stop }
         const server = listening.value
         const port = "port" in server.address ? server.address.port : 0
         const endpoint = `http://127.0.0.1:${port}/${token}`
@@ -660,7 +687,7 @@ export class Cdp extends Context.Service<
             ).pipe(Effect.andThen(Effect.never), Effect.scoped)
           )
         )
-        return { endpoint }
+        return { endpoint, stop }
       })
     )
 }

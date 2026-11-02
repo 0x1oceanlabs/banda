@@ -3,7 +3,7 @@ import type { Engine, SpaceId, SpaceSummary, Status } from "@banda/contract"
 import { inFront, useInFront } from "@banda/ui/hooks/use-in-front"
 import { IN_PROGRAM, type PaneState, QUIET } from "@banda/ui/pane"
 import { DEFAULT_KEYS } from "@banda/contract/look"
-import type { Action } from "@banda/ui/module"
+import type { Action, WindowApi } from "@banda/ui/module"
 import { actionFor, rebind } from "../actions/actions"
 import { Bar } from "../bar/Bar"
 import { type Lists, Watches } from "../bar/Watches"
@@ -23,7 +23,8 @@ import {
   settingsLinkOf,
 } from "../menu/menu"
 import { columnsOf, useLookKeys, useLookNotify, useLookSound } from "../look"
-import { kindOf, showsOf, startable, widthOf } from "../registry"
+import { modules as known } from "../modules"
+import { kindOf, runs, showsOf, startable, widthOf } from "../registry"
 import { Sidebar } from "../sidebar/Sidebar"
 import { pickPreset } from "../sidebar/settings"
 import { toggleSettled } from "../sidebar/settled"
@@ -262,15 +263,12 @@ export function Shell({
     const parts: Parts = {
       change,
       home,
-      open: (pane, space) =>
+      open: (pane, space, how) =>
         change((w) =>
-          opening(
-            w,
-            space ?? focused(w)?.space ?? home,
-            pane,
-            undefined,
-            "right"
-          )
+          opening(w, space ?? focused(w)?.space ?? home, pane, {
+            ...how,
+            place: "right",
+          })
         ),
       toggleSidebar,
       toggleOverview,
@@ -293,6 +291,29 @@ export function Shell({
     ownKeys,
     settings,
   ])
+  // Each module that runs starts once, with the window as it is when it
+  // asks (ADR 0022): the browser opens a Pane for an Agent's tab.
+  const partsNow = useRef(parts)
+  useEffect(() => {
+    partsNow.current = parts
+  }, [parts])
+  const running = known
+    .filter((module) => runs(module, modules))
+    .map((module) => module.id)
+    .join()
+  useEffect(() => {
+    const api: WindowApi = {
+      get home() {
+        return partsNow.current.home
+      },
+      open: (...how) => partsNow.current.open(...how),
+      run: (...how) => partsNow.current.run(...how),
+    }
+    const stops = known
+      .filter((module) => running.split(",").includes(module.id))
+      .flatMap((module) => module.start?.(api) ?? [])
+    return () => stops.forEach((stop) => stop())
+  }, [running])
   // The keys run the actions, before any Pane hears them. A dialog keeps
   // its keys, as the Banda menu its Alt+Enter, but for the menu's own.
   useEffect(() => {
@@ -354,7 +375,7 @@ export function Shell({
     () => ({
       focus: (entry) => change((w) => focusEntry(w, entry)),
       open: (space, pane, from, place) =>
-        change((w) => opening(w, space, pane, from, place)),
+        change((w) => opening(w, space, pane, { from, place })),
       update: (entry, pane) => change((w) => update(w, entry, pane)),
       close: (entry) => change((w) => close(w, entry)),
     }),

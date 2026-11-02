@@ -5,7 +5,7 @@
  */
 import type { SpaceId } from "@banda/contract"
 import type { Action, Args, WindowApi } from "@banda/ui/module"
-import { type PaneState, paneOf, type Place } from "@banda/ui/pane"
+import { type PaneState, paneOf } from "@banda/ui/pane"
 import { RESET_KEY } from "../actions/actions"
 import { showing } from "../calls/sight"
 import { columnsOf } from "../look"
@@ -28,6 +28,7 @@ import {
   maximize,
   move,
   open,
+  type Opening,
   send,
   shift,
   step,
@@ -86,10 +87,9 @@ export function opening(
   workspaces: Workspaces,
   space: SpaceId,
   pane: PaneState,
-  from?: string,
-  place?: Place
+  how: Omit<Opening, "width"> = {}
 ): Workspaces {
-  return open(workspaces, space, pane, { from, place, width: widthOf(pane) })
+  return open(workspaces, space, pane, { ...how, width: widthOf(pane) })
 }
 
 /** Shows a Pane here, right of the focused one, with its width; one
@@ -116,7 +116,7 @@ export function answering(
   const entry = showing(workspaces, thing, showsOf)
   return entry
     ? focusEntry(workspaces, entry.id)
-    : opening(workspaces, thing.space, thing.pane, undefined, "right")
+    : opening(workspaces, thing.space, thing.pane, { place: "right" })
 }
 
 /**
@@ -132,7 +132,7 @@ export function settingsAt(
   const shown = entries(workspaces).find(
     (entry) => entry.pane.kind === settingsPane.kind
   )
-  if (!shown) return opening(workspaces, space, pane, undefined, "right")
+  if (!shown) return opening(workspaces, space, pane, { place: "right" })
   const moved = link && link !== shown.pane.args.link
   return focusEntry(
     moved ? update(workspaces, shown.id, pane) : workspaces,

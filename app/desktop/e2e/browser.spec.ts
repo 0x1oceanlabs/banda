@@ -368,10 +368,6 @@ test("an Agent drives the browser's tabs over CDP, and Banda stays", async () =>
   const { app, page, dir, banda } = window
   const { thread: draft } = await firstThread(page)
   await expect(draft).toBeVisible()
-  const bar = await openBrowser(page)
-  await bar.fill(address.replace("http://", ""))
-  await bar.press("Enter")
-  await expect.poll(() => inPages(app, "document.title")).toEqual(["Agent"])
 
   // `banda browser` says what the window wrote, the Person's alone.
   const file = join(dir, "state", "browser.json")
@@ -391,8 +387,14 @@ test("an Agent drives the browser's tabs over CDP, and Banda stays", async () =>
   // Its targets are the tabs: never Banda's own page.
   const browser = await chromium.connectOverCDP(endpoint)
   const context = browser.contexts()[0]!
-  expect(context.pages().map((each) => each.url())).toEqual([`${address}/`])
-  const tab = context.pages()[0]!
+  expect(context.pages()).toEqual([])
+
+  // With no browser, a tab it opens gets a Pane beside the Person's, who
+  // keeps the focus.
+  const tab = await context.newPage()
+  await tab.goto(`${address}/`)
+  await expect(addressBar(page)).toBeVisible()
+  await expect(draft).toHaveAttribute("data-focused", "true")
   await tab.getByRole("button", { name: "Go" }).click()
   await expect.poll(() => inPages(app, "document.title")).toEqual(["Clicked"])
 
@@ -405,9 +407,18 @@ test("an Agent drives the browser's tabs over CDP, and Banda stays", async () =>
   await second.close()
   await expect.poll(() => inPages(app, "document.title")).toEqual(["Clicked"])
 
+  // The tab it drives shows its mark; a click on it stops the Agent
+  // there, and Banda's tab stays.
+  const tabs = page.getByRole("tablist", { name: "Tabs" })
+  const stop = tabs.getByRole("button", { name: "Stop the Agent in Clicked" })
+  await stop.click()
+  await expect.poll(() => tab.isClosed()).toBe(true)
+  await expect(stop).toBeHidden()
+  expect(await inPages(app, "document.title")).toEqual(["Clicked"])
+
   // It leaves; Banda and its tab stay.
   await browser.close()
-  await expect(bar).toBeVisible()
+  await expect(addressBar(page)).toBeVisible()
   expect(await inPages(app, "document.title")).toEqual(["Clicked"])
 })
 

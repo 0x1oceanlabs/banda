@@ -198,10 +198,11 @@ modules/<name>/
 A module declares itself in its code and a short `module.toml` (ADR 0022).
 Its engine part is the `Module` it gives the kernel, with its `methods!`
 table. Its window part is one
-`defineModule({ id, engine, panes, watches, actions, sources })` exported
-from its Pane package; the window lists these in
+`defineModule({ id, engine, panes, watches, actions, sources, start })`
+exported from its Pane package; the window lists these in
 `app/web/src/modules.ts`, the one place that names a module, and builds its
-registries from them. `module.toml` holds only what no code says.
+registries from them. `start` runs once with the window API, for a module
+that acts on the window when the desktop tells it something. `module.toml` holds only what no code says.
 `banda modules` prints the three as one JSON per module
 (`engine/src/modules.rs`), and the skill's `modules` topic is written
 from it. A path a module takes that the contract lacks is an unstable mark
@@ -734,7 +735,11 @@ modules/*/pane   each module's Panes
     client's session on it is a Chromium session of its own; a client is
     a scope, so one that leaves detaches. The window writes the endpoint
     to `browser.json` in the state folder, where the engine's first line
-    names it, and `banda browser` prints it.
+    names it, and `banda browser` prints it. A tab with a client's session
+    is told `driven`: it shows the Agent's mark and keeps drawing while
+    hidden; a click on the mark sends `browser.stop`, which ends every
+    session on it. A tab asked for with no browser Pane opens a new one
+    without the focus, through the browser module's `start`.
 
 ## Repository
 

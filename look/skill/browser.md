@@ -94,10 +94,15 @@ const tabs = context.pages()
 
 - The pages are the Person's tabs, signed in as the Person is: do there
   what the Person asked, and nothing more.
-- `context.newPage()` opens a tab in the browser Pane in front, and
-  closing the page closes the tab. There is one profile:
+- `context.newPage()` opens a tab in the browser Pane in front, or with
+  no browser Pane a new one beside the Person's; neither takes the
+  Person's focus. Closing the page closes the tab. There is one profile:
   `browser.newContext()` is refused.
 - `browser.close()` only leaves: Banda and its tabs stay.
+- A tab you drive shows your mark, and keeps drawing when the Person
+  looks at another. A click on it stops you there: your sessions on that
+  tab end (`Target.detachedFromTarget`, and Playwright's page closes).
+  Do not attach to it again unless the Person asks you to.
 - Downloads still go to `~/Downloads`, and a site that asks for the
   camera or the location still asks the Person.
 - Whoever has the token drives the browser. It changes each time the

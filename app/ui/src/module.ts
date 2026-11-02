@@ -25,8 +25,9 @@ export type WindowApi = {
   /** The Space a new Thread starts in. */
   home: SpaceId
   /** Shows a Pane right of the focused one, with its width, and focuses
-   * it: in `space`, else in the focused Pane's Space. */
-  open: (pane: PaneState, space?: SpaceId) => void
+   * it: in `space`, else in the focused Pane's Space. With `focus: false`
+   * the focus stays where it is, as for a tab an Agent opened. */
+  open: (pane: PaneState, space?: SpaceId, how?: { focus?: boolean }) => void
   /** Runs an action by its id, a module's or the window's, as its key
    * would: how one module asks another for what it does. */
   run: (action: string, args?: Args) => void
@@ -136,6 +137,13 @@ export type Module = {
   actions: readonly Action[]
   /** What it gives the Banda menu to find. */
   sources: readonly Source[]
+  /**
+   * Runs once the window is up, with what a module may ask of it; what
+   * it returns runs when the window goes. How a module that hears the
+   * desktop acts on the window, as the browser opens a Pane for a tab an
+   * Agent asked for when none shows one.
+   */
+  start?: (window: WindowApi) => () => void
 }
 
 /** Declares a module's window part; each Pane keeps its args' type. */
@@ -146,6 +154,7 @@ export function defineModule<const P extends readonly Args[]>(module: {
   watches?: readonly Watch[]
   actions?: readonly Action[]
   sources?: readonly Source[]
+  start?: (window: WindowApi) => () => void
 }): Module {
   return {
     id: module.id,
@@ -156,5 +165,6 @@ export function defineModule<const P extends readonly Args[]>(module: {
     watches: module.watches ?? [],
     actions: module.actions ?? [],
     sources: module.sources ?? [],
+    start: module.start,
   }
 }

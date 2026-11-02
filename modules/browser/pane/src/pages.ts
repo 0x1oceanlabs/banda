@@ -26,6 +26,8 @@ export type PageState = {
   crashed: boolean
   /** The site's icon, as a data URL. */
   icon?: string
+  /** An Agent drives it over CDP: the tab shows its mark. */
+  driven: boolean
 }
 
 /** A page not made yet. */
@@ -36,6 +38,7 @@ export const BLANK: PageState = {
   back: false,
   forward: false,
   crashed: false,
+  driven: false,
 }
 
 /** The part of Electron's `<webview>` a page uses. */
@@ -236,6 +239,11 @@ export class Page {
     this.set({ icon })
   }
 
+  /** An Agent drives it now, or no longer does. */
+  drive(driven: boolean): void {
+    this.set({ driven })
+  }
+
   private set(change: Partial<PageState>): void {
     const now = this.state
     const same = (Object.keys(change) as (keyof PageState)[]).every(
@@ -403,9 +411,25 @@ function frontHolder(): Holder | undefined {
   return front && holders.includes(front) ? front : holders.at(-1)
 }
 
-/** Makes the tab an extension asked for, and tells the desktop its page. */
+/** Opens a browser Pane with a tab of `url`, and says the tab's ID. */
+type Opener = (url: string) => string
+
+/** What opens a Pane for a tab when no Pane holds one: the module's
+ * start sets it, as the window lets it open Panes. */
+let opener: Opener | null = null
+
+/** Sets what opens a Pane for a tab no Pane takes; returns how to stop. */
+export function openWith(open: Opener): () => void {
+  opener = open
+  return () => {
+    if (opener === open) opener = null
+  }
+}
+
+/** Makes the tab an extension or an Agent asked for, in the Pane in front
+ * or in a new one, and tells the desktop its page. */
 function create(request: string, url: string): void {
-  const id = frontHolder()?.open(url)
+  const id = frontHolder()?.open(url) ?? opener?.(url)
   const page = id ? pageOf(id, url) : null
   if (!page) browserHost()?.created(request, null)
   else page.attached((contents) => browserHost()?.created(request, contents))
@@ -455,6 +479,7 @@ hearNews((news) => {
   if (!page) return
   const holder = held.get(page.id)
   if (news.kind === "icon") page.iconed(news.icon)
+  else if (news.kind === "driven") page.drive(news.driven)
   else if (news.kind === "open") {
     holder?.open(news.url, page.id, news.background)
   } else if (news.kind === "select") holder?.show(page.id)

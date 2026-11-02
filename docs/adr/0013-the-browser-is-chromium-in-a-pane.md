@@ -191,6 +191,10 @@ asked for the ADR; the rest are our defaults and stay his to change.
   3. Extensions and the Web Store, tried on the set.
   4. The CDP endpoint, `banda browser`, the skill's topic, the Agent's
      mark and its stop.
+     - _Done_ in two PRs: the endpoint, `banda browser` and the topic,
+       then the mark, its stop and the unfocused new Pane. A module gets
+       a `start` with the window API to open that Pane, and the window
+       API's `open` a `focus: false`.
 - **Later:**
   - Banda's own browser tools, with the MCP module;
   - a Space on another machine and a window in a plain browser: a headless
