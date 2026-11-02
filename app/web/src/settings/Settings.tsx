@@ -127,7 +127,7 @@ export function Settings({
   // A Pane as wide as a column: in a narrow one, the sections are a row
   // of icons over the page; in a wide one, a list beside it.
   return (
-    <div className="@container h-full bg-background text-foreground">
+    <div className="@container h-full text-foreground">
       <div className="flex h-full flex-col @3xl:flex-row">
         <nav
           aria-label="Settings sections"

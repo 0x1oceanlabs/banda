@@ -199,6 +199,21 @@ export function agentCalls(
  * agent. The Thread is found by its message box, so it stays found once
  * its first message gives it a title.
  */
+/** A look whose desk is glass made of `wall.png`, once `wallpaper` puts
+ * that picture in the window's config folder. */
+export const GLASS = '[desk]\nwallpaper = "wall.png"\n'
+
+/** Puts a 1×1 sky-blue PNG where `GLASS` looks for the wallpaper. */
+export function wallpaper(dir: string) {
+  writeFileSync(
+    join(dir, "config/wall.png"),
+    Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGOImHkHAAOAAg7PaQnHAAAAAElFTkSuQmCC",
+      "base64"
+    )
+  )
+}
+
 export async function firstThread(
   page: Page
 ): Promise<{ thread: Locator; composer: Locator }> {

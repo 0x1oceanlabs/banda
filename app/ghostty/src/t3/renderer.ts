@@ -160,11 +160,12 @@ export function renderGhosttySnapshot(options: {
     rowsToDraw.push(snapshot.cursorY);
   }
 
+  // Banda: the default background is left clear, so the Pane's tile shows
+  // through it, glass or solid (ADR 0023); only cells of another colour fill.
   if (forceFull) {
     context.save();
     context.resetTransform();
-    context.fillStyle = cssColor(snapshot.background);
-    context.fillRect(0, 0, context.canvas.width, context.canvas.height);
+    context.clearRect(0, 0, context.canvas.width, context.canvas.height);
     context.restore();
   }
 
@@ -174,8 +175,7 @@ export function renderGhosttySnapshot(options: {
     if (!row) continue;
     const top = originY + rowIndex * metrics.height;
 
-    context.fillStyle = cssColor(snapshot.background);
-    context.fillRect(padding, top, snapshot.cols * metrics.width, metrics.height);
+    context.clearRect(padding, top, snapshot.cols * metrics.width, metrics.height);
 
     let backgroundStart = 0;
     while (backgroundStart < row.cells.length) {

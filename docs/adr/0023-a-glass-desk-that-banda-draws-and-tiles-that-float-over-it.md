@@ -84,8 +84,13 @@ The first build made the glass Hyprland's. Roma, seeing that its blur is Hyprlan
    - The current row in the sidebar, and the chosen Space, are drawn as tiles (`bg-tile`), not as the background: on glass a block of solid black in the panel was the one heavy thing in it. On a solid desk they look as before.
    - No new key: a floating surface takes the panel's glass, so `desk.opacity` and `tile.opacity` tune it too.
 
-7. **Not here, next.**
-   - A terminal whose canvas takes the tile's opacity.
+7. **Every Pane is the same glass: the terminal and the browser too** (_built_, 2026-11-02). Roma: "make all the windows a little see-through by default, so nothing stands apart, even the browser; exceptions can come later in the config".
+   - A terminal leaves its default background clear (a canvas with alpha, cleared where Ghostty would paint the default background), so its tile shows through as under a Thread. Cells of another colour still fill. On a solid desk the tile is the background, so it looks as before. The cost: a canvas with alpha draws its text with greyscale antialiasing, not subpixel, on a solid desk too.
+   - A browser's page lives in the window's layer, over its slot (ADR 0013). Over a tile it would be a glass over a glass, almost solid; so a Pane that holds a page leaves its tile clear (`[data-tile]:has([data-holds])`) and paints the tile itself on its row, its tabs and its notices. On glass the page takes the tile's opacity (`[data-held-by]`); the whole page fades, its text too, as a webview gives no other way, so it reads a shade softer than a Thread.
+   - The settings Pane no longer paints a background of its own over its tile.
+   - Exceptions, a Pane kind kept solid (a video, say), are a key for later.
+
+8. **Not here, next.**
    - The rail sidebar (the mock's third one).
    - The wallpaper on other desktops: GNOME's and KDE's settings, macOS's and Windows' own. Until then, `desk.wallpaper` names it.
    - Lining the picture up with the wallpaper around the window, where the window knows its place on the screen (X11, macOS, Windows).
