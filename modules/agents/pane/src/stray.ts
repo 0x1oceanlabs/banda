@@ -1,0 +1,53 @@
+/**
+ * Keys typed and text pasted in a Thread Pane outside a field go into its
+ * composer, as in T3 Code (ADR 0015, decision 4): a click in the Thread
+ * leaves the box, and the next words still reach it. A key or a paste
+ * something else took, one in a field or on a control, and any while a
+ * dialog or a menu is open, are left where they were.
+ */
+
+/** What takes keys of its own. */
+const OWN_KEYS = [
+  "input",
+  "textarea",
+  "select",
+  "[contenteditable=true]",
+  "[contenteditable=plaintext-only]",
+  "[role=textbox]",
+  "button",
+  "a[href]",
+  "summary",
+  "[role=button]",
+  "[role=checkbox]",
+  "[role=menuitem]",
+  "[role=option]",
+  "[role=radio]",
+  "[role=switch]",
+  "[role=tab]",
+  "[role=slider]",
+  "[data-takes-keys]",
+].join(",")
+
+/** A layer over the window that its keys are for. */
+const OPEN_LAYER = "[role=dialog],[role=alertdialog],[role=menu],[role=listbox]"
+
+/** Whether `event` is stray in the Pane `box` is in: on it, and no one
+ * else's, nor in a field or a control, nor while a layer is open. */
+export function stray(event: Event, box: Element): boolean {
+  const target = event.target
+  if (event.defaultPrevented || !(target instanceof Element)) return false
+  if (!box.closest(PANE)?.contains(target) || target.closest(OWN_KEYS))
+    return false
+  return document.querySelector(OPEN_LAYER) === null
+}
+
+/** A Pane, as the window frames it. */
+const PANE = "[data-focused]"
+
+/** The text a stray key types: one character, with no modifier but Shift. */
+export function typed(event: KeyboardEvent, box: Element): string | undefined {
+  if (event.isComposing || event.ctrlKey || event.metaKey || event.altKey)
+    return undefined
+  if (event.key.length !== 1 || !stray(event, box)) return undefined
+  return event.key
+}

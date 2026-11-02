@@ -37,6 +37,9 @@ export type PromptEditorHandle = {
   /** Whether the caret is on the first line going `up`, or on the last
    * going down, so an arrow would leave the text. */
   atEdge(up: boolean): boolean
+  /** Puts `text`, typed or pasted somewhere else, at the end, as pasted
+   * text is read, the caret after it, and takes the focus. */
+  add(text: string): void
 }
 
 type PromptEditorProps = {
@@ -200,6 +203,15 @@ function PromptEditor({
         const line = state.selection.$head.index(0)
         const last = up ? 0 : state.doc.childCount - 1
         return line === last && view.endOfTextblock(up ? "up" : "down")
+      },
+      add(text) {
+        const { view } = editor
+        view.dispatch(
+          view.state.tr.setSelection(Selection.atEnd(view.state.doc))
+        )
+        if (inCode(view.state)) view.dispatch(view.state.tr.insertText(text))
+        else paste(view, text)
+        view.focus()
       },
     }),
     [editor]

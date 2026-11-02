@@ -227,7 +227,7 @@ function ThreadPane(props: PaneProps<ThreadArgs>) {
           history={history}
           placeholder={
             asking
-              ? `Send a message to say no and tell ${name} what to do instead`
+              ? `${asking.body.form ? "Answer above, or write" : "Send a message"} to say no and tell ${name} what to do instead`
               : planned
                 ? "Write to refine the plan, or implement it"
                 : undefined
