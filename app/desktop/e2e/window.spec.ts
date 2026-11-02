@@ -483,8 +483,11 @@ test("a Person works in a terminal in the Space, and closing it stops the shell"
 
   // Moving it to another workspace draws it again: the same shell goes on.
   await page.keyboard.press("Alt+Shift+Digit2")
-  await expect(screen).toHaveAttribute("data-state", "running")
-  await screen.click()
+  const moved = page
+    .getByRole("group", { name: "Workspace 2" })
+    .getByRole("region", { name: "Terminal screen" })
+  await expect(moved).toHaveAttribute("data-state", "running")
+  await moved.click()
   await page.keyboard.type("echo again >> typed.txt")
   await page.keyboard.press("Enter")
   await expect.poll(() => read(join(space, "typed.txt"))).toBe("é 😀again\n")
