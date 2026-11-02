@@ -1,0 +1,8 @@
+# The git module, as it declares itself (ADR 0022). What its code says,
+# its methods and its Panes, its code declares; this holds the rest.
+id = "git"
+name = "Git"
+about = "The Space's folder as git sees it: its branch, its changes, and the diff against a base, the last commit or the index."
+version = "0.1.0"
+from-banda = true
+settings = []

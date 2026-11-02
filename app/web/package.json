@@ -17,6 +17,7 @@
     "@banda/agents-pane": "workspace:*",
     "@banda/browser-pane": "workspace:*",
     "@banda/contract": "workspace:*",
+    "@banda/git-pane": "workspace:*",
     "@banda/terminal-pane": "workspace:*",
     "@banda/ui": "workspace:*",
     "lucide-react": "^1.65.0",

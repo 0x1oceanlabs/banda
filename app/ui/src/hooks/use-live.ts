@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import {
   type Engine,
   type Event,
@@ -40,12 +40,14 @@ const AGAIN = 500
  * Reads a view, then follows the Space's events after it (ADR 0002,
  * decision 5). The view stays current across reconnects; when the engine
  * asks for a fresh read, it reads again. Events that arrive within one
- * frame render once.
+ * frame render once. A new `round` reads again too, the view kept until
+ * the read answers: for what no event tells, as files changed on disk.
  */
 export function useLive<S extends { at: number }>(
   engine: Engine,
   space: SpaceId,
-  source: Source<S> | null
+  source: Source<S> | null,
+  round = 0
 ): Live<S> {
   // What is held belongs to one source; a new source starts as loading.
   const [held, setHeld] = useState<{ source: Source<S> | null; live: Live<S> }>(
@@ -54,6 +56,12 @@ export function useLive<S extends { at: number }>(
       live: LOADING,
     }
   )
+
+  // How the running effect reads again, for a new round.
+  const again = useRef(() => {})
+  useEffect(() => {
+    if (round > 0) again.current()
+  }, [round])
 
   useEffect(() => {
     if (!source) return
@@ -103,8 +111,14 @@ export function useLive<S extends { at: number }>(
       )
     }
 
+    again.current = () => {
+      unfollow()
+      unfollow = () => {}
+      void start()
+    }
     void start()
     return () => {
+      again.current = () => {}
       stopped = true
       cancelAnimationFrame(frame)
       unfollow()
