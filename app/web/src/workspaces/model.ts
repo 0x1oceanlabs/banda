@@ -210,10 +210,18 @@ function canonical(value: JsonValue | undefined): string {
 }
 
 /** The Panes `before` shows and `after` does not: they left every workspace. */
-export function left(before: Workspaces, after: Workspaces): Entry[] {
-  const stays = entries(after)
+export function left(
+  before: Workspaces,
+  after: Workspaces,
+  identity: (pane: PaneState) => PaneState = (pane) => pane
+): Entry[] {
+  const as = (entry: Entry) => ({
+    space: entry.space,
+    pane: identity(entry.pane),
+  })
+  const stays = entries(after).map(as)
   return entries(before).filter(
-    (entry) => !stays.some((other) => samePane(entry, other))
+    (entry) => !stays.some((other) => samePane(as(entry), other))
   )
 }
 

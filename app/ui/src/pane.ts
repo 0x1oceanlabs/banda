@@ -98,6 +98,8 @@ export type PaneKind<A extends { [key: string]: JsonValue }> = {
   kind: string
   /** The words in its header. */
   title: (args: A) => string
+  /** Quieter words after the title in its header, as a terminal's folder. */
+  detail?: (args: A) => string | null
   icon: LucideIcon
   /** When set, a Person can open the Pane from the menu with these args. */
   start?: A
@@ -120,6 +122,13 @@ export type PaneKind<A extends { [key: string]: JsonValue }> = {
    * one thing, as a list, or of one not yet made.
    */
   shows?: (args: A) => string | null
+  /**
+   * What makes it this one Pane where its args also hold what changes as
+   * it runs, as a terminal's title: its terminal. Args that change but
+   * keep it are the same Pane, which has not left (`closed`). All its
+   * args, by default.
+   */
+  identity?: (args: A) => JsonValue
   /**
    * What its module lets go of once the Pane leaves every workspace: it
    * closed, or its place shows another Pane or the same with other args. A
