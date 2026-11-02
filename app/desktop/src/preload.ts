@@ -1,41 +1,58 @@
-/** Gives the page its one bridge to the desktop (app/web/src/host.ts). */
+/**
+ * Gives the page its one bridge to the desktop (app/web/src/host.ts),
+ * built from the table of its channels (ADR 0028). The extensions'
+ * buttons stay written here: electron-chrome-extensions answers them on
+ * channels of its own.
+ */
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from "electron"
-import {
-  type BrowserNews,
-  PARTITION,
-  type Pressed,
-} from "@banda/browser-pane/desktop"
-import type { Look } from "@banda/contract/look"
-import type { Host, Notice } from "@banda/web/host"
+import { PARTITION } from "@banda/browser-pane/desktop"
+import { type HostOf, type Leaf, mapTable } from "@banda/contract/bridge"
+import { BRIDGE, type Host } from "@banda/web/host"
+
+/** Calls `listener` with each value main tells on `name`; returns how to
+ * stop. */
+function listen(name: string, listener: (value: unknown) => void) {
+  const heard = (_event: IpcRendererEvent, value: unknown) => listener(value)
+  ipcRenderer.on(name, heard)
+  return () => {
+    ipcRenderer.removeListener(name, heard)
+  }
+}
+
+/** A leaf, as the page calls it. */
+function call({ dir, name }: Leaf) {
+  switch (dir) {
+    case "invoke":
+      return (...args: unknown[]) => ipcRenderer.invoke(name, ...args)
+    case "send":
+      return (...args: unknown[]) => ipcRenderer.send(name, ...args)
+    case "push":
+      return (listener: (value: unknown) => void) => listen(name, listener)
+  }
+}
+
+const banda = mapTable(BRIDGE, call) as HostOf<typeof BRIDGE>
+const { key, ...browser } = banda.browser
+
+// A key the desktop took from a browser page is pressed in the window, so
+// Banda's actions and the browser Pane hear it as their own (browser.ts).
+key((pressed) => {
+  window.dispatchEvent(
+    new KeyboardEvent("keydown", {
+      ...pressed,
+      bubbles: true,
+      cancelable: true,
+    })
+  )
+})
 
 const host: Host = {
-  engine: () => ipcRenderer.invoke("engine"),
-  look: {
-    current: () => ipcRenderer.invoke("look"),
-    listen: (listener) => {
-      const heard = (_event: IpcRendererEvent, look: Look) => listener(look)
-      ipcRenderer.on("look", heard)
-      return () => {
-        ipcRenderer.removeListener("look", heard)
-      }
-    },
-  },
-  sidebar: {
-    preset: (name) => ipcRenderer.invoke("sidebar.preset", name),
-    edit: () => ipcRenderer.invoke("sidebar.edit"),
-  },
+  ...banda,
   browser: {
-    tabs: (where) => ipcRenderer.invoke("browser.tabs", where),
-    reveal: (path) => ipcRenderer.send("browser.reveal", path),
-    shown: (contents) => ipcRenderer.send("browser.shown", contents),
-    created: (request, contents) =>
-      ipcRenderer.send("browser.created", request, contents),
-    stop: (contents) => ipcRenderer.send("browser.stop", contents),
-    pin: (extension, pinned) =>
-      ipcRenderer.invoke("browser.pin", extension, pinned),
-    remove: (extension) => ipcRenderer.invoke("browser.remove", extension),
-    // electron-chrome-extensions answers these itself.
+    ...browser,
     actions: {
+      ...browser.actions,
+      // electron-chrome-extensions answers these itself.
       state: () => extensions("browserAction.getState"),
       click: (extensionId, tabId) =>
         extensions("browserAction.activate", {
@@ -44,60 +61,15 @@ const host: Host = {
           tabId,
           anchorRect: { x: 0, y: 0, width: 0, height: 0 },
         }),
-      popup: (extension, url, under) =>
-        ipcRenderer.send("browser.popup", extension, url, under),
       listen: (listener) => {
-        const heard = () => listener()
-        ipcRenderer.on("browserAction.update", heard)
+        const stop = listen("browserAction.update", () => listener())
         void extensions("browserAction.addObserver")
         return () => {
-          ipcRenderer.removeListener("browserAction.update", heard)
+          stop()
           void extensions("browserAction.removeObserver")
         }
       },
     },
-    listen: (listener) => {
-      const heard = (_event: IpcRendererEvent, news: BrowserNews) =>
-        listener(news)
-      ipcRenderer.on("browser:news", heard)
-      return () => {
-        ipcRenderer.removeListener("browser:news", heard)
-      }
-    },
-  },
-  settings: {
-    set: (file, key, value) =>
-      ipcRenderer.invoke("settings.set", file, key, value),
-    reset: (file, key) => ipcRenderer.invoke("settings.reset", file, key),
-    rename: (file, key, to) =>
-      ipcRenderer.invoke("settings.rename", file, key, to),
-    reveal: (file) => ipcRenderer.invoke("settings.reveal", file),
-    themes: () => ipcRenderer.invoke("settings.themes"),
-  },
-  menu: {
-    open: (route) => ipcRenderer.send("menu.open", route),
-    listen: (open) => {
-      const heard = (_event: IpcRendererEvent, route: string) => open(route)
-      ipcRenderer.on("menu:open", heard)
-      return () => {
-        ipcRenderer.removeListener("menu:open", heard)
-      }
-    },
-  },
-  folder: {
-    pick: (at) => ipcRenderer.invoke("folder.pick", at),
-  },
-  notify: {
-    show: (notice: Notice) => ipcRenderer.send("notify:show", notice),
-    withdraw: (key: string) => ipcRenderer.send("notify:withdraw", key),
-    listen: (listener) => {
-      const heard = (_event: IpcRendererEvent, key: string) => listener(key)
-      ipcRenderer.on("notify:answer", heard)
-      return () => {
-        ipcRenderer.removeListener("notify:answer", heard)
-      }
-    },
-    quiet: () => ipcRenderer.invoke("notify:quiet"),
   },
 }
 
@@ -107,11 +79,3 @@ contextBridge.exposeInMainWorld("banda", host)
 function extensions(name: string, ...args: unknown[]) {
   return ipcRenderer.invoke("crx-msg-remote", PARTITION, name, ...args)
 }
-
-// A key the desktop took from a browser page is pressed in the window, so
-// Banda's actions and the browser Pane hear it as their own (browser.ts).
-ipcRenderer.on("browser:key", (_event, key: Pressed) => {
-  window.dispatchEvent(
-    new KeyboardEvent("keydown", { ...key, bubbles: true, cancelable: true })
-  )
-})
