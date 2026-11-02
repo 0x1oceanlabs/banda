@@ -375,6 +375,22 @@ test("a Person works in a terminal in the Space, and closing it stops the shell"
   await page.keyboard.press("Control+w")
   await page.keyboard.press("Enter")
   await expect.poll(() => read(join(space, "word.txt"))).toBe("one\n")
+
+  // Ctrl added to a key Banda takes hands the shell that key with Alt:
+  // Ctrl+Alt+F is Alt+F, Escape and f. A key Banda leaves free is sent as
+  // it was: Ctrl+Alt+B is Escape and Ctrl+B.
+  // The keys wait for read: the shell drops what was typed ahead.
+  await page.keyboard.type(
+    `: > reading; IFS= read -r x; printf '%s' "$x" > alt.txt`
+  )
+  await page.keyboard.press("Enter")
+  await expect.poll(() => read(join(space, "reading"))).toBe("")
+  await page.keyboard.press("Control+Alt+KeyF")
+  await page.keyboard.press("Control+Alt+KeyB")
+  await page.keyboard.press("Enter")
+  await expect.poll(() => read(join(space, "alt.txt"))).toBe("\x1bf\x1b\x02")
+  await expect(terminal).toBeVisible()
+
   const shell = Number(read(join(space, "shell.pid")))
   await page.keyboard.press("Alt+KeyW")
   await expect(terminal).toBeHidden()
