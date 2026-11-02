@@ -1006,10 +1006,7 @@ async fn a_module_asks_the_window_and_only_the_owners_window_answers() {
     say(&mut by_agent, show(1)).await;
     let refused = next(&mut by_agent).await;
     assert_eq!(refused["error"]["code"], "conflict");
-    assert_eq!(
-        refused["error"]["message"],
-        "Banda's window is not open. Nothing was done."
-    );
+    assert_eq!(refused["error"]["message"], "Banda's window is not open.");
 
     let requests = |id: u64| json!({ "type": "stream", "id": id, "method": "window.requests" });
     let answer = |id: u64, request: &Value| {

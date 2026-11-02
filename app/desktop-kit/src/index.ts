@@ -7,7 +7,7 @@
  */
 export { confirm, pickFolder, type Ask } from "./dialog"
 export { Engine } from "./engine"
-export type { DesktopModule } from "./module"
+export type { Asked, DesktopModule } from "./module"
 export { Broke, NotFromPage, Refused } from "./errors"
 export { type Answer, type Answers, none, serve, tellPage, text } from "./ipc"
 export { Look } from "./look"

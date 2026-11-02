@@ -160,6 +160,13 @@ export async function startWindow({
  * `name` with `args`, through `banda mcp` as its Harness would; what the
  * tool answered (ADR 0019).
  */
+/** What a tool of `banda mcp` answers, which it did not refuse. */
+export function agentAnswers(window: Window, name: string, args: object) {
+  const said = agentCalls(window, name, args)
+  expect(said.isError, said.content[0]?.text).toBeFalsy()
+  return JSON.parse(said.content[0]!.text)
+}
+
 export function agentCalls(
   window: Window,
   name: string,

@@ -10,6 +10,7 @@
 //!   has no window.
 
 use banda_agents::Agents;
+use banda_browser::Browser;
 use banda_kernel::Method;
 use banda_terminal::Terminals;
 use banda_workspaces::Workspaces;
@@ -49,7 +50,7 @@ const FILES: &[Files] = &[
         folder: "browser",
         toml: include_str!("../../modules/browser/module.toml"),
         window: Some(include_str!("../../modules/browser/window.json")),
-        methods: None,
+        methods: Some(Browser::method_list),
     },
     Files {
         folder: "workspaces",
@@ -248,6 +249,7 @@ mod tests {
         let engine = [
             Agents::new(Default::default()).name(),
             Terminals::new().name(),
+            Browser::new().name(),
             Workspaces::new().name(),
         ];
         assert_eq!(with_engine, engine);

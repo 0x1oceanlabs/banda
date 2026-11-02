@@ -335,6 +335,9 @@ importers:
       '@banda/browser-pane':
         specifier: workspace:*
         version: link:../pane
+      '@banda/contract':
+        specifier: workspace:*
+        version: link:../../../contract
       '@banda/desktop-kit':
         specifier: workspace:*
         version: link:../../../app/desktop-kit

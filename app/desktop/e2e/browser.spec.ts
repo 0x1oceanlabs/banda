@@ -18,6 +18,7 @@ import {
   test,
 } from "@playwright/test"
 import {
+  agentAnswers,
   firstThread,
   GLASS,
   SANDBOXED,
@@ -430,6 +431,38 @@ test("an Agent drives the browser's tabs over CDP, and Banda stays", async () =>
   await browser.close()
   await expect(addressBar(page)).toBeVisible()
   expect(await inPages(app, "document.title")).toEqual(["Clicked"])
+})
+
+test("an Agent sees the browser's tabs, the Person's too, through its own tools", async () => {
+  const address = await serve({ "/": "<title>Seen</title>" })
+  window = await startWindow()
+  const { page, banda } = window
+  const { thread, composer } = await firstThread(page)
+  await composer.fill("hello")
+  await composer.press("Enter")
+  await expect(thread.getByText("You said: hello")).toBeVisible()
+  const tabs = () => agentAnswers(window, "browser_tabs", {})
+  expect(tabs()).toEqual([])
+
+  // The Person's tab: the Agent sees it, driven by no one.
+  const bar = await openBrowser(page)
+  await bar.fill(address.replace("http://", ""))
+  await bar.press("Enter")
+  await expect(page.getByRole("region", { name: "Seen" })).toBeVisible()
+  const [seen] = tabs()
+  expect(seen).toMatchObject({
+    url: `${address}/`,
+    title: "Seen",
+    driven: false,
+  })
+  expect(typeof seen.id).toBe("number")
+
+  // Driven over CDP, it says so.
+  const browser = await chromium.connectOverCDP(banda("browser").trim())
+  expect(browser.contexts()[0]!.pages()).toHaveLength(1)
+  await expect.poll(() => tabs()[0].driven).toBe(true)
+  await browser.close()
+  await expect.poll(() => tabs()[0].driven).toBe(false)
 })
 
 /**

@@ -8,6 +8,7 @@ import {
 import { join, resolve } from "node:path"
 import { expect, type Locator, type Page, test } from "@playwright/test"
 import {
+  agentAnswers,
   agentCalls,
   clickNotice,
   countNotes,
@@ -1573,19 +1574,13 @@ test("an Agent opens a Pane beside its Thread without the focus, marked until th
   await expect(hello).toHaveAttribute("data-focused", "true")
 
   // It sees its Space's Panes, with what they show; it opened none.
-  const answer = (said: { isError?: boolean; content: { text: string }[] }) => {
-    expect(said.isError, said.content[0]?.text).toBeFalsy()
-    return JSON.parse(said.content[0]!.text)
-  }
-  const seen = answer(agentCalls(window, "panes", {}))
+  const seen = agentAnswers(window, "panes", {})
   const mine = seen[0].columns[0].panes[0]
   expect(mine).toMatchObject({ kind: "agents.thread", yours: false })
 
   const browser = { kind: "browser.browser", args: { tabs: [], shown: 0 } }
   const beside = { pane: mine.id, side: "right" }
-  const { pane } = answer(
-    agentCalls(window, "open_pane", { ...browser, beside })
-  )
+  const { pane } = agentAnswers(window, "open_pane", { ...browser, beside })
   const opened = page.locator(`[data-tile="${pane}"]`)
   await expect(opened).toHaveAttribute("data-marked", "true")
   await expect(hello).toHaveAttribute("data-focused", "true")
@@ -1602,7 +1597,7 @@ test("an Agent opens a Pane beside its Thread without the focus, marked until th
   await opened.click()
   await expect(opened).toHaveAttribute("data-focused", "true")
   await expect(opened).not.toHaveAttribute("data-marked")
-  answer(agentCalls(window, "close_pane", { pane }))
+  agentAnswers(window, "close_pane", { pane })
   await expect(opened).toHaveCount(0)
   await expect(hello).toBeVisible()
 })
