@@ -1,9 +1,16 @@
 import { createHash, generateKeyPairSync } from "node:crypto"
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
+import {
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  statSync,
+  writeFileSync,
+} from "node:fs"
 import { createServer, type Server } from "node:http"
 import type { AddressInfo } from "node:net"
 import { join } from "node:path"
 import {
+  chromium,
   type ElectronApplication,
   expect,
   type Locator,
@@ -352,6 +359,58 @@ test("the blocker drops what its lists name, and browser.toml turns it off", asy
   expect(await inPages(app, shown)).toEqual(["block"])
 })
 
+test("an Agent drives the browser's tabs over CDP, and Banda stays", async () => {
+  const address = await serve({
+    "/": "<title>Agent</title><button onclick=\"document.title = 'Clicked'\">Go</button>",
+    "/second": "<title>Second</title>",
+  })
+  window = await startWindow()
+  const { app, page, dir, banda } = window
+  const { thread: draft } = await firstThread(page)
+  await expect(draft).toBeVisible()
+  const bar = await openBrowser(page)
+  await bar.fill(address.replace("http://", ""))
+  await bar.press("Enter")
+  await expect.poll(() => inPages(app, "document.title")).toEqual(["Agent"])
+
+  // `banda browser` says what the window wrote, the Person's alone.
+  const file = join(dir, "state", "browser.json")
+  await expect.poll(() => existsSync(file)).toBe(true)
+  expect(statSync(file).mode & 0o777).toBe(0o600)
+  const endpoint = banda("browser").trim()
+  expect(endpoint).toBe(JSON.parse(readFileSync(file, "utf8")).endpoint)
+  expect(endpoint).toMatch(/^http:\/\/127\.0\.0\.1:\d+\/[0-9a-f]{48}$/)
+  // Without the token, or from a web page, it answers nothing.
+  const wrong = endpoint.replace(/[0-9a-f]{48}$/, "0".repeat(48))
+  expect((await fetch(`${wrong}/json/version`)).status).toBe(404)
+  const fromPage = await fetch(`${endpoint}/json/version`, {
+    headers: { origin: "https://example.com" },
+  })
+  expect(fromPage.status).toBe(403)
+
+  // Its targets are the tabs: never Banda's own page.
+  const browser = await chromium.connectOverCDP(endpoint)
+  const context = browser.contexts()[0]!
+  expect(context.pages().map((each) => each.url())).toEqual([`${address}/`])
+  const tab = context.pages()[0]!
+  await tab.getByRole("button", { name: "Go" }).click()
+  await expect.poll(() => inPages(app, "document.title")).toEqual(["Clicked"])
+
+  // A tab it opens is the Pane's, and closes there too.
+  const second = await context.newPage()
+  await second.goto(`${address}/second`)
+  await expect
+    .poll(async () => (await inPages(app, "document.title")).sort())
+    .toEqual(["Clicked", "Second"])
+  await second.close()
+  await expect.poll(() => inPages(app, "document.title")).toEqual(["Clicked"])
+
+  // It leaves; Banda and its tab stay.
+  await browser.close()
+  await expect(bar).toBeVisible()
+  expect(await inPages(app, "document.title")).toEqual(["Clicked"])
+})
+
 /**
  * An extension as the Chrome Web Store installs one, in the browser's
  * profile: its `key` names it. Its button has a badge and a popup, which
@@ -436,12 +495,13 @@ test("an extension's button shows its popup, which opens a tab", async () => {
   await button.click()
   await expect.poll(() => popupBox(app)).not.toBeNull()
 
-  // A tab it opens is a tab of this browser, and shows.
+  // A tab it opens is a tab of this browser, and shows. The popup closes
+  // as it does, so nothing waits on the page it ran in.
   await app.evaluate(({ webContents }, url) => {
     const popup = webContents
       .getAllWebContents()
       .find((each) => each.getURL().endsWith("/popup.html"))
-    return popup?.executeJavaScript(`openTab(${JSON.stringify(url)})`)
+    void popup?.executeJavaScript(`void openTab(${JSON.stringify(url)})`)
   }, `${address}/delta`)
   await expect(tabs.getByRole("tab")).toHaveText(["Alpha", "Delta"])
   await expect(tabs.getByRole("tab", { name: "Delta" })).toHaveAttribute(

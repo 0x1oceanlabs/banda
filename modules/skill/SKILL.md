@@ -63,6 +63,13 @@ settings.<section>.<row>` opens the settings Pane there. Other words
 open it with them typed in, as a search. It exits 2 when the window is
 not open.
 
+## Driving the browser's tabs
+
+`banda browser` prints the CDP endpoint of the browser in Banda's
+window, for Playwright, Playwright MCP or Chrome DevTools MCP; its
+targets are the Person's tabs. Read `banda skill browser` before you use
+it. It exits 2 when the window is not open.
+
 ## Where things live
 
 `~/.config/banda/` (or `$BANDA_CONFIG`) holds what belongs to this machine:

@@ -10,20 +10,14 @@
  * page as it attaches, and the Pane of the one the Person looks at. What an
  * extension asks of the tabs goes to the Panes as `BrowserNews`.
  */
-import { randomUUID } from "node:crypto"
-import {
-  type Box,
-  type BrowserNews,
-  PARTITION,
-} from "@banda/browser-pane/desktop"
-import { Context, Deferred, Effect, FiberSet, Layer, Schema } from "effect"
+import { type Box, PARTITION } from "@banda/browser-pane/desktop"
+import { Context, Effect, FiberSet, Layer, Schema } from "effect"
 import {
   type BrowserWindow,
   type ContextMenuParams,
   type MenuItem,
   session,
   type WebContents,
-  webContents,
 } from "electron"
 import { ElectronChromeExtensions } from "electron-chrome-extensions"
 import {
@@ -33,10 +27,8 @@ import {
 import { confirm } from "./dialog"
 import { Refused } from "./errors"
 import { Popup } from "./popup"
+import { pageOf, Tabs } from "./tabs"
 import { Window } from "./window"
-
-/** How long a Pane has to make a tab an extension asked for. */
-const CREATING = "10 seconds"
 
 /** Where a button is in the page, which its popup shows under. */
 export const BoxArg = Schema.Struct({
@@ -54,9 +46,6 @@ export class Extensions extends Context.Service<
     /** The page the Person looks at, by its ID: the extensions' active
      * tab. Another closes the popup, which spoke of the one before. */
     shown(page: number): Effect.Effect<void>
-    /** A Pane made the page, by its ID, for the tab an extension asked for
-     * with `request`; or none, when it could not. */
-    created(request: string, page: number | null): Effect.Effect<void>
     /** The name of the extension `id`; refused when there is none. */
     named(id: string): Effect.Effect<string, Refused>
     /** What the extensions add to a page's menu. */
@@ -72,38 +61,23 @@ export class Extensions extends Context.Service<
   static readonly layer = Layer.effect(Extensions)(
     Effect.gen(function* () {
       const window = yield* Window
+      const tabs = yield* Tabs
       // What the library's callbacks run stops with the layer.
       const run = yield* FiberSet.makeRuntimePromise()
       const profile = session.fromPartition(PARTITION)
       const popup = new Popup(profile)
       yield* Effect.addFinalizer(() => Effect.sync(() => popup.close()))
-      /** Tabs an extension asked for, until a Pane made their pages. */
-      const creating = new Map<string, Deferred.Deferred<number | null>>()
       /** The active tab's web contents. */
       let active = -1
 
-      const tell = (news: BrowserNews) =>
-        window.now()?.webContents.send("browser:news", news)
-      /** Asks the Pane in front for a tab at `url`; its page, once made. */
-      const create = (url = "about:blank") =>
+      /** The tab an extension asked for, in Banda's window. */
+      const create = (url?: string) =>
         Effect.gen(function* () {
-          const request = randomUUID()
-          const made = yield* Deferred.make<number | null>()
-          creating.set(request, made)
-          tell({ kind: "create", request, url })
-          const page = yield* Deferred.await(made).pipe(
-            Effect.timeout(CREATING),
-            Effect.ensuring(Effect.sync(() => creating.delete(request)))
-          )
-          const shown = pageOf(page)
+          const page = yield* tabs.create(url)
           const opened = window.now()
-          if (!shown || !opened)
-            return yield* Effect.fail(
-              new Refused({
-                message: "No browser in Banda could open the tab.",
-              })
-            )
-          return [shown, opened] as [WebContents, BrowserWindow]
+          if (!opened)
+            return yield* new Refused({ message: "Banda's window is closed." })
+          return [page, opened] as [WebContents, BrowserWindow]
         })
       const named = (id: string) =>
         Effect.suspend(() => {
@@ -123,8 +97,8 @@ export class Extensions extends Context.Service<
           const [, opened] = await run(create(first))
           return opened
         },
-        selectTab: (page) => tell({ kind: "select", from: page.id }),
-        removeTab: (page) => tell({ kind: "close", from: page.id }),
+        selectTab: (page) => tabs.tell({ kind: "select", from: page.id }),
+        removeTab: (page) => tabs.tell({ kind: "close", from: page.id }),
       })
       // `chrome.action.openPopup()` opens the library's popup, a window of
       // its own that Hyprland would tile: it closes, and the button's
@@ -165,11 +139,6 @@ export class Extensions extends Context.Service<
             popup.close()
             extensions.selectTab(page)
           }),
-        created: (request, page) =>
-          Effect.suspend(() => {
-            const made = creating.get(request)
-            return made ? Deferred.succeed(made, page) : Effect.void
-          }),
         named,
         menuItems: (page, params) =>
           extensions.getContextMenuItems(page, params),
@@ -201,14 +170,6 @@ export class Extensions extends Context.Service<
       }
     })
   )
-}
-
-/** The browser's page of `id`; none for any other web contents. */
-function pageOf(id: number | null): WebContents | undefined {
-  const page = id === null ? undefined : webContents.fromId(id)
-  return page && !page.isDestroyed() && page.getType() === "webview"
-    ? page
-    : undefined
 }
 
 /** What an extension may do, in a line, from its manifest. */

@@ -10,12 +10,13 @@ import {
 import { dirname } from "node:path"
 
 /** Writes whole or not at all, so the look's follower never reads half a
- * file; a file that is a link stays one, and its target changes. */
-export function writeWhole(file: string, text: string): void {
+ * file; a file that is a link stays one, and its target changes. A new
+ * file takes `mode`. */
+export function writeWhole(file: string, text: string, mode?: number): void {
   const target = existsSync(file) ? realpathSync(file) : file
   mkdirSync(dirname(target), { recursive: true })
   const next = `${target}.${process.pid}.new`
-  writeFileSync(next, text)
+  writeFileSync(next, text, { mode })
   renameSync(next, target)
 }
 

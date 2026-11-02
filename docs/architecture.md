@@ -723,6 +723,15 @@ modules/*/pane   each module's Panes
     the downloads come from the desktop as `browser:news`, by the page's
     web contents ID; Banda's page shows no remote image, so the desktop
     fetches the icon in the browser's profile.
+  - Agents drive the tabs through the window's CDP endpoint
+    (`app/desktop/src/cdp.ts`, ADR 0013 decision 7): an Effect HTTP
+    server on 127.0.0.1 with a random token in its path, which answers
+    as a whole Chrome whose targets are the tabs. A tab's
+    `webContents.debugger` is attached while a client uses it, and each
+    client's session on it is a Chromium session of its own; a client is
+    a scope, so one that leaves detaches. The window writes the endpoint
+    to `browser.json` in the state folder, where the engine's first line
+    names it, and `banda browser` prints it.
 
 ## Repository
 
@@ -737,7 +746,7 @@ banda/
     browser/pane/     React: the browser Pane, its tabs and row (ADR 0013)
     skill/            Rust: the Banda skill, its core and the topics it gathers (ADR 0012)
   look/               Rust: banda look, the look, the sidebar's arrangement and the browser's; skill/ its topics
-  engine/             the banda program: serve (the kernel and its modules), call, follow, look, skill, mcp
+  engine/             the banda program: serve (the kernel and its modules), call, follow, look, skill, mcp, menu, browser
   app/ui/             shadcn/ui and the Pane contract
   app/ghostty/        T3 Code's Ghostty adapter and its WebAssembly, vendored
   app/web/            React: the shell (bar, sidebar, workspaces, overview), the actions, the Pane registry

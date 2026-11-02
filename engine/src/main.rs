@@ -115,6 +115,16 @@ enum Command {
     /// `settings.<section>.<row>` (the settings Pane there). Other
     /// words open it with them typed in.
     Menu { route: Option<String> },
+    /// Prints the CDP endpoint of the browser in Banda's window, for an
+    /// Agent's tool: Playwright's `connectOverCDP`, Playwright MCP's
+    /// `--cdp-endpoint`, Chrome DevTools MCP's `--browser-url`. Its
+    /// targets are the browser's tabs. `banda skill browser` says more.
+    Browser {
+        /// Prints the browser's WebSocket instead, for a tool that takes
+        /// only that.
+        #[arg(long)]
+        web_socket: bool,
+    },
     /// Prints the Banda skill: what an Agent needs to know to work in
     /// Banda and to change it for its Person, then its topics.
     Skill {
@@ -254,6 +264,7 @@ fn main() -> ExitCode {
         Command::Settings { what } => return settings(what),
         Command::Menu { route } => return menu(route.unwrap_or_default()),
         Command::Modules { unstable } => return print_modules(unstable),
+        Command::Browser { web_socket } => return browser(web_socket),
         _ => {}
     }
     tracing_subscriber::fmt()
@@ -301,6 +312,7 @@ async fn run(command: Command, places: Places) -> Result<(), Failure> {
         Command::Modules { .. } => {
             unreachable!("the modules say what they offer without the engine")
         }
+        Command::Browser { .. } => unreachable!("the browser is the window's, not the engine's"),
         Command::Mcp => unreachable!("banda mcp finds the engine by its variables"),
         Command::Follow {
             space,
@@ -377,6 +389,39 @@ fn menu(route: String) -> ExitCode {
         .and_then(|places| tell_window(&places.window(), &json!({ "menu": route })));
     match told {
         Ok(()) => ExitCode::SUCCESS,
+        Err(failure) => failure.exit(),
+    }
+}
+
+/// What the window writes in `browser.json` while it is open.
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct BrowserEndpoint {
+    endpoint: String,
+    web_socket: String,
+    port: u16,
+}
+
+/// Prints where the window's browser takes CDP clients, once something
+/// listens there: a window that crashed leaves its file behind.
+fn browser(web_socket: bool) -> ExitCode {
+    let said = Places::from_env().and_then(|places| {
+        let closed = || Failure::Broken("Banda's window is not open.".into());
+        let bytes = std::fs::read(places.browser()).map_err(|_| closed())?;
+        let said: BrowserEndpoint = serde_json::from_slice(&bytes).map_err(Failure::broken)?;
+        let address = (places::HOST, said.port);
+        std::net::TcpStream::connect(address).map_err(|_| closed())?;
+        Ok(if web_socket {
+            said.web_socket
+        } else {
+            said.endpoint
+        })
+    });
+    match said {
+        Ok(line) => {
+            println!("{line}");
+            ExitCode::SUCCESS
+        }
         Err(failure) => failure.exit(),
     }
 }

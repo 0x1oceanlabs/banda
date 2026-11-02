@@ -26,6 +26,11 @@ await Promise.all([
     entryPoints: ["src/main.ts"],
     outfile: "out/main.mjs",
     format: "esm",
+    // CommonJS packages bundled in, as `ws` under Effect's HTTP server,
+    // require Node's modules: an ES module has no `require` of its own.
+    banner: {
+      js: 'import { createRequire as bandaRequire } from "node:module"; const require = bandaRequire(import.meta.url);',
+    },
   }),
   build({
     ...common,

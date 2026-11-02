@@ -77,7 +77,7 @@ it.live(
     Effect.gen(function* () {
       const program = script(
         `echo $$ > "$(dirname "$0")/pid"\n` +
-          `echo '{"protocol":1,"port":4321,"secret":"s3","window":"/run/door"}'\n` +
+          `echo '{"protocol":1,"port":4321,"secret":"s3","window":"/run/door","browser":"/run/browser.json"}'\n` +
           "exec sleep 60"
       )
       const [address, door] = yield* Engine.use((engine) =>

@@ -19,13 +19,15 @@ import {
 import { command, keepRunning, known, lines } from "./child"
 
 /** The first line `serve --with-parent` prints; `window` is where the
- * window listens for `banda menu`. */
+ * window listens for `banda menu`, and `browser` where it says its CDP
+ * endpoint. */
 const Running = Schema.fromJsonString(
   Schema.Struct({
     protocol: Schema.Number,
     port: Schema.Number,
     secret: Schema.String,
     window: Schema.String,
+    browser: Schema.String,
   })
 )
 
@@ -42,13 +44,15 @@ export class Engine extends Context.Service<
     /** Where the window listens for `banda menu`, as the engine named it
      * the first time it started. */
     readonly door: Effect.Effect<string>
+    /** Where the window says its CDP endpoint, for `banda browser`. */
+    readonly browser: Effect.Effect<string>
   }
 >()("banda/Engine") {
   static readonly layer = (binary: string) =>
     Layer.effect(Engine)(
       Effect.gen(function* () {
         const address = yield* SubscriptionRef.make(Option.none<Address>())
-        const door = yield* Deferred.make<string>()
+        const door = yield* Deferred.make<{ window: string; browser: string }>()
         /** The first line of a run: where it listens, and the door. */
         const started = (line: string) =>
           Schema.decodeUnknownEffect(Running)(line).pipe(
@@ -67,7 +71,7 @@ export class Engine extends Context.Service<
                     secret: running.secret,
                   })
                 ),
-                Deferred.succeed(door, running.window)
+                Deferred.succeed(door, running)
               )
             )
           )
@@ -96,7 +100,11 @@ export class Engine extends Context.Service<
             Stream.runHead,
             Effect.map(Option.getOrThrow)
           ),
-          door: Deferred.await(door),
+          door: Effect.map(Deferred.await(door), (running) => running.window),
+          browser: Effect.map(
+            Deferred.await(door),
+            (running) => running.browser
+          ),
         }
       })
     )
