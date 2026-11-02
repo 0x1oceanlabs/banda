@@ -225,6 +225,11 @@ export function useThreadSession({
     void acting.act(() =>
       engine.command("agents.retry", { turn: turn.id }, space)
     )
+  // The fork opens here, as a Thread picked in the sidebar does.
+  const fork = (turn: TurnView) =>
+    void acting
+      .act(() => engine.command("agents.fork", { turn: turn.id }, space))
+      .then((forked) => forked && update({ ...forked, harness }))
   const queue: QueueActions = {
     onSendNow: ({ turn }) =>
       void acting.act(() =>
@@ -287,6 +292,8 @@ export function useThreadSession({
     openDiff,
     stop,
     retry,
+    /** Forks the Thread at the end of `turn` and opens the fork. */
+    fork,
     queue,
     /** Opens the last waiting message to edit, from ↑ in the composer. */
     editLast: last && (() => setEditing(last.item.id)),

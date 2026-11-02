@@ -50,6 +50,7 @@ import {
 import {
   type Listing,
   steerable,
+  threadOf,
   type ThreadState,
   type Waiting,
   working,
@@ -123,6 +124,7 @@ function ThreadPane(props: PaneProps<ThreadArgs>) {
     openDiff,
     stop,
     retry,
+    fork,
     queue,
     editLast,
   } = useThreadSession(props)
@@ -206,6 +208,7 @@ function ThreadPane(props: PaneProps<ThreadArgs>) {
             answering={acting}
             onAnswer={answer}
             onRetry={retry}
+            onFork={fork}
             onOpenDiff={openDiff}
             writers={writers}
             onOpenThread={(other) => open(threadPaneOf(other), "right")}
@@ -345,6 +348,7 @@ function Transcript({
   name,
   reader,
   onRetry,
+  onFork,
   onOpenDiff,
   signIn,
   queue,
@@ -364,6 +368,7 @@ function Transcript({
     name: string
     reader: ImageReader
     onRetry: (turn: TurnView) => void
+    onFork: (turn: TurnView) => void
     onOpenDiff: OpenDiff
     /** How a Person signs in again, below a turn that failed for that. */
     signIn: (turn: TurnView) => React.ReactNode
@@ -372,12 +377,26 @@ function Transcript({
   const turn = working(state)
   const lines = useMemo(() => timeline(state), [state])
   const last = state.items.at(-1)
+  const turns = useMemo(
+    () => new Map(state.turns.map((one) => [one.id, one])),
+    [state.turns]
+  )
+  // A reply forks its Thread at the end of its turn, once it may.
+  const forkAt = (item: Item) => {
+    const its = item.turn === undefined ? undefined : turns.get(item.turn)
+    return its && (its.can.fork ? () => onFork(its) : null)
+  }
+  const forkedFrom = useMemo(
+    () => state.forkedFrom && threadOf(writers, state.forkedFrom),
+    [writers, state.forkedFrom]
+  )
   const render = (line: Line): React.ReactNode => {
     switch (line.kind) {
       case "item":
         return (
           <Entry
             item={line.item}
+            onFork={forkAt(line.item)}
             live={turn?.state === "running" && line.item === last}
             reader={reader}
             onOpenDiff={onOpenDiff}
@@ -443,6 +462,15 @@ function Transcript({
           aria-label={`Thread with ${name}`}
         >
           <MessageScrollerContent className="mx-auto w-full max-w-3xl gap-4 px-4 pt-4 pb-2">
+            {forkedFrom && (
+              <MessageScrollerItem key="forked-from">
+                <Writer
+                  thread={forkedFrom}
+                  says="Forked from"
+                  onOpen={onOpenThread}
+                />
+              </MessageScrollerItem>
+            )}
             {lines.map((line) => (
               <MessageScrollerItem
                 key={key(line)}
@@ -523,10 +551,13 @@ function Entry({
   onOpenDiff,
   writer,
   onOpenThread,
+  onFork,
   answering,
   onAnswer,
 }: Answering & {
   item: Item
+  /** From {@link AgentMessage}'s `onFork`. */
+  onFork?: (() => void) | null
   /** Whether the Agent is still writing it. */
   live: boolean
   reader: ImageReader
@@ -550,6 +581,7 @@ function Entry({
           text={body.text}
           at={item.at}
           live={live}
+          onFork={onFork}
           from={
             writer && (
               <Writer

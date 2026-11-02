@@ -4,4 +4,8 @@ import type { ThreadId } from "./ThreadId";
 /**
  * What `agents.fork` answers: the new Thread.
  */
-export type Forked = { thread: ThreadId, };
+export type Forked = { thread: ThreadId, 
+/**
+ * Its title, "<title> fork".
+ */
+title: string, };

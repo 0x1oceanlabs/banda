@@ -1,4 +1,5 @@
 import { useState } from "react"
+import { GitForkIcon } from "lucide-react"
 import type { Image, ListedThread } from "@banda/contract/agents"
 import { Bubble, BubbleContent } from "@banda/ui/components/bubble"
 import { Button } from "@banda/ui/components/button"
@@ -79,6 +80,7 @@ export function AgentMessage({
   at,
   live,
   from,
+  onFork,
 }: {
   text: string
   at: number
@@ -86,6 +88,9 @@ export function AgentMessage({
   live: boolean
   /** Another Thread's Agent wrote it: the {@link Writer} over it. */
   from?: React.ReactNode
+  /** Forks the Thread at the end of the reply's turn, as T3 Code's "Fork
+   * from this response" (ADR 0027, decision 3); null while it cannot. */
+  onFork?: (() => void) | null
 }) {
   return (
     <Message>
@@ -94,7 +99,27 @@ export function AgentMessage({
         <div data-quotable>
           <Markdown streaming={live}>{text}</Markdown>
         </div>
-        {!live && <Meta at={at} text={text} align="start" />}
+        {!live && (
+          <Meta
+            at={at}
+            text={text}
+            align="start"
+            actions={
+              onFork !== undefined && (
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label="Fork from this response"
+                  title="Fork from this response"
+                  disabled={onFork === null}
+                  onClick={onFork ?? undefined}
+                >
+                  <GitForkIcon />
+                </Button>
+              )
+            }
+          />
+        )}
       </MessageContent>
     </Message>
   )
@@ -116,12 +141,15 @@ export type Writers = {
 export function Writer({
   thread,
   answers = false,
+  says = answers ? "Answered by" : "Asked by",
   align = "start",
   onOpen,
 }: {
   thread: ListedThread | "gone"
   /** It answers what this Thread's Agent asked; else it asks. */
   answers?: boolean
+  /** What the line says of `thread`, if not that it asks or answers. */
+  says?: string
   align?: "start" | "end"
   onOpen: (thread: ListedThread) => void
 }) {
@@ -144,7 +172,7 @@ export function Writer({
           fallback={null}
         />
       )}
-      {answers ? "Answered by" : "Asked by"}
+      {says}
       <span className="truncate font-medium text-foreground">
         {gone ? "another Thread" : thread.title || "New Thread"}
       </span>
@@ -153,19 +181,21 @@ export function Writer({
 }
 
 /**
- * Copy and the time, shown on hover or focus, and always on a touch screen.
- * `children` come first and stay in view: they are the message's own
- * controls, such as opening a clamped one.
+ * Copy, the message's `actions` and the time, shown on hover or focus, and
+ * always on a touch screen. `children` come first and stay in view: they
+ * are the message's own controls, such as opening a clamped one.
  */
 function Meta({
   at,
   text,
   align,
+  actions,
   children,
 }: {
   at: number
   text: string
   align: "start" | "end"
+  actions?: React.ReactNode
   children?: React.ReactNode
 }) {
   return (
@@ -179,6 +209,7 @@ function Meta({
       {children}
       <div className="flex items-center gap-1 opacity-0 transition-opacity group-focus-within/message:opacity-100 group-hover/message:opacity-100 pointer-coarse:opacity-100">
         {text && <CopyButton text={text} label="Copy the message" />}
+        {actions}
         <time dateTime={new Date(at).toISOString()} title={fullDate(at)}>
           {clock(at)}
         </time>

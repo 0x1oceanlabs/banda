@@ -16,6 +16,7 @@ import {
   type ThreadState,
   waiting,
   working,
+  threadOf,
   writerOf,
 } from "./thread"
 
@@ -101,6 +102,11 @@ test("a message names the other Thread whose Agent wrote it, and whether it answ
   expect(writerOf({ threads: new Map(), self: "a" }, answer)).toBe("gone")
   expect(writerOf({ threads: new Map(), self: "a" }, own)).toBeUndefined()
   expect(writerOf({ threads: new Map() }, answer)).toBeUndefined()
+  // A Thread is found by its own ID too, as a fork finds the Thread it was
+  // forked from.
+  expect(threadOf(writers, "b")).toMatchObject({ title: "Thread b" })
+  expect(threadOf(writers, "c")).toBe("gone")
+  expect(threadOf({ threads: new Map() }, "b")).toBeUndefined()
 })
 
 test("a Question opens, then is answered or closed", () => {

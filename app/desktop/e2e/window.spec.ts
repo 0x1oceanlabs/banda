@@ -2511,3 +2511,48 @@ test("text selected in a reply is quoted in the composer, a line apart from what
   // The message goes with its quote as markdown.
   await expect(thread.getByText("> quote me\n\nwhy?")).toBeVisible()
 })
+
+test("a reply forks its Thread, as in T3 Code: the fork opens in its Pane and names the Thread it came from", async () => {
+  window = await startWindow()
+  const { page } = window
+  const { thread, composer } = await firstThread(page)
+  await composer.fill("remember apples")
+  await composer.press("Enter")
+  const reply = thread.getByText("I will remember apples.")
+  await expect(reply).toBeVisible()
+  await composer.fill("remember pears")
+  await composer.press("Enter")
+  await expect(thread.getByText("I will remember pears.")).toBeVisible()
+
+  // The first reply forks at the end of its turn; its button shows by
+  // Copy on hover or focus.
+  const fork = thread
+    .getByRole("button", { name: "Fork from this response" })
+    .first()
+  await fork.focus()
+  await expect(fork).toBeEnabled()
+  await page.screenshot({ path: "test-results/fork-button.png" })
+  await fork.click()
+  const forked = page.getByRole("region", { name: "remember apples fork" })
+  await expect(forked.getByText("I will remember apples.")).toBeVisible()
+  await expect(forked.getByText("I will remember pears.")).toBeHidden()
+  const from = forked.getByRole("button", {
+    name: "Forked from remember apples",
+  })
+  await expect(from).toBeVisible()
+  await page.screenshot({ path: "test-results/forked.png" })
+
+  // Its Agent knows only what came before the fork.
+  const box = forked.getByRole("textbox")
+  await box.fill("what do you remember")
+  await box.press("Enter")
+  await expect(forked.getByText("I remember: apples.")).toBeVisible()
+
+  // The line opens the Thread it was forked from.
+  await from.click()
+  const source = page.getByRole("region", {
+    name: "remember apples",
+    exact: true,
+  })
+  await expect(source).toHaveAttribute("data-focused", "true")
+})

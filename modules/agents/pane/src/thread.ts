@@ -34,6 +34,8 @@ export type ThreadState = {
   usage?: Usage
   /** Its queue waits for a Person: a stop or a restart held it. */
   held: boolean
+  /** The Thread it was forked from, by its ID, if it was. */
+  forkedFrom?: string
 }
 
 /** What a Thread runs with when nobody chose otherwise, as the engine has it. */
@@ -65,7 +67,19 @@ export const EMPTY: ThreadState = {
 export function fromView(view: ThreadView): ThreadState {
   const { at, items, turns, settings, offer, usage, held } = view
   const { title, harness } = view.thread
-  return { at, title, harness, items, turns, settings, offer, usage, held }
+  const forkedFrom = view.forked_from
+  return {
+    at,
+    title,
+    harness,
+    items,
+    turns,
+    settings,
+    offer,
+    usage,
+    held,
+    forkedFrom,
+  }
 }
 
 /** The value a Thread runs `option` with: its own choice, or else the
@@ -459,6 +473,16 @@ export function writerOf(
   const thread = threads.get(author.id)
   if (thread) return thread
   return self !== undefined && author.id !== self ? "gone" : undefined
+}
+
+/** The Thread `id` of the Space: that Thread, or `"gone"` when the list no
+ * longer has it; nothing before the list has come. */
+export function threadOf(
+  { threads, self }: Listing,
+  id: string
+): ListedThread | "gone" | undefined {
+  for (const thread of threads.values()) if (thread.id === id) return thread
+  return self !== undefined ? "gone" : undefined
 }
 
 /** Whether `item` is something the Agent wrote, not a Person. */
