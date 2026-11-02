@@ -75,8 +75,12 @@ and stay Roma's to change.
      the tab. (Amended in step 2: a pass naming its Thread proved
      needless.)
    - Main does the work with `playwright-core`, loaded on the first call.
-     It keeps one connection to its own CDP endpoint, attached only to the
-     tabs a Thread acts on, and keeps which Thread drives which tab.
+     It connects to its own CDP endpoint once for each tab a Thread acts
+     on, to a socket whose one target is that tab, so it attaches to no
+     other; it holds the connection, where a snapshot's refs live, until
+     the tab goes or the Person stops the Agent there. It keeps which
+     Thread drives which tab. (Amended in step 2c: one connection per
+     tab, as one that sees every tab attaches to every tab.)
    - No call waits for the Person: a Harness drops a long call (Codex's
      default is 60 s). Where the Person must act, the call refuses and
      says what to wait for (decision 6).

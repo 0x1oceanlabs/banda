@@ -19,6 +19,7 @@ import {
 } from "@playwright/test"
 import {
   agentAnswers,
+  agentCalls,
   firstThread,
   GLASS,
   SANDBOXED,
@@ -463,6 +464,53 @@ test("an Agent sees the browser's tabs, the Person's too, through its own tools"
   await expect.poll(() => tabs()[0].driven).toBe(true)
   await browser.close()
   await expect.poll(() => tabs()[0].driven).toBe(false)
+})
+
+test("an Agent reads a tab's tree with refs and new errors, until the Person stops it there", async () => {
+  const address = await serve({ "/": "<title>Read</title><button>Go</button>" })
+  window = await startWindow()
+  const { app, page } = window
+  const { thread, composer } = await firstThread(page)
+  await composer.fill("hello")
+  await composer.press("Enter")
+  await expect(thread.getByText("You said: hello")).toBeVisible()
+  const bar = await openBrowser(page)
+  await bar.fill(address.replace("http://", ""))
+  await bar.press("Enter")
+  await expect(page.getByRole("region", { name: "Read" })).toBeVisible()
+  const [{ id }] = agentAnswers(window, "browser_tabs", {})
+  const snapshot = () => {
+    const said = agentCalls(window, "browser_snapshot", { tab: id })
+    expect(said.isError, said.content[0]?.text).toBeFalsy()
+    return said.content[0]!.text
+  }
+
+  // The tree comes as text, with the page's address and title, and refs.
+  const first = snapshot()
+  expect(first).toContain(`Page: ${address}/\nTitle: Read\n`)
+  expect(first).toMatch(/button "Go" \[ref=e\d+\]/)
+  expect(first).not.toContain("errors since")
+  // Banda holds the tab while it reads it, and says so.
+  const tabs = page.getByRole("tablist", { name: "Tabs" })
+  const stop = tabs.getByRole("button", { name: "Stop the Agent in Read" })
+  await expect(stop).toBeVisible()
+
+  // An error the page logs comes with the next snapshot, once.
+  await inPages(app, 'console.error("nope")')
+  await expect
+    .poll(snapshot)
+    .toContain("errors since the last snapshot:\n- nope")
+  expect(snapshot()).not.toContain("- nope")
+
+  // The Person stops the Agent there; the next snapshot connects again.
+  await stop.click()
+  await expect(stop).toBeHidden()
+  expect(snapshot()).toMatch(/button "Go" \[ref=e\d+\]/)
+
+  // A tab there is not is refused, and says where the tabs are.
+  const none = agentCalls(window, "browser_snapshot", { tab: 999999 })
+  expect(none.isError).toBe(true)
+  expect(none.content[0]!.text).toContain("browser_tabs lists them")
 })
 
 /**

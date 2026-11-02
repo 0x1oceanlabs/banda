@@ -32,6 +32,8 @@ await Promise.all([
       "electron-chrome-extensions",
       "electron-chrome-web-store",
       "@ghostery/adblocker-electron",
+      // Loaded on an Agent's first browser tool (ADR 0029), not at start.
+      "playwright-core",
     ],
     entryPoints: ["src/main.ts"],
     outfile: "out/main.mjs",

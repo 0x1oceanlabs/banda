@@ -338,7 +338,13 @@ fn an_agent_reaches_banda_through_banda_mcp() {
     assert_eq!(
         names,
         [
-            &["threads", "read", "send", "browser_tabs"][..],
+            &[
+                "threads",
+                "read",
+                "send",
+                "browser_tabs",
+                "browser_snapshot"
+            ][..],
             &arranging,
             &["skill"]
         ]

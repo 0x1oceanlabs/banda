@@ -16,6 +16,7 @@ const ALLOWED = [
   /^@effect\//,
   /^electron(-chrome-extensions|-chrome-web-store)?$/,
   /^@ghostery\/adblocker-electron$/,
+  /^playwright-core$/,
   /^node:/,
   /^\.\.?\//,
 ]

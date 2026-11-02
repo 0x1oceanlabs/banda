@@ -159,6 +159,8 @@ impl Mcp {
             .ask(&method, None, CommandId::new(), arguments)
             .await
         {
+            // A text, as a page's tree, is said as it is.
+            Ok(Value::String(text)) => Ok(said(text, false)),
             Ok(answer) => Ok(said(answer.to_string(), false)),
             Err(Failure::Refused(refusal)) => Ok(refused(&refusal)),
             Err(broken) => {

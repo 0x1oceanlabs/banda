@@ -13,6 +13,10 @@
  * sessions a scope in it: a client that leaves, by closing or by error,
  * detaches from every tab it used.
  *
+ * Banda's own tools for Agents (ADR 0029) connect to it too, each to a
+ * socket of one tab's (`tab`): a whole browser whose one target is that
+ * tab, so they attach to the tabs a Thread acts on and to no other.
+ *
  * The endpoint is written to `browser.json` beside the engine's
  * `engine.json`, readable by the Person alone, and goes when the window
  * closes. `banda browser` prints it.
@@ -103,6 +107,8 @@ type Client = {
   readonly sessions: Set<string>
   /** The session a page's socket speaks to without naming one. */
   own?: string
+  /** The one tab a tab's socket sees; every tab, if none. */
+  readonly only?: Page
 }
 
 /** Where a session's messages go: a client's session on a tab, which
@@ -126,6 +132,10 @@ export class Cdp extends Context.Service<
     readonly stop: (page: number) => Effect.Effect<void>
     /** Whether an Agent drives the tab now. */
     readonly drives: (page: Page) => boolean
+    /** The socket of a browser whose one target is the tab `page`, for
+     * Banda's own tools; none for a tab there is not, or while the
+     * endpoint is not up. */
+    readonly tab: (page: number) => string | undefined
   }
 >()("banda/Cdp") {
   /** `userAgent` is the browser's, as its pages send it. */
@@ -244,26 +254,32 @@ export class Cdp extends Context.Service<
           page.setBackgroundThrottling(!now)
           tabs.tell({ kind: "driven", from: page.id, driven: now })
         }
-        /** The tabs as targets; one whose debugger refuses is left out. */
-        const targets = Effect.suspend(() =>
-          Effect.forEach(
-            tabs.all(),
-            (page) =>
-              targetOf(page).pipe(
-                Effect.map((targetId) => ({ page, targetId })),
-                Effect.option
-              ),
-            { concurrency: "unbounded" }
-          )
-        ).pipe(Effect.map((found) => found.flatMap(Option.toArray)))
-        const targetById = (targetId: unknown) =>
+        /** The tabs `client` sees: every tab, or its socket's one. */
+        const seen = (client?: Client): readonly Page[] =>
+          client?.only ? [client.only] : tabs.all()
+        /** The tabs `client` sees, as targets; one whose debugger refuses
+         * is left out. */
+        const targets = (client?: Client) =>
+          Effect.suspend(() =>
+            Effect.forEach(
+              seen(client),
+              (page) =>
+                targetOf(page).pipe(
+                  Effect.map((targetId) => ({ page, targetId })),
+                  Effect.option
+                ),
+              { concurrency: "unbounded" }
+            )
+          ).pipe(Effect.map((found) => found.flatMap(Option.toArray)))
+        /** A target `client` sees, by its ID. */
+        const targetById = (targetId: unknown, client?: Client) =>
           Effect.gen(function* () {
             if (typeof targetId !== "string")
               return yield* new Refused({ message: "targetId is a string" })
-            if (!byTarget.has(targetId)) yield* targets
+            if (!byTarget.has(targetId)) yield* targets(client)
             const page = byTarget.get(targetId)
             if (page?.isDestroyed()) byTarget.delete(targetId)
-            if (!page || page.isDestroyed())
+            if (!page || page.isDestroyed() || !seen(client).includes(page))
               return yield* new Refused({
                 message: "No target with given id found",
               })
@@ -424,7 +440,7 @@ export class Cdp extends Context.Service<
               return Effect.gen(function* () {
                 client.discover = params.discover === true
                 if (!client.discover) return {}
-                for (const { page, targetId } of yield* targets)
+                for (const { page, targetId } of yield* targets(client))
                   created(client, page, targetId)
                 return {}
               })
@@ -434,14 +450,14 @@ export class Cdp extends Context.Service<
                 client.autoAttach = params.autoAttach === true
                 if (!client.autoAttach) return {}
                 yield* Effect.forEach(
-                  tabs.all().filter((page) => !isUsed(page, client)),
+                  seen(client).filter((page) => !isUsed(page, client)),
                   (page) => Effect.ignore(announce(client, page)),
                   { concurrency: "unbounded", discard: true }
                 )
                 return {}
               })
             case "Target.getTargets":
-              return Effect.map(targets, (found) => ({
+              return Effect.map(targets(client), (found) => ({
                 targetInfos: found.map(({ page, targetId }) =>
                   infoOf(page, targetId)
                 ),
@@ -459,7 +475,7 @@ export class Cdp extends Context.Service<
                     },
                   })
                 : Effect.map(
-                    targetById(params.targetId),
+                    targetById(params.targetId, client),
                     ({ page, targetId }) => ({
                       targetInfo: infoOf(page, targetId),
                     })
@@ -467,27 +483,38 @@ export class Cdp extends Context.Service<
             case "Target.attachToTarget":
               return Effect.gen(function* () {
                 yield* flat({ ...params, autoAttach: true })
-                const { page } = yield* targetById(params.targetId)
+                const { page } = yield* targetById(params.targetId, client)
                 return { sessionId: yield* announce(client, page) }
               })
             case "Target.detachFromTarget":
               return Effect.as(end(String(params.sessionId), client), {})
             case "Target.createTarget":
               return Effect.gen(function* () {
+                if (client.only)
+                  return yield* new Refused({
+                    message:
+                      "This socket sees one tab: open one on the browser's.",
+                  })
                 const url = typeof params.url === "string" ? params.url : ""
                 const page = yield* tabs.create(url || undefined)
                 return { targetId: yield* targetOf(page) }
               })
             case "Target.closeTarget":
-              return Effect.map(targetById(params.targetId), ({ page }) => {
-                tabs.tell({ kind: "close", from: page.id })
-                return { success: true }
-              })
+              return Effect.map(
+                targetById(params.targetId, client),
+                ({ page }) => {
+                  tabs.tell({ kind: "close", from: page.id })
+                  return { success: true }
+                }
+              )
             case "Target.activateTarget":
-              return Effect.map(targetById(params.targetId), ({ page }) => {
-                tabs.tell({ kind: "select", from: page.id })
-                return {}
-              })
+              return Effect.map(
+                targetById(params.targetId, client),
+                ({ page }) => {
+                  tabs.tell({ kind: "select", from: page.id })
+                  return {}
+                }
+              )
             default:
               return Effect.fail(
                 new Unknown({ message: `'${method}' wasn't found` })
@@ -549,9 +576,12 @@ export class Cdp extends Context.Service<
             return Effect.void
           })
 
-        /** Serves a client on `socket`: one of the browser's, or of
-         * `page`'s alone. */
-        const serve = (socket: Socket.Socket, page?: Page) =>
+        /** Serves a client on `socket`: one of the browser's, of `page`'s
+         * alone, or of a browser that sees `only`. */
+        const serve = (
+          socket: Socket.Socket,
+          { page, only }: { page?: Page; only?: Page } = {}
+        ) =>
           Effect.gen(function* () {
             const out = yield* Queue.unbounded<string, Cause.Done>()
             const client: Client = {
@@ -564,11 +594,14 @@ export class Cdp extends Context.Service<
               discover: false,
               autoAttach: false,
               sessions: new Set(),
+              ...(only && { only }),
             }
+            // A tab's socket hears of its tab alone.
+            const changes = only
+              ? Stream.filter(tabs.changes, (change) => change.page === only)
+              : tabs.changes
             yield* Effect.forkScoped(
-              Stream.runForEach(tabs.changes, (change) =>
-                changed(client, change)
-              )
+              Stream.runForEach(changes, (change) => changed(client, change))
             )
             if (page) client.own = (yield* attach(client, page)).sessionId
             const { write } = yield* socket.writer
@@ -606,7 +639,8 @@ export class Cdp extends Context.Service<
             return page ? endOn(page) : Effect.void
           })
         const drives = (page: Page) => driven.has(page)
-        if (Option.isNone(listening)) return { endpoint: "", stop, drives }
+        if (Option.isNone(listening))
+          return { endpoint: "", stop, drives, tab: () => undefined }
         const server = listening.value
         const port = "port" in server.address ? server.address.port : 0
         const endpoint = `http://127.0.0.1:${port}/${token}`
@@ -645,7 +679,7 @@ export class Cdp extends Context.Service<
               })
             if (asked === "json" || asked === "json/list")
               return HttpServerResponse.jsonUnsafe(
-                (yield* targets).map(({ page, targetId }) => ({
+                (yield* targets()).map(({ page, targetId }) => ({
                   description: "",
                   devtoolsFrontendUrl: "",
                   id: targetId,
@@ -656,7 +690,11 @@ export class Cdp extends Context.Service<
                 }))
               )
             let page: Page | undefined
-            if (asked.startsWith("devtools/page/")) {
+            let only: Page | undefined
+            if (asked.startsWith("devtools/tab/")) {
+              only = pageWith(Number(asked.slice("devtools/tab/".length)))
+              if (!only) return HttpServerResponse.empty({ status: 404 })
+            } else if (asked.startsWith("devtools/page/")) {
               const found = yield* Effect.option(
                 targetById(asked.slice("devtools/page/".length))
               )
@@ -665,7 +703,7 @@ export class Cdp extends Context.Service<
               page = found.value.page
             } else if (!asked.startsWith("devtools/browser/"))
               return HttpServerResponse.empty({ status: 404 })
-            yield* serve(yield* request.upgrade, page)
+            yield* serve(yield* request.upgrade, { page, only })
             return HttpServerResponse.empty()
           }).pipe(
             Effect.catch(() =>
@@ -687,7 +725,9 @@ export class Cdp extends Context.Service<
             ).pipe(Effect.andThen(Effect.never), Effect.scoped)
           )
         )
-        return { endpoint, stop, drives }
+        const tab = (page: number) =>
+          pageWith(page) ? `${sockets}/devtools/tab/${page}` : undefined
+        return { endpoint, stop, drives, tab }
       })
     )
 }
@@ -703,6 +743,6 @@ function flat(params: Params): Effect.Effect<void, Refused> {
     : Effect.void
 }
 
-function messageOf(error: unknown): string {
+export function messageOf(error: unknown): string {
   return error instanceof Error ? error.message : String(error)
 }
