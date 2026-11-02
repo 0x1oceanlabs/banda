@@ -11,7 +11,8 @@
     "./workspaces": "./src/workspaces.ts",
     "./look": "./src/look.ts",
     "./sidebar": "./src/sidebar.ts",
-    "./settings": "./src/settings.ts"
+    "./settings": "./src/settings.ts",
+    "./bridge": "./src/bridge.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

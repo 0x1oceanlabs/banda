@@ -3,7 +3,10 @@
  * (app/desktop/src/browser.ts): the profile pages live in, the keys the
  * desktop takes from them, and the bridge on `window.banda.browser`.
  */
+import { type HostOf, invoke, push, send } from "@banda/contract/bridge"
 import type { Tabs } from "@banda/contract/look"
+
+import type { Pressed } from "./keys"
 
 export { type Pressed, taken } from "./keys"
 
@@ -65,34 +68,48 @@ export type Box = { x: number; y: number; width: number; height: number }
 /** The extensions' buttons. */
 export type Actions = { actions: Action[] }
 
-/** The desktop's side of the browser, on `window.banda.browser`. */
-export type BrowserHost = {
+/**
+ * The browser's part of the desktop bridge, on `window.banda.browser`
+ * (ADR 0028). The window's table takes it in, which names its leaves
+ * (app/web/src/host.ts).
+ */
+export const BROWSER_BRIDGE = {
   /** Writes where the tabs are into `browser.toml`; the look brings it back. */
-  tabs: (where: Tabs) => Promise<void>
+  tabs: invoke<[where: Tabs]>(),
   /** Shows a finished download in its folder. */
-  reveal: (path: string) => void
+  reveal: send<[path: string]>(),
   /** Calls `listener` with each piece of news; returns how to stop. */
-  listen: (listener: (news: BrowserNews) => void) => () => void
+  listen: push<BrowserNews>(),
   /** The page the Person looks at, for the extensions' active tab. */
-  shown: (contents: number) => void
+  shown: send<[contents: number]>(),
   /** The page made for a `create`; none when no browser could take it. */
-  created: (request: string, contents: number | null) => void
+  created: send<[request: string, contents: number | null]>(),
   /** Stops the Agents that drive the page: their sessions on it end. */
-  stop: (contents: number) => void
-  /** The extensions' buttons. */
+  stop: send<[contents: number]>(),
+  /** Pins an extension's button to the row, or takes it off, in
+   * `browser.toml`. */
+  pin: invoke<[extension: string, pinned: boolean]>(),
+  /** Removes an extension, once the Person says so. */
+  remove: invoke<[extension: string]>(),
+  actions: {
+    /** Shows the button's popup, `url`, under `under`, the button's place
+     * in the window; or closes it when it shows. */
+    popup: send<[extension: string, url: string, under: Box]>(),
+  },
+  /** A key main took from a browser page: the preload presses it in the
+   * window, so Banda's actions and the Pane hear it as their own. */
+  key: push<Pressed>(),
+}
+
+/** The desktop's side of the browser, on `window.banda.browser`. */
+export type BrowserHost = Omit<HostOf<typeof BROWSER_BRIDGE>, "key"> & {
+  /** The extensions' buttons, which electron-chrome-extensions answers
+   * itself (app/desktop/src/preload.ts). */
   actions: {
     state: () => Promise<Actions>
     /** Clicks a button without a popup: the extension hears it. */
     click: (extension: string, tab: number) => Promise<void>
-    /** Shows the button's popup, `url`, under `under`, the button's place
-     * in the window; or closes it when it shows. */
-    popup: (extension: string, url: string, under: Box) => void
     /** Calls `listener` when any button changes; returns how to stop. */
     listen: (listener: () => void) => () => void
   }
-  /** Pins an extension's button to the row, or takes it off, in
-   * `browser.toml`. */
-  pin: (extension: string, pinned: boolean) => Promise<void>
-  /** Removes an extension, once the Person says so. */
-  remove: (extension: string) => Promise<void>
 }

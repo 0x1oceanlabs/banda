@@ -13,13 +13,14 @@ import { randomUUID } from "node:crypto"
 import { existsSync } from "node:fs"
 import { join, parse } from "node:path"
 import {
+  BROWSER_BRIDGE,
   type BrowserNews,
   type Download,
   PARTITION,
   type Pressed,
   taken,
 } from "@banda/browser-pane/desktop"
-import { Context, Effect, FiberSet, Layer, Stream } from "effect"
+import { Context, Effect, FiberSet, Layer, Schema, Stream } from "effect"
 import {
   app,
   clipboard,
@@ -34,7 +35,9 @@ import {
 import { Blocker } from "./blocker"
 import { type Ask, confirm } from "./dialog"
 import type { Broke, Refused } from "./errors"
-import { Extensions } from "./extensions"
+import { Cdp } from "./cdp"
+import { BoxArg, Extensions } from "./extensions"
+import { type Answers, tellPage, text } from "./ipc"
 import { Look } from "./look"
 import { Settings } from "./settings"
 import { Tabs } from "./tabs"
@@ -127,7 +130,8 @@ function host(
     prefs.webSecurity = true
   })
   contents.on("did-attach-webview", (_event, page) => {
-    const tell = (news: BrowserNews) => contents.send("browser:news", news)
+    const tell = (news: BrowserNews) =>
+      tellPage(contents, BROWSER_BRIDGE.listen, news)
     tabs.attached(page)
     keys(page, contents)
     keep(page, tell, extensions)
@@ -153,7 +157,7 @@ export function keys(page: WebContents, window: WebContents): void {
     }
     if (!taken(key)) return
     event.preventDefault()
-    window.send("browser:key", key)
+    tellPage(window, BROWSER_BRIDGE.key, key)
   })
 }
 
@@ -357,10 +361,10 @@ function keepProfile(
     saved.add(path)
     const id = randomUUID()
     const tell = () =>
-      window()?.webContents.send("browser:news", {
+      tellPage(window()?.webContents, BROWSER_BRIDGE.listen, {
         kind: "download",
         download: downloadOf(id, path, item),
-      } satisfies BrowserNews)
+      })
     // Chromium says it on every piece received: the row hears it at most
     // a few times a second, and always at the end.
     let told = 0
@@ -423,4 +427,41 @@ function free(path: string): string {
     candidate = join(dir, `${name} (${n})${ext}`)
   }
   return candidate
+}
+
+const page = Schema.Tuple([Schema.Number])
+
+/** How main answers the browser's channels (ADR 0028), which `main.ts`
+ * takes in without naming them. */
+export const browserAnswers: Answers<
+  typeof BROWSER_BRIDGE,
+  Browser | Extensions | Tabs | Cdp
+> = {
+  tabs: [
+    Schema.Tuple([Schema.Literals(["top", "left"])]),
+    ([where]) => Browser.use((browser) => browser.tabs(where)),
+  ],
+  reveal: [text, ([path]) => Browser.use((browser) => browser.reveal(path))],
+  shown: [
+    page,
+    ([page]) => Extensions.use((extensions) => extensions.shown(page)),
+  ],
+  created: [
+    Schema.Tuple([Schema.String, Schema.NullOr(Schema.Number)]),
+    ([request, page]) => Tabs.use((tabs) => tabs.created(request, page)),
+  ],
+  stop: [page, ([page]) => Cdp.use((cdp) => cdp.stop(page))],
+  pin: [
+    Schema.Tuple([Schema.String, Schema.Boolean]),
+    ([id, pinned]) => Browser.use((browser) => browser.pin(id, pinned)),
+  ],
+  remove: [text, ([id]) => Browser.use((browser) => browser.remove(id))],
+  // What an extension's button sends.
+  actions: {
+    popup: [
+      Schema.Tuple([Schema.String, Schema.String, BoxArg]),
+      ([extension, url, under]) =>
+        Extensions.use((extensions) => extensions.popup(extension, url, under)),
+    ],
+  },
 }

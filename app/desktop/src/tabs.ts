@@ -4,7 +4,7 @@
  * one through the Pane in front, and close or show one through its Pane.
  */
 import { randomUUID } from "node:crypto"
-import type { BrowserNews } from "@banda/browser-pane/desktop"
+import { BROWSER_BRIDGE, type BrowserNews } from "@banda/browser-pane/desktop"
 import {
   Context,
   Deferred,
@@ -16,6 +16,7 @@ import {
 } from "effect"
 import { type WebContents, webContents } from "electron"
 import { Refused } from "./errors"
+import { tellPage } from "./ipc"
 import { Window } from "./window"
 
 /** How long a Pane has to make a tab it was asked for. */
@@ -51,7 +52,7 @@ export class Tabs extends Context.Service<
       const creating = new Map<string, Deferred.Deferred<number | null>>()
       const publish = (change: Change) => PubSub.publishUnsafe(changed, change)
       const tell = (news: BrowserNews) =>
-        window.now()?.webContents.send("browser:news", news)
+        tellPage(window.now()?.webContents, BROWSER_BRIDGE.listen, news)
 
       return {
         all: () => [...pages],

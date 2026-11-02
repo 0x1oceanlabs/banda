@@ -25,18 +25,19 @@ import {
 import { type Look as LookValue, WALLPAPER_URL } from "@banda/contract/look"
 import { NodeServices } from "@effect/platform-node"
 import { Effect, Layer, ManagedRuntime, Schema, Stream } from "effect"
-import { Browser, userAgent } from "./browser"
+import { Browser, browserAnswers, userAgent } from "./browser"
 import { Cdp } from "./cdp"
-import { pickFolder } from "./dialog"
 import { openDoor } from "./door"
-import { BoxArg, Extensions } from "./extensions"
+import { pickFolder } from "./dialog"
+import { Extensions } from "./extensions"
 import { Engine } from "./engine"
 import { firstFrame, Look } from "./look"
 import { Refused } from "./errors"
-import { channels } from "./ipc"
+import { none, serve, tellPage, text } from "./ipc"
 import { NoticeArg, Notices, RecordedDesktop } from "./notices"
 import { Settings } from "./settings"
 import { Tabs } from "./tabs"
+import { BRIDGE } from "@banda/web/host"
 import { ensure } from "./sidebar"
 import { Window } from "./window"
 
@@ -153,7 +154,7 @@ async function ready(): Promise<void> {
     const background = firstFrame(now, nativeTheme.shouldUseDarkColors)
     if (!window) return
     if (background && window !== clear) window.setBackgroundColor(background)
-    window.webContents.send("look", lookIn(window, now))
+    tellPage(window.webContents, BRIDGE.look.listen, lookIn(window, now))
   }
   runtime.runFork(
     Look.use((look) =>
@@ -170,120 +171,109 @@ async function ready(): Promise<void> {
   session.defaultSession.setPermissionRequestHandler(
     (_contents, _permission, answer) => answer(false)
   )
-  const { handle, on } = channels(runtime, fromPage)
-  const none = Schema.Tuple([])
-  const text = Schema.Tuple([Schema.String])
   const write = (file: string, key: string, value: unknown) =>
     Settings.use((settings) => settings.write(file, key, value))
 
-  handle("engine", none, () => Engine.use((engine) => engine.address))
-  handle("look", none, (_, event) =>
-    Effect.map(
-      Look.use((look) => look.current),
-      (now) =>
-        now ? lookIn(BrowserWindow.fromWebContents(event.sender), now) : now
-    )
-  )
-  handle("sidebar.preset", text, ([name]) =>
-    Effect.gen(function* () {
-      const sidebar = yield* Look.part("sidebar", "The sidebar's file")
-      if (!sidebar.presets.some((preset) => preset.name === name))
-        return yield* new Refused({
-          message: `There is no preset ${JSON.stringify(name)}.`,
-        })
-      yield* write("sidebar.toml", "preset", name)
-    })
-  )
-  handle("sidebar.edit", none, () =>
-    Effect.gen(function* () {
-      const sidebar = yield* Look.part("sidebar", "The sidebar's file")
-      ensure(sidebar.file)
-      const failed = yield* Effect.promise(() => shell.openPath(sidebar.file))
-      if (failed) return yield* new Refused({ message: failed })
-    })
-  )
-  // The browser's (ADR 0013).
-  handle(
-    "browser.tabs",
-    Schema.Tuple([Schema.Literals(["top", "left"])]),
-    ([where]) => Browser.use((browser) => browser.tabs(where))
-  )
-  handle(
-    "browser.pin",
-    Schema.Tuple([Schema.String, Schema.Boolean]),
-    ([id, pinned]) => Browser.use((browser) => browser.pin(id, pinned))
-  )
-  handle("browser.remove", text, ([id]) =>
-    Browser.use((browser) => browser.remove(id))
-  )
-  on("browser.reveal", text, ([path]) =>
-    Browser.use((browser) => browser.reveal(path))
-  )
-  // What an extension's button and the tabs send.
-  on(
-    "browser.popup",
-    Schema.Tuple([Schema.String, Schema.String, BoxArg]),
-    ([extension, url, under]) =>
-      Extensions.use((extensions) => extensions.popup(extension, url, under))
-  )
-  on("browser.shown", Schema.Tuple([Schema.Number]), ([page]) =>
-    Extensions.use((extensions) => extensions.shown(page))
-  )
-  on(
-    "browser.created",
-    Schema.Tuple([Schema.String, Schema.NullOr(Schema.Number)]),
-    ([request, page]) => Tabs.use((tabs) => tabs.created(request, page))
-  )
-  on("browser.stop", Schema.Tuple([Schema.Number]), ([page]) =>
-    Cdp.use((cdp) => cdp.stop(page))
-  )
-  // The settings' (ADR 0016) and the Banda menu's (ADR 0017).
-  on("menu.open", text, ([route]) => Effect.sync(() => openMenu(route)))
-  handle(
-    "settings.set",
-    Schema.Tuple([Schema.String, Schema.String, Schema.String]),
-    ([file, key, value]) =>
-      Settings.use((settings) => settings.set(file, key, value))
-  )
-  handle(
-    "settings.reset",
-    Schema.Tuple([Schema.String, Schema.String]),
-    ([file, key]) => Settings.use((settings) => settings.reset(file, key))
-  )
-  handle(
-    "settings.rename",
-    Schema.Tuple([Schema.String, Schema.String, Schema.String]),
-    ([file, key, to]) =>
-      Settings.use((settings) => settings.rename(file, key, to))
-  )
-  handle("settings.themes", none, () =>
-    Settings.use((settings) => settings.themes)
-  )
-  handle("settings.reveal", text, ([file]) =>
-    Effect.flatMap(Look.part("sidebar", "The config folder"), (sidebar) =>
-      Settings.use((settings) => settings.reveal(sidebar.file, file))
-    )
-  )
-  // "Add Space"'s folder picker (ADR 0026).
-  handle(
-    "folder.pick",
-    Schema.Tuple([Schema.NullOr(Schema.String)]),
-    ([at], event) => pickFolder(BrowserWindow.fromWebContents(event.sender), at)
-  )
-  // Calls (ADR 0011).
-  on("notify:show", Schema.Tuple([NoticeArg]), ([notice]) =>
-    Effect.andThen(
-      Notices.use((notices) => notices.show(notice, answered)),
-      // The workspace that holds the window lights up in the desktop's bar.
-      Effect.sync(() => {
-        if (window && !window.isFocused()) window.flashFrame(true)
-      })
-    )
-  )
-  on("notify:withdraw", text, ([key]) =>
-    Notices.use((notices) => notices.withdraw(key))
-  )
-  handle("notify:quiet", none, () => Notices.use((notices) => notices.quiet))
+  serve(runtime, fromPage, BRIDGE, {
+    engine: [none, () => Engine.use((engine) => engine.address)],
+    look: {
+      current: [
+        none,
+        (_, event) =>
+          Effect.map(
+            Look.use((look) => look.current),
+            (now) =>
+              now
+                ? lookIn(BrowserWindow.fromWebContents(event.sender), now)
+                : now
+          ),
+      ],
+    },
+    sidebar: {
+      preset: [
+        text,
+        ([name]) =>
+          Effect.gen(function* () {
+            const sidebar = yield* Look.part("sidebar", "The sidebar's file")
+            if (!sidebar.presets.some((preset) => preset.name === name))
+              return yield* new Refused({
+                message: `There is no preset ${JSON.stringify(name)}.`,
+              })
+            yield* write("sidebar.toml", "preset", name)
+          }),
+      ],
+      edit: [
+        none,
+        () =>
+          Effect.gen(function* () {
+            const sidebar = yield* Look.part("sidebar", "The sidebar's file")
+            ensure(sidebar.file)
+            const failed = yield* Effect.promise(() =>
+              shell.openPath(sidebar.file)
+            )
+            if (failed) return yield* new Refused({ message: failed })
+          }),
+      ],
+    },
+    // The browser's own (ADR 0013).
+    browser: browserAnswers,
+    // The settings' (ADR 0016) and the Banda menu's (ADR 0017).
+    settings: {
+      set: [
+        Schema.Tuple([Schema.String, Schema.String, Schema.String]),
+        ([file, key, value]) =>
+          Settings.use((settings) => settings.set(file, key, value)),
+      ],
+      reset: [
+        Schema.Tuple([Schema.String, Schema.String]),
+        ([file, key]) => Settings.use((settings) => settings.reset(file, key)),
+      ],
+      rename: [
+        Schema.Tuple([Schema.String, Schema.String, Schema.String]),
+        ([file, key, to]) =>
+          Settings.use((settings) => settings.rename(file, key, to)),
+      ],
+      reveal: [
+        text,
+        ([file]) =>
+          Effect.flatMap(Look.part("sidebar", "The config folder"), (sidebar) =>
+            Settings.use((settings) => settings.reveal(sidebar.file, file))
+          ),
+      ],
+      themes: [none, () => Settings.use((settings) => settings.themes)],
+    },
+    menu: {
+      open: [text, ([route]) => Effect.sync(() => openMenu(route))],
+    },
+    // Calls (ADR 0011).
+    notify: {
+      show: [
+        Schema.Tuple([NoticeArg]),
+        ([notice]) =>
+          Effect.andThen(
+            Notices.use((notices) => notices.show(notice, answered)),
+            // The workspace that holds the window lights up in the
+            // desktop's bar.
+            Effect.sync(() => {
+              if (window && !window.isFocused()) window.flashFrame(true)
+            })
+          ),
+      ],
+      withdraw: [
+        text,
+        ([key]) => Notices.use((notices) => notices.withdraw(key)),
+      ],
+      quiet: [none, () => Notices.use((notices) => notices.quiet)],
+    },
+    // "Add Space"'s folder picker (ADR 0026).
+    folder: {
+      pick: [
+        Schema.Tuple([Schema.NullOr(Schema.String)]),
+        ([at], event) =>
+          pickFolder(BrowserWindow.fromWebContents(event.sender), at),
+      ],
+    },
+  })
   const first = await runtime.runPromise(Look.first(LOOK_WAIT))
   if (first) nativeTheme.themeSource = first.mode
   Menu.setApplicationMenu(process.platform === "darwin" ? macMenu() : null)
@@ -304,14 +294,14 @@ function openMenu(route: unknown): string {
   if (typeof route !== "string") return "the route is not a string"
   const shown = inFront()
   if (!shown) return "no window"
-  shown.webContents.send("menu:open", route)
+  tellPage(shown.webContents, BRIDGE.menu.listen, route)
   return "ok"
 }
 
 /** The Person clicked a notice: the window comes to the front, and the
  * page goes to what called. */
 function answered(key: string) {
-  inFront()?.webContents.send("notify:answer", key)
+  tellPage(inFront()?.webContents, BRIDGE.notify.listen, key)
 }
 
 /** The window, brought to the front; none when it is closed. */
