@@ -16,7 +16,7 @@
 //! What the Harness used, and what it offers, are written at once between
 //! turns too.
 
-use crate::acp::{Between, Connection, Said, Session};
+use crate::acp::{Between, Said, Session, WeakSession};
 use crate::live::Live;
 use crate::model::{
     Body, Fact, Failure, Item, ItemId, Opener, Settings, ThreadId, ToolStatus, TurnId, TurnState,
@@ -26,7 +26,7 @@ use crate::transcript::{self, Transcript};
 use crate::{emit, plain, store, writer};
 use banda_kernel::{AgentId, Error, ModuleSpace, Participant, Tx};
 use std::collections::HashSet;
-use std::sync::{Arc, Weak};
+use std::sync::Arc;
 use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio::time::Instant;
@@ -52,28 +52,22 @@ pub struct Listener {
 impl Listener {
     /// Hears `session` from now on, unless someone already does. It stops
     /// when the Harness is gone, and never keeps one that is let go.
-    pub fn hear(self, connection: &Arc<Connection>, session: &Session) {
-        let Some(hear) = connection.between(session) else {
+    pub fn hear(self, session: &Session) {
+        let Some(hear) = session.between() else {
             return;
         };
-        let (connection, session) = (Arc::downgrade(connection), session.clone());
-        tokio::spawn(self.listen(connection, session, hear));
+        tokio::spawn(self.listen(session.downgrade(), hear));
     }
 
-    async fn listen(
-        self,
-        connection: Weak<Connection>,
-        session: Session,
-        mut hear: mpsc::UnboundedReceiver<Between>,
-    ) {
+    async fn listen(self, session: WeakSession, mut hear: mpsc::UnboundedReceiver<Between>) {
         while let Some(heard) = hear.recv().await {
             let Between::Said(said) = heard else {
                 continue;
             };
-            let Some(connection) = connection.upgrade() else {
+            let Some(session) = session.upgrade() else {
                 return;
             };
-            connection.touch();
+            session.touch();
             let (thread, agent) = (self.thread, Participant::Agent(self.agent));
             let written = match said {
                 Said::Used { usage, .. } => self
@@ -91,7 +85,7 @@ impl Listener {
                 // how it went: Claude Code ends a command it sent to the
                 // background so.
                 Said::Withdrawn(_) | Said::ToolChanged { .. } => Ok(()),
-                said => self.went_on(connection, &session, said, &mut hear).await,
+                said => self.went_on(&session, said, &mut hear).await,
             };
             if let Err(error) = written {
                 tracing::warn!(%error, "what a Harness said between turns could not be written");
@@ -103,23 +97,22 @@ impl Listener {
     /// Agent's own shows what it does, until it is done.
     async fn went_on(
         &self,
-        connection: Arc<Connection>,
         session: &Session,
         first: Said,
         hear: &mut mpsc::UnboundedReceiver<Between>,
     ) -> Result<(), String> {
-        let Some(Opened { turn, settings }) = self.open(&connection, session).await? else {
+        let Some(Opened { turn, settings }) = self.open(session).await? else {
             return Ok(());
         };
         let id = turn.id;
-        let _kept = connection.keep();
-        self.live.begin(id, connection.clone(), session.clone());
+        let _kept = session.keep();
+        self.live.begin(id, session.clone());
         let mut transcript = Transcript::new(
             self.space.clone(),
             &turn,
             self.harness.clone(),
             settings,
-            connection.running(session),
+            session.running(),
         );
         let (to_writer, mut written) = mpsc::unbounded_channel();
         let mut calls = Calls::default();
@@ -164,8 +157,8 @@ impl Listener {
             // What the Harness says cannot be written: it stops, unless a
             // turn's prompt took the session over.
             Err(reason) => {
-                if !connection.prompting(session) {
-                    let _ = connection.cancel(session);
+                if !session.prompting() {
+                    let _ = session.cancel();
                 }
                 Ending::failed(reason, None)
             }
@@ -190,11 +183,7 @@ impl Listener {
     /// as ended: the Harness may go on before Banda wrote how that turn
     /// ended. `None` when the Thread is gone, or a turn's prompt took the
     /// session over meanwhile, whose turn what it says now is.
-    async fn open(
-        &self,
-        connection: &Connection,
-        session: &Session,
-    ) -> Result<Option<Opened>, String> {
+    async fn open(&self, session: &Session) -> Result<Option<Opened>, String> {
         let (thread, agent) = (self.thread, self.agent);
         let given_up = Instant::now() + ENDING;
         // Following the Thread's turn endings before the first try, so the
@@ -209,7 +198,7 @@ impl Listener {
             // Refused: another turn runs in the Thread, and nothing was
             // written.
             match opening {
-                Err(Error::Refused(_)) if connection.prompting(session) => return Ok(None),
+                Err(Error::Refused(_)) if session.prompting() => return Ok(None),
                 // It tries again once a turn of the Thread is written as
                 // ended.
                 Err(Error::Refused(refused)) => {

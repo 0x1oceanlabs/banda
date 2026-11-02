@@ -23,7 +23,7 @@
 //! turn answers the Harness's Questions by the mode where the mode allows,
 //! and asks the Person otherwise.
 
-use crate::acp::{self, Connection, Opened, Prompt, PromptImage, Running, Session, Steered};
+use crate::acp::{self, Opened, Prompt, PromptImage, Running, Session, Steered};
 use crate::between;
 use crate::images::Images;
 use crate::kept;
@@ -344,7 +344,7 @@ pub async fn steer(live: &Live, space: ModuleSpace, effect: &Effect) -> Outcome 
     };
     // Written as the outbox records the effect's end, and tried again with it.
     let requeued = || Outcome::done_writing(move |tx| requeue(tx, item));
-    let Some((connection, session)) = begun(live, &space, &turn).await else {
+    let Some(session) = begun(live, &space, &turn).await else {
         return requeued();
     };
     // A turn that is stopping takes nothing more.
@@ -360,10 +360,10 @@ pub async fn steer(live: &Live, space: ModuleSpace, effect: &Effect) -> Outcome 
         Ok(false) => return requeued(),
         Err(error) => return Outcome::Retry(error.to_string()),
     }
-    if !connection.steers() {
+    if !session.steers() {
         let text = format!(
             "{} cannot take a message while it works, so Banda stopped it to send yours.",
-            connection.name()
+            session.name()
         );
         let (thread, agent) = (turn.thread, Participant::Agent(turn.agent));
         let gave_way = space
@@ -382,9 +382,8 @@ pub async fn steer(live: &Live, space: ModuleSpace, effect: &Effect) -> Outcome 
         }
         return requeued();
     }
-    let running = connection.running(&session);
-    let Ok((prompt, refused)) = prompt_of(&space, connection.name(), &running, message).await
-    else {
+    let running = session.running();
+    let Ok((prompt, refused)) = prompt_of(&space, session.name(), &running, message).await else {
         return requeued();
     };
     if let Err(error) = notices(&space, &turn, refused).await {
@@ -392,7 +391,7 @@ pub async fn steer(live: &Live, space: ModuleSpace, effect: &Effect) -> Outcome 
     }
     // Marked first: what the Agent says of the message reads after it.
     live.mark_steered(turn.id);
-    match connection.steer(&session, &prompt).await {
+    match session.steer(&prompt).await {
         Ok(Steered::Joined) => Outcome::Done,
         Ok(Steered::NotNow) => requeued(),
         Err(error) => {
@@ -402,14 +401,10 @@ pub async fn steer(live: &Live, space: ModuleSpace, effect: &Effect) -> Outcome 
     }
 }
 
-/// The Harness and session of a turn that runs, once its prompt reached
-/// them, which takes a while for a Harness that starts; `None` when the
-/// turn ended first, or never began.
-async fn begun(
-    live: &Live,
-    space: &ModuleSpace,
-    turn: &store::Turn,
-) -> Option<(Arc<Connection>, Session)> {
+/// The session of a turn that runs, once its prompt reached it, which
+/// takes a while for a Harness that starts; `None` when the turn ended
+/// first, or never began.
+async fn begun(live: &Live, space: &ModuleSpace, turn: &store::Turn) -> Option<Session> {
     // Following the Thread's turn endings before it reads, so an end
     // between the two is not missed.
     let mut ended = space.committed(turn.thread, &[writer::ENDED]);
@@ -506,14 +501,14 @@ async fn run(
             .await
             .map_err(|e| unplanned(plain(e)))?;
     }
-    let (running, mut refused) = connection.settle(&session, &settings).await;
+    let (running, mut refused) = session.settle(&settings).await;
     let (prompt, left_out) = prompt_of(space, &harness.name, &running, message)
         .await
         .map_err(unplanned)?;
     refused.extend(left_out);
     let (id, agent, now) = (turn.id, Participant::Agent(turn.agent), running.clone());
     // What the Agent used, as it last said, between turns too.
-    let usage = connection.usage(&session);
+    let usage = session.usage();
     space
         .write(move |tx| {
             offered(tx, agent, thread, &now)?;
@@ -527,8 +522,8 @@ async fn run(
         })
         .await
         .map_err(|e| unplanned(plain(e)))?;
-    let (mut hear, mut done) = connection.prompt(&session, &prompt);
-    live.begin(turn.id, connection.clone(), session.clone());
+    let (mut hear, mut done) = session.prompt(&prompt);
+    live.begin(turn.id, session.clone());
     // What the session says once the turn ends is the Agent's own.
     let listener = between::Listener {
         live: live.clone(),
@@ -538,12 +533,12 @@ async fn run(
         name,
         harness: harness.name.clone(),
     };
-    listener.hear(&connection, &session);
+    listener.hear(&session);
     let mut transcript =
         Transcript::new(space.clone(), turn, harness.name.clone(), settings, running);
     if let Err(reason) = transcript.listen(live, &mut hear).await {
         // What the Harness says cannot be written: the turn stops and fails.
-        let _ = connection.cancel(&session);
+        let _ = session.cancel();
         if tokio::time::timeout(STOPPING, &mut done).await.is_err() {
             done.abort();
         }
@@ -555,7 +550,7 @@ async fn run(
     // What it said while the turn began but heard nothing yet, such as
     // Claude Code's slash commands just after its session opened.
     // The turn ended as it did, whether or not this is written.
-    let now = connection.running(&session);
+    let now = session.running();
     if let Err(error) = space
         .write(move |tx| offered(tx, agent, thread, &now))
         .await

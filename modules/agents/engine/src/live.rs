@@ -33,7 +33,7 @@ pub struct Live {
 
 #[derive(Default)]
 struct Turns {
-    running: HashMap<TurnId, (Arc<Connection>, Session)>,
+    running: HashMap<TurnId, Session>,
     /// Turns whose Harness was told to stop them. One that is still
     /// starting hears it when it begins.
     cancelled: HashSet<TurnId>,
@@ -114,7 +114,7 @@ impl Live {
     pub async fn close(&self, space: SpaceId) {
         let hosts = self.hosts.forget(space).await;
         let turns: Vec<TurnId> = (self.turns.lock().unwrap().running.iter())
-            .filter(|(_, (connection, _))| hosts.iter().any(|h| Arc::ptr_eq(h, connection)))
+            .filter(|(_, session)| hosts.iter().any(|host| session.runs_in(host)))
             .map(|(turn, _)| *turn)
             .collect();
         for turn in turns {
@@ -126,14 +126,14 @@ impl Live {
 
     /// The turn's prompt went to the Harness in `session`. If the turn was
     /// stopped while it started, the Harness hears the stop now.
-    pub fn begin(&self, turn: TurnId, connection: Arc<Connection>, session: Session) {
+    pub fn begin(&self, turn: TurnId, session: Session) {
         let mut turns = self.turns.lock().unwrap();
         if turns.cancelled.contains(&turn)
-            && let Err(error) = connection.cancel(&session)
+            && let Err(error) = session.cancel()
         {
             tracing::warn!(%error, "a stopped turn could not be cancelled");
         }
-        turns.running.insert(turn, (connection, session));
+        turns.running.insert(turn, session);
         self.changed.notify_waiters();
     }
 
@@ -158,8 +158,8 @@ impl Live {
     pub fn stop(&self, turn: TurnId) -> Result<(), String> {
         let mut turns = self.turns.lock().unwrap();
         turns.cancelled.insert(turn);
-        if let Some((connection, session)) = turns.running.get(&turn) {
-            connection.cancel(session)?;
+        if let Some(session) = turns.running.get(&turn) {
+            session.cancel()?;
         }
         turns.release(turn);
         self.changed.notify_waiters();
@@ -177,8 +177,8 @@ impl Live {
             .await;
     }
 
-    /// The Harness and session of the turn, once its prompt went to them.
-    pub async fn begun(&self, turn: TurnId) -> (Arc<Connection>, Session) {
+    /// The session that runs the turn, once its prompt went to it.
+    pub async fn begun(&self, turn: TurnId) -> Session {
         self.until(|turns| turns.running.get(&turn).cloned()).await
     }
 

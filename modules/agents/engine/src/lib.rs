@@ -12,7 +12,7 @@
 //!   back or sent now, and a stop or a restart holds the queue until a
 //!   Person lets it go (ADR 0003, decision 8).
 //! - **Harnesses** are reached through ACP, one process per Space and
-//!   Harness entry (`hosts.rs`). ACP's words stop in `acp.rs`.
+//!   Harness entry (`hosts.rs`). ACP's words stop in `acp.rs` and `acp/`.
 //! - **An Agent reaches Banda** through `banda mcp`, which every session
 //!   gets with the Agent's pass ([`Pipe`]). Its tools are the methods
 //!   marked `tool` below (ADR 0019).

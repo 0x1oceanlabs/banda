@@ -1,0 +1,241 @@
+//! Opening a Harness's session for a Thread: a new one, one the Thread
+//! had, continued, or a fork, and what the Thread keeps of it.
+
+use super::*;
+
+/// What a Thread keeps of its session: evidence, not identity (ADR 0002,
+/// decision 7).
+#[derive(Serialize, Deserialize)]
+pub struct Evidence {
+    harness: String,
+    session: String,
+    lasts: Lasts,
+    /// The Thread's next session is to be a fork of `session` at this
+    /// reply (ADR 0027): its conversation to there, and no further. It
+    /// goes before a session open in this process, which knows more.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    fork: Option<ForkAt>,
+}
+
+/// A reply of a session, which a fork of it goes to: by the ID the
+/// Harness gave its message, as Claude Code's and Codex's adapters find it
+/// in the request's `_meta.jetbrains.air.fork`, JetBrains AIR's extension.
+/// None goes back before the first reply: a new session, as a Thread
+/// edited from its first message is.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ForkAt {
+    pub message: Option<String>,
+}
+
+/// The request's `_meta` that forks a session at `message`.
+fn fork_meta(message: &str) -> acp::Meta {
+    let fork = serde_json::json!({ "version": 1, "messageId": message });
+    let meta = serde_json::json!({ "jetbrains": { "air": { "fork": fork } } });
+    meta.as_object().cloned().unwrap_or_default()
+}
+
+impl Evidence {
+    /// The session of a Thread that forks this one's at `at`.
+    pub fn forked_at(mut self, at: ForkAt) -> Evidence {
+        self.fork = Some(at);
+        self
+    }
+
+    /// The session a new process of `harness` may continue.
+    fn continued_by(&self, harness: &str) -> Option<acp::SessionId> {
+        let lasts = matches!(self.lasts, Lasts::Harness);
+        (lasts && self.harness == harness).then(|| acp::SessionId::new(self.session.as_str()))
+    }
+}
+
+/// How a Thread's session came to be open in this process.
+pub enum Opened {
+    /// It was open already.
+    Known,
+    /// The Harness continued the session the Thread had before.
+    Continued,
+    /// A new session. `lost` when the Thread had one the Harness could not
+    /// continue.
+    New { evidence: Evidence, lost: bool },
+}
+
+/// How long a session outlives its Harness process.
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+enum Lasts {
+    /// It ends with the process.
+    Process,
+    /// The Harness can load it again after a restart.
+    Harness,
+}
+
+/// `banda mcp` as ACP hands an MCP server to a session, named `banda`.
+fn servers(banda: Option<Program>) -> Vec<acp::McpServer> {
+    let server = |Program { program, args, env }: Program| {
+        let env = env
+            .into_iter()
+            .map(|(name, value)| acp::EnvVariable::new(name, value));
+        acp::McpServer::Stdio(
+            acp::McpServerStdio::new("banda", program)
+                .args(args)
+                .env(env.collect()),
+        )
+    };
+    banda.map(server).into_iter().collect()
+}
+
+impl Connection {
+    /// The Harness's session for `thread`, opened in `folder` on first use,
+    /// with `roots` as extra roots its Agent may read (ADR 0026).
+    /// A Thread that had a session continues it when the Harness can, by
+    /// resuming it or else by loading it; otherwise a new one opens. A
+    /// session that opens, either way, gets `banda()`, the `banda mcp` its
+    /// Agent reaches Banda through, as a stdio MCP server.
+    pub async fn session(
+        self: &Arc<Self>,
+        thread: ThreadId,
+        folder: &Path,
+        roots: &[PathBuf],
+        earlier: Option<&Evidence>,
+        banda: impl FnOnce() -> Option<Program>,
+    ) -> Result<(Session, Opened), Ending> {
+        let mut sessions = self.sessions.lock().await;
+        // A session to fork goes before one open here, which knows more;
+        // with no fork, the Thread goes on in the one it had.
+        let fork = earlier.and_then(|earlier| Some((earlier, earlier.fork.as_ref()?)));
+        let earlier = earlier.filter(|_| fork.is_none());
+        if fork.is_none()
+            && let Some(session) = sessions.get(&thread)
+        {
+            return Ok((Session::new(self, session.clone()), Opened::Known));
+        }
+        let servers = servers(banda());
+        if let Some((
+            earlier,
+            ForkAt {
+                message: Some(message),
+            },
+        )) = fork
+        {
+            if !self.agreed.forks {
+                return Err(Ending::failed(
+                    format!("{} cannot fork a conversation.", self.name),
+                    None,
+                ));
+            }
+            let fork = acp::ForkSessionRequest::new(earlier.session.clone(), folder)
+                .additional_directories(roots.to_vec())
+                .mcp_servers(servers)
+                .meta(fork_meta(message));
+            let made = self.open(fork, "fork this Thread's conversation").await?;
+            let (session, options) = (made.session_id, made.config_options);
+            return Ok(self.opened(thread, &mut sessions, session, options, folder, false));
+        }
+        if let Some(session) = earlier.and_then(|e| e.continued_by(&self.harness))
+            && let Some(options) = self
+                .continue_session(&session, folder, roots, &servers)
+                .await
+        {
+            opened(&self.learned, &session, options, folder);
+            sessions.insert(thread, session.clone());
+            return Ok((Session::new(self, session), Opened::Continued));
+        }
+        let new = acp::NewSessionRequest::new(folder)
+            .additional_directories(roots.to_vec())
+            .mcp_servers(servers);
+        let made = self.open(new, "open a session").await?;
+        let (session, options) = (made.session_id, made.config_options);
+        Ok(self.opened(
+            thread,
+            &mut sessions,
+            session,
+            options,
+            folder,
+            earlier.is_some(),
+        ))
+    }
+
+    /// Asks the Harness for a session, `doing` that in plain words if it
+    /// cannot, or does not within a minute.
+    pub(super) async fn open<R: agent_client_protocol::JsonRpcRequest>(
+        &self,
+        request: R,
+        doing: &str,
+    ) -> Result<R::Response, Ending> {
+        let asked = self.cx.send_request(request).block_task();
+        match timeout(OPENING, asked).await {
+            Ok(made) => made.map_err(|error| failed(&self.name, &error)),
+            Err(_) => Err(Ending::failed(
+                format!("{} did not {doing} within a minute.", self.name),
+                Some(Failure::HarnessStopped),
+            )),
+        }
+    }
+
+    /// A session the Harness opened anew for `thread`, and its evidence.
+    pub(super) fn opened(
+        self: &Arc<Self>,
+        thread: ThreadId,
+        sessions: &mut HashMap<ThreadId, acp::SessionId>,
+        session: acp::SessionId,
+        options: Option<Vec<acp::SessionConfigOption>>,
+        folder: &Path,
+        lost: bool,
+    ) -> (Session, Opened) {
+        opened(&self.learned, &session, options.unwrap_or_default(), folder);
+        sessions.insert(thread, session.clone());
+        let evidence = Evidence {
+            harness: self.harness.clone(),
+            session: session.0.to_string(),
+            lasts: if self.agreed.loads || self.agreed.resumes {
+                Lasts::Harness
+            } else {
+                Lasts::Process
+            },
+            fork: None,
+        };
+        (Session::new(self, session), Opened::New { evidence, lost })
+    }
+
+    /// Asks the Harness to continue `session`: resumed if it can, else
+    /// loaded. A load replays the conversation, which nobody hears: the
+    /// Thread already shows it. The session's options, if it is open again.
+    async fn continue_session(
+        &self,
+        session: &acp::SessionId,
+        folder: &Path,
+        roots: &[PathBuf],
+        servers: &[acp::McpServer],
+    ) -> Option<Vec<acp::SessionConfigOption>> {
+        let answer = if self.agreed.resumes {
+            let resume = acp::ResumeSessionRequest::new(session.clone(), folder)
+                .additional_directories(roots.to_vec())
+                .mcp_servers(servers.to_vec());
+            let asked = self.cx.send_request(resume).block_task();
+            timeout(OPENING, asked)
+                .await
+                .map(|a| a.map(|r| r.config_options))
+        } else if self.agreed.loads {
+            let load = acp::LoadSessionRequest::new(session.clone(), folder)
+                .additional_directories(roots.to_vec())
+                .mcp_servers(servers.to_vec());
+            let asked = self.cx.send_request(load).block_task();
+            timeout(OPENING, asked)
+                .await
+                .map(|a| a.map(|r| r.config_options))
+        } else {
+            return None;
+        };
+        match answer {
+            Ok(Ok(options)) => Some(options.unwrap_or_default()),
+            Ok(Err(error)) => {
+                tracing::info!(%error, "the Harness could not continue a session");
+                None
+            }
+            Err(_) => {
+                tracing::info!("the Harness took too long to continue a session");
+                None
+            }
+        }
+    }
+}
