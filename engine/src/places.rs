@@ -3,11 +3,12 @@
 //!
 //! | Place | Default | Holds |
 //! |---|---|---|
-//! | root | `~/Banda` | the Spaces' folders |
+//! | root | `~/Banda` | where a new Space's folder goes |
+//! | data | `~/.local/share/banda` | each Space's data, in `spaces/<id>/` (ADR 0026) |
 //! | state | `~/.local/state/banda` | the owner's ID, the lock, `engine.json`, this machine's scope (`machine/`) |
 //! | config | `~/.config/banda` | `harnesses.toml` |
 //!
-//! `BANDA_ROOT`, `BANDA_STATE` and `BANDA_CONFIG` move each one, so a
+//! `BANDA_ROOT`, `BANDA_DATA`, `BANDA_STATE` and `BANDA_CONFIG` move each one, so a
 //! test or a trial window runs beside the real engine.
 
 use crate::Failure;
@@ -21,6 +22,7 @@ pub const HOST: &str = "127.0.0.1";
 
 pub struct Places {
     pub root: PathBuf,
+    pub data: PathBuf,
     pub state: PathBuf,
     pub config: PathBuf,
 }
@@ -65,6 +67,7 @@ impl Places {
         let state = dirs::state_dir().or_else(dirs::data_local_dir);
         Ok(Places {
             root: place("BANDA_ROOT", dirs::home_dir(), "Banda")?,
+            data: place("BANDA_DATA", dirs::data_dir(), "banda")?,
             state: place("BANDA_STATE", state, "banda")?,
             config: place("BANDA_CONFIG", dirs::config_dir(), "banda")?,
         })
@@ -75,8 +78,8 @@ impl Places {
     }
 
     /// This machine's scope: the store and log of its modules, as the
-    /// workspaces (ADR 0025, decision 1). It is laid out as a Space's
-    /// folder is: `.banda/` holds the manifest, the store and the lock.
+    /// workspaces (ADR 0025, decision 1). It is laid out as a Space's data
+    /// is (ADR 0026): the manifest, the store and the lock.
     pub fn machine(&self) -> PathBuf {
         self.state.join("machine")
     }

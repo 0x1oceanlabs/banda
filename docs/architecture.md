@@ -86,10 +86,14 @@ banda call/follow   the CLI: the same API, for people, scripts and Agents
 
 The kernel holds only what every module needs, and it names no module.
 
-- **Space.** A folder on disk (`~/Banda/<name>/` by default): the work's
-  files plus `.banda/`. The latter holds the Space's SQLite, the modules'
-  migrations and the event log. One engine at a time opens a Space: it holds
-  a lock on `.banda/space.lock` while the Space is open.
+- **Space.** A folder on disk (a new one goes in `~/Banda/<name>/`) and
+  its data in the engine's data folder, `~/.local/share/banda/spaces/<id>/`
+  (ADR 0026): `space.json`, which names the folder, the Space's SQLite with
+  the modules' migrations and the event log, and the modules' files. The
+  folder holds the work alone. One engine at a time opens a Space: it holds
+  a lock on `spaces/<id>/space.lock` while the Space is open. Spaces from
+  before ADR 0026 move their `.banda/` there the first time an engine
+  starts.
 - **Event log.** Append-only, with typed events, one per Space. Windows and
   the CLI subscribe to it. A subscription sends only what its view needs.
   The database itself refuses to change or delete an event.
@@ -171,8 +175,8 @@ command (with its ID)
 | The OS keychain | secrets you give Banda. Its database never holds them |
 | The engine's state folder | the owner's ID; while the engine runs, its port and per-run secret |
 | The window's storage | the workspaces: their columns, each Pane with its Space, the widths and the focus; whether the sidebar shows; which finished turn of each Thread the Person has seen |
-| `.banda/` SQLite | Threads, Questions and answers, the Agents' queue, Databases' records, receipts, events, outbox |
-| `.banda/images/` | the bytes of the images messages carry, one file per image; the SQLite says what each is and which message carries it |
+| `spaces/<id>/` SQLite, in the engine's data | Threads, Questions and answers, the Agents' queue, Databases' records, receipts, events, outbox |
+| `spaces/<id>/images/` and `files/` | the bytes of the images messages carry, one file per image, the SQLite saying what each is and which message carries it; the files a message keeps (a dropped file, a long paste), which each Thread's session gets as an extra root |
 
 Events are facts with a version, and the log is never rewritten. Each module
 keeps its own ledger of migrations. Our IDs are UUIDv7. A Harness's IDs are
@@ -251,7 +255,7 @@ If Chat is removed, Agents still works through its own Thread.
   such as its model (`agents.defaults`). Defaults a Person sets per Harness
   entry (ADR 0006, decision 3) are not built yet.
   - Spaces from before ADR 0006 kept their Agents in
-    `.banda/agents/<name>.toml`. Opening the module reads those files
+    `.banda/agents/<name>.toml`, now `spaces/<id>/agents/` (ADR 0026). Opening the module reads those files
     once to learn each older Thread's Harness, and leaves them as they are.
     Older Threads keep the Agent ID they had, so one old Agent's Threads
     still share it.

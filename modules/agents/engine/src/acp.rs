@@ -43,7 +43,7 @@ use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as BASE64;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
-use std::path::Path;
+use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -650,7 +650,8 @@ impl Connection {
         Some(hear)
     }
 
-    /// The Harness's session for `thread`, opened in `folder` on first use.
+    /// The Harness's session for `thread`, opened in `folder` on first use,
+    /// with `roots` as extra roots its Agent may read (ADR 0026).
     /// A Thread that had a session continues it when the Harness can, by
     /// resuming it or else by loading it; otherwise a new one opens. A
     /// session that opens, either way, gets `banda()`, the `banda mcp` its
@@ -659,6 +660,7 @@ impl Connection {
         &self,
         thread: ThreadId,
         folder: &Path,
+        roots: &[PathBuf],
         earlier: Option<&Evidence>,
         banda: impl FnOnce() -> Option<Program>,
     ) -> Result<(Session, Opened), Ending> {
@@ -668,7 +670,9 @@ impl Connection {
         }
         let servers = servers(banda());
         if let Some(session) = earlier.and_then(|e| e.continued_by(&self.harness))
-            && let Some(options) = self.continue_session(&session, folder, &servers).await
+            && let Some(options) = self
+                .continue_session(&session, folder, roots, &servers)
+                .await
         {
             opened(&self.learned, &session, options);
             sessions.insert(thread, session.clone());
@@ -676,7 +680,11 @@ impl Connection {
         }
         let opening = self
             .cx
-            .send_request(acp::NewSessionRequest::new(folder).mcp_servers(servers))
+            .send_request(
+                acp::NewSessionRequest::new(folder)
+                    .additional_directories(roots.to_vec())
+                    .mcp_servers(servers),
+            )
             .block_task();
         let made = match timeout(OPENING, opening).await {
             Ok(made) => made.map_err(|error| failed(&self.name, &error))?,
@@ -710,18 +718,21 @@ impl Connection {
         &self,
         session: &acp::SessionId,
         folder: &Path,
+        roots: &[PathBuf],
         servers: &[acp::McpServer],
     ) -> Option<Vec<acp::SessionConfigOption>> {
         let answer = if self.agreed.resumes {
             let resume = acp::ResumeSessionRequest::new(session.clone(), folder)
+                .additional_directories(roots.to_vec())
                 .mcp_servers(servers.to_vec());
             let asked = self.cx.send_request(resume).block_task();
             timeout(OPENING, asked)
                 .await
                 .map(|a| a.map(|r| r.config_options))
         } else if self.agreed.loads {
-            let load =
-                acp::LoadSessionRequest::new(session.clone(), folder).mcp_servers(servers.to_vec());
+            let load = acp::LoadSessionRequest::new(session.clone(), folder)
+                .additional_directories(roots.to_vec())
+                .mcp_servers(servers.to_vec());
             let asked = self.cx.send_request(load).block_task();
             timeout(OPENING, asked)
                 .await

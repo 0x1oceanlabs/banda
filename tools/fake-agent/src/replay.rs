@@ -8,7 +8,9 @@
 //! notification by its method, an answer by its ID. It must say what that
 //! one said, its params or its answer, in the recorded session's folder
 //! moved to this session's; only `initialize` may differ, as it changes
-//! with each version of Banda. What the Harness said after it is said
+//! with each version of Banda. A session's extra roots
+//! (`additionalDirectories`, ADR 0026) move as its folder does; a
+//! recording made before them holds none, and then they are not compared. What the Harness said after it is said
 //! again, fitted to this run: answers carry this run's request IDs, and
 //! the folder is this session's.
 //!
@@ -116,8 +118,9 @@ async fn write(out: &mut Stdout, frame: &Value) -> std::io::Result<()> {
 struct Fit {
     /// This run's request ID for each recorded one.
     ids: HashMap<String, Value>,
-    /// The recorded session's folder, and this one's.
-    folder: Option<(String, String)>,
+    /// The recorded session's folders, its extra roots first, then its
+    /// own; and this one's.
+    folders: Vec<(String, String)>,
 }
 
 impl Fit {
@@ -127,18 +130,18 @@ impl Fit {
         {
             self.ids.insert(was.to_string(), is.clone());
         }
-        let cwd = |frame: &Value| frame["params"]["cwd"].as_str().map(str::to_owned);
-        if let (Some(was), Some(is)) = (cwd(recorded), cwd(live)) {
-            self.folder = Some((was, is));
+        let (was, is) = (&recorded["params"], &live["params"]);
+        if let (Some(was_cwd), Some(is_cwd)) = (was["cwd"].as_str(), is["cwd"].as_str()) {
+            self.folders = roots(was).zip(roots(is)).collect();
+            self.folders.push((was_cwd.to_owned(), is_cwd.to_owned()));
         }
     }
 
-    /// `frame` in this session's folder.
+    /// `frame` in this session's folders.
     fn moved(&self, frame: &Value) -> Value {
-        match &self.folder {
-            Some((was, is)) => moved(frame, was, is),
-            None => frame.clone(),
-        }
+        self.folders
+            .iter()
+            .fold(frame.clone(), |frame, (was, is)| moved(&frame, was, is))
     }
 
     /// `frame` in this session's folder, answering this run's request.
@@ -158,12 +161,30 @@ impl Fit {
 fn same(recorded: &Value, live: &Value) -> bool {
     match recorded.get("method").and_then(Value::as_str) {
         Some("initialize") => true,
-        Some(_) => recorded.get("params") == live.get("params"),
+        Some(_) => match (recorded.get("params"), live.get("params")) {
+            (Some(was), Some(Value::Object(is)))
+                if was.get(ROOTS).is_none() && is.contains_key(ROOTS) =>
+            {
+                let mut is = is.clone();
+                is.remove(ROOTS);
+                *was == Value::Object(is)
+            }
+            (was, is) => was == is,
+        },
         None => {
             recorded.get("result") == live.get("result")
                 && recorded.get("error") == live.get("error")
         }
     }
+}
+
+/// A session's extra roots, in its params.
+const ROOTS: &str = "additionalDirectories";
+
+/// A session's extra roots, as its params name them.
+fn roots(params: &Value) -> impl Iterator<Item = String> + '_ {
+    let roots = params[ROOTS].as_array().into_iter().flatten();
+    roots.filter_map(|root| root.as_str().map(str::to_owned))
 }
 
 /// `value` with each `was` in its text and its keys written as `is`.

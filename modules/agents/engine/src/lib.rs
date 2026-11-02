@@ -629,7 +629,7 @@ impl Agents {
             name,
         };
         let space = call.space();
-        let images = Images::of(space.folder());
+        let images = Images::of(space.data());
         // The file first: a row never names bytes that are not
         // there. A file left without a row goes with the sweep.
         images.keep(image.id, bytes).await.map_err(Error::from)?;
@@ -647,7 +647,7 @@ impl Agents {
     async fn keep(&self, call: Call, Keep { name, data }: Keep) -> Result<Kept, Refusal> {
         let bytes = decoded(&data, "file")?;
         let name = rules::kept_name(&name, &bytes)?;
-        let path = kept::keep(call.space().folder(), name, bytes)
+        let path = kept::keep(call.space().data(), name, bytes)
             .await
             .map_err(Error::from)?;
         Ok(Kept { path })
@@ -658,7 +658,7 @@ impl Agents {
         let kind = space.read(move |sql| store::image_kind(sql, image)).await?;
         let gone = || Refusal::not_found("There is no such image.");
         let mime = kind.ok_or_else(gone)?;
-        let bytes = Images::of(space.folder())
+        let bytes = Images::of(space.data())
             .read(image)
             .await
             .map_err(|_| gone())?;
@@ -714,7 +714,7 @@ impl Module for Agents {
     }
 
     async fn opened(&self, space: ModuleSpace) -> Result<(), Error> {
-        let agents = settings::old_agents(space.folder());
+        let agents = settings::old_agents(space.data());
         space
             .write(move |tx| {
                 store::fill_harnesses(tx.sql(), &agents)?;

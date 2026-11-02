@@ -1377,8 +1377,10 @@ test("a file dropped is kept and named in the message, a long paste is a file, a
   const chips = composer.locator("[data-chip=file]")
   await expect(chips).toHaveText(["my-notes.md"])
   const path = await chips.first().getAttribute("title")
-  expect(path).toMatch(/^\.banda\/files\/[^/]+\/my-notes\.md$/)
-  expect(readFileSync(join(dir, "root", "Work", path!), "utf8")).toBe("# notes")
+  // In the Space's data, not its folder (ADR 0026).
+  expect(path!.startsWith(join(dir, "data", "spaces"))).toBe(true)
+  expect(path).toMatch(/\/files\/[^/]+\/my-notes\.md$/)
+  expect(readFileSync(path!, "utf8")).toBe("# notes")
 
   // A text of 32 KiB or more pasted is kept as a file; Mod+Shift+V
   // pastes it as text.
@@ -1387,7 +1389,7 @@ test("a file dropped is kept and named in the message, a long paste is a file, a
   await composer.press("ControlOrMeta+v")
   await expect(chips).toHaveText(["my-notes.md", "pasted-text-1.txt"])
   const pasted = await chips.nth(1).getAttribute("title")
-  expect(readFileSync(join(dir, "root", "Work", pasted!), "utf8")).toBe(long)
+  expect(readFileSync(pasted!, "utf8")).toBe(long)
   await composer.press("ControlOrMeta+Shift+v")
   await expect
     .poll(async () => (await composer.textContent())?.length ?? 0)

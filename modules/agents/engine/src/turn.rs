@@ -27,6 +27,7 @@ use crate::acp::{
 };
 use crate::between;
 use crate::images::Images;
+use crate::kept;
 use crate::live::Live;
 use crate::model::{
     Body, Fact, Failure, Image, Item, ItemId, Mode, Offer, Opener, PlanStep, QuestionState,
@@ -522,7 +523,7 @@ async fn prompt_of(
         refused.push(rules::without_images(harness, &prompt.text)?);
         return Ok((prompt, refused));
     }
-    let files = Images::of(space.folder());
+    let files = Images::of(space.data());
     for image in images {
         match files.read(image.id).await {
             Ok(bytes) => prompt.images.push(PromptImage {
@@ -682,7 +683,13 @@ async fn run(
     // A session that opens reaches Banda with a pass of its own (ADR 0019).
     let banda = || live.banda(space, turn.agent);
     let (session, opened) = connection
-        .session(thread, space.folder(), earlier.as_ref(), banda)
+        .session(
+            thread,
+            space.folder(),
+            &[kept::folder(space.data())],
+            earlier.as_ref(),
+            banda,
+        )
         .await?;
     if let Opened::New { evidence, lost } = opened {
         let (id, agent) = (turn.id, Participant::Agent(turn.agent));

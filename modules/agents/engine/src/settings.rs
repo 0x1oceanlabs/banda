@@ -3,7 +3,8 @@
 //! agent programs it can start.
 //!
 //! Before ADR 0006 a Space also had one file per Agent,
-//! `.banda/agents/<name>.toml`, naming the Agent's Harness. Only
+//! `.banda/agents/<name>.toml`, naming the Agent's Harness; since ADR 0026
+//! they are in the Space's data, `spaces/<id>/agents/`. Only
 //! [`old_agents`] reads them still, so the Threads from then learn their
 //! Harness; nothing writes them, and nothing removes them.
 
@@ -260,8 +261,8 @@ struct AgentFile {
 /// Each old Agent of a Space and its Harness. What cannot be read, a file
 /// or the whole folder, is logged and skipped: the Space opens anyway, and
 /// only the Threads it names miss their Harness.
-pub fn old_agents(space: &Path) -> Vec<(AgentId, String)> {
-    let folder = space.join(".banda").join("agents");
+pub fn old_agents(data: &Path) -> Vec<(AgentId, String)> {
+    let folder = data.join("agents");
     let entries = match std::fs::read_dir(&folder) {
         Ok(entries) => entries,
         Err(error) if error.kind() == std::io::ErrorKind::NotFound => return Vec::new(),
@@ -343,15 +344,15 @@ mod tests {
 
     #[test]
     fn old_agent_files_name_their_harness() {
-        let space = tempfile::tempdir().unwrap();
-        assert!(old_agents(space.path()).is_empty());
-        let folder = space.path().join(".banda/agents");
+        let data = tempfile::tempdir().unwrap();
+        assert!(old_agents(data.path()).is_empty());
+        let folder = data.path().join("agents");
         std::fs::create_dir_all(&folder).unwrap();
         let id = AgentId::new();
         let text = format!("id = \"{id}\"\nharness = \"codex\"\nmode = \"supervised\"\n");
         std::fs::write(folder.join("Writer.toml"), text).unwrap();
         std::fs::write(folder.join("Broken.toml"), "id = 3").unwrap();
         std::fs::write(folder.join("notes.txt"), "not an Agent").unwrap();
-        assert_eq!(old_agents(space.path()), vec![(id, "codex".to_owned())]);
+        assert_eq!(old_agents(data.path()), vec![(id, "codex".to_owned())]);
     }
 }

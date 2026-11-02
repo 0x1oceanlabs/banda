@@ -19,7 +19,7 @@ impl World {
     async fn new() -> World {
         let root = tempfile::tempdir().unwrap();
         let owner = PersonId::new();
-        let kernel = Kernel::builder(root.path(), owner)
+        let kernel = Kernel::builder(root.path(), root.path().join(".data"), owner)
             .module(Terminals::new())
             .open()
             .await

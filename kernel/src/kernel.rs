@@ -2,7 +2,7 @@ use crate::access::{self, Caller, Right};
 use crate::methods::{Asks, Nothing, Tool};
 use crate::module::{Call, Module, Scope, Stream};
 use crate::passes::Passes;
-use crate::space::{Created, Space};
+use crate::space::{Manifest, Space, UNFINISHED};
 use crate::{AgentId, CommandId, Error, Participant, PersonId, Refusal, SpaceId};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -15,6 +15,8 @@ use ts_rs::TS;
 /// The Spaces of this machine and the modules that serve them.
 pub struct Kernel {
     root: PathBuf,
+    /// `spaces/` in the engine's data: one folder per Space.
+    spaces_data: PathBuf,
     owner: PersonId,
     /// This boot of the engine. Outbox rows claimed under another boot were
     /// cut short by a restart.
@@ -42,6 +44,7 @@ pub struct SpaceSummary {
 
 pub struct KernelBuilder {
     root: PathBuf,
+    data: PathBuf,
     owner: PersonId,
     modules: Vec<Arc<dyn Module>>,
     machine: Option<PathBuf>,
@@ -60,7 +63,8 @@ impl KernelBuilder {
         self
     }
 
-    /// Opens every Space under the root. A Space that fails to open is
+    /// Opens every Space the data holds, once the old Spaces under the root
+    /// have moved theirs out (ADR 0026). A Space that fails to open is
     /// logged and left closed, so it cannot keep the others shut.
     pub async fn open(self) -> Result<Arc<Kernel>, Error> {
         for (index, module) in self.modules.iter().enumerate() {
@@ -76,6 +80,9 @@ impl KernelBuilder {
             }
         }
         std::fs::create_dir_all(&self.root)?;
+        let spaces_data = self.data.join("spaces");
+        std::fs::create_dir_all(&spaces_data)?;
+        crate::old::move_out(&self.root, &spaces_data);
         let (of_machine, in_spaces): (Vec<_>, Vec<_>) =
             (self.modules.iter().cloned()).partition(|module| module.scope() == Scope::Machine);
         let boot = uuid::Uuid::now_v7().to_string();
@@ -86,18 +93,24 @@ impl KernelBuilder {
             let folder = self.machine.as_ref().ok_or_else(|| {
                 Refusal::invalid("A module of this machine needs the machine's folder.")
             })?;
-            if Space::id_of(folder).is_none() {
-                if let Some(parent) = folder.parent() {
-                    std::fs::create_dir_all(parent)?;
+            // Its data is its folder: it holds no work of its own.
+            let manifest = match Manifest::read(folder) {
+                Ok(manifest) => manifest,
+                Err(_) => {
+                    let author = Participant::Person(self.owner);
+                    let made = Manifest::new(folder, "machine", author, CommandId::new());
+                    std::fs::create_dir_all(folder)?;
+                    made.write(folder)?;
+                    made
                 }
-                let author = Participant::Person(self.owner);
-                Space::create(folder, "machine", author, CommandId::new())?;
-            }
-            let modules = of_machine.into();
-            Some(Space::open(folder.clone(), self.owner, modules, passes.clone(), &boot).await?)
+            };
+            let (modules, data) = (of_machine.into(), folder.clone());
+            let opened = Space::open(data, manifest, self.owner, modules, passes.clone(), &boot);
+            Some(opened.await?)
         };
         let kernel = Arc::new(Kernel {
             root: self.root,
+            spaces_data,
             owner: self.owner,
             boot,
             tools: in_spaces.iter().flat_map(|m| m.tools()).collect(),
@@ -107,28 +120,41 @@ impl KernelBuilder {
             machine,
             passes,
         });
-        let mut folders: Vec<PathBuf> = std::fs::read_dir(&kernel.root)?
+        let mut found: Vec<PathBuf> = std::fs::read_dir(&kernel.spaces_data)?
             .filter_map(|entry| entry.ok().map(|e| e.path()))
             .collect();
-        folders.sort();
-        for folder in folders {
-            let Some(id) = Space::id_of(&folder) else {
+        found.sort();
+        let mut folders: std::collections::HashMap<PathBuf, PathBuf> = Default::default();
+        for data in found {
+            let name = data.file_name().unwrap_or_default().to_string_lossy();
+            if name.ends_with(UNFINISHED) {
+                // Cut short while it was written: it never was a Space.
+                let _ = std::fs::remove_dir_all(&data);
                 continue;
+            }
+            let manifest = match Manifest::read(&data) {
+                Ok(manifest) => manifest,
+                Err(error) => {
+                    tracing::error!(data = %data.display(), %error, "a Space did not open");
+                    continue;
+                }
             };
-            if let Ok(kept) = kernel.space(id).await {
+            if let Some(kept) = folders.get(&manifest.folder) {
                 tracing::warn!(
-                    kept = %kept.folder().display(),
-                    skipped = %folder.display(),
-                    "two folders hold the same Space; the second stays closed"
+                    folder = %manifest.folder.display(),
+                    kept = %kept.display(),
+                    skipped = %data.display(),
+                    "two Spaces name the same folder; the second stays closed"
                 );
                 continue;
             }
-            match kernel.open_space(folder.clone()).await {
+            folders.insert(manifest.folder.clone(), data.clone());
+            match kernel.open_space(data.clone(), manifest).await {
                 Ok(space) => {
                     kernel.spaces.write().await.insert(space.id(), space);
                 }
                 Err(error) => {
-                    tracing::error!(folder = %folder.display(), %error, "a Space did not open")
+                    tracing::error!(data = %data.display(), %error, "a Space did not open")
                 }
             }
         }
@@ -140,7 +166,7 @@ crate::methods! {
     Kernel(Own<'_>) as "SpacesMethods" in "./" {
         /// This computer's Spaces.
         call list(Nothing) -> Vec<SpaceSummary>, Read;
-        /// Makes a Space: its folder under the root, by its name.
+        /// Makes a Space: a new folder under the root, by its name.
         command create(CreateSpace) -> SpaceSummary, Manage;
         /// The tools an Agent may call, from the methods of the modules in
         /// Spaces.
@@ -188,11 +214,18 @@ fn no_method(method: &str) -> Refusal {
 }
 
 impl Kernel {
-    /// `root` holds the Spaces' folders (`~/Banda` by default). `owner`
-    /// is the Person who owns this computer's Spaces.
-    pub fn builder(root: impl Into<PathBuf>, owner: PersonId) -> KernelBuilder {
+    /// `root` is where a new Space's folder goes (`~/Banda` by default),
+    /// and `data` where Banda keeps the Spaces' own data
+    /// (`~/.local/share/banda`, ADR 0026). `owner` is the Person who owns
+    /// this computer's Spaces.
+    pub fn builder(
+        root: impl Into<PathBuf>,
+        data: impl Into<PathBuf>,
+        owner: PersonId,
+    ) -> KernelBuilder {
         KernelBuilder {
             root: root.into(),
+            data: data.into(),
             owner,
             modules: Vec::new(),
             machine: None,
@@ -375,9 +408,9 @@ impl Kernel {
             .collect()
     }
 
-    async fn open_space(&self, folder: PathBuf) -> Result<Arc<Space>, Error> {
+    async fn open_space(&self, data: PathBuf, manifest: Manifest) -> Result<Arc<Space>, Error> {
         let (modules, passes) = (self.in_spaces.clone(), self.passes.clone());
-        Space::open(folder, self.owner, modules, passes, &self.boot).await
+        Space::open(data, manifest, self.owner, modules, passes, &self.boot).await
     }
 
     async fn list(&self, ask: Own<'_>, _: Nothing) -> Result<Vec<SpaceSummary>, Refusal> {
@@ -408,15 +441,36 @@ impl Kernel {
     ) -> Result<SpaceSummary, Refusal> {
         let name = Space::plain_name(name)?;
         let folder = self.root.join(name);
-        match Space::create(&folder, name, author, command)? {
-            Created::Earlier(id) => Ok(self.space(id).await?.summary()),
-            Created::New => {
-                let space = self.open_space(folder).await?;
-                let summary = space.summary();
-                self.spaces.write().await.insert(space.id(), space);
-                Ok(summary)
+        match std::fs::create_dir(&folder) {
+            Ok(()) => {}
+            Err(error) if error.kind() == std::io::ErrorKind::AlreadyExists => {
+                // The same command again: the Space it made.
+                let folder = std::fs::canonicalize(&folder).map_err(Error::from)?;
+                let spaces = self.spaces.read().await;
+                return match spaces.values().find(|s| s.folder() == folder) {
+                    Some(made) if made.command() == command => Ok(made.summary()),
+                    _ => Err(Refusal::conflict(format!(
+                        "A folder named \"{name}\" already exists in this place."
+                    ))),
+                };
             }
+            Err(error) => return Err(Error::from(error).into()),
         }
+        let made = std::fs::canonicalize(&folder)
+            .map_err(Error::from)
+            .and_then(|folder| Space::create(&self.spaces_data, &folder, name, author, command));
+        let (data, manifest) = match made {
+            Ok(made) => made,
+            Err(error) => {
+                // Take back the folder this call made, while it is empty.
+                let _ = std::fs::remove_dir(&folder);
+                return Err(error.into());
+            }
+        };
+        let space = self.open_space(data, manifest).await?;
+        let summary = space.summary();
+        self.spaces.write().await.insert(space.id(), space);
+        Ok(summary)
     }
 }
 

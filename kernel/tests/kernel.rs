@@ -209,7 +209,7 @@ impl Module for Desk {
 }
 
 async fn open(root: &Path, owner: PersonId, notes: &Notes) -> Arc<Kernel> {
-    Kernel::builder(root, owner)
+    Kernel::builder(root, root.join(".data"), owner)
         .module(notes.clone())
         .open()
         .await
@@ -288,7 +288,9 @@ async fn a_space_is_a_folder_and_opens_again_after_a_restart() {
     let space = create_space(&kernel, person, command, "Research")
         .await
         .unwrap();
-    assert!(root.path().join("Research/.banda/space.json").is_file());
+    let data = root.path().join(".data/spaces").join(space.id.to_string());
+    assert!(data.join("space.json").is_file());
+    assert!(!root.path().join("Research/.banda").exists());
     add(&kernel, person, &space, "first").await.unwrap();
 
     let again = create_space(&kernel, person, command, "Research").await;
@@ -470,8 +472,11 @@ async fn a_restart_replays_or_abandons_what_it_cut_short() {
 
     // An earlier run claimed two effects and then the engine stopped.
     let author = serde_json::to_string(&Participant::Person(owner)).unwrap();
-    let database =
-        rusqlite::Connection::open(root.path().join("Work/.banda/space.sqlite3")).unwrap();
+    let database = rusqlite::Connection::open(
+        root.path()
+            .join(format!(".data/spaces/{}/space.sqlite3", space.id)),
+    )
+    .unwrap();
     for (kind, key, text, attempts) in [
         ("publish", "a", "replayed", "0"),
         ("notify", "b", "abandoned", "0"),
@@ -838,7 +843,7 @@ async fn a_module_of_the_machine_names_no_space_and_keeps_its_own_log() {
     let owner = PersonId::new();
     let person = Participant::Person(owner);
     let open = || {
-        Kernel::builder(dir.path().join("root"), owner)
+        Kernel::builder(dir.path().join("root"), dir.path().join("data"), owner)
             .module(Notes::default())
             .module(Desk)
             .machine(dir.path().join("state").join("machine"))
@@ -898,7 +903,7 @@ async fn a_module_of_the_machine_names_no_space_and_keeps_its_own_log() {
 #[tokio::test]
 async fn a_module_of_the_machine_needs_the_machines_folder() {
     let dir = tempfile::tempdir().unwrap();
-    let opened = Kernel::builder(dir.path(), PersonId::new())
+    let opened = Kernel::builder(dir.path(), dir.path().join(".data"), PersonId::new())
         .module(Desk)
         .open()
         .await;
