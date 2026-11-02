@@ -24,13 +24,16 @@ round too; the card is as wide as the messages, centred.
 
 ## Decision
 
-1. **The composer is a card.** Its surface is raised a little above the
-   tile (`foreground` at a few percent), with a hairline outline
-   (`foreground` at 8 %) and, in dark, a top highlight; a soft shadow under
-   it. Focus brightens the outline, with no ring. Its corners follow ADR
-   0007's ladder (`rounded-lg`), never rounder than the tile around it. It
-   is as wide as the messages and centred. Files dragged over it tint it
-   (`accent`) with an inner `primary` line instead of a ring.
+1. **The composer is a card, as Codex's.** In light it is the tile's own
+   `background`, not grey, lifted by Codex's soft shadow (a 4 % hairline,
+   `0 2px 8px` at 4 %, `0 4px 40px 8px` at 2.4 %); in dark it is a little
+   lighter than the tile (`foreground` at 8 %) with Codex's hairline
+   (`inset 0 0 1px` white at 20 %) and no shadow. No focus ring. Its
+   corners follow ADR 0007's ladder (`rounded-lg`), never rounder than the
+   tile around it, not Codex's 22 px. It is as wide as the messages and
+   centred. Files dragged over it tint it (`accent`) with an inner
+   `primary` line. (Roma, 2026-11-02: the first, grey card was not liked;
+   of four mocks, Codex's own was chosen.)
 2. **The send button is round.** `primary` with a thin arrow; with nothing
    to send it is `foreground` at a tenth and muted. While a turn runs it
    steers or queues as before (ADR 0010, decision 7), with those icons;
@@ -51,7 +54,16 @@ round too; the card is as wide as the messages, centred.
    Thread's mark do; the button turning into Stop is enough.
 6. **A new Thread's Space and Harness sit under the card**, in a bare row
    without a surface, as T3 Code's environment and branch.
-7. The empty box keeps naming the Agent and its triggers ("Write to Claude
+7. **The messages fade out at both ends**, under the header and above the
+   composer, while there is more that way (shadcn's `scroll-fade`, a mask,
+   so it works on glass too); at the end, the last line is not faded.
+   Roma chose a plain fade over macOS Tahoe's progressive blur.
+8. **A Thread's header has no line under it** (the Pane kind's `header:
+   "bare"`), and reads: its Agent's mark, as the sidebar shows it (faded
+   at rest), its Space, then its title. The frame draws it from the list
+   the sidebar reads, for any Pane that shows a listed thing; a tabbed
+   column's tabs still take its place.
+9. The empty box keeps naming the Agent and its triggers ("Write to Claude
    Code. @ files, / commands, $ skills"): Banda runs more than one Harness.
 
 Not done: T3 Code's banners docked on the composer's top edge (a Question

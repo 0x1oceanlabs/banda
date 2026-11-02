@@ -1,6 +1,6 @@
 import { Component, useEffect, useLayoutEffect, useRef } from "react"
 import type { Engine, SpaceId } from "@banda/contract"
-import type { PaneState } from "@banda/ui/pane"
+import type { Listed, PaneState } from "@banda/ui/pane"
 import { columnsOf, moveOf, useLookColumns } from "../look"
 import { Choices } from "../registry"
 import type { Chime } from "@banda/ui/sound"
@@ -47,6 +47,7 @@ export function Strip({
   marked,
   zoomed,
   center,
+  listed,
   frame,
   onStart,
 }: {
@@ -68,6 +69,8 @@ export function Strip({
   /** Counts Alt+C: each time it does, the focused column goes to the
    * middle of the screen, once. */
   center: number
+  /** The listed thing a Pane shows, as its module lists it. */
+  listed: (entry: Entry) => Listed | undefined
   frame: Frame
   /** Opens a first Pane on this empty workspace. */
   onStart: (pane: PaneState) => void
@@ -208,7 +211,9 @@ export function Strip({
               marked={marked(entry)}
               zoomed={entry.id === zoomed}
               height={column.tabbed ? undefined : column.heights[e]}
-              spaceName={mixed ? spaceName(entry.space) : undefined}
+              listed={listed(entry)}
+              spaceName={spaceName(entry.space)}
+              mixed={mixed}
               frame={frame}
               hidden={
                 zooms

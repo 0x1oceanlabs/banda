@@ -88,6 +88,8 @@ export const threadPane = definePane<ThreadArgs>({
   title: (args) => args.title || "New Thread",
   shows: (args) => args.thread,
   icon: MessageSquareIcon,
+  // No line under it: the messages fade out under it (ADR 0031).
+  header: "bare",
   start: NEW_THREAD,
   // A Thread starts with its Harness.
   letter: "H",

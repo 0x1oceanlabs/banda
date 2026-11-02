@@ -1,11 +1,12 @@
 import { type ReactNode, useEffect, useRef } from "react"
 import type { Engine, SpaceId } from "@banda/contract"
 import { PaneHeader } from "@banda/ui/components/pane-header"
-import { type PaneState, type Place, within } from "@banda/ui/pane"
+import { type Listed, type PaneState, type Place, within } from "@banda/ui/pane"
 import type { Args } from "@banda/ui/module"
 import { Minimize2Icon } from "lucide-react"
 import { kindOf, kindRuns, labelOf } from "../registry"
 import { widthAt } from "./layout"
+import { ThreadMark } from "../sidebar/Row"
 import type { Entry } from "./model"
 
 /** What a framed Pane asks of the workspaces. */
@@ -34,8 +35,9 @@ export function AgentMark({ className = "" }: { className?: string }) {
 /**
  * One tile: a header with the Pane's icon and title, and its Space when the
  * workspace mixes Spaces, unless the Pane draws its own; under it, the Pane
- * itself. A `header` given, as a tabbed column's tabs, takes the header's
- * place.
+ * itself. A Pane that shows a listed thing, as a Thread, has its mark in the
+ * icon's place and its Space before the title (ADR 0031). A `header`
+ * given, as a tabbed column's tabs, takes the header's place.
  */
 export function PaneFrame({
   entry,
@@ -45,7 +47,9 @@ export function PaneFrame({
   marked,
   zoomed = false,
   height,
+  listed,
   spaceName,
+  mixed,
   frame,
   header,
   hidden = false,
@@ -61,8 +65,11 @@ export function PaneFrame({
   zoomed?: boolean
   /** Its share of its column's height; left out, an even one. */
   height?: number
-  /** Shown in the header when the workspace mixes Spaces. */
-  spaceName: string | undefined
+  /** The listed thing it shows, if it shows one. */
+  listed: Listed | undefined
+  spaceName: string
+  /** The workspace mixes Spaces, so each header names its Space. */
+  mixed: boolean
   frame: Frame
   /** Drawn in the header's place. */
   header?: ReactNode
@@ -108,12 +115,28 @@ export function PaneFrame({
       )}
       {header ??
         ((zoomed || kind?.header !== false) && (
-          <PaneHeader title={title} onClose={() => frame.close(entry.id)}>
-            {Icon && <Icon className="size-4 shrink-0 text-muted-foreground" />}
+          <PaneHeader
+            title={title}
+            onClose={() => frame.close(entry.id)}
+            className={kind?.header === "bare" ? "border-b-0" : undefined}
+          >
+            {listed ? (
+              <>
+                <ThreadMark
+                  listed={listed}
+                  className={listed.mark === "rest" ? "opacity-40" : undefined}
+                />
+                <span className="shrink-0 text-muted-foreground">
+                  {spaceName}
+                </span>
+              </>
+            ) : (
+              Icon && <Icon className="size-4 shrink-0 text-muted-foreground" />
+            )}
             <h2 className="min-w-0 truncate font-medium text-muted-foreground group-data-[focused=true]/tile:text-foreground">
               {title}
             </h2>
-            {spaceName && (
+            {mixed && !listed && (
               <span className="shrink-0 truncate rounded-sm bg-muted px-1.5 text-xs text-muted-foreground">
                 {spaceName}
               </span>

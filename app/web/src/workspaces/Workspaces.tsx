@@ -1,6 +1,11 @@
 import { useEffect, useLayoutEffect, useRef } from "react"
 import type { Engine, SpaceId } from "@banda/contract"
-import { holderOf, PANE_LAYER, type PaneState } from "@banda/ui/pane"
+import {
+  holderOf,
+  type Listed,
+  PANE_LAYER,
+  type PaneState,
+} from "@banda/ui/pane"
 import { moveOf } from "../look"
 import { Moving } from "../motion"
 import type { Chime } from "@banda/ui/sound"
@@ -28,6 +33,7 @@ export function Workspaces({
   marked,
   zoomed,
   center,
+  listed,
   frame,
   onStep,
   onStart,
@@ -46,6 +52,8 @@ export function Workspaces({
   zoomed: string | undefined
   /** Counts Alt+C, for the current workspace's Strip. */
   center: number
+  /** The listed thing a Pane shows, as its module lists it. */
+  listed: (entry: Entry) => Listed | undefined
   frame: Frame
   /** A swipe up or down with Alt held steps once, however long it is. */
   onStep: (by: 1 | -1) => void
@@ -136,6 +144,7 @@ export function Workspaces({
               marked={marked}
               zoomed={zoomed}
               center={center}
+              listed={listed}
               frame={frame}
               onStart={onStart}
             />

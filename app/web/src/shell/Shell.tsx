@@ -619,6 +619,15 @@ export function Shell({
       calling.find((call) => isShowing(entry, call, showsOf))?.chime,
     [calling]
   )
+  const listed = useCallback(
+    (entry: Entry) => {
+      const thing = showsOf(entry.pane)
+      return thing
+        ? lists[entry.space]?.find((row) => row.id === thing)
+        : undefined
+    },
+    [lists]
+  )
   const spaceName = useCallback(
     (id: SpaceId) => spaces.find((space) => space.id === id)?.name ?? "Space",
     [spaces]
@@ -690,6 +699,7 @@ export function Shell({
               marked={marked}
               zoomed={zoomed}
               center={center}
+              listed={listed}
               frame={frame}
               onStep={(by) => change((w) => step(w, by))}
               onStart={(pane) => parts.open(pane)}
