@@ -12,6 +12,8 @@ import type { FileQuery } from "./FileQuery";
 import type { HarnessView } from "./HarnessView";
 import type { Image } from "./Image";
 import type { ImageData } from "./ImageData";
+import type { Keep } from "./Keep";
+import type { Kept } from "./Kept";
 import type { OneHarness } from "./OneHarness";
 import type { OneImage } from "./OneImage";
 import type { OneThread } from "./OneThread";
@@ -106,6 +108,11 @@ attach: CommandMethod<Attach, Image>,
  * An image's bytes.
  */
 image: CallMethod<OneImage, ImageData>, 
+/**
+ * A file a message points at, kept in the Space: one dropped on
+ * the Thread, or a long text pasted.
+ */
+keep: CommandMethod<Keep, Kept>, 
 /**
  * The files in the Space's folder, for `@` in the composer.
  */

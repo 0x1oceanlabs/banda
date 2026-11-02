@@ -1769,6 +1769,26 @@ async fn a_message_carries_its_images_to_the_harness() {
 }
 
 #[tokio::test]
+async fn a_file_is_kept_in_the_space_for_a_message_to_point_at() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let data = BASE64.encode("a long text");
+    let params = json!({ "name": "pasted text.txt", "data": data });
+    let kept = world
+        .call(world.person(), "agents.keep", params)
+        .await
+        .unwrap();
+    let path = kept["path"].as_str().unwrap();
+    assert!(path.starts_with(".banda/files/") && path.ends_with("/pasted-text.txt"));
+    let file = root.path().join("Work").join(path);
+    assert_eq!(std::fs::read_to_string(file).unwrap(), "a long text");
+    // A file with no name is refused.
+    let params = json!({ "name": "", "data": data });
+    let refused = world.call(world.person(), "agents.keep", params).await;
+    assert_eq!(refused.unwrap_err().code, Code::Invalid);
+}
+
+#[tokio::test]
 async fn a_message_of_an_image_alone_is_named_after_it() {
     let root = tempfile::tempdir().unwrap();
     let world = World::new(root.path()).await;

@@ -25,6 +25,7 @@ import { harnessName, useHarnesses } from "./harnesses"
 import { useThread } from "./live-thread"
 import { settledTurn } from "./marks"
 import { useImageReader } from "./MessageImages"
+import { base64Of, dataUrl } from "./images"
 import type { QueueActions } from "./Queue"
 import { markSeen } from "./seen"
 import {
@@ -129,6 +130,17 @@ export function useThreadSession({
     attach: (image: Attaching) => engine.command("agents.attach", image, space),
     closed: offer.no_images ? `${name} does not take images.` : undefined,
   })
+  // A file dropped or pasted, kept in the Space for the message to name.
+  const keep = (file: File) =>
+    acting.act(async () => {
+      const data = base64Of(await dataUrl(file))
+      const kept = await engine.command(
+        "agents.keep",
+        { name: file.name, data },
+        space
+      )
+      return kept.path
+    })
   // The files `@` names come from the Space's folder.
   const findFiles = useCallback(
     (query: string) => engine.call("agents.files", { query }, { space }),
@@ -262,6 +274,7 @@ export function useThreadSession({
     steering: state !== undefined && steerable(state),
     images,
     findFiles,
+    keep,
     waits,
     asking,
     planned,
