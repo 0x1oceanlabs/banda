@@ -130,7 +130,7 @@ function WaitingMessage({
   busy: boolean
   reader: ImageReader
   /** The other Thread whose Agent wrote it, if one did. */
-  writer?: ListedThread
+  writer?: ListedThread | "gone"
   onOpenThread: Writers["onOpenThread"]
 }) {
   const body = waiting.item.body

@@ -10,6 +10,7 @@ import { cn } from "@banda/ui/lib/utils"
 import { clock, fullDate } from "@banda/ui/lib/words"
 import { type ImageReader, MessageImages } from "./MessageImages"
 import { clamped } from "./messages"
+import type { Listing } from "./thread"
 
 /**
  * The Person's message: a bubble on the right, its long text clamped until
@@ -100,14 +101,15 @@ export function AgentMessage({
 /** The Space's other Threads by their Agents' IDs, and how one opens: what
  * a {@link Writer} needs. */
 export type Writers = {
-  writers: ReadonlyMap<string, ListedThread>
+  writers: Listing
   onOpenThread: (thread: ListedThread) => void
 }
 
 /**
  * The other Thread whose Agent wrote a message, over it: whether it asks
  * or answers, and that Thread's Harness and title, which opens it (ADR
- * 0019).
+ * 0019). A Thread the list no longer has is "another Thread", and opens
+ * nothing.
  */
 export function Writer({
   thread,
@@ -115,26 +117,34 @@ export function Writer({
   align = "start",
   onOpen,
 }: {
-  thread: ListedThread
+  thread: ListedThread | "gone"
   /** It answers what this Thread's Agent asked; else it asks. */
   answers?: boolean
   align?: "start" | "end"
   onOpen: (thread: ListedThread) => void
 }) {
+  const gone = thread === "gone"
   return (
     <Button
       variant="ghost"
       size="xs"
+      disabled={gone}
       className={cn(
         "-mb-1.5 max-w-full text-muted-foreground",
         align === "end" ? "-mr-2 self-end" : "-ml-2 self-start"
       )}
-      onClick={() => onOpen(thread)}
+      onClick={gone ? undefined : () => onOpen(thread)}
     >
-      <HarnessLogo id={thread.harness} name={thread.harness} fallback={null} />
+      {!gone && (
+        <HarnessLogo
+          id={thread.harness}
+          name={thread.harness}
+          fallback={null}
+        />
+      )}
       {answers ? "Answered by" : "Asked by"}
       <span className="truncate font-medium text-foreground">
-        {thread.title || "New Thread"}
+        {gone ? "another Thread" : thread.title || "New Thread"}
       </span>
     </Button>
   )

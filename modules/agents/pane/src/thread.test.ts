@@ -92,10 +92,15 @@ test("a message names the other Thread whose Agent wrote it, and whether it answ
     updated_at: 1,
     asking: [],
   })
-  const writers = new Map([["b", listed("b")]])
-  expect(writerOf(writers, answer)?.title).toBe("Thread b")
+  const writers = { threads: new Map([["b", listed("b")]]), self: "a" }
+  expect(writerOf(writers, answer)).toMatchObject({ title: "Thread b" })
   expect(writerOf(writers, own)).toBeUndefined()
   expect(writerOf(writers, said)).toBeUndefined()
+  // A Thread the list no longer has is still another Thread; before the
+  // list has come, nothing is said.
+  expect(writerOf({ threads: new Map(), self: "a" }, answer)).toBe("gone")
+  expect(writerOf({ threads: new Map(), self: "a" }, own)).toBeUndefined()
+  expect(writerOf({ threads: new Map() }, answer)).toBeUndefined()
 })
 
 test("a Question opens, then is answered or closed", () => {

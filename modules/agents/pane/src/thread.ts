@@ -434,15 +434,27 @@ export function declineOnce(question: QuestionBody): string | undefined {
 /** An item that is a message. */
 export type Said = Item & { body: Extract<Body, { kind: "message" }> }
 
-/** The other Thread whose Agent wrote the message `item`, among
- * `writers`, the Space's Threads by their Agents but this one. */
+/** The Space's other Threads by their Agents' IDs, and this Thread's own
+ * Agent once the Thread list has said it. */
+export type Listing = {
+  threads: ReadonlyMap<string, ListedThread>
+  self?: string
+}
+
+/**
+ * The other Thread whose Agent wrote the message `item`: that Thread, or
+ * `"gone"` when the list no longer has it; nothing for a message of this
+ * Thread's own Agent or a Person, or before the list has come.
+ */
 export function writerOf(
-  writers: ReadonlyMap<string, ListedThread>,
+  { threads, self }: Listing,
   item: Item
-): ListedThread | undefined {
+): ListedThread | "gone" | undefined {
   const { author, body } = item
   if (body.kind !== "message" || author.kind !== "agent") return undefined
-  return writers.get(author.id)
+  const thread = threads.get(author.id)
+  if (thread) return thread
+  return self !== undefined && author.id !== self ? "gone" : undefined
 }
 
 /** Whether `item` is something the Agent wrote, not a Person. */
