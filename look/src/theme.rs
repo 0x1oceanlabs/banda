@@ -305,7 +305,7 @@ fn read_folder(
     let palette = match Palette::parse(&text) {
         Ok(palette) => palette,
         Err(error) => {
-            problems.push(Problem::toml(&colors_path, &text, &error));
+            problems.push(Problem::toml(&colors_path, &text, &error).left_out());
             return None;
         }
     };

@@ -47,8 +47,8 @@ columns: Columns,
 sources: Array<Source>, 
 /**
  * What is wrong in the files. The look still applies: a value that
- * does not read is left out; a file that does not read at all is,
- * and `--follow` keeps the last good look.
+ * does not read is left out; a file that does not read at all is left
+ * out whole, and `--follow` keeps the last good look.
  */
 problems: Array<Problem>, 
 /**

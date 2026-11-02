@@ -39,8 +39,10 @@ use motion::Motion;
 use palette::Palette;
 use serde::Serialize;
 use settings::{Corner, Material, ModeChoice, Settings, SidebarStyle, ThemeChoice};
+use std::borrow::Cow;
 use std::collections::BTreeMap;
 use std::fmt;
+use std::ops::Range;
 use std::path::{Path, PathBuf};
 use std::time::Duration;
 use theme::{Places, Theme};
@@ -87,8 +89,8 @@ pub struct Look {
     /// The layers it came from, bottom first.
     pub sources: Vec<Source>,
     /// What is wrong in the files. The look still applies: a value that
-    /// does not read is left out; a file that does not read at all is,
-    /// and `--follow` keeps the last good look.
+    /// does not read is left out; a file that does not read at all is left
+    /// out whole, and `--follow` keeps the last good look.
     pub problems: Vec<Problem>,
     /// Banda's sounds, which the window plays (ADR 0009).
     pub sound: sound::Sound,
@@ -187,6 +189,11 @@ pub struct Problem {
     #[serde(skip_serializing_if = "Option::is_none")]
     pub key: Option<String>,
     pub message: String,
+    /// The file it is in is left out whole, as TOML written wrong is, so
+    /// `--follow` keeps the last good look.
+    #[serde(skip)]
+    #[ts(skip)]
+    pub left_out: bool,
 }
 
 impl fmt::Display for Problem {
@@ -204,10 +211,23 @@ impl Problem {
     pub fn at(
         path: &Path,
         text: &str,
-        span: Option<std::ops::Range<usize>>,
+        span: Option<Range<usize>>,
         message: impl Into<String>,
     ) -> Problem {
-        let start = span.map(|span| span.start.min(text.len()));
+        let start = span.map(|span| span.start);
+        let key = start.and_then(|start| keyed::key_at(text, start));
+        Problem::placed(path, text, start, key, message)
+    }
+
+    /// A problem at `start` in `text`, about `key`.
+    fn placed(
+        path: &Path,
+        text: &str,
+        start: Option<usize>,
+        key: Option<String>,
+        message: impl Into<String>,
+    ) -> Problem {
+        let start = start.map(|start| start.min(text.len()));
         let (line, column) = start.map_or((None, None), |start| {
             let column = text[..start]
                 .rsplit('\n')
@@ -220,8 +240,17 @@ impl Problem {
             path: path.display().to_string(),
             line,
             column,
-            key: start.and_then(|start| keyed::key_at(text, start)),
+            key,
             message: message.into(),
+            left_out: false,
+        }
+    }
+
+    /// This problem, with the file it is in left out whole.
+    pub fn left_out(self) -> Problem {
+        Problem {
+            left_out: true,
+            ..self
         }
     }
 
@@ -246,55 +275,34 @@ impl Problem {
 /// Reads `text`, the file at `path`, as a `T`. A value that does not
 /// read is named at its key and left out, so the rest of the file still
 /// applies: its entry's bytes go blank, so every place stays where it
-/// was, and the text is read again. `None`, with the problem, when what
-/// is wrong is no key's, as TOML written wrong.
+/// was, and the text is read again. `None`, with the problem left out
+/// whole, when what is wrong is no key's, as TOML written wrong.
 pub fn read<T: serde::de::DeserializeOwned>(
     path: &Path,
     text: &str,
     problems: &mut Vec<Problem>,
 ) -> Option<T> {
-    let mut text = std::borrow::Cow::Borrowed(text);
+    let mut text = Cow::Borrowed(text);
     loop {
         let error = match toml::from_str(&text) {
             Ok(read) => return Some(read),
             Err(error) => error,
         };
-        problems.push(Problem::toml(path, &text, &error));
-        let start = error.span()?.start;
-        let (_, entry) = keyed::entry_at(&text, start)?;
-        let blanked = blank(&text, entry);
-        if blanked == *text {
+        let start = error.span().map(|span| span.start);
+        let message = error.message().trim().to_owned();
+        // Each pass blanks a key, so the loop ends.
+        let Some((key, entry)) = start.and_then(|start| keyed::entry_at(&text, start)) else {
+            problems.push(Problem::placed(path, &text, start, None, message).left_out());
             return None;
-        }
-        text = std::borrow::Cow::Owned(blanked);
+        };
+        problems.push(Problem::placed(path, &text, start, Some(key), message));
+        text = Cow::Owned(keyed::blank(&text, entry));
     }
-}
-
-/// `text` with the bytes of `entry` as spaces, lines kept, and a comma
-/// after it too, as in an inline table: TOML without that entry.
-fn blank(text: &str, entry: std::ops::Range<usize>) -> String {
-    let rest = &text[entry.end..];
-    let gap = rest.len() - rest.trim_start_matches([' ', '\t']).len();
-    let end = match rest[gap..].starts_with(',') {
-        true => entry.end + gap + 1,
-        false => entry.end,
-    };
-    let mut blanked = String::with_capacity(text.len());
-    blanked.push_str(&text[..entry.start]);
-    for c in text[entry.start..end].chars() {
-        match c {
-            '\n' => blanked.push(c),
-            // As many bytes as it had, so every place after stays.
-            c => blanked.extend(std::iter::repeat_n(' ', c.len_utf8())),
-        }
-    }
-    blanked.push_str(&text[end..]);
-    blanked
 }
 
 /// Reads a `look.toml` or a `banda.toml`, and checks what TOML alone does
-/// not: sizes are not negative, colours are colours. Problems go to
-/// `problems`; `None` when it is not TOML at all.
+/// not: sizes are not negative, colours are colours, as [`read`] reads a
+/// file.
 pub fn read_settings(path: &Path, text: &str, problems: &mut Vec<Problem>) -> Option<Settings> {
     let settings: Settings = read(path, text, problems)?;
     for key in settings.negative_sizes() {
@@ -846,9 +854,8 @@ pub fn follow(
         watched = resolved.watched;
         followed = resolved.followed;
         // A value that does not read is left out and the rest applies; a
-        // problem that is no key's, as TOML written wrong, leaves a file
-        // out whole, so the last good look stays.
-        let whole = look.problems.iter().any(|problem| problem.key.is_none());
+        // file left out whole keeps the last good look.
+        let whole = look.problems.iter().any(|problem| problem.left_out);
         let shown = match (&good, whole) {
             (Some(good), true) => Look {
                 problems: look.problems.clone(),
@@ -993,7 +1000,11 @@ mod reading {
         assert_eq!(read.t, Some(BTreeMap::from([("two".to_owned(), 2)])));
         assert_eq!(
             keys,
-            [Some("a".to_owned()), Some("c".to_owned()), Some("t.one".to_owned())]
+            [
+                Some("a".to_owned()),
+                Some("c".to_owned()),
+                Some("t.one".to_owned())
+            ]
         );
     }
 
