@@ -382,7 +382,9 @@ If Chat is removed, Agents still works through its own Thread.
     through `banda settings` (ADR 0016). An entry with a known ID, `claude`
     or `codex`, takes each key it leaves out from Banda, so a new Banda
     moves its adapter; the window shows what is wrong in the file as in
-    the look's.
+    the look's. An entry's `start` says what a new Thread on it starts
+    with: its mode, plan and options, as the composer's bar shows them
+    (`agents.defaults`), set from the same bar in the settings.
 - **The Harness's notices**, such as warnings, join the Thread as lines of
   their own.
 - **A Thread has settings: a mode, Plan, and the Harness's options.** The

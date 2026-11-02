@@ -8,7 +8,7 @@
 //! [`old_agents`] reads them still, so the Threads from then learn their
 //! Harness; nothing writes them, and nothing removes them.
 
-use crate::model::{HarnessView, Program};
+use crate::model::{HarnessView, Mode, Offer, OptionValue, Program, Settings};
 use banda_kernel::AgentId;
 use banda_look::Problem;
 use schemars::JsonSchema;
@@ -34,6 +34,8 @@ pub struct Harness {
     pub env: BTreeMap<String, String>,
     /// The Person's own CLI the program runs, when it runs one.
     pub cli: Option<Cli>,
+    /// What a new Thread on it starts with.
+    pub start: Start,
     /// A folder where each start of the program writes what Banda and
     /// the Harness say to each other, one ACP frame per line, for tests to
     /// replay. Only a test sets it, never a Harness list: a recording holds
@@ -117,6 +119,52 @@ pub struct HarnessEntry {
     pub env: Option<BTreeMap<String, String>>,
     /// The Person's own CLI the program runs, when it runs one.
     pub cli: Option<Cli>,
+    /// What a new Thread on it starts with.
+    pub start: Option<Start>,
+}
+
+/// What a new Thread on a Harness starts with, over the Harness's own:
+/// what it leaves out, the Harness chooses.
+#[derive(Clone, Debug, Default, PartialEq, Eq, Deserialize, JsonSchema)]
+pub struct Start {
+    /// How freely its Agent acts: "supervised", "accept_edits", "auto" or
+    /// "full_access".
+    pub mode: Option<Mode>,
+    /// The Agent makes a plan before it changes anything.
+    pub plan: Option<bool>,
+    /// The Harness's options by their IDs, as its Threads offer them:
+    /// `model = "opus"`.
+    #[serde(flatten)]
+    pub options: BTreeMap<String, OptionValue>,
+}
+
+impl Start {
+    /// What a new Thread starts with: the Harness's own values for what
+    /// it `offer`s, with this over them. An option the Harness does not
+    /// offer, or a value it has not, is left out. Before it offered
+    /// anything, this goes as written, and the Harness says what it does
+    /// not take.
+    pub fn over(&self, offer: Option<&Offer>) -> Settings {
+        let mut settings = Settings::default();
+        let Some(offer) = offer else {
+            settings.options = self.options.clone();
+            settings.mode = self.mode.unwrap_or_default();
+            settings.plan = self.plan.unwrap_or_default();
+            return settings;
+        };
+        for option in &offer.options {
+            let value = self.options.get(&option.id).filter(|v| option.takes(v));
+            let value = value.unwrap_or(&option.value);
+            settings.options.insert(option.id.clone(), value.clone());
+        }
+        if let Some(mode) = self.mode {
+            settings.mode = mode;
+        }
+        if let Some(plan) = self.plan.filter(|_| offer.plans) {
+            settings.plan = plan;
+        }
+        settings
+    }
 }
 
 impl HarnessEntry {
@@ -141,8 +189,8 @@ impl HarnessEntry {
                 self.id
             ));
         };
-        let base = base.map(|b| (b.args, b.env, b.cli));
-        let (args, env, cli) = base.unwrap_or_default();
+        let base = base.map(|b| (b.args, b.env, b.cli, b.start));
+        let (args, env, cli, start) = base.unwrap_or_default();
         Ok(Harness {
             id: self.id,
             name,
@@ -151,6 +199,7 @@ impl HarnessEntry {
             args: self.args.unwrap_or(args),
             env: self.env.unwrap_or(env),
             cli: self.cli.or(cli),
+            start: self.start.unwrap_or(start),
             record: None,
         })
     }
@@ -243,6 +292,7 @@ fn known() -> Vec<Harness> {
             variable: variable.to_owned(),
             minimum: Some(minimum.to_owned()),
         }),
+        start: Default::default(),
         record: None,
     };
     vec![
@@ -445,6 +495,21 @@ mod tests {
             flag[0].cli.is_some(),
             "Banda's command still runs the Person's CLI"
         );
+    }
+
+    #[test]
+    fn an_entry_says_what_a_new_thread_starts_with() {
+        let text =
+            "[[harness]]\nid = \"claude\"\n\n[harness.start]\nmode = \"auto\"\nmodel = \"opus\"\n";
+        let claude = &parse(Path::new("h"), text).unwrap()[0];
+        assert_eq!(claude.start.mode, Some(Mode::Auto));
+        assert_eq!(
+            claude.start.options,
+            BTreeMap::from([("model".to_owned(), OptionValue::Choice("opus".to_owned()))])
+        );
+        assert_eq!(claude.args.len(), 2, "how it starts is still Banda's");
+        let wrong = "[[harness]]\nid = \"claude\"\nstart = { mode = \"loose\" }\n";
+        assert_eq!(parse(Path::new("h"), wrong).unwrap_err().line, Some(3));
     }
 
     #[test]

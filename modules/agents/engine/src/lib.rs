@@ -513,19 +513,12 @@ impl Agents {
         call: Call,
         OneHarness { harness }: OneHarness,
     ) -> Result<Defaults, Refusal> {
-        self.harness(&harness)?;
-        let (at, offer) = call
+        let start = self.harness(&harness)?.start;
+        // What the composer shows is what the new Thread gets.
+        let (at, (settings, offer)) = call
             .space()
-            .view(move |sql| Ok(store::latest_offer(sql, &harness)?.unwrap_or_default()))
+            .view(move |sql| fresh(sql, &harness, &start))
             .await?;
-        // What the composer shows is what the new Thread gets: the
-        // Harness's own values for its options.
-        let mut settings = Settings::default();
-        for option in &offer.options {
-            settings
-                .options
-                .insert(option.id.clone(), option.value.clone());
-        }
         Ok(Defaults {
             at,
             settings,
@@ -545,7 +538,10 @@ impl Agents {
         rules::may_send(&text, &images)?;
         let target = match (thread, harness) {
             (Some(thread), _) => Target::Thread(thread),
-            (None, Some(harness)) => Target::New(self.harness(&harness)?.id),
+            (None, Some(harness)) => {
+                let harness = self.harness(&harness)?;
+                Target::New(harness.id, harness.start)
+            }
             (None, None) => {
                 return Err(Refusal::invalid(
                     "A message goes into a Thread, or starts one on a Harness.",
@@ -818,7 +814,21 @@ struct Message {
 /// Where a message goes: into a Thread, or into a new one on a Harness.
 enum Target {
     Thread(ThreadId),
-    New(String),
+    /// A new Thread on a Harness, and what its entry starts one with.
+    New(String, settings::Start),
+}
+
+/// What a new Thread on `harness` starts with, as the composer shows it:
+/// the Harness's own values for what it last offered in this Space, under
+/// its entry's `start`; and that offer.
+fn fresh(
+    sql: &rusqlite::Connection,
+    harness: &str,
+    start: &settings::Start,
+) -> Result<(Settings, Offer), Error> {
+    let offer = store::latest_offer(sql, harness)?;
+    let settings = start.over(offer.as_ref());
+    Ok((settings, offer.unwrap_or_default()))
 }
 
 /// A message in a Thread, or the first of a new Thread on a Harness, and
@@ -859,9 +869,13 @@ fn send(
             }
             (id, agent)
         }
-        Target::New(harness) => {
+        Target::New(harness, start) => {
             let title = rules::title(&text, &images);
-            let settings = settings.unwrap_or_default();
+            // No one chose: as the composer would have shown it.
+            let settings = match settings {
+                Some(settings) => settings,
+                None => fresh(tx.sql(), &harness, &start)?.0,
+            };
             start_thread(tx, author, harness, title, &settings)?
         }
     };
