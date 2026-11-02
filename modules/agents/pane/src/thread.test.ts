@@ -304,6 +304,7 @@ test("the Thread's settings and the Harness's offer follow their facts", () => {
         options: [model],
         plans: true,
         slash_commands: [],
+        skills: [],
         no_images: false,
       },
     }),

@@ -14,21 +14,56 @@
  */
 import type { JSONContent } from "@tiptap/core"
 import type { Fragment, Mark, Node } from "@tiptap/pm/model"
+import type { EditorState, Transaction } from "@tiptap/pm/state"
 
-/** What a chip points at, and how each kind is written and read. */
+/** What may follow a chip in the text: a full stop, a comma or a style's
+ * delimiter, which is not part of it, then a space or the line's end. */
+const ENDS = String.raw`(?=[.,;:!?)\]*~\`]*(?:\s|$))`
+
+/** The names of the skills a Harness has, which are chips in its text. */
+export type Skills = ReadonlySet<string>
+export const NO_SKILLS: Skills = new Set()
+
+/** What a chip points at, and how each kind is written and read: `read`
+ * finds the space before it and what it points at, which `known` says is
+ * a chip. */
 export const KINDS = {
   file: {
     write: (path: string) => `@${path}`,
     /** `@` at a word's start, then a path with a folder or an extension
-     * in it, so a name such as `@here` stays text; a full stop, a comma or
-     * a style's delimiter after it is not part of it. */
-    read: /(^|\s)@([^\s@]*[./][^\s@]*[^\s@.,;:!?)\]*~`])(?=[.,;:!?)\]*~`]*(?:\s|$))/g,
+     * in it, so a name such as `@here` stays text. */
+    read: new RegExp(
+      String.raw`(^|\s)@([^\s@]*[./][^\s@]*[^\s@.,;:!?)\]*~\`])` + ENDS,
+      "g"
+    ),
+    known: () => true,
     /** Its name, the last part of its path. */
     label: (path: string) => path.slice(path.lastIndexOf("/") + 1),
+    /** lucide's file. */
+    icon: [
+      "M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z",
+      "M14 2v5a1 1 0 0 0 1 1h5",
+    ],
+  },
+  skill: {
+    write: (name: string) => `$${name}`,
+    /** `$` at a word's start, then a name with a letter first, so a price
+     * such as `$5` stays text. */
+    read: new RegExp(String.raw`(^|\s)\$([a-zA-Z][a-zA-Z0-9:_-]*)` + ENDS, "g"),
+    /** Only a skill the Harness has is a chip. */
+    known: (name: string, skills: Skills) => skills.has(name),
+    label: (name: string) => name,
+    /** lucide's box, as T3 Code draws a skill. */
+    icon: [
+      "M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z",
+      "m3.3 7 8.7 5 8.7-5",
+      "M12 22V12",
+    ],
   },
 } as const
 
 export type ChipKind = keyof typeof KINDS
+const CHIP_KINDS = Object.keys(KINDS) as ChipKind[]
 
 /** How text is styled: strike `~~`, bold `**` or `__`, italic `*` or `_`,
  * code `` ` ``. Of two styles over the same text, written inside as many
@@ -55,14 +90,15 @@ export function chip(kind: ChipKind, value: string): JSONContent {
 }
 
 /** The document that shows `text`: a paragraph for each line, styled as
- * its markdown says, what it points at as chips. */
-export function docOf(text: string): JSONContent {
+ * its markdown says, what it points at as chips: a file, and one of
+ * `skills`. */
+export function docOf(text: string, skills: Skills = NO_SKILLS): JSONContent {
   const lines = text.split("\n")
   const content: JSONContent[] = []
   for (let at = 0; at < lines.length; at += 1) {
     const open = openingFence(lines[at])
     if (!open) {
-      content.push(blockOf(lines[at]))
+      content.push(blockOf(lines[at], skills))
       continue
     }
     // A fence's lines are code, as they are, to the line that closes it
@@ -105,18 +141,24 @@ const ITEM = /^([ \t]*)([-*+]|\d{1,9}[.)])([ \t]+|$)/
 const CHECK = /^\[([ xX])\]([ \t]+|$)/
 
 /** The block a line is, from how it starts. */
-function blockOf(line: string): JSONContent {
+function blockOf(line: string, skills: Skills): JSONContent {
   if (RULE.test(line)) return { type: "rule", attrs: { source: line } }
   const heading = HEADING.exec(line)
   if (heading)
     return textblock(
       "heading",
       { level: heading[1].length, space: heading[2] },
-      line.slice(heading[0].length)
+      line.slice(heading[0].length),
+      skills
     )
   const quote = QUOTE.exec(line)
   if (quote)
-    return textblock("quote", { prefix: quote[0] }, line.slice(quote[0].length))
+    return textblock(
+      "quote",
+      { prefix: quote[0] },
+      line.slice(quote[0].length),
+      skills
+    )
   const item = ITEM.exec(line)
   if (item) {
     const [found, indent, marker, space] = item
@@ -132,19 +174,21 @@ function blockOf(line: string): JSONContent {
         check: check?.[1] ?? null,
         checkSpace: check?.[2] ?? "",
       },
-      rest.slice(check?.[0].length ?? 0)
+      rest.slice(check?.[0].length ?? 0),
+      skills
     )
   }
-  return textblock("paragraph", {}, line)
+  return textblock("paragraph", {}, line, skills)
 }
 
 /** A block of `type` holding `text`, styled unless it is code. */
 function textblock(
   type: string,
   attrs: Record<string, unknown>,
-  text: string
+  text: string,
+  skills: Skills
 ): JSONContent {
-  const content = inline(text)
+  const content = inline(text, skills)
   return {
     type,
     ...(Object.keys(attrs).length > 0 && { attrs }),
@@ -152,35 +196,46 @@ function textblock(
   }
 }
 
-/** A line's text and chips, styled. A chip stands in as a character the
- * line has not got while the styles are read, so a chip in code stays its
- * text and a style around a chip takes it in. */
-function inline(line: string): JSONContent[] {
+/** A line's text and chips, styled. Each kind of chip stands in as a
+ * character the line has not got while the styles are read, so a chip in
+ * code stays its text and a style around a chip takes it in. */
+function inline(line: string, skills: Skills): JSONContent[] {
+  // Each kind's stand, and what its chips point at, in turn.
+  const stands = new Map<string, { kind: ChipKind; values: string[] }>()
+  let shown = line
   let stand = 0xe000
-  while (line.includes(String.fromCodePoint(stand))) stand += 1
-  const chipAt = String.fromCodePoint(stand)
-  const paths: string[] = []
-  const shown = line.replace(
-    KINDS.file.read,
-    (_, space: string, path: string) => {
-      paths.push(path)
-      return space + chipAt
-    }
-  )
+  for (const kind of CHIP_KINDS) {
+    while (line.includes(String.fromCodePoint(stand))) stand += 1
+    const at = String.fromCodePoint(stand++)
+    const values: string[] = []
+    stands.set(at, { kind, values })
+    shown = shown.replace(
+      KINDS[kind].read,
+      (whole, space: string, value: string) => {
+        if (!KINDS[kind].known(value, skills)) return whole
+        values.push(value)
+        return space + at
+      }
+    )
+  }
+  const chipAt = new RegExp(`([${[...stands.keys()].join("")}])`)
   const parts: JSONContent[] = []
   for (const { text, marks } of spansOf(shown)) {
     const styled = marks.length > 0 ? { marks } : {}
     const code = marks.some((mark) => mark.type === "code")
     text.split(chipAt).forEach((piece, index) => {
-      if (index > 0) {
-        const path = paths.shift() ?? ""
-        parts.push(
-          code
-            ? { type: "text", text: KINDS.file.write(path), ...styled }
-            : { ...chip("file", path), ...styled }
-        )
+      const stood = index % 2 === 1 ? stands.get(piece) : undefined
+      if (!stood) {
+        if (piece) parts.push({ type: "text", text: piece, ...styled })
+        return
       }
-      if (piece) parts.push({ type: "text", text: piece, ...styled })
+      const { kind } = stood
+      const value = stood.values.shift() ?? ""
+      parts.push(
+        code
+          ? { type: "text", text: KINDS[kind].write(value), ...styled }
+          : { ...chip(kind, value), ...styled }
+      )
     })
   }
   return parts
@@ -321,6 +376,41 @@ function same(a: StyledMark, b: StyledMark) {
     a.attrs.delimiter === b.attrs.delimiter &&
     a.attrs.depth === b.attrs.depth
   )
+}
+
+/** What makes the text's skills chips as `skills` says them: a skill's
+ * name written as text is a chip, and the chip of one not in them is its
+ * text, as T3 Code does; the text stays the same, the caret where it was.
+ * Nothing if nothing changes. */
+export function rechip(
+  state: EditorState,
+  skills: Skills
+): Transaction | undefined {
+  const { tr, schema } = state
+  state.doc.descendants((node, pos) => {
+    if (node.type.spec.code) return false
+    const { kind, value } = node.attrs
+    if (
+      node.type.name === "chip" &&
+      kind === "skill" &&
+      !KINDS.skill.known(value, skills)
+    ) {
+      const at = tr.mapping.map(pos)
+      const text = schema.text(KINDS.skill.write(value), node.marks)
+      tr.replaceWith(at, at + node.nodeSize, text)
+    }
+    if (!node.isText || node.marks.some(isCode)) return
+    for (const found of (node.text ?? "").matchAll(KINDS.skill.read)) {
+      const [whole, space, name] = found
+      if (!KINDS.skill.known(name, skills)) continue
+      const from = pos + found.index + space.length
+      const made = schema.nodeFromJSON(chip("skill", name)).mark(node.marks)
+      const to = pos + found.index + whole.length
+      tr.replaceWith(tr.mapping.map(from), tr.mapping.map(to), made)
+    }
+  })
+  if (!tr.docChanged) return undefined
+  return tr.setMeta("addToHistory", false).setMeta("preventUpdate", true)
 }
 
 /** What a leaf writes into the text: a chip what it points at. */
@@ -475,16 +565,26 @@ const depth = (mark: Mark) => Number(mark.attrs.depth)
 const delimiter = (mark: Mark) => String(mark.attrs.delimiter)
 
 /** A word being typed that asks for suggestions: `/` and a command's
- * name at a line's start, or `@` and a file's name at a word's start. */
-export type Typing = { trigger: "/" | "@"; word: string }
+ * name at a line's start, or `@` and a file's name or `$` and a skill's at
+ * a word's start. */
+export type Typing = { trigger: "/" | "@" | "$"; word: string }
 
 /** The word a line's text before the caret ends with, if it asks for
  * suggestions; a chip in it is {@link CHIP_MARK}, so none is taken for
  * typing. */
 export function typingIn(before: string): Typing | undefined {
-  const command = /^\/([^\s/]*)$/.exec(before)
+  const command = COMMAND_TYPED.exec(before)
   if (command) return { trigger: "/", word: command[1] }
-  const file = new RegExp(`(?:^|\\s)@([^\\s@${CHIP_MARK}]*)$`).exec(before)
+  const file = FILE_TYPED.exec(before)
   if (file) return { trigger: "@", word: file[1] }
+  const skill = SKILL_TYPED.exec(before)
+  if (skill) return { trigger: "$", word: skill[1] }
   return undefined
 }
+
+const COMMAND_TYPED = /^\/([^\s/]*)$/
+const FILE_TYPED = new RegExp(String.raw`(?:^|\s)@([^\s@${CHIP_MARK}]*)$`)
+/** Not a price, such as `$5`. */
+const SKILL_TYPED = new RegExp(
+  String.raw`(?:^|\s)\$((?![0-9])[^\s$${CHIP_MARK}]*)$`
+)

@@ -128,7 +128,17 @@ rest are our defaults and stay his to change.
    - A chip's removal, by Backspace, Delete, a cut or typing over it, is
      a step of its own to undo, so Mod+Z brings back the chip with what
      it pointed at, not the typing before it too.
-   - `$` skills wait for a Harness that says which skills it has.
+   - `$` at a word's start, anywhere in the text, lists the skills the
+     Harness has, and the skill picked is a chip with a box for its icon,
+     as T3 Code draws one, written as `$name`, which Codex reads as the
+     skill anywhere in a message. Codex says its skills with its slash
+     commands, each named `$` and the skill's name; the engine keeps them
+     apart, in the Thread's offer as `skills`, so `/` lists only
+     commands. Claude Code runs a skill as a slash command, `/name`, so
+     its skills stay in the `/` list, as in its own CLI: nothing new goes
+     between the engine and a Harness. Only a skill the Harness has is a
+     chip, so `$5` and `$HOME` stay text; skills said after the text was
+     written make chips of their names in it, as in T3 Code.
 
 **Build order.** One PR each: (1) the prompt editor in place of the
 textarea, nothing else changing, (2) chips for `@` files and `/` anywhere

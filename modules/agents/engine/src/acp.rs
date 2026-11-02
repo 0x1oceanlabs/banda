@@ -29,7 +29,7 @@
 
 use crate::model::{
     Account, Adapter, CliView, Cost, Exit, Failure, Field, FieldValue, HarnessOption, Input, Mode,
-    Offer, OptionChoice, OptionValue, PlanStep, Program, Settings, SignInWay, SignedInAs,
+    Offer, OptionChoice, OptionValue, PlanStep, Program, Settings, SignInWay, SignedInAs, Skill,
     SlashCommand, StepState, TextFormat, ThreadId, ToolContent, ToolKind, ToolStatus, TurnState,
     Usage, Values,
 };
@@ -302,12 +302,19 @@ pub struct Running {
     pub mode: Option<Mode>,
     /// It plans before it changes anything.
     pub plan: bool,
-    /// Its options, and whether it can plan. Its slash commands are not
-    /// here: see `slash_commands`.
+    /// Its options, and whether it can plan. Its slash commands and
+    /// skills are not here: see `commands`.
     pub offer: Offer,
-    /// The slash commands it said, or `None` before it has: a session that
-    /// has not said them yet leaves the Thread's.
-    pub slash_commands: Option<Vec<SlashCommand>>,
+    /// The commands it said, or `None` before it has: a session that has
+    /// not said them yet leaves the Thread's.
+    pub commands: Option<Commands>,
+}
+
+/// What a session said a message can ask it to run.
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
+pub struct Commands {
+    pub slash_commands: Vec<SlashCommand>,
+    pub skills: Vec<Skill>,
 }
 
 /// Each mode as the Harnesses with modes of their own name it, Claude
@@ -394,7 +401,7 @@ struct Known {
     native: bool,
     options: Vec<acp::SessionConfigOption>,
     usage: Option<Usage>,
-    slash_commands: Option<Vec<SlashCommand>>,
+    commands: Option<Commands>,
 }
 
 impl Known {
@@ -1026,9 +1033,9 @@ async fn drive(
                         Some(Said::Runs(running(&known)))
                     }
                     acp::SessionUpdate::AvailableCommandsUpdate(now) => {
-                        let commands = now.available_commands.iter().map(slash_command);
+                        let commands = commands(&now.available_commands);
                         Some(Said::Runs(update(&learned, &note.session_id, |known| {
-                            known.slash_commands = Some(commands.collect());
+                            known.commands = Some(commands);
                             running(known)
                         })))
                     }
@@ -1455,11 +1462,31 @@ fn running(known: &Known) -> Running {
             options: offered,
             plans: native && plans,
             slash_commands: Vec::new(),
+            skills: Vec::new(),
             no_images: false,
             outdated: None,
         },
-        slash_commands: known.slash_commands.clone(),
+        commands: known.commands.clone(),
     }
+}
+
+/// The commands a session said, its slash commands apart from its
+/// skills: Codex says each of its skills as a command named `$` and the
+/// skill's name, which a message names anywhere in its text. Claude
+/// Code's skills are slash commands, as it runs them.
+fn commands(said: &[acp::AvailableCommand]) -> Commands {
+    let mut commands = Commands::default();
+    for command in said {
+        match command.name.strip_prefix('$') {
+            Some("") => {}
+            Some(name) => commands.skills.push(Skill {
+                name: name.to_owned(),
+                description: command.description.clone(),
+            }),
+            None => commands.slash_commands.push(slash_command(command)),
+        }
+    }
+    commands
 }
 
 fn slash_command(command: &acp::AvailableCommand) -> SlashCommand {

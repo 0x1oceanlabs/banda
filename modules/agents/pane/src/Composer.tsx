@@ -2,10 +2,11 @@ import {
   useEffect,
   useEffectEvent,
   useImperativeHandle,
+  useMemo,
   useRef,
   useState,
 } from "react"
-import type { Image, TurnView, Usage } from "@banda/contract/agents"
+import type { Image, Skill, TurnView, Usage } from "@banda/contract/agents"
 import type { Enter } from "@banda/contract/look"
 import {
   InputGroup,
@@ -34,7 +35,7 @@ import { recall } from "./history"
 import { imagesAmong, KINDS } from "./images"
 import { ownCommand, type Suggested } from "./slash"
 import { type FindFiles, useFileMenu } from "./FileMenu"
-import { useSlashMenu } from "./SlashMenu"
+import { useSkillMenu, useSlashMenu } from "./SlashMenu"
 import { stray, typed } from "./stray"
 
 /**
@@ -60,6 +61,7 @@ export function Composer({
   steering,
   usage,
   commands,
+  skills,
   images,
   dropping,
   onPlanMode,
@@ -95,6 +97,9 @@ export function Composer({
   /** The slash commands a message can start with, suggested as it is
    * typed. */
   commands: Suggested[]
+  /** The skills a message can name anywhere with `$`, suggested as their
+   * names are typed. */
+  skills: Skill[]
   /** The images the message carries. */
   images: Attachments
   /** Images are dragged over the Pane, to drop them here. */
@@ -190,8 +195,12 @@ export function Composer({
     }
   }, [focused])
 
-  // The word being typed that asks for suggestions: `/` or `@`.
+  // The word being typed that asks for suggestions: `/`, `@` or `$`.
   const [typing, setTyping] = useState<Typing>()
+  const skillNames = useMemo(
+    () => new Set(skills.map((skill) => skill.name)),
+    [skills]
+  )
   const pick = (command: Suggested) => {
     if (command.planMode === undefined) {
       field.current?.complete(`/${command.name} `)
@@ -207,12 +216,22 @@ export function Composer({
     name,
     onPick: pick,
   })
+  const skillMenu = useSkillMenu({
+    text,
+    word: typing?.trigger === "$" ? typing.word : undefined,
+    skills,
+    onPick: (skill) =>
+      field.current?.complete({ chip: "skill", value: skill.name }),
+  })
   const fileMenu = useFileMenu({
     text,
     word: typing?.trigger === "@" ? typing.word : undefined,
     findFiles,
     onPick: (path) => field.current?.complete({ chip: "file", value: path }),
   })
+
+  // At most one is open, for the word being typed.
+  const menus = [slash, fileMenu, skillMenu]
 
   const trimmed = text.trim().length
   const written = trimmed > 0 || images.adding.length > 0
@@ -256,6 +275,7 @@ export function Composer({
       )}
       {slash.menu}
       {fileMenu.menu}
+      {skillMenu.menu}
       <input
         ref={files}
         type="file"
@@ -280,12 +300,15 @@ export function Composer({
         <PromptEditor
           ref={field}
           value={text}
-          placeholder={placeholder ?? `Write to ${name}. @ files, / commands`}
+          placeholder={
+            placeholder ??
+            `Write to ${name}. @ files, / commands${skills.length > 0 ? ", $ skills" : ""}`
+          }
+          skills={skillNames}
           attributes={{
             "aria-label": `Message to ${name}`,
             "data-slot": "input-group-control",
-            ...slash.field,
-            ...fileMenu.field,
+            ...Object.assign({}, ...menus.map((menu) => menu.field)),
           }}
           className="max-h-48 min-h-10"
           onTyping={setTyping}
@@ -295,7 +318,7 @@ export function Composer({
           }}
           onPaste={(event) => takePaste(event, "caret")}
           onKeyDown={(event) => {
-            if (slash.onKeyDown(event) || fileMenu.onKeyDown(event)) return
+            if (menus.some((menu) => menu.onKeyDown(event))) return
             if (event.key === "Tab" && event.shiftKey && plan !== undefined) {
               event.preventDefault()
               onPlanMode(!plan)

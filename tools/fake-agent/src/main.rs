@@ -278,13 +278,16 @@ fn report(cx: &ConnectionTo<Client>, signed_in: bool) -> Result<(), Error> {
     cx.send_notification(AuthStatusUpdate { status })
 }
 
-/// Its commands; with `/init` once it has learned that.
+/// Its commands, a skill among them; with `/init` once it has learned
+/// that.
 fn commands(learned: bool) -> SessionUpdate {
     let mut all = vec![
         AvailableCommand::new("review", "Review the changes so far").input(
             AvailableCommandInput::Unstructured(UnstructuredCommandInput::new("what to look at")),
         ),
         AvailableCommand::new("compact", "Make room in the context"),
+        // A skill, named as Codex names one.
+        AvailableCommand::new("$explain", "Explain the code it is pointed at"),
     ];
     if learned {
         all.push(AvailableCommand::new(

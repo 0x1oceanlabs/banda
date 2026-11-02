@@ -31,6 +31,9 @@ import {
   type ChipKind,
   docOf,
   KINDS,
+  NO_SKILLS,
+  rechip,
+  type Skills,
   textOf,
   type Typing,
   typingIn,
@@ -65,8 +68,10 @@ type PromptEditorProps = {
   value: string
   /** The text changed, as typed. */
   onChange: (value: string) => void
+  /** The names of the skills `$` names, each a chip in the text. */
+  skills?: Skills
   /** The word being typed that asks for suggestions, as the caret moves:
-   * `/` at a line's start, or `@` at a word's. */
+   * `/` at a line's start, or `@` or `$` at a word's. */
   onTyping?: (typing: Typing | undefined) => void
   /** Sees each key first; one it prevents goes no further. */
   onKeyDown?: (event: KeyboardEvent) => void
@@ -91,6 +96,7 @@ type PromptEditorProps = {
 function PromptEditor({
   value,
   onChange,
+  skills: known = NO_SKILLS,
   onTyping,
   onKeyDown,
   onPaste,
@@ -101,14 +107,14 @@ function PromptEditor({
 }: PromptEditorProps) {
   // ProseMirror's props are given once, so tiptap never sets them again;
   // the keys and pastes reach the latest handlers here.
-  const latest = React.useRef({ onKeyDown, onPaste })
+  const latest = React.useRef({ onKeyDown, onPaste, known })
   React.useLayoutEffect(() => {
-    latest.current = { onKeyDown, onPaste }
+    latest.current = { onKeyDown, onPaste, known }
   })
   // The text last typed, so a value its owner sets is told apart.
   const typed = React.useRef(value)
   const [setup] = React.useState(() => ({
-    content: docOf(value),
+    content: docOf(value, known),
     editorProps: {
       handleKeyDown(view: EditorView, event: KeyboardEvent) {
         // The text's keys come before the owner's, but not while a word
@@ -133,7 +139,7 @@ function PromptEditor({
         // Into code, ProseMirror puts the text as it is.
         if (!text || event.clipboardData?.files.length || inCode(view.state))
           return false
-        paste(view, text)
+        paste(view, text, latest.current.known)
         return true
       },
       // Copied, a chip is what it writes; dropped, that is a chip again.
@@ -143,7 +149,7 @@ function PromptEditor({
         _: unknown,
         __: boolean,
         view: EditorView
-      ) => sliceOf(view, text),
+      ) => sliceOf(view, text, latest.current.known),
     },
   }))
 
@@ -184,12 +190,19 @@ function PromptEditor({
     if (value === typed.current) return
     typed.current = value
     const { state, view } = editor
-    const doc = state.schema.nodeFromJSON(docOf(value))
+    const doc = state.schema.nodeFromJSON(docOf(value, latest.current.known))
     const tr = state.tr.replaceWith(0, state.doc.content.size, doc.content)
     tr.setSelection(TextSelection.atEnd(tr.doc))
     tr.setMeta("addToHistory", false).setMeta("preventUpdate", true)
     view.dispatch(tr)
   }, [editor, value])
+
+  // Skills the Harness says after the text was written make chips of
+  // their names in it, and one it no longer has is text again.
+  React.useEffect(() => {
+    const tr = rechip(editor.state, known)
+    if (tr) editor.view.dispatch(tr)
+  }, [editor, known])
 
   React.useImperativeHandle(
     ref,
@@ -213,7 +226,7 @@ function PromptEditor({
         const last = up ? 0 : state.doc.childCount - 1
         return line === last && view.endOfTextblock(up ? "up" : "down")
       },
-      add: (text) => put(editor.view, text, "end"),
+      add: (text) => put(editor.view, text, "end", latest.current.known),
       point(path, at) {
         const { view } = editor
         if (at === "end") toEnd(view)
@@ -227,7 +240,7 @@ function PromptEditor({
       putLines(text) {
         const { view } = editor
         const tr = view.state.tr
-        putOwnLines(tr, sliceOf(view, text).content)
+        putOwnLines(tr, sliceOf(view, text, latest.current.known).content)
         view.dispatch(tr.scrollIntoView())
         view.focus()
       },
@@ -307,10 +320,15 @@ function putChip(
 
 /** Puts `text` at the caret, or at the end, as pasted text is read, or as
  * it is in code, and takes the focus. */
-function put(view: EditorView, text: string, at: "caret" | "end") {
+function put(
+  view: EditorView,
+  text: string,
+  at: "caret" | "end",
+  skills = NO_SKILLS
+) {
   if (at === "end") toEnd(view)
   if (inCode(view.state)) view.dispatch(view.state.tr.insertText(text))
-  else paste(view, text)
+  else paste(view, text, skills)
   view.focus()
 }
 
@@ -320,18 +338,18 @@ function toEnd(view: EditorView) {
 
 /** `text` as the lines it makes, open at their ends to join the line it
  * goes into. */
-function sliceOf(view: EditorView, text: string) {
-  const doc = view.state.schema.nodeFromJSON(docOf(text))
+function sliceOf(view: EditorView, text: string, skills = NO_SKILLS) {
+  const doc = view.state.schema.nodeFromJSON(docOf(text, skills))
   return Slice.maxOpen(doc.content)
 }
 
 /** Puts `text` where the caret is; on a line of its own, its first line
  * keeps what it is, such as an item of a list. */
-function paste(view: EditorView, text: string) {
+function paste(view: EditorView, text: string, skills: Skills) {
   const { state } = view
   const { $from, empty } = state.selection
   const line = $from.parent
-  const slice = sliceOf(view, text)
+  const slice = sliceOf(view, text, skills)
   const tr = state.tr
   if (empty && blank(line)) putOwnLines(tr, slice.content)
   else tr.replaceSelection(slice)

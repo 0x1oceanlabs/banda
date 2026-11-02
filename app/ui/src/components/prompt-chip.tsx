@@ -50,7 +50,7 @@ export const Chip = Node.create({
       dom.dataset.value = value
       dom.title = value
       dom.className = CHIP
-      dom.append(fileIcon(), kind.label(value))
+      dom.append(icon(kind.icon), kind.label(value))
       return { dom }
     }
   },
@@ -73,8 +73,8 @@ function removesChip(tr: Transaction): boolean {
 const CHIP =
   "mx-px inline-flex items-baseline gap-1 rounded-md bg-muted px-1 align-baseline font-medium [&.ProseMirror-selectednode]:ring-2 [&.ProseMirror-selectednode]:ring-ring/50"
 
-/** lucide's file icon, drawn as the window's other icons are. */
-function fileIcon(): SVGSVGElement {
+/** A chip's icon, drawn as the window's other icons are. */
+function icon(paths: readonly string[]): SVGSVGElement {
   const svg = document.createElementNS(SVG, "svg")
   for (const [name, value] of Object.entries({
     viewBox: "0 0 24 24",
@@ -87,7 +87,7 @@ function fileIcon(): SVGSVGElement {
     class: "size-3.5 shrink-0 self-center text-muted-foreground",
   }))
     svg.setAttribute(name, value)
-  for (const d of FILE_ICON) {
+  for (const d of paths) {
     const path = document.createElementNS(SVG, "path")
     path.setAttribute("d", d)
     svg.append(path)
@@ -96,7 +96,3 @@ function fileIcon(): SVGSVGElement {
 }
 
 const SVG = "http://www.w3.org/2000/svg"
-const FILE_ICON = [
-  "M6 22a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h8a2.4 2.4 0 0 1 1.704.706l3.588 3.588A2.4 2.4 0 0 1 20 8v12a2 2 0 0 1-2 2z",
-  "M14 2v5a1 1 0 0 0 1 1h5",
-]

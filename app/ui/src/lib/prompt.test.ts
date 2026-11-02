@@ -3,12 +3,13 @@ import Document from "@tiptap/extension-document"
 import Paragraph from "@tiptap/extension-paragraph"
 import Text from "@tiptap/extension-text"
 import { Node } from "@tiptap/pm/model"
+import { EditorState, TextSelection } from "@tiptap/pm/state"
 import { expect, test } from "vitest"
 import { PROMPT_BLOCKS } from "../components/prompt-blocks"
 import { Chip } from "../components/prompt-chip"
 import { CodeBlock } from "../components/prompt-code"
 import { PROMPT_MARKS } from "../components/prompt-marks"
-import { docOf, quoted, textOf, typingIn } from "./prompt"
+import { docOf, quoted, rechip, textOf, typingIn } from "./prompt"
 
 const schema = getSchema([
   Document,
@@ -38,6 +39,41 @@ test("a file named in the text is a chip that writes it back", () => {
   })
   // A full stop or a bracket after a path is not part of it.
   expect(chips).toEqual(["src/main.ts", "notes.md"])
+})
+
+test("a skill the Harness has, named with $, is a chip that writes it back", () => {
+  const skills = new Set(["explain", "review:deep"])
+  const text =
+    "$explain this, then *see $review:deep* it.\n$5 and $other stay, as `$explain` does"
+  const doc = Node.fromJSON(schema, docOf(text, skills))
+  expect(textOf(doc.content)).toBe(text)
+  const chips: string[] = []
+  doc.descendants((child) => {
+    if (child.type.name === "chip")
+      chips.push(`${child.attrs.kind}:${child.attrs.value}`)
+  })
+  expect(chips).toEqual(["skill:explain", "skill:review:deep"])
+  // A skill the Harness has not said is text.
+  expect(back("$explain this")).toBe("$explain this")
+  expect(node("$explain this").firstChild?.firstChild?.isText).toBe(true)
+})
+
+test("skills said later make chips of their names, and one gone is text", () => {
+  const text = "$explain it, `$explain`, $review"
+  const doc = Node.fromJSON(schema, docOf(text, new Set(["review"])))
+  let state = EditorState.create({ schema, doc })
+  state = state.apply(state.tr.setSelection(TextSelection.atEnd(state.doc)))
+  const tr = rechip(state, new Set(["explain"]))
+  if (!tr) throw new Error("nothing changed")
+  const now = state.apply(tr)
+  expect(textOf(now.doc.content)).toBe(text)
+  const chips: string[] = []
+  now.doc.descendants((child) => {
+    if (child.type.name === "chip") chips.push(child.attrs.value)
+  })
+  expect(chips).toEqual(["explain"])
+  expect(now.selection.to).toBe(now.doc.content.size - 1)
+  expect(rechip(now, new Set(["explain"]))).toBeUndefined()
 })
 
 /** The line's pieces: each text or chip with the styles it has. */
@@ -258,6 +294,8 @@ test("a word being typed asks for suggestions", () => {
   expect(typingIn("/")).toEqual({ trigger: "/", word: "" })
   expect(typingIn("look at @src/ma")).toEqual({ trigger: "@", word: "src/ma" })
   expect(typingIn("@")).toEqual({ trigger: "@", word: "" })
+  expect(typingIn("then $exp")).toEqual({ trigger: "$", word: "exp" })
+  expect(typingIn("$")).toEqual({ trigger: "$", word: "" })
   // Not a command past a line's start, a path, an address, a word the
   // caret has left, or a chip.
   expect(typingIn("see /rev")).toBeUndefined()
@@ -265,6 +303,9 @@ test("a word being typed asks for suggestions", () => {
   expect(typingIn("me@home")).toBeUndefined()
   expect(typingIn("@notes and")).toBeUndefined()
   expect(typingIn("@￼")).toBeUndefined()
+  // Nor a price, or a skill's name inside a word.
+  expect(typingIn("costs $5")).toBeUndefined()
+  expect(typingIn("a$b")).toBeUndefined()
 })
 
 test("a quote's lines each start with >, a blank one too", () => {

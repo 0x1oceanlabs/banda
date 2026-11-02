@@ -267,6 +267,7 @@ function ThreadPane(props: PaneProps<ThreadArgs>) {
           steering={steering}
           usage={state?.usage}
           commands={suggested(offer)}
+          skills={offer.skills}
           images={images}
           dropping={dropping}
           onPlanMode={setPlan}
