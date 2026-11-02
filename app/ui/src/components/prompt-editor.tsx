@@ -1,6 +1,11 @@
 import * as React from "react"
 import { Slice } from "@tiptap/pm/model"
-import { type EditorState, Selection, TextSelection } from "@tiptap/pm/state"
+import {
+  type EditorState,
+  Selection,
+  TextSelection,
+  type Transaction,
+} from "@tiptap/pm/state"
 import type { EditorView } from "@tiptap/pm/view"
 import Document from "@tiptap/extension-document"
 import Paragraph from "@tiptap/extension-paragraph"
@@ -21,6 +26,7 @@ import {
   CHIP_MARK,
   type ChipKind,
   docOf,
+  KINDS,
   textOf,
   type Typing,
   typingIn,
@@ -40,6 +46,9 @@ export type PromptEditorHandle = {
   /** Puts `text`, typed or pasted somewhere else, at the end, as pasted
    * text is read, the caret after it, and takes the focus. */
   add(text: string): void
+  /** Puts a chip for the file at `path` at the caret, or at the end, as a
+   * word of its own, and takes the focus. */
+  point(path: string, at: "caret" | "end"): void
 }
 
 type PromptEditorProps = {
@@ -186,15 +195,7 @@ function PromptEditor({
         const { from, to } = typing
         const tr = state.tr
         if (typeof put === "string") tr.insertText(put, from, to)
-        else {
-          const made = state.schema.nodeFromJSON(chip(put.chip, put.value))
-          tr.replaceWith(from, to, made)
-          // One space after a chip, whether one was there or not.
-          const after = from + made.nodeSize
-          const next = tr.doc.textBetween(after, tr.doc.resolve(after).end())
-          if (!/^\s/.test(next)) tr.insertText(" ", after)
-          tr.setSelection(TextSelection.create(tr.doc, after + 1))
-        }
+        else putChip(tr, from, to, put.chip, put.value)
         view.dispatch(tr)
         view.focus()
       },
@@ -204,13 +205,15 @@ function PromptEditor({
         const last = up ? 0 : state.doc.childCount - 1
         return line === last && view.endOfTextblock(up ? "up" : "down")
       },
-      add(text) {
+      add: (text) => put(editor.view, text, "end"),
+      point(path, at) {
         const { view } = editor
-        view.dispatch(
-          view.state.tr.setSelection(Selection.atEnd(view.state.doc))
-        )
-        if (inCode(view.state)) view.dispatch(view.state.tr.insertText(text))
-        else paste(view, text)
+        if (at === "end") toEnd(view)
+        const { state } = view
+        // In code, what a chip writes is text.
+        if (inCode(state)) return put(view, KINDS.file.write(path), "caret")
+        const { from, to } = state.selection
+        view.dispatch(putChip(state.tr, from, to, "file", path))
         view.focus()
       },
     }),
@@ -263,6 +266,41 @@ function placeOf(
   const { parent, parentOffset, pos } = $head
   const found = typingIn(parent.textBetween(0, parentOffset, "", CHIP_MARK))
   return found && { ...found, from: pos - found.word.length - 1, to: pos }
+}
+
+/** Puts a chip of `kind` for `value` in place of `from` to `to`, a word of
+ * its own: a space before it if the text before has none, and one after
+ * it, whether one was there or not, the caret after that. */
+function putChip(
+  tr: Transaction,
+  from: number,
+  to: number,
+  kind: ChipKind,
+  value: string
+): Transaction {
+  const $from = tr.doc.resolve(from)
+  const before = $from.parent.textBetween(0, $from.parentOffset, "", CHIP_MARK)
+  const made = tr.doc.type.schema.nodeFromJSON(chip(kind, value))
+  tr.replaceWith(from, to, made)
+  let at = from
+  if (before !== "" && !/\s$/.test(before)) tr.insertText(" ", at++)
+  const after = at + made.nodeSize
+  const next = tr.doc.textBetween(after, tr.doc.resolve(after).end())
+  if (!/^\s/.test(next)) tr.insertText(" ", after)
+  return tr.setSelection(TextSelection.create(tr.doc, after + 1))
+}
+
+/** Puts `text` at the caret, or at the end, as pasted text is read, or as
+ * it is in code, and takes the focus. */
+function put(view: EditorView, text: string, at: "caret" | "end") {
+  if (at === "end") toEnd(view)
+  if (inCode(view.state)) view.dispatch(view.state.tr.insertText(text))
+  else paste(view, text)
+  view.focus()
+}
+
+function toEnd(view: EditorView) {
+  view.dispatch(view.state.tr.setSelection(Selection.atEnd(view.state.doc)))
 }
 
 /** `text` as the lines it makes, open at their ends to join the line it

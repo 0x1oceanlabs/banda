@@ -8,6 +8,7 @@
 //! The sweep lets such files go once they are a day old.
 
 use crate::model::ImageId;
+use banda_kernel::DATA;
 use std::collections::HashSet;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -25,20 +26,13 @@ impl Images {
     /// The images of the Space in `space`.
     pub fn of(space: &Path) -> Self {
         Images {
-            folder: space.join(".banda").join("images"),
+            folder: space.join(DATA).join("images"),
         }
     }
 
     /// Keeps an image's bytes, whole or not at all.
     pub async fn keep(&self, image: ImageId, bytes: Vec<u8>) -> io::Result<()> {
-        let (folder, path) = (self.folder.clone(), self.path(image));
-        blocking(move || {
-            std::fs::create_dir_all(&folder)?;
-            let part = path.with_extension("part");
-            std::fs::write(&part, bytes)?;
-            std::fs::rename(part, path)
-        })
-        .await
+        write_whole(self.path(image), bytes).await
     }
 
     pub async fn read(&self, image: ImageId) -> io::Result<Vec<u8>> {
@@ -86,6 +80,20 @@ fn remove(path: &Path) -> io::Result<()> {
         Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(()),
         done => done,
     }
+}
+
+/// Writes `bytes` as the file at `path`, whole or not at all: beside it
+/// first, then into its place, its folder made if it is not there.
+pub async fn write_whole(path: PathBuf, bytes: Vec<u8>) -> io::Result<()> {
+    blocking(move || {
+        if let Some(folder) = path.parent() {
+            std::fs::create_dir_all(folder)?;
+        }
+        let part = path.with_extension("part");
+        std::fs::write(&part, bytes)?;
+        std::fs::rename(part, path)
+    })
+    .await
 }
 
 async fn blocking<T: Send + 'static>(

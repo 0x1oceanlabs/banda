@@ -94,6 +94,19 @@ rest are our defaults and stay his to change.
    file attached to the message, not text in the box; Mod+Shift+V pastes
    it as text. A file dropped on the Thread is attached, as images are
    now. A draft keeps its images.
+   - An image dropped or pasted is an image of the message, as before.
+     Any other file, and a long text pasted, is kept in the Space as
+     `.banda/files/<ID>/<name>` (`agents.keep`), and the message names it
+     as a chip, `@path`, as `@` names a file of the Space's own: the
+     Agent reads it as it reads any file, only as far as it needs to, as
+     T3 Code gives an Agent a pasted text by its path. Nothing new goes
+     between the engine and a Harness, and the chip shows in the text
+     where it was put, and goes with Backspace.
+   - Its name keeps the file's own, its spaces dashes, so the path reads
+     back whole; a pasted text is `pasted-text-<n>.txt`. A file is kept
+     up to 20 MB. It is kept as it is given, so one whose chip goes
+     before the message is sent stays in `.banda/files/`, as a file of
+     the Space does.
 
 6. **Later, each when it is built.** `$` and a skill's name, as a chip,
    once a Harness says which skills it has; quoting a reply's selected

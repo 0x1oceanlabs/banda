@@ -1337,6 +1337,50 @@ test("the box behaves: words typed or pasted in the Thread reach it, a long mess
   await expect(thread.getByText("You said: more words")).toBeVisible()
 })
 
+test("a file dropped is kept and named in the message, a long paste is a file, and Mod+Shift+V pastes it as text", async () => {
+  window = await startWindow()
+  const { app, page, dir } = window
+  const { thread, composer } = await firstThread(page)
+  await composer.fill("hello")
+  await composer.press("Enter")
+  const said = thread.getByText("You said: hello")
+  await expect(said).toBeVisible()
+
+  // A file dropped on the Thread is kept in the Space and named, as `@`
+  // names a file.
+  await said.evaluate((where) => {
+    const data = new DataTransfer()
+    data.items.add(
+      new File(["# notes"], "my notes.md", { type: "text/markdown" })
+    )
+    const drop = { dataTransfer: data, bubbles: true, cancelable: true }
+    where.dispatchEvent(new DragEvent("dragover", drop))
+    where.dispatchEvent(new DragEvent("drop", drop))
+  })
+  const chips = composer.locator("[data-chip=file]")
+  await expect(chips).toHaveText(["my-notes.md"])
+  const path = await chips.first().getAttribute("title")
+  expect(path).toMatch(/^\.banda\/files\/[^/]+\/my-notes\.md$/)
+  expect(readFileSync(join(dir, "root", "Work", path!), "utf8")).toBe("# notes")
+
+  // A text of 32 KiB or more pasted is kept as a file; Mod+Shift+V
+  // pastes it as text.
+  const long = "word ".repeat(7000)
+  await app.evaluate(({ clipboard }, text) => clipboard.writeText(text), long)
+  await composer.press("ControlOrMeta+v")
+  await expect(chips).toHaveText(["my-notes.md", "pasted-text-1.txt"])
+  const pasted = await chips.nth(1).getAttribute("title")
+  expect(readFileSync(join(dir, "root", "Work", pasted!), "utf8")).toBe(long)
+  await composer.press("ControlOrMeta+Shift+v")
+  await expect
+    .poll(async () => (await composer.textContent())?.length ?? 0)
+    .toBeGreaterThan(long.length - 10)
+  await expect(chips).toHaveCount(2)
+  // The next is named on from those the message names.
+  await composer.press("ControlOrMeta+v")
+  await expect(chips.nth(2)).toHaveText("pasted-text-2.txt")
+})
+
 test("what the Agent does by itself shows in a turn of its own", async () => {
   window = await startWindow()
   const { page } = window

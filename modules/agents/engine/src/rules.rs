@@ -487,6 +487,32 @@ pub const LARGEST_IMAGE: usize = 10 * MB;
 pub const MOST_IMAGES: usize = 100;
 const MOST_IMAGE_BYTES: usize = 80 * MB;
 
+/// The largest file Banda keeps for a message to point at.
+pub const LARGEST_FILE: usize = 20 * MB;
+
+/// The name a file Banda keeps for a message is given, from the name it
+/// came with: its last part, its spaces dashes, so `@` reads its path
+/// back whole; refused if it is too large, or has no name left.
+pub fn kept_name(name: &str, bytes: &[u8]) -> Result<String, Refusal> {
+    if bytes.len() > LARGEST_FILE {
+        return Err(Refusal::invalid(format!(
+            "A file can be at most {} MB.",
+            LARGEST_FILE / MB
+        )));
+    }
+    let last = name.rsplit(['/', '\\']).next().unwrap_or_default();
+    let kept: String = last
+        .chars()
+        .filter(|c| !c.is_control() && *c != '@')
+        .map(|c| if c.is_whitespace() { '-' } else { c })
+        .take(120)
+        .collect();
+    if kept.trim_matches('.').is_empty() {
+        return Err(Refusal::invalid("A file needs a name."));
+    }
+    Ok(kept)
+}
+
 /// Whether `bytes` can go with a message as an image of kind `mime`.
 pub fn may_attach(mime: &str, bytes: &[u8]) -> Result<(), Refusal> {
     let Some((_, starts)) = IMAGE_KINDS.iter().find(|(kind, _)| *kind == mime) else {
@@ -774,6 +800,18 @@ impl Pieces {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_kept_file_is_named_so_its_path_reads_back_whole() {
+        let name = |name: &str| kept_name(name, b"x");
+        assert_eq!(name("notes.md").unwrap(), "notes.md");
+        assert_eq!(name("/home/me/My Notes.txt").unwrap(), "My-Notes.txt");
+        assert_eq!(name("C:\\work\\a@b.rs").unwrap(), "ab.rs");
+        assert!(name("..").is_err());
+        assert!(name("dir/").is_err());
+        let large = vec![0; LARGEST_FILE + 1];
+        assert!(kept_name("big.bin", &large).is_err());
+    }
 
     fn turn(message: ItemId, state: TurnState) -> TurnView {
         TurnView {

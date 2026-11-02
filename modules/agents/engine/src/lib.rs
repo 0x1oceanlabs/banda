@@ -24,6 +24,7 @@ mod cli;
 mod files;
 mod hosts;
 mod images;
+mod kept;
 mod live;
 pub mod model;
 mod record;
@@ -206,6 +207,9 @@ banda_kernel::methods! {
         command attach(Attach) -> Image, Write;
         /// An image's bytes.
         call image(OneImage) -> ImageData, Read;
+        /// A file a message points at, kept in the Space: one dropped on
+        /// the Thread, or a long text pasted.
+        command keep(Keep) -> Kept, Write;
         /// The files in the Space's folder, for `@` in the composer.
         call files(FileQuery) -> Vec<String>, Read;
     }
@@ -290,6 +294,23 @@ struct Attach {
     #[serde(default)]
     #[ts(optional = nullable)]
     name: Option<String>,
+}
+
+/// A file for a message to point at: the name it came with, and its bytes
+/// in base64.
+#[derive(Deserialize, TS)]
+#[ts(export_to = "agents/")]
+struct Keep {
+    name: String,
+    data: String,
+}
+
+/// Where a file kept for a message is: its path in the Space, which the
+/// message writes as `@path`.
+#[derive(Clone, Debug, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "agents/")]
+pub struct Kept {
+    pub path: String,
 }
 
 /// What `agents.files` asks: the files in the Space's folder that hold
@@ -599,9 +620,7 @@ impl Agents {
         call: Call,
         Attach { mime, data, name }: Attach,
     ) -> Result<Image, Refusal> {
-        let bytes = BASE64
-            .decode(data.as_bytes())
-            .map_err(|_| Refusal::invalid("The image's bytes are not base64."))?;
+        let bytes = decoded(&data, "image")?;
         rules::may_attach(&mime, &bytes)?;
         let image = Image {
             id: ImageId::new(),
@@ -623,6 +642,15 @@ impl Agents {
             .await;
         tokio::spawn(sweep(space.clone(), images));
         kept
+    }
+
+    async fn keep(&self, call: Call, Keep { name, data }: Keep) -> Result<Kept, Refusal> {
+        let bytes = decoded(&data, "file")?;
+        let name = rules::kept_name(&name, &bytes)?;
+        let path = kept::keep(call.space().folder(), name, bytes)
+            .await
+            .map_err(Error::from)?;
+        Ok(Kept { path })
     }
 
     async fn image(&self, call: Call, OneImage { image }: OneImage) -> Result<ImageData, Refusal> {
@@ -722,6 +750,13 @@ fn configure(
         thread,
         &Fact::ThreadConfigured { thread, settings },
     )
+}
+
+/// The bytes of `data`, which a call sends in base64, of `what`.
+fn decoded(data: &str, what: &str) -> Result<Vec<u8>, Refusal> {
+    BASE64
+        .decode(data.as_bytes())
+        .map_err(|_| Refusal::invalid(format!("The {what}'s bytes are not base64.")))
 }
 
 /// What a Person writes to an Agent: text, images, or both.

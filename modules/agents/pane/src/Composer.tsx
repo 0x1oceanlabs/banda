@@ -1,4 +1,10 @@
-import { useEffect, useEffectEvent, useRef, useState } from "react"
+import {
+  useEffect,
+  useEffectEvent,
+  useImperativeHandle,
+  useRef,
+  useState,
+} from "react"
 import type { TurnView, Usage } from "@banda/contract/agents"
 import type { Enter } from "@banda/contract/look"
 import {
@@ -57,10 +63,12 @@ export function Composer({
   dropping,
   onPlanMode,
   findFiles,
+  keep,
   onEditLast,
   onSend,
   onStop,
   children,
+  ref,
 }: {
   name: string
   /** The Thread it writes to, which keeps its draft; null before it
@@ -94,6 +102,9 @@ export function Composer({
   onPlanMode: (on: boolean) => void
   /** Finds files in the Space's folder, for `@`. */
   findFiles?: FindFiles
+  /** Keeps a file in the Space for the message to name; resolves its
+   * path, or nothing if it could not be kept. */
+  keep: (file: File) => Promise<string | undefined>
   /** Opens the last message that waits to edit; given while one does. */
   onEditLast?: () => void
   /** Sends the text and the images, into the turn that runs if `steer`;
@@ -102,6 +113,7 @@ export function Composer({
   onStop: (turn: TurnView) => void
   /** What the Thread runs with, beside the send button. */
   children?: React.ReactNode
+  ref?: React.Ref<ComposerHandle>
 }) {
   const [text, setText] = useDraft(thread)
   // How far back ↑ has walked the history; 0 for not at all.
@@ -112,15 +124,37 @@ export function Composer({
   useEffect(() => {
     if (focused) field.current?.focus()
   }, [focused])
-  // Images pasted, here or anywhere in the Pane, join the message.
-  const pasteImages = (event: ClipboardEvent) => {
-    const pasted = imagesAmong(event.clipboardData?.files ?? [])
-    if (pasted.length === 0) return false
+  // Files dropped or pasted join the message: images as images, any other
+  // kept in the Space and named in the text, in turn, as `@` names a file.
+  const take = async (given: File[], at: "caret" | "end") => {
+    const pictures = imagesAmong(given)
+    if (pictures.length > 0) images.add(pictures)
+    for (const file of given) {
+      if (pictures.includes(file)) continue
+      const path = await keep(file)
+      if (path) field.current?.point(path, at)
+    }
+  }
+  useImperativeHandle(ref, () => ({ take: (given) => void take(given, "end") }))
+  // Whether the paste coming is Mod+Shift+V's, which pastes a long text as
+  // text: the last key pressed says.
+  const asText = useRef(false)
+  /** Takes from a paste what is not text for the box: files, and a text
+   * too long for it, kept as a file; whether it took any. */
+  const takePaste = (event: ClipboardEvent, at: "caret" | "end") => {
+    const data = event.clipboardData
+    if (!data) return false
+    const pasted = data.getData("text/plain")
+    if (data.files.length > 0) void take([...data.files], at)
+    else if (!asText.current && long(pasted)) {
+      const name = `pasted-text-${(text.match(PASTED)?.length ?? 0) + 1}.txt`
+      const file = new File([pasted], name, { type: "text/plain" })
+      void take([file], at)
+    } else return false
     event.preventDefault()
-    images.add(pasted)
     return true
   }
-  const pasteImagesLater = useEffectEvent(pasteImages)
+  const takePasteLater = useEffectEvent(takePaste)
   // While its Pane is the one in use, what is typed or pasted in it
   // outside a field comes here.
   const form = useRef<HTMLFormElement>(null)
@@ -128,13 +162,15 @@ export function Composer({
     const box = form.current
     if (!focused || !box) return
     const onKey = (event: KeyboardEvent) => {
+      const mod = event.ctrlKey || event.metaKey
+      asText.current = mod && event.shiftKey && event.code === "KeyV"
       const text = typed(event, box)
       if (text === undefined) return
       event.preventDefault()
       field.current?.add(text)
     }
     const onPaste = (event: ClipboardEvent) => {
-      if (!stray(event, box) || pasteImagesLater(event)) return
+      if (!stray(event, box) || takePasteLater(event, "end")) return
       const text = event.clipboardData?.getData("text/plain")
       if (!text) return
       event.preventDefault()
@@ -251,7 +287,7 @@ export function Composer({
             setText(value)
             setBack(0)
           }}
-          onPaste={pasteImages}
+          onPaste={(event) => takePaste(event, "caret")}
           onKeyDown={(event) => {
             if (slash.onKeyDown(event) || fileMenu.onKeyDown(event)) return
             if (event.key === "Tab" && event.shiftKey && plan !== undefined) {
@@ -341,6 +377,22 @@ export function Composer({
       )}
     </form>
   )
+}
+
+/** What the window may do to a composer: give it files dropped on the
+ * Pane. */
+export type ComposerHandle = { take: (files: File[]) => void }
+
+/** A pasted text this long or longer is kept as a file, as in T3 Code. */
+const LONG_PASTE = 32 * 1024
+/** A long text kept as a file, as the message names it. */
+const PASTED = /pasted-text-\d+\.txt/g
+
+/** Whether a pasted text is {@link LONG_PASTE} bytes or more: a character
+ * is one byte or more, and at most three. */
+function long(text: string): boolean {
+  if (text.length * 3 < LONG_PASTE) return false
+  return text.length >= LONG_PASTE || new Blob([text]).size >= LONG_PASTE
 }
 
 /** The longest message a Harness takes, as in T3 Code. */

@@ -41,7 +41,7 @@ import {
 } from "lucide-react"
 import { steerable, type ThreadState, type Waiting, working } from "./thread"
 import { suggested } from "./slash"
-import { Composer } from "./Composer"
+import { Composer, type ComposerHandle } from "./Composer"
 import type { ImageReader } from "./MessageImages"
 import { AgentMessage, PersonMessage } from "./Messages"
 import type { Values } from "./form"
@@ -95,6 +95,7 @@ function ThreadPane(props: PaneProps<ThreadArgs>) {
     steering,
     images,
     findFiles,
+    keep,
     waits,
     asking,
     planned,
@@ -111,11 +112,12 @@ function ThreadPane(props: PaneProps<ThreadArgs>) {
   // What the Person looks for in the Thread, while the find bar is open.
   const [find, setFind] = useState<{ query: string; at: number }>()
   const area = useRef<HTMLDivElement>(null)
+  const composer = useRef<ComposerHandle>(null)
   const findField = useRef<HTMLInputElement>(null)
   const found = useFound(area, find?.query ?? "", find?.at ?? 0, state)
 
   return (
-    // Images dropped anywhere on the Pane join the message; Mod+F finds in
+    // Files dropped anywhere on the Pane join the message; Mod+F finds in
     // it, as in T3 Code.
     <div
       className="flex h-full min-h-0 flex-col"
@@ -141,7 +143,7 @@ function ThreadPane(props: PaneProps<ThreadArgs>) {
         if (!event.dataTransfer.types.includes("Files")) return
         event.preventDefault()
         setDropping(false)
-        images.add([...event.dataTransfer.files])
+        composer.current?.take([...event.dataTransfer.files])
       }}
     >
       <div ref={area} className="relative min-h-0 flex-1">
@@ -222,6 +224,7 @@ function ThreadPane(props: PaneProps<ThreadArgs>) {
           />
         )}
         <Composer
+          ref={composer}
           name={name}
           thread={thread}
           history={history}
@@ -244,6 +247,7 @@ function ThreadPane(props: PaneProps<ThreadArgs>) {
           onPlanMode={setPlan}
           onEditLast={editLast}
           findFiles={findFiles}
+          keep={keep}
           onSend={send}
           onStop={stop}
         >
