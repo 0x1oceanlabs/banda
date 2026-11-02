@@ -42,6 +42,7 @@ The evidence is in two notes: [tiling managers](../research/2026-11-01-tiling-ma
    - Windows show the layout. The CLI and Agents change it like any other module's data.
    - Focus stays with the window.
    - Today the window keeps its Desk in its own storage, out of the Agents' reach.
+   - _Changed on 2026-11-02, by ADR 0025._ The workspaces are a module of this machine, a scope the kernel gets beside the Space; the window keeps the view: the focus, the scroll, the overview and the zoom.
 
 4. **Tiles are calm** (niri's principles).
    - Opening a Pane never resizes or moves the Pane the Person is in.
@@ -55,6 +56,7 @@ The evidence is in two notes: [tiling managers](../research/2026-11-01-tiling-ma
    - Each workspace keeps its choice, and `Alt+V` switches it, as Omarchy does.
    - **A column is a group** (_built_ 2026-11-01), as niri's tabbed column and Hyprland's group. Its Panes stack one above another, or show as tabs: one at a time, a row of tabs in its tile's header. The tiles behind other tabs stay drawn, hidden, so their programs keep running. A tab whose Thread calls the Person carries its mark (decision 15). `[columns] display` in `look.toml` sets how a new column starts (ADR 0007).
    - The Strip answers "Agents keep opening things": a new Pane adds a column instead of shrinking the others. A sign-in terminal stacks under its Thread in the same column.
+   - _Changed on 2026-11-02, by ADR 0025._ The Split goes, and `Alt+V` with it: the Strip is the one layout, and columns, stacks, tabs and the zoom do what the Split would.
 
 6. **A Space is a folder on a machine** (_decided_).
    - **What a Space is.** One folder on one machine, this one or another, plus everything Banda keeps for it: its Threads, its terminals and its browser profile. This is what a project is in T3 Code and a space is in Herdr. A Space is the boundary: an Agent works in its own Space's folder.
@@ -74,6 +76,7 @@ The evidence is in two notes: [tiling managers](../research/2026-11-01-tiling-ma
    - A new Thread starts in the default Space or in one picked from the list (ADR 0006, decision 2). A Pane opened from a Thread, such as its terminal, opens in that Thread's Space. Any other new Pane opens in the default Space.
    - The workspaces live on the Person's computer. A Pane of a Space on another machine sits in them like any other.
    - **The drawer** (a proposal). It slides a quick Thread over the workspace (`Alt+S`), as Omarchy's scratchpad does.
+     _Changed on 2026-11-02, by ADR 0025:_ it is on `` Alt+` ``, as `Alt+S` settles a Thread.
 
 8. **The sidebar: every Thread in every Space, in one place** (_decided_).
    - **What it shows.** Every Thread of every Space on every connected machine, each row naming its Harness and its Space. Threads come in this order: those that need the Person (a Question, a failed turn, a sign-in), those that finished while the Person was away, those that work (folded, as in T3 Code), and the pinned ones. A switch turns it to the second order, which groups the Threads under their Spaces, as Herdr does and as T3 Code's grouped sidebar does.
@@ -116,6 +119,7 @@ The evidence is in two notes: [tiling managers](../research/2026-11-01-tiling-ma
    | `Alt+K` | the Banda menu at its Actions: the key sheet; picking a row runs it |
 
    - _Changed on 2026-11-01, by ADR 0017._ The palette is the Banda menu, "our Raycast" as Roma put it, and the key sheet is that menu opened at its Actions, so there is one list of keys.
+   - _Changed on 2026-11-02, by ADR 0025._ niri's keys for heights (`Alt+Shift+R`, `Alt+Ctrl+R`, `Alt+Ctrl+↑↓`), `Alt+Ctrl+F`, `Alt+C`, `Alt+Home` and `Alt+End`; the zoom is `Alt+Shift+F`, niri's fullscreen, not `Alt+Z`; `Alt+V` goes with the Split; the drawer is `` Alt+` ``. The mouse works the workspaces as niri's does.
 
    - **Reading the key.** Electron's main process reads the keys before the page does (`before-input-event`) and acts only when the Alt held down is the left one. AltGr stays free for typing on European layouts. Keys bind by their physical place, so they work on any layout. There is no app menu, so a lone Alt does nothing.
    - **Banda's Alt keys are niri's, in every Pane; a program gets them with Ctrl added** (_changed_ 2026-11-02). Banda first took only the letters readline leaves free (`a e h i j k m o q s v w z`, and `n`). Roma chose niri's binds instead, as `Alt+R`, `Alt+F` and `Alt+G` are, though a shell's readline has them too: `Alt+F` a word forward, `Alt+R` the line undone, `Alt+G` a glob, `Alt+U` a word in capitals. So a terminal's program still reaches every Alt key:
