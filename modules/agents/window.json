@@ -1,7 +1,6 @@
 {
   "panes": [
-    "agents.thread",
-    "agents.threads"
+    "agents.thread"
   ],
   "actions": [
     {
