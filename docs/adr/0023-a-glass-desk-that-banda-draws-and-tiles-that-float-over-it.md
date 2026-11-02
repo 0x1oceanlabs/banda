@@ -92,9 +92,9 @@ The first build made the glass Hyprland's. Roma, seeing that its blur is Hyprlan
 
 8. **Not here, next.**
    - The rail sidebar (the mock's third one).
-   - The wallpaper on other desktops: GNOME's and KDE's settings, macOS's and Windows' own. Until then, `desk.wallpaper` names it.
+   - The wallpaper on other desktops: ADR 0029 reads it on Linux, and takes the system's glass on macOS and Windows.
    - Lining the picture up with the wallpaper around the window, where the window knows its place on the screen (X11, macOS, Windows).
-   - The system's glass on macOS and Windows: vibrancy, acrylic.
+   - The system's glass on macOS and Windows: vibrancy, acrylic (ADR 0029).
 
 ## Consequences
 
