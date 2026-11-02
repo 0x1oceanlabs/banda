@@ -7,7 +7,7 @@ import {
   useState,
 } from "react"
 import type { Image, Skill, TurnView, Usage } from "@banda/contract/agents"
-import type { Enter } from "@banda/contract/look"
+import type { Enter } from "@banda/contract/agents"
 import { Button } from "@banda/ui/components/button"
 import {
   PromptEditor,

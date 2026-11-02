@@ -12,7 +12,11 @@ import {
   useSyncExternalStore,
 } from "react"
 import { newId } from "@banda/contract"
-import { type Browser as Settings, DEFAULT_BROWSER } from "@banda/contract/look"
+import {
+  type Browser as Settings,
+  DEFAULT_BROWSER,
+  fileOf,
+} from "@banda/contract/look"
 import { Button } from "@banda/ui/components/button"
 import {
   DropdownMenu,
@@ -105,7 +109,10 @@ function titleOf(tab: Tab): string {
 }
 
 function BrowserPane({ args, focused, update, close }: PaneProps<BrowserArgs>) {
-  const settings = useLook((look) => look.browser, DEFAULT_BROWSER)
+  const settings = useLook(
+    (look) => fileOf(look.files, "browser.toml", DEFAULT_BROWSER),
+    DEFAULT_BROWSER
+  )
   // Any page's change draws the tabs again: their titles, icons, loads.
   const version = useSyncExternalStore(watchPages, pagesVersion)
   const [first] = useState(newId)

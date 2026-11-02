@@ -4,7 +4,8 @@
 //! a new one starts as, and how its text is checked. The look describes the
 //! files it reads; a module describes its own; `banda_settings` gathers
 //! them. A file that is one layer, the Person's, over Banda's defaults is a
-//! [`OneFile`], and [`resolve`] resolves every such file the same way.
+//! [`OneFile`], and [`resolve`] resolves every such file the same way, so
+//! the look carries a module's file by its name, a value and its keys.
 
 use crate::Problem;
 use crate::keyed::{self, Keyed, Layer};
@@ -26,7 +27,11 @@ pub struct SettingsFile {
     schema: fn() -> Schema,
     template: fn() -> String,
     check: fn(&Path, &str) -> Vec<Problem>,
+    resolve: Option<Resolve>,
 }
+
+/// How the look resolves a file: its value, and each key's.
+type Resolve = fn(&Places, &mut Vec<Problem>, &mut Vec<PathBuf>) -> (Value, Keyed);
 
 impl SettingsFile {
     /// The file `name`, whose keys are a `T`, that starts as `template`
@@ -41,12 +46,16 @@ impl SettingsFile {
             schema: schema_of::<T>,
             template,
             check,
+            resolve: None,
         }
     }
 
-    /// The file a [`OneFile`] is.
+    /// The file a [`OneFile`] is, which the look resolves.
     pub const fn of<T: OneFile>() -> SettingsFile {
-        SettingsFile::new::<T>(T::NAME, template_of::<T>, check_of::<T>)
+        SettingsFile {
+            resolve: Some(resolve_value::<T>),
+            ..SettingsFile::new::<T>(T::NAME, template_of::<T>, check_of::<T>)
+        }
     }
 
     /// The file's JSON Schema, titled with its name.
@@ -64,6 +73,31 @@ impl SettingsFile {
     /// What is wrong in `text`, the file at `path`.
     pub fn check(&self, path: &Path, text: &str) -> Vec<Problem> {
         (self.check)(path, text)
+    }
+
+    /// Whether the look resolves it into a value: a [`OneFile`] does.
+    pub fn resolves(&self) -> bool {
+        self.resolve.is_some()
+    }
+
+    /// The file on this machine, watched there or not: a [`OneFile`]'s
+    /// value and each key's; any other's problems only, as its crate finds
+    /// them, with `None`.
+    pub fn resolve(
+        &self,
+        places: &Places,
+        problems: &mut Vec<Problem>,
+        watched: &mut Vec<PathBuf>,
+    ) -> Option<(Value, Keyed)> {
+        if let Some(resolve) = self.resolve {
+            return Some(resolve(places, problems, watched));
+        }
+        let path = places.config.join(self.name);
+        if let Ok(text) = std::fs::read_to_string(&path) {
+            problems.extend(self.check(&path, &text));
+        }
+        watched.push(path);
+        None
     }
 
     /// What it holds: its root struct's doc comment.
@@ -87,7 +121,7 @@ pub trait OneFile: Default + Serialize + DeserializeOwned + JsonSchema {
     /// The file as Banda writes it first, every default named.
     const TEMPLATE: &'static str;
     /// What the window gets, every key resolved.
-    type Resolved;
+    type Resolved: Serialize;
     /// Banda's own, every key said.
     fn defaults() -> Self;
     /// The keys `self` says, over the keys of `under`.
@@ -129,6 +163,15 @@ pub fn resolve<T: OneFile>(
     let merged = mine.over(defaults);
     let keyed = keyed::keyed(&merged, &layers);
     (merged.resolved(), keyed)
+}
+
+fn resolve_value<T: OneFile>(
+    places: &Places,
+    problems: &mut Vec<Problem>,
+    watched: &mut Vec<PathBuf>,
+) -> (Value, Keyed) {
+    let (resolved, keyed) = resolve::<T>(places, problems, watched);
+    (serde_json::to_value(resolved).unwrap_or_default(), keyed)
 }
 
 fn template_of<T: OneFile>() -> String {

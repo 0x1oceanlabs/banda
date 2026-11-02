@@ -5,7 +5,7 @@
  */
 
 import { useCallback } from "react"
-import { DEFAULT_BROWSER } from "@banda/contract/look"
+import { DEFAULT_BROWSER, fileOf } from "@banda/contract/look"
 import { useLook } from "@banda/ui/lib/look"
 
 const LOCAL =
@@ -24,7 +24,10 @@ export function addressOf(
 
 /** {@link addressOf} with the search `browser.toml` names now. */
 export function useAddressOf(): (typed: string) => string {
-  const { search } = useLook((look) => look.browser, DEFAULT_BROWSER)
+  const { search } = useLook(
+    (look) => fileOf(look.files, "browser.toml", DEFAULT_BROWSER),
+    DEFAULT_BROWSER
+  )
   return useCallback((typed: string) => addressOf(typed, search), [search])
 }
 

@@ -4,12 +4,16 @@
  * it waits until the turn ends. Ctrl (⌘ on a Mac) does the other. The
  * Person chooses it in `agents.toml` (ADR 0016), which comes with the look.
  */
-import type { Enter } from "@banda/contract/look"
+import { DEFAULT_AGENTS, type Enter } from "@banda/contract/agents"
+import { fileOf } from "@banda/contract/look"
 import { useLook } from "@banda/ui/lib/look"
 
 /** What Enter does now; Banda's own before the look comes. */
 export function useEnterKey(): Enter {
-  return useLook((look) => look.agents.enter, "steer")
+  return useLook(
+    (look) => fileOf(look.files, "agents.toml", DEFAULT_AGENTS).enter,
+    DEFAULT_AGENTS.enter
+  )
 }
 
 /** Whether a message sent with Enter, or with Ctrl+Enter when `other`,

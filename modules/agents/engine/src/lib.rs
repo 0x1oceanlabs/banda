@@ -2,7 +2,9 @@
 //! one session with a Harness in a Space, and the Agent at work in it is
 //! its own, with no name or settings (ADR 0006).
 //!
-//! - The **Harness list** is a text file of the machine ([`settings`]).
+//! - The **Harness list** is a text file of the machine ([`settings`]),
+//!   and `agents.toml` says how messages are sent ([`sending`]): the
+//!   module's [`SETTINGS`].
 //! - **Threads, turns and Questions** are this module's tables and facts
 //!   ([`model`]). A message queues a turn, or goes into the turn that runs
 //!   (steering); the outbox runs a Thread's turns one at a time, and
@@ -29,6 +31,7 @@ mod live;
 pub mod model;
 mod record;
 mod rules;
+pub mod sending;
 pub mod settings;
 mod skills;
 mod store;
@@ -58,6 +61,18 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 use ts_rs::TS;
+
+/// The module's settings files in `~/.config/banda` (ADR 0016): how
+/// messages are sent, which the look resolves for the window, and the
+/// Harness list, which the look only checks.
+pub const SETTINGS: [banda_look::SettingsFile; 2] = [
+    banda_look::SettingsFile::of::<sending::AgentsSettings>(),
+    banda_look::SettingsFile::new::<settings::HarnessFile>(
+        "harnesses.toml",
+        settings::template,
+        settings::check,
+    ),
+];
 use turn::ReplyEffect;
 
 pub struct Agents {

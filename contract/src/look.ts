@@ -9,13 +9,11 @@ import type { Columns } from "./generated/look/Columns"
 import type { Motion } from "./generated/look/Motion"
 
 export type { Look } from "./generated/look/Look"
-export type { Agents } from "./generated/look/Agents"
 export type { Desk } from "./generated/look/Desk"
 export type { Wallpaper } from "./generated/look/Wallpaper"
 export type { Material } from "./generated/look/Material"
 export type { SidebarStyle } from "./generated/look/SidebarStyle"
 export type { Browser } from "./generated/look/Browser"
-export type { Enter } from "./generated/look/Enter"
 export type { Tabs } from "./generated/look/Tabs"
 export type { Problem } from "./generated/look/Problem"
 export type { Call } from "./generated/look/Call"
@@ -87,6 +85,15 @@ export function shown(
 
 /** No keys of the Person's: what `banda look` gives with no keys.toml. */
 export const DEFAULT_KEYS: Keys = { file: "", binds: [] }
+
+/**
+ * A module's settings file as the look resolved it, by its name: what
+ * `files` holds, typed as its module says, or `before` when the look has
+ * none of it yet.
+ */
+export function fileOf<T>(files: Look["files"], name: string, before: T): T {
+  return (files[name] as T | undefined) ?? before
+}
 
 /** Banda's browser, as `banda look` gives it with no `browser.toml`: for
  * before the first look and outside the desktop. */
