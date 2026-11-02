@@ -14,25 +14,28 @@ use std::path::{Path, PathBuf};
 mod write;
 pub use write::{rename, reset, set};
 
-/// Every settings file, one per module (ADR 0016, decision 3): the look's,
-/// then the files the look does not read, which other crates do.
-pub const FILES: [SettingsFile; 6] = {
-    let [look, sidebar, browser, agents, keys] = banda_look::FILES;
-    let harnesses =
-        SettingsFile::new::<HarnessFile>("harnesses.toml", harness_template, check_harnesses);
-    [look, sidebar, browser, agents, keys, harnesses]
-};
+/// Every settings file, one per module (ADR 0016, decision 3), by the
+/// crate that describes them: the look's first, as the look reads them.
+const GROUPS: [&[SettingsFile]; 2] = [&banda_look::FILES, &[HARNESSES]];
+
+const HARNESSES: SettingsFile =
+    SettingsFile::new::<HarnessFile>("harnesses.toml", harness_template, check_harnesses);
+
+/// Every settings file.
+pub fn files() -> impl Iterator<Item = &'static SettingsFile> {
+    GROUPS.into_iter().flatten()
+}
 
 /// The file called `name`.
 pub fn file(name: &str) -> Option<&'static SettingsFile> {
-    FILES.iter().find(|file| file.name == name)
+    files().find(|file| file.name == name)
 }
 
 /// Writes each file's schema into `folder`, as `<name>.schema.json`. A
 /// schema already there and the same is left alone.
 pub fn export(folder: &Path) -> std::io::Result<()> {
     std::fs::create_dir_all(folder)?;
-    for file in &FILES {
+    for file in files() {
         let path = folder.join(file.schema_name());
         let text = serde_json::to_string_pretty(&file.schema())? + "\n";
         if std::fs::read_to_string(&path).is_ok_and(|was| was == text) {
@@ -45,8 +48,11 @@ pub fn export(folder: &Path) -> std::io::Result<()> {
 
 /// The files the look does not read, which it watches and names the
 /// problems of all the same: the Harness list, as the engine reads it.
-pub fn also() -> &'static [SettingsFile] {
-    &FILES[banda_look::FILES.len()..]
+pub fn also() -> Vec<SettingsFile> {
+    GROUPS[1..]
+        .iter()
+        .flat_map(|group| group.iter().copied())
+        .collect()
 }
 
 /// Checks `paths`, or with none every file Banda reads: the look's, the
@@ -58,7 +64,9 @@ pub fn check(places: &Places, paths: &[PathBuf]) -> Vec<Problem> {
             fontconfig: None,
             ..places.clone()
         };
-        return banda_look::resolve(&places, &|| None, also()).look.problems;
+        return banda_look::resolve(&places, &|| None, &also())
+            .look
+            .problems;
     }
     paths.iter().flat_map(|path| check_file(path)).collect()
 }
@@ -94,7 +102,7 @@ mod tests {
     fn the_schemas_are_in_the_contract() {
         let folder = Path::new(env!("CARGO_MANIFEST_DIR")).join("../contract/src/generated/schema");
         export(&folder).unwrap();
-        for file in &FILES {
+        for file in files() {
             assert!(folder.join(file.schema_name()).exists());
         }
     }
@@ -155,7 +163,7 @@ mod tests {
         let folder = tempfile::tempdir().unwrap();
         let places = Places::at(folder.path());
         let path = folder.path().join("harnesses.toml");
-        let resolved = banda_look::resolve(&places, &|| None, also());
+        let resolved = banda_look::resolve(&places, &|| None, &also());
         assert!(resolved.look.problems.is_empty());
         assert!(
             resolved.watched.contains(&path),
@@ -167,7 +175,9 @@ mod tests {
             "[[harness]]\nid = \"claude\"\n\n[[harness]]\nid = \"x\"\n",
         )
         .unwrap();
-        let problems = banda_look::resolve(&places, &|| None, also()).look.problems;
+        let problems = banda_look::resolve(&places, &|| None, &also())
+            .look
+            .problems;
         assert_eq!(problems.len(), 1, "{problems:?}");
         assert_eq!(problems[0].line, Some(4));
         assert!(problems[0].message.contains("needs a name and a command"));

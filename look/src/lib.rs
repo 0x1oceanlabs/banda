@@ -397,22 +397,31 @@ pub struct Resolved {
 /// The files the look reads: its own, the sidebar's and the keys', and
 /// the agents' and the browser's, which the window draws (ADR 0016).
 pub const FILES: [SettingsFile; 5] = [
-    SettingsFile::new::<Settings>("look.toml", || TEMPLATE.to_owned(), check_text),
+    SettingsFile::new::<Settings>(
+        "look.toml",
+        || TEMPLATE.to_owned(),
+        |path, text| checked(|problems| read_settings(path, text, problems)),
+    ),
     SettingsFile::new::<sidebar::SidebarSettings>(
         "sidebar.toml",
         || sidebar::TEMPLATE.to_owned(),
-        check_text,
+        |path, text| checked(|problems| sidebar::read_sidebar(path, text, false, problems)),
     ),
-    ONE_FILES[0],
-    ONE_FILES[1],
-    SettingsFile::new::<keys::KeysSettings>("keys.toml", || keys::TEMPLATE.to_owned(), check_text),
-];
-
-/// The look's files that are one layer over Banda's defaults.
-const ONE_FILES: [SettingsFile; 2] = [
     SettingsFile::of::<browser::BrowserSettings>(),
     SettingsFile::of::<agents::AgentsSettings>(),
+    SettingsFile::new::<keys::KeysSettings>(
+        "keys.toml",
+        || keys::TEMPLATE.to_owned(),
+        |path, text| checked(|problems| keys::read_keys(path, text, problems)),
+    ),
 ];
+
+/// The problems `read` finds.
+fn checked<T>(read: impl FnOnce(&mut Vec<Problem>) -> T) -> Vec<Problem> {
+    let mut problems = Vec::new();
+    read(&mut problems);
+    problems
+}
 
 /// Resolves the look on this machine. `windows` asks Hyprland for its
 /// window settings, and is asked only when `look.toml` lets it. The
@@ -952,42 +961,44 @@ pub(crate) fn line_at(text: &str, offset: usize) -> u32 {
     text[..offset.min(text.len())].matches('\n').count() as u32 + 1
 }
 
-/// Checks `text` as the file at `path` would be read: a `colors.toml` as
-/// a palette, a `sidebar.toml` or a file in `sidebars/` as the sidebar's
-/// schema, one of the look's [`FILES`] as that file, anything else as
-/// `look.toml`'s.
+/// Checks `text` as the file at `path` would be read: a file in
+/// `sidebars/` as a sidebar preset, a `colors.toml` as a palette, one of
+/// the look's [`FILES`] as that file, anything else as `look.toml`.
 pub fn check_text(path: &Path, text: &str) -> Vec<Problem> {
-    let mut problems = Vec::new();
-    if let Some(preset) = sidebar::is_sidebar_file(path) {
-        sidebar::read_sidebar(path, text, preset, &mut problems);
-    } else if let Some(file) = ONE_FILES
-        .iter()
-        .find(|file| path.file_name().is_some_and(|name| name == file.name))
-    {
-        return file.check(path, text);
-    } else if keys::is_keys_file(path) {
-        keys::read_keys(path, text, &mut problems);
-    } else if path.file_name().is_some_and(|n| n == "colors.toml") {
-        match Palette::parse(text) {
-            Ok(palette) => {
-                let complete = palette.complete();
-                let not_hex = complete.not_hex();
-                if !not_hex.is_empty() {
-                    problems.push(Problem::whole(
-                        path,
-                        format!(
-                            "{} are not hex, so colours mixed from them fall back",
-                            not_hex.join(", ")
-                        ),
-                    ));
-                }
-            }
-            Err(error) => problems.push(Problem::toml(path, text, &error)),
-        }
-    } else {
-        read_settings(path, text, &mut problems);
+    let name = path.file_name();
+    if sidebar::is_sidebar_file(path) == Some(true) {
+        return checked(|problems| sidebar::read_sidebar(path, text, true, problems));
     }
-    problems
+    if name.is_some_and(|name| name == "colors.toml") {
+        return check_palette(path, text);
+    }
+    match FILES
+        .iter()
+        .find(|file| name.is_some_and(|name| name == file.name))
+    {
+        Some(file) => file.check(path, text),
+        None => checked(|problems| read_settings(path, text, problems)),
+    }
+}
+
+fn check_palette(path: &Path, text: &str) -> Vec<Problem> {
+    match Palette::parse(text) {
+        Ok(palette) => {
+            let complete = palette.complete();
+            let not_hex = complete.not_hex();
+            if not_hex.is_empty() {
+                return Vec::new();
+            }
+            vec![Problem::whole(
+                path,
+                format!(
+                    "{} are not hex, so colours mixed from them fall back",
+                    not_hex.join(", ")
+                ),
+            )]
+        }
+        Err(error) => vec![Problem::toml(path, text, &error)],
+    }
 }
 
 #[cfg(test)]

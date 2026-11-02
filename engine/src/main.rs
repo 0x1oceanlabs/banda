@@ -231,7 +231,7 @@ enum SettingsCommand {
 }
 
 fn file_names() -> clap::builder::PossibleValuesParser {
-    clap::builder::PossibleValuesParser::new(banda_settings::FILES.map(|file| file.name))
+    clap::builder::PossibleValuesParser::new(banda_settings::files().map(|file| file.name))
 }
 
 /// Why the program did not do its job, and how it exits.
@@ -530,8 +530,7 @@ fn settings(what: SettingsCommand) -> ExitCode {
                     let schema = serde_json::to_string_pretty(&file.schema()).unwrap_or_default();
                     writeln!(out, "{schema}")
                 }
-                None => banda_settings::FILES
-                    .iter()
+                None => banda_settings::files()
                     .try_for_each(|file| writeln!(out, "{}\t{}", file.name, file.about())),
             };
             ExitCode::SUCCESS
@@ -580,7 +579,7 @@ fn look(what: Option<LookCommand>, follow: bool) -> ExitCode {
             banda_look::follow(
                 &places,
                 Hyprland::from_env(),
-                banda_settings::also(),
+                &banda_settings::also(),
                 |look| print(json!(look)),
             );
             ExitCode::SUCCESS
@@ -588,8 +587,9 @@ fn look(what: Option<LookCommand>, follow: bool) -> ExitCode {
         None => {
             let hyprland = Hyprland::from_env();
             let windows = || hyprland.as_ref().and_then(|h| h.windows().ok());
-            let also = banda_settings::also();
-            print(json!(banda_look::resolve(&places, &windows, also).look));
+            print(json!(
+                banda_look::resolve(&places, &windows, &banda_settings::also()).look
+            ));
             ExitCode::SUCCESS
         }
         Some(LookCommand::Themes) => {
