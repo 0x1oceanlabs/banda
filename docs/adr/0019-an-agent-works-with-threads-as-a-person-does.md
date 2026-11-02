@@ -107,6 +107,8 @@ Roma asked for the simple version: "не хочется усложнять, чт
 5. **Not now.** Limits on depth or count, budgets, timers that wake an
    Agent later, stopping a whole chain at once, other Spaces, roles. The
    notes keep how others did them, if the use shows they are needed.
+   (Other Spaces' Panes: an Agent sees them when its Person lets it, ADR
+   0029.)
 
 **Plan.** Each step is its own PR, and `scripts/check.sh` passes after
 each.
