@@ -49,7 +49,7 @@ _Avoid_: console, shell (that is one program a terminal runs).
 **Thread**:
 One session with a Harness in a Space: starting one is all it takes. Its
 Harness is chosen when it starts and stays with it. It shows items: messages,
-the Agent's thoughts, tool calls, its plans, notices and Questions.
+the Agent's thoughts, tool calls, its plans, Visuals, notices and Questions.
 A Harness keeps a session of its own for it, which a Thread holds as
 evidence.
 _Avoid_: chat.
@@ -65,6 +65,12 @@ What a Harness runs when a message starts with `/` and its name, such as
 `/compact`. Each Harness has its own; the window adds `/plan` and `/default`,
 which switch plan mode.
 _Avoid_: command (that is a request to a module).
+
+**Visual**:
+One finished HTML page an Agent shows its Person in its Thread: a mockup,
+a chart, a diagram, an animation, a sound. It wears the look and runs apart
+from Banda; it opens larger as a preview or as a Pane of its own (ADR 0035).
+_Avoid_: page (that is the browser's), artifact, render.
 
 **Turn**:
 One stretch of an Agent's work in a Thread. It begins at a message to the
