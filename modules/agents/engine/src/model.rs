@@ -133,6 +133,10 @@ pub struct Offer {
     /// such as `/compact`.
     #[serde(default)]
     pub slash_commands: Vec<SlashCommand>,
+    /// The skills a message can name anywhere with `$` and a skill's
+    /// name, as Codex reads it (ADR 0015, decision 6).
+    #[serde(default)]
+    pub skills: Vec<Skill>,
     /// The Harness takes no images: a message to it carries text alone.
     #[serde(default)]
     pub no_images: bool,
@@ -155,6 +159,16 @@ pub struct SlashCommand {
     #[ts(optional)]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub hint: Option<String>,
+}
+
+/// What the Harness can do as a message asks with `$` and its name.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "agents/")]
+pub struct Skill {
+    /// Its name, without the `$`.
+    pub name: String,
+    /// What it does, in the Harness's words.
+    pub description: String,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]

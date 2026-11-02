@@ -44,11 +44,14 @@ export function ownCommand(
   return commands.find((command) => command.name === name)?.planMode
 }
 
-/** The slash commands that fit a word: by name exactly, then names that
- * start with it, then names and descriptions that hold it. */
-export function matching(commands: Suggested[], word: string): Suggested[] {
+/** The commands, or skills, that fit a word: by name exactly, then names
+ * that start with it, then names and descriptions that hold it. */
+export function matching<Named extends { name: string; description: string }>(
+  commands: Named[],
+  word: string
+): Named[] {
   const lower = word.toLowerCase()
-  const rank = ({ name, description }: Suggested) => {
+  const rank = ({ name, description }: Named) => {
     const named = name.toLowerCase()
     if (named === lower) return 0
     if (named.startsWith(lower)) return 1

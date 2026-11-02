@@ -14,6 +14,7 @@ const OFFER: Offer = {
     { name: "compact", description: "Make room in the context" },
     { name: "plan", description: "The Harness's own plan" },
   ],
+  skills: [],
   no_images: false,
 }
 

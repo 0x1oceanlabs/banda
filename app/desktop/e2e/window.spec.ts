@@ -733,6 +733,54 @@ test("a message starts with a slash command its Agent offers", async () => {
   await expect(composer.locator("p")).toHaveText(["first", "/review"])
 })
 
+test("a message names a skill its Agent has with $, anywhere in it", async () => {
+  window = await startWindow()
+  const { page } = window
+  const { thread, composer } = await firstThread(page)
+  const skills = thread.getByRole("listbox", { name: "Skills" })
+
+  // Before its Harness says its skills, `$` is text, as in a price, and a
+  // draft's name of one stays text.
+  await composer.pressSequentially("costs $")
+  await expect(skills).toBeHidden()
+  await composer.fill("hello")
+  await composer.press("Enter")
+  await expect(thread.getByText("You said: hello")).toBeVisible()
+  await expect(composer).toHaveAttribute(
+    "aria-placeholder",
+    "Write to Fake AI. @ files, / commands, $ skills"
+  )
+
+  // Its skills are not slash commands.
+  await composer.fill("/")
+  await expect(
+    thread.getByRole("listbox", { name: "Slash commands" }).getByRole("option")
+  ).not.toContainText(["$explain"])
+
+  await composer.fill("")
+  await composer.pressSequentially("then $exp")
+  await expect(skills.getByRole("option")).toHaveText([/^\$explain/])
+  await expect(skills).toContainText("Explain the code it is pointed at")
+  await page.screenshot({ path: "test-results/12-skills.png" })
+  await composer.press("Enter")
+  await expect(skills).toBeHidden()
+  const chip = composer.locator('[data-chip="skill"]')
+  await expect(chip).toHaveText("explain")
+  await composer.pressSequentially("this")
+  await composer.press("Enter")
+  await expect(thread.getByText("You said: then $explain this")).toBeVisible()
+
+  // A skill's name pasted is a chip, as a file's path is.
+  await composer.evaluate((box) => {
+    const data = new DataTransfer()
+    data.setData("text/plain", "$explain again")
+    const paste = { clipboardData: data, bubbles: true, cancelable: true }
+    box.dispatchEvent(new ClipboardEvent("paste", paste))
+  })
+  await expect(chip).toHaveText("explain")
+  await expect(composer).toHaveText("explain again")
+})
+
 test("a message carries images to its Agent", async () => {
   window = await startWindow()
   const { page } = window

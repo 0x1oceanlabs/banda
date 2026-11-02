@@ -768,7 +768,8 @@ async fn run(
 }
 
 /// Writes what the Harness offers in the Thread, when that changed. A
-/// session that has not said its slash commands yet leaves the Thread's.
+/// session that has not said its commands yet leaves the Thread's slash
+/// commands and skills.
 pub fn offered(
     tx: &mut Tx<'_>,
     agent: Participant,
@@ -776,9 +777,12 @@ pub fn offered(
     running: &Running,
 ) -> Result<(), Error> {
     let before = store::offer(tx.sql(), thread)?;
+    let said = running.commands.as_ref();
     let offer = Offer {
-        slash_commands: (running.slash_commands.clone())
-            .unwrap_or_else(|| before.slash_commands.clone()),
+        slash_commands: said
+            .map_or(&before.slash_commands, |c| &c.slash_commands)
+            .clone(),
+        skills: said.map_or(&before.skills, |c| &c.skills).clone(),
         ..running.offer.clone()
     };
     if before == offer {

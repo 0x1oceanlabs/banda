@@ -47,6 +47,7 @@ export const NO_OFFER: Offer = {
   options: [],
   plans: false,
   slash_commands: [],
+  skills: [],
   no_images: false,
 }
 

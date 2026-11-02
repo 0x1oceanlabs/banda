@@ -1682,7 +1682,7 @@ fn slash_commands(view: &ThreadView) -> Vec<&str> {
 }
 
 #[tokio::test]
-async fn the_slash_commands_a_harness_says_on_opening_reach_its_thread() {
+async fn the_slash_commands_and_skills_a_harness_says_on_opening_reach_its_thread() {
     let root = tempfile::tempdir().unwrap();
     let world = World::new(root.path()).await;
     let (_, view) = world.finish(None, "hello").await;
@@ -1691,6 +1691,11 @@ async fn the_slash_commands_a_harness_says_on_opening_reach_its_thread() {
     assert_eq!(review.description, "Review the changes so far");
     assert_eq!(review.hint.as_deref(), Some("what to look at"));
     assert_eq!(view.offer.slash_commands[1].hint, None);
+    let [explain] = &view.offer.skills[..] else {
+        panic!("one skill: {:?}", view.offer.skills)
+    };
+    assert_eq!(explain.name, "explain", "its skill, named without the `$`");
+    assert_eq!(explain.description, "Explain the code it is pointed at");
 }
 
 #[tokio::test]
