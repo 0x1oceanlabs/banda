@@ -61,7 +61,8 @@ pub trait Module: Send + Sync + 'static {
     }
 
     /// Runs once a Space opens, after the outbox settled what a restart cut
-    /// short: a module can pick up its work here.
+    /// short and before any effect runs: a module can pick up its work here,
+    /// and finds it as the last boot left it.
     async fn opened(&self, _space: ModuleSpace) -> Result<(), Error> {
         Ok(())
     }

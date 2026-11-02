@@ -229,10 +229,12 @@ impl Space {
             _lock: lock,
         });
         outbox::recover(&space, boot).await?;
-        tokio::spawn(outbox::work(Arc::downgrade(&space), boot.to_owned()));
+        // Each module picks up its work before any effect runs, so what it
+        // finds is what the last boot left.
         for module in space.modules.iter() {
             module.opened(space.module(module.name())).await?;
         }
+        tokio::spawn(outbox::work(Arc::downgrade(&space), boot.to_owned()));
         Ok(space)
     }
 

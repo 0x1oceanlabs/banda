@@ -142,6 +142,11 @@ WHERE state = 'running' AND id NOT IN (
 CREATE UNIQUE INDEX agents_turns_one_running ON agents_turns (thread)
     WHERE state = 'running';
 "#,
+    r#"
+-- A running turn was asked to stop: by a Person, or by Banda for a
+-- message its Harness cannot take while it works (ADR 0018, decision 3).
+ALTER TABLE agents_turns ADD COLUMN stopping INTEGER NOT NULL DEFAULT 0;
+"#,
 ];
 
 fn json<T: Serialize>(value: &T) -> Result<String, Error> {
@@ -502,6 +507,8 @@ pub struct Turn {
     /// that asked, kept when a Person tries it again; or the one that
     /// answers.
     pub from_thread: Option<ThreadId>,
+    /// It runs and was asked to stop.
+    pub stopping: bool,
 }
 
 impl Turn {
@@ -556,7 +563,7 @@ pub fn turn_settings(sql: &Connection, turn: &Turn) -> Result<Settings, Error> {
 }
 
 const TURN: &str =
-    "SELECT id, thread, agent, message, state, opener, from_thread FROM agents_turns";
+    "SELECT id, thread, agent, message, state, opener, from_thread, stopping FROM agents_turns";
 
 fn read_turn(row: &Row<'_>) -> rusqlite::Result<Turn> {
     Ok(Turn {
@@ -567,6 +574,7 @@ fn read_turn(row: &Row<'_>) -> rusqlite::Result<Turn> {
         state: word_of(row, 4)?,
         opener: word_of(row, 5)?,
         from_thread: row.get(6)?,
+        stopping: row.get(7)?,
     })
 }
 
@@ -595,6 +603,15 @@ pub fn every_running(sql: &Connection) -> Result<Vec<Turn>, Error> {
 /// The Thread's turn that runs, if one does.
 pub fn running(sql: &Connection, thread: ThreadId) -> Result<Option<Turn>, Error> {
     Ok(turns_in(sql, thread, TurnState::Running)?.pop())
+}
+
+/// Marks `turn`, which runs, as asked to stop.
+pub fn set_stopping(sql: &Connection, turn: TurnId) -> Result<(), Error> {
+    sql.execute(
+        "UPDATE agents_turns SET stopping = 1 WHERE id = ?1",
+        params![turn],
+    )?;
+    Ok(())
 }
 
 /// The turns that ran or will run `message`, the first first. A turn a
@@ -1073,7 +1090,11 @@ mod tests {
     #[test]
     fn a_thread_runs_one_turn_and_one_that_ran_two_keeps_the_outboxs() {
         let sql = Connection::open_in_memory().unwrap();
-        let (before, from) = MIGRATIONS.split_at(MIGRATIONS.len() - 1);
+        let at = MIGRATIONS
+            .iter()
+            .position(|m| m.contains("agents_turns_one_running"))
+            .unwrap();
+        let (before, from) = MIGRATIONS.split_at(at);
         for migration in before {
             sql.execute_batch(migration).unwrap();
         }
@@ -1096,6 +1117,7 @@ mod tests {
                 state: TurnState::Running,
                 opener,
                 from_thread: None,
+                stopping: false,
             };
             insert_turn(&sql, &turn, author, at, &Settings::default()).unwrap();
             turn.id
@@ -1203,6 +1225,7 @@ mod tests {
             state: TurnState::Queued,
             opener: Opener::Person,
             from_thread: None,
+            stopping: false,
         };
         let settings = Settings::default();
         insert_turn(&sql, &turn, Participant::Agent(agent), 10, &settings).unwrap();
@@ -1259,6 +1282,7 @@ mod tests {
                 state,
                 opener: Opener::Person,
                 from_thread: None,
+                stopping: false,
             };
             insert_turn(&sql, &turn, author, at, &settings).unwrap();
             turn.id

@@ -10,11 +10,12 @@
 //! [`tell`] the turn, since a late ending of a turn that ended changes
 //! nothing.
 
+use crate::effects::{START, STOP, TurnEffect};
 use crate::model::{Fact, ItemId, Opener, Settings, ThreadId, TurnId, TurnState};
 use crate::rules::{self, Ending, Event, Step, Then, TurnFacts};
-use crate::turn::{START, STOP, TurnEffect};
 use crate::{emit, store};
 use banda_kernel::{AgentId, Error, Participant, Refusal, Tx};
+use rusqlite::Connection;
 
 /// Makes `turn`, new and waiting, and gives it `event`: [`Event::Queue`]
 /// for one the outbox starts, [`Event::Open`] for one the Agent opens by
@@ -30,7 +31,7 @@ pub fn make(
     posted: Option<Fact>,
 ) -> Result<(Settings, Step), Error> {
     debug_assert_eq!(turn.state, TurnState::Queued, "a turn is made waiting");
-    let step = rules::next(&known(tx, turn)?, event)?;
+    let step = rules::next(&known(tx.sql(), turn)?, event)?;
     let now = tx.now();
     let settings = store::settings(tx.sql(), turn.thread)?;
     store::insert_turn(tx.sql(), turn, author, now, &settings)?;
@@ -63,6 +64,7 @@ pub fn queue(
         state: TurnState::Queued,
         opener,
         from_thread,
+        stopping: false,
     };
     make(tx, author, &turn, Event::Queue, None)?;
     Ok(turn.id)
@@ -76,7 +78,7 @@ pub fn apply(
     turn: &store::Turn,
     event: Event,
 ) -> Result<Result<Step, Refusal>, Error> {
-    let known = known(tx, turn)?;
+    let known = known(tx.sql(), turn)?;
     let step = match rules::next(&known, event) {
         Ok(step) => step,
         Err(refused) => return Ok(Err(refused)),
@@ -97,13 +99,27 @@ pub fn tell(
     apply(tx, author, turn, event).map(drop)
 }
 
+/// Whether [`rules::next`] takes `event` for `turn` now; nothing is
+/// written.
+pub fn takes(sql: &Connection, turn: &store::Turn, event: Event) -> Result<bool, Error> {
+    Ok(rules::next(&known(sql, turn)?, event).is_ok())
+}
+
 /// What the rules know of `turn` among its Thread's turns now.
-fn known(tx: &mut Tx<'_>, turn: &store::Turn) -> Result<TurnFacts, Error> {
-    let sql = tx.sql();
+fn known(sql: &Connection, turn: &store::Turn) -> Result<TurnFacts, Error> {
     let held = store::held(sql, turn.thread)?;
     let turns = store::turns(sql, turn.thread)?;
     let openers = store::openers(sql, turn.thread)?;
-    Ok(rules::known(&turns, &openers, held, turn.id, turn.opener))
+    // Read anew: the turn a caller holds may be as it was when it began.
+    let stopping = store::turn(sql, turn.id)?.is_some_and(|now| now.stopping);
+    Ok(rules::known(
+        &turns,
+        &openers,
+        held,
+        turn.id,
+        turn.opener,
+        stopping,
+    ))
 }
 
 /// Writes `step`, which moves `turn` from `was`.
@@ -140,6 +156,7 @@ fn write(
     match step.then {
         Some(Then::Start) => start_later(tx, turn.thread, turn.id)?,
         Some(Then::AskStop) => {
+            store::set_stopping(tx.sql(), turn.id)?;
             let stop = TurnEffect { turn: turn.id };
             tx.enqueue(STOP, &turn.id.to_string(), &stop)?;
         }

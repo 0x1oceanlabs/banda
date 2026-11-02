@@ -87,28 +87,6 @@ impl Ending {
         }
         self
     }
-
-    /// A turn the Harness ended as cancelled stopped when a Person asked
-    /// for it, and failed otherwise, so nobody reads a stop that no Person
-    /// made.
-    pub fn stop_asked(self, asked: bool) -> Ending {
-        match self.state {
-            TurnState::Stopped if !asked => Ending::failed(
-                "The Harness ended the turn by itself.",
-                Some(Failure::Provider),
-            ),
-            _ => self,
-        }
-    }
-
-    /// A turn the Agent went on with by itself stopped when a Person
-    /// asked, however the Harness ended what it did.
-    pub fn stopped_if_asked(self, asked: bool) -> Ending {
-        match asked {
-            true => Ending::new(TurnState::Stopped, None),
-            false => self,
-        }
-    }
 }
 
 /// Whether a Thread may be forked at the end of a turn: the turn ran and
@@ -174,18 +152,6 @@ pub fn position(turns: &[TurnView], turn: TurnId) -> Position {
     }
 }
 
-/// Whether a message sent now goes into a turn: it runs, its queue is not
-/// held, and a Person asked for it; one the Agent went on with by itself
-/// takes a message as a turn of its own.
-pub fn steers(state: TurnState, held: bool, by_itself: bool) -> bool {
-    let turn = TurnFacts {
-        held,
-        by_itself,
-        ..TurnFacts::of(state)
-    };
-    next(&turn, Event::Steer).is_ok()
-}
-
 /// What the rules know of each of a Thread's `turns`, in the order they
 /// were made, who opened each in `openers`.
 fn facts<'a>(
@@ -203,19 +169,23 @@ fn facts<'a>(
     })
 }
 
-/// What the rules know of `turn`, opened by `opener`, among its Thread's
-/// `turns`, who opened each in `openers`. A turn not among them yet is
-/// new: it waits.
+/// What the rules know of `turn`, opened by `opener` and asked to stop if
+/// `stopping`, among its Thread's `turns`, who opened each in `openers`. A
+/// turn not among them yet is new: it waits.
 pub fn known(
     turns: &[TurnView],
     openers: &HashMap<TurnId, Opener>,
     held: bool,
     turn: TurnId,
     opener: Opener,
+    stopping: bool,
 ) -> TurnFacts {
     let found = turns.iter().find(|one| one.id == turn);
     let state = found.map_or(TurnState::Queued, |one| one.state);
-    Works::of(turns, openers, held).facts(state, opener, position(turns, turn))
+    TurnFacts {
+        stopping,
+        ..Works::of(turns, openers, held).facts(state, opener, position(turns, turn))
+    }
 }
 
 fn opener_of(openers: &HashMap<TurnId, Opener>, turn: TurnId) -> Opener {
@@ -949,17 +919,6 @@ mod tests {
         assert_eq!(exact.take().map(|(_, cut)| cut), Some(false));
         exact.add("more");
         assert_eq!(exact.take(), Some((String::new(), true)), "told it is cut");
-    }
-
-    #[test]
-    fn a_turn_stops_when_a_person_asked() {
-        use TurnState::{Done, Failed, Stopped};
-        let cancelled = || Ending::new(Stopped, None);
-        assert_eq!(cancelled().stop_asked(true).state, Stopped);
-        assert_eq!(cancelled().stop_asked(false).state, Failed, "nobody asked");
-        let done = || Ending::new(Done, None);
-        assert_eq!(done().stopped_if_asked(true).state, Stopped);
-        assert_eq!(done().stopped_if_asked(false).state, Done);
     }
 
     #[test]

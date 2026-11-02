@@ -17,13 +17,14 @@
 //! turns too.
 
 use crate::acp::{Between, Connection, Said, Session};
+use crate::effects::LOOK_AGAIN;
 use crate::live::Live;
 use crate::model::{
     Body, Fact, Failure, Item, ItemId, Opener, Settings, ThreadId, ToolStatus, TurnId, TurnState,
 };
 use crate::rules::{Ending, Event};
-use crate::turn::{self, LOOK_AGAIN, Writer, plain};
-use crate::{emit, store, writer};
+use crate::transcript::{self, Transcript};
+use crate::{emit, plain, store, writer};
 use banda_kernel::{AgentId, Error, ModuleSpace, Participant, Tx};
 use std::collections::HashSet;
 use std::sync::{Arc, Weak};
@@ -78,12 +79,12 @@ impl Listener {
             let written = match said {
                 Said::Used { usage, .. } => self
                     .space
-                    .write(move |tx| turn::used(tx, agent, thread, usage))
+                    .write(move |tx| transcript::used(tx, agent, thread, usage))
                     .await
                     .map_err(plain),
                 Said::Runs(now) => self
                     .space
-                    .write(move |tx| turn::offered(tx, agent, thread, &now))
+                    .write(move |tx| transcript::offered(tx, agent, thread, &now))
                     .await
                     .map_err(plain),
                 // Nothing it asked is open between turns, and a tool call
@@ -114,7 +115,7 @@ impl Listener {
         let id = turn.id;
         let _kept = connection.keep();
         self.live.begin(id, connection.clone(), session.clone());
-        let mut writer = Writer::new(
+        let mut transcript = Transcript::new(
             self.space.clone(),
             &turn,
             self.harness.clone(),
@@ -158,7 +159,7 @@ impl Listener {
                 }
             }
         };
-        let (ending, listened) = tokio::join!(forward, writer.listen(live, &mut written));
+        let (ending, listened) = tokio::join!(forward, transcript.listen(live, &mut written));
         let ending = match listened {
             Ok(()) => ending,
             // What the Harness says cannot be written: it stops, unless a
@@ -170,7 +171,9 @@ impl Listener {
                 Ending::failed(reason, None)
             }
         };
-        let ending = ending.stopped_if_asked(self.live.end(id));
+        // Stopped, if a Person asked, however the Harness ended it: the
+        // rules read that from the turn.
+        self.live.end(id);
         self.space
             .write(move |tx| {
                 // Unless it ended already, as one a turn the outbox
@@ -286,6 +289,7 @@ fn open(
         state: TurnState::Queued,
         opener: Opener::ByItself,
         from_thread: None,
+        stopping: false,
     };
     let item = Item {
         id: turn.message,
@@ -309,14 +313,13 @@ fn open(
     Ok(Some(Opened { turn, settings }))
 }
 
-/// Ends each turn the Agent went on with by itself that a restart cut
-/// short: no effect ran it, so nothing settled it.
+/// A restart is one event (ADR 0018, decision 3): each turn still running
+/// was cut short. The outbox already settled the turns its effects ran,
+/// and no effect has run since, so what runs now is the Agent's own.
 pub fn cut_short(tx: &mut Tx<'_>) -> Result<(), Error> {
     for running in store::every_running(tx.sql())? {
-        if running.opener.by_itself() {
-            let agent = Participant::Agent(running.agent);
-            writer::tell(tx, agent, &running, Event::CutShort)?;
-        }
+        let agent = Participant::Agent(running.agent);
+        writer::tell(tx, agent, &running, Event::CutShort)?;
     }
     Ok(())
 }

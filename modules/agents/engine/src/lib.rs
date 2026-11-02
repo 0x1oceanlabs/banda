@@ -23,6 +23,7 @@
 mod acp;
 mod between;
 mod cli;
+mod effects;
 mod files;
 mod hosts;
 mod images;
@@ -35,7 +36,7 @@ pub mod sending;
 pub mod settings;
 mod skills;
 mod store;
-mod turn;
+mod transcript;
 mod writer;
 
 use acp::Connection;
@@ -45,6 +46,7 @@ use banda_kernel::{
 };
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as BASE64;
+use effects::ReplyEffect;
 use images::Images;
 use live::Live;
 use model::{
@@ -61,7 +63,6 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 use ts_rs::TS;
-use turn::ReplyEffect;
 
 /// The module's settings files in `~/.config/banda` (ADR 0016): how
 /// messages are sent, which the look resolves for the window, and the
@@ -414,6 +415,11 @@ struct Answer {
     values: Option<model::Values>,
 }
 
+/// An error in plain words, for a turn that fails by it.
+fn plain(error: impl Display) -> String {
+    error.to_string()
+}
+
 /// Writes one of the module's facts about `subject`.
 fn emit(
     tx: &mut Tx<'_>,
@@ -746,10 +752,10 @@ impl Module for Agents {
 
     async fn run(&self, space: ModuleSpace, effect: Effect) -> Outcome {
         match effect.kind.as_str() {
-            turn::START => turn::start(&self.live, &self.harnesses, space, &effect).await,
-            turn::STOP => turn::stop(&self.live, space, &effect).await,
-            turn::REPLY => turn::reply(&self.live, &effect),
-            turn::STEER => turn::steer(&self.live, space, &effect).await,
+            effects::START => effects::start(&self.live, &self.harnesses, space, &effect).await,
+            effects::STOP => effects::stop(&self.live, space, &effect).await,
+            effects::REPLY => effects::reply(&self.live, &effect),
+            effects::STEER => effects::steer(&self.live, space, &effect).await,
             other => Outcome::Fail(format!("agents runs no effect of kind {other}")),
         }
     }
@@ -774,7 +780,7 @@ impl Module for Agents {
     }
 
     fn settle(&self, tx: &mut Tx<'_>, effect: &Effect, settled: &Settled) -> Result<(), Error> {
-        turn::settle(tx, effect, settled)
+        effects::settle(tx, effect, settled)
     }
 }
 
@@ -916,12 +922,12 @@ fn send(
     store::carry_images(tx.sql(), &images, item.id)?;
     if let Some(running) = running {
         store::touch_thread(tx.sql(), thread, now)?;
-        turn::steer_into(
+        effects::steer_into(
             tx,
             author,
             &running,
             item.id,
-            turn::Message { text, images },
+            effects::Message { text, images },
         )?;
         let sent = Sent {
             thread,
@@ -941,6 +947,7 @@ fn send(
         state: TurnState::Queued,
         opener,
         from_thread: by.map(|(_, from)| from),
+        stopping: false,
     };
     let posted = Fact::MessagePosted {
         item: item.id,
@@ -965,15 +972,14 @@ fn stop(tx: &mut Tx<'_>, author: Participant, turn: TurnId) -> Result<(), Error>
     writer::tell(tx, author, &found, Event::Stop)
 }
 
-/// The Thread's turn a message can go into. A turn a Person stopped takes
-/// nothing more, and one the Agent went on with by itself takes a message
-/// as a turn of its own, whose prompt the Harness takes into what it does.
+/// The Thread's turn a message can go into: one that runs, unless it is
+/// stopping, or is the Agent's own, which takes a message as a turn of
+/// its own, whose prompt the Harness takes into what it does.
 fn steerable(tx: &mut Tx<'_>, thread: ThreadId) -> Result<Option<store::Turn>, Error> {
-    let held = store::held(tx.sql(), thread)?;
     let Some(running) = store::running(tx.sql(), thread)? else {
         return Ok(None);
     };
-    Ok(rules::steers(running.state, held, running.opener.by_itself()).then_some(running))
+    Ok(writer::takes(tx.sql(), &running, Event::Steer)?.then_some(running))
 }
 
 /// Forks the Thread of `turn`, an ended turn, at its end: a new Thread,
@@ -1106,12 +1112,12 @@ fn send_now(tx: &mut Tx<'_>, author: Participant, turn: TurnId) -> Result<(), Er
         writer::resume(tx, author, found.thread)?;
         return Ok(());
     };
-    let message = turn::Message::read(tx.sql(), found.message)?
+    let message = effects::Message::read(tx.sql(), found.message)?
         .ok_or_else(|| Refusal::invalid("Only a message can be sent."))?;
     writer::apply(tx, author, &found, Event::Withdraw)??;
     store::set_item_turn(tx.sql(), found.message, Some(running.id))?;
     store::move_last(tx.sql(), found.message)?;
-    turn::steer_into(tx, author, &running, found.message, message)?;
+    effects::steer_into(tx, author, &running, found.message, message)?;
     Ok(())
 }
 
@@ -1173,6 +1179,6 @@ fn answer(
         values,
         secret: kept_secret,
     };
-    tx.enqueue(turn::REPLY, &item.to_string(), &reply)?;
+    tx.enqueue(effects::REPLY, &item.to_string(), &reply)?;
     Ok(())
 }
