@@ -15,7 +15,7 @@ pub use write::{rename, reset, set};
 
 /// Each module's settings files, by its ID, as its crate describes them
 /// (ADR 0016, decision 3): what its `module.toml` says it owns.
-const MODULES: [(&str, &[SettingsFile]); 2] = [
+pub const MODULES: [(&str, &[SettingsFile]); 2] = [
     ("agents", &banda_agents::SETTINGS),
     ("browser", &banda_browser::SETTINGS),
 ];
@@ -24,19 +24,6 @@ const MODULES: [(&str, &[SettingsFile]); 2] = [
 /// modules'.
 pub fn files() -> impl Iterator<Item = &'static SettingsFile> {
     banda_look::FILES.iter().chain(modules_files())
-}
-
-/// The settings files the module `id` owns; none when it owns none.
-pub fn of_module(id: &str) -> &'static [SettingsFile] {
-    MODULES
-        .iter()
-        .find(|(module, _)| *module == id)
-        .map_or(&[], |(_, files)| files)
-}
-
-/// The modules that own settings files, by their IDs.
-pub fn owners() -> impl Iterator<Item = &'static str> {
-    MODULES.iter().map(|(id, _)| *id)
 }
 
 fn modules_files() -> impl Iterator<Item = &'static SettingsFile> {
@@ -70,8 +57,8 @@ pub fn also() -> Vec<SettingsFile> {
     modules_files().copied().collect()
 }
 
-/// Checks `paths`, or with none every file Banda reads: the look's, the
-/// sidebar's and the Harness list. Says nothing when all is well.
+/// Checks `paths`, or with none every file Banda reads, [`files`]. Says
+/// nothing when all is well.
 pub fn check(places: &Places, paths: &[PathBuf]) -> Vec<Problem> {
     if paths.is_empty() {
         // No font's name is ever wrong, so the system is not asked for one.

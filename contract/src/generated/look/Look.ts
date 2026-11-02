@@ -78,7 +78,8 @@ keys: Keys,
 settings: { [key in string]: { [key in string]: Setting } }, 
 /**
  * Each module's settings file that the window reads, resolved, by its
- * name: `browser.toml`. Its module's types say what it holds.
+ * name, as `browser.toml` and `agents.toml`. Its module's types say
+ * what it holds.
  */
 files: { [key in string]: JsonValue }, 
 /**

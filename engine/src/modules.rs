@@ -257,24 +257,21 @@ mod tests {
 
     #[test]
     fn a_module_owns_the_settings_files_its_crate_describes() {
-        let offers = offers();
-        for offer in &offers {
-            let id = &offer.manifest.id;
-            let described: Vec<&str> = banda_settings::of_module(id)
-                .iter()
-                .map(|file| file.name)
-                .collect();
-            assert_eq!(
-                offer.manifest.settings, described,
-                "modules/{id}/module.toml"
-            );
-        }
-        for owner in banda_settings::owners() {
-            assert!(
-                offers.iter().any(|offer| offer.manifest.id == owner),
-                "{owner} describes settings files but is no module"
-            );
-        }
+        let mut said: Vec<(String, Vec<String>)> = offers()
+            .into_iter()
+            .filter(|offer| !offer.manifest.settings.is_empty())
+            .map(|offer| (offer.manifest.id, offer.manifest.settings))
+            .collect();
+        let mut described: Vec<(String, Vec<String>)> = banda_settings::MODULES
+            .iter()
+            .map(|(id, files)| {
+                let names = files.iter().map(|file| file.name.to_owned()).collect();
+                (id.to_string(), names)
+            })
+            .collect();
+        said.sort();
+        described.sort();
+        assert_eq!(said, described, "each module.toml's settings, its crate's");
     }
 
     #[test]

@@ -106,7 +106,8 @@ pub struct Look {
     /// comes from (ADR 0016).
     pub settings: BTreeMap<String, keyed::Keyed>,
     /// Each module's settings file that the window reads, resolved, by its
-    /// name: `browser.toml`. Its module's types say what it holds.
+    /// name, as `browser.toml` and `agents.toml`. Its module's types say
+    /// what it holds.
     pub files: BTreeMap<String, serde_json::Value>,
     /// The folder the settings files are in: `~/.config/banda`.
     pub config: String,
