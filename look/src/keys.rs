@@ -274,11 +274,6 @@ pub fn resolve(
     (keys, keyed)
 }
 
-/// Whether `banda look check` reads `path` as a `keys.toml`.
-pub fn is_keys_file(path: &Path) -> bool {
-    path.file_name().is_some_and(|n| n == "keys.toml")
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
