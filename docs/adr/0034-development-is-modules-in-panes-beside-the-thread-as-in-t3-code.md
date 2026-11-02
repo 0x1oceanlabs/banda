@@ -50,7 +50,7 @@ the rest are our defaults, as T3 Code does, and stay Roma's to change.
 
    | Module | Panes | What it holds |
    | --- | --- | --- |
-   | `git` | `git.diff`, `git.space` | status, refs, diffs, commit, push |
+   | `git` | `git.diff`, rows in Thread details | status, refs, diffs, commit, push |
    | `files` | `files.tree`, `files.file` | the Space's files |
    | `pulls` | `pulls.pull`, `pulls.linked` | pull requests, through `gh` |
    | `agents` | `agents.thread`, as a side chat | the fork it is |
@@ -58,23 +58,43 @@ the rest are our defaults, as T3 Code does, and stay Roma's to change.
    The first is `git` (_decided_): the Diff is what comments, a PR's Code
    tab and a worktree later stand on, and it is nearest to what Banda has.
 
-2. **One Diff Pane, `git.diff`, with what it compares** (_decided_).
+2. **One Diff Pane, `git.diff`, with what it compares** (_decided_). The
+   research for it is `docs/research/2026-11-02-t3-code-git.md`; Roma's
+   calls of 2026-11-02 after it are marked _decided_ below.
    - Its scopes, as T3 Code's: **Changes** (the branch and the work tree
      against a base, the default), **Uncommitted** (the work tree against
-     `HEAD`), **Commit** (one of the branch's commits: "No commits on this
-     branch.") and **Turn** (what a turn of a Thread changed).
+     `HEAD`), **Staged** (the index, as the Codex app's), **Commit** (one of
+     the branch's commits: "No commits on this branch.") and **Turn** (what
+     a turn of a Thread changed, the latest first).
+   - It is drawn with `@pierre/diffs` and its tree with `@pierre/trees`, as
+     T3 Code's (_decided_): stacked or split, line numbers, Shiki colours,
+     sticky file headers, expand context, find, virtualised. Its colours
+     are Banda's `added` and `removed`, mixed into the tile as T3 Code
+     mixes them.
+   - A big diff stays fast as T3 Code's: every file's header and `+N −M`
+     at once, from `--numstat`, and past 120 KB the patches load a few
+     files at a time as one scrolls.
+   - **Stage, unstage and revert**, as the Codex app's (_decided_): a hunk,
+     a file or the whole diff, from its header and the file's; revert asks
+     first. T3 Code has none of them.
    - The base, for Changes, is "Automatic" (where the branch left the
      default branch) or a ref picked from a list with search.
    - Its toolbar, as T3 Code's: refresh, expand or collapse all files,
      stacked or split, wrap lines, hide whitespace changes, show or hide
      the file tree.
-   - **Turn is `agents.diff` today, and `agents.diff` goes.** A turn's
-     changes still come from its tool calls, not git, so Turn works in a
-     Space that is no repository. The agents engine answers
-     `agents.changes { thread, turn }` with each file's text before and
-     after, and the Diff draws them; the other scopes ask `git`. "Changed
-     files" under a turn opens `git.diff` on Turn, beside the Thread. A
-     Pane kept as `agents.diff` opens as `git.diff` on its turn.
+   - **Turn comes from checkpoints, as T3 Code's** (_decided_). Before and
+     after each turn the git engine snapshots the Space's work tree as a
+     commit made through a temporary index (`add -A`, `write-tree`,
+     `commit-tree -p HEAD`), kept under `refs/banda/checkpoints/<thread>/<n>`;
+     the Person's index, `HEAD` and branch are never touched. Turn N is the
+     diff of its two snapshots, so it shows what the shell changed too, and
+     Edit from here can later put files back (decision 11). A Thread's
+     refs go with it. In a Space that is no repository, Turn comes from the
+     tool calls as today: the agents engine answers `agents.changes
+     { thread, turn }` with each file's text before and after.
+   - **`agents.diff` goes.** "Changed files" under a turn opens `git.diff`
+     on Turn, beside the Thread. A Pane kept as `agents.diff` opens as
+     `git.diff` on its turn.
    - The diff view itself (a file's lines, the line diff, the file list)
      moves from the agents Pane to `app/ui`, so `git.diff`, `files.file`
      and `pulls.pull` draw changes the same way.
@@ -83,27 +103,50 @@ the rest are our defaults, as T3 Code does, and stay Roma's to change.
 
 3. **The git engine runs `git`.** It runs the `git` program in the Space's
    folder, with a time limit, as T3 Code does, and no library of its own.
+   - Every call sets `GIT_OPTIONAL_LOCKS=0`, so reading never takes
+     `index.lock` from the Person's own git; untracked files are diffed
+     through a copied index; a few git programs run at once at most; git's
+     words are read into a short reason, not shown raw, as they can hold
+     credentials.
    - Reads: `git.status` (branch, upstream, ahead and behind, the changed
      files with `+N −M`), `git.diff { scope }`, `git.refs`, `git.commits`.
-   - Commands: `git.commit { message, files, branch? }`, `git.push`,
+   - Commands: `git.commit { message?, files, branch? }`, `git.push`,
      `git.pull`, `git.switch { ref }`, `git.branch { name, from? }`,
-     `git.init`. Each says in a line what went wrong, as git said it.
+     `git.stage`, `git.unstage`, `git.revert` (a file or a hunk),
+     `git.init`. Each says in a line what went wrong.
+   - A message left empty is written by a Harness in one short run, as T3
+     Code's text model writes it (_decided_): from the staged diff, in the
+     repository's style; with "Commit on new branch" it names the branch
+     too.
    - The status follows the folder: a stream `git.watch` reads it again
      every few seconds while a Pane follows it, and says only what
      changed. A watcher on the folder can replace the polling later.
 
-4. **`git.space`: the branch, the changes, and one main button.**
-   - The branch, with search, "Create branch …" and "Copy branch name";
-     ahead and behind; the changed files, each opening `git.diff` on that
-     file.
-   - The main button follows the state, as T3 Code's: Commit, Commit &
-     push, Push, Pull, Create PR (with `pulls`, decision 6), Initialize
-     Git.
-   - Commit asks for a message, can leave files out, and can commit on a
-     new branch. On the default branch it asks first: "Commit and push to
-     the default branch?". A message the model writes for an empty field comes later.
+4. **Thread details: a card in the Thread, as T3 Code's** (_decided_).
+   Not a Pane of its own: a quiet card at the top right of the Thread
+   Pane, shown and hidden from the Thread's header and with a key, its
+   rows given by modules (git now, `pulls` after), as the Changes card of
+   Claude Code's desktop app is.
+   - **Branch:** the branch, with search over local and remote ones,
+     "Create branch …" and "Copy branch name"; ahead and behind.
+   - **The main button** follows the state, as T3 Code's eleven rules:
+     `Commit`, `Commit & push`, `Commit, push & PR`, `Push`, `Push & create
+     PR`, `Create PR`, `Pull`, `Publish repository`, `Initialize Git`. It
+     runs the whole chain at once, every file, the message written for it.
+     Disabled, it says why on hover. Its progress is in the button: the
+     step, a hook's last line, a timer, then ✓ for ten seconds; only an
+     error is a toast, and it stays.
+   - **`▾`:** Commit (a dialog: the message, the files to leave out,
+     "Commit on new branch"), Push, Create PR.
+   - **On the default branch** Push and PR ask first: Abort, "Push to
+     main", or "Check out feature branch & continue", the branch named for
+     it.
+   - **Changes `+N −M`** opens `git.diff` on Changes.
    - The same actions are in the Banda menu (ADR 0017), under Git: Diff,
      Commit, Push, Switch branch. They act in the focused Space.
+
+   A module then needs a way to add rows to another module's Pane; it
+   comes with this decision, and `pulls` uses it for the PR rows.
 
 5. **`files`: the tree and a file, read-only at first.**
    - `files.tree`: the Space's files, with search, refresh, expand and
@@ -126,7 +169,7 @@ the rest are our defaults, as T3 Code does, and stay Roma's to change.
      ("Linked by you", "Created from this Thread", "Linked by the Agent"),
      and Watch / Stop watching, Unlink.
    - A Thread's links: the Person pastes a URL or `#42`; Create PR in
-     `git.space` links what it made; the Agent links with tools, as T3
+     Thread details links what it made; the Agent links with tools, as T3
      Code's: `link_pull_request`, `unlink_pull_request`,
      `list_thread_pull_requests`, `watch_pull_request`,
      `unwatch_pull_request`.
@@ -148,8 +191,8 @@ the rest are our defaults, as T3 Code does, and stay Roma's to change.
    CLI and an Agent all open through `workspaces.open`. A Pane a Thread
    opens goes in the column right of the Thread's Pane (ADR 0029,
    decision 4, built here for every kind). `git.diff`, `files.file` and
-   `pulls.pull` join `AGENT_KINDS`: they show and run nothing. `git.space`
-   and `pulls.linked` do not, as their buttons act as the Person.
+   `pulls.pull` join `AGENT_KINDS`: they show and run nothing. `pulls.linked`
+   does not, as its buttons act as the Person.
 
 9. **A comment on lines goes to the Agent.** In `git.diff`, `files.file`
    and a PR's Code tab, lines picked and "Add a comment…" put a chip in
@@ -178,20 +221,24 @@ the rest are our defaults, as T3 Code does, and stay Roma's to change.
 
 Each a PR, tried in the window, with `/simplify` before it:
 
-1. **The Diff.** The `git` module with `git.status`, `git.diff`,
-   `git.refs` and `git.commits`; `git.diff` with its four scopes; the
-   diff view in `app/ui`; `agents.changes`; "Changed files" opens
-   `git.diff`; `agents.diff` goes.
-2. **The branch and Commit.** `git.space`, the git commands, `git.watch`,
-   the Banda menu's Git actions.
-3. **Files.** `files.tree`, `files.file`, paths in replies as links,
+1. **The Diff.** The `git` module and its runner; `git.status`, `git.diff`,
+   `git.refs` and `git.commits`; `git.diff` on `@pierre/diffs` with
+   Changes, Uncommitted, Staged and Commit, and Turn from `agents.changes`;
+   "Changed files" opens `git.diff`; `agents.diff` goes.
+2. **Turns from checkpoints.** The snapshots before and after each turn,
+   Turn from them in a repository, the refs gone with their Thread.
+3. **Stage, unstage and revert** in `git.diff`.
+4. **Thread details and the main button.** The card, the way a module
+   adds rows to it, the branch, the git commands, `git.watch`, the
+   message a Harness writes, the Banda menu's Git actions.
+5. **Files.** `files.tree`, `files.file`, paths in replies as links,
    `agents.files` moved.
-4. **A pull request.** `pulls` on `gh`, `pulls.pull`, Create PR from
-   `git.space`, PR URLs in replies as links.
-5. **A Thread's pull requests.** `pulls.linked`, the Agent's tools, the
+6. **A pull request.** `pulls` on `gh`, `pulls.pull`, Create PR from
+   Thread details, PR URLs in replies as links.
+7. **A Thread's pull requests.** `pulls.linked`, the Agent's tools, the
    watch, settling on merge, the PR on the sidebar row.
-6. **Comments to the Agent**, from the Diff, a file and a PR's Code tab.
-7. **Side chat.**
+8. **Comments to the Agent**, from the Diff, a file and a PR's Code tab.
+9. **Side chat.**
 
 ## Consequences
 
@@ -200,6 +247,8 @@ Each a PR, tried in the window, with `/simplify` before it:
   an Agent reaches them only through the Panes and tools named here.
 - `agents.diff` goes from the contract and from `AGENT_KINDS`; a Pane kept
   with it opens again as `git.diff`.
-- The diff view leaves the agents Pane for `app/ui`.
+- The diff view leaves the agents Pane for `app/ui`, drawn by
+  `@pierre/diffs`.
+- A repository Space gets Banda's checkpoint refs under `refs/banda/`.
 - The sidebar learns parts from another module (decision 6), which ADR
   0008's `branch` and `diff` can use after.
