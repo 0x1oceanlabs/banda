@@ -10,6 +10,7 @@ import { expect, type Locator, type Page, test } from "@playwright/test"
 import {
   agentAnswers,
   agentCalls,
+  agentSays,
   clickNotice,
   countNotes,
   desktopOf,
@@ -1607,11 +1608,7 @@ test("an Agent starts a Thread, its answer comes back, and each names the other'
   await expect(thread.getByText("You said: hello")).toBeVisible()
 
   // The Agent of "hello" calls `send`, as its Harness would.
-  const sent = agentCalls(window, "send", {
-    harness: "fake",
-    text: "look around",
-  })
-  expect(sent.isError, sent.content[0]?.text).toBeFalsy()
+  await agentSays(window, "send", { harness: "fake", text: "look around" })
   const answer = thread.getByRole("button", {
     name: "Answered by look around",
   })
@@ -1641,15 +1638,12 @@ test("an Agent shows a Visual in its Thread: its page runs apart from Banda, in 
     document.getElementById("said").textContent =
       "ran, " + typeof window.bandaEngine + ", " + cookies
   </script></body></html>`
-  const said = agentCalls(window, "show_visual", {
+  const said = await agentSays(window, "show_visual", {
     html,
     title: "A mockup",
     height: 120,
   })
-  expect(said.isError, said.content[0]?.text).toBeFalsy()
-  expect(said.content[0]!.text).toContain(
-    "Shown to your Person above your reply."
-  )
+  expect(said).toContain("Shown to your Person above your reply.")
 
   const frame = thread.locator('iframe[title="A mockup"]')
   await expect(frame).toBeVisible()
@@ -1687,30 +1681,35 @@ test("an Agent opens a Pane beside its Thread without the focus, marked until th
   await expect(hello).toHaveAttribute("data-focused", "true")
 
   // It sees its Space's Panes, with what they show; it opened none.
-  const seen = agentAnswers(window, "panes", {})
+  const seen = await agentAnswers(window, "panes", {})
   const mine = seen[0].columns[0].panes[0]
   expect(mine).toMatchObject({ kind: "agents.thread", yours: false })
 
   const browser = { kind: "browser.browser", args: { tabs: [], shown: 0 } }
   const beside = { pane: mine.id, side: "right" }
-  const { pane } = agentAnswers(window, "open_pane", { ...browser, beside })
+  const { pane } = await agentAnswers(window, "open_pane", {
+    ...browser,
+    beside,
+  })
   const opened = page.locator(`[data-tile="${pane}"]`)
   await expect(opened).toHaveAttribute("data-marked", "true")
   await expect(hello).toHaveAttribute("data-focused", "true")
   await page.screenshot({ path: "test-results/18l-agent-opened.png" })
   // A terminal would run as the Person: not an Agent's to open.
-  const terminal = agentCalls(window, "open_pane", {
+  const terminal = await agentCalls(window, "open_pane", {
     kind: "terminal.terminal",
     args: {},
   })
   expect(terminal.isError).toBe(true)
   // Nor is the Person's Pane its to close.
-  expect(agentCalls(window, "close_pane", { pane: mine.id }).isError).toBe(true)
+  expect(
+    (await agentCalls(window, "close_pane", { pane: mine.id })).isError
+  ).toBe(true)
 
   await opened.click()
   await expect(opened).toHaveAttribute("data-focused", "true")
   await expect(opened).not.toHaveAttribute("data-marked")
-  agentAnswers(window, "close_pane", { pane })
+  await agentAnswers(window, "close_pane", { pane })
   await expect(opened).toHaveCount(0)
   await expect(hello).toBeVisible()
 })
@@ -1727,11 +1726,7 @@ test("an answer that comes while its Thread works waits in the queue, named by t
   await composer.press("Enter")
   await expect(thread.getByText("Waiting.")).toBeVisible()
 
-  const sent = agentCalls(window, "send", {
-    harness: "fake",
-    text: "look around",
-  })
-  expect(sent.isError, sent.content[0]?.text).toBeFalsy()
+  await agentSays(window, "send", { harness: "fake", text: "look around" })
   const queue = thread.getByRole("list", { name: "Waiting messages" })
   const answer = queue.getByRole("button", { name: "Answered by look around" })
   await expect(answer).toBeVisible()

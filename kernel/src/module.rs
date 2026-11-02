@@ -162,12 +162,13 @@ impl Call {
     /// (ADR 0029, decision 2). With no window, or none that answers in
     /// time, it is refused, and the refusal says whether it may have run;
     /// an answer that is not a `T` is refused too.
-    pub async fn ask_window<T: serde::de::DeserializeOwned>(
+    pub async fn ask_window<T: DeserializeOwned>(
         &self,
         what: &str,
-        params: Value,
+        params: &impl Serialize,
         within: Duration,
     ) -> Result<T, Refusal> {
+        let params = serde_json::to_value(params).map_err(|_| Refusal::internal())?;
         let answer = (self.space)
             .ask_window(self.participant, what, params, within)
             .await?;

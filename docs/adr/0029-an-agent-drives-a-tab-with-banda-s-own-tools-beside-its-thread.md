@@ -64,7 +64,8 @@ and stay Roma's to change.
    - With no window, the ask refuses: "Banda's window is not open.
      Nothing was done." The tools are still listed, since `banda mcp`
      reads the list once. Past its limit, a call refuses and says the
-     action may have run.
+     action may have run, with a code of its own, `may_have_run`, so an
+     Agent looks before it asks again (amended in step 3a).
    - **Main holds the stream**, as an API client of its own: it has the
      engine's port and secret, and the stream is a scoped resource that
      ends with the window (ADR 0020). The page is not on the road.
@@ -198,8 +199,10 @@ and stay Roma's to change.
    holding the stream; the browser's engine part with `browser_tabs`;
    the refusal with no window. 2c: `browser_snapshot`, Playwright in
    main.
-3. Acting: `browser_open`, `browser_navigate`, `browser_act`,
-   `browser_wait_for`; the short answers; the Person's input noted
+3. Acting, in two PRs. 3a: `browser_open` and `browser_navigate`, with
+   the short answers and `may_have_run`; a tab opens in the browser Pane
+   focused last, as one the CDP endpoint opens, until step 4. 3b:
+   `browser_act` and `browser_wait_for`; the Person's input noted
    (decision 5); E's refused and masked fields.
 4. The Thread on the tab: tabs open beside the Thread; the icon, glow,
    cursor and pill; the three waits with their answers, events and calls

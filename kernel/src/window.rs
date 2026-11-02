@@ -92,13 +92,13 @@ fn not_open() -> Refusal {
 }
 
 fn closed() -> Refusal {
-    Refusal::conflict(
+    Refusal::may_have_run(
         "Banda's window closed before it answered. What was asked may have been done.",
     )
 }
 
 fn late(within: Duration) -> Refusal {
-    Refusal::conflict(format!(
+    Refusal::may_have_run(format!(
         "Banda's window did not answer within {} s. What was asked may have been done.",
         within.as_secs_f64()
     ))
@@ -285,7 +285,7 @@ mod tests {
         let window = Window::default();
         let _hear = hold(&window).await;
         let refusal = ask(&window, Duration::from_millis(20)).await.unwrap_err();
-        assert_eq!(refusal.code, Code::Conflict);
+        assert_eq!(refusal.code, Code::MayHaveRun);
         assert!(refusal.message.contains("may have been done"));
     }
 

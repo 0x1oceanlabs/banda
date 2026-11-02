@@ -2,7 +2,8 @@
  * Starts the real window on a throwaway machine: its own folders, and the
  * fake agent as the only Harness, so no test reaches a paid model.
  */
-import { execFileSync } from "node:child_process"
+import { execFileSync, spawn } from "node:child_process"
+import { once } from "node:events"
 import {
   existsSync,
   mkdirSync,
@@ -155,23 +156,29 @@ export async function startWindow({
   }
 }
 
+/** What a tool of `banda mcp` says, which it did not refuse. */
+export async function agentSays(window: Window, name: string, args: object) {
+  const said = await agentCalls(window, name, args)
+  expect(said.isError, said.content[0]?.text).toBeFalsy()
+  return said.content[0]!.text
+}
+
+/** What a tool of `banda mcp` answers as JSON, which it did not refuse. */
+export async function agentAnswers(window: Window, name: string, args: object) {
+  return JSON.parse(await agentSays(window, name, args))
+}
+
 /**
  * The Agent of the Thread whose session opened last calls Banda's tool
  * `name` with `args`, through `banda mcp` as its Harness would; what the
- * tool answered (ADR 0019).
+ * tool answered (ADR 0019). It waits without blocking, so the test's own
+ * site answers the window meanwhile.
  */
-/** What a tool of `banda mcp` answers, which it did not refuse. */
-export function agentAnswers(window: Window, name: string, args: object) {
-  const said = agentCalls(window, name, args)
-  expect(said.isError, said.content[0]?.text).toBeFalsy()
-  return JSON.parse(said.content[0]!.text)
-}
-
-export function agentCalls(
+export async function agentCalls(
   window: Window,
   name: string,
   args: object
-): { isError?: boolean; content: { text: string }[] } {
+): Promise<{ isError?: boolean; content: { text: string }[] }> {
   const [server] = JSON.parse(
     readFileSync(join(window.dir, "mcp.json"), "utf8")
   ) as {
@@ -195,11 +202,15 @@ export function agentCalls(
       params: { name, arguments: args },
     },
   ]
-  const said = execFileSync(server.command, server.args, {
+  const child = spawn(server.command, server.args, {
     env: { ...process.env, ...env },
-    input: messages.map((m) => JSON.stringify(m)).join("\n") + "\n",
-    encoding: "utf8",
+    stdio: ["pipe", "pipe", "inherit"],
   })
+  child.stdin.end(messages.map((m) => JSON.stringify(m)).join("\n") + "\n")
+  let said = ""
+  child.stdout.setEncoding("utf8").on("data", (chunk) => (said += chunk))
+  const [code] = await once(child, "close")
+  if (code !== 0) throw new Error(`banda mcp exited with ${code}`)
   return JSON.parse(said.trim().split("\n").at(-1)!).result
 }
 
