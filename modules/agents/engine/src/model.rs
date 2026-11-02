@@ -792,6 +792,10 @@ pub struct ThreadView {
     /// sending or going on lets it go.
     #[serde(default)]
     pub held: bool,
+    /// The Thread it was forked from (`agents.fork`), if it was.
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub forked_from: Option<ThreadId>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]

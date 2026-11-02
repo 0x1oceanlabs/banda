@@ -21,10 +21,12 @@ export function sources(
   })
 }
 
-/** Every module a file names: `from "…"`, `import "…"`, `import("…")`. */
+/** Every module a file names: `from "…"`, `import "…"`, `import("…")`.
+ * A name is on one line, so words in a string, such as `key="forked-from"`,
+ * are not taken for one. */
 export function imports(source: string): string[] {
   const found = source.matchAll(
-    /(?:\bfrom\s*|\bimport\s*\(?\s*)["']([^"']+)["']/g
+    /(?:\bfrom\s*|\bimport\s*\(?\s*)["']([^"'\n]+)["']/g
   )
   return [...found].map((match) => match[1])
 }

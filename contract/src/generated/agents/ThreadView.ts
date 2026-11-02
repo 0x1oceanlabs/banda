@@ -2,6 +2,7 @@
 import type { Item } from "./Item";
 import type { Offer } from "./Offer";
 import type { Settings } from "./Settings";
+import type { ThreadId } from "./ThreadId";
 import type { ThreadSummary } from "./ThreadSummary";
 import type { TurnView } from "./TurnView";
 import type { Usage } from "./Usage";
@@ -23,4 +24,8 @@ usage?: Usage,
  * Its queue waits for a Person: a stop or a restart held it, and
  * sending or going on lets it go.
  */
-held: boolean, };
+held: boolean, 
+/**
+ * The Thread it was forked from (`agents.fork`), if it was.
+ */
+forked_from?: ThreadId, };

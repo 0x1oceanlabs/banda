@@ -372,6 +372,8 @@ pub struct Sent {
 #[ts(export, export_to = "agents/")]
 pub struct Forked {
     pub thread: ThreadId,
+    /// Its title, "<title> fork".
+    pub title: String,
 }
 
 #[derive(Deserialize, TS)]
@@ -493,6 +495,7 @@ impl Agents {
                     offer: store::offer(sql, thread)?,
                     usage: store::usage(sql, thread)?,
                     held,
+                    forked_from: store::forked_from(sql, thread)?,
                     thread: summary,
                 }))
             })
@@ -967,12 +970,13 @@ fn fork(tx: &mut Tx<'_>, author: Participant, turn: TurnId) -> Result<Forked, Er
     let evidence: acp::Evidence = store::evidence(tx.sql(), from)?.ok_or_else(cannot)?;
     let settings = store::settings(tx.sql(), from)?;
     let title = format!("{} fork", source.title);
-    let (thread, agent) = start_thread(tx, author, source.harness, title, &settings)?;
+    let (thread, agent) = start_thread(tx, author, source.harness, title.clone(), &settings)?;
+    store::set_forked_from(tx.sql(), thread, from)?;
     store::copy_turns(tx.sql(), (from, found.agent), turn, (thread, agent))?;
     store::set_offer(tx.sql(), thread, &store::offer(tx.sql(), from)?)?;
     let forked = evidence.forked_at(acp::ForkAt { message });
     store::set_evidence(tx.sql(), thread, &forked)?;
-    Ok(Forked { thread })
+    Ok(Forked { thread, title })
 }
 
 /// A new Thread on `harness`, and its own Agent, the only one.

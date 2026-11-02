@@ -3123,6 +3123,12 @@ async fn a_thread_forks_at_a_turns_end_and_its_session_knows_only_that_far() {
     let view = world.thread(fork).await;
     assert_eq!(view.thread.title, "remember apples fork");
     assert_eq!(
+        view.forked_from.map(|from| json!(from)).as_ref(),
+        Some(&thread),
+        "it names the Thread it was forked from"
+    );
+    assert_eq!(first.forked_from, None);
+    assert_eq!(
         texts(&view),
         [
             "message: remember apples",
@@ -3207,6 +3213,11 @@ async fn the_real_harnesses_fork_a_thread_at_a_turns_end() {
         let ask = "Which words did I ask you to remember? Do not use any tools. \
                    Reply with only the words, comma separated.";
         let (_, view) = finish(Some(&forked["thread"]), ask).await;
+        assert_eq!(view.thread.title, forked["title"]);
+        assert_eq!(
+            view.forked_from.map(|from| json!(from)),
+            Some(thread.clone())
+        );
         let reply = last_reply(&view);
         println!("{harness}: {reply}");
         assert!(reply.contains("APPLES"), "{harness} remembers: {reply}");

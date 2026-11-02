@@ -119,6 +119,10 @@ ALTER TABLE agents_turns ADD COLUMN from_thread TEXT;
 -- session goes to (ADR 0027).
 ALTER TABLE agents_items ADD COLUMN harness_message TEXT;
 "#,
+    r#"
+-- The Thread a Thread was forked from (ADR 0027, decision 3).
+ALTER TABLE agents_threads ADD COLUMN forked_from TEXT;
+"#,
 ];
 
 fn json<T: Serialize>(value: &T) -> Result<String, Error> {
@@ -426,6 +430,26 @@ pub fn thread(sql: &Connection, id: ThreadId) -> Result<Option<ThreadSummary>, E
     Ok(sql
         .query_row(&format!("{THREAD} WHERE id = ?1"), params![id], read_thread)
         .optional()?)
+}
+
+/// The Thread `thread` was forked from, if it was.
+pub fn forked_from(sql: &Connection, thread: ThreadId) -> Result<Option<ThreadId>, Error> {
+    Ok(sql
+        .query_row(
+            "SELECT forked_from FROM agents_threads WHERE id = ?1",
+            params![thread],
+            |row| row.get(0),
+        )
+        .optional()?
+        .flatten())
+}
+
+pub fn set_forked_from(sql: &Connection, thread: ThreadId, from: ThreadId) -> Result<(), Error> {
+    sql.execute(
+        "UPDATE agents_threads SET forked_from = ?2 WHERE id = ?1",
+        params![thread, from],
+    )?;
+    Ok(())
 }
 
 /// The Space's Threads, the latest first, each with where its work stands.
