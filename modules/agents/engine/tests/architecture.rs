@@ -13,13 +13,17 @@ fn only_the_acp_adapter_names_the_protocol() {
                 folders.push(path);
                 continue;
             }
-            if path.file_name().is_some_and(|name| name == "acp.rs") {
+            if path.file_name().is_some_and(|name| name == "acp.rs")
+                || path
+                    .parent()
+                    .is_some_and(|folder| folder.ends_with("src/acp"))
+            {
                 continue;
             }
             let code = std::fs::read_to_string(&path).unwrap();
             assert!(
                 !code.contains("agent_client_protocol"),
-                "{} names the ACP crate; only acp.rs speaks ACP",
+                "{} names the ACP crate; only acp.rs and acp/ speak ACP",
                 path.display()
             );
         }

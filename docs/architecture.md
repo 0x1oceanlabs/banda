@@ -599,6 +599,12 @@ module reaches a Harness through an adapter:
   adapters (ADR 0003). A native adapter is added only where ACP blocks
   something users need; a native Codex adapter comes later, for its rate
   limits.
+- **The ACP adapter** is `acp.rs` (the Harness's process and opening a
+  session) with a file per concept under `acp/`: a session, what the
+  Harness says, its options and modes, failures, what it asks, and who
+  is signed in. A turn holds a `Session`, its process and session as
+  one handle (`prompt`, `steer`, `cancel`, `settle`, `running`); what
+  listens between turns holds it weakly, so a process let go stops.
 - **Capabilities.** The engine declares what the window can show (notices,
   options that are on or off, forms, and a command's output as it comes),
   and the adapter reads what the
@@ -612,7 +618,7 @@ module reaches a Harness through an adapter:
   session opens; never freer than the one chosen when the Harness lacks
   it; the Harness then decides when to ask. Plan is Claude Code's
   plan mode and Codex's collaboration mode. Any other Harness's modes are
-  options like the rest. The table is in `acp.rs`.
+  options like the rest. The table is in `acp/options.rs`.
 
 ## Window
 
