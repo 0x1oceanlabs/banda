@@ -79,6 +79,9 @@ impl Machine {
                 home: None,
                 omarchy_themes: vec![omarchy_themes],
                 fontconfig: None,
+                desktops: Vec::new(),
+                config_home: None,
+                gsettings: None,
             },
             _dir: dir,
         }
@@ -113,6 +116,14 @@ impl Machine {
         std::os::unix::fs::symlink(&picture, link).unwrap();
         fs::canonicalize(picture).unwrap()
     }
+}
+
+/// The path of the picture the desk is made of, if any.
+fn picture_of(look: &Look) -> Option<String> {
+    look.desk
+        .wallpaper
+        .as_ref()
+        .map(|wallpaper| wallpaper.path.clone())
 }
 
 fn write(path: &Path, text: &str) {
@@ -194,7 +205,7 @@ fn the_desk_is_banda_glass_made_of_the_wallpaper() {
     // Hyprland's gaps.
     let solid = machine.under_hyprland();
     assert!(!solid.desk.glass);
-    assert_eq!(solid.desk.wallpaper, None);
+    assert_eq!(picture_of(&solid), None);
     assert_eq!(solid.vars["--gap-inner"], "5px");
 
     // Omarchy's background: Banda's glass is made of it, the same
@@ -203,7 +214,8 @@ fn the_desk_is_banda_glass_made_of_the_wallpaper() {
     let glass = machine.under_hyprland();
     assert!(glass.desk.glass);
     assert_eq!(glass.desk.material, Material::Banda);
-    assert_eq!(glass.desk.wallpaper, Some(picture.display().to_string()));
+    assert_eq!(picture_of(&glass), Some(picture.display().to_string()));
+    assert_eq!(glass.desk.wallpaper.as_ref().unwrap().from, "Omarchy");
     assert_eq!(glass.desk.sidebar, SidebarStyle::Panel);
     assert_eq!(glass.vars["--gap-inner"], "12px");
     assert_eq!(glass.vars["--desk-blur"], "40px");
@@ -218,9 +230,16 @@ fn the_desk_is_banda_glass_made_of_the_wallpaper() {
     // The background changes: so does the glass.
     let next = machine.background("2-sea.jpg");
     assert_eq!(
-        machine.look().desk.wallpaper,
+        picture_of(&machine.look()),
         Some(next.display().to_string())
     );
+
+    // Rewritten in place, the same picture is new by its time.
+    let before = machine.look().desk.wallpaper.unwrap().modified;
+    let file = fs::File::options().write(true).open(&next).unwrap();
+    file.set_modified(std::time::SystemTime::now() + std::time::Duration::from_secs(60))
+        .unwrap();
+    assert!(machine.look().desk.wallpaper.unwrap().modified > before);
 
     machine.look_toml(concat!(
         "[desk]\nopacity = 0.2\nsidebar = \"desk\"\nblur = 64\nsaturation = 1\ngrain = 0\n",
@@ -239,7 +258,8 @@ fn the_desk_is_banda_glass_made_of_the_wallpaper() {
     write(&machine.places.config.join("walls/mine.png"), "a picture");
     machine.look_toml("[desk]\nwallpaper = \"walls/mine.png\"\n");
     let own = machine.look().desk.wallpaper.unwrap();
-    assert!(own.ends_with("walls/mine.png"), "{own}");
+    assert!(own.path.ends_with("walls/mine.png"), "{}", own.path);
+    assert_eq!(own.from, "look.toml");
 
     machine.look_toml("[desk]\nwallpaper = \"walls/none.png\"\n");
     let missing = machine.look();
@@ -257,7 +277,7 @@ fn the_desk_is_banda_glass_made_of_the_wallpaper() {
     let system = machine.look();
     assert!(system.desk.glass);
     assert_eq!(system.desk.material, Material::System);
-    assert_eq!(system.desk.wallpaper, None);
+    assert_eq!(picture_of(&system), None);
     assert!(system.problems.is_empty(), "{:?}", system.problems);
 
     machine.look_toml("[desk]\nglass = false\n");
@@ -565,4 +585,128 @@ fn each_key_says_where_its_value_comes_from() {
     assert_eq!(keys["tile.dim-inactive"].from.layer, "hyprland");
     assert_eq!(keys["bar.height"].from.layer, "defaults");
     assert!(look.settings["sidebar.toml"].contains_key("group.by"));
+}
+
+#[test]
+fn a_linux_desktop_gives_its_wallpaper() {
+    let mut machine = Machine::new(false);
+    let home = machine.places.config.parent().unwrap().to_owned();
+    let config_home = home.join("config-home");
+    machine.places.config_home = Some(config_home.clone());
+    machine.places.home = Some(home.clone());
+    let from = |machine: &Machine| {
+        let look = machine.look();
+        look.desk
+            .wallpaper
+            .map(|wallpaper| (wallpaper.from, wallpaper.path))
+    };
+    let picture = |name: &str| {
+        let path = home.join("Pictures").join(name);
+        write(&path, "a picture");
+        fs::canonicalize(path).unwrap().display().to_string()
+    };
+    // No desktop Banda knows: the desk is solid, quietly.
+    assert_eq!(from(&machine), None);
+    assert!(machine.look().problems.is_empty());
+
+    // GNOME, through gsettings, which answers from its files here: a URI,
+    // escapes and all.
+    let gsettings = home.join("bin/gsettings");
+    write(
+        &gsettings,
+        "#!/bin/sh\ncat \"$(dirname \"$0\")/$2.$3\" 2>/dev/null || exit 1\n",
+    );
+    fs::set_permissions(
+        &gsettings,
+        std::os::unix::fs::PermissionsExt::from_mode(0o755),
+    )
+    .unwrap();
+    machine.places.gsettings = Some(gsettings.clone());
+    machine.places.desktops = vec!["ubuntu".into(), "gnome".into()];
+    let sea = picture("the sea.jpg");
+    let said = home.join("bin/org.gnome.desktop.background.picture-uri");
+    write(&said, &format!("'file://{}'\n", sea.replace(' ', "%20")));
+    assert_eq!(from(&machine), Some(("GNOME", sea.clone())));
+    // Its setting changes, and dconf's file with it: the look asks again.
+    let resolved = resolve(&machine.places, &|| None, &[]);
+    assert!(resolved.followed.contains(&config_home.join("dconf/user")));
+
+    // A slideshow gives its first still picture.
+    let still = picture("still.png");
+    let show = home.join("Pictures/day.xml");
+    write(
+        &show,
+        &format!(
+            "<background><starttime/><static><duration>60</duration><file>{still}</file></static></background>"
+        ),
+    );
+    write(&said, &format!("'{}'\n", show.display()));
+    assert_eq!(from(&machine), Some(("GNOME", still.clone())));
+
+    // A picture the page cannot draw: solid, and the look says why.
+    write(&said, &format!("'{}'\n", picture("mac.heic")));
+    let unseen = machine.look();
+    assert!(!unseen.desk.glass);
+    assert!(
+        unseen
+            .problems
+            .iter()
+            .any(|p| p.message.starts_with("desk.wallpaper: GNOME's wallpaper")),
+        "{:?}",
+        unseen.problems
+    );
+
+    // MATE keeps a plain path, under its own schema.
+    machine.places.desktops = vec!["mate".into()];
+    write(
+        &home.join("bin/org.mate.background.picture-filename"),
+        &format!("'{sea}'\n"),
+    );
+    assert_eq!(from(&machine), Some(("MATE", sea.clone())));
+
+    // KDE: the first desktop's image, or its package's largest picture.
+    machine.places.desktops = vec!["kde".into()];
+    let applets = config_home.join("plasma-org.kde.plasma.desktop-appletsrc");
+    write(
+        &applets,
+        &format!(
+            "[Containments][1][General]\nImage=file:///nowhere.png\n\n[Containments][1][Wallpaper][org.kde.image][General]\nImage=file://{sea}\nSlidePaths=/usr/share/wallpapers/\n"
+        ),
+    );
+    assert_eq!(from(&machine), Some(("KDE", sea.clone())));
+    let next = home.join("wallpapers/Next");
+    write(&next.join("contents/images/1280x800.png"), "small");
+    write(&next.join("contents/images/3840x2160.png"), "large");
+    write(
+        &applets,
+        &format!(
+            "[Containments][1][Wallpaper][org.kde.image][General]\nImage={}\n",
+            next.display()
+        ),
+    );
+    let (_, large) = from(&machine).unwrap();
+    assert!(large.ends_with("3840x2160.png"), "{large}");
+
+    // XFCE: the first screen's last image.
+    machine.places.desktops = vec!["xfce".into()];
+    write(
+        &config_home.join("xfce4/xfconf/xfce-perchannel-xml/xfce4-desktop.xml"),
+        &format!(
+            "<channel name=\"xfce4-desktop\">\n  <property name=\"last-image\" type=\"string\" value=\"{sea}\"/>\n</channel>\n"
+        ),
+    );
+    assert_eq!(from(&machine), Some(("XFCE", sea.clone())));
+
+    // Hyprland without Omarchy: hyprpaper's first wallpaper, from home.
+    machine.places.desktops = vec!["hyprland".into()];
+    write(
+        &config_home.join("hypr/hyprpaper.conf"),
+        "preload = ~/Pictures/the sea.jpg\nwallpaper = DP-1, ~/Pictures/the sea.jpg\n",
+    );
+    assert_eq!(from(&machine), Some(("hyprpaper", sea.clone())));
+
+    // The key still wins over the desktop's.
+    let mine = picture("mine.webp");
+    machine.look_toml(&format!("[desk]\nwallpaper = \"{mine}\"\n"));
+    assert_eq!(from(&machine), Some(("look.toml", mine)));
 }

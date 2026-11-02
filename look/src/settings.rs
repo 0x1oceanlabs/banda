@@ -117,7 +117,8 @@ pub struct Desk {
     /// for the compositor to blur; it shows from Banda's next start.
     pub material: Option<Material>,
     /// The picture Banda's glass is made of: a path, `~/` for home. Unset,
-    /// the desktop's own wallpaper, where Banda knows it.
+    /// the desktop's own wallpaper: Omarchy's, GNOME's and its family's,
+    /// KDE's, XFCE's or hyprpaper's (ADR 0030).
     pub wallpaper: Option<String>,
     /// How frosted Banda's glass is: the blur's radius, in pixels.
     #[schemars(range(min = 0))]

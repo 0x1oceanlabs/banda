@@ -36,7 +36,10 @@ Every key, with its default:
   `glass = false`.
 - "More frosted", "less blur": `[desk]` `blur = 64` or `blur = 20`;
   "duller colours under the glass": `saturation = 1`; "no grain":
-  `grain = 0`. "Glass from this picture": `wallpaper = "~/Pictures/x.jpg"`.
+  `grain = 0`. "Glass from this picture": `wallpaper = "~/Pictures/x.jpg"`
+  (unset, the desktop's own: Omarchy, GNOME, KDE, XFCE, hyprpaper; the
+  look's `desk.wallpaper.from` says which). "My wallpaper doesn't show":
+  `banda look` names the problem, such as a format Banda cannot draw.
   "Real see-through, the compositor's blur": `material = "system"` (from
   Banda's next start).
 - "Shadow under the windows": `[tile]` `shadow = 0.4`; none under the

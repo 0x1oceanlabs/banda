@@ -26,6 +26,7 @@ fn on(config: &Path) -> Command {
     command
         .env("BANDA_CONFIG", config)
         .env("BANDA_OMARCHY", "")
+        .env("XDG_CURRENT_DESKTOP", "")
         .env("BANDA_FONTCONFIG", "")
         .env_remove("HYPRLAND_INSTANCE_SIGNATURE");
     command

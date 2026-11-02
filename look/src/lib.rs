@@ -31,6 +31,7 @@ pub mod sidebar;
 pub mod sound;
 pub mod theme;
 pub mod tokens;
+mod wallpaper;
 
 use color::{is_css_color, is_hex};
 use hyprland::Windows;
@@ -115,11 +116,26 @@ pub struct Desk {
     pub glass: bool,
     pub material: Material,
     pub sidebar: SidebarStyle,
-    /// The picture Banda's glass is made of, the file itself, links
-    /// followed: when the desktop's wallpaper changes, so does this.
+    /// The picture Banda's glass is made of: when the desktop's wallpaper
+    /// changes, so does this.
     #[ts(optional)]
     #[serde(skip_serializing_if = "Option::is_none")]
-    pub wallpaper: Option<String>,
+    pub wallpaper: Option<Wallpaper>,
+}
+
+/// A picture Banda's glass is made of (ADR 0030).
+#[derive(Clone, Debug, PartialEq, Serialize, TS)]
+#[ts(export, export_to = "look/")]
+pub struct Wallpaper {
+    /// The file itself, links followed.
+    pub path: String,
+    /// When it was last written, in milliseconds since 1970: in the page's
+    /// address, so a picture rewritten in place is drawn again.
+    #[ts(type = "number")]
+    pub modified: u64,
+    /// Where the look found it: `look.toml`, `Omarchy`, or the desktop
+    /// (`GNOME`, `KDE`, …).
+    pub from: &'static str,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, TS)]
@@ -316,8 +332,9 @@ pub const TEMPLATE: &str = include_str!("../look.toml");
 pub struct Resolved {
     pub look: Look,
     pub watched: Vec<PathBuf>,
-    /// Links whose target is what matters, not the bytes: the wallpaper,
-    /// which the look names by where it goes.
+    /// Files followed by where their links go, their size and their
+    /// time, not their bytes: the wallpaper, which may be large and is
+    /// named by where it goes.
     pub followed: Vec<PathBuf>,
 }
 
@@ -558,7 +575,7 @@ pub fn resolve(places: &Places, windows: &dyn Fn() -> Option<Windows>, also: &[A
                 glass,
                 material,
                 sidebar: desk.sidebar.unwrap_or(SidebarStyle::Panel),
-                wallpaper: wallpaper.map(|path| path.display().to_string()),
+                wallpaper,
             },
             motion: all.motion.resolve(),
             columns: all.columns.resolve(),
@@ -577,35 +594,68 @@ pub fn resolve(places: &Places, windows: &dyn Fn() -> Option<Windows>, also: &[A
     }
 }
 
+/// The pictures the page draws, by their names' endings.
+/// JPEG XL too: GNOME's own wallpapers are, and Electron draws it.
+const DRAWN: [&str; 9] = [
+    "jpg", "jpeg", "png", "webp", "avif", "jxl", "gif", "bmp", "svg",
+];
+
 /// The picture Banda's glass is made of: `desk.wallpaper`, from home or
-/// the config folder, else the desktop's own (Omarchy's current
-/// background), links followed. `None` when there is none.
+/// the config folder, else the desktop's own (ADR 0030). `None` when there is none, or the page could
+/// not draw it.
 fn wallpaper(
     places: &Places,
     desk: &settings::Desk,
     look_file: &Path,
     problems: &mut Vec<Problem>,
     followed: &mut Vec<PathBuf>,
-) -> Option<PathBuf> {
-    let path = match &desk.wallpaper {
+) -> Option<Wallpaper> {
+    let (path, from) = match &desk.wallpaper {
         Some(named) => match named.strip_prefix("~/") {
-            Some(rest) => places.home.as_ref()?.join(rest),
-            None => places.config.join(named),
+            Some(rest) => (places.home.as_ref()?.join(rest), "look.toml"),
+            None => (places.config.join(named), "look.toml"),
         },
-        None => places.omarchy_background.clone()?,
+        None => wallpaper::of_desktop(places, followed)?,
     };
     followed.push(path.clone());
-    let found = std::fs::canonicalize(&path).ok().filter(|p| p.is_file());
-    if found.is_none() && desk.wallpaper.is_some() {
-        problems.push(Problem::whole(
+    let unseen = |why: String| {
+        Problem::whole(
             look_file,
-            format!(
-                "desk.wallpaper: there is no picture at {}, so the desk is solid",
-                path.display()
-            ),
-        ));
+            format!("desk.wallpaper: {why}, so the desk is solid"),
+        )
+    };
+    let found = std::fs::canonicalize(&path).ok();
+    let meta = found
+        .as_ref()
+        .and_then(|found| std::fs::metadata(found).ok())
+        .filter(|meta| meta.is_file());
+    let (Some(found), Some(meta)) = (found, meta) else {
+        if desk.wallpaper.is_some() {
+            problems.push(unseen(format!("there is no picture at {}", path.display())));
+        }
+        return None;
+    };
+    let drawn = found
+        .extension()
+        .and_then(|ending| ending.to_str())
+        .is_some_and(|ending| DRAWN.iter().any(|one| ending.eq_ignore_ascii_case(one)));
+    if !drawn {
+        problems.push(unseen(format!(
+            "{from}'s wallpaper {} is not a picture Banda draws (JPEG, PNG, WebP, AVIF, JPEG XL, GIF, BMP or SVG)",
+            found.display()
+        )));
+        return None;
     }
-    found
+    let modified = meta
+        .modified()
+        .ok()
+        .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
+        .map_or(0, |since| since.as_millis() as u64);
+    Some(Wallpaper {
+        path: found.display().to_string(),
+        modified,
+        from,
+    })
 }
 
 fn shown_of(wanted: ModeChoice) -> Shown {
@@ -806,11 +856,16 @@ fn fingerprint(paths: &[PathBuf]) -> Vec<Option<u64>> {
         .collect()
 }
 
-/// Where each link goes, links followed; none if it goes nowhere.
-fn targets(links: &[PathBuf]) -> Vec<Option<PathBuf>> {
+/// Where each link goes, links followed, and that file's size and time;
+/// none if it goes nowhere. A picture rewritten in place is a change too.
+fn targets(links: &[PathBuf]) -> Vec<Option<(PathBuf, u64, Option<std::time::SystemTime>)>> {
     links
         .iter()
-        .map(|link| std::fs::canonicalize(link).ok())
+        .map(|link| {
+            let target = std::fs::canonicalize(link).ok()?;
+            let meta = std::fs::metadata(&target).ok()?;
+            Some((target, meta.len(), meta.modified().ok()))
+        })
         .collect()
 }
 
