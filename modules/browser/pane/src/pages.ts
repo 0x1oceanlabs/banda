@@ -10,7 +10,7 @@
  * until its Pane comes back, or leaves every workspace.
  */
 import { HELD_BY, paneLayer } from "@banda/ui/pane"
-import { PARTITION } from "./desktop"
+import { type BrowserNews, PARTITION } from "./desktop"
 import { browserHost, hearNews } from "./host"
 
 /** What the row shows of a page. */
@@ -264,15 +264,29 @@ export class Page {
   private listen(): void {
     const view = this.view
     type Navigated = Event & { url: string; isMainFrame?: boolean }
-    view.addEventListener("did-attach", () => {
-      const contents = view.getWebContentsId()
+    // Its web contents' ID, once the webview has one: at `did-attach`
+    // it may not yet, as when the page waited for its Pane, so again at
+    // `dom-ready`.
+    const attach = () => {
+      if (this.contents !== null) return
+      let contents: number
+      try {
+        contents = view.getWebContentsId()
+      } catch {
+        return
+      }
       this.contents = contents
       byContents.set(contents, this)
       for (const then of this.attaching.splice(0)) then(contents)
+      const heard = early.get(contents) ?? []
+      early.delete(contents)
+      heard.forEach(hear)
       changed()
-    })
+    }
+    view.addEventListener("did-attach", attach)
     view.addEventListener("dom-ready", () => {
       this.ready = true
+      attach()
     })
     view.addEventListener("did-start-loading", () =>
       this.set({ loading: true, failed: undefined })
@@ -475,8 +489,21 @@ const byContents = new Map<number, Page>()
 hearNews((news) => {
   if (news.kind === "create") return create(news.request, news.url)
   if (news.kind === "download") return
+  hear(news)
+})
+
+type PageNews = Exclude<BrowserNews, { kind: "create" | "download" }>
+
+/** News of a page the desktop knows before this window does: the page
+ * hears it once it attached. */
+const early = new Map<number, PageNews[]>()
+
+function hear(news: PageNews): void {
   const page = byContents.get(news.from)
-  if (!page) return
+  if (!page) {
+    early.set(news.from, [...(early.get(news.from) ?? []), news])
+    return
+  }
   const holder = held.get(page.id)
   if (news.kind === "icon") page.iconed(news.icon)
   else if (news.kind === "driven") page.drive(news.driven)
@@ -484,4 +511,4 @@ hearNews((news) => {
     holder?.open(news.url, page.id, news.background)
   } else if (news.kind === "select") holder?.show(page.id)
   else holder?.close(page.id)
-})
+}

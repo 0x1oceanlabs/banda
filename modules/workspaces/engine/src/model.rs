@@ -6,7 +6,7 @@
 //! - a workspace is a Strip of columns, each holding its Panes, and a
 //!   column with no Pane goes;
 //! - a Pane opens once: opening one the workspaces show already names the
-//!   one shown.
+//!   one shown, unless it opens `again`, as a new Thread does each time.
 //!
 //! An empty workspace in the middle stays until the window tidies: the
 //! window knows which one the Person looks at, and the engine does not.
@@ -194,7 +194,7 @@ pub fn showing<'a>(list: &'a Arrangement, shown: &Shown) -> Option<&'a Pane> {
 
 /// Shows a Pane at `place`, or `instead` of another, which leaves; and
 /// names it. One the workspaces show already stays where it is, and is
-/// named. Left with neither, it opens as a column on the right of the top
+/// named, unless it opens `again` or `instead`. Left with neither, it opens as a column on the right of the top
 /// workspace that shows a Pane of its Space, or else on the empty one at
 /// the bottom. `width` is a new column's.
 pub fn open(
@@ -203,6 +203,7 @@ pub fn open(
     place: Option<Place>,
     instead: Option<PaneId>,
     width: Option<String>,
+    again: bool,
 ) -> Result<PaneId, Refusal> {
     check_shown(&shown)?;
     check_width(width.as_deref())?;
@@ -211,7 +212,7 @@ pub fn open(
             "A Pane opens at a place or instead of another, not both.",
         ));
     }
-    if let Some(pane) = showing(list, &shown) {
+    if let Some(pane) = showing(list, &shown).filter(|_| !again && instead.is_none()) {
         return Ok(pane.id);
     }
     let pane = Pane {
@@ -500,7 +501,7 @@ mod tests {
     const EMPTY: Vec<Vec<u64>> = Vec::new();
 
     fn opened(list: &mut Arrangement, shown: Shown, place: Option<Place>) -> PaneId {
-        open(list, shown, place, None, None).unwrap()
+        open(list, shown, place, None, None, false).unwrap()
     }
 
     fn beside(pane: PaneId, side: Side) -> Option<Place> {
@@ -566,7 +567,15 @@ mod tests {
             layout(&list),
             [vec![vec![3], vec![5, 1, 4], vec![2]], vec![]]
         );
-        open(&mut list, shown(work, "a.a", 6), None, Some(one), None).unwrap();
+        open(
+            &mut list,
+            shown(work, "a.a", 6),
+            None,
+            Some(one),
+            None,
+            false,
+        )
+        .unwrap();
         assert_eq!(
             layout(&list),
             [vec![vec![3], vec![5, 6, 4], vec![2]], vec![]]
@@ -577,8 +586,20 @@ mod tests {
             beside(one, Side::Left),
             Some(one),
             None,
+            false,
         );
         assert!(both.is_err());
+    }
+
+    #[test]
+    fn a_pane_shown_already_is_named_unless_it_opens_again() {
+        let mut list = start();
+        let work = SpaceId::new();
+        let one = opened(&mut list, shown(work, "a.a", 1), None);
+        assert_eq!(opened(&mut list, shown(work, "a.a", 1), None), one);
+        let two = open(&mut list, shown(work, "a.a", 1), None, None, None, true).unwrap();
+        assert_ne!(two, one);
+        assert_eq!(layout(&list), [vec![vec![1], vec![1]], vec![]]);
     }
 
     #[test]
@@ -591,6 +612,7 @@ mod tests {
             None,
             None,
             Some("1/3".into()),
+            false,
         )
         .unwrap();
         assert_eq!(list[0].columns[0].width.as_deref(), Some("1/3"));
@@ -601,15 +623,16 @@ mod tests {
                 None,
                 None,
                 Some(bad.into()),
+                false,
             );
             assert!(refused.is_err(), "{bad}");
         }
-        assert!(open(&mut list, shown(work, "a", 2), None, None, None).is_err());
+        assert!(open(&mut list, shown(work, "a", 2), None, None, None, false).is_err());
         let listed = Shown {
             args: json!([1]),
             ..shown(work, "a.a", 2)
         };
-        assert!(open(&mut list, listed, None, None, None).is_err());
+        assert!(open(&mut list, listed, None, None, None, false).is_err());
     }
 
     #[test]

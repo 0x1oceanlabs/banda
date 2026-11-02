@@ -17,7 +17,12 @@ instead?: PaneId,
 /**
  * A new column's width; left out, the look's.
  */
-width?: string, space: SpaceId, 
+width?: string, 
+/**
+ * A new Pane even when one shows the same: a New Thread, a New Pane,
+ * as a browser's new window.
+ */
+again?: boolean, space: SpaceId, 
 /**
  * Its kind, `<module>.<pane>`.
  */

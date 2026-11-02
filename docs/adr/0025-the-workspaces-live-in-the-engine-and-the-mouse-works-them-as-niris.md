@@ -9,8 +9,9 @@ ADR 0005 decided that the workspaces live in the engine (decision 3), so
 that the CLI and Agents change them like any other module's data, and
 that the windows behave as in niri (decisions 5 and 7). The Strip, its
 columns, their widths, tabs, the overview and the keys are built. The
-workspaces are still the window's: `localStorage`, out of the Agents'
-reach. And the mouse only clicks and swipes.
+workspaces were the window's: `localStorage`, out of the Agents' reach
+(they moved to the engine on 2026-11-02, decisions 1 and 2). And the
+mouse only clicks and swipes.
 
 Roma, on 2026-11-02, after a list of what is left of niri and tiling:
 "let's think the UX through well", then "I'd also like dragging windows
@@ -85,12 +86,21 @@ On the list, Roma decided:
      scrolled, the overview and the zoom (decision 4) are what the Person
      looks at, not the arrangement (ADR 0005, decision 3: "Focus stays
      with the window."). An empty workspace in the middle goes when the
-     Person leaves it, so the window says so as it leaves.
+     Person leaves it, so the window says so as it leaves. _Built_
+     2026-11-02 (`app/web/src/workspaces/arrange.ts`): the view holds
+     IDs, each with where it stood, so a neighbour takes the place of
+     one that went; it stays in the window's storage.
    - **The window draws what the engine says.** A key, a drag and an
      Agent all end in the same command, and the window draws the event
      that comes back. The engine runs on this machine, so the event is
      there before the next frame. A drag or a resize draws its own hint
      while the pointer moves and sends one command when it lets go.
+     _Built_ 2026-11-02 for the keys: `model.ts` still works out where
+     a key puts a Pane, and what that changes becomes one command. The
+     window sends one at a time; each answers with the log's place of
+     its event, and the next waits until the window draws past it, so
+     quick keys land as pressed. A Pane opened or moved takes the focus
+     once its event is drawn.
    - **An Agent arranges its own Space's Panes, and calmly** (ADR 0005,
      decision 4; ADR 0019). Behind the Space wall it sees only the Panes
      of its pass's Space, and opens, moves and closes only those. It

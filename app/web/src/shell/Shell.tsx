@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import type { Engine, SpaceId, SpaceSummary, Status } from "@banda/contract"
 import { inFront, useInFront } from "@banda/ui/hooks/use-in-front"
+import { useLive } from "@banda/ui/hooks/use-live"
+import { useMachine } from "@banda/ui/hooks/use-status"
 import { IN_PROGRAM, type PaneState, QUIET } from "@banda/ui/pane"
 import { DEFAULT_KEYS } from "@banda/contract/look"
 import type { Action, WindowApi } from "@banda/ui/module"
@@ -28,8 +30,20 @@ import { kindOf, runs, showsOf, startable, widthOf } from "../registry"
 import { Sidebar } from "../sidebar/Sidebar"
 import { pickPreset } from "../sidebar/settings"
 import { toggleSettled } from "../sidebar/settled"
+import type { Arranged } from "@banda/contract/workspaces"
 import {
-  close,
+  arrangedSource,
+  type Asked,
+  NO_VIEW,
+  resolve,
+  send,
+  tidied,
+  type View,
+  viewOf,
+  withAsked,
+} from "../workspaces/arrange"
+import {
+  current,
   type Entry,
   focused,
   focusEntry,
@@ -39,29 +53,70 @@ import {
   samePane,
   shown,
   step,
-  update,
   type Workspaces as State,
 } from "../workspaces/model"
 import { Overview } from "../workspaces/Overview"
 import type { Frame } from "../workspaces/PaneFrame"
 import {
   keepSidebar,
-  keepWorkspaces,
+  keepView,
   loadSidebar,
-  loadWorkspaces,
+  loadView,
+  moveOver,
 } from "../workspaces/store"
 import { Workspaces } from "../workspaces/Workspaces"
 import {
   ACTIONS,
   answering,
   bringing,
+  closing,
   opening,
   runAction,
   settingsAt,
   type Shell as Parts,
+  type Step,
 } from "./actions"
 
-type Change = (workspaces: State) => State
+type Change = (workspaces: State) => Step
+
+/** What the window draws while the engine's arrangement is read. */
+const WAITING: State = { list: [{ id: "", columns: [], focus: 0 }], current: 0 }
+
+/** The engine's arrangement, the view and the workspaces they draw. */
+type Seen = {
+  kept: Arranged["workspaces"] | null
+  /** Where in the machine's log `kept` stands. */
+  at: number
+  view: View
+  /** Args Panes asked for, drawn over `kept` until it shows them. */
+  asked: Asked
+  state: State
+}
+
+const NOTHING_SEEN: Seen = {
+  kept: null,
+  at: 0,
+  view: NO_VIEW,
+  asked: {},
+  state: WAITING,
+}
+
+/** How long a change waits for its event before the next goes anyway. */
+const DRAWN_WITHIN = 2000
+
+/** The workspaces `view` draws of what `seen` keeps; the view then keeps
+ * where each ID it holds stands now. */
+function looking(seen: Seen, view: View): Seen {
+  if (!seen.kept) return { ...seen, view }
+  const { kept, asked } = withAsked(seen.kept, seen.asked, seen.at)
+  const state = resolve(kept, view, seen.state, seen.at)
+  return { ...seen, asked, state, view: viewOf(state, view.want, seen.at) }
+}
+
+/** A change the engine refused is logged: the window draws what it says. */
+function refused(error: unknown): void {
+  console.warn("The workspaces did not change:", error)
+}
 
 /**
  * The window (ADR 0005): the bar on top, the sidebar docked on the left,
@@ -122,26 +177,67 @@ export function Shell({
   home: SpaceId
   onCreated: (space: SpaceSummary) => void
 }) {
-  const [workspaces, setWorkspaces] = useState(() => {
+  // The arrangement is the engine's; the view, the window's (ADR 0025).
+  const machine = useMachine(engine)
+  const source = useMemo(
+    () => (machine ? arrangedSource(engine) : null),
+    [engine, machine]
+  )
+  const live = useLive(engine, machine ?? "", source)
+  const ready = live.state === "ready"
+  const [drawing, setDrawing] = useState(() =>
+    looking(NOTHING_SEEN, loadView())
+  )
+  // A new arrangement is drawn as the view looks at it, at once.
+  if (ready && live.view.workspaces !== drawing.kept) {
+    const { workspaces: kept, at } = live.view
+    setDrawing(looking({ ...drawing, kept, at }, drawing.view))
+  }
+  const workspaces = drawing.state
+  const setView = useCallback(
+    (how: (view: View) => View) =>
+      setDrawing((was) => looking(was, how(was.view))),
+    []
+  )
+  useEffect(() => keepView(drawing.view), [drawing.view])
+  // The window's arrangement moves to the engine once (decision 2).
+  useEffect(() => {
+    if (!machine || modules.length === 0) return
     const first = startable(modules)[0]
-    return loadWorkspaces(home, first && { pane: first, width: widthOf(first) })
-  })
+    moveOver(engine, home, first && { pane: first, width: widthOf(first) })
+      .then((kept) => kept && setView(() => kept))
+      .catch(refused)
+  }, [engine, machine, modules, home, setView])
+  // An empty workspace the Person left goes, as niri's.
+  const tidying = useRef("")
+  useEffect(() => {
+    const command = ready ? tidied(workspaces) : undefined
+    const key = command ? JSON.stringify([command, workspaces.list.length]) : ""
+    if (key === tidying.current) return
+    tidying.current = key
+    if (command) send(engine, command).catch(refused)
+  }, [engine, workspaces, ready])
   const [sidebar, setSidebar] = useState(loadSidebar)
   const [overview, setOverview] = useState(false)
   const [menu, setMenu] = useState<Opening | null>(null)
   const [attention, setAttention] = useState(QUIET)
   const [lists, setLists] = useState<Lists>({})
 
+  // What is drawn, for what runs between draws; and the changes that
+  // wait to see theirs drawn, each with when it is.
+  const waiting = useRef(new Set<(seen: Seen) => boolean>())
+  const seenNow = useRef(drawing)
+  useEffect(() => {
+    seenNow.current = drawing
+    for (const drawn of waiting.current)
+      if (drawn(drawing)) waiting.current.delete(drawn)
+  }, [drawing])
   // What calls the Person, told where they look as `[notify]` says
   // (ADR 0011), with their `[sound]` (ADR 0009, decision 5).
-  const now = useRef(workspaces)
-  useEffect(() => {
-    now.current = workspaces
-  }, [workspaces])
   const where: Where = useMemo(
     () => ({
       sight: (call) =>
-        sightOf(now.current, call, inFront(), showsOf, columnsOf()),
+        sightOf(seenNow.current.state, call, inFront(), showsOf, columnsOf()),
       desktop: window.banda?.notify,
     }),
     []
@@ -158,7 +254,6 @@ export function Shell({
         seen(call.key)
   }, [calling, workspaces, front, seen])
   const toasts = calls.toasts
-  useEffect(() => keepWorkspaces(workspaces), [workspaces])
   useEffect(() => keepSidebar(sidebar), [sidebar])
 
   // A Pane that leaves every workspace lets its module let go, as a
@@ -175,7 +270,79 @@ export function Shell({
     before.current = workspaces
   }, [engine, workspaces])
 
-  const change = useCallback((how: Change) => setWorkspaces(how), [])
+  // Changes go one after another, each worked out from what the last one
+  // drew: keys pressed quickly act as they would slowly.
+  const changes = useRef(Promise.resolve())
+  const drawnWhen = useCallback(
+    (done: (seen: Seen) => boolean) =>
+      new Promise<void>((go) => {
+        const drawn = (seen: Seen) => done(seen) && (go(), true)
+        if (drawn(seenNow.current)) return
+        waiting.current.add(drawn)
+        setTimeout(() => {
+          waiting.current.delete(drawn)
+          go()
+        }, DRAWN_WITHIN)
+      }),
+    []
+  )
+  // The engine answers in turn: a command that changed nothing finds
+  // the arrangement as the last one answered left it.
+  const answered = useRef(0)
+  const answeredAt = useCallback((at: number | null) => {
+    if (at !== null) answered.current = Math.max(answered.current, at)
+    return answered.current
+  }, [])
+  const change = useCallback(
+    (how: Change) => {
+      const run = async () => {
+        const was = seenNow.current.state
+        const next = how(was)
+        if (!next || next === was) return
+        if (!("command" in next)) {
+          // The view alone: drawn as `next` at once.
+          seenNow.current = looking(seenNow.current, viewOf(next))
+          return setView(() => viewOf(next))
+        }
+        const answer = (await send(engine, next.command)) as {
+          at: number | null
+          pane?: string
+        }
+        const want =
+          next.focus === false ? undefined : (next.want ?? answer.pane)
+        const after = answeredAt(answer.at)
+        if (want) setView((view) => ({ ...view, want: { pane: want, after } }))
+        await drawnWhen(
+          (seen) =>
+            seen.at >= after && (!want || focused(seen.state)?.id === want)
+        )
+      }
+      changes.current = changes.current.then(run).catch(refused)
+    },
+    [engine, setView, drawnWhen, answeredAt]
+  )
+  // A Pane's new args are drawn at once, and kept until their event is.
+  const update = useCallback(
+    (pane: string, { args }: PaneState) => {
+      // Drawn again only as asked, or when the engine refused: an
+      // answer only says until when.
+      const ask = (until: number, draw: boolean) =>
+        setDrawing((was) => {
+          if (until !== Infinity && was.asked[pane]?.args !== args) return was
+          const seen = {
+            ...was,
+            asked: { ...was.asked, [pane]: { args, until } },
+          }
+          return draw ? looking(seen, was.view) : seen
+        })
+      ask(Infinity, true)
+      engine.command("workspaces.update", { pane, args }).then(
+        (done) => ask(answeredAt(done.at), false),
+        (error) => (refused(error), ask(0, true))
+      )
+    },
+    [engine, answeredAt]
+  )
   const answerCall = useCallback(
     (call: Heard) => {
       dismiss(call.key)
@@ -213,7 +380,7 @@ export function Shell({
     listsNow.current = lists
   }, [lists])
   const settle = useCallback(() => {
-    const entry = focused(now.current)
+    const entry = focused(seenNow.current.state)
     const thing = entry && showsOf(entry.pane)
     if (entry && thing) toggleSettled(listsNow.current, entry.space, thing)
   }, [])
@@ -377,14 +544,21 @@ export function Shell({
 
   const frame: Frame = useMemo(
     () => ({
-      focus: (entry) => change((w) => focusEntry(w, entry)),
+      // A tile takes the focus as the DOM gives it, on the workspace on
+      // screen; by its turn, the Person may have gone to another.
+      focus: (entry) =>
+        change((w) =>
+          current(w).columns.some((c) => c.entries.some((e) => e.id === entry))
+            ? focusEntry(w, entry)
+            : undefined
+        ),
       open: (space, pane, from, place) =>
         change((w) => opening(w, space, pane, { from, place })),
-      update: (entry, pane) => change((w) => update(w, entry, pane)),
-      close: (entry) => change((w) => close(w, entry)),
+      update,
+      close: (entry) => change(() => closing(entry)),
       run: parts.run,
     }),
-    [change, parts]
+    [change, update, parts]
   )
   const called = useCallback(
     (entry: Entry) =>
@@ -444,17 +618,19 @@ export function Shell({
           />
         )}
         <main className="relative min-h-0 min-w-0 flex-1">
-          <Workspaces
-            workspaces={workspaces}
-            covered={overview}
-            engine={engine}
-            modules={modules}
-            spaceName={spaceName}
-            called={called}
-            frame={frame}
-            onStep={(by) => change((w) => step(w, by))}
-            onStart={(pane) => parts.open(pane)}
-          />
+          {ready && (
+            <Workspaces
+              workspaces={workspaces}
+              covered={overview}
+              engine={engine}
+              modules={modules}
+              spaceName={spaceName}
+              called={called}
+              frame={frame}
+              onStep={(by) => change((w) => step(w, by))}
+              onStart={(pane) => parts.open(pane)}
+            />
+          )}
           <Toasts
             toasts={toasts}
             calling={calling}

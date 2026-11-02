@@ -137,9 +137,10 @@ export function shown(state: Workspaces): number[] {
   )
 }
 
-type Spot = { workspace: number; column: number; entry: number }
+export type Spot = { workspace: number; column: number; entry: number }
 
-function find(state: Workspaces, id: string): Spot | undefined {
+/** Where an entry stands, by its ID. */
+export function find(state: Workspaces, id: string): Spot | undefined {
   for (const [w, workspace] of state.list.entries()) {
     for (const [c, column] of workspace.columns.entries()) {
       const e = column.entries.findIndex((entry) => entry.id === id)
@@ -316,26 +317,6 @@ function showIn(state: Workspaces, spot: Spot, entry: Entry): Workspaces {
     }),
     entry.id
   )
-}
-
-/** Keeps new args for an entry's Pane: it stays where it is. */
-export function update(
-  state: Workspaces,
-  id: string,
-  pane: PaneState
-): Workspaces {
-  const spot = find(state, id)
-  if (!spot) return state
-  const workspace = state.list[spot.workspace]
-  const column = workspace.columns[spot.column]
-  const entry = column.entries[spot.entry]
-  return setWorkspace(state, spot.workspace, {
-    ...workspace,
-    columns: replace(workspace.columns, spot.column, {
-      ...column,
-      entries: replace(column.entries, spot.entry, { ...entry, pane }),
-    }),
-  })
 }
 
 /**
@@ -656,7 +637,7 @@ function swap<T>(list: readonly T[], a: number, b: number): T[] {
   return copy
 }
 
-function clamp(index: number, length: number): number {
+export function clamp(index: number, length: number): number {
   return Math.max(0, Math.min(index, length - 1))
 }
 

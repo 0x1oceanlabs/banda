@@ -3,6 +3,7 @@ import type { CallMethod } from "../CallMethod";
 import type { CommandMethod } from "../CommandMethod";
 import type { Nothing } from "../Nothing";
 import type { Arranged } from "./Arranged";
+import type { Done } from "./Done";
 import type { Maximize } from "./Maximize";
 import type { MoveColumn } from "./MoveColumn";
 import type { MovePane } from "./MovePane";
@@ -29,38 +30,38 @@ open: CommandMethod<Open, Opened>,
 /**
  * Closes a Pane; its column goes when it was the last there.
  */
-close: CommandMethod<OnePane, null>, 
+close: CommandMethod<OnePane, Done>, 
 /**
  * Keeps new args for a Pane, which stays where it is.
  */
-update: CommandMethod<Update, null>, 
+update: CommandMethod<Update, Done>, 
 /**
  * Moves a Pane to a place, counted as if it had left its own.
  */
-move_pane: CommandMethod<MovePane, null>, 
+move_pane: CommandMethod<MovePane, Done>, 
 /**
  * Moves a column, its Panes and all, to a workspace.
  */
-move_column: CommandMethod<MoveColumn, null>, 
+move_column: CommandMethod<MoveColumn, Done>, 
 /**
  * Gives a column its width; it no longer takes the whole screen.
  */
-size: CommandMethod<Size, null>, 
+size: CommandMethod<Size, Done>, 
 /**
  * Whether a column takes the whole screen.
  */
-maximize: CommandMethod<Maximize, null>, 
+maximize: CommandMethod<Maximize, Done>, 
 /**
  * Shows a column's Panes one above another or as tabs.
  */
-display: CommandMethod<ShowAs, null>, 
+display: CommandMethod<ShowAs, Done>, 
 /**
  * Lets every empty workspace go but the one the Person looks at
  * and the last.
  */
-tidy: CommandMethod<Tidy, null>, 
+tidy: CommandMethod<Tidy, Done>, 
 /**
  * Puts a window's arrangement over the engine's, once (ADR 0025,
  * decision 2).
  */
-take: CommandMethod<Take, null>, };
+take: CommandMethod<Take, Done>, };

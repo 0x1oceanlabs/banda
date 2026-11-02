@@ -71,7 +71,8 @@ async fn the_arrangement_is_kept_said_in_events_and_survives_a_restart() {
     assert_eq!(opened["new"], true);
     // Shown already: it is named, and nothing changes or is said.
     let again = machine.command("workspaces.open", pane).await.unwrap();
-    assert_eq!(again, json!({ "pane": opened["pane"], "new": false }));
+    let same = json!({ "pane": opened["pane"], "new": false, "at": null });
+    assert_eq!(again, same);
 
     let arranged = machine.list().await;
     let workspaces = arranged["workspaces"].as_array().unwrap();
@@ -97,6 +98,8 @@ async fn the_arrangement_is_kept_said_in_events_and_survives_a_restart() {
     let events = machine.events().await;
     let kinds: Vec<&str> = events.iter().map(|(kind, _)| kind.as_str()).collect();
     assert_eq!(kinds, ["opened", "updated", "sized"]);
+    // A change answers where its event stands, so a window draws it first.
+    assert_eq!(opened["at"], json!(1));
     assert_eq!(events[0].1["workspaces"], arranged["workspaces"]);
     assert_eq!(events[1].1, args);
     let now = machine.list().await;

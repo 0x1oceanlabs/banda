@@ -187,7 +187,8 @@ command (with its ID)
 | The Harness | its session, context and sign-in. We keep only its session ID, as evidence |
 | The OS keychain | secrets you give Banda. Its database never holds them |
 | The engine's state folder | the owner's ID; while the engine runs, its port and per-run secret |
-| The window's storage | the workspaces: their columns, each Pane with its Space, the widths and the focus; whether the sidebar shows; which finished turn of each Thread the Person has seen |
+| The window's storage | the view of the workspaces: the one on screen, each one's focused column and each column's shown Pane; whether the sidebar shows; which finished turn of each Thread the Person has seen |
+| `machine/` SQLite, in the engine's state | this machine's, in no Space: the workspaces, their columns, each Pane with its Space and the widths (ADR 0025) |
 | `spaces/<id>/` SQLite, in the engine's data | Threads, Questions and answers, the Agents' queue, Databases' records, receipts, events, outbox |
 | `spaces/<id>/images/` and `files/` | the bytes of the images messages carry, one file per image, the SQLite saying what each is and which message carries it; the files a message keeps (a dropped file, a long paste), which each Thread's session gets as an extra root |
 
@@ -618,13 +619,17 @@ modules/*/pane   each module's Panes
   - A Pane leaves when it closes or its place shows another Pane, or the
     same with other args; moving it to another column or workspace draws
     it again without that.
-  - The window keeps the workspaces in its storage
-    (`$BANDA_STATE/window` when that is set) until they move into the
-    engine (ADR 0005, decision 3); `workspaces/store.ts` is the one place
-    that changes then. The engine's side is built: the `workspaces`
-    module of this machine (`modules/workspaces/engine`, ADR 0025) keeps
-    the arrangement and its rules, and says each change in one event
-    that holds it whole.
+  - The workspaces live in the engine (ADR 0005, decision 3; ADR 0025):
+    the `workspaces` module of this machine (`modules/workspaces/engine`)
+    keeps the arrangement and its rules, and says each change in one
+    event that holds it whole. The window keeps only the view, in its
+    storage (`$BANDA_STATE/window` when that is set), and draws the two
+    together (`workspaces/arrange.ts`). A key works out its change with
+    `model.ts` and sends it as one command; the window draws the event
+    that comes back. A Pane's new args are drawn at once and kept over
+    the arrangement until their event is, since a Pane works out its next
+    args from the ones it drew. What a window kept before moves over once
+    (`workspaces/store.ts`).
 - **One list of actions** (`app/web/src/shell/actions.ts`) holds what the
   window does, the modules' actions and its own, each with a name, its
   key sheet section and a default key, by its physical place.

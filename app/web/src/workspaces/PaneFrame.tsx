@@ -56,7 +56,10 @@ export function PaneFrame({
     }
   }, [focused])
 
-  const take = () => frame.focus(entry.id)
+  // A tile that has the focus already only hears its own echo.
+  const take = () => {
+    if (!focused) frame.focus(entry.id)
+  }
   return (
     <section
       ref={element}

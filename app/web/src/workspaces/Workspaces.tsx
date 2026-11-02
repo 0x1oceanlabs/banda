@@ -63,7 +63,8 @@ export function Workspaces({
   useEffect(() => {
     const take = (element: Element | null) => {
       const tile = holderOf(element)?.closest<HTMLElement>("[data-tile]")
-      if (tile?.dataset.tile) frame.focus(tile.dataset.tile)
+      if (tile?.dataset.tile && tile.dataset.focused !== "true")
+        frame.focus(tile.dataset.tile)
     }
     const onLeave = (event: FocusEvent) =>
       take(event.relatedTarget as Element | null)
