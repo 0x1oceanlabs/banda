@@ -207,11 +207,15 @@ The Banda note weighs four places (Q1). Two fit Banda's rules:
 1. **Every tab**, as ADR 0013 decision 7 says.
 2. **Beside the Thread**, in the Pane next to it. The tab shows that an
    Agent drives it; the look is to be designed.
-3. **Open.** To be weighed with how Codex does it:
-   `2026-11-02-browser-tools-codex.md` and
-   `2026-11-02-browser-tools-takeover-and-confirm.md`.
-4. **The simpler for Agents and the Person**; the difference to be
-   explained.
+3. **No lock**, as Codex's built-in browser: the Person and the Agent
+   act in the tab at once. The Agent's next answer says when the Person
+   acted too.
+4. **Through the engine**: the tools are methods of the browser's engine
+   part, and the window does them.
 5. **The Person's one profile**, as now.
-6. **Open.** The options are in
-   `2026-11-02-browser-tools-takeover-and-confirm.md`.
+6. **A + B + E first**: the Harness asks; a site needs the Person's yes,
+   in Banda's code; passwords, payment, signing up and terms are the
+   Person's. C and D later.
+
+The decision is ADR 0029, with
+[the mockup](2026-11-02-browser-tools-mockup.html) of the tab.
