@@ -86,6 +86,8 @@ export function useSizing(
     // The gap the look draws, read as the pointer comes in.
     let gap = room(element).gap
     let cursor = ""
+    /** Heights sent and not drawn yet, by Pane. */
+    const sent = new Map<string, Width | undefined>()
 
     const tilesOf = (column: HTMLElement) => [
       ...column.querySelectorAll<HTMLElement>(":scope > [data-tile]"),
@@ -113,7 +115,11 @@ export function useSizing(
       const space = room(element)
       const scale = space.inner + space.gap
       const floor = floorIn(space, column.min)
-      const from = drawn(share(column.width) ?? 0.5, floor)
+      // As drawn: a width let go of a moment ago may not be the Strip's yet.
+      const from = drawn(
+        motion.current.shareOf(column.id) ?? share(column.width) ?? 0.5,
+        floor
+      )
       const { presets, snap } = sizing.current.look
       const pull = pulled(waits)
       let width: Width | undefined
@@ -151,9 +157,19 @@ export function useSizing(
     ): Part => {
       const tiles = tilesOf(columnIn(element, column.id)!)
       const scale = tiles[0].parentElement!.clientHeight + gap
+      // As drawn: heights let go of a moment ago may not be the Strip's yet.
+      const own = column.entries.map((entry) =>
+        sent.has(entry.id) ? sent.get(entry.id) : entry.height
+      )
+      const entriesWith = (heights: readonly (Width | undefined)[]) =>
+        column.entries.map((entry, i) => ({ ...entry, height: heights[i] }))
       const stack = {
-        heights: column.heights,
-        own: column.entries.map((entry) => entry.height),
+        heights: heightsOf({
+          id: column.id,
+          entries: entriesWith(own),
+          active: 0,
+        }),
+        own,
       }
       const { heights: steps, snap } = sizing.current.look
       const show = (heights: readonly number[]) =>
@@ -161,45 +177,44 @@ export function useSizing(
           tile.style.flex = heightAt(heights[i])
         })
       const pull = pulled(waits)
-      let own: (Width | undefined)[] | undefined
+      let after: (Width | undefined)[] | undefined
       return {
         draw: (_, y) => {
-          const wanted = pull(column.heights[pane], y, y0, scale)
+          const wanted = pull(stack.heights[pane], y, y0, scale)
           if (wanted === undefined) return
-          own = heightsFor(
+          after = heightsFor(
             stack,
             pane,
             wanted,
             { steps, snap, scale },
             (LEAST + gap) / scale
           )
-          const entries = column.entries.map((entry, i) => ({
-            ...entry,
-            height: own![i],
-          }))
-          show(heightsOf({ id: column.id, entries, active: 0 }))
+          show(
+            heightsOf({ id: column.id, entries: entriesWith(after), active: 0 })
+          )
         },
         plans: () =>
-          (own ?? []).flatMap((height, i) => {
+          (after ?? []).flatMap((height, i) => {
             const entry = column.entries[i]
-            return height === entry.height
-              ? []
-              : [
-                  {
-                    command: {
-                      method: "workspaces.height",
-                      params: {
-                        pane: entry.id,
-                        ...(height !== undefined && { height }),
-                      },
-                    },
-                  } satisfies Plan,
-                ]
+            if (height === own[i]) return []
+            sent.set(entry.id, height)
+            return [
+              {
+                command: {
+                  method: "workspaces.height",
+                  params: {
+                    pane: entry.id,
+                    ...(height !== undefined && { height }),
+                  },
+                },
+              } satisfies Plan,
+            ]
           }),
-        undo: () => show(column.heights),
+        undo: () => show(stack.heights),
         // React writes a tile's height only when it changes: the Strip's
         // own, drawn again, whatever the engine said.
         settle: () => {
+          for (const entry of column.entries) sent.delete(entry.id)
           const now = sizing.current.columns.find((c) => c.id === column.id)
           if (now?.heights.length === tiles.length) show(now.heights)
         },
