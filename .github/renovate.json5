@@ -1,0 +1,53 @@
+// What an agent does with these PRs: AGENTS.md, Workflow.
+{
+  $schema: "https://docs.renovatebot.com/renovate-schema.json",
+  extends: [
+    "config:recommended",
+    // Before 4am on Monday; open PRs are left alone the rest of the week.
+    "schedule:weekly",
+    ":maintainLockFilesMonthly",
+  ],
+  updateNotScheduled: false,
+  // Three at a time, so they don't crowd the runners.
+  prConcurrentLimit: 3,
+  // A release that is pulled or poisoned is usually gone within days.
+  minimumReleaseAge: "3 days",
+
+  // main takes rebased commits only. `ci` runs on main after every merge,
+  // so a branch behind main needs no rebase until it conflicts.
+  automergeStrategy: "rebase",
+  rebaseWhen: "conflicted",
+  lockFileMaintenance: { automerge: true },
+
+  packageRules: [
+    {
+      // Whatever isn't a major merges itself once `ci` is green.
+      matchUpdateTypes: ["minor", "patch"],
+      automerge: true,
+    },
+    {
+      // One PR a week for the crates, one for npm.
+      matchManagers: ["cargo"],
+      matchUpdateTypes: ["minor", "patch"],
+      groupName: "Rust crates",
+    },
+    {
+      matchManagers: ["npm"],
+      matchUpdateTypes: ["minor", "patch"],
+      groupName: "npm packages",
+    },
+    {
+      // A 0.x minor breaks things: its own PR, so it doesn't hold up a group.
+      matchCurrentVersion: "/^0\\./",
+      matchUpdateTypes: ["minor"],
+      groupName: null,
+    },
+    {
+      // The runners are rebuilt by hand (ci/README.md), and `ci` never
+      // builds their image: these wait on the Dependency Dashboard.
+      matchFileNames: ["ci/**"],
+      automerge: false,
+      dependencyDashboardApproval: true,
+    },
+  ],
+}
