@@ -64,6 +64,7 @@ The evidence is in two notes: [tiling managers](../research/2026-11-01-tiling-ma
    - **Where the data lives.** Banda's data lives outside the folder, in the engine's state on that machine (`~/.local/share/banda/spaces/<id>/`), as in T3 Code and Herdr. The folder holds only the work, so there is nothing to commit by mistake and nothing a sync tool can break.
      - This changes ADR 0001, decision 5: copying the folder no longer moves the Threads. An export can, once someone needs it.
      - A Space whose folder moved asks where it went.
+   - _Built from 2026-11-02, by ADR 0026._ A Space is added as a project is in T3 Code: "Add Space" in the Banda menu, from a new name or any folder; its data is in `~/.local/share/banda/spaces/<id>/`, and the existing Spaces move theirs there by themselves.
    - **Another machine.** A Space on another machine is one whose engine runs there. The window connects to it over SSH, and the Agents, terminals and files work where the folder is. The Space list names each Space's machine. Where a browser Pane runs for such a Space is still open.
    - **Later.** A Thread in its own git worktree of the Space, as T3 Code offers.
 
