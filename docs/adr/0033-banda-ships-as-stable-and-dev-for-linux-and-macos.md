@@ -47,7 +47,7 @@ Roma, 2026-11-02:
    - Stable is `0.X.Y`, from its tag `v0.X.Y`. The first is `0.1.0`.
    - Dev is `0.X.Y-dev.N`, where `0.X.Y` is the next minor after the last Stable, and `N` is the release workflow's run number.
 
-3. **Dev is built on every push to `main`, once `ci` is green on that commit.** The release workflow builds it and publishes a GitHub prerelease, `dev-N`. Only the last 20 Dev releases are kept.
+3. **Dev is built on every push to `main`, once `ci` is green on that commit.** The release workflow builds it and publishes a GitHub prerelease tagged with its version, `v0.X.Y-dev.N`, as electron-updater reads a release's version from its tag. Only the last 20 Dev releases are kept.
 
 4. **Stable is a Dev that Roma has lived with.** Roma tags a commit that has a Dev build, `v0.X.Y`. The workflow builds it again from that commit with the Stable channel and publishes a release, with its notes taken from the titles of the PRs merged since the last Stable. Stable never loses a Person's data: an update runs the modules' migrations (ADR 0002), and a change that cannot migrate does not go into a Stable.
 

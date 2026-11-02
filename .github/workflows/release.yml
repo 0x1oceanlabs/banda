@@ -1,0 +1,107 @@
+# Banda's releases (ADR 0033, step 3): Dev on every push to main once `ci`
+# is green on it, Stable on a tag v0.X.Y. Each packs the AppImage with
+# scripts/package.sh on devbox and publishes it with scripts/release.mjs.
+# A PR that changes how Banda is packed packs it too, publishing nothing.
+name: release
+
+on:
+  workflow_run:
+    workflows: [ci]
+    types: [completed]
+    branches: [main]
+  push:
+    tags: ["v[0-9]+.[0-9]+.[0-9]+"]
+  pull_request:
+    paths:
+      - .github/workflows/release.yml
+      - scripts/package.sh
+      - scripts/release.mjs
+      - app/desktop/electron-builder.config.mjs
+      - app/desktop/src/channel.ts
+      - app/desktop/package.json
+
+permissions:
+  contents: read
+
+# One Dev at a time; a newer push waits, and one waiting is replaced by the
+# next, so the last of a burst of merges is the one built. A run that builds
+# nothing (its `ci` failed or was cancelled) is in a group of its own, so it
+# replaces no Dev.
+concurrency:
+  group: >-
+    release-${{
+      github.event_name == 'push' && github.ref ||
+      github.event_name == 'pull_request' && github.head_ref ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push') && 'dev' ||
+      github.run_id }}
+  cancel-in-progress: false
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  pack:
+    name: pack
+    # A Dev only from a push to main whose `ci` passed.
+    if: >-
+      github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       github.event.workflow_run.event == 'push')
+    runs-on: devbox
+    timeout-minutes: 45
+    # To publish. A PR's run gets it too, packing its own code on devbox
+    # but publishing nothing: only collaborators open PRs here.
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.workflow_run.head_sha || github.sha }}
+          # The tags, to find the last Stable.
+          fetch-depth: 0
+      - name: target/ from the runner's volume, and rust-toolchain.toml's toolchain
+        run: ci/target.sh && rustup toolchain install
+      - name: which Banda, and its version
+        id: which
+        env:
+          EVENT: ${{ github.event_name }}
+        run: |
+          if [[ $EVENT == push ]]; then
+            echo "channel=stable" >> "$GITHUB_OUTPUT"
+            echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          # Dev is the next minor after the last Stable, or the workspace's
+          # version before there is one (ADR 0033, decision 2).
+          last=$(git tag -l 'v[0-9]*' --sort=-v:refname | grep -v -- - | head -1 || true)
+          if [[ -n $last ]]; then
+            IFS=. read -r major minor _ <<< "${last#v}"
+            next="$major.$((minor + 1)).0"
+          else
+            next=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
+          fi
+          echo "channel=dev" >> "$GITHUB_OUTPUT"
+          echo "version=$next-dev.$GITHUB_RUN_NUMBER" >> "$GITHUB_OUTPUT"
+      - name: pack
+        env:
+          BANDA_VERSION: ${{ steps.which.outputs.version }}
+        run: scripts/package.sh ${{ steps.which.outputs.channel }}
+      - name: publish
+        if: github.event_name != 'pull_request'
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: >-
+          node scripts/release.mjs
+          ${{ steps.which.outputs.channel }}
+          ${{ steps.which.outputs.version }}
+          "$(git rev-parse HEAD)"
+          app/desktop/dist/*.AppImage
+      # Step 5 adds electron-builder's update files (*-linux.yml) to both.
+      - name: keep what a PR packed
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: banda-${{ steps.which.outputs.version }}
+          path: app/desktop/dist/*.AppImage
+          retention-days: 3

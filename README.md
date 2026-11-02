@@ -47,8 +47,17 @@ scripts/package.sh dev    # or stable, or local: app/desktop/dist/*.AppImage
 It builds the engine for release, the page and the window, and packs them
 into an AppImage (ADR 0033). `BANDA_VERSION` names its version, `0.X.Y` or
 `0.X.Y-dev.N`; unset, it is the workspace's, marked local. On its first
-start the AppImage lists itself among the desktop's apps. The ways to bring
-Banda to Linux: [`docs/research/2026-11-02-linux-distribution.md`](docs/research/2026-11-02-linux-distribution.md).
+start the AppImage lists itself among the desktop's apps. The release
+workflow packs and publishes Dev on every green push to `main`, and Stable
+on a tag `v0.X.Y` (`.github/workflows/release.yml`). While the repository
+is private, `gh` fetches one:
+
+```sh
+gh release list --repo 0x1oceanlabs/banda           # the newest first
+gh release download v0.1.0-dev.42 --repo 0x1oceanlabs/banda --pattern '*.AppImage'
+```
+
+The ways to bring Banda to Linux: [`docs/research/2026-11-02-linux-distribution.md`](docs/research/2026-11-02-linux-distribution.md).
 
 ## Check it
 
