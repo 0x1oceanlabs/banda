@@ -139,7 +139,7 @@ export function Sidebar({
   return (
     <aside
       aria-label="Sidebar"
-      className="absolute inset-y-(--gap-outer) left-(--gap-outer) z-20 flex w-(--sidebar-width) flex-col overflow-hidden rounded-tile border bg-panel shadow-(--panel-shadow) sidebar-desk:inset-y-0 sidebar-desk:left-0 sidebar-desk:rounded-none sidebar-desk:border-0 sidebar-desk:bg-desk sidebar-desk:shadow-none glass:backdrop-blur-(--desk-blur)"
+      className="absolute inset-y-(--gap-outer) left-(--gap-outer) z-20 flex w-(--sidebar-width) flex-col overflow-hidden rounded-tile border bg-panel shadow-(--panel-shadow) sidebar-desk:inset-y-0 sidebar-desk:left-0 sidebar-desk:rounded-none sidebar-desk:border-0 sidebar-desk:bg-desk sidebar-desk:shadow-none"
     >
       <div className="flex items-center gap-0.5 px-2 pt-2 pb-1">
         <button
@@ -394,7 +394,7 @@ function SpacesList({
             title={space.folder}
             className={cn(
               "flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-transparent px-2 py-1 text-left text-sm outline-none hover:bg-foreground/5 focus-visible:ring-3 focus-visible:ring-ring/50",
-              only === space.id && "border-border bg-background shadow-xs"
+              only === space.id && "border-border bg-tile shadow-xs"
             )}
             onClick={() => onPick(space.id)}
           >

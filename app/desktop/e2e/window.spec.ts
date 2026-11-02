@@ -1954,11 +1954,23 @@ test("the desk is Banda's own glass, made of the wallpaper", async () => {
   expect(served).toBe(1)
   await page.screenshot({ path: "test-results/19b-banda-glass.png" })
 
+  // What floats over the window is glass too: the Banda menu frosts what is
+  // under it.
+  const menu = page.getByRole("dialog", { name: "Banda menu" })
+  const { composer } = await firstThread(page)
+  await expect(composer).toBeVisible()
+  await page.keyboard.press("Alt+Space")
+  await expect(menu).toHaveCSS("backdrop-filter", /blur/)
+  await page.keyboard.press("Escape")
+  await expect(menu).toBeHidden()
+
   writeFileSync(
     join(dir, "config/look.toml"),
     '[desk]\nwallpaper = "wall.png"\nglass = false\n'
   )
   await expect(root).not.toHaveAttribute("data-glass")
+  await page.keyboard.press("Alt+Space")
+  await expect(menu).toHaveCSS("backdrop-filter", "none")
 })
 
 test("the window takes its look from look.toml, and again on each save", async () => {

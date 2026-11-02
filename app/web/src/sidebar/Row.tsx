@@ -52,7 +52,7 @@ export function Row({
         "flex w-full min-w-0 flex-col gap-0.5 rounded-lg border border-transparent px-2 text-left transition-colors outline-none",
         "hover:bg-foreground/5 focus-visible:ring-3 focus-visible:ring-ring/50",
         one ? "py-1" : "py-1.5",
-        current && "border-border bg-background shadow-xs hover:bg-background"
+        current && "border-border bg-tile shadow-xs hover:bg-tile"
       )}
       onClick={onOpen}
     >

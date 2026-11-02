@@ -50,7 +50,7 @@
   --color-primary-foreground: var(--primary-foreground);
   --color-primary: var(--primary);
   --color-popover-foreground: var(--popover-foreground);
-  --color-popover: var(--popover);
+  --color-popover: var(--floating);
   --color-card-foreground: var(--card-foreground);
   --color-card: var(--card);
   --color-foreground: var(--foreground);
@@ -177,6 +177,9 @@
   --desk: color-mix(in oklab, var(--muted) 40%, var(--background));
   --panel: var(--sidebar);
   --tile: var(--background);
+  /* What floats over all of them: menus, dialogs, toasts, as bg-popover.
+     Solid; on glass it is the panel's glass, in the popover's colour. */
+  --floating: var(--popover);
   /* [tile] shadow and [desk] sidebar-shadow: how dark, from 0 to 1. Only
      glass casts them: a solid desk shows none. */
   --tile-shadow-strength: 0;
@@ -254,9 +257,15 @@ html[data-glass] {
     var(--background) var(--desk-opacity),
     transparent
   );
+  --panel-opacity: calc((var(--desk-opacity) + var(--tile-opacity)) / 2);
   --panel: color-mix(
     in oklab,
-    var(--sidebar) calc((var(--desk-opacity) + var(--tile-opacity)) / 2),
+    var(--sidebar) var(--panel-opacity),
+    transparent
+  );
+  --floating: color-mix(
+    in oklab,
+    var(--popover) var(--panel-opacity),
     transparent
   );
   --tile: color-mix(
@@ -269,6 +278,16 @@ html[data-glass] {
     0 2px 6px rgb(0 0 0 / calc(var(--tile-shadow-strength) * 0.36));
   --panel-shadow: 0 12px 32px -14px rgb(0 0 0 / var(--sidebar-shadow-strength));
   --bar-rule: transparent;
+}
+/* Whatever floats over the desk frosts what is under it, as the desk
+   frosts the wallpaper: the sidebar's panel, and every bg-popover, so a
+   new menu is glass too. Only the bare classes: bg-popover/90 is not. A
+   popover inside another, as a select's scroll arrows, is frosted by it. */
+html[data-glass] :is(.bg-panel, .bg-popover) {
+  backdrop-filter: blur(var(--desk-blur)) saturate(var(--desk-saturation));
+}
+html[data-glass] .bg-popover .bg-popover {
+  backdrop-filter: none;
 }
 [data-sidebar-shown] {
   --sidebar-inset: calc(var(--sidebar-width) + var(--gap-outer));
