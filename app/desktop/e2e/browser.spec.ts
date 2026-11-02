@@ -581,6 +581,48 @@ function popupBox(app: ElectronApplication) {
   })
 }
 
+test("a page that paints no background lies on white, as in a browser, unless it asks for dark", async () => {
+  const address = await serve({
+    "/": '<title>Plain</title><a href="/night">Night</a>',
+    "/night":
+      '<meta name="color-scheme" content="dark"><title>Night</title><p>Night</p>',
+  })
+  window = await startWindow({ look: 'mode = "dark"\n' })
+  const { app, page } = window
+  const { composer } = await firstThread(page)
+  await expect(composer).toBeFocused()
+  const bar = await openBrowser(page)
+  await bar.fill(address.replace("http://", ""))
+  await bar.press("Enter")
+  await expect(page.getByRole("region", { name: "Plain" })).toBeVisible()
+  const held = page.locator("[data-held-by]")
+  // A pixel of the page where it draws nothing: its bottom middle, clear
+  // of the tile's rounded corners.
+  const canvas = async () => {
+    const box = (await held.boundingBox())!
+    return app.evaluate(
+      async ({ BrowserWindow }, at) => {
+        const shot = await BrowserWindow.getAllWindows()[0].capturePage({
+          x: Math.round(at.x),
+          y: Math.round(at.y),
+          width: 1,
+          height: 1,
+        })
+        const [b, g, r] = shot.toBitmap()
+        return [r, g, b]
+      },
+      { x: box.x + box.width / 2, y: box.y + box.height - 8 }
+    )
+  }
+  // Banda is dark, but the page asks for nothing: white, as Chrome paints
+  // it, so its black text reads.
+  await expect.poll(canvas).toEqual([255, 255, 255])
+  // A page that asks for dark lies on a browser's dark canvas.
+  await inPages(app, "document.querySelector('a').click()")
+  await expect(page.getByRole("region", { name: "Night" })).toBeVisible()
+  await expect.poll(canvas).toEqual([18, 18, 18])
+})
+
 test("on glass a terminal and a browser's page are as clear as any tile", async () => {
   const address = await serve({ "/": "<title>Alpha</title><p>Alpha</p>" })
   window = await startWindow({ look: GLASS })
