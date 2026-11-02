@@ -106,6 +106,15 @@ The kernel holds only what every module needs, and it names no module.
   (`access::within`), for the API and for callers in the engine alike. A
   call that names no Space runs in the pass's; any other Space is
   refused. `spaces.list` shows it only its own.
+- **This machine** (ADR 0025, decision 1). A module whose data holds
+  every Space's, as the workspaces do, is the machine's
+  (`Module::scope`). The kernel keeps one more store like a Space's for
+  those modules, in the engine's state folder (`machine/`), with its own
+  receipts, event log and outbox; a Space's modules never open there, nor
+  the machine's in a Space. Their methods name no Space. The machine is
+  no Space in `spaces.list`; `welcome` names its ID, which a window
+  follows and streams by. An Agent's pass stops at it, until the
+  workspaces give Agents their tools.
 - **Identity.** A port: it says which Participant a connection's token names.
   On one computer, whoever holds the engine's secret is the owner. Later it
   is OIDC, or our accounts.

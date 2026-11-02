@@ -14,6 +14,17 @@ use tokio::sync::mpsc;
 /// keeps.
 pub type Stream = mpsc::Receiver<Value>;
 
+/// Where a module keeps its data and runs its methods (ADR 0025,
+/// decision 1).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Scope {
+    /// In each Space: its methods name one.
+    Space,
+    /// Once for this machine, as the workspaces are, holding every
+    /// Space's Panes: its methods name no Space.
+    Machine,
+}
+
 /// A bounded context: its own words, data and contract (ADR 0001, decision
 /// 3). The kernel knows a module only through this trait.
 ///
@@ -24,6 +35,11 @@ pub type Stream = mpsc::Receiver<Value>;
 pub trait Module: Send + Sync + 'static {
     /// Lowercase letters: the prefix of its methods, events and tables.
     fn name(&self) -> &'static str;
+
+    /// Where its data lives: each Space's, or this machine's.
+    fn scope(&self) -> Scope {
+        Scope::Space
+    }
 
     /// Its own ledger of migrations. Each step runs once, in order, and a
     /// shipped step never changes.

@@ -50,6 +50,7 @@ pub async fn serve(places: Places, port: u16, with_parent: bool) -> Result<(), F
         engine: running.url(),
     };
     let kernel = Kernel::builder(&places.root, owner)
+        .machine(places.machine())
         .module(Agents::new(harnesses).piped(pipe))
         .module(Terminals::new())
         .open()

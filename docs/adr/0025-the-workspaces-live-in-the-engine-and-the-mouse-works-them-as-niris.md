@@ -49,8 +49,11 @@ On the list, Roma decided:
      Space. The workspaces hold Panes of every Space, so they belong to
      no Space. The kernel gets one more scope, **this machine**: a store
      in the engine's state folder with its own receipts, event log and
-     outbox, and the same command path. A module marks a method of the
-     machine's in its `methods!` table; such a method names no Space.
+     outbox, and the same command path. A module says it is the
+     machine's (`Module::scope`, _built_ 2026-11-02); its methods then
+     name no Space. `welcome` names the machine's ID, which the window
+     follows and streams by as it does a Space's. The store is the engine
+     state folder's `machine/`.
    - **The `workspaces` module** is the first module of the machine. It
      keeps the workspaces in order, each a Strip of columns, each column
      its Panes, stacked or as tabs, with its width and their heights.

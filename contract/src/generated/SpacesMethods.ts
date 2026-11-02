@@ -16,6 +16,7 @@ list: CallMethod<Nothing, Array<SpaceSummary>>,
  */
 create: CommandMethod<CreateSpace, SpaceSummary>, 
 /**
- * The tools an Agent may call, from every module's methods.
+ * The tools an Agent may call, from the methods of the modules in
+ * Spaces.
  */
 tools: CallMethod<Nothing, Array<Tool>>, };
