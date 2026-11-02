@@ -307,11 +307,11 @@
           "$ref": "#/$defs/Event"
         },
         "open": {
-          "description": "A tile coming in: it fades in, growing a little.",
+          "description": "A tile coming in: it fades in, growing from half its size.",
           "$ref": "#/$defs/Event"
         },
         "close": {
-          "description": "A tile going: it fades out, shrinking a little, as the rest close in.",
+          "description": "A tile going: it fades out, shrinking to four fifths, as the rest close in.",
           "$ref": "#/$defs/Event"
         }
       },

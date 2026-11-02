@@ -32,10 +32,10 @@ pub struct MotionSettings {
     /// A column changing its width.
     #[serde(default)]
     pub resize: Event,
-    /// A tile coming in: it fades in, growing a little.
+    /// A tile coming in: it fades in, growing from half its size.
     #[serde(default)]
     pub open: Event,
-    /// A tile going: it fades out, shrinking a little, as the rest close in.
+    /// A tile going: it fades out, shrinking to four fifths, as the rest close in.
     #[serde(default)]
     pub close: Event,
 }

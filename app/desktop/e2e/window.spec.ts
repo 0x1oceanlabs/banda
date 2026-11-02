@@ -1910,6 +1910,10 @@ test("a tile fades in as it opens and fades out where it was as it closes", asyn
   const launcher = page.getByRole("region", { name: "New Pane" })
   await expect(launcher).toBeVisible()
   expect(await opacity(launcher)).toBeLessThan(0.9)
+  // It grows from half its size, as niri's.
+  const scale = (tile: Locator) =>
+    tile.evaluate((e: HTMLElement) => Number(e.style.scale || 1))
+  expect(await scale(launcher)).toBeLessThan(0.75)
   await expect.poll(() => opacity(launcher)).toBe(1)
 
   // Closed, it is gone from the window at once, and its look fades out
@@ -1925,7 +1929,38 @@ test("a tile fades in as it opens and fades out where it was as it closes", asyn
   expect(await ghost.evaluate((e: HTMLElement) => e.style.left)).toBe(
     `${left}px`
   )
+  // It shrinks to four fifths, as niri's.
+  await expect.poll(() => scale(ghost)).toBeLessThan(0.9)
+  expect(await scale(ghost)).toBeGreaterThanOrEqual(0.8)
   await expect(ghost).toHaveCount(0)
+
+  // One that goes stays where it was on the screen as the Strip scrolls.
+  await page.keyboard.press("Alt+KeyN")
+  await page.keyboard.press("Alt+KeyN")
+  await expect(launcher).toHaveCount(2)
+  const middle = (e: Element) => {
+    const { left, right } = e.getBoundingClientRect()
+    return (left + right) / 2
+  }
+  // Where it shows once the Strip has scrolled to it.
+  const newest = launcher.last().locator("xpath=..")
+  let shown = NaN
+  await expect
+    .poll(async () => {
+      const was = shown
+      shown = await newest.evaluate(middle)
+      return Math.abs(shown - was) < 0.5
+    })
+    .toBe(true)
+  await page.keyboard.press("Alt+KeyW")
+  await expect(ghost).toHaveCount(1)
+  await ghost.evaluate((e) => (e.parentElement!.scrollLeft = 0))
+  await expect
+    .poll(async () => Math.round((await ghost.evaluate(middle)) - shown))
+    .toBe(0)
+  await expect(ghost).toHaveCount(0)
+  await page.keyboard.press("Alt+KeyW")
+  await expect(launcher).toHaveCount(0)
 
   // A terminal fades out with its screen on it.
   await page.keyboard.press("Alt+KeyN")
