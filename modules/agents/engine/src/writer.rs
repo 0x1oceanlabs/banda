@@ -13,7 +13,7 @@
 use crate::effects::{START, STOP, TurnEffect};
 use crate::model::{Fact, ItemId, Opener, Settings, ThreadId, TurnId, TurnState};
 use crate::rules::{self, Ending, Event, Step, Then, TurnFacts};
-use crate::{emit, store};
+use crate::{emit, questions, store};
 use banda_kernel::{AgentId, Error, Participant, Refusal, Tx};
 use rusqlite::Connection;
 
@@ -185,16 +185,7 @@ fn end(
         reason,
         failure,
     } = ending.clone();
-    for mut item in store::open_questions(tx.sql(), turn.id)? {
-        rules::close(&mut item.body);
-        store::set_body(tx.sql(), item.id, &item.body)?;
-        emit(
-            tx,
-            author,
-            turn.thread,
-            &Fact::QuestionClosed { item: item.id },
-        )?;
-    }
+    questions::close_unanswered(tx, author, turn.thread, turn.id)?;
     store::set_turn(
         tx.sql(),
         turn.id,

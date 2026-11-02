@@ -28,14 +28,14 @@
 //! runs until the Harness ends it or a Person stops it.
 
 use crate::model::{
-    Account, Adapter, CliView, Cost, Exit, Failure, Field, FieldValue, HarnessOption, Input, Mode,
-    Offer, OptionChoice, OptionValue, PlanStep, Program, Settings, SignInWay, SignedInAs, Skill,
-    SlashCommand, StepState, TextFormat, ThreadId, ToolContent, ToolKind, ToolStatus, TurnState,
-    Usage, Values,
+    Account, Adapter, Choice, CliView, Cost, Exit, Failure, Field, FieldValue, HarnessOption,
+    Input, Mode, Offer, OptionChoice, OptionValue, PlanStep, Program, Settings, SignInWay,
+    SignedInAs, Skill, SlashCommand, StepState, TextFormat, ThreadId, ToolContent, ToolKind,
+    ToolStatus, TurnState, Usage, Values,
 };
 use crate::plain;
 use crate::record::{Recording, To};
-use crate::rules::{Ending, Offered};
+use crate::rules::Ending;
 use crate::settings::Harness;
 use agent_client_protocol::schema::ProtocolVersion;
 use agent_client_protocol::schema::v1 as acp;
@@ -103,7 +103,7 @@ pub enum Said {
         title: Option<String>,
         /// What the tool call would do, if the Harness says here.
         tool: Option<ToolKind>,
-        offered: Vec<Offered>,
+        offered: Vec<Choice>,
         /// A form to fill in, for a Question that asks more than a choice.
         form: Option<Vec<Field>>,
         /// The plan it asks to carry out, when it asks to leave plan mode.
@@ -1232,7 +1232,7 @@ async fn drive(
                     |id| id.0.to_string(),
                 );
                 let (answer, decided) = oneshot::channel();
-                let choice = |id: &str, name: &str, allows| Offered {
+                let choice = |id: &str, name: &str, allows| Choice {
                     id: id.to_owned(),
                     name: name.to_owned(),
                     allows,
@@ -1941,9 +1941,9 @@ fn content(fields: &[Field], values: Values) -> BTreeMap<String, acp::Elicitatio
         .collect()
 }
 
-fn offered(option: &acp::PermissionOption) -> Offered {
+fn offered(option: &acp::PermissionOption) -> Choice {
     use acp::PermissionOptionKind as Kind;
-    Offered {
+    Choice {
         id: option.option_id.0.to_string(),
         name: option.name.clone(),
         allows: matches!(option.kind, Kind::AllowOnce | Kind::AllowAlways),

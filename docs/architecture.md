@@ -430,7 +430,11 @@ If Chat is removed, Agents still works through its own Thread.
   the Harness from memory only: the Thread and the outbox keep a mask. A
   form Banda cannot show goes unanswered, with a notice.
 - **A Question closes** when the Harness stops waiting for it, as when it
-  times out.
+  times out, when its turn ends unanswered, and when its answer never
+  reached the Harness.
+- **A Question is one module** (`questions.rs`): asking it, its answer and
+  its close, with their rules, writes and facts; `live.rs` holds the
+  Harness's wait for the answer and a form's secrets.
 - **A tool call shows what it did:** a file change as its diff, and what
   a command printed, with how it ended. Codex sends output as it prints;
   Claude Code sends it once the command is done. The Thread keeps it all,
@@ -477,9 +481,9 @@ If Chat is removed, Agents still works through its own Thread.
   between turns make and move turns only through `writer::make` and
   `writer::apply`, which write the step in the caller's transaction. The
   I/O only runs effects and says what happened: `effects.rs` runs START,
-  STOP, STEER and REPLY on the Harness, `transcript.rs` writes what the
-  Harness says, and `between.rs` turns what it says between turns into
-  events. Whether a turn was asked to stop is its own state
+  STOP and STEER on the Harness and `questions.rs` runs REPLY;
+  `transcript.rs` writes what the Harness says, and `between.rs` turns
+  what it says between turns into events. Whether a turn was asked to stop is its own state
   (`agents_turns.stopping`), which the rules read: a Harness that cancels
   a turn nobody stopped failed it, and the Agent's own turn ends stopped
   once a stop was asked, however its Harness ended it; `live.rs` keeps
