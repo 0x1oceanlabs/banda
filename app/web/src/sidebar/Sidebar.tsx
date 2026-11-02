@@ -136,7 +136,7 @@ export function Sidebar({
   return (
     <aside
       aria-label="Sidebar"
-      className="flex w-64 shrink-0 flex-col border-r bg-sidebar/60"
+      className="absolute inset-y-(--gap-outer) left-(--gap-outer) z-20 flex w-(--sidebar-width) flex-col overflow-hidden rounded-tile border bg-panel shadow-(--panel-shadow) sidebar-desk:inset-y-0 sidebar-desk:left-0 sidebar-desk:rounded-none sidebar-desk:border-0 sidebar-desk:bg-desk sidebar-desk:shadow-none glass:backdrop-blur-(--desk-blur)"
     >
       <div className="flex items-center gap-0.5 px-2 pt-2 pb-1">
         <button

@@ -37,7 +37,7 @@ use hyprland::Windows;
 use motion::Motion;
 use palette::Palette;
 use serde::Serialize;
-use settings::{Corner, ModeChoice, Settings, ThemeChoice};
+use settings::{Corner, Material, ModeChoice, Settings, SidebarStyle, ThemeChoice};
 use std::collections::BTreeMap;
 use std::fmt;
 use std::path::{Path, PathBuf};
@@ -76,6 +76,9 @@ pub struct Look {
     pub schemes: Schemes,
     /// Sizes, the same in light and dark.
     pub vars: BTreeMap<String, String>,
+    /// Whether the desk is glass, what of, and how the sidebar sits on it
+    /// (ADR 0023).
+    pub desk: Desk,
     /// How each event moves, already slowed down or turned off.
     pub motion: Motion,
     /// The widths columns take, and where the focused one scrolls to.
@@ -100,6 +103,23 @@ pub struct Look {
     /// Each key of each settings file, by file: its value, and where it
     /// comes from (ADR 0016).
     pub settings: BTreeMap<String, keyed::Keyed>,
+}
+
+/// The desk as the window makes it (ADR 0023). Its opacities are CSS
+/// variables, with the sizes.
+#[derive(Clone, Debug, PartialEq, Serialize, TS)]
+#[ts(export, export_to = "look/")]
+pub struct Desk {
+    /// The desk is glass: there is a wallpaper for Banda's, or the system
+    /// makes it.
+    pub glass: bool,
+    pub material: Material,
+    pub sidebar: SidebarStyle,
+    /// The picture Banda's glass is made of, the file itself, links
+    /// followed: when the desktop's wallpaper changes, so does this.
+    #[ts(optional)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub wallpaper: Option<String>,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, TS)]
@@ -200,12 +220,8 @@ pub fn read_settings(path: &Path, text: &str, problems: &mut Vec<Problem>) -> Op
     for key in settings.negative_sizes() {
         problems.push(Problem::whole(path, format!("{key} cannot be negative")));
     }
-    if settings
-        .tile
-        .dim_inactive
-        .is_some_and(|d| !(d.is_finite() && (0.0..=1.0).contains(&d)))
-    {
-        problems.push(Problem::whole(path, "tile.dim-inactive is from 0 to 1"));
+    for key in settings.shares_out_of_range() {
+        problems.push(Problem::whole(path, format!("{key} is from 0 to 1")));
     }
     for (span, message) in settings.columns.problems() {
         problems.push(Problem::at(path, text, span, message));
@@ -274,6 +290,9 @@ pub const TEMPLATE: &str = include_str!("../look.toml");
 pub struct Resolved {
     pub look: Look,
     pub watched: Vec<PathBuf>,
+    /// Links whose target is what matters, not the bytes: the wallpaper,
+    /// which the look names by where it goes.
+    pub followed: Vec<PathBuf>,
 }
 
 /// Resolves the look on this machine. `windows` asks Hyprland for its
@@ -281,6 +300,7 @@ pub struct Resolved {
 pub fn resolve(places: &Places, windows: &dyn Fn() -> Option<Windows>) -> Resolved {
     let mut problems = Vec::new();
     let mut watched = Vec::new();
+    let mut followed = Vec::new();
 
     let look_file = places.look_file();
     watched.push(look_file.clone());
@@ -400,10 +420,24 @@ pub fn resolve(places: &Places, windows: &dyn Fn() -> Option<Windows>) -> Resolv
         keyed_layers.push(keyed::Layer::new("theme", &theme.settings, file));
         layers = theme.settings.clone().over(layers);
     }
+    // The desk, which Hyprland leaves alone: glass when there is a picture
+    // to make Banda's of, or when the system makes it.
+    let desk = mine.desk.clone().over(layers.desk.clone());
+    let material = desk.material.unwrap_or(Material::Banda);
+    let wanted = desk.glass.unwrap_or(true);
+    let wallpaper = (wanted && material == Material::Banda)
+        .then(|| wallpaper(places, &desk, &look_file, &mut problems, &mut followed))
+        .flatten();
+    let glass = wanted && (material == Material::System || wallpaper.is_some());
     if mine.hyprland.unwrap_or(true)
         && let Some(found) = windows()
     {
-        let found = found.layer();
+        let mut found = found.layer();
+        // Over a glass desk the tiles float, and the air between them is
+        // Banda's: Hyprland's gaps are for windows that touch the screen.
+        if glass {
+            found.gaps = settings::Gaps::default();
+        }
         keyed_layers.push(keyed::Layer::new("hyprland", &found, None));
         layers = found.over(layers);
         sources.push(Source {
@@ -475,6 +509,12 @@ pub fn resolve(places: &Places, windows: &dyn Fn() -> Option<Windows>) -> Resolv
             mode: shown,
             schemes,
             vars,
+            desk: Desk {
+                glass,
+                material,
+                sidebar: desk.sidebar.unwrap_or(SidebarStyle::Panel),
+                wallpaper: wallpaper.map(|path| path.display().to_string()),
+            },
             motion: all.motion.resolve(),
             columns: all.columns.resolve(),
             sources,
@@ -488,7 +528,39 @@ pub fn resolve(places: &Places, windows: &dyn Fn() -> Option<Windows>) -> Resolv
             settings,
         },
         watched,
+        followed,
     }
+}
+
+/// The picture Banda's glass is made of: `desk.wallpaper`, from home or
+/// the config folder, else the desktop's own (Omarchy's current
+/// background), links followed. `None` when there is none.
+fn wallpaper(
+    places: &Places,
+    desk: &settings::Desk,
+    look_file: &Path,
+    problems: &mut Vec<Problem>,
+    followed: &mut Vec<PathBuf>,
+) -> Option<PathBuf> {
+    let path = match &desk.wallpaper {
+        Some(named) => match named.strip_prefix("~/") {
+            Some(rest) => places.home.as_ref()?.join(rest),
+            None => places.config.join(named),
+        },
+        None => places.omarchy_background.clone()?,
+    };
+    followed.push(path.clone());
+    let found = std::fs::canonicalize(&path).ok().filter(|p| p.is_file());
+    if found.is_none() && desk.wallpaper.is_some() {
+        problems.push(Problem::whole(
+            look_file,
+            format!(
+                "desk.wallpaper: there is no picture at {}, so the desk is solid",
+                path.display()
+            ),
+        ));
+    }
+    found
 }
 
 fn shown_of(wanted: ModeChoice) -> Shown {
@@ -552,34 +624,48 @@ fn vars(all: &Settings) -> BTreeMap<String, String> {
         Corner::Step(step) => radius * step.factor(),
         Corner::Pixels(px) => px,
     };
-    let px = |v: f64| {
-        let rounded = (v * 1000.0).round() / 1000.0;
-        format!("{rounded}px")
-    };
     let mut vars = BTreeMap::new();
-    let mut put = |name: &str, value: Option<f64>| {
+    let mut put = |name: &str, value: Option<f64>, unit: &str| {
         if let Some(value) = value.filter(|v| v.is_finite() && *v >= 0.0) {
-            vars.insert(format!("--{name}"), px(value));
+            vars.insert(format!("--{name}"), format!("{}{unit}", thousandths(value)));
         }
     };
-    put("radius", Some(radius));
-    put("tile-radius", Some(tile));
-    put("tile-border", all.tile.border);
-    put("gap-inner", all.gaps.inner);
-    put("gap-outer", all.gaps.outer);
-    put("bar-height", all.bar.height);
-    put("focus-ring", all.focus.ring);
-    if let Some(dim) = all
-        .tile
-        .dim_inactive
-        .filter(|d| d.is_finite() && (0.0..=1.0).contains(d))
-    {
-        vars.insert(
-            "--tile-dim".to_owned(),
-            format!("{}", (dim * 1000.0).round() / 1000.0),
-        );
-    }
+    put("radius", Some(radius), "px");
+    put("tile-radius", Some(tile), "px");
+    put("tile-border", all.tile.border, "px");
+    put("gap-inner", all.gaps.inner, "px");
+    put("gap-outer", all.gaps.outer, "px");
+    put("bar-height", all.bar.height, "px");
+    put("focus-ring", all.focus.ring, "px");
+    // Banda's glass: how frosted, and how vivid the wallpaper under it.
+    put("desk-blur", all.desk.blur, "px");
+    put("desk-saturation", all.desk.saturation, "");
+    let mut put_share = |name: &str, value: Option<f64>, percent: bool| {
+        if let Some(value) = value.filter(|v| settings::is_share(*v)) {
+            let value = if percent {
+                format!("{}%", thousandths(value * 100.0))
+            } else {
+                thousandths(value).to_string()
+            };
+            vars.insert(format!("--{name}"), value);
+        }
+    };
+    put_share("tile-dim", all.tile.dim_inactive, false);
+    // How solid the desk and the tiles are over glass, as percents for
+    // color-mix(); the page uses them only where its window is glass
+    // (ADR 0023).
+    put_share("desk-opacity", all.desk.opacity, true);
+    put_share("tile-opacity", all.tile.opacity, true);
+    // How dark the shadows over glass are: a tile's, and the sidebar's.
+    put_share("tile-shadow-strength", all.tile.shadow, false);
+    put_share("sidebar-shadow-strength", all.desk.sidebar_shadow, false);
+    put_share("desk-grain", all.desk.grain, false);
     vars
+}
+
+/// `v` to three decimals, as CSS gets every number.
+fn thousandths(v: f64) -> f64 {
+    (v * 1000.0).round() / 1000.0
 }
 
 /// Prints the look, then again each time a file it reads changes or
@@ -600,18 +686,22 @@ pub fn follow(
     let mut good: Option<Look> = None;
     let mut last: Option<Look> = None;
     let mut watched: Vec<PathBuf> = Vec::new();
+    let mut followed: Vec<PathBuf> = Vec::new();
+    let state =
+        |watched: &[PathBuf], followed: &[PathBuf]| (fingerprint(watched), targets(followed));
     loop {
         // The files as they were before they are read, so a save while they
         // are read, or before the look is out, is still a change to come.
-        let before = fingerprint(&watched);
+        let before = state(&watched, &followed);
         let resolved = resolve(places, &windows);
-        let seen = if resolved.watched == watched {
+        let seen = if resolved.watched == watched && resolved.followed == followed {
             before
         } else {
-            fingerprint(&resolved.watched)
+            state(&resolved.watched, &resolved.followed)
         };
-        let Resolved { look, watched: now } = resolved;
-        watched = now;
+        let look = resolved.look;
+        watched = resolved.watched;
+        followed = resolved.followed;
         let shown = match (&good, look.problems.is_empty()) {
             (Some(good), false) => Look {
                 problems: look.problems.clone(),
@@ -637,7 +727,7 @@ pub fn follow(
                     std::thread::sleep(Duration::from_millis(250))
                 }
             }
-            if fingerprint(&watched) != seen {
+            if state(&watched, &followed) != seen {
                 break;
             }
         }
@@ -667,6 +757,14 @@ fn fingerprint(paths: &[PathBuf]) -> Vec<Option<u64>> {
             }
             Some(hash.finish())
         })
+        .collect()
+}
+
+/// Where each link goes, links followed; none if it goes nowhere.
+fn targets(links: &[PathBuf]) -> Vec<Option<PathBuf>> {
+    links
+        .iter()
+        .map(|link| std::fs::canonicalize(link).ok())
         .collect()
 }
 

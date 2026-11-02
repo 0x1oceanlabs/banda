@@ -40,6 +40,10 @@
     "gaps": {
       "$ref": "#/$defs/Gaps"
     },
+    "desk": {
+      "description": "The desk the tiles float over (ADR 0023).",
+      "$ref": "#/$defs/Desk"
+    },
     "tile": {
       "$ref": "#/$defs/Tile"
     },
@@ -115,6 +119,78 @@
       },
       "additionalProperties": false
     },
+    "Desk": {
+      "description": "The desk: the bar, and the space around and between the tiles.",
+      "type": "object",
+      "properties": {
+        "glass": {
+          "description": "Glass: the desk shows the wallpaper behind it, blurred. Off, the\ndesk is solid.",
+          "type": "boolean"
+        },
+        "material": {
+          "description": "`\"banda\"`: Banda draws the glass itself, from the wallpaper, the\nsame everywhere. `\"system\"`: the window lets the desktop through,\nfor the compositor to blur; it shows from Banda's next start.",
+          "$ref": "#/$defs/Material"
+        },
+        "wallpaper": {
+          "description": "The picture Banda's glass is made of: a path, `~/` for home. Unset,\nthe desktop's own wallpaper, where Banda knows it.",
+          "type": "string"
+        },
+        "blur": {
+          "description": "How frosted Banda's glass is: the blur's radius, in pixels.",
+          "type": "number",
+          "format": "double",
+          "minimum": 0
+        },
+        "saturation": {
+          "description": "How vivid the wallpaper's colours stay under the glass: 1 as they\nare, more is richer, 0 is grey.",
+          "type": "number",
+          "format": "double",
+          "minimum": 0
+        },
+        "grain": {
+          "description": "A fine grain over the glass, from 0 (none) to 1, so it reads as a\nmaterial rather than a blurred photo.",
+          "type": "number",
+          "format": "double",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "opacity": {
+          "description": "The desk's tint over the blurred desktop, from 0 (clear) to 1\n(solid), with glass on.",
+          "type": "number",
+          "format": "double",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "sidebar": {
+          "description": "`\"panel\"`: the sidebar floats as a glass panel. `\"desk\"`: its rows\nsit right on the desk.",
+          "$ref": "#/$defs/SidebarStyle"
+        },
+        "sidebar-shadow": {
+          "description": "The shadow the sidebar's panel casts on a glass desk, from 0 (none)\nto 1 (the darkest).",
+          "type": "number",
+          "format": "double",
+          "minimum": 0,
+          "maximum": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "Material": {
+      "description": "Who makes the desk's glass (ADR 0023).",
+      "type": "string",
+      "enum": [
+        "banda",
+        "system"
+      ]
+    },
+    "SidebarStyle": {
+      "description": "How the sidebar sits on the desk.",
+      "type": "string",
+      "enum": [
+        "panel",
+        "desk"
+      ]
+    },
     "Tile": {
       "type": "object",
       "properties": {
@@ -128,6 +204,20 @@
         },
         "dim-inactive": {
           "description": "How much the tiles without the focus darken, from 0 to 1, as\nHyprland's `dim_inactive` and `dim_strength`.",
+          "type": "number",
+          "format": "double",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "opacity": {
+          "description": "How solid a tile is over a glass desk, from 0 to 1: 1 is solid.\nWithout glass the tiles are solid.",
+          "type": "number",
+          "format": "double",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "shadow": {
+          "description": "The shadow a tile casts on a glass desk, from 0 (none) to 1 (the\ndarkest).",
           "type": "number",
           "format": "double",
           "minimum": 0,

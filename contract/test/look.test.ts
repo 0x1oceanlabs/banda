@@ -18,6 +18,7 @@ const look = (mode: Look["mode"], schemes: Look["schemes"]): Look => ({
   mode,
   schemes,
   vars: {},
+  desk: { glass: false, material: "banda", sidebar: "panel" },
   motion: DEFAULT_MOTION,
   columns: DEFAULT_COLUMNS,
   sources: [],

@@ -64,7 +64,7 @@ export function PaneFrame({
       hidden={hidden}
       onPointerDownCapture={take}
       onFocusCapture={take}
-      className="group/tile relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-tile border-(length:--tile-border) border-focus-inactive bg-background outline-none after:pointer-events-none after:absolute after:inset-0 after:bg-black after:opacity-(--tile-dim) data-[focused=true]:border-focus data-[focused=true]:outline-[length:calc(var(--tile-border)+var(--focus-ring))] data-[focused=true]:outline-offset-[calc(-1*var(--tile-border))] data-[focused=true]:outline-focus data-[focused=true]:outline-solid data-[focused=true]:after:opacity-0"
+      className="group/tile relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-tile border-(length:--tile-border) border-focus-inactive bg-tile shadow-(--tile-shadow) outline-none after:pointer-events-none after:absolute after:inset-0 after:bg-black after:opacity-(--tile-dim) data-[focused=true]:border-focus data-[focused=true]:outline-[length:calc(var(--tile-border)+var(--focus-ring))] data-[focused=true]:outline-offset-[calc(-1*var(--tile-border))] data-[focused=true]:outline-focus data-[focused=true]:outline-solid data-[focused=true]:after:opacity-0"
     >
       {header ??
         (kind?.header !== false && (

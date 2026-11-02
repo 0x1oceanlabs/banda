@@ -41,6 +41,8 @@ impl Windows {
                 radius: Some(Corner::Step(Step::Xl)),
                 border: Some(self.border),
                 dim_inactive: self.dim,
+                opacity: None,
+                shadow: None,
             },
             motion: MotionSettings {
                 off: (!self.animations).then_some(true),

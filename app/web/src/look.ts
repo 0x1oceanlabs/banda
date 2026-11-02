@@ -17,6 +17,7 @@ import {
   type Notify,
   type Problem,
   shown,
+  WALLPAPER_URL,
 } from "@banda/contract/look"
 import { DEFAULT_SIDEBAR, type Sidebar } from "@banda/contract/sidebar"
 import { currentLook, takeLook, useLook } from "@banda/ui/lib/look"
@@ -46,6 +47,13 @@ export function apply(
   }
   const { dark, colors } = shown(look, systemDark)
   const next: Record<string, string> = { ...look.vars, ...colors }
+  // The picture Banda's glass is made of, which the desktop serves; its
+  // path in the address, so a new wallpaper is a new picture (ADR 0023).
+  const { wallpaper } = look.desk
+  if (wallpaper) {
+    next["--desk-wallpaper"] =
+      `url("${WALLPAPER_URL}?of=${encodeURIComponent(wallpaper)}")`
+  }
   for (const name of before) {
     if (!(name in next)) root.style.removeProperty(name)
   }
@@ -53,6 +61,9 @@ export function apply(
     root.style.setProperty(name, value)
   }
   root.classList.toggle("dark", dark)
+  root.toggleAttribute("data-glass", look.desk.glass)
+  root.dataset.material = look.desk.material
+  root.dataset.sidebar = look.desk.sidebar
   return new Set(Object.keys(next))
 }
 

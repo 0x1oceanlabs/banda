@@ -22,7 +22,7 @@ import {
   session,
   shell,
 } from "electron"
-import type { Look as LookValue } from "@banda/contract/look"
+import { type Look as LookValue, WALLPAPER_URL } from "@banda/contract/look"
 import type { Notice } from "@banda/web/host"
 import { NodeServices } from "@effect/platform-node"
 import { Effect, Layer, ManagedRuntime, Stream } from "effect"
@@ -104,6 +104,8 @@ const runtime = ManagedRuntime.make(
 const lookNow = () => runtime.runSync(Look.use((look) => look.current))
 const settings = new Settings(engineBinary)
 let window: BrowserWindow | null = null
+/** The window that lets the desktop through, if one does (ADR 0023). */
+let clear: BrowserWindow | null = null
 /** The settings window; one at a time (ADR 0016, decision 1). */
 let settingsWindow: BrowserWindow | null = null
 
@@ -136,8 +138,9 @@ async function ready(): Promise<void> {
     nativeTheme.themeSource = now.mode
     const background = firstFrame(now, nativeTheme.shouldUseDarkColors)
     for (const shown of [window, settingsWindow]) {
-      if (background) shown?.setBackgroundColor(background)
-      shown?.webContents.send("look", now)
+      if (background && shown && shown !== clear)
+        shown.setBackgroundColor(background)
+      shown?.webContents.send("look", lookIn(shown, now))
     }
   }
   runtime.runFork(
@@ -147,7 +150,9 @@ async function ready(): Promise<void> {
       )
     )
   )
-  protocol.handle("app", page)
+  protocol.handle("app", (request) =>
+    request.url.split("?")[0] === WALLPAPER_URL ? wallpaper() : page(request)
+  )
   // The page asks for nothing: no camera, no notifications, no location.
   // Its system notifications go through the desktop (notices.ts).
   session.defaultSession.setPermissionRequestHandler(
@@ -165,7 +170,8 @@ async function ready(): Promise<void> {
     const from = event.senderFrame?.url ?? ""
     if (!fromPage(from))
       throw new Error("Only Banda's page may ask for the look.")
-    return lookNow()
+    const now = lookNow()
+    return now && lookIn(BrowserWindow.fromWebContents(event.sender), now)
   })
   ipcMain.handle("sidebar.preset", async (event, name: unknown) => {
     const from = event.senderFrame?.url ?? ""
@@ -332,11 +338,43 @@ async function page(request: Request): Promise<Response> {
   if (url.host !== "banda" || !file.startsWith(pageFolder + sep)) {
     return new Response("Not found", { status: 404 })
   }
+  return served(file, { "Content-Security-Policy": CSP })
+}
+
+/**
+ * The picture Banda's glass is made of: the look's wallpaper, and no other
+ * file, whatever the address asks (ADR 0023).
+ */
+async function wallpaper(): Promise<Response> {
+  const file = lookNow()?.desk.wallpaper
+  if (!file) return new Response("Not found", { status: 404 })
+  return served(file)
+}
+
+/** A file of the machine's, as a page may take it: never sniffed. */
+async function served(
+  file: string,
+  more: Record<string, string> = {}
+): Promise<Response> {
   const found = await net.fetch(pathToFileURL(file).toString())
   const headers = new Headers(found.headers)
-  headers.set("Content-Security-Policy", CSP)
   headers.set("X-Content-Type-Options", "nosniff")
+  for (const [name, value] of Object.entries(more)) headers.set(name, value)
   return new Response(found.body, { status: found.status, headers })
+}
+
+/** The system makes the glass: the window lets the desktop through. */
+function systemGlass(now: LookValue | null): boolean {
+  return now?.desk.glass === true && now.desk.material === "system"
+}
+
+/** The look as `shown` can show it. The system's glass shows only where
+ * the window lets the desktop through, so a solid window's page paints
+ * itself; Banda's own glass shows in every window (ADR 0023). */
+function lookIn(shown: BrowserWindow | null, now: LookValue): LookValue {
+  return systemGlass(now) && shown !== clear
+    ? { ...now, desk: { ...now.desk, glass: false } }
+    : now
 }
 
 /** Answers `channel` for Banda's page alone. */
@@ -354,17 +392,23 @@ function fromPage(url: string): boolean {
 }
 
 function openWindow(extensions: Extensions): BrowserWindow {
-  const opened = pageWindow({
-    width: 1280,
-    height: 820,
-    minWidth: 640,
-    minHeight: 420,
-    title: "Banda",
-  })
+  const opened = pageWindow(
+    {
+      width: 1280,
+      height: 820,
+      minWidth: 640,
+      minHeight: 420,
+      title: "Banda",
+    },
+    // The system's glass lets the desktop through (ADR 0023). Electron
+    // sets this once, so turning it on shows from the next start.
+    systemGlass(lookNow())
+  )
   hostPages(opened.webContents, extensions)
   void opened.loadURL(PAGE)
   opened.on("closed", () => {
     window = null
+    if (clear === opened) clear = null
   })
   return opened
 }
@@ -404,15 +448,18 @@ function pageWindow(
   size: Pick<
     BrowserWindowConstructorOptions,
     "width" | "height" | "minWidth" | "minHeight" | "title"
-  >
+  >,
+  glass = false
 ): BrowserWindow {
   const current = lookNow()
   const opened = new BrowserWindow({
     ...size,
     show: false,
-    backgroundColor:
-      (current && firstFrame(current, nativeTheme.shouldUseDarkColors)) ??
-      (nativeTheme.shouldUseDarkColors ? "#0a0a0a" : "#ffffff"),
+    transparent: glass,
+    backgroundColor: glass
+      ? "#00000000"
+      : ((current && firstFrame(current, nativeTheme.shouldUseDarkColors)) ??
+        (nativeTheme.shouldUseDarkColors ? "#0a0a0a" : "#ffffff")),
     webPreferences: {
       preload: join(import.meta.dirname, "preload.cjs"),
       sandbox: true,
@@ -424,6 +471,7 @@ function pageWindow(
       webviewTag: true,
     },
   })
+  if (glass) clear = opened
   opened.once("ready-to-show", () => opened.show())
   opened.on("focus", () => opened.flashFrame(false))
   const contents = opened.webContents

@@ -17,6 +17,11 @@ pub struct Places {
     pub config: PathBuf,
     /// Omarchy's current theme, when Omarchy is installed.
     pub omarchy_current: Option<PathBuf>,
+    /// Omarchy's current background, a link to the picture, beside its
+    /// current theme (ADR 0023).
+    pub omarchy_background: Option<PathBuf>,
+    /// The Person's home, which `~/` in a path names.
+    pub home: Option<PathBuf>,
     /// Omarchy's theme folders: the Person's first, then the system's.
     pub omarchy_themes: Vec<PathBuf>,
     /// fontconfig's folder of the Person's, `~/.config/fontconfig`, where
@@ -31,6 +36,8 @@ impl Places {
         Places {
             config: config.to_owned(),
             omarchy_current: None,
+            omarchy_background: None,
+            home: None,
             omarchy_themes: Vec::new(),
             fontconfig: None,
         }
@@ -42,7 +49,8 @@ impl Places {
     /// test or a trial window runs beside the real one.
     pub fn from_env() -> Places {
         let var = |name: &str| std::env::var_os(name).map(PathBuf::from);
-        let home = var("HOME").unwrap_or_default();
+        let home_set = var("HOME");
+        let home = home_set.clone().unwrap_or_default();
         let config_home = var("XDG_CONFIG_HOME").unwrap_or_else(|| home.join(".config"));
         let state_home = var("XDG_STATE_HOME").unwrap_or_else(|| home.join(".local/state"));
         let config = var("BANDA_CONFIG").unwrap_or_else(|| config_home.join("banda"));
@@ -58,7 +66,12 @@ impl Places {
         };
         Places {
             config,
+            omarchy_background: omarchy_current
+                .as_deref()
+                .and_then(Path::parent)
+                .map(|current| current.join("background")),
             omarchy_current,
+            home: home_set,
             omarchy_themes: vec![
                 config_home.join("omarchy/themes"),
                 PathBuf::from("/usr/share/omarchy/themes"),

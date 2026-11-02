@@ -6,7 +6,14 @@ import { Moving } from "../motion"
 import { Choices, minOf } from "../registry"
 import type { Chime } from "@banda/ui/sound"
 import { displayOf, type Entry, share, widthIn, type Workspace } from "./model"
-import { ColumnMotion, minWidthOf, type Place, places, widthAt } from "./layout"
+import {
+  ColumnMotion,
+  minWidthOf,
+  type Place,
+  places,
+  room,
+  widthAt,
+} from "./layout"
 import { type Frame, PaneFrame } from "./PaneFrame"
 import { Tabs } from "./Tabs"
 import { pixels, scrollsSideways, SWIPE_END, Swipe } from "./swipe"
@@ -82,6 +89,17 @@ export function Strip({
     }
     before.current = focus
   }, [focus, widths])
+  // The room changes when the window does, or the sidebar comes or goes
+  // over the Strip's left: the focused column comes whole into view again.
+  useEffect(() => {
+    const strip = scroller.current
+    if (!strip) return
+    const watch = new ResizeObserver(() =>
+      reveal(strip, places(strip, now.current.columns), now.current.focus)
+    )
+    watch.observe(strip)
+    return () => watch.disconnect()
+  }, [empty])
   useEffect(() => {
     const strip = scroller.current
     if (!strip) return
@@ -121,7 +139,7 @@ export function Strip({
 
   if (empty) {
     return (
-      <div className="flex h-full flex-col items-center justify-center gap-3 p-6">
+      <div className="flex h-full flex-col items-center justify-center gap-3 p-6 pl-[calc(--spacing(6)+var(--sidebar-inset))]">
         <p className="text-sm text-muted-foreground">
           This workspace is empty. Open a Pane:
         </p>
@@ -138,7 +156,7 @@ export function Strip({
     <div
       ref={scroller}
       data-strip={workspace.id}
-      className="relative flex h-full gap-(--gap-inner) overflow-hidden p-(--gap-outer)"
+      className="relative flex h-full gap-(--gap-inner) overflow-hidden p-(--gap-outer) pl-[calc(var(--gap-outer)+var(--sidebar-inset))]"
     >
       {columns.map((column, c) => (
         <div
@@ -215,22 +233,26 @@ function reveal(
   if (!column) return
   const scroll = scrollOf(strip)
   const at = scroll.target
-  const width = strip.clientWidth
-  // The look's outer gap stays in view beside what shows.
-  const pad = parseFloat(getComputedStyle(strip).paddingLeft) || 0
-  const least = (start: number, end: number) =>
-    start < at ? start : end > at + width ? end - width : at
-  const middle = (column.left + column.right) / 2 - width / 2
+  // What shows: `inner` wide, `pad` in from the left, past the outer gap
+  // and the sidebar floating there.
+  const { pad, inner } = room(strip)
+  const least = (left: number, right: number) =>
+    left - pad < at
+      ? left - pad
+      : right - pad - inner > at
+        ? right - pad - inner
+        : at
+  const middle = (column.left + column.right - inner) / 2 - pad
   const { center } = columnsOf()
-  let to = least(column.left - pad, column.right + pad)
+  let to = least(column.left, column.right)
   if (center === "always") to = middle
   const previous = all.find((place) => place.id === before)
   if (center === "on-overflow" && previous && previous !== column) {
-    const start = Math.min(column.left, previous.left) - pad
-    const end = Math.max(column.right, previous.right) + pad
-    to = end - start <= width ? least(start, end) : middle
+    const left = Math.min(column.left, previous.left)
+    const right = Math.max(column.right, previous.right)
+    to = right - left <= inner ? least(left, right) : middle
   }
-  const most = Math.max(0, (all.at(-1)?.right ?? 0) + pad - width)
+  const most = Math.max(0, (all.at(-1)?.right ?? 0) - pad - inner)
   const target = Math.max(0, Math.min(most, to))
   if (target !== at) scroll.to(target, moveOf("strip"))
 }
@@ -246,9 +268,10 @@ function land(
   focus: string | undefined,
   frame: Frame
 ) {
+  const { pad, inner } = room(strip)
   const view = {
-    from: strip.scrollLeft,
-    to: strip.scrollLeft + strip.clientWidth,
+    from: strip.scrollLeft + pad,
+    to: strip.scrollLeft + pad + inner,
   }
   const shares = all.map((place) => {
     const shown =
