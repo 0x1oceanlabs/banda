@@ -53,7 +53,7 @@ banda call/follow   the CLI: the same API, for people, scripts and Agents
   the desktop's ad blocker (`app/desktop/src/blocker.ts`) on and off.
   The agents module's
   `agents.toml`, what Enter does in the composer, comes with it the same
-  way (ADR 0016). The settings window writes every file through `banda
+  way (ADR 0016). The settings Pane writes every file through `banda
   settings set` too; nothing else the page asks of Node writes a file. A Pane reads its part of the look
   through `@banda/ui/lib/look`.
 - **The Banda skill is text for Agents** (ADR 0012). `banda skill`
@@ -276,7 +276,7 @@ If Chat is removed, Agents still works through its own Thread.
     place.
   - Its `minimum` is the oldest version the adapter supports, the one it
     was built for: Claude Code 2.1.312, Codex 0.165.0. An older CLI runs,
-    and the settings window's Agents and the Threads warn. Checking the Harness again
+    and the settings Pane's Agents and the Threads warn. Checking the Harness again
     finds the CLI again, so an update ends the warning without a restart.
 - **A message queues a turn.** The outbox runs one Thread's turns one at a
   time, in order (`turn.start`, keyed by the Thread). Threads run side by
@@ -359,7 +359,7 @@ If Chat is removed, Agents still works through its own Thread.
   - A Harness that declares ACP's logout signs out when asked
     (`agents.sign_out`), and its processes are let go as after a sign-in.
     The adapter signs its CLI out, so the Person's own terminal too.
-  - The settings window's Agents, like T3 Code's provider settings, shows
+  - The settings Pane's Agents, like T3 Code's provider settings, shows
     each entry with its CLI and adapter versions, who is signed in, Sign
     in, and Sign out where a logout ends the sign-in: an account's, not a
     key's. Check again asks the Harness anew. It turns an entry on or off,
@@ -618,7 +618,7 @@ modules/*/pane   each module's Panes
   takes these keys before any Pane hears them; a terminal gets every other
   key, Ctrl+W among them. `keys.toml` binds and frees keys over them (ADR
   0005, decision 11); Ctrl+Alt+Shift+K (`keys.reset`) is no file's, and
-  brings the window's own keys back until the file changes. The settings window's
+  brings the window's own keys back until the file changes. The settings Pane's
   Keys section shows the file's lines, and opens the key sheet in the
   window for the rest.
 - **The sidebar** lists every Thread of every Space, arranged as a preset

@@ -84,7 +84,7 @@ impl Harness {
 
 /// The Harnesses this machine can start. Read from a file, they follow
 /// it: each look at them reads it again once it changed (ADR 0016), so a
-/// Harness the settings window or the Person's editor changed starts its
+/// Harness the settings Pane or the Person's editor changed starts its
 /// next process as the file now says.
 #[derive(Clone, Debug, Default)]
 pub struct Harnesses(Arc<Mutex<List>>);
@@ -237,7 +237,7 @@ fn listed(path: &Path, text: Option<&str>) -> Result<Vec<Harness>, String> {
     }
 }
 
-/// What `harnesses.toml` starts as when the settings window first writes
+/// What `harnesses.toml` starts as when the settings Pane first writes
 /// it: the known Harnesses, written out, so a change to one keeps the
 /// others.
 pub fn template() -> String {

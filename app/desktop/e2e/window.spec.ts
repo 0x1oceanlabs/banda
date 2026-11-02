@@ -2269,9 +2269,13 @@ test("banda menu opens the Banda menu at a route, from outside the window", asyn
   await expect(menu.getByRole("option").first()).toContainText("hello")
   await page.screenshot({ path: "test-results/29-banda-menu-route.png" })
 
-  // A settings route opens the settings window there.
+  // A settings route opens the settings Pane there, under the menu.
+  await page.keyboard.press("Escape")
+  await expect(menu).toBeHidden()
   banda("menu", "settings.appearance")
-  await expect
-    .poll(() => window.app.windows().map((shown) => new URL(shown.url()).hash))
-    .toContain("#settings/appearance")
+  await expect(
+    page
+      .getByRole("region", { name: "Settings", exact: true })
+      .getByRole("heading", { name: "Appearance" })
+  ).toBeVisible()
 })

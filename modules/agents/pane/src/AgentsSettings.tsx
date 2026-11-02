@@ -54,7 +54,7 @@ import { commandLine, wordsOf } from "./sign-in"
 import { type Open, Problem, Warning, Ways } from "./SignIn"
 
 /**
- * `harnesses.toml`, as the settings window writes it (ADR 0016): through
+ * `harnesses.toml`, as the settings Pane writes it (ADR 0016): through
  * `banda settings`, which keeps the Person's text and refuses what the
  * engine would not read. Each answers what was wrong, or nothing.
  */
@@ -76,7 +76,7 @@ type Props = {
 }
 
 /**
- * The settings window's Agents (ADR 0016, decision 7), as T3 Code's
+ * The settings Pane's Agents (ADR 0016, decision 7), as T3 Code's
  * providers: a card per Harness entry with who is signed in, on or off,
  * and how it starts; adding one. What a message written while an Agent
  * works does is `agents.toml`'s, drawn from its schema under these. The

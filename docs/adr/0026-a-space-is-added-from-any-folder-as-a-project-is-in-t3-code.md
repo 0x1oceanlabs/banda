@@ -145,7 +145,7 @@ every proposal:
 5. **A Space is managed where it is shown, with T3 Code's words.**
    - A Space's row in the sidebar has a right-click menu: "New Thread",
      "Copy path", "Pin Space" or "Unpin Space", "Space settings".
-   - The settings window (ADR 0016) gets a "Spaces" section. It is the
+   - The settings Pane (ADR 0016) gets a "Spaces" section. It is the
      engine's data, not a file, so it calls the engine as the Agents
      section does. Per Space: "Name"; "Pin" ("Pinned Spaces come first in
      Space pickers."); "Archive" ("Hides the Space from Space pickers.

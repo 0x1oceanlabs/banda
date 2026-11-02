@@ -23,6 +23,7 @@ import {
 import { LayoutGridIcon } from "lucide-react"
 import { columnsOf } from "./look"
 import { modules } from "./modules"
+import { settingsPane } from "./settings/pane"
 import type { Width } from "./workspaces/model"
 
 type Args = { [key: string]: JsonValue }
@@ -35,11 +36,12 @@ export const launcher: AnyPaneKind = definePane<Args>({
   Pane: Launcher,
 })
 
-/** The window's own things, as a module of their own. */
+/** The window's own things, as a module of their own: the launcher and
+ * the settings (ADR 0016). */
 const windowModule = defineModule({
   id: "window",
   engine: false,
-  panes: [launcher],
+  panes: [launcher, settingsPane],
 })
 
 const all: readonly Module[] = [windowModule, ...modules]

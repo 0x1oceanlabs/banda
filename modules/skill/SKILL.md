@@ -59,7 +59,7 @@ yours to read.
 does: `banda menu actions` at its Actions, each with its key;
 `banda menu space.<name>` in a Space, its Threads and a new one there;
 `banda menu views` at the sidebar's presets; `banda menu
-settings.<section>.<row>` opens the settings window there. Other words
+settings.<section>.<row>` opens the settings Pane there. Other words
 open it with them typed in, as a search. It exits 2 when the window is
 not open.
 

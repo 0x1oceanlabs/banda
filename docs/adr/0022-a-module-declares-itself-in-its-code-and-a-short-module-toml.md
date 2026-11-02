@@ -184,7 +184,7 @@ from the first. Roma chose to declare in code what is code, and to keep
        by its id (`run`), so the agents module's files open through
        `browser.open`, an action run by its id alone (`unlisted`). The
        Banda menu imports no module; the architecture test's list holds
-       the settings window's agents section and the browser's main
+       the settings Pane's agents section and the browser's main
        process alone.
   5. `module.toml` for each module, `banda modules`, the unstable marks
      counted against a ceiling; the skill's reference lists the modules,
@@ -202,4 +202,4 @@ from the first. Roma chose to declare in code what is code, and to keep
        sheet's, not a module's, so the topic leaves them out.
   - **Later, not forgotten:**
     - the browser's tabs and history as a source of the Banda menu;
-    - the settings window's rows as a source, once ADR 0016 has them.
+    - the settings Pane's rows as a source, once ADR 0016 has them.

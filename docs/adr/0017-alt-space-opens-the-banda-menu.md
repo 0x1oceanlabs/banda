@@ -121,4 +121,4 @@ Roma, on 2026-11-01, looking at the sidebar's header:
   5. **Sources from the manifests**, with ADR 0014.
      - _Changed on 2026-11-02:_ this is ADR 0022's step 4, where a module's `defineModule` declares its sources.
   6. **`banda menu [route]`.**
-     - _Done._ The CLI writes one JSON line to the window's socket, `window.sock` in the state folder, and the window answers `ok`. The engine names that path to the window as it starts, so both find it the same way. Routes: `actions`, `views`, `space.<name>` (or its ID), and `settings.<section>.<row>` for the settings window; other words open the menu with them typed in. Dotted ids for every row wait for the manifests (step 5).
+     - _Done._ The CLI writes one JSON line to the window's socket, `window.sock` in the state folder, and the window answers `ok`. The engine names that path to the window as it starts, so both find it the same way. Routes: `actions`, `views`, `space.<name>` (or its ID), and `settings.<section>.<row>` for the settings Pane; other words open the menu with them typed in. Dotted ids for every row wait for the manifests (step 5).

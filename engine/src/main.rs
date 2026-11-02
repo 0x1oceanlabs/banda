@@ -112,7 +112,7 @@ enum Command {
     /// Opens the Banda menu in Banda's window, as Alt+Space does: at its
     /// root, or at ROUTE: `actions` (the key sheet), `views` (the
     /// sidebar's view), `space.<name>` (a Space's Threads), or
-    /// `settings.<section>.<row>` (the settings window there). Other
+    /// `settings.<section>.<row>` (the settings Pane there). Other
     /// words open it with them typed in.
     Menu { route: Option<String> },
     /// Prints the Banda skill: what an Agent needs to know to work in
@@ -168,7 +168,7 @@ enum SettingsCommand {
         #[arg(long, conflicts_with = "file")]
         export: bool,
     },
-    /// Sets one key, as the settings window does, and leaves every other
+    /// Sets one key, as the settings Pane does, and leaves every other
     /// line and comment as it was. VALUE is TOML (`3`, `true`,
     /// `["a", "b"]`), or else taken as a string. Refuses, saying why
     /// as `check` does, when the file would then be wrong.

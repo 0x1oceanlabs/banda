@@ -112,7 +112,7 @@ export function openingAt(at: At, path: Branch[] = [], words = ""): Opening {
  * empty route at its root, `actions` at its Actions, `views` in the
  * sidebar's view, `space.<name>` (or its ID) in a Space. Any other words
  * open it with them typed in. Settings routes are the desktop's: it
- * opens the settings window at them.
+ * opens the settings Pane at them.
  */
 export function openingOf(
   route: string,

@@ -2,7 +2,7 @@
 //!
 //! Each file's keys are Rust structs with a doc comment on every key, and
 //! they derive a JSON Schema as well as their parser. The schema is what
-//! the settings window draws its rows from, what the skill shows, and what
+//! the settings Pane draws its rows from, what the skill shows, and what
 //! an editor completes and checks the file with. A new key appears in all
 //! of them, with no list kept by hand.
 
