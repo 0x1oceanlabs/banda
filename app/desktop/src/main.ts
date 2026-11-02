@@ -2,8 +2,9 @@
  * The desktop window. It runs the engine as its child, serves the page
  * from `app://banda` and hands the page the engine's address. It also
  * runs `banda look --follow` and hands the page each look (ADR 0007),
- * and writes the preset the page picks into `sidebar.toml` (ADR 0008);
- * nothing else crosses from Node to the page (docs/architecture.md,
+ * writes the preset the page picks into `sidebar.toml` (ADR 0008), and
+ * opens the system's folder picker for "Add Space" (ADR 0026); nothing
+ * else crosses from Node to the page (docs/architecture.md,
  * "Processes"). The page shows the browser's pages, kept apart from it
  * (browser.ts, ADR 0013). Settings are a Pane of the page; the desktop
  * writes their files (settings.ts, ADR 0016).
@@ -26,6 +27,7 @@ import { NodeServices } from "@effect/platform-node"
 import { Effect, Layer, ManagedRuntime, Schema, Stream } from "effect"
 import { Browser, userAgent } from "./browser"
 import { Cdp } from "./cdp"
+import { pickFolder } from "./dialog"
 import { openDoor } from "./door"
 import { BoxArg, Extensions } from "./extensions"
 import { Engine } from "./engine"
@@ -261,6 +263,12 @@ async function ready(): Promise<void> {
     Effect.flatMap(Look.part("sidebar", "The config folder"), (sidebar) =>
       Settings.use((settings) => settings.reveal(sidebar.file, file))
     )
+  )
+  // "Add Space"'s folder picker (ADR 0026).
+  handle(
+    "folder.pick",
+    Schema.Tuple([Schema.NullOr(Schema.String)]),
+    ([at], event) => pickFolder(BrowserWindow.fromWebContents(event.sender), at)
   )
   // Calls (ADR 0011).
   on("notify:show", Schema.Tuple([NoticeArg]), ([notice]) =>

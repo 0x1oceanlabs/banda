@@ -2471,6 +2471,44 @@ test("Add Space adds a folder on disk from the Banda menu, and one banda space a
   await expect(menu.getByRole("group", { name: "Spaces" })).toContainText("cli")
 })
 
+test("Open in Files adds the folder picked in the system's picker, opened where the path points", async () => {
+  window = await startWindow()
+  const { page, dir, app } = window
+  await firstThread(page)
+  const work = join(dir, "work")
+  const picked = join(work, "picked")
+  mkdirSync(picked, { recursive: true })
+  // The system's picker answers with the folder, and keeps where it opened.
+  await app.evaluate(({ dialog }, folder) => {
+    const at = globalThis as { pickedAt?: string }
+    dialog.showOpenDialog = async (...args: unknown[]) => {
+      const options = args.at(-1) as { defaultPath?: string }
+      at.pickedAt = options.defaultPath
+      return { canceled: false, filePaths: [folder] }
+    }
+  }, picked)
+  const menu = page.getByRole("dialog", { name: "Banda menu" })
+  const search = menu.getByRole("combobox", { name: "Search" })
+
+  await page
+    .getByRole("complementary", { name: "Sidebar" })
+    .getByRole("button", { name: "Add Space" })
+    .click()
+  await search.fill("local")
+  await search.press("Enter")
+  await search.fill(`${work}/pi`)
+  await expect(menu.getByRole("option", { name: "picked" })).toBeVisible()
+  await page.screenshot({ path: "test-results/31-open-in-files.png" })
+  await menu.getByRole("button", { name: "Open in Files" }).click()
+  await expect(menu).toBeHidden()
+  await expect(
+    page.getByRole("button", { name: "Space: picked" })
+  ).toBeVisible()
+  expect(
+    await app.evaluate(() => (globalThis as { pickedAt?: string }).pickedAt)
+  ).toBe(work)
+})
+
 test("text selected in a reply is quoted in the composer, a line apart from what is written after it", async () => {
   window = await startWindow()
   const { page } = window

@@ -2,8 +2,9 @@
  * What the desktop gives the page, on `window.banda`
  * (app/desktop/src/preload.ts). The page reaches the engine only through
  * the address it hands out, gets the look the desktop reads (ADR 0007),
- * and asks it to write the sidebar's preset (ADR 0008) and to show system
- * notifications (ADR 0011). The browser's pages live in it too (ADR 0013).
+ * and asks it to write the sidebar's preset (ADR 0008), to show system
+ * notifications (ADR 0011) and to pick a folder (ADR 0026). The browser's
+ * pages live in it too (ADR 0013).
  */
 import type { BrowserHost } from "@banda/browser-pane/desktop"
 import type { Address } from "@banda/contract"
@@ -66,6 +67,12 @@ export type Host = {
     open: (route: string) => void
     /** Calls `open` with each route the menu is asked to open at. */
     listen: (open: (route: string) => void) => () => void
+  }
+  /** The system's folder picker, which "Add Space" opens (ADR 0026). */
+  folder: {
+    /** The folder the Person picks, the picker opened at `at`, a whole
+     * path, or at home; none if they cancel. */
+    pick: (at: string | null) => Promise<string | null>
   }
   /** The desktop's notifications and its quiet. */
   notify: {
