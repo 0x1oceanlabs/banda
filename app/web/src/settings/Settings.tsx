@@ -88,17 +88,10 @@ export function Settings({
     const link = key ? `${next.id}/${key}` : next.id
     if (link !== args.link) update({ link })
   }
-  // A problem at a line a row's value is on shows at that row; the rest,
-  // above the section.
-  const file = section.file ?? ""
-  const atRows = new Set<number>()
+  // A problem shows at the row of its key; the rest, above the section.
   const row = (r: Row) => {
     const setting = keyed[r.file]?.[r.key]
-    const line = setting?.from.layer === "file" ? setting.from.line : undefined
-    if (line) atRows.add(line)
-    const here = line
-      ? (wrong.get(r.file) ?? NONE).filter((p) => p.line === line)
-      : NONE
+    const here = (wrong.get(r.file) ?? NONE).filter((p) => p.key === r.key)
     return (
       <SettingRow
         key={`${r.file}:${r.key}`}
@@ -110,7 +103,11 @@ export function Settings({
       />
     )
   }
-  const groups = groupsOf(section).map((group) => (
+  const sectionGroups = groupsOf(section)
+  const shown = new Set(
+    sectionGroups.flatMap((g) => g.rows.map((r) => `${r.file}:${r.key}`))
+  )
+  const groups = sectionGroups.map((group) => (
     <div key={group.title} className="flex flex-col gap-1.5">
       {group.title && (
         <h2 className="px-1 text-xs font-medium text-muted-foreground">
@@ -120,8 +117,10 @@ export function Settings({
       <Rows>{group.rows.map(row)}</Rows>
     </div>
   ))
-  const above = (wrong.get(file) ?? NONE).filter(
-    (p) => !p.line || !atRows.has(p.line)
+  const above = [section.file, section.also?.file].flatMap((file) =>
+    file
+      ? (wrong.get(file) ?? NONE).filter((p) => !shown.has(`${file}:${p.key}`))
+      : NONE
   )
 
   // A Pane as wide as a column: in a narrow one, the sections are a row

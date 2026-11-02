@@ -38,7 +38,7 @@ export function SettingRow({
 }: {
   row: Row
   setting?: Setting
-  /** What is wrong in the file at this key's line. */
+  /** What is wrong in the file at this key. */
   problems: Problem[]
   /** A link named it: it shows lit. */
   lit?: boolean

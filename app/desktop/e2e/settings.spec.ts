@@ -70,6 +70,13 @@ test("Alt+, opens the settings Pane, which writes the files and follows them (AD
     "9"
   )
 
+  // A value that does not read shows at its key's row, though the row's
+  // value is still Banda's own.
+  writeFileSync(file, 'radius = 9\n\n[tile]\nborder = "thick"\n')
+  await expect(border.getByRole("alert")).toContainText("thick")
+  writeFileSync(file, "radius = 9\n")
+  await expect(border.getByRole("alert")).toHaveCount(0)
+
   // The search finds a row in any section, and goes to it.
   await page.keyboard.press("/")
   await page.keyboard.type("volume")
