@@ -6,6 +6,7 @@ use crate::line_at;
 use serde::Serialize;
 use serde_json::{Map, Value};
 use std::collections::{BTreeMap, BTreeSet};
+use std::ops::Range;
 use std::path::PathBuf;
 use toml_edit::TableLike;
 use ts_rs::TS;
@@ -137,28 +138,39 @@ fn line_of(table: &dyn TableLike, key: &str, text: &str) -> Option<u32> {
 /// `harness.codex.enabled`. None when the text is not TOML, or the place
 /// is no key's.
 pub fn key_at(text: &str, offset: usize) -> Option<String> {
-    let document = toml_edit::Document::parse(text).ok()?;
-    key_in(document.as_table(), offset)
+    entry_at(text, offset).map(|(key, _)| key)
 }
 
-fn key_in(table: &dyn TableLike, offset: usize) -> Option<String> {
+/// [`key_at`], and the bytes of its entry: from the first part of its
+/// name, `tile` of `tile.border = 3`, to the end of its value.
+pub fn entry_at(text: &str, offset: usize) -> Option<(String, Range<usize>)> {
+    let document = toml_edit::Document::parse(text).ok()?;
+    entry_in(document.as_table(), offset)
+}
+
+fn entry_in(table: &dyn TableLike, offset: usize) -> Option<(String, Range<usize>)> {
     table.iter().find_map(|(name, item)| {
         if let toml_edit::Item::ArrayOfTables(list) = item {
             return list.iter().find_map(|entry| {
-                let rest = key_in(entry, offset)?;
-                Some(match entry.get("id").and_then(|id| id.as_str()) {
+                let (rest, range) = entry_in(entry, offset)?;
+                let key = match entry.get("id").and_then(|id| id.as_str()) {
                     Some(id) => format!("{name}.{id}.{rest}"),
                     None => format!("{name}.{rest}"),
-                })
+                };
+                Some((key, range))
             });
         }
-        if let Some(inner) = item.as_table_like() {
-            return key_in(inner, offset).map(|rest| format!("{name}.{rest}"));
-        }
         let (key, _) = table.get_key_value(name)?;
-        (key.span()?.start..item.span()?.end)
-            .contains(&offset)
-            .then(|| name.to_owned())
+        if let Some(inner) = item.as_table_like() {
+            let (rest, mut range) = entry_in(inner, offset)?;
+            // `tile.border = 3` is one entry, from `tile`.
+            if inner.is_dotted() {
+                range.start = key.span()?.start;
+            }
+            return Some((format!("{name}.{rest}"), range));
+        }
+        let range = key.span()?.start..item.span()?.end;
+        range.contains(&offset).then(|| (name.to_owned(), range))
     })
 }
 

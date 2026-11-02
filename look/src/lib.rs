@@ -86,8 +86,9 @@ pub struct Look {
     pub columns: columns::Columns,
     /// The layers it came from, bottom first.
     pub sources: Vec<Source>,
-    /// What is wrong in the files. The look still applies: a broken layer
-    /// is left out, and `--follow` keeps the last good look.
+    /// What is wrong in the files. The look still applies: a value that
+    /// does not read is left out; a file that does not read at all is,
+    /// and `--follow` keeps the last good look.
     pub problems: Vec<Problem>,
     /// Banda's sounds, which the window plays (ADR 0009).
     pub sound: sound::Sound,
@@ -242,17 +243,60 @@ impl Problem {
     }
 }
 
-/// Reads a `look.toml` or a `banda.toml`, and checks what TOML alone does
-/// not: sizes are not negative, colours are colours. Problems go to
-/// `problems`; `None` when the file cannot be read as the schema at all.
-pub fn read_settings(path: &Path, text: &str, problems: &mut Vec<Problem>) -> Option<Settings> {
-    let settings: Settings = match toml::from_str(text) {
-        Ok(settings) => settings,
-        Err(error) => {
-            problems.push(Problem::toml(path, text, &error));
+/// Reads `text`, the file at `path`, as a `T`. A value that does not
+/// read is named at its key and left out, so the rest of the file still
+/// applies: its entry's bytes go blank, so every place stays where it
+/// was, and the text is read again. `None`, with the problem, when what
+/// is wrong is no key's, as TOML written wrong.
+pub fn read<T: serde::de::DeserializeOwned>(
+    path: &Path,
+    text: &str,
+    problems: &mut Vec<Problem>,
+) -> Option<T> {
+    let mut text = std::borrow::Cow::Borrowed(text);
+    loop {
+        let error = match toml::from_str(&text) {
+            Ok(read) => return Some(read),
+            Err(error) => error,
+        };
+        problems.push(Problem::toml(path, &text, &error));
+        let start = error.span()?.start;
+        let (_, entry) = keyed::entry_at(&text, start)?;
+        let blanked = blank(&text, entry);
+        if blanked == *text {
             return None;
         }
+        text = std::borrow::Cow::Owned(blanked);
+    }
+}
+
+/// `text` with the bytes of `entry` as spaces, lines kept, and a comma
+/// after it too, as in an inline table: TOML without that entry.
+fn blank(text: &str, entry: std::ops::Range<usize>) -> String {
+    let rest = &text[entry.end..];
+    let gap = rest.len() - rest.trim_start_matches([' ', '\t']).len();
+    let end = match rest[gap..].starts_with(',') {
+        true => entry.end + gap + 1,
+        false => entry.end,
     };
+    let mut blanked = String::with_capacity(text.len());
+    blanked.push_str(&text[..entry.start]);
+    for c in text[entry.start..end].chars() {
+        match c {
+            '\n' => blanked.push(c),
+            // As many bytes as it had, so every place after stays.
+            c => blanked.extend(std::iter::repeat_n(' ', c.len_utf8())),
+        }
+    }
+    blanked.push_str(&text[end..]);
+    blanked
+}
+
+/// Reads a `look.toml` or a `banda.toml`, and checks what TOML alone does
+/// not: sizes are not negative, colours are colours. Problems go to
+/// `problems`; `None` when it is not TOML at all.
+pub fn read_settings(path: &Path, text: &str, problems: &mut Vec<Problem>) -> Option<Settings> {
+    let settings: Settings = read(path, text, problems)?;
     for key in settings.negative_sizes() {
         problems.push(Problem::of_key(
             path,
@@ -801,8 +845,12 @@ pub fn follow(
         let look = resolved.look;
         watched = resolved.watched;
         followed = resolved.followed;
-        let shown = match (&good, look.problems.is_empty()) {
-            (Some(good), false) => Look {
+        // A value that does not read is left out and the rest applies; a
+        // problem that is no key's, as TOML written wrong, leaves a file
+        // out whole, so the last good look stays.
+        let whole = look.problems.iter().any(|problem| problem.key.is_none());
+        let shown = match (&good, whole) {
+            (Some(good), true) => Look {
                 problems: look.problems.clone(),
                 ..good.clone()
             },
@@ -914,4 +962,53 @@ pub fn check_text(path: &Path, text: &str) -> Vec<Problem> {
         read_settings(path, text, &mut problems);
     }
     problems
+}
+
+#[cfg(test)]
+mod reading {
+    use super::*;
+    use serde::Deserialize;
+    use std::collections::BTreeMap;
+
+    #[derive(Debug, Default, Deserialize, PartialEq)]
+    #[serde(deny_unknown_fields)]
+    struct File {
+        a: Option<u32>,
+        b: Option<String>,
+        t: Option<BTreeMap<String, u32>>,
+    }
+
+    fn read_text(text: &str) -> (Option<File>, Vec<Option<String>>) {
+        let mut problems = Vec::new();
+        let read = read::<File>(Path::new("f.toml"), text, &mut problems);
+        (read, problems.into_iter().map(|p| p.key).collect())
+    }
+
+    #[test]
+    fn each_value_that_does_not_read_is_left_out_and_the_rest_applies() {
+        let text = "a = \"x\"\nb = \"é\"\nc = 1\nt.one = \"no\"\nt.two = 2\n";
+        let (read, keys) = read_text(text);
+        let read = read.unwrap();
+        assert_eq!((read.a, read.b.as_deref()), (None, Some("é")));
+        assert_eq!(read.t, Some(BTreeMap::from([("two".to_owned(), 2)])));
+        assert_eq!(
+            keys,
+            [Some("a".to_owned()), Some("c".to_owned()), Some("t.one".to_owned())]
+        );
+    }
+
+    #[test]
+    fn an_inline_table_keeps_its_other_keys() {
+        let (read, keys) = read_text("t = { one = \"no\", two = 2 }\nb = \"é\"\n");
+        assert_eq!(keys, [Some("t.one".to_owned())]);
+        let read = read.unwrap();
+        assert_eq!(read.t, Some(BTreeMap::from([("two".to_owned(), 2)])));
+        assert_eq!(read.b.as_deref(), Some("é"), "places after stay");
+    }
+
+    #[test]
+    fn toml_written_wrong_is_no_key_s_and_reads_nothing() {
+        let (read, keys) = read_text("a = \n");
+        assert_eq!((read, keys), (None, vec![None]));
+    }
 }

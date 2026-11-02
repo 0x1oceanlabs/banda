@@ -370,20 +370,14 @@ impl SidebarSettings {
 
 /// Reads a `sidebar.toml`, or a preset file when `preset`, and checks what
 /// TOML alone does not. Problems go to `problems`, and a key that is wrong
-/// is left out; `None` when the file cannot be read as the schema at all.
+/// is left out; `None` when it is not TOML at all.
 pub fn read_sidebar(
     path: &Path,
     text: &str,
     preset: bool,
     problems: &mut Vec<Problem>,
 ) -> Option<SidebarSettings> {
-    let mut settings: SidebarSettings = match toml::from_str(text) {
-        Ok(settings) => settings,
-        Err(error) => {
-            problems.push(Problem::toml(path, text, &error));
-            return None;
-        }
-    };
+    let mut settings: SidebarSettings = crate::read(path, text, problems)?;
     if preset && let Some(named) = settings.preset.take() {
         problems.push(Problem::at(
             path,
