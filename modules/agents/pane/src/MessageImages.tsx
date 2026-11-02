@@ -17,25 +17,41 @@ export type ImageReader = {
   /** An image as a `data:` URL, read once while the Pane is open. */
   read: (image: ImageId) => Promise<string>
   /** Remembers a URL the window already has, such as for an image just
-   * sent. */
+   * added. */
   remember: (image: ImageId, url: string) => void
+  /** The URL already read, if it is. */
+  peek: (image: ImageId) => string | undefined
+  /** Lets go of an image's URL, such as one taken off the message. */
+  forget: (image: ImageId) => void
 }
 
 export function useImageReader(engine: Engine, space: SpaceId): ImageReader {
   return useMemo(() => {
     const urls = new Map<ImageId, Promise<string>>()
+    const ready = new Map<ImageId, string>()
     return {
       read: (image) => {
         let url = urls.get(image)
         if (!url) {
           url = engine.call("agents.image", { image }, { space }).then(urlOf)
-          // A read that failed goes again the next time.
-          url.catch(() => urls.delete(image))
+          url.then(
+            (read) => ready.set(image, read),
+            // A read that failed goes again the next time.
+            () => urls.delete(image)
+          )
           urls.set(image, url)
         }
         return url
       },
-      remember: (image, url) => urls.set(image, Promise.resolve(url)),
+      remember: (image, url) => {
+        urls.set(image, Promise.resolve(url))
+        ready.set(image, url)
+      },
+      peek: (image) => ready.get(image),
+      forget: (image) => {
+        urls.delete(image)
+        ready.delete(image)
+      },
     }
   }, [engine, space])
 }
@@ -103,9 +119,10 @@ function MessageImage({
 
 /** The image's URL once read: `undefined` while it is read, `null` when
  * it could not be. */
-function useUrl(reader: ImageReader, image: ImageId) {
+export function useUrl(reader: ImageReader, image: ImageId | undefined) {
   const [read, setRead] = useState<{ image: ImageId; url: string | null }>()
   useEffect(() => {
+    if (image === undefined) return
     let current = true
     reader.read(image).then(
       (url) => current && setRead({ image, url }),
@@ -115,5 +132,6 @@ function useUrl(reader: ImageReader, image: ImageId) {
       current = false
     }
   }, [reader, image])
-  return read?.image === image ? read.url : undefined
+  if (image === undefined) return undefined
+  return read?.image === image ? read.url : reader.peek(image)
 }

@@ -1,11 +1,14 @@
 /**
  * What a Person wrote to a Thread and has not sent yet, kept in this
  * window's storage, so it waits for them when they come back, as in T3
- * Code (ADR 0010, decision 7). Every Pane on the same Thread holds the
- * same draft. It is written once typing stops, and before the window
- * closes (ADR 0015, decision 4).
+ * Code (ADR 0010, decision 7): its text, and the images it carries. Every
+ * Pane on the same Thread holds the same draft. Its text is written once
+ * typing stops, and before the window closes (ADR 0015, decisions 4 and
+ * 5).
  */
-import { useState, useSyncExternalStore } from "react"
+import { useCallback, useState, useSyncExternalStore } from "react"
+import type { Image } from "@banda/contract/agents"
+import { kept as keptIn } from "@banda/ui/lib/kept"
 
 const PREFIX = "banda.agents.draft."
 const heard = new Set<() => void>()
@@ -91,4 +94,28 @@ export function useDraft(
     (next) =>
       keep(thread, typeof next === "function" ? next(read(thread)) : next),
   ]
+}
+
+const NO_IMAGES: Image[] = []
+const images = keptIn("banda.agents.draft-images", (value): value is Image[] =>
+  Array.isArray(value)
+)
+
+/** The images the engine keeps for `thread`'s draft, by the order they
+ * were added, and how to change them; a Thread not yet started keeps
+ * them only while its Pane is open. Each waits in the engine as long as
+ * an image no message took (ADR 0015, decision 5). */
+export function useDraftImages(
+  thread: string | null
+): [Image[], (to: (all: Image[]) => Image[]) => void] {
+  const [unstarted, setUnstarted] = useState(NO_IMAGES)
+  const all = images.use()
+  const change = useCallback(
+    (to: (all: Image[]) => Image[]) =>
+      thread === null
+        ? setUnstarted(to)
+        : images.put(thread, to(images.read()[thread] ?? NO_IMAGES)),
+    [thread]
+  )
+  return [thread === null ? unstarted : (all[thread] ?? NO_IMAGES), change]
 }

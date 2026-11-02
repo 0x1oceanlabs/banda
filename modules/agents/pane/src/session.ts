@@ -8,6 +8,7 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 import type { Engine, SpaceId } from "@banda/contract"
 import type {
   Defaults,
+  Image,
   ItemId,
   Offer,
   Settings,
@@ -18,7 +19,7 @@ import { useAct } from "@banda/ui/hooks/use-act"
 import { useInFront } from "@banda/ui/hooks/use-in-front"
 import { READ_AGAIN, type Source, useLive } from "@banda/ui/hooks/use-live"
 import { paneOf, type PaneProps } from "@banda/ui/pane"
-import { type Attached, type Attaching, useAttachments } from "./Attachments"
+import { type Attaching, useAttachments } from "./Attachments"
 import { diffPane } from "./DiffPane"
 import type { Values } from "./form"
 import { harnessName, useHarnesses } from "./harnesses"
@@ -127,7 +128,9 @@ export function useThreadSession({
   }
 
   const images = useAttachments({
+    thread,
     attach: (image: Attaching) => engine.command("agents.attach", image, space),
+    reader,
     closed: offer.no_images ? `${name} does not take images.` : undefined,
   })
   // A file dropped or pasted, kept in the Space for the message to name.
@@ -169,13 +172,12 @@ export function useThreadSession({
   /** Sends `text`; an existing Thread changes to `next` first, if given. */
   const go = async (
     text: string,
-    images: Attached[],
+    images: Image[],
     steer: boolean,
     next?: Settings
   ) => {
     const no = asking && declineOnce(asking.body)
     if (no && text && (await answer(asking.id, no)) === undefined) return false
-    for (const { image, url } of images) reader.remember(image.id, url)
     const sent = await sending.act(() =>
       engine.command(
         "agents.send",
@@ -184,7 +186,7 @@ export function useThreadSession({
         {
           ...(thread === null ? { harness } : { thread }),
           text,
-          images: images.map(({ image }) => image.id),
+          images: images.map(({ id }) => id),
           settings: thread === null ? (settings ?? null) : (next ?? null),
           steer,
         },
@@ -278,7 +280,7 @@ export function useThreadSession({
     waits,
     asking,
     planned,
-    send: (text: string, images: Attached[], steer: boolean) =>
+    send: (text: string, images: Image[], steer: boolean) =>
       go(text, images, steer),
     implement,
     answer,
