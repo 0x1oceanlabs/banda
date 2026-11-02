@@ -1,11 +1,15 @@
-import { useEffect, useMemo, useRef, useState } from "react"
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react"
 import type { Engine, SpaceId, SpaceSummary } from "@banda/contract"
 import type { Bind } from "@banda/contract/look"
-import { useHarnesses, useSpaceFiles } from "@banda/agents-pane"
-import { useAddressOf } from "@banda/browser-pane"
 import { MARK_WORDS, waits } from "@banda/ui/components/banda-mark"
 import { Dialog, DialogContent, DialogTitle } from "@banda/ui/components/dialog"
-import { HarnessLogo } from "@banda/ui/components/harness-logo"
 import { Kbd, KbdGroup } from "@banda/ui/components/kbd"
 import {
   Suggestion,
@@ -14,21 +18,18 @@ import {
 } from "@banda/ui/components/suggestions"
 import { useWrite } from "@banda/ui/hooks/use-write"
 import { type Key, keyToBind, matches, sameKey } from "@banda/ui/lib/keys"
-import { nameAndFolder } from "@banda/ui/lib/paths"
+import type { Action, Here, MenuRow, Source } from "@banda/ui/module"
 import {
   CheckIcon,
   ChevronRightIcon,
   CornerDownLeftIcon,
-  FileIcon,
-  GlobeIcon,
   ListFilterIcon,
   SearchIcon,
-  SquarePenIcon,
 } from "lucide-react"
-import type { Action } from "@banda/ui/module"
 import { KEYS_FILE, keyName, writeBind } from "../actions/actions"
 import type { Lists } from "../bar/Watches"
 import { useLookSidebar } from "../look"
+import { runs, sources as allSources } from "../registry"
 import type { Shell } from "../shell/actions"
 import { SpaceBadge, ThreadMark } from "../sidebar/Row"
 import { PRESET_WORDS } from "../sidebar/settings"
@@ -44,6 +45,7 @@ import {
   type Keying,
   menuOf,
   OPEN,
+  type Found,
   type Opening,
   type Sources,
 } from "./menu"
@@ -62,6 +64,7 @@ export function BandaMenu({
   onClose,
   onChoose,
   engine,
+  modules,
   space,
   lists,
   spaces,
@@ -74,7 +77,9 @@ export function BandaMenu({
   /** Runs a chosen row, once the menu has closed. */
   onChoose: (row: Exclude<Choice, Branch | Keying>) => void
   engine: Engine
-  /** The Space a new Thread starts in, whose Harnesses it can start on. */
+  /** The modules the engine runs: the sources of the others find nothing. */
+  modules: readonly string[]
+  /** The focused Space, where the sources look. */
   space: SpaceId
   lists: Lists
   spaces: readonly SpaceSummary[]
@@ -82,114 +87,180 @@ export function BandaMenu({
   /** The Person's keys in force, from keys.toml. */
   binds: readonly Bind[]
 }) {
-  // Loaded while the menu is shut, so they are there as it opens.
-  const all = useHarnesses(engine, space)
-  // A Harness turned off starts no new Thread.
-  const harnesses = useMemo(() => all.filter((h) => h.enabled), [all])
+  // What the menu looks for, and what each source found. The sources are
+  // drawn while the menu is shut too, so what they load first is there as
+  // it opens.
+  const [looking, setLooking] = useState<Looking>(NOWHERE)
+  const [rows, setRows] = useState<
+    Readonly<Record<string, readonly MenuRow[]>>
+  >({})
+  const running = useMemo(
+    () => allSources.filter(({ module }) => runs(module, modules)),
+    [modules]
+  )
+  const found: Found[] = useMemo(
+    () =>
+      running.map(({ source }) => ({
+        label: source.label,
+        rows: rows[source.id] ?? NO_ROWS,
+      })),
+    [running, rows]
+  )
+  const here: Here = useMemo(() => {
+    const at = looking.entered ?? space
+    return {
+      engine,
+      space: at,
+      folder: spaces.find((one) => one.id === at)?.folder,
+      entered: looking.entered !== undefined,
+    }
+  }, [engine, space, spaces, looking.entered])
+  const hear = useCallback((id: string, heard?: readonly MenuRow[]) => {
+    setRows((rows) => {
+      if (rows[id] === heard) return rows
+      const next = { ...rows }
+      if (heard) next[id] = heard
+      else delete next[id]
+      return next
+    })
+  }, [])
   // Esc shuts the open act list before the menu.
   const escapeRef = useRef<() => boolean>(() => false)
   return (
-    <Dialog
-      open={opening !== null}
-      onOpenChange={(open, details) => {
-        if (open) return
-        if (details.reason === "escape-key" && escapeRef.current())
-          return details.cancel()
-        onClose()
-      }}
-    >
-      <DialogContent
-        showCloseButton={false}
-        className="top-[12%] translate-y-0 gap-0 overflow-hidden p-0 sm:max-w-xl"
+    <>
+      {running.map(({ source }) => (
+        <Finder
+          key={source.id}
+          source={source}
+          words={looking.words}
+          here={here}
+          hear={hear}
+        />
+      ))}
+      <Dialog
+        open={opening !== null}
+        onOpenChange={(open, details) => {
+          if (open) return
+          if (details.reason === "escape-key" && escapeRef.current())
+            return details.cancel()
+          onClose()
+        }}
       >
-        <DialogTitle className="sr-only">Banda menu</DialogTitle>
-        {opening && (
-          <Menu
-            key={opening.n}
-            opening={opening}
-            engine={engine}
-            space={space}
-            lists={lists}
-            spaces={spaces}
-            actions={actions}
-            binds={binds}
-            harnesses={harnesses}
-            escapeRef={escapeRef}
-            onChoose={(row) => {
-              onClose()
-              onChoose(row)
-            }}
-          />
-        )}
-      </DialogContent>
-    </Dialog>
+        <DialogContent
+          showCloseButton={false}
+          className="top-[12%] translate-y-0 gap-0 overflow-hidden p-0 sm:max-w-xl"
+        >
+          <DialogTitle className="sr-only">Banda menu</DialogTitle>
+          {opening && (
+            <Menu
+              key={opening.n}
+              opening={opening}
+              lists={lists}
+              spaces={spaces}
+              actions={actions}
+              binds={binds}
+              found={found}
+              onLooking={setLooking}
+              escapeRef={escapeRef}
+              onChoose={(row) => {
+                onClose()
+                onChoose(row)
+              }}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
+    </>
   )
 }
+
+/** One source, finding for the menu; what it found leaves with it. */
+function Finder({
+  source,
+  words,
+  here,
+  hear,
+}: {
+  source: Source
+  words: string
+  here: Here
+  hear: (id: string, rows?: readonly MenuRow[]) => void
+}) {
+  const { id, Find } = source
+  const found = useCallback(
+    (rows: readonly MenuRow[]) => hear(id, rows),
+    [hear, id]
+  )
+  useEffect(() => () => hear(id), [hear, id])
+  return <Find words={words} here={here} found={found} />
+}
+
+/** What the menu looks for: the words typed at its root, or the Space it
+ * went into. */
+type Looking = { words: string; entered?: SpaceId }
+
+const NOWHERE: Looking = { words: "" }
 
 /** The menu while it is open: it starts where it is opened, each time. */
 function Menu({
   opening,
-  engine,
-  space,
   lists,
   spaces,
   actions,
   binds,
-  harnesses,
+  found,
+  onLooking,
   escapeRef,
   onChoose,
 }: {
   opening: Opening
-  engine: Engine
-  space: SpaceId
   lists: Lists
   spaces: readonly SpaceSummary[]
   actions: readonly Action<Shell>[]
   /** The Person's keys in force, from keys.toml. */
   binds: readonly Bind[]
-  harnesses: Sources["harnesses"]
+  /** What the sources found for what it looks for. */
+  found: readonly Found[]
+  onLooking: (looking: Looking) => void
   escapeRef: React.RefObject<() => boolean>
   onChoose: (row: Exclude<Choice, Branch | Keying>) => void
 }) {
   const { preset, presets } = useLookSidebar()
   const settled = useIsSettled()
-  const addressOf = useAddressOf()
   const uses = useOpened()
   const [now] = useState(Date.now)
   const { at } = opening
   const [words, setWords] = useState(opening.words)
   const [path, setPath] = useState<Branch[]>(opening.path)
-  // The focused Space's files that fit the words, as `@` finds them.
   const query = words.trim()
-  const lookFiles = at === "root" && path.length === 0 && query !== ""
-  const found = useSpaceFiles(engine, space, lookFiles ? query : undefined)
-  const paths = (lookFiles && found?.paths) || NO_PATHS
+  // The sources look for the words at the root, and in a Space gone into.
+  const inside = path.at(-1)
+  const entered = inside?.kind === "space" ? inside.space.id : undefined
+  const atRoot = at === "root" && path.length === 0
+  // Before the paint, so no row is drawn for the words before.
+  useLayoutEffect(
+    () =>
+      onLooking(
+        entered
+          ? { words: query, entered }
+          : atRoot
+            ? { words: query }
+            : NOWHERE
+      ),
+    [onLooking, entered, atRoot, query]
+  )
+  useEffect(() => () => onLooking(NOWHERE), [onLooking])
   const sources: Sources = useMemo(
     () => ({
       lists,
       spaces,
       actions,
       presets: { names: presets.map((one) => one.name), current: preset },
-      harnesses,
       settled,
-      files: { space, paths },
-      addressOf,
+      found,
       weight: (id) => weightOf(uses[id], now),
     }),
-    [
-      lists,
-      spaces,
-      actions,
-      presets,
-      preset,
-      harnesses,
-      settled,
-      space,
-      paths,
-      addressOf,
-      uses,
-      now,
-    ]
+    [lists, spaces, actions, presets, preset, settled, found, uses, now]
   )
   const [index, setIndex] = useState(0)
   // The row's acts that Tab shows, and the one chosen among them.
@@ -198,7 +269,6 @@ function Menu({
   // of the keys did.
   const [taking, setTaking] = useState<Action<Shell>>()
   const [note, setNote] = useState<string>()
-  const inside = path.at(-1)
   const groups = useMemo(
     () => menuOf({ words, at, inside, sources }),
     [words, at, inside, sources]
@@ -571,58 +641,27 @@ function RowView({
           <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground" />
         </>
       )
-    case "ask": {
-      const harness =
-        sources.harnesses.find((one) => one.id === row.harness) ??
-        sources.harnesses[0]
+    case "found": {
+      const { icon, title, detail } = row.row
       return (
         <>
-          <HarnessLogo
-            id={harness?.id}
-            name={harness?.name ?? ""}
-            className="size-4"
-            fallback={<SquarePenIcon className="size-4 shrink-0" />}
-          />
-          <span className="min-w-0 flex-1 truncate">
-            {row.words ? `New Thread: “${row.words}”` : "New Thread here"}
-          </span>
-          {harness && <Detail>{harness.name}</Detail>}
-          {!row.space && <Keys keyOf={ASK} />}
-        </>
-      )
-    }
-    case "file": {
-      const { name, folder } = nameAndFolder(row.path)
-      return (
-        <>
-          <FileIcon className="size-4 shrink-0 text-muted-foreground" />
-          <span className="min-w-0 truncate">{name}</span>
+          {icon}
+          <span className="min-w-0 truncate">{title}</span>
           <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
-            {folder}
+            {detail}
           </span>
         </>
       )
     }
-    case "web":
-      return (
-        <>
-          <GlobeIcon className="size-4 shrink-0 text-muted-foreground" />
-          <span className="min-w-0 flex-1 truncate">
-            {row.address
-              ? `Open ${row.words}`
-              : `Search the web: “${row.words}”`}
-          </span>
-        </>
-      )
+    case "ask":
     case "settle":
-    case "copy":
     case "bind":
     case "free":
       return null
   }
 }
 
-const NO_PATHS: string[] = []
+const NO_ROWS: readonly MenuRow[] = []
 
 function Detail({ children }: { children: React.ReactNode }) {
   return (

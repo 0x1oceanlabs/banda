@@ -1,23 +1,17 @@
 /**
  * What the Banda menu lists (ADR 0017): empty, the Recent Threads and the
- * Actions run most; typed into, the Threads, Spaces, Files and Actions
- * that fit the words, then always "New Thread" with them and the web's
- * row for them. A Space and the sidebar's
- * view are branches the menu goes into, as Omarchy's menu does, and `Tab`
- * shows what can be done with a row. Plain data, so the window only draws
- * it.
+ * Actions run most; typed into, the Threads, Spaces, what the modules'
+ * sources find (ADR 0022, decision 4) and the Actions that fit the words,
+ * then the sources' rows with no heading, as New Thread with them. A
+ * Space and the sidebar's view are branches the menu goes into, as
+ * Omarchy's menu does, and `Tab` shows what can be done with a row. Plain
+ * data, so the window only draws it. It knows no module.
  */
 import type { SpaceId, SpaceSummary } from "@banda/contract"
-import {
-  browserAt,
-  browserPane,
-  fileAddress,
-  isAddress,
-} from "@banda/browser-pane"
 import { waits } from "@banda/ui/components/banda-mark"
 import type { Key } from "@banda/ui/lib/keys"
-import { type Listed, type PaneState, paneOf } from "@banda/ui/pane"
-import type { Action } from "@banda/ui/module"
+import type { Listed } from "@banda/ui/pane"
+import type { Action, MenuRow } from "@banda/ui/module"
 import { keyName } from "../actions/actions"
 import type { Lists } from "../bar/Watches"
 import type { Shell } from "../shell/actions"
@@ -55,39 +49,15 @@ export type Choice =
   | { kind: "bind"; id: string; action: Action<Shell> }
   /** Frees one of the action's keys, in `keys.toml`. */
   | { kind: "free"; id: string; action: Action<Shell>; key: Key }
-  /** A new Thread: with `words`, in `space`, on `harness`, where given. */
-  | {
-      kind: "ask"
-      id: string
-      words: string
-      space?: SpaceId
-      harness?: string
-    }
+  /** A new Thread: with `words`, in `space` where given; the menu's own
+   * Alt+Enter, and a Space's Tab. */
+  | { kind: "ask"; id: string; words: string; space?: SpaceId }
+  /** What a module's source found; choosing it runs it. */
+  | { kind: "found"; id: string; row: MenuRow }
   /** Arranges the sidebar by a preset (ADR 0008). */
   | { kind: "preset"; id: string; name: string; current: boolean }
   /** Settles a Thread, or brings it back. */
   | { kind: "settle"; id: string; space: SpaceId; listed: Listed }
-  /** A file in a Space's folder, `path` in it and `full` from the root:
-   * it opens as `pane` in the Space. */
-  | {
-      kind: "file"
-      id: string
-      space: SpaceId
-      path: string
-      full: string
-      pane: PaneState
-    }
-  /** The words as a page, opened as `pane`: the address typed, or a
-   * search for them. */
-  | {
-      kind: "web"
-      id: string
-      words: string
-      address: boolean
-      pane: PaneState
-    }
-  /** Puts `text` on the clipboard. */
-  | { kind: "copy"; id: string; text: string }
 
 /** A row the menu goes into rather than runs. */
 export type Branch = Extract<Choice, { kind: "space" | "views" | "family" }>
@@ -173,19 +143,18 @@ export type Sources = {
   actions: readonly Action<Shell>[]
   /** The sidebar's presets, and the one in force. */
   presets: { names: readonly string[]; current: string }
-  /** The Harnesses a new Thread can start on, the first by default. */
-  harnesses: readonly { id: string; name: string }[]
   /** Whether a Thread is settled now. */
   settled: (listed: Listed) => boolean
-  /** The files of the focused Space that fit the words, as `@` finds
-   * them, the best first. */
-  files: { space: SpaceId; paths: readonly string[] }
-  /** The page the browser opens for what was typed. */
-  addressOf: (typed: string) => string
+  /** What the modules' sources found for the words, in the modules'
+   * order, each under its source's heading. */
+  found: readonly Found[]
   /** How often and lately a row was chosen, by its id: more ranks first
    * among equal matches. */
   weight: (id: string) => number
 }
+
+/** The rows one source found, under its heading. */
+export type Found = { label: string; rows: readonly MenuRow[] }
 
 /** The Actions an empty menu offers, as T3 Code's palette offers its own. */
 export const ROOT_ACTIONS = [
@@ -201,7 +170,7 @@ export const ROOT_ACTIONS = [
 const SECTIONS = ["Threads", "Panes", "Columns", "Workspaces", "Banda"]
 
 /** How many rows of each group a search shows. */
-const SHOWN = { threads: 8, spaces: 5, files: 6, actions: 8, recent: 6 }
+const SHOWN = { threads: 8, spaces: 5, actions: 8, recent: 6 }
 
 /**
  * The menu's rows for `words`: opened `at` its root or its Actions, or
@@ -218,11 +187,25 @@ export function menuOf({
   inside?: Branch
   sources: Sources
 }): Group[] {
-  const { lists, spaces, actions, presets, files, weight } = sources
+  const { lists, spaces, presets, found, weight } = sources
   const query = words.trim()
   const byWeight = (row: Choice) => weight(row.id)
   // The actions, and the branches among them, as one list.
+  const actions = sources.actions.filter((action) => !action.unlisted)
   const actionRows: Choice[] = [...actions.map(actionRow), VIEWS_BRANCH]
+  // What the sources found: the groups with a heading, by it in the
+  // modules' order, and the rows with none.
+  const headed = new Map<string, Choice[]>()
+  for (const { label, rows } of found)
+    if (label)
+      headed.set(label, [...(headed.get(label) ?? []), ...rows.map(foundRow)])
+  const sourced: Group[] = [...headed].map(([label, rows]) => ({ label, rows }))
+  const last: Group = {
+    label: "",
+    rows: found
+      .filter((one) => !one.label)
+      .flatMap((one) => one.rows.map(foundRow)),
+  }
   const actionTexts = (row: Choice) =>
     row.kind === "action" ? [row.action.title, row.action.id] : [VIEWS]
   const threadsOf = (space: string, listed: readonly Listed[]) =>
@@ -254,11 +237,9 @@ export function menuOf({
     ])
   if (inside?.kind === "space") {
     const here = inside.space.id
+    // Its new Thread first, as its sources find it, then its Threads.
     return nonEmpty([
-      {
-        label: "",
-        rows: [{ kind: "ask", id: `ask:${here}`, words: query, space: here }],
-      },
+      last,
       {
         label: "Threads",
         rows: fitting(
@@ -266,6 +247,7 @@ export function menuOf({
           threadTexts
         ),
       },
+      ...sourced,
     ])
   }
 
@@ -332,8 +314,6 @@ export function menuOf({
     ])
   }
 
-  const folder = spaces.find((space) => space.id === files.space)?.folder
-  const browsing = (url: string) => paneOf(browserPane, browserAt(url))
   return nonEmpty([
     {
       label: "Threads",
@@ -345,40 +325,12 @@ export function menuOf({
         row.kind === "space" ? [row.space.name] : []
       ).slice(0, SHOWN.spaces),
     },
-    {
-      label: "Files",
-      rows:
-        folder === undefined
-          ? []
-          : files.paths.slice(0, SHOWN.files).map((path) => {
-              const full = `${folder.replace(/\/$/, "")}/${path}`
-              return {
-                kind: "file",
-                id: `file:${files.space}:${path}`,
-                space: files.space,
-                path,
-                full,
-                pane: browsing(fileAddress(full)),
-              }
-            }),
-    },
+    ...sourced,
     {
       label: "Actions",
       rows: fitting(actionRows, actionTexts).slice(0, SHOWN.actions),
     },
-    {
-      label: "",
-      rows: [
-        { kind: "ask", id: "ask", words: query },
-        {
-          kind: "web",
-          id: "web",
-          words: query,
-          address: isAddress(query),
-          pane: browsing(sources.addressOf(query)),
-        },
-      ],
-    },
+    last,
   ])
 }
 
@@ -391,12 +343,7 @@ const BESIDE: Key = { code: "Enter", shift: true }
 
 /** What can be done with `row`, the first as `Enter` does it. */
 export function actsOf(row: Choice, sources: Sources): Act[] {
-  const { harnesses, settled } = sources
-  const startOn = (ask: Extract<Choice, { kind: "ask" }>, verb: string) =>
-    harnesses.map((harness) => ({
-      title: `${verb} on ${harness.name}`,
-      row: { ...ask, id: `${ask.id}:${harness.id}`, harness: harness.id },
-    }))
+  const { settled } = sources
   switch (row.kind) {
     case "thread": {
       const acts: Act[] = [
@@ -419,18 +366,23 @@ export function actsOf(row: Choice, sources: Sources): Act[] {
     case "space":
       return [
         { title: "Open", key: OPEN, row },
-        ...startOn(
-          {
+        {
+          title: "New Thread here",
+          row: {
             kind: "ask",
             id: `ask:${row.space.id}`,
             words: "",
             space: row.space.id,
           },
-          "New Thread"
-        ),
+        },
       ]
-    case "ask":
-      return startOn(row, "Start")
+    case "found":
+      return (row.row.acts ?? []).map((act) => ({
+        title: act.title,
+        key: act.key,
+        // An act counts as its row, chosen.
+        row: foundRow({ ...row.row, run: act.run }),
+      }))
     case "action":
       return [
         { title: "Run", key: OPEN, row },
@@ -452,14 +404,6 @@ export function actsOf(row: Choice, sources: Sources): Act[] {
           },
         })),
       ]
-    case "file":
-      return [
-        { title: "Open", key: OPEN, row },
-        {
-          title: "Copy path",
-          row: { kind: "copy", id: `copy:${row.full}`, text: row.full },
-        },
-      ]
     default:
       return []
   }
@@ -467,6 +411,10 @@ export function actsOf(row: Choice, sources: Sources): Act[] {
 
 function actionRow(action: Action<Shell>): Choice {
   return { kind: "action", id: `action:${action.id}`, action }
+}
+
+function foundRow(row: MenuRow): Choice {
+  return { kind: "found", id: row.id, row }
 }
 
 /** What waits first, then what changed last: the sidebar's order. */

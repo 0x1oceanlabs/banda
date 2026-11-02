@@ -4,7 +4,8 @@
  * registries from these and names the modules in one list alone; what a
  * module's engine part offers, its `methods!` table says.
  */
-import type { JsonValue, SpaceId } from "@banda/contract"
+import type { ComponentType, ReactNode } from "react"
+import type { Engine, JsonValue, SpaceId } from "@banda/contract"
 import type { Key } from "./lib/keys"
 import type { PaneKind, PaneState, Watch } from "./pane"
 
@@ -26,6 +27,9 @@ export type WindowApi = {
   /** Shows a Pane right of the focused one, with its width, and focuses
    * it: in `space`, else in the focused Pane's Space. */
   open: (pane: PaneState, space?: SpaceId) => void
+  /** Runs an action by its id, a module's or the window's, as its key
+   * would: how one module asks another for what it does. */
+  run: (action: string, args?: Args) => void
 }
 
 /**
@@ -48,7 +52,68 @@ export type Action<Context = WindowApi> = {
   /** Its key works while a dialog is open, as the Banda menu's own do;
    * any other key there is the dialog's. */
   overDialogs?: true
+  /** Run by its id alone, with the args another module gives: the Banda
+   * menu and its key sheet leave it out. */
+  unlisted?: true
   run: (context: Context, args?: Args) => void
+}
+
+/** One thing `Tab` lists for a row of the Banda menu. Its `key` there,
+ * as `Enter` for the row's first, does it too. */
+export type MenuAct = {
+  title: string
+  key?: Key
+  run: (window: WindowApi) => void
+}
+
+/** A row a module's source gives the Banda menu (ADR 0022, decision 4). */
+export type MenuRow = {
+  /** Dotted, its module's id first (`agents.file.<space>.<path>`): what
+   * the menu counts as chosen often and lately. */
+  id: string
+  title: string
+  /** After the title, dimmer: where it is, what it is on. */
+  detail?: string
+  /** Before the title. */
+  icon?: ReactNode
+  /** What `Enter` does. */
+  run: (window: WindowApi) => void
+  /** What `Tab` lists: what `Enter` does among them, if it says so. */
+  acts?: readonly MenuAct[]
+}
+
+/** Where the Banda menu looks: the focused Space, or the one the Person
+ * went into (`entered`). */
+export type Here = {
+  engine: Engine
+  space: SpaceId
+  /** The Space's folder, where it has one. */
+  folder?: string
+  entered: boolean
+}
+
+export type FindProps = {
+  /** What the Person typed, trimmed. */
+  words: string
+  here: Here
+  /** Says the rows that fit, now or later; each call replaces the last.
+   * Said in a layout effect, they show with the words they fit. */
+  found: (rows: readonly MenuRow[]) => void
+}
+
+/**
+ * Where the Banda menu finds a module's rows (ADR 0022, decision 4), as
+ * a Watch: the window draws its `Find` while the menu may show it and
+ * the engine runs the module. The menu keeps what is its own: the field,
+ * the keys, the groups' order and the ranking.
+ */
+export type Source = {
+  /** Dotted, its module's id first: `agents.files`. */
+  id: string
+  /** The heading its rows go under; none for the rows after every group,
+   * as New Thread with the words. */
+  label: string
+  Find: ComponentType<FindProps>
 }
 
 export type Module = {
@@ -69,6 +134,8 @@ export type Module = {
   watches: readonly Watch[]
   /** What the Person can do with it, by a key or the Banda menu. */
   actions: readonly Action[]
+  /** What it gives the Banda menu to find. */
+  sources: readonly Source[]
 }
 
 /** Declares a module's window part; each Pane keeps its args' type. */
@@ -78,6 +145,7 @@ export function defineModule<const P extends readonly Args[]>(module: {
   panes?: { readonly [K in keyof P]: PaneKind<P[K]> }
   watches?: readonly Watch[]
   actions?: readonly Action[]
+  sources?: readonly Source[]
 }): Module {
   return {
     id: module.id,
@@ -87,5 +155,6 @@ export function defineModule<const P extends readonly Args[]>(module: {
     panes: (module.panes ?? []) as unknown as readonly AnyPaneKind[],
     watches: module.watches ?? [],
     actions: module.actions ?? [],
+    sources: module.sources ?? [],
   }
 }

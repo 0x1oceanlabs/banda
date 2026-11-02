@@ -99,6 +99,21 @@ from the first. Roma chose to declare in code what is code, and to keep
      - window: Spaces, the actions, the sidebar's view;
      - settings: the rows of ADR 0016's window, once it has them;
      - browser: its tabs and history, later (see the order of work).
+   - _Changed on 2026-11-02, in step 4:_
+     - A source is drawn as a Watch is: its `Find` component says its
+       rows, now or later, while the engine runs its module. A hook in a
+       loop could not stop as a module stops.
+     - The Threads stay the window's: they are the sidebar's lists, which
+       any module's Watch fills, and they open, open beside and settle as
+       the sidebar does. The agents module gives New Thread with the
+       words (and, by `Tab`, on each Harness) and the files. The browser
+       gives the words as a page.
+     - A module's row has a dotted id. The window's rows keep the ids the
+       menu has counted as opened (`thread:…`, `space:…`, `action:…`).
+       The routes stay the branches' (`actions`, `views`,
+       `space.<name>`): no source has a branch yet.
+     - `Tab` on a Space opens it or starts a new Thread there; the choice
+       of a Harness is inside it, on its New Thread.
 
 5. **One id is the module everywhere.** The engine's `Module::name`, the
    window's `defineModule` id and `module.toml`'s id are the same word. A
@@ -164,6 +179,13 @@ from the first. Roma chose to declare in code what is code, and to keep
        still reaches the agents and browser modules, until step 4.
   4. Sources: the Banda menu's Threads, files, Spaces and actions come
      from sources, with dotted ids as routes.
+     - _Done._ `defineModule` takes `sources`; `@banda/ui/module` has
+       `Source`, `MenuRow` and `MenuAct`. The window API runs an action
+       by its id (`run`), so the agents module's files open through
+       `browser.open`, an action run by its id alone (`unlisted`). The
+       Banda menu imports no module; the architecture test's list holds
+       the settings window's agents section and the browser's main
+       process alone.
   5. `module.toml` for each module, `banda modules`, the unstable marks
      counted against a ceiling; the skill's reference lists the modules,
      their actions and their tools from it.
