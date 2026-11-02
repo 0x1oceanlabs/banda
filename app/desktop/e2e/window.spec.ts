@@ -1089,6 +1089,12 @@ test("@ names a file in the Space's folder, picked from a list", async () => {
   await composer.press("Backspace")
   await expect(chip).toHaveCount(0)
   await expect(composer).toHaveText("look at")
+  // Undo brings it back with what it pointed at, and redo takes it again.
+  await composer.press("ControlOrMeta+z")
+  await expect(chip).toHaveAttribute("title", "src/main.ts")
+  await composer.press("ControlOrMeta+Shift+z")
+  await expect(chip).toHaveCount(0)
+  await expect(composer).toHaveText("look at")
   await composer.pressSequentially(" @mai")
   await expect(files.getByRole("option")).toHaveCount(1)
   await composer.press("Enter")
@@ -2288,4 +2294,45 @@ test("banda menu opens the Banda menu at a route, from outside the window", asyn
       .getByRole("region", { name: "Settings", exact: true })
       .getByRole("heading", { name: "Appearance" })
   ).toBeVisible()
+})
+
+test("text selected in a reply is quoted in the composer, a line apart from what is written after it", async () => {
+  window = await startWindow()
+  const { page } = window
+  const { thread, composer } = await firstThread(page)
+  await composer.fill("quote me please")
+  await composer.press("Enter")
+  const reply = thread.getByText("You said: quote me please")
+  await expect(reply).toBeVisible()
+
+  // The button shows once text in one reply is selected.
+  const quote = thread.getByRole("button", { name: "Quote", exact: true })
+  await expect(quote).toBeHidden()
+  await reply.evaluate((element) => {
+    const text = element.firstChild!
+    const range = document.createRange()
+    range.setStart(text, "You said: ".length)
+    range.setEnd(text, "You said: quote me".length)
+    document.getSelection()!.removeAllRanges()
+    document.getSelection()!.addRange(range)
+  })
+  await expect(quote).toBeVisible()
+  await page.screenshot({ path: "test-results/quote-button.png" })
+  await quote.click()
+  await expect(quote).toBeHidden()
+  await expect(composer.locator("blockquote")).toHaveText("quote me")
+  await expect(composer).toBeFocused()
+
+  // What is written after it is a paragraph of its own.
+  await page.keyboard.type("why?")
+  const drafts = () =>
+    page.evaluate(() =>
+      Object.keys(localStorage)
+        .filter((key) => key.startsWith("banda.agents.draft."))
+        .map((key) => localStorage.getItem(key))
+    )
+  await expect.poll(drafts).toEqual(["> quote me\n\nwhy?"])
+  await composer.press("Enter")
+  // The message goes with its quote as markdown.
+  await expect(thread.getByText("> quote me\n\nwhy?")).toBeVisible()
 })

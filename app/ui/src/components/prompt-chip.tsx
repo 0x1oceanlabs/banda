@@ -1,11 +1,14 @@
 import { Node } from "@tiptap/core"
+import { closeHistory } from "@tiptap/pm/history"
+import type { Transaction } from "@tiptap/pm/state"
 import { type ChipKind, KINDS } from "@banda/ui/lib/prompt"
 
 /**
  * A chip in a prompt (ADR 0015, decision 2): one atom, which the caret
  * steps over and Backspace takes whole, showing what it points at with an
  * icon and a short name, the whole of it on hover, and writing it into
- * the text in its kind's way.
+ * the text in its kind's way. A chip's removal is a step of its own to
+ * undo, which brings it back with what it pointed at.
  */
 export const Chip = Node.create({
   name: "chip",
@@ -30,8 +33,12 @@ export const Chip = Node.create({
   parseHTML() {
     return [{ tag: "span[data-chip]" }]
   },
-  renderHTML({ node, HTMLAttributes }) {
-    return ["span", HTMLAttributes, String(node.attrs.value)]
+  // However it goes, a chip's removal is a step of its own to undo, apart
+  // from the typing before and after it.
+  dispatchTransaction({ transaction, next }) {
+    if (!removesChip(transaction)) return next(transaction)
+    next(closeHistory(transaction))
+    next(closeHistory(this.editor.state.tr))
   },
   // A chip never changes, so its view is plain DOM, not React.
   addNodeView() {
@@ -48,6 +55,20 @@ export const Chip = Node.create({
     }
   },
 })
+
+/** Whether `tr` takes away a chip: one in what a step of it replaced. */
+function removesChip(tr: Transaction): boolean {
+  return tr.steps.some((step, at) => {
+    let found = false
+    step.getMap().forEach((from, to) =>
+      tr.docs[at].nodesBetween(from, to, (node) => {
+        found ||= node.type.name === "chip"
+        return !found
+      })
+    )
+    return found
+  })
+}
 
 const CHIP =
   "mx-px inline-flex items-baseline gap-1 rounded-md bg-muted px-1 align-baseline font-medium [&.ProseMirror-selectednode]:ring-2 [&.ProseMirror-selectednode]:ring-ring/50"

@@ -8,7 +8,7 @@ import { PROMPT_BLOCKS } from "../components/prompt-blocks"
 import { Chip } from "../components/prompt-chip"
 import { CodeBlock } from "../components/prompt-code"
 import { PROMPT_MARKS } from "../components/prompt-marks"
-import { docOf, textOf, typingIn } from "./prompt"
+import { docOf, quoted, textOf, typingIn } from "./prompt"
 
 const schema = getSchema([
   Document,
@@ -265,4 +265,14 @@ test("a word being typed asks for suggestions", () => {
   expect(typingIn("me@home")).toBeUndefined()
   expect(typingIn("@notes and")).toBeUndefined()
   expect(typingIn("@￼")).toBeUndefined()
+})
+
+test("a quote's lines each start with >, a blank one too", () => {
+  expect(quoted("  one  \n\ntwo\n")).toBe("> one\n>\n> two")
+  const doc = docOf(quoted("one\n\ntwo"))
+  expect(doc.content?.map((line) => line.type)).toEqual([
+    "quote",
+    "quote",
+    "quote",
+  ])
 })

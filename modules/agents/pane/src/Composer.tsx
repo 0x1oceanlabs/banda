@@ -18,6 +18,7 @@ import {
   type Typing,
 } from "@banda/ui/components/prompt-editor"
 import { RingMeter } from "@banda/ui/components/ring-meter"
+import { quoted } from "@banda/ui/lib/prompt"
 import { Spinner } from "@banda/ui/components/spinner"
 import {
   ArrowUpIcon,
@@ -135,7 +136,12 @@ export function Composer({
       if (path) field.current?.point(path, at)
     }
   }
-  useImperativeHandle(ref, () => ({ take: (given) => void take(given, "end") }))
+  useImperativeHandle(ref, () => ({
+    take: (given) => void take(given, "end"),
+    // A line apart from what is written after it, which would else run on
+    // in it.
+    quote: (quote) => field.current?.putLines(`${quoted(quote)}\n\n`),
+  }))
   // Whether the paste coming is Mod+Shift+V's, which pastes a long text as
   // text: the last key pressed says.
   const asText = useRef(false)
@@ -381,7 +387,11 @@ export function Composer({
 
 /** What the window may do to a composer: give it files dropped on the
  * Pane. */
-export type ComposerHandle = { take: (files: File[]) => void }
+export type ComposerHandle = {
+  take: (files: File[]) => void
+  /** Quotes `text` in the message, on lines of its own. */
+  quote: (text: string) => void
+}
 
 /** A pasted text this long or longer is kept as a file, as in T3 Code. */
 const LONG_PASTE = 32 * 1024

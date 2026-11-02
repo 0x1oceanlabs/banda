@@ -36,6 +36,16 @@ export type ChipKind = keyof typeof KINDS
 const ORDER = ["strike", "bold", "italic", "code"] as const
 export type MarkName = (typeof ORDER)[number]
 
+/** `text` as the lines of a quote: each `> ` and the line, a blank one
+ * `>`. */
+export function quoted(text: string): string {
+  return text
+    .trim()
+    .split("\n")
+    .map((line) => (line.trim() ? `> ${line.trimEnd()}` : ">"))
+    .join("\n")
+}
+
 /** What stands for a chip in text read to find the word being typed. */
 export const CHIP_MARK = "￼"
 

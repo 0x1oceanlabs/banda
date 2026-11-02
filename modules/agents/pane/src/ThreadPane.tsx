@@ -61,6 +61,7 @@ import { suggested } from "./slash"
 import { Composer, type ComposerHandle } from "./Composer"
 import type { ImageReader } from "./MessageImages"
 import { AgentMessage, PersonMessage, Writer, type Writers } from "./Messages"
+import { QuoteSelection } from "./Quote"
 import type { Values } from "./form"
 import { Question, QuestionDrawer } from "./Questions"
 import { ChangedFiles } from "./ChangedFiles"
@@ -165,6 +166,10 @@ function ThreadPane(props: PaneProps<ThreadArgs>) {
       }}
     >
       <div ref={area} className="relative min-h-0 flex-1">
+        <QuoteSelection
+          area={area}
+          onQuote={(quote) => composer.current?.quote(quote)}
+        />
         {find && (
           <FindBar
             field={findField}

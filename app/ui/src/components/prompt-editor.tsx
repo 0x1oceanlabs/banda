@@ -1,5 +1,9 @@
 import * as React from "react"
-import { Slice } from "@tiptap/pm/model"
+import {
+  type Fragment,
+  type Node as ProseMirrorNode,
+  Slice,
+} from "@tiptap/pm/model"
 import {
   type EditorState,
   Selection,
@@ -49,6 +53,10 @@ export type PromptEditorHandle = {
   /** Puts a chip for the file at `path` at the caret, or at the end, as a
    * word of its own, and takes the focus. */
   point(path: string, at: "caret" | "end"): void
+  /** Puts `text` on lines of its own after the caret's line, or in place
+   * of it if it is empty; the caret goes to their end, and takes the
+   * focus. */
+  putLines(text: string): void
 }
 
 type PromptEditorProps = {
@@ -216,6 +224,13 @@ function PromptEditor({
         view.dispatch(putChip(state.tr, from, to, "file", path))
         view.focus()
       },
+      putLines(text) {
+        const { view } = editor
+        const tr = view.state.tr
+        putOwnLines(tr, sliceOf(view, text).content)
+        view.dispatch(tr.scrollIntoView())
+        view.focus()
+      },
     }),
     [editor]
   )
@@ -318,12 +333,23 @@ function paste(view: EditorView, text: string) {
   const line = $from.parent
   const slice = sliceOf(view, text)
   const tr = state.tr
-  if (empty && line.type.name === "paragraph" && line.content.size === 0) {
-    tr.replaceWith($from.before(), $from.after(), slice.content)
-    const end = $from.before() + slice.content.size
-    tr.setSelection(Selection.near(tr.doc.resolve(end), -1))
-  } else tr.replaceSelection(slice)
+  if (empty && blank(line)) putOwnLines(tr, slice.content)
+  else tr.replaceSelection(slice)
   view.dispatch(tr.scrollIntoView().setMeta("uiEvent", "paste"))
+}
+
+/** Puts `lines` on lines of their own: in place of the caret's line if it
+ * is empty, else after it; the caret goes to their end. */
+function putOwnLines(tr: Transaction, lines: Fragment) {
+  const { $from, to } = tr.selection
+  const line = $from.depth > 0 ? $from.parent : undefined
+  const from = !line ? to : blank(line) ? $from.before() : $from.after()
+  tr.replaceWith(from, line && blank(line) ? $from.after() : from, lines)
+  tr.setSelection(Selection.near(tr.doc.resolve(from + lines.size), -1))
+}
+
+function blank(line: ProseMirrorNode): boolean {
+  return line.type.name === "paragraph" && line.content.size === 0
 }
 
 /** What a prompt is made of: lines, some of them headings, quotes, items
