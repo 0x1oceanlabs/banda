@@ -22,6 +22,7 @@
 
 mod acp;
 mod between;
+mod changes;
 mod cli;
 mod effects;
 mod files;
@@ -48,6 +49,7 @@ use banda_kernel::{
 };
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as BASE64;
+use changes::{ChangesAsk, TurnChanges};
 use images::Images;
 use live::Live;
 use model::{
@@ -201,6 +203,10 @@ banda_kernel::methods! {
         call thread(OneThread) -> ThreadView, Read, tool "read";
         /// What a new Thread on a Harness starts with.
         call defaults(OneHarness) -> Defaults, Read;
+        /// The turns of a Thread that changed files, the latest first, and
+        /// the files one of them changed, from its tool calls: the Diff's
+        /// Turn (ADR 0034).
+        call changes(ChangesAsk) -> TurnChanges, Read;
         /// Writes into a Thread of this Space, or starts a new Thread on a
         /// Harness. Its Agent reads that the message is from your Thread's
         /// Agent, not its Person; when the turn it asks for ends, its last
@@ -586,6 +592,34 @@ impl Agents {
             .await?;
         let view = found.ok_or_else(|| Refusal::not_found("There is no such Thread."))?;
         Ok(ThreadView { at, ..view })
+    }
+
+    async fn changes(
+        &self,
+        call: Call,
+        ChangesAsk { thread, turn }: ChangesAsk,
+    ) -> Result<TurnChanges, Refusal> {
+        let (at, found) = call
+            .space()
+            .view(move |sql| {
+                if store::thread(sql, thread)?.is_none() {
+                    return Ok(None);
+                }
+                let items = store::items(sql, thread)?;
+                let turns = store::turns(sql, thread)?;
+                Ok(Some(changes::changes(&items, &turns, turn)))
+            })
+            .await?;
+        let (turns, mut files) =
+            found.ok_or_else(|| Refusal::not_found("There is no such Thread."))?;
+        // A file in the Space's folder is named from there, as git names it.
+        let folder = call.space().folder();
+        for file in &mut files {
+            if let Ok(inside) = std::path::Path::new(&file.path).strip_prefix(folder) {
+                file.path = inside.to_string_lossy().replace('\\', "/");
+            }
+        }
+        Ok(TurnChanges { at, turns, files })
     }
 
     async fn defaults(

@@ -12,8 +12,14 @@ export type Scope =
   | { kind: "uncommitted" }
   | { kind: "staged" }
   | { kind: "commit"; sha: string; subject: string }
+  /** What one turn of a Thread changed, from its tool calls; `title` is
+   * the start of the message that asked for it. */
+  | { kind: "turn"; thread: string; turn: string; title: string }
 
-export const CHANGES: Scope = { kind: "changes", base: null }
+export const CHANGES: Extract<Scope, { kind: "changes" }> = {
+  kind: "changes",
+  base: null,
+}
 
 /** The words on the scope menu's button. */
 export function labelOf(scope: Scope): string {
@@ -26,6 +32,8 @@ export function labelOf(scope: Scope): string {
       return "Staged"
     case "commit":
       return scope.subject || `Commit ${scope.sha.slice(0, 7)}`
+    case "turn":
+      return scope.title || "Turn"
   }
 }
 

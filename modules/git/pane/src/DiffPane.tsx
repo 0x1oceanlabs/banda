@@ -8,10 +8,13 @@ import {
   type ReactNode,
 } from "react"
 import type { Engine, SpaceId } from "@banda/contract"
+import type { ChangedTurn, TurnChanges } from "@banda/contract/agents"
 import type { Diff, DiffAsk } from "@banda/contract/git"
 import { Button } from "@banda/ui/components/button"
 import {
   CodeDiff,
+  countsOf,
+  fileOf,
   filesOf,
   keyOf,
   pathOf,
@@ -44,7 +47,7 @@ import { ChangedFiles, type TreeFile } from "@banda/ui/components/file-tree"
 import { PaneHeader } from "@banda/ui/components/pane-header"
 import { Spinner } from "@banda/ui/components/spinner"
 import { useInFront } from "@banda/ui/hooks/use-in-front"
-import { READ_AGAIN, useLive } from "@banda/ui/hooks/use-live"
+import { READ_AGAIN, useLive, type Source } from "@banda/ui/hooks/use-live"
 import { useRead, type Read } from "@banda/ui/hooks/use-read"
 import { cn } from "@banda/ui/lib/utils"
 import { definePane, type PaneProps } from "@banda/ui/pane"
@@ -72,6 +75,11 @@ import { CHANGES, changeOf, isTest, labelOf, type Scope } from "./scope"
 export type DiffArgs = {
   scope: Scope
   view: View
+  /** The Thread whose turns the menu offers, kept as the scope leaves a
+   * turn: the one it was opened on. */
+  thread?: string | null
+  /** The file to show once it is read, as a Thread's changed file opens. */
+  file: string | null
 }
 
 export const diffPane = definePane<DiffArgs>({
@@ -80,7 +88,7 @@ export const diffPane = definePane<DiffArgs>({
   detail: (args) => labelOf(args.scope),
   icon: FileDiffIcon,
   letter: "D",
-  start: { scope: CHANGES, view: VIEW },
+  start: { scope: CHANGES, view: VIEW, file: null },
   header: false,
   // One Diff per Space: another scope is the same Pane.
   identity: () => "diff",
@@ -89,6 +97,33 @@ export const diffPane = definePane<DiffArgs>({
 
 /** What makes the Diff read again: an Agent's turn ending. */
 const TURNS = { module: "agents", kinds: ["turn.ended"] }
+
+/** What the Pane draws, as git answers it; a turn's changes come as their
+ * files already diffed, and the Thread's turns that changed files. */
+type Drawn = Diff & { drawn?: FileDiffMetadata[]; turns?: ChangedTurn[] }
+
+/** What it asks: git for its scopes, the agents module for a turn's. */
+type Question = { git: DiffAsk } | { turn: { thread: string; turn: string } }
+
+/** A turn's changes as the Pane draws a diff: each file diffed from its
+ * texts, whole. */
+function turnRead(changes: TurnChanges): Drawn {
+  const drawn = changes.files.map((file) =>
+    fileOf(file.path, file.old, file.new)
+  )
+  return {
+    at: changes.at,
+    files: changes.files.map((file, index) => ({
+      path: file.path,
+      ...countsOf(drawn[index]!),
+      binary: false,
+    })),
+    patch: "",
+    truncated: false,
+    drawn,
+    turns: changes.turns,
+  }
+}
 
 function DiffPane({ engine, space, args, update, close }: PaneProps<DiffArgs>) {
   const scope = args.scope
@@ -107,23 +142,45 @@ function DiffPane({ engine, space, args, update, close }: PaneProps<DiffArgs>) {
     if (front) again()
   }
 
+  const thread = scope.kind === "turn" ? scope.thread : (args.thread ?? null)
   // The question's words decide: the same words ask the same.
-  const words = JSON.stringify({
-    scope: asked(scope),
-    ignore_whitespace: view.ignoreWhitespace,
-  })
-  const ask = useMemo(() => JSON.parse(words) as DiffAsk, [words])
-  const source = useMemo(
-    () => ({
-      read: () => engine.call("git.diff", ask, { space }),
-      filter: TURNS,
-      apply: () => READ_AGAIN,
-    }),
-    [engine, space, ask]
+  const words = JSON.stringify(
+    scope.kind === "turn"
+      ? { turn: { thread: scope.thread, turn: scope.turn } }
+      : {
+          git: {
+            scope: asked(scope),
+            ignore_whitespace: view.ignoreWhitespace,
+          },
+        }
+  )
+  const question = useMemo(() => JSON.parse(words) as Question, [words])
+  const source = useMemo<Source<Drawn>>(
+    () =>
+      "git" in question
+        ? {
+            read: () => engine.call("git.diff", question.git, { space }),
+            filter: TURNS,
+            apply: () => READ_AGAIN,
+          }
+        : {
+            read: async () =>
+              turnRead(
+                await engine.call("agents.changes", question.turn, { space })
+              ),
+            filter: {
+              module: "agents",
+              subject: question.turn.thread,
+              kinds: ["turn.ended", "thread.rewound"],
+            },
+            apply: () => READ_AGAIN,
+          },
+    [engine, space, question]
   )
   const live = useLive(engine, space, source, round)
   const diff = live.state === "ready" ? live.view : undefined
 
+  const ask = "git" in question ? question.git : null
   const files = useFiles(engine, space, ask, words, diff)
   // The files shown: tests and mocks left out when they are hidden.
   const visible = useMemo(
@@ -194,6 +251,37 @@ function DiffPane({ engine, space, args, update, close }: PaneProps<DiffArgs>) {
     )
   }
 
+  // A turn opened from its Thread takes the words the engine names it by.
+  const named =
+    scope.kind === "turn" && !scope.title
+      ? diff?.turns?.find((each) => each.turn === scope.turn)?.said
+      : undefined
+  const nameTurn = useEffectEvent((title: string) => {
+    if (scope.kind === "turn") update({ ...args, scope: { ...scope, title } })
+  })
+  useEffect(() => {
+    if (named) nameTurn(named)
+  }, [named])
+
+  // The file it was opened on shows once its files are drawn.
+  const wanted = args.file ?? null
+  const showWanted = useEffectEvent(() => {
+    if (wanted === null) return
+    // A Thread names a file in the Space's folder from the root, as its
+    // tool calls did; the Diff names it from the folder.
+    const path = [...files.byPath.keys()].find(
+      (each) => each === wanted || wanted.endsWith(`/${each}`)
+    )
+    if (path === undefined) return
+    reveal(path)
+    update({ ...args, file: null })
+  })
+  useEffect(() => {
+    // Once the view has drawn them, so it can scroll to it.
+    const frame = requestAnimationFrame(() => showWanted())
+    return () => cancelAnimationFrame(frame)
+  }, [wanted, files.byPath])
+
   const added = diff?.files.reduce((sum, file) => sum + file.added, 0) ?? 0
   const removed = diff?.files.reduce((sum, file) => sum + file.removed, 0) ?? 0
 
@@ -204,7 +292,8 @@ function DiffPane({ engine, space, args, update, close }: PaneProps<DiffArgs>) {
           engine={engine}
           space={space}
           scope={scope}
-          onChange={(next) => update({ ...args, scope: next })}
+          thread={thread}
+          onChange={(next) => update({ ...args, scope: next, thread })}
         />
         {scope.kind === "changes" && diff?.base && (
           <BaseMenu
@@ -319,7 +408,7 @@ function DiffPane({ engine, space, args, update, close }: PaneProps<DiffArgs>) {
             folded={folded}
             layout={view.layout}
             wrap={view.wrap}
-            load={files.whole}
+            {...(files.whole ? { load: files.whole } : {})}
             prefix={(key) => (
               <Button
                 variant="ghost"
@@ -366,6 +455,7 @@ const EMPTY: Record<Scope["kind"], string> = {
   uncommitted: "Nothing changed since the last commit.",
   staged: "Nothing is staged.",
   commit: "This commit changes no files.",
+  turn: "This turn changed no files.",
 }
 
 /** A short number for a patch, so highlighting kept for one is not used
@@ -387,13 +477,17 @@ function hashOf(text: string): string {
 function useFiles(
   engine: Engine,
   space: SpaceId,
-  ask: DiffAsk,
+  ask: DiffAsk | null,
   words: string,
-  diff: Diff | undefined
+  diff: Drawn | undefined
 ) {
   const patch = diff?.patch ?? ""
   const basis = `${words}:${hashOf(patch)}`
-  const inPatch = useMemo(() => filesOf(patch, basis), [patch, basis])
+  const drawn = diff?.drawn
+  const inPatch = useMemo(
+    () => drawn ?? filesOf(patch, basis),
+    [drawn, patch, basis]
+  )
   // What loaded by name belongs to one patch.
   const [loaded, setLoaded] = useState<{
     basis: string
@@ -413,7 +507,7 @@ function useFiles(
   )
 
   const load = (paths: string[]) => {
-    if (loading || paths.length === 0) return
+    if (!ask || loading || paths.length === 0) return
     setLoading(true)
     engine
       .call("git.diff", { ...ask, files: paths }, { space })
@@ -428,27 +522,30 @@ function useFiles(
       .finally(() => setLoading(false))
   }
 
-  const whole = useCallback(
-    async (file: FileDiffMetadata) => {
-      const contents = await engine.call(
-        "git.contents",
-        {
-          scope: ask.scope,
-          path: pathOf(file),
-          ...(file.prevName ? { old_path: file.prevName } : {}),
-        },
-        { space }
-      )
-      if (contents.too_large)
-        throw new Error("The file is too large to expand.")
-      return {
-        oldFile: {
-          name: file.prevName ?? pathOf(file),
-          contents: contents.old ?? "",
-        },
-        newFile: { name: pathOf(file), contents: contents.new ?? "" },
-      }
-    },
+  // A turn's files come whole; git's are read whole to expand.
+  const whole = useMemo(
+    () =>
+      ask &&
+      (async (file: FileDiffMetadata) => {
+        const contents = await engine.call(
+          "git.contents",
+          {
+            scope: ask.scope,
+            path: pathOf(file),
+            ...(file.prevName ? { old_path: file.prevName } : {}),
+          },
+          { space }
+        )
+        if (contents.too_large)
+          throw new Error("The file is too large to expand.")
+        return {
+          oldFile: {
+            name: file.prevName ?? pathOf(file),
+            contents: contents.old ?? "",
+          },
+          newFile: { name: pathOf(file), contents: contents.new ?? "" },
+        }
+      }),
     [engine, space, ask]
   )
 
@@ -549,24 +646,50 @@ function ScopeMenu({
   engine,
   space,
   scope,
+  thread,
   onChange,
 }: {
   engine: Engine
   space: SpaceId
   scope: Scope
+  /** The Thread whose turns it offers; none offers none. */
+  thread: string | null
   onChange: (scope: Scope) => void
 }) {
+  const [open, setOpen] = useState(false)
   const base = scope.kind === "changes" ? scope.base : null
-  const commits = useReadOnOpen(
-    useCallback(
+  const commits = useRead(
+    useMemo(
       () =>
-        engine.call("git.commits", base === null ? {} : { base }, { space }),
-      [engine, space, base]
+        open
+          ? () =>
+              engine.call("git.commits", base === null ? {} : { base }, {
+                space,
+              })
+          : null,
+      [open, engine, space, base]
     )
   )
-  const value = scope.kind === "commit" ? `commit:${scope.sha}` : scope.kind
+  const turns = useRead(
+    useMemo(
+      () =>
+        open && thread !== null
+          ? () =>
+              engine
+                .call("agents.changes", { thread }, { space })
+                .then((changes) => changes.turns)
+          : null,
+      [open, engine, space, thread]
+    )
+  )
+  const value =
+    scope.kind === "commit"
+      ? `commit:${scope.sha}`
+      : scope.kind === "turn"
+        ? `turn:${scope.turn}`
+        : scope.kind
   return (
-    <DropdownMenu onOpenChange={commits.onOpenChange}>
+    <DropdownMenu onOpenChange={setOpen}>
       <DropdownMenuTrigger
         render={
           <Button
@@ -609,11 +732,45 @@ function ScopeMenu({
           />
         </DropdownMenuRadioGroup>
         <DropdownMenuSeparator />
+        {thread !== null && (
+          <DropdownMenuSub>
+            <DropdownMenuSubTrigger>Turns</DropdownMenuSubTrigger>
+            <DropdownMenuSubContent className="max-h-96 w-80 overflow-y-auto">
+              <DropdownMenuGroup>
+                <Listed read={turns} none="No turn changed files">
+                  {(list) =>
+                    list.map((turn) => (
+                      <DropdownMenuItem
+                        key={turn.turn}
+                        onClick={() =>
+                          onChange({
+                            kind: "turn",
+                            thread,
+                            turn: turn.turn,
+                            title: turn.said,
+                          })
+                        }
+                        className={cn(
+                          value === `turn:${turn.turn}` && "bg-accent"
+                        )}
+                      >
+                        <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
+                          {turn.n}
+                        </span>
+                        <span className="truncate">{turn.said || "Turn"}</span>
+                      </DropdownMenuItem>
+                    ))
+                  }
+                </Listed>
+              </DropdownMenuGroup>
+            </DropdownMenuSubContent>
+          </DropdownMenuSub>
+        )}
         <DropdownMenuSub>
           <DropdownMenuSubTrigger>Commits</DropdownMenuSubTrigger>
           <DropdownMenuSubContent className="max-h-96 w-80 overflow-y-auto">
             <DropdownMenuGroup>
-              <Listed read={commits.list} none="No commits on this branch">
+              <Listed read={commits} none="No commits on this branch">
                 {(list) =>
                   list.map((commit) => (
                     <DropdownMenuItem

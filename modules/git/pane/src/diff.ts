@@ -6,8 +6,11 @@
 import type { Scope as Asked } from "@banda/contract/git"
 import type { Scope } from "./scope"
 
+/** A scope git answers: all but a turn's, which the agents module does. */
+export type GitScope = Exclude<Scope, { kind: "turn" }>
+
 /** The scope as `git.diff` is asked it: a commit's subject stays here. */
-export function asked(scope: Scope): Asked {
+export function asked(scope: GitScope): Asked {
   switch (scope.kind) {
     case "changes":
       return scope.base === null

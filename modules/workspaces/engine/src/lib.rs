@@ -77,7 +77,9 @@ banda_kernel::methods! {
         /// ones you opened, which alone you move and close.
         call panes(Nothing) -> Vec<SeenWorkspace>, Read, tool "panes";
         /// Opens a Pane of your Space for your Person to see: a Thread
-        /// (`agents.thread`, args `{"thread": "<id>"}`), a diff, or a
+        /// (`agents.thread`, args `{"thread": "<id>"}`), the Diff
+        /// (`git.diff`, args `{"scope": {"kind": "changes"}}`, or `uncommitted`,
+        /// `staged`, or `{"kind": "commit", "sha": "<sha>"}`), or a
         /// browser (`browser.browser`). Beside a Pane `panes` lists, or,
         /// left out, beside your Space's Panes. It takes no focus; the
         /// Person sees a mark on it until they look.
@@ -92,7 +94,7 @@ banda_kernel::methods! {
 /// The kinds of Pane an Agent may open: ones that show, and run nothing as
 /// the Person. A terminal's runs the Person's shell, and the command its
 /// `done` sends goes as the Person (ADR 0032).
-const AGENT_KINDS: &[&str] = &["agents.thread", "agents.diff", "browser.browser"];
+const AGENT_KINDS: &[&str] = &["agents.thread", "git.diff", "browser.browser"];
 
 /// A workspace as an Agent sees it: only the columns with a Pane it sees.
 #[derive(Serialize, TS)]
@@ -126,7 +128,7 @@ pub struct SeenPane {
 #[derive(Deserialize, TS, JsonSchema)]
 #[ts(export_to = "workspaces/")]
 pub struct OpenPane {
-    /// The kind: `agents.thread`, `agents.diff` or `browser.browser`.
+    /// The kind: `agents.thread`, `git.diff` or `browser.browser`.
     pub kind: String,
     /// The kind's own, an object, as `panes` shows them.
     #[schemars(with = "serde_json::Map<String, Value>")]
@@ -663,7 +665,15 @@ fn load(sql: &rusqlite::Connection) -> Result<Arrangement, Error> {
         [],
         |row| row.get(0),
     )?;
-    Ok(serde_json::from_str(&text)?)
+    let mut list: Arrangement = serde_json::from_str(&text)?;
+    for pane in list
+        .iter_mut()
+        .flat_map(|w| &mut w.columns)
+        .flat_map(|c| &mut c.panes)
+    {
+        pane.shows.upgrade();
+    }
+    Ok(list)
 }
 
 fn keep(tx: &Tx<'_>, list: &Arrangement) -> Result<(), Error> {

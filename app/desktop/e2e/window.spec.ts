@@ -736,16 +736,25 @@ test("a tool call opens on what it changed and what it printed", async () => {
   await expect(change.locator("[data-kind=removed]")).toHaveText("−two")
   await expect(change.locator("[data-kind=added]")).toHaveText(["+2", "+four"])
 
-  // Under the reply, the turn's changed files; one opens beside the Thread.
+  // Under the reply, the turn's changed files; one opens the Diff beside
+  // the Thread, on that turn and open at that file (ADR 0034).
   const changed = thread.getByRole("region", { name: "Changed files" })
   await expect(changed).toContainText("1 file changed")
   await changed.getByRole("button", { name: /notes\.md/ }).click()
-  const diff = page.getByRole("region", { name: "Changes · edit the notes" })
-  await expect(diff.locator("[data-kind=removed]")).toHaveText("−two")
+  const diff = page.getByRole("region", { name: "Diff" })
+  const scope = diff.getByRole("button", { name: "Scope" })
+  await expect(scope).toHaveText("edit the notes")
+  await expect(diff.getByText("two", { exact: true })).toBeVisible()
   await page.screenshot({ path: "test-results/10-diff-pane.png" })
-  await diff
-    .getByRole("button", { name: "Close Changes · edit the notes" })
-    .click()
+  // Its menu offers the Thread's turns that changed files.
+  await scope.click()
+  await page.getByRole("menuitem", { name: "Turns" }).hover()
+  await expect(
+    page.getByRole("menuitem", { name: /edit the notes/ })
+  ).toBeVisible()
+  await page.keyboard.press("Escape")
+  await page.keyboard.press("Escape")
+  await diff.getByRole("button", { name: "Close Diff" }).click()
 
   await composer.fill("run the tests")
   await composer.press("Enter")

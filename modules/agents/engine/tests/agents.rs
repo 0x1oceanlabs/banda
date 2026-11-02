@@ -1588,6 +1588,48 @@ fn last_tool(view: &ThreadView) -> &Body {
 }
 
 #[tokio::test]
+async fn the_diff_s_turn_is_what_the_turn_s_tool_calls_changed() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let (thread, _) = world.finish(None, "edit the notes").await;
+    world.finish(Some(&thread), "just answer").await;
+    let listed = world
+        .call(
+            world.person(),
+            "agents.changes",
+            json!({ "thread": thread }),
+        )
+        .await
+        .unwrap();
+    assert_eq!(listed["turns"].as_array().unwrap().len(), 1, "{listed}");
+    assert_eq!(listed["turns"][0]["said"], "edit the notes");
+    assert_eq!(listed["turns"][0]["n"], 1);
+    assert_eq!(listed["files"], json!([]));
+
+    let turn = listed["turns"][0]["turn"].clone();
+    let one = world
+        .call(
+            world.person(),
+            "agents.changes",
+            json!({ "thread": thread, "turn": turn }),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        one["files"],
+        json!([{ "path": "/work/notes.md", "old": "one\ntwo\nthree\n", "new": "one\n2\nthree\nfour\n" }])
+    );
+    let gone = world
+        .call(
+            world.person(),
+            "agents.changes",
+            json!({ "thread": banda_kernel::SpaceId::new() }),
+        )
+        .await;
+    assert_eq!(gone.unwrap_err().code, Code::NotFound);
+}
+
+#[tokio::test]
 async fn a_tool_call_shows_its_diff_and_what_its_command_printed() {
     let root = tempfile::tempdir().unwrap();
     let world = World::new(root.path()).await;

@@ -4,7 +4,7 @@ import type { Beside } from "./Beside";
 
 export type OpenPane = { 
 /**
- * The kind: `agents.thread`, `agents.diff` or `browser.browser`.
+ * The kind: `agents.thread`, `git.diff` or `browser.browser`.
  */
 kind: string, 
 /**
