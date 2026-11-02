@@ -18,9 +18,8 @@ import type {
 import { useAct } from "@banda/ui/hooks/use-act"
 import { useInFront } from "@banda/ui/hooks/use-in-front"
 import { READ_AGAIN, type Source, useLive } from "@banda/ui/hooks/use-live"
-import { paneOf, type PaneProps } from "@banda/ui/pane"
+import type { PaneProps } from "@banda/ui/pane"
 import { type Attaching, useAttachments } from "./Attachments"
-import { diffPane } from "./DiffPane"
 import type { Values } from "./form"
 import { harnessName, useHarnesses } from "./harnesses"
 import { useThread } from "./live-thread"
@@ -210,12 +209,18 @@ export function useThreadSession({
   const implement = () => {
     if (settings) void go(IMPLEMENT, [], false, { ...settings, plan: false })
   }
-  // A turn's changes open in a Diff Pane beside the Thread, or in the one
-  // already open, which then shows them.
+  // A turn's changes open in the git module's Diff, on that Turn: in the
+  // Diff already open, or beside the Thread (ADR 0034).
   const openDiff = (turn: string, path?: string) => {
     if (thread === null) return
-    const title = state?.title ?? args.title
-    open(paneOf(diffPane, { thread, turn, path: path ?? null, title }), "right")
+    // Its title comes from the engine, which names the turn.
+    open({
+      kind: "git.diff",
+      args: {
+        scope: { kind: "turn", thread, turn, title: "" },
+        file: path ?? null,
+      },
+    })
   }
   const stop = (turn: TurnView) =>
     void acting.act(() =>

@@ -5,6 +5,7 @@ import type { Nothing } from "../Nothing";
 import type { Account } from "./Account";
 import type { Answer } from "./Answer";
 import type { Attach } from "./Attach";
+import type { ChangesAsk } from "./ChangesAsk";
 import type { Configure } from "./Configure";
 import type { Defaults } from "./Defaults";
 import type { Edit } from "./Edit";
@@ -26,6 +27,7 @@ import type { ShowVisual } from "./ShowVisual";
 import type { SignIn } from "./SignIn";
 import type { ThreadList } from "./ThreadList";
 import type { ThreadView } from "./ThreadView";
+import type { TurnChanges } from "./TurnChanges";
 import type { VisualPage } from "./VisualPage";
 
 export type AgentsMethods = { 
@@ -62,6 +64,12 @@ thread: CallMethod<OneThread, ThreadView>,
  * What a new Thread on a Harness starts with.
  */
 defaults: CallMethod<OneHarness, Defaults>, 
+/**
+ * The turns of a Thread that changed files, the latest first, and
+ * the files one of them changed, from its tool calls: the Diff's
+ * Turn (ADR 0034).
+ */
+changes: CallMethod<ChangesAsk, TurnChanges>, 
 /**
  * Writes into a Thread of this Space, or starts a new Thread on a
  * Harness. Its Agent reads that the message is from your Thread's

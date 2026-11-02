@@ -6,6 +6,7 @@
  * the tile as T3 Code mixes them.
  */
 import {
+  parseDiffFromFile,
   parsePatchFiles,
   type FileDiffContentsLoader,
   type FileDiffMetadata,
@@ -52,6 +53,49 @@ const LAYOUT = { paddingTop: 0, paddingBottom: 0, gap: 0 }
 export function filesOf(patch: string, key: string): FileDiffMetadata[] {
   if (!patch.trim()) return []
   return parsePatchFiles(patch, key).flatMap((parsed) => parsed.files)
+}
+
+/** Files diffed from their texts, by path, newest last: the same change
+ * read again is the same file, which the view keeps. */
+const MADE = new Map<
+  string,
+  { old: string | undefined; text: string; file: FileDiffMetadata }
+>()
+const MOST_MADE = 200
+
+/** A file's change from its text before (none for a new file) to its
+ * text after, whole, so all its context can show. */
+export function fileOf(
+  path: string,
+  old: string | undefined,
+  text: string
+): FileDiffMetadata {
+  const known = MADE.get(path)
+  if (known && known.old === old && known.text === text) return known.file
+  const parsed = parseDiffFromFile(
+    { name: path, contents: old ?? "" },
+    { name: path, contents: text }
+  )
+  const file: FileDiffMetadata =
+    old === undefined ? { ...parsed, type: "new" } : parsed
+  MADE.delete(path)
+  MADE.set(path, { old, text, file })
+  if (MADE.size > MOST_MADE) MADE.delete(MADE.keys().next().value!)
+  return file
+}
+
+/** The lines a file's change adds and removes. */
+export function countsOf(file: FileDiffMetadata): {
+  added: number
+  removed: number
+} {
+  let added = 0
+  let removed = 0
+  for (const hunk of file.hunks) {
+    added += hunk.additionLines
+    removed += hunk.deletionLines
+  }
+  return { added, removed }
 }
 
 /** The path a file has after the change, or before it when it went. */

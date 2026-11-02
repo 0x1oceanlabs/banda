@@ -88,7 +88,9 @@ take: CommandMethod<Take, Done>,
 panes: CallMethod<Nothing, Array<SeenWorkspace>>, 
 /**
  * Opens a Pane of your Space for your Person to see: a Thread
- * (`agents.thread`, args `{"thread": "<id>"}`), a diff, or a
+ * (`agents.thread`, args `{"thread": "<id>"}`), the Diff
+ * (`git.diff`, args `{"scope": {"kind": "changes"}}`, or `uncommitted`,
+ * `staged`, or `{"kind": "commit", "sha": "<sha>"}`), or a
  * browser (`browser.browser`). Beside a Pane `panes` lists, or,
  * left out, beside your Space's Panes. It takes no focus; the
  * Person sees a mark on it until they look.

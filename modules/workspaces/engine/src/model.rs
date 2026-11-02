@@ -131,6 +131,22 @@ pub struct Shown {
     pub args: Value,
 }
 
+impl Shown {
+    /// The Pane a kind gone shows now: `agents.diff`, one turn's changes,
+    /// is the Diff on that Turn (ADR 0034).
+    pub fn upgrade(&mut self) {
+        if self.kind != "agents.diff" {
+            return;
+        }
+        let arg = |name: &str| self.args.get(name).cloned().unwrap_or(Value::Null);
+        let (thread, turn, title) = (arg("thread"), arg("turn"), arg("title"));
+        self.kind = "git.diff".into();
+        self.args = serde_json::json!({
+            "scope": { "kind": "turn", "thread": thread, "turn": turn, "title": title },
+        });
+    }
+}
+
 /// Where a Pane goes.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 #[serde(tag = "to", rename_all = "lowercase")]
@@ -547,6 +563,27 @@ fn check_share(value: Option<&str>, what: &str, of: &str) -> Result<(), Refusal>
 mod tests {
     use super::*;
     use serde_json::json;
+
+    #[test]
+    fn a_turn_s_changes_kept_from_before_open_as_the_diff_on_that_turn() {
+        let space = SpaceId::new();
+        let mut old = Shown {
+            space,
+            kind: "agents.diff".into(),
+            args: json!({ "thread": "t", "turn": "u", "path": "a.ts", "title": "Fix" }),
+        };
+        old.upgrade();
+        assert_eq!(old.kind, "git.diff");
+        assert_eq!(
+            old.args,
+            json!({
+                "scope": { "kind": "turn", "thread": "t", "turn": "u", "title": "Fix" },
+            })
+        );
+        let mut other = shown(space, "browser.browser", 1);
+        other.upgrade();
+        assert_eq!(other, shown(space, "browser.browser", 1));
+    }
 
     fn shown(space: SpaceId, kind: &str, n: u32) -> Shown {
         Shown {
