@@ -69,7 +69,7 @@ _Avoid_: command (that is a request to a module).
 **Visual**:
 One finished HTML page an Agent shows its Person in its Thread: a mockup,
 a chart, a diagram, an animation, a sound. It wears the look and runs apart
-from Banda; it opens larger as a preview or as a Pane of its own (ADR 0035).
+from Banda; it opens larger as a preview or as a Pane of its own (ADR 0037).
 _Avoid_: page (that is the browser's), artifact, render.
 
 **Turn**:
