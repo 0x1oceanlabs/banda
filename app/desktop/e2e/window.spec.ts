@@ -1444,6 +1444,32 @@ test("an Agent starts a Thread, its answer comes back, and each names the other'
   await expect(hello).toHaveAttribute("data-focused", "true")
 })
 
+test("an answer that comes while its Thread works waits in the queue, named by the Thread it comes from", async () => {
+  window = await startWindow()
+  const { page } = window
+  const { thread, composer } = await firstThread(page)
+  await composer.fill("hello")
+  await composer.press("Enter")
+  await expect(thread.getByText("You said: hello")).toBeVisible()
+  // The Thread works on, so what comes into it waits its turn.
+  await composer.fill("wait here")
+  await composer.press("Enter")
+  await expect(thread.getByText("Waiting.")).toBeVisible()
+
+  const sent = agentCalls(window, "send", {
+    harness: "fake",
+    text: "look around",
+  })
+  expect(sent.isError, sent.content[0]?.text).toBeFalsy()
+  const queue = thread.getByRole("list", { name: "Waiting messages" })
+  const answer = queue.getByRole("button", { name: "Answered by look around" })
+  await expect(answer).toBeVisible()
+  await page.screenshot({ path: "test-results/18k-answer-waits.png" })
+  await answer.click()
+  const asked = page.getByRole("region", { name: "look around" })
+  await expect(asked).toHaveAttribute("data-focused", "true")
+})
+
 test("the sidebar is arranged by sidebar.toml, and its view menu writes the file", async () => {
   window = await startWindow({ sidebar: '# mine\npreset = "spaces"\n' })
   const { page, dir } = window

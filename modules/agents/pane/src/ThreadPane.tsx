@@ -48,6 +48,7 @@ import {
   RotateCcwIcon,
 } from "lucide-react"
 import {
+  type Listing,
   steerable,
   type ThreadState,
   type Waiting,
@@ -524,7 +525,7 @@ function Entry({
   reader: ImageReader
   onOpenDiff: OpenDiff
   /** The other Thread whose Agent wrote it, if one did. */
-  writer?: ListedThread
+  writer?: ListedThread | "gone"
   onOpenThread: Writers["onOpenThread"]
 }) {
   const body = item.body
@@ -675,22 +676,24 @@ function adviceFor(failure: Failure): string | undefined {
 }
 
 /** The Space's other Threads by their Agents' IDs, as the sidebar follows
- * them, so a message from one names it as it is now. */
+ * them, so a message from one names it as it is now; and this Thread's own
+ * Agent, so a message from one the list no longer has still says so. */
 function useWriters(
   engine: Engine,
   space: SpaceId,
   thread: string | null
-): ReadonlyMap<string, ListedThread> {
+): Listing {
   const source = useMemo(() => threadsSource(engine, space), [engine, space])
   const live = useLive(engine, space, source)
   const threads = live.state === "ready" ? live.view.threads : undefined
-  return useMemo(
-    () =>
-      new Map(
-        (threads ?? [])
-          .filter((other) => other.id !== thread)
-          .map((other) => [other.agent, other])
-      ),
-    [threads, thread]
-  )
+  return useMemo(() => {
+    const listing: { threads: Map<string, ListedThread>; self?: string } = {
+      threads: new Map(),
+    }
+    for (const one of threads ?? []) {
+      if (one.id === thread) listing.self = one.agent
+      else listing.threads.set(one.agent, one)
+    }
+    return listing
+  }, [threads, thread])
 }
