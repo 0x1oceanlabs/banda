@@ -268,6 +268,7 @@ export function Shell({
           opening(w, space ?? focused(w)?.space ?? home, pane, {
             ...how,
             place: "right",
+            again: true,
           })
         ),
       toggleSidebar,
@@ -338,8 +339,9 @@ export function Shell({
   // A row of the sidebar or the menu opens its Pane, where a workspace
   // shows it or in a new column; a Space gets a new Thread.
   const openPane = useCallback(
-    (space: SpaceId, pane: PaneState) => parts.open(pane, space),
-    [parts]
+    (space: SpaceId, pane: PaneState) =>
+      change((w) => opening(w, space, pane, { place: "right" })),
+    [change]
   )
   // A new Thread is the agents module's, as its key's (`thread.new`).
   const newThreadIn = useCallback(
@@ -452,7 +454,7 @@ export function Shell({
             called={called}
             frame={frame}
             onStep={(by) => change((w) => step(w, by))}
-            onStart={(pane) => change((w) => opening(w, home, pane))}
+            onStart={(pane) => parts.open(pane)}
           />
           <Toasts
             toasts={toasts}

@@ -24,9 +24,11 @@ export type AnyPaneKind = PaneKind<Args>
 export type WindowApi = {
   /** The Space a new Thread starts in. */
   home: SpaceId
-  /** Shows a Pane right of the focused one, with its width, and focuses
-   * it: in `space`, else in the focused Pane's Space. With `focus: false`
-   * the focus stays where it is, as for a tab an Agent opened. */
+  /** Shows a new Pane right of the focused one, with its width, and
+   * focuses it: in `space`, else in the focused Pane's Space. It is a new
+   * tile each time, as a browser's new window, even when another shows
+   * the same Pane. With `focus: false` the focus stays where it is, as
+   * for a tab an Agent opened. */
   open: (pane: PaneState, space?: SpaceId, how?: { focus?: boolean }) => void
   /** Runs an action by its id, a module's or the window's, as its key
    * would: how one module asks another for what it does. */

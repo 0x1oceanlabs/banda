@@ -13,7 +13,7 @@ import { NEW_THREAD } from "./session"
 
 /**
  * A new Thread, in a new column, on this computer's first Harness (ADR
- * 0006); one not yet started there gets the focus instead. Its args: the
+ * 0006): a new one at each press, as a browser's new window. Its args: the
  * `space` (the home Space else), and, from the Banda menu, the words to
  * `ask` at once and the `harness` (ADR 0017, decision 6).
  */

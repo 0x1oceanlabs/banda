@@ -233,8 +233,8 @@ export async function sendAndLeave(
 ) {
   await composer.fill(text)
   await composer.press("Enter")
-  // A Thread not yet started gets the focus instead of a new one, so the
-  // first message must have started it.
+  // The first message must have started it, so the new one is the only
+  // New Thread.
   const thread = composer.locator("xpath=ancestor::section[1]")
   await expect(thread).not.toHaveAccessibleName("New Thread")
   await page.keyboard.press("Alt+Enter")

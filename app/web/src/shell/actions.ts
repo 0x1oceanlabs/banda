@@ -82,7 +82,8 @@ function resize(shell: Shell, by: 1 | -1, wrap = false) {
   })
 }
 
-/** Shows a Pane of a Space and focuses it; a new column takes its width. */
+/** Shows a Pane of a Space and focuses it, as `how` says; a new column
+ * takes its width. */
 export function opening(
   workspaces: Workspaces,
   space: SpaceId,
