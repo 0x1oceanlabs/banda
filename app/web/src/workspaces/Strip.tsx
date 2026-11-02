@@ -99,7 +99,7 @@ export function Strip({
     )
     watch.observe(strip)
     return () => watch.disconnect()
-  }, [empty])
+  }, [])
   useEffect(() => {
     const strip = scroller.current
     if (!strip) return
@@ -135,18 +135,7 @@ export function Strip({
       strip.removeEventListener("wheel", onWheel)
       clearTimeout(ending)
     }
-  }, [empty])
-
-  if (empty) {
-    return (
-      <div className="flex h-full flex-col items-center justify-center gap-3 p-6 pl-[calc(--spacing(6)+var(--sidebar-inset))]">
-        <p className="text-sm text-muted-foreground">
-          This workspace is empty. Open a Pane:
-        </p>
-        <Choices modules={modules} onPick={onStart} />
-      </div>
-    )
-  }
+  }, [])
 
   const spaces = new Set(
     workspace.columns.flatMap((column) => column.entries.map((e) => e.space))
@@ -158,6 +147,16 @@ export function Strip({
       data-strip={workspace.id}
       className="relative flex h-full gap-(--gap-inner) overflow-hidden p-(--gap-outer) pl-[calc(var(--gap-outer)+var(--sidebar-inset))]"
     >
+      {/* The Strip stays when its last Pane goes, so that Pane fades out
+          here, over these words. */}
+      {empty && (
+        <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 p-6 pl-[calc(--spacing(6)+var(--sidebar-inset))]">
+          <p className="text-sm text-muted-foreground">
+            This workspace is empty. Open a Pane:
+          </p>
+          <Choices modules={modules} onPick={onStart} />
+        </div>
+      )}
       {columns.map((column, c) => (
         <div
           key={column.id}
