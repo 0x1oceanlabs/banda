@@ -5,4 +5,4 @@ import type { Display } from "./Display";
 /**
  * `[columns]` resolved: valid widths only, narrowest first.
  */
-export type Columns = { presets: Array<string>, heights: Array<string>, default: string, alone: string, center: Center, display: Display, min: number, };
+export type Columns = { presets: Array<string>, heights: Array<string>, default: string, alone: string, center: Center, display: Display, min: number, snap: number, };

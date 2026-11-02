@@ -298,6 +298,29 @@ html[data-glass] .bg-popover .bg-popover {
 html[data-glass] [data-held-by] {
   opacity: var(--tile-opacity);
 }
+/* What a Pane keeps in the window's layer takes the pointer, as the layer
+   itself does not; while the mouse sizes a column or a Pane (ADR 0025,
+   decision 5) the pointer is the window's: nothing there takes it, nothing
+   is selected, and the cursor says which way the size goes. */
+[data-held-by] {
+  pointer-events: auto;
+}
+html[data-sizing] [data-held-by] {
+  pointer-events: none;
+}
+html[data-sizing],
+html[data-sizing] * {
+  user-select: none;
+}
+html[data-sizing="width"] * {
+  cursor: col-resize !important;
+}
+html[data-sizing="height"] * {
+  cursor: row-resize !important;
+}
+html[data-sizing="both"] * {
+  cursor: nwse-resize !important;
+}
 [data-sidebar-shown] {
   --sidebar-inset: calc(var(--sidebar-width) + var(--gap-outer));
 }

@@ -59,6 +59,12 @@ export function share(width: Width): number | undefined {
   return Number.isFinite(value) && value > 0 && value <= 1 ? value : undefined
 }
 
+/** A share as a width the engine keeps: three places are finer than a
+ * pixel on any screen. */
+export function free(at: number): Width {
+  return String(Math.round(at * 1000) / 1000)
+}
+
 /** Panes one above another, sharing the column's height. */
 export type Column = {
   id: string

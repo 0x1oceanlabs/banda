@@ -185,6 +185,21 @@ On the list, Roma decided:
      the size holds a moment, so the steps are easy to hit. A double
      click on a gap between columns makes the column the whole screen
      wide, and back; between Panes, the heights even again.
+   - _Built_ 2026-11-02, the sizing (`app/web/src/workspaces/sizing.ts`
+     decides, `useSizing.ts` measures and draws). The hand reaches a gap
+     8 px wide however thin the look draws it; the last column's right
+     sizes it, the first one's left nothing. A size holds at a step
+     within `[columns] snap` pixels (8; 0 never) and is kept as dragged
+     between them, `"0.42"`. A Pane's height moves only the gap at its
+     bottom, or at its top for the last: the Pane across the gap takes
+     the rest, so the others stay where they are. `Alt` and the right
+     button wait for a 4 px pull, and `Esc` puts a drag back. A double
+     click that fills the screen gives that column the focus, so it stays
+     in view; a drag leaves the focus where it was. The pages are not
+     still pictures: while a size is dragged they let the pointer by and
+     stay live. A page still takes its own buttons, so `Alt` and the right
+     button on a browser's page, not its tab row, size nothing yet; step 6
+     takes that with the moving.
    - **The view.** `Alt` and the middle button drag the Strip sideways
      and the workspaces up and down. The wheel stays as it is (the
      architecture's swipes): `Alt` and the wheel go a workspace up or
@@ -267,8 +282,9 @@ On the list, Roma decided:
   4. the keys: heights, the zoom, `Alt+Ctrl+F`, `Alt+C`, Home and End,
      the launcher's letters (_built_ 2026-11-02);
   5. the mouse's sizing: the gaps, `Alt` and the right button, the
-     double click, the steps;
+     double click, the steps (_built_ 2026-11-02);
   6. the mouse's moving: the insert hint, the Strip's edge, the bar's
-     numbers, the pages' still pictures;
+     numbers, a page's own buttons with `Alt`, and `Alt` and the middle
+     button over the view;
   7. the overview: the drag, the arrows, typing;
   8. the drawer, a Pane in its own window, the narrow window.

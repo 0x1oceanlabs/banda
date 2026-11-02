@@ -341,6 +341,7 @@ export function Shell({
         )
       }
       changes.current = changes.current.then(run).catch(refused)
+      return changes.current
     },
     [engine, setView, drawnWhen, answeredAt]
   )
@@ -610,6 +611,7 @@ export function Shell({
       update,
       close: (entry) => change(() => closing(entry)),
       run: parts.run,
+      arrange: (plan) => change(() => plan),
     }),
     [change, update, parts]
   )
