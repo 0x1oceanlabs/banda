@@ -10,7 +10,7 @@ use banda_kernel::{AgentId, Error, Participant, Refusal};
 use rusqlite::{Connection, OptionalExtension, Row, params};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 pub const MIGRATIONS: &[&str] = &[
     r#"
@@ -113,6 +113,11 @@ UPDATE agents_turns SET opener = 'by_itself' WHERE message IN
 -- decision 4): the one that asked, for 'asked'; the one that answers, for
 -- 'answered'. NULL for every other turn.
 ALTER TABLE agents_turns ADD COLUMN from_thread TEXT;
+"#,
+    r#"
+-- The ID the Harness gave each reply's message, which a fork of its
+-- session goes to (ADR 0027).
+ALTER TABLE agents_items ADD COLUMN harness_message TEXT;
 "#,
 ];
 
@@ -682,6 +687,94 @@ pub fn item(sql: &Connection, id: ItemId) -> Result<Option<(ThreadId, Item)>, Er
         .optional()?)
 }
 
+/// Copies the turns of the Thread `from`, to `through` and with it, and
+/// their items, into the new Thread `to`: each with an ID of its own, in
+/// the same order, `to`'s Agent for `from`'s (ADR 0027).
+pub fn copy_turns(
+    sql: &Connection,
+    (from, old): (ThreadId, AgentId),
+    through: TurnId,
+    (to, agent): (ThreadId, AgentId),
+) -> Result<(), Error> {
+    let (was, now) = (
+        json(&Participant::Agent(old))?,
+        json(&Participant::Agent(agent))?,
+    );
+    let whose = |author: String| if author == was { now.clone() } else { author };
+    let mut listed = sql.prepare(
+        "SELECT id, author, message FROM agents_turns WHERE thread = ?1
+         AND rowid <= (SELECT rowid FROM agents_turns WHERE id = ?2) ORDER BY rowid",
+    )?;
+    let turns = listed
+        .query_map(params![from, through], |row| {
+            Ok((row.get::<_, TurnId>(0)?, row.get(1)?, row.get(2)?))
+        })?
+        .collect::<rusqlite::Result<Vec<(TurnId, String, ItemId)>>>()?;
+    let new_turns: HashMap<TurnId, TurnId> =
+        turns.iter().map(|(id, ..)| (*id, TurnId::new())).collect();
+    // Its items to the last of `through`'s, but for a later turn's, as a
+    // message queued while it ran.
+    let mut listed = sql.prepare(
+        "SELECT id, turn, author FROM agents_items WHERE thread = ?1
+         AND rowid <= (SELECT MAX(rowid) FROM agents_items WHERE thread = ?1 AND turn = ?2)
+         ORDER BY rowid",
+    )?;
+    let items = listed
+        .query_map(params![from, through], |row| {
+            Ok((row.get::<_, ItemId>(0)?, row.get(1)?, row.get(2)?))
+        })?
+        .collect::<rusqlite::Result<Vec<(ItemId, Option<TurnId>, String)>>>()?;
+    let mut new_items = HashMap::new();
+    let mut insert = sql.prepare(
+        "INSERT INTO agents_items (id, thread, turn, author, at, body, harness_message)
+         SELECT ?2, ?3, ?4, ?5, at, body, harness_message FROM agents_items WHERE id = ?1",
+    )?;
+    for (id, turn, author) in items {
+        let turn = match turn.map(|turn| new_turns.get(&turn)) {
+            Some(None) => continue,
+            new => new.flatten(),
+        };
+        let new = ItemId::new();
+        new_items.insert(id, new);
+        insert.execute(params![id, new, to, turn, whose(author)])?;
+    }
+    let mut insert = sql.prepare(
+        "INSERT INTO agents_turns (id, thread, agent, author, message, state, reason,
+             created_at, failure, settings, started_at, ended_at, opener, from_thread)
+         SELECT ?2, ?3, ?4, ?5, ?6, state, reason, created_at, failure, settings,
+             started_at, ended_at, opener, from_thread FROM agents_turns WHERE id = ?1",
+    )?;
+    for (id, author, message) in turns {
+        let message = new_items.get(&message).copied().unwrap_or(message);
+        insert.execute(params![
+            id,
+            new_turns[&id],
+            to,
+            agent,
+            whose(author),
+            message
+        ])?;
+    }
+    Ok(())
+}
+
+/// The ID the Harness gave the last reply of `turn` that it named.
+pub fn last_named_reply(
+    sql: &Connection,
+    thread: ThreadId,
+    turn: TurnId,
+) -> Result<Option<String>, Error> {
+    Ok(sql
+        .query_row(
+            "SELECT harness_message FROM agents_items
+             WHERE thread = ?1 AND turn = ?2 AND harness_message IS NOT NULL
+             ORDER BY rowid DESC LIMIT 1",
+            params![thread, turn],
+            |row| row.get(0),
+        )
+        .optional()?)
+}
+
 /// Which turn an item belongs to, if any.
 pub fn set_item_turn(sql: &Connection, id: ItemId, turn: Option<TurnId>) -> Result<(), Error> {
     sql.execute(
@@ -710,9 +803,20 @@ pub fn set_body(sql: &Connection, id: ItemId, body: &Body) -> Result<(), Error> 
 
 /// Writes an item the Agent sends. A reply or a thought comes in pieces:
 /// a piece of an item that is already written adds its text to it.
-pub fn put(sql: &Connection, thread: ThreadId, item: &Item) -> Result<(), Error> {
+/// A reply keeps `named`, the ID the Harness gave its message.
+pub fn put(
+    sql: &Connection,
+    thread: ThreadId,
+    item: &Item,
+    named: Option<&str>,
+) -> Result<(), Error> {
     let Some((_, mut stored)) = self::item(sql, item.id)? else {
-        return insert_item(sql, thread, item);
+        insert_item(sql, thread, item)?;
+        sql.execute(
+            "UPDATE agents_items SET harness_message = ?2 WHERE id = ?1",
+            params![item.id, named],
+        )?;
+        return Ok(());
     };
     match (&mut stored.body, &item.body) {
         (Body::Message { text, .. }, Body::Message { text: more, .. })

@@ -148,6 +148,16 @@ impl Ending {
     }
 }
 
+/// Whether a Thread may be forked at the end of a turn: the turn ran and
+/// ended, and no turn of the Thread runs now (ADR 0027).
+pub fn may_fork(state: TurnState, works: bool) -> Result<(), Refusal> {
+    let turn = TurnFacts {
+        works,
+        ..TurnFacts::of(state)
+    };
+    next(&turn, Event::Fork).map(drop)
+}
+
 /// Whether a turn may be tried again: a Person asked for it, it failed or
 /// was cut short, and nothing came after it in its Thread.
 pub fn retry(state: TurnState, latest: bool, by_itself: bool) -> Result<(), Refusal> {
@@ -204,6 +214,7 @@ pub fn steers(state: TurnState, held: bool, by_itself: bool) -> bool {
 /// decision 2): what [`next`] accepts of a Person. `turns` are in the order
 /// they were made, and `own` are those the Agent opened by itself.
 pub fn can(turns: &mut [TurnView], own: &HashSet<TurnId>, held: bool) {
+    let works = turns.iter().any(|turn| turn.state == TurnState::Running);
     let can: Vec<Can> = turns
         .iter()
         .map(|turn| {
@@ -213,6 +224,7 @@ pub fn can(turns: &mut [TurnView], own: &HashSet<TurnId>, held: bool) {
                 first,
                 latest,
                 held,
+                works,
                 ..TurnFacts::of(turn.state)
             };
             let takes = |event| next(&facts, event).is_ok();
@@ -222,6 +234,7 @@ pub fn can(turns: &mut [TurnView], own: &HashSet<TurnId>, held: bool) {
                 edit: takes(Event::Change),
                 withdraw: takes(Event::Withdraw),
                 steer: takes(Event::Steer),
+                fork: takes(Event::Fork),
             }
         })
         .collect();

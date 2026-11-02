@@ -201,6 +201,9 @@ banda_kernel::methods! {
         command stop(OneTurn) -> (), Write;
         /// Tries a failed turn's message again.
         command retry(OneTurn) -> Sent, Write;
+        /// A new Thread with the conversation to the end of an ended turn:
+        /// its turns and items, and a fork of its session there (ADR 0027).
+        command fork(OneTurn) -> Forked, Write;
         /// Answers a Question; `values` fill its form.
         command answer(Answer) -> (), Decide;
         /// An image a message will carry.
@@ -362,6 +365,13 @@ pub struct Sent {
     pub thread: ThreadId,
     pub turn: TurnId,
     pub item: ItemId,
+}
+
+/// What `agents.fork` answers: the new Thread.
+#[derive(Clone, Debug, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "agents/")]
+pub struct Forked {
+    pub thread: ThreadId,
 }
 
 #[derive(Deserialize, TS)]
@@ -596,6 +606,11 @@ impl Agents {
     async fn stop(&self, call: Call, OneTurn { turn }: OneTurn) -> Result<(), Refusal> {
         let author = call.participant();
         call.command(move |tx| stop(tx, author, turn)).await
+    }
+
+    async fn fork(&self, call: Call, OneTurn { turn }: OneTurn) -> Result<Forked, Refusal> {
+        let author = call.participant();
+        call.command(move |tx| fork(tx, author, turn)).await
     }
 
     async fn retry(&self, call: Call, OneTurn { turn }: OneTurn) -> Result<Sent, Refusal> {
@@ -833,24 +848,9 @@ fn send(
             (id, agent)
         }
         Target::New(harness) => {
-            let summary = ThreadSummary {
-                id: ThreadId::new(),
-                harness,
-                title: rules::title(&text, &images),
-                updated_at: now,
-            };
-            // The Thread's own Agent, and only one.
-            let agent = AgentId::new();
+            let title = rules::title(&text, &images);
             let settings = settings.unwrap_or_default();
-            store::insert_thread(tx.sql(), &summary, agent, author, &settings)?;
-            let fact = Fact::ThreadStarted {
-                thread: summary.id,
-                title: summary.title.clone(),
-                harness: Some(summary.harness.clone()),
-                agent: Some(agent),
-            };
-            emit(tx, author, summary.id, &fact)?;
-            (summary.id, agent)
+            start_thread(tx, author, harness, title, &settings)?
         }
     };
     let running = match steer && by_person {
@@ -949,6 +949,56 @@ fn steerable(tx: &mut Tx<'_>, thread: ThreadId) -> Result<Option<store::Turn>, E
         return Ok(None);
     };
     Ok(rules::steers(running.state, held, running.opener.by_itself()).then_some(running))
+}
+
+/// Forks the Thread of `turn`, an ended turn, at its end: a new Thread,
+/// "<title> fork", on the same Harness and settings, with a copy of the
+/// conversation to there, whose session is to be a fork of the Thread's at
+/// the turn's last reply (ADR 0027).
+fn fork(tx: &mut Tx<'_>, author: Participant, turn: TurnId) -> Result<Forked, Error> {
+    let found = turn_of(tx, turn)?;
+    let from = found.thread;
+    let works = store::running(tx.sql(), from)?.is_some();
+    rules::may_fork(found.state, works)?;
+    let source = store::thread(tx.sql(), from)?
+        .ok_or_else(|| Refusal::not_found("There is no such Thread."))?;
+    let cannot = || Refusal::conflict("Its Agent named no reply of this turn to fork from.");
+    let message = store::last_named_reply(tx.sql(), from, turn)?.ok_or_else(cannot)?;
+    let evidence: acp::Evidence = store::evidence(tx.sql(), from)?.ok_or_else(cannot)?;
+    let settings = store::settings(tx.sql(), from)?;
+    let title = format!("{} fork", source.title);
+    let (thread, agent) = start_thread(tx, author, source.harness, title, &settings)?;
+    store::copy_turns(tx.sql(), (from, found.agent), turn, (thread, agent))?;
+    store::set_offer(tx.sql(), thread, &store::offer(tx.sql(), from)?)?;
+    let forked = evidence.forked_at(acp::ForkAt { message });
+    store::set_evidence(tx.sql(), thread, &forked)?;
+    Ok(Forked { thread })
+}
+
+/// A new Thread on `harness`, and its own Agent, the only one.
+fn start_thread(
+    tx: &mut Tx<'_>,
+    author: Participant,
+    harness: String,
+    title: String,
+    settings: &Settings,
+) -> Result<(ThreadId, AgentId), Error> {
+    let summary = ThreadSummary {
+        id: ThreadId::new(),
+        harness,
+        title,
+        updated_at: tx.now(),
+    };
+    let agent = AgentId::new();
+    store::insert_thread(tx.sql(), &summary, agent, author, settings)?;
+    let fact = Fact::ThreadStarted {
+        thread: summary.id,
+        title: summary.title,
+        harness: Some(summary.harness),
+        agent: Some(agent),
+    };
+    emit(tx, author, summary.id, &fact)?;
+    Ok((summary.id, agent))
 }
 
 fn turn_of(tx: &mut Tx<'_>, turn: TurnId) -> Result<store::Turn, Error> {

@@ -19,6 +19,8 @@ pub struct TurnFacts {
     pub latest: bool,
     /// Its Thread's queue waits for a Person.
     pub held: bool,
+    /// A turn of its Thread runs.
+    pub works: bool,
 }
 
 impl TurnFacts {
@@ -31,6 +33,7 @@ impl TurnFacts {
             first: true,
             latest: true,
             held: false,
+            works: false,
         }
     }
 }
@@ -51,6 +54,9 @@ pub enum Event {
     /// A Person tries it again: a new turn runs its message, and it stays
     /// as it ended.
     Retry,
+    /// A Person forks its Thread at its end (ADR 0027); it stays as it
+    /// ended.
+    Fork,
 }
 
 /// What an event does to a turn.
@@ -116,6 +122,14 @@ pub fn next(turn: &TurnFacts, event: Event) -> Result<Step, Refusal> {
             "Only the Thread's latest turn can be tried again.",
         )),
         Event::Retry => to(state),
+        // It ran and ended, and its Thread does not work now.
+        Event::Fork if matches!(state, Queued | Running | Withdrawn) => Err(Refusal::conflict(
+            "A Thread is forked at the end of a turn that ran.",
+        )),
+        Event::Fork if turn.works => Err(Refusal::conflict(
+            "The Thread can be forked once its turn ends.",
+        )),
+        Event::Fork => to(state),
     }
 }
 
@@ -135,20 +149,20 @@ mod tests {
 
     #[test]
     fn every_event_moves_each_state_of_a_turn_or_is_refused() {
-        use Event::{Change, Retry, Start, Steer, Stop, Withdraw};
+        use Event::{Change, Fork, Retry, Start, Steer, Stop, Withdraw};
         #[rustfmt::skip]
         let table = [
-            //            Start      Stop         Change    Withdraw     Steer      Retry
-            (Queued,      ["Running", "Stopped",   "Queued", "Withdrawn", "-",       "-"]),
-            (Running,     ["-",       "Running H", "-",      "-",         "Running", "-"]),
-            (Done,        ["-",       "-",         "-",      "-",         "-",       "-"]),
-            (Stopped,     ["-",       "-",         "-",      "-",         "-",       "-"]),
-            (Failed,      ["-",       "-",         "-",      "-",         "-",       "Failed"]),
-            (Interrupted, ["-",       "-",         "-",      "-",         "-",       "Interrupted"]),
-            (Withdrawn,   ["-",       "-",         "-",      "-",         "-",       "-"]),
+            //            Start      Stop         Change    Withdraw     Steer      Retry          Fork
+            (Queued,      ["Running", "Stopped",   "Queued", "Withdrawn", "-",       "-",           "-"]),
+            (Running,     ["-",       "Running H", "-",      "-",         "Running", "-",           "-"]),
+            (Done,        ["-",       "-",         "-",      "-",         "-",       "-",           "Done"]),
+            (Stopped,     ["-",       "-",         "-",      "-",         "-",       "-",           "Stopped"]),
+            (Failed,      ["-",       "-",         "-",      "-",         "-",       "Failed",      "Failed"]),
+            (Interrupted, ["-",       "-",         "-",      "-",         "-",       "Interrupted", "Interrupted"]),
+            (Withdrawn,   ["-",       "-",         "-",      "-",         "-",       "-",           "-"]),
         ];
         for (state, row) in table {
-            let events = [Start, Stop, Change, Withdraw, Steer, Retry];
+            let events = [Start, Stop, Change, Withdraw, Steer, Retry, Fork];
             for (event, want) in events.into_iter().zip(row) {
                 let turn = TurnFacts::of(state);
                 assert_eq!(moved(&turn, event), want, "{state:?} {event:?}");
@@ -176,6 +190,7 @@ mod tests {
             ("the Agent's own",  own(Running),                              Event::Stop,   "Running H"),
             ("the Agent's own",  own(Failed),                               Event::Retry,  "-"),
             ("not the latest",   TurnFacts { latest: false, ..of(Failed) }, Event::Retry,  "-"),
+            ("its Thread works", TurnFacts { works: true, ..of(Done) },     Event::Fork,   "-"),
         ];
         for (why, turn, event, want) in cases {
             assert_eq!(moved(&turn, event), want, "{why}");

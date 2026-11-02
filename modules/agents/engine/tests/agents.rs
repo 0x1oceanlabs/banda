@@ -4,7 +4,7 @@
 use banda_agents::Agents;
 use banda_agents::model::{
     Body, Choice, Exit, Failure, ItemId, Mode, OptionValue, QuestionState, Settings, StepState,
-    ThreadList, ThreadView, ToolContent, ToolStatus, TurnState,
+    ThreadList, ThreadView, ToolContent, ToolStatus, TurnId, TurnState,
 };
 use banda_agents::settings::{Cli, Harness, Harnesses};
 use banda_kernel::{
@@ -3103,5 +3103,113 @@ async fn a_removed_space_stops_its_turns_before_its_data_goes() {
             "the turn never stopped"
         );
         tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+}
+
+#[tokio::test]
+async fn a_thread_forks_at_a_turns_end_and_its_session_knows_only_that_far() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let (thread, first) = world.finish(None, "remember apples").await;
+    let turn = first.turns[0].id;
+    world.finish(Some(&thread), "remember pears").await;
+
+    let forked = world
+        .call(world.person(), "agents.fork", json!({ "turn": turn }))
+        .await
+        .unwrap();
+    let fork = &forked["thread"];
+    assert_ne!(fork, &thread);
+    let view = world.thread(fork).await;
+    assert_eq!(view.thread.title, "remember apples fork");
+    assert_eq!(
+        texts(&view),
+        [
+            "message: remember apples",
+            "message: I will remember apples."
+        ],
+        "the conversation to the end of the turn"
+    );
+    assert_eq!(view.turns.len(), 1);
+    assert_ne!(
+        view.turns[0].id, turn,
+        "each turn copied has an ID of its own"
+    );
+    assert_ne!(view.items[0].id, first.items[0].id);
+
+    // Its session is a fork at that turn's reply, and the Thread's own
+    // goes on as it was.
+    let (_, view) = world.finish(Some(fork), "what do you remember").await;
+    assert_eq!(last_reply(&view), "message: I remember: apples.");
+    let (_, view) = world.finish(Some(&thread), "what do you remember").await;
+    assert_eq!(last_reply(&view), "message: I remember: apples, pears.");
+}
+
+#[tokio::test]
+async fn a_thread_is_not_forked_where_its_agent_named_no_reply_or_while_it_works() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let (thread, view) = world.finish(None, "hello").await;
+    let fork = |turn: TurnId| world.call(world.person(), "agents.fork", json!({ "turn": turn }));
+    let refused = fork(view.turns[0].id).await.unwrap_err();
+    assert_eq!(
+        refused.code,
+        Code::Conflict,
+        "the fake names no plain reply"
+    );
+
+    let sent = world.send(Some(&thread), "wait").await;
+    world.until(&thread, |v| ongoing(v, &sent["turn"])).await;
+    let refused = fork(view.turns[0].id).await.unwrap_err();
+    assert_eq!(refused.code, Code::Conflict, "not while a turn runs");
+    let turn: TurnId = serde_json::from_value(sent["turn"].clone()).unwrap();
+    assert_eq!(fork(turn).await.unwrap_err().code, Code::Conflict);
+}
+
+/// Claude Code and Codex fork a session at a turn's reply, by the ID they
+/// gave its message (ADR 0027): the fork knows what came before it and
+/// not what came after. It calls the models, which costs money: run it by
+/// hand when an adapter changes, `cargo test -p banda-agents --test agents
+/// real_harnesses_fork -- --ignored --nocapture`.
+#[tokio::test]
+#[ignore = "calls the real models, which costs money"]
+async fn the_real_harnesses_fork_a_thread_at_a_turns_end() {
+    let known = Harnesses::known();
+    for harness in ["claude", "codex"] {
+        let agents = Agents::new(Harnesses::new(vec![known.find(harness).unwrap().clone()]));
+        let root = tempfile::tempdir().unwrap();
+        let world = World::new_on(root.path(), agents, harness).await;
+        let finish = async |thread: Option<&Value>, text: &str| {
+            let sent = world.send(thread, text).await;
+            let view = world
+                .until_within(Duration::from_secs(300), &sent["thread"], |v| {
+                    !ongoing(v, &sent["turn"])
+                })
+                .await;
+            assert_eq!(state(&view, &sent["turn"]), Some(TurnState::Done));
+            (sent["thread"].clone(), view)
+        };
+        let (thread, first) = finish(
+            None,
+            "Remember the word APPLES. Do not use any tools. Reply with only: OK",
+        )
+        .await;
+        let turn = first.turns[0].id;
+        finish(
+            Some(&thread),
+            "Remember the word PEARS too. Do not use any tools. Reply with only: OK",
+        )
+        .await;
+        let forked = world
+            .call(world.person(), "agents.fork", json!({ "turn": turn }))
+            .await
+            .unwrap();
+        let ask = "Which words did I ask you to remember? Do not use any tools. \
+                   Reply with only the words, comma separated.";
+        let (_, view) = finish(Some(&forked["thread"]), ask).await;
+        let reply = last_reply(&view);
+        println!("{harness}: {reply}");
+        assert!(reply.contains("APPLES"), "{harness} remembers: {reply}");
+        assert!(!reply.contains("PEARS"), "{harness} knows no more: {reply}");
     }
 }
