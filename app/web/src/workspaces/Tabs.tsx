@@ -10,7 +10,8 @@ import { AgentMark, type Frame } from "./PaneFrame"
  * A tabbed column's row of tabs, in place of its tile's header (ADR 0005,
  * decision 6): one per Pane, the shown one raised. A tab whose Thread
  * calls the Person carries its mark, so no call hides behind another tab.
- * A click shows the Pane; a middle click, or its cross, closes it.
+ * A click shows the Pane; a middle click, or its cross, closes it; a tab
+ * dragged carries its Pane (`data-handle`).
  */
 export function Tabs({
   entries,
@@ -29,6 +30,7 @@ export function Tabs({
   return (
     <div
       role="tablist"
+      data-handle=""
       className="flex h-9 shrink-0 items-stretch overflow-x-auto border-b text-sm [scrollbar-width:none]"
     >
       {entries.map((entry, e) => {
@@ -38,6 +40,7 @@ export function Tabs({
         return (
           <div
             key={entry.id}
+            data-pane={entry.id}
             data-shown={shown}
             className="group/tab flex max-w-60 min-w-24 flex-1 items-center gap-1.5 border-r bg-muted/50 pr-1 pl-2.5 text-muted-foreground last:border-r-0 hover:bg-muted data-[shown=true]:bg-background data-[shown=true]:text-foreground"
           >

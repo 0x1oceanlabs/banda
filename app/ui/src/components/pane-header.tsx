@@ -7,6 +7,7 @@ import { Button } from "./button"
  * A tile's header: one row as tall as every Pane's, with what the Pane puts
  * in it and its close button at the end. The frame draws it for most
  * Panes; a Pane that draws its own (`header: false`) draws it with this.
+ * The mouse carries the Pane by it (`data-handle`).
  */
 function PaneHeader({
   title,
@@ -22,6 +23,7 @@ function PaneHeader({
 }) {
   return (
     <header
+      data-handle=""
       className={cn(
         "flex h-9 shrink-0 items-center gap-2 border-b px-2.5 text-sm",
         className

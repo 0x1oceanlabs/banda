@@ -23,6 +23,10 @@ export type Grab =
   | { kind: "width"; column: string }
   | { kind: "height"; column: string; pane: number }
 
+/** How far, in pixels, the pointer goes before a press drags anything:
+ * a click alone moves and sizes nothing. */
+export const THRESHOLD = 4
+
 /** How wide a gap is to the hand, in pixels, however thin the look draws
  * it: half of it on each side of the gap's middle. */
 export const REACH = 8

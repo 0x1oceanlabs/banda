@@ -200,6 +200,25 @@ On the list, Roma decided:
      stay live. A page still takes its own buttons, so `Alt` and the right
      button on a browser's page, not its tab row, size nothing yet; step 6
      takes that with the moving.
+   - _Built_ 2026-11-02, the moving (`app/web/src/workspaces/moving.ts`
+     decides, `useMoving.ts` measures and draws). A Pane's header and a
+     tab carry it (`data-handle`), its buttons and fields excepted; `Alt`
+     and the left button carry it from anywhere on it, and `Alt` and a
+     click that moves nothing give it the focus. What lifts is a card
+     with its title: the tile, or the tab, dims where it is, and nothing
+     else moves until it lands. A column's edge is a quarter of it, 96 px
+     at most, and the gap beside it counts as the edge; a tabbed column's
+     page lands the Pane as its last tab. Where it would stay, there is
+     no hint, and letting go moves nothing. On an empty workspace, the
+     Strip itself takes it. Against the Strip's edge, 96 px, the Strip
+     scrolls, faster the nearer the edge. Over a workspace's number,
+     held half a second, that workspace shows; let go there, the Pane is
+     its last column, and the view follows it, as `Alt+Shift+N`'s does.
+     `Alt` held in a browser's page stays the page's, and the window
+     hears it too (`html[data-alt]`): the page lets the mouse through, so
+     `Alt` and either button move and size over it. `Alt` and the middle
+     button drag the Strip with the pointer and land as a swipe does; up
+     or down, 48 px, they step one workspace, once.
    - **The view.** `Alt` and the middle button drag the Strip sideways
      and the workspaces up and down. The wheel stays as it is (the
      architecture's swipes): `Alt` and the wheel go a workspace up or
@@ -285,6 +304,6 @@ On the list, Roma decided:
      double click, the steps (_built_ 2026-11-02);
   6. the mouse's moving: the insert hint, the Strip's edge, the bar's
      numbers, a page's own buttons with `Alt`, and `Alt` and the middle
-     button over the view;
+     button over the view (_built_ 2026-11-02);
   7. the overview: the drag, the arrows, typing;
   8. the drawer, a Pane in its own window, the narrow window.

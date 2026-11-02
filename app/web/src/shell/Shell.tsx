@@ -713,6 +713,12 @@ export function Shell({
               listed={listed}
               frame={frame}
               onStep={(by) => change((w) => step(w, by))}
+              onGo={(id) =>
+                change((w) => {
+                  const index = w.list.findIndex((each) => each.id === id)
+                  return index < 0 ? undefined : go(w, index)
+                })
+              }
               onStart={(pane) => parts.open(pane)}
             />
           )}

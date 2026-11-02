@@ -2188,11 +2188,7 @@ test("the mouse sizes as niri's: the gaps, Alt and the right button, a double cl
   const terminal = terminalTile(page)
   await expect(terminal).toHaveAttribute("data-focused", "true")
   await expect.poll(() => sharesOf(page)).toEqual([50, 50])
-  const middle = async (tile: Locator) => {
-    const box = (await tile.boundingBox())!
-    return { x: box.x + box.width / 2, y: box.y + box.height / 2 }
-  }
-  const { y } = await middle(thread)
+  const { y } = await within(thread, 0.5, 0.5)
 
   // The gap right of the Thread, dragged near a third, holds there; the
   // focus stays where it was.
@@ -2234,7 +2230,7 @@ test("the mouse sizes as niri's: the gaps, Alt and the right button, a double cl
 
   // Alt and the right button, anywhere on the Thread: sideways its width,
   // held at a half; the Thread takes the focus.
-  const on = await middle(thread)
+  const on = await within(thread, 0.5, 0.5)
   await page.keyboard.down("Alt")
   await page.mouse.move(on.x, on.y)
   await page.mouse.down({ button: "right" })
@@ -2270,7 +2266,7 @@ test("the mouse sizes as niri's: the gaps, Alt and the right button, a double cl
 
   // Alt and the right button on the lower one: up makes it shorter.
   await settled(upper, lower)
-  const low = await middle(lower)
+  const low = await within(lower, 0.5, 0.5)
   await page.keyboard.down("Alt")
   await page.mouse.move(low.x, low.y)
   await page.mouse.down({ button: "right" })
@@ -2285,6 +2281,162 @@ test("the mouse sizes as niri's: the gaps, Alt and the right button, a double cl
   const d = (await lower.boundingBox())!
   await page.mouse.dblclick(c.x + 40, (c.y + c.height + d.y) / 2)
   await expect.poll(() => heightOf(upper)).toBe(50)
+})
+
+/** The workspace on screen: each column's tiles, top down, by ID. */
+function layoutOf(page: Page) {
+  return page.evaluate(() =>
+    [
+      ...document.querySelectorAll(
+        '[role="group"]:not([aria-hidden="true"]) [data-column]'
+      ),
+    ].map((column) =>
+      [...column.querySelectorAll<HTMLElement>(":scope > [data-tile]")].map(
+        (tile) => tile.dataset.tile
+      )
+    )
+  )
+}
+
+/** Where to take `tile` by its header: left of its middle, past its
+ * buttons. */
+async function headerOf(tile: Locator) {
+  const box = (await tile.locator("header[data-handle]").boundingBox())!
+  return { x: box.x + box.width / 3, y: box.y + box.height / 2 }
+}
+
+/** Where in `tile`, as shares of its width and height. */
+async function within(tile: Locator, x: number, y: number) {
+  const box = (await tile.boundingBox())!
+  return { x: box.x + box.width * x, y: box.y + box.height * y }
+}
+
+test("the mouse moves Panes as niri's: a header, Alt and the left button, the bar's numbers", async () => {
+  window = await startWindow({ look: "[columns]\nmin = 10\n" })
+  const { page } = window
+  const { thread, composer } = await firstThread(page)
+  await expect(composer).toBeFocused()
+  // Two New Panes; the last one, a terminal.
+  const launchers = page.getByRole("region", { name: "New Pane" })
+  await page.keyboard.press("Alt+KeyN")
+  await expect(launchers).toHaveCount(1)
+  await expect(launchers.first()).toHaveAttribute("data-focused", "true")
+  await page.keyboard.press("Alt+KeyN")
+  await expect(launchers).toHaveCount(2)
+  await expect(launchers.nth(1)).toHaveAttribute("data-focused", "true")
+  await page.keyboard.press("KeyT")
+  const terminal = terminalTile(page)
+  await expect(terminal).toHaveAttribute("data-focused", "true")
+  const launcher = launchers.first()
+  const [t, term, l] = await Promise.all(
+    [thread, terminal, launcher].map((tile) => tile.getAttribute("data-tile"))
+  )
+  await expect.poll(() => layoutOf(page)).toEqual([[t], [l], [term]])
+  const hint = page.locator("body > .bg-focus")
+  const bar = page.locator("[data-workspace]")
+
+  // The New Pane's header, dragged under the terminal: the hint shows
+  // where, the Pane lifted looks it, and it lands there, focused.
+  await settled(terminal, launcher)
+  const from = await headerOf(launcher)
+  await page.mouse.move(from.x, from.y)
+  await page.mouse.down()
+  const under = await within(terminal, 0.5, 0.8)
+  await page.mouse.move(under.x, under.y, { steps: 8 })
+  await expect(page.locator('html[data-drag="move"]')).toHaveCount(1)
+  await expect(launcher).toHaveAttribute("data-lifted", "")
+  await expect(hint).toBeVisible()
+  await page.screenshot({ path: "test-results/6a-carried.png" })
+  await page.mouse.up()
+  await expect.poll(() => layoutOf(page)).toEqual([[t], [term, l]])
+  await expect(launcher).toHaveAttribute("data-focused", "true")
+  await expect(page.locator("html[data-drag], [data-lifted]")).toHaveCount(0)
+  await expect(hint).toHaveCount(0)
+
+  // Alt and the left button, from anywhere on it, to the column's left
+  // edge: a column of its own there.
+  await settled(terminal, launcher)
+  const on = await within(launcher, 0.5, 0.5)
+  const edge = await within(terminal, 0.05, 0.5)
+  await page.keyboard.down("Alt")
+  await page.mouse.move(on.x, on.y)
+  await page.mouse.down()
+  await page.mouse.move(edge.x, edge.y, { steps: 8 })
+  await page.mouse.up()
+  await page.keyboard.up("Alt")
+  await expect.poll(() => layoutOf(page)).toEqual([[t], [l], [term]])
+
+  // Esc puts it back.
+  await page.keyboard.press("Alt+ArrowRight")
+  await expect(terminal).toHaveAttribute("data-focused", "true")
+  await settled(terminal, launcher)
+  const back = await headerOf(terminal)
+  await page.mouse.move(back.x, back.y)
+  await page.mouse.down()
+  const there = await within(launcher, 0.5, 0.8)
+  await page.mouse.move(there.x, there.y, { steps: 8 })
+  await expect(hint).toBeVisible()
+  await page.keyboard.press("Escape")
+  await page.mouse.up()
+  await expect(page.locator("html[data-drag], [data-lifted]")).toHaveCount(0)
+  await expect.poll(() => layoutOf(page)).toEqual([[t], [l], [term]])
+
+  // Onto the empty workspace's number: it lands there, and the view goes
+  // with it.
+  await expect(bar).toHaveCount(2)
+  const second = (await bar.nth(1).boundingBox())!
+  await page.mouse.move(back.x, back.y)
+  await page.mouse.down()
+  await page.mouse.move(second.x + second.width / 2, second.y + 4, {
+    steps: 8,
+  })
+  await expect(bar.nth(1)).toHaveAttribute("data-drop", "")
+  await page.mouse.up()
+  await expect.poll(() => layoutOf(page)).toEqual([[term]])
+  await expect(bar).toHaveCount(3)
+  await expect(bar.nth(1)).toHaveAttribute("aria-current", "true")
+
+  // Held over the first workspace's number, it goes there; let go under
+  // the New Pane, it lands under it.
+  await settled(terminal)
+  const alone = await headerOf(terminal)
+  const first = (await bar.nth(0).boundingBox())!
+  await page.mouse.move(alone.x, alone.y)
+  await page.mouse.down()
+  await page.mouse.move(first.x + first.width / 2, first.y + 4, { steps: 8 })
+  await expect(bar.nth(0)).toHaveAttribute("aria-current", "true")
+  await settled(launcher)
+  const below = await within(launcher, 0.5, 0.8)
+  await page.mouse.move(below.x, below.y, { steps: 8 })
+  await page.mouse.up()
+  await expect.poll(() => layoutOf(page)).toEqual([[t], [l, term]])
+  await expect(bar).toHaveCount(2)
+
+  // Alt and the middle button: sideways the Strip follows, and a column
+  // most in view takes the focus; up, the next workspace.
+  await page.keyboard.press("Alt+KeyN")
+  await expect(launchers).toHaveCount(2)
+  const third = launchers.nth(1)
+  await expect(third).toHaveAttribute("data-focused", "true")
+  await settled(third)
+  const strip = page.locator('[role="group"][aria-hidden="false"] [data-strip]')
+  await expect
+    .poll(() => strip.evaluate((e) => e.scrollLeft))
+    .toBeGreaterThan(0)
+  const view = await within(third, 0.5, 0.5)
+  await page.keyboard.down("Alt")
+  await page.mouse.move(view.x, view.y)
+  await page.mouse.down({ button: "middle" })
+  await page.mouse.move(view.x + 600, view.y, { steps: 10 })
+  await page.mouse.up({ button: "middle" })
+  await expect(third).toHaveAttribute("data-focused", "false")
+  await expect.poll(() => strip.evaluate((e) => e.scrollLeft)).toBe(0)
+  await page.mouse.move(view.x, view.y)
+  await page.mouse.down({ button: "middle" })
+  await page.mouse.move(view.x, view.y - 100, { steps: 6 })
+  await page.mouse.up({ button: "middle" })
+  await page.keyboard.up("Alt")
+  await expect(bar.nth(1)).toHaveAttribute("aria-current", "true")
 })
 
 test("Alt+[ takes a Pane into a column, Alt+G shows it as tabs", async () => {
