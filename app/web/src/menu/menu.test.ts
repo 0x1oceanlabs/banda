@@ -119,11 +119,14 @@ function nameOf(row: Choice): string {
       return `free ${row.action.id}`
     case "add":
     case "source":
+    case "locate":
       return branchName(row)
     case "adding":
       return "name" in row.how
         ? `create ${row.how.name}`
-        : `${row.how.create ? "create & add" : "add"} ${row.how.folder}`
+        : "locate" in row.how
+          ? `locate ${row.how.folder}`
+          : `${row.how.create ? "create & add" : "add"} ${row.how.folder}`
     case "folder":
       return row.up ? `.. ${row.path}` : row.path
   }
@@ -400,6 +403,34 @@ describe("Add Space (ADR 0026)", () => {
     expect(labels("/", "root", way("folder"), { browsed: root })).toEqual([
       ["", ["add /"]],
     ])
+  })
+
+  test("a missing Space's folder is located from where it was, once the path is a folder", () => {
+    const gone = {
+      ...spaces[0],
+      id: "s2",
+      name: "old",
+      folder: "/home/r/old",
+      missing: true,
+    }
+    expect(labels("ol", "root", undefined, { spaces: [gone] })[0]).toEqual([
+      "Spaces",
+      ["Locate folder"],
+    ])
+    expect(openingOf("space.locate.s2", [gone]).words).toBe("/home/r/")
+    const locate: Branch = {
+      kind: "locate",
+      id: "space.locate.s2",
+      space: gone,
+    }
+    const moved = browsed("/home/r/new", "/home/r", true, "new")
+    expect(labels("/home/r/new", "root", locate, { browsed: moved })).toEqual([
+      ["", ["locate /home/r/new", ".. /home/", "/home/r/new/"]],
+    ])
+    const nowhere = browsed("/home/r/nope", "/home/r", false)
+    expect(
+      labels("/home/r/nope", "root", locate, { browsed: nowhere })
+    ).toEqual([["", [".. /home/"]]])
   })
 
   test("a path not yet read is added, not made", () => {

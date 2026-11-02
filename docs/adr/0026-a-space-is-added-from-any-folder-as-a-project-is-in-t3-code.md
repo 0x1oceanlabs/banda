@@ -160,7 +160,7 @@ every proposal:
    - `SpaceSummary` gains `pinned`, `archived` and `missing` (decision 6).
      _Changed on 2026-11-02, in step 3:_ `missing` comes with step 7,
      which lists a Space whose folder is gone; until then the engine
-     lists no such Space.
+     lists no such Space. _Built in step 7._
 
 5. **A Space is managed where it is shown, with T3 Code's words.**
    - A Space's row in the sidebar has a right-click menu: "New Thread",
@@ -202,6 +202,19 @@ every proposal:
    its Threads. Its row says the folder is missing and offers "Locate
    folder", the same path field and picker; the folder found is written
    into `space.json`.
+   - _Built on 2026-11-02, in step 7:_
+     - The engine finds a folder missing as it starts. One that goes
+       while it runs shows as missing at its next start.
+     - A missing Space keeps its name, pin and archive, and can be
+       removed; every call into it is refused until it is located
+       (`spaces.locate`). A folder that already is a Space is refused.
+     - Its row says "Missing" and opens "Locate folder" in the Banda
+       menu (`banda menu space.locate.<id>`), which starts where the
+       folder was. Its right-click menu offers "Locate folder" in place
+       of "New Thread", and its settings show "Folder is missing" with
+       the same button. Once located, its new Thread opens.
+     - It is in no Space picker that starts a Thread, and no module
+       lists it.
 
 7. **"Git URL" clones** (_later_, as T3 Code's): a URL, then where to
    clone it, its folder's name filled in ("Clone", "Create & Clone");

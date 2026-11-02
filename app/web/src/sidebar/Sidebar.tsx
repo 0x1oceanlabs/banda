@@ -29,6 +29,7 @@ import {
   CopyIcon,
   FileCogIcon,
   FolderPlusIcon,
+  FolderSearchIcon,
   ListFilterIcon,
   PinIcon,
   PinOffIcon,
@@ -38,7 +39,7 @@ import {
 } from "lucide-react"
 import { keyName } from "../actions/actions"
 import type { Lists } from "../bar/Watches"
-import { MENU_KEY } from "../menu/menu"
+import { LOCATE, MENU_KEY } from "../menu/menu"
 import {
   arrange,
   type Row as Arranged,
@@ -69,6 +70,7 @@ export function Sidebar({
   onAddSpace,
   onPin,
   onSpaceSettings,
+  onLocate,
 }: {
   spaces: SpaceSummary[]
   lists: Lists
@@ -92,6 +94,8 @@ export function Sidebar({
   onPin: (space: SpaceId, pinned: boolean) => void
   /** Opens the settings at the Space's own (ADR 0026). */
   onSpaceSettings: (space: SpaceId) => void
+  /** Finds the folder of a Space whose folder is missing (ADR 0026). */
+  onLocate: (space: SpaceId) => void
 }) {
   const settings = useLookSidebar()
   const { preset, presets } = settings
@@ -126,6 +130,7 @@ export function Sidebar({
       onNewThread={onNewThread}
       onPin={onPin}
       onSettings={onSpaceSettings}
+      onLocate={onLocate}
     >
       {row}
     </SpaceMenu>
@@ -249,6 +254,7 @@ export function Sidebar({
               onPick={(space) =>
                 setOnly((was) => (was === space ? undefined : space))
               }
+              onLocate={onLocate}
               onNewThread={onNewThread}
               withMenu={withMenu}
             />
@@ -392,6 +398,7 @@ function SpacesList({
   only,
   onPick,
   onNewThread,
+  onLocate,
   withMenu,
 }: {
   lines: SpaceLine[]
@@ -399,6 +406,7 @@ function SpacesList({
   only?: SpaceId
   onPick: (space: SpaceId) => void
   onNewThread: (space: SpaceId) => void
+  onLocate: (space: SpaceId) => void
   withMenu: WithMenu
 }) {
   return (
@@ -412,20 +420,31 @@ function SpacesList({
               <button
                 type="button"
                 aria-pressed={only === space.id}
-                title={space.folder}
+                title={
+                  space.missing
+                    ? `The folder ${space.folder} is missing`
+                    : space.folder
+                }
                 className={cn(
                   "flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-transparent px-2 py-1 text-left text-sm outline-none hover:bg-foreground/5 focus-visible:ring-3 focus-visible:ring-ring/50",
                   only === space.id && "border-border bg-tile shadow-xs"
                 )}
-                onClick={() => onPick(space.id)}
+                onClick={() =>
+                  space.missing ? onLocate(space.id) : onPick(space.id)
+                }
               >
                 <SpaceBadge space={space} />
                 <span className="min-w-0 flex-1 truncate">{space.name}</span>
+                {space.missing && (
+                  <span className="shrink-0 text-xs text-attention">
+                    Missing
+                  </span>
+                )}
                 {settings.spaces.rollup && (
                   <Rollup mark={mark} waiting={waiting} />
                 )}
               </button>
-              {settings.spaces.newThread && (
+              {settings.spaces.newThread && !space.missing && (
                 <NewThreadIn space={space} onNewThread={onNewThread} />
               )}
             </div>
@@ -488,22 +507,31 @@ function SpaceMenu({
   onNewThread,
   onPin,
   onSettings,
+  onLocate,
   children,
 }: {
   space: SpaceSummary
   onNewThread: (space: SpaceId) => void
   onPin: (space: SpaceId, pinned: boolean) => void
   onSettings: (space: SpaceId) => void
+  onLocate: (space: SpaceId) => void
   children: ReactElement
 }) {
   return (
     <ContextMenu>
       <ContextMenuTrigger>{children}</ContextMenuTrigger>
       <ContextMenuContent>
-        <DropdownMenuItem onClick={() => onNewThread(space.id)}>
-          <SquarePenIcon />
-          New Thread
-        </DropdownMenuItem>
+        {space.missing ? (
+          <DropdownMenuItem onClick={() => onLocate(space.id)}>
+            <FolderSearchIcon />
+            {LOCATE}
+          </DropdownMenuItem>
+        ) : (
+          <DropdownMenuItem onClick={() => onNewThread(space.id)}>
+            <SquarePenIcon />
+            New Thread
+          </DropdownMenuItem>
+        )}
         <DropdownMenuItem
           onClick={() => void navigator.clipboard.writeText(space.folder)}
         >

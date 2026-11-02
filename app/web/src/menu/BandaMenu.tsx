@@ -28,6 +28,7 @@ import {
   FolderIcon,
   FolderOpenIcon,
   FolderPlusIcon,
+  FolderSearchIcon,
   ListFilterIcon,
   PlusIcon,
   SearchIcon,
@@ -58,6 +59,8 @@ import {
   type Sources,
   wordsIn,
   isPathField,
+  LOCATE,
+  pathAdding,
 } from "./menu"
 import {
   PATH_PLACEHOLDER,
@@ -358,7 +361,12 @@ function Menu({
     const space = await act(() =>
       "name" in how
         ? engine.command("spaces.create", { name: how.name })
-        : engine.command("spaces.add", how)
+        : "locate" in how
+          ? engine.command("spaces.locate", {
+              space: how.locate,
+              folder: how.folder,
+            })
+          : engine.command("spaces.add", how)
     )
     if (space) onAdded(space)
   }
@@ -366,7 +374,7 @@ function Menu({
   // T3 Code does; the field takes the keys back when it is cancelled.
   const field = useRef<HTMLInputElement>(null)
   const picker = usePickFolder(browsed, (folder) =>
-    folder ? void add({ folder, create: false }) : field.current?.focus()
+    folder ? void add(pathAdding(inside, folder)!) : field.current?.focus()
   )
   const own = (row: Own) => {
     setActing(undefined)
@@ -681,6 +689,15 @@ function RowView({
           <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground" />
         </>
       )
+    case "locate":
+      return (
+        <>
+          <SpaceBadge space={row.space} />
+          <span className="min-w-0 flex-1 truncate">{row.space.name}</span>
+          <Detail>Folder missing · {LOCATE}</Detail>
+          <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground" />
+        </>
+      )
     case "views":
       return (
         <>
@@ -759,10 +776,13 @@ function RowView({
       const [title, detail] =
         "name" in how
           ? ["Create Space", how.name]
-          : [how.create ? "Create & Add" : "Add", how.folder]
+          : "locate" in how
+            ? ["Locate", how.folder]
+            : [how.create ? "Create & Add" : "Add", how.folder]
+      const Icon = "locate" in how ? FolderSearchIcon : FolderPlusIcon
       return (
         <>
-          <FolderPlusIcon className="size-4 shrink-0 text-muted-foreground" />
+          <Icon className="size-4 shrink-0 text-muted-foreground" />
           <span className="shrink-0">{title}</span>
           <span className="min-w-0 flex-1 truncate text-xs text-muted-foreground">
             {detail}
@@ -795,8 +815,8 @@ function placeholderOf(
   at: string
 ): string {
   if (taking) return `Press the keys for “${taking.title}”…`
-  if (inside?.kind === "source")
-    return inside.source === "new" ? "Space name" : PATH_PLACEHOLDER
+  if (inside?.kind === "source" && inside.source === "new") return "Space name"
+  if (isPathField(inside)) return PATH_PLACEHOLDER
   if (inside) return "Search…"
   return at === "actions"
     ? "Search actions…"

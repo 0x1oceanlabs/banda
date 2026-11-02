@@ -67,17 +67,30 @@ export type Choice =
   /** A folder the path field lists, or the one above (`up`): choosing it
    * types `path`, as the Person typed the path, to go on in. */
   | { kind: "folder"; id: string; name: string; path: string; up?: true }
+  /** A branch: the path field that finds a missing Space's folder. */
+  | { kind: "locate"; id: string; space: SpaceSummary }
 
 /** How a Space is added: a new folder by its name, or a folder on disk,
- * made first when it does not exist. */
-export type Adding = { name: string } | { folder: string; create: boolean }
+ * made first when it does not exist; or where a missing Space's folder
+ * is now (ADR 0026, decision 6). */
+export type Adding =
+  | { name: string }
+  | { folder: string; create: boolean }
+  | { locate: SpaceId; folder: string }
 
 /** The ways to add a Space, as T3 Code's "Add project" lists them, in
  * their order. */
 export const SOURCE_ORDER = ["new", "folder"] as const
 export type Source = (typeof SOURCE_ORDER)[number]
 
-const BRANCHES = ["space", "views", "family", "add", "source"] as const
+const BRANCHES = [
+  "space",
+  "views",
+  "family",
+  "add",
+  "source",
+  "locate",
+] as const
 const OWN = ["bind", "free", "adding", "folder"] as const
 
 /** A row the menu goes into rather than runs. */
@@ -108,11 +121,15 @@ export function branchName(branch: Branch): string {
       return ADD_SPACE
     case "source":
       return SOURCES[branch.source].title
+    case "locate":
+      return LOCATE
   }
 }
 
 const VIEWS = "Sidebar view"
 const ADD_SPACE = "Add Space"
+/** T3 Code's words for finding a missing folder. */
+export const LOCATE = "Locate folder"
 
 /** Each way to add a Space: its row's words. */
 export const SOURCES: Record<Source, { title: string; about: string }> = {
@@ -127,23 +144,54 @@ function sourceBranch(source: Source): Branch {
   return { kind: "source", id: `space.add.${source}`, source }
 }
 
-/** Whether the field is a path, as in "Local folder". */
+/** Whether the field is a path, as in "Local folder" and "Locate
+ * folder". */
 export function isPathField(inside: Branch | undefined): boolean {
-  return inside?.kind === "source" && inside.source === "folder"
+  return (
+    inside?.kind === "locate" ||
+    (inside?.kind === "source" && inside.source === "folder")
+  )
 }
 
 /** What the field holds as the menu goes into `path`: the path field
- * starts at the home folder. */
+ * starts at the home folder, or where the missing folder was. */
 export function wordsIn(path: readonly Branch[]): string {
-  return isPathField(path.at(-1)) ? "~/" : ""
+  const inside = path.at(-1)
+  if (inside?.kind === "locate")
+    return inside.space.folder.replace(/[^/]*$/, "")
+  return isPathField(inside) ? "~/" : ""
+}
+
+/** What a folder in a path field does: added, made first when `create`,
+ * or found as the missing Space's, which only a folder that is there
+ * can be. */
+export function pathAdding(
+  inside: Branch | undefined,
+  folder: string,
+  create = false
+): Adding | undefined {
+  if (inside?.kind !== "locate") return { folder, create }
+  return create ? undefined : { locate: inside.space.id, folder }
 }
 
 /** The sidebar's view, as the branch the menu goes into. */
 const VIEWS_BRANCH: Branch = { kind: "views", id: "views" }
 
-/** A Space, as the branch the menu goes into. */
+/** A Space, as the branch the menu goes into: one whose folder is
+ * missing goes to find it. */
 function spaceBranch(space: SpaceSummary): Branch {
-  return { kind: "space", id: `space:${space.id}`, space }
+  return space.missing
+    ? locateBranch(space)
+    : { kind: "space", id: `space:${space.id}`, space }
+}
+
+function locateBranch(space: SpaceSummary): Branch {
+  return { kind: "locate", id: locateRoute(space.id), space }
+}
+
+/** The route of "Locate folder" for a missing Space. */
+export function locateRoute(space: SpaceId): string {
+  return `space.locate.${space}`
 }
 
 /** Where the menu opens: at its root or its Actions, inside the
@@ -169,8 +217,9 @@ export function settingsLinkOf(route: string): string | undefined {
  * Where `banda menu ROUTE` opens the menu (ADR 0017, decision 7): an
  * empty route at its root, `actions` at its Actions, `views` in the
  * sidebar's view, `space.add` in "Add Space" (`space.add.new`,
- * `space.add.folder` at one of its ways, ADR 0026), `space.<name>` (or
- * its ID) in a Space. Any other words open it with them typed in. A
+ * `space.add.folder` at one of its ways, ADR 0026), `space.locate.<id>`
+ * at "Locate folder" for a missing Space, `space.<name>` (or its ID) in
+ * a Space. Any other words open it with them typed in. A
  * settings route opens the settings Pane instead (`settingsLinkOf`).
  */
 export function openingOf(
@@ -186,13 +235,15 @@ export function openingOf(
     const path = way ? [ADD_BRANCH, sourceBranch(way)] : [ADD_BRANCH]
     return openingAt("root", path, wordsIn(path))
   }
-  const named = /^space\.(.+)$/.exec(words)?.[1].toLowerCase()
+  // A Space by its name or ID; one whose folder is missing, at
+  // "Locate folder".
+  const named = /^space\.(?:locate\.)?(.+)$/.exec(words)?.[1].toLowerCase()
   const space = spaces.find(
     (one) => one.id === named || one.name.toLowerCase() === named
   )
-  return space
-    ? openingAt("root", [spaceBranch(space)])
-    : openingAt("root", [], words)
+  if (!space) return openingAt("root", [], words)
+  const path = [spaceBranch(space)]
+  return openingAt("root", path, wordsIn(path))
 }
 
 /** A group of rows under its heading; the fallback row has none. */
@@ -337,9 +388,9 @@ export function menuOf({
         rows: fitting(SOURCE_ORDER.map(sourceBranch), actionTexts),
       },
     ])
-  if (inside?.kind === "source")
+  if (inside?.kind === "source" || inside?.kind === "locate")
     return nonEmpty([
-      { label: "", rows: addRows(inside.source, query, sources.browsed) },
+      { label: "", rows: addRows(inside, query, sources.browsed) },
     ])
 
   if (inside?.kind === "family")
@@ -414,7 +465,7 @@ export function menuOf({
     {
       label: "Spaces",
       rows: fitting(spaces.map(spaceBranch), (row) =>
-        row.kind === "space" ? [row.space.name] : []
+        "space" in row ? [row.space.name] : []
       ).slice(0, SHOWN.spaces),
     },
     ...sourced,
@@ -501,22 +552,19 @@ export function actsOf(row: Choice, sources: Sources): Act[] {
   }
 }
 
-/** The rows of one way to add a Space, for what is typed: the Space to
- * add first, then for a path the folder above and the folders that fit. */
+/** The rows of one way to add a Space, or of "Locate folder", for what
+ * is typed: the Space to add or locate first, then for a path the folder
+ * above and the folders that fit. */
 function addRows(
-  source: Source,
+  inside: Extract<Branch, { kind: "source" | "locate" }>,
   query: string,
   browsed: Browsing | undefined
 ): Choice[] {
-  if (source === "new")
+  if (inside.kind === "source" && inside.source === "new")
     return query ? [{ kind: "adding", id: "adding", how: { name: query } }] : []
   const { create, folders } = folderRows(query, browsed)
-  const adding: Choice = {
-    kind: "adding",
-    id: "adding",
-    how: { folder: query, create },
-  }
-  return query ? [adding, ...folders] : folders
+  const how = query ? pathAdding(inside, query, create) : undefined
+  return how ? [{ kind: "adding", id: "adding", how }, ...folders] : folders
 }
 
 export type Folder = Extract<Choice, { kind: "folder" }>

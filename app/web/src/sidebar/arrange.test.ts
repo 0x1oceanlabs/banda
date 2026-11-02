@@ -13,6 +13,7 @@ const space = (id: string, name: string, folder: string): SpaceSummary => ({
   pinned: false,
   archived: false,
   sees_others: false,
+  missing: false,
 })
 const landing = space("s1", "Landing", "/l")
 const api = space("s2", "API", "/a")

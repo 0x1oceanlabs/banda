@@ -24,7 +24,7 @@ pub struct Kernel {
     modules: Arc<[Arc<dyn Module>]>,
     /// The modules each Space runs: those of the Space's scope.
     in_spaces: Arc<[Arc<dyn Module>]>,
-    spaces: RwLock<BTreeMap<SpaceId, Arc<Space>>>,
+    spaces: RwLock<BTreeMap<SpaceId, Entry>>,
     /// Held while a Space is added, so one folder never becomes two.
     adding: tokio::sync::Mutex<()>,
     /// This machine's scope (ADR 0025, decision 1): a store and a log like
@@ -33,6 +33,34 @@ pub struct Kernel {
     passes: Arc<Passes>,
     /// The tools of the modules in Spaces, made once as it opens.
     tools: Vec<Tool>,
+}
+
+/// A Space the engine knows: open, or waiting for its folder.
+#[derive(Clone)]
+enum Entry {
+    Open(Arc<Space>),
+    /// Its folder was gone as the engine started (ADR 0026, decision 6):
+    /// listed, `missing`, but not open, until the Person locates it.
+    Missing {
+        data: PathBuf,
+        manifest: Manifest,
+    },
+}
+
+impl Entry {
+    fn summary(&self) -> SpaceSummary {
+        match self {
+            Entry::Open(space) => space.summary(),
+            Entry::Missing { manifest, .. } => manifest.summary(true),
+        }
+    }
+
+    fn folder(&self) -> &Path {
+        match self {
+            Entry::Open(space) => space.folder(),
+            Entry::Missing { manifest, .. } => &manifest.folder,
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -49,6 +77,9 @@ pub struct SpaceSummary {
     /// Its Agents see the other Spaces' Panes (ADR 0032). Only the Person
     /// sets it.
     pub sees_others: bool,
+    /// Its folder was gone as the engine started: none of its Threads
+    /// open until the Person locates it (`spaces.locate`).
+    pub missing: bool,
 }
 
 pub struct KernelBuilder {
@@ -160,9 +191,20 @@ impl KernelBuilder {
                 continue;
             }
             folders.insert(manifest.folder.clone(), data.clone());
+            if !manifest.folder.is_dir() {
+                tracing::warn!(
+                    folder = %manifest.folder.display(),
+                    "a Space's folder is gone; it waits to be located"
+                );
+                let id = manifest.id;
+                let missing = Entry::Missing { data, manifest };
+                kernel.spaces.write().await.insert(id, missing);
+                continue;
+            }
             match kernel.open_space(data.clone(), manifest).await {
                 Ok(space) => {
-                    kernel.spaces.write().await.insert(space.id(), space);
+                    let id = space.id();
+                    kernel.spaces.write().await.insert(id, Entry::Open(space));
                 }
                 Err(error) => {
                     tracing::error!(data = %data.display(), %error, "a Space did not open")
@@ -188,6 +230,9 @@ crate::methods! {
         /// Renames, pins or archives a Space, or lets its Agents see the
         /// other Spaces' Panes.
         command update(UpdateSpace) -> SpaceSummary, Manage;
+        /// Names the folder a missing Space's work is in now, and opens
+        /// the Space there.
+        command locate(LocateSpace) -> SpaceSummary, Manage;
         /// Forgets a Space and deletes its Threads; its folder and the
         /// files in it stay as they are.
         command remove(OneSpace) -> (), Manage;
@@ -277,6 +322,13 @@ struct UpdateSpace {
     #[serde(default)]
     #[ts(optional)]
     sees_others: Option<bool>,
+}
+
+#[derive(Deserialize, TS)]
+struct LocateSpace {
+    space: SpaceId,
+    /// Where its folder is now: absolute, or from the home folder.
+    folder: String,
 }
 
 #[derive(Deserialize, TS)]
@@ -488,21 +540,21 @@ impl Kernel {
     }
 
     pub async fn space(&self, id: SpaceId) -> Result<Arc<Space>, Refusal> {
-        self.spaces
-            .read()
-            .await
-            .get(&id)
-            .cloned()
-            .ok_or_else(|| Refusal::not_found("There is no such Space on this computer."))
+        match self.spaces.read().await.get(&id) {
+            Some(Entry::Open(space)) => Ok(space.clone()),
+            Some(Entry::Missing { manifest, .. }) => Err(Refusal::not_found(format!(
+                "The folder of the Space \"{}\", {}, is gone: locate it first.",
+                manifest.name,
+                manifest.folder.display()
+            ))),
+            None => Err(no_space()),
+        }
     }
 
+    /// Every Space, the missing too.
     pub async fn spaces(&self) -> Vec<SpaceSummary> {
-        self.spaces
-            .read()
-            .await
-            .values()
-            .map(|s| s.summary())
-            .collect()
+        let spaces = self.spaces.read().await;
+        spaces.values().map(Entry::summary).collect()
     }
 
     async fn open_space(&self, data: PathBuf, manifest: Manifest) -> Result<Arc<Space>, Error> {
@@ -542,7 +594,7 @@ impl Kernel {
         let folder = self.root.join(name);
         if let Ok(canonical) = std::fs::canonicalize(&folder) {
             return match self.at(&canonical).await {
-                Some(made) if made.command() == command => Ok(made.summary()),
+                Some(Entry::Open(made)) if made.command() == command => Ok(made.summary()),
                 _ => Err(Refusal::conflict(format!(
                     "A folder named \"{name}\" already exists in this place."
                 ))),
@@ -583,23 +635,19 @@ impl Kernel {
             std::fs::create_dir_all(folder).map_err(Error::from)?;
         }
         let added = async {
-            let canonical = match std::fs::canonicalize(folder) {
-                Ok(canonical) => canonical,
-                Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                    let there = format!("There is no folder {}.", folder.display());
-                    return Err(Refusal::not_found(there));
+            let canonical = folder_found(folder)?;
+            match self.at(&canonical).await {
+                Some(Entry::Open(space)) => {
+                    return match space.summary().archived {
+                        true => Ok(space.change(|manifest| manifest.archived = false)?),
+                        false => Ok(space.summary()),
+                    };
                 }
-                Err(error) => return Err(Error::from(error).into()),
-            };
-            if !canonical.is_dir() {
-                let what = format!("{} is not a folder.", folder.display());
-                return Err(Refusal::invalid(what));
-            }
-            if let Some(space) = self.at(&canonical).await {
-                return match space.summary().archived {
-                    true => Ok(space.change(|manifest| manifest.archived = false)?),
-                    false => Ok(space.summary()),
-                };
+                // Its missing folder is back: the Space opens there again.
+                Some(Entry::Missing { manifest, .. }) => {
+                    return self.open_missing(manifest.id, &canonical).await;
+                }
+                None => {}
             }
             let named = canonical.file_name().map(|n| n.to_string_lossy());
             let name = match (name, &named) {
@@ -617,8 +665,9 @@ impl Kernel {
         added
     }
 
-    /// The open Space whose folder is `folder`, absolute and resolved.
-    async fn at(&self, folder: &Path) -> Option<Arc<Space>> {
+    /// The Space whose folder is `folder`, absolute and resolved: open, or
+    /// missing it.
+    async fn at(&self, folder: &Path) -> Option<Entry> {
         let spaces = self.spaces.read().await;
         spaces.values().find(|s| s.folder() == folder).cloned()
     }
@@ -640,7 +689,38 @@ impl Kernel {
             }
         };
         let summary = space.summary();
-        self.spaces.write().await.insert(space.id(), space);
+        self.spaces
+            .write()
+            .await
+            .insert(space.id(), Entry::Open(space));
+        Ok(summary)
+    }
+
+    /// Opens the missing Space `id` at `folder`, written into its
+    /// `space.json`; as it was if it does not open.
+    async fn open_missing(&self, id: SpaceId, folder: &Path) -> Result<SpaceSummary, Refusal> {
+        let entry = self.spaces.read().await.get(&id).cloned();
+        let Some(Entry::Missing { data, manifest }) = entry else {
+            self.space(id).await?;
+            return Err(Refusal::conflict("The Space's folder is not missing."));
+        };
+        let mut found = manifest.clone();
+        found.folder = folder.to_owned();
+        found.write(&data)?;
+        let space = match self.open_space(data.clone(), found).await {
+            Ok(space) => space,
+            Err(error) => {
+                let _ = manifest.write(&data);
+                return Err(error.into());
+            }
+        };
+        let summary = space.summary();
+        let mut spaces = self.spaces.write().await;
+        // Removed while it opened: it stays removed.
+        if !matches!(spaces.get(&id), Some(Entry::Missing { .. })) {
+            return Err(no_space());
+        }
+        spaces.insert(id, Entry::Open(space));
         Ok(summary)
     }
 
@@ -668,8 +748,7 @@ impl Kernel {
 
     async fn update(&self, _: Own<'_>, update: UpdateSpace) -> Result<SpaceSummary, Refusal> {
         let name = update.name.as_deref().map(Space::name_of).transpose()?;
-        let space = self.space(update.space).await?;
-        Ok(space.change(|manifest| {
+        let change = |manifest: &mut Manifest| {
             if let Some(name) = name {
                 manifest.name = name.to_owned();
             }
@@ -682,7 +761,34 @@ impl Kernel {
             if let Some(sees_others) = update.sees_others {
                 manifest.sees_others = sees_others;
             }
-        })?)
+        };
+        // A missing Space keeps its name, pin and archive too.
+        match self.spaces.write().await.get_mut(&update.space) {
+            Some(Entry::Open(space)) => Ok(space.change(change)?),
+            Some(Entry::Missing { data, manifest }) => {
+                manifest.change_in(data, change)?;
+                Ok(manifest.summary(true))
+            }
+            None => Err(no_space()),
+        }
+    }
+
+    /// Opens a missing Space at the folder its work is in now, written
+    /// into its `space.json`. A folder that already is another Space is
+    /// refused.
+    async fn locate(&self, _: Own<'_>, locate: LocateSpace) -> Result<SpaceSummary, Refusal> {
+        let _adding = self.adding.lock().await;
+        let folder = folder_found(&from_home(&locate.folder)?)?;
+        if let Some(other) = self.at(&folder).await
+            && other.summary().id != locate.space
+        {
+            let name = other.summary().name;
+            return Err(Refusal::conflict(format!(
+                "{} already is the Space \"{name}\".",
+                folder.display()
+            )));
+        }
+        self.open_missing(locate.space, &folder).await
     }
 
     /// Takes the Space out of the list at once, and its data out of the
@@ -690,23 +796,59 @@ impl Kernel {
     /// or else on the next start. Its modules stop what runs there first.
     /// A Space that is already gone is what was asked for.
     async fn remove(&self, _: Own<'_>, OneSpace { space }: OneSpace) -> Result<(), Refusal> {
-        let Some(space) = self.spaces.write().await.remove(&space) else {
+        let Some(entry) = self.spaces.write().await.remove(&space) else {
             return Ok(());
         };
-        let gone = self.spaces_data.join(format!("{}{GONE}", space.id()));
-        match std::fs::rename(space.data(), &gone) {
-            Ok(()) => space.delete_when_closed(gone),
-            Err(error) => {
-                let data = space.data().display();
-                tracing::warn!(%data, %error, "a removed Space's data stayed in place");
-                space.delete_when_closed(space.data().to_owned());
+        let gone = self.spaces_data.join(format!("{space}{GONE}"));
+        let space = match entry {
+            Entry::Open(space) => space,
+            // Nothing of it is open: its data goes now.
+            Entry::Missing { data, .. } => {
+                let away = put_away(&data, gone);
+                tokio::task::spawn_blocking(move || std::fs::remove_dir_all(away));
+                return Ok(());
             }
-        }
+        };
+        space.delete_when_closed(put_away(space.data(), gone));
         for module in space.modules() {
             module.closing(space.module(module.name())).await;
         }
         Ok(())
     }
+}
+
+fn no_space() -> Refusal {
+    Refusal::not_found("There is no such Space on this computer.")
+}
+
+/// Moves a removed Space's `data` out of the engine's sight, to `gone`;
+/// answers where it is now, in place if it would not move.
+fn put_away(data: &Path, gone: PathBuf) -> PathBuf {
+    match std::fs::rename(data, &gone) {
+        Ok(()) => gone,
+        Err(error) => {
+            let shown = data.display();
+            tracing::warn!(data = %shown, %error, "a removed Space's data stayed in place");
+            data.to_owned()
+        }
+    }
+}
+
+/// The folder at `folder`, resolved: refused when there is none.
+fn folder_found(folder: &Path) -> Result<PathBuf, Refusal> {
+    let canonical = match std::fs::canonicalize(folder) {
+        Ok(canonical) => canonical,
+        Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
+            let there = format!("There is no folder {}.", folder.display());
+            return Err(Refusal::not_found(there));
+        }
+        Err(error) => return Err(Error::from(error).into()),
+    };
+    if !canonical.is_dir() {
+        let what = format!("{} is not a folder.", folder.display());
+        return Err(Refusal::invalid(what));
+    }
+    Ok(canonical)
 }
 
 /// `~` or `~/…` from the home folder; any other path must be absolute.
