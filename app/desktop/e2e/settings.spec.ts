@@ -160,6 +160,18 @@ test("Agents show who is signed in to each Harness, and write harnesses.toml", a
   await expect(other).toHaveCount(0)
   expect(readFileSync(file, "utf8")).not.toContain("other")
 
+  // A mistake made in an editor shows here, at its line, and the list
+  // from before stays.
+  const good = readFileSync(file, "utf8")
+  writeFileSync(file, `${good}\n[[harness]]\nid = "nobody"\n`)
+  const lines = good.split("\n").length + 1
+  await expect(settings.getByRole("alert")).toContainText(
+    `harnesses.toml:${lines}:1: Banda does not know a Harness "nobody"`
+  )
+  await expect(fake).toBeVisible()
+  writeFileSync(file, good)
+  await expect(settings.getByRole("alert")).toHaveCount(0)
+
   // What Enter does while an Agent works is agents.toml's, under the
   // Harnesses.
   const enter = settings.locator('[data-key="enter"]')

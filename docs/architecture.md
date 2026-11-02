@@ -379,7 +379,10 @@ If Chat is removed, Agents still works through its own Thread.
     in, and Sign out where a logout ends the sign-in: an account's, not a
     key's. Check again asks the Harness anew. It turns an entry on or off,
     changes its command, and adds or removes one, writing `harnesses.toml`
-    through `banda settings` (ADR 0016).
+    through `banda settings` (ADR 0016). An entry with a known ID, `claude`
+    or `codex`, takes each key it leaves out from Banda, so a new Banda
+    moves its adapter; the window shows what is wrong in the file as in
+    the look's.
 - **The Harness's notices**, such as warnings, join the Thread as lines of
   their own.
 - **A Thread has settings: a mode, Plan, and the Harness's options.** The

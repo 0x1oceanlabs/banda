@@ -295,9 +295,21 @@ pub struct Resolved {
     pub followed: Vec<PathBuf>,
 }
 
+/// A settings file another crate reads, as `harnesses.toml` is the
+/// agents module's: the look watches it and names its problems with its
+/// own, so the window shows what is wrong in every file (ADR 0016).
+#[derive(Clone, Copy)]
+pub struct Also {
+    /// Its name in the config folder.
+    pub name: &'static str,
+    /// What is wrong in its text, as the crate that reads it finds it.
+    pub check: fn(&Path, &str) -> Vec<Problem>,
+}
+
 /// Resolves the look on this machine. `windows` asks Hyprland for its
-/// window settings, and is asked only when `look.toml` lets it.
-pub fn resolve(places: &Places, windows: &dyn Fn() -> Option<Windows>) -> Resolved {
+/// window settings, and is asked only when `look.toml` lets it. The
+/// files in `also` are watched, and their problems named, too.
+pub fn resolve(places: &Places, windows: &dyn Fn() -> Option<Windows>, also: &[Also]) -> Resolved {
     let mut problems = Vec::new();
     let mut watched = Vec::new();
     let mut followed = Vec::new();
@@ -503,6 +515,13 @@ pub fn resolve(places: &Places, windows: &dyn Fn() -> Option<Windows>) -> Resolv
     {
         watched.push(folder.join("fonts.conf"));
     }
+    for file in also {
+        let path = places.config.join(file.name);
+        if let Ok(text) = std::fs::read_to_string(&path) {
+            problems.extend((file.check)(&path, &text));
+        }
+        watched.push(path);
+    }
 
     Resolved {
         look: Look {
@@ -668,12 +687,13 @@ fn thousandths(v: f64) -> f64 {
     (v * 1000.0).round() / 1000.0
 }
 
-/// Prints the look, then again each time a file it reads changes or
-/// Hyprland reloads, until `emit` says to stop. A broken file keeps the
-/// last good look in force, with the new problems.
+/// Prints the look, then again each time a file it reads, or one in
+/// `also`, changes or Hyprland reloads, until `emit` says to stop. A
+/// broken file keeps the last good look in force, with the new problems.
 pub fn follow(
     places: &Places,
     hyprland: Option<hyprland::Hyprland>,
+    also: &[Also],
     mut emit: impl FnMut(&Look) -> bool,
 ) {
     let (tell, changes) = std::sync::mpsc::channel::<()>();
@@ -693,7 +713,7 @@ pub fn follow(
         // The files as they were before they are read, so a save while they
         // are read, or before the look is out, is still a change to come.
         let before = state(&watched, &followed);
-        let resolved = resolve(places, &windows);
+        let resolved = resolve(places, &windows, also);
         let seen = if resolved.watched == watched && resolved.followed == followed {
             before
         } else {

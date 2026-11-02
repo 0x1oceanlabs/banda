@@ -10,14 +10,15 @@
 
 use crate::model::{HarnessView, Program};
 use banda_kernel::AgentId;
+use banda_look::Problem;
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
 /// An agent program and how to start it. It speaks ACP on its stdio.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Harness {
     /// How Threads and the window name it: `claude`, `codex`.
     pub id: String,
@@ -25,39 +26,24 @@ pub struct Harness {
     pub name: String,
     /// The program that speaks ACP: its name on PATH, or its path.
     pub command: String,
-    /// Whether Threads start with it. One turned off stays in the list,
-    /// with how it starts, for when it is turned on again.
-    #[serde(default = "on", skip_serializing_if = "is_on")]
-    #[schemars(extend("default" = true))]
+    /// Whether Threads start with it.
     pub enabled: bool,
     /// The program's arguments.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub args: Vec<String>,
     /// Variables over the environment it starts in.
-    #[serde(default, skip_serializing_if = "BTreeMap::is_empty")]
     pub env: BTreeMap<String, String>,
     /// The Person's own CLI the program runs, when it runs one.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub cli: Option<Cli>,
     /// A folder where each start of the program writes what Banda and
     /// the Harness say to each other, one ACP frame per line, for tests to
     /// replay. Only a test sets it, never a Harness list: a recording holds
     /// everything said, a secret typed into a form too.
-    #[serde(skip)]
     pub record: Option<PathBuf>,
-}
-
-fn on() -> bool {
-    true
-}
-
-fn is_on(enabled: &bool) -> bool {
-    *enabled
 }
 
 /// A CLI the Person installed, which an adapter runs in place of a copy
 /// of its own (ADR 0003, decision 3).
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Eq, Deserialize, JsonSchema)]
 pub struct Cli {
     /// Its name on PATH, or its path.
     pub program: String,
@@ -98,13 +84,76 @@ struct List {
     file: Option<(PathBuf, Option<String>)>,
 }
 
-/// The Harnesses this machine starts Threads with. Without the file,
-/// Banda starts Claude Code and Codex, each with the Person's own CLI.
-#[derive(Serialize, Deserialize, JsonSchema)]
+/// The Harnesses this machine starts Threads with, in this order.
+/// Without the file, Banda starts Claude Code and Codex, each with the
+/// Person's own CLI.
+#[derive(Deserialize, JsonSchema)]
 pub struct HarnessFile {
     /// One `[[harness]]` table per agent program.
     #[serde(default)]
-    harness: Vec<Harness>,
+    #[schemars(with = "Vec<HarnessEntry>")]
+    harness: Vec<toml::Spanned<HarnessEntry>>,
+}
+
+/// One `[[harness]]` table. An entry with the ID of a Harness Banda
+/// knows, `claude` or `codex`, takes each key it leaves out from Banda:
+/// so a Banda that moves an adapter to a newer version moves this
+/// machine's too. Any other ID needs a `name` and a `command`.
+#[derive(Deserialize, JsonSchema)]
+pub struct HarnessEntry {
+    /// How Threads and the window name it: `claude`, `codex`.
+    pub id: String,
+    /// What the Person reads: `Claude Code`.
+    pub name: Option<String>,
+    /// The program that speaks ACP: its name on PATH, or its path.
+    pub command: Option<String>,
+    /// Whether Threads start with it. One turned off stays in the list,
+    /// with how it starts, for when it is turned on again.
+    #[schemars(extend("default" = true))]
+    pub enabled: Option<bool>,
+    /// The program's arguments.
+    pub args: Option<Vec<String>>,
+    /// Variables over the environment it starts in.
+    pub env: Option<BTreeMap<String, String>>,
+    /// The Person's own CLI the program runs, when it runs one.
+    pub cli: Option<Cli>,
+}
+
+impl HarnessEntry {
+    /// The entry over Banda's own Harness of its ID, if Banda has one.
+    /// Banda's arguments and CLI go with Banda's command: an entry that
+    /// names another command says its own.
+    fn harness(self) -> Result<Harness, String> {
+        let mut base = known().into_iter().find(|known| known.id == self.id);
+        if let (Some(base), Some(command)) = (&mut base, &self.command)
+            && *command != base.command
+        {
+            base.args.clear();
+            base.cli = None;
+        }
+        let name = self.name.or_else(|| base.as_ref().map(|b| b.name.clone()));
+        let command = self
+            .command
+            .or_else(|| base.as_ref().map(|b| b.command.clone()));
+        let (Some(name), Some(command)) = (name, command) else {
+            return Err(format!(
+                "Banda does not know a Harness {:?}: its entry needs a name and a command",
+                self.id
+            ));
+        };
+        let base = base.map(|b| (b.args, b.env, b.cli));
+        let (args, env, cli) = base.unwrap_or_default();
+        Ok(Harness {
+            id: self.id,
+            name,
+            command,
+            enabled: self.enabled.unwrap_or(true),
+            args: self.args.unwrap_or(args),
+            env: self.env.unwrap_or(env),
+            cli: self.cli.or(cli),
+            record: None,
+        })
+    }
 }
 
 impl Harnesses {
@@ -125,11 +174,10 @@ impl Harnesses {
         Self::new(known())
     }
 
-    /// Reads a Harness list: `[[harness]]` tables with `id`, `name`,
-    /// `command`, and optional `args`, `env` and `cli`.
-    /// A mistake keeps TOML's place for it, so a check names the line.
-    pub fn parse(text: &str) -> Result<Self, toml::de::Error> {
-        parse(text).map(Self::new)
+    /// Reads the Harness list at `path`: `[[harness]]` tables, each over
+    /// Banda's own of its ID. A mistake says its line, as a check does.
+    pub fn parse(path: &Path, text: &str) -> Result<Self, Problem> {
+        parse(path, text).map(Self::new)
     }
 
     /// The machine's Harness list in `path`, followed from then on. A
@@ -216,8 +264,16 @@ fn known() -> Vec<Harness> {
     ]
 }
 
-fn parse(text: &str) -> Result<Vec<Harness>, toml::de::Error> {
-    Ok(toml::from_str::<HarnessFile>(text)?.harness)
+fn parse(path: &Path, text: &str) -> Result<Vec<Harness>, Problem> {
+    let file = toml::from_str::<HarnessFile>(text).map_err(|e| Problem::toml(path, text, &e))?;
+    file.harness
+        .into_iter()
+        .map(|entry| {
+            let span = entry.span();
+            let wrong = |message| Problem::at(path, text, Some(span), message);
+            entry.into_inner().harness().map_err(wrong)
+        })
+        .collect()
 }
 
 /// The file's text; none when it is not there.
@@ -232,21 +288,26 @@ fn read(path: &Path) -> Result<Option<String>, String> {
 /// The list `text` says, or the known one when there is no file.
 fn listed(path: &Path, text: Option<&str>) -> Result<Vec<Harness>, String> {
     match text {
-        Some(text) => parse(text).map_err(|e| format!("{}: {e}", path.display())),
+        Some(text) => parse(path, text).map_err(|problem| problem.to_string()),
         None => Ok(known()),
     }
 }
 
 /// What `harnesses.toml` starts as when the settings Pane first writes
-/// it: the known Harnesses, written out, so a change to one keeps the
-/// others.
+/// it: the known Harnesses by their IDs alone, so a change to one keeps
+/// the others, and each takes how it starts from Banda.
 pub fn template() -> String {
-    let known = HarnessFile { harness: known() };
-    let list = toml::to_string(&known).expect("a Harness list writes as TOML");
+    let ids: String = known()
+        .iter()
+        .map(|harness| format!("\n[[harness]]\nid = {:?}\n", harness.id))
+        .collect();
     format!(
         "#:schema ./schemas/harnesses.schema.json\n\
-         # The Harnesses Banda starts Threads with. Without this file, the\n\
-         # ones below.\n\n{list}"
+         # The Harnesses Banda starts Threads with, in this order. Without\n\
+         # this file, the ones below. An entry with the ID of one Banda knows\n\
+         # takes each key it leaves out from Banda, the adapter's version too;\n\
+         # any other ID needs a name and a command. Check a change with:\n\
+         # banda settings check\n{ids}"
     )
 }
 
@@ -299,6 +360,7 @@ mod tests {
     #[test]
     fn a_harness_list_reads_from_text() {
         let list = Harnesses::parse(
+            Path::new("harnesses.toml"),
             r#"
             [[harness]]
             id = "fake"
@@ -311,7 +373,7 @@ mod tests {
         let fake = list.find("fake").unwrap();
         assert_eq!(fake.args, ["--quiet"]);
         assert!(list.find("claude").is_none());
-        assert!(Harnesses::parse("harness = 3").is_err());
+        assert!(Harnesses::parse(Path::new("h"), "harness = 3").is_err());
     }
 
     #[test]
@@ -339,7 +401,62 @@ mod tests {
 
     #[test]
     fn the_template_reads_as_the_known_harnesses() {
-        assert_eq!(parse(&template()).unwrap(), known());
+        assert_eq!(parse(Path::new("h"), &template()).unwrap(), known());
+        assert!(
+            !template().contains("@agentclientprotocol"),
+            "no version is written down"
+        );
+    }
+
+    #[test]
+    fn a_known_id_takes_what_its_entry_leaves_out_from_banda() {
+        let list = parse(
+            Path::new("h"),
+            "[[harness]]\nid = \"codex\"\nenabled = false\n",
+        )
+        .unwrap();
+        let codex = known().into_iter().find(|h| h.id == "codex").unwrap();
+        assert_eq!(
+            list,
+            vec![Harness {
+                enabled: false,
+                ..codex
+            }]
+        );
+        assert!(
+            list.iter().all(|h| h.id != "claude"),
+            "the file is the list"
+        );
+
+        let own = parse(
+            Path::new("h"),
+            "[[harness]]\nid = \"claude\"\ncommand = \"my-acp\"\n",
+        )
+        .unwrap();
+        assert_eq!(own[0].name, "Claude Code");
+        assert_eq!(
+            (own[0].args.len(), own[0].cli.is_none()),
+            (0, true),
+            "Banda's arguments go with Banda's command"
+        );
+        let flag = "[[harness]]\nid = \"claude\"\ncommand = \"npx\"\nargs = [\"x\"]\n";
+        let flag = parse(Path::new("h"), flag).unwrap();
+        assert!(
+            flag[0].cli.is_some(),
+            "Banda's command still runs the Person's CLI"
+        );
+    }
+
+    #[test]
+    fn a_new_id_needs_a_name_and_a_command_and_says_where() {
+        let text =
+            "[[harness]]\nid = \"claude\"\n\n[[harness]]\nid = \"gemini\"\nname = \"Gemini\"\n";
+        let problem = parse(Path::new("h"), text).unwrap_err();
+        assert!(
+            problem.message.contains("needs a name and a command"),
+            "{problem}"
+        );
+        assert_eq!(problem.line, Some(4), "{problem}");
     }
 
     #[test]
