@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useRef } from "react"
+import { Component, useEffect, useLayoutEffect, useRef } from "react"
 import type { Engine, SpaceId } from "@banda/contract"
 import type { PaneState } from "@banda/ui/pane"
 import { columnsOf, moveOf, useLookColumns } from "../look"
@@ -147,6 +147,7 @@ export function Strip({
       data-strip={workspace.id}
       className="relative flex h-full gap-(--gap-inner) overflow-hidden p-(--gap-outer) pl-[calc(var(--gap-outer)+var(--sidebar-inset))]"
     >
+      <Before read={() => motion.current.before(scroller.current)} />
       {/* The Strip stays when its last Pane goes, so that Pane fades out
           here, over these words. */}
       {empty && (
@@ -196,6 +197,20 @@ export function Strip({
       ))}
     </div>
   )
+}
+
+/** Calls `read` just before React changes the page, as it is still:
+ * what `getSnapshotBeforeUpdate` is for, and only a class has it. */
+class Before extends Component<{ read: () => void }> {
+  getSnapshotBeforeUpdate() {
+    this.props.read()
+    return null
+  }
+  // React wants it beside getSnapshotBeforeUpdate.
+  componentDidUpdate() {}
+  render() {
+    return null
+  }
 }
 
 const scrolls = new WeakMap<HTMLElement, Moving>()

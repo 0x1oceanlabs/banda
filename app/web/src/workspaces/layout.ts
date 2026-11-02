@@ -107,6 +107,12 @@ export class ColumnMotion {
   #columns = new Map<string, Moved>()
   #tiles = new Map<string, Tile>()
   #started = false
+  #scroll: number | undefined
+
+  /** Notes how far the Strip is scrolled, just before React changes it. */
+  before(strip: HTMLElement | null) {
+    this.#scroll = strip?.scrollLeft
+  }
 
   /**
    * After each drawing: a column whose width changed grows to it from the
@@ -118,6 +124,11 @@ export class ColumnMotion {
     const first = !this.#started
     this.#started = true
     if (!strip) return
+    // A Strip that got narrower than its scroll is scrolled back at once:
+    // what stays goes from where it was on the screen, and what went
+    // fades out there.
+    const shifted = (this.#scroll ?? strip.scrollLeft) - strip.scrollLeft
+    this.#scroll = undefined
     const found = columns.flatMap((column) => {
       const element = strip.querySelector<HTMLElement>(
         `:scope > [data-column="${column.id}"]`
@@ -136,7 +147,7 @@ export class ColumnMotion {
       go(moved.element, strip, {
         top: pad,
         height: strip.clientHeight - 2 * pad,
-        left: moved.left + moved.slide.value,
+        left: moved.left + moved.slide.value - shifted,
         width: moved.width,
       })
     }
@@ -180,7 +191,7 @@ export class ColumnMotion {
     // opened, closed or changed its place.
     for (const moved of this.#columns.values()) {
       const left = moved.element.offsetLeft
-      const by = left - moved.left
+      const by = left - moved.left + shifted
       moved.left = left
       moved.width = moved.element.offsetWidth
       if (Math.abs(by) < 0.5) continue
@@ -231,10 +242,11 @@ export class ColumnMotion {
   }
 }
 
-/** How small a tile is as it comes and goes: niri's is a little smaller. */
-const SMALL = 0.94
+/** How big a tile is as it starts coming in, and as it is gone: niri's. */
+const COMING = 0.5
+const GONE = 0.8
 
-/** Shows a tile coming in: from nothing, a little smaller, to itself. */
+/** Shows a tile coming in: from nothing, half its size, to itself. */
 function come(element: HTMLElement) {
   let shown = 0
   new Moving(
@@ -242,7 +254,7 @@ function come(element: HTMLElement) {
       shown = at
       const done = at >= 1
       element.style.opacity = done ? "" : String(at)
-      element.style.scale = done ? "" : String(SMALL + (1 - SMALL) * at)
+      element.style.scale = done ? "" : String(COMING + (1 - COMING) * at)
     },
     () => shown
   ).to(1, moveOf("open"), 0)
@@ -265,8 +277,9 @@ function freeze(element: HTMLElement) {
 /**
  * Shows a tile or a column going, after the window let it go: the element
  * it was is put back where it was, over its old place, out of reach, and
- * fades out a little smaller. Whatever it held is gone already; this is
- * how it looked.
+ * fades out shrinking to the middle. It stays where it was on the screen
+ * as the Strip scrolls under it. Whatever it held is gone already; this
+ * is how it looked.
  */
 function go(
   element: HTMLElement,
@@ -275,6 +288,7 @@ function go(
 ) {
   const move = moveOf("close")
   if (move.kind === "off") return
+  const scrolled = into.scrollLeft
   freeze(element)
   element.inert = true
   element.setAttribute("aria-hidden", "true")
@@ -295,8 +309,10 @@ function go(
   new Moving(
     (at) => {
       shown = at
+      const by = into.scrollLeft - scrolled
       element.style.opacity = String(at)
-      element.style.scale = String(SMALL + (1 - SMALL) * at)
+      element.style.scale = String(GONE + (1 - GONE) * at)
+      element.style.translate = `${by}px 0`
       if (at <= 0) element.remove()
     },
     () => shown
