@@ -339,8 +339,9 @@ mod every_key {
         // The theme is Omarchy's when there is one, else Banda's: the
         // machine says it, not a default.
         "look.toml:theme",
-        // None: the desktop's own background.
+        // None: the desktop's own background, light and dark.
         "look.toml:desk.wallpaper",
+        "look.toml:desk.wallpaper-dark",
         // None: the file's own keys, with no preset under them.
         "sidebar.toml:preset",
         // Each line says nothing unless the Person or a preset fills it.

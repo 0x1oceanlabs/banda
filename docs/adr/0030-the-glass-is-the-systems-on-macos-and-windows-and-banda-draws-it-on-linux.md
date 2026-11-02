@@ -48,7 +48,7 @@ Roma, 2026-11-02: "let's combine: on Mac and Windows take it natively, on Linux 
 ## Steps
 
 1. **Linux readers** (#190): GNOME's family, KDE, XFCE, hyprpaper; the picture's time in its address; where it came from.
-2. **Dark wallpapers**: GNOME's `picture-uri-dark` and a KDE package's dark pictures, when Banda is dark. The look carries a second picture, as it carries both schemes when the system decides.
+2. **Dark wallpapers**: GNOME's `picture-uri-dark` and a KDE package's dark pictures, when Banda is dark. The look carries a second picture, as it carries both schemes when the system decides, and the page picks by the mode it shows. `[desk] wallpaper-dark` names one by hand; set, either key is the picture for both and the desktop's are not asked.
 3. **macOS and Windows** (#192): the platform's material by default, vibrancy and acrylic. It is built here on Linux and has to be tried on a Mac and on Windows before it is called done.
 
 ## Consequences

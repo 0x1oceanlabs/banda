@@ -169,7 +169,9 @@ async function ready(): Promise<void> {
     )
   )
   protocol.handle("app", (request) =>
-    request.url.split("?")[0] === WALLPAPER_URL ? wallpaper() : page(request)
+    request.url.split("?")[0] === WALLPAPER_URL
+      ? wallpaper(request.url)
+      : page(request)
   )
   // The page asks for nothing but to write to the clipboard, as "Copy
   // path" and a terminal's copy do: no camera, no notifications, no
@@ -333,11 +335,17 @@ async function page(request: Request): Promise<Response> {
 }
 
 /**
- * The picture Banda's glass is made of: the look's wallpaper, and no other
- * file, whatever the address asks (ADR 0023).
+ * The picture Banda's glass is made of: the look's wallpaper, or its dark
+ * one when the address asks for it, and no other file, whatever the
+ * address asks (ADR 0023, ADR 0030).
  */
-async function wallpaper(): Promise<Response> {
-  const file = lookNow()?.desk.wallpaper?.path
+async function wallpaper(address: string): Promise<Response> {
+  const desk = lookNow()?.desk
+  const asked = new URL(address).searchParams.get("of")
+  const pictures = [desk?.wallpaper, desk?.wallpaper_dark].flatMap((one) =>
+    one ? [one.path] : []
+  )
+  const file = pictures.find((path) => path === asked) ?? pictures[0]
   if (!file) return new Response("Not found", { status: 404 })
   return served(file)
 }

@@ -126,6 +126,10 @@ pub struct Desk {
     #[ts(optional)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub wallpaper: Option<Wallpaper>,
+    /// The picture for when Banda is dark, when it is another.
+    #[ts(optional)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub wallpaper_dark: Option<Wallpaper>,
 }
 
 /// A picture Banda's glass is made of (ADR 0030).
@@ -534,10 +538,13 @@ pub fn resolve(places: &Places, windows: &dyn Fn() -> Option<Windows>, also: &[A
     let desk = mine.desk.clone().over(layers.desk.clone());
     let material = desk.material.unwrap_or(Material::Banda);
     let wanted = desk.glass.unwrap_or(true);
-    let wallpaper = (wanted && material == Material::Banda)
-        .then(|| wallpaper(places, &desk, &look_file, &mut problems, &mut followed))
-        .flatten();
-    let glass = wanted && (material == Material::System || wallpaper.is_some());
+    let (wallpaper, wallpaper_dark) = if wanted && material == Material::Banda {
+        wallpapers(places, &desk, &look_file, &mut problems, &mut followed)
+    } else {
+        (None, None)
+    };
+    let glass =
+        wanted && (material == Material::System || wallpaper.is_some() || wallpaper_dark.is_some());
     if mine.hyprland.unwrap_or(true)
         && let Some(found) = windows()
     {
@@ -630,6 +637,7 @@ pub fn resolve(places: &Places, windows: &dyn Fn() -> Option<Windows>, also: &[A
                 material,
                 sidebar: desk.sidebar.unwrap_or(SidebarStyle::Panel),
                 wallpaper,
+                wallpaper_dark,
             },
             motion: all.motion.resolve(),
             columns: all.columns.resolve(),
@@ -655,62 +663,84 @@ const DRAWN: [&str; 9] = [
     "jpg", "jpeg", "png", "webp", "avif", "jxl", "gif", "bmp", "svg",
 ];
 
-/// The picture Banda's glass is made of: `desk.wallpaper`, from home or
-/// the config folder, else the desktop's own (ADR 0030). `None` when there is none, or the page could
-/// not draw it.
-fn wallpaper(
+/// The pictures Banda's glass is made of, light and dark: the keys, from
+/// home or the config folder, else the desktop's own (ADR 0030). `None`
+/// when there is none, the page could not draw it, or the dark one is the
+/// light one.
+fn wallpapers(
     places: &Places,
     desk: &settings::Desk,
     look_file: &Path,
     problems: &mut Vec<Problem>,
     followed: &mut Vec<PathBuf>,
-) -> Option<Wallpaper> {
-    let (path, from) = match &desk.wallpaper {
-        Some(named) => match named.strip_prefix("~/") {
-            Some(rest) => (places.home.as_ref()?.join(rest), "look.toml"),
-            None => (places.config.join(named), "look.toml"),
-        },
-        None => wallpaper::of_desktop(places, followed)?,
-    };
-    followed.push(path.clone());
-    let unseen = |why: String| {
-        Problem::whole(
-            look_file,
-            format!("desk.wallpaper: {why}, so the desk is solid"),
+) -> (Option<Wallpaper>, Option<Wallpaper>) {
+    let keyed = desk.wallpaper.is_some() || desk.wallpaper_dark.is_some();
+    let (light, dark, from) = if keyed {
+        let named = |key: &Option<String>| {
+            let named = key.as_deref()?;
+            Some(match named.strip_prefix("~/") {
+                Some(rest) => places.home.as_ref()?.join(rest),
+                None => places.config.join(named),
+            })
+        };
+        (
+            named(&desk.wallpaper),
+            named(&desk.wallpaper_dark),
+            "look.toml",
         )
-    };
-    let found = std::fs::canonicalize(&path).ok();
-    let meta = found
-        .as_ref()
-        .and_then(|found| std::fs::metadata(found).ok())
-        .filter(|meta| meta.is_file());
-    let (Some(found), Some(meta)) = (found, meta) else {
-        if desk.wallpaper.is_some() {
-            problems.push(unseen(format!("there is no picture at {}", path.display())));
+    } else {
+        match wallpaper::of_desktop(places, followed) {
+            Some(found) => (Some(found.light), found.dark, found.from),
+            None => return (None, None),
         }
-        return None;
     };
-    let drawn = found
-        .extension()
-        .and_then(|ending| ending.to_str())
-        .is_some_and(|ending| DRAWN.iter().any(|one| ending.eq_ignore_ascii_case(one)));
-    if !drawn {
-        problems.push(unseen(format!(
-            "{from}'s wallpaper {} is not a picture Banda draws (JPEG, PNG, WebP, AVIF, JPEG XL, GIF, BMP or SVG)",
-            found.display()
-        )));
-        return None;
-    }
-    let modified = meta
-        .modified()
-        .ok()
-        .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
-        .map_or(0, |since| since.as_millis() as u64);
-    Some(Wallpaper {
-        path: found.display().to_string(),
-        modified,
-        from,
-    })
+    let mut picture = |path: PathBuf, dark: bool| {
+        let (key, what) = if dark {
+            ("desk.wallpaper-dark", "dark wallpaper")
+        } else {
+            ("desk.wallpaper", "wallpaper")
+        };
+        followed.push(path.clone());
+        let unseen =
+            |why: String| Problem::whole(look_file, format!("{key}: {why}, so the desk is solid"));
+        let found = std::fs::canonicalize(&path).ok();
+        let meta = found
+            .as_ref()
+            .and_then(|found| std::fs::metadata(found).ok())
+            .filter(|meta| meta.is_file());
+        let (Some(found), Some(meta)) = (found, meta) else {
+            if keyed {
+                problems.push(unseen(format!("there is no picture at {}", path.display())));
+            }
+            return None;
+        };
+        let drawn = found
+            .extension()
+            .and_then(|ending| ending.to_str())
+            .is_some_and(|ending| DRAWN.iter().any(|one| ending.eq_ignore_ascii_case(one)));
+        if !drawn {
+            problems.push(unseen(format!(
+                "{from}'s {what} {} is not a picture Banda draws (JPEG, PNG, WebP, AVIF, JPEG XL, GIF, BMP or SVG)",
+                found.display()
+            )));
+            return None;
+        }
+        let modified = meta
+            .modified()
+            .ok()
+            .and_then(|time| time.duration_since(std::time::UNIX_EPOCH).ok())
+            .map_or(0, |since| since.as_millis() as u64);
+        Some(Wallpaper {
+            path: found.display().to_string(),
+            modified,
+            from,
+        })
+    };
+    let light = light.and_then(|path| picture(path, false));
+    let dark = dark
+        .and_then(|path| picture(path, true))
+        .filter(|dark| light.as_ref().is_none_or(|light| light.path != dark.path));
+    (light, dark)
 }
 
 fn shown_of(wanted: ModeChoice) -> Shown {

@@ -260,6 +260,21 @@ fn the_desk_is_banda_glass_made_of_the_wallpaper() {
     let own = machine.look().desk.wallpaper.unwrap();
     assert!(own.path.ends_with("walls/mine.png"), "{}", own.path);
     assert_eq!(own.from, "look.toml");
+    assert_eq!(machine.look().desk.wallpaper_dark, None);
+
+    // And one for when Banda is dark. Set alone, it is the picture in light
+    // too; the desktop's own are not asked once a key is set.
+    write(&machine.places.config.join("walls/night.png"), "a picture");
+    machine.look_toml(
+        "[desk]\nwallpaper = \"walls/mine.png\"\nwallpaper-dark = \"walls/night.png\"\n",
+    );
+    let night = machine.look().desk.wallpaper_dark.unwrap();
+    assert!(night.path.ends_with("walls/night.png"), "{}", night.path);
+    machine.look_toml("[desk]\nwallpaper-dark = \"walls/night.png\"\n");
+    let alone = machine.look();
+    assert!(alone.desk.glass);
+    assert_eq!(picture_of(&alone), None);
+    assert!(alone.desk.wallpaper_dark.is_some());
 
     machine.look_toml("[desk]\nwallpaper = \"walls/none.png\"\n");
     let missing = machine.look();
@@ -608,6 +623,10 @@ fn a_linux_desktop_gives_its_wallpaper() {
             .wallpaper
             .map(|wallpaper| (wallpaper.from, wallpaper.path))
     };
+    let dark = |machine: &Machine| {
+        let look = machine.look();
+        look.desk.wallpaper_dark.map(|wallpaper| wallpaper.path)
+    };
     let picture = |name: &str| {
         let path = home.join("Pictures").join(name);
         write(&path, "a picture");
@@ -617,12 +636,12 @@ fn a_linux_desktop_gives_its_wallpaper() {
     assert_eq!(from(&machine), None);
     assert!(machine.look().problems.is_empty());
 
-    // GNOME, through gsettings, which answers from its files here: a URI,
-    // escapes and all.
+    // GNOME, through gsettings, which lists a schema from its file here,
+    // as the real one does: a URI, escapes and all.
     let gsettings = home.join("bin/gsettings");
     write(
         &gsettings,
-        "#!/bin/sh\ncat \"$(dirname \"$0\")/$2.$3\" 2>/dev/null || exit 1\n",
+        "#!/bin/sh\ncat \"$(dirname \"$0\")/$2\" 2>/dev/null || exit 1\n",
     );
     fs::set_permissions(
         &gsettings,
@@ -631,10 +650,33 @@ fn a_linux_desktop_gives_its_wallpaper() {
     .unwrap();
     machine.places.gsettings = Some(gsettings.clone());
     machine.places.desktops = vec!["ubuntu".into(), "gnome".into()];
+    let gnome = |keys: &[(&str, &str)]| {
+        let schema = "org.gnome.desktop.background";
+        let lines: String = keys
+            .iter()
+            .map(|(key, value)| format!("{schema} {key} '{value}'\n"))
+            .collect();
+        write(
+            &home.join("bin").join(schema),
+            &format!("{schema} picture-opacity 100\n{lines}"),
+        );
+    };
     let sea = picture("the sea.jpg");
-    let said = home.join("bin/org.gnome.desktop.background.picture-uri");
-    write(&said, &format!("'file://{}'\n", sea.replace(' ', "%20")));
+    let sea_uri = format!("file://{}", sea.replace(' ', "%20"));
+    gnome(&[("picture-uri", &sea_uri)]);
     assert_eq!(from(&machine), Some(("GNOME", sea.clone())));
+    assert_eq!(dark(&machine), None);
+    // GNOME keeps a picture for its dark style: the look carries both, and
+    // the same picture twice is one.
+    let night = picture("night.png");
+    gnome(&[
+        ("picture-uri", &sea_uri),
+        ("picture-uri-dark", &format!("file://{night}")),
+    ]);
+    assert_eq!(from(&machine), Some(("GNOME", sea.clone())));
+    assert_eq!(dark(&machine), Some(night.clone()));
+    gnome(&[("picture-uri", &sea_uri), ("picture-uri-dark", &sea_uri)]);
+    assert_eq!(dark(&machine), None);
     // Its setting changes, and dconf's file with it: the look asks again.
     let resolved = resolve(&machine.places, &|| None, &[]);
     assert!(resolved.followed.contains(&config_home.join("dconf/user")));
@@ -648,11 +690,11 @@ fn a_linux_desktop_gives_its_wallpaper() {
             "<background><starttime/><static><duration>60</duration><file>{still}</file></static></background>"
         ),
     );
-    write(&said, &format!("'{}'\n", show.display()));
+    gnome(&[("picture-uri", &show.display().to_string())]);
     assert_eq!(from(&machine), Some(("GNOME", still.clone())));
 
     // A picture the page cannot draw: solid, and the look says why.
-    write(&said, &format!("'{}'\n", picture("mac.heic")));
+    gnome(&[("picture-uri", &picture("mac.heic"))]);
     let unseen = machine.look();
     assert!(!unseen.desk.glass);
     assert!(
@@ -667,8 +709,8 @@ fn a_linux_desktop_gives_its_wallpaper() {
     // MATE keeps a plain path, under its own schema.
     machine.places.desktops = vec!["mate".into()];
     write(
-        &home.join("bin/org.mate.background.picture-filename"),
-        &format!("'{sea}'\n"),
+        &home.join("bin/org.mate.background"),
+        &format!("org.mate.background picture-filename '{sea}'\n"),
     );
     assert_eq!(from(&machine), Some(("MATE", sea.clone())));
 
@@ -693,7 +735,13 @@ fn a_linux_desktop_gives_its_wallpaper() {
         ),
     );
     let (_, large) = from(&machine).unwrap();
-    assert!(large.ends_with("3840x2160.png"), "{large}");
+    assert!(large.ends_with("images/3840x2160.png"), "{large}");
+    assert_eq!(dark(&machine), None);
+    // A package with dark pictures: its largest is the dark wallpaper.
+    write(&next.join("contents/images_dark/1280x800.png"), "small");
+    write(&next.join("contents/images_dark/2560x1440.png"), "large");
+    let night = dark(&machine).unwrap();
+    assert!(night.ends_with("images_dark/2560x1440.png"), "{night}");
 
     // XFCE: the first screen's last image.
     machine.places.desktops = vec!["xfce".into()];

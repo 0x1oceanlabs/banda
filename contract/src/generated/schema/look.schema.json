@@ -132,7 +132,11 @@
           "$ref": "#/$defs/Material"
         },
         "wallpaper": {
-          "description": "The picture Banda's glass is made of: a path, `~/` for home. Unset,\nthe desktop's own wallpaper: Omarchy's, GNOME's and its family's,\nKDE's, XFCE's or hyprpaper's (ADR 0030).",
+          "description": "The picture Banda's glass is made of: a path, `~/` for home. With\nneither this nor `wallpaper-dark` set, the desktop's own wallpaper:\nOmarchy's, GNOME's and its family's, KDE's, XFCE's or hyprpaper's\n(ADR 0030).",
+          "type": "string"
+        },
+        "wallpaper-dark": {
+          "description": "The picture for when Banda is dark, the same way; when one of the\ntwo is set, it is the picture for both. With neither set, the\ndesktop's own dark wallpaper when it keeps one (GNOME and KDE do).",
           "type": "string"
         },
         "blur": {
