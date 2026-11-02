@@ -10,13 +10,11 @@
 //! It is the window's machine's, not a Space's, so it is no module of the
 //! engine: `banda look` prints it, and `banda look --follow` prints it
 //! again on every change. The window runs that and applies what it reads.
-//! The sidebar's `sidebar.toml` (ADR 0008) and the browser's
-//! `browser.toml` (ADR 0013) are this machine's too, so they come with the
-//! look: [`sidebar`], [`browser`]; so do its keys, [`keys`]. A module's own
-//! file the window reads, as the agents module's `agents.toml`, comes in
-//! [`Look::files`], by its name ([`file`]).
+//! The sidebar's `sidebar.toml` (ADR 0008) is this machine's too, so it
+//! comes with the look: [`sidebar`]; so do its keys, [`keys`]. A module's
+//! own file the window reads, as the browser's `browser.toml`, comes in
+//! [`Look::files`], by its name ([`file`]); the module describes it.
 
-pub mod browser;
 pub mod color;
 pub mod columns;
 pub mod file;
@@ -406,9 +404,9 @@ pub struct Resolved {
     pub followed: Vec<PathBuf>,
 }
 
-/// The files the look reads: its own, the sidebar's and the keys', and
-/// the browser's, which the window draws (ADR 0016).
-pub const FILES: [SettingsFile; 4] = [
+/// The files the look reads: its own, the sidebar's and the keys' (ADR
+/// 0016).
+pub const FILES: [SettingsFile; 3] = [
     SettingsFile::new::<Settings>(
         "look.toml",
         || TEMPLATE.to_owned(),
@@ -419,7 +417,6 @@ pub const FILES: [SettingsFile; 4] = [
         || sidebar::TEMPLATE.to_owned(),
         |path, text| checked(|problems| sidebar::read_sidebar(path, text, false, problems)),
     ),
-    SettingsFile::of::<browser::BrowserSettings>(),
     SettingsFile::new::<keys::KeysSettings>(
         "keys.toml",
         || keys::TEMPLATE.to_owned(),
@@ -634,7 +631,7 @@ pub fn resolve(
         ("keys.toml".to_owned(), keys_keys),
     ]);
     let mut files = BTreeMap::new();
-    for file in FILES.iter().filter(|file| file.resolves()).chain(also) {
+    for file in also {
         if let Some((value, keyed)) = file.resolve(places, &mut problems, &mut watched) {
             files.insert(file.name.to_owned(), value);
             settings.insert(file.name.to_owned(), keyed);

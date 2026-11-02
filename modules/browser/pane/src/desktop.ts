@@ -4,7 +4,7 @@
  * desktop takes from them, and the bridge on `window.banda.browser`.
  */
 import { type HostOf, invoke, push, send } from "@banda/contract/bridge"
-import type { Tabs } from "@banda/contract/look"
+import type { Tabs } from "@banda/contract/browser"
 
 import type { Pressed } from "./keys"
 

@@ -15,7 +15,7 @@ typed in the address go. The switch in the row writes `tabs` into it and
 keeps everything else; every browser Pane follows. If the file is not
 there yet, it starts as this template:
 
-<!-- include ../browser.toml -->
+<!-- include ../engine/browser.toml -->
 
 - `tabs = "top"`: the tabs at the start of the row, as Helium's compact
   layout.
