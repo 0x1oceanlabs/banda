@@ -116,10 +116,15 @@ pub struct Desk {
     /// same everywhere. `"system"`: the window lets the desktop through,
     /// for the compositor to blur; it shows from Banda's next start.
     pub material: Option<Material>,
-    /// The picture Banda's glass is made of: a path, `~/` for home. Unset,
-    /// the desktop's own wallpaper: Omarchy's, GNOME's and its family's,
-    /// KDE's, XFCE's or hyprpaper's (ADR 0030).
+    /// The picture Banda's glass is made of: a path, `~/` for home. With
+    /// neither this nor `wallpaper-dark` set, the desktop's own wallpaper:
+    /// Omarchy's, GNOME's and its family's, KDE's, XFCE's or hyprpaper's
+    /// (ADR 0030).
     pub wallpaper: Option<String>,
+    /// The picture for when Banda is dark, the same way; when one of the
+    /// two is set, it is the picture for both. With neither set, the
+    /// desktop's own dark wallpaper when it keeps one (GNOME and KDE do).
+    pub wallpaper_dark: Option<String>,
     /// How frosted Banda's glass is: the blur's radius, in pixels.
     #[schemars(range(min = 0))]
     pub blur: Option<f64>,
@@ -151,6 +156,7 @@ impl Desk {
             glass: self.glass.or(under.glass),
             material: self.material.or(under.material),
             wallpaper: self.wallpaper.or(under.wallpaper),
+            wallpaper_dark: self.wallpaper_dark.or(under.wallpaper_dark),
             blur: self.blur.or(under.blur),
             saturation: self.saturation.or(under.saturation),
             grain: self.grain.or(under.grain),
@@ -362,6 +368,7 @@ impl Settings {
                 glass: Some(true),
                 material: Some(Material::Banda),
                 wallpaper: None,
+                wallpaper_dark: None,
                 blur: Some(40.0),
                 saturation: Some(1.4),
                 grain: Some(0.04),

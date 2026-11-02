@@ -1,4 +1,10 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs"
+import {
+  copyFileSync,
+  existsSync,
+  mkdirSync,
+  readFileSync,
+  writeFileSync,
+} from "node:fs"
 import { join, resolve } from "node:path"
 import { expect, type Locator, type Page, test } from "@playwright/test"
 import {
@@ -2084,6 +2090,15 @@ test("the desk is Banda's own glass, made of the wallpaper", async () => {
   await expect(menu).toHaveCSS("backdrop-filter", /blur/)
   await page.keyboard.press("Escape")
   await expect(menu).toBeHidden()
+
+  // Dark, the desk is made of the dark picture (ADR 0030).
+  copyFileSync(join(dir, "config/wall.png"), join(dir, "config/night.png"))
+  writeFileSync(
+    join(dir, "config/look.toml"),
+    `mode = "dark"\n${GLASS}wallpaper-dark = "night.png"\n`
+  )
+  await expect.poll(drawn).toContain("night.png")
+  await expect(root).toHaveAttribute("data-glass", "")
 
   writeFileSync(join(dir, "config/look.toml"), `${GLASS}glass = false\n`)
   await expect(root).not.toHaveAttribute("data-glass")

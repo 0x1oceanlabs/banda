@@ -17,4 +17,8 @@ glass: boolean, material: Material, sidebar: SidebarStyle,
  * The picture Banda's glass is made of: when the desktop's wallpaper
  * changes, so does this.
  */
-wallpaper?: Wallpaper, };
+wallpaper?: Wallpaper, 
+/**
+ * The picture for when Banda is dark, when it is another.
+ */
+wallpaper_dark?: Wallpaper, };
