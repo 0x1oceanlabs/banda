@@ -66,9 +66,11 @@ the rest are our defaults, as T3 Code does, and stay his to change.
      message, and its text and images return to the composer. Files the
      Agent changed stay as they are." Cancel, "Edit from here".
    - The turns from that message on leave the Thread's conversation:
-     `agents.rewind { turn }`, the message's turn, marks them rewound. They stay in
-     the Space's record, as all of a Thread's history does, and the Pane
-     no longer shows them.
+     `agents.rewind { turn }`, the message's turn, takes them and their
+     items out of the Thread, and the fact `thread.rewound` says so. What
+     they said stays in the Space's log, as all of a Thread's history
+     does, and the Pane no longer shows them. The images their messages
+     carried wait as a draft's do.
    - The message's text and images go into the composer as `↑` puts a
      waiting message back (ADR 0010, decision 6): after the draft, the
      caret at its end.
@@ -86,10 +88,11 @@ the rest are our defaults, as T3 Code does, and stay his to change.
    - The fingerprint is left out: the ID finds the reply for both
      Harnesses, and the fingerprint would only stand in where it does
      not.
-   - A Harness that cannot fork, or a reply with no ID, refuses the
-     rewind, and the Pane says so: "<Agent>
-     cannot go back to this message." The button is not shown for a
-     Harness that says no fork in its capabilities.
+   - A reply with no ID refuses the rewind, and the Pane says so. A
+     Harness that cannot fork says so at the next turn, as a fork's
+     does: the engine learns what a Harness can as it connects.
+   - The fork goes before the session open in the Harness's process,
+     which knows more: the evidence says the next session is a fork.
 3. **Fork from this response, on the Agent's replies, makes a new
    Thread.**
    - A git-fork icon on a finished reply, "Fork from this response". The

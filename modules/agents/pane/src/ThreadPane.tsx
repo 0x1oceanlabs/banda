@@ -48,6 +48,7 @@ import {
   RotateCcwIcon,
 } from "lucide-react"
 import {
+  firstTurnOf,
   type Listing,
   steerable,
   threadOf,
@@ -125,6 +126,7 @@ function ThreadPane(props: PaneProps<ThreadArgs>) {
     stop,
     retry,
     fork,
+    rewind,
     queue,
     editLast,
   } = useThreadSession(props)
@@ -209,6 +211,15 @@ function ThreadPane(props: PaneProps<ThreadArgs>) {
             onAnswer={answer}
             onRetry={retry}
             onFork={fork}
+            onRewind={(turn, message) =>
+              void rewind(turn).then((back) => {
+                if (back && message.body.kind === "message")
+                  composer.current?.putBack(
+                    message.body.text,
+                    message.body.images
+                  )
+              })
+            }
             onOpenDiff={openDiff}
             writers={writers}
             onOpenThread={(other) => open(threadPaneOf(other), "right")}
@@ -349,6 +360,7 @@ function Transcript({
   reader,
   onRetry,
   onFork,
+  onRewind,
   onOpenDiff,
   signIn,
   queue,
@@ -369,6 +381,8 @@ function Transcript({
     reader: ImageReader
     onRetry: (turn: TurnView) => void
     onFork: (turn: TurnView) => void
+    /** Takes the Thread back to before `message`, which `turn` ran first. */
+    onRewind: (turn: TurnView, message: Item) => void
     onOpenDiff: OpenDiff
     /** How a Person signs in again, below a turn that failed for that. */
     signIn: (turn: TurnView) => React.ReactNode
@@ -386,6 +400,12 @@ function Transcript({
     const its = item.turn === undefined ? undefined : turns.get(item.turn)
     return its && (its.can.fork ? () => onFork(its) : null)
   }
+  // A Person's message is edited from the turn that ran it first.
+  const editAt = (item: Item) => {
+    if (item.author.kind !== "person") return undefined
+    const its = firstTurnOf(state.turns, item.id)
+    return its && (its.can.rewind ? () => onRewind(its, item) : null)
+  }
   const forkedFrom = useMemo(
     () => state.forkedFrom && threadOf(writers, state.forkedFrom),
     [writers, state.forkedFrom]
@@ -397,6 +417,7 @@ function Transcript({
           <Entry
             item={line.item}
             onFork={forkAt(line.item)}
+            onEdit={editAt(line.item)}
             live={turn?.state === "running" && line.item === last}
             reader={reader}
             onOpenDiff={onOpenDiff}
@@ -552,12 +573,15 @@ function Entry({
   writer,
   onOpenThread,
   onFork,
+  onEdit,
   answering,
   onAnswer,
 }: Answering & {
   item: Item
   /** From {@link AgentMessage}'s `onFork`. */
   onFork?: (() => void) | null
+  /** From {@link PersonMessage}'s `onEdit`. */
+  onEdit?: (() => void) | null
   /** Whether the Agent is still writing it. */
   live: boolean
   reader: ImageReader
@@ -571,6 +595,7 @@ function Entry({
     case "message":
       return item.author.kind === "person" ? (
         <PersonMessage
+          onEdit={onEdit}
           text={body.text}
           images={body.images}
           at={item.at}

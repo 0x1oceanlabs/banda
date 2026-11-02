@@ -204,6 +204,10 @@ banda_kernel::methods! {
         /// A new Thread with the conversation to the end of an ended turn:
         /// its turns and items, and a fork of its session there (ADR 0027).
         command fork(OneTurn) -> Forked, Write;
+        /// Takes the Thread back to before a turn's message, to edit it:
+        /// that turn and the ones after it leave it, and its session goes
+        /// back to the reply before (ADR 0027).
+        command rewind(OneTurn) -> (), Write;
         /// Answers a Question; `values` fill its form.
         command answer(Answer) -> (), Decide;
         /// An image a message will carry.
@@ -486,7 +490,7 @@ impl Agents {
                 let items = store::items(sql, thread)?;
                 let mut turns = store::turns(sql, thread)?;
                 let held = store::held(sql, thread)?;
-                rules::can(&mut turns, &store::own_turns(sql, thread)?, held);
+                rules::can(&mut turns, &store::openers(sql, thread)?, held);
                 Ok(Some(ThreadView {
                     at: 0,
                     items,
@@ -614,6 +618,11 @@ impl Agents {
     async fn fork(&self, call: Call, OneTurn { turn }: OneTurn) -> Result<Forked, Refusal> {
         let author = call.participant();
         call.command(move |tx| fork(tx, author, turn)).await
+    }
+
+    async fn rewind(&self, call: Call, OneTurn { turn }: OneTurn) -> Result<(), Refusal> {
+        let author = call.participant();
+        call.command(move |tx| rewind(tx, author, turn)).await
     }
 
     async fn retry(&self, call: Call, OneTurn { turn }: OneTurn) -> Result<Sent, Refusal> {
@@ -974,9 +983,34 @@ fn fork(tx: &mut Tx<'_>, author: Participant, turn: TurnId) -> Result<Forked, Er
     store::set_forked_from(tx.sql(), thread, from)?;
     store::copy_turns(tx.sql(), (from, found.agent), turn, (thread, agent))?;
     store::set_offer(tx.sql(), thread, &store::offer(tx.sql(), from)?)?;
-    let forked = evidence.forked_at(acp::ForkAt { message });
+    let forked = evidence.forked_at(acp::ForkAt {
+        message: Some(message),
+    });
     store::set_evidence(tx.sql(), thread, &forked)?;
     Ok(Forked { thread, title })
+}
+
+fn rewind(tx: &mut Tx<'_>, author: Participant, turn: TurnId) -> Result<(), Error> {
+    let found = turn_of(tx, turn)?;
+    let thread = found.thread;
+    let turns = store::turns(tx.sql(), thread)?;
+    rules::may_rewind(turn, &turns, &store::openers(tx.sql(), thread)?)?;
+    // Its session goes back to the last reply before the message, or
+    // starts anew before the first.
+    let reply = store::named_reply_before(tx.sql(), thread, found.message)?;
+    let ran_before = (turns.iter().take_while(|one| one.id != turn))
+        .any(|one| one.state != TurnState::Withdrawn);
+    if reply.is_none() && ran_before {
+        let cannot = "Its Agent named no reply before this message to go back to.";
+        return Err(Refusal::conflict(cannot).into());
+    }
+    if let Some(evidence) = store::evidence::<acp::Evidence>(tx.sql(), thread)? {
+        let back = evidence.forked_at(acp::ForkAt { message: reply });
+        store::set_evidence(tx.sql(), thread, &back)?;
+    }
+    store::rewind(tx.sql(), thread, turn, tx.now())?;
+    emit(tx, author, thread, &Fact::ThreadRewound { thread, turn })?;
+    Ok(())
 }
 
 /// A new Thread on `harness`, and its own Agent, the only one.

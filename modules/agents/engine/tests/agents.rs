@@ -3172,6 +3172,102 @@ async fn a_thread_is_not_forked_where_its_agent_named_no_reply_or_while_it_works
     assert_eq!(fork(turn).await.unwrap_err().code, Code::Conflict);
 }
 
+#[tokio::test]
+async fn a_thread_goes_back_to_before_a_message_and_its_session_forgets_what_came_after() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let (thread, _) = world.finish(None, "remember apples").await;
+    let (_, view) = world.finish(Some(&thread), "remember pears").await;
+    let pears = view.turns[1].id;
+    let (_, view) = world.finish(Some(&thread), "remember plums").await;
+    assert!(view.turns.iter().all(|turn| turn.can.rewind));
+    let rewind =
+        |turn: TurnId| world.call(world.person(), "agents.rewind", json!({ "turn": turn }));
+
+    // The turn of "remember pears" and every one after it leave the
+    // Thread; its session goes back to the reply before.
+    rewind(pears).await.unwrap();
+    let view = world.thread(&thread).await;
+    assert_eq!(
+        texts(&view),
+        [
+            "message: remember apples",
+            "message: I will remember apples."
+        ]
+    );
+    assert_eq!(view.turns.len(), 1);
+    let (_, view) = world.finish(Some(&thread), "what do you remember").await;
+    assert_eq!(last_reply(&view), "message: I remember: apples.");
+
+    // Back to before the first message, it starts anew.
+    rewind(view.turns[0].id).await.unwrap();
+    let view = world.thread(&thread).await;
+    assert!(view.items.is_empty() && view.turns.is_empty());
+    let (_, view) = world.finish(Some(&thread), "what do you remember").await;
+    assert_eq!(last_reply(&view), "message: I remember: .");
+    assert!(
+        !texts(&view).iter().any(|text| text.contains("afresh")),
+        "a new session it asked for is not one it lost"
+    );
+}
+
+#[tokio::test]
+async fn a_message_gone_back_from_keeps_its_images_for_the_next() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let shot = world
+        .attach(world.person(), "image/png", PNG, Some("shot.png"))
+        .await
+        .unwrap();
+    let sent = world.send_images("what is this", &[&shot]).await;
+    let view = world.ended(&sent).await;
+    world
+        .call(
+            world.person(),
+            "agents.rewind",
+            json!({ "turn": view.turns[0].id }),
+        )
+        .await
+        .unwrap();
+    // The image waits, as a draft's does, and goes with the next message.
+    let read = world
+        .call(
+            world.person(),
+            "agents.image",
+            json!({ "image": shot["id"] }),
+        )
+        .await;
+    assert!(read.is_ok(), "{read:?}");
+    let params =
+        json!({ "thread": sent["thread"], "text": "what is this", "images": [shot["id"]] });
+    let sent = world
+        .call(world.person(), "agents.send", params)
+        .await
+        .unwrap();
+    let view = world.ended(&sent).await;
+    assert_eq!(texts(&view)[0], "message: what is this + 1 image(s)");
+}
+
+#[tokio::test]
+async fn a_thread_goes_back_only_to_a_persons_message_once_nothing_runs() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let (thread, _) = world.finish(None, "hello").await;
+    let (_, view) = world.finish(Some(&thread), "hello again").await;
+    let rewind =
+        |turn: TurnId| world.call(world.person(), "agents.rewind", json!({ "turn": turn }));
+    // The fake names no plain reply, so the second message has no reply
+    // to go back to; the first starts anew.
+    let refused = rewind(view.turns[1].id).await.unwrap_err();
+    assert_eq!(refused.code, Code::Conflict);
+
+    let sent = world.send(Some(&thread), "wait").await;
+    let view = world.until(&thread, |v| ongoing(v, &sent["turn"])).await;
+    assert!(view.turns.iter().all(|turn| !turn.can.rewind));
+    let refused = rewind(view.turns[0].id).await.unwrap_err();
+    assert_eq!(refused.code, Code::Conflict, "not while a turn runs");
+}
+
 /// Claude Code and Codex fork a session at a turn's reply, by the ID they
 /// gave its message (ADR 0027): the fork knows what came before it and
 /// not what came after. It calls the models, which costs money: run it by
@@ -3180,6 +3276,50 @@ async fn a_thread_is_not_forked_where_its_agent_named_no_reply_or_while_it_works
 #[tokio::test]
 #[ignore = "calls the real models, which costs money"]
 async fn the_real_harnesses_fork_a_thread_at_a_turns_end() {
+    told_apples_then_pears(async |world, thread, view| {
+        let forked = world
+            .call(
+                world.person(),
+                "agents.fork",
+                json!({ "turn": view.turns[0].id }),
+            )
+            .await
+            .unwrap();
+        let fork = world.thread(&forked["thread"]).await;
+        assert_eq!(fork.thread.title, forked["title"]);
+        assert_eq!(
+            fork.forked_from.map(|from| json!(from)).as_ref(),
+            Some(thread)
+        );
+        forked["thread"].clone()
+    })
+    .await;
+}
+
+/// Claude Code and Codex go back to before a message (ADR 0027): the
+/// Thread's open session forks at the reply before it, and the next turn
+/// knows nothing after it. It calls the models, which costs money: run it
+/// by hand when an adapter changes, `cargo test -p banda-agents --test
+/// agents real_harnesses_go_back -- --ignored --nocapture`.
+#[tokio::test]
+#[ignore = "calls the real models, which costs money"]
+async fn the_real_harnesses_go_back_to_before_a_message() {
+    told_apples_then_pears(async |world, thread, view| {
+        let turn = view.turns[1].id;
+        let back = world
+            .call(world.person(), "agents.rewind", json!({ "turn": turn }))
+            .await;
+        back.unwrap();
+        assert_eq!(world.thread(thread).await.turns.len(), 1);
+        thread.clone()
+    })
+    .await;
+}
+
+/// Tells each real Harness to remember APPLES, then PEARS; `back` takes
+/// the Thread to after the first, and answers the Thread to ask what it
+/// remembers there: APPLES alone.
+async fn told_apples_then_pears(back: impl AsyncFn(&World, &Value, &ThreadView) -> Value) {
     let known = Harnesses::known();
     for harness in ["claude", "codex"] {
         let agents = Agents::new(Harnesses::new(vec![known.find(harness).unwrap().clone()]));
@@ -3195,29 +3335,20 @@ async fn the_real_harnesses_fork_a_thread_at_a_turns_end() {
             assert_eq!(state(&view, &sent["turn"]), Some(TurnState::Done));
             (sent["thread"].clone(), view)
         };
-        let (thread, first) = finish(
+        let (thread, _) = finish(
             None,
             "Remember the word APPLES. Do not use any tools. Reply with only: OK",
         )
         .await;
-        let turn = first.turns[0].id;
-        finish(
+        let (_, view) = finish(
             Some(&thread),
             "Remember the word PEARS too. Do not use any tools. Reply with only: OK",
         )
         .await;
-        let forked = world
-            .call(world.person(), "agents.fork", json!({ "turn": turn }))
-            .await
-            .unwrap();
+        let asked = back(&world, &thread, &view).await;
         let ask = "Which words did I ask you to remember? Do not use any tools. \
                    Reply with only the words, comma separated.";
-        let (_, view) = finish(Some(&forked["thread"]), ask).await;
-        assert_eq!(view.thread.title, forked["title"]);
-        assert_eq!(
-            view.forked_from.map(|from| json!(from)),
-            Some(thread.clone())
-        );
+        let (_, view) = finish(Some(&asked), ask).await;
         let reply = last_reply(&view);
         println!("{harness}: {reply}");
         assert!(reply.contains("APPLES"), "{harness} remembers: {reply}");

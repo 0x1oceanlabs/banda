@@ -103,6 +103,12 @@ retry: CommandMethod<OneTurn, Sent>,
  */
 fork: CommandMethod<OneTurn, Forked>, 
 /**
+ * Takes the Thread back to before a turn's message, to edit it:
+ * that turn and the ones after it leave it, and its session goes
+ * back to the reply before (ADR 0027).
+ */
+rewind: CommandMethod<OneTurn, null>, 
+/**
  * Answers a Question; `values` fill its form.
  */
 answer: CommandMethod<Answer, null>, 

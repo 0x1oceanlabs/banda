@@ -3,10 +3,10 @@
 
 use crate::model::{
     Body, Can, Choice, Fact, Failure, Field, FieldValue, Image, ImageId, Input, ItemId, Mode,
-    QuestionState, ThreadId, ToolContent, ToolKind, TurnId, TurnState, TurnView, Values,
+    Opener, QuestionState, ThreadId, ToolContent, ToolKind, TurnId, TurnState, TurnView, Values,
 };
 use banda_kernel::{Participant, Refusal};
-use std::collections::HashSet;
+use std::collections::{HashMap, HashSet};
 
 mod moves;
 use moves::{Event, Step, TurnFacts, next};
@@ -158,6 +158,19 @@ pub fn may_fork(state: TurnState, works: bool) -> Result<(), Refusal> {
     next(&turn, Event::Fork).map(drop)
 }
 
+/// Whether a Thread may go back to before `turn`'s message, one of its
+/// `turns` (ADR 0027).
+pub fn may_rewind(
+    turn: TurnId,
+    turns: &[TurnView],
+    openers: &HashMap<TurnId, Opener>,
+) -> Result<(), Refusal> {
+    let (_, found) = facts(turns, openers, false)
+        .find(|(one, _)| one.id == turn)
+        .ok_or_else(|| Refusal::not_found("There is no such turn."))?;
+    next(&found, Event::Rewind).map(drop)
+}
+
 /// Whether a turn may be tried again: a Person asked for it, it failed or
 /// was cut short, and nothing came after it in its Thread.
 pub fn retry(state: TurnState, latest: bool, by_itself: bool) -> Result<(), Refusal> {
@@ -210,23 +223,37 @@ pub fn steers(state: TurnState, held: bool, by_itself: bool) -> bool {
     next(&turn, Event::Steer).is_ok()
 }
 
+/// What the rules know of each of a Thread's `turns`, in the order they
+/// were made, who opened each in `openers`.
+fn facts<'a>(
+    turns: &'a [TurnView],
+    openers: &'a HashMap<TurnId, Opener>,
+    held: bool,
+) -> impl Iterator<Item = (&'a TurnView, TurnFacts)> {
+    let any = |state| turns.iter().any(|turn| turn.state == state);
+    let (works, waits) = (any(TurnState::Running), any(TurnState::Queued));
+    turns.iter().map(move |turn| {
+        let Position { first, latest } = position(turns, turn.id);
+        let opener = openers.get(&turn.id).copied().unwrap_or(Opener::Person);
+        let facts = TurnFacts {
+            by_itself: opener.by_itself(),
+            by_person: opener.by_person(),
+            first,
+            latest,
+            held,
+            works,
+            waits,
+            ..TurnFacts::of(turn.state)
+        };
+        (turn, facts)
+    })
+}
+
 /// What a Person may do with each of a Thread's turns now (ADR 0014,
-/// decision 2): what [`next`] accepts of a Person. `turns` are in the order
-/// they were made, and `own` are those the Agent opened by itself.
-pub fn can(turns: &mut [TurnView], own: &HashSet<TurnId>, held: bool) {
-    let works = turns.iter().any(|turn| turn.state == TurnState::Running);
-    let can: Vec<Can> = turns
-        .iter()
-        .map(|turn| {
-            let Position { first, latest } = position(turns, turn.id);
-            let facts = TurnFacts {
-                by_itself: own.contains(&turn.id),
-                first,
-                latest,
-                held,
-                works,
-                ..TurnFacts::of(turn.state)
-            };
+/// decision 2): what [`next`] accepts of a Person.
+pub fn can(turns: &mut [TurnView], openers: &HashMap<TurnId, Opener>, held: bool) {
+    let can: Vec<Can> = facts(turns, openers, held)
+        .map(|(_, facts)| {
             let takes = |event| next(&facts, event).is_ok();
             Can {
                 stop: takes(Event::Stop),
@@ -235,6 +262,7 @@ pub fn can(turns: &mut [TurnView], own: &HashSet<TurnId>, held: bool) {
                 withdraw: takes(Event::Withdraw),
                 steer: takes(Event::Steer),
                 fork: takes(Event::Fork),
+                rewind: takes(Event::Rewind),
             }
         })
         .collect();
@@ -850,7 +878,7 @@ mod tests {
             turn(again, TurnState::Queued),
             turn(ItemId::new(), TurnState::Running),
         ];
-        let own = HashSet::from([turns[3].id]);
+        let own = HashMap::from([(turns[3].id, Opener::ByItself)]);
         can(&mut turns, &own, false);
         let [failed, done, retried, by_itself] = [0, 1, 2, 3].map(|i| turns[i].can);
         assert!(!failed.retry, "a turn began after it");

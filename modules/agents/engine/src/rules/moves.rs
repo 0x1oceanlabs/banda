@@ -13,6 +13,8 @@ pub struct TurnFacts {
     pub state: TurnState,
     /// The Agent opened it by itself, between turns.
     pub by_itself: bool,
+    /// A Person's message opened it, not an Agent's.
+    pub by_person: bool,
     /// No turn ran its message before it ([`super::Position::first`]).
     pub first: bool,
     /// It is the Thread's latest that began ([`super::Position::latest`]).
@@ -21,6 +23,8 @@ pub struct TurnFacts {
     pub held: bool,
     /// A turn of its Thread runs.
     pub works: bool,
+    /// A turn of its Thread waits in its queue.
+    pub waits: bool,
 }
 
 impl TurnFacts {
@@ -30,10 +34,12 @@ impl TurnFacts {
         TurnFacts {
             state,
             by_itself: false,
+            by_person: true,
             first: true,
             latest: true,
             held: false,
             works: false,
+            waits: false,
         }
     }
 }
@@ -57,6 +63,9 @@ pub enum Event {
     /// A Person forks its Thread at its end (ADR 0027); it stays as it
     /// ended.
     Fork,
+    /// A Person takes its Thread back to before its message, to edit it
+    /// (ADR 0027); it leaves the Thread, with every turn after it.
+    Rewind,
 }
 
 /// What an event does to a turn.
@@ -130,6 +139,18 @@ pub fn next(turn: &TurnFacts, event: Event) -> Result<Step, Refusal> {
             "The Thread can be forked once its turn ends.",
         )),
         Event::Fork => to(state),
+        // A Person's message a turn ran first, that turn ended, and
+        // nothing runs or waits in its Thread.
+        Event::Rewind if !turn.by_person || !turn.first => Err(Refusal::invalid(
+            "Only a message a Person sent is edited from here.",
+        )),
+        Event::Rewind if matches!(state, Queued | Running | Withdrawn) => Err(Refusal::conflict(
+            "A Thread goes back to a message a turn ran.",
+        )),
+        Event::Rewind if turn.works || turn.waits => Err(Refusal::conflict(
+            "The Thread can go back once nothing runs or waits in it.",
+        )),
+        Event::Rewind => to(state),
     }
 }
 
@@ -149,20 +170,20 @@ mod tests {
 
     #[test]
     fn every_event_moves_each_state_of_a_turn_or_is_refused() {
-        use Event::{Change, Fork, Retry, Start, Steer, Stop, Withdraw};
+        use Event::{Change, Fork, Retry, Rewind, Start, Steer, Stop, Withdraw};
         #[rustfmt::skip]
         let table = [
-            //            Start      Stop         Change    Withdraw     Steer      Retry          Fork
-            (Queued,      ["Running", "Stopped",   "Queued", "Withdrawn", "-",       "-",           "-"]),
-            (Running,     ["-",       "Running H", "-",      "-",         "Running", "-",           "-"]),
-            (Done,        ["-",       "-",         "-",      "-",         "-",       "-",           "Done"]),
-            (Stopped,     ["-",       "-",         "-",      "-",         "-",       "-",           "Stopped"]),
-            (Failed,      ["-",       "-",         "-",      "-",         "-",       "Failed",      "Failed"]),
-            (Interrupted, ["-",       "-",         "-",      "-",         "-",       "Interrupted", "Interrupted"]),
-            (Withdrawn,   ["-",       "-",         "-",      "-",         "-",       "-",           "-"]),
+            //            Start      Stop         Change    Withdraw     Steer      Retry          Fork           Rewind
+            (Queued,      ["Running", "Stopped",   "Queued", "Withdrawn", "-",       "-",           "-",           "-"]),
+            (Running,     ["-",       "Running H", "-",      "-",         "Running", "-",           "-",           "-"]),
+            (Done,        ["-",       "-",         "-",      "-",         "-",       "-",           "Done",        "Done"]),
+            (Stopped,     ["-",       "-",         "-",      "-",         "-",       "-",           "Stopped",     "Stopped"]),
+            (Failed,      ["-",       "-",         "-",      "-",         "-",       "Failed",      "Failed",      "Failed"]),
+            (Interrupted, ["-",       "-",         "-",      "-",         "-",       "Interrupted", "Interrupted", "Interrupted"]),
+            (Withdrawn,   ["-",       "-",         "-",      "-",         "-",       "-",           "-",           "-"]),
         ];
         for (state, row) in table {
-            let events = [Start, Stop, Change, Withdraw, Steer, Retry, Fork];
+            let events = [Start, Stop, Change, Withdraw, Steer, Retry, Fork, Rewind];
             for (event, want) in events.into_iter().zip(row) {
                 let turn = TurnFacts::of(state);
                 assert_eq!(moved(&turn, event), want, "{state:?} {event:?}");
@@ -191,6 +212,11 @@ mod tests {
             ("the Agent's own",  own(Failed),                               Event::Retry,  "-"),
             ("not the latest",   TurnFacts { latest: false, ..of(Failed) }, Event::Retry,  "-"),
             ("its Thread works", TurnFacts { works: true, ..of(Done) },     Event::Fork,   "-"),
+            ("its Thread works", TurnFacts { works: true, ..of(Done) },     Event::Rewind, "-"),
+            ("a turn waits",     TurnFacts { waits: true, ..of(Done) },     Event::Rewind, "-"),
+            ("a waiting fork",   TurnFacts { waits: true, ..of(Done) },     Event::Fork,   "Done"),
+            ("an Agent's word",  TurnFacts { by_person: false, ..of(Done) }, Event::Rewind, "-"),
+            ("tried again",      TurnFacts { first: false, ..of(Done) },    Event::Rewind, "-"),
         ];
         for (why, turn, event, want) in cases {
             assert_eq!(moved(&turn, event), want, "{why}");
