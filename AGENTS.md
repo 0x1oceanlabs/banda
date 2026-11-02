@@ -39,8 +39,11 @@ green. A red `ci` is yours to fix, on the PR or, after a merge, on `main`.
 - A part of main is a service: `class X extends Context.Service<X, {…}>()("banda/X")`,
   with a `static layer` that builds it. What it starts it starts in the
   layer's scope (`Effect.forkScoped`), so disposing the runtime stops it.
-- Electron's callbacks are the edge: each runs one effect on the runtime
-  in `main.ts` (`runtime.runPromise`, `runtime.runFork`). Nowhere else
+- Electron's callbacks are the edge: each runs one effect. Those
+  `main.ts` registers run on its runtime (`runtime.runPromise`,
+  `runtime.runFork`); those a service's layer registers, as Electron's
+  or a library's handlers, run on a runner of the layer's scope
+  (`FiberSet.makeRuntimePromise`), so they stop with it. Nowhere else
   runs an effect.
 - Input from outside main (the page, an extension, a CDP client, a
   program's output) is decoded with `Schema`. The contract's types are

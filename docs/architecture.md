@@ -690,7 +690,9 @@ modules/*/pane   each module's Panes
   to what the workspace shows of it (`modules/browser/pane/src/pages.ts`).
   - The desktop attaches a page only in the `persist:browser` profile,
     sandboxed, with no preload and no Node; a site asks before it uses the
-    camera, the location or another program (`app/desktop/src/browser.ts`).
+    camera, the location or another program (the `Browser` service,
+    `app/desktop/src/browser.ts`; the extensions are `Extensions`, ADR
+    0020).
   - Banda's Alt keys and the browser's Ctrl keys are taken from the page in
     `before-input-event` and pressed again in the window, so the actions
     and the Pane hear them as their own.
