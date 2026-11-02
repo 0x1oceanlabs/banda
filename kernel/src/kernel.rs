@@ -3,6 +3,7 @@ use crate::methods::{Asks, Nothing, Tool};
 use crate::module::{Call, Module, Scope, Stream, Wall};
 use crate::passes::Passes;
 use crate::space::{GONE, Manifest, Space, UNFINISHED};
+use crate::window::Window;
 use crate::{AgentId, CommandId, Error, Participant, PersonId, Refusal, SpaceId};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -31,6 +32,8 @@ pub struct Kernel {
     /// a Space's, for the modules of the machine. None while no module is.
     machine: Option<Arc<Space>>,
     passes: Arc<Passes>,
+    /// The road from a module to the window (ADR 0029).
+    window: Arc<Window>,
     /// The tools of the modules in Spaces, made once as it opens.
     tools: Vec<Tool>,
 }
@@ -110,7 +113,7 @@ impl KernelBuilder {
         for (index, module) in self.modules.iter().enumerate() {
             let name = module.name();
             let valid = !name.is_empty() && name.bytes().all(|b| b.is_ascii_lowercase());
-            if !valid || name == "spaces" || name == crate::store::KERNEL {
+            if !valid || OWN.contains(&name) || name == crate::store::KERNEL {
                 return Err(
                     Refusal::invalid(format!("\"{name}\" cannot be a module's name.")).into(),
                 );
@@ -127,6 +130,7 @@ impl KernelBuilder {
             (self.modules.iter().cloned()).partition(|module| module.scope() == Scope::Machine);
         let boot = uuid::Uuid::now_v7().to_string();
         let passes = Arc::<Passes>::default();
+        let window = Arc::<Window>::default();
         let machine = if of_machine.is_empty() {
             None
         } else {
@@ -145,7 +149,8 @@ impl KernelBuilder {
                 }
             };
             let (modules, data) = (of_machine.into(), folder.clone());
-            let opened = Space::open(data, manifest, self.owner, modules, passes.clone(), &boot);
+            let (passes, window) = (passes.clone(), window.clone());
+            let opened = Space::open(data, manifest, self.owner, modules, passes, window, &boot);
             Some(opened.await?)
         };
         let kernel = Arc::new(Kernel {
@@ -160,6 +165,7 @@ impl KernelBuilder {
             adding: Default::default(),
             machine,
             passes,
+            window,
         });
         let mut found: Vec<PathBuf> = std::fs::read_dir(&kernel.spaces_data)?
             .filter_map(|entry| entry.ok().map(|e| e.path()))
@@ -345,6 +351,10 @@ fn outside_machine() -> Refusal {
     Refusal::forbidden("An Agent's pass is for its Space, not this machine.")
 }
 
+/// The prefixes of the kernel's own methods, which no module takes:
+/// `spaces.*`, and the window's road (ADR 0029, decision 2).
+const OWN: [&str; 2] = ["spaces", "window"];
+
 fn no_method(method: &str) -> Refusal {
     Refusal::invalid(format!("There is no method \"{method}\"."))
 }
@@ -395,6 +405,12 @@ impl Kernel {
         params: Value,
     ) -> Result<Value, Refusal> {
         let Caller { participant, only } = caller.into();
+        if let Some(own) = method.strip_prefix("window.")
+            && let Some(right) = Window::right(own)
+        {
+            access::decide(&participant, right, self.owner)?;
+            return self.window.call(participant, own, params).await;
+        }
         if let Some(own) = method.strip_prefix("spaces.")
             && let Some(right) = Self::method_right(own)
         {
@@ -435,18 +451,25 @@ impl Kernel {
         answer
     }
 
-    /// Opens a module's stream in a Space, once the access decision
-    /// allows it.
+    /// Opens a module's stream in a Space, or this machine's for a module
+    /// of the machine, which names none, once the access decision allows
+    /// it. `window.requests` names none either.
     pub async fn stream(
         &self,
         caller: impl Into<Caller>,
         method: &str,
-        space: SpaceId,
+        space: Option<SpaceId>,
         params: Value,
     ) -> Result<Stream, Refusal> {
         let Caller { participant, only } = caller.into();
+        if let Some(own) = method.strip_prefix("window.")
+            && let Some(right) = Window::right(own)
+        {
+            access::decide(&participant, right, self.owner)?;
+            return self.window.stream(participant, own, params).await;
+        }
         let (module, rest, right) = self.method(method)?;
-        let (space, wall) = self.place(&**module, method, Some(space), only).await?;
+        let (space, wall) = self.place(&**module, method, space, only).await?;
         access::decide(&participant, right, space.owner())?;
         let call = Call::new(
             participant,
@@ -496,8 +519,9 @@ impl Kernel {
         Ok(space)
     }
 
-    /// The ID a window follows and streams this machine's modules by, as
-    /// a Space's; none while no module is the machine's.
+    /// The ID a window follows this machine's modules by, as a Space's;
+    /// none while no module is the machine's. Their streams name it, or
+    /// no Space at all.
     pub fn machine(&self) -> Option<SpaceId> {
         self.machine.as_ref().map(|machine| machine.id())
     }
@@ -559,7 +583,11 @@ impl Kernel {
 
     async fn open_space(&self, data: PathBuf, manifest: Manifest) -> Result<Arc<Space>, Error> {
         let (modules, passes) = (self.in_spaces.clone(), self.passes.clone());
-        Space::open(data, manifest, self.owner, modules, passes, &self.boot).await
+        let window = self.window.clone();
+        Space::open(
+            data, manifest, self.owner, modules, passes, window, &self.boot,
+        )
+        .await
     }
 
     async fn list(&self, ask: Own<'_>, _: Nothing) -> Result<Vec<SpaceSummary>, Refusal> {

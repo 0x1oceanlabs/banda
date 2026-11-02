@@ -56,6 +56,7 @@ impl Module for Notes {
             "purge" => Some(Right::Manage),
             "count" => Some(Right::Read),
             "pass" => Some(Right::Read),
+            "show" => Some(Right::Read),
             _ => None,
         }
     }
@@ -103,6 +104,9 @@ impl Module for Notes {
                 let agent: AgentId = decode(params["agent"].clone())?;
                 Ok(json!(call.space().pass(agent)?))
             }
+            // Asks the window to show what it is given, as the browser asks
+            // it for a page.
+            "show" => (call.ask_window("show", params, Duration::from_secs(5))).await,
             "list" => {
                 let (at, items) = call
                     .space()
@@ -969,6 +973,71 @@ async fn a_pass_connects_as_its_agent_and_only_in_its_space() {
         "forbidden",
         "nor may it manage it"
     );
+}
+
+#[tokio::test]
+async fn a_module_asks_the_window_and_only_the_owners_window_answers() {
+    let root = tempfile::tempdir().unwrap();
+    let owner = PersonId::new();
+    let notes = Notes::default();
+    let kernel = open(root.path(), owner, &notes).await;
+    let work = create(&kernel, owner, "Work").await;
+    let agent = AgentId::new();
+    let person = Participant::Person(owner);
+    let pass = kernel
+        .call(
+            person,
+            "notes.pass",
+            Some(work.id),
+            None,
+            json!({ "agent": agent }),
+        )
+        .await
+        .unwrap();
+    let address = serve(&kernel, owner).await;
+    let hello = |token: &Value| json!({ "type": "hello", "protocol": 1, "token": token });
+    let (mut by_agent, _) = connect(address, hello(&pass)).await;
+    let (mut window, _) = connect(address, hello(&json!("secret"))).await;
+    async fn say(socket: &mut Socket, frame: Value) {
+        socket.send(Message::text(frame.to_string())).await.unwrap();
+    }
+
+    let show = |id: u64| json!({ "type": "call", "id": id, "method": "notes.show", "params": { "text": "hi" } });
+    say(&mut by_agent, show(1)).await;
+    let refused = next(&mut by_agent).await;
+    assert_eq!(refused["error"]["code"], "conflict");
+    assert_eq!(
+        refused["error"]["message"],
+        "Banda's window is not open. Nothing was done."
+    );
+
+    let requests = |id: u64| json!({ "type": "stream", "id": id, "method": "window.requests" });
+    let answer = |id: u64, request: &Value| {
+        json!({
+            "type": "call", "id": id, "method": "window.answer",
+            "params": { "request": request, "ok": { "shown": true } }
+        })
+    };
+    say(&mut by_agent, requests(2)).await;
+    assert_eq!(next(&mut by_agent).await["error"]["code"], "forbidden");
+    say(&mut by_agent, answer(3, &json!(0))).await;
+    assert_eq!(next(&mut by_agent).await["error"]["code"], "forbidden");
+
+    say(&mut window, requests(1)).await;
+    assert_eq!(next(&mut window).await["ok"]["stream"], 1);
+    say(&mut by_agent, show(4)).await;
+    let piece = next(&mut window).await;
+    assert_eq!(piece["type"], "piece");
+    let asked = &piece["data"];
+    assert_eq!(asked["method"], "notes.show");
+    assert_eq!(asked["space"], json!(work.id));
+    assert_eq!(asked["by"], json!(Participant::Agent(agent)));
+    assert_eq!(asked["params"], json!({ "text": "hi" }));
+    say(&mut window, answer(2, &asked["id"])).await;
+    assert_eq!(next(&mut window).await["ok"], Value::Null);
+    let shown = next(&mut by_agent).await;
+    assert_eq!(shown["id"], 4);
+    assert_eq!(shown["ok"], json!({ "shown": true }));
 }
 
 #[tokio::test]

@@ -149,6 +149,15 @@ The kernel holds only what every module needs, and it names no module.
   reads slowly holds the module back, which sends more in the next piece.
   Nothing of a stream is logged; a window that connects again asks again
   and hears it from the start.
+- **The window's road** (ADR 0029, decision 2). Some work is the
+  window's, such as its pages. A module's method asks the window
+  (`Call::ask_window`) and awaits the answer, within a time it gives.
+  The window hears every module's requests on one stream that names no
+  Space, `window.requests`, and answers each by `window.answer`; both
+  need the right to run as the Person, so no Agent holds or answers
+  them. The latest window to ask holds the road, and what the one before
+  had not answered is refused. With no window, or none that answers in
+  time, the ask is refused, and says whether the work may have run.
 - **Receipts and outbox.** These carry every command along one path (below).
 
 ### The command path

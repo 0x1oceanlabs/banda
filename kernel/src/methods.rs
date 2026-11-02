@@ -219,6 +219,7 @@ macro_rules! methods {
             }
 
             /// Every line of its `methods!` table (ADR 0022, decision 1).
+            #[allow(dead_code)]
             pub fn method_list() -> Vec<$crate::methods::Method> {
                 vec![$(
                     $crate::methods::Method {

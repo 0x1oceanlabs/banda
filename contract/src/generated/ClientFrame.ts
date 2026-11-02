@@ -8,4 +8,9 @@ export type ClientFrame = { "type": "hello", protocol: number, token: string, } 
 /**
  * Makes a command run once (ADR 0002, decision 2).
  */
-command?: CommandId, params: JsonValue, } | { "type": "subscribe", id: number, space: SpaceId, after: number, filter: EventFilter, } | { "type": "unsubscribe", id: number, subscription: number, } | { "type": "stream", id: number, space: SpaceId, method: string, params: JsonValue, };
+command?: CommandId, params: JsonValue, } | { "type": "subscribe", id: number, space: SpaceId, after: number, filter: EventFilter, } | { "type": "unsubscribe", id: number, subscription: number, } | { "type": "stream", id: number, 
+/**
+ * None for a stream of this machine's: `window.requests`, or a
+ * module of the machine's.
+ */
+space?: SpaceId, method: string, params: JsonValue, };

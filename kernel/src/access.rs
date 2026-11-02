@@ -19,8 +19,9 @@ pub enum Right {
     /// Decide what an Agent asked a Person to decide. An Agent never
     /// answers in a Person's place (ADR 0002, decision 9).
     Decide,
-    /// Run programs as the Person, as a terminal does. An Agent runs them
-    /// through its Harness, under its Thread's mode.
+    /// Run programs as the Person, as a terminal does, or hold the
+    /// window's road (ADR 0029). An Agent runs them through its Harness,
+    /// under its Thread's mode.
     Run,
 }
 
@@ -41,7 +42,7 @@ pub fn decide(participant: &Participant, right: Right, owner: PersonId) -> Resul
             "Only a Person decides what an Agent asked.",
         )),
         (Participant::Agent(_), Right::Run) => Err(Refusal::forbidden(
-            "An Agent runs programs through its Harness, not in a terminal.",
+            "An Agent runs programs through its Harness, not as the Person.",
         )),
     }
 }
