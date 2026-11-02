@@ -49,7 +49,7 @@ pub async fn serve(places: Places, port: u16, with_parent: bool) -> Result<(), F
         program: std::env::current_exe().map_err(Failure::broken)?,
         engine: running.url(),
     };
-    let kernel = Kernel::builder(&places.root, owner)
+    let kernel = Kernel::builder(&places.root, &places.data, owner)
         .machine(places.machine())
         .module(Agents::new(harnesses).piped(pipe))
         .module(Terminals::new())

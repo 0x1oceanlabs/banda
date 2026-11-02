@@ -73,7 +73,8 @@
 //!
 //! With `FAKE_AGENT_MCP` naming a file it writes there the MCP servers a
 //! new session was given, as JSON, so a test can start them as a Harness
-//! would.
+//! would. With `FAKE_AGENT_ROOTS` naming a file it writes there the extra
+//! roots (`additionalDirectories`) a new session was given, as JSON.
 //!
 //! With `FAKE_AGENT_REPLAY` naming a recording it plays a real Harness's
 //! conversation instead: see [`replay`].
@@ -1065,6 +1066,11 @@ async fn main() -> Result<(), Error> {
                     if let Some(file) = std::env::var_os("FAKE_AGENT_MCP") {
                         let servers = serde_json::to_vec(&request.mcp_servers).unwrap_or_default();
                         let _ = std::fs::write(file, servers);
+                    }
+                    if let Some(file) = std::env::var_os("FAKE_AGENT_ROOTS") {
+                        let roots =
+                            serde_json::to_vec(&request.additional_directories).unwrap_or_default();
+                        let _ = std::fs::write(file, roots);
                     }
                     let number = fake.sessions.fetch_add(1, Ordering::Relaxed) + 1;
                     // Unique across processes, so a resumed session shows.

@@ -8,10 +8,11 @@ it.
 ## Work
 
 **Space**:
-One body of work and its folder on disk (`~/Banda/<name>/` by default). It
-holds the files that the Person and the Agents work on, plus `.banda/`,
-which keeps the Space's data and event log. Copying the folder moves the
-Space.
+One body of work and its folder on disk: any folder, a git repository too,
+or a new one in `~/Banda/<name>/`. The folder holds the files that the
+Person and the Agents work on, and nothing of Banda's: the Space's data and
+event log are in the engine's data, `~/.local/share/banda/spaces/<id>/`
+(ADR 0026).
 _Avoid_: project, workspace (that is a screen of Panes).
 
 **Participant**:

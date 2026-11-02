@@ -52,6 +52,7 @@ function serve(): Promise<void> {
     env: {
       ...process.env,
       BANDA_ROOT: join(dir, "root"),
+      BANDA_DATA: join(dir, "data"),
       BANDA_STATE: join(dir, "state"),
       BANDA_CONFIG: join(dir, "config"),
       BANDA_LOG: "warn",

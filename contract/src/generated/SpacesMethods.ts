@@ -12,7 +12,7 @@ export type SpacesMethods = {
  */
 list: CallMethod<Nothing, Array<SpaceSummary>>, 
 /**
- * Makes a Space: its folder under the root, by its name.
+ * Makes a Space: a new folder under the root, by its name.
  */
 create: CommandMethod<CreateSpace, SpaceSummary>, 
 /**

@@ -70,7 +70,7 @@ impl World {
     }
 
     async fn open_with(root: &Path, owner: PersonId, agents: Agents) -> Arc<Kernel> {
-        Kernel::builder(root, owner)
+        Kernel::builder(root, root.join(".data"), owner)
             .module(agents)
             .open()
             .await
@@ -256,7 +256,7 @@ fn state(view: &ThreadView, turn: &Value) -> Option<TurnState> {
 /// Who opened `turn`, and from which other Thread, as the module keeps it
 /// in the Space's database: the window does not read it.
 fn opened(root: &Path, turn: &Value) -> (String, Option<String>) {
-    let sql = rusqlite::Connection::open(root.join("Work/.banda/space.sqlite3")).unwrap();
+    let sql = rusqlite::Connection::open(space_data(root).join("space.sqlite3")).unwrap();
     sql.query_row(
         "SELECT opener, from_thread FROM agents_turns WHERE id = ?1",
         [turn.as_str().unwrap()],
@@ -302,6 +302,22 @@ async fn ask_session(world: &World, thread: Option<&Value>) -> (Value, (String, 
         })
         .await;
     (sent["thread"].clone(), session_of(&view))
+}
+
+/// A session may read the files Banda keeps for the Space's messages,
+/// which are in the Space's data, not its folder (ADR 0026).
+#[tokio::test]
+async fn a_session_may_read_the_files_kept_for_its_messages() {
+    let root = tempfile::tempdir().unwrap();
+    let roots = root.path().join("roots.json");
+    let agents = Agents::new(harnesses_with(&[(
+        "FAKE_AGENT_ROOTS",
+        roots.to_str().unwrap(),
+    )]));
+    let world = World::new_with(root.path(), agents).await;
+    ask_session(&world, None).await;
+    let given: Vec<PathBuf> = serde_json::from_slice(&std::fs::read(&roots).unwrap()).unwrap();
+    assert_eq!(given, [space_data(root.path()).join("files")]);
 }
 
 #[tokio::test]
@@ -1692,7 +1708,16 @@ const PNG: &[u8] = b"\x89PNG\r\n\x1a\n a picture";
 /// Where the Space keeps an image's bytes.
 fn image_file(root: &Path, image: &Value) -> PathBuf {
     let id = image["id"].as_str().unwrap();
-    root.join("Work/.banda/images").join(id)
+    space_data(root).join("images").join(id)
+}
+
+/// The data of the one Space under `root`, which the tests keep in
+/// `root/.data` (ADR 0026).
+fn space_data(root: &Path) -> PathBuf {
+    let mut spaces = std::fs::read_dir(root.join(".data/spaces")).unwrap();
+    let space = spaces.next().unwrap().unwrap().path();
+    assert!(spaces.next().is_none(), "one Space");
+    space
 }
 
 impl World {
@@ -1779,8 +1804,9 @@ async fn a_file_is_kept_in_the_space_for_a_message_to_point_at() {
         .await
         .unwrap();
     let path = kept["path"].as_str().unwrap();
-    assert!(path.starts_with(".banda/files/") && path.ends_with("/pasted-text.txt"));
-    let file = root.path().join("Work").join(path);
+    assert!(Path::new(path).starts_with(space_data(root.path()).join("files")));
+    assert!(path.ends_with("/pasted-text.txt"));
+    let file = PathBuf::from(path);
     assert_eq!(std::fs::read_to_string(file).unwrap(), "a long text");
     // A file with no name is refused.
     let params = json!({ "name": "", "data": data });
@@ -2789,11 +2815,7 @@ async fn a_recorded_conversation_plays_again_as_it_went() {
 async fn threads_one_thread_and_send_are_an_agents_tools() {
     let root = tempfile::tempdir().unwrap();
     let owner = PersonId::new();
-    let kernel = Kernel::builder(root.path(), owner)
-        .module(Agents::new(harnesses()))
-        .open()
-        .await
-        .unwrap();
+    let kernel = World::open(root.path(), owner).await;
     let agent = Participant::Agent(AgentId::new());
     let mut tools = kernel
         .call(agent, "spaces.tools", None, None, Value::Null)

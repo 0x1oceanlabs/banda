@@ -29,7 +29,7 @@ banda_kernel::id!(
 );
 
 /// An image a Person sends with a message. Its bytes are kept apart, in
-/// the Space's `.banda/images/`, and read with `agents.image`.
+/// the Space's data, `spaces/<id>/images/`, and read with `agents.image`.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "agents/")]
 pub struct Image {

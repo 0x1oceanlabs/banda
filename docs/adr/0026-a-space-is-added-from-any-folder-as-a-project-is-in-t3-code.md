@@ -92,8 +92,13 @@ every proposal:
      `.banda/` removed. A move that failed leaves `.banda/` as it was and
      tries again on the next start.
    - The Threads' past messages name kept files by their old
-     `.banda/files/…` path. The window and the engine read such a path
-     from the Space's data, so the old messages still open their files.
+     `.banda/files/…` path. Nothing in Banda opens such a path: only an
+     old Thread's Agent, reading it again, finds it gone, and a new
+     message names the file anew.
+     _Changed on 2026-11-02, in step 2:_ the first text said the window
+     and the engine would read the old paths from the data; nothing does.
+   - Two Spaces that name one folder: the first opens, the second stays
+     closed and is logged.
 
 3. **Adding a Space is one branch of the Banda menu, "Add Space"**
    (ADR 0017), as adding a project is one view of T3 Code's palette.

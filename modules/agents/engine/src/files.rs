@@ -1,8 +1,8 @@
 //! The files in a Space's folder, for `@` in the composer (ADR 0010,
 //! decision 9): the ones git keeps or would, in a folder git knows, or
-//! else what a walk finds; never Banda's own.
+//! else what a walk finds. Banda's own data is not in the folder
+//! (ADR 0026).
 
-use banda_kernel::DATA;
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::process::Command;
@@ -56,13 +56,7 @@ impl Listings {
 
 /// The files under `folder`, as paths from it with `/` between names.
 fn listed(folder: &Path) -> Vec<String> {
-    let paths = git(folder).unwrap_or_else(|| walk(folder));
-    // Banda's own data, not the Person's files.
-    let data = format!("{DATA}/");
-    paths
-        .into_iter()
-        .filter(|path| !path.starts_with(&data))
-        .collect()
+    git(folder).unwrap_or_else(|| walk(folder))
 }
 
 fn git(folder: &Path) -> Option<Vec<String>> {
@@ -184,7 +178,6 @@ mod tests {
             std::fs::create_dir_all(path.parent().unwrap()).unwrap();
             std::fs::write(path, "").unwrap();
         }
-        std::fs::create_dir_all(root.join(".banda/images")).unwrap();
         let mut found = walk(root);
         found.sort();
         assert_eq!(found, ["notes.md", "src/app.ts"]);
@@ -208,8 +201,6 @@ mod tests {
         std::fs::write(root.join(".gitignore"), "built/\n").unwrap();
         std::fs::create_dir_all(root.join("built")).unwrap();
         std::fs::write(root.join("built/out.js"), "").unwrap();
-        std::fs::create_dir_all(root.join(".banda/images")).unwrap();
-        std::fs::write(root.join(".banda/images/a"), "").unwrap();
         std::fs::write(root.join("kept.md"), "").unwrap();
         let mut found = listed(root);
         found.sort();

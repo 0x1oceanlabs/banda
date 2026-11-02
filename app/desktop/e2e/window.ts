@@ -91,6 +91,7 @@ export async function startWindow({
   const variables = {
     ...process.env,
     BANDA_ROOT: join(dir, "root"),
+    BANDA_DATA: join(dir, "data"),
     BANDA_STATE: join(dir, "state"),
     // The engine and the look read only this folder: no Omarchy, no
     // Hyprland.

@@ -11,8 +11,9 @@ Pane of Banda's window.
 
 ## Words
 
-- **Space**: one body of work and its folder. Its `.banda/` folder keeps
-  Banda's data and log for it.
+- **Space**: one body of work and its folder, any folder on this machine.
+  Banda keeps its data and log outside it, in
+  `~/.local/share/banda/spaces/<id>/`.
 - **Thread**: one session with a Harness in a Space. Each Thread has its
   own Agent.
 - **Harness**: the agent program a Thread runs on, such as Claude Code or
@@ -48,8 +49,9 @@ Banda is changed through text files, the same way the Person changes it.
 The window applies each save at once. A broken file leaves the last good
 state in force, and the bar names the file and the line.
 
-Never touch credentials, a Harness's own configuration, or a Space's
-`.banda/` folder.
+Never touch credentials, a Harness's own configuration, or a Space's data
+in `~/.local/share/banda/spaces/`; the files a message keeps there are
+yours to read.
 
 ## Opening the Banda menu for the Person
 

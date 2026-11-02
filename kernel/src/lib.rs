@@ -24,6 +24,7 @@ mod ids;
 mod kernel;
 pub mod methods;
 mod module;
+mod old;
 mod outbox;
 mod passes;
 mod space;
@@ -40,7 +41,7 @@ pub use outbox::{Effect, OnRestart, Outcome, Settled};
 pub use passes::secret;
 /// For `methods!` and `id!`, which name it from a module's crate.
 pub use schemars;
-pub use space::{DATA, ModuleSpace, Space};
+pub use space::{ModuleSpace, Space};
 pub use store::Tx;
 
 /// The version of the API's wire protocol. A window that speaks another

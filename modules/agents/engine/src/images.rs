@@ -1,14 +1,13 @@
-//! The bytes of the images messages carry, as files in the Space:
-//! `.banda/images/<image ID>`. The Space's SQLite keeps what each image
-//! is and which message carries it (`store`); the bytes stay out of it
-//! (ADR 0002, decision 1), and copying the Space's folder moves them too.
+//! The bytes of the images messages carry, as files in the Space's data:
+//! `spaces/<id>/images/<image ID>` (ADR 0026). The Space's SQLite keeps
+//! what each image is and which message carries it (`store`); the bytes
+//! stay out of it (ADR 0002, decision 1).
 //!
 //! A file is written before its image's row commits, so a file may have
 //! no row: an attach that failed, or one repeated with the same command.
 //! The sweep lets such files go once they are a day old.
 
 use crate::model::ImageId;
-use banda_kernel::DATA;
 use std::collections::HashSet;
 use std::io;
 use std::path::{Path, PathBuf};
@@ -23,10 +22,10 @@ pub struct Images {
 }
 
 impl Images {
-    /// The images of the Space in `space`.
-    pub fn of(space: &Path) -> Self {
+    /// The images of the Space whose data is in `data`.
+    pub fn of(data: &Path) -> Self {
         Images {
-            folder: space.join(DATA).join("images"),
+            folder: data.join("images"),
         }
     }
 
