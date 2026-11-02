@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react"
 import type { Engine, SpaceId, SpaceSummary, Status } from "@banda/contract"
 import { inFront, useInFront } from "@banda/ui/hooks/use-in-front"
 import { type PaneState, QUIET } from "@banda/ui/pane"
+import { DEFAULT_KEYS } from "@banda/contract/look"
 import { actionFor, rebind } from "../actions/actions"
 import { Bar } from "../bar/Bar"
 import { type Lists, Watches } from "../bar/Watches"
@@ -192,6 +193,22 @@ export function Shell({
   )
   const closeMenu = useCallback(() => setMenu(null), [])
 
+  // The actions, with the Person's keys over their own (keys.toml), but
+  // after the reset chord: then their own, until the file changes.
+  const lookKeys = useLookKeys()
+  const said = JSON.stringify(lookKeys.binds)
+  const [shipped, setShipped] = useState<string>()
+  const inForce = shipped === said ? DEFAULT_KEYS : lookKeys
+  const keyed = useMemo(() => rebind(ACTIONS, inForce), [inForce])
+  const saidNow = useRef(said)
+  useEffect(() => {
+    saidNow.current = said
+  }, [said])
+  const ownKeys = useCallback(() => {
+    setShipped(saidNow.current)
+    window.banda?.settings.open("keys")
+  }, [])
+
   const parts: Parts = useMemo(
     () => ({
       change,
@@ -201,12 +218,19 @@ export function Shell({
       answer,
       settle,
       menu: toggleMenu,
+      ownKeys,
     }),
-    [change, home, toggleSidebar, toggleOverview, answer, settle, toggleMenu]
+    [
+      change,
+      home,
+      toggleSidebar,
+      toggleOverview,
+      answer,
+      settle,
+      toggleMenu,
+      ownKeys,
+    ]
   )
-  // The actions, with the Person's keys over their own (keys.toml).
-  const lookKeys = useLookKeys()
-  const keyed = useMemo(() => rebind(ACTIONS, lookKeys), [lookKeys])
   // The keys run the actions, before any Pane hears them. A dialog keeps
   // its keys, as the Banda menu its Alt+Enter, but for the menu's own.
   useEffect(() => {
@@ -364,6 +388,7 @@ export function Shell({
             lists={lists}
             spaces={spaces}
             actions={keyed.actions}
+            binds={inForce.binds}
           />
           {overview && (
             <Overview

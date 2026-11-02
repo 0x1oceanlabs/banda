@@ -212,3 +212,59 @@ test("General, the sidebar's presets, and hearing a sound", async () => {
     settings.locator('[data-key="notify.done"]').getByRole("switch")
   ).toHaveAttribute("aria-checked", "true")
 })
+
+test("Keys: the lines of keys.toml, a key changed and taken out, and the reset chord (ADR 0005, decision 11)", async () => {
+  window = await startWindow({
+    files: {
+      "config/keys.toml": '[binds]\n"Alt+J" = "pane.close"\n"Alt+W" = "none"\n',
+    },
+  })
+  const { app, page, dir } = window
+  const file = join(dir, "config/keys.toml")
+  const { composer } = await firstThread(page)
+  await expect(composer).toBeVisible()
+  const settings = await openSettings(app, page)
+  await settings
+    .getByRole("navigation", { name: "Settings sections" })
+    .getByRole("button", { name: /Keys/ })
+    .click()
+
+  // Each line: its key, what it runs, and where it is.
+  const close = settings.locator('[data-key="Alt+J"]')
+  await expect(close).toContainText("pane.close")
+  await expect(close).toContainText("keys.toml:2")
+  await expect(settings.locator('[data-key="Alt+W"]')).toContainText(
+    "goes to the Pane"
+  )
+
+  // The next key pressed is the line's; one that would be typed is not.
+  await close.getByRole("button", { name: "Change Alt+J" }).click()
+  await settings.keyboard.press("KeyQ")
+  await expect(close.getByRole("alert")).toContainText("would be typed")
+  await close.getByRole("button", { name: "Change Alt+J" }).click()
+  await settings.keyboard.press("Alt+KeyQ")
+  await expect
+    .poll(() => readFileSync(file, "utf8"))
+    .toBe('[binds]\n"Alt+W" = "none"\n"Alt+Q" = "pane.close"\n')
+  await expect(settings.locator('[data-key="Alt+Q"]')).toContainText(
+    "keys.toml:3"
+  )
+
+  // The reset chord brings the window's own keys back: Alt+Q is nothing
+  // again, and Alt+W closes the Pane.
+  await composer.click()
+  await page.keyboard.press("Control+Alt+Shift+KeyK")
+  await page.keyboard.press("Alt+KeyQ")
+  await expect(composer).toBeVisible()
+  await page.keyboard.press("Alt+KeyW")
+  await expect(composer).toBeHidden()
+
+  // ↶ takes a line out.
+  await settings
+    .locator('[data-key="Alt+W"]')
+    .getByRole("button", { name: "Reset Alt+W" })
+    .click()
+  await expect
+    .poll(() => readFileSync(file, "utf8"))
+    .toBe('[binds]\n"Alt+Q" = "pane.close"\n')
+})

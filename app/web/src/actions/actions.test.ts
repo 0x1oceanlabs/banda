@@ -1,7 +1,7 @@
 import { expect, test } from "vitest"
 import { ACTIONS } from "../shell/actions"
 import { matches } from "@banda/ui/lib/keys"
-import { actionFor, keyName, rebind } from "./actions"
+import { actionFor, keyName, rebind, RESET_KEY } from "./actions"
 
 const press = (code: string, mods: Partial<KeyboardEvent> = {}) => ({
   code,
@@ -40,6 +40,14 @@ test("the window's actions each have their own name and key", () => {
   expect(new Set(ids).size).toBe(ids.length)
   const keys = ACTIONS.flatMap((action) => (action.keys ?? []).map(keyName))
   expect(new Set(keys).size).toBe(keys.length)
+  // The reset chord is its own action's, as look/src/keys.rs names it.
+  expect(keyName(RESET_KEY)).toBe("Ctrl+Alt+Shift+K")
+  expect(
+    actionFor(
+      ACTIONS,
+      press("KeyK", { altKey: true, ctrlKey: true, shiftKey: true })
+    )?.id
+  ).toBe("keys.reset")
 })
 
 test("keys.toml binds a key to an action, frees one, and names a wrong one", () => {

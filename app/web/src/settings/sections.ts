@@ -21,6 +21,7 @@ import {
   BotIcon,
   FileCogIcon,
   GlobeIcon,
+  KeyboardIcon,
   type LucideIcon,
   PaletteIcon,
   PanelLeftIcon,
@@ -28,6 +29,7 @@ import {
 } from "lucide-react"
 import { Agents } from "./Agents"
 import { General } from "./General"
+import { Keys } from "./Keys"
 import { PlaySound, PresetPicker } from "./rows"
 import { ThemePicker } from "./ThemePicker"
 
@@ -115,6 +117,15 @@ export const SECTIONS: Section[] = [
     icon: GlobeIcon,
     file: "browser.toml",
     about: aboutOf("browser.toml"),
+  },
+  {
+    id: "keys",
+    title: "Keys",
+    icon: KeyboardIcon,
+    file: "keys.toml",
+    about:
+      "Your keys over Banda's own, as Hyprland's binds: each line a key and the action it runs, or none, so the key goes to the Pane.",
+    Body: Keys,
   },
   {
     id: "files",

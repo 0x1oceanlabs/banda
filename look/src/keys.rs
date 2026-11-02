@@ -24,6 +24,12 @@ pub const TEMPLATE: &str = include_str!("../keys.toml");
 /// What a key bound to it runs: nothing, so the key is the Pane's.
 pub const NONE: &str = "none";
 
+/// The one chord no file binds (ADR 0005, decision 11): the window's
+/// `keys.reset` brings its own keys back until `keys.toml` changes, and
+/// opens the settings at Keys, so keys bound away can always be mended.
+/// The window holds it as `RESET_KEY` (`app/web/src/actions/actions.ts`).
+pub const RESET: &str = "Ctrl+Alt+Shift+K";
+
 /// Banda's keys over the window's own. Every key is optional.
 #[derive(Debug, Default, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
@@ -140,7 +146,19 @@ pub fn canonical(text: &str) -> Option<String> {
     parse(text).ok().map(|bind| bind.text)
 }
 
+/// A key as a file binds it: any but [`RESET`].
 fn parse(text: &str) -> Result<Bind, String> {
+    let bind = chord(text)?;
+    if bind.text == RESET {
+        return Err(format!(
+            "{RESET} brings the window's own keys back, so no file binds it"
+        ));
+    }
+    Ok(bind)
+}
+
+/// Any key, as it is written.
+fn chord(text: &str) -> Result<Bind, String> {
     let text = text.trim();
     let (mods, name) = text.rsplit_once('+').unwrap_or(("", text));
     let (mut alt, mut shift, mut ctrl) = (false, false, false);
@@ -299,6 +317,16 @@ mod tests {
         assert!(parse("Hyper+R").is_err());
         assert!(parse("Alt+Banana").unwrap_err().contains("Banana"));
         assert!(parse("Shift+R").unwrap_err().contains("typed"));
+        assert!(
+            parse("shift+ctrl+alt+k")
+                .unwrap_err()
+                .contains("no file binds")
+        );
+        let reset = chord(RESET).unwrap();
+        assert_eq!(
+            (reset.code.as_str(), reset.ctrl, reset.alt, reset.shift),
+            ("KeyK", true, true, true)
+        );
     }
 
     #[test]

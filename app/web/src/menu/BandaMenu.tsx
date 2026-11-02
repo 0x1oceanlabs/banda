@@ -13,7 +13,7 @@ import {
   Suggestions,
 } from "@banda/ui/components/suggestions"
 import { useWrite } from "@banda/ui/hooks/use-write"
-import { type Key, matches, sameKey } from "@banda/ui/lib/keys"
+import { type Key, keyToBind, matches, sameKey } from "@banda/ui/lib/keys"
 import { nameAndFolder } from "@banda/ui/lib/paths"
 import {
   CheckIcon,
@@ -25,9 +25,9 @@ import {
   SearchIcon,
   SquarePenIcon,
 } from "lucide-react"
-import { type Action, keyName } from "../actions/actions"
+import { type Action, KEYS_FILE, keyName, writeBind } from "../actions/actions"
 import type { Lists } from "../bar/Watches"
-import { useLookKeys, useLookSidebar } from "../look"
+import { useLookSidebar } from "../look"
 import type { Shell } from "../shell/actions"
 import { SpaceBadge, ThreadMark } from "../sidebar/Row"
 import { PRESET_WORDS } from "../sidebar/settings"
@@ -50,12 +50,6 @@ import { opened, useOpened, weightOf } from "./opened"
 
 const ASK: Key = { code: "Enter", alt: true }
 
-/** The file the menu writes a key to (ADR 0005, decision 11). */
-const KEYS_FILE = "keys.toml"
-
-/** Keys that are only mods: a key to bind comes with them, not alone. */
-const MODS = new Set(["Alt", "AltGraph", "Control", "Shift", "Meta"])
-
 /**
  * The Banda menu (ADR 0017): one window in the middle that finds and runs
  * everything, opened by Alt+Space at its root, by Alt+K at its Actions,
@@ -71,6 +65,7 @@ export function BandaMenu({
   lists,
   spaces,
   actions,
+  binds,
 }: {
   /** Where it opens; closed when none. */
   opening: Opening | null
@@ -83,6 +78,8 @@ export function BandaMenu({
   lists: Lists
   spaces: readonly SpaceSummary[]
   actions: readonly Action<Shell>[]
+  /** The Person's keys in force, from keys.toml. */
+  binds: readonly Bind[]
 }) {
   // Loaded while the menu is shut, so they are there as it opens.
   const all = useHarnesses(engine, space)
@@ -114,6 +111,7 @@ export function BandaMenu({
             lists={lists}
             spaces={spaces}
             actions={actions}
+            binds={binds}
             harnesses={harnesses}
             escapeRef={escapeRef}
             onChoose={(row) => {
@@ -135,6 +133,7 @@ function Menu({
   lists,
   spaces,
   actions,
+  binds,
   harnesses,
   escapeRef,
   onChoose,
@@ -145,12 +144,13 @@ function Menu({
   lists: Lists
   spaces: readonly SpaceSummary[]
   actions: readonly Action<Shell>[]
+  /** The Person's keys in force, from keys.toml. */
+  binds: readonly Bind[]
   harnesses: Sources["harnesses"]
   escapeRef: React.RefObject<() => boolean>
   onChoose: (row: Exclude<Choice, Branch | Keying>) => void
 }) {
   const { preset, presets } = useLookSidebar()
-  const { binds } = useLookKeys()
   const settled = useIsSettled()
   const addressOf = useAddressOf()
   const uses = useOpened()
@@ -234,13 +234,7 @@ function Menu({
   const write = (key: Key, action: string, did: string) => {
     done.current = did
     setNote(undefined)
-    writing(
-      window.banda?.settings.set(
-        KEYS_FILE,
-        `binds.${JSON.stringify(keyName(key))}`,
-        action
-      ) ?? Promise.resolve(["Only the desktop app writes keys.toml"])
-    )
+    writing(writeBind(key, action))
   }
   const keying = (row: Keying) => {
     setActing(undefined)
@@ -264,15 +258,11 @@ function Menu({
   // the desktop's; `banda settings` refuses one that would be typed.
   const take = (event: React.KeyboardEvent, action: Action<Shell>) => {
     event.preventDefault()
-    if (MODS.has(event.key) || event.key === "Escape") return
-    const key: Key = {
-      code: event.code,
-      alt: event.altKey,
-      shift: event.shiftKey,
-      ctrl: event.ctrlKey,
-    }
-    if (event.metaKey)
-      return setNote("Super is the desktop's: hold Alt or Ctrl instead")
+    if (event.key === "Escape") return
+    const pressed = keyToBind(event)
+    if (!pressed) return
+    if ("refused" in pressed) return setNote(pressed.refused)
+    const { key } = pressed
     const had = actions.find(
       (one) => one !== action && one.keys?.some((mine) => sameKey(mine, key))
     )

@@ -127,7 +127,7 @@ The evidence is in two notes: [tiling managers](../research/2026-11-01-tiling-ma
    - **`keys.toml`** (_built_ 2026-11-01), as Hyprland's and niri's binds: a `[binds]` table, each line a key and the id of the action it runs, as the key sheet lists them. `"Alt+M" = "column.maximize"` binds a key; a key bound elsewhere by Banda leaves that action. `"Alt+F" = "none"` frees a key, so it goes to the Pane, as to a shell's readline. An action keeps its own keys besides. A key is Alt, Ctrl and Shift, any of them, then the key's name (`R`, `5`, `F2`, `Left`, `Return`, `[`); Super is the desktop's, and a key without Alt or Ctrl, but for F1 to F24, would be typed, so it is refused. `banda look` reads the file with the look and watches it; `banda look check` names a key written wrong, and the window names an action it does not have, at its line, in the bar. `banda settings set keys.toml binds."Alt+K" …` changes the line that names Alt+K, however it is written there, so the key sheet and an Agent write the file as the Person would (ADR 0017, decision 9).
    - A file applies once it is saved. On an error, the last good version stays in force, and a notice names the file and the line.
    - `banda check` validates a file before it is saved.
-   - One reset chord cannot be rebound.
+   - One reset chord cannot be rebound. (_built_ 2026-11-02) It is Ctrl+Alt+Shift+K, the action `keys.reset` in the key sheet: it brings the window's own keys back until `keys.toml` changes, and opens the settings at Keys to mend the file. `banda look check` refuses a line that binds it.
    - The settings page edits the same files, so there is one source of truth.
 
 12. **Every module, ours too, is built on the contract a module from elsewhere gets.**

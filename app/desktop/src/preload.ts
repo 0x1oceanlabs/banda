@@ -81,6 +81,7 @@ const host: Host = {
     },
   },
   menu: {
+    open: (route) => ipcRenderer.send("menu.open", route),
     listen: (open) => {
       const heard = (_event: IpcRendererEvent, route: string) => open(route)
       ipcRenderer.on("menu:open", heard)

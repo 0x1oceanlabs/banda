@@ -7,7 +7,7 @@ import type { SpaceId } from "@banda/contract"
 import { NEW_THREAD, threadPane } from "@banda/agents-pane"
 import { browserPane, NEW_BROWSER } from "@banda/browser-pane"
 import { type PaneState, paneOf, type Place } from "@banda/ui/pane"
-import type { Action } from "../actions/actions"
+import { type Action, RESET_KEY } from "../actions/actions"
 import { showing } from "../calls/sight"
 import { columnsOf } from "../look"
 import { type At, MENU_KEY } from "../menu/menu"
@@ -47,6 +47,9 @@ export type Shell = {
   settle: () => void
   /** Opens the Banda menu, or closes it when it is open (ADR 0017). */
   menu: (at: At) => void
+  /** The window's own keys again, until keys.toml changes; the settings
+   * open at Keys to mend it (ADR 0005, decision 11). */
+  ownKeys: () => void
 }
 
 const ARROWS: Record<Direction, string> = {
@@ -283,6 +286,14 @@ export const ACTIONS: readonly Action<Shell>[] = [
     title: "Open the settings",
     keys: [{ code: "Comma", alt: true }],
     run: () => window.banda?.settings.open(),
+  },
+  {
+    id: "keys.reset",
+    title: "Banda's own keys, until keys.toml changes",
+    // No file binds it, so keys bound away can always be mended.
+    keys: [RESET_KEY],
+    overDialogs: true,
+    run: (shell) => shell.ownKeys(),
   },
   {
     id: "sidebar.toggle",
