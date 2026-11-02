@@ -317,6 +317,7 @@ dependencies = [
  "agent-client-protocol",
  "async-trait",
  "banda-kernel",
+ "banda-look",
  "base64 0.22.1",
  "rusqlite",
  "schemars 1.2.3",

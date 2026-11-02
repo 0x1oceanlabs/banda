@@ -7,13 +7,13 @@
 //! of them, with no list kept by hand.
 
 use banda_agents::settings::{HarnessFile, Harnesses, template as harness_template};
-use banda_look::Problem;
 use banda_look::agents::AgentsSettings;
 use banda_look::browser::BrowserSettings;
 use banda_look::keys::KeysSettings;
 use banda_look::settings::Settings as LookSettings;
 use banda_look::sidebar::SidebarSettings;
 use banda_look::theme::Places;
+use banda_look::{Also, Problem};
 use schemars::generate::SchemaSettings;
 use schemars::transform::RecursiveTransform;
 use schemars::{JsonSchema, Schema};
@@ -31,6 +31,9 @@ pub struct File {
     schema: fn() -> Schema,
     /// What a new file starts as, before its first key is written.
     template: fn() -> String,
+    /// What is wrong in its text, for a file another module reads: the
+    /// look reads the rest itself.
+    check: Option<fn(&Path, &str) -> Vec<Problem>>,
 }
 
 const HARNESSES: &str = "harnesses.toml";
@@ -41,31 +44,37 @@ pub const FILES: [File; 6] = [
         name: "look.toml",
         schema: schema_of::<LookSettings>,
         template: || banda_look::TEMPLATE.to_owned(),
+        check: None,
     },
     File {
         name: "sidebar.toml",
         schema: schema_of::<SidebarSettings>,
         template: || banda_look::sidebar::TEMPLATE.to_owned(),
+        check: None,
     },
     File {
         name: "browser.toml",
         schema: schema_of::<BrowserSettings>,
         template: || banda_look::browser::TEMPLATE.to_owned(),
+        check: None,
     },
     File {
         name: "agents.toml",
         schema: schema_of::<AgentsSettings>,
         template: || banda_look::agents::TEMPLATE.to_owned(),
+        check: None,
     },
     File {
         name: "keys.toml",
         schema: schema_of::<KeysSettings>,
         template: || banda_look::keys::TEMPLATE.to_owned(),
+        check: None,
     },
     File {
         name: HARNESSES,
         schema: schema_of::<HarnessFile>,
         template: harness_template,
+        check: Some(check_harnesses),
     },
 ];
 
@@ -162,6 +171,20 @@ pub fn export(folder: &Path) -> std::io::Result<()> {
     Ok(())
 }
 
+/// The files the look does not read, which it watches and names the
+/// problems of all the same: the Harness list, as the engine reads it.
+pub fn also() -> Vec<Also> {
+    FILES
+        .iter()
+        .filter_map(|file| {
+            Some(Also {
+                name: file.name,
+                check: file.check?,
+            })
+        })
+        .collect()
+}
+
 /// Checks `paths`, or with none every file Banda reads: the look's, the
 /// sidebar's and the Harness list. Says nothing when all is well.
 pub fn check(places: &Places, paths: &[PathBuf]) -> Vec<Problem> {
@@ -171,12 +194,9 @@ pub fn check(places: &Places, paths: &[PathBuf]) -> Vec<Problem> {
             fontconfig: None,
             ..places.clone()
         };
-        let mut problems = banda_look::resolve(&places, &|| None).look.problems;
-        let harnesses = places.config.join(HARNESSES);
-        if harnesses.exists() {
-            problems.extend(check_file(&harnesses));
-        }
-        return problems;
+        return banda_look::resolve(&places, &|| None, &also())
+            .look
+            .problems;
     }
     paths.iter().flat_map(|path| check_file(path)).collect()
 }
@@ -191,13 +211,15 @@ fn check_file(path: &Path) -> Vec<Problem> {
 /// Checks `text` as the file at `path` is read: the Harness list as the
 /// engine reads it, anything else as the look does.
 fn check_text(path: &Path, text: &str) -> Vec<Problem> {
-    if path.file_name().is_none_or(|name| name != HARNESSES) {
-        return banda_look::check_text(path, text);
+    let name = path.file_name().and_then(|name| name.to_str());
+    match name.and_then(file).and_then(|file| file.check) {
+        Some(check) => check(path, text),
+        None => banda_look::check_text(path, text),
     }
-    match Harnesses::parse(text) {
-        Ok(_) => Vec::new(),
-        Err(error) => vec![Problem::toml(path, text, &error)],
-    }
+}
+
+fn check_harnesses(path: &Path, text: &str) -> Vec<Problem> {
+    Harnesses::parse(path, text).err().into_iter().collect()
 }
 
 #[cfg(test)]
@@ -240,10 +262,11 @@ mod tests {
         assert!(families.as_array().unwrap().contains(&"off".into()));
 
         let harnesses = serde_json::to_value(file("harnesses.toml").unwrap().schema()).unwrap();
-        let harness = &harnesses["$defs"]["Harness"];
+        let harness = &harnesses["$defs"]["HarnessEntry"];
         assert_eq!(
             harness["required"],
-            serde_json::json!(["id", "name", "command"])
+            serde_json::json!(["id"]),
+            "a known ID takes the rest from Banda"
         );
         assert!(
             harness["properties"].get("record").is_none(),
@@ -263,6 +286,31 @@ mod tests {
         let problems = check(&Places::at(folder.path()), std::slice::from_ref(&path));
         assert_eq!(problems.len(), 1, "{problems:?}");
         assert_eq!(problems[0].line, Some(3));
+    }
+
+    #[test]
+    fn the_look_names_what_is_wrong_in_the_harness_list() {
+        let folder = tempfile::tempdir().unwrap();
+        let places = Places::at(folder.path());
+        let path = folder.path().join("harnesses.toml");
+        let resolved = banda_look::resolve(&places, &|| None, &also());
+        assert!(resolved.look.problems.is_empty());
+        assert!(
+            resolved.watched.contains(&path),
+            "followed before it is there"
+        );
+
+        std::fs::write(
+            &path,
+            "[[harness]]\nid = \"claude\"\n\n[[harness]]\nid = \"x\"\n",
+        )
+        .unwrap();
+        let problems = banda_look::resolve(&places, &|| None, &also())
+            .look
+            .problems;
+        assert_eq!(problems.len(), 1, "{problems:?}");
+        assert_eq!(problems[0].line, Some(4));
+        assert!(problems[0].message.contains("needs a name and a command"));
     }
 
     #[test]

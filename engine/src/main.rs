@@ -575,13 +575,19 @@ fn look(what: Option<LookCommand>, follow: bool) -> ExitCode {
             if let Err(error) = banda_settings::export(&schemas) {
                 eprintln!("banda: {}: {error}", schemas.display());
             }
-            banda_look::follow(&places, Hyprland::from_env(), |look| print(json!(look)));
+            // The Harness list is the agents module's, and the window shows
+            // what is wrong in it as in the look's own files.
+            let also = banda_settings::also();
+            banda_look::follow(&places, Hyprland::from_env(), &also, |look| {
+                print(json!(look))
+            });
             ExitCode::SUCCESS
         }
         None => {
             let hyprland = Hyprland::from_env();
             let windows = || hyprland.as_ref().and_then(|h| h.windows().ok());
-            print(json!(banda_look::resolve(&places, &windows).look));
+            let also = banda_settings::also();
+            print(json!(banda_look::resolve(&places, &windows, &also).look));
             ExitCode::SUCCESS
         }
         Some(LookCommand::Themes) => {

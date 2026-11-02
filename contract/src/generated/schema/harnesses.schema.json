@@ -1,21 +1,20 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "harnesses.toml",
-  "description": "The Harnesses this machine starts Threads with. Without the file,\nBanda starts Claude Code and Codex, each with the Person's own CLI.",
+  "description": "The Harnesses this machine starts Threads with, in this order.\nWithout the file, Banda starts Claude Code and Codex, each with the\nPerson's own CLI.",
   "type": "object",
   "properties": {
     "harness": {
       "description": "One `[[harness]]` table per agent program.",
       "type": "array",
       "items": {
-        "$ref": "#/$defs/Harness"
-      },
-      "default": []
+        "$ref": "#/$defs/HarnessEntry"
+      }
     }
   },
   "$defs": {
-    "Harness": {
-      "description": "An agent program and how to start it. It speaks ACP on its stdio.",
+    "HarnessEntry": {
+      "description": "One `[[harness]]` table. An entry with the ID of a Harness Banda\nknows, `claude` or `codex`, takes each key it leaves out from Banda:\nso a Banda that moves an adapter to a newer version moves this\nmachine's too. Any other ID needs a `name` and a `command`.",
       "type": "object",
       "properties": {
         "id": {
@@ -55,9 +54,7 @@
         }
       },
       "required": [
-        "id",
-        "name",
-        "command"
+        "id"
       ]
     },
     "Cli": {
