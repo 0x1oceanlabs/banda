@@ -10,7 +10,7 @@ license = "UNLICENSED"
 publish = false
 
 [workspace.dependencies]
-agent-client-protocol = "3.6.0"
+agent-client-protocol = { version = "3.6.0", features = ["unstable_session_fork"] }
 async-trait = "0.1"
 base64 = "0.22"
 axum = { version = "0.8.9", features = ["ws"] }

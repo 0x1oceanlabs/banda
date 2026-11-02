@@ -9,6 +9,7 @@ import type { Configure } from "./Configure";
 import type { Defaults } from "./Defaults";
 import type { Edit } from "./Edit";
 import type { FileQuery } from "./FileQuery";
+import type { Forked } from "./Forked";
 import type { HarnessView } from "./HarnessView";
 import type { Image } from "./Image";
 import type { ImageData } from "./ImageData";
@@ -96,6 +97,11 @@ stop: CommandMethod<OneTurn, null>,
  * Tries a failed turn's message again.
  */
 retry: CommandMethod<OneTurn, Sent>, 
+/**
+ * A new Thread with the conversation to the end of an ended turn:
+ * its turns and items, and a fork of its session there (ADR 0027).
+ */
+fork: CommandMethod<OneTurn, Forked>, 
 /**
  * Answers a Question; `values` fill its form.
  */

@@ -437,6 +437,9 @@ pub struct Can {
     /// Take a message sent now: it runs, the queue is not held, and a
     /// Person asked for it (`agents.send` with `steer`).
     pub steer: bool,
+    /// Fork its Thread at its end: it ran and ended, and no turn of the
+    /// Thread runs (`agents.fork`).
+    pub fork: bool,
 }
 
 /// What kind of action a tool call is, as the Harness says.

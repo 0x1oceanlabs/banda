@@ -19,7 +19,7 @@ Its actions, which `keys.toml` binds by id:
 
 - New Thread (`thread.new`), Alt+Return
 
-Its methods, `banda call agents.<method>`: `harnesses`, `account`, `sign_in`, `sign_out`, `threads`, `thread`, `defaults`, `send`, `edit`, `withdraw`, `steer`, `resume`, `configure`, `stop`, `retry`, `answer`, `attach`, `image`, `keep`, `files`.
+Its methods, `banda call agents.<method>`: `harnesses`, `account`, `sign_in`, `sign_out`, `threads`, `thread`, `defaults`, `send`, `edit`, `withdraw`, `steer`, `resume`, `configure`, `stop`, `retry`, `fork`, `answer`, `attach`, `image`, `keep`, `files`.
 
 What an Agent in a Thread may call as a tool of `banda mcp`:
 

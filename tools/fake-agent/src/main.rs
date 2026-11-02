@@ -43,6 +43,11 @@
 //!   Thread keeps; `at once` as Claude Code does, all at the end.
 //! - `new command`: starts its reply, learns the command `/init`, and ends
 //!   the reply.
+//! - `remember` and a word: keeps the word, and says it did in a reply
+//!   with an ID of its own; `what do you remember` replies with the words
+//!   the session keeps. A fork of a session keeps what it kept, up to the
+//!   reply it is forked at, named by its ID in `_meta.jetbrains.air.fork`,
+//!   as Claude Code's and Codex's adapters take it.
 //! - images: it says how many it was shown and of what kinds, then does
 //!   what the words ask.
 //! - anything else: a short thought, then a reply that quotes the prompt.
@@ -87,18 +92,18 @@ use agent_client_protocol::schema::v1::{
     AuthenticateRequest, AuthenticateResponse, AvailableCommand, AvailableCommandInput,
     AvailableCommandsUpdate, CancelNotification, ConfigOptionUpdate, ContentBlock, ContentChunk,
     Cost, CreateElicitationRequest, Diff, ElicitationAction, ElicitationContentValue,
-    ElicitationFormMode, ElicitationSchema, ElicitationSessionScope, EnumOption, Implementation,
-    InitializeRequest, InitializeResponse, LoadSessionRequest, LoadSessionResponse,
-    LogoutCapabilities, LogoutRequest, LogoutResponse, MessageId, NewSessionRequest,
-    NewSessionResponse, Notice, NoticeSeverity, PermissionOption, PermissionOptionKind, Plan,
-    PlanEntry, PlanEntryPriority, PlanEntryStatus, PromptCapabilities, PromptRequest,
-    PromptResponse, RequestPermissionOutcome, RequestPermissionRequest, ResumeSessionRequest,
-    ResumeSessionResponse, SessionCapabilities, SessionConfigOption, SessionConfigOptionCategory,
-    SessionConfigOptionValue, SessionConfigSelectOption, SessionId, SessionNotification,
-    SessionResumeCapabilities, SessionUpdate, SetSessionConfigOptionRequest,
-    SetSessionConfigOptionResponse, StopReason, StringPropertySchema, Terminal, TextContent,
-    ToolCall, ToolCallContent, ToolCallStatus, ToolCallUpdate, ToolCallUpdateFields, ToolKind,
-    UnstructuredCommandInput, UsageUpdate,
+    ElicitationFormMode, ElicitationSchema, ElicitationSessionScope, EnumOption,
+    ForkSessionRequest, ForkSessionResponse, Implementation, InitializeRequest, InitializeResponse,
+    LoadSessionRequest, LoadSessionResponse, LogoutCapabilities, LogoutRequest, LogoutResponse,
+    MessageId, NewSessionRequest, NewSessionResponse, Notice, NoticeSeverity, PermissionOption,
+    PermissionOptionKind, Plan, PlanEntry, PlanEntryPriority, PlanEntryStatus, PromptCapabilities,
+    PromptRequest, PromptResponse, RequestPermissionOutcome, RequestPermissionRequest,
+    ResumeSessionRequest, ResumeSessionResponse, SessionCapabilities, SessionConfigOption,
+    SessionConfigOptionCategory, SessionConfigOptionValue, SessionConfigSelectOption,
+    SessionForkCapabilities, SessionId, SessionNotification, SessionResumeCapabilities,
+    SessionUpdate, SetSessionConfigOptionRequest, SetSessionConfigOptionResponse, StopReason,
+    StringPropertySchema, Terminal, TextContent, ToolCall, ToolCallContent, ToolCallStatus,
+    ToolCallUpdate, ToolCallUpdateFields, ToolKind, UnstructuredCommandInput, UsageUpdate,
 };
 use agent_client_protocol::{Agent, Client, ConnectionTo, Error, Responder, Stdio};
 use serde::{Deserialize, Serialize};
@@ -144,7 +149,14 @@ struct Fake {
     setups: Arc<Mutex<HashMap<SessionId, Setup>>>,
     /// Its Person signed in, as it read when it started or signed in since.
     signed_in: Arc<AtomicBool>,
+    /// The words each session was asked to remember, each with the ID of
+    /// the reply that said so.
+    kept: Arc<Mutex<HashMap<SessionId, Vec<Kept>>>>,
 }
+
+/// A word a session was asked to remember, and the ID of the reply that
+/// said so.
+type Kept = (String, String);
 
 /// What a session runs with.
 #[derive(Clone)]
@@ -188,6 +200,13 @@ impl Fake {
     fn setup(&self, session: &SessionId) -> Setup {
         let mut setups = self.setups.lock().unwrap();
         setups.entry(session.clone()).or_default().clone()
+    }
+
+    /// A new session's ID, unique across processes, so a resumed session
+    /// shows.
+    fn new_session(&self) -> SessionId {
+        let number = self.sessions.fetch_add(1, Ordering::Relaxed) + 1;
+        SessionId::new(format!("fake-{}-{number}", std::process::id()))
     }
 
     /// The session's options, as the Harness offers them.
@@ -481,6 +500,28 @@ async fn turn(
             &cx,
             &session,
             SessionUpdate::AgentMessageChunk(text("Nothing to plan.")),
+        )?;
+        return Ok(StopReason::EndTurn);
+    }
+    if let Some(word) = words.strip_prefix("remember ") {
+        let id = format!("kept-{}", fake.sessions.fetch_add(1, Ordering::Relaxed));
+        let mut kept = fake.kept.lock().unwrap();
+        let session_kept = kept.entry(session.clone()).or_default();
+        session_kept.push((word.to_owned(), id.clone()));
+        let chunk = text(&format!("I will remember {word}.")).message_id(MessageId::new(id));
+        say(&cx, &session, SessionUpdate::AgentMessageChunk(chunk))?;
+        return Ok(StopReason::EndTurn);
+    }
+    if words.contains("what do you remember") {
+        let kept = fake.kept.lock().unwrap();
+        let words: Vec<&str> = (kept.get(&session).into_iter().flatten())
+            .map(|(word, _)| word.as_str())
+            .collect();
+        let reply = format!("I remember: {}.", words.join(", "));
+        say(
+            &cx,
+            &session,
+            SessionUpdate::AgentMessageChunk(text(&reply)),
         )?;
         return Ok(StopReason::EndTurn);
     }
@@ -984,7 +1025,9 @@ async fn main() -> Result<(), Error> {
                         .prompt_capabilities(PromptCapabilities::new().image(images))
                         .load_session(true)
                         .session_capabilities(
-                            SessionCapabilities::new().resume(SessionResumeCapabilities::new()),
+                            SessionCapabilities::new()
+                                .resume(SessionResumeCapabilities::new())
+                                .fork(SessionForkCapabilities::new()),
                         );
                     let mut ways = Vec::new();
                     let has_account = account().is_some();
@@ -1075,13 +1118,44 @@ async fn main() -> Result<(), Error> {
                             serde_json::to_vec(&request.additional_directories).unwrap_or_default();
                         let _ = std::fs::write(file, roots);
                     }
-                    let number = fake.sessions.fetch_add(1, Ordering::Relaxed) + 1;
-                    // Unique across processes, so a resumed session shows.
-                    let id = SessionId::new(format!("fake-{}-{number}", std::process::id()));
+                    let id = fake.new_session();
                     let options = fake.options(&id);
                     responder
                         .respond(NewSessionResponse::new(id.clone()).config_options(options))?;
                     // Before any prompt, as Claude Code does.
+                    say(&cx, &id, commands(false))
+                }
+            },
+            agent_client_protocol::on_receive_request!(),
+        )
+        .on_receive_request(
+            {
+                let fake = fake.clone();
+                async move |request: ForkSessionRequest,
+                            responder: Responder<ForkSessionResponse>,
+                            cx: ConnectionTo<Client>| {
+                    let id = fake.new_session();
+                    let at = request
+                        .meta
+                        .as_ref()
+                        .and_then(|meta| meta.get("jetbrains")?.get("air")?.get("fork"))
+                        .and_then(|fork| fork.get("messageId")?.as_str().map(str::to_owned));
+                    {
+                        let mut kept = fake.kept.lock().unwrap();
+                        let mut copied = kept.get(&request.session_id).cloned().unwrap_or_default();
+                        if let Some(at) = at {
+                            let Some(end) = copied.iter().position(|(_, id)| *id == at) else {
+                                return responder.respond_with_error(
+                                    Error::invalid_params().data("no such message"),
+                                );
+                            };
+                            copied.truncate(end + 1);
+                        }
+                        kept.insert(id.clone(), copied);
+                    }
+                    let options = fake.options(&id);
+                    responder
+                        .respond(ForkSessionResponse::new(id.clone()).config_options(options))?;
                     say(&cx, &id, commands(false))
                 }
             },

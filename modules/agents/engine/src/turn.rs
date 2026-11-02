@@ -159,7 +159,7 @@ fn notice(
         at: tx.now(),
         body: Body::Notice { text: text.clone() },
     };
-    store::put(tx.sql(), thread, &item)?;
+    store::put(tx.sql(), thread, &item, None)?;
     let fact = Fact::NoticePosted {
         item: item.id,
         turn,
@@ -1019,7 +1019,7 @@ impl Writer {
                     answer: None,
                     values: None,
                 };
-                let written = self.put(id, body, asked).await;
+                let written = self.put(id, body, asked, None).await;
                 if written.is_err() {
                     live.forget(id);
                 } else {
@@ -1055,7 +1055,7 @@ impl Writer {
                     turn: self.turn,
                     text: text.clone(),
                 };
-                self.put(id, Body::Notice { text }, posted).await
+                self.put(id, Body::Notice { text }, posted, None).await
             }
             Said::Steps(steps) => match self.plan {
                 Some(id) => self.change_plan(id, steps).await,
@@ -1070,7 +1070,7 @@ impl Writer {
                         turn: self.turn,
                         steps: steps.clone(),
                     };
-                    self.put(id, Body::Plan { steps }, made).await
+                    self.put(id, Body::Plan { steps }, made, None).await
                 }
             },
             Said::Used { usage, resets } => {
@@ -1147,7 +1147,7 @@ impl Writer {
             content,
             output: None,
         };
-        self.put(id, body, started).await
+        self.put(id, body, started, None).await
     }
 
     async fn change_tool(&self, id: ItemId, change: ToolChange) -> Result<(), String> {
@@ -1308,13 +1308,26 @@ impl Writer {
         }
     }
 
+    /// Writes a piece of a reply or a thought; a reply keeps the ID the
+    /// Harness gave its message, which a fork goes to (ADR 0027).
     async fn write(&self, Piece { item, kind, text }: Piece) -> Result<(), String> {
         let grew = kind.grew(item, self.turn, text.clone());
-        self.put(item, kind.body(text), grew).await
+        let named = match kind {
+            Text::Reply => self.message.clone(),
+            Text::Thought => None,
+        };
+        self.put(item, kind.body(text), grew, named).await
     }
 
-    /// Writes an item, or a piece of one, and the fact of it.
-    async fn put(&self, id: ItemId, body: Body, fact: Fact) -> Result<(), String> {
+    /// Writes an item, or a piece of one, and the fact of it; a reply
+    /// with `named`, the ID the Harness gave its message.
+    async fn put(
+        &self,
+        id: ItemId,
+        body: Body,
+        fact: Fact,
+        named: Option<String>,
+    ) -> Result<(), String> {
         let (thread, turn, agent) = (self.thread, self.turn, Participant::Agent(self.agent));
         self.space
             .write(move |tx| {
@@ -1325,7 +1338,7 @@ impl Writer {
                     at: tx.now(),
                     body,
                 };
-                store::put(tx.sql(), thread, &item)?;
+                store::put(tx.sql(), thread, &item, named.as_deref())?;
                 store::touch_thread(tx.sql(), thread, tx.now())?;
                 emit(tx, agent, thread, &fact)
             })

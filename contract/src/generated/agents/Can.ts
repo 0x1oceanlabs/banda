@@ -28,4 +28,9 @@ withdraw: boolean,
  * Take a message sent now: it runs, the queue is not held, and a
  * Person asked for it (`agents.send` with `steer`).
  */
-steer: boolean, };
+steer: boolean, 
+/**
+ * Fork its Thread at its end: it ran and ended, and no turn of the
+ * Thread runs (`agents.fork`).
+ */
+fork: boolean, };

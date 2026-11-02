@@ -157,6 +157,7 @@ function withCan(state: ThreadState): ThreadState {
   )
   const counted = state.turns.filter((turn) => turn.state !== "withdrawn")
   const begun = counted.findLast((turn) => turn.state !== "queued")?.id
+  const works = state.turns.some((turn) => turn.state === "running")
   const turns = state.turns.map((turn) => {
     const its = counted.filter((t) => t.message === turn.message)
     const byItself = notices.has(turn.message)
@@ -171,6 +172,7 @@ function withCan(state: ThreadState): ThreadState {
       edit: waits && its[0]?.id === turn.id,
       withdraw: waits,
       steer: turn.state === "running" && !state.held && !byItself,
+      fork: !works && !waits && turn.state !== "withdrawn",
     }
     const same = (Object.keys(can) as (keyof Can)[]).every(
       (key) => turn.can[key] === can[key]
@@ -189,6 +191,7 @@ export const NOTHING: Can = {
   edit: false,
   withdraw: false,
   steer: false,
+  fork: false,
 }
 
 function project(state: ThreadState, event: Event): ThreadState {

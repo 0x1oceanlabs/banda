@@ -159,9 +159,35 @@ pub struct Evidence {
     harness: String,
     session: String,
     lasts: Lasts,
+    /// The Thread's next session is to be a fork of `session` at this
+    /// reply (ADR 0027): its conversation to there, and no further.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    fork: Option<ForkAt>,
+}
+
+/// A reply of a session, which a fork of it goes to: by the ID the
+/// Harness gave its message, as Claude Code's and Codex's adapters find it
+/// in the request's `_meta.jetbrains.air.fork`, JetBrains AIR's extension.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct ForkAt {
+    pub message: String,
+}
+
+impl ForkAt {
+    fn meta(&self) -> acp::Meta {
+        let fork = serde_json::json!({ "version": 1, "messageId": self.message });
+        let meta = serde_json::json!({ "jetbrains": { "air": { "fork": fork } } });
+        meta.as_object().cloned().unwrap_or_default()
+    }
 }
 
 impl Evidence {
+    /// The session of a Thread that forks this one's at `at`.
+    pub fn forked_at(mut self, at: ForkAt) -> Evidence {
+        self.fork = Some(at);
+        self
+    }
+
     /// The session a new process of `harness` may continue.
     fn continued_by(&self, harness: &str) -> Option<acp::SessionId> {
         let lasts = matches!(self.lasts, Lasts::Harness);
@@ -458,6 +484,8 @@ struct Agreed {
     images: bool,
     /// It takes a message into a running turn (`_session/steering`).
     steers: bool,
+    /// It forks a session (`session/fork`).
+    forks: bool,
 }
 
 /// What a Harness said when it started: what it can do with sessions, and
@@ -676,6 +704,23 @@ impl Connection {
             return Ok((Session(session.clone()), Opened::Known));
         }
         let servers = servers(banda());
+        if let Some(earlier) = earlier
+            && let Some(at) = &earlier.fork
+        {
+            if !self.agreed.forks {
+                return Err(Ending::failed(
+                    format!("{} cannot fork a conversation.", self.name),
+                    None,
+                ));
+            }
+            let fork = acp::ForkSessionRequest::new(earlier.session.clone(), folder)
+                .additional_directories(roots.to_vec())
+                .mcp_servers(servers)
+                .meta(at.meta());
+            let made = self.open(fork, "fork this Thread's conversation").await?;
+            let (session, options) = (made.session_id, made.config_options);
+            return Ok(self.opened(thread, &mut sessions, session, options, false));
+        }
         if let Some(session) = earlier.and_then(|e| e.continued_by(&self.harness))
             && let Some(options) = self
                 .continue_session(&session, folder, roots, &servers)
@@ -685,37 +730,53 @@ impl Connection {
             sessions.insert(thread, session.clone());
             return Ok((Session(session), Opened::Continued));
         }
-        let opening = self
-            .cx
-            .send_request(
-                acp::NewSessionRequest::new(folder)
-                    .additional_directories(roots.to_vec())
-                    .mcp_servers(servers),
-            )
-            .block_task();
-        let made = match timeout(OPENING, opening).await {
-            Ok(made) => made.map_err(|error| failed(&self.name, &error))?,
-            Err(_) => {
-                return Err(Ending::failed(
-                    format!("{} did not open a session within a minute.", self.name),
-                    Some(Failure::HarnessStopped),
-                ));
-            }
-        };
-        let options = made.config_options.unwrap_or_default();
-        opened(&self.learned, &made.session_id, options);
-        sessions.insert(thread, made.session_id.clone());
+        let new = acp::NewSessionRequest::new(folder)
+            .additional_directories(roots.to_vec())
+            .mcp_servers(servers);
+        let made = self.open(new, "open a session").await?;
+        let (session, options) = (made.session_id, made.config_options);
+        Ok(self.opened(thread, &mut sessions, session, options, earlier.is_some()))
+    }
+
+    /// Asks the Harness for a session, `doing` that in plain words if it
+    /// cannot, or does not within a minute.
+    async fn open<R: agent_client_protocol::JsonRpcRequest>(
+        &self,
+        request: R,
+        doing: &str,
+    ) -> Result<R::Response, Ending> {
+        let asked = self.cx.send_request(request).block_task();
+        match timeout(OPENING, asked).await {
+            Ok(made) => made.map_err(|error| failed(&self.name, &error)),
+            Err(_) => Err(Ending::failed(
+                format!("{} did not {doing} within a minute.", self.name),
+                Some(Failure::HarnessStopped),
+            )),
+        }
+    }
+
+    /// A session the Harness opened anew for `thread`, and its evidence.
+    fn opened(
+        &self,
+        thread: ThreadId,
+        sessions: &mut HashMap<ThreadId, acp::SessionId>,
+        session: acp::SessionId,
+        options: Option<Vec<acp::SessionConfigOption>>,
+        lost: bool,
+    ) -> (Session, Opened) {
+        opened(&self.learned, &session, options.unwrap_or_default());
+        sessions.insert(thread, session.clone());
         let evidence = Evidence {
             harness: self.harness.clone(),
-            session: made.session_id.0.to_string(),
+            session: session.0.to_string(),
             lasts: if self.agreed.loads || self.agreed.resumes {
                 Lasts::Harness
             } else {
                 Lasts::Process
             },
+            fork: None,
         };
-        let lost = earlier.is_some();
-        Ok((Session(made.session_id), Opened::New { evidence, lost }))
+        (Session(session), Opened::New { evidence, lost })
     }
 
     /// Asks the Harness to continue `session`: resumed if it can, else
@@ -1204,6 +1265,7 @@ async fn drive(
                         loads: capabilities.load_session,
                         resumes: capabilities.session_capabilities.resume.is_some(),
                         images: capabilities.prompt_capabilities.image,
+                        forks: capabilities.session_capabilities.fork.is_some(),
                         steers: steering
                             .and_then(|steering| steering.get("supported"))
                             .and_then(serde_json::Value::as_bool)
