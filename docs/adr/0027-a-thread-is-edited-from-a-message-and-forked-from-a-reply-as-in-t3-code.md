@@ -79,14 +79,15 @@ the rest are our defaults, as T3 Code does, and stay his to change.
 2. **Under it, the engine forks the session at the reply before.** With no
    rewind in ACP, the Thread's session becomes a fork of itself:
    `session/fork` at the last reply of the turn before, by its message
-   ID, and its fingerprint and occurrence besides, so the next turn runs
-   in the fork,
-   which knows nothing after it. A rewind to the Thread's first message
+   ID, so the next turn runs in the fork, which knows nothing after it. A rewind to the Thread's first message
    gives it a new session. The old session stays as the Harness keeps it.
    - The engine keeps each reply's message ID, as the Harness said it, on
      its Item, for this; not shown.
-   - A Harness that cannot fork, or a reply with no ID and no
-     fingerprint found, refuses the rewind, and the Pane says so: "<Agent>
+   - The fingerprint is left out: the ID finds the reply for both
+     Harnesses, and the fingerprint would only stand in where it does
+     not.
+   - A Harness that cannot fork, or a reply with no ID, refuses the
+     rewind, and the Pane says so: "<Agent>
      cannot go back to this message." The button is not shown for a
      Harness that says no fork in its capabilities.
 3. **Fork from this response, on the Agent's replies, makes a new
