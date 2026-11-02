@@ -15,6 +15,7 @@ import {
   tomlOf,
 } from "@banda/contract/settings"
 import { Button } from "@banda/ui/components/button"
+import { Card } from "@banda/ui/components/card"
 import { Input } from "@banda/ui/components/input"
 import { Switch } from "@banda/ui/components/switch"
 import { useWrite } from "@banda/ui/hooks/use-write"
@@ -72,6 +73,31 @@ export function SettingRow({
   )
 }
 
+/** Rows in a card, a line between each. */
+export function Rows({ children }: { children: ReactNode }) {
+  return <Card className="gap-0 divide-y py-0">{children}</Card>
+}
+
+/** A group of rows under its title, if it has one. */
+export function Group({
+  title,
+  children,
+}: {
+  title?: string
+  children: ReactNode
+}) {
+  return (
+    <div className="flex flex-col gap-1.5">
+      {title && (
+        <h2 className="px-1 text-xs font-medium text-muted-foreground">
+          {title}
+        </h2>
+      )}
+      <Rows>{children}</Rows>
+    </div>
+  )
+}
+
 /**
  * The frame of every row, the schema's or a section's own: what it is,
  * where its value comes from, a ↶ for the Person's line, its control, and
@@ -94,12 +120,13 @@ export function RowFrame({
   lit?: boolean
   title: ReactNode
   about?: string
-  file: string
+  /** Its file; none for a row of the engine's, as a Space's name. */
+  file?: string
   from?: From
   /** Takes the Person's line out; shown when the value is theirs. */
-  onReset: () => void
+  onReset?: () => void
   /** What was wrong, a message a line; each once. */
-  wrong: string[]
+  wrong?: readonly string[]
   /** Its control. */
   children: ReactNode
 }) {
@@ -122,13 +149,13 @@ export function RowFrame({
               />
             )}
             {title}
-            <Origin from={from} file={file} />
+            {file && <Origin from={from} file={file} />}
           </div>
           {about && (
             <div className="text-xs text-muted-foreground">{about}</div>
           )}
         </div>
-        {mine && (
+        {mine && onReset && (
           <Button
             variant="ghost"
             size="icon-sm"
@@ -142,7 +169,7 @@ export function RowFrame({
         )}
         <div className="flex shrink-0 items-center">{children}</div>
       </div>
-      {[...new Set(wrong)].map((message) => (
+      {[...new Set(wrong ?? [])].map((message) => (
         <p key={message} role="alert" className="text-xs text-destructive">
           {message}
         </p>
@@ -358,7 +385,7 @@ function Many({
 }
 
 /** A field that writes on Enter, or when it loses the focus. */
-function Field({
+export function Field({
   label,
   value,
   onCommit,

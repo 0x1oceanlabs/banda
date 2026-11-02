@@ -171,10 +171,13 @@ async function ready(): Promise<void> {
   protocol.handle("app", (request) =>
     request.url.split("?")[0] === WALLPAPER_URL ? wallpaper() : page(request)
   )
-  // The page asks for nothing: no camera, no notifications, no location.
-  // Its system notifications go through the desktop (notices.ts).
+  // The page asks for nothing but to write to the clipboard, as "Copy
+  // path" and a terminal's copy do: no camera, no notifications, no
+  // location, no reading the clipboard. Its system notifications go through the desktop
+  // (notices.ts).
   session.defaultSession.setPermissionRequestHandler(
-    (_contents, _permission, answer) => answer(false)
+    (_contents, permission, answer) =>
+      answer(permission === "clipboard-sanitized-write")
   )
   const write = (file: string, key: string, value: unknown) =>
     Settings.use((settings) => settings.write(file, key, value))

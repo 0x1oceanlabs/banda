@@ -3,6 +3,7 @@ import type { Engine, SpaceId, SpaceSummary, Status } from "@banda/contract"
 import { inFront, useInFront } from "@banda/ui/hooks/use-in-front"
 import { useLive } from "@banda/ui/hooks/use-live"
 import { useMachine } from "@banda/ui/hooks/use-status"
+import { updateSpace } from "@banda/ui/lib/spaces"
 import { IN_PROGRAM, type PaneState, QUIET } from "@banda/ui/pane"
 import { DEFAULT_KEYS } from "@banda/contract/look"
 import type { Action, WindowApi } from "@banda/ui/module"
@@ -615,6 +616,12 @@ export function Shell({
             onOpen={openPane}
             onNewThread={newThreadIn}
             onAddSpace={() => parts.run("space.add")}
+            onPin={(space, pinned) =>
+              updateSpace(engine, { space, pinned }).catch((error: unknown) =>
+                console.error("banda: the Space was not pinned", error)
+              )
+            }
+            onSpaceSettings={(space) => settings(`spaces/${space}`)}
           />
         )}
         <main className="relative min-h-0 min-w-0 flex-1">

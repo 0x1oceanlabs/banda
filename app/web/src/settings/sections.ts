@@ -20,6 +20,7 @@ import {
   BellIcon,
   BotIcon,
   FileCogIcon,
+  FoldersIcon,
   GlobeIcon,
   KeyboardIcon,
   type LucideIcon,
@@ -31,6 +32,7 @@ import { Agents } from "./Agents"
 import { General } from "./General"
 import { Keys } from "./Keys"
 import { PlaySound, PresetPicker } from "./rows"
+import { SpacesSettings } from "./SpacesSettings"
 import { ThemePicker } from "./ThemePicker"
 
 /** A row a section draws itself: the value now, how to set it, and the
@@ -69,6 +71,14 @@ export const SECTIONS: Section[] = [
     icon: SettingsIcon,
     about: "Banda's engine, and where its settings files are.",
     Body: General,
+  },
+  {
+    id: "spaces",
+    title: "Spaces",
+    icon: FoldersIcon,
+    about:
+      "The folders you and your Agents work in. Banda's engine keeps them, not a file.",
+    Body: SpacesSettings,
   },
   {
     id: "appearance",

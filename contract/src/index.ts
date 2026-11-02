@@ -15,6 +15,7 @@ export type { SpaceId } from "./generated/SpaceId"
 export type { SpaceSummary } from "./generated/SpaceSummary"
 export type { Browsed } from "./generated/Browsed"
 export type { BrowsedFolder } from "./generated/BrowsedFolder"
+export type { UpdateSpace } from "./generated/UpdateSpace"
 export type { JsonValue } from "./generated/serde_json/JsonValue"
 export {
   Engine,

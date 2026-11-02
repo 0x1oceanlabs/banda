@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react"
+import { Fragment, type ReactElement, useMemo, useState } from "react"
 import type { SpaceId, SpaceSummary } from "@banda/contract"
 import { BandaMark, MARK_WORDS } from "@banda/ui/components/banda-mark"
 import { Button } from "@banda/ui/components/button"
@@ -26,9 +26,12 @@ import type { PaneState } from "@banda/ui/pane"
 import {
   ChevronDownIcon,
   ChevronRightIcon,
+  CopyIcon,
   FileCogIcon,
   FolderPlusIcon,
   ListFilterIcon,
+  PinIcon,
+  PinOffIcon,
   SearchIcon,
   SettingsIcon,
   SquarePenIcon,
@@ -64,6 +67,8 @@ export function Sidebar({
   onOpen,
   onNewThread,
   onAddSpace,
+  onPin,
+  onSpaceSettings,
 }: {
   spaces: SpaceSummary[]
   lists: Lists
@@ -83,6 +88,10 @@ export function Sidebar({
   onNewThread: (space: SpaceId) => void
   /** Opens "Add Space" in the Banda menu (ADR 0026). */
   onAddSpace: () => void
+  /** Pins the Space, so it comes first, or unpins it (ADR 0026). */
+  onPin: (space: SpaceId, pinned: boolean) => void
+  /** Opens the settings at the Space's own (ADR 0026). */
+  onSpaceSettings: (space: SpaceId) => void
 }) {
   const settings = useLookSidebar()
   const { preset, presets } = settings
@@ -110,6 +119,17 @@ export function Sidebar({
       console.error("banda: sidebar.toml did not open", error)
     })
   }
+  // A Space's row, wherever it shows, has its right-click menu.
+  const withMenu: WithMenu = (space, row) => (
+    <SpaceMenu
+      space={space}
+      onNewThread={onNewThread}
+      onPin={onPin}
+      onSettings={onSpaceSettings}
+    >
+      {row}
+    </SpaceMenu>
+  )
   const flip = (set: ReadonlySet<string>, key: string) => {
     const next = new Set(set)
     if (!next.delete(key)) next.add(key)
@@ -127,6 +147,7 @@ export function Sidebar({
       onOpen={onOpen}
       onSettle={(row) => settle(row.listed.id, row.state !== "settled")}
       onNewThread={onNewThread}
+      withMenu={withMenu}
     />
   )
   const nothing =
@@ -229,6 +250,7 @@ export function Sidebar({
                 setOnly((was) => (was === space ? undefined : space))
               }
               onNewThread={onNewThread}
+              withMenu={withMenu}
             />
           )}
           {nothing ? (
@@ -272,6 +294,7 @@ function SectionView({
   onOpen,
   onSettle,
   onNewThread,
+  withMenu,
 }: {
   section: Section
   settings: Settings
@@ -283,42 +306,44 @@ function SectionView({
   /** Settles the row, or brings it back. */
   onSettle: (row: Arranged) => void
   onNewThread: (space: SpaceId) => void
+  withMenu: WithMenu
 }) {
   const { limit } = settings.group
   const rows = limit > 0 && !more ? section.rows.slice(0, limit) : section.rows
   const hidden = section.rows.length - rows.length
   const Chevron = section.folded ? ChevronRightIcon : ChevronDownIcon
   const { space } = section
+  const header = section.label && (
+    <div className="group/head flex items-center">
+      <button
+        type="button"
+        aria-expanded={!section.folded}
+        className={cn(
+          "flex min-w-0 flex-1 items-center gap-1.5 rounded-md px-2 pt-2 pb-1 text-xs outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
+          space ? "font-medium text-foreground" : "text-muted-foreground"
+        )}
+        onClick={onToggle}
+      >
+        <Chevron className="size-3 shrink-0 text-muted-foreground" />
+        {space && <SpaceBadge space={space} />}
+        <span className="min-w-0 truncate" title={space?.folder}>
+          {section.label}
+        </span>
+        <span className="ml-auto flex items-center gap-1 text-muted-foreground tabular-nums">
+          {section.folded && settings.spaces.rollup && (
+            <Rollup mark={section.mark} waiting={section.waiting} />
+          )}
+          {section.rows.length}
+        </span>
+      </button>
+      {space && settings.spaces.newThread && (
+        <NewThreadIn space={space} onNewThread={onNewThread} />
+      )}
+    </div>
+  )
   return (
     <div role="group" aria-label={section.label || "Threads"}>
-      {section.label && (
-        <div className="group/head flex items-center">
-          <button
-            type="button"
-            aria-expanded={!section.folded}
-            className={cn(
-              "flex min-w-0 flex-1 items-center gap-1.5 rounded-md px-2 pt-2 pb-1 text-xs outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
-              space ? "font-medium text-foreground" : "text-muted-foreground"
-            )}
-            onClick={onToggle}
-          >
-            <Chevron className="size-3 shrink-0 text-muted-foreground" />
-            {space && <SpaceBadge space={space} />}
-            <span className="min-w-0 truncate" title={space?.folder}>
-              {section.label}
-            </span>
-            <span className="ml-auto flex items-center gap-1 text-muted-foreground tabular-nums">
-              {section.folded && settings.spaces.rollup && (
-                <Rollup mark={section.mark} waiting={section.waiting} />
-              )}
-              {section.rows.length}
-            </span>
-          </button>
-          {space && settings.spaces.newThread && (
-            <NewThreadIn space={space} onNewThread={onNewThread} />
-          )}
-        </div>
-      )}
+      {header && (space ? withMenu(space, header) : header)}
       {!section.folded && (
         <div className="flex flex-col gap-px">
           {rows.map((row) => (
@@ -367,36 +392,45 @@ function SpacesList({
   only,
   onPick,
   onNewThread,
+  withMenu,
 }: {
   lines: SpaceLine[]
   settings: Settings
   only?: SpaceId
   onPick: (space: SpaceId) => void
   onNewThread: (space: SpaceId) => void
+  withMenu: WithMenu
 }) {
   return (
     <div role="group" aria-label="Spaces" className="flex flex-col gap-px pb-1">
       <div className="px-2 pt-2 pb-1 text-xs text-muted-foreground">Spaces</div>
       {lines.map(({ space, mark, waiting }) => (
-        <div key={space.id} className="group/head flex items-center">
-          <button
-            type="button"
-            aria-pressed={only === space.id}
-            title={space.folder}
-            className={cn(
-              "flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-transparent px-2 py-1 text-left text-sm outline-none hover:bg-foreground/5 focus-visible:ring-3 focus-visible:ring-ring/50",
-              only === space.id && "border-border bg-tile shadow-xs"
-            )}
-            onClick={() => onPick(space.id)}
-          >
-            <SpaceBadge space={space} />
-            <span className="min-w-0 flex-1 truncate">{space.name}</span>
-            {settings.spaces.rollup && <Rollup mark={mark} waiting={waiting} />}
-          </button>
-          {settings.spaces.newThread && (
-            <NewThreadIn space={space} onNewThread={onNewThread} />
+        <Fragment key={space.id}>
+          {withMenu(
+            space,
+            <div className="group/head flex items-center">
+              <button
+                type="button"
+                aria-pressed={only === space.id}
+                title={space.folder}
+                className={cn(
+                  "flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-transparent px-2 py-1 text-left text-sm outline-none hover:bg-foreground/5 focus-visible:ring-3 focus-visible:ring-ring/50",
+                  only === space.id && "border-border bg-tile shadow-xs"
+                )}
+                onClick={() => onPick(space.id)}
+              >
+                <SpaceBadge space={space} />
+                <span className="min-w-0 flex-1 truncate">{space.name}</span>
+                {settings.spaces.rollup && (
+                  <Rollup mark={mark} waiting={waiting} />
+                )}
+              </button>
+              {settings.spaces.newThread && (
+                <NewThreadIn space={space} onNewThread={onNewThread} />
+              )}
+            </div>
           )}
-        </div>
+        </Fragment>
       ))}
     </div>
   )
@@ -442,5 +476,49 @@ function NewThreadIn({
     >
       <SquarePenIcon />
     </Button>
+  )
+}
+
+/** A Space's row with its right-click menu around it. */
+type WithMenu = (space: SpaceSummary, row: ReactElement) => ReactElement
+
+/** A Space's right-click menu, in T3 Code's words (ADR 0026, decision 5). */
+function SpaceMenu({
+  space,
+  onNewThread,
+  onPin,
+  onSettings,
+  children,
+}: {
+  space: SpaceSummary
+  onNewThread: (space: SpaceId) => void
+  onPin: (space: SpaceId, pinned: boolean) => void
+  onSettings: (space: SpaceId) => void
+  children: ReactElement
+}) {
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger>{children}</ContextMenuTrigger>
+      <ContextMenuContent>
+        <DropdownMenuItem onClick={() => onNewThread(space.id)}>
+          <SquarePenIcon />
+          New Thread
+        </DropdownMenuItem>
+        <DropdownMenuItem
+          onClick={() => void navigator.clipboard.writeText(space.folder)}
+        >
+          <CopyIcon />
+          Copy path
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => onPin(space.id, !space.pinned)}>
+          {space.pinned ? <PinOffIcon /> : <PinIcon />}
+          {space.pinned ? "Unpin Space" : "Pin Space"}
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => onSettings(space.id)}>
+          <SettingsIcon />
+          Space settings
+        </DropdownMenuItem>
+      </ContextMenuContent>
+    </ContextMenu>
   )
 }
