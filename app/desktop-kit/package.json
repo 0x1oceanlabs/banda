@@ -1,0 +1,22 @@
+{
+  "name": "@banda/desktop-kit",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "What a module's part in the window's main process may use of main (ADR 0028): its services, dialogs, errors and the bridge's answers.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@banda/contract": "workspace:*",
+    "effect": "4.1.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24",
+    "electron": "45.1.0",
+    "typescript": "~6.0.2"
+  }
+}

@@ -1,7 +1,8 @@
 /**
  * The window knows no module (ADR 0022, decision 2): only `modules.ts`
- * names one, and every registry is built from it. The files listed here,
- * in the page or in the desktop's main process, still reach a module's
+ * names one, in the page and in the desktop's main process, and every
+ * registry is built from it; the bridge's table takes in each module's
+ * part of it (ADR 0028). The files listed here still reach a module's
  * package, each by an unstable mark its module's `module.toml` names
  * (decision 6); one that no longer does leaves the list.
  */
@@ -13,33 +14,31 @@ import { expect, test } from "vitest"
 const app = join(import.meta.dirname, "../..")
 const root = join(app, "..")
 
-/** The modules' window parts, by their packages' names. */
-const packages = readdirSync(join(root, "modules")).flatMap((module) => {
-  try {
-    const file = join(root, "modules", module, "pane", "package.json")
+/** The modules' window parts, the page's and main's, by their packages'
+ * names. */
+const packages = readdirSync(join(root, "modules")).flatMap((module) =>
+  ["pane", "desktop"].flatMap((part) => {
+    const file = join(root, "modules", module, part, "package.json")
+    if (!existsSync(file)) return []
     return [(JSON.parse(readFileSync(file, "utf8")) as { name: string }).name]
-  } catch {
-    return []
-  }
-})
+  })
+)
 const reachesModule = (name: string) =>
   packages.some((pkg) => name === pkg || name.startsWith(`${pkg}/`))
-
-/** The browser's part in the window's main process. */
-const MAIN = "browser.desktop-main"
 
 /** Each file that still reaches a module, and the mark that says why:
  * `<module>.<mark>`, from `[unstable]` in `modules/<module>/module.toml`. */
 const STILL: Record<string, string> = {
   "web/src/settings/Agents.tsx": "agents.settings-section",
-  "web/src/host.ts": MAIN,
-  "desktop/src/blocker.ts": MAIN,
-  "desktop/src/browser.ts": MAIN,
-  "desktop/src/extensions.ts": MAIN,
-  "desktop/src/popup.ts": MAIN,
-  "desktop/src/tabs.ts": MAIN,
-  "desktop/src/preload.ts": MAIN,
+  "desktop/src/preload.ts": "browser.desktop-preload",
 }
+
+/** The files that name modules by design. */
+const NAMING = [
+  "web/src/modules.ts",
+  "desktop/src/modules.ts",
+  "web/src/host.ts",
+]
 
 const reaching = ["web/src", "desktop/src"]
   .flatMap((folder) => sources(join(app, folder)))
@@ -47,9 +46,10 @@ const reaching = ["web/src", "desktop/src"]
   .filter((file) => imports(readFileSync(file, "utf8")).some(reachesModule))
   .map((file) => relative(app, file))
 
-test("only modules.ts names a module's package", () => {
+test("only modules.ts, and the bridge's table, name a module's package", () => {
   expect(packages).toContain("@banda/agents-pane")
-  const known = new Set(["web/src/modules.ts", ...Object.keys(STILL)])
+  expect(packages).toContain("@banda/browser-desktop")
+  const known = new Set([...NAMING, ...Object.keys(STILL)])
   expect(reaching.filter((file) => !known.has(file))).toEqual([])
 })
 

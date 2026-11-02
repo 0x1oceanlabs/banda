@@ -5,9 +5,8 @@ import { expect, it } from "@effect/vitest"
 import { Effect, Layer, Stream } from "effect"
 import type { WebContents } from "electron"
 import { Cdp } from "./cdp"
-import { Engine } from "./engine"
+import { Engine, Window } from "@banda/desktop-kit"
 import { Tabs } from "./tabs"
-import { Window } from "./window"
 
 type Listener = (...args: unknown[]) => void
 /** What the desktop tells the browser's Panes. */

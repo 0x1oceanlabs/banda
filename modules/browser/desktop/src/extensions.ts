@@ -24,11 +24,9 @@ import {
   installChromeWebStore,
   uninstallExtension,
 } from "electron-chrome-web-store"
-import { confirm } from "./dialog"
-import { Refused } from "./errors"
+import { confirm, Refused, Window } from "@banda/desktop-kit"
 import { Popup } from "./popup"
 import { pageOf, Tabs } from "./tabs"
-import { Window } from "./window"
 
 /** Where a button is in the page, which its popup shows under. */
 export const BoxArg = Schema.Struct({

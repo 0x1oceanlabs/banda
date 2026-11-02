@@ -5,8 +5,8 @@
  * window (child.ts).
  */
 import type { Address } from "@banda/contract"
+import { Engine } from "@banda/desktop-kit"
 import {
-  Context,
   Data,
   Deferred,
   Effect,
@@ -36,76 +36,61 @@ class Unexpected extends Data.TaggedError("Unexpected")<{
   readonly message: string
 }> {}
 
-export class Engine extends Context.Service<
-  Engine,
-  {
-    /** Where the engine listens; waits while it starts. */
-    readonly address: Effect.Effect<Address>
-    /** Where the window listens for `banda menu`, as the engine named it
-     * the first time it started. */
-    readonly door: Effect.Effect<string>
-    /** Where the window says its CDP endpoint, for `banda browser`. */
-    readonly browser: Effect.Effect<string>
-  }
->()("banda/Engine") {
-  static readonly layer = (binary: string) =>
-    Layer.effect(Engine)(
-      Effect.gen(function* () {
-        const address = yield* SubscriptionRef.make(Option.none<Address>())
-        const door = yield* Deferred.make<{ window: string; browser: string }>()
-        /** The first line of a run: where it listens, and the door. */
-        const started = (line: string) =>
-          Schema.decodeUnknownEffect(Running)(line).pipe(
-            Effect.mapError(
-              (error) =>
-                new Unexpected({
-                  message: `it said something unexpected: ${error.message}`,
+/** The engine's layer: see `Engine` (@banda/desktop-kit). */
+export const engineLayer = (binary: string) =>
+  Layer.effect(Engine)(
+    Effect.gen(function* () {
+      const address = yield* SubscriptionRef.make(Option.none<Address>())
+      const door = yield* Deferred.make<{ window: string; browser: string }>()
+      /** The first line of a run: where it listens, and the door. */
+      const started = (line: string) =>
+        Schema.decodeUnknownEffect(Running)(line).pipe(
+          Effect.mapError(
+            (error) =>
+              new Unexpected({
+                message: `it said something unexpected: ${error.message}`,
+              })
+          ),
+          Effect.flatMap((running) =>
+            Effect.andThen(
+              SubscriptionRef.set(
+                address,
+                Option.some({
+                  url: `ws://127.0.0.1:${running.port}/ws`,
+                  secret: running.secret,
                 })
-            ),
-            Effect.flatMap((running) =>
-              Effect.andThen(
-                SubscriptionRef.set(
-                  address,
-                  Option.some({
-                    url: `ws://127.0.0.1:${running.port}/ws`,
-                    secret: running.secret,
-                  })
-                ),
-                Deferred.succeed(door, running)
-              )
+              ),
+              Deferred.succeed(door, running)
             )
           )
-        yield* Effect.forkScoped(
-          keepRunning(
-            "engine",
-            command(binary, ["serve", "--with-parent"]),
-            (child) => {
-              let first = true
-              // Every line is read, so the pipe never fills; the address
-              // is kept until the engine dies, then forgotten.
-              return lines(child).pipe(
-                Stream.runForEach((line) => {
-                  if (!first) return Effect.void
-                  first = false
-                  return started(line)
-                }),
-                Effect.andThen(Effect.never),
-                Effect.ensuring(SubscriptionRef.set(address, Option.none()))
-              )
-            }
-          )
         )
-        return {
-          address: known(address).pipe(
-            Stream.runHead,
-            Effect.map(Option.getOrThrow)
-          ),
-          door: Effect.map(Deferred.await(door), (running) => running.window),
-          browser: Effect.map(
-            Deferred.await(door),
-            (running) => running.browser
-          ),
-        }
-      })
-    )
-}
+      yield* Effect.forkScoped(
+        keepRunning(
+          "engine",
+          command(binary, ["serve", "--with-parent"]),
+          (child) => {
+            let first = true
+            // Every line is read, so the pipe never fills; the address
+            // is kept until the engine dies, then forgotten.
+            return lines(child).pipe(
+              Stream.runForEach((line) => {
+                if (!first) return Effect.void
+                first = false
+                return started(line)
+              }),
+              Effect.andThen(Effect.never),
+              Effect.ensuring(SubscriptionRef.set(address, Option.none()))
+            )
+          }
+        )
+      )
+      return {
+        address: known(address).pipe(
+          Stream.runHead,
+          Effect.map(Option.getOrThrow)
+        ),
+        door: Effect.map(Deferred.await(door), (running) => running.window),
+        browser: Effect.map(Deferred.await(door), (running) => running.browser),
+      }
+    })
+  )

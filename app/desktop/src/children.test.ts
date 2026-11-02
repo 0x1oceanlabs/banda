@@ -6,8 +6,9 @@ import { Clock, Effect, Layer, Sink, Stream } from "effect"
 import { ChildProcessSpawner } from "effect/process"
 import { TestClock } from "effect/testing"
 import { command, keepRunning } from "./child"
-import { Engine } from "./engine"
-import { Look } from "./look"
+import { Engine, Look } from "@banda/desktop-kit"
+import { engineLayer } from "./engine"
+import { firstLook, lookLayer } from "./look"
 import { script } from "./testing"
 
 /** A spawner whose programs end as `ends` says for their nth run, and
@@ -84,7 +85,7 @@ it.live(
         Effect.all([engine.address, engine.door])
       ).pipe(
         Effect.provide(
-          Engine.layer(program).pipe(Layer.provide(NodeServices.layer))
+          engineLayer(program).pipe(Layer.provide(NodeServices.layer))
         )
       )
       expect(address).toEqual({ url: "ws://127.0.0.1:4321/ws", secret: "s3" })
@@ -110,7 +111,7 @@ it.live(
         )
       ).pipe(
         Effect.provide(
-          Look.layer(program).pipe(Layer.provide(NodeServices.layer))
+          lookLayer(program).pipe(Layer.provide(NodeServices.layer))
         )
       )
       expect(modes).toEqual(["dark", "light"])
@@ -120,10 +121,8 @@ it.live(
 it.live("the window opens without its look when none came in time", () =>
   Effect.gen(function* () {
     const program = script("exec sleep 60")
-    const first = yield* Look.first(50).pipe(
-      Effect.provide(
-        Look.layer(program).pipe(Layer.provide(NodeServices.layer))
-      )
+    const first = yield* firstLook(50).pipe(
+      Effect.provide(lookLayer(program).pipe(Layer.provide(NodeServices.layer)))
     )
     expect(first).toBeNull()
   })

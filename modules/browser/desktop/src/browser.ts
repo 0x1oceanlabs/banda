@@ -33,15 +33,21 @@ import {
   type WebContents,
 } from "electron"
 import { Blocker } from "./blocker"
-import { type Ask, confirm } from "./dialog"
-import type { Broke, Refused } from "./errors"
+import {
+  type Answers,
+  type Ask,
+  type Broke,
+  confirm,
+  Look,
+  type Refused,
+  Settings,
+  tellPage,
+  text,
+  Window,
+} from "@banda/desktop-kit"
 import { Cdp } from "./cdp"
 import { BoxArg, Extensions } from "./extensions"
-import { type Answers, tellPage, text } from "./ipc"
-import { Look } from "./look"
-import { Settings } from "./settings"
 import { Tabs } from "./tabs"
-import { Window } from "./window"
 
 /** What a page may open: the web, a blank page and the Person's files. */
 const OPENS = /^(https?|about|file):/i
@@ -431,8 +437,8 @@ function free(path: string): string {
 
 const page = Schema.Tuple([Schema.Number])
 
-/** How main answers the browser's channels (ADR 0028), which `main.ts`
- * takes in without naming them. */
+/** How main answers the browser's channels (ADR 0028), which main takes
+ * in through its `modules.ts` without naming them. */
 export const browserAnswers: Answers<
   typeof BROWSER_BRIDGE,
   Browser | Extensions | Tabs | Cdp
