@@ -136,7 +136,7 @@
           "type": "boolean"
         },
         "material": {
-          "description": "`\"banda\"`: Banda draws the glass itself, from the wallpaper, the\nsame everywhere. `\"system\"`: the window lets the desktop through,\nfor the compositor to blur; it shows from Banda's next start.",
+          "description": "`\"banda\"`: Banda draws the glass itself, from the wallpaper, the\nsame everywhere. `\"system\"`: the system's own material, vibrancy on\nmacOS and acrylic on Windows 11, or on Linux the compositor's blur\nof the desktop; it shows from Banda's next start. Unset, the\nplatform's: the system's on macOS and Windows, Banda's on Linux\n(ADR 0030).",
           "$ref": "#/$defs/Material"
         },
         "wallpaper": {

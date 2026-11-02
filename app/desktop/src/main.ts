@@ -463,7 +463,22 @@ async function served(
   return new Response(found.body, { status: found.status, headers })
 }
 
-/** The system makes the glass: the window lets the desktop through. */
+/**
+ * How a window lets the system's material through (ADR 0030): vibrancy
+ * under the whole window on macOS, acrylic on Windows 11 from 22H2 (build
+ * 22621), and on Linux a transparent window for the compositor to blur.
+ * Windows 10 has no material: `null`, and the desk is solid there.
+ */
+const SYSTEM_MATERIAL: BrowserWindowConstructorOptions | null =
+  process.platform === "darwin"
+    ? { vibrancy: "under-window" }
+    : process.platform !== "win32"
+      ? { transparent: true }
+      : Number(process.getSystemVersion().split(".")[2]) >= 22621
+        ? { backgroundMaterial: "acrylic" }
+        : null
+
+/** The look asks for the system's glass. */
 function systemGlass(now: LookValue | null): boolean {
   return now?.desk.glass === true && now.desk.material === "system"
 }
@@ -472,7 +487,7 @@ function systemGlass(now: LookValue | null): boolean {
  * the window lets the desktop through, so a solid window's page paints
  * itself; Banda's own glass shows in every window (ADR 0023). */
 function lookIn(shown: BrowserWindow | null, now: LookValue): LookValue {
-  return systemGlass(now) && shown !== clear
+  return systemGlass(now) && (SYSTEM_MATERIAL === null || shown !== clear)
     ? { ...now, desk: { ...now.desk, glass: false } }
     : now
 }
@@ -491,9 +506,9 @@ function openWindow(): BrowserWindow {
       minHeight: 420,
       title: "Banda",
     },
-    // The system's glass lets the desktop through (ADR 0023). Electron
-    // sets this once, so turning it on shows from the next start.
-    systemGlass(lookNow())
+    // The system's glass lets its material through (ADR 0023, ADR 0030).
+    // Electron sets this once, so turning it on shows from the next start.
+    SYSTEM_MATERIAL !== null && systemGlass(lookNow())
   )
   void opened.loadURL(PAGE)
   opened.on("closed", () => {
@@ -553,7 +568,7 @@ function pageWindow(
   const opened = new BrowserWindow({
     ...size,
     show: false,
-    transparent: glass,
+    ...(glass ? SYSTEM_MATERIAL : {}),
     backgroundColor: glass
       ? "#00000000"
       : ((current && firstFrame(current, nativeTheme.shouldUseDarkColors)) ??

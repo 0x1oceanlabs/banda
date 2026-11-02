@@ -2921,6 +2921,23 @@ test("the desk is Banda's own glass, made of the wallpaper", async () => {
   await expect(menu).toHaveCSS("backdrop-filter", "none")
 })
 
+test("the system's glass is its material, with Banda's grain over it", async () => {
+  window = await startWindow({ look: '[desk]\nmaterial = "system"\n' })
+  const { page } = window
+  const root = page.locator("html")
+  // On Linux the window lets the desktop through for the compositor to
+  // blur; Banda draws no picture, and lays its tint and grain over it.
+  await expect(root).toHaveAttribute("data-material", "system")
+  await expect(root).toHaveAttribute("data-glass", "")
+  const drawn = await page.evaluate(() => ({
+    picture: getComputedStyle(document.documentElement, "::before")
+      .backgroundImage,
+    grain: getComputedStyle(document.body, "::before").opacity,
+  }))
+  expect(drawn.picture).toBe("none")
+  expect(drawn.grain).toBe("0.04")
+})
+
 test("the window takes its look from look.toml, and again on each save", async () => {
   window = await startWindow({
     look: '[gaps]\ninner = 12\n[colors]\naccent = "#e07a3f"\n',
