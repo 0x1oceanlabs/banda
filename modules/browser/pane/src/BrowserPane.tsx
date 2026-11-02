@@ -293,7 +293,11 @@ function Browser({
   const left = settings.tabs === "left"
   return (
     <div ref={root} className="flex h-full flex-col">
-      <PaneHeader title={title} onClose={close} className="gap-1 px-1.5">
+      <PaneHeader
+        title={title}
+        onClose={close}
+        className="gap-1 bg-tile px-1.5"
+      >
         {!left && <TabStrip {...tabs} side="top" />}
         <Button
           variant="ghost"
@@ -359,7 +363,7 @@ function Browser({
         <div
           ref={slot}
           {...{ [HOLDS]: tab.id }}
-          className="relative min-w-0 flex-1 bg-background"
+          className="relative min-w-0 flex-1"
         >
           <Notice state={state} page={page} url={tab.url} />
         </div>
@@ -396,7 +400,7 @@ function LeftTabs(tabs: TabsProps) {
         clearTimeout(timer.current)
         setOver(null)
       }}
-      className="flex w-10 shrink-0 flex-col border-r"
+      className="flex w-10 shrink-0 flex-col border-r bg-tile"
     >
       <TabStrip {...tabs} side="left" />
       {over && (
@@ -404,7 +408,7 @@ function LeftTabs(tabs: TabsProps) {
           <div
             data-browser-titles=""
             style={{ top: over.top, left: over.left, height: over.height }}
-            className="fixed z-50 flex w-60 flex-col border-r bg-background shadow-lg"
+            className="fixed z-50 flex w-60 flex-col border-r bg-popover shadow-lg"
           >
             <TabStrip {...tabs} side="titles" />
           </div>
@@ -731,7 +735,7 @@ function Words({
   action?: React.ReactNode
 }) {
   return (
-    <Empty className="h-full">
+    <Empty className="h-full bg-tile">
       <EmptyDescription>{children}</EmptyDescription>
       {action && <EmptyContent>{action}</EmptyContent>}
     </Empty>

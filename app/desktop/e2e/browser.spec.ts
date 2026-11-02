@@ -19,9 +19,11 @@ import {
 } from "@playwright/test"
 import {
   firstThread,
+  GLASS,
   SANDBOXED,
   startWindow,
   textOf,
+  wallpaper,
   type Window,
 } from "./window"
 
@@ -545,3 +547,44 @@ function popupBox(app: ElectronApplication) {
     return popup?.getBounds() ?? null
   })
 }
+
+test("on glass a terminal and a browser's page are as clear as any tile", async () => {
+  const address = await serve({ "/": "<title>Alpha</title><p>Alpha</p>" })
+  window = await startWindow({ look: GLASS })
+  const { page, dir } = window
+  wallpaper(dir)
+  await expect(page.locator("html")).toHaveAttribute("data-glass", "")
+  const { composer } = await firstThread(page)
+  await expect(composer).toBeFocused()
+
+  // A terminal's screen is clear where nothing is written: its tile shows.
+  await page.keyboard.press("Alt+KeyN")
+  await page
+    .getByRole("region", { name: "New Pane" })
+    .getByRole("button", { name: "Terminal" })
+    .click()
+  const screen = page.getByRole("region", { name: "Terminal screen" })
+  await expect(screen).toHaveAttribute("data-state", "running")
+  const corner = await screen
+    .locator("canvas")
+    .evaluate((canvas: HTMLCanvasElement) => {
+      const context = canvas.getContext("2d")!
+      const { width, height } = canvas
+      return context.getImageData(width - 2, height - 2, 1, 1).data[3]
+    })
+  expect(corner).toBe(0)
+
+  // A page is as dense as a tile, over its own tile left clear.
+  const bar = await openBrowser(page)
+  await bar.fill(address.replace("http://", ""))
+  await bar.press("Enter")
+  const tile = page.getByRole("region", { name: "Alpha" })
+  await expect(tile).toHaveCSS("background-color", "rgba(0, 0, 0, 0)")
+  const held = page.locator("[data-held-by]")
+  await expect(held).toHaveCSS("opacity", "0.95")
+
+  // On a solid desk the page is solid.
+  writeFileSync(join(dir, "config/look.toml"), `${GLASS}glass = false\n`)
+  await expect(page.locator("html")).not.toHaveAttribute("data-glass")
+  await expect(held).toHaveCSS("opacity", "1")
+})

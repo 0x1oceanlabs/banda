@@ -7,10 +7,12 @@ import {
   countNotes,
   desktopOf,
   firstThread,
+  GLASS,
   sendAndLeave,
   setInFront,
   setQuiet,
   startWindow,
+  wallpaper,
   type Window,
 } from "./window"
 
@@ -1959,18 +1961,13 @@ test("a tile fades in as it opens and fades out where it was as it closes", asyn
 })
 
 test("the desk is Banda's own glass, made of the wallpaper", async () => {
-  window = await startWindow({ look: '[desk]\nwallpaper = "wall.png"\n' })
+  window = await startWindow({ look: GLASS })
   const { page, dir } = window
   const root = page.locator("html")
   // No picture yet: the desk is solid.
   await expect(root).toHaveAttribute("data-material", "banda")
   await expect(root).not.toHaveAttribute("data-glass")
-  // A 1×1 sky-blue PNG.
-  const picture = Buffer.from(
-    "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGOImHkHAAOAAg7PaQnHAAAAAElFTkSuQmCC",
-    "base64"
-  )
-  writeFileSync(join(dir, "config/wall.png"), picture)
+  wallpaper(dir)
   await expect(root).toHaveAttribute("data-glass", "")
   const drawn = () =>
     page.evaluate(
@@ -2002,10 +1999,7 @@ test("the desk is Banda's own glass, made of the wallpaper", async () => {
   await page.keyboard.press("Escape")
   await expect(menu).toBeHidden()
 
-  writeFileSync(
-    join(dir, "config/look.toml"),
-    '[desk]\nwallpaper = "wall.png"\nglass = false\n'
-  )
+  writeFileSync(join(dir, "config/look.toml"), `${GLASS}glass = false\n`)
   await expect(root).not.toHaveAttribute("data-glass")
   await page.keyboard.press("Alt+Space")
   await expect(menu).toHaveCSS("backdrop-filter", "none")

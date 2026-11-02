@@ -38,7 +38,9 @@ export function paneLayer(): HTMLElement | null {
 /**
  * Ties what a Pane draws in the layer to its place in the tile: the place
  * carries `HOLDS`, the thing in the layer `HELD_BY`, both with one ID.
- * The window then counts the focus there as the tile's.
+ * The window then counts the focus there as the tile's. The look's CSS
+ * (styles/globals.css) names both: a tile that holds leaves its background
+ * clear, and the thing held takes the tile's opacity on glass.
  */
 export const HOLDS = "data-holds"
 export const HELD_BY = "data-held-by"
