@@ -3,10 +3,13 @@
  * facts and the decoder a Pane reads events with.
  */
 import type { Event } from "./generated/Event"
+import type { Agents } from "./generated/agents/Agents"
 import type { Fact } from "./generated/agents/Fact"
 import { VERSION } from "./generated/agents/VERSION"
 
 export type { Account } from "./generated/agents/Account"
+export type { Agents } from "./generated/agents/Agents"
+export type { Enter } from "./generated/agents/Enter"
 export type { Adapter } from "./generated/agents/Adapter"
 export type { Body } from "./generated/agents/Body"
 export type { Can } from "./generated/agents/Can"
@@ -103,3 +106,7 @@ export function decodeFact(event: Event): Fact | null {
     event.payload !== null
   return known ? ({ kind: event.kind, payload: event.payload } as Fact) : null
 }
+
+/** How messages are sent with no `agents.toml`, as `banda look` gives it:
+ * for before the first look. */
+export const DEFAULT_AGENTS: Agents = { enter: "steer" }

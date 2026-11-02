@@ -3,12 +3,14 @@ import { mkdtempSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { expect, test } from "vitest"
+import { DEFAULT_AGENTS } from "../src/agents"
 import {
   DEFAULT_BROWSER,
   DEFAULT_COLUMNS,
   DEFAULT_KEYS,
   DEFAULT_MOTION,
   type Look,
+  fileOf,
   shown,
 } from "../src/look"
 import { DEFAULT_SIDEBAR } from "../src/sidebar"
@@ -31,8 +33,6 @@ const look = (mode: Look["mode"], schemes: Look["schemes"]): Look => ({
     failed: true,
   },
   sidebar: DEFAULT_SIDEBAR,
-  browser: DEFAULT_BROWSER,
-  agents: { enter: "steer" },
   keys: DEFAULT_KEYS,
   notify: {
     system: "away",
@@ -44,6 +44,7 @@ const look = (mode: Look["mode"], schemes: Look["schemes"]): Look => ({
     failed: true,
   },
   settings: {},
+  files: {},
   config: "",
 })
 const light = { "--background": "#fff" }
@@ -91,7 +92,7 @@ test("the window's own motion and columns are what banda look gives with no file
   expect(look.columns).toEqual(DEFAULT_COLUMNS)
 })
 
-test("the window's own browser is what banda look gives with no files", () => {
+test("the window's own module files are what banda look gives with none", () => {
   const repository = join(import.meta.dirname, "../..")
   const config = mkdtempSync(join(tmpdir(), "banda-browser-"))
   const printed = execFileSync(
@@ -108,5 +109,7 @@ test("the window's own browser is what banda look gives with no files", () => {
       encoding: "utf8",
     }
   )
-  expect((JSON.parse(printed) as Look).browser).toEqual(DEFAULT_BROWSER)
+  const { files } = JSON.parse(printed) as Look
+  expect(fileOf(files, "browser.toml", null)).toEqual(DEFAULT_BROWSER)
+  expect(fileOf(files, "agents.toml", null)).toEqual(DEFAULT_AGENTS)
 })

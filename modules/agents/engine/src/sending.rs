@@ -5,9 +5,9 @@
 //!
 //! The composer runs in the window, so `banda look` resolves it with the
 //! look, watches it with the look's files, and names its problems in the
-//! same list, as it does `browser.toml`.
+//! same list: the look carries it as `files["agents.toml"]`.
 
-use crate::file::OneFile;
+use banda_look::OneFile;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -16,7 +16,7 @@ use ts_rs::TS;
 /// Enter.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Deserialize, Serialize, TS, JsonSchema)]
 #[serde(rename_all = "lowercase")]
-#[ts(export, export_to = "look/")]
+#[ts(export, export_to = "agents/")]
 pub enum Enter {
     /// Into the turn: the Agent reads it as it works, as in T3 Code.
     #[default]
@@ -39,7 +39,7 @@ pub struct AgentsSettings {
 
 /// How messages to an Agent are sent, every key resolved.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, TS)]
-#[ts(export, export_to = "look/")]
+#[ts(export, export_to = "agents/")]
 pub struct Agents {
     pub enter: Enter,
 }
@@ -71,9 +71,9 @@ impl OneFile for AgentsSettings {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::Problem;
-    use crate::keyed::Keyed;
-    use crate::theme::Places;
+    use banda_look::Problem;
+    use banda_look::keyed::Keyed;
+    use banda_look::theme::Places;
 
     fn resolved(text: Option<&str>) -> (Agents, Keyed, Vec<Problem>) {
         let folder = tempfile::tempdir().unwrap();
@@ -81,7 +81,7 @@ mod tests {
             std::fs::write(folder.path().join("agents.toml"), text).unwrap();
         }
         let (mut problems, mut watched) = (Vec::new(), Vec::new());
-        let (agents, keyed) = crate::file::resolve::<AgentsSettings>(
+        let (agents, keyed) = banda_look::file::resolve::<AgentsSettings>(
             &Places::at(folder.path()),
             &mut problems,
             &mut watched,

@@ -15,7 +15,6 @@
 //! machine's too, so they come with the look: [`sidebar`], [`browser`],
 //! [`agents`]; so do its keys, [`keys`].
 
-pub mod agents;
 pub mod browser;
 pub mod color;
 pub mod columns;
@@ -100,15 +99,14 @@ pub struct Look {
     pub sidebar: sidebar::Sidebar,
     /// How the window tells its Person of a call (ADR 0011).
     pub notify: notify::Notify,
-    /// How the browser looks and searches, from `browser.toml` (ADR 0013).
-    pub browser: browser::Browser,
-    /// How messages to an Agent are sent, from `agents.toml` (ADR 0016).
-    pub agents: agents::Agents,
     /// The keys the Person bound in `keys.toml` (ADR 0005, decision 11).
     pub keys: keys::Keys,
     /// Each key of each settings file, by file: its value, and where it
     /// comes from (ADR 0016).
     pub settings: BTreeMap<String, keyed::Keyed>,
+    /// Each module's settings file that the window reads, resolved, by its
+    /// name: `browser.toml`. Its module's types say what it holds.
+    pub files: BTreeMap<String, serde_json::Value>,
     /// The folder the settings files are in: `~/.config/banda`.
     pub config: String,
 }
@@ -399,8 +397,8 @@ pub struct Resolved {
 }
 
 /// The files the look reads: its own, the sidebar's and the keys', and
-/// the agents' and the browser's, which the window draws (ADR 0016).
-pub const FILES: [SettingsFile; 5] = [
+/// the browser's, which the window draws (ADR 0016).
+pub const FILES: [SettingsFile; 4] = [
     SettingsFile::new::<Settings>(
         "look.toml",
         || TEMPLATE.to_owned(),
@@ -412,7 +410,6 @@ pub const FILES: [SettingsFile; 5] = [
         |path, text| checked(|problems| sidebar::read_sidebar(path, text, false, problems)),
     ),
     SettingsFile::of::<browser::BrowserSettings>(),
-    SettingsFile::of::<agents::AgentsSettings>(),
     SettingsFile::new::<keys::KeysSettings>(
         "keys.toml",
         || keys::TEMPLATE.to_owned(),
@@ -429,8 +426,9 @@ fn checked<T>(read: impl FnOnce(&mut Vec<Problem>) -> T) -> Vec<Problem> {
 
 /// Resolves the look on this machine. `windows` asks Hyprland for its
 /// window settings, and is asked only when `look.toml` lets it. The
-/// files in `also`, other crates' to read, are watched, and their problems
-/// named, too.
+/// files in `also`, the modules', are watched and resolved too, into
+/// [`Look::files`], or their problems named when the look only checks
+/// them.
 pub fn resolve(
     places: &Places,
     windows: &dyn Fn() -> Option<Windows>,
@@ -619,18 +617,19 @@ pub fn resolve(
     }
 
     let (sidebar, sidebar_keys) = sidebar::resolve(places, &mut problems, &mut watched);
-    let (browser, browser_keys) =
-        file::resolve::<browser::BrowserSettings>(places, &mut problems, &mut watched);
-    let (agents, agents_keys) =
-        file::resolve::<agents::AgentsSettings>(places, &mut problems, &mut watched);
     let (keys, keys_keys) = keys::resolve(places, &mut problems, &mut watched);
-    let settings = BTreeMap::from([
+    let mut settings = BTreeMap::from([
         ("look.toml".to_owned(), keyed::keyed(&all, &keyed_layers)),
         ("sidebar.toml".to_owned(), sidebar_keys),
-        ("browser.toml".to_owned(), browser_keys),
-        ("agents.toml".to_owned(), agents_keys),
         ("keys.toml".to_owned(), keys_keys),
     ]);
+    let mut files = BTreeMap::new();
+    for file in FILES.iter().filter(|file| file.resolves()).chain(also) {
+        if let Some((value, keyed)) = file.resolve(places, &mut problems, &mut watched) {
+            files.insert(file.name.to_owned(), value);
+            settings.insert(file.name.to_owned(), keyed);
+        }
+    }
     let mut vars = vars(&all);
     let system = |generic: &str| {
         places
@@ -646,14 +645,6 @@ pub fn resolve(
     {
         watched.push(folder.join("fonts.conf"));
     }
-    for file in also {
-        let path = places.config.join(file.name);
-        if let Ok(text) = std::fs::read_to_string(&path) {
-            problems.extend(file.check(&path, &text));
-        }
-        watched.push(path);
-    }
-
     Resolved {
         look: Look {
             mode: shown,
@@ -673,10 +664,9 @@ pub fn resolve(
             sound: all.sound.resolved(),
             sidebar,
             notify: all.notify.resolved(),
-            browser,
-            agents,
             keys,
             settings,
+            files,
             config: places.config.display().to_string(),
         },
         watched,

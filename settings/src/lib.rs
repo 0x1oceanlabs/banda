@@ -6,7 +6,6 @@
 //! an editor completes and checks the file with. A new key appears in all
 //! of them, with no list kept by hand.
 
-use banda_agents::settings::{HarnessFile, Harnesses, template as harness_template};
 use banda_look::theme::Places;
 use banda_look::{Problem, SettingsFile};
 use std::path::{Path, PathBuf};
@@ -16,10 +15,7 @@ pub use write::{rename, reset, set};
 
 /// Every settings file, one per module (ADR 0016, decision 3), by the
 /// crate that describes them: the look's first, as the look reads them.
-const GROUPS: [&[SettingsFile]; 2] = [&banda_look::FILES, &[HARNESSES]];
-
-const HARNESSES: SettingsFile =
-    SettingsFile::new::<HarnessFile>("harnesses.toml", harness_template, check_harnesses);
+const GROUPS: [&[SettingsFile]; 2] = [&banda_look::FILES, &banda_agents::SETTINGS];
 
 /// Every settings file.
 pub fn files() -> impl Iterator<Item = &'static SettingsFile> {
@@ -46,8 +42,9 @@ pub fn export(folder: &Path) -> std::io::Result<()> {
     Ok(())
 }
 
-/// The files the look does not read, which it watches and names the
-/// problems of all the same: the Harness list, as the engine reads it.
+/// The modules' files, which the look watches too: it resolves the ones
+/// the window reads, `agents.toml`, and names the problems of the rest,
+/// as the Harness list, as the engine reads it.
 pub fn also() -> Vec<SettingsFile> {
     GROUPS[1..]
         .iter()
@@ -86,10 +83,6 @@ fn check_text(path: &Path, text: &str) -> Vec<Problem> {
         Some(file) => file.check(path, text),
         None => banda_look::check_text(path, text),
     }
-}
-
-fn check_harnesses(path: &Path, text: &str) -> Vec<Problem> {
-    Harnesses::parse(path, text).err().into_iter().collect()
 }
 
 #[cfg(test)]
@@ -156,6 +149,29 @@ mod tests {
         let problems = check(&Places::at(folder.path()), std::slice::from_ref(&path));
         assert_eq!(problems.len(), 1, "{problems:?}");
         assert_eq!(problems[0].line, Some(3));
+    }
+
+    #[test]
+    fn the_look_carries_a_module_s_file_by_its_name() {
+        let folder = tempfile::tempdir().unwrap();
+        let places = Places::at(folder.path());
+        std::fs::write(folder.path().join("agents.toml"), "enter = \"queue\"\n").unwrap();
+        let resolved = banda_look::resolve(&places, &|| None, &also());
+        let look = resolved.look;
+        assert_eq!(
+            look.files["agents.toml"],
+            serde_json::json!({"enter": "queue"})
+        );
+        assert_eq!(look.settings["agents.toml"]["enter"].from.layer, "file");
+        assert!(
+            resolved
+                .watched
+                .contains(&folder.path().join("agents.toml"))
+        );
+        assert!(
+            !look.files.contains_key("harnesses.toml"),
+            "a file the look only checks"
+        );
     }
 
     #[test]
@@ -262,10 +278,11 @@ mod every_key {
     #[test]
     fn every_key_of_a_schema_has_a_value_and_where_it_comes_from() {
         let folder = tempfile::tempdir().unwrap();
-        let look = banda_look::resolve(&Places::at(folder.path()), &|| None, &[]).look;
+        let look = banda_look::resolve(&Places::at(folder.path()), &|| None, &also()).look;
         let mut named = Vec::new();
-        // Another module's file has no keys in the look.
-        for file in &banda_look::FILES {
+        // A file the look only checks, as the Harness list, has no keys
+        // in it.
+        for file in files().filter(|file| file.name != "harnesses.toml") {
             let name = file.name;
             let keyed = &look.settings[name];
             let schema = serde_json::to_value(file.schema()).unwrap();

@@ -20,6 +20,7 @@ import {
   type Pressed,
   taken,
 } from "@banda/browser-pane/desktop"
+import { DEFAULT_BROWSER, fileOf } from "@banda/contract/look"
 import { Context, Effect, FiberSet, Layer, Schema, Stream } from "effect"
 import {
   app,
@@ -87,7 +88,9 @@ export class Browser extends Context.Service<
       // The blocker follows browser.toml, a change at a time, in order.
       yield* Effect.forkScoped(
         look.changes.pipe(
-          Stream.map((now) => now.browser.blocker),
+          Stream.map(
+            (now) => fileOf(now.files, "browser.toml", DEFAULT_BROWSER).blocker
+          ),
           Stream.changes,
           Stream.runForEach((on) => Effect.promise(() => blocker.set(on)))
         )
@@ -96,7 +99,8 @@ export class Browser extends Context.Service<
         settings.write("browser.toml", key, value)
       const pin = (id: string, pinned: boolean) =>
         Effect.gen(function* () {
-          const browser = yield* Look.part("browser", "The browser's file")
+          const files = yield* Look.part("files", "The browser's file")
+          const browser = fileOf(files, "browser.toml", DEFAULT_BROWSER)
           const others = browser.pinned.filter((each) => each !== id)
           yield* write("pinned", pinned ? [...others, id] : others)
         }).pipe(Effect.provideService(Look, look))

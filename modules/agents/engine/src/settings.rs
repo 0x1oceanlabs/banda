@@ -343,6 +343,11 @@ fn listed(path: &Path, text: Option<&str>) -> Result<Vec<Harness>, String> {
     }
 }
 
+/// What is wrong in `text`, a `harnesses.toml` at `path`.
+pub fn check(path: &Path, text: &str) -> Vec<Problem> {
+    Harnesses::parse(path, text).err().into_iter().collect()
+}
+
 /// What `harnesses.toml` starts as when the settings Pane first writes
 /// it: the known Harnesses by their IDs alone, so a change to one keeps
 /// the others, and each takes how it starts from Banda.
