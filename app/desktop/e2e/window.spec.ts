@@ -775,9 +775,19 @@ test("a message carries images to its Agent", async () => {
   await page.keyboard.press("Escape")
   await expect(whole).toBeHidden()
 
-  // An image alone is a message too.
+  // An image added waits in the Thread's draft, as its text does, and
+  // comes back with the window.
   await files.setInputFiles(shot)
   await expect(waiting.getByRole("img", { name: "shot.png" })).toBeVisible()
+  await composer.fill("kept")
+  await page.reload()
+  await expect(composer).toHaveText("kept")
+  await expect(waiting.getByRole("img", { name: "shot.png" })).toBeVisible()
+
+  // An image alone is a message too.
+  await composer.press("ControlOrMeta+a")
+  await composer.press("Backspace")
+  await expect(composer).toHaveText("")
   await thread.getByRole("button", { name: "Send" }).click()
   await expect(
     thread.getByRole("button", { name: "Open shot.png" })

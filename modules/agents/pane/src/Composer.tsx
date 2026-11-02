@@ -5,7 +5,7 @@ import {
   useRef,
   useState,
 } from "react"
-import type { TurnView, Usage } from "@banda/contract/agents"
+import type { Image, TurnView, Usage } from "@banda/contract/agents"
 import type { Enter } from "@banda/contract/look"
 import {
   InputGroup,
@@ -26,7 +26,7 @@ import {
   ListPlusIcon,
   SquareIcon,
 } from "lucide-react"
-import { AttachmentList, type Attached, type Attachments } from "./Attachments"
+import { AttachmentList, type Attachments } from "./Attachments"
 import { useDraft } from "./drafts"
 import { keyFor, steers, useEnterKey } from "./enter-key"
 import { recall } from "./history"
@@ -109,7 +109,7 @@ export function Composer({
   onEditLast?: () => void
   /** Sends the text and the images, into the turn that runs if `steer`;
    * resolves whether it went. */
-  onSend: (text: string, images: Attached[], steer: boolean) => Promise<boolean>
+  onSend: (text: string, images: Image[], steer: boolean) => Promise<boolean>
   onStop: (turn: TurnView) => void
   /** What the Thread runs with, beside the send button. */
   children?: React.ReactNode
@@ -268,7 +268,7 @@ export function Composer({
       >
         {images.adding.length > 0 && (
           <InputGroupAddon align="block-start">
-            <AttachmentList adding={images.adding} onRemove={images.remove} />
+            <AttachmentList images={images} />
           </InputGroupAddon>
         )}
         <PromptEditor

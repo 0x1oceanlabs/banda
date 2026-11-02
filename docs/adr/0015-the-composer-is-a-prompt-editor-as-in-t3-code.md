@@ -107,6 +107,11 @@ rest are our defaults and stay his to change.
      up to 20 MB. It is kept as it is given, so one whose chip goes
      before the message is sent stays in `.banda/files/`, as a file of
      the Space does.
+   - A draft's images are the engine's: the draft keeps their IDs beside
+     its text, every Pane on the Thread shows them, and one reopened is
+     read back with `agents.image`. They wait in the engine as an image
+     no message took does, a day, so a draft older than that comes back
+     with its text and without them.
 
 6. **Later, each when it is built.** `$` and a skill's name, as a chip,
    once a Harness says which skills it has; quoting a reply's selected
