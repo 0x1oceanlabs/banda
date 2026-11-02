@@ -148,6 +148,23 @@ pub fn entry_at(text: &str, offset: usize) -> Option<(String, Range<usize>)> {
     entry_in(document.as_table(), offset)
 }
 
+/// `text` with the bytes of `entry` as spaces, lines kept, and a comma
+/// after it too, as in an inline table: TOML without that entry, every
+/// place in it where it was.
+pub fn blank(text: &str, entry: Range<usize>) -> String {
+    let after = text[entry.end..].trim_start_matches([' ', '\t']);
+    let end = after
+        .strip_prefix(',')
+        .map_or(entry.end, |after| text.len() - after.len());
+    let mut bytes = text.as_bytes().to_vec();
+    for byte in &mut bytes[entry.start..end] {
+        if *byte != b'\n' {
+            *byte = b' ';
+        }
+    }
+    String::from_utf8(bytes).expect("whole characters, as the entry starts and ends at one")
+}
+
 fn entry_in(table: &dyn TableLike, offset: usize) -> Option<(String, Range<usize>)> {
     table.iter().find_map(|(name, item)| {
         if let toml_edit::Item::ArrayOfTables(list) = item {

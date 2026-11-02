@@ -66,8 +66,7 @@ pub struct Browser {
     pub blocker: bool,
 }
 
-/// Reads a `browser.toml`. A key that is wrong goes to `problems` and is
-/// left out; `None` when it is not TOML at all.
+/// Reads a `browser.toml`, as [`crate::read`] reads a file.
 pub fn read_browser(
     path: &Path,
     text: &str,

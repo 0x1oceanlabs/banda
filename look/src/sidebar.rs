@@ -369,8 +369,7 @@ impl SidebarSettings {
 }
 
 /// Reads a `sidebar.toml`, or a preset file when `preset`, and checks what
-/// TOML alone does not. Problems go to `problems`, and a key that is wrong
-/// is left out; `None` when it is not TOML at all.
+/// TOML alone does not, as [`crate::read`] reads a file.
 pub fn read_sidebar(
     path: &Path,
     text: &str,

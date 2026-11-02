@@ -203,8 +203,7 @@ fn chord(text: &str) -> Result<Bind, String> {
     })
 }
 
-/// Reads a `keys.toml`. A key written wrong goes to `problems` and is left
-/// out; `None` when it is not TOML at all.
+/// Reads a `keys.toml`, as [`crate::read`] reads a file.
 pub fn read_keys(
     path: &Path,
     text: &str,
