@@ -293,11 +293,12 @@ export function Composer({
           event.target.value = ""
         }}
       />
-      {/* A card raised a little above the tile: focus brightens its
-          outline, files dragged over tint it (ADR 0031). */}
+      {/* A card as Codex's: on the tile's own colour with a soft shadow
+          in light, a little lighter with a hairline in dark; files
+          dragged over tint it (ADR 0031). */}
       <div
         data-dropping={dropping || undefined}
-        className="group/composer flex flex-col rounded-lg bg-foreground/4 shadow-xs ring-1 ring-foreground/8 transition-colors ring-inset focus-within:ring-foreground/16 data-dropping:bg-accent/45 data-dropping:ring-primary/70 dark:shadow-[0_12px_28px_-18px_rgb(0_0_0/0.8)] dark:inset-shadow-[0_1px_0_rgb(255_255_255/0.035)]"
+        className="flex flex-col rounded-lg bg-background shadow-[0_0_0_1px_rgb(0_0_0/0.04),0_2px_8px_rgb(0_0_0/0.04),0_4px_40px_8px_rgb(0_0_0/0.024)] transition-colors data-dropping:bg-accent/45 data-dropping:inset-ring data-dropping:inset-ring-primary dark:bg-foreground/8 dark:shadow-[inset_0_0_1px_rgb(255_255_255/0.2)]"
       >
         {images.adding.length > 0 && (
           <div className="px-3 pt-3">

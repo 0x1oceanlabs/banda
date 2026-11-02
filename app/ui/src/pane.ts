@@ -109,8 +109,10 @@ export type PaneKind<A extends { [key: string]: JsonValue }> = {
   /**
    * False when the Pane draws its own header, as the browser's row of tabs
    * and address: the frame then draws none (`PaneHeader` draws one).
+   * `"bare"` when the frame's header has no line under it, as a Thread's,
+   * whose messages fade out under it instead (ADR 0031).
    */
-  header?: false
+  header?: false | "bare"
   /**
    * The one thing the Pane shows, such as its Thread, by the ID its
    * module lists it with (`Listed.id`): a Person who looks at the Pane sees
