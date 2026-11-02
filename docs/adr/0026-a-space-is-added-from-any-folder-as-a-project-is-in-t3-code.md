@@ -137,6 +137,11 @@ every proposal:
        Space list.
      - The menu's "Add Space" branch shows in its Actions and in the key
        sheet's "Banda" section.
+   - _Built on 2026-11-02, in step 5:_
+     - The button is T3 Code's "Open in Files", in the menu's foot and
+       beside "Add" on the first screen. The picker opens at the folder
+       of what is typed, and the folder picked is added at once, as in
+       T3 Code.
 
 4. **The engine's methods.**
    - `spaces.add {folder, name?, create?}`: adds the folder as a Space.

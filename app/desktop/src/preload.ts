@@ -84,6 +84,9 @@ const host: Host = {
       }
     },
   },
+  folder: {
+    pick: (at) => ipcRenderer.invoke("folder.pick", at),
+  },
   notify: {
     show: (notice: Notice) => ipcRenderer.send("notify:show", notice),
     withdraw: (key: string) => ipcRenderer.send("notify:withdraw", key),

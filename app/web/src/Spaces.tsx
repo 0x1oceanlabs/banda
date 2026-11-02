@@ -23,8 +23,19 @@ import {
 } from "@banda/ui/components/suggestions"
 import { useAct } from "@banda/ui/hooks/use-act"
 import { CornerLeftUpIcon, FolderIcon } from "lucide-react"
-import { PATH_PLACEHOLDER, useBrowsed } from "./menu/browse"
-import { folderRows, SOURCE_ORDER, SOURCES, type Source } from "./menu/menu"
+import {
+  PATH_PLACEHOLDER,
+  PICK_FOLDER,
+  useBrowsed,
+  usePickFolder,
+} from "./menu/browse"
+import {
+  type Adding,
+  folderRows,
+  SOURCE_ORDER,
+  SOURCES,
+  type Source,
+} from "./menu/menu"
 
 /** Names a new Space and creates it; `onCreated` hears the Space. */
 function SpaceForm({
@@ -89,19 +100,20 @@ function FolderForm({
   const browsed = useBrowsed(engine, typed)
   const { create, folders } = folderRows(typed, browsed)
   const ready = typed !== "" && !busy
-  const add = async () => {
-    if (!ready) return
-    const space = await act(() =>
-      engine.command("spaces.add", { folder: typed, create })
-    )
+  const add = async (how: Extract<Adding, { folder: string }>) => {
+    const space = await act(() => engine.command("spaces.add", how))
     if (space) onCreated(space)
   }
+  // The system's folder picker: the folder picked is added at once.
+  const picker = usePickFolder(browsed, (folder) => {
+    if (folder) void add({ folder, create: false })
+  })
   return (
     <form
       className="flex flex-col gap-4"
       onSubmit={(event) => {
         event.preventDefault()
-        void add()
+        if (ready) void add({ folder: typed, create })
       }}
     >
       <FieldGroup>
@@ -139,12 +151,26 @@ function FolderForm({
             </Suggestions>
           )}
         </Field>
-        {problem && <FieldError>{problem}</FieldError>}
+        {(problem ?? picker?.problem) && (
+          <FieldError>{problem ?? picker?.problem}</FieldError>
+        )}
       </FieldGroup>
-      <Button type="submit" disabled={!ready} className="self-end">
-        {busy && <Spinner />}
-        {create ? "Create & Add" : "Add"}
-      </Button>
+      <div className="flex justify-end gap-2">
+        {picker && (
+          <Button
+            type="button"
+            variant="ghost"
+            disabled={picker.busy || busy}
+            onClick={() => void picker.pick()}
+          >
+            {PICK_FOLDER}
+          </Button>
+        )}
+        <Button type="submit" disabled={!ready}>
+          {busy && <Spinner />}
+          {create ? "Create & Add" : "Add"}
+        </Button>
+      </div>
     </form>
   )
 }

@@ -59,7 +59,12 @@ import {
   wordsIn,
   isPathField,
 } from "./menu"
-import { PATH_PLACEHOLDER, useBrowsed } from "./browse"
+import {
+  PATH_PLACEHOLDER,
+  PICK_FOLDER,
+  useBrowsed,
+  usePickFolder,
+} from "./browse"
 import { opened, useOpened, weightOf } from "./opened"
 
 const ASK: Key = { code: "Enter", alt: true }
@@ -357,6 +362,12 @@ function Menu({
     )
     if (space) onAdded(space)
   }
+  // The system's folder picker: the folder picked is added at once, as
+  // T3 Code does; the field takes the keys back when it is cancelled.
+  const field = useRef<HTMLInputElement>(null)
+  const picker = usePickFolder(browsed, (folder) =>
+    folder ? void add({ folder, create: false }) : field.current?.focus()
+  )
   const own = (row: Own) => {
     setActing(undefined)
     switch (row.kind) {
@@ -473,6 +484,7 @@ function Menu({
           </span>
         ))}
         <input
+          ref={field}
           autoFocus
           // Every key comes here while one is taken, the window's too.
           data-takes-keys={taking ? "" : undefined}
@@ -492,13 +504,14 @@ function Menu({
           className="h-11 min-w-0 flex-1 bg-transparent text-[15px] outline-none placeholder:text-muted-foreground"
         />
       </div>
-      {(note || problem || adding || refused.length > 0) && (
+      {(note || problem || picker?.problem || adding || refused.length > 0) && (
         <div
           role="status"
           className="border-b px-3 py-1.5 text-xs text-muted-foreground"
         >
           {note ??
             problem ??
+            picker?.problem ??
             (adding ? "Adding the Space…" : refused.join("; "))}
         </div>
       )}
@@ -563,6 +576,16 @@ function Menu({
           </KbdGroup>
         )}
         <div className="ml-auto flex items-center gap-4">
+          {isPathField(inside) && picker && (
+            <button
+              type="button"
+              disabled={picker.busy || adding}
+              onClick={() => void picker.pick()}
+              className="hover:text-foreground disabled:opacity-50"
+            >
+              {PICK_FOLDER}
+            </button>
+          )}
           {acts.length > 0 && (
             <KbdGroup>
               <Kbd>Tab</Kbd>
