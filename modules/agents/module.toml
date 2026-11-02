@@ -11,4 +11,4 @@ settings = ["agents.toml", "harnesses.toml"]
 # Paths it takes that a module from elsewhere would lack (ADR 0022,
 # decision 6), each with why. One that gets its place in the contract goes.
 [unstable]
-settings-section = "the settings window draws its Harnesses section (app/web/src/settings/Agents.tsx): a module cannot declare a section yet (ADR 0016)"
+settings-section = "the settings Pane draws its Harnesses section (app/web/src/settings/Agents.tsx): a module cannot declare a section yet (ADR 0016)"
