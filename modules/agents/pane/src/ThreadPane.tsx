@@ -1,5 +1,12 @@
 import { useMemo, useRef, useState } from "react"
-import type { Failure, Item, ItemId, TurnView } from "@banda/contract/agents"
+import type { Engine, SpaceId } from "@banda/contract"
+import type {
+  Failure,
+  Item,
+  ItemId,
+  ListedThread,
+  TurnView,
+} from "@banda/contract/agents"
 import { Button } from "@banda/ui/components/button"
 import {
   Empty,
@@ -27,6 +34,7 @@ import {
   TraceLine,
   TraceTitle,
 } from "@banda/ui/components/trace"
+import { useLive } from "@banda/ui/hooks/use-live"
 import { clock } from "@banda/ui/lib/words"
 import { definePane, paneOf, type PaneProps } from "@banda/ui/pane"
 import {
@@ -39,11 +47,19 @@ import {
   MessageSquareIcon,
   RotateCcwIcon,
 } from "lucide-react"
-import { steerable, type ThreadState, type Waiting, working } from "./thread"
+import {
+  steerable,
+  type ThreadState,
+  type Waiting,
+  working,
+  writerOf,
+} from "./thread"
+import { threadsSource } from "./list"
+import { threadPaneOf } from "./rows"
 import { suggested } from "./slash"
 import { Composer } from "./Composer"
 import type { ImageReader } from "./MessageImages"
-import { AgentMessage, PersonMessage } from "./Messages"
+import { AgentMessage, PersonMessage, Writer, type Writers } from "./Messages"
 import type { Values } from "./form"
 import { Question, QuestionDrawer } from "./Questions"
 import { ChangedFiles } from "./ChangedFiles"
@@ -112,6 +128,7 @@ function ThreadPane(props: PaneProps<ThreadArgs>) {
   const [find, setFind] = useState<{ query: string; at: number }>()
   const area = useRef<HTMLDivElement>(null)
   const findField = useRef<HTMLInputElement>(null)
+  const writers = useWriters(engine, space, thread)
   const found = useFound(area, find?.query ?? "", find?.at ?? 0, state)
 
   return (
@@ -182,6 +199,8 @@ function ThreadPane(props: PaneProps<ThreadArgs>) {
             onAnswer={answer}
             onRetry={retry}
             onOpenDiff={openDiff}
+            writers={writers}
+            onOpenThread={(other) => open(threadPaneOf(other), "right")}
             signIn={(turn) => (
               <SignIn
                 engine={engine}
@@ -317,24 +336,27 @@ function Transcript({
   onOpenDiff,
   signIn,
   queue,
+  writers,
+  onOpenThread,
   ...answers
-}: Answering & {
-  thread: string
-  /** The Thread waits for its Person: a Question, or a plan. */
-  forYou: boolean
-  /** What the Person looks for in it, if anything. */
-  finding: string
-  state: ThreadState
-  /** The messages that wait, from {@link waiting}. */
-  waits: Waiting[]
-  name: string
-  reader: ImageReader
-  onRetry: (turn: TurnView) => void
-  onOpenDiff: OpenDiff
-  /** How a Person signs in again, below a turn that failed for that. */
-  signIn: (turn: TurnView) => React.ReactNode
-  queue: QueueActions
-}) {
+}: Answering &
+  Writers & {
+    thread: string
+    /** The Thread waits for its Person: a Question, or a plan. */
+    forYou: boolean
+    /** What the Person looks for in it, if anything. */
+    finding: string
+    state: ThreadState
+    /** The messages that wait, from {@link waiting}. */
+    waits: Waiting[]
+    name: string
+    reader: ImageReader
+    onRetry: (turn: TurnView) => void
+    onOpenDiff: OpenDiff
+    /** How a Person signs in again, below a turn that failed for that. */
+    signIn: (turn: TurnView) => React.ReactNode
+    queue: QueueActions
+  }) {
   const turn = working(state)
   const lines = useMemo(() => timeline(state), [state])
   const last = state.items.at(-1)
@@ -347,6 +369,8 @@ function Transcript({
             live={turn?.state === "running" && line.item === last}
             reader={reader}
             onOpenDiff={onOpenDiff}
+            writer={writerOf(writers, line.item)}
+            onOpenThread={onOpenThread}
             {...answers}
           />
         )
@@ -441,6 +465,8 @@ function Transcript({
                   name={name}
                   busy={answers.answering}
                   reader={reader}
+                  writers={writers}
+                  onOpenThread={onOpenThread}
                   {...queue}
                 />
               </MessageScrollerItem>
@@ -483,6 +509,8 @@ function Entry({
   live,
   reader,
   onOpenDiff,
+  writer,
+  onOpenThread,
   answering,
   onAnswer,
 }: Answering & {
@@ -491,6 +519,9 @@ function Entry({
   live: boolean
   reader: ImageReader
   onOpenDiff: OpenDiff
+  /** The other Thread whose Agent wrote it, if one did. */
+  writer?: ListedThread
+  onOpenThread: Writers["onOpenThread"]
 }) {
   const body = item.body
   switch (body.kind) {
@@ -503,7 +534,20 @@ function Entry({
           reader={reader}
         />
       ) : (
-        <AgentMessage text={body.text} at={item.at} live={live} />
+        <AgentMessage
+          text={body.text}
+          at={item.at}
+          live={live}
+          from={
+            writer && (
+              <Writer
+                thread={writer}
+                answers={body.answers}
+                onOpen={onOpenThread}
+              />
+            )
+          }
+        />
       )
     case "thought":
       return (
@@ -624,4 +668,25 @@ function adviceFor(failure: Failure): string | undefined {
     case "provider":
       return undefined
   }
+}
+
+/** The Space's other Threads by their Agents' IDs, as the sidebar follows
+ * them, so a message from one names it as it is now. */
+function useWriters(
+  engine: Engine,
+  space: SpaceId,
+  thread: string | null
+): ReadonlyMap<string, ListedThread> {
+  const source = useMemo(() => threadsSource(engine, space), [engine, space])
+  const live = useLive(engine, space, source)
+  const threads = live.state === "ready" ? live.view.threads : undefined
+  return useMemo(
+    () =>
+      new Map(
+        (threads ?? [])
+          .filter((other) => other.id !== thread)
+          .map((other) => [other.agent, other])
+      ),
+    [threads, thread]
+  )
 }

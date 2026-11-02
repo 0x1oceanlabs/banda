@@ -404,7 +404,9 @@ pub fn evidence<T: DeserializeOwned>(
     Ok(text.and_then(|text| serde_json::from_str(&text).ok()))
 }
 
-const THREAD: &str = "SELECT id, COALESCE(harness, ''), title, updated_at FROM agents_threads";
+/// A Thread's summary, then its Agent.
+const THREAD: &str =
+    "SELECT id, COALESCE(harness, ''), title, updated_at, agent FROM agents_threads";
 
 fn read_thread(row: &Row<'_>) -> rusqlite::Result<ThreadSummary> {
     Ok(ThreadSummary {
@@ -424,12 +426,13 @@ pub fn thread(sql: &Connection, id: ThreadId) -> Result<Option<ThreadSummary>, E
 /// The Space's Threads, the latest first, each with where its work stands.
 pub fn threads(sql: &Connection) -> Result<Vec<ListedThread>, Error> {
     let mut statement = sql.prepare(&format!("{THREAD} ORDER BY updated_at DESC, id DESC"))?;
-    let rows = statement.query_map([], read_thread)?;
+    let rows = statement.query_map([], |row| Ok((read_thread(row)?, row.get(4)?)))?;
     let summaries = rows.collect::<rusqlite::Result<Vec<_>>>()?;
     summaries
         .into_iter()
-        .map(|thread| {
+        .map(|(thread, agent)| {
             Ok(ListedThread {
+                agent,
                 latest: last_begun(sql, thread.id)?,
                 asking: asking(sql, thread.id)?,
                 message: latest_message(sql, thread.id)?,
@@ -918,6 +921,7 @@ mod tests {
         let asked = old(Body::Message {
             text: "Hi".to_owned(),
             images: Vec::new(),
+            answers: false,
         });
         let own = old(Body::Notice {
             text: "It went on by itself.".to_owned(),

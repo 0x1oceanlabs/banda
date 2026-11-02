@@ -702,6 +702,7 @@ impl Text {
             Text::Reply => Body::Message {
                 text,
                 images: Vec::new(),
+                answers: false,
             },
             Text::Thought => Body::Thought { text },
         }

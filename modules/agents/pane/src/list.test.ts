@@ -5,10 +5,10 @@ import { event, person } from "./testing"
 
 const empty: ThreadList = { at: 0, threads: [] }
 
-test("a new Thread joins the list once, with its Harness", () => {
+test("a new Thread joins the list once, with its Harness and Agent", () => {
   const started = event(
     "thread.started",
-    { thread: "t1", title: "Hello", harness: "claude" },
+    { thread: "t1", title: "Hello", harness: "claude", agent: "a1" },
     { subject: "t1" }
   )
   const state = [started, started].reduce(applyThreads, empty)
@@ -16,6 +16,7 @@ test("a new Thread joins the list once, with its Harness", () => {
     {
       id: "t1",
       harness: "claude",
+      agent: "a1",
       title: "Hello",
       updated_at: started.at,
       asking: [],
@@ -36,8 +37,22 @@ test("a Thread that hears a message moves to the top", () => {
   const state: ThreadList = {
     at: 2,
     threads: [
-      { id: "t2", harness: "fake", title: "Two", updated_at: 2, asking: [] },
-      { id: "t1", harness: "fake", title: "One", updated_at: 1, asking: [] },
+      {
+        id: "t2",
+        agent: "a2",
+        harness: "fake",
+        title: "Two",
+        updated_at: 2,
+        asking: [],
+      },
+      {
+        id: "t1",
+        agent: "a1",
+        harness: "fake",
+        title: "One",
+        updated_at: 1,
+        asking: [],
+      },
     ],
   }
   const posted = event(
@@ -59,7 +74,14 @@ test("a Thread that hears a message moves to the top", () => {
 const one: ThreadList = {
   at: 1,
   threads: [
-    { id: "t1", harness: "fake", title: "One", updated_at: 1, asking: [] },
+    {
+      id: "t1",
+      agent: "a1",
+      harness: "fake",
+      title: "One",
+      updated_at: 1,
+      asking: [],
+    },
   ],
 }
 

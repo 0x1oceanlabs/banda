@@ -269,8 +269,8 @@ fn texts(view: &ThreadView) -> Vec<String> {
     view.items
         .iter()
         .map(|item| match &item.body {
-            Body::Message { text, images } if images.is_empty() => format!("message: {text}"),
-            Body::Message { text, images } => {
+            Body::Message { text, images, .. } if images.is_empty() => format!("message: {text}"),
+            Body::Message { text, images, .. } => {
                 format!("message: {text} + {} image(s)", images.len())
             }
             Body::Thought { text } => format!("thought: {text}"),
@@ -2859,6 +2859,21 @@ impl World {
         }
         self.call(agent, "agents.send", params).await
     }
+
+    /// Whether each message posted into `thread` answers, as its fact says.
+    async fn posted_answers(&self, thread: &Value) -> Vec<Value> {
+        let filter = EventFilter {
+            module: Some("agents".to_owned()),
+            subject: thread.as_str().map(str::to_owned),
+            kinds: Some(vec!["message.posted".to_owned()]),
+        };
+        let space = self.kernel.space(self.space).await.unwrap();
+        let events = space.events_after(0, filter, usize::MAX).await.unwrap();
+        events
+            .into_iter()
+            .map(|e| e.payload["answers"].clone())
+            .collect()
+    }
 }
 
 #[tokio::test]
@@ -2879,6 +2894,10 @@ async fn an_agent_writes_to_another_thread_and_its_answer_comes_back() {
     assert_eq!(message.unwrap().author, agent_of(&asking));
     let said = texts(&view);
     assert_eq!(said[3], "message: count the files");
+    // It asks: neither the item nor its fact says it answers.
+    let asks = matches!(message.unwrap().body, Body::Message { answers: false, .. });
+    assert!(asks);
+    assert_eq!(world.posted_answers(&b).await, [Value::Null, Value::Null]);
     let from = format!(
         "message: You said: The Agent of Thread \"hello\" ({}), another Agent of this Space",
         a.as_str().unwrap()
@@ -2892,6 +2911,9 @@ async fn an_agent_writes_to_another_thread_and_its_answer_comes_back() {
     assert_eq!(opened(root.path(), &answered), by("answered", &b));
     let answer = view.items.iter().find(|i| i.id == view.turns[1].message);
     assert_eq!(answer.unwrap().author, agent_of(&answering));
+    let answers = matches!(answer.unwrap().body, Body::Message { answers: true, .. });
+    assert!(answers, "the item says it answers");
+    assert_eq!(world.posted_answers(&a).await, [Value::Null, json!(true)]);
     let said_in_a = texts(&view);
     assert_eq!(said_in_a[3], said[5], "the answer is B's last reply");
     let from = format!(

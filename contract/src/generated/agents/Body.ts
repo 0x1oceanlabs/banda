@@ -13,7 +13,12 @@ import type { ToolStatus } from "./ToolStatus";
 /**
  * What one Thread entry holds.
  */
-export type Body = { "kind": "message", text: string, images: Array<Image>, } | { "kind": "thought", text: string, } | { "kind": "tool", title: string, tool: ToolKind, status: ToolStatus, 
+export type Body = { "kind": "message", text: string, images: Array<Image>, 
+/**
+ * It answers what this Thread's Agent asked another Thread's
+ * (ADR 0019); its author is that Thread's Agent.
+ */
+answers?: boolean, } | { "kind": "thought", text: string, } | { "kind": "tool", title: string, tool: ToolKind, status: ToolStatus, 
 /**
  * What it shows besides its title, as the Harness last said.
  */

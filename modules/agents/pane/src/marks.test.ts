@@ -6,6 +6,7 @@ import { NOTHING } from "./thread"
 function thread(more: Partial<ListedThread> = {}): ListedThread {
   return {
     id: "t1",
+    agent: "a1",
     harness: "fake",
     title: "One",
     updated_at: 1,

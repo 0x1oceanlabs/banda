@@ -3,7 +3,13 @@
  * fake agent as the only Harness, so no test reaches a paid model.
  */
 import { execFileSync } from "node:child_process"
-import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs"
+import {
+  mkdirSync,
+  mkdtempSync,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs"
 import { tmpdir } from "node:os"
 import { dirname, join, resolve } from "node:path"
 import {
@@ -71,9 +77,12 @@ export async function startWindow({
   const fake = join(repository, "target/debug/banda-fake-agent")
   const home = join(dir, "fake-home")
   mkdirSync(home)
+  // The fake agent writes where each new session's MCP servers are, for
+  // `agentCalls`.
+  const mcp = `FAKE_AGENT_MCP = ${JSON.stringify(join(dir, "mcp.json"))}`
   const env = account
-    ? `env = { FAKE_AGENT_HOME = ${JSON.stringify(home)} }\n`
-    : ""
+    ? `env = { FAKE_AGENT_HOME = ${JSON.stringify(home)}, ${mcp} }\n`
+    : `env = { ${mcp} }\n`
   const cli = oldCli ? fakeCli(dir, "1.0.0", "2.0.0") : ""
   writeFileSync(
     join(dir, "config/harnesses.toml"),
@@ -135,6 +144,47 @@ export async function startWindow({
       rmSync(dir, { recursive: true, force: true })
     },
   }
+}
+
+/**
+ * The Agent of the Thread whose session opened last calls Banda's tool
+ * `name` with `args`, through `banda mcp` as its Harness would; what the
+ * tool answered (ADR 0019).
+ */
+export function agentCalls(
+  window: Window,
+  name: string,
+  args: object
+): { isError?: boolean; content: { text: string }[] } {
+  const [server] = JSON.parse(
+    readFileSync(join(window.dir, "mcp.json"), "utf8")
+  ) as {
+    command: string
+    args: string[]
+    env: { name: string; value: string }[]
+  }[]
+  const env = Object.fromEntries(server.env.map((v) => [v.name, v.value]))
+  const hello = {
+    protocolVersion: "2025-06-18",
+    capabilities: {},
+    clientInfo: { name: "e2e", version: "1" },
+  }
+  const messages = [
+    { jsonrpc: "2.0", id: 1, method: "initialize", params: hello },
+    { jsonrpc: "2.0", method: "notifications/initialized" },
+    {
+      jsonrpc: "2.0",
+      id: 2,
+      method: "tools/call",
+      params: { name, arguments: args },
+    },
+  ]
+  const said = execFileSync(server.command, server.args, {
+    env: { ...process.env, ...env },
+    input: messages.map((m) => JSON.stringify(m)).join("\n") + "\n",
+    encoding: "utf8",
+  })
+  return JSON.parse(said.trim().split("\n").at(-1)!).result
 }
 
 /**

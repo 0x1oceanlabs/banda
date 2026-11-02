@@ -773,6 +773,7 @@ fn send(
 ) -> Result<Sent, Error> {
     let now = tx.now();
     let opener = by.map_or(Opener::Person, |(opener, _)| opener);
+    let answers = opener == Opener::Answered;
     let by_person = opener.by_person();
     let images = store::unsent_images(tx.sql(), &images, author)?;
     rules::may_carry(&images)?;
@@ -807,6 +808,7 @@ fn send(
                 thread: summary.id,
                 title: summary.title.clone(),
                 harness: Some(summary.harness.clone()),
+                agent: Some(agent),
             };
             emit(tx, author, summary.id, &fact)?;
             (summary.id, agent)
@@ -824,6 +826,7 @@ fn send(
         body: Body::Message {
             text: text.clone(),
             images: images.clone(),
+            answers,
         },
     };
     store::insert_item(tx.sql(), thread, &item)?;
@@ -869,6 +872,7 @@ fn send(
         turn: turn.id,
         text,
         images,
+        answers,
     };
     emit(tx, author, thread, &fact)?;
     tx.enqueue(
@@ -928,7 +932,10 @@ fn edit(tx: &mut Tx<'_>, author: Participant, turn: TurnId, text: String) -> Res
     let Some((thread, mut message)) = store::item(tx.sql(), item)? else {
         return Err(Refusal::not_found("There is no such message.").into());
     };
-    let Body::Message { text: was, images } = &mut message.body else {
+    let Body::Message {
+        text: was, images, ..
+    } = &mut message.body
+    else {
         return Err(Refusal::invalid("Only a message can be changed.").into());
     };
     let carried: Vec<ImageId> = images.iter().map(|image| image.id).collect();

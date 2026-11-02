@@ -496,7 +496,7 @@ impl Message {
             Some((
                 _,
                 Item {
-                    body: Body::Message { text, images },
+                    body: Body::Message { text, images, .. },
                     ..
                 },
             )) => Some(Message { text, images }),

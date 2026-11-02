@@ -9,6 +9,7 @@ import {
   type Can,
   type HarnessOption,
   type Item,
+  type ListedThread,
   type Offer,
   type OptionValue,
   type Settings,
@@ -211,6 +212,7 @@ function project(state: ThreadState, event: Event): ThreadState {
             kind: "message",
             text: fact.payload.text,
             images: fact.payload.images,
+            ...(fact.payload.answers && { answers: true }),
           }),
         ],
         turns: [
@@ -431,6 +433,17 @@ export function declineOnce(question: QuestionBody): string | undefined {
 
 /** An item that is a message. */
 export type Said = Item & { body: Extract<Body, { kind: "message" }> }
+
+/** The other Thread whose Agent wrote the message `item`, among
+ * `writers`, the Space's Threads by their Agents but this one. */
+export function writerOf(
+  writers: ReadonlyMap<string, ListedThread>,
+  item: Item
+): ListedThread | undefined {
+  const { author, body } = item
+  if (body.kind !== "message" || author.kind !== "agent") return undefined
+  return writers.get(author.id)
+}
 
 /** Whether `item` is something the Agent wrote, not a Person. */
 export function isReply(item: Item): item is Said {
