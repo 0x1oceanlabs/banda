@@ -64,6 +64,9 @@ export type Host = {
   }
   /** The Banda menu, as `banda menu [route]` opens it (ADR 0017). */
   menu: {
+    /** Opens the menu at `route` in the window, brought to the front, as
+     * `banda menu` does: `actions` is the key sheet. */
+    open: (route: string) => void
     /** Calls `open` with each route the menu is asked to open at. */
     listen: (open: (route: string) => void) => () => void
   }

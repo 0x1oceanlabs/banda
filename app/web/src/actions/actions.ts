@@ -7,6 +7,7 @@
  * physical place (`KeyboardEvent.code`), so they work on any layout.
  */
 import type { Keys, Problem } from "@banda/contract/look"
+import { tomlOf } from "@banda/contract/settings"
 import { type Key, matches, type Pressed, sameKey } from "@banda/ui/lib/keys"
 
 export type Action<Context> = {
@@ -94,4 +95,30 @@ export function keyName(key: Key): string {
   return [key.ctrl && "Ctrl", key.alt && "Alt", key.shift && "Shift", name]
     .filter(Boolean)
     .join("+")
+}
+
+/** The chord no file binds (ADR 0005, decision 11), as `look/src/keys.rs`
+ * has it, `RESET`: its action brings the window's own keys back. */
+export const RESET_KEY: Key = {
+  code: "KeyK",
+  ctrl: true,
+  alt: true,
+  shift: true,
+}
+
+/** The file the Person's keys are in (ADR 0005, decision 11). */
+export const KEYS_FILE = "keys.toml"
+
+/** The line of keys.toml that names `key`, as `banda settings` takes it. */
+export function bindPath(key: Key): string {
+  return `binds.${JSON.stringify(keyName(key))}`
+}
+
+/** Writes `key` to keys.toml, running `action`, or `none` to free it; what
+ * was wrong, if it was refused. */
+export function writeBind(key: Key, action: string): Promise<string[]> {
+  return (
+    window.banda?.settings.set(KEYS_FILE, bindPath(key), tomlOf(action)) ??
+    Promise.resolve([`Only the desktop app writes ${KEYS_FILE}`])
+  )
 }

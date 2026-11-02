@@ -71,5 +71,6 @@ not open.
 | `sidebars/<name>.toml` | the Person's own sidebar presets |
 | `browser.toml` | where the browser's tabs are, and its search |
 | `agents.toml` | what Enter does with a message written while the Agent works |
+| `keys.toml` | the Person's keys, `[binds]`: `"Alt+M" = "column.maximize"`, or `"none"` to free a key; Ctrl+Alt+Shift+K brings Banda's own back |
 | `harnesses.toml` | the Harnesses Threads start with |
 | `schemas/` | each file's JSON Schema, written by Banda for editors |

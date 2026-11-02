@@ -8,7 +8,8 @@
 # Delete, Insert, Home, End, PageUp, PageDown or one of [ ] , . / ; ' - =
 # ` \. Super is the desktop's. An action keeps the window's own keys
 # besides the ones bound here; "none" frees a key, so it goes to the Pane,
-# as Alt+F to a shell.
+# as Alt+F to a shell. Ctrl+Alt+Shift+K is no file's: it brings the
+# window's own keys back until this file changes.
 
 [binds]
 # "Alt+M" = "column.maximize"

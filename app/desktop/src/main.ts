@@ -223,6 +223,9 @@ async function ready(): Promise<void> {
   ipcMain.on("settings.open", (event, link: unknown) => {
     if (fromPage(event.senderFrame?.url ?? "")) openSettings(linkOf(link))
   })
+  ipcMain.on("menu.open", (event, route: unknown) => {
+    if (fromPage(event.senderFrame?.url ?? "")) openMenu(route)
+  })
   ipcMain.on("settings.close", (event) => {
     if (fromPage(event.senderFrame?.url ?? "")) settingsWindow?.close()
   })

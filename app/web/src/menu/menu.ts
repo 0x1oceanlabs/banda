@@ -202,7 +202,7 @@ const SECTIONS: readonly (readonly [string, readonly string[]])[] = [
   ["Panes", ["pane", "browser"]],
   ["Columns", ["column"]],
   ["Workspaces", ["workspace", "overview"]],
-  ["Banda", ["menu", "settings"]],
+  ["Banda", ["menu", "settings", "keys"]],
 ]
 
 function sectionOf(id: string): string {

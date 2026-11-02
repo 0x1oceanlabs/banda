@@ -584,7 +584,11 @@ modules/*/pane   each module's Panes
   PageUp and PageDown the workspace above or below, 1…9 go to one,
   Shift+1…9 move the Pane there, A shows or hides the sidebar. The window
   takes these keys before any Pane hears them; a terminal gets every other
-  key, Ctrl+W among them.
+  key, Ctrl+W among them. `keys.toml` binds and frees keys over them (ADR
+  0005, decision 11); Ctrl+Alt+Shift+K (`keys.reset`) is no file's, and
+  brings the window's own keys back until the file changes. The settings window's
+  Keys section shows the file's lines, and opens the key sheet in the
+  window for the rest.
 - **The sidebar** lists every Thread of every Space, arranged as a preset
   and the Person's keys say (ADR 0008): grouped by state, by Space or not
   at all; sorted by need, by change or by title; shelves at the bottom;

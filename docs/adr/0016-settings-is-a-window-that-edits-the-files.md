@@ -116,4 +116,4 @@ Roma asked for a visual settings module where Claude Code, Codex and the rest ar
   4. The window: the Electron window, Alt+, and the gear in the sidebar; then the sections, the search and the one row; then Appearance.
   5. Agents: the Harnesses Pane moves in, the window writes `harnesses.toml`, and the engine reads it again on a change.
   6. Sidebar, Sounds & calls, and General, with the Enter key moving into `agents.toml`.
-  7. Keys, with `keys.toml`.
+  7. Keys, with `keys.toml`: the file's lines, each a key and its action, a key changed or taken out; the key sheet (Alt+K) keeps the one list of every action, and the section opens it; and the reset chord.
