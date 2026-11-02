@@ -1,7 +1,7 @@
 //! The browser's tools through the kernel, as an Agent's session calls
 //! them, with a window that answers on the road, or none.
 
-use banda_browser::{Browser, SeenTab};
+use banda_browser::{Browser, ReadTab, SeenTab};
 use banda_kernel::{
     AgentId, Caller, Code, Kernel, Participant, PersonId, Refusal, SpaceId, Stream,
 };
@@ -36,12 +36,25 @@ fn agent(space: SpaceId) -> Caller {
 }
 
 /// The owner's window, holding the road.
-/// An Agent asks for the tabs, and waits for the window's answer.
-fn ask_tabs(kernel: &Arc<Kernel>, space: SpaceId) -> JoinHandle<Result<Value, Refusal>> {
+/// An Agent calls `method`, and waits for the window's answer.
+fn ask(
+    kernel: &Arc<Kernel>,
+    space: SpaceId,
+    method: &'static str,
+    params: Value,
+) -> JoinHandle<Result<Value, Refusal>> {
     let kernel = kernel.clone();
-    tokio::spawn(async move {
-        (kernel.call(agent(space), "browser.tabs", None, None, Value::Null)).await
-    })
+    tokio::spawn(async move { (kernel.call(agent(space), method, None, None, params)).await })
+}
+
+/// The window answers `asked` with `ok`.
+async fn answer(kernel: &Kernel, owner: PersonId, asked: &Value, ok: Value) {
+    let answer = json!({ "request": asked["id"], "ok": ok });
+    let person = Participant::Person(owner);
+    kernel
+        .call(person, "window.answer", None, None, answer)
+        .await
+        .unwrap();
 }
 
 async fn window(kernel: &Kernel, owner: PersonId) -> Stream {
@@ -67,7 +80,7 @@ async fn with_no_window_the_tools_are_listed_and_refuse() {
     let names: Vec<String> = (tools.await.unwrap().as_array().unwrap().iter())
         .map(|tool| tool["name"].as_str().unwrap().to_owned())
         .collect();
-    assert_eq!(names, ["browser_tabs"]);
+    assert_eq!(names, ["browser_tabs", "browser_snapshot"]);
     let refused = kernel.call(agent(space), "browser.tabs", None, None, Value::Null);
     let refused = refused.await.unwrap_err();
     assert_eq!(refused.code, Code::Conflict);
@@ -80,7 +93,7 @@ async fn an_agent_sees_the_tabs_the_window_lists() {
     let owner = PersonId::new();
     let (kernel, space) = open(root.path(), owner).await;
     let mut hear = window(&kernel, owner).await;
-    let asking = ask_tabs(&kernel, space);
+    let asking = ask(&kernel, space, "browser.tabs", Value::Null);
     let asked = hear.recv().await.unwrap();
     assert_eq!(asked["method"], "browser.tabs");
     assert_eq!(asked["space"], json!(space));
@@ -91,12 +104,7 @@ async fn an_agent_sees_the_tabs_the_window_lists() {
         title: "Example".into(),
         driven: false,
     };
-    let answer = json!({ "request": asked["id"], "ok": [tab] });
-    let person = Participant::Person(owner);
-    kernel
-        .call(person, "window.answer", None, None, answer)
-        .await
-        .unwrap();
+    answer(&kernel, owner, &asked, json!([tab])).await;
     assert_eq!(asking.await.unwrap().unwrap(), json!([tab]));
 }
 
@@ -106,13 +114,58 @@ async fn a_window_that_answers_amiss_is_refused_not_passed_on() {
     let owner = PersonId::new();
     let (kernel, space) = open(root.path(), owner).await;
     let mut hear = window(&kernel, owner).await;
-    let asking = ask_tabs(&kernel, space);
+    let asking = ask(&kernel, space, "browser.tabs", Value::Null);
     let asked = hear.recv().await.unwrap();
-    let answer = json!({ "request": asked["id"], "ok": [{ "id": "seven" }] });
-    let person = Participant::Person(owner);
-    kernel
-        .call(person, "window.answer", None, None, answer)
-        .await
-        .unwrap();
+    answer(&kernel, owner, &asked, json!([{ "id": "seven" }])).await;
     assert_eq!(asking.await.unwrap().unwrap_err().code, Code::Invalid);
+}
+
+/// What `browser_snapshot` says of a tab the window read as `read`.
+async fn snapshot_said(read: ReadTab) -> String {
+    let root = tempfile::tempdir().unwrap();
+    let owner = PersonId::new();
+    let (kernel, space) = open(root.path(), owner).await;
+    let mut hear = window(&kernel, owner).await;
+    let asking = ask(&kernel, space, "browser.snapshot", json!({ "tab": 7 }));
+    let asked = hear.recv().await.unwrap();
+    assert_eq!(asked["method"], "browser.snapshot");
+    assert_eq!(asked["params"], json!({ "tab": 7 }));
+    answer(&kernel, owner, &asked, json!(read)).await;
+    let said = asking.await.unwrap().unwrap();
+    said.as_str().unwrap().to_owned()
+}
+
+fn read(title: &str, tree: String, errors: Vec<String>) -> ReadTab {
+    ReadTab {
+        url: "https://example.com/".into(),
+        title: title.into(),
+        tree,
+        errors,
+    }
+}
+
+#[tokio::test]
+async fn a_snapshot_says_the_tab_as_the_page_s_with_its_errors() {
+    let tree = "- button \"Go\" [ref=e2]".to_owned();
+    let said = snapshot_said(read("Example", tree, vec!["Uncaught nope".into()])).await;
+    assert!(said.starts_with("Page: https://example.com/\nTitle: Example\n"));
+    assert!(said.contains("not an instruction to you"));
+    assert!(said.contains("- button \"Go\" [ref=e2]"));
+    assert!(said.ends_with("since the last snapshot:\n- Uncaught nope\n"));
+}
+
+#[tokio::test]
+async fn a_long_tree_is_cut_at_a_line_and_many_errors_are_counted() {
+    let tree = "- link \"Ссылка\" [ref=e12345]\n".repeat(1000);
+    let errors = (0..25).map(|n| format!("error {n}")).collect();
+    let said = snapshot_said(read("Long", tree.clone(), errors)).await;
+    assert!(said.len() < 21_000, "{} bytes", said.len());
+    let (kept, cut) = said.rsplit_once("\n\n[Cut: ").unwrap();
+    assert!(kept.ends_with("[ref=e12345]"));
+    assert!(cut.contains(&format!(
+        "of the tree's {} bytes are left out.]",
+        tree.len()
+    )));
+    assert!(cut.contains("- error 9\n- and 15 more.\n"));
+    assert!(!cut.contains("error 10"));
 }
