@@ -5,81 +5,123 @@
  * windows the new look, so the page never reads or writes a file itself.
  * `banda settings` checks the file and the key; this hands them on.
  */
-import { execFile } from "node:child_process"
 import { existsSync } from "node:fs"
 import { dirname, join } from "node:path"
-import { promisify } from "node:util"
-import { shell } from "electron"
 import type { Listed } from "@banda/contract/look"
+import { Context, Duration, Effect, Exit, Layer, Schema, Stream } from "effect"
+import { ChildProcess, ChildProcessSpawner } from "effect/process"
+import { shell } from "electron"
+import { Broke, Refused } from "./errors"
 
-const run = promisify(execFile)
+/** A line of `banda look themes`: JSON, taken as the theme it lists. */
+const parse = Schema.decodeUnknownEffect(Schema.fromJsonString(Schema.Unknown))
 
-/** `banda settings`, run for the page. */
-export class Settings {
-  readonly #binary: string
-  #themes: Promise<Listed[]> | undefined
-
-  constructor(binary: string) {
-    this.#binary = binary
+export class Settings extends Context.Service<
+  Settings,
+  {
+    /** Sets `key` in `file` to `value`, TOML; what was wrong, if it
+     * refused. */
+    set(
+      file: string,
+      key: string,
+      value: string
+    ): Effect.Effect<string[], Broke>
+    /** Sets `key` in `file` to `value`, written as TOML; a refusal fails,
+     * saying what was wrong. */
+    write(
+      file: string,
+      key: string,
+      value: unknown
+    ): Effect.Effect<void, Refused | Broke>
+    /** Takes `key` out of `file`, so the layer under it shows again. */
+    reset(file: string, key: string): Effect.Effect<string[], Broke>
+    /** Names `key` in `file` `to` instead, where it is, comments kept. */
+    rename(
+      file: string,
+      key: string,
+      to: string
+    ): Effect.Effect<string[], Broke>
+    /** The themes there are, as `banda look themes` lists them; read once. */
+    readonly themes: Effect.Effect<Listed[], Broke>
+    /** Opens `file`, beside `sidebar.toml` in the config folder, in the
+     * Person's editor; the folder when it is not there yet, or for "". */
+    reveal(sidebarFile: string, file: string): Effect.Effect<void, Refused>
   }
+>()("banda/Settings") {
+  static readonly layer = (binary: string) =>
+    Layer.effect(Settings)(
+      Effect.gen(function* () {
+        const spawner = yield* ChildProcessSpawner.ChildProcessSpawner
 
-  /** Sets `key` in `file` to `value`, TOML; what was wrong, if it refused. */
-  set(file: unknown, key: unknown, value: unknown): Promise<string[]> {
-    return this.#settings(["set", text(file), text(key), text(value)])
-  }
+        /** What `banda settings` said when it refused, a problem a line;
+         * nothing when done. 1 is a refusal, said as `check` says it;
+         * anything else broke. */
+        const settings = (args: string[]) =>
+          Effect.scoped(
+            Effect.gen(function* () {
+              const child = yield* spawner.spawn(
+                ChildProcess.make(binary, ["settings", ...args], {
+                  stdin: "ignore",
+                  stdout: "ignore",
+                })
+              )
+              const [said, code] = yield* Effect.all(
+                [
+                  child.stderr.pipe(Stream.decodeText, Stream.mkString),
+                  child.exitCode,
+                ],
+                { concurrency: 2 }
+              )
+              if (code === 0) return []
+              if (code === 1 && said) return said.split("\n").filter(Boolean)
+              return yield* new Broke({
+                message: said.trim() || `banda settings stopped (code ${code})`,
+              })
+            })
+          ).pipe(
+            Effect.catchTag("PlatformError", (error) =>
+              Effect.fail(new Broke({ message: error.message }))
+            )
+          )
 
-  /** Takes `key` out of `file`, so the layer under it shows again. */
-  reset(file: unknown, key: unknown): Promise<string[]> {
-    return this.#settings(["reset", text(file), text(key)])
-  }
+        const read = spawner
+          .lines(ChildProcess.make(binary, ["look", "themes"]))
+          .pipe(
+            Effect.flatMap((lines) =>
+              Effect.forEach(lines.filter(Boolean), (line) => parse(line))
+            ),
+            Effect.map((themes) => themes as Listed[]),
+            Effect.mapError((error) => new Broke({ message: error.message }))
+          )
+        // Read again after a failure, never after a success.
+        const themes = yield* Effect.cachedWithTTL(read, (exit) =>
+          Exit.isSuccess(exit) ? Duration.infinity : 0
+        )
 
-  /** Names `key` in `file` `to` instead, where it is, comments kept. */
-  rename(file: unknown, key: unknown, to: unknown): Promise<string[]> {
-    return this.#settings(["rename", text(file), text(key), text(to)])
-  }
-
-  /** The themes there are, as `banda look themes` lists them; once. */
-  themes(): Promise<Listed[]> {
-    this.#themes ??= run(this.#binary, ["look", "themes"]).then(
-      ({ stdout }) =>
-        stdout
-          .split("\n")
-          .filter(Boolean)
-          .map((line) => JSON.parse(line) as Listed),
-      (error: unknown) => {
-        this.#themes = undefined
-        throw error
-      }
+        return {
+          set: (file, key, value) => settings(["set", file, key, value]),
+          write: (file, key, value) =>
+            settings(["set", file, key, JSON.stringify(value)]).pipe(
+              Effect.flatMap((refused) =>
+                refused.length
+                  ? Effect.fail(new Refused({ message: refused.join("\n") }))
+                  : Effect.void
+              )
+            ),
+          reset: (file, key) => settings(["reset", file, key]),
+          rename: (file, key, to) => settings(["rename", file, key, to]),
+          themes,
+          reveal: (sidebarFile, file) =>
+            Effect.gen(function* () {
+              if (file && !/^[a-z-]+\.toml$/.test(file))
+                return yield* new Refused({ message: `${file} is not one.` })
+              const path = join(dirname(sidebarFile), file)
+              const failed = yield* Effect.promise(() =>
+                shell.openPath(existsSync(path) ? path : dirname(path))
+              )
+              if (failed) return yield* new Refused({ message: failed })
+            }),
+        }
+      })
     )
-    return this.#themes
-  }
-
-  /** Opens `file`, beside `sidebar.toml` in the config folder, in the
-   * Person's editor; the folder when it is not there yet, or for "". */
-  async reveal(sidebarFile: string, file: unknown): Promise<void> {
-    const name = text(file)
-    if (name && !/^[a-z-]+\.toml$/.test(name))
-      throw new Error(`${name} is not one.`)
-    const path = join(dirname(sidebarFile), name)
-    const failed = await shell.openPath(existsSync(path) ? path : dirname(path))
-    if (failed) throw new Error(failed)
-  }
-
-  /** What it said when it refused, a problem a line; nothing when done. */
-  async #settings(args: string[]): Promise<string[]> {
-    try {
-      await run(this.#binary, ["settings", ...args])
-      return []
-    } catch (error) {
-      const { code, stderr } = error as { code?: number; stderr?: string }
-      // 1: refused, said as `check` says it; anything else broke.
-      if (code === 1 && stderr) return stderr.split("\n").filter(Boolean)
-      throw error
-    }
-  }
-}
-
-function text(value: unknown): string {
-  if (typeof value !== "string") throw new Error("Settings are named in text.")
-  return value
 }

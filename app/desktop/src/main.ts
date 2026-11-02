@@ -14,7 +14,6 @@ import {
   app,
   BrowserWindow,
   type BrowserWindowConstructorOptions,
-  ipcMain,
   Menu,
   nativeTheme,
   net,
@@ -23,16 +22,17 @@ import {
   shell,
 } from "electron"
 import { type Look as LookValue, WALLPAPER_URL } from "@banda/contract/look"
-import type { Notice } from "@banda/web/host"
 import { NodeServices } from "@effect/platform-node"
-import { Effect, Layer, ManagedRuntime, Stream } from "effect"
+import { Effect, Layer, ManagedRuntime, Schema, Stream } from "effect"
 import { Blocker } from "./blocker"
 import { hostPages, keepProfile, reveal } from "./browser"
 import { openDoor } from "./door"
 import { Extensions } from "./extensions"
 import { Engine } from "./engine"
 import { firstFrame, Look } from "./look"
-import { type Desktop, RecordedDesktop, SystemDesktop } from "./notices"
+import { Refused } from "./errors"
+import { channels } from "./ipc"
+import { NoticeArg, Notices, RecordedDesktop } from "./notices"
 import { Settings } from "./settings"
 import { ensure } from "./sidebar"
 
@@ -92,32 +92,37 @@ protocol.registerSchemesAsPrivileged([
   },
 ])
 
-/** Main's services (ADR 0020): the engine and the look, as children.
- * They start with the first effect run, and stop when it is disposed. */
+/**
+ * Where the page's notices go: the desktop's notification server, or, for
+ * the end-to-end tests, a list they read (`BANDA_DESKTOP=recorded`).
+ */
+const notices =
+  process.env.BANDA_DESKTOP === "recorded"
+    ? Notices.recorded(
+        ((globalThis as { bandaDesktop?: RecordedDesktop }).bandaDesktop =
+          new RecordedDesktop())
+      )
+    : Notices.system
+
+/** Main's services (ADR 0020): the engine and the look as children, the
+ * settings and the notices. They start with the first effect run, and
+ * stop when it is disposed. */
 const runtime = ManagedRuntime.make(
-  Layer.mergeAll(Engine.layer(engineBinary), Look.layer(engineBinary)).pipe(
-    Layer.provide(NodeServices.layer)
-  )
+  Layer.mergeAll(
+    Engine.layer(engineBinary),
+    Look.layer(engineBinary),
+    Settings.layer(engineBinary),
+    notices
+  ).pipe(Layer.provide(NodeServices.layer))
 )
 /** The last look, for what reads it at once; none before the first.
  * The window opens once the runtime is built (`ready`). */
 const lookNow = () => runtime.runSync(Look.use((look) => look.current))
-const settings = new Settings(engineBinary)
 let window: BrowserWindow | null = null
 /** The window that lets the desktop through, if one does (ADR 0023). */
 let clear: BrowserWindow | null = null
 /** The settings window; one at a time (ADR 0016, decision 1). */
 let settingsWindow: BrowserWindow | null = null
-
-/**
- * Where the page's notices go: the desktop's notification server, or, for
- * the end-to-end tests, a list they read (`BANDA_DESKTOP=recorded`).
- */
-const desktop: Desktop =
-  process.env.BANDA_DESKTOP === "recorded"
-    ? ((globalThis as { bandaDesktop?: RecordedDesktop }).bandaDesktop =
-        new RecordedDesktop())
-    : new SystemDesktop()
 
 /** How long the window waits for its look, so it opens in its colours. */
 const LOOK_WAIT = 300
@@ -160,134 +165,129 @@ async function ready(): Promise<void> {
   )
   keepProfile(() => window)
   const extensions = new Extensions(() => window)
-  ipcMain.handle("engine", (event) => {
-    const from = event.senderFrame?.url ?? ""
-    if (!fromPage(from))
-      throw new Error("Only Banda's page may ask for the engine.")
-    return runtime.runPromise(Engine.use((engine) => engine.address))
-  })
-  ipcMain.handle("look", (event) => {
-    const from = event.senderFrame?.url ?? ""
-    if (!fromPage(from))
-      throw new Error("Only Banda's page may ask for the look.")
-    const now = lookNow()
-    return now && lookIn(BrowserWindow.fromWebContents(event.sender), now)
-  })
-  ipcMain.handle("sidebar.preset", async (event, name: unknown) => {
-    const from = event.senderFrame?.url ?? ""
-    if (!fromPage(from))
-      throw new Error("Only Banda's page may change the sidebar.")
-    const sidebar = lookNow()?.sidebar
-    if (!sidebar) throw new Error("The sidebar's file is not known yet.")
-    if (!sidebar.presets.some((preset) => preset.name === name))
-      throw new Error(`There is no preset ${JSON.stringify(name)}.`)
-    // The one writer (ADR 0016, decision 5).
-    const refused = await settings.set(
-      "sidebar.toml",
-      "preset",
-      JSON.stringify(name)
+  const { handle, on } = channels(runtime, fromPage)
+  const none = Schema.Tuple([])
+  const text = Schema.Tuple([Schema.String])
+  const write = (file: string, key: string, value: unknown) =>
+    Settings.use((settings) => settings.write(file, key, value))
+  /** Pins the extension `id` to the browser's row, or takes it off. */
+  const pin = (id: string, pinned: boolean) =>
+    Effect.flatMap(Look.part("browser", "The browser's file"), (browser) => {
+      const others = browser.pinned.filter((each) => each !== id)
+      return write("browser.toml", "pinned", pinned ? [...others, id] : others)
+    })
+
+  handle("engine", none, () => Engine.use((engine) => engine.address))
+  handle("look", none, (_, event) =>
+    Effect.map(
+      Look.use((look) => look.current),
+      (now) =>
+        now ? lookIn(BrowserWindow.fromWebContents(event.sender), now) : now
     )
-    if (refused.length) throw new Error(refused.join("\n"))
-  })
-  ipcMain.handle("sidebar.edit", async (event) => {
-    const from = event.senderFrame?.url ?? ""
-    if (!fromPage(from))
-      throw new Error("Only Banda's page may open the sidebar's file.")
-    const sidebar = lookNow()?.sidebar
-    if (!sidebar) throw new Error("The sidebar's file is not known yet.")
-    ensure(sidebar.file)
-    const failed = await shell.openPath(sidebar.file)
-    if (failed) throw new Error(failed)
-  })
-  // The browser's (ADR 0013): only Banda's page asks.
-  const fromBanda = (
-    event: Electron.IpcMainEvent | Electron.IpcMainInvokeEvent
-  ) => fromPage(event.senderFrame?.url ?? "")
-  const browserAsks = (
-    event: Electron.IpcMainEvent | Electron.IpcMainInvokeEvent
-  ) => {
-    if (!fromBanda(event))
-      throw new Error("Only Banda's page may change the browser.")
-  }
-  /** Sets `key` in browser.toml, through the one writer (ADR 0016). */
-  const setBrowser = async (key: string, value: string) => {
-    const refused = await settings.set("browser.toml", key, value)
-    if (refused.length) throw new Error(refused.join("\n"))
-  }
-  /** Pins the extension `id` to the row, or takes it off. */
-  const pin = async (id: string, pinned: boolean) => {
-    const others = (lookNow()?.browser.pinned ?? []).filter(
-      (each) => each !== id
+  )
+  handle("sidebar.preset", text, ([name]) =>
+    Effect.gen(function* () {
+      const sidebar = yield* Look.part("sidebar", "The sidebar's file")
+      if (!sidebar.presets.some((preset) => preset.name === name))
+        return yield* new Refused({
+          message: `There is no preset ${JSON.stringify(name)}.`,
+        })
+      yield* write("sidebar.toml", "preset", name)
+    })
+  )
+  handle("sidebar.edit", none, () =>
+    Effect.gen(function* () {
+      const sidebar = yield* Look.part("sidebar", "The sidebar's file")
+      ensure(sidebar.file)
+      const failed = yield* Effect.promise(() => shell.openPath(sidebar.file))
+      if (failed) return yield* new Refused({ message: failed })
+    })
+  )
+  // The browser's (ADR 0013).
+  handle(
+    "browser.tabs",
+    Schema.Tuple([Schema.Literals(["top", "left"])]),
+    ([where]) => write("browser.toml", "tabs", where)
+  )
+  handle(
+    "browser.pin",
+    Schema.Tuple([Schema.String, Schema.Boolean]),
+    ([id, pinned]) =>
+      extensions.has(id)
+        ? pin(id, pinned)
+        : Effect.fail(new Refused({ message: `There is no extension ${id}.` }))
+  )
+  handle("browser.remove", text, ([id]) =>
+    Effect.promise(() => extensions.remove(id)).pipe(
+      // A removed extension's button leaves the row too.
+      Effect.flatMap((removed) => (removed ? pin(id, false) : Effect.void))
     )
-    const list = pinned ? [...others, id] : others
-    await setBrowser("pinned", JSON.stringify(list))
-  }
-  ipcMain.handle("browser.tabs", async (event, where: unknown) => {
-    browserAsks(event)
-    if (where !== "top" && where !== "left")
-      throw new Error(`The tabs go "top" or "left", not ${String(where)}.`)
-    await setBrowser("tabs", JSON.stringify(where))
-  })
-  ipcMain.handle("browser.pin", async (event, id: unknown, pinned: unknown) => {
-    browserAsks(event)
-    if (!extensions.has(id))
-      throw new Error(`There is no extension ${String(id)}.`)
-    await pin(id, pinned === true)
-  })
-  ipcMain.handle("browser.remove", async (event, id: unknown) => {
-    browserAsks(event)
-    // A removed extension's button leaves the row too.
-    if (await extensions.remove(id)) await pin(id as string, false)
-  })
-  ipcMain.on("browser.reveal", (event, path: unknown) => {
-    if (fromBanda(event)) reveal(path)
-  })
-  ipcMain.on("settings.open", (event, link: unknown) => {
-    if (fromPage(event.senderFrame?.url ?? "")) openSettings(linkOf(link))
-  })
-  ipcMain.on("menu.open", (event, route: unknown) => {
-    if (fromPage(event.senderFrame?.url ?? "")) openMenu(route)
-  })
-  ipcMain.on("settings.close", (event) => {
-    if (fromPage(event.senderFrame?.url ?? "")) settingsWindow?.close()
-  })
-  pageOnly("settings.set", (file, key, value) => settings.set(file, key, value))
-  pageOnly("settings.reset", (file, key) => settings.reset(file, key))
-  pageOnly("settings.rename", (file, key, to) => settings.rename(file, key, to))
-  pageOnly("settings.themes", () => settings.themes())
-  pageOnly("settings.reveal", (file) => {
-    const sidebar = lookNow()?.sidebar
-    if (!sidebar) throw new Error("The config folder is not known yet.")
-    return settings.reveal(sidebar.file, file)
-  })
-  ipcMain.on(
+  )
+  on("browser.reveal", text, ([path]) => Effect.sync(() => reveal(path)))
+  // What an extension's button and the tabs send; extensions.ts checks it.
+  const anything = Schema.Unknown
+  on(
     "browser.popup",
-    (event, extension: unknown, url: unknown, under: unknown) => {
-      if (fromBanda(event)) extensions.popup(extension, url, under)
-    }
+    Schema.Tuple([anything, anything, anything]),
+    ([extension, url, under]) =>
+      Effect.sync(() => extensions.popup(extension, url, under))
   )
-  ipcMain.on("browser.shown", (event, contents: unknown) => {
-    if (fromBanda(event)) extensions.shown(contents)
-  })
-  ipcMain.on(
+  on("browser.shown", Schema.Tuple([anything]), ([contents]) =>
+    Effect.sync(() => extensions.shown(contents))
+  )
+  on(
     "browser.created",
-    (event, request: unknown, contents: unknown) => {
-      if (fromBanda(event)) extensions.created(request, contents)
-    }
+    Schema.Tuple([anything, anything]),
+    ([request, contents]) =>
+      Effect.sync(() => extensions.created(request, contents))
   )
-  ipcMain.on("notify:show", (event, notice: Notice) => {
-    if (!fromPage(event.senderFrame?.url ?? "")) return
-    desktop.show(notice, answered)
-    // The workspace that holds the window lights up in the desktop's bar.
-    if (window && !window.isFocused()) window.flashFrame(true)
-  })
-  ipcMain.on("notify:withdraw", (event, key: string) => {
-    if (fromPage(event.senderFrame?.url ?? "")) desktop.withdraw(key)
-  })
-  ipcMain.handle("notify:quiet", (event) => {
-    if (!fromPage(event.senderFrame?.url ?? "")) return false
-    return desktop.quiet()
-  })
+  // The settings window's (ADR 0016) and the Banda menu's (ADR 0017).
+  on("settings.open", text, ([link]) =>
+    Effect.sync(() => openSettings(linkOf(link)))
+  )
+  on("menu.open", Schema.Tuple([anything]), ([route]) =>
+    Effect.sync(() => openMenu(route))
+  )
+  on("settings.close", none, () => Effect.sync(() => settingsWindow?.close()))
+  handle(
+    "settings.set",
+    Schema.Tuple([Schema.String, Schema.String, Schema.String]),
+    ([file, key, value]) =>
+      Settings.use((settings) => settings.set(file, key, value))
+  )
+  handle(
+    "settings.reset",
+    Schema.Tuple([Schema.String, Schema.String]),
+    ([file, key]) => Settings.use((settings) => settings.reset(file, key))
+  )
+  handle(
+    "settings.rename",
+    Schema.Tuple([Schema.String, Schema.String, Schema.String]),
+    ([file, key, to]) =>
+      Settings.use((settings) => settings.rename(file, key, to))
+  )
+  handle("settings.themes", none, () =>
+    Settings.use((settings) => settings.themes)
+  )
+  handle("settings.reveal", text, ([file]) =>
+    Effect.flatMap(Look.part("sidebar", "The config folder"), (sidebar) =>
+      Settings.use((settings) => settings.reveal(sidebar.file, file))
+    )
+  )
+  // Calls (ADR 0011).
+  on("notify:show", Schema.Tuple([NoticeArg]), ([notice]) =>
+    Effect.andThen(
+      Notices.use((notices) => notices.show(notice, answered)),
+      // The workspace that holds the window lights up in the desktop's bar.
+      Effect.sync(() => {
+        if (window && !window.isFocused()) window.flashFrame(true)
+      })
+    )
+  )
+  on("notify:withdraw", text, ([key]) =>
+    Notices.use((notices) => notices.withdraw(key))
+  )
+  handle("notify:quiet", none, () => Notices.use((notices) => notices.quiet))
   const first = await runtime.runPromise(Look.first(LOOK_WAIT))
   if (first) nativeTheme.themeSource = first.mode
   Menu.setApplicationMenu(process.platform === "darwin" ? macMenu() : null)
@@ -376,15 +376,6 @@ function lookIn(shown: BrowserWindow | null, now: LookValue): LookValue {
   return systemGlass(now) && shown !== clear
     ? { ...now, desk: { ...now.desk, glass: false } }
     : now
-}
-
-/** Answers `channel` for Banda's page alone. */
-function pageOnly(channel: string, answer: (...args: unknown[]) => unknown) {
-  ipcMain.handle(channel, (event, ...args: unknown[]) => {
-    if (!fromPage(event.senderFrame?.url ?? ""))
-      throw new Error(`Only Banda's page may ask for ${channel}.`)
-    return answer(...args)
-  })
 }
 
 function fromPage(url: string): boolean {

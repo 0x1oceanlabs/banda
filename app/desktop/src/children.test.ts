@@ -1,5 +1,4 @@
-import { mkdtempSync, readFileSync, writeFileSync } from "node:fs"
-import { tmpdir } from "node:os"
+import { readFileSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { NodeServices } from "@effect/platform-node"
 import { expect, it } from "@effect/vitest"
@@ -9,6 +8,7 @@ import { TestClock } from "effect/testing"
 import { command, keepRunning } from "./child"
 import { Engine } from "./engine"
 import { Look } from "./look"
+import { script } from "./testing"
 
 /** A spawner whose programs end as `ends` says for their nth run, and
  * which notes when each started. */
@@ -70,13 +70,6 @@ it.effect(
       expect(starts).toEqual([0, 500, 1500, 33_000])
     })
 )
-
-/** A shell script in a folder of its own; returns its path. */
-function script(text: string): string {
-  const program = join(mkdtempSync(join(tmpdir(), "banda-child-")), "program")
-  writeFileSync(program, `#!/bin/sh\n${text}\n`, { mode: 0o755 })
-  return program
-}
 
 it.live(
   "the engine's first line gives its address and its door, and the window's end stops it",
