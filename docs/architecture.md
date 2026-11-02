@@ -75,7 +75,8 @@ banda call/follow   the CLI: the same API, for people, scripts and Agents
   `instructions` are the skill's core. A refused or malformed call is a
   tool result marked `isError`, with the refusal and that nothing was
   done; only an engine that does not answer is a JSON-RPC error.
-- **The CLI prints JSON.** `banda call <method>` prints `{"ok": …}`.
+- **The CLI prints JSON.** `banda call <method>` prints `{"ok": …}`, as
+  `banda space add <path>` does with the Space it added.
   `banda follow` prints events, one per line. When the engine refuses
   the call, the hello or the follow, the CLI prints
   `{"error": {"code", "message"}}` and exits 1. When no engine answers,
@@ -93,7 +94,12 @@ The kernel holds only what every module needs, and it names no module.
   folder holds the work alone. One engine at a time opens a Space: it holds
   a lock on `spaces/<id>/space.lock` while the Space is open. Spaces from
   before ADR 0026 move their `.banda/` there the first time an engine
-  starts.
+  starts. The kernel's own methods manage them: `spaces.create` makes a
+  new folder, `spaces.add` adds any folder (resolved, so one folder is one
+  Space), `spaces.browse` lists folders as a path is typed,
+  `spaces.update` renames, pins or archives, and `spaces.remove` forgets
+  a Space: its modules stop what runs there (`Module::closing`), its data
+  becomes `<id>.gone` and is deleted, and its folder is not touched.
 - **Event log.** Append-only, with typed events, one per Space. Windows and
   the CLI subscribe to it. A subscription sends only what its view needs.
   The database itself refuses to change or delete an event.

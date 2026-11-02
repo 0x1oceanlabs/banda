@@ -141,6 +141,9 @@ every proposal:
    - `spaces.update {space, name?, pinned?, archived?}` and
      `spaces.remove {space}`.
    - `SpaceSummary` gains `pinned`, `archived` and `missing` (decision 6).
+     _Changed on 2026-11-02, in step 3:_ `missing` comes with step 7,
+     which lists a Space whose folder is gone; until then the engine
+     lists no such Space.
 
 5. **A Space is managed where it is shown, with T3 Code's words.**
    - A Space's row in the sidebar has a right-click menu: "New Thread",

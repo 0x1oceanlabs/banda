@@ -24,8 +24,11 @@ const DATABASE: &str = "space.sqlite3";
 /// A Space's data while it is being written, before it is renamed into
 /// place: the engine opens none of these, and clears them.
 pub(crate) const UNFINISHED: &str = ".new";
+/// A removed Space's data until it is deleted: the engine opens none of
+/// these either, and clears them.
+pub(crate) const GONE: &str = ".gone";
 
-#[derive(Serialize, Deserialize)]
+#[derive(Clone, Serialize, Deserialize)]
 pub(crate) struct Manifest {
     pub id: SpaceId,
     pub name: String,
@@ -37,6 +40,12 @@ pub(crate) struct Manifest {
     /// The command that made it: the same command again gets this Space.
     pub command: CommandId,
     pub created_at: i64,
+    /// Pinned Spaces come first in the Space pickers (ADR 0026).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub pinned: bool,
+    /// Hidden from the Space pickers; its Threads and files are kept.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub archived: bool,
 }
 
 impl Manifest {
@@ -49,6 +58,8 @@ impl Manifest {
             author,
             command,
             created_at: now_ms(),
+            pinned: false,
+            archived: false,
         }
     }
 
@@ -58,8 +69,11 @@ impl Manifest {
         )?)?)
     }
 
+    /// Writes it whole or not at all: beside, then renamed over the old.
     pub fn write(&self, data: &Path) -> Result<(), Error> {
-        std::fs::write(data.join(MANIFEST), serde_json::to_vec_pretty(self)?)?;
+        let aside = data.join(format!("{MANIFEST}{UNFINISHED}"));
+        std::fs::write(&aside, serde_json::to_vec_pretty(self)?)?;
+        std::fs::rename(&aside, data.join(MANIFEST))?;
         Ok(())
     }
 }
@@ -93,12 +107,14 @@ pub(crate) fn place(
 
 pub struct Space {
     id: SpaceId,
-    name: String,
     folder: PathBuf,
     /// `spaces/<id>/` in the engine's data.
     data: PathBuf,
-    /// The command that made it.
-    command: CommandId,
+    /// Its `space.json`, as the Person changes its name, pin and archive.
+    /// Its ID and folder never change while it is open.
+    manifest: std::sync::Mutex<Manifest>,
+    /// Where its data went once it was removed: deleted as it closes.
+    removed: std::sync::Mutex<Option<PathBuf>>,
     owner: PersonId,
     store: Store,
     modules: Arc<[Arc<dyn Module>]>,
@@ -108,6 +124,15 @@ pub struct Space {
 }
 
 impl Space {
+    /// A Space's name, which the Person may change: it names no folder.
+    pub(crate) fn name_of(name: &str) -> Result<&str, Refusal> {
+        let name = name.trim();
+        if name.is_empty() || name.chars().count() > 64 || name.contains(char::is_control) {
+            return Err(Refusal::invalid("A Space's name is 1 to 64 characters."));
+        }
+        Ok(name)
+    }
+
     /// The name as a Space's folder takes it.
     pub(crate) fn plain_name(name: &str) -> Result<&str, Refusal> {
         crate::plain_name(name).ok_or_else(|| {
@@ -141,7 +166,7 @@ impl Space {
         passes: Arc<Passes>,
         boot: &str,
     ) -> Result<Arc<Space>, Error> {
-        let folder = manifest.folder;
+        let folder = manifest.folder.clone();
         if !folder.is_dir() {
             return Err(Refusal::not_found(format!(
                 "The Space's folder {} is not there.",
@@ -157,10 +182,10 @@ impl Space {
             .map_err(|_| Error::Closed)??;
         let space = Arc::new(Space {
             id: manifest.id,
-            name: manifest.name,
             folder,
             data,
-            command: manifest.command,
+            manifest: std::sync::Mutex::new(manifest),
+            removed: Default::default(),
             owner,
             store,
             modules,
@@ -179,10 +204,6 @@ impl Space {
         self.id
     }
 
-    pub fn name(&self) -> &str {
-        &self.name
-    }
-
     pub fn folder(&self) -> &Path {
         &self.folder
     }
@@ -192,8 +213,15 @@ impl Space {
         &self.data
     }
 
+    /// The command that made it.
     pub(crate) fn command(&self) -> CommandId {
-        self.command
+        self.manifest.lock().unwrap().command
+    }
+
+    /// Its data, now at `data`, is deleted once the last holder lets go
+    /// of the Space: its turns and terminals have stopped.
+    pub(crate) fn delete_when_closed(&self, data: PathBuf) {
+        *self.removed.lock().unwrap() = Some(data);
     }
 
     pub fn owner(&self) -> PersonId {
@@ -201,11 +229,26 @@ impl Space {
     }
 
     pub fn summary(&self) -> SpaceSummary {
+        let manifest = self.manifest.lock().unwrap();
         SpaceSummary {
             id: self.id,
-            name: self.name.clone(),
+            name: manifest.name.clone(),
             folder: self.folder.display().to_string(),
+            pinned: manifest.pinned,
+            archived: manifest.archived,
         }
+    }
+
+    /// Changes its `space.json` with `change`, and keeps it once written.
+    pub(crate) fn change(&self, change: impl FnOnce(&mut Manifest)) -> Result<SpaceSummary, Error> {
+        {
+            let mut kept = self.manifest.lock().unwrap();
+            let mut changed = kept.clone();
+            change(&mut changed);
+            changed.write(&self.data)?;
+            *kept = changed;
+        }
+        Ok(self.summary())
     }
 
     /// Committed events from now on, in order.
@@ -262,6 +305,18 @@ impl Drop for Space {
     fn drop(&mut self) {
         // Wake the worker so it sees the Space is gone and ends.
         self.store.outbox_signal().notify_one();
+        if let Some(data) = self.removed.get_mut().unwrap().take() {
+            let delete = move || {
+                if let Err(error) = std::fs::remove_dir_all(&data) {
+                    let data = data.display();
+                    tracing::warn!(%data, %error, "a removed Space's data was not deleted");
+                }
+            };
+            match tokio::runtime::Handle::try_current() {
+                Ok(runtime) => drop(runtime.spawn_blocking(delete)),
+                Err(_) => delete(),
+            }
+        }
     }
 }
 

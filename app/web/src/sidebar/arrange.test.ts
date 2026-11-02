@@ -6,9 +6,16 @@ import { arrange, type Arranged } from "./arrange"
 import { DEFAULT_SIDEBAR } from "@banda/contract/sidebar"
 import { type Settings, STATES } from "./settings"
 
-const landing: SpaceSummary = { id: "s1", name: "Landing", folder: "/l" }
-const api: SpaceSummary = { id: "s2", name: "API", folder: "/a" }
-const quiet: SpaceSummary = { id: "s3", name: "Quiet", folder: "/q" }
+const space = (id: string, name: string, folder: string): SpaceSummary => ({
+  id,
+  name,
+  folder,
+  pinned: false,
+  archived: false,
+})
+const landing = space("s1", "Landing", "/l")
+const api = space("s2", "API", "/a")
+const quiet = space("s3", "Quiet", "/q")
 const spaces = [landing, api, quiet]
 
 const listed = (id: string, mark: MarkState, changed: number): Listed => ({
