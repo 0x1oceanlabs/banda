@@ -4,7 +4,7 @@
 use crate::model::{
     Asking, Body, Failure, Image, ImageId, Item, ItemId, LISTED_MESSAGE, LatestTurn, ListedThread,
     Offer, Opener, QuestionState, Settings, ThreadId, ThreadSummary, TurnId, TurnState, TurnView,
-    Usage,
+    Usage, VisualId,
 };
 use banda_kernel::{AgentId, Error, Participant, Refusal};
 use rusqlite::{Connection, OptionalExtension, Row, params};
@@ -315,6 +315,16 @@ pub fn drop_unsent_images(sql: &Connection, before: i64) -> Result<Vec<ImageId>,
 pub fn image_ids(sql: &Connection) -> Result<HashSet<ImageId>, Error> {
     let mut all = sql.prepare("SELECT id FROM agents_images")?;
     let ids = all.query_map([], |row| row.get(0))?;
+    Ok(ids.collect::<Result<_, _>>()?)
+}
+
+/// Every Visual an item of the Space names (ADR 0037).
+pub fn visual_ids(sql: &Connection) -> Result<HashSet<VisualId>, Error> {
+    let mut named = sql.prepare(
+        "SELECT json_extract(body, '$.visual') FROM agents_items \
+         WHERE json_extract(body, '$.kind') = 'visual'",
+    )?;
+    let ids = named.query_map([], |row| row.get(0))?;
     Ok(ids.collect::<Result<_, _>>()?)
 }
 

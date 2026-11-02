@@ -1610,6 +1610,58 @@ test("an Agent starts a Thread, its answer comes back, and each names the other'
   await expect(hello).toHaveAttribute("data-focused", "true")
 })
 
+test("an Agent shows a Visual in its Thread: its page runs apart from Banda, in the look's colours, as tall as it is", async () => {
+  window = await startWindow()
+  const { page } = window
+  const { thread, composer } = await firstThread(page)
+  await composer.fill("wait")
+  await composer.press("Enter")
+  await expect(thread.getByText("Waiting.")).toBeVisible()
+
+  // A page with a script, the look's colour, and a height of its own.
+  const html = `<!doctype html><html><head><style>
+    .box { height: 260px; background: var(--primary); border-radius: var(--radius) }
+  </style></head><body><div class="box"></div><p id="said">…</p><script>
+    let cookies = "cookies"
+    try { document.cookie } catch { cookies = "no cookies" }
+    document.getElementById("said").textContent =
+      "ran, " + typeof window.bandaEngine + ", " + cookies
+  </script></body></html>`
+  const said = agentCalls(window, "show_visual", {
+    html,
+    title: "A mockup",
+    height: 120,
+  })
+  expect(said.isError, said.content[0]?.text).toBeFalsy()
+  expect(said.content[0]!.text).toContain(
+    "Shown to your Person above your reply."
+  )
+
+  const frame = thread.locator('iframe[title="A mockup"]')
+  await expect(frame).toBeVisible()
+  const inside = frame.contentFrame()
+  await expect(inside.locator("#said")).toHaveText("ran, undefined, no cookies")
+  // It is an origin of its own, sandboxed: opaque to Banda's page.
+  expect(await inside.locator("html").evaluate(() => origin)).toBe("null")
+  // The look's primary colour, as Banda's page has it.
+  const primary = await page.evaluate(() =>
+    getComputedStyle(document.documentElement)
+      .getPropertyValue("--primary")
+      .trim()
+  )
+  const painted = await inside
+    .locator(".box")
+    .evaluate((box) =>
+      getComputedStyle(box).getPropertyValue("--primary").trim()
+    )
+  expect(painted).toBe(primary)
+  // The frame fits the page, not the height the Agent guessed.
+  await expect
+    .poll(async () => (await frame.boundingBox())?.height ?? 0)
+    .toBeGreaterThan(280)
+  await page.screenshot({ path: "test-results/18m-visual.png" })
+})
+
 test("an Agent opens a Pane beside its Thread without the focus, marked until the Person looks, and closes it", async () => {
   window = await startWindow()
   const { page } = window

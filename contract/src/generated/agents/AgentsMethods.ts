@@ -19,11 +19,14 @@ import type { OneHarness } from "./OneHarness";
 import type { OneImage } from "./OneImage";
 import type { OneThread } from "./OneThread";
 import type { OneTurn } from "./OneTurn";
+import type { OneVisual } from "./OneVisual";
 import type { Send } from "./Send";
 import type { Sent } from "./Sent";
+import type { ShowVisual } from "./ShowVisual";
 import type { SignIn } from "./SignIn";
 import type { ThreadList } from "./ThreadList";
 import type { ThreadView } from "./ThreadView";
+import type { VisualPage } from "./VisualPage";
 
 export type AgentsMethods = { 
 /**
@@ -128,4 +131,32 @@ keep: CommandMethod<Keep, Kept>,
 /**
  * The files in the Space's folder, for `@` in the composer.
  */
-files: CallMethod<FileQuery, Array<string>>, };
+files: CallMethod<FileQuery, Array<string>>, 
+/**
+ * Shows your Person a finished HTML page in your Thread, above
+ * your reply: a mockup, a chart, a diagram, how a feature works,
+ * an animation, a sound. Don't announce or describe it after;
+ * say only what it doesn't. The frame is your reply's width, on
+ * the Thread's own background, and fits the page's height up to
+ * 20000px. Leave html, body and the outer element with no
+ * background colour, no outer card, border, banner title or side
+ * padding; Banda adds an 8px gutter for focus rings and shadows.
+ * A box that needs its own background gets 16px padding and
+ * var(--radius) corners. Give charts fixed pixel heights and let
+ * the content set the height: no vh units and no height:100% on
+ * html or body, as the frame grows to fit the page. Use the
+ * window's colours as CSS variables on :root, not fixed colours:
+ * --background, --foreground, --muted, --card, --popover,
+ * --secondary, --border, --input, --ring, --primary, --accent,
+ * --destructive, --warning, --success, --info, --code-background
+ * (most have a matching -foreground; accent, destructive and
+ * warning also have -surface), --chart-1 to --chart-6, --radius,
+ * --font-sans, --font-mono. Banda's sheet sets the text colour
+ * and font. Inline <style> and <script>; web addresses load as
+ * they are. Sound plays once your Person clicks in the page.
+ */
+show_visual: CommandMethod<ShowVisual, string>, 
+/**
+ * A Visual's page, as the window serves it.
+ */
+visual: CallMethod<OneVisual, VisualPage>, };

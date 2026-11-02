@@ -27,6 +27,11 @@ banda_kernel::id!(
     ImageId,
     export_to = "agents/"
 );
+banda_kernel::id!(
+    /// A Visual: a page an Agent showed in its Thread (ADR 0037).
+    VisualId,
+    export_to = "agents/"
+);
 
 /// An image a Person sends with a message. Its bytes are kept apart, in
 /// the Space's data, `spaces/<id>/images/`, and read with `agents.image`.
@@ -759,6 +764,13 @@ pub enum Body {
     Notice {
         text: String,
     },
+    /// A page the Agent showed its Person (ADR 0037): read with
+    /// `agents.visual`, it shows `height` pixels tall till it says its own.
+    Visual {
+        visual: VisualId,
+        title: String,
+        height: u32,
+    },
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -1051,6 +1063,15 @@ pub enum Fact {
         item: ItemId,
         turn: TurnId,
         text: String,
+    },
+    /// The Agent showed its Person a Visual (ADR 0037).
+    #[serde(rename = "visual.shown")]
+    VisualShown {
+        item: ItemId,
+        turn: TurnId,
+        visual: VisualId,
+        title: String,
+        height: u32,
     },
 }
 

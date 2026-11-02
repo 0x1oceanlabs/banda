@@ -279,6 +279,7 @@ fn texts(view: &ThreadView) -> Vec<String> {
             Body::Question { title, state, .. } => format!("question: {title} ({state:?})"),
             Body::Notice { text } => format!("notice: {text}"),
             Body::Plan { steps } => format!("plan: {} steps", steps.len()),
+            Body::Visual { title, height, .. } => format!("visual: {title} ({height}px)"),
         })
         .collect()
 }
@@ -2933,7 +2934,7 @@ async fn a_recorded_conversation_plays_again_as_it_went() {
 /// 0019): their MCP names, their methods, their `///` and the schema of
 /// their params, with only what an Agent sets.
 #[tokio::test]
-async fn threads_one_thread_and_send_are_an_agents_tools() {
+async fn threads_one_thread_send_and_show_visual_are_an_agents_tools() {
     let root = tempfile::tempdir().unwrap();
     let owner = PersonId::new();
     let kernel = World::open(root.path(), owner).await;
@@ -2942,6 +2943,27 @@ async fn threads_one_thread_and_send_are_an_agents_tools() {
         .call(agent, "spaces.tools", None, None, Value::Null)
         .await
         .unwrap();
+    let show = tools.as_array_mut().unwrap().pop().unwrap();
+    assert_eq!(
+        (&show["name"], &show["method"]),
+        (&json!("show_visual"), &json!("agents.show_visual"))
+    );
+    let description = show["description"].as_str().unwrap();
+    assert!(description.starts_with("Shows your Person a finished HTML page"));
+    assert!(
+        description.contains("--chart-1 to --chart-6"),
+        "{description}"
+    );
+    let given: Vec<_> = show["schema"]["properties"]
+        .as_object()
+        .unwrap()
+        .keys()
+        .collect();
+    assert_eq!(given, ["html", "title", "height"]);
+    assert_eq!(
+        show["schema"]["required"],
+        json!(["html", "title", "height"])
+    );
     let send = tools.as_array_mut().unwrap().pop().unwrap();
     assert_eq!(
         (&send["name"], &send["method"]),
@@ -3037,6 +3059,96 @@ impl World {
             .map(|e| e.payload["answers"].clone())
             .collect()
     }
+}
+
+#[tokio::test]
+async fn an_agent_shows_its_person_a_visual_in_its_own_turn() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let sent = world.send(None, "wait").await;
+    let thread = sent["thread"].clone();
+    world
+        .until(&thread, |v| {
+            texts(v).contains(&"message: Waiting.".to_owned())
+        })
+        .await;
+    let listed = world.threads().await.threads;
+    let agent = Participant::Agent(listed[0].agent);
+    let page = "<!doctype html><p style=\"color:var(--primary)\">Hi</p>";
+    let show = |who, title: &str, height: u32| {
+        world.call(
+            who,
+            "agents.show_visual",
+            json!({ "html": page, "title": title, "height": height }),
+        )
+    };
+
+    // The Agent's own Thread shows it, after what the turn said, by the Agent.
+    let said = show(agent, " A mockup ", 12).await.unwrap();
+    assert!(
+        said.as_str()
+            .unwrap()
+            .starts_with("Shown to your Person above your reply.")
+    );
+    let view = world.thread(&thread).await;
+    assert_eq!(
+        texts(&view)[1..],
+        ["message: Waiting.", "visual: A mockup (80px)"]
+    );
+    let item = view.items.last().unwrap();
+    assert_eq!(item.author, agent);
+    assert_eq!(json!(item.turn), sent["turn"]);
+    let Body::Visual { visual, .. } = &item.body else {
+        panic!("a Visual")
+    };
+    let read = world
+        .call(world.person(), "agents.visual", json!({ "visual": visual }))
+        .await
+        .unwrap();
+    assert_eq!(read["html"], page);
+
+    // A Person has no Thread to show it in; a page is needed.
+    let person = show(world.person(), "t", 300).await.unwrap_err();
+    assert_eq!(person.code, Code::Forbidden);
+    let empty = world
+        .call(
+            agent,
+            "agents.show_visual",
+            json!({ "html": "", "title": "t", "height": 300 }),
+        )
+        .await
+        .unwrap_err();
+    assert_eq!(
+        empty.message,
+        "A Visual needs its page: a whole HTML document."
+    );
+    let none = world
+        .call(
+            world.person(),
+            "agents.visual",
+            json!({ "visual": TurnId::new() }),
+        )
+        .await
+        .unwrap_err();
+    assert_eq!(none.message, "There is no such Visual.");
+
+    // Once its turn ended, nothing shows, and no page is left behind.
+    world
+        .call(
+            world.person(),
+            "agents.stop",
+            json!({ "turn": sent["turn"] }),
+        )
+        .await
+        .unwrap();
+    world.until(&thread, |v| !ongoing(v, &sent["turn"])).await;
+    let late = show(agent, "Late", 300).await.unwrap_err();
+    assert_eq!(late.message, "A Visual shows in a turn that runs.");
+    let kept = std::fs::read_dir(root.path().join(".data/spaces"))
+        .unwrap()
+        .flat_map(|space| std::fs::read_dir(space.unwrap().path().join("visuals")).unwrap())
+        .count();
+    assert_eq!(kept, 1, "only the Visual that showed keeps its page");
 }
 
 #[tokio::test]

@@ -440,6 +440,12 @@ If Chat is removed, Agents still works through its own Thread.
   Claude Code sends it once the command is done. The Thread keeps it all,
   up to 4 MB for one command's output, text or diff, which only a runaway
   command reaches; a diff past it says so instead.
+- **A Visual is a page the Agent shows** (ADR 0037): `show_visual` keeps
+  its HTML in the Space's data, `spaces/<id>/visuals/`, and the Agent's
+  turn that runs gets an item, `visual.shown`, which no fold hides. The
+  window serves it at `app://visuals/<space>/<visual>`, an origin of its
+  own, sandboxed by its response and its frame (`modules/agents/desktop`),
+  and the frame passes it the look's colours as T3 Code's variables.
 - **An Agent's plan** for its turn is one entry whose steps follow the
   Harness: each plan it sends replaces the steps, and an empty one clears
   them. A new turn's plan is a new entry. Codex in plan mode writes its
@@ -827,6 +833,7 @@ banda/
   modules/
     agents/engine/    Rust: Threads, turns, Questions, the ACP adapter
     agents/pane/      React: the Thread, the settings' Agents, each Thread as the sidebar lists it
+    agents/desktop/   Electron main: serves the Visuals Agents show (ADR 0037)
     terminal/engine/  Rust: Terminals, their PTYs and what they printed
     terminal/pane/    React: a terminal, drawn by Ghostty
     browser/pane/     React: the browser Pane, its tabs and row (ADR 0013)

@@ -1,0 +1,28 @@
+{
+  "name": "@banda/agents-desktop",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "description": "The agents module's part in the window's main process (ADR 0028): it serves the Visuals Agents show in their Threads (ADR 0037).",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --dir src"
+  },
+  "dependencies": {
+    "@banda/agents-pane": "workspace:*",
+    "@banda/contract": "workspace:*",
+    "@banda/desktop-kit": "workspace:*",
+    "effect": "4.1.1"
+  },
+  "devDependencies": {
+    "@banda/ui": "workspace:*",
+    "@effect/vitest": "4.1.1",
+    "@types/node": "^24",
+    "electron": "45.1.0",
+    "typescript": "~6.0.2",
+    "vitest": "^5.0.5"
+  }
+}

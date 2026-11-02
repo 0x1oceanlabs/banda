@@ -57,6 +57,9 @@ importers:
         specifier: 1.64.1
         version: 1.64.1
     devDependencies:
+      '@banda/agents-desktop':
+        specifier: workspace:*
+        version: link:../../modules/agents/desktop
       '@banda/browser-desktop':
         specifier: workspace:*
         version: link:../../modules/browser/desktop
@@ -303,6 +306,40 @@ importers:
         version: 6.0.3
       vitest:
         specifier: ^5
+        version: 5.0.5(@types/node@24.19.2)(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0))
+
+  modules/agents/desktop:
+    dependencies:
+      '@banda/agents-pane':
+        specifier: workspace:*
+        version: link:../pane
+      '@banda/contract':
+        specifier: workspace:*
+        version: link:../../../contract
+      '@banda/desktop-kit':
+        specifier: workspace:*
+        version: link:../../../app/desktop-kit
+      effect:
+        specifier: 4.1.1
+        version: 4.1.1
+    devDependencies:
+      '@banda/ui':
+        specifier: workspace:*
+        version: link:../../../app/ui
+      '@effect/vitest':
+        specifier: 4.1.1
+        version: 4.1.1(effect@4.1.1)(vitest@5.0.5(@types/node@24.19.2)(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)))
+      '@types/node':
+        specifier: ^24
+        version: 24.19.2
+      electron:
+        specifier: 45.1.0
+        version: 45.1.0(supports-color@7.2.0)
+      typescript:
+        specifier: ~6.0.2
+        version: 6.0.3
+      vitest:
+        specifier: ^5.0.5
         version: 5.0.5(@types/node@24.19.2)(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0))
 
   modules/agents/pane:

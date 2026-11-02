@@ -78,6 +78,7 @@ import { FindBar, useFound } from "./Find"
 import { holds } from "./find"
 import { Minimap } from "./Minimap"
 import { ToolCall } from "./ToolCall"
+import { Visual } from "./Visual"
 import { SettingsMenu } from "./ThreadSettings"
 import { SignIn, Warning } from "./SignIn"
 import { NewThreadBar } from "./NewThread"
@@ -204,6 +205,7 @@ function ThreadPane(props: PaneProps<ThreadArgs>) {
           <Transcript
             // Each Thread scrolls on its own, from where it was left.
             key={thread}
+            space={space}
             thread={thread}
             forYou={Boolean(asking || planned)}
             finding={find?.query ?? ""}
@@ -356,6 +358,7 @@ type Answering = {
 }
 
 function Transcript({
+  space,
   thread,
   forYou,
   finding,
@@ -374,6 +377,7 @@ function Transcript({
   ...answers
 }: Answering &
   Writers & {
+    space: SpaceId
     thread: string
     /** The Thread waits for its Person: a Question, or a plan. */
     forYou: boolean
@@ -420,6 +424,7 @@ function Transcript({
       case "item":
         return (
           <Entry
+            space={space}
             item={line.item}
             onFork={forkAt(line.item)}
             onEdit={editAt(line.item)}
@@ -571,6 +576,7 @@ function ScrollToEnd({ queued, forYou }: { queued: number; forYou: boolean }) {
 type OpenDiff = (turn: string, path?: string) => void
 
 function Entry({
+  space,
   item,
   live,
   reader,
@@ -582,6 +588,7 @@ function Entry({
   answering,
   onAnswer,
 }: Answering & {
+  space: SpaceId
   item: Item
   /** From {@link AgentMessage}'s `onFork`. */
   onFork?: (() => void) | null
@@ -675,6 +682,15 @@ function Entry({
             <TraceTitle className="whitespace-normal">{body.text}</TraceTitle>
           </TraceLine>
         </Trace>
+      )
+    case "visual":
+      return (
+        <Visual
+          space={space}
+          visual={body.visual}
+          title={body.title}
+          height={body.height}
+        />
       )
   }
 }

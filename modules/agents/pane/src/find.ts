@@ -16,6 +16,7 @@ function wordsOf({ body }: Item): string {
       return body.text
     case "tool":
     case "question":
+    case "visual":
       return body.title
     case "plan":
       return body.steps.map((step) => step.text).join("\n")

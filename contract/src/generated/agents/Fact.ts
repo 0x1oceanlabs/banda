@@ -17,6 +17,7 @@ import type { ToolStatus } from "./ToolStatus";
 import type { TurnId } from "./TurnId";
 import type { TurnState } from "./TurnState";
 import type { Usage } from "./Usage";
+import type { VisualId } from "./VisualId";
 
 /**
  * What the agents module publishes, version 1: each fact is an Event's
@@ -45,4 +46,4 @@ exit?: Exit, } } | { "kind": "tool.output", "payload": { item: ItemId, text: str
 /**
  * Banda keeps no more of its output.
  */
-cut: boolean, } } | { "kind": "plan.made", "payload": { item: ItemId, turn: TurnId, steps: Array<PlanStep>, } } | { "kind": "plan.changed", "payload": { item: ItemId, steps: Array<PlanStep>, } } | { "kind": "thread.used", "payload": { thread: ThreadId, usage: Usage, } } | { "kind": "question.asked", "payload": { item: ItemId, turn: TurnId, title: string, choices: Array<Choice>, form?: Array<Field>, plan?: string, } } | { "kind": "question.answered", "payload": { item: ItemId, choice: string, values?: { [key in string]: FieldValue }, } } | { "kind": "question.closed", "payload": { item: ItemId, } } | { "kind": "notice.posted", "payload": { item: ItemId, turn: TurnId, text: string, } };
+cut: boolean, } } | { "kind": "plan.made", "payload": { item: ItemId, turn: TurnId, steps: Array<PlanStep>, } } | { "kind": "plan.changed", "payload": { item: ItemId, steps: Array<PlanStep>, } } | { "kind": "thread.used", "payload": { thread: ThreadId, usage: Usage, } } | { "kind": "question.asked", "payload": { item: ItemId, turn: TurnId, title: string, choices: Array<Choice>, form?: Array<Field>, plan?: string, } } | { "kind": "question.answered", "payload": { item: ItemId, choice: string, values?: { [key in string]: FieldValue }, } } | { "kind": "question.closed", "payload": { item: ItemId, } } | { "kind": "notice.posted", "payload": { item: ItemId, turn: TurnId, text: string, } } | { "kind": "visual.shown", "payload": { item: ItemId, turn: TurnId, visual: VisualId, title: string, height: number, } };

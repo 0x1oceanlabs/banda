@@ -457,6 +457,11 @@ function project(state: ThreadState, event: Event): ThreadState {
         items: [...state.items, item(id, { kind: "notice", text }, turn)],
       }
     }
+    case "visual.shown": {
+      const { item: id, turn, visual, title, height } = fact.payload
+      const body = { kind: "visual", visual, title, height } as const
+      return { ...next, items: [...state.items, item(id, body, turn)] }
+    }
     case "thread.configured":
       return { ...next, settings: fact.payload.settings }
     case "thread.offered":

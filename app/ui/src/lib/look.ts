@@ -38,3 +38,15 @@ export function useLook<T>(pick: (look: Look) => T, before: T): T {
 export function useFile<T>(file: ModuleFile<T>): T {
   return useLook((look) => fileOf(look.files, file), file.before)
 }
+
+/** Calls `onChange` when the window turns light or dark, or its look
+ * sets new colours on the root (ADR 0007): after they are painted, so a
+ * reader of the root's style reads the new ones. */
+export function onThemeChange(onChange: () => void): () => void {
+  const watching = new MutationObserver(onChange)
+  watching.observe(document.documentElement, {
+    attributes: true,
+    attributeFilter: ["class", "style"],
+  })
+  return () => watching.disconnect()
+}

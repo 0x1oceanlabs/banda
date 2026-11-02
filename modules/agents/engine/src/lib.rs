@@ -38,6 +38,7 @@ pub mod settings;
 mod skills;
 mod store;
 mod transcript;
+mod visuals;
 mod writer;
 
 use acp::Connection;
@@ -52,6 +53,7 @@ use live::Live;
 use model::{
     Account, Body, Fact, HarnessView, Image, ImageId, Item, ItemId, Offer, Opener, Program,
     Settings, ThreadId, ThreadList, ThreadSummary, ThreadView, TurnId, TurnState, VERSION,
+    VisualId,
 };
 use rules::Event;
 use schemars::JsonSchema;
@@ -63,6 +65,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 use ts_rs::TS;
+use visuals::Visuals;
 
 /// The module's settings files in `~/.config/banda` (ADR 0016): how
 /// messages are sent, which the look resolves for the window, and the
@@ -238,6 +241,30 @@ banda_kernel::methods! {
         command keep(Keep) -> Kept, Write;
         /// The files in the Space's folder, for `@` in the composer.
         call files(FileQuery) -> Vec<String>, Read;
+        /// Shows your Person a finished HTML page in your Thread, above
+        /// your reply: a mockup, a chart, a diagram, how a feature works,
+        /// an animation, a sound. Don't announce or describe it after;
+        /// say only what it doesn't. The frame is your reply's width, on
+        /// the Thread's own background, and fits the page's height up to
+        /// 20000px. Leave html, body and the outer element with no
+        /// background colour, no outer card, border, banner title or side
+        /// padding; Banda adds an 8px gutter for focus rings and shadows.
+        /// A box that needs its own background gets 16px padding and
+        /// var(--radius) corners. Give charts fixed pixel heights and let
+        /// the content set the height: no vh units and no height:100% on
+        /// html or body, as the frame grows to fit the page. Use the
+        /// window's colours as CSS variables on :root, not fixed colours:
+        /// --background, --foreground, --muted, --card, --popover,
+        /// --secondary, --border, --input, --ring, --primary, --accent,
+        /// --destructive, --warning, --success, --info, --code-background
+        /// (most have a matching -foreground; accent, destructive and
+        /// warning also have -surface), --chart-1 to --chart-6, --radius,
+        /// --font-sans, --font-mono. Banda's sheet sets the text colour
+        /// and font. Inline <style> and <script>; web addresses load as
+        /// they are. Sound plays once your Person clicks in the page.
+        command show_visual(ShowVisual) -> String, Write, tool "show_visual";
+        /// A Visual's page, as the window serves it.
+        call visual(OneVisual) -> VisualPage, Read;
     }
 }
 
@@ -346,6 +373,35 @@ pub struct Kept {
 struct FileQuery {
     query: String,
 }
+
+/// A page to show in your Thread.
+#[derive(Deserialize, TS, JsonSchema)]
+#[ts(export_to = "agents/")]
+struct ShowVisual {
+    /// A complete, self-contained HTML document.
+    html: String,
+    /// What it shows, in a few words.
+    title: String,
+    /// Its height in CSS pixels, 80 to 2000.
+    height: u32,
+}
+
+#[derive(Deserialize, TS)]
+#[ts(export_to = "agents/")]
+struct OneVisual {
+    visual: VisualId,
+}
+
+/// What `agents.visual` answers: a Visual's page.
+#[derive(Clone, Debug, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "agents/")]
+pub struct VisualPage {
+    pub html: String,
+}
+
+/// What an Agent hears once its Visual shows, as T3 Code says it.
+const SHOWN: &str = "Shown to your Person above your reply. Don't mention or describe \
+    it; reply with only what it doesn't already say.";
 
 #[derive(Deserialize, TS)]
 #[ts(export_to = "agents/")]
@@ -715,6 +771,45 @@ impl Agents {
         })
     }
 
+    async fn show_visual(&self, call: Call, params: ShowVisual) -> Result<String, Refusal> {
+        let ShowVisual {
+            html,
+            title,
+            height,
+        } = params;
+        let Participant::Agent(agent) = call.participant() else {
+            return Err(Refusal::forbidden(
+                "Only a Thread's Agent shows a Visual, in its own Thread.",
+            ));
+        };
+        let (title, height) = visuals::may_show(&html, &title, height)?;
+        let visual = VisualId::new();
+        let space = call.space();
+        let visuals = Visuals::of(space.data());
+        // The file first: an item never names a page that is not there.
+        visuals.keep(visual, html).await.map_err(Error::from)?;
+        let shown = call
+            .command(move |tx| show_visual(tx, agent, visual, title, height))
+            .await;
+        if shown.is_err() {
+            visuals.forget(visual).await;
+        }
+        tokio::spawn(sweep_visuals(space.clone(), visuals));
+        shown.map(|()| SHOWN.to_owned())
+    }
+
+    async fn visual(
+        &self,
+        call: Call,
+        OneVisual { visual }: OneVisual,
+    ) -> Result<VisualPage, Refusal> {
+        let html = Visuals::of(call.space().data())
+            .read(visual)
+            .await
+            .map_err(|_| Refusal::not_found("There is no such Visual."))?;
+        Ok(VisualPage { html })
+    }
+
     async fn files(
         &self,
         call: Call,
@@ -814,7 +909,54 @@ fn decoded(data: &str, what: &str) -> Result<Vec<u8>, Refusal> {
         .map_err(|_| Refusal::invalid(format!("The {what}'s bytes are not base64.")))
 }
 
-/// What a Person writes to an Agent: text, images, or both.
+/// Writes a Visual into the Agent's own Thread, in its turn that runs.
+fn show_visual(
+    tx: &mut Tx<'_>,
+    agent: AgentId,
+    visual: VisualId,
+    title: String,
+    height: u32,
+) -> Result<(), Error> {
+    let thread = rules::own_thread(store::thread_of(tx.sql(), agent)?)?;
+    let turn = store::running(tx.sql(), thread)?
+        .ok_or_else(|| Refusal::conflict("A Visual shows in a turn that runs."))?
+        .id;
+    let author = Participant::Agent(agent);
+    let item = Item {
+        id: ItemId::new(),
+        turn: Some(turn),
+        author,
+        at: tx.now(),
+        body: Body::Visual {
+            visual,
+            title: title.clone(),
+            height,
+        },
+    };
+    store::insert_item(tx.sql(), thread, &item)?;
+    store::touch_thread(tx.sql(), thread, item.at)?;
+    let fact = Fact::VisualShown {
+        item: item.id,
+        turn,
+        visual,
+        title,
+        height,
+    };
+    emit(tx, author, thread, &fact)
+}
+
+/// Lets go of the pages a day old that no item names, as after a rewind.
+async fn sweep_visuals(space: ModuleSpace, visuals: Visuals) {
+    let named = space.read(store::visual_ids).await;
+    let swept = match named {
+        Ok(named) => visuals.sweep(named).await.map_err(Error::from),
+        Err(error) => Err(error),
+    };
+    if let Err(error) = swept {
+        tracing::warn!(%error, "could not sweep the Visuals no item names");
+    }
+}
+
 /// Lets go of the images no message took within a day: their rows, then
 /// their files. A file whose row went first is swept the next time.
 async fn sweep(space: ModuleSpace, images: Images) {
@@ -834,6 +976,7 @@ async fn sweep(space: ModuleSpace, images: Images) {
     }
 }
 
+/// What a Person writes to an Agent: text, images, or both.
 struct Message {
     text: String,
     images: Vec<ImageId>,

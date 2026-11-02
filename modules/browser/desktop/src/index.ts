@@ -34,6 +34,7 @@ export const browserDesktop: DesktopModule<
   ),
   answers: browserAnswers,
   asked: browserAsked,
+  served: {},
   // Banda's page may show browser pages, and nothing else.
   opened: (contents: WebContents) =>
     Browser.use((browser) => browser.host(contents)),

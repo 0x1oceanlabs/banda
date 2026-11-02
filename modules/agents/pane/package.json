@@ -6,7 +6,8 @@
   "description": "The agents module's Panes: the Agents of a Space, and one Thread with an Agent.",
   "exports": {
     ".": "./src/index.ts",
-    "./settings": "./src/AgentsSettings.tsx"
+    "./settings": "./src/AgentsSettings.tsx",
+    "./visual": "./src/visual-frame.ts"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",

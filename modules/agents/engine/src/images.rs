@@ -48,23 +48,10 @@ impl Images {
             for path in paths {
                 remove(&path)?;
             }
-            let entries = match std::fs::read_dir(&folder) {
-                Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(()),
-                entries => entries?,
-            };
-            let before = SystemTime::now() - UNSENT_LAST;
-            for entry in entries {
-                let entry = entry?;
-                let name = entry.file_name();
-                let named = name
-                    .to_str()
-                    .and_then(|name| name.parse::<ImageId>().ok())
-                    .is_some_and(|image| known.contains(&image));
-                if !named && entry.metadata()?.modified()? < before {
-                    remove(&entry.path())?;
-                }
-            }
-            Ok(())
+            let_go_unnamed(&folder, |name| {
+                name.parse::<ImageId>()
+                    .is_ok_and(|image| known.contains(&image))
+            })
         })
         .await
     }
@@ -74,7 +61,25 @@ impl Images {
     }
 }
 
-fn remove(path: &Path) -> io::Result<()> {
+/// Lets go of every file in `folder` a day old whose name `named` does not
+/// take; a folder not made yet holds none.
+pub(crate) fn let_go_unnamed(folder: &Path, named: impl Fn(&str) -> bool) -> io::Result<()> {
+    let entries = match std::fs::read_dir(folder) {
+        Err(e) if e.kind() == io::ErrorKind::NotFound => return Ok(()),
+        entries => entries?,
+    };
+    let before = SystemTime::now() - UNSENT_LAST;
+    for entry in entries {
+        let entry = entry?;
+        let kept = entry.file_name().to_str().is_some_and(&named);
+        if !kept && entry.metadata()?.modified()? < before {
+            remove(&entry.path())?;
+        }
+    }
+    Ok(())
+}
+
+pub(crate) fn remove(path: &Path) -> io::Result<()> {
     match std::fs::remove_file(path) {
         Err(e) if e.kind() == io::ErrorKind::NotFound => Ok(()),
         done => done,
@@ -95,7 +100,7 @@ pub async fn write_whole(path: PathBuf, bytes: Vec<u8>) -> io::Result<()> {
     .await
 }
 
-async fn blocking<T: Send + 'static>(
+pub(crate) async fn blocking<T: Send + 'static>(
     work: impl FnOnce() -> io::Result<T> + Send + 'static,
 ) -> io::Result<T> {
     tokio::task::spawn_blocking(work)

@@ -1,0 +1,156 @@
+/**
+ * How a Visual's frame and its Thread talk (ADR 0037, decisions 4 and 5):
+ * where the window serves its page, the look the page wears, and what the
+ * page says back. The words are MCP Apps', as T3 Code's are, so the same
+ * frame can host MCP Apps later. Main's part of the agents module serves
+ * the page with the script that speaks them; the Thread's Pane speaks the
+ * other side. Pure, so plain tests cover it.
+ */
+
+/** The host of `app://` that serves Visuals: an origin apart from
+ * Banda's page. */
+export const VISUALS = "visuals"
+
+export const visualAddress = (space: string, visual: string): string =>
+  `app://${VISUALS}/${space}/${visual}`
+
+/** What a Visual's page may do: run its scripts and forms, and nothing
+ * of its origin's, as both its frame and its response say. */
+export const SANDBOX = "allow-scripts allow-forms"
+
+/** The fragment that gives the page its first look, before it paints. */
+export const LOOK_KEY = "banda-look"
+
+export const SAID = {
+  /** The window to the page: the look changed. */
+  look: "ui/notifications/host-context-changed",
+  /** The page to the window: its height now. */
+  size: "ui/notifications/size-changed",
+  /** The page to the window: open this address. */
+  link: "ui/open-link",
+} as const
+
+/** How tall a frame grows to fit its page, in pixels. */
+const FITS = { least: 80, most: 20_000 } as const
+
+export type Theme = "light" | "dark"
+
+/** The look a Visual wears: T3 Code's variable names, Banda's colours. */
+export type VisualLook = {
+  theme: Theme
+  variables: Record<string, string>
+}
+
+/** The variables a page may use, as T3 Code names them, that the look
+ * has under the same names. */
+const SAME = [
+  "--background",
+  "--foreground",
+  "--card",
+  "--card-foreground",
+  "--popover",
+  "--popover-foreground",
+  "--primary",
+  "--primary-foreground",
+  "--secondary",
+  "--secondary-foreground",
+  "--muted",
+  "--muted-foreground",
+  "--accent",
+  "--accent-foreground",
+  "--destructive",
+  "--border",
+  "--input",
+  "--ring",
+  "--chart-1",
+  "--chart-2",
+  "--chart-3",
+  "--chart-4",
+  "--chart-5",
+  "--radius",
+  "--font-sans",
+  "--font-mono",
+]
+
+/** The rest, each with the look's token nearest it. */
+const NEAREST: Readonly<Record<string, string>> = {
+  "--destructive-foreground": "--primary-foreground",
+  "--warning": "--attention",
+  "--warning-foreground": "--primary-foreground",
+  "--success": "--added",
+  "--success-foreground": "--primary-foreground",
+  "--info": "--chart-2",
+  "--info-foreground": "--primary-foreground",
+  "--code-background": "--muted",
+  "--code-foreground": "--foreground",
+  "--chart-6": "--chart-1",
+}
+
+/** A soft ground of a colour, for a box that says it. */
+const SURFACES = ["--accent", "--destructive", "--warning"]
+
+/** The look for a page, from `read`, which gives a token's value now. */
+export function visualLook(
+  read: (token: string) => string,
+  dark: boolean
+): VisualLook {
+  const variables: Record<string, string> = {}
+  const pairs = [
+    ...SAME.map((name) => [name, name]),
+    ...Object.entries(NEAREST),
+  ]
+  for (const [name, token] of pairs) {
+    const value = read(token).trim()
+    if (value) variables[name] = value
+  }
+  for (const name of SURFACES) {
+    const colour = variables[name]
+    if (colour)
+      variables[`${name}-surface`] =
+        `color-mix(in oklab, ${colour} 16%, transparent)`
+  }
+  return { theme: dark ? "dark" : "light", variables }
+}
+
+/** The look as MCP Apps' host context says it, in the address's fragment
+ * and in each message alike. */
+const context = (look: VisualLook) => ({
+  theme: look.theme,
+  styles: { variables: look.variables },
+})
+
+/** The page's address with its first look. */
+export function lookedAt(address: string, look: VisualLook): string {
+  const first = encodeURIComponent(JSON.stringify(context(look)))
+  return `${address}#${LOOK_KEY}=${first}`
+}
+
+/** What the window posts the page when the look changes. */
+export function lookMessage(look: VisualLook): unknown {
+  return { jsonrpc: "2.0", method: SAID.look, params: context(look) }
+}
+
+export type Heard =
+  { kind: "size"; height: number } | { kind: "link"; url: string }
+
+/** What a page said, if it is something the window takes. */
+export function heard(data: unknown): Heard | null {
+  if (typeof data !== "object" || data === null) return null
+  const { method, params } = data as { method?: unknown; params?: unknown }
+  const said = (params ?? {}) as { height?: unknown; url?: unknown }
+  if (method === SAID.size && typeof said.height === "number") {
+    if (!Number.isFinite(said.height)) return null
+    const height = Math.ceil(said.height)
+    return {
+      kind: "size",
+      height: Math.min(FITS.most, Math.max(FITS.least, height)),
+    }
+  }
+  if (method === SAID.link && typeof said.url === "string") {
+    const url = URL.parse(said.url)
+    return url && (url.protocol === "https:" || url.protocol === "http:")
+      ? { kind: "link", url: url.href }
+      : null
+  }
+  return null
+}
