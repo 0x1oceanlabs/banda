@@ -42,7 +42,7 @@ Its methods, `banda call harnesses.<method>`: `list`, `account`, `sign_in`, `sig
 
 Programs the Person runs in a terminal: a shell, or a Harness's sign-in.
 
-Its methods, `banda call terminal.<method>`: `open`, `write`, `resize`, `close`, `watch`.
+Its methods, `banda call terminal.<method>`: `open`, `write`, `resize`, `close`, `watch`, `ports`, `stop_server`.
 
 ## Browser (`browser`)
 

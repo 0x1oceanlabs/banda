@@ -11,12 +11,14 @@ pub mod model;
 
 mod front;
 mod history;
+mod servers;
 mod terminal;
 
-use banda_kernel::{Call, Module, ModuleSpace, Refusal, Right, SpaceId, Stream};
-use model::{Open, Piece, Size, TerminalId};
+use banda_kernel::{Call, Module, ModuleSpace, Nothing, Refusal, Right, SpaceId, Stream};
+use model::{Open, Piece, Servers, Size, TerminalId};
 use serde::Deserialize;
 use serde_json::Value;
+use servers::Scanner;
 use std::collections::HashMap;
 use std::collections::hash_map::Entry;
 use std::sync::{Arc, Mutex};
@@ -29,6 +31,8 @@ const AT_ONCE: usize = 64 * 1024;
 #[derive(Default)]
 pub struct Terminals {
     open: Mutex<HashMap<TerminalId, Arc<Terminal>>>,
+    /// The servers started in Banda, a terminal's or an Agent's (ADR 0044).
+    servers: Arc<Scanner>,
 }
 
 impl Terminals {
@@ -63,6 +67,12 @@ banda_kernel::methods! {
         /// The screen so far, then what it prints, then how it ended.
         /// Watching shows what a Person types, such as a sign-in's code.
         stream watch(One) -> Piece, Run;
+        /// The Space's servers, then their list again each time it
+        /// changes: what a terminal or an Agent started that listens on
+        /// this computer (ADR 0044).
+        stream ports(Nothing) -> Servers, Read;
+        /// Stops a server of the Space's, and what it started.
+        call stop_server(StopServer) -> (), Run;
     }
 }
 
@@ -77,6 +87,13 @@ struct One {
 struct Write {
     terminal: TerminalId,
     data: String,
+}
+
+#[derive(Deserialize, TS)]
+#[ts(export_to = "terminal/")]
+struct StopServer {
+    port: u16,
+    process: u32,
 }
 
 #[derive(Deserialize, TS)]
@@ -183,5 +200,26 @@ impl Terminals {
 
     async fn watch(&self, call: Call, One { terminal }: One) -> Result<Stream, Refusal> {
         Ok(self.find(call.space().id(), terminal)?.watch())
+    }
+
+    async fn ports(&self, call: Call, _: Nothing) -> Result<Stream, Refusal> {
+        Ok(self.servers.stream(call.space().id()))
+    }
+
+    async fn stop_server(
+        &self,
+        call: Call,
+        StopServer { port, process }: StopServer,
+    ) -> Result<(), Refusal> {
+        let space = call.space().id();
+        // It may have ended since, and its number name another process.
+        let still = (servers::look().await).into_iter().any(|found| {
+            found.space == space && found.server.port == port && found.server.process == process
+        });
+        if !still {
+            return Err(Refusal::not_found("This server is no longer running."));
+        }
+        servers::stop(process).await;
+        Ok(())
     }
 }

@@ -48,6 +48,12 @@ pub use space::{Committed, Heard, ModuleSpace, Space};
 pub use store::Tx;
 pub use window::{WindowAnswer, WindowRequest};
 
+/// The variable that names its Space in the environment of what Banda
+/// starts in one, a terminal's program or a Harness's process, which all
+/// they start inherits: so the servers started in Banda are known by it
+/// (ADR 0044, decision 2).
+pub const SPACE_VARIABLE: &str = "BANDA_SPACE";
+
 /// The version of the API's wire protocol. A window that speaks another
 /// version is refused before anything else (ADR 0002, decision 8).
 pub const PROTOCOL: u32 = 1;

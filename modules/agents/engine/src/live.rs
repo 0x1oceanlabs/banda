@@ -106,7 +106,7 @@ impl Live {
         space: SpaceId,
         harness: &Harness,
     ) -> Result<Arc<Connection>, String> {
-        let connection = self.hosts.get(space, harness).await?;
+        let connection = self.hosts.get(space, &harness.in_space(space)).await?;
         connection.touch();
         Ok(connection)
     }

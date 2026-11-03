@@ -23,6 +23,7 @@ Roma looked at a mock of the widget and its list on 2026-11-03, and decided: the
 ## Decision
 
 1. **A server is a program started in Banda that listens on a loopback or wildcard address**: `127.0.0.1`, `::1`, `0.0.0.0` or `::`. One bound to another address is not shown, nor one Banda did not start.
+   - Nor what a Harness listens on itself, as Claude Code's CLI and Codex's do for an editor: a process in the process group of the Harness's process, as its CLI is. What an Agent runs, its tool's shell gives a group of its own, as a shell with job control does. _Added in step 2, which found both CLIs listening on 127.0.0.1._
 
 2. **What Banda starts carries its Space.**
    - A terminal starts its program with `BANDA_SPACE=<Space ID>` and `BANDA_TERMINAL=<terminal ID>` in its environment.
@@ -32,13 +33,13 @@ Roma looked at a mock of the widget and its list on 2026-11-03, and decided: the
 
 3. **The terminal module finds them.** It is the module of the programs on this computer in a Space.
    - On Linux, from `/proc`: the sockets in `LISTEN` in `/proc/net/tcp` and `/proc/net/tcp6`, the process that holds each through `/proc/<pid>/fd`, its environment in `/proc/<pid>/environ`, and its command line, named as a terminal's header names a program (`front.rs`: `pnpm dev`, not `node /usr/bin/pnpm dev`).
-   - On macOS, from `lsof -iTCP -sTCP:LISTEN -P -n -F pcn`, and the environments from `ps -E -ww -o pid=,command= -p <pids>`.
+   - On macOS, from `lsof -iTCP -sTCP:LISTEN -P -n -F pcn`, the environments and command lines as `sysinfo` reads them (as a terminal's header does), and the process groups from `ps -A -o pid=,ppid=,pgid=`. _Changed in step 2: `ps -E` mixes the command line with the environment._
    - Windows is not now, as the terminal module is not yet built there.
    - It looks every 3 seconds while a window listens, once for every Space, and says only what changed. It sends nothing to a server it found.
 
 4. **`terminal.ports` and `terminal.stop_server`.**
    - `terminal.ports`, a stream of a Space: its servers, each its port, its process, its program, and whether a terminal or an Agent started it. It needs `Read`.
-   - `terminal.stop_server`, with the port and the process: it looks again that the server is still the Space's, then sends SIGTERM to the server's process group, and SIGKILL to what is left after 3 seconds. A group whose leader the engine started itself, as a Harness's process or a terminal's shell, is never stopped as a group: only the server's own process is. It needs `Run`, as a terminal's input does.
+   - `terminal.stop_server`, with the port and the process: it looks again that the server is still the Space's, then sends SIGTERM to the server's process group, and SIGKILL to what is left after 3 seconds. A group that holds the engine, what started it, or what it started itself (a terminal's program, a Harness's process, and so a Harness's CLI) is never stopped as a group: the server and what it started are, which none of those are. _Changed in step 2, as T3 Code's rule is: by what the group holds, not by its leader._ It needs `Run`, as a terminal's input does.
 
 5. **The widget `terminal.ports` shows the port's number**, on the bar's right (ADR 0024, decision 2): `:5173`, and with more `:5173 +2`, in the bar's muted text. The first is the one that came first. It draws nothing while no Space has a server.
    - The line on hover lists them: "localhost:5173 · localhost:3000 · localhost:6006".
