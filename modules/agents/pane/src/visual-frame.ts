@@ -52,6 +52,10 @@ export function heightAt(
   return within(fit?.height ?? height)
 }
 
+/** The zooms a Visual's preview steps through, as a browser's do,
+ * from 50 to 200 % (ADR 0037, decision 6). */
+export const ZOOMS = [0.5, 0.67, 0.75, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2]
+
 export type Theme = "light" | "dark"
 
 /** The look a Visual wears: T3 Code's variable names, Banda's colours. */

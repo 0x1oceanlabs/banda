@@ -5,6 +5,7 @@ import type { SpaceId } from "@banda/contract"
 import { type Action, defineModule } from "@banda/ui/module"
 import { paneOf } from "@banda/ui/pane"
 import { threadPane } from "./ThreadPane"
+import { visualPane } from "./VisualPane"
 import { threadsWatch } from "./ThreadsWatch"
 import { askSource, filesSource } from "./sources"
 import { NEW_THREAD } from "./session"
@@ -37,7 +38,7 @@ const newThread: Action = {
 export const agents = defineModule({
   id: "agents",
   engine: true,
-  panes: [threadPane],
+  panes: [threadPane, visualPane],
   watches: [threadsWatch],
   actions: [newThread],
   sources: [filesSource, askSource],

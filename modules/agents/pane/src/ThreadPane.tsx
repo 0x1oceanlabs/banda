@@ -81,7 +81,8 @@ import { holds } from "./findIn"
 import { Minimap } from "./Minimap"
 import { ToolCall } from "./ToolCall"
 import { Issue } from "./Issue"
-import { Visual } from "./Visual"
+import { Visual, type VisualArgs } from "./Visual"
+import { visualPane } from "./VisualPane"
 import { ModelPicker } from "./ModelPicker"
 import { pickedOf } from "./picker"
 import { ModeMenu } from "./ThreadSettings"
@@ -260,6 +261,7 @@ function ThreadPane(props: PaneProps<ThreadArgs>) {
               })
             }
             onOpenDiff={openDiff}
+            onOpenVisual={(visual) => open(paneOf(visualPane, visual))}
             writers={writers}
             onOpenThread={(other) => open(threadPaneOf(other), "right")}
             signIn={(turn) => (
@@ -414,6 +416,7 @@ function Transcript({
   onFork,
   onRewind,
   onOpenDiff,
+  onOpenVisual,
   signIn,
   queue,
   writers,
@@ -438,6 +441,7 @@ function Transcript({
     /** Takes the Thread back to before `message`, which `turn` ran first. */
     onRewind: (turn: TurnView, message: Item) => void
     onOpenDiff: OpenDiff
+    onOpenVisual: OpenVisual
     /** How a Person signs in again, below a turn that failed for that. */
     signIn: (turn: TurnView) => React.ReactNode
     queue: QueueActions
@@ -477,6 +481,7 @@ function Transcript({
             live={turn?.state === "running" && line.item === last}
             reader={reader}
             onOpenDiff={onOpenDiff}
+            onOpenVisual={onOpenVisual}
             writer={writerOf(writers, line.item)}
             onOpenThread={onOpenThread}
             {...answers}
@@ -621,6 +626,9 @@ function ScrollToEnd({ queued, forYou }: { queued: number; forYou: boolean }) {
 /** Opens the changes of a turn, on one file if `path` names it. */
 type OpenDiff = (turn: string, path?: string) => void
 
+/** Opens a Visual as a Pane of its own, beside the Thread. */
+type OpenVisual = (visual: VisualArgs) => void
+
 function Entry({
   engine,
   space,
@@ -628,6 +636,7 @@ function Entry({
   live,
   reader,
   onOpenDiff,
+  onOpenVisual,
   writer,
   onOpenThread,
   onFork,
@@ -646,6 +655,7 @@ function Entry({
   live: boolean
   reader: ImageReader
   onOpenDiff: OpenDiff
+  onOpenVisual: OpenVisual
   /** The other Thread whose Agent wrote it, if one did. */
   writer?: ListedThread | "gone"
   onOpenThread: Writers["onOpenThread"]
@@ -733,16 +743,13 @@ function Entry({
       )
     case "issue":
       return <Issue engine={engine} space={space} item={item.id} issue={body} />
-    case "visual":
+    case "visual": {
+      const { visual, title, height, heights } = body
+      const args = { visual, title, height, heights }
       return (
-        <Visual
-          space={space}
-          visual={body.visual}
-          title={body.title}
-          height={body.height}
-          heights={body.heights}
-        />
+        <Visual space={space} visual={args} onOpen={() => onOpenVisual(args)} />
       )
+    }
   }
 }
 
