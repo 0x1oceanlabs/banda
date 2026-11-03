@@ -190,11 +190,13 @@ jobs:
             app/desktop/dist/latest-mac.yml
           retention-days: 3
 
+  # On GitHub's runner, which has ssh for the tap (devbox's image has
+  # none), and runs only for a release, never a PR's code.
   mac-publish:
     name: publish (macOS)
     needs: [which, linux, mac]
     if: needs.which.outputs.publish == 'true'
-    runs-on: devbox
+    runs-on: ubuntu-latest
     timeout-minutes: 10
     permissions:
       contents: write
@@ -202,11 +204,47 @@ jobs:
       - uses: actions/checkout@v5
         with:
           ref: ${{ needs.which.outputs.commit }}
+      - id: node
+        run: echo "version=$(sed -n 's/^ARG NODE_VERSION=//p' ci/Dockerfile)" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ steps.node.outputs.version }}
+          package-manager-cache: false
       - uses: actions/download-artifact@v4
         with:
           name: banda-mac-${{ github.run_number }}
-          path: mac
-      - name: add the Mac's zip to the release
+          path: ${{ runner.temp }}/mac
+      - id: add
+        name: add the Mac's zip to the release
         env:
           GITHUB_TOKEN: ${{ github.token }}
-        run: node scripts/release.mjs add ${{ needs.which.outputs.version }} mac/*.zip mac/latest-mac.yml
+          MAC: ${{ runner.temp }}/mac
+        run: node scripts/release.mjs add ${{ needs.which.outputs.version }} "$MAC"/*.zip "$MAC"/latest-mac.yml
+      # Pushed with the tap's deploy key, in the secret TAP_KEY: `brew
+      # upgrade` finds the release (ADR 0033, decision 6).
+      - name: the cask in the tap
+        if: steps.add.outputs.added == 'true'
+        env:
+          TAP_KEY: ${{ secrets.TAP_KEY }}
+          CHANNEL: ${{ needs.which.outputs.channel }}
+          VERSION: ${{ needs.which.outputs.version }}
+          MAC: ${{ runner.temp }}/mac
+          GIT_AUTHOR_NAME: github-actions[bot]
+          GIT_AUTHOR_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+          GIT_COMMITTER_NAME: github-actions[bot]
+          GIT_COMMITTER_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+        run: |
+          key=$RUNNER_TEMP/tap-key
+          tap=$RUNNER_TEMP/tap
+          printf '%s\n' "$TAP_KEY" > "$key" && chmod 600 "$key"
+          export GIT_SSH_COMMAND="ssh -i $key -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
+          git clone -q --depth 1 git@github.com:0x1oceanlabs/homebrew-banda.git "$tap"
+          name=$([[ $CHANNEL == dev ]] && echo banda-dev || echo banda)
+          mkdir -p "$tap/Casks"
+          node scripts/cask.mjs "$CHANNEL" "$VERSION" "$MAC"/*.zip > "$tap/Casks/$name.rb"
+          cd "$tap"
+          git add Casks
+          git diff --cached --quiet && exit 0
+          git commit -q -m "$name $VERSION"
+          # A Stable and a Dev at once: the later one goes on top.
+          git push -q || { git pull -q --rebase && git push -q; }
