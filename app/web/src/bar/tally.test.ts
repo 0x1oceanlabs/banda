@@ -2,7 +2,7 @@ import { expect, test } from "vitest"
 import type { SpaceId } from "@banda/contract"
 import type { MarkState } from "@banda/ui/components/banda-mark"
 import type { Listed } from "@banda/ui/pane"
-import { inOrder, tally } from "./counts"
+import { inOrder, tally } from "./tally"
 
 const one = (id: string, mark: MarkState, changed = 0): Listed => ({
   id,

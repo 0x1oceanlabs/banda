@@ -1,7 +1,7 @@
 import { expect, test } from "vitest"
 import { event, person } from "./testing"
 import { apply, EMPTY } from "./thread"
-import { holds } from "./find"
+import { holds } from "./findIn"
 import { timeline } from "./timeline"
 
 test("a folded turn holds the words its work shows, in any case", () => {

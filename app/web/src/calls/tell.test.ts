@@ -5,7 +5,7 @@ import { consume, open, start } from "../workspaces/model"
 import { DEFAULT_NOTIFY as NOTIFY } from "./settings"
 import { type Shows, showing, sightOf } from "./sight"
 import { type Call, callsOf, newsOf, tell } from "./tell"
-import { alive, LIFE, released, told } from "./toasts"
+import { alive, LIFE, released, told } from "./toast"
 import { first, type Heard } from "./useCalls"
 
 const call = (about: string, chime: Chime): Call => ({

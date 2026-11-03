@@ -16,7 +16,7 @@ import { useMemo, useState } from "react"
 import { useLookSidebar } from "../look"
 import { SpaceBadge, Status, ThreadMark, toneOf } from "../sidebar/Row"
 import { useIsSettled } from "../sidebar/settled"
-import { type Counted, inOrder, type Tally, tally } from "./counts"
+import { type Counted, inOrder, type Tally, tally } from "./tally"
 import type { Lists } from "./Watches"
 
 /** Each count's words, after its number. */

@@ -8,7 +8,7 @@ import type { Host } from "../host"
 import { GATHER, loudestChime, type Played, plays } from "./calls"
 import { iconOf, loudestOf, MANY, noticeOf, SUMMARY, summaryOf } from "./system"
 import { type Call, callsOf, newsOf, type Sight, tell } from "./tell"
-import { alive, released, type Toast, told } from "./toasts"
+import { alive, released, type Toast, told } from "./toast"
 
 /** A call as the window heard it: of a Space, since a time, by a key. */
 export type Heard = Call & {

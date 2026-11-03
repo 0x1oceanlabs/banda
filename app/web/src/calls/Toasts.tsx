@@ -1,7 +1,7 @@
 import { BandaMark, MARK_WORDS } from "@banda/ui/components/banda-mark"
 import type { Chime } from "@banda/ui/sound"
 import { cn } from "@banda/ui/lib/utils"
-import { SHOWN, type Toast } from "./toasts"
+import { SHOWN, type Toast } from "./toast"
 import type { Heard } from "./useCalls"
 
 /** The edge that says each call at a glance, as the Mark's colours do. */

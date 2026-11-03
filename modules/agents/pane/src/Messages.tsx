@@ -19,7 +19,7 @@ import { Message, MessageContent } from "@banda/ui/components/message"
 import { cn } from "@banda/ui/lib/utils"
 import { clock, fullDate } from "@banda/ui/lib/words"
 import { type ImageReader, MessageImages } from "./MessageImages"
-import { clamped } from "./messages"
+import { clamped } from "./messageText"
 import type { Listing } from "./thread"
 
 /**
