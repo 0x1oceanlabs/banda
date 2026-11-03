@@ -63,6 +63,9 @@ export type BrowserNews =
    * step it takes, and where its hands went last; or none does now (ADR
    * 0029, decision 4). */
   | { kind: "driver"; from: number; driver: Driver | null }
+  /** The Threads that wait for the Person on the tab (ADR 0029,
+   * decision 6). */
+  | { kind: "waits"; from: number; waits: readonly Wait[] }
 
 /** An extension's button, as Chrome's `action` says it, for every tab and
  * for some tabs alone (electron-chrome-extensions' `getState`). */
@@ -88,6 +91,18 @@ export type ActionLook = {
 export type Driver = { agent: string; step: string; at?: Point }
 export type Point = { x: number; y: number }
 
+/**
+ * A Thread that waits for the Person on a tab, by its Agent, and why: the
+ * Person stopped it there. Its calls on the tab are refused until the
+ * Person lets it drive again (ADR 0029, decision 6). Once it called again
+ * and was refused, it `asked` the Person, since then.
+ */
+export type Wait = {
+  agent: string
+  reason: "stopped"
+  asked: number | null
+}
+
 /** A place in Banda's window, in its page's pixels. */
 export type Box = { x: number; y: number; width: number; height: number }
 
@@ -112,9 +127,11 @@ export const BROWSER_BRIDGE = {
   created: send<[request: string, contents: number | null]>(),
   /** Stops the Agents that drive the page: their sessions on it end. */
   stop: send<[contents: number]>(),
-  /** Stops the Thread that drives the page with Banda's tools; the
-   * Person's own programs on it go on. */
+  /** Stops the Thread that drives the page with Banda's tools, which
+   * then waits until `letDrive`; the Person's own programs on it go on. */
   release: send<[contents: number]>(),
+  /** Lets the Thread of `agent` drive the page again, after a stop. */
+  letDrive: send<[contents: number, agent: string]>(),
   /** The turn of the Thread of `agent` ended: it drives no tab now. */
   settled: send<[agent: string]>(),
   /** Pins an extension's button to the row, or takes it off, in

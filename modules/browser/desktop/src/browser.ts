@@ -479,6 +479,10 @@ export const browserAnswers: Answers<
   ],
   stop: [page, ([page]) => Cdp.use((cdp) => cdp.stop(page))],
   release: [page, ([page]) => Drive.use((drive) => drive.release(page))],
+  letDrive: [
+    Schema.Tuple([Schema.Number, Schema.String]),
+    ([page, agent]) => Drive.use((drive) => drive.letDrive(page, agent)),
+  ],
   settled: [text, ([agent]) => Drive.use((drive) => drive.settled(agent))],
   pin: [
     Schema.Tuple([Schema.String, Schema.Boolean]),

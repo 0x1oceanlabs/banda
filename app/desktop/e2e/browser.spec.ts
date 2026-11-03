@@ -588,9 +588,31 @@ test("an Agent reads a tab's tree with refs and new errors, until the Person sto
     .toContain("errors since the last snapshot:\n- nope")
   expect(await snapshot()).not.toContain("- nope")
 
-  // The Person stops the Agent there; the next snapshot connects again.
+  // The Person stops the Agent there: its Thread waits until they let it
+  // drive again, and its call there is refused meanwhile. Once it called,
+  // its row asks the Person, as for a Question.
   await stop.click()
   await expect(stop).toBeHidden()
+  const stopped = page.getByRole("status", {
+    name: "hello is stopped in this tab",
+  })
+  await expect(stopped).toContainText("Stopped hello")
+  const row = page
+    .getByRole("complementary", { name: "Sidebar" })
+    .getByRole("button", { name: /hello/ })
+  await expect(row).not.toContainText("Stopped on a tab")
+  const refused = await agentCalls(window, "browser_snapshot", { tab: id })
+  expect(refused.isError).toBe(true)
+  expect(refused.content[0]!.text).toContain(
+    `The Person stopped you on tab ${id}.`
+  )
+  await expect(row).toContainText("Stopped on a tab: let it drive again")
+  await expect(row).toContainText("Asks you")
+
+  // Let drive again, it reads the tab once more, and its row is calm.
+  await stopped.getByRole("button", { name: "Let drive again" }).click()
+  await expect(stopped).toHaveCount(0)
+  await expect(row).not.toContainText("Stopped on a tab")
   expect(await snapshot()).toMatch(/button "Go" \[ref=e\d+\]/)
 
   // A tab there is not is refused, and says where the tabs are.
@@ -734,9 +756,15 @@ test("a Thread's tab glows and its pill says the Thread and its step, until the 
   await pill.getByRole("button", { name: "wait here", exact: true }).click()
   await expect(composer).toBeFocused()
 
-  // Its Stop ends that Thread's drive there; a call drives it again.
+  // Its Stop ends that Thread's drive there, until the Person lets it
+  // drive again.
   await pill.getByRole("button", { name: "Stop wait here in this tab" }).click()
   await expect(pill).toHaveCount(0)
+  const stopped = page.getByRole("status", {
+    name: "wait here is stopped in this tab",
+  })
+  await stopped.getByRole("button", { name: "Let drive again" }).click()
+  await expect(stopped).toHaveCount(0)
   await agentSays(window, "browser_snapshot", { tab })
   await expect(pill).toBeVisible()
 

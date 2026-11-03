@@ -16,7 +16,7 @@ import type {
   Shown,
   WaitFor,
 } from "@banda/contract/browser"
-import type { Driver } from "@banda/browser-pane/desktop"
+import type { Driver, Wait } from "@banda/browser-pane/desktop"
 import { Refused } from "@banda/desktop-kit"
 import { Context, Effect, FiberSet, Layer, RcMap } from "effect"
 import type { Event, InputEvent, WebContents } from "electron"
@@ -188,8 +188,11 @@ export class Drive extends Context.Service<
     /** The tab, once it shows what `wait` says. */
     waitFor(wait: WaitFor, by: Participant): Effect.Effect<Shown, Refused>
     /** Stops the Thread that drives the tab: its hold on it ends, and
-     * the Person's programs there go on. */
+     * the Person's programs there go on. The Thread waits until the
+     * Person lets it drive again (ADR 0029, decision 6). */
     release(tab: number): Effect.Effect<void>
+    /** Lets the Thread of `agent` drive the tab again. */
+    letDrive(tab: number, agent: string): Effect.Effect<void>
     /** The turn of the Thread of `agent` ended: it drives no tab now. */
     settled(agent: string): Effect.Effect<void>
   }
@@ -210,6 +213,42 @@ export class Drive extends Context.Service<
         if (driver) driving.set(tab, driver)
         else driving.delete(tab)
         tabs.tell({ kind: "driver", from: tab, driver })
+      }
+      /** The Threads that wait for the Person on each tab, by the IDs
+       * of their Agents: until the Person answers, or the tab closes. */
+      const waits = new Map<number, Map<string, Wait>>()
+      const tellWaits = (tab: number) =>
+        tabs.tell({
+          kind: "waits",
+          from: tab,
+          waits: [...(waits.get(tab)?.values() ?? [])],
+        })
+      const wait = (tab: number, agent: string) => {
+        let on = waits.get(tab)
+        if (!on) {
+          on = new Map()
+          waits.set(tab, on)
+          contentsOf(tab)?.once("destroyed", () => waits.delete(tab))
+        }
+        on.set(agent, { agent, reason: "stopped", asked: null })
+        tellWaits(tab)
+      }
+      /** Refuses a call of the Agent `by` on a tab where its Thread waits
+       * for the Person, which it then asks. */
+      const waiting = (tab: number, by: Participant) => {
+        const on = waits.get(tab)
+        const was = by.kind === "agent" ? on?.get(by.id) : undefined
+        if (!on || !was) return Effect.void
+        if (was.asked === null) {
+          on.set(by.id, { ...was, asked: Date.now() })
+          tellWaits(tab)
+        }
+        return Effect.fail(
+          new Refused({
+            code: "forbidden",
+            message: `The Person stopped you on tab ${tab}. Do not use it until they let you drive again: say where you stopped and end your turn, and they will tell you.`,
+          })
+        )
       }
       /** The cursor of the Thread that drives the tab, going to `x`, `y`
        * as its hands do: they wait for it, unless it is there. */
@@ -292,22 +331,26 @@ export class Drive extends Context.Service<
         step: string | ((tree: string) => string),
         work: (held: Held) => Promise<A>
       ) =>
-        Effect.scoped(
-          Effect.flatMap(heldOf(tab), (kept) =>
-            Effect.tryPromise({
-              try: async () => {
-                if (!kept.touched.has(by.id)) kept.touched.set(by.id, false)
-                if (by.kind === "agent") {
-                  const said = typeof step === "string" ? step : step(kept.tree)
-                  // The cursor stays where the Thread's hands went last.
-                  const was = driving.get(tab)
-                  const at = was?.agent === by.id ? was.at : undefined
-                  tell(tab, { agent: by.id, step: said, at })
-                }
-                return await work(kept)
-              },
-              catch: refused,
-            })
+        Effect.andThen(
+          Effect.suspend(() => waiting(tab, by)),
+          Effect.scoped(
+            Effect.flatMap(heldOf(tab), (kept) =>
+              Effect.tryPromise({
+                try: async () => {
+                  if (!kept.touched.has(by.id)) kept.touched.set(by.id, false)
+                  if (by.kind === "agent") {
+                    const said =
+                      typeof step === "string" ? step : step(kept.tree)
+                    // The cursor stays where the Thread's hands went last.
+                    const was = driving.get(tab)
+                    const at = was?.agent === by.id ? was.at : undefined
+                    tell(tab, { agent: by.id, step: said, at })
+                  }
+                  return await work(kept)
+                },
+                catch: refused,
+              })
+            )
           )
         )
       return {
@@ -418,7 +461,16 @@ export class Drive extends Context.Service<
               return shown(wait.tab, kept, by.id)
             }
           ),
-        release: (tab) => RcMap.invalidate(held, tab),
+        release: (tab) =>
+          Effect.suspend(() => {
+            const driver = driving.get(tab)
+            if (driver) wait(tab, driver.agent)
+            return RcMap.invalidate(held, tab)
+          }),
+        letDrive: (tab, agent) =>
+          Effect.sync(() => {
+            if (waits.get(tab)?.delete(agent)) tellWaits(tab)
+          }),
         settled: (agent) =>
           Effect.forEach(
             [...driving].filter(([, driver]) => driver.agent === agent),

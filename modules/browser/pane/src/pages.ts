@@ -11,7 +11,7 @@
  */
 import type { SpaceId } from "@banda/contract"
 import { HELD_BY, paneLayer } from "@banda/ui/pane"
-import { type BrowserNews, type Driver, PARTITION } from "./desktop"
+import { type BrowserNews, type Driver, PARTITION, type Wait } from "./desktop"
 import { browserHost, hearNews } from "./host"
 
 /** What the row shows of a page. */
@@ -33,6 +33,8 @@ export type PageState = {
    * step it takes: the page glows, and a pill says so (ADR 0029,
    * decision 4). */
   driver: Driver | null
+  /** The Threads that wait for the Person here (ADR 0029, decision 6). */
+  waits: readonly Wait[]
 }
 
 /** A page not made yet. */
@@ -45,6 +47,7 @@ export const BLANK: PageState = {
   crashed: false,
   driven: false,
   driver: null,
+  waits: [],
 }
 
 /** The part of Electron's `<webview>` a page uses. */
@@ -262,6 +265,11 @@ export class Page {
     const zoom = this.view.getZoomFactor()
     const at = driver?.at && { x: driver.at.x * zoom, y: driver.at.y * zoom }
     this.set({ driver: driver && { ...driver, at } })
+  }
+
+  /** The Threads that wait for the Person here now. */
+  waited(waits: readonly Wait[]): void {
+    this.set({ waits })
   }
 
   private set(change: Partial<PageState>): void {
@@ -509,6 +517,16 @@ export function drivers(): Set<string> {
   )
 }
 
+/** The Threads that asked the Person on a page, each with that page's
+ * web contents' ID. */
+export function asking(): { contents: number; wait: Wait }[] {
+  return [...byContents].flatMap(([contents, page]) =>
+    page.state.waits
+      .filter((wait) => wait.asked !== null)
+      .map((wait) => ({ contents, wait }))
+  )
+}
+
 /** A number that changes with any page, for `useSyncExternalStore`. */
 export function pagesVersion(): number {
   return version
@@ -546,6 +564,7 @@ function hear(news: PageNews): void {
   if (news.kind === "icon") page.iconed(news.icon)
   else if (news.kind === "driven") page.drive(news.driven)
   else if (news.kind === "driver") page.driveBy(news.driver)
+  else if (news.kind === "waits") page.waited(news.waits)
   else if (news.kind === "open") {
     holder?.open(news.url, page.id, news.background)
   } else if (news.kind === "select") holder?.show(page.id)
