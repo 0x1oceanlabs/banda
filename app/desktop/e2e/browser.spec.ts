@@ -653,7 +653,7 @@ test("an Agent hands a tab to the Person, who hands it back, and its Thread carr
   const refused = await agentCalls(window, "browser_snapshot", { tab })
   expect(refused.isError).toBe(true)
   expect(refused.content[0]!.text).toContain(
-    `You handed tab ${tab} to the Person, to ${why}.`
+    `You handed tab ${tab} to the Person: "${why}".`
   )
 
   // Done hands it back, and says so in the Thread, as the Person's

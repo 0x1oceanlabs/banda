@@ -53,7 +53,6 @@ import type { Download, Driver, Handed, Point } from "./desktop"
 import { browserHost, downloadsNow, watchDownloads } from "./host"
 import { browserKey, type Does, isTabKey } from "./keys"
 import { handBack, threadOf, useThreadOf } from "./threads"
-
 import {
   BLANK,
   drop,
@@ -219,7 +218,7 @@ function BrowserPane({
         const thread = threadOf(agent)
         if (thread) open(thread.listed.pane, undefined, thread.space)
       }}
-      onHandBack={(contents, wait) => handBack(engine, contents, wait)}
+      onHandBack={(contents, wait) => void handBack(engine, contents, wait)}
       close={close}
     />
   )
@@ -426,7 +425,9 @@ function Browser({
             <Stopped
               agent={stopped.agent}
               onThread={onThread}
-              onLet={() => browserHost()?.answered(contents, stopped.agent)}
+              onLet={() =>
+                void browserHost()?.answered(contents, stopped.agent)
+              }
             />
           </DrawnIn>
         )}

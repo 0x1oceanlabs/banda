@@ -17,7 +17,7 @@ import type {
   Shown,
   WaitFor,
 } from "@banda/contract/browser"
-import type { Driver, Wait } from "@banda/browser-pane/desktop"
+import { type Driver, refusalOf, type Wait } from "@banda/browser-pane/desktop"
 import { Refused } from "@banda/desktop-kit"
 import { Context, Effect, FiberSet, Layer, RcMap } from "effect"
 import type { Event, InputEvent, WebContents } from "electron"
@@ -197,7 +197,7 @@ export class Drive extends Context.Service<
     handoff(hand: Handoff, by: Participant): Effect.Effect<void, Refused>
     /** The Person answered what the Thread of `agent` waits for on the
      * tab: it may use the tab again. */
-    answered(tab: number, agent: string): Effect.Effect<void>
+    answered(tab: number, agent: string): Effect.Effect<boolean>
     /** The turn of the Thread of `agent` ended: it drives no tab now. */
     settled(agent: string): Effect.Effect<void>
   }
@@ -228,9 +228,9 @@ export class Drive extends Context.Service<
           from: tab,
           waits: [...(waits.get(tab)?.values() ?? [])],
         })
-      /** The tab's Thread of `wait.agent` waits for the Person; none
+      /** The tab's Thread of `what.agent` waits for the Person; none
        * does on a tab gone. */
-      const wait = (tab: number, wait: Wait) => {
+      const wait = (tab: number, what: Wait) => {
         const contents = contentsOf(tab)
         if (!contents) return false
         let on = waits.get(tab)
@@ -239,28 +239,31 @@ export class Drive extends Context.Service<
           waits.set(tab, on)
           contents.once("destroyed", () => waits.delete(tab))
         }
-        on.set(wait.agent, wait)
+        on.set(what.agent, what)
         tellWaits(tab)
         return true
       }
       /** Refuses a call of the Agent `by` on a tab where its Thread waits
-       * for the Person, which it then asks. */
+       * for the Person, which it then asks; and every Agent's, while the
+       * tab is handed to the Person. */
       const waiting = (tab: number, by: Participant) =>
         Effect.suspend(() => {
           const on = waits.get(tab)
-          const was = by.kind === "agent" ? on?.get(by.id) : undefined
+          if (!on || by.kind !== "agent") return Effect.void
+          const own = on.get(by.id)
+          const handed = [...on.values()].find(
+            (wait) => wait.reason === "handoff"
+          )
+          const was = own ?? handed
           if (!was) return Effect.void
-          if (was.asked === undefined) {
-            on!.set(by.id, { ...was, asked: Date.now() })
+          if (own && own.asked === undefined) {
+            on.set(by.id, { ...own, asked: Date.now() })
             tellWaits(tab)
           }
           return Effect.fail(
             new Refused({
               code: "forbidden",
-              message:
-                was.reason === "stopped"
-                  ? `The Person stopped you on tab ${tab}. Do not use it until they let you drive again: say where you stopped and end your turn, and they will tell you.`
-                  : `You handed tab ${tab} to the Person, to ${was.why}. Do not use it until they hand it back: end your turn, and their message says when.`,
+              message: refusalOf(tab, was, was === own),
             })
           )
         })
@@ -482,7 +485,8 @@ export class Drive extends Context.Service<
             return RcMap.invalidate(held, tab)
           }),
         handoff: ({ tab, why }, by) =>
-          Effect.suspend(() => {
+          // A Thread that waits there already hands nothing over.
+          Effect.andThen(waiting(tab, by), () => {
             if (by.kind !== "agent")
               return Effect.fail(
                 new Refused({ message: "Only an Agent hands a tab over." })
@@ -494,15 +498,17 @@ export class Drive extends Context.Service<
               asked: Date.now(),
             }
             if (!wait(tab, handed)) return Effect.fail(noTab(tab))
-            // The Person's turn: the Thread's drive there ends.
-            return RcMap.invalidate(held, tab)
+            // The Person's turn: the Thread's drive there ends, and its
+            // hold on the tab stays for when they hand it back.
+            if (driving.get(tab)?.agent === by.id) tell(tab, null)
+            return Effect.void
           }),
         answered: (tab, agent) =>
           Effect.sync(() => {
-            const on = waits.get(tab)
-            if (!on?.delete(agent)) return
-            if (!on.size) waits.delete(tab)
+            // The tab's map stays, as its one hook on the tab's end does.
+            if (!waits.get(tab)?.delete(agent)) return false
             tellWaits(tab)
+            return true
           }),
         settled: (agent) =>
           Effect.forEach(
