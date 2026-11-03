@@ -17,7 +17,7 @@ import type {
   Shown,
   WaitFor,
 } from "@banda/contract/browser"
-import { type Driver, refusalOf, type Wait } from "@banda/browser-pane/desktop"
+import type { Driver, Wait } from "@banda/browser-pane/desktop"
 import { Refused } from "@banda/desktop-kit"
 import { Context, Effect, FiberSet, Layer, RcMap } from "effect"
 import type { Event, InputEvent, WebContents } from "electron"
@@ -80,7 +80,33 @@ const noTab = (tab: number) =>
     message: `There is no tab ${tab}: browser_tabs lists them.`,
   })
 
+/** Whether `wait` keeps the Agent `agent` off its tab: its own does, and
+ * a tab handed to the Person is theirs, for every Agent. */
+const blocks = (wait: Wait, agent: string) =>
+  wait.agent === agent || wait.reason === "handoff"
+
+/** What a call of the Agent `agent` on `tab` hears while `wait` blocks
+ * it there (ADR 0029, decision 6). */
+const waitRefused = (tab: number, wait: Wait, agent: string) => {
+  const say = (message: string) => new Refused({ code: "forbidden", message })
+  if (wait.agent !== agent)
+    return say(
+      `Tab ${tab} is the Person's now, for a step of theirs. Do not use it until they hand it back.`
+    )
+  switch (wait.reason) {
+    case "stopped":
+      return say(
+        `The Person stopped you on tab ${tab}. Do not use it until they let you drive again: say where you stopped and end your turn, and they will tell you.`
+      )
+    case "handoff":
+      return say(
+        `You handed tab ${tab} to the Person: "${wait.why}". Do not use it until they hand it back: end your turn, and their message says when.`
+      )
+  }
+}
+
 /** A tab as an Agent sees it. */
+
 export const seenTab = (
   page: WebContents,
   cdp: Pick<Cdp["Service"], "drives">
@@ -195,9 +221,13 @@ export class Drive extends Context.Service<
     /** The Thread of `agent` hands the tab to the Person for a step that
      * is theirs, and waits until they hand it back. */
     handoff(hand: Handoff, by: Participant): Effect.Effect<void, Refused>
-    /** The Person answered what the Thread of `agent` waits for on the
-     * tab: it may use the tab again. */
-    answered(tab: number, agent: string): Effect.Effect<boolean>
+    /** The Person answered the Thread of `agent`'s wait for `reason` on
+     * the tab: it may use the tab again. False when it waited for none. */
+    answered(
+      tab: number,
+      agent: string,
+      reason: Wait["reason"]
+    ): Effect.Effect<boolean>
     /** The turn of the Thread of `agent` ended: it drives no tab now. */
     settled(agent: string): Effect.Effect<void>
   }
@@ -243,29 +273,21 @@ export class Drive extends Context.Service<
         tellWaits(tab)
         return true
       }
-      /** Refuses a call of the Agent `by` on a tab where its Thread waits
-       * for the Person, which it then asks; and every Agent's, while the
-       * tab is handed to the Person. */
+      /** Refuses a call of the Agent `by` on a tab where a wait blocks
+       * it; its own wait then asks the Person. */
       const waiting = (tab: number, by: Participant) =>
         Effect.suspend(() => {
           const on = waits.get(tab)
-          if (!on || by.kind !== "agent") return Effect.void
-          const own = on.get(by.id)
-          const handed = [...on.values()].find(
-            (wait) => wait.reason === "handoff"
-          )
-          const was = own ?? handed
+          if (!on?.size || by.kind !== "agent") return Effect.void
+          let was = on.get(by.id)
+          if (!was)
+            for (const wait of on.values()) if (blocks(wait, by.id)) was = wait
           if (!was) return Effect.void
-          if (own && own.asked === undefined) {
-            on.set(by.id, { ...own, asked: Date.now() })
+          if (was.agent === by.id && was.asked === undefined) {
+            on.set(by.id, { ...was, asked: Date.now() })
             tellWaits(tab)
           }
-          return Effect.fail(
-            new Refused({
-              code: "forbidden",
-              message: refusalOf(tab, was, was === own),
-            })
-          )
+          return Effect.fail(waitRefused(tab, was, by.id))
         })
       /** The cursor of the Thread that drives the tab, going to `x`, `y`
        * as its hands do: they wait for it, unless it is there. */
@@ -498,15 +520,17 @@ export class Drive extends Context.Service<
               asked: Date.now(),
             }
             if (!wait(tab, handed)) return Effect.fail(noTab(tab))
-            // The Person's turn: the Thread's drive there ends, and its
-            // hold on the tab stays for when they hand it back.
-            if (driving.get(tab)?.agent === by.id) tell(tab, null)
+            // The Person's turn: any drive there ends, and holds on the
+            // tab stay for when they hand it back.
+            if (driving.has(tab)) tell(tab, null)
             return Effect.void
           }),
-        answered: (tab, agent) =>
+        answered: (tab, agent, reason) =>
           Effect.sync(() => {
+            const on = waits.get(tab)
+            if (on?.get(agent)?.reason !== reason) return false
             // The tab's map stays, as its one hook on the tab's end does.
-            if (!waits.get(tab)?.delete(agent)) return false
+            on.delete(agent)
             tellWaits(tab)
             return true
           }),

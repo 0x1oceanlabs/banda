@@ -480,8 +480,13 @@ export const browserAnswers: Answers<
   stop: [page, ([page]) => Cdp.use((cdp) => cdp.stop(page))],
   release: [page, ([page]) => Drive.use((drive) => drive.release(page))],
   answered: [
-    Schema.Tuple([Schema.Number, Schema.String]),
-    ([page, agent]) => Drive.use((drive) => drive.answered(page, agent)),
+    Schema.Tuple([
+      Schema.Number,
+      Schema.String,
+      Schema.Literals(["stopped", "handoff"]),
+    ]),
+    ([page, agent, reason]) =>
+      Drive.use((drive) => drive.answered(page, agent, reason)),
   ],
   settled: [text, ([agent]) => Drive.use((drive) => drive.settled(agent))],
   pin: [

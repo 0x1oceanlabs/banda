@@ -49,10 +49,10 @@ import {
 } from "lucide-react"
 import { addressOf, siteOf } from "./address"
 import { Extensions, WEB_STORE } from "./Extensions"
-import type { Download, Driver, Handed, Point } from "./desktop"
+import { type Download, type Driver, type Point, shownOf } from "./desktop"
 import { browserHost, downloadsNow, watchDownloads } from "./host"
 import { browserKey, type Does, isTabKey } from "./keys"
-import { handBack, threadOf, useThreadOf } from "./threads"
+import { handBack, threadOf, useThreadOf, useTitleOf } from "./threads"
 import {
   BLANK,
   drop,
@@ -218,7 +218,9 @@ function BrowserPane({
         const thread = threadOf(agent)
         if (thread) open(thread.listed.pane, undefined, thread.space)
       }}
-      onHandBack={(contents, wait) => void handBack(engine, contents, wait)}
+      onHandBack={(contents, agent, why) =>
+        void handBack(engine, contents, agent, why)
+      }
       close={close}
     />
   )
@@ -256,7 +258,7 @@ function Browser({
   /** Goes to the Thread of the Agent that drives the page. */
   onThread: (agent: string) => void
   /** The Person is done with what the Thread handed them in the page. */
-  onHandBack: (contents: number, wait: Handed) => void
+  onHandBack: (contents: number, agent: string, why: string) => void
   close: () => void
 }) {
   const root = useRef<HTMLDivElement>(null)
@@ -276,11 +278,7 @@ function Browser({
 
   // The page the Person looks at is the extensions' active tab.
   const contents = page?.contents ?? null
-  // One wait shows at a time: a handed-over tab is the Person's to use.
-  const handed = state.waits.find(
-    (wait): wait is Handed => wait.reason === "handoff"
-  )
-  const stopped = state.waits.find((wait) => wait.reason === "stopped")
+  const shown = shownOf(state.waits, state.driver !== null)
   useEffect(() => {
     if (focused && contents !== null) browserHost()?.shown(contents)
   }, [focused, contents])
@@ -411,24 +409,24 @@ function Browser({
             />
           </DrawnIn>
         )}
-        {page && handed && contents != null && (
+        {page && shown && contents != null && (
           <DrawnIn element={page.over}>
-            <HandedOver
-              wait={handed}
-              onThread={onThread}
-              onDone={() => onHandBack(contents, handed)}
-            />
-          </DrawnIn>
-        )}
-        {page && !state.driver && !handed && stopped && contents != null && (
-          <DrawnIn element={page.over}>
-            <Stopped
-              agent={stopped.agent}
-              onThread={onThread}
-              onLet={() =>
-                void browserHost()?.answered(contents, stopped.agent)
-              }
-            />
+            {shown.reason === "handoff" ? (
+              <HandedOver
+                agent={shown.agent}
+                why={shown.why}
+                onThread={onThread}
+                onDone={() => onHandBack(contents, shown.agent, shown.why)}
+              />
+            ) : (
+              <Stopped
+                agent={shown.agent}
+                onThread={onThread}
+                onLet={() =>
+                  void browserHost()?.answered(contents, shown.agent, "stopped")
+                }
+              />
+            )}
           </DrawnIn>
         )}
       </div>
@@ -490,14 +488,23 @@ function Driving({
   )
 }
 
-/** A glass pill at the foot of a page, over it, which says what a Thread
- * does there. */
+/** Where Banda's glass over a page goes: a pill at its foot, or a card
+ * across its top. */
+const PLACES = {
+  foot: "bottom-3 left-1/2 max-w-[calc(100%-24px)] -translate-x-1/2 gap-2 rounded-full py-1 pr-1 whitespace-nowrap",
+  top: "inset-x-3 top-3 gap-2.5 rounded-lg py-2 pr-2 pl-3",
+}
+
+/** Banda's glass over a page, which says what a Thread does there or
+ * waits for. */
 function Pill({
   label,
+  at = "foot",
   className,
   children,
 }: {
   label: string
+  at?: keyof typeof PLACES
   className: string
   children: React.ReactNode
 }) {
@@ -506,7 +513,8 @@ function Pill({
       role="status"
       aria-label={label}
       className={cn(
-        "pointer-events-auto absolute bottom-3 left-1/2 flex max-w-[calc(100%-24px)] -translate-x-1/2 items-center gap-2 rounded-full bg-popover py-1 pr-1 text-xs whitespace-nowrap text-popover-foreground shadow-lg ring-1",
+        "pointer-events-auto absolute flex items-center bg-popover text-xs text-popover-foreground shadow-lg ring-1",
+        PLACES[at],
         className
       )}
     >
@@ -551,7 +559,7 @@ function Stopped({
   onThread: (agent: string) => void
   onLet: () => void
 }) {
-  const title = useThreadOf(agent)?.title ?? "An Agent"
+  const title = useTitleOf(agent)
   return (
     <Pill
       label={`${title} is stopped in this tab`}
@@ -579,26 +587,28 @@ function Stopped({
  * once they are done.
  */
 function HandedOver({
-  wait,
+  agent,
+  why,
   onThread,
   onDone,
 }: {
-  wait: Handed
+  agent: string
+  why: string
   onThread: (agent: string) => void
   onDone: () => void
 }) {
-  const title = useThreadOf(wait.agent)?.title ?? "An Agent"
+  const title = useTitleOf(agent)
   return (
-    <div
-      role="status"
-      aria-label={`${title} handed this tab to you`}
-      className="pointer-events-auto absolute inset-x-3 top-3 flex items-center gap-2.5 rounded-lg bg-popover py-2 pr-2 pl-3 text-xs text-popover-foreground shadow-lg ring-1 ring-attention/60"
+    <Pill
+      label={`${title} handed this tab to you`}
+      at="top"
+      className="ring-attention/60"
     >
       <p className="min-w-0 flex-1 leading-snug">
-        <b className="text-attention">Your turn.</b> {wait.why}.{" "}
+        <b className="text-attention">Your turn.</b> {why}.{" "}
         <span className="opacity-70">
-          <ThreadLink title={title} onClick={() => onThread(wait.agent)} />{" "}
-          waits, and never sees what you type in a password field.
+          <ThreadLink title={title} onClick={() => onThread(agent)} /> waits,
+          and never sees what you type in a password field.
         </span>
       </p>
       <Button
@@ -608,7 +618,7 @@ function HandedOver({
       >
         Done — hand back
       </Button>
-    </div>
+    </Pill>
   )
 }
 
