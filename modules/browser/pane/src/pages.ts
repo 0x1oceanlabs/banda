@@ -11,7 +11,7 @@
  */
 import type { SpaceId } from "@banda/contract"
 import { HELD_BY, paneLayer } from "@banda/ui/pane"
-import { type BrowserNews, PARTITION } from "./desktop"
+import { type BrowserNews, type Driver, PARTITION } from "./desktop"
 import { browserHost, hearNews } from "./host"
 
 /** What the row shows of a page. */
@@ -35,11 +35,6 @@ export type PageState = {
   driver: Driver | null
 }
 
-/** A Thread that drives a page, by its Agent: the step it takes, and
- * where its cursor is, once its hands went somewhere. */
-export type Driver = { agent: string; step: string; at?: Point }
-export type Point = { x: number; y: number }
-
 /** A page not made yet. */
 export const BLANK: PageState = {
   url: "",
@@ -62,6 +57,7 @@ type View = HTMLElement & {
   reloadIgnoringCache(): void
   loadURL(url: string): Promise<void>
   getZoomLevel(): number
+  getZoomFactor(): number
   setZoomLevel(level: number): void
   isDevToolsOpened(): boolean
   openDevTools(): void
@@ -260,20 +256,12 @@ export class Page {
     this.set({ driven })
   }
 
-  /** A Thread's Agent drives it with Banda's tools now, at `step`; or
-   * none does. */
-  driveBy(agent: string | null, step: string): void {
-    const was = this.state.driver
-    if (was?.agent === agent && was?.step === step) return
-    // The cursor stays where the Thread's hands went last.
-    const at = was?.agent === agent ? was?.at : undefined
-    this.set({ driver: agent ? { agent, step, ...(at && { at }) } : null })
-  }
-
-  /** The Thread's hands go to `at` in the page, its cursor with them. */
-  point(at: Point): void {
-    const was = this.state.driver
-    if (was) this.set({ driver: { ...was, at } })
+  /** A Thread's Agent drives it with Banda's tools now; or none does.
+   * Where its hands went is drawn as the page's zoom draws it. */
+  driveBy(driver: Driver | null): void {
+    const zoom = this.view.getZoomFactor()
+    const at = driver?.at && { x: driver.at.x * zoom, y: driver.at.y * zoom }
+    this.set({ driver: driver && { ...driver, at } })
   }
 
   private set(change: Partial<PageState>): void {
@@ -557,8 +545,7 @@ function hear(news: PageNews): void {
   const holder = held.get(page.id)
   if (news.kind === "icon") page.iconed(news.icon)
   else if (news.kind === "driven") page.drive(news.driven)
-  else if (news.kind === "driver") page.driveBy(news.agent, news.step)
-  else if (news.kind === "point") page.point({ x: news.x, y: news.y })
+  else if (news.kind === "driver") page.driveBy(news.driver)
   else if (news.kind === "open") {
     holder?.open(news.url, page.id, news.background)
   } else if (news.kind === "select") holder?.show(page.id)

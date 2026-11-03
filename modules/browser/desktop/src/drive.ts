@@ -16,9 +16,11 @@ import type {
   Shown,
   WaitFor,
 } from "@banda/contract/browser"
+import type { Driver } from "@banda/browser-pane/desktop"
 import { Refused } from "@banda/desktop-kit"
 import { Context, Effect, FiberSet, Layer, RcMap } from "effect"
 import type { Event, InputEvent, WebContents } from "electron"
+import { setTimeout as sleep } from "node:timers/promises"
 import type { Browser, Dialog, Frame, Page } from "playwright-core"
 import { Cdp, messageOf } from "./cdp"
 import {
@@ -26,6 +28,7 @@ import {
   goingTo,
   hidden,
   opening,
+  type Pointing,
   READING,
   secrets,
   stepOf,
@@ -200,13 +203,24 @@ export class Drive extends Context.Service<
       /** The tabs a Thread drives, from its first call until its turn
        * ends or the Person stops it (ADR 0029, decision 4), by the ID of
        * its Agent. */
-      const driving = new Map<number, string>()
-      /** Tells the tab's Pane who drives it now, and the step it takes. */
-      const tell = (tab: number, agent: string | null, step = "") => {
-        if (agent) driving.set(tab, agent)
+      const driving = new Map<number, Driver>()
+      /** Tells the tab's Pane who drives it now, the step it takes and
+       * where its hands went last. */
+      const tell = (tab: number, driver: Driver | null) => {
+        if (driver) driving.set(tab, driver)
         else driving.delete(tab)
-        tabs.tell({ kind: "driver", from: tab, agent, step })
+        tabs.tell({ kind: "driver", from: tab, driver })
       }
+      /** The cursor of the Thread that drives the tab, going to `x`, `y`
+       * as its hands do: they wait for it, unless it is there. */
+      const pointer =
+        (tab: number): Pointing =>
+        async (x, y) => {
+          const driver = driving.get(tab)
+          if (!driver || (driver.at?.x === x && driver.at?.y === y)) return
+          tell(tab, { ...driver, at: { x, y } })
+          await sleep(POINTING)
+        }
       const held = yield* RcMap.make({
         idleTimeToLive: IDLE,
         lookup: (tab: number) =>
@@ -285,7 +299,10 @@ export class Drive extends Context.Service<
                 if (!kept.touched.has(by.id)) kept.touched.set(by.id, false)
                 if (by.kind === "agent") {
                   const said = typeof step === "string" ? step : step(kept.tree)
-                  tell(tab, by.id, said)
+                  // The cursor stays where the Thread's hands went last.
+                  const was = driving.get(tab)
+                  const at = was?.agent === by.id ? was.at : undefined
+                  tell(tab, { agent: by.id, step: said, at })
                 }
                 return await work(kept)
               },
@@ -358,19 +375,13 @@ export class Drive extends Context.Service<
               session.on("will-download", downloads)
               kept.acting = true
               try {
-                const acting = act(page, contents, what, (x, y) => {
-                  // Only a Thread's hands have a cursor.
-                  if (by.kind !== "agent") return Promise.resolve()
-                  // The page's pixels, as the tab's zoom draws them.
-                  const zoom = contents.getZoomFactor()
-                  tabs.tell({
-                    kind: "point",
-                    from: what.tab,
-                    x: x * zoom,
-                    y: y * zoom,
-                  })
-                  return new Promise((there) => setTimeout(there, POINTING))
-                })
+                // Only a Thread's hands have a cursor.
+                const acting = act(
+                  page,
+                  contents,
+                  what,
+                  by.kind === "agent" ? pointer(what.tab) : undefined
+                )
                 // A dialog the action opens stops the page, and the action
                 // with it: the dialog is its answer.
                 acting.catch(() => {})
@@ -378,8 +389,7 @@ export class Drive extends Context.Service<
                 if (shows)
                   opens = { kind: shows.type(), message: shows.message() }
                 // A stopped page starts nothing more.
-                else
-                  await new Promise((settled) => setTimeout(settled, SETTLING))
+                else await sleep(SETTLING)
               } finally {
                 kept.acting = false
                 dialog.stop()
@@ -411,7 +421,7 @@ export class Drive extends Context.Service<
         release: (tab) => RcMap.invalidate(held, tab),
         settled: (agent) =>
           Effect.forEach(
-            [...driving].filter(([, driver]) => driver === agent),
+            [...driving].filter(([, driver]) => driver.agent === agent),
             ([tab]) => RcMap.invalidate(held, tab),
             { discard: true }
           ),
