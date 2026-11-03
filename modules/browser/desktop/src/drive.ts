@@ -224,32 +224,35 @@ export class Drive extends Context.Service<
           waits: [...(waits.get(tab)?.values() ?? [])],
         })
       const wait = (tab: number, agent: string) => {
+        const contents = contentsOf(tab)
+        if (!contents) return
         let on = waits.get(tab)
         if (!on) {
           on = new Map()
           waits.set(tab, on)
-          contentsOf(tab)?.once("destroyed", () => waits.delete(tab))
+          contents.once("destroyed", () => waits.delete(tab))
         }
-        on.set(agent, { agent, reason: "stopped", asked: null })
+        on.set(agent, { agent, reason: "stopped" })
         tellWaits(tab)
       }
       /** Refuses a call of the Agent `by` on a tab where its Thread waits
        * for the Person, which it then asks. */
-      const waiting = (tab: number, by: Participant) => {
-        const on = waits.get(tab)
-        const was = by.kind === "agent" ? on?.get(by.id) : undefined
-        if (!on || !was) return Effect.void
-        if (was.asked === null) {
-          on.set(by.id, { ...was, asked: Date.now() })
-          tellWaits(tab)
-        }
-        return Effect.fail(
-          new Refused({
-            code: "forbidden",
-            message: `The Person stopped you on tab ${tab}. Do not use it until they let you drive again: say where you stopped and end your turn, and they will tell you.`,
-          })
-        )
-      }
+      const waiting = (tab: number, by: Participant) =>
+        Effect.suspend(() => {
+          const on = waits.get(tab)
+          const was = by.kind === "agent" ? on?.get(by.id) : undefined
+          if (!was) return Effect.void
+          if (was.asked === undefined) {
+            on!.set(by.id, { ...was, asked: Date.now() })
+            tellWaits(tab)
+          }
+          return Effect.fail(
+            new Refused({
+              code: "forbidden",
+              message: `The Person stopped you on tab ${tab}. Do not use it until they let you drive again: say where you stopped and end your turn, and they will tell you.`,
+            })
+          )
+        })
       /** The cursor of the Thread that drives the tab, going to `x`, `y`
        * as its hands do: they wait for it, unless it is there. */
       const pointer =
@@ -332,7 +335,7 @@ export class Drive extends Context.Service<
         work: (held: Held) => Promise<A>
       ) =>
         Effect.andThen(
-          Effect.suspend(() => waiting(tab, by)),
+          waiting(tab, by),
           Effect.scoped(
             Effect.flatMap(heldOf(tab), (kept) =>
               Effect.tryPromise({
@@ -469,7 +472,10 @@ export class Drive extends Context.Service<
           }),
         letDrive: (tab, agent) =>
           Effect.sync(() => {
-            if (waits.get(tab)?.delete(agent)) tellWaits(tab)
+            const on = waits.get(tab)
+            if (!on?.delete(agent)) return
+            if (!on.size) waits.delete(tab)
+            tellWaits(tab)
           }),
         settled: (agent) =>
           Effect.forEach(

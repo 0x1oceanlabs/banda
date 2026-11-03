@@ -442,11 +442,7 @@ function Driving({
         className="absolute inset-0 shadow-[inset_0_0_30px_color-mix(in_srgb,var(--primary)_40%,transparent)]"
       />
       {driver.at && <Cursor at={driver.at} title={title} />}
-      <div
-        role="status"
-        aria-label={`${title} drives this tab`}
-        className="pointer-events-auto absolute bottom-3 left-1/2 flex max-w-[calc(100%-24px)] -translate-x-1/2 items-center gap-2 rounded-full bg-popover py-1 pr-1 pl-2 text-xs whitespace-nowrap text-popover-foreground shadow-lg ring-1 ring-border"
-      >
+      <Pill label={`${title} drives this tab`} className="pl-2 ring-border">
         <BandaMark
           state={thread?.mark ?? "running"}
           variant="agent"
@@ -454,14 +450,11 @@ function Driving({
           news={false}
           className="size-4"
         />
-        <button
-          type="button"
-          title="Go to the Thread"
+        <ThreadLink
+          title={title}
           onClick={() => onThread(driver.agent)}
-          className="min-w-0 truncate font-semibold hover:underline"
-        >
-          {title}
-        </button>
+          className="min-w-0 truncate"
+        />
         <span className="min-w-0 truncate opacity-70">· {driver.step}</span>
         <Button
           variant="secondary"
@@ -472,8 +465,55 @@ function Driving({
         >
           Stop
         </Button>
-      </div>
+      </Pill>
     </>
+  )
+}
+
+/** A glass pill at the foot of a page, over it, which says what a Thread
+ * does there. */
+function Pill({
+  label,
+  className,
+  children,
+}: {
+  label: string
+  className: string
+  children: React.ReactNode
+}) {
+  return (
+    <div
+      role="status"
+      aria-label={label}
+      className={cn(
+        "pointer-events-auto absolute bottom-3 left-1/2 flex max-w-[calc(100%-24px)] -translate-x-1/2 items-center gap-2 rounded-full bg-popover py-1 pr-1 text-xs whitespace-nowrap text-popover-foreground shadow-lg ring-1",
+        className
+      )}
+    >
+      {children}
+    </div>
+  )
+}
+
+/** A Thread's title, which goes to the Thread. */
+function ThreadLink({
+  title,
+  onClick,
+  className,
+}: {
+  title: string
+  onClick: () => void
+  className?: string
+}) {
+  return (
+    <button
+      type="button"
+      title="Go to the Thread"
+      onClick={onClick}
+      className={cn("font-semibold hover:underline", className)}
+    >
+      {title}
+    </button>
   )
 }
 
@@ -493,21 +533,12 @@ function Stopped({
 }) {
   const title = useThreadOf(agent)?.title ?? "An Agent"
   return (
-    <div
-      role="status"
-      aria-label={`${title} is stopped in this tab`}
-      className="pointer-events-auto absolute bottom-3 left-1/2 flex max-w-[calc(100%-24px)] -translate-x-1/2 items-center gap-2 rounded-full bg-popover py-1 pr-1 pl-3 text-xs whitespace-nowrap text-popover-foreground shadow-lg ring-1 ring-attention/60"
+    <Pill
+      label={`${title} is stopped in this tab`}
+      className="pl-3 ring-attention/60"
     >
       <span className="min-w-0 truncate">
-        Stopped{" "}
-        <button
-          type="button"
-          title="Go to the Thread"
-          onClick={() => onThread(agent)}
-          className="font-semibold hover:underline"
-        >
-          {title}
-        </button>
+        Stopped <ThreadLink title={title} onClick={() => onThread(agent)} />
       </span>
       <Button
         variant="outline"
@@ -517,7 +548,7 @@ function Stopped({
       >
         Let drive again
       </Button>
-    </div>
+    </Pill>
   )
 }
 

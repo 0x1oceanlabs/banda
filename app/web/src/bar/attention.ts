@@ -3,7 +3,7 @@
  * every Space calls for, and how many things wait for the Person in all.
  * Pure, so plain tests cover it.
  */
-import { loudest } from "@banda/ui/components/banda-mark"
+import { loudest, MARK_ORDER } from "@banda/ui/components/banda-mark"
 import type { Attention, Listed } from "@banda/ui/pane"
 
 export function combine(reports: Iterable<Attention>): Attention {
@@ -25,16 +25,19 @@ export function folded(listed: readonly Listed[]): readonly Listed[] {
   return listed
     .filter((thing) => thing.on === undefined)
     .map((thing) => {
-      const of = about.filter((each) => each.on === thing.agent)
-      if (thing.agent === undefined || !of.length) return thing
-      const mark = loudest([thing.mark, ...of.map((each) => each.mark)])
-      if (mark === thing.mark) return thing
-      const loud = of.find((each) => each.mark === mark)!
+      const louder = about
+        .filter((each) => each.on === thing.agent)
+        .reduce<Listed>(
+          (loud, each) =>
+            MARK_ORDER[each.mark] > MARK_ORDER[loud.mark] ? each : loud,
+          thing
+        )
+      if (louder === thing) return thing
       return {
         ...thing,
-        mark,
-        changed: Math.max(thing.changed, loud.changed),
-        ...(loud.calls !== undefined && { calls: loud.calls }),
+        mark: louder.mark,
+        changed: Math.max(thing.changed, louder.changed),
+        ...(louder.calls !== undefined && { calls: louder.calls }),
       }
     })
 }
