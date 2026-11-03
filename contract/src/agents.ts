@@ -64,6 +64,8 @@ export type { VisualPage } from "./generated/agents/VisualPage"
 export type { TurnState } from "./generated/agents/TurnState"
 export type { TurnView } from "./generated/agents/TurnView"
 export type { Usage } from "./generated/agents/Usage"
+export type { WriteAsk } from "./generated/agents/WriteAsk"
+export type { Written } from "./generated/agents/Written"
 
 export { VERSION }
 

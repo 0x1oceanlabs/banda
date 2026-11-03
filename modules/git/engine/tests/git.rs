@@ -1270,3 +1270,59 @@ async fn the_watch_says_the_status_and_then_what_changed() {
     let next: Status = serde_json::from_value(next).unwrap();
     assert_eq!(next.files.len(), 1);
 }
+
+#[tokio::test]
+async fn a_prompt_says_what_the_commit_would_take_and_leaves_the_index() {
+    let world = World::committed().await;
+    world.write("a.txt", "one\nTWO\nthree\n");
+    world.write("new.txt", "new\n");
+    let index = world.index();
+    let said = world.call("git.prompt", json!({})).await.unwrap();
+    let prompt = said["prompt"].as_str().unwrap();
+
+    assert!(
+        prompt.contains("Files:\na.txt (+1 −1)\nnew.txt (+1 −0)\n"),
+        "{prompt}"
+    );
+    assert!(prompt.contains("+TWO"), "{prompt}");
+    assert!(prompt.contains("Branch: main"), "{prompt}");
+    assert!(prompt.contains("Last subjects:\nfirst\n"), "{prompt}");
+    assert!(!prompt.contains("branch must be"), "{prompt}");
+    assert_eq!(world.index(), index);
+
+    let said = world
+        .call(
+            "git.prompt",
+            json!({ "files": ["new.txt"], "branch": true }),
+        )
+        .await
+        .unwrap();
+    let prompt = said["prompt"].as_str().unwrap();
+    assert!(prompt.contains("Files:\nnew.txt (+1 −0)\n\n"), "{prompt}");
+    assert!(prompt.contains("branch must be"), "{prompt}");
+
+    world.git(&["checkout", "--quiet", "--", "a.txt"]);
+    world.git(&["clean", "--quiet", "--force"]);
+    let refused = world.call("git.prompt", json!({})).await.unwrap_err();
+    assert_eq!(refused.code, Code::Conflict);
+}
+
+#[tokio::test]
+async fn a_reply_is_a_message_and_a_branch_no_branch_has() {
+    let world = World::committed().await;
+    world.git(&["branch", "feature/search-box"]);
+    let reply = "```json\n{\"subject\": \"Add a search box.\", \"body\": \"- in the header\", \"branch\": \"Search box\"}\n```";
+    let said = world
+        .call("git.written", json!({ "reply": reply, "branch": true }))
+        .await
+        .unwrap();
+    assert_eq!(
+        said,
+        json!({ "message": "Add a search box\n\n- in the header", "branch": "feature/search-box-2" })
+    );
+    let said = world
+        .call("git.written", json!({ "reply": "Fix the bar" }))
+        .await
+        .unwrap();
+    assert_eq!(said, json!({ "message": "Fix the bar" }));
+}

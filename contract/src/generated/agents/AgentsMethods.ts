@@ -29,6 +29,8 @@ import type { ThreadList } from "./ThreadList";
 import type { ThreadView } from "./ThreadView";
 import type { TurnChanges } from "./TurnChanges";
 import type { VisualPage } from "./VisualPage";
+import type { WriteAsk } from "./WriteAsk";
+import type { Written } from "./Written";
 
 export type AgentsMethods = { 
 /**
@@ -70,6 +72,13 @@ defaults: CallMethod<OneHarness, Defaults>,
  * Turn (ADR 0034).
  */
 changes: CallMethod<ChangesAsk, TurnChanges>, 
+/**
+ * What the Thread's Harness replies to a prompt, in a short run of
+ * its own the Thread does not show: on its model, asking before
+ * it changes anything, and refused whatever it asks. Git asks it
+ * for a commit's message.
+ */
+write: CallMethod<WriteAsk, Written>, 
 /**
  * Writes into a Thread of this Space, or starts a new Thread on a
  * Harness. Its Agent reads that the message is from your Thread's

@@ -11,11 +11,15 @@ import type { Contents } from "./Contents";
 import type { ContentsAsk } from "./ContentsAsk";
 import type { Diff } from "./Diff";
 import type { DiffAsk } from "./DiffAsk";
+import type { Message } from "./Message";
 import type { Progress } from "./Progress";
+import type { PromptAsk } from "./PromptAsk";
+import type { Prompted } from "./Prompted";
 import type { Ref } from "./Ref";
 import type { RefsAsk } from "./RefsAsk";
 import type { Status } from "./Status";
 import type { SwitchAsk } from "./SwitchAsk";
+import type { WrittenAsk } from "./WrittenAsk";
 
 export type GitMethods = { 
 /**
@@ -80,4 +84,15 @@ branch: CallMethod<BranchAsk, null>,
 /**
  * Makes the Space's folder a git repository.
  */
-init: CallMethod<Nothing, null>, };
+init: CallMethod<Nothing, null>, 
+/**
+ * The prompt a Harness writes a commit's message from: what the
+ * commit would take, its branch and the repository's last
+ * subjects. The index is left as it is.
+ */
+prompt: CallMethod<PromptAsk, Prompted>, 
+/**
+ * A Harness's reply to `prompt` read as a message for `act`, and
+ * as the name of a new branch no branch here has.
+ */
+written: CallMethod<WrittenAsk, Message>, };

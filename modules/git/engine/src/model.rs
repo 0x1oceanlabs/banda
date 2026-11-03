@@ -389,3 +389,47 @@ pub struct BranchAsk {
     #[ts(optional)]
     pub from: Option<String>,
 }
+
+/// What `git.prompt` is asked: the commit a message is written for.
+#[derive(Clone, Debug, Default, Deserialize, TS)]
+#[ts(export, export_to = "git/")]
+pub struct PromptAsk {
+    /// Only these files, as `git.act` takes them; every change when none
+    /// are given.
+    #[serde(default)]
+    #[ts(optional)]
+    pub files: Option<Vec<String>>,
+    /// The Harness names a new branch for it too.
+    #[serde(default)]
+    #[ts(as = "Option<bool>", optional)]
+    pub branch: bool,
+}
+
+/// A prompt for a Harness, which writes a commit's message from it.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "git/")]
+pub struct Prompted {
+    pub prompt: String,
+}
+
+/// What `git.written` is asked: a Harness's reply to `git.prompt`.
+#[derive(Clone, Debug, Deserialize, TS)]
+#[ts(export, export_to = "git/")]
+pub struct WrittenAsk {
+    pub reply: String,
+    /// A new branch's name is read from it too.
+    #[serde(default)]
+    #[ts(as = "Option<bool>", optional)]
+    pub branch: bool,
+}
+
+/// A commit's message, as `git.act` takes it, and a new branch's name.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "git/")]
+pub struct Message {
+    pub message: String,
+    /// One no branch here has.
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub branch: Option<String>,
+}

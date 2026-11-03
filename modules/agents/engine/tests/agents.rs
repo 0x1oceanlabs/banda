@@ -3645,3 +3645,43 @@ async fn told_apples_then_pears(back: impl AsyncFn(&World, &Value, &ThreadView) 
         assert!(!reply.contains("PEARS"), "{harness} knows no more: {reply}");
     }
 }
+
+#[tokio::test]
+async fn a_short_run_of_its_own_writes_on_the_threads_model_and_the_thread_never_shows_it() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let (thread, _) = world.finish(None, "which session").await;
+    world
+        .configure(&thread, json!({ "options": { "model": "smart" } }))
+        .await;
+    let before = texts(&world.thread(&thread).await);
+    let write = |prompt: &str| {
+        world.call(
+            world.person(),
+            "agents.write",
+            json!({ "thread": thread, "prompt": prompt }),
+        )
+    };
+
+    let written = write("which settings").await.unwrap();
+    assert_eq!(written["text"], "Mode plan, model smart, brief false");
+    // What it asks is refused: the tool call is skipped, and it replies.
+    let written = write("ask").await.unwrap();
+    assert!(written["text"].as_str().is_some_and(|t| !t.is_empty()));
+    let written = write("which session").await.unwrap();
+    let own = written["text"].as_str().unwrap().to_owned();
+
+    assert_eq!(texts(&world.thread(&thread).await), before);
+    let (_, (session, _)) = ask_session(&world, Some(&thread)).await;
+    assert!(!own.contains(&session), "{own} is the Thread's {session}");
+
+    let refused = world
+        .call(
+            world.person(),
+            "agents.write",
+            json!({ "thread": banda_agents::model::ThreadId::new(), "prompt": "hello" }),
+        )
+        .await
+        .unwrap_err();
+    assert_eq!(refused.code, Code::NotFound);
+}

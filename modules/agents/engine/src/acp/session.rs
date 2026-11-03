@@ -5,6 +5,8 @@ use super::*;
 
 /// How long a Harness may take to say whether a message joins its turn.
 const STEERING: Duration = Duration::from_secs(30);
+/// How long a Harness may take to close a session.
+const CLOSING: Duration = Duration::from_secs(10);
 /// A Harness's session for one Thread, in the process it runs in: what a
 /// turn does there goes through it.
 #[derive(Clone)]
@@ -256,6 +258,22 @@ impl Session {
             }
         });
         (hear, done)
+    }
+
+    /// Closes the session on the Harness when it can, and forgets what
+    /// was learned of it here. A Thread's session is never closed; a
+    /// short run's is, once it ended.
+    pub async fn close(&self) {
+        let connection = &*self.connection;
+        if connection.agreed.closes {
+            let close = acp::CloseSessionRequest::new(self.id.clone());
+            let asked = connection.cx.send_request(close).block_task();
+            if let Ok(Err(error)) = timeout(CLOSING, asked).await {
+                tracing::info!(%error, "the Harness could not close a session");
+            }
+        }
+        connection.learned.lock().unwrap().remove(&self.id);
+        connection.routes.forget(&self.id);
     }
 
     /// What the session last said it has used, if it has.

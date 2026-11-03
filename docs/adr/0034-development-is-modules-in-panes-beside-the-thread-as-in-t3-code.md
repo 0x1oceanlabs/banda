@@ -139,7 +139,12 @@ the rest are our defaults, as T3 Code does, and stay Roma's to change.
    - A message left empty is written by a Harness in one short run, as T3
      Code's text model writes it (_decided_): from the staged diff, in the
      repository's style; with "Commit on new branch" it names the branch
-     too.
+     too. `git.prompt` says what the commit would take, as the Diff reads
+     the work tree against `HEAD`; `agents.write` runs it on the Thread's Harness
+     and model in a session of its own, planning, refused whatever it
+     asks, that the Thread does not show; `git.written` reads the reply
+     into a subject of at most 72 characters, a body and a branch no
+     branch has (`feature/…`, then `-2`).
    - The status follows the folder: a stream `git.watch` reads it again
      every few seconds while a Pane follows it, and says only what
      changed. A watcher on the folder can replace the polling later.

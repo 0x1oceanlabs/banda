@@ -8,7 +8,7 @@
 //! comes, its credentials taken out, and a failure says its last line.
 
 use crate::model::{ActAsk, Action, Done, Progress, Step};
-use crate::repo::{Repo, plain_paths, scratch};
+use crate::repo::{Repo, chosen, scratch};
 use crate::run::{Failure, Opts, Ran, Reason, git};
 use banda_kernel::Refusal;
 use serde_json::Value;
@@ -86,13 +86,7 @@ pub async fn act(repo: &Repo, ask: ActAsk, tell: &Teller) -> Result<Done, Refusa
         .map(str::trim)
         .filter(|m| !m.is_empty())
         .ok_or_else(|| Refusal::invalid("A commit needs a message."))?;
-    let files = match &ask.files {
-        Some(files) if files.is_empty() => {
-            return Err(Refusal::invalid("A commit of chosen files needs one."));
-        }
-        Some(files) => Some(plain_paths(files)?),
-        None => None,
-    };
+    let files = chosen(&ask.files)?;
     let said = repo.porcelain().await?;
     if said.files.is_empty() {
         return Err(Refusal::conflict(

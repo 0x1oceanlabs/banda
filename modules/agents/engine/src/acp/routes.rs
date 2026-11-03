@@ -51,6 +51,12 @@ impl Routes {
         self.turns.lock().unwrap().remove(session);
     }
 
+    /// A closed session: nothing goes to it any more.
+    pub(super) fn forget(&self, session: &acp::SessionId) {
+        self.ended(session);
+        self.between.lock().unwrap().remove(session);
+    }
+
     /// Whether a turn's prompt runs in `session` now.
     pub(super) fn prompting(&self, session: &acp::SessionId) -> bool {
         self.turns.lock().unwrap().contains_key(session)
