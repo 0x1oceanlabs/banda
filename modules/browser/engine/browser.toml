@@ -19,3 +19,9 @@ tabs = "top"
 # Whether Banda blocks ads and trackers in the browser, with EasyList,
 # EasyPrivacy and uBlock Origin's lists.
 # blocker = true
+
+# The sites Agents may use without asking, "allow", or never, "deny", by
+# site: github.com covers its subdomains. Your answers on a tab write
+# them; localhost never asks.
+# [agents.sites]
+# "github.com" = "allow"

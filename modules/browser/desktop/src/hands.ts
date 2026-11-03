@@ -10,6 +10,25 @@ import type { Act, Navigate, WaitFor } from "@banda/contract/browser"
 import { Refused } from "@banda/desktop-kit"
 import type { WebContents } from "electron"
 import type { Locator, Page } from "playwright-core"
+import { getDomain } from "tldts"
+
+/** The site of a web page at `url`, which an Agent may use once the
+ * Person says so (ADR 0029, decision 7, B): its domain, as a browser
+ * takes a site to be, so github.com covers gist.github.com. None for
+ * this computer's own pages, which never ask, nor for a page not of the
+ * web. */
+export function domainOf(url: string): string | null {
+  let address: URL
+  try {
+    address = new URL(url)
+  } catch {
+    return null
+  }
+  if (address.protocol !== "http:" && address.protocol !== "https:") return null
+  const host = address.hostname
+  if (["localhost", "127.0.0.1", "[::1]"].includes(host)) return null
+  return getDomain(host, { allowPrivateDomains: true }) ?? host
+}
 
 /** How long an element has to be there and ready for an action. */
 const READY = 5_000

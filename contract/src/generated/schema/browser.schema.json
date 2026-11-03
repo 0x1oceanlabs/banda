@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "browser.toml",
-  "description": "How Banda's browser shows its tabs and where it searches. Every key is\noptional.",
+  "description": "How Banda's browser shows its tabs, where it searches, and the sites\nAgents may use. Every key is optional.",
   "type": "object",
   "properties": {
     "tabs": {
@@ -22,6 +22,10 @@
     "blocker": {
       "description": "Whether Banda blocks ads and trackers in the browser, with\nEasyList, EasyPrivacy and uBlock Origin's lists. On when left out.",
       "type": "boolean"
+    },
+    "agents": {
+      "description": "What Agents may do in the browser.",
+      "$ref": "#/$defs/AgentsSettings"
     }
   },
   "additionalProperties": false,
@@ -38,6 +42,35 @@
           "description": "A rail of icons beside the page, opening to titles on hover.",
           "type": "string",
           "const": "left"
+        }
+      ]
+    },
+    "AgentsSettings": {
+      "description": "What Agents may do in the browser.",
+      "type": "object",
+      "properties": {
+        "sites": {
+          "description": "The sites Agents may use without asking, or never, by site, as\ngithub.com, which covers its subdomains. Your answers on a tab\nwrite them; localhost never asks.",
+          "type": "object",
+          "additionalProperties": {
+            "$ref": "#/$defs/SiteRule"
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "SiteRule": {
+      "description": "What the Person said of a site for every Agent (ADR 0029, decision 6):\nAgents use it without asking, or never.",
+      "oneOf": [
+        {
+          "description": "Agents use it without asking.",
+          "type": "string",
+          "const": "allow"
+        },
+        {
+          "description": "No Agent uses it, and none asks.",
+          "type": "string",
+          "const": "deny"
         }
       ]
     }

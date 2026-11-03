@@ -1,5 +1,5 @@
 import { expect, test } from "vitest"
-import { stepOf } from "./hands"
+import { domainOf, stepOf } from "./hands"
 
 const tree = `- generic [ref=e1]:
   - button "Greet" [ref=e2]
@@ -24,4 +24,21 @@ test("a step names its elements as the last snapshot does, and says no text type
   expect(act({ action: "click", ref: "e9" })).toBe("Clicking e9")
   expect(stepOf(tree, { tab: 1, text: "Done" })).toBe('Waiting for "Done"')
   expect(stepOf(tree, { tab: 1, url: "/next" })).toBe("Waiting for /next")
+})
+
+test("a site is its page's domain, and this computer's own pages none", () => {
+  expect(domainOf("https://gist.github.com/x")).toBe("github.com")
+  expect(domainOf("https://a.b.co.uk")).toBe("b.co.uk")
+  expect(domainOf("https://roma.github.io/")).toBe("roma.github.io")
+  expect(domainOf("http://192.168.1.2:8080/")).toBe("192.168.1.2")
+  expect(domainOf("http://site.localhost:5173/")).toBe("site.localhost")
+  for (const own of [
+    "http://localhost:5173/",
+    "http://127.0.0.1/",
+    "http://[::1]:3000/",
+    "about:blank",
+    "file:///home/roma/notes.html",
+    "not an address",
+  ])
+    expect(domainOf(own)).toBeNull()
 })

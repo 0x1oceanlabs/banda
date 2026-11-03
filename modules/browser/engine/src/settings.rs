@@ -11,6 +11,7 @@
 use banda_look::{OneFile, Problem};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::path::Path;
 use toml::Spanned;
 use ts_rs::TS;
@@ -27,14 +28,36 @@ pub enum Tabs {
     Left,
 }
 
+/// What the Person said of a site for every Agent (ADR 0029, decision 6):
+/// Agents use it without asking, or never.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize, TS, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+#[ts(export, export_to = "browser/")]
+pub enum SiteRule {
+    /// Agents use it without asking.
+    Allow,
+    /// No Agent uses it, and none asks.
+    Deny,
+}
+
+/// What Agents may do in the browser.
+#[derive(Debug, Default, Deserialize, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields, rename_all = "kebab-case")]
+pub struct AgentsSettings {
+    /// The sites Agents may use without asking, or never, by site, as
+    /// github.com, which covers its subdomains. Your answers on a tab
+    /// write them; localhost never asks.
+    pub sites: Option<BTreeMap<String, SiteRule>>,
+}
+
 /// The file as Banda writes it first, every default named.
 pub const TEMPLATE: &str = include_str!("../browser.toml");
 
 /// Banda's search, for words that are not an address.
 pub const SEARCH: &str = "https://duckduckgo.com/?q=%s";
 
-/// How Banda's browser shows its tabs and where it searches. Every key is
-/// optional.
+/// How Banda's browser shows its tabs, where it searches, and the sites
+/// Agents may use. Every key is optional.
 #[derive(Debug, Default, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct BrowserSettings {
@@ -50,6 +73,8 @@ pub struct BrowserSettings {
     /// Whether Banda blocks ads and trackers in the browser, with
     /// EasyList, EasyPrivacy and uBlock Origin's lists. On when left out.
     pub blocker: Option<bool>,
+    /// What Agents may do in the browser.
+    pub agents: Option<AgentsSettings>,
 }
 
 /// How the browser looks and searches, every key resolved.
@@ -63,6 +88,8 @@ pub struct Browser {
     pub pinned: Vec<String>,
     /// Whether ads and trackers are blocked.
     pub blocker: bool,
+    /// What the Person said of each site for every Agent, by site.
+    pub sites: BTreeMap<String, SiteRule>,
 }
 
 impl OneFile for BrowserSettings {
@@ -76,6 +103,9 @@ impl OneFile for BrowserSettings {
             search: Some(Spanned::new(0..0, SEARCH.to_owned())),
             pinned: Some(Vec::new()),
             blocker: Some(true),
+            agents: Some(AgentsSettings {
+                sites: Some(BTreeMap::new()),
+            }),
         }
     }
 
@@ -85,6 +115,7 @@ impl OneFile for BrowserSettings {
             search: self.search.or(under.search),
             pinned: self.pinned.or(under.pinned),
             blocker: self.blocker.or(under.blocker),
+            agents: self.agents.or(under.agents),
         }
     }
 
@@ -96,11 +127,36 @@ impl OneFile for BrowserSettings {
                 .map_or_else(|| SEARCH.to_owned(), Spanned::into_inner),
             pinned: self.pinned.unwrap_or_default(),
             blocker: self.blocker.unwrap_or(true),
+            sites: self
+                .agents
+                .and_then(|agents| agents.sites)
+                .unwrap_or_default(),
         }
     }
 
-    /// The search is an http or https address with `%s` in it.
+    /// The search is an http or https address with `%s` in it, and each
+    /// site a bare name, as github.com.
     fn check(&mut self, path: &Path, text: &str, problems: &mut Vec<Problem>) {
+        if let Some(sites) = self
+            .agents
+            .as_mut()
+            .and_then(|agents| agents.sites.as_mut())
+        {
+            sites.retain(|site, _| {
+                let bare = !site.is_empty()
+                    && site.chars().all(|c| c.is_ascii_alphanumeric() || "-.".contains(c))
+                    && site == &site.to_ascii_lowercase();
+                if !bare {
+                    problems.push(Problem::at(
+                        path,
+                        text,
+                        None,
+                        format!("agents.sites: {site:?} is a site's bare name in lowercase, as github.com"),
+                    ));
+                }
+                bare
+            });
+        }
         let Some(search) = &self.search else { return };
         let address = search.get_ref();
         let web = address.starts_with("https://") || address.starts_with("http://");
@@ -159,6 +215,7 @@ mod tests {
             "tabs = \"left\"\nsearch = \"https://kagi.com/search?q=%s\"\npinned = [\"abc\"]\nblocker = false\n",
         ));
         assert!(!browser.blocker);
+        assert!(browser.sites.is_empty());
         assert_eq!(browser.tabs, Tabs::Left);
         assert_eq!(browser.pinned, vec!["abc".to_owned()]);
         assert_eq!(browser.search, "https://kagi.com/search?q=%s");
@@ -173,6 +230,21 @@ mod tests {
         assert_eq!(browser.search, SEARCH);
         assert_eq!(problems.len(), 1);
         assert_eq!(problems[0].line, Some(2));
+    }
+
+    #[test]
+    fn the_sites_are_bare_names_each_allowed_or_denied() {
+        let (browser, problems) = resolved(Some(
+            "[agents.sites]\n\"github.com\" = \"allow\"\n\"bank.example\" = \"deny\"\n\"https://x.com\" = \"allow\"\n",
+        ));
+        assert_eq!(
+            browser.sites.into_iter().collect::<Vec<_>>(),
+            vec![
+                ("bank.example".to_owned(), SiteRule::Deny),
+                ("github.com".to_owned(), SiteRule::Allow)
+            ]
+        );
+        assert_eq!(problems.len(), 1);
     }
 
     #[test]

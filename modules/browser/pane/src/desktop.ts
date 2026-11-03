@@ -105,7 +105,13 @@ export type Wait = { agent: string; asked?: number } &
     /** It handed the tab to the Person for a step that is theirs, `why`;
      * they hand it back once done. */
     | { reason: "handoff"; why: string }
+    /** It may not use `site` yet; the Person says whether it may. */
+    | { reason: "site"; site: string }
   )
+
+/** The Person's answer to whether a Thread may use a site: for it, until
+ * Banda restarts; or for every Agent, written in `browser.toml`. */
+export type SiteAnswer = "once" | "always" | "deny"
 
 /** A place in Banda's window, in its page's pixels. */
 export type Box = { x: number; y: number; width: number; height: number }
@@ -138,6 +144,12 @@ export const BROWSER_BRIDGE = {
    * page: it may use the page again. False when it waited no more, as
    * after an answer already given. */
   answered: invoke<[contents: number, agent: string], boolean>(),
+  /** The Person's answer to whether the Thread of `agent` may use the
+   * site it waits for on the page: false when it waited no more. */
+  allowed: invoke<
+    [contents: number, agent: string, answer: SiteAnswer],
+    boolean
+  >(),
   /** The turn of the Thread of `agent` ended: it drives no tab now. */
   settled: send<[agent: string]>(),
   /** Pins an extension's button to the row, or takes it off, in

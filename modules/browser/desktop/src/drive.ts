@@ -15,17 +15,21 @@ import type {
   ReadTab,
   SeenTab,
   Shown,
+  SiteRule,
   WaitFor,
 } from "@banda/contract/browser"
-import type { Driver, Wait } from "@banda/browser-pane/desktop"
-import { Refused } from "@banda/desktop-kit"
-import { Context, Effect, FiberSet, Layer, RcMap } from "effect"
+import type { Driver, SiteAnswer, Wait } from "@banda/browser-pane/desktop"
+import { BROWSER_FILE } from "@banda/contract/browser"
+import { fileOf } from "@banda/contract/look"
+import { type Broke, Look, Refused, Settings } from "@banda/desktop-kit"
+import { Context, Effect, FiberSet, Layer, RcMap, Stream } from "effect"
 import type { Event, InputEvent, WebContents } from "electron"
 import { setTimeout as sleep } from "node:timers/promises"
 import type { Browser, Dialog, Frame, Page } from "playwright-core"
 import { Cdp, messageOf } from "./cdp"
 import {
   act,
+  domainOf,
   goingTo,
   hidden,
   opening,
@@ -97,8 +101,18 @@ const waitRefused = (tab: number, wait: Wait, agent: string) => {
       return say(
         `You handed tab ${tab} to the Person: "${wait.why}". Do not use it until they hand it back: end your turn, and their message says when.`
       )
+    case "site":
+      return say(
+        `Tab ${tab} is on ${wait.site}, which you may not use yet: Banda asked the Person on the tab. End your turn, and their message says what they chose.`
+      )
   }
 }
+
+const denied = (site: string) =>
+  new Refused({
+    code: "forbidden",
+    message: `The Person lets no Agent use ${site}. Do not use it: carry on without it, or tell them why you need it.`,
+  })
 
 /** A tab as an Agent sees it. */
 export const seenTab = (
@@ -219,6 +233,15 @@ export class Drive extends Context.Service<
      * tab (one wait at most): it may use the tab again. False when it
      * waited for nothing. */
     answered(tab: number, agent: string): Effect.Effect<boolean>
+    /** The Person's answer to whether the Thread of `agent` may use the
+     * site it waits for on the tab: Once, for it until Banda restarts;
+     * Always or Deny, for every Agent, in `browser.toml`. False when it
+     * waited for none. */
+    allowed(
+      tab: number,
+      agent: string,
+      answer: SiteAnswer
+    ): Effect.Effect<boolean, Refused | Broke>
     /** The turn of the Thread of `agent` ended: it drives no tab now. */
     settled(agent: string): Effect.Effect<void>
   }
@@ -227,6 +250,8 @@ export class Drive extends Context.Service<
     Effect.gen(function* () {
       const cdp = yield* Cdp
       const tabs = yield* Tabs
+      const look = yield* Look
+      const settings = yield* Settings
       // What Playwright's callbacks run stops with the layer.
       const run = yield* FiberSet.makeRuntime()
       /** The tabs a Thread drives, from its first call until its turn
@@ -280,6 +305,42 @@ export class Drive extends Context.Service<
             tellWaits(tab)
           }
           return Effect.fail(waitRefused(tab, was, by.id))
+        })
+      /** The sites the Thread of each Agent may use until Banda restarts,
+       * as the Person answered Once, by the ID of its Agent. */
+      const once = new Map<string, Set<string>>()
+      /** What the Person answered Always or Deny to since the last look,
+       * which brings it back from `browser.toml`. */
+      const said = new Map<string, SiteRule>()
+      yield* Effect.forkScoped(
+        Stream.runForEach(look.changes, () => Effect.sync(() => said.clear()))
+      )
+      /** Refuses a read or an action of the Agent `by` on a site it may
+       * not use (ADR 0029, decision 7, B): one the Person denied every
+       * Agent; or one they have not let it use yet, which its Thread then
+       * waits on the tab for them to answer. */
+      const gated = (tab: number, by: Participant) =>
+        Effect.suspend(() => {
+          const site = domainOf(contentsOf(tab)?.getURL() ?? "")
+          if (!site || by.kind !== "agent") return Effect.void
+          return Effect.flatMap(look.current, (now) => {
+            const rule =
+              said.get(site) ??
+              (now && fileOf(now.files, BROWSER_FILE).sites[site])
+            if (rule === "deny") return Effect.fail(denied(site))
+            if (rule === "allow" || once.get(by.id)?.has(site))
+              return Effect.void
+            const asking: Wait = {
+              agent: by.id,
+              reason: "site",
+              site,
+              asked: Date.now(),
+            }
+            if (!wait(tab, asking)) return Effect.fail(noTab(tab))
+            // Its drive there ends while it waits, as a handoff's does.
+            if (driving.get(tab)?.agent === by.id) tell(tab, null)
+            return Effect.fail(waitRefused(tab, asking, by.id))
+          })
         })
       /** The cursor of the Thread that drives the tab, going to `x`, `y`
        * as its hands do: they wait for it, unless it is there. */
@@ -354,16 +415,21 @@ export class Drive extends Context.Service<
       /**
        * Does `work` in the tab for `by`, connected to it. An Agent's
        * Thread drives the tab from then on, and its Pane shows the `step`
-       * it takes.
+       * it takes. Work that reads or acts in the page, not only goes
+       * somewhere, needs the Person's yes to its site.
        */
       const inTab = <A>(
         tab: number,
         by: Participant,
         step: string | ((tree: string) => string),
-        work: (held: Held) => Promise<A>
+        work: (held: Held) => Promise<A>,
+        reads = true
       ) =>
         Effect.andThen(
-          waiting(tab, by),
+          Effect.andThen(
+            waiting(tab, by),
+            reads ? gated(tab, by) : Effect.void
+          ),
           Effect.scoped(
             Effect.flatMap(heldOf(tab), (kept) =>
               Effect.tryPromise({
@@ -413,13 +479,19 @@ export class Drive extends Context.Service<
           }),
         open: (url, by) =>
           Effect.flatMap(tabs.create(url, by.id), ({ id }) =>
-            inTab(id, by, opening(url), (kept) => shown(id, kept, by.id))
+            inTab(id, by, opening(url), (kept) => shown(id, kept, by.id), false)
           ),
         navigate: (to, by) =>
-          inTab(to.tab, by, goingTo(to.to), async (kept) => {
-            await go(kept.page, to)
-            return shown(to.tab, kept, by.id)
-          }),
+          inTab(
+            to.tab,
+            by,
+            goingTo(to.to),
+            async (kept) => {
+              await go(kept.page, to)
+              return shown(to.tab, kept, by.id)
+            },
+            false
+          ),
         act: (what, by) =>
           inTab(
             what.tab,
@@ -522,6 +594,32 @@ export class Drive extends Context.Service<
             // The tab's map stays, as its one hook on the tab's end does.
             if (!waits.get(tab)?.delete(agent)) return false
             tellWaits(tab)
+            return true
+          }),
+        allowed: (tab, agent, answer) =>
+          Effect.gen(function* () {
+            const was = waits.get(tab)?.get(agent)
+            if (was?.reason !== "site") return false
+            const { site } = was
+            if (answer === "once") {
+              const sites = once.get(agent) ?? new Set()
+              once.set(agent, sites.add(site))
+            } else {
+              const rule = answer === "always" ? "allow" : "deny"
+              yield* settings.write(
+                BROWSER_FILE.name,
+                `agents.sites.${JSON.stringify(site)}`,
+                rule
+              )
+              said.set(site, rule)
+            }
+            // Its waits for the site on other tabs end with this one.
+            for (const [at, on] of waits) {
+              const other = on.get(agent)
+              if (other?.reason !== "site" || other.site !== site) continue
+              on.delete(agent)
+              tellWaits(at)
+            }
             return true
           }),
         settled: (agent) =>

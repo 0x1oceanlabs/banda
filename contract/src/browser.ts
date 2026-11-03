@@ -18,6 +18,7 @@ export type { Open } from "./generated/browser/Open"
 export type { ReadTab } from "./generated/browser/ReadTab"
 export type { SeenTab } from "./generated/browser/SeenTab"
 export type { Shown } from "./generated/browser/Shown"
+export type { SiteRule } from "./generated/browser/SiteRule"
 export type { WaitFor } from "./generated/browser/WaitFor"
 export type { Tabs } from "./generated/browser/Tabs"
 
@@ -28,6 +29,7 @@ export const DEFAULT_BROWSER: Browser = {
   search: "https://duckduckgo.com/?q=%s",
   pinned: [],
   blocker: true,
+  sites: {},
 }
 
 /** The browser's `browser.toml`. */

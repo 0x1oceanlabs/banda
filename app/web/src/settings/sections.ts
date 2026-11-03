@@ -31,6 +31,7 @@ import {
   SettingsIcon,
 } from "lucide-react"
 import { Agents } from "./Agents"
+import { BrowserSites } from "./BrowserSites"
 import { General } from "./General"
 import { Keys } from "./Keys"
 import { ProblemsSettings } from "./ProblemsSettings"
@@ -54,8 +55,8 @@ export type SectionFile = {
   tables?: string[]
   /** One heading over all its rows, instead of one for each table. */
   title?: string
-  /** Its tables are the section's Body's to draw, as its first file is,
-   * not rows: `agents.toml`'s `start`, on each Harness's card. */
+  /** Its tables are the section's Body's or Foot's to draw, not rows:
+   * `agents.toml`'s `start`, on each Harness's card. */
   drawn?: boolean
 }
 
@@ -74,6 +75,8 @@ export type Section = {
   /** What it shows instead of its first file's rows, as a module draws
    * it; `lit` is the part a link names. */
   Body?: ComponentType<SectionProps>
+  /** What it shows under its rows, as a module draws it. */
+  Foot?: ComponentType<SectionProps>
 }
 
 /** What a section's own Body is drawn with. */
@@ -149,8 +152,12 @@ export const SECTIONS: Section[] = [
     id: "browser",
     title: "Browser",
     icon: GlobeIcon,
-    files: [{ name: "browser.toml" }],
+    files: [
+      { name: "browser.toml" },
+      { name: "browser.toml", tables: ["agents"], drawn: true },
+    ],
     about: aboutOf("browser.toml"),
+    Foot: BrowserSites,
   },
   {
     id: "keys",

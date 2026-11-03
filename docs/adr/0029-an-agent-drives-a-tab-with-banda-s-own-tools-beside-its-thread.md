@@ -211,6 +211,26 @@ and stay Roma's to change.
        "Done: <why>. Carry on." into the Thread, by `agents.send` as the
        Person.
      - E's refused fields now point the Agent to `browser_handoff`.
+   - Amended in step 4f, for a new site (Roma's yes to [a
+     mockup](../research/2026-11-03-browser-site-gate-mockup.html),
+     2026-11-03):
+     - A site is the page's domain, as a browser takes it, private
+       suffixes too: github.com covers gist.github.com, and
+       roma.github.io is its own. `localhost`, `127.0.0.1` and `[::1]`
+       never ask, nor does a page not of the web.
+     - Only a read or an action asks: `browser_snapshot`, `browser_act`
+       and `browser_wait_for`. `browser_open` and `browser_navigate` go
+       anywhere the web is.
+     - The wait lives in main, as the others do, and asks at once. The
+       pill at the page's foot asks "Let <Thread> use github.com?". The
+       answer goes over the bridge, and the window says it in the Thread,
+       as the Person's message.
+     - Once, and Always, let the Thread at once, until Banda restarts.
+       Always and Deny then go to `browser.toml`'s `[agents.sites]`, as
+       `"github.com" = "allow"`. A denied site refuses at once, and asks
+       nothing. Settings → Browser lists the sites: a line changes, or ↶
+       takes it out. No site is added there; the Person's file takes one
+       by hand.
 
 7. **Who confirms a risky step: A, B and E first** (_decided_).
    - **A. The Harness asks**, as before any tool, under the Thread's mode
@@ -252,7 +272,7 @@ and stay Roma's to change.
    cursor glides there. 4d: the Stopped wait with its answer, events and
    calls (decision 6, closing #154), which the other two waits build on.
    4e: `browser_handoff` and its wait, "Done" writing into the Thread.
-   4f: B's site gate, `[agents] sites` in `browser.toml` and Settings.
+   4f: B's site gate, `[agents.sites]` in `browser.toml` and Settings.
    4g: a page's dialogs drawn by Banda, which the Agent may accept or
    dismiss, shown to Roma as a mockup first.
 5. Screenshots as image content, and the tools behind a setting.

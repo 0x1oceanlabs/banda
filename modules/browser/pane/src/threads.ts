@@ -12,7 +12,7 @@ import {
   type WatchProps,
 } from "@banda/ui/pane"
 import { useEffect, useSyncExternalStore } from "react"
-import type { Wait } from "./desktop"
+import type { SiteAnswer, Wait } from "./desktop"
 import { browserHost } from "./host"
 import { asking, drivers, watchPages, watchWaits } from "./pages"
 
@@ -76,25 +76,64 @@ export function followThreads(window: WindowApi): () => void {
 /**
  * The Person is done with what the Thread of `agent` handed them on the
  * page of `contents`, `why` (ADR 0029, decision 6): the tab is the
- * Thread's again, and a line in it, as the Person's message, starts its
- * next turn. A send that fails is left unhandled, which keeps it as a
- * Problem (ADR 0039).
+ * Thread's again.
  */
-export async function handBack(
+export const handBack = (
   engine: Engine,
   contents: number,
   agent: string,
   why: string
+) =>
+  tell(
+    engine,
+    agent,
+    browserHost()?.answered(contents, agent),
+    `Done: ${why}. Carry on.`
+  )
+
+/** What the Thread hears of each answer to whether it may use a site. */
+const SAID: Record<SiteAnswer, string> = {
+  once: "allowed once",
+  always: "always allowed",
+  deny: "denied. Carry on without it",
+}
+
+/** The Person's answer to whether the Thread of `agent` may use `site`,
+ * which it waits for on the page of `contents` (decision 7, B). */
+export const allowSite = (
+  engine: Engine,
+  contents: number,
+  agent: string,
+  site: string,
+  answer: SiteAnswer
+) =>
+  tell(
+    engine,
+    agent,
+    browserHost()?.allowed(contents, agent, answer),
+    `${site}: ${SAID[answer]}.${answer === "deny" ? "" : " Carry on."}`
+  )
+
+/**
+ * Says `text` in the Thread of `agent`, as the Person's message, once
+ * main took the answer the Thread waited for: it starts its next turn. A
+ * second press finds no wait, and says nothing. A send that fails is left
+ * unhandled, which keeps it as a Problem (ADR 0039).
+ */
+async function tell(
+  engine: Engine,
+  agent: string,
+  answered: Promise<boolean> | undefined,
+  text: string
 ): Promise<void> {
-  // Once: a second press finds no wait.
-  if (!(await browserHost()?.answered(contents, agent))) return
+  if (!(await answered)) return
   const thread = threadOf(agent)
   if (!thread) return
   await engine.command(
     "agents.send",
     {
       thread: thread.listed.id,
-      text: `Done: ${why}. Carry on.`,
+      text,
       images: [],
       settings: null,
       steer: false,
@@ -121,6 +160,8 @@ function callOf(wait: Wait): string {
       return "Stopped on a tab: let it drive again there"
     case "handoff":
       return `Your turn in a tab: ${wait.why}`
+    case "site":
+      return `Asks to use ${wait.site}`
   }
 }
 
