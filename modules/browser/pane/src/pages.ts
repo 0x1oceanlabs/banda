@@ -270,6 +270,7 @@ export class Page {
   /** The Threads that wait for the Person here now. */
   waited(waits: readonly Wait[]): void {
     this.set({ waits })
+    for (const watcher of waitWatchers) watcher()
   }
 
   private set(change: Partial<PageState>): void {
@@ -517,14 +518,23 @@ export function drivers(): Set<string> {
   )
 }
 
-/** The Threads that asked the Person on a page, each with that page's
- * web contents' ID. */
-export function asking(): { contents: number; wait: Wait }[] {
+/** The Threads that asked the Person on a page, by their Agents, each
+ * with that page's web contents' ID and since when. */
+export function asking(): { contents: number; agent: string; asked: number }[] {
   return [...byContents].flatMap(([contents, page]) =>
-    page.state.waits
-      .filter((wait) => wait.asked !== null)
-      .map((wait) => ({ contents, wait }))
+    page.state.waits.flatMap(({ agent, asked }) =>
+      asked === undefined ? [] : [{ contents, agent, asked }]
+    )
   )
+}
+
+/** What hears the Threads that wait on the pages change. */
+const waitWatchers = new Set<() => void>()
+
+/** Calls `listener` each time a page's waits change; returns how to stop. */
+export function watchWaits(listener: () => void): () => void {
+  waitWatchers.add(listener)
+  return () => waitWatchers.delete(listener)
 }
 
 /** A number that changes with any page, for `useSyncExternalStore`. */

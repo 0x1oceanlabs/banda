@@ -50,13 +50,12 @@ export function Watches({
   )
   useEffect(() => onChange({ mark, waiting }), [onChange, mark, waiting])
   const lists = useMemo(() => {
-    const lists: Record<SpaceId, Listed[]> = {}
+    const lists: Record<SpaceId, readonly Listed[]> = {}
     for (const { space, listed } of Object.values(reports)) {
       lists[space] = [...(lists[space] ?? []), ...listed]
     }
-    return Object.fromEntries(
-      Object.entries(lists).map(([space, listed]) => [space, folded(listed)])
-    ) as Lists
+    for (const space in lists) lists[space] = folded(lists[space]!)
+    return lists
   }, [reports])
   useEffect(() => onLists(lists), [onLists, lists])
 

@@ -13,7 +13,7 @@ import {
 } from "@banda/ui/pane"
 import { useEffect, useSyncExternalStore } from "react"
 import { browserHost } from "./host"
-import { asking, drivers, watchPages } from "./pages"
+import { asking, drivers, watchPages, watchWaits } from "./pages"
 
 /** The window, while the module runs. */
 let shell: WindowApi | null = null
@@ -88,21 +88,23 @@ function WaitsWatch({ space, report }: WatchProps) {
   useEffect(() => {
     let was: string | undefined
     const check = () => {
-      const listed = asking().flatMap(({ contents, wait }): Listed[] => {
-        const thread = threadOf(wait.agent)
-        if (thread?.space !== space || wait.asked === null) return []
-        return [
-          {
-            id: `browser:${contents}:${wait.agent}`,
-            title: thread.listed.title,
-            mark: "asking",
-            changed: wait.asked,
-            calls: STOPPED,
-            on: wait.agent,
-            pane: thread.listed.pane,
-          },
-        ]
-      })
+      const listed = asking().flatMap(
+        ({ contents, agent, asked }): Listed[] => {
+          const thread = threadOf(agent)
+          if (thread?.space !== space) return []
+          return [
+            {
+              id: `browser:${contents}:${agent}`,
+              title: thread.listed.title,
+              mark: "asking",
+              changed: asked,
+              calls: STOPPED,
+              on: agent,
+              pane: thread.listed.pane,
+            },
+          ]
+        }
+      )
       const said = JSON.stringify(listed)
       if (said === was) return
       was = said
@@ -110,7 +112,8 @@ function WaitsWatch({ space, report }: WatchProps) {
       report({ mark, waiting: listed.length, listed })
     }
     check()
-    const stops = [watchLists(check), watchPages(check)]
+    // A Thread's title and Space are the lists'; the rest, the waits'.
+    const stops = [watchLists(check), watchWaits(check)]
     return () => {
       for (const stop of stops) stop()
     }

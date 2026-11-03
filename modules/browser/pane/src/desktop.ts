@@ -95,12 +95,13 @@ export type Point = { x: number; y: number }
  * A Thread that waits for the Person on a tab, by its Agent, and why: the
  * Person stopped it there. Its calls on the tab are refused until the
  * Person lets it drive again (ADR 0029, decision 6). Once it called again
- * and was refused, it `asked` the Person, since then.
+ * and was refused, it `asked` the Person, since then. A handed-over tab
+ * and a new site wait too, in later steps.
  */
 export type Wait = {
   agent: string
   reason: "stopped"
-  asked: number | null
+  asked?: number
 }
 
 /** A place in Banda's window, in its page's pixels. */

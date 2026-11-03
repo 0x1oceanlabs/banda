@@ -31,7 +31,7 @@ test("a Pane shows while the engine runs its module, or always for a module with
   expect(kindRuns("browser.browser", [])).toBe(true)
   expect(kindRuns("window.launcher", [])).toBe(true)
   expect(kindRuns("nobody.knows", ["nobody"])).toBe(false)
-  expect(watches.map(({ module }) => module.id)).toEqual(["agents"])
+  expect(watches.map(({ module }) => module.id)).toEqual(["agents", "browser"])
 })
 
 /** Ids an action kept as it moved to its module, so `keys.toml` stays
