@@ -2,7 +2,8 @@
  * The engine as the window's child: `banda serve --with-parent` (ADR
  * 0020). It learns the engine's address from the first line it prints,
  * forgets it while the engine is down, and stops the engine with the
- * window (child.ts).
+ * window (child.ts). It starts with `path` as its PATH, when there is
+ * one: on macOS, the login shell's (login.ts).
  */
 import { type Address, Engine as Client } from "@banda/contract"
 import { Engine } from "@banda/desktop-kit"
@@ -16,6 +17,7 @@ import {
   Stream,
   SubscriptionRef,
 } from "effect"
+import type { ChildProcessSpawner } from "effect/process"
 import { command, keepRunning, known, lines } from "./child"
 
 /** The first line `serve --with-parent` prints; `window` is where the
@@ -37,9 +39,20 @@ class Unexpected extends Data.TaggedError("Unexpected")<{
 }> {}
 
 /** The engine's layer: see `Engine` (@banda/desktop-kit). */
-export const engineLayer = (binary: string) =>
+export const engineLayer = (
+  binary: string,
+  path: Effect.Effect<
+    Option.Option<string>,
+    never,
+    ChildProcessSpawner.ChildProcessSpawner
+  > = Effect.succeed(Option.none())
+) =>
   Layer.effect(Engine)(
     Effect.gen(function* () {
+      const env = Option.match(yield* path, {
+        onNone: () => undefined,
+        onSome: (PATH) => ({ PATH }),
+      })
       const address = yield* SubscriptionRef.make(Option.none<Address>())
       const door = yield* Deferred.make<{ window: string; browser: string }>()
       /** The first line of a run: where it listens, and the door. */
@@ -67,7 +80,7 @@ export const engineLayer = (binary: string) =>
       yield* Effect.forkScoped(
         keepRunning(
           "engine",
-          command(binary, ["serve", "--with-parent"]),
+          command(binary, ["serve", "--with-parent"], env),
           (child) => {
             let first = true
             // Every line is read, so the pipe never fills; the address

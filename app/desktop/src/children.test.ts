@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs"
 import { dirname, join } from "node:path"
 import { NodeServices } from "@effect/platform-node"
 import { expect, it } from "@effect/vitest"
-import { Clock, Effect, Layer, Sink, Stream } from "effect"
+import { Clock, Effect, Layer, Option, Sink, Stream } from "effect"
 import { ChildProcessSpawner } from "effect/process"
 import { TestClock } from "effect/testing"
 import { command, keepRunning } from "./child"
@@ -92,6 +92,29 @@ it.live(
       expect(door).toBe("/run/door")
       const pid = Number(readFileSync(join(dirname(program), "pid"), "utf8"))
       expect(() => process.kill(pid, 0)).toThrow()
+    })
+)
+
+it.live(
+  "the engine starts with the PATH it is given, as the login shell's",
+  () =>
+    Effect.gen(function* () {
+      const program = script(
+        `printenv PATH > "$(dirname "$0")/path"\n` +
+          `echo '{"protocol":1,"port":1,"secret":"s","window":"/w","browser":"/b"}'\n` +
+          "exec sleep 60"
+      )
+      const path = `/Users/p/.local/bin:${process.env.PATH}`
+      yield* Engine.use((engine) => engine.address).pipe(
+        Effect.provide(
+          engineLayer(program, Effect.succeed(Option.some(path))).pipe(
+            Layer.provide(NodeServices.layer)
+          )
+        )
+      )
+      expect(readFileSync(join(dirname(program), "path"), "utf8").trim()).toBe(
+        path
+      )
     })
 )
 
