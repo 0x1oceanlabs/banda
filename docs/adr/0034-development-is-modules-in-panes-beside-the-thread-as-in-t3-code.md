@@ -168,7 +168,13 @@ the rest are our defaults, as T3 Code does, and stay Roma's to change.
      is, and as a command of git's ends, `git.watch` reads the status
      again at once.
    - **`▾`:** Commit (a dialog: the message, the files to leave out,
-     "Commit on new branch"), Push, Create PR.
+     "Commit on new branch"), Push, Create PR. The dialog's message may
+     be the Person's; left empty, the Harness writes it, for the files
+     taken only. What cannot run says why: a menu item on hover, the
+     dialog under its buttons. The branch picker searches the list it
+     read as it opened, and asks git only when that list was full (100
+     of here's or of remotes'); its keys move the choice, Enter takes it,
+     and words no branch has make "Create branch …" the one Enter takes.
    - **On the default branch** Push and PR ask first: Abort, "Push to
      main", or "Check out feature branch & continue", the branch named for
      it.

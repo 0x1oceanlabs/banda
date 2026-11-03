@@ -54,47 +54,58 @@ export function dismiss(space: SpaceId): void {
   if (runOf(space).is === "failed") set(space, IDLE)
 }
 
-/** Runs `action` in `space`, its message written by `thread`'s Harness;
- * with `feature`, on a new branch named for the change. */
+/** How a commit goes: on a new branch named for the change (`feature`),
+ * of these `files` alone, with the Person's `message`. */
+export type Commit = {
+  feature?: boolean
+  files?: string[]
+  message?: string
+}
+
+/** Runs `action` in `space`, its message the Person's, else written by
+ * `thread`'s Harness. */
 export async function run(
   engine: Engine,
   space: SpaceId,
   thread: string | null,
   action: Action,
-  feature = false
+  { feature = false, files, message: own }: Commit = {}
 ): Promise<void> {
   if (runOf(space).is === "running") return
   const commits = action === "commit" || action === "commit_push"
-  if (commits && thread === null)
+  // A commit with no message of the Person's: the Harness writes it.
+  const writes = commits && !own
+  if (writes && thread === null)
     return set(space, {
       is: "failed",
       message: "A new Thread has no Harness to write the message yet.",
     })
   const step = (label: string) =>
     set(space, { is: "running", label, since: Date.now() })
-  step(commits ? "Writing commit message…" : "Starting…")
+  step(writes ? "Writing commit message…" : "Starting…")
   try {
-    let message: string | undefined
+    let message = own
     let branch: string | undefined
-    if (commits && thread !== null) {
-      const ask = { space }
+    const ask = { space }
+    if (writes && thread !== null) {
       const { prompt } = await engine.call(
         "git.prompt",
-        { branch: feature },
+        { files, branch: feature },
         ask
       )
-      const { text } = await engine.call(
-        "agents.write",
-        { thread, prompt },
-        ask
-      )
-      const written = await engine.call(
+      const written = await engine.call("agents.write", { thread, prompt }, ask)
+      ;({ message, branch } = await engine.call(
         "git.written",
-        { reply: text, branch: feature },
+        { reply: written.text, branch: feature },
         ask
-      )
-      message = written.message
-      branch = written.branch
+      ))
+    } else if (commits && feature && own) {
+      // The Person's message names the branch, as a Harness's subject would.
+      ;({ branch } = await engine.call(
+        "git.written",
+        { reply: own, branch: true },
+        ask
+      ))
     }
     // A hook's lines come as fast as it prints them: the last one shows.
     let line: string | undefined
@@ -107,7 +118,7 @@ export async function run(
     engine.stream(
       space,
       "git.act",
-      { action, message, branch },
+      { action, message, files, branch },
       (piece) => {
         switch (piece.kind) {
           case "step":

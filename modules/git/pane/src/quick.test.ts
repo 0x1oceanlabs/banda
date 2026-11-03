@@ -1,6 +1,6 @@
 import type { Status } from "@banda/contract/git"
 import { expect, test } from "vitest"
-import { askOf, asksFirst, quickOf } from "./quick"
+import { askOf, asksFirst, menuOf, quickOf } from "./quick"
 
 const STATUS: Status = {
   at: 0,
@@ -67,4 +67,18 @@ test("a push on the default branch asks first, a commit never", () => {
   expect(asksFirst(STATUS, "push")).toBe(false)
   expect(askOf("commit_push", "main").go).toBe("Commit & push to main")
   expect(askOf("push", "main").title).toBe("Push to main?")
+})
+
+test("the ▾ menu says which of Commit, Push and Pull can run, and why not", () => {
+  const menu = menuOf(CHANGED)
+  expect(menu.commit.can).toBe(true)
+  expect(menu.push.hint).toBe("No local commits to push.")
+  expect(menu.pull.can).toBe(false)
+  expect(menu.follows).toBe("origin/feature")
+  expect(menuOf({ ...STATUS, ahead: 2 }).push.can).toBe(true)
+  expect(menuOf({ ...STATUS, behind: 1 }).pull.can).toBe(true)
+  expect(menuOf({ ...STATUS, behind: 1 }).push.can).toBe(false)
+  expect(menuOf(STATUS).commit.hint).toMatch(/clean/)
+  // A branch never pushed pushes its commits.
+  expect(menuOf({ ...STATUS, upstream: undefined }).push.can).toBe(true)
 })

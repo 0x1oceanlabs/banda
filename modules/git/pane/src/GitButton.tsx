@@ -5,7 +5,7 @@
  * stays in the card until it is closed. A push on the default branch
  * asks first.
  */
-import { useState, useSyncExternalStore } from "react"
+import { type ReactNode, useState, useSyncExternalStore } from "react"
 import type { Engine, SpaceId } from "@banda/contract"
 import type { Action, Status } from "@banda/contract/git"
 import { Button } from "@banda/ui/components/button"
@@ -18,12 +18,20 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@banda/ui/components/dialog"
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@banda/ui/components/dropdown-menu"
 import { Spinner } from "@banda/ui/components/spinner"
-import { DetailsRow } from "@banda/ui/components/thread-details"
+import { DetailsRow, ROW_HOVER } from "@banda/ui/components/thread-details"
 import { useNow } from "@banda/ui/hooks/use-now"
 import { duration } from "@banda/ui/lib/words"
+import { cn } from "@banda/ui/lib/utils"
 import {
   CheckIcon,
+  ChevronDownIcon,
   CircleAlertIcon,
   CloudDownloadIcon,
   CloudUploadIcon,
@@ -32,7 +40,15 @@ import {
   XIcon,
 } from "lucide-react"
 import { dismiss, hearRun, run, runOf } from "./chain"
-import { askOf, asksFirst, type Quick, quickOf } from "./quick"
+import { CommitDialog } from "./CommitDialog"
+import {
+  askOf,
+  asksFirst,
+  type Item,
+  menuOf,
+  type Quick,
+  quickOf,
+} from "./quick"
 
 const ICONS: Record<Quick["icon"], typeof GitCommitIcon> = {
   commit: GitCommitIcon,
@@ -57,10 +73,14 @@ export function GitButton({
     () => runOf(space)
   )
   const [asking, setAsking] = useState<Action | null>(null)
+  const [committing, setCommitting] = useState(false)
   const go = (action: Action, feature = false) => {
     setAsking(null)
-    void run(engine, space, thread, action, feature)
+    void run(engine, space, thread, action, { feature })
   }
+  // A push on the default branch asks first.
+  const press = (action: Action) =>
+    asksFirst(status, action) ? setAsking(action) : go(action)
 
   if (now.is === "running")
     return (
@@ -105,21 +125,39 @@ export function GitButton({
           </Button>
         </div>
       )}
-      {/* A disabled button hears no hover: its row says why. */}
-      <div title={quick.hint}>
-        <DetailsRow
-          icon={<Icon />}
-          disabled={quick.action === null}
-          onClick={() => {
-            const action = quick.action
-            if (!action) return
-            if (asksFirst(status, action)) setAsking(action)
-            else go(action)
-          }}
-        >
-          {quick.label}
-        </DetailsRow>
+      <div
+        className={cn(
+          "group/split flex items-center rounded-lg has-data-popup-open:bg-black/[3.5%] dark:has-data-popup-open:bg-white/8",
+          ROW_HOVER
+        )}
+      >
+        <Why hint={quick.hint} className="min-w-0 flex-1">
+          <DetailsRow
+            icon={<Icon />}
+            disabled={quick.action === null}
+            className="hover:bg-transparent dark:hover:bg-transparent"
+            onClick={() => quick.action && press(quick.action)}
+          >
+            {quick.label}
+          </DetailsRow>
+        </Why>
+        <Menu
+          status={status}
+          onCommit={() => setCommitting(true)}
+          onPush={() => press("push")}
+          onPull={() => go("pull")}
+        />
       </div>
+      {committing && (
+        <CommitDialog
+          status={status}
+          writes={thread !== null}
+          onClose={() => setCommitting(false)}
+          onCommit={(commit) =>
+            void run(engine, space, thread, "commit", commit)
+          }
+        />
+      )}
       <Dialog
         open={asking !== null}
         onOpenChange={(open) => !open && setAsking(null)}
@@ -153,6 +191,80 @@ export function GitButton({
         )}
       </Dialog>
     </>
+  )
+}
+
+/** The `▾`: Commit… opens the dialog; Push and Pull run at once. What
+ * cannot run says why on hover. */
+function Menu({
+  status,
+  onCommit,
+  onPush,
+  onPull,
+}: {
+  status: Status
+  onCommit: () => void
+  onPush: () => void
+  onPull: () => void
+}) {
+  const menu = menuOf(status)
+  const item = (
+    label: string,
+    Icon: typeof GitCommitIcon,
+    { can, hint }: Item,
+    onClick: () => void
+  ) => (
+    <Why hint={hint}>
+      <DropdownMenuItem disabled={!can} onClick={onClick}>
+        <Icon />
+        {label}
+      </DropdownMenuItem>
+    </Why>
+  )
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            aria-label="More git actions"
+            className="mr-1 shrink-0 border-l border-transparent group-hover/split:border-border hover:bg-transparent data-popup-open:border-border"
+          />
+        }
+      >
+        <ChevronDownIcon />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="w-64">
+        {item("Commit…", GitCommitIcon, menu.commit, onCommit)}
+        {item("Push", CloudUploadIcon, menu.push, onPush)}
+        {item("Pull", CloudDownloadIcon, menu.pull, onPull)}
+        {menu.follows && (
+          <p className="px-2 pt-1.5 pb-1 text-[11px] text-muted-foreground">
+            Pull and Push follow the upstream {menu.follows}.
+          </p>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
+  )
+}
+
+/** What is disabled hears no hover (`pointer-events: none`): what holds
+ * it says why. */
+function Why({
+  hint,
+  className,
+  children,
+}: {
+  hint?: string
+  className?: string
+  children: ReactNode
+}) {
+  if (!hint) return children
+  return (
+    <div title={hint} className={className}>
+      {children}
+    </div>
   )
 }
 

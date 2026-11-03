@@ -323,3 +323,97 @@ test("the git button commits every change with the message the Thread's Harness 
   // The Thread never showed the message's run.
   await expect(thread.getByText("You write concise")).toBeHidden()
 })
+
+test("the branch picker makes and switches branches, and ▾ commits chosen files with the Person's message and pushes", async () => {
+  window = await startWindow()
+  const { page, dir } = window
+  const { thread, composer } = await firstThread(page)
+  const folder = join(dir, "root", "Work")
+  const remote = join(dir, "remote.git")
+  git(dir, "init", "-q", "--bare", "--initial-branch=main", remote)
+  git(folder, "init", "-q", "-b", "main")
+  git(folder, "config", "user.name", "Roma")
+  git(folder, "config", "user.email", "roma@banda.so")
+  writeFileSync(join(folder, "a.ts"), "export const a = 1\n")
+  writeFileSync(join(folder, "b.ts"), "export const b = 1\n")
+  git(folder, "add", "-A")
+  git(folder, "commit", "-qm", "First")
+  git(folder, "remote", "add", "origin", remote)
+  git(folder, "push", "-q", "-u", "origin", "main")
+  git(folder, "branch", "other")
+  writeFileSync(join(folder, "a.ts"), "export const a = 2\n")
+  writeFileSync(join(folder, "b.ts"), "export const b = 2\n")
+
+  await composer.fill("hello")
+  await composer.press("Enter")
+  await expect(thread.getByText("You said: hello")).toBeVisible()
+  await page.keyboard.press("Control+Shift+KeyB")
+  const card = page.getByRole("dialog", { name: "Thread details" })
+
+  // The picker lists the branches here and the remote's in one list.
+  await card.getByRole("button", { name: /^main/ }).click()
+  const search = page.getByRole("textbox", { name: "Search branches" })
+  await expect(search).toBeFocused()
+  const options = page.getByRole("listbox")
+  await expect(
+    options.getByRole("option", { name: /main.*current/ })
+  ).toBeVisible()
+  await expect(options.getByRole("option", { name: "other" })).toBeVisible()
+  await expect(
+    options.getByRole("option", { name: /^origin\/main/ })
+  ).toBeVisible()
+  await page.screenshot({
+    path: "test-results/git-branches.png",
+    animations: "disabled",
+  })
+  await options
+    .getByRole("option", { name: "other" })
+    .click({ button: "right" })
+  await expect(
+    page.getByRole("menuitem", { name: "Copy branch name" })
+  ).toBeVisible()
+  await page.keyboard.press("Escape")
+  await expect(search).toBeFocused()
+  // The keys move the choice, the current branch first, then the default.
+  await search.press("ArrowDown")
+  await expect(
+    options.getByRole("option", { name: /^origin\/main/ })
+  ).toHaveAttribute("aria-selected", "true")
+  // Words no branch has make one, the choice Enter takes, and switch to
+  // it, the changes along.
+  await search.fill("feature/menu")
+  await expect(
+    options.getByRole("option", { name: "Create branch “feature/menu”" })
+  ).toHaveAttribute("aria-selected", "true")
+  await search.press("Enter")
+  await expect(
+    card.getByRole("button", { name: /^feature\/menu/ })
+  ).toBeVisible()
+  expect(git(folder, "branch", "--show-current")).toBe("feature/menu\n")
+
+  // ▾ → Commit…: b.ts left out, the Person's message.
+  await card.getByRole("button", { name: "More git actions" }).click()
+  await page.getByRole("menuitem", { name: "Commit…" }).click()
+  const dialog = page.getByRole("dialog", { name: "Commit changes" })
+  await dialog.getByRole("button", { name: "Edit" }).click()
+  await dialog.getByRole("checkbox", { name: "Commit b.ts" }).click()
+  await dialog.getByRole("button", { name: "Done" }).click()
+  await expect(dialog).toContainText("1 of 2")
+  await expect(dialog).toContainText("Left out")
+  await dialog.getByRole("textbox", { name: "Message" }).fill("Change a")
+  await page.screenshot({ path: "test-results/git-commit-dialog.png" })
+  await dialog.getByRole("button", { name: "Commit", exact: true }).click()
+  await expect(card).toContainText("Change a")
+  expect(git(folder, "log", "-1", "--format=%s", "--name-only")).toBe(
+    "Change a\n\na.ts\n"
+  )
+  expect(git(folder, "status", "--porcelain")).toBe(" M b.ts\n")
+
+  // Push runs at once from ▾: a branch never pushed goes to the remote.
+  await card.getByRole("button", { name: "More git actions" }).click()
+  await page.getByRole("menuitem", { name: "Push" }).click()
+  await expect(card).toContainText("to origin/feature/menu")
+  expect(git(remote, "log", "--format=%s", "feature/menu")).toBe(
+    "Change a\nFirst\n"
+  )
+})
