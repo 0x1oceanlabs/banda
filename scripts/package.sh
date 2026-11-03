@@ -5,7 +5,8 @@
 #   scripts/package.sh [stable|dev|local]
 #
 # BANDA_VERSION names the version (0.X.Y, 0.X.Y-dev.N); unset, it is the
-# workspace's, marked local. On Linux, an AppImage.
+# workspace's, marked local. On Linux, an AppImage; on macOS, a zip of the
+# app for Apple silicon, signed ad hoc.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 

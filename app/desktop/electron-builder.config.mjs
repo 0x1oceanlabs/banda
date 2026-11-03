@@ -30,7 +30,17 @@ export default {
     { from: "../web/dist", to: "web/dist" },
   ],
   artifactName: `${channel.folder}-\${version}-\${arch}.\${ext}`,
-  linux: { icon: channel.icon, category: "Development" },
+  icon: channel.icon,
+  linux: { category: "Development" },
+  // Apple silicon, signed ad hoc until there is a certificate (ADR 0033,
+  // decision 6): a zip of the app. Ad hoc, the hardened runtime would
+  // refuse Electron's own frameworks, signed by another team.
+  mac: {
+    category: "public.app-category.developer-tools",
+    target: [{ target: "zip", arch: ["arm64"] }],
+    identity: "-",
+    hardenedRuntime: false,
+  },
   // The static runtime, with FUSE 3 inside: it runs where only fuse3 is,
   // as on Omarchy, with no libfuse2.
   toolsets: { appimage: "1.0.3" },
