@@ -48,6 +48,8 @@ jobs:
       - uses: actions/setup-node@v5
         with:
           node-version: ${{ steps.node.outputs.version }}
+          # It would cache pnpm's store before pnpm is installed.
+          package-manager-cache: false
       - run: npm install --global --silent "$(jq -r .packageManager package.json)"
       - run: rustup toolchain install
       # One cache for every branch's run, PR's or by hand.
