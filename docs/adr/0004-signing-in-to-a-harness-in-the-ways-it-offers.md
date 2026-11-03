@@ -59,6 +59,8 @@ integration as in T3 Code. Roma can reverse it. The evidence is in
 5. **The rest of ADR 0003, decision 4, stands.**
    - Tokens never pass through Banda.
    - Banda reads none of the Harness's credential files.
+     _Changed by ADR 0043, decision 2: Banda reads Claude Code's access
+     token for its limits, for that one request, and keeps it nowhere._
    - A second account is a second entry, with its own config folder.
 
 **Consequences.**
