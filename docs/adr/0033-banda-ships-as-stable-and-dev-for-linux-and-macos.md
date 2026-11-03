@@ -55,7 +55,7 @@ Roma, 2026-11-02:
    - Built with electron-builder on the devbox runners, the engine inside.
    - electron-updater finds a new version in the background, downloads it, and installs it when the app quits. Banda reads the Stable releases, Banda Dev the prereleases. Neither asks, and neither restarts by itself: Dev can change many times a day.
    - It has to run on Omarchy, which has only `fuse3`, and on a plain GNOME and KDE (step 2).
-   - A pacman package in the AUR comes later, if asked.
+   - Each Stable is in the AUR too, as `banda-bin` (`scripts/aur.mjs`, pushed by the release workflow with Roma's AUR key): the AppImage taken apart into `/opt/banda`, which `yay -Syu` updates. There Banda finds no `APPIMAGE`, so it neither updates itself nor lists itself in the launcher. Dev is not in the AUR, as it changes many times a day (Roma, 2026-11-03).
 
 6. **macOS: an app for Apple silicon, through our own Homebrew tap, until there is a certificate.**
    - The build is signed ad hoc and not notarized. The tap `0x1oceanlabs/homebrew-banda` has two casks, `banda` and `banda-dev`. Each takes the quarantine off the app it installs, so Gatekeeper lets it open.
