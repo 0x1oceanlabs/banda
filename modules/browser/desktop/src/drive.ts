@@ -7,11 +7,20 @@
  * the Agent there, or no call came for a while: a held tab draws as a
  * driven one does, unthrottled.
  */
-import type { Navigate, ReadTab, Shown } from "@banda/contract/browser"
+import type {
+  Act,
+  Navigate,
+  ReadTab,
+  SeenTab,
+  Shown,
+  WaitFor,
+} from "@banda/contract/browser"
 import { Refused } from "@banda/desktop-kit"
 import { Context, Effect, FiberSet, Layer, RcMap } from "effect"
-import type { Page } from "playwright-core"
+import type { Event, InputEvent, WebContents } from "electron"
+import type { Browser, Dialog, Frame, Page } from "playwright-core"
 import { Cdp, messageOf } from "./cdp"
+import { act, hidden, secrets, timedOut, waitFor } from "./hands"
 import { pageOf as contentsOf, Tabs } from "./tabs"
 
 /** How long a tab no call came for stays held. */
@@ -20,26 +29,95 @@ const IDLE = "5 minutes"
  * engine waits 40 s for both (ADR 0029, decision 2). */
 const ANSWERING = 15_000
 const LOADING = 15_000
+/** How long an action's page has to start what it starts: a new address,
+ * a tab, a dialog, a download. */
+const SETTLING = 300
+/** The Person's input on a page, as Banda notes it (decision 5). */
+const PERSON = new Set<InputEvent["type"]>([
+  "mouseDown",
+  "mouseWheel",
+  "rawKeyDown",
+  "keyDown",
+])
+
+/** A tab Banda holds: Playwright's page in it, and what main keeps of
+ * it besides. */
+type Held = {
+  readonly connection: Browser
+  readonly page: Page
+  /** Whether the Person acted on it since the last snapshot. */
+  touched: boolean
+  /** Whether Banda's hands act in it now: their input is not the
+   * Person's. */
+  acting: boolean
+}
+
+const noTab = (tab: number) =>
+  new Refused({
+    code: "not_found",
+    message: `There is no tab ${tab}: browser_tabs lists them.`,
+  })
+
+/** A tab as an Agent sees it. */
+export const seenTab = (
+  page: WebContents,
+  cdp: Pick<Cdp["Service"], "drives">
+): SeenTab => ({
+  id: page.id,
+  url: page.getURL(),
+  title: page.getTitle(),
+  driven: cdp.drives(page),
+})
 
 /** What Playwright threw, as the Agent hears it. */
 const refused = (error: unknown) =>
   error instanceof Refused ? error : new Refused({ message: messageOf(error) })
 
-const timedOut = (error: unknown) =>
-  error instanceof Error && error.name === "TimeoutError"
-
-/** Where `page` is once it loaded, or `LOADING` passed. */
-const shown = async (tab: number, page: Page): Promise<Shown> => {
-  const loading = await page
-    .waitForLoadState("load", { timeout: LOADING })
-    .then(
+/** Where the tab of `held` is once it loaded, or `LOADING` passed, and
+ * what `changed`. The Person's input is said once. */
+const shown = async (
+  tab: number,
+  held: Held,
+  changed: Partial<Shown> = {}
+): Promise<Shown> => {
+  const { page } = held
+  // A page that shows a dialog loads nothing more until it is answered.
+  const loading =
+    !changed.dialog &&
+    (await page.waitForLoadState("load", { timeout: LOADING }).then(
       () => false,
       (error) => {
         if (timedOut(error)) return true
         throw error
       }
-    )
-  return { tab, url: page.url(), title: await page.title(), loading }
+    ))
+  const touched = held.touched
+  held.touched = false
+  return {
+    tab,
+    url: page.url(),
+    // From the browser, not the page, while a dialog stops it.
+    title: changed.dialog
+      ? (contentsOf(tab)?.getTitle() ?? "")
+      : await page.title(),
+    loading,
+    moved: false,
+    opened: [],
+    dialog: null,
+    download: null,
+    touched,
+    ...changed,
+  }
+}
+
+/** The dialog `page` shows next, once it shows one, until `stop`. */
+const dialogs = (page: Page) => {
+  let stop = () => {}
+  const opened = new Promise<Dialog>((heard) => {
+    page.once("dialog", heard)
+    stop = () => page.off("dialog", heard)
+  })
+  return { opened, stop }
 }
 
 /** Takes `page` where `to` says, once its address answered. */
@@ -76,6 +154,10 @@ export class Drive extends Context.Service<
     open(url?: string): Effect.Effect<Shown, Refused>
     /** The tab, where `to` says, once it loaded. */
     navigate(to: Navigate): Effect.Effect<Shown, Refused>
+    /** The tab, once `act` is done in it, and what it changed. */
+    act(act: Act): Effect.Effect<Shown, Refused>
+    /** The tab, once it shows what `wait` says. */
+    waitFor(wait: WaitFor): Effect.Effect<Shown, Refused>
   }
 >()("banda/Drive") {
   static readonly layer = Layer.effect(Drive)(
@@ -91,11 +173,7 @@ export class Drive extends Context.Service<
             Effect.tryPromise({
               try: async () => {
                 const socket = cdp.tab(tab)
-                if (!socket)
-                  throw new Refused({
-                    code: "not_found",
-                    message: `There is no tab ${tab}: browser_tabs lists them.`,
-                  })
+                if (!socket) throw noTab(tab)
                 const { chromium } = await import("playwright-core")
                 const connection = await chromium.connectOverCDP(socket)
                 const page = connection.contexts()[0]?.pages()[0]
@@ -108,40 +186,62 @@ export class Drive extends Context.Service<
                 const drop = () => run(RcMap.invalidate(held, tab))
                 page.on("close", drop)
                 connection.on("disconnected", drop)
-                return { connection, page }
+                const kept: Held = {
+                  connection,
+                  page,
+                  touched: false,
+                  acting: false,
+                }
+                // A dialog waits for the Person's answer: Playwright
+                // dismisses one that nothing listens for.
+                page.on("dialog", () => {})
+                const contents = contentsOf(tab)
+                const noted = (_: Event, input: InputEvent) => {
+                  if (!kept.acting && PERSON.has(input.type))
+                    kept.touched = true
+                }
+                contents?.on("input-event", noted)
+                return { kept, contents, noted }
               },
               catch: refused,
             }),
-            ({ connection }) => Effect.promise(() => connection.close())
+            ({ kept, contents, noted }) =>
+              Effect.promise(() => {
+                if (contents && !contents.isDestroyed())
+                  contents.off("input-event", noted)
+                return kept.connection.close()
+              })
           ),
       })
-      /** The tab's page, connected; again, if its page closed since. */
-      const pageOf = (tab: number) =>
-        Effect.flatMap(RcMap.get(held, tab), ({ page }) =>
-          page.isClosed()
+      /** The tab, connected; again, if its page closed since. */
+      const heldOf = (tab: number) =>
+        Effect.flatMap(RcMap.get(held, tab), ({ kept }) =>
+          kept.page.isClosed()
             ? Effect.andThen(
                 RcMap.invalidate(held, tab),
-                Effect.map(RcMap.get(held, tab), (again) => again.page)
+                Effect.map(RcMap.get(held, tab), (again) => again.kept)
               )
-            : Effect.succeed(page)
+            : Effect.succeed(kept)
         )
       /** Does `work` in the tab, connected to it. */
-      const inTab = <A>(tab: number, work: (page: Page) => Promise<A>) =>
+      const inTab = <A>(tab: number, work: (held: Held) => Promise<A>) =>
         Effect.scoped(
-          Effect.flatMap(pageOf(tab), (page) =>
-            Effect.tryPromise({ try: () => work(page), catch: refused })
+          Effect.flatMap(heldOf(tab), (kept) =>
+            Effect.tryPromise({ try: () => work(kept), catch: refused })
           )
         )
-
       return {
         snapshot: (tab) =>
-          inTab(tab, async (page) => {
-            const [title, tree, messages, thrown] = await Promise.all([
+          inTab(tab, async (kept) => {
+            const { page } = kept
+            const [title, tree, values, messages, thrown] = await Promise.all([
               page.title(),
               page.ariaSnapshot({ mode: "ai" }),
+              secrets(page),
               page.consoleMessages(),
               page.pageErrors(),
             ])
+            kept.touched = false
             // Playwright keeps the last 200 of each: cleared, the next
             // snapshot says the new ones.
             await Promise.all([
@@ -154,16 +254,77 @@ export class Drive extends Context.Service<
                 .map((message) => message.text()),
               ...thrown.map((error) => error.message),
             ]
-            return { url: page.url(), title, tree, errors }
+            return {
+              url: page.url(),
+              title,
+              tree: hidden(tree, values),
+              errors,
+            }
           }),
         open: (url) =>
           Effect.flatMap(tabs.create(url), ({ id }) =>
-            inTab(id, (page) => shown(id, page))
+            inTab(id, (kept) => shown(id, kept))
           ),
         navigate: (to) =>
-          inTab(to.tab, async (page) => {
-            await go(page, to)
-            return shown(to.tab, page)
+          inTab(to.tab, async (kept) => {
+            await go(kept.page, to)
+            return shown(to.tab, kept)
+          }),
+        act: (what) =>
+          inTab(what.tab, async (kept) => {
+            const { page } = kept
+            const contents = contentsOf(what.tab)
+            if (!contents) throw noTab(what.tab)
+            const before = new Set(tabs.all().map((page) => page.id))
+            let moved = false
+            const navigated = (frame: Frame) => {
+              if (frame === page.mainFrame()) moved = true
+            }
+            let download: string | null = null
+            const { session } = contents
+            const downloads = (
+              _: Event,
+              item: Electron.DownloadItem,
+              from: WebContents
+            ) => {
+              if (from.id === what.tab) download = item.getFilename()
+            }
+            const dialog = dialogs(page)
+            let opens: Shown["dialog"] = null
+            page.on("framenavigated", navigated)
+            session.on("will-download", downloads)
+            kept.acting = true
+            try {
+              const acting = act(page, contents, what)
+              // A dialog the action opens stops the page, and the action
+              // with it: the dialog is its answer.
+              acting.catch(() => {})
+              const shows = await Promise.race([acting, dialog.opened])
+              if (shows)
+                opens = { kind: shows.type(), message: shows.message() }
+              // A stopped page starts nothing more.
+              else await new Promise((settled) => setTimeout(settled, SETTLING))
+            } finally {
+              kept.acting = false
+              dialog.stop()
+              page.off("framenavigated", navigated)
+              session.off("will-download", downloads)
+            }
+            const opened = tabs
+              .all()
+              .filter((page) => !before.has(page.id))
+              .map((page) => seenTab(page, cdp))
+            return shown(what.tab, kept, {
+              moved,
+              opened,
+              download,
+              dialog: opens,
+            })
+          }),
+        waitFor: (wait) =>
+          inTab(wait.tab, async (kept) => {
+            await waitFor(kept.page, wait)
+            return shown(wait.tab, kept)
           }),
       }
     })

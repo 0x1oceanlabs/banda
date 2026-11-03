@@ -94,7 +94,7 @@ and stay Roma's to change.
    | `browser_open` | A new tab beside the Thread (decision 4), with an address or blank. |
    | `browser_navigate` | Address, back, forward, reload; waits for the load. |
    | `browser_snapshot` | The tab's tree with refs, its address and title, and new console errors. |
-   | `browser_act` | One action on a ref: click, type, fill, select, press, hover, scroll, drag; or accept or dismiss the tab's dialog. |
+   | `browser_act` | One action on a ref: click, type, fill, select, press, hover, scroll, drag; accepting or dismissing the tab's dialog comes with step 4. |
    | `browser_wait_for` | Until a text, a ref or an address shows; 15 s by default, 60 s at most. |
    | `browser_handoff` | Hands the tab to the Person for a step that is theirs (decision 6). |
 
@@ -106,6 +106,15 @@ and stay Roma's to change.
      refuses with "take a new snapshot".
    - An action answers in a line, plus what changed: the address, the
      title, a new tab, a dialog, a download.
+   - Keys go to the tab through Electron, not CDP: a tab is a webview in
+     Banda's window, and CDP's keys go where the window's focus is, as
+     the Person's Thread. Mouse actions stay Playwright's. (Amended in
+     step 3b.)
+   - A dialog a page shows waits for the Person, who answers it as
+     always, and the answer says so. The Agent's accept and dismiss come
+     with step 4, when Banda draws a page's dialogs itself: Electron's
+     own box cannot be tried in the headless tests, which it ends.
+     (Amended in step 3b.)
    - Every answer is capped at about 20 KB and says what it left out.
    - Page text comes back marked as the page's, not as instructions. Only
      http, https and `localhost` addresses open.
@@ -144,7 +153,8 @@ and stay Roma's to change.
      driven tab, once until the next snapshot. The next answer to that
      Thread then says: "The Person also acted on this page since your last
      snapshot. Take a new snapshot before you act by ref." (Roma's yes,
-     2026-11-02.)
+     2026-11-02.) Until step 4 knows which Thread drives a tab, the note
+     is the tab's, and the next answer on it says it.
 
 6. **A Thread waits for the Person, for one of three reasons.**
    - **Stopped** (#154): the Person pressed Stop.
@@ -206,7 +216,8 @@ and stay Roma's to change.
    (decision 5); E's refused and masked fields.
 4. The Thread on the tab: tabs open beside the Thread; the icon, glow,
    cursor and pill; the three waits with their answers, events and calls
-   (decision 6, closing #154); B's site gate; `browser_handoff`.
+   (decision 6, closing #154); B's site gate; `browser_handoff`; a page's
+   dialogs drawn by Banda, which the Agent may accept or dismiss.
 5. Screenshots as image content, and the tools behind a setting.
 6. The skill's `browser` topic names Banda's tools. The CDP endpoint
    stays, for the Person's own programs.

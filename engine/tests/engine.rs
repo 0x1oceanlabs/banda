@@ -346,7 +346,9 @@ fn an_agent_reaches_banda_through_banda_mcp() {
                 "browser_tabs",
                 "browser_snapshot",
                 "browser_open",
-                "browser_navigate"
+                "browser_navigate",
+                "browser_act",
+                "browser_wait_for"
             ][..],
             &arranging,
             &["skill"]
