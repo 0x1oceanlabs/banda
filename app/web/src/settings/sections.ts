@@ -175,7 +175,7 @@ export const SECTIONS: Section[] = [
     title: "Problems",
     icon: BugIcon,
     about:
-      "What broke in Banda itself. It is kept on this computer only, and nothing is sent.",
+      "What broke in Banda itself, kept on this computer. Sharing sends a report only if you turn it on.",
     Body: ProblemsSettings,
   },
   {

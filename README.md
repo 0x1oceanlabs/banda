@@ -43,9 +43,14 @@ It needs FUSE 3, as most distributions have.
 
 ## What it sends
 
-Nothing of its own: there is no account and no telemetry, and a crash is
-kept on your machine. Your Agents talk to their providers as they do in a
-terminal, and the browser loads the pages you or your Agents open.
+Nothing of its own unless you turn it on. There is no account, and a
+crash is kept on your machine. At the first run Banda asks whether to
+send problem reports and usage counts, both unticked; Settings → Sharing
+changes it, and shows each event exactly as it went. They go to PostHog
+(US) with a random ID, no IP and no location, and only from a released
+Banda: the code that sends is `modules/sharing`, and nothing else does.
+Your Agents talk to their providers as they do in a terminal, and the
+browser loads the pages you or your Agents open.
 
 ## Build it
 

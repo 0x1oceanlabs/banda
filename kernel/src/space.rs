@@ -582,8 +582,9 @@ impl ModuleSpace {
     }
 
     /// Asks the window `what`, under this module's name, for `by` in this
-    /// Space (ADR 0029, decision 2).
-    pub(crate) async fn ask_window(
+    /// Space (ADR 0029, decision 2): a call's, or the module's own work, as
+    /// sharing asks the window to post what waits (ADR 0039).
+    pub async fn ask_window(
         &self,
         by: Participant,
         what: &str,

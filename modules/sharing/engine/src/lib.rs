@@ -11,15 +11,17 @@
 //! (decision 8). A Banda run from a checkout, as in CI and the tests,
 //! never sends, nor one run with `BANDA_SHARING=0`.
 
+mod exception;
+mod outbox;
 pub mod settings;
 
-use banda_kernel::{Call, Error, Module, Nothing, Refusal, Right, Scope};
+use banda_kernel::{Call, Error, Module, ModuleSpace, Nothing, Refusal, Right, Scope};
 use rusqlite::Row;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use settings::Shares;
 use std::path::PathBuf;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
 use ts_rs::TS;
 use uuid::Uuid;
 
@@ -29,17 +31,17 @@ pub const SETTINGS: [banda_look::SettingsFile; 1] =
     [banda_look::SettingsFile::of::<settings::SharingSettings>()];
 
 /// How long an event is kept, sent or waiting: seven days, in ms.
-const KEPT_MS: i64 = 7 * 24 * 60 * 60 * 1000;
+pub(crate) const KEPT_MS: i64 = 7 * 24 * 60 * 60 * 1000;
 
 pub struct Sharing {
     /// `sharing.toml`.
     file: PathBuf,
-    /// The file the ID is kept in, while anything is shared.
-    id: PathBuf,
+    /// The ID it sends with.
+    ids: Arc<Ids>,
     /// Why this Banda never sends, whatever is on.
     never: Option<Never>,
-    /// Held while the ID is made, read or erased.
-    ids: Mutex<()>,
+    /// Which Banda it is: `stable`, `dev` or `local`.
+    channel: &'static str,
 }
 
 /// Why a Banda never sends, whatever its file turns on.
@@ -61,9 +63,12 @@ impl Sharing {
             file: config
                 .into()
                 .join(<settings::SharingSettings as banda_look::OneFile>::NAME),
-            id: state.into().join("sharing-id"),
+            ids: Arc::new(Ids {
+                path: state.into().join("sharing-id"),
+                held: Mutex::new(()),
+            }),
             never: None,
-            ids: Mutex::new(()),
+            channel: "local",
         }
     }
 
@@ -75,33 +80,13 @@ impl Sharing {
         }
     }
 
-    /// The ID while anything is shared, made as sharing turns on, or made
-    /// `anew`; none, and the one there was erased, while nothing is. It is
-    /// looked at as the window reads the state; the step that sends looks
-    /// before each event too.
-    fn id(&self, shares: Shares, anew: bool) -> Result<Option<String>, Error> {
-        let _held = self.ids.lock().unwrap_or_else(|held| held.into_inner());
-        if !shares.any() {
-            return match std::fs::remove_file(&self.id) {
-                Err(error) if error.kind() != std::io::ErrorKind::NotFound => Err(error.into()),
-                _ => Ok(None),
-            };
-        }
-        let kept = std::fs::read_to_string(&self.id).ok();
-        let kept = kept.map(|kept| kept.trim().to_owned());
-        if let Some(kept) = kept.filter(|kept| !anew && Uuid::parse_str(kept).is_ok()) {
-            return Ok(Some(kept));
-        }
-        let id = Uuid::new_v4().to_string();
-        if let Some(folder) = self.id.parent() {
-            std::fs::create_dir_all(folder)?;
-        }
-        std::fs::write(&self.id, &id)?;
-        Ok(Some(id))
+    /// Says it is Banda's `channel`: `stable` or `dev`.
+    pub fn channel(self, channel: &'static str) -> Self {
+        Self { channel, ..self }
     }
 
     async fn shared(&self, call: &Call, shares: Shares, anew: bool) -> Result<Shared, Refusal> {
-        let id = self.id(shares, anew)?;
+        let id = self.ids.id(shares, anew)?;
         let since = banda_kernel::now_ms() - KEPT_MS;
         let sent = call.space().read(move |sql| kept(sql, since)).await?;
         Ok(Shared {
@@ -110,6 +95,39 @@ impl Sharing {
             never: self.never,
             sent,
         })
+    }
+}
+
+/// The random ID, in a file of its own in the state folder.
+pub(crate) struct Ids {
+    path: PathBuf,
+    /// Held while it is made, read or erased.
+    held: Mutex<()>,
+}
+
+impl Ids {
+    /// The ID while anything is shared, made as sharing turns on, or made
+    /// `anew`; none, and the one there was erased, while nothing is. It is
+    /// looked at as the window reads the state, and as an event is made.
+    pub(crate) fn id(&self, shares: Shares, anew: bool) -> Result<Option<String>, Error> {
+        let _held = self.held.lock().unwrap_or_else(|held| held.into_inner());
+        if !shares.any() {
+            return match std::fs::remove_file(&self.path) {
+                Err(error) if error.kind() != std::io::ErrorKind::NotFound => Err(error.into()),
+                _ => Ok(None),
+            };
+        }
+        let kept = std::fs::read_to_string(&self.path).ok();
+        let kept = kept.map(|kept| kept.trim().to_owned());
+        if let Some(kept) = kept.filter(|kept| !anew && Uuid::parse_str(kept).is_ok()) {
+            return Ok(Some(kept));
+        }
+        let id = Uuid::new_v4().to_string();
+        if let Some(folder) = self.path.parent() {
+            std::fs::create_dir_all(folder)?;
+        }
+        std::fs::write(&self.path, &id)?;
+        Ok(Some(id))
     }
 }
 
@@ -169,14 +187,34 @@ impl Module for Sharing {
 
     fn migrations(&self) -> &'static [&'static str] {
         // Each event, as it goes or waits to.
-        &["CREATE TABLE sharing_sent (
+        &[
+            "CREATE TABLE sharing_sent (
                id INTEGER PRIMARY KEY,
                event TEXT NOT NULL,
                about TEXT NOT NULL,
                json TEXT NOT NULL,
                made INTEGER NOT NULL,
                sent INTEGER
-           )"]
+           )",
+            // How far into the log it has heard.
+            "CREATE TABLE sharing_heard (
+               one INTEGER PRIMARY KEY CHECK (one = 1),
+               at INTEGER NOT NULL
+             )",
+        ]
+    }
+
+    /// From where it last heard, it makes an event of each Problem as the
+    /// problems module says it, and sends what waits: at once, and again
+    /// every few minutes, through Banda's window.
+    async fn opened(&self, space: ModuleSpace) -> Result<(), Error> {
+        let courier = outbox::Courier {
+            file: self.file.clone(),
+            ids: self.ids.clone(),
+            never: self.never,
+            channel: self.channel,
+        };
+        outbox::start(courier, space).await
     }
 
     fn right(&self, method: &str) -> Option<Right> {

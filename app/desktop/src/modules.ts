@@ -8,6 +8,7 @@
  */
 import { agentsDesktop } from "@banda/agents-desktop"
 import { browserDesktop } from "@banda/browser-desktop"
+import { sharingDesktop } from "@banda/sharing-desktop"
 import type { Asked, DesktopModule } from "@banda/desktop-kit"
 import { Layer } from "effect"
 
@@ -19,8 +20,17 @@ type Uses<M> =
 
 /** Under the module's name, as its engine part asks. */
 const asked: Readonly<
-  Record<string, Asked<Uses<typeof browserDesktop | typeof agentsDesktop>>>
-> = { browser: browserDesktop.asked, agents: agentsDesktop.asked }
+  Record<
+    string,
+    Asked<
+      Uses<typeof browserDesktop | typeof agentsDesktop | typeof sharingDesktop>
+    >
+  >
+> = {
+  browser: browserDesktop.asked,
+  agents: agentsDesktop.asked,
+  sharing: sharingDesktop.asked,
+}
 
 export const modules = {
   layer: Layer.mergeAll(browserDesktop.layer, agentsDesktop.layer),
