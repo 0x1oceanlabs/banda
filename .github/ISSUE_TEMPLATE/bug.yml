@@ -1,0 +1,36 @@
+name: Something is wrong
+description: Banda does something it should not, or does not do what it should.
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, and what Banda did instead. A screenshot helps.
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Which Banda
+      description: The AppImage's file name, as banda-0.2.0-x86_64.AppImage, or the commit you built.
+    validations:
+      required: true
+  - type: input
+    id: system
+    attributes:
+      label: Your system
+      description: The distribution and the desktop, as Arch with Hyprland, or Ubuntu 26.04 with GNOME.
+    validations:
+      required: true
+  - type: input
+    id: harness
+    attributes:
+      label: The Harness
+      description: If an Agent is part of it, which Harness and its version, as Claude Code 2.4.1.
+  - type: textarea
+    id: log
+    attributes:
+      label: What Banda printed
+      description: If you can, start the AppImage from a terminal, do it again, and paste what it printed around the trouble.
+      render: text
