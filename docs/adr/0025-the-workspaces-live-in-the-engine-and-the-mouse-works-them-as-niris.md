@@ -281,6 +281,9 @@ On the list, Roma decided:
    each under its row, and a Strip scrolls as its row does; the overview
    lays clear tiles over them, which take the clicks, the keys and the
    drag. A thread's text, a terminal's screen and a page show as they run.
+   _Changed_ 2026-11-03: half was too big, two workspaces at most on a
+   laptop's screen, so it zooms out to 0.35 by default, and
+   `[overview] zoom` in `look.toml` sets it, as niri's `overview { zoom }`.
 
 8. **The drawer** (ADR 0005, decision 7) is on `` Alt+` ``, as a terminal
    that drops down is; `Alt+S` settles a Thread now (ADR 0008). A Thread

@@ -8,9 +8,10 @@ import {
   useState,
 } from "react"
 import type { SpaceId } from "@banda/contract"
+import { DEFAULT_OVERVIEW } from "@banda/contract/look"
 import type { Label } from "@banda/ui/pane"
 import { labelOf, useSaid } from "../registry"
-import { useLookColumns } from "../look"
+import { useLookColumns, useLookOverview } from "../look"
 import {
   drawnColumns,
   heightAt,
@@ -35,9 +36,6 @@ import { type Carrying, landIn, useMoving } from "./useMoving"
 
 /** Where a Pane lands before the overview is drawn: nowhere. */
 const ASIDE = { land: () => ({}), scroll: () => false }
-
-/** The most the overview zooms the workspaces out to: half, as niri's. */
-const ZOOM = 0.5
 
 const ARROWS: Record<string, Direction> = {
   ArrowLeft: "left",
@@ -105,6 +103,8 @@ export function Overview({
   onClose: () => void
 }) {
   const look = useLookColumns()
+  // A zoom of 0 would draw nothing: the default stands in.
+  const most = useLookOverview().zoom || DEFAULT_OVERVIEW.zoom
   const root = useRef<HTMLDivElement>(null)
   const [screen, setScreen] = useState<Screen>()
   const [query, setQuery] = useState("")
@@ -142,7 +142,7 @@ export function Overview({
     return () => watch.disconnect()
   }, [])
   const zoom = screen
-    ? Math.min(ZOOM, screen.room / (screen.inner + 2 * screen.outer))
+    ? Math.min(most, screen.room / (screen.inner + 2 * screen.outer))
     : 0
   // The workspaces themselves, zoomed out under their rows: each stands
   // where its row is, and its Strip scrolls as the row does, or the row as

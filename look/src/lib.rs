@@ -90,6 +90,8 @@ pub struct Look {
     pub bar: Bar,
     /// The drawer on Alt+` (ADR 0025, decision 8).
     pub drawer: Drawer,
+    /// The overview on Alt+O (ADR 0025, decision 7).
+    pub overview: Overview,
     /// The layers it came from, bottom first.
     pub sources: Vec<Source>,
     /// What is wrong in the files. The look still applies: a value that
@@ -159,6 +161,14 @@ pub struct Drawer {
     #[ts(optional)]
     #[serde(skip_serializing_if = "Option::is_none")]
     pub harness: Option<String>,
+}
+
+/// The overview on Alt+O (ADR 0025, decision 7).
+#[derive(Clone, Debug, PartialEq, Serialize, TS)]
+#[ts(export, export_to = "look/")]
+pub struct Overview {
+    /// How far it zooms the workspaces out, at most: 0.5 is half.
+    pub zoom: f64,
 }
 
 /// A picture Banda's glass is made of (ADR 0030).
@@ -708,6 +718,9 @@ pub fn resolve(
             drawer: Drawer {
                 height: all.drawer.height.unwrap_or(0.6),
                 harness: all.drawer.harness.clone(),
+            },
+            overview: Overview {
+                zoom: all.overview.zoom.unwrap_or(0.35),
             },
             sources,
             problems,
