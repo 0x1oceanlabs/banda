@@ -19,7 +19,7 @@ test("Banda's update shows on the bar as it downloads, is ready, or cannot insta
       ipcMain.handle("update.current", () => value)
       BrowserWindow.getAllWindows()[0]?.webContents.send("update.listen", value)
     }, value)
-  const known = { name: "Banda Dev", have: "0.1.0-dev.62" }
+  const known = { name: "Banda Dev", have: "0.1.0-dev.62", always: false }
   const { composer } = await firstThread(page)
   const downloading = page.getByRole("button", { name: /^Downloading/ })
 
@@ -29,6 +29,8 @@ test("Banda's update shows on the bar as it downloads, is ready, or cannot insta
     state: "downloading",
     version: "0.1.0-dev.66",
     share: 0.1,
+    notes: [],
+    restarts: false,
   })
   await page.waitForTimeout(1000)
   await expect(downloading).toBeHidden()
@@ -40,6 +42,8 @@ test("Banda's update shows on the bar as it downloads, is ready, or cannot insta
     state: "downloading",
     version: "0.1.0-dev.66",
     share: 0.38,
+    notes: [],
+    restarts: false,
   })
   await expect(downloading).toHaveAccessibleName(
     "Downloading Banda Dev 0.1.0-dev.66 · 38%"
@@ -81,4 +85,71 @@ test("Banda's update shows on the bar as it downloads, is ready, or cannot insta
   ).toBeVisible()
   await tell({ ...known, state: "none" })
   await expect(page.getByRole("button", { name: /cannot update/ })).toBeHidden()
+})
+
+test("Banda Dev's widget stays on the bar and updates now (ADR 0045)", async () => {
+  window = await startWindow()
+  const { page, app } = window
+  const tell = (value: object) =>
+    app.evaluate(({ BrowserWindow, ipcMain }, value) => {
+      ipcMain.removeHandler("update.current")
+      ipcMain.handle("update.current", () => value)
+      BrowserWindow.getAllWindows()[0]?.webContents.send("update.listen", value)
+    }, value)
+  // Main counts what the page asks of it, in place of its updater.
+  await app.evaluate(({ ipcMain }) => {
+    const asked: string[] = []
+    ;(globalThis as { asked?: string[] }).asked = asked
+    for (const name of ["now", "later"]) {
+      ipcMain.removeAllListeners(`update.${name}`)
+      ipcMain.on(`update.${name}`, () => asked.push(name))
+    }
+  })
+  const asked = () =>
+    app.evaluate(() => (globalThis as { asked?: string[] }).asked)
+  const known = { name: "Banda Dev", have: "0.1.0-dev.101", always: true }
+  await firstThread(page)
+
+  await tell({ ...known, state: "none", looked: Date.now() - 4 * 60_000 })
+  const widget = page.getByRole("button", { name: "Banda Dev 0.1.0-dev.101" })
+  await widget.click()
+  const popover = page.locator("[data-slot=popover-content]")
+  await expect(popover).toContainText(
+    "You have the newest Banda Dev · looked 4m ago"
+  )
+  await popover.getByRole("button", { name: "Update now" }).click()
+  await expect.poll(asked).toEqual(["now"])
+
+  // The popover stays open, and follows the look and the download.
+  await tell({ ...known, state: "looking" })
+  await expect(popover).toContainText("Looking for a new Banda Dev…")
+  await expect(
+    popover.getByRole("button", { name: "Update now" })
+  ).toBeDisabled()
+  await tell({
+    ...known,
+    state: "downloading",
+    version: "0.1.0-dev.104",
+    share: 0.38,
+    notes: [
+      { version: "0.1.0-dev.104", text: "Built from 1ceb27c: the README" },
+    ],
+    restarts: true,
+  })
+  await expect(popover).toContainText(
+    "Downloading · 38% · restarts when it is down"
+  )
+  await expect(popover).toContainText("dev.104Built from 1ceb27c: the README")
+  await page.screenshot({ path: "test-results/8-update-now.png" })
+  await popover.getByRole("button", { name: "Don't restart" }).click()
+  await expect.poll(asked).toEqual(["now", "later"])
+
+  await tell({
+    ...known,
+    state: "none",
+    missed: "net::ERR_INTERNET_DISCONNECTED",
+  })
+  await expect(popover).toContainText(
+    "Could not update: net::ERR_INTERNET_DISCONNECTED"
+  )
 })

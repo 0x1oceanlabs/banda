@@ -2,6 +2,7 @@
  * What the bar shows of Banda's own update (ADR 0041, decision 4). Pure,
  * so plain tests cover it; Update.tsx draws it.
  */
+import { ago } from "@banda/ui/lib/words"
 import type { Update } from "../host"
 
 /** How long a download runs before the bar shows it: a Dev that differs
@@ -13,9 +14,11 @@ export function lineOf(update: Update): string {
   const named = (version: string) => `${update.name} ${version}`
   switch (update.state) {
     case "none":
-      return ""
+      return named(update.have)
+    case "looking":
+      return `Looking for a new ${update.name}…`
     case "downloading":
-      return `Downloading ${named(update.version)} · ${Math.round(update.share * 100)}%`
+      return `Downloading ${named(update.version)} · ${percentOf(update.share)}`
     case "ready":
       return `${named(update.version)} is ready: it installs when you quit ${update.name}`
     case "failed":
@@ -35,4 +38,32 @@ export function workingWords(working: number): string | undefined {
   return working === 1
     ? "A Thread works: a restart stops its turn."
     : `${working} Threads work: a restart stops their turns.`
+}
+
+/** What the popover says of a look while nothing new is known
+ * (ADR 0045). */
+export function lookedWords(
+  update: Extract<Update, { state: "none" }>,
+  now: number
+): string {
+  if (update.missed) return `Could not update: ${update.missed}`
+  if (update.looked === undefined)
+    return `${update.name} looks every hour, and when you ask`
+  const when = ago(update.looked, now)
+  return `You have the newest ${update.name} · looked ${when === "now" ? "just now" : `${when} ago`}`
+}
+
+/** How the popover says where a download goes. */
+export function downloadWords(
+  update: Extract<Update, { state: "downloading" }>
+): string {
+  const share = percentOf(update.share)
+  return update.restarts
+    ? `Downloading · ${share} · restarts when it is down`
+    : `Downloading · ${share} · installs when you quit ${update.name}`
+}
+
+/** A download's share as the bar says it: `38%`. */
+function percentOf(share: number): string {
+  return `${Math.round(share * 100)}%`
 }
