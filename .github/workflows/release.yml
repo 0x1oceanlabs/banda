@@ -1,6 +1,7 @@
 # Banda's releases (ADR 0033, step 3): Dev on every push to main once `ci`
 # is green on it, Stable on a tag v0.X.Y. Each packs the AppImage with
-# scripts/package.sh on devbox and publishes it with scripts/release.mjs.
+# scripts/package.sh on devbox and publishes it with scripts/release.mjs,
+# beside latest-linux.yml, which electron-updater reads (ADR 0041).
 # A PR that changes how Banda is packed packs it too, publishing nothing.
 name: release
 
@@ -102,11 +103,13 @@ jobs:
           ${{ steps.which.outputs.version }}
           "$(git rev-parse HEAD)"
           app/desktop/dist/*.AppImage
-      # Step 5 adds electron-builder's update files (*-linux.yml) to both.
+          app/desktop/dist/latest-linux.yml
       - name: keep what a PR packed
         if: github.event_name == 'pull_request'
         uses: actions/upload-artifact@v4
         with:
           name: banda-${{ steps.which.outputs.version }}
-          path: app/desktop/dist/*.AppImage
+          path: |
+            app/desktop/dist/*.AppImage
+            app/desktop/dist/latest-linux.yml
           retention-days: 3
