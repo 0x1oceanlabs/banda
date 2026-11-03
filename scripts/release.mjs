@@ -95,17 +95,24 @@ const release = await github("POST", `/repos/${repo}/releases`, {
   draft: true,
   ...fields,
 })
-for (const file of files) {
-  const name = basename(file)
-  console.log(
-    `${tag}: ${name}, ${(statSync(file).size / 2 ** 20).toFixed(0)} MB`
-  )
-  await github(
-    "POST",
-    `/repos/${repo}/releases/${release.id}/assets?name=${encodeURIComponent(name)}`,
-    readFileSync(file),
-    "https://uploads.github.com"
-  )
+// A file that fails to go up takes the draft with it: a draft left behind
+// only waits for a run again of the same number, which may never come.
+try {
+  for (const file of files) {
+    const name = basename(file)
+    console.log(
+      `${tag}: ${name}, ${(statSync(file).size / 2 ** 20).toFixed(0)} MB`
+    )
+    await github(
+      "POST",
+      `/repos/${repo}/releases/${release.id}/assets?name=${encodeURIComponent(name)}`,
+      readFileSync(file),
+      "https://uploads.github.com"
+    )
+  }
+} catch (error) {
+  await github("DELETE", `/repos/${repo}/releases/${release.id}`)
+  throw error
 }
 try {
   const published = await github(
