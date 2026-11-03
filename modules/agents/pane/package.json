@@ -2,6 +2,7 @@
   "name": "@banda/agents-pane",
   "version": "0.0.0",
   "private": true,
+  "license": "Apache-2.0",
   "type": "module",
   "description": "The agents module's Panes: the Agents of a Space, and one Thread with an Agent.",
   "exports": {

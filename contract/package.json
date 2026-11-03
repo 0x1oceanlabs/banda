@@ -2,6 +2,7 @@
   "name": "@banda/contract",
   "version": "0.0.0",
   "private": true,
+  "license": "Apache-2.0",
   "type": "module",
   "description": "The engine's API for TypeScript: the types generated from Rust, the modules' decoders and the client a window uses.",
   "exports": {

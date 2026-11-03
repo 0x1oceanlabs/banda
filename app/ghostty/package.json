@@ -2,6 +2,7 @@
   "name": "@banda/ghostty",
   "version": "0.0.0",
   "private": true,
+  "license": "Apache-2.0 AND MIT",
   "type": "module",
   "description": "A terminal drawn by Ghostty: T3 Code's adapter over libghostty-vt's WebAssembly, vendored as it is.",
   "exports": {

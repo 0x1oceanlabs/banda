@@ -2,6 +2,7 @@
   "name": "@banda/agents-desktop",
   "version": "0.0.0",
   "private": true,
+  "license": "Apache-2.0",
   "type": "module",
   "description": "The agents module's part in the window's main process (ADR 0028): it serves the Visuals Agents show in their Threads (ADR 0037).",
   "exports": {
