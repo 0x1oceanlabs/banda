@@ -17,6 +17,7 @@
 //! turns too.
 
 use crate::acp::{Between, Said, Session, WeakSession};
+use crate::drive::drive;
 use crate::live::Live;
 use crate::model::{
     Body, Fact, Failure, Item, ItemId, Opener, Settings, ThreadId, ToolStatus, TurnId, TurnState,
@@ -104,10 +105,10 @@ impl Listener {
         let Some(Opened { turn, settings }) = self.open(session).await? else {
             return Ok(());
         };
-        let id = turn.id;
         let _kept = session.keep();
-        self.live.begin(id, session.clone());
-        let mut transcript = Transcript::new(
+        let run = self.live.open(turn.id);
+        run.begin(session.clone());
+        let transcript = Transcript::new(
             self.space.clone(),
             &turn,
             self.harness.clone(),
@@ -118,17 +119,15 @@ impl Listener {
         let mut calls = Calls::default();
         calls.hear(&first);
         let _ = to_writer.send(first);
-        let (live, harness) = (&self.live, &self.harness);
+        let (quiet, harness) = (self.live.quiet(), &self.harness);
+        let asking = || run.asking();
         let forward = async move {
             loop {
                 tokio::select! {
                     next = hear.recv() => match next {
                         // The session's words are a turn's now, and the
                         // Harness takes that turn's prompt into what it does.
-                        Some(Between::Prompted) => {
-                            live.hand_over(id);
-                            break Ending::new(TurnState::Done, None);
-                        }
+                        Some(Between::Prompted) => break Ending::new(TurnState::Done, None),
                         Some(Between::Said(said)) => {
                             if !calls.hear(&said) {
                                 continue;
@@ -145,27 +144,17 @@ impl Listener {
                             Some(Failure::HarnessStopped),
                         ),
                     },
-                    () = tokio::time::sleep(live.quiet()) => if !calls.running() && !live.asking(id) {
+                    () = tokio::time::sleep(quiet) => if !calls.running() && !asking() {
                         break Ending::new(TurnState::Done, None);
                     },
                 }
             }
         };
-        let (ending, listened) = tokio::join!(forward, transcript.listen(live, &mut written));
-        let ending = match listened {
-            Ok(()) => ending,
-            // What the Harness says cannot be written: it stops, unless a
-            // turn's prompt took the session over.
-            Err(reason) => {
-                if !session.prompting() {
-                    let _ = session.cancel();
-                }
-                Ending::failed(reason, None)
-            }
-        };
-        // Stopped, if a Person asked, however the Harness ended it: the
-        // rules read that from the turn.
-        self.live.end(id);
+        let ending = drive(&run, transcript, &mut written, forward).await;
+        // Memory lets go of the turn before its end is written. Stopped,
+        // if a Person asked, however the Harness ended it: the rules read
+        // that from the turn.
+        drop(run);
         self.space
             .write(move |tx| {
                 // Unless it ended already, as one a turn the outbox

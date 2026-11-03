@@ -7,7 +7,7 @@
 mod output;
 
 use crate::acp::{Answer, Running, Said, ToolChange};
-use crate::live::Live;
+use crate::live::TurnRun;
 use crate::model::{
     Body, Fact, Item, ItemId, Mode, Offer, PlanStep, Settings, ThreadId, ToolContent, ToolKind,
     ToolStatus, TurnId, Usage,
@@ -179,7 +179,7 @@ impl Transcript {
     /// Writes what the Harness says until it ends the turn.
     pub async fn listen(
         &mut self,
-        live: &Live,
+        run: &TurnRun,
         hear: &mut mpsc::UnboundedReceiver<Said>,
     ) -> Result<(), String> {
         loop {
@@ -193,7 +193,7 @@ impl Transcript {
             tokio::select! {
                 biased;
                 said = hear.recv() => match said {
-                    Some(said) => self.hear(live, said).await?,
+                    Some(said) => self.hear(run, said).await?,
                     None => break,
                 },
                 () = gathered => self.write_gathered().await?,
@@ -202,15 +202,15 @@ impl Transcript {
         self.close().await
     }
 
-    async fn hear(&mut self, live: &Live, said: Said) -> Result<(), String> {
+    async fn hear(&mut self, run: &TurnRun, said: Said) -> Result<(), String> {
         match said {
             Said::Reply { text, message } => {
-                self.after_steer(live).await?;
+                self.after_steer(run).await?;
                 self.next_message(message).await?;
                 self.gather(Text::Reply, &text).await
             }
             Said::Thought { text, message } => {
-                self.after_steer(live).await?;
+                self.after_steer(run).await?;
                 self.next_message(message).await?;
                 self.gather(Text::Thought, &text).await
             }
@@ -283,12 +283,12 @@ impl Transcript {
                     }
                 };
                 // Held before it is written, so an answer finds it.
-                if !live.ask(self.turn, id, answer) {
+                if !run.ask(id, answer) {
                     return Ok(());
                 }
                 let written = self.put(id, body, asked, None).await;
                 if written.is_err() {
-                    live.forget(id);
+                    run.forget(id);
                 } else {
                     self.asked.insert(call, id);
                 }
@@ -298,7 +298,7 @@ impl Transcript {
                 let Some(id) = self.asked.remove(&call) else {
                     return Ok(());
                 };
-                live.forget(id);
+                run.forget(id);
                 let agent = Participant::Agent(self.agent);
                 self.space
                     .write(move |tx| questions::withdrawn(tx, agent, id))
@@ -538,8 +538,8 @@ impl Transcript {
 
     /// A message a Person sent into the turn ends what the Agent said
     /// before it, for a Harness that does not name its messages.
-    async fn after_steer(&mut self, live: &Live) -> Result<(), String> {
-        if live.take_steered(self.turn) {
+    async fn after_steer(&mut self, run: &TurnRun) -> Result<(), String> {
+        if run.take_steered() {
             self.end_text().await?;
         }
         Ok(())

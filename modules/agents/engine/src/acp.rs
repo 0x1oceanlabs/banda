@@ -48,6 +48,7 @@ mod asking;
 mod failure;
 mod opening;
 mod options;
+mod routes;
 mod said;
 mod session;
 
@@ -57,6 +58,8 @@ use failure::*;
 pub use opening::{Evidence, ForkAt, Opened};
 pub use options::Running;
 use options::*;
+pub use routes::Between;
+use routes::*;
 use said::*;
 pub use said::{Answer, Said, ToolChange};
 use session::*;
@@ -67,54 +70,6 @@ pub use session::{Prompt, PromptImage, Session, Steered, WeakSession};
 pub const STARTING: Duration = Duration::from_secs(120);
 /// How long a Harness may take to open a session.
 pub const OPENING: Duration = Duration::from_secs(60);
-/// What a session says while none of the engine's turns runs in it.
-pub enum Between {
-    /// The Harness said it by itself, as Claude Code does when it goes on
-    /// with what a background task it started found.
-    Said(Said),
-    /// A turn's prompt went to the session: what it says now is the turn's.
-    Prompted,
-}
-
-/// Where what each session says goes: to the turn whose prompt it
-/// answers, or else to whoever hears the session between turns.
-#[derive(Clone, Default)]
-struct Routes {
-    turns: Arc<Mutex<HashMap<acp::SessionId, mpsc::UnboundedSender<Said>>>>,
-    between: Arc<Mutex<HashMap<acp::SessionId, mpsc::UnboundedSender<Between>>>>,
-}
-
-#[derive(Clone)]
-enum Route {
-    Turn(mpsc::UnboundedSender<Said>),
-    Between(mpsc::UnboundedSender<Between>),
-}
-
-impl Routes {
-    fn of(&self, session: &acp::SessionId) -> Option<Route> {
-        if let Some(turn) = self.turns.lock().unwrap().get(session) {
-            return Some(Route::Turn(turn.clone()));
-        }
-        let between = self.between.lock().unwrap();
-        between.get(session).cloned().map(Route::Between)
-    }
-
-    /// Everyone who listens hears that the Harness is gone.
-    fn clear(&self) {
-        self.turns.lock().unwrap().clear();
-        self.between.lock().unwrap().clear();
-    }
-}
-
-impl Route {
-    /// False when nobody listens any more.
-    fn send(&self, said: Said) -> bool {
-        match self {
-            Route::Turn(turn) => turn.send(said).is_ok(),
-            Route::Between(between) => between.send(Between::Said(said)).is_ok(),
-        }
-    }
-}
 /// What the Harness said it can do with sessions.
 #[derive(Clone, Copy)]
 struct Agreed {
@@ -269,8 +224,7 @@ impl Connection {
 
     /// Since when no turn runs here, or `None` while one does.
     pub fn idle_since(&self) -> Option<Instant> {
-        let busy =
-            !self.routes.turns.lock().unwrap().is_empty() || self.kept.load(Ordering::SeqCst) > 0;
+        let busy = self.routes.busy() || self.kept.load(Ordering::SeqCst) > 0;
         (!busy).then(|| *self.active.lock().unwrap())
     }
 

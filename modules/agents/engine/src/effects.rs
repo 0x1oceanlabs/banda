@@ -25,9 +25,10 @@
 
 use crate::acp::{self, Opened, Prompt, PromptImage, Running, Session, Steered};
 use crate::between;
+use crate::drive::drive;
 use crate::images::Images;
 use crate::kept;
-use crate::live::Live;
+use crate::live::{Live, TurnRun};
 use crate::model::{Body, Fact, Failure, Image, Item, ItemId, Opener, Settings, TurnId, TurnState};
 use crate::rules::{self, Ending, Event};
 use crate::settings::Harnesses;
@@ -42,8 +43,6 @@ pub const START: &str = "turn.start";
 pub const STOP: &str = "turn.stop";
 pub const STEER: &str = "turn.steer";
 
-/// How long a Harness may take to stop a turn that cannot go on.
-const STOPPING: Duration = Duration::from_secs(10);
 /// How long a message sent into a turn waits for the turn's Harness to
 /// start and take its prompt.
 const BEGINNING: Duration = Duration::from_secs(acp::STARTING.as_secs() + acp::OPENING.as_secs());
@@ -173,6 +172,9 @@ pub async fn start(
     let Ok(start) = serde_json::from_value::<TurnEffect>(effect.payload.clone()) else {
         return Outcome::Fail("The turn could not be read.".to_owned());
     };
+    // Memory holds the turn from now, a stop that comes while it starts
+    // too, and lets go of it however this ends.
+    let run = live.open(start.turn);
     if let Err(error) = after_questions(live, &space, start.turn).await {
         return Outcome::Retry(error.to_string());
     }
@@ -225,9 +227,10 @@ pub async fn start(
     if !space.reacted(REACTED).await {
         tracing::warn!(turn = %turn.id, "a turn started before all reacted to it");
     }
-    let ending = work(live, harnesses, &space, &turn, message, settings).await;
-    // Stopped only if someone asked: the rules read that from the turn.
-    live.end(turn.id);
+    // Memory lets go of the turn before its end is written.
+    let ending = match work(live, run, harnesses, &space, &turn, message, settings).await {
+        Ok(ending) | Err(ending) => ending,
+    };
     // Written as the outbox records the turn's end, and tried again with
     // it. An ending that comes after the turn ended changes nothing.
     Outcome::done_writing(move |tx| {
@@ -438,19 +441,7 @@ async fn begun(live: &Live, space: &ModuleSpace, turn: &store::Turn) -> Option<S
 
 async fn work(
     live: &Arc<Live>,
-    harnesses: &Harnesses,
-    space: &ModuleSpace,
-    turn: &store::Turn,
-    message: Message,
-    settings: Settings,
-) -> Ending {
-    match run(live, harnesses, space, turn, message, settings).await {
-        Ok(ending) | Err(ending) => ending,
-    }
-}
-
-async fn run(
-    live: &Arc<Live>,
+    run: TurnRun,
     harnesses: &Harnesses,
     space: &ModuleSpace,
     turn: &store::Turn,
@@ -530,8 +521,8 @@ async fn run(
         })
         .await
         .map_err(|e| unplanned(plain(e)))?;
-    let (mut hear, mut done) = session.prompt(&prompt);
-    live.begin(turn.id, session.clone());
+    let (mut hear, done) = session.prompt(&prompt);
+    run.begin(session.clone());
     // What the session says once the turn ends is the Agent's own.
     let listener = between::Listener {
         live: live.clone(),
@@ -542,19 +533,12 @@ async fn run(
         harness: harness.name.clone(),
     };
     listener.hear(&session);
-    let mut transcript =
-        Transcript::new(space.clone(), turn, harness.name.clone(), settings, running);
-    if let Err(reason) = transcript.listen(live, &mut hear).await {
-        // What the Harness says cannot be written: the turn stops and fails.
-        let _ = session.cancel();
-        if tokio::time::timeout(STOPPING, &mut done).await.is_err() {
-            done.abort();
-        }
-        return Err(unplanned(reason));
-    }
-    let ending = done
-        .await
-        .unwrap_or_else(|_| unplanned("The turn's task ended.".to_owned()));
+    let transcript = Transcript::new(space.clone(), turn, harness.name.clone(), settings, running);
+    let ended = async {
+        done.await
+            .unwrap_or_else(|_| unplanned("The turn's task ended.".to_owned()))
+    };
+    let ending = drive(&run, transcript, &mut hear, ended).await;
     // What it said while the turn began but heard nothing yet, such as
     // Claude Code's slash commands just after its session opened.
     // The turn ended as it did, whether or not this is written.
@@ -565,5 +549,5 @@ async fn run(
     {
         tracing::warn!(%error, "what the Harness offers could not be written");
     }
-    Ok(ending.resets(transcript.resets))
+    Ok(ending)
 }
