@@ -289,6 +289,9 @@ On the list, Roma decided:
    colour then. Beside each workspace its number and how many Panes it
    holds; an empty one is a slim dashed place to drop a Pane, not a whole
    screen; and the search says it is there before anything is typed.
+   _Changed_ 2026-11-03: a middle click on a Pane closes it, as on a
+   tab, and so does the cross that shows as the mouse is over it; the
+   wheel sideways scrolls a workspace, and its Strip with it.
 
 8. **The drawer** (ADR 0005, decision 7) is on `` Alt+` ``, as a terminal
    that drops down is; `Alt+S` settles a Thread now (ADR 0008). A Thread

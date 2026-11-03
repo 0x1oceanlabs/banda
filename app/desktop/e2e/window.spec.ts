@@ -2522,6 +2522,45 @@ test("the mouse moves Panes as niri's: a header, Alt and the left button, the ba
   await expect(bar.nth(1)).toHaveAttribute("aria-current", "true")
 })
 
+test("in the overview a middle click or a cross closes a Pane, and the wheel scrolls a workspace sideways", async () => {
+  window = await startWindow()
+  const { page } = window
+  const { thread, composer } = await firstThread(page)
+  await expect(composer).toBeFocused()
+  const launchers = page.getByRole("region", { name: "New Pane" })
+  for (const count of [1, 2, 3]) {
+    await page.keyboard.press("Alt+KeyN")
+    await expect(launchers).toHaveCount(count)
+  }
+  const [t, a, b, c] = await Promise.all(
+    [thread, ...[0, 1, 2].map((n) => launchers.nth(n))].map((tile) =>
+      tile.getAttribute("data-tile")
+    )
+  )
+  await expect.poll(() => layoutOf(page)).toEqual([[t], [a], [b], [c]])
+  const strip = page.locator("[data-strip]").first()
+  const scrolled = () => strip.evaluate((s) => s.scrollLeft)
+
+  await page.keyboard.press("Alt+KeyO")
+  const overview = page.getByRole("dialog", { name: "Overview" })
+  const tileOf = (id: string | null) => overview.locator(`[data-tile="${id}"]`)
+  // A middle click closes the Pane under it.
+  await tileOf(c).click({ button: "middle" })
+  await expect.poll(() => layoutOf(page)).toEqual([[t], [a], [b]])
+
+  // Sideways, the row scrolls, and the Strip under it with it.
+  await expect.poll(scrolled).toBeGreaterThan(0)
+  await overview.getByRole("group", { name: "Workspace 1" }).hover()
+  await page.mouse.wheel(-2000, 0)
+  await expect.poll(scrolled).toBe(0)
+
+  // Its cross, shown as the mouse is over it, closes it too.
+  await tileOf(a).hover()
+  await tileOf(a).getByRole("button", { name: "Close New Pane" }).click()
+  await expect.poll(() => layoutOf(page)).toEqual([[t], [b]])
+  await expect(overview).toBeVisible()
+})
+
 test("the overview zooms out as far as [overview] zoom says", async () => {
   window = await startWindow({ look: "[overview]\nzoom = 0.2\n" })
   const { page } = window
