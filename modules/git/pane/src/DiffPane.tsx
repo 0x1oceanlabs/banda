@@ -284,10 +284,11 @@ function DiffPane({ engine, space, args, update, close }: PaneProps<DiffArgs>) {
 
   const added = diff?.files.reduce((sum, file) => sum + file.added, 0) ?? 0
   const removed = diff?.files.reduce((sum, file) => sum + file.removed, 0) ?? 0
+  const count = diff?.files.length ?? 0
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <PaneHeader title="Diff" onClose={close}>
+      <PaneHeader title="Diff" icon={diffPane.icon} onClose={close}>
         <ScopeMenu
           engine={engine}
           space={space}
@@ -306,7 +307,13 @@ function DiffPane({ engine, space, args, update, close }: PaneProps<DiffArgs>) {
             }
           />
         )}
-        <DiffCounts added={added} removed={removed} />
+        {count > 0 && (
+          <span className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground tabular-nums">
+            {count === 1 ? "1 file" : `${count} files`}
+            {added + removed > 0 && <span aria-hidden>·</span>}
+            <DiffCounts added={added} removed={removed} />
+          </span>
+        )}
         <div className="ml-auto flex shrink-0 items-center gap-0.5">
           <Tool label="Read again" onClick={again}>
             <RefreshCwIcon />

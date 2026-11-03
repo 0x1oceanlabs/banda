@@ -1,5 +1,5 @@
 import type { ReactNode } from "react"
-import { XIcon } from "lucide-react"
+import { XIcon, type LucideIcon } from "lucide-react"
 import { cn } from "cn"
 import { Button } from "./button"
 
@@ -11,12 +11,15 @@ import { Button } from "./button"
  */
 function PaneHeader({
   title,
+  icon: Icon,
   onClose,
   className,
   children,
 }: {
   /** What the close button closes, for its label. */
   title: string
+  /** The Pane's kind's icon, drawn first. */
+  icon?: LucideIcon | undefined
   onClose: () => void
   className?: string
   children: ReactNode
@@ -29,6 +32,7 @@ function PaneHeader({
         className
       )}
     >
+      {Icon && <Icon className="size-4 shrink-0 text-muted-foreground" />}
       {children}
       <Button
         variant="ghost"
