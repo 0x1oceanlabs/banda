@@ -20,7 +20,13 @@ import type { Fit, Fitting, LayOut, Previewed } from "@banda/contract/agents"
 import { windowGround } from "@banda/contract/look"
 import { Look, Refused } from "@banda/desktop-kit"
 import { Effect } from "effect"
-import { BrowserWindow, nativeTheme, session } from "electron"
+import {
+  BrowserWindow,
+  type NativeImage,
+  nativeTheme,
+  session,
+  type WebContents,
+} from "electron"
 import { fitted, Logs } from "./laid"
 import { HEIGHT } from "./page"
 import { pageResponse } from "./visuals"
@@ -111,14 +117,26 @@ async function inWindow<T>(
 }
 
 /** The check: the page's height, console and picture at `width`. */
+/** The page's picture, once two frames have painted. A window's first
+ * capture can find no frame from the compositor yet, which Chromium says
+ * as "UnknownVizError": it is taken once more, two frames later. */
+async function pictured(page: WebContents): Promise<NativeImage> {
+  await page.executeJavaScript(PAINTED, true)
+  try {
+    return await page.capturePage()
+  } catch {
+    await page.executeJavaScript(PAINTED, true)
+    return page.capturePage()
+  }
+}
+
 async function checked(
   { shown, page, logs }: Laid,
   width: number
 ): Promise<Previewed> {
   const height: number = await page.executeJavaScript(MEASURE, true)
   shown.setContentSize(width, Math.max(1, Math.min(TALLEST, height)))
-  await page.executeJavaScript(PAINTED, true)
-  const taken = await page.capturePage()
+  const taken = await pictured(page)
   const size = taken.getSize()
   const fit = fitted(size.width, size.height)
   const picture =
