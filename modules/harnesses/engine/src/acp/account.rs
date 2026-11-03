@@ -1,11 +1,17 @@
 //! Who is signed in to a Harness, and the ways it offers to sign in. The
 //! engine declares terminal sign-in, so a Harness offers its ways, Claude
-//! Code's in a terminal among them ([`Connection::ways`]). Who is signed in
+//! Code's in a terminal among them ([`Process::ways`]). Who is signed in
 //! comes from the Harness's own reports (`_auth/status_update`, which
 //! Claude Code's and Codex's adapters push), never from its files. A
 //! Harness that does not report it shows no one.
 
-use super::*;
+use super::{Process, in_words};
+use crate::Harness;
+use crate::model::{Account, SignInWay, SignedInAs};
+use agent_client_protocol::schema::v1 as acp;
+use serde::{Deserialize, Serialize};
+use std::time::Duration;
+use tokio::time::timeout;
 
 /// How long a Harness that signs in by itself may wait for its Person.
 const SIGNING_IN: Duration = Duration::from_secs(10 * 60);
@@ -82,7 +88,7 @@ pub(super) fn ways(harness: &Harness, methods: Vec<acp::AuthMethod>) -> Vec<Sign
         .collect()
 }
 
-impl Connection {
+impl Process {
     /// The ways the Harness offers to sign in.
     pub fn ways(&self) -> &[SignInWay] {
         &self.ways
@@ -95,7 +101,7 @@ impl Connection {
     /// `harness` finds it now: updated since the start, its Threads stop
     /// warning that it is old.
     pub async fn account(&self, harness: &Harness) -> Result<Account, String> {
-        let (_, cli) = banda_harnesses::cli::find(harness).await?;
+        let (_, cli) = crate::cli::find(harness).await?;
         *self.cli.lock().unwrap() = cli.clone();
         let mut account = self.account.clone();
         if self.about.reports_account {

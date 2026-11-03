@@ -26,7 +26,7 @@ pub async fn write(
     settings: &Settings,
     prompt: String,
 ) -> Result<String, Refusal> {
-    let name = connection.name().to_owned();
+    let name = connection.process().name().to_owned();
     let session = connection
         .aside(folder)
         .await

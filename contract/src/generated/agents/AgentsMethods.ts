@@ -2,8 +2,8 @@
 import type { CallMethod } from "../CallMethod";
 import type { CommandMethod } from "../CommandMethod";
 import type { Nothing } from "../Nothing";
+import type { Account } from "../harnesses/Account";
 import type { HarnessView } from "../harnesses/HarnessView";
-import type { Account } from "./Account";
 import type { Answer } from "./Answer";
 import type { Attach } from "./Attach";
 import type { ChangesAsk } from "./ChangesAsk";

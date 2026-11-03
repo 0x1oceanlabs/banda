@@ -27,14 +27,12 @@ mod changes;
 mod drive;
 mod effects;
 mod files;
-mod hosts;
 mod images;
 mod kept;
 mod live;
 pub mod model;
 mod old_agents;
 mod questions;
-mod record;
 mod rules;
 pub mod sending;
 mod skills;
@@ -44,7 +42,8 @@ mod visuals;
 mod writer;
 
 use acp::Connection;
-use banda_harnesses::model::{HarnessView, Program};
+use banda_harnesses::hosts::IDLE;
+use banda_harnesses::model::{Account, HarnessView, Program};
 use banda_harnesses::{Harness, Harnesses};
 use banda_kernel::{
     AgentId, Call, Effect, Error, Module, ModuleSpace, Nothing, OnRestart, Outcome, Participant,
@@ -57,8 +56,8 @@ use changes::{ChangesAsk, TurnChanges};
 use images::Images;
 use live::Live;
 use model::{
-    Account, Body, Fact, Image, ImageId, Item, ItemId, Offer, Opener, Settings, ThreadId,
-    ThreadList, ThreadSummary, ThreadView, TurnId, TurnState, VERSION, VisualId,
+    Body, Fact, Image, ImageId, Item, ItemId, Offer, Opener, Settings, ThreadId, ThreadList,
+    ThreadSummary, ThreadView, TurnId, TurnState, VERSION, VisualId,
 };
 use rules::Event;
 use schemars::JsonSchema;
@@ -125,8 +124,8 @@ impl Agents {
         Self {
             harnesses,
             config: None,
-            live: Arc::new(Live::new(hosts::IDLE, between::QUIET, None)),
-            idle: hosts::IDLE,
+            live: Arc::new(Live::new(IDLE, between::QUIET, None)),
+            idle: IDLE,
             quiet: between::QUIET,
             listings: Arc::default(),
             pipe: None,
@@ -552,6 +551,7 @@ impl Agents {
     ) -> Result<Account, Refusal> {
         let (harness, connection) = self.running(call.space().id(), &harness).await?;
         connection
+            .process()
             .account(&harness)
             .await
             .map_err(Refusal::conflict)
@@ -564,6 +564,7 @@ impl Agents {
     ) -> Result<Option<Sent>, Refusal> {
         let (harness, connection) = self.running(call.space().id(), &harness).await?;
         let found = connection
+            .process()
             .ways()
             .iter()
             .find(|w| w.id == way)
@@ -572,7 +573,11 @@ impl Agents {
             })?;
         // A way in a terminal ran already: the Person signed in there.
         if found.terminal.is_none() {
-            connection.sign_in(&way).await.map_err(Refusal::conflict)?;
+            connection
+                .process()
+                .sign_in(&way)
+                .await
+                .map_err(Refusal::conflict)?;
         }
         drop(connection);
         self.live.let_go(&harness.id).await;
@@ -595,7 +600,11 @@ impl Agents {
         OneHarness { harness }: OneHarness,
     ) -> Result<(), Refusal> {
         let (harness, connection) = self.running(call.space().id(), &harness).await?;
-        connection.sign_out().await.map_err(Refusal::conflict)?;
+        connection
+            .process()
+            .sign_out()
+            .await
+            .map_err(Refusal::conflict)?;
         drop(connection);
         self.start_again(&call, &harness.id).await
     }

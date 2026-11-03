@@ -1,7 +1,6 @@
 //! The agents module's published language: its IDs, the facts it publishes
 //! and the views a window reads. TypeScript types come from here.
 
-use banda_harnesses::model::{CliView, Program};
 use banda_kernel::{AgentId, Participant};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -198,77 +197,6 @@ pub struct OptionChoice {
     #[ts(optional)]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub description: Option<String>,
-}
-
-/// What `agents.account` answers: a Harness entry on this computer as its
-/// process says when it starts, and how a Person signs in to it.
-#[derive(Clone, Debug, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "agents/")]
-pub struct Account {
-    pub ways: Vec<SignInWay>,
-    /// What runs, as it names itself.
-    #[ts(optional)]
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub adapter: Option<Adapter>,
-    /// The Person's own CLI it runs, when it runs one.
-    #[ts(optional)]
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub cli: Option<CliView>,
-    /// Who it says is signed in; `None` when it does not say.
-    #[ts(optional)]
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub signed_in_as: Option<SignedInAs>,
-    /// Signing out here ends its sign-in (`agents.sign_out`): it declares
-    /// ACP's logout, and an account is signed in. A key in its environment
-    /// outlives a logout.
-    pub signs_out: bool,
-}
-
-/// A Harness's program, as it names itself when it starts: for Claude
-/// Code and Codex, their ACP adapter.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "agents/")]
-pub struct Adapter {
-    pub name: String,
-    pub version: String,
-}
-
-/// Who a Harness says is signed in, in its own words: a plan such as
-/// "Claude Max" with its email, an API key, a gateway, or no one. Banda
-/// reads none of its files to know.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "agents/")]
-pub struct SignedInAs {
-    /// Whether anyone is: `false` when the Harness says no one is.
-    pub signed_in: bool,
-    pub label: String,
-    #[ts(optional)]
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub detail: Option<String>,
-    #[ts(optional)]
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub email: Option<String>,
-    #[ts(optional)]
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub organization: Option<String>,
-}
-
-/// A way to sign in to a Harness, as the Harness offers it. Banda runs
-/// it and holds none of the account's credentials: the Harness keeps them.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "agents/")]
-pub struct SignInWay {
-    pub id: String,
-    pub name: String,
-    #[ts(optional)]
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub description: Option<String>,
-    /// The program a Person signs in with, in a terminal: it ends with
-    /// code 0 when that worked. Without one the Harness signs in by itself,
-    /// as Codex does in the browser.
-    #[ts(optional)]
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub terminal: Option<Program>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
