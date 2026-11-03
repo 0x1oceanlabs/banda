@@ -15,6 +15,7 @@ use banda_git::Git;
 use banda_harnesses::HarnessesModule;
 use banda_kernel::Method;
 use banda_problems::Problems;
+use banda_sharing::Sharing;
 use banda_terminal::Terminals;
 use banda_workspaces::Workspaces;
 use serde::{Deserialize, Serialize};
@@ -78,6 +79,12 @@ const FILES: &[Files] = &[
         toml: include_str!("../../modules/problems/module.toml"),
         window: None,
         methods: Some(Problems::method_list),
+    },
+    Files {
+        folder: "sharing",
+        toml: include_str!("../../modules/sharing/module.toml"),
+        window: None,
+        methods: Some(Sharing::method_list),
     },
 ];
 
@@ -275,6 +282,7 @@ mod tests {
             Git::new().name(),
             Workspaces::new().name(),
             Problems::new("", "").name(),
+            Sharing::new("", "").name(),
         ];
         assert_eq!(with_engine, engine);
     }

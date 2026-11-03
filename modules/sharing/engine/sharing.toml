@@ -1,0 +1,14 @@
+#:schema ./schemas/sharing.schema.json
+# What Banda sends to its makers (ADR 0039): only what you turn on here,
+# at the first run, or in Settings → Sharing, which shows each event as it
+# went. It goes to PostHog (US) with a random ID that is not you: no IP, no
+# location, no profile. Check a change with: banda settings check
+
+# Send problem reports: what broke in Banda, where in its code, and its
+# version and system. Each problem once a day.
+problems = false
+
+# Send usage counts: one summary a day of how many Threads, Turns and
+# Panes, by kind, and the country of the system's language. Never words,
+# paths or names.
+usage = false

@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "sharing.toml",
+  "description": "What Banda sends to its makers. Every key is optional: what is left\nout is not sent.",
+  "type": "object",
+  "properties": {
+    "problems": {
+      "description": "Send problem reports: what broke in Banda, where in its code, and\nits version and system. Each problem once a day.",
+      "type": "boolean"
+    },
+    "usage": {
+      "description": "Send usage counts: one summary a day of how many Threads, Turns and\nPanes, by kind, and the country of the system's language. Never\nwords, paths or names.",
+      "type": "boolean"
+    }
+  },
+  "additionalProperties": false
+}

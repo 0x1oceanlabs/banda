@@ -142,6 +142,20 @@ pub fn read<T: OneFile>(path: &Path, text: &str, problems: &mut Vec<Problem>) ->
     Some(settings)
 }
 
+/// The file at `path` as a `T`, as the engine reads a module's own file
+/// when it needs it: none when it is missing or does not read at all, a
+/// wrong key left out; what is wrong goes to the log, as the look names
+/// it to the Person.
+pub fn read_at<T: OneFile>(path: &Path) -> Option<T> {
+    let text = std::fs::read_to_string(path).ok()?;
+    let mut problems = Vec::new();
+    let read = read::<T>(path, &text, &mut problems);
+    for problem in &problems {
+        tracing::warn!(%problem, file = T::NAME);
+    }
+    read
+}
+
 /// A `T` on this machine, its file over Banda's defaults, with each key's
 /// value and where it comes from. The file is watched, there or not.
 pub fn resolve<T: OneFile>(

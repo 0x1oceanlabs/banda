@@ -11,6 +11,7 @@ import type { BrowserMethods } from "./generated/browser/BrowserMethods"
 import type { GitMethods } from "./generated/git/GitMethods"
 import type { HarnessesMethods } from "./generated/harnesses/HarnessesMethods"
 import type { ProblemsMethods } from "./generated/problems/ProblemsMethods"
+import type { SharingMethods } from "./generated/sharing/SharingMethods"
 import type { TerminalMethods } from "./generated/terminal/TerminalMethods"
 import type { WorkspacesMethods } from "./generated/workspaces/WorkspacesMethods"
 
@@ -27,7 +28,8 @@ export type Methods = Prefixed<"spaces", SpacesMethods> &
   Prefixed<"terminal", TerminalMethods> &
   Prefixed<"workspaces", WorkspacesMethods> &
   Prefixed<"git", GitMethods> &
-  Prefixed<"problems", ProblemsMethods>
+  Prefixed<"problems", ProblemsMethods> &
+  Prefixed<"sharing", SharingMethods>
 
 type Kind = Methods[keyof Methods]["kind"]
 

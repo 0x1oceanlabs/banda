@@ -1,0 +1,9 @@
+# The sharing module, as it declares itself (ADR 0022). Its methods its
+# code declares; this holds the rest.
+id = "sharing"
+name = "Sharing"
+about = "The one part of Banda that sends anything anywhere (ADR 0039, decision 4): problem reports and usage counts, each only while the Person turned it on, and each kept here first, as it goes."
+version = "0.1.0"
+from-banda = true
+# The settings files it owns, in ~/.config/banda.
+settings = ["sharing.toml"]
