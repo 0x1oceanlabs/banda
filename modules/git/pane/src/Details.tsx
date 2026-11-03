@@ -15,7 +15,8 @@ import {
 import { DiffCounts } from "@banda/ui/components/diff"
 import { useAct } from "@banda/ui/hooks/use-act"
 import { paneOf } from "@banda/ui/pane"
-import { FileDiffIcon, GitBranchIcon, GitBranchPlusIcon } from "lucide-react"
+import { FileDiffIcon, GitBranchPlusIcon } from "lucide-react"
+import { BranchPicker } from "./BranchPicker"
 import { diffPane } from "./DiffPane"
 import { GitButton } from "./GitButton"
 import { VIEW } from "./diff"
@@ -105,13 +106,7 @@ function GitRows({ engine, space, thread, open }: DetailsProps) {
     )
   return (
     <>
-      <DetailsRow
-        icon={<GitBranchIcon />}
-        title={status.upstream && `Follows ${status.upstream}`}
-        end={<Distance ahead={status.ahead} behind={status.behind} />}
-      >
-        {status.branch ?? "Detached HEAD"}
-      </DetailsRow>
+      <BranchPicker engine={engine} space={space} status={status} />
       <GitButton
         engine={engine}
         space={space}
@@ -131,16 +126,6 @@ function GitRows({ engine, space, thread, open }: DetailsProps) {
         </DetailsRow>
       )}
     </>
-  )
-}
-
-/** `↑2 ↓3`: the commits the upstream lacks, and those it has. */
-function Distance({ ahead, behind }: { ahead?: number; behind?: number }) {
-  if (!ahead && !behind) return null
-  return (
-    <span className="text-xs text-muted-foreground tabular-nums">
-      {[ahead && `↑${ahead}`, behind && `↓${behind}`].filter(Boolean).join(" ")}
-    </span>
   )
 }
 

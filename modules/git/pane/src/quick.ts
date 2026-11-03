@@ -52,10 +52,8 @@ export function quickOf(
     return { label: "Commit & push", action: "commit_push", icon: "push" }
   }
   if (!upstream) {
-    if (!status.remote)
-      return off("Push", 'Add an "origin" remote before pushing.', "push")
-    // A branch never pushed: its commits are its own, if it has any.
-    if (!status.head) return off("Push", "No local commits to push.", "push")
+    const { hint } = pushOf(status)
+    if (hint) return off("Push", hint, "push")
     return { label: "Push", action: "push", icon: "push" }
   }
   if (ahead > 0 && behind > 0)
@@ -88,5 +86,51 @@ export function askOf(action: Action, branch: string) {
       ? `This commits and pushes on “${branch}”. Or make a feature branch, named for the change, and do it there.`
       : `This pushes local commits on “${branch}”. Or make a feature branch yourself and push from it.`,
     go: commits ? `Commit & push to ${branch}` : `Push to ${branch}`,
+  }
+}
+
+/** One item of the `▾` menu: whether it can run, and why not. */
+export type Item = { can: boolean; hint?: string }
+
+const CAN: Item = { can: true }
+const no = (hint: string): Item => ({ can: false, hint })
+
+/** Whether `status`'s branch can be pushed, and why not: the button's
+ * Push and the menu's both ask it. */
+function pushOf(status: Status): Item {
+  if (!status.branch)
+    return no("Detached HEAD: check out a branch before pushing.")
+  if ((status.behind ?? 0) > 0)
+    return no("Branch is behind upstream. Pull before pushing.")
+  if (status.upstream === undefined) {
+    if (!status.remote) return no('Add an "origin" remote before pushing.')
+    // A branch never pushed: its commits are its own, if it has any.
+    return status.head ? CAN : no("No local commits to push.")
+  }
+  return (status.ahead ?? 0) > 0 ? CAN : no("No local commits to push.")
+}
+
+/** The `▾` menu's items for `status`, as T3 Code's; and what Pull and
+ * Push follow. Commit opens the dialog, which may write the message
+ * itself, so it needs only changes. */
+export function menuOf(status: Status): {
+  commit: Item
+  push: Item
+  pull: Item
+  follows?: string
+} {
+  return {
+    commit:
+      status.files.length > 0
+        ? CAN
+        : no("Worktree is clean. Make changes before committing."),
+    push: pushOf(status),
+    pull:
+      status.upstream === undefined
+        ? no("The branch follows no upstream to pull from.")
+        : (status.behind ?? 0) > 0
+          ? CAN
+          : no("Branch is up to date with its upstream."),
+    follows: status.upstream,
   }
 }

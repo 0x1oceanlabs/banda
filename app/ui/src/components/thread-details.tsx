@@ -50,6 +50,10 @@ export function useDetails(): readonly Details[] {
   return useContext(Given)
 }
 
+/** A row's faint fill under the mouse; a row split in two, as the git
+ * button and its `▾`, puts it on what holds both. */
+export const ROW_HOVER = "hover:bg-black/[3.5%] dark:hover:bg-white/8"
+
 /**
  * A row of the card, as T3 Code's: 32px, no fill at rest, a faint one
  * under the mouse; an icon, words and what goes at the end. A `button`
@@ -77,17 +81,17 @@ export function DetailsRow({
       {end && <span className="flex shrink-0 items-center gap-1.5">{end}</span>}
     </>
   )
-  const look = cn(
-    "flex h-8 w-full min-w-0 items-center gap-2 rounded-lg px-2 text-[13px] font-medium text-foreground/80",
-    className
-  )
-  if (!props.onClick) return <div className={look}>{inner}</div>
+  const look =
+    "flex h-8 w-full min-w-0 items-center gap-2 rounded-lg px-2 text-[13px] font-medium text-foreground/80"
+  if (!props.onClick) return <div className={cn(look, className)}>{inner}</div>
   return (
     <button
       type="button"
       className={cn(
         look,
-        "outline-none hover:bg-black/[3.5%] focus-visible:ring-2 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50 dark:hover:bg-white/8"
+        "outline-none focus-visible:ring-2 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50",
+        ROW_HOVER,
+        className
       )}
       {...props}
     >
