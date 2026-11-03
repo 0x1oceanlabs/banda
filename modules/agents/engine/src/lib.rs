@@ -24,6 +24,7 @@ mod acp;
 mod between;
 mod changes;
 mod cli;
+mod drive;
 mod effects;
 mod files;
 mod hosts;

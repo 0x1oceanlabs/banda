@@ -1,6 +1,7 @@
 //! What runs now, in memory: the Harness processes ([`Hosts`]), the turns
 //! they run and the Questions they wait on. A restart loses it, and the
-//! outbox settles what that cut short.
+//! outbox settles what that cut short. A turn is held from [`Live::open`]
+//! until its [`TurnRun`] is let go, however its task ends.
 //!
 //! One lock holds the running turns, the cancels and the Questions
 //! together, so a stop that comes while a turn starts, or while it asks, is
@@ -124,33 +125,18 @@ impl Live {
         }
     }
 
-    /// The turn's prompt went to the Harness in `session`. If the turn was
-    /// stopped while it started, the Harness hears the stop now.
-    pub fn begin(&self, turn: TurnId, session: Session) {
-        let mut turns = self.turns.lock().unwrap();
-        if turns.cancelled.contains(&turn)
-            && let Err(error) = session.cancel()
-        {
-            tracing::warn!(%error, "a stopped turn could not be cancelled");
+    /// A turn the engine runs, from now until the returned run is let go:
+    /// what memory holds of it goes then.
+    pub fn open(self: &Arc<Self>, turn: TurnId) -> TurnRun {
+        TurnRun {
+            live: self.clone(),
+            turn,
         }
-        turns.running.insert(turn, session);
-        self.changed.notify_waiters();
-    }
-
-    /// The turn's session went on with another turn: a stop of this one
-    /// no longer reaches the session.
-    pub fn hand_over(&self, turn: TurnId) {
-        self.turns.lock().unwrap().running.remove(&turn);
     }
 
     /// Marks that a message goes into the running turn.
     pub fn mark_steered(&self, turn: TurnId) {
         self.turns.lock().unwrap().steered.insert(turn);
-    }
-
-    /// Whether a message went into the turn since the last time asked.
-    pub fn take_steered(&self, turn: TurnId) -> bool {
-        self.turns.lock().unwrap().steered.remove(&turn)
     }
 
     /// Stops a turn the engine runs: its Harness hears the stop first, then
@@ -164,11 +150,6 @@ impl Live {
         turns.release(turn);
         self.changed.notify_waiters();
         Ok(())
-    }
-
-    /// Whether the turn waits for a Person's answer.
-    pub fn asking(&self, turn: TurnId) -> bool {
-        self.turns.lock().unwrap().asking(turn)
     }
 
     /// Returns once the turn waits for no Person's answer.
@@ -196,26 +177,6 @@ impl Live {
         }
     }
 
-    /// Holds a Question until a Person answers it. False when the turn was
-    /// stopped: the Harness hears at once that nobody will answer.
-    pub fn ask(&self, turn: TurnId, item: ItemId, answer: oneshot::Sender<Answer>) -> bool {
-        let mut turns = self.turns.lock().unwrap();
-        if turns.cancelled.contains(&turn) {
-            let _ = answer.send(Answer::Cancelled);
-            return false;
-        }
-        turns.questions.insert(item, (turn, answer));
-        true
-    }
-
-    /// Lets go of a Question that could not be written.
-    pub fn forget(&self, item: ItemId) {
-        if let Some((_, answer)) = self.turns.lock().unwrap().questions.remove(&item) {
-            let _ = answer.send(Answer::Cancelled);
-            self.changed.notify_waiters();
-        }
-    }
-
     /// Hands a Person's answer to the Harness: a choice, or a form's
     /// values. Whether it still waited.
     pub fn answer(&self, item: ItemId, choice: String, values: Option<Values>) -> bool {
@@ -238,14 +199,119 @@ impl Live {
     pub fn take_secret(&self, item: ItemId) -> Option<Values> {
         self.turns.lock().unwrap().secrets.remove(&item)
     }
+}
 
-    /// The turn ended: lets go of it and its Questions.
-    pub fn end(&self, turn: TurnId) {
-        let mut turns = self.turns.lock().unwrap();
-        turns.running.remove(&turn);
-        turns.steered.remove(&turn);
-        turns.cancelled.remove(&turn);
-        turns.release(turn);
-        self.changed.notify_waiters();
+/// A turn the engine runs, as memory holds it: letting it go ends it there,
+/// with its Questions, however its task ended.
+pub struct TurnRun {
+    live: Arc<Live>,
+    turn: TurnId,
+}
+
+impl TurnRun {
+    /// The prompt went to the Harness in `session`, or the session went on
+    /// with the turn by itself. A turn the session ran before no longer
+    /// holds it, so a stop of that turn misses this one. If the turn was
+    /// stopped while it started, the Harness hears the stop now.
+    pub fn begin(&self, session: Session) {
+        let mut turns = self.live.turns.lock().unwrap();
+        if turns.cancelled.contains(&self.turn)
+            && let Err(error) = session.cancel()
+        {
+            tracing::warn!(%error, "a stopped turn could not be cancelled");
+        }
+        turns.running.retain(|_, held| !held.is(&session));
+        turns.running.insert(self.turn, session);
+        self.live.changed.notify_waiters();
+    }
+
+    /// Stops the turn, as a stop from a Person does.
+    pub fn stop(&self) -> Result<(), String> {
+        self.live.stop(self.turn)
+    }
+
+    /// Whether the turn waits for a Person's answer.
+    pub fn asking(&self) -> bool {
+        self.live.turns.lock().unwrap().asking(self.turn)
+    }
+
+    /// Holds one of the turn's Questions until a Person answers it. False
+    /// when the turn was stopped: the Harness hears at once that nobody
+    /// will answer.
+    pub fn ask(&self, item: ItemId, answer: oneshot::Sender<Answer>) -> bool {
+        let mut turns = self.live.turns.lock().unwrap();
+        if turns.cancelled.contains(&self.turn) {
+            let _ = answer.send(Answer::Cancelled);
+            return false;
+        }
+        turns.questions.insert(item, (self.turn, answer));
+        true
+    }
+
+    /// Lets go of a Question that could not be written, or that the
+    /// Harness took back.
+    pub fn forget(&self, item: ItemId) {
+        if let Some((_, answer)) = self.live.turns.lock().unwrap().questions.remove(&item) {
+            let _ = answer.send(Answer::Cancelled);
+            self.live.changed.notify_waiters();
+        }
+    }
+
+    /// Whether a message went into the turn since the last time asked.
+    pub fn take_steered(&self) -> bool {
+        self.live.turns.lock().unwrap().steered.remove(&self.turn)
+    }
+}
+
+/// The turn ended: memory lets go of it and its Questions.
+impl Drop for TurnRun {
+    fn drop(&mut self) {
+        let mut turns = self.live.turns.lock().unwrap();
+        turns.running.remove(&self.turn);
+        turns.steered.remove(&self.turn);
+        turns.cancelled.remove(&self.turn);
+        turns.release(self.turn);
+        self.live.changed.notify_waiters();
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn live() -> Arc<Live> {
+        Arc::new(Live::new(
+            Duration::from_secs(60),
+            Duration::from_secs(60),
+            None,
+        ))
+    }
+
+    #[tokio::test]
+    async fn a_turn_let_go_releases_its_questions() {
+        let live = live();
+        let run = live.open(TurnId::new());
+        let (answer, answered) = oneshot::channel();
+        assert!(run.ask(ItemId::new(), answer));
+        assert!(run.asking());
+        drop(run);
+        assert!(matches!(answered.await, Ok(Answer::Cancelled)));
+    }
+
+    #[tokio::test]
+    async fn a_stop_before_the_turn_runs_holds_until_it_is_let_go() {
+        let live = live();
+        let turn = TurnId::new();
+        live.stop(turn).unwrap();
+        let run = live.open(turn);
+        let (answer, _) = oneshot::channel();
+        assert!(
+            !run.ask(ItemId::new(), answer),
+            "a stopped turn asks nobody"
+        );
+        drop(run);
+        let run = live.open(turn);
+        let (answer, _) = oneshot::channel();
+        assert!(run.ask(ItemId::new(), answer), "memory let go of the stop");
     }
 }

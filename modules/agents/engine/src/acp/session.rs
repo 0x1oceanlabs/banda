@@ -123,6 +123,11 @@ impl Session {
         }
     }
 
+    /// Whether `other` is this session.
+    pub fn is(&self, other: &Session) -> bool {
+        self.runs_in(&other.connection) && self.id == other.id
+    }
+
     /// Whether the session runs in `connection`, the Harness's process.
     pub fn runs_in(&self, connection: &Arc<Connection>) -> bool {
         Arc::ptr_eq(&self.connection, connection)
@@ -159,24 +164,14 @@ impl Session {
 
     /// Whether a turn's prompt runs in the session now.
     pub fn prompting(&self) -> bool {
-        let turns = self.connection.routes.turns.lock().unwrap();
-        turns.contains_key(&self.id)
+        self.connection.routes.prompting(&self.id)
     }
 
     /// Hears what the session says between the engine's turns, from now on;
     /// `None` while someone already hears it. Nobody hears it any more once
     /// the Harness is gone.
     pub fn between(&self) -> Option<mpsc::UnboundedReceiver<Between>> {
-        let mut between = self.connection.routes.between.lock().unwrap();
-        if between
-            .get(&self.id)
-            .is_some_and(|heard| !heard.is_closed())
-        {
-            return None;
-        }
-        let (said, hear) = mpsc::unbounded_channel();
-        between.insert(self.id.clone(), said);
-        Some(hear)
+        self.connection.routes.hear(&self.id)
     }
 
     /// Sets the session's options so it runs as `wanted`: one at a time,
@@ -239,17 +234,8 @@ impl Session {
     /// comes on the receiver; the returned task ends with the turn.
     pub fn prompt(&self, prompt: &Prompt) -> (mpsc::UnboundedReceiver<Said>, JoinHandle<Ending>) {
         let (connection, session) = (&*self.connection, &self.id);
-        let (said, hear) = mpsc::unbounded_channel();
         connection.touch();
-        connection
-            .routes
-            .turns
-            .lock()
-            .unwrap()
-            .insert(session.clone(), said);
-        if let Some(between) = connection.routes.between.lock().unwrap().get(session) {
-            let _ = between.send(Between::Prompted);
-        }
+        let hear = connection.routes.prompt(session);
         let request = acp::PromptRequest::new(session.clone(), blocks(prompt));
         // Sent here, not in the task: a stop that follows must reach the
         // Harness after the prompt it stops.
@@ -259,7 +245,7 @@ impl Session {
         let done = tokio::spawn(async move {
             let answer = sent.block_task().await;
             *active.lock().unwrap() = Instant::now();
-            routes.turns.lock().unwrap().remove(&session);
+            routes.ended(&session);
             match answer {
                 Ok(answer) => ending(&answer.stop_reason),
                 Err(error) if gone(&error) => Ending::failed(

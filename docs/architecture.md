@@ -489,7 +489,10 @@ If Chat is removed, Agents still works through its own Thread.
   I/O only runs effects and says what happened: `effects.rs` runs START,
   STOP and STEER on the Harness and `questions.rs` runs REPLY;
   `transcript.rs` writes what the Harness says, and `between.rs` turns
-  what it says between turns into events. Whether a turn was asked to stop is its own state
+  what it says between turns into events. Both kinds of turn run through
+  one `drive` (`drive.rs`). Memory holds a turn as a `TurnRun` from
+  `Live::open`, and lets go of it and its Questions when the run is
+  dropped, however its task ended. Whether a turn was asked to stop is its own state
   (`agents_turns.stopping`), which the rules read: a Harness that cancels
   a turn nobody stopped failed it, and the Agent's own turn ends stopped
   once a stop was asked, however its Harness ended it; `live.rs` keeps
@@ -605,6 +608,8 @@ module reaches a Harness through an adapter:
   is signed in. A turn holds a `Session`, its process and session as
   one handle (`prompt`, `steer`, `cancel`, `settle`, `running`); what
   listens between turns holds it weakly, so a process let go stops.
+  `acp/routes.rs` alone says where what a session says goes: to the turn
+  whose prompt it answers, or to whoever hears it between turns.
 - **Capabilities.** The engine declares what the window can show (notices,
   options that are on or off, forms, and a command's output as it comes),
   and the adapter reads what the
