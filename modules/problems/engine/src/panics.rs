@@ -136,10 +136,17 @@ pub(crate) fn root() -> Option<&'static Path> {
 }
 
 /// A source file from the repository's root, as every machine names it.
+/// A backtrace names one under the working folder from there, `./…`.
 fn relative(file: &str) -> String {
+    let file = Path::new(file);
+    let whole = match file.strip_prefix(".") {
+        Ok(under) => std::env::current_dir().map(|here| here.join(under)).ok(),
+        Err(_) => Some(file.to_owned()),
+    };
     root()
-        .and_then(|root| Path::new(file).strip_prefix(root).ok())
-        .map_or_else(|| file.to_owned(), |path| path.display().to_string())
+        .zip(whole)
+        .and_then(|(root, whole)| Some(whole.strip_prefix(root).ok()?.display().to_string()))
+        .unwrap_or_else(|| file.display().to_string())
 }
 
 #[cfg(test)]
@@ -168,6 +175,16 @@ mod tests {
                 line: Some(40),
             }]
         );
+    }
+
+    #[test]
+    fn a_file_under_the_working_folder_is_named_from_the_repository_root() {
+        // Tests run in the crate's folder.
+        assert_eq!(
+            relative("./src/panics.rs"),
+            "modules/problems/engine/src/panics.rs"
+        );
+        assert_eq!(relative("/elsewhere/x.rs"), "/elsewhere/x.rs");
     }
 
     #[test]

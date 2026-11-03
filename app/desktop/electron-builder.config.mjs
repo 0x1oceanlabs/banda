@@ -48,6 +48,11 @@ export default {
     target: [{ target: "zip", arch: ["arm64"] }],
     identity: "-",
     hardenedRuntime: false,
+    // The engine's line tables, which its backtrace finds beside it
+    // (scripts/package.sh, ADR 0039, decision 9).
+    extraResources: [
+      { from: "../../target/release/banda.dSYM", to: "banda.dSYM" },
+    ],
   },
   // The static runtime, with FUSE 3 inside: it runs where only fuse3 is,
   // as on Omarchy, with no libfuse2.

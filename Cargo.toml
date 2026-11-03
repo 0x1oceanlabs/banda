@@ -37,6 +37,17 @@ tokio-tungstenite = "0.29"
 ts-rs = { version = "12.0.1", features = ["uuid-impl", "serde-json-impl"] }
 uuid = { version = "1.29.0", features = ["v4", "v7", "serde"] }
 
+# A released engine's panic names Banda's files and lines by itself: its
+# backtrace reads them from these tables, with no symbols file to upload
+# (ADR 0039, decision 9). Only Banda's own crates have them: a Problem
+# keeps only Banda's frames, and the rest would make the engine much
+# bigger.
+[profile.release]
+debug = "line-tables-only"
+
+[profile.release.package."*"]
+debug = false
+
 [workspace.lints.rust]
 unsafe_code = "forbid"
 
