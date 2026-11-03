@@ -2,7 +2,7 @@ use crate::access::{self, Caller, Right};
 use crate::methods::{Asks, Nothing, Tool};
 use crate::module::{Call, Module, Scope, Stream, Wall};
 use crate::passes::Passes;
-use crate::space::{GONE, Manifest, Space, UNFINISHED};
+use crate::space::{GONE, Manifest, Shared, Space, UNFINISHED};
 use crate::window::Window;
 use crate::{AgentId, CommandId, Error, Participant, PersonId, Refusal, SpaceId};
 use serde::{Deserialize, Serialize};
@@ -149,9 +149,13 @@ impl KernelBuilder {
                 }
             };
             let (modules, data) = (of_machine.into(), folder.clone());
-            let (passes, window) = (passes.clone(), window.clone());
-            let opened = Space::open(data, manifest, self.owner, modules, passes, window, &boot);
-            Some(opened.await?)
+            let engine = Shared {
+                owner: self.owner,
+                passes: passes.clone(),
+                window: window.clone(),
+                machine: None,
+            };
+            Some(Space::open(data, manifest, modules, engine, &boot).await?)
         };
         let kernel = Arc::new(Kernel {
             root: self.root,
@@ -582,12 +586,14 @@ impl Kernel {
     }
 
     async fn open_space(&self, data: PathBuf, manifest: Manifest) -> Result<Arc<Space>, Error> {
-        let (modules, passes) = (self.in_spaces.clone(), self.passes.clone());
-        let window = self.window.clone();
-        Space::open(
-            data, manifest, self.owner, modules, passes, window, &self.boot,
-        )
-        .await
+        let engine = Shared {
+            owner: self.owner,
+            passes: self.passes.clone(),
+            window: self.window.clone(),
+            machine: self.machine.clone(),
+        };
+        let modules = self.in_spaces.clone();
+        Space::open(data, manifest, modules, engine, &self.boot).await
     }
 
     async fn list(&self, ask: Own<'_>, _: Nothing) -> Result<Vec<SpaceSummary>, Refusal> {

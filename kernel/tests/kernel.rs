@@ -226,16 +226,25 @@ impl Module for Desk {
 }
 
 /// A module that keeps each Space it opens in, to react to the log as a
-/// test says.
+/// test says: a Space's, or, as `listens`, the machine's.
 #[derive(Clone, Default)]
 struct Hears {
     spaces: Arc<Mutex<Vec<ModuleSpace>>>,
+    machine: bool,
 }
 
 #[async_trait::async_trait]
 impl Module for Hears {
     fn name(&self) -> &'static str {
-        "hears"
+        if self.machine { "listens" } else { "hears" }
+    }
+
+    fn scope(&self) -> Scope {
+        if self.machine {
+            Scope::Machine
+        } else {
+            Scope::Space
+        }
     }
 
     fn migrations(&self) -> &'static [&'static str] {
@@ -1129,6 +1138,70 @@ async fn a_module_of_the_machine_names_no_space_and_keeps_its_own_log() {
     assert_eq!(kernel.machine(), Some(machine));
     let list = kernel.call(person, "desk.list", None, None, Value::Null);
     assert_eq!(list.await.unwrap(), json!(["terminal"]));
+}
+
+#[tokio::test]
+async fn a_module_of_a_space_hears_the_machine_until_its_space_closes() {
+    let dir = tempfile::tempdir().unwrap();
+    let owner = PersonId::new();
+    let person = Participant::Person(owner);
+    let hears = Hears::default();
+    let listens = Hears {
+        machine: true,
+        ..Hears::default()
+    };
+    let kernel = Kernel::builder(dir.path().join("root"), dir.path().join("data"), owner)
+        .module(Desk)
+        .module(hears.clone())
+        .module(listens.clone())
+        .machine(dir.path().join("machine"))
+        .open()
+        .await
+        .unwrap();
+    let work = create(&kernel, owner, "Work").await;
+    let module = hears.spaces.lock().unwrap()[0].clone();
+    let machine = listens.spaces.lock().unwrap()[0].clone();
+    let open_pane = |kind: &str| {
+        let params = json!({ "kind": kind });
+        kernel.call(person, "desk.open", None, Some(CommandId::new()), params)
+    };
+    let short = Duration::from_millis(50);
+
+    // It hears from now on, and only hears.
+    open_pane("before").await.unwrap();
+    let filter = EventFilter {
+        module: Some("desk".into()),
+        ..EventFilter::default()
+    };
+    let mut heard = module.react_to_machine(filter).await.unwrap().unwrap();
+    assert!(heard.space().is_none(), "it never writes the machine's log");
+    open_pane("terminal").await.unwrap();
+    assert!(!machine.reacted(short).await, "the machine waits for it");
+    let event = heard.next().await.unwrap().unwrap();
+    assert_eq!(event.payload["kind"], "terminal");
+    let next = tokio::spawn(async move { heard.next().await });
+    assert!(machine.reacted(Duration::from_secs(5)).await);
+
+    // Its Space removed and closed, it hears no more.
+    drop(module);
+    hears.spaces.lock().unwrap().clear();
+    let remove = json!({ "space": work.id });
+    let removed = kernel.call(
+        person,
+        "spaces.remove",
+        None,
+        Some(CommandId::new()),
+        remove,
+    );
+    removed.await.unwrap();
+    let ended = tokio::time::timeout(Duration::from_secs(5), next).await;
+    assert!(ended.unwrap().unwrap().unwrap().is_none());
+    open_pane("after").await.unwrap();
+    assert!(machine.reacted(short).await);
+
+    // A module of the machine has no machine to hear but its own log.
+    let own = machine.react_to_machine(EventFilter::default()).await;
+    assert!(own.unwrap().is_none());
 }
 
 #[tokio::test]

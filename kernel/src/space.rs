@@ -112,6 +112,15 @@ impl Manifest {
     }
 }
 
+/// What a Space shares with the engine and every other Space.
+pub(crate) struct Shared {
+    pub owner: PersonId,
+    pub passes: Arc<Passes>,
+    pub window: Arc<Window>,
+    /// This machine's scope; none for the machine itself.
+    pub machine: Option<Arc<Space>>,
+}
+
 /// Puts a Space's data in place as `spaces/<id>/`, whole or not at all:
 /// `fill` writes it into a folder aside, the manifest joins it, and that
 /// folder is renamed into place. Answers where it is.
@@ -157,6 +166,11 @@ pub struct Space {
     /// How far each module reacting to the log has reacted: see
     /// [`ModuleSpace::react`].
     reactions: std::sync::Mutex<Vec<watch::Receiver<i64>>>,
+    /// This machine's scope, which its modules may hear (ADR 0040,
+    /// decision 3); none for the machine itself, or with no module of it.
+    machine: Option<Arc<Space>>,
+    /// Dropped with the Space: what hears the machine for it ends then.
+    open: watch::Sender<()>,
     /// Held while the Space is open, so one engine at a time writes it.
     _lock: File,
 }
@@ -199,12 +213,16 @@ impl Space {
     pub(crate) async fn open(
         data: PathBuf,
         manifest: Manifest,
-        owner: PersonId,
         modules: Arc<[Arc<dyn Module>]>,
-        passes: Arc<Passes>,
-        window: Arc<Window>,
+        engine: Shared,
         boot: &str,
     ) -> Result<Arc<Space>, Error> {
+        let Shared {
+            owner,
+            passes,
+            window,
+            machine,
+        } = engine;
         let folder = manifest.folder.clone();
         if !folder.is_dir() {
             return Err(Refusal::not_found(format!(
@@ -231,6 +249,8 @@ impl Space {
             passes,
             window,
             reactions: Default::default(),
+            machine,
+            open: watch::Sender::new(()),
             _lock: lock,
         });
         outbox::recover(&space, boot).await?;
@@ -286,6 +306,11 @@ impl Space {
         Ok(self.summary())
     }
 
+    /// The log's position now.
+    async fn head(&self) -> Result<i64, Error> {
+        self.store.read(|sql| Ok(events::head(sql)?)).await
+    }
+
     /// Committed events from now on, in order.
     pub fn subscribe(&self) -> broadcast::Receiver<Arc<Event>> {
         self.store.subscribe()
@@ -314,7 +339,10 @@ impl Space {
     ) -> Heard {
         let handled = reaction_of.map(|_| {
             let (handled, reaction) = watch::channel(after);
-            self.reactions.lock().unwrap().push(reaction);
+            let mut reactions = self.reactions.lock().unwrap();
+            // One whose Heard is gone reacts no more.
+            reactions.retain(|reaction| reaction.has_changed().is_ok());
+            reactions.push(reaction);
             handled
         });
         // Listening before the log is read, nothing falls between the two.
@@ -328,6 +356,7 @@ impl Space {
             handled,
             read: Default::default(),
             caught_up: false,
+            from: None,
         }
     }
 
@@ -424,6 +453,10 @@ pub struct Heard {
     read: std::collections::VecDeque<Event>,
     /// The log is read up to the live events.
     caught_up: bool,
+    /// Whether the Space of the module that hears is open, when it hears
+    /// another's log: it ends as that Space closes. A watch, not that
+    /// Space's log, which would wake it at each of its events.
+    from: Option<watch::Receiver<()>>,
 }
 
 /// How many events one read of the log takes.
@@ -436,6 +469,13 @@ impl Heard {
     pub async fn next(&mut self) -> Result<Option<Event>, Error> {
         self.reacted(self.given);
         loop {
+            if self
+                .from
+                .as_ref()
+                .is_some_and(|from| from.has_changed().is_err())
+            {
+                return Ok(self.end());
+            }
             if let Some(event) = self.read.pop_front() {
                 self.given = event.seq;
                 return Ok(Some(event));
@@ -454,7 +494,14 @@ impl Heard {
                 self.read.extend(page);
                 continue;
             }
-            match self.live.recv().await {
+            let heard = match &mut self.from {
+                Some(from) => tokio::select! {
+                    heard = self.live.recv() => heard,
+                    _ = from.changed() => return Ok(self.end()),
+                },
+                None => self.live.recv().await,
+            };
+            match heard {
                 Ok(event) if event.seq > self.last => {
                     self.last = event.seq;
                     if self.filter.matches(&event) {
@@ -477,6 +524,12 @@ impl Heard {
     /// it.
     pub fn space(&self) -> Option<ModuleSpace> {
         Some(self.space.upgrade()?.module(self.module?))
+    }
+
+    /// Its hearing Space closed: it reacts no more, so no one waits on it.
+    fn end(&mut self) -> Option<Event> {
+        self.handled = None;
+        None
     }
 
     /// Says it has reacted to every event up to `seq`.
@@ -586,6 +639,25 @@ impl ModuleSpace {
         self.space.hear(after, filter, Some(self.module))
     }
 
+    /// This machine's events that match `filter`, from now on, and then
+    /// each as it is committed: how a module of a Space reacts to what
+    /// this computer did, as `agents` lets go of its Harness processes
+    /// after a sign-in (ADR 0040, decision 3). The machine's
+    /// [`ModuleSpace::reacted`] waits for it too. It only hears: its
+    /// [`Heard::space`] is none, so it never writes the machine's log. It
+    /// ends as this Space closes. None for a module of the machine, or
+    /// while the engine has none.
+    pub async fn react_to_machine(&self, filter: EventFilter) -> Result<Option<Heard>, Error> {
+        let Some(machine) = &self.space.machine else {
+            return Ok(None);
+        };
+        let mut heard = machine.hear(machine.head().await?, filter, Some(self.module));
+        // It only hears: there is no machine's Space of its module to give.
+        heard.module = None;
+        heard.from = Some(self.space.open.subscribe());
+        Ok(Some(heard))
+    }
+
     /// Waits until every module reacting to the log has handled what is
     /// in it now, at most `within`, and says whether they all did: an
     /// effect about to change the world lets them react first, as an
@@ -637,7 +709,7 @@ impl ModuleSpace {
     /// The log position now: what a view read now is current at, for an
     /// answer read outside the Space's data, as git's.
     pub async fn at(&self) -> Result<i64, Error> {
-        self.space.store.read(|sql| Ok(events::head(sql)?)).await
+        self.space.head().await
     }
 
     /// The receipt of `command`, made by `author` for `method`.
