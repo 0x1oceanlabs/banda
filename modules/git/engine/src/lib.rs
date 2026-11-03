@@ -17,6 +17,7 @@ pub mod model;
 mod act;
 mod checkpoint;
 mod diff;
+mod message;
 mod parse;
 mod refs;
 mod repo;
@@ -28,7 +29,7 @@ mod watch;
 use banda_kernel::{Call, Error, Module, ModuleSpace, Nothing, Refusal, Right, Stream};
 use model::{
     ActAsk, BranchAsk, ChangeAsk, Commit, CommitsAsk, Contents, ContentsAsk, Diff, DiffAsk,
-    Progress, Ref, RefsAsk, Status, SwitchAsk,
+    Message, Progress, PromptAsk, Prompted, Ref, RefsAsk, Status, SwitchAsk, WrittenAsk,
 };
 use repo::Repo;
 use serde_json::Value;
@@ -86,6 +87,13 @@ banda_kernel::methods! {
         call branch(BranchAsk) -> (), Write;
         /// Makes the Space's folder a git repository.
         call init(Nothing) -> (), Write;
+        /// The prompt a Harness writes a commit's message from: what the
+        /// commit would take, its branch and the repository's last
+        /// subjects. The index is left as it is.
+        call prompt(PromptAsk) -> Prompted, Read;
+        /// A Harness's reply to `prompt` read as a message for `act`, and
+        /// as the name of a new branch no branch here has.
+        call written(WrittenAsk) -> Message, Read;
     }
 }
 
@@ -195,6 +203,14 @@ impl Git {
         let repo = Repo::open(call.space().folder()).await?;
         let _writing = self.writing.lock().await;
         act::make_branch(&repo, &ask.name, ask.from.as_deref()).await
+    }
+
+    async fn prompt(&self, call: Call, ask: PromptAsk) -> Result<Prompted, Refusal> {
+        message::prompt(&Repo::open(call.space().folder()).await?, ask).await
+    }
+
+    async fn written(&self, call: Call, ask: WrittenAsk) -> Result<Message, Refusal> {
+        message::written(&Repo::open(call.space().folder()).await?, ask).await
     }
 
     async fn init(&self, call: Call, _: Nothing) -> Result<(), Refusal> {

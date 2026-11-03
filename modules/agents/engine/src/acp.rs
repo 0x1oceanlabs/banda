@@ -82,6 +82,8 @@ struct Agreed {
     steers: bool,
     /// It forks a session (`session/fork`).
     forks: bool,
+    /// It closes a session (`session/close`).
+    closes: bool,
 }
 
 /// What a Harness said when it started: what it can do with sessions, and
@@ -464,6 +466,7 @@ async fn drive(
                         resumes: capabilities.session_capabilities.resume.is_some(),
                         images: capabilities.prompt_capabilities.image,
                         forks: capabilities.session_capabilities.fork.is_some(),
+                        closes: capabilities.session_capabilities.close.is_some(),
                         steers: steering
                             .and_then(|steering| steering.get("supported"))
                             .and_then(serde_json::Value::as_bool)

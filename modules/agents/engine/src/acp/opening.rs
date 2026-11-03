@@ -85,6 +85,18 @@ fn servers(banda: Option<Program>) -> Vec<acp::McpServer> {
 }
 
 impl Connection {
+    /// A session of its own in `folder`, in no Thread's place and with no
+    /// `banda mcp`, for a short run (`agents.write`); closed after with
+    /// [`Session::close`].
+    pub async fn aside(self: &Arc<Self>, folder: &Path) -> Result<Session, Ending> {
+        let made = self
+            .open(acp::NewSessionRequest::new(folder), "open a session")
+            .await?;
+        let options = made.config_options.unwrap_or_default();
+        opened(&self.learned, &made.session_id, options, folder);
+        Ok(Session::new(self, made.session_id))
+    }
+
     /// The Harness's session for `thread`, opened in `folder` on first use,
     /// with `roots` as extra roots its Agent may read (ADR 0026).
     /// A Thread that had a session continues it when the Harness can, by

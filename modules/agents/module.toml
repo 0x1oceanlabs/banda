@@ -4,7 +4,7 @@
 # Visuals its Agents show (ADR 0037).
 id = "agents"
 name = "Agents"
-about = "Threads with Agents on their Harnesses: what each says and does, and what it asks the Person."
+about = "Threads with Agents on their Harnesses: what each says and does, and what it asks the Person; and a short run of a Thread's Harness apart from it, as for a commit's message."
 version = "0.1.0"
 from-banda = true
 # The settings files it owns, in ~/.config/banda.

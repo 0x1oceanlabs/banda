@@ -368,6 +368,18 @@ pub fn plain_paths(paths: &[String]) -> Result<Vec<&str>, Refusal> {
     paths.iter().map(|path| plain_path(path)).collect()
 }
 
+/// The files a commit of chosen files takes, when it chose some; all
+/// when `files` is None.
+pub fn chosen(files: &Option<Vec<String>>) -> Result<Option<Vec<&str>>, Refusal> {
+    match files {
+        Some(files) if files.is_empty() => {
+            Err(Refusal::invalid("A commit of chosen files needs one."))
+        }
+        Some(files) => Ok(Some(plain_paths(files)?)),
+        None => Ok(None),
+    }
+}
+
 /// A folder of the engine's own, gone when it is dropped.
 pub fn scratch(prefix: &str) -> Result<tempfile::TempDir, Refusal> {
     tempfile::Builder::new()

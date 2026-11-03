@@ -21,6 +21,7 @@
 //! `methods!` table below (ADR 0014).
 
 mod acp;
+mod aside;
 mod between;
 mod changes;
 mod drive;
@@ -228,6 +229,11 @@ banda_kernel::methods! {
         /// the files one of them changed, from its tool calls: the Diff's
         /// Turn (ADR 0034).
         call changes(ChangesAsk) -> TurnChanges, Read;
+        /// What the Thread's Harness replies to a prompt, in a short run of
+        /// its own the Thread does not show: on its model, asking before
+        /// it changes anything, and refused whatever it asks. Git asks it
+        /// for a commit's message.
+        call write(WriteAsk) -> Written, Write;
         /// Writes into a Thread of this Space, or starts a new Thread on a
         /// Harness. Its Agent reads that the message is from your Thread's
         /// Agent, not its Person; when the turn it asks for ends, its last
@@ -312,6 +318,22 @@ struct SignIn {
     #[serde(default)]
     #[ts(optional = nullable)]
     turn: Option<TurnId>,
+}
+
+/// What `agents.write` is asked.
+#[derive(Deserialize, TS)]
+#[ts(export, export_to = "agents/")]
+struct WriteAsk {
+    /// The Thread whose Harness and model write.
+    thread: ThreadId,
+    prompt: String,
+}
+
+/// What `agents.write` answers.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "agents/")]
+struct Written {
+    text: String,
 }
 
 #[derive(Deserialize, TS, JsonSchema)]
@@ -641,6 +663,30 @@ impl Agents {
             }
         }
         Ok(TurnChanges { at, turns, files })
+    }
+
+    async fn write(
+        &self,
+        call: Call,
+        WriteAsk { thread, prompt }: WriteAsk,
+    ) -> Result<Written, Refusal> {
+        let found = call
+            .space()
+            .read(move |sql| {
+                let Some(summary) = store::thread(sql, thread)? else {
+                    return Ok(None);
+                };
+                Ok(Some((summary.harness, store::settings(sql, thread)?)))
+            })
+            .await?;
+        let (harness, settings) =
+            found.ok_or_else(|| Refusal::not_found("There is no such Thread."))?;
+        if harness.is_empty() {
+            return Err(Refusal::conflict("This Thread's Harness is gone."));
+        }
+        let (_, connection) = self.running(call.space().id(), &harness).await?;
+        let text = aside::write(connection, call.space().folder(), &settings, prompt).await?;
+        Ok(Written { text })
     }
 
     async fn defaults(

@@ -112,6 +112,14 @@ fn allow_once(choices: &[Choice]) -> Option<&str> {
         .map(|c| c.id.as_str())
 }
 
+/// The answer that refuses this once, if the Harness offers one.
+pub(crate) fn refuse_once(choices: &[Choice]) -> Option<&str> {
+    choices
+        .iter()
+        .find(|c| !c.allows && !c.always)
+        .map(|c| c.id.as_str())
+}
+
 /// A Person's answer to Question `item`: the Thread keeps it, and the
 /// outbox hands it to the Harness.
 pub fn answer(

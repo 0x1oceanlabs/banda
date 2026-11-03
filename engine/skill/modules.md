@@ -11,7 +11,7 @@ Banda's work is done by modules. `banda modules` prints all of this as JSON, one
 
 ## Agents (`agents`)
 
-Threads with Agents on their Harnesses: what each says and does, and what it asks the Person.
+Threads with Agents on their Harnesses: what each says and does, and what it asks the Person; and a short run of a Thread's Harness apart from it, as for a commit's message.
 
 Its settings: `agents.toml`, `harnesses.toml`.
 
@@ -19,7 +19,7 @@ Its actions, which `keys.toml` binds by id:
 
 - New Thread (`thread.new`), Alt+Return
 
-Its methods, `banda call agents.<method>`: `harnesses`, `account`, `sign_in`, `sign_out`, `threads`, `thread`, `defaults`, `changes`, `send`, `edit`, `withdraw`, `steer`, `resume`, `configure`, `stop`, `retry`, `fork`, `rewind`, `answer`, `attach`, `image`, `keep`, `files`, `show_visual`, `visual`.
+Its methods, `banda call agents.<method>`: `harnesses`, `account`, `sign_in`, `sign_out`, `threads`, `thread`, `defaults`, `changes`, `write`, `send`, `edit`, `withdraw`, `steer`, `resume`, `configure`, `stop`, `retry`, `fork`, `rewind`, `answer`, `attach`, `image`, `keep`, `files`, `show_visual`, `visual`.
 
 What an Agent in a Thread may call as a tool of `banda mcp`:
 
@@ -59,7 +59,7 @@ What an Agent in a Thread may call as a tool of `banda mcp`:
 
 The Space's folder as git sees it: its branch, its changes, and the diff against a base, the last commit or the index; it stages, unstages and reverts them, commits, pushes and pulls, and switches and makes branches.
 
-Its methods, `banda call git.<method>`: `status`, `diff`, `refs`, `commits`, `contents`, `stage`, `unstage`, `revert`, `watch`, `act`, `switch`, `branch`, `init`.
+Its methods, `banda call git.<method>`: `status`, `diff`, `refs`, `commits`, `contents`, `stage`, `unstage`, `revert`, `watch`, `act`, `switch`, `branch`, `init`, `prompt`, `written`.
 
 ## Workspaces (`workspaces`)
 
