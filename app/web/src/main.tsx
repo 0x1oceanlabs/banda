@@ -6,14 +6,23 @@ import "@banda/ui/globals.css"
 import { poppedOf } from "./host"
 import { moveEnterKey } from "./enter-key"
 import { followLook } from "./look"
+import { keepProblem, watchProblems } from "./problems"
 
 const host = window.banda
 // The look the desktop reads (ADR 0007), else the system's light or dark.
 followLook(host)
-const root = createRoot(document.getElementById("root")!)
+const root = createRoot(document.getElementById("root")!, {
+  // What an error boundary caught, as a Pane that broke, is a Problem
+  // too (ADR 0039); React says it on the console as it would.
+  onCaughtError: (error) => {
+    console.error(error)
+    keepProblem(error)
+  },
+})
 const engine = host && new Engine(() => host.engine())
 
 if (host && engine) {
+  watchProblems(engine)
   void moveEnterKey(host).catch(() => undefined)
   // A Pane in a window of its own draws alone (ADR 0025, decision 9).
   const popped = poppedOf(location.hash)

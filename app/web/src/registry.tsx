@@ -26,6 +26,7 @@ import { LayoutGridIcon } from "lucide-react"
 import { useEffect, useLayoutEffect, useRef, useSyncExternalStore } from "react"
 import { columnsOf } from "./look"
 import { modules } from "./modules"
+import { keepProblem } from "./problems"
 import { settingsPane } from "./settings/pane"
 import type { Entry, Width } from "./workspaces/model"
 
@@ -88,6 +89,7 @@ function told<T>(say: () => T, otherwise: T): T {
     if (!broke.has(String(error))) {
       broke.add(String(error))
       console.error(error)
+      keepProblem(error)
     }
     return otherwise
   }
