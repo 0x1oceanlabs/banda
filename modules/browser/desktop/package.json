@@ -2,6 +2,7 @@
   "name": "@banda/browser-desktop",
   "version": "0.0.0",
   "private": true,
+  "license": "Apache-2.0",
   "type": "module",
   "description": "The browser's part in the window's main process (ADR 0013, ADR 0028): its pages kept apart, their tabs, extensions and blocker, and the CDP endpoint.",
   "exports": {

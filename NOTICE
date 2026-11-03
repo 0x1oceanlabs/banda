@@ -1,0 +1,17 @@
+Banda
+Copyright 2026 The Banda Authors
+
+Licensed under the Apache License, Version 2.0 (LICENSE).
+
+Banda includes code from others, under their own licenses:
+
+- T3 Code's terminal adapter, in app/ghostty/src/t3: MIT,
+  app/ghostty/LICENSE-T3. Copyright (c) 2026 T3 Tools Inc.
+- Ghostty's libghostty-vt, built to WebAssembly in app/ghostty/src/t3/vendor,
+  and its key header in app/ghostty/native: MIT,
+  app/ghostty/native/LICENSE-GHOSTTY. Copyright (c) 2024 Mitchell
+  Hashimoto, Ghostty contributors.
+- Symbols Nerd Font Mono, in app/ghostty/src/t3/fonts: MIT,
+  app/ghostty/src/t3/fonts/LICENSE. Copyright (c) 2014 Ryan L McIntyre.
+
+app/ghostty/README.md says where each came from, at which commit.

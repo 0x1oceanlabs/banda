@@ -2,6 +2,7 @@
   "name": "@banda/ui",
   "version": "0.0.0",
   "private": true,
+  "license": "Apache-2.0",
   "type": "module",
   "description": "Banda's look: shadcn/ui (preset b0) on Base UI, Banda's mark and sounds, and the Pane contract every Pane is built to.",
   "exports": {

@@ -65,3 +65,9 @@ The ways to bring Banda to Linux: [`docs/research/2026-11-02-linux-distribution.
 scripts/check.sh               # everything: Rust, types, lints, tests, the window
 scripts/check.sh --no-window   # without the window's end-to-end tests
 ```
+
+## License
+
+Banda is under the [Apache License 2.0](LICENSE). It includes code from T3
+Code, Ghostty and the Nerd Fonts under their MIT licenses; [`NOTICE`](NOTICE)
+says which and where.

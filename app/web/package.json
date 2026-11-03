@@ -2,6 +2,7 @@
   "name": "@banda/web",
   "version": "0.0.0",
   "private": true,
+  "license": "Apache-2.0",
   "type": "module",
   "description": "The window's page: the bar, the sidebar, the workspaces of Panes and the engine connection.",
   "exports": {

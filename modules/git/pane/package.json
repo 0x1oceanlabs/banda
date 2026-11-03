@@ -2,6 +2,7 @@
   "name": "@banda/git-pane",
   "version": "0.0.0",
   "private": true,
+  "license": "Apache-2.0",
   "type": "module",
   "description": "The git module's Panes: the Diff of a Space's repository, as T3 Code's.",
   "exports": {

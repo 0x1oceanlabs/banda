@@ -2,6 +2,7 @@
   "name": "@banda/terminal-pane",
   "version": "0.0.0",
   "private": true,
+  "license": "Apache-2.0",
   "type": "module",
   "description": "The terminal module's Pane: a program the engine runs on a PTY, drawn by Ghostty.",
   "exports": {
