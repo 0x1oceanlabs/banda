@@ -322,6 +322,7 @@ async function ready(): Promise<void> {
             Effect.promise(() => shell.openPath(join(state, "logs")))
           ),
       ],
+      reopen: [none, (_, event) => Effect.sync(() => event.sender.reload())],
     },
     menu: {
       open: [text, ([route]) => Effect.sync(() => openMenu(route))],

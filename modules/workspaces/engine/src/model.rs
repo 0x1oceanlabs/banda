@@ -246,7 +246,7 @@ fn panes_of(workspace: &Workspace) -> impl Iterator<Item = &Pane> {
     workspace.columns.iter().flat_map(|c| &c.panes)
 }
 
-fn panes(list: &Arrangement) -> impl Iterator<Item = &Pane> {
+pub(crate) fn panes(list: &Arrangement) -> impl Iterator<Item = &Pane> {
     list.iter().flat_map(panes_of)
 }
 

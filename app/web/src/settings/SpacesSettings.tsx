@@ -31,20 +31,30 @@ import { removeSpace, updateSpace } from "@banda/ui/lib/spaces"
 import { cn } from "@banda/ui/lib/utils"
 import { FolderSearchIcon, Trash2Icon } from "lucide-react"
 import { LOCATE, locateRoute } from "../menu/menu"
+import { AsideRow } from "../safe/AsidePill"
 import { Field, Group, RowFrame, Rows } from "./SettingRow"
 
 /** The Space a removal asks about, and how many Threads go with it, if
  * the agents module said. */
 type Removing = { space: SpaceSummary; threads?: number }
 
-export function SpacesSettings({
-  engine,
-  lit,
-}: {
+type Props = {
   engine: Engine
   /** The Space a link names: `spaces/<id>`. */
   lit?: string
-}) {
+}
+
+/** The Spaces, and the workspaces set aside while some are (ADR 0039). */
+export function SpacesSettings(props: Props) {
+  return (
+    <>
+      <AsideRow engine={props.engine} />
+      <Space {...props} />
+    </>
+  )
+}
+
+function Space({ engine, lit }: Props) {
   // Every Space, the archived too, as the window's other lists read them.
   const { listed } = useSpaces(engine)
   // The Space picked here, until a link names another.

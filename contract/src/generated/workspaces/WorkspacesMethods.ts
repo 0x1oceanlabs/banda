@@ -80,6 +80,17 @@ tidy: CommandMethod<Tidy, Done>,
  */
 take: CommandMethod<Take, Done>, 
 /**
+ * Sets the workspaces aside, for a window that broke on them, and
+ * leaves one empty workspace (ADR 0039, decision 2). Those set
+ * aside before stay, with these after them.
+ */
+set_aside: CommandMethod<Nothing, Done>, 
+/**
+ * Brings the workspaces set aside back, after the ones there are
+ * now.
+ */
+bring_back: CommandMethod<Nothing, Done>, 
+/**
  * The Panes on the workspaces, from the top down and from the
  * left: your Space's with their args, and, when your Person lets
  * you see the other Spaces, theirs without. `yours` marks the

@@ -109,6 +109,9 @@ export const BRIDGE = bridge({
   problems: {
     /** Opens the folder of `engine.log` and `window.log`. */
     logs: invoke(),
+    /** Opens the page that asks again, as it opened, after it broke
+     * (decision 2). */
+    reopen: invoke(),
   },
   /** The Banda menu, as `banda menu [route]` opens it (ADR 0017). */
   menu: {
