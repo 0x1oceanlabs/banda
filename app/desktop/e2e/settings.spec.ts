@@ -347,3 +347,31 @@ test("Sharing: nothing on and no ID, then an ID as a switch turns on, and a Band
   await expect(newId).toHaveCount(0)
   await expect(settings).toContainText("None while nothing is shared")
 })
+
+test("The first run asks to share once, nothing ticked, after the first Space; Continue writes the answer (ADR 0039)", async () => {
+  window = await startWindow({ asked: false })
+  const { page, dir } = window
+  const file = join(dir, "config/sharing.toml")
+  await firstThread(page)
+
+  const ask = page.getByRole("dialog", { name: "Help make Banda better?" })
+  await expect(ask).toBeVisible()
+  const problems = ask.getByRole("checkbox").first()
+  const usage = ask.getByRole("checkbox").nth(1)
+  await expect(problems).not.toBeChecked()
+  await expect(usage).not.toBeChecked()
+  await expect(ask.getByRole("button")).toHaveText([
+    /See exactly what is sent/,
+    "Continue",
+  ])
+  await ask.getByRole("button", { name: /See exactly what is sent/ }).click()
+  await expect(ask).toContainText("$exception")
+  await page.screenshot({ path: "test-results/sharing-ask.png" })
+
+  await problems.click()
+  await ask.getByRole("button", { name: "Continue" }).click()
+  await expect(ask).toHaveCount(0)
+  const text = readFileSync(file, "utf8")
+  expect(text).toMatch(/^problems = true$/m)
+  expect(text).toMatch(/^usage = false$/m)
+})
