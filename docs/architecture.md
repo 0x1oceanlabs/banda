@@ -579,9 +579,11 @@ If Chat is removed, Agents still works through its own Thread.
   which knows nothing of Threads: the list and its file, finding the
   Person's CLI, a process (`acp::Process`: starting, recording, agreeing
   on ACP, who is signed in) and the pool of processes. The agents module
-  wraps a process with its sessions' handlers and capabilities.
-- The window asks `harnesses`; the agents module's own `harnesses`,
-  `account`, `sign_in` and `sign_out` go next (ADR 0040, step 4c).
+  wraps a process with its sessions' handlers and capabilities. The
+  agents module and `harnesses` share one list. The version a CLI says is
+  kept by its path as the latest look found it, by any process, and
+  checked against its entry's `minimum` at each read: a Thread stops
+  warning once the Person updated it and checked again.
 
 ### terminal
 

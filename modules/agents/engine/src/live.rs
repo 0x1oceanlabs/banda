@@ -111,12 +111,6 @@ impl Live {
         Ok(connection)
     }
 
-    /// Lets go of the processes of `harness` in every Space, after the
-    /// module's own sign-in, which goes in ADR 0040's step 4.
-    pub fn let_go_everywhere(&self, harness: &str) {
-        self.hosts.let_go_everywhere(harness);
-    }
-
     /// Lets go of `space`'s process of each Harness whose account changed,
     /// as the machine says, until the Space closes (ADR 0040, decision 4).
     pub async fn let_go_as_accounts_change(self: Arc<Self>, space: SpaceId, mut heard: Heard) {

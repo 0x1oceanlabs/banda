@@ -7,7 +7,8 @@
 //! Starting a Harness is bounded: [`STARTING`].
 
 use crate::Harness;
-use crate::model::{Adapter, CliView, SignInWay};
+use crate::cli::Located;
+use crate::model::{Adapter, SignInWay};
 use crate::record::{Recording, To};
 use agent_client_protocol::schema::ProtocolVersion;
 use agent_client_protocol::schema::v1 as acp;
@@ -15,7 +16,6 @@ use agent_client_protocol::{
     AcpAgent, AcpAgentConfig, Agent, Builder, Client, ConnectionTo, HandleConnectionClose,
     HandleDispatchFrom, LineDirection, RunWithConnectionTo,
 };
-use std::sync::Mutex;
 use std::time::Duration;
 use tokio::sync::{oneshot, watch};
 use tokio::task::JoinHandle;
@@ -47,9 +47,8 @@ pub struct Process {
     /// The ways it offers to sign in.
     ways: Vec<SignInWay>,
     about: About,
-    /// The Person's CLI it runs, as last found: when it started, or when a
-    /// Person last asked who is signed in.
-    cli: Mutex<Option<CliView>>,
+    /// Where the Person's CLI it runs was found when it started.
+    cli: Option<Located>,
     /// Who it last said is signed in.
     account: watch::Receiver<Option<AuthStatus>>,
     driver: JoinHandle<()>,
@@ -141,7 +140,7 @@ impl Process {
             name: harness.name.clone(),
             ways: ways(&harness, std::mem::take(&mut answer.auth_methods)),
             about,
-            cli: Mutex::new(cli),
+            cli: cli.map(|cli| Located::new(cli.path, &harness)),
             account,
             driver,
         };
@@ -168,10 +167,10 @@ impl Process {
         !self.driver.is_finished() && !self.cx.is_incoming_closed()
     }
 
-    /// Why the Person's CLI it runs is old, as last found.
+    /// Why the Person's CLI it runs is old, as the latest look at it
+    /// found, by any process of the Harness.
     pub fn outdated(&self) -> Option<String> {
-        let cli = self.cli.lock().unwrap();
-        cli.as_ref().and_then(|cli| cli.outdated.clone())
+        self.cli.as_ref()?.outdated(&self.name)
     }
 }
 

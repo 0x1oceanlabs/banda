@@ -69,8 +69,12 @@ impl World {
         World::open_with(root, owner, Agents::new(harnesses())).await
     }
 
+    /// A kernel with the machine, its module `harnesses` on the same list
+    /// as `agents`, and `agents`.
     async fn open_with(root: &Path, owner: PersonId, agents: Agents) -> Arc<Kernel> {
         Kernel::builder(root, root.join(".data"), owner)
+            .machine(root.join(".machine"))
+            .module(HarnessesModule::new(agents.harnesses()))
             .module(agents)
             .open()
             .await
@@ -926,21 +930,31 @@ async fn signed_out(root: &Path, home: &Path) -> World {
 }
 
 impl World {
-    async fn sign_in(&self, who: Participant, way: &str) -> Result<Value, banda_kernel::Refusal> {
-        let params = json!({ "harness": "fake", "way": way });
-        self.call(who, "agents.sign_in", params).await
+    /// Calls `method` of the machine's module `harnesses`.
+    async fn on_machine(
+        &self,
+        who: Participant,
+        method: &str,
+        params: Value,
+    ) -> Result<Value, banda_kernel::Refusal> {
+        let method = format!("harnesses.{method}");
+        self.call_in(None, who, &method, params).await
     }
 
-    async fn sign_in_for(&self, turn: &Value) -> Result<Value, banda_kernel::Refusal> {
-        let params = json!({ "harness": "fake", "way": "fake-sign-in", "turn": turn });
-        self.call(self.person(), "agents.sign_in", params).await
+    async fn sign_in(&self, who: Participant, way: &str) -> Result<Value, banda_kernel::Refusal> {
+        let params = json!({ "harness": "fake", "way": way });
+        self.on_machine(who, "sign_in", params).await
+    }
+
+    /// Who is signed in to `harness`, as the machine says.
+    async fn account_of(&self, harness: &str) -> Result<Value, banda_kernel::Refusal> {
+        let params = json!({ "harness": harness });
+        let accounted = self.on_machine(self.person(), "account", params).await?;
+        Ok(accounted["account"].clone())
     }
 
     async fn account(&self) -> Value {
-        let params = json!({ "harness": "fake" });
-        self.call(self.person(), "agents.account", params)
-            .await
-            .unwrap()
+        self.account_of("fake").await.unwrap()
     }
 
     /// Tries the failed turn of `sent` again and waits for it to end:
@@ -969,14 +983,7 @@ async fn a_person_signs_in_in_a_terminal_and_the_harness_starts_again() {
     let (sent, view) = failing(&world, "hello").await;
     assert_eq!(view.turns[0].failure, Some(Failure::SignIn));
 
-    let account = world
-        .call(
-            world.person(),
-            "agents.account",
-            json!({ "harness": "fake" }),
-        )
-        .await
-        .unwrap();
+    let account = world.account().await;
     let ways = account["ways"].as_array().unwrap();
     assert_eq!(ways.len(), 2, "{account}");
     let terminal = &ways[0]["terminal"];
@@ -1024,38 +1031,37 @@ async fn a_person_signs_in_in_a_terminal_and_the_harness_starts_again() {
 }
 
 #[tokio::test]
-async fn a_sign_in_sends_the_turn_that_needed_it_again_once() {
+async fn a_terminals_sign_in_tries_the_turn_that_needed_it_again_once() {
     let (root, home) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
     let world = signed_out(root.path(), home.path()).await;
     let (sent, _) = failing(&world, "hello").await;
     // What the way's program does in a terminal that ended with code 0.
     std::fs::write(home.path().join("signed-in"), "yes").unwrap();
 
-    // A terminal Pane sends this once its program ended well; another
-    // window, or the same one after a reload, sends the same command.
-    let command = CommandId::new();
-    let params = json!({ "harness": "fake", "way": "fake-sign-in", "turn": sent["turn"] });
-    let sign_in = || {
-        world.kernel.call(
-            world.person(),
-            "agents.sign_in",
-            Some(world.space),
-            Some(command),
-            params.clone(),
-        )
+    // A terminal Pane sends these once its program ended well: the sign-in
+    // on the machine, then the retry in its Space (ADR 0040, decision 5).
+    // Another window, or the same one after a reload, sends the same ones.
+    let (signing, retrying) = (CommandId::new(), CommandId::new());
+    let way = json!({ "harness": "fake", "way": "fake-sign-in" });
+    let turn = json!({ "turn": sent["turn"] });
+    let done = || async {
+        let (kernel, who) = (&world.kernel, world.person());
+        let method = "harnesses.sign_in";
+        let signed = kernel.call(who, method, None, Some(signing), way.clone());
+        assert_eq!(signed.await.unwrap(), Value::Null);
+        let (space, method) = (Some(world.space), "agents.retry");
+        kernel
+            .call(who, method, space, Some(retrying), turn.clone())
+            .await
     };
-    let again = sign_in().await.unwrap();
-    assert_eq!(sign_in().await.unwrap(), again, "once");
+    let again = done().await.unwrap();
+    assert_eq!(done().await.unwrap(), again, "once");
     let view = world
         .until(&sent["thread"], |v| {
             state(v, &again["turn"]) == Some(TurnState::Done)
         })
         .await;
     assert_eq!(view.turns.len(), 2, "one turn went again");
-
-    // A turn that went again already leaves the sign-in as it is.
-    let later = world.sign_in_for(&sent["turn"]).await.unwrap();
-    assert_eq!(later, Value::Null);
 }
 
 #[tokio::test]
@@ -1097,7 +1103,7 @@ async fn a_harness_says_who_is_signed_in_and_signs_out() {
     assert_eq!(signed_in["label"], "Fake Pro");
     assert_eq!(signed_in["email"], "person@example.invalid");
 
-    let sign_out = |who| world.call(who, "agents.sign_out", json!({ "harness": "fake" }));
+    let sign_out = |who| world.on_machine(who, "sign_out", json!({ "harness": "fake" }));
     let refused = sign_out(world.agent()).await.unwrap_err();
     assert_eq!(refused.code, Code::Forbidden);
     sign_out(world.person()).await.unwrap();
@@ -1111,65 +1117,21 @@ async fn a_harness_says_who_is_signed_in_and_signs_out() {
     );
 }
 
-/// A World with the machine and its module `harnesses`, whose fake agent
-/// has an account in `home`, signed out.
-async fn on_a_machine(root: &Path, home: &Path) -> World {
-    let home = home.display().to_string();
-    let harnesses = || harnesses_with(&[("FAKE_AGENT_HOME", &home)]);
-    let owner = PersonId::new();
-    let kernel = Kernel::builder(root, root.join(".data"), owner)
-        .machine(root.join(".machine"))
-        .module(Agents::new(harnesses()))
-        .module(HarnessesModule::new(harnesses()))
-        .open()
-        .await
-        .unwrap();
-    World::in_a_space(kernel, owner, "fake").await
-}
-
-impl World {
-    /// Calls `method` of the machine's module `harnesses`.
-    async fn on_machine(
-        &self,
-        who: Participant,
-        method: &str,
-        params: Value,
-    ) -> Result<Value, banda_kernel::Refusal> {
-        let method = format!("harnesses.{method}");
-        self.call_in(None, who, &method, params).await
-    }
-}
-
 #[tokio::test]
 async fn a_sign_in_on_the_machine_starts_each_spaces_harness_again() {
     let (root, home) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
-    let world = on_a_machine(root.path(), home.path()).await;
-    let fake = || json!({ "harness": "fake" });
+    let world = signed_out(root.path(), home.path()).await;
     let list = world.on_machine(world.person(), "list", json!({})).await;
     assert_eq!(list.unwrap()[0]["id"], "fake");
     let (sent, view) = failing(&world, "hello").await;
     assert_eq!(view.turns[0].failure, Some(Failure::SignIn));
 
-    let accounted = world.on_machine(world.person(), "account", fake()).await;
+    let fake = json!({ "harness": "fake" });
+    let accounted = world.on_machine(world.person(), "account", fake).await;
     let accounted = accounted.unwrap();
     assert!(accounted["at"].is_i64(), "{accounted}");
-    let account = &accounted["account"];
-    assert_eq!(account["signed_in_as"]["signed_in"], false, "{account}");
-    assert_eq!(account["ways"].as_array().unwrap().len(), 2, "{account}");
 
-    let way = json!({ "harness": "fake", "way": "fake-browser" });
-    let refused = world
-        .on_machine(world.agent(), "sign_in", way.clone())
-        .await;
-    assert_eq!(refused.unwrap_err().code, Code::Forbidden);
-    let elsewhere = json!({ "harness": "fake", "way": "elsewhere" });
-    let refused = world.on_machine(world.person(), "sign_in", elsewhere).await;
-    assert_eq!(refused.unwrap_err().code, Code::NotFound);
-    world
-        .on_machine(world.person(), "sign_in", way)
-        .await
-        .unwrap();
-
+    world.sign_in(world.person(), "fake-browser").await.unwrap();
     let machine = world.kernel.machine().unwrap();
     let log = world.kernel.follow(world.person(), machine).await.unwrap();
     let events = log.events_after(0, account_changed(), 100).await.unwrap();
@@ -1183,23 +1145,6 @@ async fn a_sign_in_on_the_machine_starts_each_spaces_harness_again() {
         world.retried(&sent).await.0,
         TurnState::Done,
         "the Space's Harness started again, and read the account"
-    );
-    let account = world.on_machine(world.person(), "account", fake()).await;
-    let account = &account.unwrap()["account"];
-    assert_eq!(account["signed_in_as"]["label"], "Fake Pro", "{account}");
-
-    world
-        .on_machine(world.person(), "sign_out", fake())
-        .await
-        .unwrap();
-    let account = world.on_machine(world.person(), "account", fake()).await;
-    let account = &account.unwrap()["account"];
-    assert_eq!(account["signed_in_as"]["signed_in"], false, "{account}");
-    let (_, view) = failing(&world, "hello").await;
-    assert_eq!(
-        view.turns[0].failure,
-        Some(Failure::SignIn),
-        "the Space's Harness is signed out too"
     );
 }
 
@@ -1280,14 +1225,7 @@ async fn a_cli_older_than_its_harness_supports_runs_and_its_threads_warn() {
 async fn a_harness_whose_cli_is_not_installed_does_not_start() {
     let root = tempfile::tempdir().unwrap();
     let world = World::new_with(root.path(), with_cli("banda-no-such-cli")).await;
-    let refused = world
-        .call(
-            world.person(),
-            "agents.account",
-            json!({ "harness": "fake" }),
-        )
-        .await
-        .unwrap_err();
+    let refused = world.account_of("fake").await.unwrap_err();
     assert_eq!(refused.code, Code::Conflict);
     assert!(
         refused.message.contains("not installed"),
@@ -1304,11 +1242,7 @@ async fn a_harness_that_does_not_report_shows_no_one() {
     assert!(account.get("signed_in_as").is_none(), "{account}");
     assert_eq!(account["signs_out"], false);
     let refused = world
-        .call(
-            world.person(),
-            "agents.sign_out",
-            json!({ "harness": "fake" }),
-        )
+        .on_machine(world.person(), "sign_out", json!({ "harness": "fake" }))
         .await
         .unwrap_err();
     assert_eq!(refused.code, Code::Conflict, "{refused:?}");
@@ -2708,8 +2642,7 @@ async fn the_real_harnesses_say_what_they_run_and_who_is_signed_in() {
     let root = tempfile::tempdir().unwrap();
     let world = World::new_with(root.path(), Agents::new(harnesses)).await;
     for harness in ["claude", "codex"] {
-        let params = json!({ "harness": harness });
-        let account = world.call(world.person(), "agents.account", params).await;
+        let account = world.account_of(harness).await;
         println!("{harness}: {account:#?}");
         let account = account.unwrap();
         assert!(account["cli"]["version"].is_string(), "{account}");
@@ -2742,14 +2675,7 @@ async fn record_the_real_harnesses_editing_a_file() {
         let view = world.edit(Duration::from_secs(300)).await;
         println!("{harness}: {:#?}", texts(&view));
 
-        let account = world
-            .call(
-                world.person(),
-                "agents.account",
-                json!({ "harness": harness }),
-            )
-            .await
-            .unwrap();
+        let account = world.account_of(harness).await.unwrap();
         let who = &account["signed_in_as"];
         let email = who["email"]
             .as_str()

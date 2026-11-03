@@ -219,18 +219,6 @@ impl<H: Host> Hosts<H> {
         }
     }
 
-    /// Lets go of the hosts of `harness` in every Space, as [`let_go`]
-    /// does: for the agents module's own sign-in, which goes with it (ADR
-    /// 0040, step 4).
-    ///
-    /// [`let_go`]: Self::let_go
-    pub fn let_go_everywhere(&self, harness: &str) {
-        let slots = self.slots.lock().unwrap();
-        (slots.iter())
-            .filter(|((_, id), _)| id == harness)
-            .for_each(|(_, entry)| Self::stale(entry));
-    }
-
     fn stale(entry: &Arc<Entry<H>>) {
         entry.stale.store(true, Ordering::SeqCst);
         if let Ok(mut slot) = entry.slot.try_lock() {
