@@ -37,23 +37,20 @@ fn on(port: u16) -> impl Fn(&[Server]) -> bool {
     move |servers| servers.iter().any(|server| server.port == port)
 }
 
+/// What an Agent's tool does with a server: starts it in a group of its
+/// own, here through Node's `setsid`, and ends as it ends.
+const JOB: &str = "const job = require('child_process').spawn(
+  process.execPath, ['-e', process.argv[1]], { detached: true, stdio: 'inherit' })
+job.on('exit', (code, signal) => process.exit(signal ? 1 : code))";
+
 /// Starts [`LISTENS`] as a Harness's process for `world`'s Space, which
-/// the test's process stands for: through a shell when `job`, as an
-/// Agent's tool runs it, in a group of its own. Answers it and the port
-/// it listens on.
+/// the test's process stands for: through [`JOB`] when `job`, as an
+/// Agent's tool runs it. Answers it and the port it listens on.
 async fn as_a_harness(world: &World, job: bool) -> (tokio::process::Child, u16) {
-    let mut command = match job {
-        // With job control, the shell gives its job a group of its own.
-        true => {
-            let mut command = tokio::process::Command::new("sh");
-            command.args(["-c", "set -m; node -e \"$0\" & wait $!", LISTENS]);
-            command
-        }
-        false => {
-            let mut command = tokio::process::Command::new("node");
-            command.args(["-e", LISTENS]);
-            command
-        }
+    let mut command = tokio::process::Command::new("node");
+    match job {
+        true => command.args(["-e", JOB, LISTENS]),
+        false => command.args(["-e", LISTENS]),
     };
     let mut started = command
         .env(SPACE_VARIABLE, world.space.to_string())
