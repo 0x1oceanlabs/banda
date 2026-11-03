@@ -1,11 +1,11 @@
 /**
  * The settings Pane's sections (ADR 0016, decision 8). Sections follow
  * what a Person looks for, not the files: Sounds & calls is a section, yet
- * its keys stay in `look.toml`. A section names its file and the tables of
- * it that it shows; one that names none shows the tables no other section
- * takes. Its rows come from the file's schema, so a new key in Rust shows
- * with no list kept here; a row the schema cannot draw well, the section
- * draws itself (decision 4).
+ * its keys stay in `look.toml`. A section names its files and the tables of
+ * each that it shows; a file that names none shows the tables no other
+ * section takes. Its rows come from the file's schema, so a new key in Rust
+ * shows with no list kept here; a row the schema cannot draw well, the
+ * section draws itself (decision 4).
  */
 import type { ComponentType, ReactNode } from "react"
 import type { Engine } from "@banda/contract"
@@ -44,24 +44,30 @@ export type CustomRow = ComponentType<{
   control: ReactNode
 }>
 
+/** A file a section shows. */
+export type SectionFile = {
+  name: string
+  /** Its tables the section shows; none, the ones no other section takes. */
+  tables?: string[]
+  /** One heading over all its rows, instead of one for each table. */
+  title?: string
+}
+
 export type Section = {
   /** Its part of a link: `appearance` in `appearance/radius`. */
   id: string
   title: string
   icon: LucideIcon
-  /** The file its rows are in; none for Files, which lists them. */
-  file?: string
+  /** The files its rows are in, its own first: the one it opens, and
+   * the one its Body draws. None for Files, which lists them. */
+  files?: SectionFile[]
   /** What it holds, under its title. */
   about: string
-  /** The file's tables it shows. */
-  tables?: string[]
   /** Its own rows, by key. */
   custom?: { [key: string]: CustomRow }
-  /** What it shows instead of its file's rows, as a module draws it;
-   * `lit` is the part a link names. */
+  /** What it shows instead of its first file's rows, as a module draws
+   * it; `lit` is the part a link names. */
   Body?: ComponentType<{ engine: Engine; lit?: string }>
-  /** Another file whose rows follow the body, under `title`. */
-  also?: { file: string; title: string }
 }
 
 export const SECTIONS: Section[] = [
@@ -84,7 +90,7 @@ export const SECTIONS: Section[] = [
     id: "appearance",
     title: "Appearance",
     icon: PaletteIcon,
-    file: "look.toml",
+    files: [{ name: "look.toml" }],
     about:
       "Layers, each over the one before: Banda, the theme, Hyprland, then your look.toml. Reset takes your line out, and the layer below shows again.",
     custom: { theme: ThemePicker },
@@ -93,7 +99,7 @@ export const SECTIONS: Section[] = [
     id: "sidebar",
     title: "Sidebar",
     icon: PanelLeftIcon,
-    file: "sidebar.toml",
+    files: [{ name: "sidebar.toml" }],
     about: aboutOf("sidebar.toml"),
     custom: { preset: PresetPicker },
   },
@@ -101,10 +107,9 @@ export const SECTIONS: Section[] = [
     id: "sounds",
     title: "Sounds & calls",
     icon: BellIcon,
-    file: "look.toml",
+    files: [{ name: "look.toml", tables: ["sound", "notify"] }],
     about:
       "Banda's sounds, and how it tells you a Thread calls for you. Kept in look.toml.",
-    tables: ["sound", "notify"],
     custom: {
       "sound.done": PlaySound,
       "sound.asking": PlaySound,
@@ -115,24 +120,26 @@ export const SECTIONS: Section[] = [
     id: "agents",
     title: "Agents",
     icon: BotIcon,
-    file: "harnesses.toml",
+    files: [
+      { name: "harnesses.toml" },
+      { name: "agents.toml", title: "Writing to an Agent" },
+    ],
     about:
       "The Harnesses Banda starts Threads with, and what a message written while an Agent works does.",
     Body: Agents,
-    also: { file: "agents.toml", title: "Writing to an Agent" },
   },
   {
     id: "browser",
     title: "Browser",
     icon: GlobeIcon,
-    file: "browser.toml",
+    files: [{ name: "browser.toml" }],
     about: aboutOf("browser.toml"),
   },
   {
     id: "keys",
     title: "Keys",
     icon: KeyboardIcon,
-    file: "keys.toml",
+    files: [{ name: "keys.toml" }],
     about:
       "Your keys over Banda's own, as Hyprland's binds: each line a key and the action it runs, or none, so the key goes to the Pane.",
     Body: Keys,
@@ -146,30 +153,29 @@ export const SECTIONS: Section[] = [
   },
 ]
 
-/** Each section's rows in their tables, the file's own keys first; the
- * schemas never change, so once. */
+/** Each section's rows in their tables, file by file; the schemas never
+ * change, so once. */
 const GROUPS = new Map(
   SECTIONS.map((section) => [
     section,
-    [
-      ...grouped(rowsFor(section)),
-      ...(section.also
-        ? [{ title: section.also.title, rows: rowsOf(section.also.file) }]
-        : []),
-    ],
+    (section.files ?? [])
+      // A Body draws its first file.
+      .slice(section.Body ? 1 : 0)
+      .flatMap((file) =>
+        file.title
+          ? [{ title: file.title, rows: rowsFor(file) }]
+          : grouped(rowsFor(file))
+      ),
   ])
 )
 
-function rowsFor(section: Section): Row[] {
-  if (!section.file || section.Body) return []
-  const taken = SECTIONS.filter((s) => s.file === section.file).flatMap(
-    (s) => s.tables ?? []
-  )
-  return rowsOf(section.file).filter((row) => {
+function rowsFor(file: SectionFile): Row[] {
+  const taken = SECTIONS.flatMap((s) => s.files ?? [])
+    .filter((f) => f.name === file.name)
+    .flatMap((f) => f.tables ?? [])
+  return rowsOf(file.name).filter((row) => {
     const table = row.key.split(".")[0]!
-    return section.tables
-      ? section.tables.includes(table)
-      : !taken.includes(table)
+    return file.tables ? file.tables.includes(table) : !taken.includes(table)
   })
 }
 
@@ -184,6 +190,11 @@ function grouped(rows: Row[]): { title: string; rows: Row[] }[] {
     title: group.split(".").map(titleOf).join(" › "),
     rows,
   }))
+}
+
+/** The file a section opens: its first. */
+export function ownFile(section: Section): string | undefined {
+  return section.files?.[0]?.name
 }
 
 /** A section's rows in their tables. */

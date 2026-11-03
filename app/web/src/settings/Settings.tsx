@@ -20,7 +20,14 @@ import type { PaneProps } from "@banda/ui/pane"
 import { ExternalLinkIcon, SearchIcon } from "lucide-react"
 import { problemWords } from "../bar/Bar"
 import { useLookProblems, useLookSettings } from "../look"
-import { groupsOf, parseLink, search, type Section, SECTIONS } from "./sections"
+import {
+  groupsOf,
+  ownFile,
+  parseLink,
+  search,
+  type Section,
+  SECTIONS,
+} from "./sections"
 import type { SettingsArgs } from "./pane"
 import { Group, Rows, SettingRow } from "./SettingRow"
 
@@ -111,11 +118,10 @@ export function Settings({
       {group.rows.map(row)}
     </Group>
   ))
-  const above = [section.file, section.also?.file].flatMap((file) =>
-    file
-      ? (wrong.get(file) ?? NONE).filter((p) => !shown.has(`${file}:${p.key}`))
-      : NONE
+  const above = (section.files ?? []).flatMap(({ name }) =>
+    (wrong.get(name) ?? NONE).filter((p) => !shown.has(`${name}:${p.key}`))
   )
+  const own = ownFile(section)
 
   // A Pane as wide as a column: in a narrow one, the sections are a row
   // of icons over the page; in a wide one, a list beside it.
@@ -158,11 +164,9 @@ export function Settings({
                 <span className="sr-only flex-1 @3xl:not-sr-only">
                   {s.title}
                 </span>
-                {s.file && (
-                  <span className="hidden font-mono text-[10px] opacity-70 @3xl:inline">
-                    {s.file}
-                  </span>
-                )}
+                <span className="hidden font-mono text-[10px] opacity-70 @3xl:inline">
+                  {ownFile(s)}
+                </span>
               </button>
             ))}
           </div>
@@ -227,9 +231,7 @@ export function Settings({
                         {section.about}
                       </p>
                     </div>
-                    {section.file && (
-                      <OpenFile file={section.file} words="Open file" />
-                    )}
+                    {own && <OpenFile file={own} words="Open file" />}
                   </div>
                   {section.Body && (
                     <section.Body engine={engine} lit={at.key} />
@@ -245,7 +247,7 @@ export function Settings({
                       ))}
                     </div>
                   )}
-                  {!section.file && !section.Body && <Files wrong={wrong} />}
+                  {!section.files && !section.Body && <Files wrong={wrong} />}
                 </>
               )}
             </div>
