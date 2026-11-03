@@ -77,6 +77,9 @@ ts() {
   pnpm exec eslint .
   quiet pnpm -r typecheck
   quiet pnpm -r test
+
+  step "What Banda ships is under a license it may ship (ADR 0038, decision 1)"
+  node scripts/licenses.mjs
 }
 
 window() {
