@@ -306,14 +306,21 @@ function DiffPane({ engine, space, args, update, close }: PaneProps<DiffArgs>) {
     return () => cancelAnimationFrame(frame)
   }, [wanted, files.byPath])
 
-  // Staging and reverting, one at a time; the Diff reads again after.
+  // Staging and reverting, one at a time; the Diff reads again after,
+  // and acts again once it has: until then its files are the ones before.
   const acts = actsOf(scope)
   const acting = useAct()
+  const [before, setBefore] = useState<Drawn>()
+  const busy = acting.busy || (before !== undefined && before === diff)
   const act = (what: Act, ask: ChangeAsk) => {
-    if (acting.busy) return
+    if (busy) return
+    const shown = diff
     void acting
       .act(() => engine.call(`git.${what}`, ask, { space }))
-      .then(again)
+      .then(() => {
+        setBefore(shown)
+        again()
+      })
   }
   // What went wrong shows until the next try, or until dismissed.
   const [dismissed, setDismissed] = useState<string>()
@@ -356,7 +363,7 @@ function DiffPane({ engine, space, args, update, close }: PaneProps<DiffArgs>) {
             <Acts
               acts={acts}
               words="wide"
-              disabled={acting.busy}
+              disabled={busy}
               what="all"
               asked={
                 visible.length === 1
@@ -489,7 +496,7 @@ function DiffPane({ engine, space, args, update, close }: PaneProps<DiffArgs>) {
                   actions: (file: FileDiffMetadata) => (
                     <Acts
                       acts={acts}
-                      disabled={acting.busy}
+                      disabled={busy}
                       what={pathOf(file)}
                       about={
                         file.type === "new"
@@ -505,7 +512,7 @@ function DiffPane({ engine, space, args, update, close }: PaneProps<DiffArgs>) {
                       ask && (
                         <Acts
                           acts={acts}
-                          disabled={acting.busy}
+                          disabled={busy}
                           words="shown"
                           what="this hunk"
                           about={`Its lines in ${pathOf(file)} go back to what is staged.`}
