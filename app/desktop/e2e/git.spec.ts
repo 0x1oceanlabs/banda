@@ -52,10 +52,10 @@ test("the Diff shows a Space's changes by scope, as T3 Code's, and reads again a
   writeFileSync(join(folder, "new.test.ts"), "test()\n")
 
   await page.keyboard.press("Alt+KeyN")
-  await expect(page.getByRole("region", { name: "New Pane" })).toHaveAttribute(
-    "data-focused",
-    "true"
-  )
+  const launcher = page.getByRole("region", { name: "New Pane" })
+  await expect(launcher).toHaveAttribute("data-focused", "true")
+  // The Diff is offered once the launcher knows the engine runs git.
+  await expect(launcher.getByRole("button", { name: /Diff/ })).toBeVisible()
   await page.keyboard.press("KeyD")
   const diff = page.getByRole("region", { name: "Diff" })
   await expect(diff).toBeVisible()
