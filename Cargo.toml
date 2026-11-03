@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["engine", "kernel", "look", "settings", "modules/agents/engine", "modules/browser/engine", "modules/git/engine", "modules/skill", "modules/terminal/engine", "modules/workspaces/engine", "tools/fake-agent"]
+members = ["engine", "kernel", "look", "settings", "modules/agents/engine", "modules/browser/engine", "modules/git/engine", "modules/problems/engine", "modules/skill", "modules/terminal/engine", "modules/workspaces/engine", "tools/fake-agent"]
 
 [workspace.package]
 version = "0.1.0"
