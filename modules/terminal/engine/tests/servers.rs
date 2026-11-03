@@ -12,13 +12,12 @@ use std::process::Stdio;
 use std::time::Duration;
 use tokio::io::{AsyncBufReadExt, BufReader};
 
-/// Listens on a free port of 127.0.0.1, and says which.
-const LISTENS: &str = "import socket, time
-s = socket.socket()
-s.bind(('127.0.0.1', 0))
-s.listen()
-print(s.getsockname()[1], flush=True)
-time.sleep(60)";
+/// Listens on a free port of 127.0.0.1, and says which: in Node, which
+/// every machine that builds Banda has.
+const LISTENS: &str = "require('net').createServer().listen(0, '127.0.0.1', function () {
+  console.log(String(this.address().port))
+})
+setTimeout(() => {}, 60000)";
 
 /// The lists the stream says until one that `done` holds for.
 async fn servers(stream: &mut Stream, done: impl Fn(&[Server]) -> bool) -> Vec<Server> {
@@ -38,21 +37,21 @@ fn on(port: u16) -> impl Fn(&[Server]) -> bool {
     move |servers| servers.iter().any(|server| server.port == port)
 }
 
-/// Starts `script` in Python as a Harness's process for `world`'s Space,
-/// which the test's process stands for: through a shell when `shell`, as
-/// an Agent's tool runs it, in a group of its own. Answers it and the port
+/// Starts [`LISTENS`] as a Harness's process for `world`'s Space, which
+/// the test's process stands for: through a shell when `job`, as an
+/// Agent's tool runs it, in a group of its own. Answers it and the port
 /// it listens on.
-async fn as_a_harness(world: &World, script: &str, shell: bool) -> (tokio::process::Child, u16) {
-    let mut command = match shell {
-        // `exit` keeps the shell from becoming Python.
+async fn as_a_harness(world: &World, job: bool) -> (tokio::process::Child, u16) {
+    let mut command = match job {
+        // With job control, the shell gives its job a group of its own.
         true => {
             let mut command = tokio::process::Command::new("sh");
-            command.args(["-c", "python3 -c \"$0\"; exit $?", script]);
+            command.args(["-c", "set -m; node -e \"$0\" & wait $!", LISTENS]);
             command
         }
         false => {
-            let mut command = tokio::process::Command::new("python3");
-            command.args(["-c", script]);
+            let mut command = tokio::process::Command::new("node");
+            command.args(["-e", LISTENS]);
             command
         }
     };
@@ -73,7 +72,7 @@ async fn a_terminal_s_server_shows_in_its_space_only_and_stops() {
     let other = world.another_space().await;
     let mut ports = world.ports(world.space).await;
     let terminal = TerminalId::new();
-    let open = json!({ "terminal": terminal, "program": "python3", "args": ["-c", LISTENS] });
+    let open = json!({ "terminal": terminal, "program": "node", "args": ["-e", LISTENS] });
     world.call("terminal.open", open).await.unwrap();
     let mut watching = world.watch(terminal).await;
     let said = |screen: &str| {
@@ -87,9 +86,7 @@ async fn a_terminal_s_server_shows_in_its_space_only_and_stops() {
     let found = servers(&mut ports, on(port)).await;
     let server = found.iter().find(|server| server.port == port).unwrap();
     assert_eq!(server.by, StartedBy::Terminal);
-    // macOS's framework Python names itself `Python`.
-    let program = server.program.to_lowercase();
-    assert!(program.starts_with("python"), "{server:?}");
+    assert!(server.program.starts_with("node -e"), "{server:?}");
     let elsewhere = servers(&mut world.ports(other).await, |_| true).await;
     assert!(!on(port)(&elsewhere), "{elsewhere:?}");
     let named = json!({ "port": port, "process": server.process });
@@ -110,10 +107,9 @@ async fn an_agent_s_server_is_known_by_its_space_and_a_harness_s_own_is_not() {
     let world = World::new().await;
     let mut ports = world.ports(world.space).await;
     // As a Harness's CLI listens for an editor: in its process's group.
-    let (_cli, own) = as_a_harness(&world, LISTENS, false).await;
+    let (_cli, own) = as_a_harness(&world, false).await;
     // As an Agent's tool runs a server: a job of its own.
-    let job = format!("import os\nos.setpgrp()\n{LISTENS}");
-    let (mut tool, port) = as_a_harness(&world, &job, true).await;
+    let (mut tool, port) = as_a_harness(&world, true).await;
 
     let found = servers(&mut ports, on(port)).await;
     assert!(!on(own)(&found), "{found:?}");
