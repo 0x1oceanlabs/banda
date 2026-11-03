@@ -702,6 +702,45 @@ test("an Agent's tab opens beside its Thread, in the browser there, and the Pers
   await expect(composer).toBeFocused()
 })
 
+test("a Thread's tab glows and its pill says the Thread and its step, until the Person stops it or the turn ends", async () => {
+  const address = await serve({
+    "/": `<title>Form</title><button onclick="out.textContent = 'Hi'">Greet</button><p id="out"></p>`,
+  })
+  window = await startWindow()
+  const { page } = window
+  const { thread, composer } = await firstThread(page)
+  await composer.fill("wait here")
+  await composer.press("Enter")
+  await expect(thread.getByText("Waiting.")).toBeVisible()
+
+  // The pill names the Thread and the step it takes.
+  const opened = await agentSays(window, "browser_open", { url: `${address}/` })
+  const tab = Number(/^Opened tab (\d+)\./.exec(opened)?.[1])
+  const pill = page.getByRole("status", { name: "wait here drives this tab" })
+  const host = new URL(address).host
+  await expect(pill).toContainText(`wait here· Opening ${host}`)
+  const tree = await agentSays(window, "browser_snapshot", { tab })
+  await expect(pill).toContainText("· Reading the page")
+  const greet = /button "Greet" \[ref=(e\d+)\]/.exec(tree)![1]
+  await agentSays(window, "browser_act", { tab, action: "click", ref: greet })
+  await expect(pill).toContainText('· Clicking "Greet"')
+
+  // Its title goes to the Thread.
+  await addressBar(page).focus()
+  await pill.getByRole("button", { name: "wait here", exact: true }).click()
+  await expect(composer).toBeFocused()
+
+  // Its Stop ends that Thread's drive there; a call drives it again.
+  await pill.getByRole("button", { name: "Stop wait here in this tab" }).click()
+  await expect(pill).toHaveCount(0)
+  await agentSays(window, "browser_snapshot", { tab })
+  await expect(pill).toBeVisible()
+
+  // The turn's end ends it too.
+  await thread.getByRole("button", { name: "Stop" }).click()
+  await expect(pill).toHaveCount(0)
+})
+
 test("an Agent acts in a tab by refs, hears what changed, and leaves the Person's secrets alone", async () => {
   const form = `<title>Form</title>
     <label>Name <input id="name"></label>

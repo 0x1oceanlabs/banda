@@ -43,6 +43,9 @@ export type BrowserNews =
   | { kind: "close"; from: number }
   /** An Agent drives the tab over CDP, or no longer does. */
   | { kind: "driven"; from: number; driven: boolean }
+  /** A Thread's Agent drives the tab with Banda's tools, by its ID, and
+   * the step it takes; or none does now (ADR 0029, decision 4). */
+  | { kind: "driver"; from: number; agent: string | null; step: string }
 
 /** An extension's button, as Chrome's `action` says it, for every tab and
  * for some tabs alone (electron-chrome-extensions' `getState`). */
@@ -86,6 +89,11 @@ export const BROWSER_BRIDGE = {
   created: send<[request: string, contents: number | null]>(),
   /** Stops the Agents that drive the page: their sessions on it end. */
   stop: send<[contents: number]>(),
+  /** Stops the Thread that drives the page with Banda's tools; the
+   * Person's own programs on it go on. */
+  release: send<[contents: number]>(),
+  /** The turn of the Thread of `agent` ended: it drives no tab now. */
+  settled: send<[agent: string]>(),
   /** Pins an extension's button to the row, or takes it off, in
    * `browser.toml`. */
   pin: invoke<[extension: string, pinned: boolean]>(),

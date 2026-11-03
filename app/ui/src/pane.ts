@@ -214,6 +214,9 @@ export type Listed = {
   pane: PaneState
 }
 
+/** What every module lists for each Space, for the sidebar. */
+export type Lists = Readonly<Record<SpaceId, readonly Listed[]>>
+
 /** What a Watch says about one Space: what calls the Person, and its list. */
 export type Report = Attention & { listed: readonly Listed[] }
 

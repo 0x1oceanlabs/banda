@@ -9,6 +9,7 @@ import { browserPane } from "./BrowserPane"
 import { frontHolder, holderOf, openWith } from "./pages"
 import { webSource } from "./sources"
 import { browserAt, type KeptArgs, NEW_BROWSER, readArgs } from "./tabs"
+import { followThreads } from "./threads"
 
 export const browser = defineModule({
   id: "browser",
@@ -50,9 +51,11 @@ export const browser = defineModule({
   // to the browser of the column right of the Thread's Pane, or a new
   // one there; with the Thread not shown, to its Space's browser the
   // Person was in last, or a new one. An extension's goes to the browser
-  // the Person was in last. The Person's Pane keeps the focus.
-  start: (window) =>
-    openWith((url, agent) => {
+  // the Person was in last. The Person's Pane keeps the focus. A Thread
+  // drives its tabs until its turn ends (`followThreads`).
+  start: (window) => {
+    const following = followThreads(window)
+    const opening = openWith((url, agent) => {
       const at = agent ? window.beside(agent) : null
       const holder = at?.right ? browserIn(at.right) : frontHolder(at?.space)
       if (holder) return holder.open(url)
@@ -62,7 +65,12 @@ export const browser = defineModule({
         ...(agent ? { beside: agent } : {}),
       })
       return args.tabs[0].id
-    }),
+    })
+    return () => {
+      following()
+      opening()
+    }
+  },
 })
 
 /** The browser Pane among `panes`, by its first tab's page. */

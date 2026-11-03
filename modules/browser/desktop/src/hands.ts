@@ -92,6 +92,51 @@ const elementOf = async (page: Page, ref: string) => {
   return locator
 }
 
+/** How much of an element's name a step says. */
+const NAMED = 40
+
+/** The element of `ref` as the Person knows it: its name in quotes, as
+ * its line in the tab's last snapshot, `tree`, has it; else its ref. */
+const nameOf = (tree: string, ref: string) => {
+  const line = tree.split("\n").find((line) => line.includes(`[ref=${ref}]`))
+  const name = line && /- [\w-]+ "((?:[^"\\]|\\.)*)"/.exec(line)?.[1]
+  if (!name) return ref
+  return `"${name.length > NAMED ? `${name.slice(0, NAMED - 1)}…` : name}"`
+}
+
+/** What the tab's Pane says the Thread does with `what` (ADR 0029,
+ * decision 4), naming elements as the tab's last snapshot, `tree`, does:
+ * words for the Person, with no text it types. */
+export function stepOf(tree: string, what: Act | WaitFor): string {
+  const name = nameOf(tree, what.ref ?? "")
+  if (!("action" in what)) {
+    if (what.text !== undefined) return `Waiting for "${what.text}"`
+    if (what.ref !== undefined) return `Waiting for ${name}`
+    return `Waiting for ${what.url}`
+  }
+  switch (what.action) {
+    case "click":
+      return `Clicking ${name}`
+    case "double_click":
+      return `Double-clicking ${name}`
+    case "type":
+    case "fill":
+      return `Typing in ${name}`
+    case "select":
+      return `Choosing in ${name}`
+    case "press":
+      return `Pressing ${what.key}`
+    case "hover":
+      return `Pointing at ${name}`
+    case "scroll":
+      return what.ref
+        ? `Scrolling to ${name}`
+        : `Scrolling ${what.direction ?? "down"}`
+    case "drag":
+      return `Dragging ${name} to ${nameOf(tree, what.to ?? "")}`
+  }
+}
+
 /** Keys as Playwright names them, where Electron's names differ. */
 const KEYS: Record<string, string> = {
   ArrowUp: "Up",

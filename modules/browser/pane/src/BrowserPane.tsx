@@ -28,7 +28,7 @@ import {
 import { PaneHeader } from "@banda/ui/components/pane-header"
 import { RingMeter } from "@banda/ui/components/ring-meter"
 import { Spinner } from "@banda/ui/components/spinner"
-import { TopLayer } from "@banda/ui/components/top-layer"
+import { DrawnIn, TopLayer } from "@banda/ui/components/top-layer"
 import { useFile } from "@banda/ui/lib/look"
 import { cn } from "@banda/ui/lib/utils"
 import { definePane, HOLDS, type PaneProps } from "@banda/ui/pane"
@@ -42,6 +42,7 @@ import {
   PanelTopIcon,
   PlusIcon,
   RotateCwIcon,
+  SquareIcon,
   XIcon,
 } from "lucide-react"
 import { addressOf, siteOf } from "./address"
@@ -49,6 +50,7 @@ import { Extensions, WEB_STORE } from "./Extensions"
 import type { Download } from "./desktop"
 import { browserHost, downloadsNow, watchDownloads } from "./host"
 import { browserKey, type Does, isTabKey } from "./keys"
+import { threadOf, useThreadOf } from "./threads"
 import {
   BLANK,
   drop,
@@ -111,6 +113,7 @@ function BrowserPane({
   space,
   args: kept,
   focused,
+  open,
   update,
   close,
 }: PaneProps<KeptArgs>) {
@@ -208,6 +211,10 @@ function BrowserPane({
       onOpen={(url) => update(withChanged(args, { ...tab, url }))}
       onStore={() => holder.open(WEB_STORE)}
       onTabKey={(key) => change(afterTabKey(args, key, newId()))}
+      onThread={(agent) => {
+        const thread = threadOf(agent)
+        if (thread) open(thread.listed.pane, undefined, thread.space)
+      }}
       close={close}
     />
   )
@@ -230,6 +237,7 @@ function Browser({
   onOpen,
   onStore,
   onTabKey,
+  onThread,
   close,
 }: {
   tab: Tab
@@ -240,6 +248,8 @@ function Browser({
   onOpen: (url: string) => void
   onStore: () => void
   onTabKey: (key: TabKey) => void
+  /** Goes to the Thread of the Agent that drives the page. */
+  onThread: (agent: string) => void
   close: () => void
 }) {
   const root = useRef<HTMLDivElement>(null)
@@ -380,8 +390,70 @@ function Browser({
         >
           <Notice state={state} page={page} url={tab.url} />
         </div>
+        {page && state.driver && (
+          <DrawnIn element={page.over}>
+            <Driving
+              driver={state.driver}
+              contents={contents}
+              onThread={() => onThread(state.driver!.agent)}
+            />
+          </DrawnIn>
+        )}
       </div>
     </div>
+  )
+}
+
+/**
+ * What Banda draws over a page a Thread drives (ADR 0029, decision 4), in
+ * the page's own layer and not in it: a soft glow round it, and a glass
+ * pill at its foot with the Thread, the step it takes, and Stop, which
+ * stops that Thread there alone. A click on the title goes to the Thread.
+ */
+function Driving({
+  driver,
+  contents,
+  onThread,
+}: {
+  driver: { agent: string; step: string }
+  contents: number | null
+  onThread: () => void
+}) {
+  const title = useThreadOf(driver.agent)?.title ?? "An Agent"
+  return (
+    <>
+      <div
+        aria-hidden
+        className="absolute inset-0 shadow-[inset_0_0_30px_color-mix(in_srgb,var(--primary)_40%,transparent)]"
+      />
+      <div
+        role="status"
+        aria-label={`${title} drives this tab`}
+        className="pointer-events-auto absolute bottom-3 left-1/2 flex max-w-[calc(100%-24px)] -translate-x-1/2 items-center gap-2 rounded-full bg-popover/85 py-1 pr-1 pl-2.5 text-xs whitespace-nowrap text-popover-foreground shadow-lg ring-1 ring-border backdrop-blur-md"
+      >
+        <span className="size-[7px] shrink-0 animate-pulse rounded-full bg-primary" />
+        <button
+          type="button"
+          title="Go to the Thread"
+          onClick={onThread}
+          className="min-w-0 truncate font-semibold hover:underline"
+        >
+          {title}
+        </button>
+        <span className="min-w-0 truncate opacity-70">· {driver.step}</span>
+        <Button
+          variant="secondary"
+          size="xs"
+          className="shrink-0 rounded-full"
+          aria-label={`Stop ${title} in this tab`}
+          onClick={() => {
+            if (contents !== null) browserHost()?.release(contents)
+          }}
+        >
+          Stop
+        </Button>
+      </div>
+    </>
   )
 }
 
@@ -503,8 +575,12 @@ function TabItem({
   const page = pageAt(tab.id)
   const state = page?.state
   const words = state?.title || titleOf(tab)
-  const mark = state?.driven && (
-    <Driven contents={page?.contents} words={words} />
+  const mark = (state?.driven || state?.driver) && (
+    <Driven
+      contents={page?.contents}
+      words={words}
+      thread={state.driver !== null}
+    />
   )
   return (
     <div
@@ -552,14 +628,18 @@ function TabItem({
   )
 }
 
-/** The mark of an Agent that drives the tab over CDP; a click stops it,
- * as its sessions on the tab end (ADR 0013, decision 7). */
+/** The mark of an Agent that drives the tab, a stop under the pointer.
+ * A click stops it: a Thread there alone (ADR 0029, decision 4), else
+ * every session on the tab ends (ADR 0013, decision 7). */
 function Driven({
   contents,
   words,
+  thread,
 }: {
   contents: number | null | undefined
   words: string
+  /** A Thread drives it with Banda's tools. */
+  thread: boolean
 }) {
   return (
     <button
@@ -568,11 +648,14 @@ function Driven({
       title="An Agent drives this tab: click to stop it"
       onClick={(event) => {
         event.stopPropagation()
-        if (contents != null) browserHost()?.stop(contents)
+        if (contents == null) return
+        if (thread) browserHost()?.release(contents)
+        else browserHost()?.stop(contents)
       }}
-      className="flex size-5 shrink-0 items-center justify-center rounded text-primary hover:bg-foreground/10 [&_svg]:size-3.5"
+      className="group/stop flex size-5 shrink-0 items-center justify-center rounded text-primary hover:bg-foreground/10 [&_svg]:size-3.5"
     >
-      <BotIcon />
+      <BotIcon className="group-hover/stop:hidden" />
+      <SquareIcon className="hidden fill-current group-hover/stop:block" />
     </button>
   )
 }
