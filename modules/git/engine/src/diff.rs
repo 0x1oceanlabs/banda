@@ -32,9 +32,9 @@ pub const FILE: usize = 1024 * 1024;
 pub const UNTRACKED: usize = 5000;
 
 /// What a scope compares, once its refs are resolved.
-struct Sides {
-    /// The commit or tree on the old side.
-    from: String,
+pub(crate) struct Sides {
+    /// The commit or tree on the old side; the index when none.
+    from: Option<String>,
     /// The commit on the new side; the work tree or the index when none.
     to: Option<String>,
     /// The new side is the index (`--cached`).
@@ -46,16 +46,20 @@ struct Sides {
 /// is while the turn runs.
 fn work_tree(scope: &Scope) -> Option<bool> {
     match scope {
-        Scope::Changes { .. } | Scope::Uncommitted => Some(true),
+        Scope::Changes { .. } | Scope::Uncommitted | Scope::Unstaged => Some(true),
         Scope::Staged | Scope::Commit { .. } => Some(false),
         Scope::Turn { .. } => None,
     }
 }
 
 /// The sides of `scope`, with `head` the commit `HEAD` is.
-async fn sides(repo: &Repo, scope: &Scope, head: Option<&str>) -> Result<Sides, Refusal> {
+pub(crate) async fn sides(
+    repo: &Repo,
+    scope: &Scope,
+    head: Option<&str>,
+) -> Result<Sides, Refusal> {
     let tree = |from: String| Sides {
-        from,
+        from: Some(from),
         to: None,
         cached: false,
         base: None,
@@ -82,6 +86,12 @@ async fn sides(repo: &Repo, scope: &Scope, head: Option<&str>) -> Result<Sides, 
             }
         }
         Scope::Uncommitted => tree(repo.head_or_empty(head).await?),
+        Scope::Unstaged => Sides {
+            from: None,
+            to: None,
+            cached: false,
+            base: None,
+        },
         Scope::Staged => Sides {
             cached: true,
             ..tree(repo.head_or_empty(head).await?)
@@ -116,7 +126,7 @@ async fn sides(repo: &Repo, scope: &Scope, head: Option<&str>) -> Result<Sides, 
 impl Sides {
     /// `git diff`'s arguments for these sides with `flags`, before `--`
     /// and the paths.
-    fn args(&self, whitespace: bool, flags: &[&str]) -> Vec<String> {
+    pub(crate) fn args(&self, whitespace: bool, flags: &[&str]) -> Vec<String> {
         let mut args: Vec<String> = DIFF.map(str::to_owned).into();
         if whitespace {
             args.push("--ignore-all-space".into());
@@ -125,7 +135,7 @@ impl Sides {
         if self.cached {
             args.push("--cached".into());
         }
-        args.push(self.from.clone());
+        args.extend(self.from.clone());
         args.extend(self.to.clone());
         args.push("--".into());
         args
@@ -285,23 +295,11 @@ impl Scratch {
         let (folder, index) = own_index(repo).await?;
         let args = [
             &INDEX[..],
-            &[
-                "-c",
-                "core.preloadIndex=false",
-                "--literal-pathspecs",
-                "add",
-                "--intent-to-add",
-                "--pathspec-from-file=-",
-                "--pathspec-file-nul",
-            ],
+            &["-c", "core.preloadIndex=false", "add", "--intent-to-add"],
         ]
         .concat();
-        let opts = Opts {
-            index: Some(&index),
-            stdin: Some(untracked.join("\0").into_bytes()),
-            ..Opts::default()
-        };
-        repo.run(args, opts).await?;
+        let paths: Vec<&str> = untracked.iter().map(String::as_str).collect();
+        repo.run_on_paths(&args, &paths, Some(&index)).await?;
         Ok(Scratch {
             _folder: Some(folder),
             index: Some(index),
@@ -401,7 +399,10 @@ pub async fn contents(repo: &Repo, ask: ContentsAsk) -> Result<Contents, Refusal
     let head = repo.head().await?;
     let sides = sides(repo, &ask.scope, head.as_deref()).await?;
     // The empty tree, before the first commit, holds no file.
-    let old = blob(repo, format!("{}:{old_path}", sides.from));
+    let old = blob(
+        repo,
+        format!("{}:{old_path}", sides.from.as_deref().unwrap_or(":0")),
+    );
     let new = async {
         match (&sides.to, sides.cached) {
             (Some(commit), _) => blob(repo, format!("{commit}:{path}")).await,

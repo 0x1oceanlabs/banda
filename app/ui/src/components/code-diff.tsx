@@ -8,21 +8,31 @@
 import {
   parseDiffFromFile,
   parsePatchFiles,
+  type DiffLineAnnotation,
   type FileDiffContentsLoader,
   type FileDiffMetadata,
 } from "@pierre/diffs"
 import {
   CodeView,
   WorkerPoolContextProvider,
+  type CodeViewAnnotationArgs,
   type CodeViewHandle,
   type CodeViewItem,
 } from "@pierre/diffs/react"
-import { type ReactNode, type Ref, useMemo } from "react"
+import {
+  type ReactNode,
+  type Ref,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+} from "react"
 import { useDark } from "../hooks/use-dark"
 import { cn } from "cn"
 
 export type { FileDiffMetadata } from "@pierre/diffs"
-export type { CodeViewHandle } from "@pierre/diffs/react"
+
+/** The view's handle: a hunk's mark is its index in its file. */
+export type CodeDiffHandle = CodeViewHandle<number, undefined>
 
 const THEMES = { dark: "pierre-dark", light: "pierre-light" } as const
 
@@ -112,13 +122,71 @@ export function keyOf(file: FileDiffMetadata): string {
 const numbers = new WeakMap<FileDiffMetadata, number>()
 let counted = 0
 
-/** What tells the view to draw an item again: a new patch of its file, or
- * a new fold; it keeps an item whose version stayed. */
-function versionOf(file: FileDiffMetadata, collapsed: boolean): number {
+/** What tells the view to draw an item again: a new patch of its file, a
+ * new fold, or its hunks marked or not; it keeps an item whose version
+ * stayed. */
+function versionOf(
+  file: FileDiffMetadata,
+  collapsed: boolean,
+  marked: boolean
+): number {
   let number = numbers.get(file)
   if (number === undefined) numbers.set(file, (number = ++counted))
-  return number * 2 + (collapsed ? 1 : 0)
+  return number * 4 + (collapsed ? 2 : 0) + (marked ? 1 : 0)
 }
+
+/** A mark under each hunk's first line, where what it can do is drawn
+ * over it: on the old side when the hunk begins with lines removed, which
+ * are drawn first, else on the new. */
+function marksOf(file: FileDiffMetadata): DiffLineAnnotation<number>[] {
+  return file.hunks.map((hunk, index) => {
+    const first = hunk.hunkContent[0]
+    const removedFirst =
+      (first?.type === "change" && first.deletions > 0) ||
+      hunk.additionCount === 0
+    return removedFirst
+      ? { side: "deletions", lineNumber: hunk.deletionStart, metadata: index }
+      : { side: "additions", lineNumber: hunk.additionStart, metadata: index }
+  })
+}
+
+/** The hunk of `file` a line is in, on its side: its index, or -1. */
+function hunkAt(
+  file: FileDiffMetadata,
+  side: "additions" | "deletions",
+  line: number
+): number {
+  return file.hunks.findIndex((hunk) => {
+    const [start, count] =
+      side === "additions"
+        ? [hunk.additionStart, hunk.additionCount]
+        : [hunk.deletionStart, hunk.deletionCount]
+    return line >= start && line < start + count
+  })
+}
+
+/** The hunk the pointer is on: its file's item and its index. */
+type Pointed = { item: string; hunk: number } | null
+
+/** Where the pointer is, told to each hunk's plate as it moves to
+ * another hunk. */
+function pointer() {
+  let pointed: Pointed = null
+  const told = new Set<() => void>()
+  return {
+    get: () => pointed,
+    set(next: Pointed) {
+      if (next?.item === pointed?.item && next?.hunk === pointed?.hunk) return
+      pointed = next
+      for (const tell of told) tell()
+    },
+    subscribe(tell: () => void) {
+      told.add(tell)
+      return () => told.delete(tell)
+    },
+  }
+}
+type Pointer = ReturnType<typeof pointer>
 
 export type CodeDiffProps = {
   files: readonly FileDiffMetadata[]
@@ -132,7 +200,12 @@ export type CodeDiffProps = {
   prefix?: (key: string) => ReactNode
   /** Drawn after the last file: where more load, say. */
   footer?: () => ReactNode
-  viewer?: Ref<CodeViewHandle<undefined, undefined>>
+  /** Drawn after a file's counts: what can be done to it. */
+  actions?: (file: FileDiffMetadata) => ReactNode
+  /** Drawn at a hunk's top right while the pointer is on it: what can be
+   * done to the hunk, by its index in the file; none draws nothing. */
+  hunkActions?: (file: FileDiffMetadata, hunk: number) => ReactNode
+  viewer?: Ref<CodeDiffHandle>
   className?: string
 }
 
@@ -144,11 +217,14 @@ export function CodeDiff({
   load,
   prefix,
   footer,
+  actions,
+  hunkActions,
   viewer,
   className,
 }: CodeDiffProps) {
   const dark = useDark()
-  const items = useMemo<CodeViewItem<undefined>[]>(
+  const marked = hunkActions !== undefined
+  const items = useMemo<CodeViewItem<number>[]>(
     () =>
       files.map((file) => {
         const id = keyOf(file)
@@ -158,11 +234,24 @@ export function CodeDiff({
           type: "diff",
           fileDiff: file,
           collapsed,
-          version: versionOf(file, collapsed),
+          version: versionOf(file, collapsed, marked),
+          ...(marked ? { annotations: marksOf(file) } : {}),
         }
       }),
-    [files, folded]
+    [files, folded, marked]
   )
+  const [pointed] = useState(pointer)
+  // The pointer leaving the view leaves every hunk; one callback for the
+  // view's life, as the view sets itself up again for a new one.
+  const [watch] = useState(() => {
+    const leave = () => pointed.set(null)
+    let watched: HTMLDivElement | null = null
+    return (element: HTMLDivElement | null) => {
+      watched?.removeEventListener("pointerleave", leave)
+      watched = element
+      element?.addEventListener("pointerleave", leave)
+    }
+  })
   // Pierre draws every file again when its options are a new object.
   const options = useMemo(
     () => ({
@@ -173,19 +262,44 @@ export function CodeDiff({
       themeType: dark ? ("dark" as const) : ("light" as const),
       stickyHeaders: true,
       ...(load ? { loadDiffFiles: load } : {}),
+      // A hunk shows what it can do while the pointer is on its lines, or
+      // on what it shows, which is on none.
+      ...(marked
+        ? {
+            onLineEnter: (
+              line: {
+                lineNumber: number
+                annotationSide?: "additions" | "deletions"
+              },
+              context: { item: CodeViewItem<number> }
+            ) => {
+              const { item } = context
+              if (item.type === "diff" && line.annotationSide)
+                pointed.set({
+                  item: item.id,
+                  hunk: hunkAt(
+                    item.fileDiff,
+                    line.annotationSide,
+                    line.lineNumber
+                  ),
+                })
+            },
+          }
+        : {}),
       unsafeCSS: CSS,
       itemMetrics: METRICS,
       layout: LAYOUT,
     }),
-    [layout, wrap, dark, load]
+    [layout, wrap, dark, load, marked, pointed]
   )
   return (
     <WorkerPoolContextProvider
       poolOptions={POOL}
       highlighterOptions={HIGHLIGHTER}
     >
-      <CodeView<undefined>
+      <CodeView<number>
         {...(viewer ? { ref: viewer } : {})}
+        containerRef={watch}
         items={items}
         className={cn(
           "[--diff-number:35%] [--diff-row:50%] dark:[--diff-number:60%] dark:[--diff-row:70%]",
@@ -194,14 +308,71 @@ export function CodeDiff({
         )}
         {...(prefix
           ? {
-              renderHeaderPrefix: (item: CodeViewItem<undefined>) =>
+              renderHeaderPrefix: (item: CodeViewItem<number>) =>
                 prefix(item.id),
+            }
+          : {})}
+        {...(actions
+          ? {
+              renderHeaderMetadata: (item: CodeViewItem<number>) =>
+                item.type === "diff" ? actions(item.fileDiff) : null,
+            }
+          : {})}
+        {...(hunkActions
+          ? {
+              renderAnnotation: (
+                ...[annotation, , item]: CodeViewAnnotationArgs<number>
+              ) => {
+                if (item.type !== "diff") return null
+                const actions = hunkActions(item.fileDiff, annotation.metadata)
+                return actions ? (
+                  <HunkPlate
+                    pointed={pointed}
+                    item={item.id}
+                    hunk={annotation.metadata}
+                  >
+                    {actions}
+                  </HunkPlate>
+                ) : null
+              },
             }
           : {})}
         {...(footer ? { renderCodeViewFooter: footer } : {})}
         options={options}
       />
     </WorkerPoolContextProvider>
+  )
+}
+
+/** What a hunk can do, drawn over the right of its first line while the
+ * pointer is on the hunk, or while a popup opened from it is open. */
+function HunkPlate({
+  pointed,
+  item,
+  hunk,
+  children,
+}: {
+  pointed: Pointer
+  item: string
+  hunk: number
+  children: ReactNode
+}) {
+  const on = useSyncExternalStore(pointed.subscribe, () => {
+    const at = pointed.get()
+    return at?.item === item && at.hunk === hunk
+  })
+  return (
+    <div data-hunk-actions className="relative h-0">
+      <div
+        className={cn(
+          "absolute right-2 bottom-0 flex items-center gap-0.5 rounded-md bg-popover font-sans text-xs text-popover-foreground shadow-md ring-1 ring-foreground/10 transition-[opacity,visibility] duration-100 [&_[data-slot=button]]:h-5",
+          !on &&
+            "invisible opacity-0 has-data-popup-open:visible has-data-popup-open:opacity-100"
+        )}
+      >
+        {children}
+      </div>
+    </div>
   )
 }
 

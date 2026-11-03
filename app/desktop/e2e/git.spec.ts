@@ -10,9 +10,11 @@ test.afterEach(async () => {
   await window?.close()
 })
 
-/** Runs git in `folder`, as one who has no config of their own. */
-function git(folder: string, ...args: string[]) {
-  execFileSync("git", args, {
+/** Runs git in `folder`, as one who has no config of their own, and says
+ * what it printed. */
+function git(folder: string, ...args: string[]): string {
+  return execFileSync("git", args, {
+    encoding: "utf8",
     cwd: folder,
     env: {
       ...process.env,
@@ -151,4 +153,67 @@ test("a turn's Diff is all the turn changed, its shell's work too, from git's ch
   await setInFront(page, true)
   await expect(files.getByRole("treeitem", { name: "made.txt" })).toBeVisible()
   await expect(files.getByRole("treeitem", { name: "later.md" })).toHaveCount(0)
+})
+
+test("the Diff stages, unstages and reverts a hunk, a file and all, as the Codex app's", async () => {
+  window = await startWindow()
+  const { page, dir } = window
+  await expect((await firstThread(page)).composer).toBeVisible()
+
+  // A file changed at both ends, another changed, and one untracked.
+  const folder = join(dir, "root", "Work")
+  const ten = Array.from({ length: 10 }, (_, n) => `line ${n + 1}`)
+  git(folder, "init", "-q", "-b", "main")
+  writeFileSync(join(folder, "ten.txt"), ten.join("\n") + "\n")
+  writeFileSync(join(folder, "b.txt"), "bee\n")
+  git(folder, "add", "-A")
+  git(folder, "commit", "-qm", "First")
+  const changed = [...ten]
+  changed[0] = "line ONE"
+  changed[9] = "line TEN"
+  writeFileSync(join(folder, "ten.txt"), changed.join("\n") + "\n")
+  writeFileSync(join(folder, "b.txt"), "BEE\n")
+  writeFileSync(join(folder, "new.txt"), "new\n")
+  const status = () => git(folder, "status", "--porcelain").trimEnd()
+
+  await page.keyboard.press("Alt+KeyN")
+  const launcher = page.getByRole("region", { name: "New Pane" })
+  await expect(launcher.getByRole("button", { name: /Diff/ })).toBeVisible()
+  await page.keyboard.press("KeyD")
+  const diff = page.getByRole("region", { name: "Diff" })
+  const scope = diff.getByRole("button", { name: "Scope" })
+  await scope.click()
+  await page.getByRole("menuitemradio", { name: /Unstaged/ }).click()
+  await expect(scope).toHaveText("Unstaged")
+  await expect(diff.locator("header")).toContainText("3 files")
+  await diff.getByRole("button", { name: "Expand all files" }).click()
+
+  // A hunk shows what it can do as the pointer is on it: its first is
+  // staged, the other stays.
+  await diff.getByText("line ONE").hover()
+  const stageHunk = diff.getByRole("button", { name: "Stage this hunk" })
+  // Only the hunk under the pointer shows it.
+  await expect(stageHunk).toHaveCount(1)
+  await page.screenshot({ path: "test-results/git-diff-hunk.png" })
+  await stageHunk.click()
+  await expect.poll(status).toContain("MM ten.txt")
+  await expect(diff.getByText("line ONE")).toHaveCount(0)
+  await expect(diff.getByText("line TEN")).toBeVisible()
+
+  // A file's Revert asks first; the untracked one goes.
+  await diff.getByRole("button", { name: "Revert new.txt" }).click()
+  const ask = page.getByRole("dialog", { name: "Revert new.txt?" })
+  await expect(ask).toContainText("can't be undone")
+  await page.screenshot({ path: "test-results/git-diff-revert.png" })
+  await ask.getByRole("button", { name: "Revert" }).click()
+  await expect.poll(status).not.toContain("new.txt")
+
+  // Stage all; then Staged unstages a file.
+  await diff.getByRole("button", { name: "Stage all" }).click()
+  await expect(diff.getByText("Everything changed is staged.")).toBeVisible()
+  await scope.click()
+  await page.getByRole("menuitemradio", { name: /Staged/ }).click()
+  await expect(scope).toHaveText("Staged")
+  await diff.getByRole("button", { name: "Unstage b.txt" }).click()
+  await expect.poll(status).toBe(" M b.txt\nM  ten.txt")
 })

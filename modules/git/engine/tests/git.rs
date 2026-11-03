@@ -692,3 +692,212 @@ async fn a_turn_is_the_work_tree_from_its_checkpoint_as_it_began_to_as_it_ended(
     let refused = world.call("git.diff", turn(&first)).await.unwrap_err();
     assert_eq!(refused.code, Code::NotFound);
 }
+
+/// What the Diff sends to change the `n`th hunk of `path` in `diff`: the
+/// hunk's lines and the file's objects, read from the patch as the Pane
+/// reads them.
+fn hunk_of(diff: &Diff, path: &str, n: usize) -> Value {
+    let start = diff
+        .patch
+        .find(&format!("diff --git a/{path} b/{path}\n"))
+        .unwrap_or_else(|| panic!("{path} in {}", diff.patch));
+    let file = &diff.patch[start..];
+    let file = match file[1..].find("\ndiff --git ") {
+        Some(end) => &file[..end + 1],
+        None => file,
+    };
+    let ids = file
+        .lines()
+        .find_map(|line| line.strip_prefix("index "))
+        .unwrap()
+        .split(' ')
+        .next()
+        .unwrap();
+    let (old_id, new_id) = ids.split_once("..").unwrap();
+    let header = file
+        .lines()
+        .filter(|l| l.starts_with("@@ "))
+        .nth(n)
+        .unwrap();
+    let ranges: Vec<u32> = header
+        .trim_start_matches("@@ -")
+        .split(" @@")
+        .next()
+        .unwrap()
+        .split([' ', ',', '+'])
+        .filter(|s| !s.is_empty())
+        .map(|s| s.parse().unwrap())
+        .collect();
+    let [old_start, old_lines, new_start, new_lines] = ranges[..] else {
+        panic!("{header}")
+    };
+    json!({
+        "files": [path],
+        "hunk": {
+            "old_start": old_start, "old_lines": old_lines,
+            "new_start": new_start, "new_lines": new_lines,
+            "old_id": old_id, "new_id": new_id,
+        },
+    })
+}
+
+/// A file of ten lines, to change at either end.
+const TEN: &str = "1\n2\n3\n4\n5\n6\n7\n8\n9\n10\n";
+
+#[tokio::test]
+async fn unstaged_is_the_work_tree_against_the_index() {
+    let world = World::committed().await;
+    world.write("a.txt", "one\nTWO\nthree\n");
+    world.git(&["add", "a.txt"]);
+    world.write("a.txt", "one\nTWO\nTHREE\n");
+    world.write("b.txt", "unstaged\n");
+    world.write("untracked.txt", "no\n");
+
+    let unstaged = world.diff(json!({ "scope": { "kind": "unstaged" } })).await;
+    assert_eq!(paths(&unstaged), ["a.txt", "b.txt", "untracked.txt"]);
+    assert!(unstaged.patch.contains("+THREE") && !unstaged.patch.contains("+TWO"));
+    let contents: Contents = world
+        .ask(
+            "git.contents",
+            json!({ "scope": { "kind": "unstaged" }, "path": "a.txt" }),
+        )
+        .await;
+    assert_eq!(contents.old.as_deref(), Some("one\nTWO\nthree\n"));
+    assert_eq!(contents.new.as_deref(), Some("one\nTWO\nTHREE\n"));
+}
+
+#[tokio::test]
+async fn files_stage_and_unstage_whole_untracked_and_removed_too() {
+    let world = World::committed().await;
+    world.write("a.txt", "one\nTWO\nthree\n");
+    std::fs::remove_file(world.folder.join("d.txt")).unwrap();
+    world.write("new.txt", "new\n");
+
+    let files = json!({ "files": ["a.txt", "d.txt", "new.txt"] });
+    world.call("git.stage", files.clone()).await.unwrap();
+    assert_eq!(
+        world.git(&["diff", "--cached", "--name-status"]),
+        "M\ta.txt\nD\td.txt\nA\tnew.txt"
+    );
+    let unstaged = world.diff(json!({ "scope": { "kind": "unstaged" } })).await;
+    assert!(unstaged.files.is_empty());
+
+    world.call("git.unstage", files).await.unwrap();
+    assert_eq!(world.git(&["diff", "--cached", "--name-status"]), "");
+    assert_eq!(
+        world.git(&["status", "--porcelain"]),
+        " M a.txt\n D d.txt\n?? new.txt"
+    );
+}
+
+#[tokio::test]
+async fn files_unstage_before_the_first_commit() {
+    let world = World::new().await;
+    world.write("a.txt", "one\n");
+    world.git(&["add", "a.txt"]);
+    world
+        .call("git.unstage", json!({ "files": ["a.txt"] }))
+        .await
+        .unwrap();
+    assert_eq!(world.git(&["status", "--porcelain"]), "?? a.txt");
+}
+
+#[tokio::test]
+async fn a_hunk_stages_alone_and_unstages_alone() {
+    let world = World::new().await;
+    world.write("ten.txt", TEN);
+    world.commit("ten");
+    world.write(
+        "ten.txt",
+        &TEN.replace("1\n", "one\n").replace("10\n", "ten\n"),
+    );
+
+    let unstaged = world.diff(json!({ "scope": { "kind": "unstaged" } })).await;
+    world
+        .call("git.stage", hunk_of(&unstaged, "ten.txt", 1))
+        .await
+        .unwrap();
+    let staged = world.git(&["diff", "--cached"]);
+    assert!(
+        staged.contains("+ten") && !staged.contains("+one"),
+        "{staged}"
+    );
+    let unstaged = world.git(&["diff"]);
+    assert!(
+        unstaged.contains("+one") && !unstaged.contains("+ten"),
+        "{unstaged}"
+    );
+
+    world.write("ten.txt", TEN.replace("10\n", "ten\n").as_str());
+    let staged = world.diff(json!({ "scope": { "kind": "staged" } })).await;
+    world
+        .call("git.unstage", hunk_of(&staged, "ten.txt", 0))
+        .await
+        .unwrap();
+    assert_eq!(world.git(&["diff", "--cached"]), "");
+}
+
+#[tokio::test]
+async fn a_hunk_drawn_with_whitespace_hidden_takes_its_whitespace_along() {
+    let world = World::new().await;
+    world.write("ten.txt", TEN);
+    world.commit("ten");
+    world.write(
+        "ten.txt",
+        &TEN.replace("2\n", "  2\n").replace("3\n", "three\n"),
+    );
+
+    let hidden = world
+        .diff(json!({ "scope": { "kind": "unstaged" }, "ignore_whitespace": true }))
+        .await;
+    world
+        .call("git.stage", hunk_of(&hidden, "ten.txt", 0))
+        .await
+        .unwrap();
+    assert_eq!(world.git(&["diff"]), "");
+}
+
+#[tokio::test]
+async fn revert_puts_a_hunk_or_a_file_back_and_an_untracked_file_goes() {
+    let world = World::new().await;
+    world.write("ten.txt", TEN);
+    world.write("b.txt", "bee\n");
+    world.commit("ten");
+    world.write(
+        "ten.txt",
+        &TEN.replace("1\n", "one\n").replace("10\n", "ten\n"),
+    );
+    world.write("b.txt", "BEE\n");
+    world.write("new.txt", "new\n");
+
+    let unstaged = world.diff(json!({ "scope": { "kind": "unstaged" } })).await;
+    world
+        .call("git.revert", hunk_of(&unstaged, "ten.txt", 0))
+        .await
+        .unwrap();
+    let left = std::fs::read_to_string(world.folder.join("ten.txt")).unwrap();
+    assert_eq!(left, TEN.replace("10\n", "ten\n"));
+
+    world
+        .call("git.revert", json!({ "files": ["b.txt", "new.txt"] }))
+        .await
+        .unwrap();
+    assert_eq!(world.git(&["status", "--porcelain"]), " M ten.txt");
+}
+
+#[tokio::test]
+async fn a_hunk_of_a_file_changed_since_the_diff_changes_nothing() {
+    let world = World::new().await;
+    world.write("ten.txt", TEN);
+    world.commit("ten");
+    world.write("ten.txt", &TEN.replace("1\n", "one\n"));
+    let unstaged = world.diff(json!({ "scope": { "kind": "unstaged" } })).await;
+    world.write("ten.txt", &TEN.replace("1\n", "ONE\n"));
+
+    let refused = world
+        .call("git.stage", hunk_of(&unstaged, "ten.txt", 0))
+        .await
+        .unwrap_err();
+    assert_eq!(refused.code, Code::Conflict);
+    assert_eq!(world.git(&["diff", "--cached"]), "");
+}

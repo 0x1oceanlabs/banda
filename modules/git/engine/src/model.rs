@@ -101,6 +101,9 @@ pub enum Scope {
     },
     /// The work tree, untracked files too, against `HEAD`.
     Uncommitted,
+    /// The work tree, untracked files too, against the index: what is not
+    /// staged yet, as the Codex app's.
+    Unstaged,
     /// The index against `HEAD`: what a commit would take.
     Staged,
     /// One commit against its first parent; the first commit against
@@ -252,4 +255,36 @@ pub struct Contents {
     pub new: Option<String>,
     /// A side is binary or past 1 MiB, and neither is sent.
     pub too_large: bool,
+}
+
+/// What `git.stage`, `git.unstage` and `git.revert` change: files whole,
+/// or the lines of one hunk of one file. Stage and revert take the work
+/// tree against the index (Unstaged); unstage the index against `HEAD`
+/// (Staged).
+#[derive(Clone, Debug, Deserialize, TS)]
+#[ts(export, export_to = "git/")]
+pub struct ChangeAsk {
+    /// The files, by their path from the top; a renamed one by where it
+    /// was too.
+    pub files: Vec<String>,
+    /// Only these lines of the one file in `files`.
+    #[serde(default)]
+    #[ts(optional)]
+    pub hunk: Option<HunkAsk>,
+}
+
+/// A hunk of a file as the Diff drew it: its lines on either side, and
+/// the file's objects from the patch's `index` line, so that nothing is
+/// changed when the file has changed since. What changed in these lines
+/// is taken, whitespace too, though the Diff hid it.
+#[derive(Clone, Debug, Deserialize, TS)]
+#[ts(export, export_to = "git/")]
+pub struct HunkAsk {
+    pub old_start: u32,
+    pub old_lines: u32,
+    pub new_start: u32,
+    pub new_lines: u32,
+    /// The file's object before and after, as short as the patch has it.
+    pub old_id: String,
+    pub new_id: String,
 }
