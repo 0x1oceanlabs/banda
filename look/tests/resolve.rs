@@ -397,6 +397,24 @@ fn columns_and_fonts_come_through_the_layers() {
 }
 
 #[test]
+fn the_bar_s_widgets_stand_where_look_toml_lists_them() {
+    let machine = Machine::new(false);
+    let bar = machine.look().bar;
+    assert!(bar.left.is_empty());
+    assert_eq!(bar.center, ["sidebar.counts"]);
+    assert_eq!(bar.right, ["workspaces.aside"]);
+
+    // A list replaces Banda's for its part, and [] empties it.
+    machine.look_toml("[bar]\ncenter = []\nright = [\"git.branch\", \"workspaces.aside\"]\n");
+    let look = machine.look();
+    assert!(look.problems.is_empty(), "{:?}", look.problems);
+    assert!(look.bar.center.is_empty());
+    assert_eq!(look.bar.right, ["git.branch", "workspaces.aside"]);
+    let right = &look.settings["look.toml"]["bar.right"].from;
+    assert_eq!((right.layer.as_str(), right.line), ("file", Some(3)));
+}
+
+#[test]
 fn any_omarchy_theme_by_name_and_a_pair_for_the_system() {
     let machine = Machine::new(true);
     machine.look_toml("theme = \"tokyo-night-light\"\n");

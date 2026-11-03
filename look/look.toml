@@ -67,6 +67,9 @@
 # [bar]
 # height = 36
 # workspaces = "numbers"             # "numbers", or "dots" with the one shown drawn long
+# left = []                          # widgets after the workspaces, by id, in order
+# center = ["sidebar.counts"]        # widgets in the middle; [] leaves it empty
+# right = ["workspaces.aside"]       # widgets on the right, before the connection
 
 # A Thread that drops from the top over the workspace, on Alt+`.
 # [drawer]

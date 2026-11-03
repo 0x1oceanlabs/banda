@@ -13,6 +13,7 @@ import {
   defineModule,
   type Module,
   type Source,
+  type Widget,
 } from "@banda/ui/module"
 import {
   definePane,
@@ -69,6 +70,14 @@ export const watches: readonly { watch: Watch; module: Module }[] = all.flatMap(
 /** Where the Banda menu finds the modules' rows, each with its module. */
 export const sources: readonly { source: Source; module: Module }[] =
   all.flatMap((module) => module.sources.map((source) => ({ source, module })))
+
+/** What the modules show on the bar, each with its module, by its id. */
+export const widgets: ReadonlyMap<string, { widget: Widget; module: Module }> =
+  new Map(
+    all.flatMap((module) =>
+      module.bar.map((widget) => [widget.id, { widget, module }] as const)
+    )
+  )
 
 export function kindOf(kind: string): AnyPaneKind | undefined {
   return byKind.get(kind)?.kind

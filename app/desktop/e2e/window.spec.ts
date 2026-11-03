@@ -3073,6 +3073,29 @@ test("the bar's middle counts who works and who waits while the sidebar is close
   ).toBeVisible()
 })
 
+test("the bar's widgets stand where look.toml's [bar] lists them, and an id it has no widget for is named at its line", async () => {
+  window = await startWindow({
+    look: '[bar]\ncenter = []\nright = ["sidebar.counts", "git.brnch"]\n',
+  })
+  const { page } = window
+  await firstThread(page)
+  const bar = page.getByRole("banner")
+  await bar.getByRole("button", { name: /^Sidebar/ }).click()
+  // The counts' calm square stands on the right now, the middle empty.
+  const calm = bar.getByRole("img", {
+    name: "Nothing waits for you, nothing works",
+  })
+  await expect(calm).toBeVisible()
+  const width = page.viewportSize()!.width
+  expect((await calm.boundingBox())!.x).toBeGreaterThan(width * 0.75)
+  await expect(
+    bar.getByRole("status", {
+      name: /^The look: .*look\.toml:3:1: bar\.right names "git\.brnch", and no module has that widget$/,
+    })
+  ).toBeVisible()
+  await page.screenshot({ path: "test-results/25-bar-widgets.png" })
+})
+
 test("a Thread that finishes behind another window sends a system notification, and its click goes there", async () => {
   window = await startWindow()
   const { app, page } = window

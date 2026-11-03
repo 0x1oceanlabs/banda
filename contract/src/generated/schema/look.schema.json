@@ -285,6 +285,27 @@
         "workspaces": {
           "description": "How the bar shows the workspaces: `\"numbers\"`, or `\"dots\"` with the\none shown drawn long, as GNOME's.",
           "$ref": "#/$defs/Workspaces"
+        },
+        "left": {
+          "description": "The widgets after the workspaces, by id, in order (ADR 0024).",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "center": {
+          "description": "The widgets in the bar's middle, by id, in order: the sidebar's\ncounts, `\"sidebar.counts\"`.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "right": {
+          "description": "The widgets on the bar's right, by id, in order, before the\nengine's connection: the workspaces set aside, `\"workspaces.aside\"`.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       },
       "additionalProperties": false

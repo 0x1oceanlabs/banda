@@ -14,12 +14,11 @@ import { DEFAULT_KEYS } from "@banda/contract/look"
 import type { Action, WindowApi } from "@banda/ui/module"
 import { actionFor, rebind } from "../actions/actions"
 import { Bar } from "../bar/Bar"
-import { Counts } from "../bar/Counts"
+import { useWidgets } from "../bar/Widgets"
 import { Watches } from "../bar/Watches"
 import { besideOf, isShowing, sightOf } from "../calls/sight"
 import { SUMMARY } from "../calls/system"
 import { Toasts } from "../calls/Toasts"
-import { AsidePill } from "../safe/AsidePill"
 import { WELL, wentWell } from "../safe/starts"
 import { problemLink } from "../problems/live"
 import { NOTICE, useProblemNews } from "../problems/news"
@@ -759,6 +758,18 @@ export function Shell({
   )
   // The Space the focused Pane is in: where the menu's New Thread starts.
   const here = focused(workspaces)?.space ?? home
+  // The bar's widgets, the window's own and the modules', where the
+  // look's `[bar]` puts them (ADR 0024).
+  const bar = useWidgets(modules, {
+    engine,
+    spaces,
+    space: here,
+    window: parts,
+    lists,
+    sidebarShown,
+    onOpen: openPane,
+    aside: (ready && live.view.aside) || null,
+  })
   const choose = useCallback(
     (row: Exclude<Choice, Branch | Own>) => {
       switch (row.kind) {
@@ -850,21 +861,8 @@ export function Shell({
         current={workspaces.current}
         sidebar={narrow ? over : sidebar}
         onSidebar={toggleSidebar}
-        problems={keyed.problems}
-        notes={
-          ready &&
-          live.view.aside && (
-            <AsidePill engine={engine} aside={live.view.aside} />
-          )
-        }
-        middle={
-          <Counts
-            lists={lists}
-            spaces={spaces}
-            sidebarShown={sidebarShown}
-            onOpen={openPane}
-          />
-        }
+        problems={[...keyed.problems, ...bar.problems]}
+        widgets={bar.parts}
         onPick={(index) =>
           index === workspaces.current
             ? toggleOverview()

@@ -5,7 +5,7 @@
  * module's engine part offers, its `methods!` table says.
  */
 import type { ComponentType, ReactNode } from "react"
-import type { Engine, JsonValue, SpaceId } from "@banda/contract"
+import type { Engine, JsonValue, SpaceId, SpaceSummary } from "@banda/contract"
 import type { Key } from "./lib/keys"
 import type { Lists, PaneKind, PaneState, Watch } from "./pane"
 
@@ -144,6 +144,26 @@ export type Source = {
   Find: ComponentType<FindProps>
 }
 
+/** What the window gives a widget on the bar, as it gives a Watch. */
+export type WidgetProps = {
+  engine: Engine
+  spaces: readonly SpaceSummary[]
+  /** The focused Pane's Space. */
+  space: SpaceId
+  window: WindowApi
+}
+
+/**
+ * A module's item on the bar (ADR 0024, decision 3): an icon, maybe a
+ * number, in the bar's muted text. It draws nothing while it has nothing
+ * to say. Where it stands is the look's `[bar]`.
+ */
+export type Widget = {
+  /** Unique, its module's id first: `harnesses.limits`. */
+  id: string
+  Widget: ComponentType<WidgetProps>
+}
+
 export type Module = {
   /**
    * The module's one id: its engine module's name, its `module.toml`'s
@@ -164,6 +184,8 @@ export type Module = {
   actions: readonly Action[]
   /** What it gives the Banda menu to find. */
   sources: readonly Source[]
+  /** What it shows on the bar, where the look's `[bar]` puts it. */
+  bar: readonly Widget[]
   /**
    * Runs once the window is up, with what a module may ask of it; what
    * it returns runs when the window goes. How a module that hears the
@@ -181,6 +203,7 @@ export function defineModule<const P extends readonly Args[]>(module: {
   watches?: readonly Watch[]
   actions?: readonly Action[]
   sources?: readonly Source[]
+  bar?: readonly Widget[]
   start?: (window: WindowApi) => () => void
 }): Module {
   return {
@@ -192,6 +215,7 @@ export function defineModule<const P extends readonly Args[]>(module: {
     watches: module.watches ?? [],
     actions: module.actions ?? [],
     sources: module.sources ?? [],
+    bar: module.bar ?? [],
     start: module.start,
   }
 }

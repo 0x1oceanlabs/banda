@@ -246,9 +246,10 @@ the numbers of the workspaces and a `+` for a new one on its left; widgets on it
 (ADR 0024).
 
 **Widget**:
-A module's item on the bar's right: an icon, maybe a number, that shows
-only while it has something to say. A click runs one of its module's
-actions. The look's `[bar]` says which widgets stand where.
+A module's item on the bar, or the window's own: an icon, maybe a
+number, that shows only while it has something to say. A click runs one
+of its module's actions. The look's `[bar]` says which widgets stand after
+the workspaces, in the middle and on the right, and in what order.
 
 **Update**:
 A newer Banda of the same channel, which Banda downloads by itself and

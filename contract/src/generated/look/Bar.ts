@@ -4,4 +4,9 @@ import type { Workspaces } from "./Workspaces";
 /**
  * The bar as the window draws it; its height is a CSS variable.
  */
-export type Bar = { workspaces: Workspaces, };
+export type Bar = { workspaces: Workspaces, 
+/**
+ * The widgets of each part, by id, in order (ADR 0024, decision 4):
+ * after the workspaces, in the middle, and on the right.
+ */
+left: Array<string>, center: Array<string>, right: Array<string>, };

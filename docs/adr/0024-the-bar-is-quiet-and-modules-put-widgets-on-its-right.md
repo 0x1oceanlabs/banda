@@ -99,6 +99,11 @@ Codex, `codex app-server`'s rate limits.
      empties it.
    - The Mark and the numbers are not widgets and stay first on the
      left.
+   - _Built by ADR 0043, step 2: `[bar]` has `left`, after the numbers,
+     `center` and `right`. Banda's defaults are `center =
+     ["sidebar.counts"]` (ADR 0035) and `right = ["workspaces.aside"]`
+     (ADR 0039); the window's own widgets stand there as a module's do.
+     `agents.working` was not made: the counts in the middle show it._
    - The window names an id it does not have, at its line, in the bar,
      as it does for `keys.toml`. `banda look check` can name it once
      the modules' manifests are printed (ADR 0022, step 5).
@@ -172,7 +177,8 @@ Codex, `codex app-server`'s rate limits.
 - The order of work, each step its own PR:
   1. This ADR.
   2. The bar's three parts, `bar` in `defineModule`, `[bar]` in the
-     look, and `agents.working`.
+     look, and `agents.working`. _Built as ADR 0043, step 2, without
+     `agents.working`._
   3. `agents.limits`: the engine reads them, then the widget.
   4. `terminal.ports`.
   5. The branch and the pull request, after the git modules' ADR.

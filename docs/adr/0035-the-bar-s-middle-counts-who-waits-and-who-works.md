@@ -64,6 +64,8 @@ decided.
 a few); counts of one Space only; the counts as a widget of the system
 ADR 0024's widgets will have. When that system comes, these counts become
 its first widget in the middle, and `[bar]` stays where it is.
+_ADR 0043, step 2, made them the widget `sidebar.counts`, the look's
+`[bar] center` by default._
 
 ## Consequences
 
