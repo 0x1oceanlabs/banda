@@ -109,6 +109,9 @@ pub struct Report {
     pub system: String,
     /// The last lines of each log there is.
     pub logs: Vec<Log>,
+    /// All of it in Markdown, as `banda problems report` prints it and
+    /// the Person copies it.
+    pub text: String,
 }
 
 #[derive(Serialize, Deserialize, TS)]

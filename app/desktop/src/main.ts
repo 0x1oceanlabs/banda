@@ -305,6 +305,15 @@ async function ready(): Promise<void> {
       ],
       themes: [none, () => Settings.use((settings) => settings.themes)],
     },
+    problems: {
+      logs: [
+        none,
+        () =>
+          Effect.asVoid(
+            Effect.promise(() => shell.openPath(join(state, "logs")))
+          ),
+      ],
+    },
     menu: {
       open: [text, ([route]) => Effect.sync(() => openMenu(route))],
     },

@@ -13,4 +13,5 @@ export const DEFAULT_NOTIFY: Notify = {
   done: true,
   asking: true,
   failed: true,
+  problems: true,
 }

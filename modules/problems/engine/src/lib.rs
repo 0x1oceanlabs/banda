@@ -13,6 +13,7 @@
 
 pub mod model;
 mod panics;
+mod report;
 
 use banda_kernel::{
     Call, Error, Module, ModuleSpace, Nothing, Participant, Refusal, Right, Scope, Tx,
@@ -64,7 +65,7 @@ banda_kernel::methods! {
         /// window shows them, then follows the module's events.
         call list(Nothing) -> Listed, Read;
         /// One Problem with what it takes to look into it: the system,
-        /// and the last lines of the logs.
+        /// and the last lines of the logs; and all of it in Markdown.
         call problem(Fingerprint) -> Report, Read;
         /// Keeps what broke in a part of Banda, as one Problem by its
         /// fingerprint: a new one is said in an event, one known counts
@@ -158,11 +159,14 @@ impl Problems {
                 })
             })
             .collect();
-        Ok(Report {
+        let mut report = Report {
             problem,
             system: format!("{} {}", std::env::consts::OS, std::env::consts::ARCH),
             logs,
-        })
+            text: String::new(),
+        };
+        report.text = report::markdown(&report);
+        Ok(report)
     }
 
     async fn record(&self, call: Call, record: Record) -> Result<Recorded, Refusal> {

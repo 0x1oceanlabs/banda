@@ -87,6 +87,12 @@ export const BRIDGE = bridge({
     /** The themes there are. */
     themes: invoke<[], Listed[]>(),
   },
+  /** What broke in Banda (ADR 0039): the engine keeps it; the desktop
+   * shows where its logs are. */
+  problems: {
+    /** Opens the folder of `engine.log` and `window.log`. */
+    logs: invoke(),
+  },
   /** The Banda menu, as `banda menu [route]` opens it (ADR 0017). */
   menu: {
     /** Opens the menu at `route` in the window, brought to the front, as

@@ -26,7 +26,7 @@ import { LayoutGridIcon } from "lucide-react"
 import { useEffect, useLayoutEffect, useRef, useSyncExternalStore } from "react"
 import { columnsOf } from "./look"
 import { modules } from "./modules"
-import { keepProblem } from "./problems"
+import { keepProblem } from "./problems/keep"
 import { settingsPane } from "./settings/pane"
 import type { Entry, Width } from "./workspaces/model"
 

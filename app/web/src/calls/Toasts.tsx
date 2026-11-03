@@ -1,8 +1,13 @@
 import { BandaMark, MARK_WORDS } from "@banda/ui/components/banda-mark"
 import type { Chime } from "@banda/ui/sound"
 import { cn } from "@banda/ui/lib/utils"
+import type { ReactNode } from "react"
 import { SHOWN, type Toast } from "./toast"
 import type { Heard } from "./useCalls"
+
+/** A toast's card: a call's, and a Problem's (ADR 0039). */
+export const TOAST_CARD =
+  "pointer-events-auto flex w-full items-start gap-2.5 rounded-lg border bg-popover p-3 text-popover-foreground shadow-lg motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-right-3"
 
 /** The edge that says each call at a glance, as the Mark's colours do. */
 const EDGE: Record<Chime, string> = {
@@ -28,6 +33,7 @@ export function Toasts({
   toasts,
   calling,
   detail,
+  first,
   onAnswer,
   onMore,
   onHold,
@@ -36,6 +42,8 @@ export function Toasts({
   calling: readonly Heard[]
   /** Whether a toast says what was said, or only names what calls. */
   detail: boolean
+  /** What shows over the calls' toasts: the Problems' (ADR 0039). */
+  first?: ReactNode
   onAnswer: (call: Heard) => void
   onMore: () => void
   onHold: (holds: boolean) => void
@@ -44,7 +52,7 @@ export function Toasts({
     const call = calling.find((c) => c.key === toast.key)
     return call ? [{ toast, call }] : []
   })
-  if (shown.length === 0) return null
+  if (shown.length === 0 && !first) return null
   const more = shown.length - SHOWN
   return (
     <section
@@ -54,14 +62,16 @@ export function Toasts({
       onPointerEnter={() => onHold(true)}
       onPointerLeave={() => onHold(false)}
     >
+      {first}
       {shown.slice(0, SHOWN).map(({ toast, call }) => (
         <button
           key={toast.key}
           type="button"
           onClick={() => onAnswer(call)}
           className={cn(
-            "pointer-events-auto flex w-full items-start gap-2.5 rounded-lg border border-l-4 bg-popover p-3 text-left text-popover-foreground shadow-lg outline-none",
-            "hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-right-3",
+            TOAST_CARD,
+            "border-l-4 text-left outline-none",
+            "hover:bg-accent focus-visible:ring-2 focus-visible:ring-ring",
             EDGE[call.chime]
           )}
         >
