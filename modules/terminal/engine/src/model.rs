@@ -110,3 +110,33 @@ pub struct Title {
     /// Its folder, with `~` for the home folder.
     pub folder: String,
 }
+
+/// A Space's servers, in the order they came (ADR 0044, decision 4).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "terminal/")]
+pub struct Servers {
+    pub servers: Vec<Server>,
+}
+
+/// A program started in Banda that listens on a loopback or wildcard
+/// address (ADR 0044, decision 1).
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "terminal/")]
+pub struct Server {
+    pub port: u16,
+    /// Its process, which `stop_server` names.
+    pub process: u32,
+    /// Its command line in a few words, as a terminal's header names a
+    /// program: `pnpm dev`.
+    pub program: String,
+    pub by: StartedBy,
+}
+
+/// What started a server: a terminal, or an Agent through its Harness.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export, export_to = "terminal/")]
+pub enum StartedBy {
+    Terminal,
+    Agent,
+}

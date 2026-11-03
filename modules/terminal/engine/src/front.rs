@@ -72,15 +72,22 @@ impl Reader {
     }
 
     fn read(&mut self, process: i32) -> Option<(Vec<String>, PathBuf)> {
-        let line = std::fs::read(format!("/proc/{process}/cmdline")).ok()?;
-        let words = line
-            .split(|byte| *byte == 0)
-            .filter(|word| !word.is_empty())
-            .map(|word| String::from_utf8_lossy(word).into_owned())
-            .collect();
+        let words = words_of(process)?;
         let folder = std::fs::read_link(format!("/proc/{process}/cwd")).ok()?;
         Some((words, folder))
     }
+}
+
+/// A process's command line, from `/proc`.
+#[cfg(not(target_os = "macos"))]
+pub(crate) fn words_of(process: impl std::fmt::Display) -> Option<Vec<String>> {
+    let line = std::fs::read(format!("/proc/{process}/cmdline")).ok()?;
+    let words = line
+        .split(|byte| *byte == 0)
+        .filter(|word| !word.is_empty())
+        .map(|word| String::from_utf8_lossy(word).into_owned())
+        .collect();
+    Some(words)
 }
 
 /// Reads a process's words and folder as macOS gives them, through
@@ -119,18 +126,21 @@ impl Reader {
                 .without_tasks(),
         );
         let found = system.process(pid)?;
-        let words = found
-            .cmd()
-            .iter()
-            .map(|word| word.to_string_lossy().into_owned())
-            .collect();
-        Some((words, found.cwd()?.to_path_buf()))
+        Some((words(found), found.cwd()?.to_path_buf()))
     }
+}
+
+/// A process's command line, as `sysinfo` read it.
+#[cfg(target_os = "macos")]
+pub(crate) fn words(process: &sysinfo::Process) -> Vec<String> {
+    (process.cmd().iter())
+        .map(|word| word.to_string_lossy().into_owned())
+        .collect()
 }
 
 /// A command line in a few words: `-bash` is `bash`, a script stands for
 /// the program that runs it.
-fn program_of(words: &[String]) -> Option<String> {
+pub(crate) fn program_of(words: &[String]) -> Option<String> {
     let (first, rest) = words.split_first()?;
     let name = base(first.trim_start_matches('-'));
     let (name, rest) = match rest.split_first() {

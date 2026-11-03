@@ -4,6 +4,7 @@
 //! `agents.toml` (ADR 0040, decision 6).
 
 use crate::model::{HarnessView, Program};
+use banda_kernel::{SPACE_VARIABLE, SpaceId};
 use banda_look::Problem;
 use schemars::JsonSchema;
 use serde::Deserialize;
@@ -59,6 +60,15 @@ impl Harness {
             args: self.args.iter().chain(args).cloned().collect(),
             env: self.env.clone().into_iter().chain(env.clone()).collect(),
         }
+    }
+
+    /// The entry as its process for `space` starts: it, and every program
+    /// it starts, an Agent's server too, carries the Space (ADR 0044,
+    /// decision 2). Its process for the machine carries none.
+    pub fn in_space(&self, space: SpaceId) -> Harness {
+        let mut harness = self.clone();
+        (harness.env).insert(SPACE_VARIABLE.to_owned(), space.to_string());
+        harness
     }
 }
 

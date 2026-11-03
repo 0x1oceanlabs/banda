@@ -11,7 +11,8 @@
 use crate::front::Front;
 use crate::history::{Decoder, History, Since};
 use crate::model::{Ended, Open, Piece, Size, Title};
-use banda_kernel::{SpaceId, Stream};
+use crate::servers::TERMINAL_VARIABLE;
+use banda_kernel::{SPACE_VARIABLE, SpaceId, Stream};
 use pty_process::{OwnedReadPty, OwnedWritePty};
 use rustix::process::{Pid, Signal, kill_process_group};
 use std::os::unix::process::ExitStatusExt;
@@ -69,8 +70,11 @@ impl Terminal {
                 command = command.env_remove(key);
             }
         }
+        // What it carries tells its servers (ADR 0044, decision 2).
         let child = command
             .envs(&open.env)
+            .env(SPACE_VARIABLE, space.to_string())
+            .env(TERMINAL_VARIABLE, open.terminal.to_string())
             .spawn(pts)
             .map_err(|e| format!("{program} could not start: {e}."))?;
         let group = child
