@@ -45,6 +45,7 @@ const look = (mode: Look["mode"], schemes: Look["schemes"]): Look => ({
     done: true,
     asking: true,
     failed: true,
+    problems: true,
   },
   settings: {},
   files: {},

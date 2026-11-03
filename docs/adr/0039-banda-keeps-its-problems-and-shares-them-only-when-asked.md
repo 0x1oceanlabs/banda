@@ -52,7 +52,8 @@ Roma, 2026-11-03:
    - The engine keeps them in its state folder, one record each, with a fingerprint: a hash of the error's type and its top frames in Banda's code. The same fault gives the same fingerprint on every machine, so it is counted once.
    - The engine and the window also write their logs to files there, kept by size.
    - `banda problems` lists them. `banda problems report <id>` writes one Problem's report: Banda's version, channel and system, the Problem, the last lines of the logs, and the shape of the workspaces with no args.
-   - Settings shows the Problems.
+   - Settings shows the Problems, the newest first, each with where it broke, Copy report and the logs' folder. A dot marks the ones new since the section was last open.
+   - A new Problem tells the Person, as a call does (ADR 0011) but silently (Roma, 2026-11-03: "a notification when there is a bug, so it gets fixed"). It shows a toast "Something broke in Banda" while the window is in front, or a system notification while it is not, and nothing while the desktop is quiet. A Problem that breaks again only counts. `problems = false` under `[notify]` in `look.toml` turns it off. Until step 3, its button is Details, which opens it in Settings.
    - `problems` sends nothing anywhere. The one exception is an issue the Person sends (decision 3).
 
 2. **After two starts that broke, Banda offers to start without the workspaces.** A window that broke on what it restored, as on 2026-11-02, then opens empty. The workspaces stay in the engine, untouched, for the next start.

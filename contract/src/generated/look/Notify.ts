@@ -10,4 +10,8 @@ export type Notify = { system: System, window: Toasts, detail: boolean, quiet: Q
 /**
  * Which calls notify: a Thread finished, asks, or failed.
  */
-done: boolean, asking: boolean, failed: boolean, };
+done: boolean, asking: boolean, failed: boolean, 
+/**
+ * Whether a new Problem of Banda's own tells, silently.
+ */
+problems: boolean, };

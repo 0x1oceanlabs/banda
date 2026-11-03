@@ -19,6 +19,7 @@ import {
 import {
   BellIcon,
   BotIcon,
+  BugIcon,
   FileCogIcon,
   FoldersIcon,
   GlobeIcon,
@@ -31,6 +32,7 @@ import {
 import { Agents } from "./Agents"
 import { General } from "./General"
 import { Keys } from "./Keys"
+import { ProblemsSettings } from "./ProblemsSettings"
 import { PlaySound, PresetPicker } from "./rows"
 import { SpacesSettings } from "./SpacesSettings"
 import { ThemePicker } from "./ThemePicker"
@@ -143,6 +145,14 @@ export const SECTIONS: Section[] = [
     about:
       "Your keys over Banda's own, as Hyprland's binds: each line a key and the action it runs, or none, so the key goes to the Pane.",
     Body: Keys,
+  },
+  {
+    id: "problems",
+    title: "Problems",
+    icon: BugIcon,
+    about:
+      "What broke in Banda itself. It is kept on this computer only, and nothing is sent.",
+    Body: ProblemsSettings,
   },
   {
     id: "files",

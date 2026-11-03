@@ -605,6 +605,10 @@
         "failed": {
           "description": "Whether a Thread that failed tells you.",
           "type": "boolean"
+        },
+        "problems": {
+          "description": "Whether something new that broke in Banda itself tells you, with\nno sound (ADR 0039).",
+          "type": "boolean"
         }
       },
       "additionalProperties": false

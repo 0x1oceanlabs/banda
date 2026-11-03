@@ -16,7 +16,7 @@ export type ProblemsMethods = {
 list: CallMethod<Nothing, Listed>, 
 /**
  * One Problem with what it takes to look into it: the system,
- * and the last lines of the logs.
+ * and the last lines of the logs; and all of it in Markdown.
  */
 problem: CallMethod<Fingerprint, Report>, 
 /**

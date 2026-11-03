@@ -6,9 +6,18 @@ import { type Chime, player, type SoundSettings } from "@banda/ui/sound"
 import type { Notify } from "@banda/contract/look"
 import type { Host } from "../host"
 import { GATHER, loudestChime, type Played, plays } from "./calls"
-import { iconOf, loudestOf, MANY, noticeOf, SUMMARY, summaryOf } from "./system"
+import {
+  iconOf,
+  loudestOf,
+  MANY,
+  noticeOf,
+  quietNow,
+  SUMMARY,
+  summaryOf,
+} from "./system"
 import { type Call, callsOf, newsOf, type Sight, tell } from "./tell"
-import { alive, released, type Toast, told } from "./toast"
+import { type Toast, told } from "./toast"
+import { useToasts } from "./useToasts"
 
 /** A call as the window heard it: of a Space, since a time, by a key. */
 export type Heard = Call & {
@@ -69,7 +78,7 @@ export function useCalls(
 
   const lists = useRef(new Map<string, Heard[]>())
   const [calling, setCalling] = useState<readonly Heard[]>([])
-  const [toasts, setToasts] = useState<readonly Toast[]>([])
+  const { toasts, setToasts, hold } = useToasts()
   const gathered = useRef<Heard[]>([])
   const last = useRef<Played | undefined>(undefined)
   const timer = useRef(0)
@@ -94,10 +103,7 @@ export function useCalls(
     gathered.current = []
     const { sound, notify, where } = settings.current
     const { desktop } = where
-    const quiet =
-      desktop && notify.quiet === "desktop"
-        ? await desktop.quiet().catch(() => false)
-        : false
+    const quiet = await quietNow(notify, desktop)
     const chimes: Chime[] = []
     const notices: Heard[] = []
     const now = Date.now()
@@ -182,31 +188,6 @@ export function useCalls(
     },
     [changed]
   )
-
-  // The toasts go away by themselves, unless the pointer holds them.
-  const heldAt = useRef<number | undefined>(undefined)
-  const hold = useCallback((holds: boolean) => {
-    if (holds) {
-      heldAt.current ??= Date.now()
-      return
-    }
-    const from = heldAt.current
-    heldAt.current = undefined
-    if (from === undefined) return
-    const now = Date.now()
-    setToasts((toasts) => released(toasts, now - from, now))
-  }, [])
-  useEffect(() => {
-    if (toasts.length === 0) return
-    const tick = window.setInterval(() => {
-      if (heldAt.current !== undefined) return
-      setToasts((toasts) => {
-        const left = alive(toasts, Date.now())
-        return left.length === toasts.length ? toasts : left
-      })
-    }, 250)
-    return () => clearInterval(tick)
-  }, [toasts.length])
 
   const dismiss = useCallback(
     (key: string) =>

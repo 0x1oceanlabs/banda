@@ -75,10 +75,34 @@ export type Telling = { sound: boolean; toast: boolean; system: boolean }
 
 const NOTHING: Telling = { sound: false, toast: false, system: false }
 
+/** Where the window tells of something it tells of at all. */
+export type Place = { toast: boolean; system: boolean }
+
 /**
- * How to tell of a call, from where the Person looks: nothing while they
- * look at it, or while the desktop is quiet; once, in one place,
- * otherwise. The sound is `[sound]`'s to choose.
+ * Where to tell of something, from where the Person looks: nowhere while
+ * they look at it, or while the desktop is quiet; once, in one place,
+ * otherwise. A call's and a Problem's alike (ADR 0039).
+ */
+export function placeOf(
+  sight: Sight,
+  settings: Notify,
+  desktopQuiet: boolean
+): Place | null {
+  if (sight === "looking") return null
+  if (desktopQuiet && settings.quiet === "desktop") return null
+  const system =
+    settings.system === "always" ||
+    (settings.system === "away" && sight === "away")
+  const toast =
+    !system &&
+    (settings.window === "always" ||
+      (settings.window === "out-of-sight" && sight === "in-window"))
+  return { toast, system }
+}
+
+/**
+ * How to tell of a call: where, if `[notify]` tells of its kind; the
+ * sound is `[sound]`'s to choose.
  */
 export function tell(
   chime: Chime,
@@ -86,17 +110,12 @@ export function tell(
   settings: Notify,
   desktopQuiet: boolean
 ): Telling {
-  if (sight === "looking") return NOTHING
-  if (desktopQuiet && settings.quiet === "desktop") return NOTHING
+  const place = placeOf(sight, settings, desktopQuiet)
+  if (!place) return NOTHING
   const notifies = settings[chime]
-  const system =
-    notifies &&
-    (settings.system === "always" ||
-      (settings.system === "away" && sight === "away"))
-  const toast =
-    notifies &&
-    !system &&
-    (settings.window === "always" ||
-      (settings.window === "out-of-sight" && sight === "in-window"))
-  return { sound: true, toast, system }
+  return {
+    sound: true,
+    toast: notifies && place.toast,
+    system: notifies && place.system,
+  }
 }

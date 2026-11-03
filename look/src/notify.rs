@@ -62,6 +62,9 @@ pub struct NotifySettings {
     pub asking: Option<bool>,
     /// Whether a Thread that failed tells you.
     pub failed: Option<bool>,
+    /// Whether something new that broke in Banda itself tells you, with
+    /// no sound (ADR 0039).
+    pub problems: Option<bool>,
 }
 
 /// How the window tells of a call, every key resolved.
@@ -76,6 +79,8 @@ pub struct Notify {
     pub done: bool,
     pub asking: bool,
     pub failed: bool,
+    /// Whether a new Problem of Banda's own tells, silently.
+    pub problems: bool,
 }
 
 impl NotifySettings {
@@ -91,6 +96,7 @@ impl NotifySettings {
             done: Some(own.done),
             asking: Some(own.asking),
             failed: Some(own.failed),
+            problems: Some(own.problems),
         }
     }
 
@@ -104,6 +110,7 @@ impl NotifySettings {
             done: self.done.or(under.done),
             asking: self.asking.or(under.asking),
             failed: self.failed.or(under.failed),
+            problems: self.problems.or(under.problems),
         }
     }
 
@@ -118,6 +125,7 @@ impl NotifySettings {
             done: self.done.unwrap_or(own.done),
             asking: self.asking.unwrap_or(own.asking),
             failed: self.failed.unwrap_or(own.failed),
+            problems: self.problems.unwrap_or(own.problems),
         }
     }
 }
@@ -136,6 +144,7 @@ impl Default for Notify {
             done: true,
             asking: true,
             failed: true,
+            problems: true,
         }
     }
 }
@@ -155,7 +164,7 @@ mod tests {
         assert_eq!(notify.window, Toasts::OutOfSight);
         assert!(notify.detail);
         assert_eq!(notify.quiet, Quiet::Desktop);
-        assert!(notify.done && notify.asking && notify.failed);
+        assert!(notify.done && notify.asking && notify.failed && notify.problems);
     }
 
     #[test]

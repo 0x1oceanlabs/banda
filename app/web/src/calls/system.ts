@@ -9,7 +9,8 @@ import {
   stillMark,
 } from "@banda/ui/components/banda-mark"
 import type { Chime } from "@banda/ui/sound"
-import type { Notice } from "../host"
+import type { Notify } from "@banda/contract/look"
+import type { Host, Notice } from "../host"
 import { loudestChime } from "./calls"
 import type { Heard } from "./useCalls"
 
@@ -95,4 +96,14 @@ async function drawn(svg: string): Promise<string | undefined> {
   } catch {
     return undefined
   }
+}
+
+/** Whether the desktop is quiet now, when `[notify]` keeps its quiet. */
+export async function quietNow(
+  notify: Notify,
+  desktop: Host["notify"] | undefined
+): Promise<boolean> {
+  return desktop && notify.quiet === "desktop"
+    ? await desktop.quiet().catch(() => false)
+    : false
 }

@@ -20,6 +20,9 @@ import { Watches } from "../bar/Watches"
 import { besideOf, isShowing, sightOf } from "../calls/sight"
 import { SUMMARY } from "../calls/system"
 import { Toasts } from "../calls/Toasts"
+import { problemLink } from "../problems/live"
+import { NOTICE, useProblemNews } from "../problems/news"
+import { ProblemToast } from "../problems/ProblemToast"
 import { first, type Heard, useCalls, type Where } from "../calls/useCalls"
 import { BandaMenu } from "../menu/BandaMenu"
 import {
@@ -290,6 +293,9 @@ export function Shell({
   const notify = useLookNotify()
   const calls = useCalls(useLookSound(), notify, where)
   const { hear, leave, calling, hold, dismiss, seen } = calls
+  // A new Problem of Banda's own tells too, silently (ADR 0039).
+  const problemNews = useProblemNews(engine, notify, inFront, where.desktop)
+  const newProblem = problemNews.shown
   const listening = useMemo(() => ({ hear, leave }), [hear, leave])
   const front = useInFront()
   // What the Person looks at is seen: its toast and notification go.
@@ -573,6 +579,15 @@ export function Shell({
     (link?: string) =>
       change((w) => settingsAt(w, focused(w)?.space ?? home, link)),
     [change, home]
+  )
+  // A click on a Problem's notice opens it in Settings → Problems.
+  useEffect(
+    () =>
+      window.banda?.notify.listen((key) => {
+        if (key.startsWith(NOTICE))
+          settings(problemLink(key.slice(NOTICE.length)))
+      }),
+    [settings]
   )
   // A settings route opens the settings there; any other, the menu.
   const route = useCallback(
@@ -903,9 +918,24 @@ export function Shell({
             toasts={toasts}
             calling={calling}
             detail={notify.detail}
+            first={
+              newProblem && (
+                <ProblemToast
+                  {...newProblem}
+                  onDetails={() => {
+                    problemNews.dismiss()
+                    settings(problemLink(newProblem.problem.fingerprint))
+                  }}
+                  onClose={problemNews.dismiss}
+                />
+              )
+            }
             onAnswer={answerCall}
             onMore={showSidebar}
-            onHold={hold}
+            onHold={(holds) => {
+              hold(holds)
+              problemNews.hold(holds)
+            }}
           />
           <BandaMenu
             opening={menu}

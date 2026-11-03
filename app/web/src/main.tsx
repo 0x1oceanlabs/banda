@@ -6,7 +6,7 @@ import "@banda/ui/globals.css"
 import { poppedOf } from "./host"
 import { moveEnterKey } from "./enter-key"
 import { followLook } from "./look"
-import { keepProblem, watchProblems } from "./problems"
+import { keepProblem, watchProblems } from "./problems/keep"
 
 const host = window.banda
 // The look the desktop reads (ADR 0007), else the system's light or dark.

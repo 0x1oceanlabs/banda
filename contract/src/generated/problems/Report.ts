@@ -13,4 +13,9 @@ system: string,
 /**
  * The last lines of each log there is.
  */
-logs: Array<Log>, };
+logs: Array<Log>, 
+/**
+ * All of it in Markdown, as `banda problems report` prints it and
+ * the Person copies it.
+ */
+text: string, };
