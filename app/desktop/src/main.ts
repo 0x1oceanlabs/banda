@@ -351,6 +351,8 @@ async function ready(): Promise<void> {
       current: [none, () => Effect.sync(update.current)],
       check: [none, () => Effect.sync(update.check)],
       restart: [none, () => Effect.sync(update.restart)],
+      now: [none, () => Effect.sync(update.now)],
+      later: [none, () => Effect.sync(update.later)],
     },
     // Calls (ADR 0011).
     notify: {

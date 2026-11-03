@@ -1,5 +1,5 @@
 import { expect, it } from "vitest"
-import { needsPerson, notesOf } from "./update"
+import { firstLine, needsPerson, notesOf } from "./update"
 
 const info = (releaseNotes: unknown) =>
   ({ version: "0.1.0-dev.66", releaseNotes }) as Parameters<typeof notesOf>[0]
@@ -45,4 +45,8 @@ it("shows only what the Person has to mend", () => {
   expect(needsPerson(new Error("ERR_UPDATER_CHANNEL_FILE_NOT_FOUND"))).toBe(
     false
   )
+})
+
+it("keeps an error's first line, without its headers", () => {
+  expect(firstLine("HttpError: 404 \nHeaders: {…}")).toBe("HttpError: 404")
 })

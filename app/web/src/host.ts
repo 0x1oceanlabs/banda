@@ -29,13 +29,29 @@ export type Notice = {
 
 /**
  * Where Banda's own update is (ADR 0041, decision 2), as main tells it:
- * nothing to say, a version downloading, one ready to install on quit,
- * or one that cannot install until the Person mends something. `name` is
- * the app's, `Banda Dev`, and `have` the version that runs.
+ * nothing to say, a look the Person asked for, a version downloading, one
+ * ready to install on quit, or one that cannot install until the Person
+ * mends something. `name` is the app's, `Banda Dev`, and `have` the
+ * version that runs. `always` keeps the widget on the bar with nothing to
+ * say, as Banda Dev's is (ADR 0045).
  */
-export type Update = { name: string; have: string } & (
-  | { state: "none" }
-  | { state: "downloading"; version: string; share: number }
+export type Update = { name: string; have: string; always: boolean } & (
+  | {
+      state: "none"
+      /** When the last look ended, in ms since the epoch. */
+      looked?: number
+      /** Why the last look the Person asked for failed. */
+      missed?: string
+    }
+  | { state: "looking" }
+  | {
+      state: "downloading"
+      version: string
+      share: number
+      notes: Note[]
+      /** Banda restarts into it once it is down (`update.now`). */
+      restarts: boolean
+    }
   | { state: "ready"; version: string; notes: Note[] }
   | { state: "failed"; reason: string }
 )
@@ -175,6 +191,11 @@ export const BRIDGE = bridge({
     listen: push<Update>(),
     /** Looks for a new version now. */
     check: send<[]>(),
+    /** Looks, downloads and restarts into a new version as soon as it is
+     * down; restarts at once into one that is ready (ADR 0045). */
+    now: send<[]>(),
+    /** Keeps the version that downloads for the quit, with no restart. */
+    later: send<[]>(),
     /** Installs the version that is ready and starts it; nothing if none
      * is. */
     restart: send<[]>(),

@@ -7,7 +7,9 @@
  *
  * What it tells the page is one `Update`, for the bar (decision 4). A look
  * or a download that fails for want of a network says nothing, and the
- * next look tries again; only what the Person has to mend shows.
+ * next look tries again; only what the Person has to mend shows. A look
+ * the Person asks for says what it found, and "Update now" restarts into
+ * the new version once it is down (ADR 0045).
  */
 import { spawn } from "node:child_process"
 import { accessSync, constants } from "node:fs"
@@ -24,22 +26,54 @@ const EVERY = (channel === CHANNELS.dev ? 1 : 4) * 3_600_000
 /** What main does with Banda's update. */
 export type Updates = {
   readonly current: () => Update
-  /** Looks for a new version now; not while one is ready. */
+  /** Looks for a new version now, as the Person asked; not while one
+   * downloads or is ready. */
   readonly check: () => void
+  /** Restarts into a new version as soon as one is down, looking for it
+   * first when none downloads (ADR 0045). */
+  readonly now: () => void
+  /** Keeps the version that downloads for the quit. */
+  readonly later: () => void
   /** Installs the version that is ready and starts it; nothing if none is. */
   readonly restart: () => void
 }
 
 /** Starts looking for Banda's update; `tell` hears each change. */
 export function updates(tell: (now: Update) => void): Updates {
-  const known = { name: channel.name, have: app.getVersion() }
+  const image = process.env.APPIMAGE
+  const known = {
+    name: channel.name,
+    have: app.getVersion(),
+    always: Boolean(image) && channel === CHANNELS.dev,
+  }
   const { have } = known
   let now: Update = { ...known, state: "none" }
-  const image = process.env.APPIMAGE
-  if (!image) return { current: () => now, check() {}, restart() {} }
-  const set = (next: DistributiveOmit<Update, "name" | "have">) => {
+  if (!image) {
+    const nothing = () => {}
+    return {
+      current: () => now,
+      check: nothing,
+      now: nothing,
+      later: nothing,
+      restart: nothing,
+    }
+  }
+  const set = (next: DistributiveOmit<Update, keyof typeof known>) => {
     now = { ...known, ...next }
     tell(now)
+  }
+  // The Person asked for the look that runs (it says what it found), and
+  // for a restart once its version is down.
+  let asked = false
+  let restarts = false
+  let looked: number | undefined
+  const rest = (missed?: string) => {
+    asked = restarts = false
+    set({ state: "none", looked, missed })
+  }
+  const fail = (reason: string) => {
+    asked = restarts = false
+    set({ state: "failed", reason })
   }
 
   autoUpdater.autoInstallOnAppQuit = true
@@ -49,22 +83,27 @@ export function updates(tell: (now: Update) => void): Updates {
   // the newer one is down.
   autoUpdater.on("update-available", (info: UpdateInfo) => {
     if (now.state !== "ready")
-      set({ state: "downloading", version: info.version, share: 0 })
+      set({
+        state: "downloading",
+        version: info.version,
+        share: 0,
+        notes: notesOf(info, have),
+        restarts,
+      })
   })
   autoUpdater.on("download-progress", ({ percent }: { percent: number }) => {
     if (now.state === "downloading")
       set({ ...now, share: Math.min(1, percent / 100) })
   })
   autoUpdater.on("update-downloaded", (info: UpdateInfo) => {
+    asked = false
     const unwritable = cannotWrite(image)
-    set(
-      unwritable
-        ? {
-            state: "failed",
-            reason: `${unwritable}, so ${info.version} cannot install`,
-          }
-        : { state: "ready", version: info.version, notes: notesOf(info, have) }
-    )
+    if (unwritable) {
+      fail(`${unwritable}, so ${info.version} cannot install`)
+      return
+    }
+    set({ state: "ready", version: info.version, notes: notesOf(info, have) })
+    if (restarts) restart()
   })
   // Installed, the new AppImage took its own name when the old one's holds
   // a version, as Banda's do: the launcher's entry names it now, as the new
@@ -75,31 +114,58 @@ export function updates(tell: (now: Update) => void): Updates {
     listApp(path)
   })
   autoUpdater.on("update-not-available", () => {
-    if (now.state === "downloading") set({ state: "none" })
+    looked = Date.now()
+    if (now.state !== "ready" && now.state !== "failed") rest()
   })
   autoUpdater.on("error", (error: Error) => {
     console.warn("Banda could not update itself:", error.message)
-    if (needsPerson(error)) set({ state: "failed", reason: error.message })
-    else if (now.state === "downloading") set({ state: "none" })
+    if (needsPerson(error)) fail(error.message)
+    else if (asked) {
+      looked = Date.now()
+      rest(firstLine(error.message))
+    } else if (now.state === "downloading") rest()
   })
 
-  const check = () => {
-    if (now.state === "ready") return
+  const look = (byPerson: boolean) => {
+    if (now.state === "ready" || now.state === "downloading") return
+    // Banda's widget says nothing with nothing new: its look stays quiet,
+    // as ADR 0041 has it.
+    if (byPerson && known.always) {
+      asked = true
+      set({ state: "looking" })
+    }
     // The same error comes as an "error" event.
     autoUpdater.checkForUpdates().catch(() => {})
   }
-  setTimeout(check, FIRST_LOOK)
-  setInterval(check, EVERY)
+  const restart = () => {
+    if (now.state !== "ready") return
+    // Installed by the time it returns; the app quits right after.
+    autoUpdater.quitAndInstall(true, false)
+    startAfter(installed)
+  }
+  setTimeout(() => look(false), FIRST_LOOK)
+  setInterval(() => look(false), EVERY)
   return {
     current: () => now,
-    check,
-    restart() {
-      if (now.state !== "ready") return
-      // Installed by the time it returns; the app quits right after.
-      autoUpdater.quitAndInstall(true, false)
-      startAfter(installed)
+    check: () => look(true),
+    now() {
+      restarts = true
+      if (now.state === "ready") restart()
+      else if (now.state === "downloading") set({ ...now, restarts })
+      else look(true)
     },
+    later() {
+      restarts = false
+      if (now.state === "downloading") set({ ...now, restarts })
+    },
+    restart,
   }
+}
+
+/** An error's first line: electron-updater's HTTP errors carry their
+ * headers after it. */
+export function firstLine(message: string): string {
+  return message.split("\n", 1)[0]!.trim()
 }
 
 /**
