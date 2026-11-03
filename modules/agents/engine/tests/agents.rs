@@ -3786,3 +3786,62 @@ async fn a_short_run_of_its_own_writes_on_the_threads_model_and_the_thread_never
         .unwrap_err();
     assert_eq!(refused.code, Code::NotFound);
 }
+
+/// Claude Code and Codex write a commit's message in a short run of
+/// their own (ADR 0034, decision 3): JSON as the prompt asks, nothing
+/// changed in the folder, nothing shown in the Thread. It calls the
+/// models, which costs money: run it by hand when an adapter or the
+/// prompt changes, `cargo test -p banda-agents --test agents -- --ignored
+/// the_real_harnesses_write_a_commits_message --nocapture`.
+#[tokio::test]
+#[ignore = "calls the real models, which costs money"]
+async fn the_real_harnesses_write_a_commits_message() {
+    let known = Harnesses::known();
+    for harness in ["claude", "codex"] {
+        let agents = Agents::new(Harnesses::new(vec![known.find(harness).unwrap().clone()]));
+        let root = tempfile::tempdir().unwrap();
+        let world = World::new_on(root.path(), agents, harness).await;
+        let space = world.kernel.space(world.space).await.unwrap();
+        let notes = space.folder().join("notes.txt");
+        std::fs::write(&notes, "apples\npears\n").unwrap();
+        let (thread, _) = world
+            .finish_real(None, "Do not use any tools. Reply with only: OK")
+            .await;
+        let before = texts(&world.thread(&thread).await);
+        let prompt = "You write concise git commit messages.\n\
+            Return only a JSON object with keys: subject, body, branch.\n\
+            Rules:\n\
+            - subject must be imperative, <= 72 chars, and no trailing period\n\
+            - body can be empty string or short bullet points\n\
+            - branch must be a short semantic git branch fragment for this change\n\
+            - capture the primary user-visible or developer-visible change\n\
+            - do not run tools or change files: answer from what is below\n\
+            - follow the repository's established commit message style, as its last subjects show\n\n\
+            Last subjects:\nAdd the shopping list\nFix the list's order\n\n\
+            Branch: main\n\n\
+            Files:\nnotes.txt (+1 −0)\n\n\
+            Patch:\n\
+            diff --git a/notes.txt b/notes.txt\n\
+            --- a/notes.txt\n\
+            +++ b/notes.txt\n\
+            @@ -1,2 +1,3 @@\n apples\n pears\n+plums\n";
+        let started = std::time::Instant::now();
+        let written = world
+            .call(
+                world.person(),
+                "agents.write",
+                json!({ "thread": thread, "prompt": prompt }),
+            )
+            .await;
+        println!("{harness} in {:?}: {written:#?}", started.elapsed());
+        let text = written.unwrap()["text"].as_str().unwrap().to_owned();
+        let object = &text[text.find('{').unwrap()..=text.rfind('}').unwrap()];
+        let reply: Value = serde_json::from_str(object).unwrap();
+        let subject = reply["subject"].as_str().unwrap();
+        assert!(!subject.is_empty() && subject.len() <= 72, "{reply}");
+        assert!(subject.to_lowercase().contains("plum"), "{reply}");
+        assert!(reply["branch"].is_string(), "{reply}");
+        assert_eq!(std::fs::read_to_string(&notes).unwrap(), "apples\npears\n");
+        assert_eq!(texts(&world.thread(&thread).await), before);
+    }
+}
