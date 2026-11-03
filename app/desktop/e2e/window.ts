@@ -64,7 +64,8 @@ export const textOf = (file: string) =>
  * 2.0.0 at least. With `other`, a second fake Harness, "Other AI", is
  * listed after it. `look` and `sidebar` are the text of `look.toml` and
  * `sidebar.toml`; `files` are more, by their paths in the throwaway
- * folder. */
+ * folder. Unless `asked` is false, the first run's sharing question was
+ * answered already: nothing shared. */
 export async function startWindow({
   account = false,
   oldCli = false,
@@ -72,6 +73,7 @@ export async function startWindow({
   look = "",
   sidebar = "",
   files = {} as Record<string, string>,
+  asked = true,
 } = {}): Promise<Window> {
   const dir = mkdtempSync(join(tmpdir(), "banda-window-"))
   mkdirSync(join(dir, "config"))
@@ -83,6 +85,8 @@ export async function startWindow({
   writeFileSync(join(dir, "blocker.txt"), "/banda-ad.js\n##.banda-ad\n")
   if (look) writeFileSync(join(dir, "config/look.toml"), look)
   if (sidebar) writeFileSync(join(dir, "config/sidebar.toml"), sidebar)
+  if (asked && !files["config/sharing.toml"])
+    writeFileSync(join(dir, "config/sharing.toml"), "problems = false\n")
   const fake = join(repository, "target/debug/banda-fake-agent")
   const home = join(dir, "fake-home")
   mkdirSync(home)
