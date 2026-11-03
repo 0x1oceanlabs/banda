@@ -51,8 +51,10 @@ const HOLD = 500
 const LAST = 1_000_000
 
 /** What a press on a handle takes for its own, so it carries nothing. */
-const CONTROLS =
-  'input, textarea, select, a, [contenteditable], button:not([role="tab"])'
+const CONTROLS = "input, textarea, select, a, [contenteditable], button"
+
+/** A tab: in a tabbed column's group bar, or in the overview's tile. */
+const TAB = "[data-handle] > [data-pane]"
 
 const GHOST_LOOK =
   "pointer-events-none fixed top-0 left-0 z-50 max-w-60 truncate rounded-md border bg-popover px-2.5 py-1.5 text-sm text-popover-foreground shadow-md"
@@ -97,14 +99,18 @@ export function useMoving(
       if (event.button !== 0 || event.ctrlKey || event.metaKey) return
       if (event.shiftKey || !(event.target instanceof Element)) return
       const target = event.target
-      const tile = target.closest<HTMLElement>("[data-tile]")
-      if (!tile?.dataset.tile) return
       const at = {
         pointer: event.pointerId,
         x: event.clientX,
         y: event.clientY,
       }
-      if (event.altKey) {
+      const tab = target.closest<HTMLElement>(TAB)
+      const tile = tab ? null : target.closest<HTMLElement>("[data-tile]")
+      if (tab?.dataset.pane) {
+        press = { ...at, pane: tab.dataset.pane, lifted: tab }
+      } else if (!tile?.dataset.tile) {
+        return
+      } else if (event.altKey) {
         // The Pane's from anywhere on it: nothing in it hears the press.
         event.preventDefault()
         event.stopPropagation()
@@ -116,10 +122,7 @@ export function useMoving(
         if (!handle || !tile.contains(handle) || target.closest(CONTROLS)) {
           return
         }
-        const tab = target.closest<HTMLElement>("[data-handle] > [data-pane]")
-        press = tab?.dataset.pane
-          ? { ...at, pane: tab.dataset.pane, lifted: tab }
-          : { ...at, pane: tile.dataset.tile, lifted: tile }
+        press = { ...at, pane: tile.dataset.tile, lifted: tile }
       }
       window.addEventListener("pointermove", onMove, true)
       window.addEventListener("pointerup", onUp, true)
@@ -326,9 +329,7 @@ function lanesOf(strip: HTMLElement): Lane[] {
     const tiles = [
       ...column.querySelectorAll<HTMLElement>(":scope > [data-tile]"),
     ]
-    const tabs = [
-      ...column.querySelectorAll<HTMLElement>("[data-handle] > [data-pane]"),
-    ]
+    const tabs = [...column.querySelectorAll<HTMLElement>(TAB)]
     return {
       id: column.dataset.column ?? "",
       left,

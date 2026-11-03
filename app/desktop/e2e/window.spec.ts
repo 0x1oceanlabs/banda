@@ -2553,6 +2553,13 @@ test("Alt+[ takes a Pane into a column, Alt+G shows it as tabs", async () => {
   await expect(tabs.nth(1)).toHaveAttribute("aria-selected", "true")
   await expect(launcher).toBeVisible()
   await expect(thread).toBeHidden()
+  // Over the tile, which keeps its own header.
+  const bar = await page.getByRole("tablist").boundingBox()
+  const tile = await launcher.boundingBox()
+  expect(bar!.y + bar!.height).toBeLessThanOrEqual(tile!.y)
+  await expect(
+    launcher.getByRole("heading", { name: "New Pane" })
+  ).toBeVisible()
   await tabs.nth(0).click()
   await expect(thread).toBeVisible()
   await expect(launcher).toBeHidden()
@@ -2567,6 +2574,35 @@ test("Alt+[ takes a Pane into a column, Alt+G shows it as tabs", async () => {
   await expect(thread).toBeVisible()
   await page.keyboard.press("Alt+BracketRight")
   await expect(columns).toHaveCount(2)
+})
+
+test("a tab in a column's group bar carries its Pane", async () => {
+  window = await startWindow()
+  const { page } = window
+  const { thread, composer } = await firstThread(page)
+  await expect(composer).toBeFocused()
+  await page.keyboard.press("Alt+KeyN")
+  const launcher = page.getByRole("region", { name: "New Pane" })
+  await expect(launcher).toHaveAttribute("data-focused", "true")
+  const [t, l] = await Promise.all(
+    [thread, launcher].map((tile) => tile.getAttribute("data-tile"))
+  )
+  await page.keyboard.press("Alt+BracketLeft")
+  await page.keyboard.press("Alt+KeyG")
+  const tabs = page.getByRole("tab")
+  await expect(tabs).toHaveCount(2)
+
+  // The Thread's tab, to the right edge of the tile: a column of its own.
+  await settled(launcher)
+  const from = await tabs.nth(0).boundingBox()
+  await page.mouse.move(from!.x + from!.width / 2, from!.y + from!.height / 2)
+  await page.mouse.down()
+  const edge = await within(launcher, 0.95, 0.5)
+  await page.mouse.move(edge.x, edge.y, { steps: 8 })
+  await expect(tabs.nth(0)).toHaveAttribute("data-lifted", "")
+  await page.mouse.up()
+  await expect.poll(() => layoutOf(page)).toEqual([[l], [t]])
+  await expect(thread).toBeVisible()
 })
 
 test("columns grow and go to their new places on the look's motion", async () => {

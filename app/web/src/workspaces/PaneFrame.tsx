@@ -61,8 +61,8 @@ export function AgentMark({ className = "" }: { className?: string }) {
  * One tile: a header with the Pane's icon and title, and its Space when the
  * workspace mixes Spaces, unless the Pane draws its own; under it, the Pane
  * itself. A Pane that shows a listed thing, as a Thread, has its mark in the
- * icon's place and its Space before the title (ADR 0031). A `header`
- * given, as a tabbed column's tabs, takes the header's place.
+ * icon's place and its Space before the title (ADR 0031). A tabbed
+ * column's group bar sits over its tile, outside it (`Tabs`).
  */
 export function PaneFrame({
   entry,
@@ -76,7 +76,6 @@ export function PaneFrame({
   spaceName,
   mixed,
   frame,
-  header,
   actions,
   hidden = false,
   away = false,
@@ -99,8 +98,6 @@ export function PaneFrame({
   /** The workspace mixes Spaces, so each header names its Space. */
   mixed: boolean
   frame: Frame
-  /** Drawn in the header's place. */
-  header?: ReactNode
   /** Buttons of its own in the header, beside the close button. */
   actions?: ReactNode
   /** Kept drawn, so the Pane keeps running, but not shown. */
@@ -187,54 +184,51 @@ export function PaneFrame({
         <AgentMark className="pointer-events-none absolute top-1.5 right-1.5 z-10" />
       )}
       <TileActions value={own}>
-        {header ??
-          // A stand-in draws the frame's header, as its Pane is not drawn.
-          ((zoomed || away || kind?.header !== false) && (
-            <PaneHeader
-              title={title}
-              icon={listed ? undefined : Icon}
-              onClose={close}
-              className={kind?.header === "bare" ? "border-b-0" : undefined}
-            >
-              {listed && (
-                <>
-                  <ThreadMark
-                    listed={listed}
-                    className={
-                      listed.mark === "rest" ? "opacity-40" : undefined
-                    }
-                  />
-                  <span className="shrink-0 text-muted-foreground">
-                    {spaceName}
-                  </span>
-                </>
-              )}
-              <h2 className="min-w-0 truncate font-medium text-muted-foreground group-data-[focused=true]/tile:text-foreground">
-                {title}
-              </h2>
-              {detail && (
-                <span className="min-w-0 shrink-[2] truncate text-xs text-muted-foreground">
-                  {detail}
-                </span>
-              )}
-              {mixed && !listed && (
-                <span className="shrink-0 truncate rounded-sm bg-muted px-1.5 text-xs text-muted-foreground">
+        {/* A stand-in draws the frame's header, as its Pane is not drawn. */}
+        {(zoomed || away || kind?.header !== false) && (
+          <PaneHeader
+            title={title}
+            icon={listed ? undefined : Icon}
+            onClose={close}
+            className={kind?.header === "bare" ? "border-b-0" : undefined}
+          >
+            {listed && (
+              <>
+                <ThreadMark
+                  listed={listed}
+                  className={listed.mark === "rest" ? "opacity-40" : undefined}
+                />
+                <span className="shrink-0 text-muted-foreground">
                   {spaceName}
                 </span>
-              )}
-              {zoomed && (
-                <button
-                  type="button"
-                  title="Back in its column (Alt+Shift+F)"
-                  className="flex shrink-0 items-center gap-1 rounded-sm bg-muted px-1.5 text-xs text-muted-foreground hover:text-foreground"
-                  onClick={() => frame.run("pane.zoom")}
-                >
-                  <Minimize2Icon className="size-3" />
-                  Zoomed
-                </button>
-              )}
-            </PaneHeader>
-          ))}
+              </>
+            )}
+            <h2 className="min-w-0 truncate font-medium text-muted-foreground group-data-[focused=true]/tile:text-foreground">
+              {title}
+            </h2>
+            {detail && (
+              <span className="min-w-0 shrink-[2] truncate text-xs text-muted-foreground">
+                {detail}
+              </span>
+            )}
+            {mixed && !listed && (
+              <span className="shrink-0 truncate rounded-sm bg-muted px-1.5 text-xs text-muted-foreground">
+                {spaceName}
+              </span>
+            )}
+            {zoomed && (
+              <button
+                type="button"
+                title="Back in its column (Alt+Shift+F)"
+                className="flex shrink-0 items-center gap-1 rounded-sm bg-muted px-1.5 text-xs text-muted-foreground hover:text-foreground"
+                onClick={() => frame.run("pane.zoom")}
+              >
+                <Minimize2Icon className="size-3" />
+                Zoomed
+              </button>
+            )}
+          </PaneHeader>
+        )}
         <div className="min-h-0 flex-1">
           {away ? (
             <button
