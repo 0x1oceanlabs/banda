@@ -1,33 +1,27 @@
-/** Where a new Thread starts: its Space and its Harness (ADR 0006). */
+/** Where a new Thread starts: its Space (ADR 0006). Its Harness is chosen
+ * with its model, in the model picker (ADR 0031, decision 6). */
 import { useMemo } from "react"
 import type { Engine, SpaceId, SpaceSummary } from "@banda/contract"
-import type { HarnessView } from "@banda/contract/harnesses"
 import { useSpaces } from "@banda/ui/hooks/use-spaces"
 import { openSpaces, shownSpaces } from "@banda/ui/lib/spaces"
-import { BotIcon, FolderIcon, FolderPlusIcon } from "lucide-react"
+import { FolderIcon, FolderPlusIcon } from "lucide-react"
 import { Pick } from "./ThreadSettings"
 
 /**
- * The Space and the Harness of a Thread not yet started. A Person changes
- * them until the first message; after it, they are the Thread's for good.
+ * The Space of a Thread not yet started. A Person changes it until the
+ * first message; after it, it is the Thread's for good.
  */
 export function NewThreadBar({
   engine,
   space,
-  harness,
-  harnesses,
   disabled,
   onSpace,
-  onHarness,
   onAddSpace,
 }: {
   engine: Engine
   space: SpaceId
-  harness: string
-  harnesses: HarnessView[]
   disabled: boolean
   onSpace: (space: SpaceId) => void
-  onHarness: (harness: string) => void
   /** Opens "Add Space" in the Banda menu (ADR 0026), from the Space list. */
   onAddSpace?: () => void
 }) {
@@ -53,19 +47,6 @@ export function NewThreadBar({
               run: onAddSpace,
             }
           }
-        />
-      )}
-      {harnesses.length > 0 && (
-        <Pick
-          what="Harness"
-          icon={<BotIcon data-icon="inline-start" />}
-          value={harness}
-          choices={harnesses.map((harness) => ({
-            id: harness.id,
-            name: harness.name,
-          }))}
-          disabled={disabled}
-          onChange={onHarness}
         />
       )}
     </div>

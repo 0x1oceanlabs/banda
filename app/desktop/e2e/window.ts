@@ -61,12 +61,14 @@ export const textOf = (file: string) =>
 
 /** With `account`, the fake agent has one in the throwaway folders, signed
  * out. With `oldCli`, it runs a CLI that says 1.0.0 where its entry asks for
- * 2.0.0 at least. `look` and `sidebar` are the text of `look.toml` and
+ * 2.0.0 at least. With `other`, a second fake Harness, "Other AI", is
+ * listed after it. `look` and `sidebar` are the text of `look.toml` and
  * `sidebar.toml`; `files` are more, by their paths in the throwaway
  * folder. */
 export async function startWindow({
   account = false,
   oldCli = false,
+  other = false,
   look = "",
   sidebar = "",
   files = {} as Record<string, string>,
@@ -91,9 +93,11 @@ export async function startWindow({
     ? `env = { FAKE_AGENT_HOME = ${JSON.stringify(home)}, ${mcp} }\n`
     : `env = { ${mcp} }\n`
   const cli = oldCli ? fakeCli(dir, "1.0.0", "2.0.0") : ""
+  const entry = (id: string, name: string, more = "") =>
+    `[[harness]]\nid = "${id}"\nname = "${name}"\ncommand = ${JSON.stringify(fake)}\n${env}${more}`
   writeFileSync(
     join(dir, "config/harnesses.toml"),
-    `[[harness]]\nid = "fake"\nname = "Fake AI"\ncommand = ${JSON.stringify(fake)}\n${env}${cli}`
+    entry("fake", "Fake AI", cli) + (other ? entry("other", "Other AI") : "")
   )
   const variables = {
     ...process.env,

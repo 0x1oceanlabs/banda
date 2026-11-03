@@ -1,6 +1,7 @@
 import { useState } from "react"
 import type {
   HarnessOption,
+  Offer,
   OptionValue,
   Settings,
 } from "@banda/contract/agents"
@@ -20,7 +21,14 @@ import {
   RotateCcwIcon,
   ZapIcon,
 } from "lucide-react"
-import { levelAt, levelsOf, modelName, resetOf, type Picked } from "./picker"
+import {
+  levelAt,
+  levelsOf,
+  modelName,
+  pickedOf,
+  resetOf,
+  type Picked,
+} from "./picker"
 import { choose, chosen } from "./thread"
 
 /**
@@ -28,7 +36,8 @@ import { choose, chosen } from "./thread"
  * beside the send button, as Codex has it: the Harness's logo, the model,
  * the effort. It opens on a slider of effort levels, with Fast mode and a
  * way back to the Harness's defaults beside the model's name, which opens
- * the list of models.
+ * the list of models. A new Thread's list holds every Harness's models,
+ * each under its logo: choosing one chooses the Harness too.
  */
 export function ModelPicker({
   harness,
@@ -37,6 +46,8 @@ export function ModelPicker({
   picked,
   disabled,
   onChange,
+  starts,
+  onStart,
 }: {
   /** The Harness's id, for its logo, and its name. */
   harness: string
@@ -45,13 +56,18 @@ export function ModelPicker({
   picked: Picked
   disabled: boolean
   onChange: (settings: Settings) => void
+  /** A new Thread's Harnesses, if it can start on another. */
+  starts?: Start[]
+  /** Starts the new Thread on another Harness, with `settings`. */
+  onStart?: (harness: string, settings?: Settings) => void
 }) {
   const { model, effort, fast } = picked
   const [open, setOpen] = useState(false)
   const [view, setView] = useState<"levels" | "models">("levels")
   // The level under the thumb while it is dragged, before it is chosen.
   const [sliding, setSliding] = useState<number>()
-  if (!model && !effort) return null
+  const others = starts && starts.length > 1 ? starts : undefined
+  if (!model && !effort && !others) return null
 
   const value = model && String(chosen(settings, model))
   const now = model?.choices.find((choice) => choice.value === value)
@@ -62,9 +78,11 @@ export function ModelPicker({
   const level = unset ? undefined : levels[at]
   const reset = resetOf(settings, picked)
   const logo = <HarnessLogo id={harness} name={name} fallback={null} />
+  // A Harness that has not said its models yet goes by its own name.
+  const what = now ? modelName(now) : level ? undefined : name
   const named = (
     <>
-      {now && <span className="truncate">{modelName(now)}</span>}
+      {what && <span className="truncate">{what}</span>}
       {level && (
         <span className={cn("shrink-0", levelTone(at, levels.length - 1))}>
           {level.name}
@@ -72,7 +90,7 @@ export function ModelPicker({
       )}
     </>
   )
-  const label = [now && modelName(now), level?.name].filter(Boolean).join(", ")
+  const label = [what, level?.name].filter(Boolean).join(", ")
   // Only a change goes to the Harness: each is a round trip to it.
   const pick = (option: HarnessOption, next: OptionValue) => {
     setSliding(undefined)
@@ -80,6 +98,30 @@ export function ModelPicker({
       onChange(choose(settings, option.id, next))
   }
   const shown = effort ? view : "models"
+  // The models: this Harness's alone; for a new Thread, every Harness's.
+  const groups: Group[] = (others ?? [undefined]).map((start) => {
+    if (!start || start.id === harness)
+      return {
+        id: harness,
+        name,
+        model,
+        value,
+        choose: (next) => model && next !== undefined && pick(model, next),
+      }
+    const theirs = pickedOf(start.offer.options).model
+    return {
+      id: start.id,
+      name: start.name,
+      model: theirs,
+      choose: (next) =>
+        onStart?.(
+          start.id,
+          theirs && next !== undefined
+            ? choose(start.settings, theirs.id, next)
+            : undefined
+        ),
+    }
+  })
 
   return (
     <Popover
@@ -155,18 +197,15 @@ export function ModelPicker({
             />
           </>
         ) : (
-          model && (
-            <Models
-              option={model}
-              value={value}
-              logo={logo}
-              onBack={effort && (() => setView("levels"))}
-              onChoose={(next) => {
-                setOpen(false)
-                pick(model, next)
-              }}
-            />
-          )
+          <Models
+            groups={groups}
+            current={harness}
+            onBack={effort && (() => setView("levels"))}
+            onChoose={(group, next) => {
+              setOpen(false)
+              group.choose(next)
+            }}
+          />
         )}
       </PopoverContent>
     </Popover>
@@ -200,20 +239,38 @@ function FastToggle({
   )
 }
 
-/** The Harness's models, each under its logo with what it is for. */
+/** What a new Thread on a Harness would start with. */
+export type Start = {
+  id: string
+  name: string
+  settings: Settings
+  offer: Offer
+}
+
+/** One Harness's models in the list, and what choosing one of them, or
+ * the Harness itself when it has not said its models, does. */
+type Group = {
+  id: string
+  name: string
+  model?: HarnessOption
+  value?: string
+  choose: (value?: string) => void
+}
+
+/** The models, each with what it is for: one Harness's, each under its
+ * logo, or each Harness's under its logo and name. */
 function Models({
-  option,
-  value,
-  logo,
+  groups,
+  current,
   onBack,
   onChoose,
 }: {
-  option: HarnessOption
-  value?: string
-  logo: React.ReactNode
+  groups: Group[]
+  current: string
   onBack?: () => void
-  onChoose: (value: string) => void
+  onChoose: (group: Group, value?: string) => void
 }) {
+  const headed = groups.length > 1
   return (
     <div className="flex flex-col">
       <div className="flex h-8 items-center gap-1 px-1 text-xs text-muted-foreground">
@@ -227,41 +284,93 @@ function Models({
             <ChevronLeftIcon />
           </Button>
         )}
-        <span className={cn(!onBack && "px-1.5")}>{option.name}</span>
+        <span className={cn(!onBack && "px-1.5")}>Model</span>
       </div>
       <div
         role="listbox"
-        aria-label={option.name}
+        aria-label="Model"
         className="max-h-80 overflow-y-auto"
       >
-        {option.choices.map((choice) => {
-          const on = choice.value === value
+        {groups.map((group, i) => {
+          const logo = (
+            <HarnessLogo id={group.id} name={group.name} fallback={null} />
+          )
+          const here = group.id === current
           return (
-            <button
-              key={choice.value}
-              type="button"
-              role="option"
-              aria-selected={on}
-              className={cn(
-                "flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left outline-none hover:bg-accent focus-visible:bg-accent",
-                on && "bg-accent/60"
+            <div key={group.id} role="group" aria-label={group.name}>
+              {headed && group.model && (
+                <div
+                  className={cn(
+                    "flex items-center gap-2 px-2.5 pt-2 pb-1 text-xs text-muted-foreground",
+                    i > 0 && "mt-1 border-t border-border/60"
+                  )}
+                >
+                  {logo}
+                  {group.name}
+                </div>
               )}
-              onClick={() => onChoose(choice.value)}
-            >
-              {logo}
-              <span className="flex min-w-0 flex-1 flex-col">
-                <span className="truncate">{choice.name}</span>
-                {choice.description && (
-                  <span className="truncate text-xs text-muted-foreground">
-                    {choice.description}
-                  </span>
-                )}
-              </span>
-              {on && <CheckIcon className="size-4 shrink-0" />}
-            </button>
+              {group.model ? (
+                group.model.choices.map((choice) => (
+                  <Row
+                    key={choice.value}
+                    name={choice.name}
+                    about={choice.description}
+                    logo={!headed && logo}
+                    on={here && choice.value === group.value}
+                    onClick={() => onChoose(group, choice.value)}
+                  />
+                ))
+              ) : (
+                <Row
+                  name={group.name}
+                  about="Models show after its first Thread"
+                  logo={logo}
+                  on={here}
+                  onClick={() => onChoose(group)}
+                />
+              )}
+            </div>
           )
         })}
       </div>
     </div>
+  )
+}
+
+function Row({
+  name,
+  about,
+  logo,
+  on,
+  onClick,
+}: {
+  name: string
+  about?: string
+  logo?: React.ReactNode
+  on: boolean
+  onClick: () => void
+}) {
+  return (
+    <button
+      type="button"
+      role="option"
+      aria-selected={on}
+      className={cn(
+        "flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left outline-none hover:bg-accent focus-visible:bg-accent",
+        on && "bg-accent/60"
+      )}
+      onClick={onClick}
+    >
+      {logo}
+      <span className="flex min-w-0 flex-1 flex-col">
+        <span className="truncate">{name}</span>
+        {about && (
+          <span className="truncate text-xs text-muted-foreground">
+            {about}
+          </span>
+        )}
+      </span>
+      {on && <CheckIcon className="size-4 shrink-0" />}
+    </button>
   )
 }
