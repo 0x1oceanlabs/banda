@@ -64,6 +64,8 @@ test("the Diff shows a Space's changes by scope, as T3 Code's, and reads again a
   const scope = diff.getByRole("button", { name: "Scope" })
   await expect(scope).toHaveText("Changes")
   await expect(diff.getByRole("button", { name: "Base" })).toHaveText("vs main")
+  // Its header sums them: how many files, lines added and removed.
+  await expect(diff.locator("header")).toContainText("3 files·+3−1")
   const files = diff.getByRole("tree")
   // A file's header in the view, by its path.
   const header = (path: string) => diff.getByText(path, { exact: true })

@@ -128,10 +128,11 @@ export function PaneFrame({
         ((zoomed || kind?.header !== false) && (
           <PaneHeader
             title={title}
+            icon={listed ? undefined : Icon}
             onClose={close}
             className={kind?.header === "bare" ? "border-b-0" : undefined}
           >
-            {listed ? (
+            {listed && (
               <>
                 <ThreadMark
                   listed={listed}
@@ -141,8 +142,6 @@ export function PaneFrame({
                   {spaceName}
                 </span>
               </>
-            ) : (
-              Icon && <Icon className="size-4 shrink-0 text-muted-foreground" />
             )}
             <h2 className="min-w-0 truncate font-medium text-muted-foreground group-data-[focused=true]/tile:text-foreground">
               {title}
