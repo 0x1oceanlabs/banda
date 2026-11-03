@@ -21,7 +21,7 @@ use crate::model::{ItemId, TurnId, Values};
 use banda_harnesses::Harness;
 use banda_harnesses::hosts::Hosts;
 use banda_harnesses::model::Program;
-use banda_kernel::{AgentId, ModuleSpace, SpaceId};
+use banda_kernel::{AgentId, Heard, ModuleSpace, SpaceId};
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -111,10 +111,35 @@ impl Live {
         Ok(connection)
     }
 
-    /// Lets go of every process of `harness`: each starts again on its
-    /// next turn.
-    pub async fn let_go(&self, harness: &str) {
-        self.hosts.let_go(harness).await;
+    /// Lets go of the process of `harness` in `space`: it starts again on
+    /// its next turn.
+    pub fn let_go(&self, space: SpaceId, harness: &str) {
+        self.hosts.let_go(space, harness);
+    }
+
+    /// Lets go of the processes of `harness` in every Space, after the
+    /// module's own sign-in, which goes in ADR 0040's step 4.
+    pub fn let_go_everywhere(&self, harness: &str) {
+        self.hosts.let_go_everywhere(harness);
+    }
+
+    /// Lets go of `space`'s process of each Harness whose account changed,
+    /// as the machine says, until the Space closes (ADR 0040, decision 4).
+    pub async fn let_go_as_accounts_change(self: Arc<Self>, space: SpaceId, mut heard: Heard) {
+        loop {
+            match heard.next().await {
+                Ok(Some(event)) => {
+                    if let Some(harness) = &event.subject {
+                        self.let_go(space, harness);
+                    }
+                }
+                Ok(None) => return,
+                Err(error) => {
+                    tracing::warn!(%error, "a Space no longer hears the machine's accounts");
+                    return;
+                }
+            }
+        }
     }
 
     /// Stops every turn that runs on a Harness of `space`, as the Space is

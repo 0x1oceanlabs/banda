@@ -8,7 +8,7 @@ about = "Threads with Agents on their Harnesses: what each says and does, and wh
 version = "0.1.0"
 from-banda = true
 # The settings files it owns, in ~/.config/banda.
-settings = ["agents.toml", "harnesses.toml"]
+settings = ["agents.toml"]
 
 # Paths it takes that a module from elsewhere would lack (ADR 0022,
 # decision 6), each with why. One that gets its place in the contract goes.

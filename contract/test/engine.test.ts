@@ -103,7 +103,15 @@ test("a window calls, follows and sees refusals by their code", async () => {
   client = new Engine(address)
   await until(client, "open")
   expect(client.status).toMatchObject({
-    modules: ["agents", "terminal", "browser", "git", "workspaces", "problems"],
+    modules: [
+      "agents",
+      "harnesses",
+      "terminal",
+      "browser",
+      "git",
+      "workspaces",
+      "problems",
+    ],
   })
 
   const space = await client.command("spaces.create", {

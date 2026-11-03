@@ -7,7 +7,7 @@ use crate::places::{HOST, Places, Running};
 use banda_agents::{Agents, Pipe};
 use banda_browser::Browser;
 use banda_git::Git;
-use banda_harnesses::Harnesses;
+use banda_harnesses::{Harnesses, HarnessesModule};
 use banda_kernel::api::{self, OwnerSecret};
 use banda_kernel::{Kernel, PROTOCOL};
 use banda_problems::Problems;
@@ -60,6 +60,9 @@ pub async fn serve(places: Places, port: u16, with_parent: bool) -> Result<(), F
                 .config_in(places.config.clone())
                 .piped(pipe),
         )
+        .module(HarnessesModule::new(
+            Harnesses::load(&places.harnesses()).map_err(Failure::broken)?,
+        ))
         .module(Terminals::new())
         .module(Browser::new())
         .module(Git::new())

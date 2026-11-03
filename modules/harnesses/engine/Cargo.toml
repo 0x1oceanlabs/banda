@@ -1,6 +1,6 @@
 [package]
 name = "banda-harnesses"
-description = "The Harnesses of this computer: the agent programs harnesses.toml lists, and how to find and start each (ADR 0040)."
+description = "The harnesses module: the Harnesses of this computer, the agent programs harnesses.toml lists, how to start each and who is signed in to it (ADR 0040)."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true
@@ -9,6 +9,7 @@ publish.workspace = true
 
 [dependencies]
 agent-client-protocol = { workspace = true, features = ["process"] }
+async-trait.workspace = true
 banda-kernel = { path = "../../../kernel" }
 banda-look = { path = "../../../look" }
 schemars.workspace = true

@@ -2,9 +2,11 @@
 //! one session with a Harness in a Space, and the Agent at work in it is
 //! its own, with no name or settings (ADR 0006).
 //!
-//! - The **Harness list** is a text file of the machine (`banda-harnesses`),
-//!   and `agents.toml` says how messages are sent ([`sending`]): the
-//!   module's [`SETTINGS`].
+//! - The **Harness list** is a text file of the machine, the module
+//!   `harnesses`'s (`banda-harnesses`), and `agents.toml` says how
+//!   messages are sent ([`sending`]): the module's [`SETTINGS`]. A
+//!   Space's hosts of a Harness are let go as the machine says its
+//!   account changed.
 //! - **Threads, turns and Questions** are this module's tables and facts
 //!   ([`model`]). A message queues a turn, or goes into the turn that runs
 //!   (steering); the outbox runs a Thread's turns one at a time, and
@@ -70,13 +72,11 @@ use std::time::Duration;
 use ts_rs::TS;
 use visuals::Visuals;
 
-/// The module's settings files in `~/.config/banda` (ADR 0016): how
-/// messages are sent, which the look resolves for the window, and the
-/// Harness list, which the look only checks.
-pub const SETTINGS: [banda_look::SettingsFile; 2] = [
-    banda_look::SettingsFile::of::<sending::AgentsSettings>(),
-    banda_harnesses::FILE,
-];
+/// The module's settings file in `~/.config/banda` (ADR 0016): how
+/// messages are sent and what a new Thread starts with, which the look
+/// resolves for the window.
+pub const SETTINGS: [banda_look::SettingsFile; 1] =
+    [banda_look::SettingsFile::of::<sending::AgentsSettings>()];
 
 pub struct Agents {
     harnesses: Harnesses,
@@ -187,7 +187,7 @@ impl Agents {
     /// share it. Then the receipt keeps the answer, and the kernel answers
     /// the same command, sent again, from it.
     async fn start_again(&self, call: &Call, harness: &str) -> Result<(), Refusal> {
-        self.live.let_go(harness).await;
+        self.live.let_go_everywhere(harness);
         call.command(|_| Ok(())).await
     }
 
@@ -580,7 +580,10 @@ impl Agents {
                 .map_err(Refusal::conflict)?;
         }
         drop(connection);
-        self.live.let_go(&harness.id).await;
+        // The machine's module `harnesses` does not hear it: until the
+        // window asks it (ADR 0040, step 4), its own process may answer
+        // from the old account until it is let go as idle.
+        self.live.let_go_everywhere(&harness.id);
         let author = call.participant();
         call.command(move |tx| match turn {
             // A turn that went again already, or cannot, leaves the
@@ -965,6 +968,8 @@ impl Module for Agents {
         }
     }
 
+    /// From now on, a Space lets go of its hosts of a Harness whose
+    /// account changed (ADR 0040, decision 4).
     async fn opened(&self, space: ModuleSpace) -> Result<(), Error> {
         let agents = old_agents::read(space.data());
         space
@@ -972,7 +977,13 @@ impl Module for Agents {
                 store::fill_harnesses(tx.sql(), &agents)?;
                 between::cut_short(tx)
             })
-            .await
+            .await?;
+        let filter = banda_harnesses::account_changed();
+        if let Some(heard) = space.react_to_machine(filter).await? {
+            let live = self.live.clone();
+            tokio::spawn(live.let_go_as_accounts_change(space.id(), heard));
+        }
+        Ok(())
     }
 
     async fn closing(&self, space: ModuleSpace) {

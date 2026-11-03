@@ -383,6 +383,7 @@ name = "banda-harnesses"
 version = "0.1.0"
 dependencies = [
  "agent-client-protocol",
+ "async-trait",
  "banda-kernel",
  "banda-look",
  "schemars 1.2.3",
@@ -452,6 +453,7 @@ version = "0.1.0"
 dependencies = [
  "banda-agents",
  "banda-browser",
+ "banda-harnesses",
  "banda-look",
  "schemars 1.2.3",
  "serde_json",

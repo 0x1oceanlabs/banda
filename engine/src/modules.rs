@@ -12,6 +12,7 @@
 use banda_agents::Agents;
 use banda_browser::Browser;
 use banda_git::Git;
+use banda_harnesses::HarnessesModule;
 use banda_kernel::Method;
 use banda_problems::Problems;
 use banda_terminal::Terminals;
@@ -41,6 +42,12 @@ const FILES: &[Files] = &[
         toml: include_str!("../../modules/agents/module.toml"),
         window: Some(include_str!("../../modules/agents/window.json")),
         methods: Some(Agents::method_list),
+    },
+    Files {
+        folder: "harnesses",
+        toml: include_str!("../../modules/harnesses/module.toml"),
+        window: None,
+        methods: Some(HarnessesModule::method_list),
     },
     Files {
         folder: "terminal",
@@ -262,6 +269,7 @@ mod tests {
             .collect();
         let engine = [
             Agents::new(Default::default()).name(),
+            HarnessesModule::new(Default::default()).name(),
             Terminals::new().name(),
             Browser::new().name(),
             Git::new().name(),

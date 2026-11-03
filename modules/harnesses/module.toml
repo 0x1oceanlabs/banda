@@ -1,0 +1,10 @@
+# The harnesses module, as it declares itself (ADR 0022). Its methods its
+# code declares; it is the machine's (ADR 0040), and the settings Pane
+# draws its file in the Agents section.
+id = "harnesses"
+name = "Harnesses"
+about = "The agent programs this computer can start, and who is signed in to each."
+version = "0.1.0"
+from-banda = true
+# The settings files it owns, in ~/.config/banda.
+settings = ["harnesses.toml"]
