@@ -94,8 +94,7 @@ it. It exits 2 when the window is not open.
 ## Showing the Person a Visual
 
 Show a visual the Person asks for, and data with a trend or a
-comparison, as a Visual in your Thread, with the `preview_visual` and
-`show_visual` tools of `banda mcp`: lay the page out with
+comparison, as a Visual in your Thread: lay the page out with
 `preview_visual`, fix what its picture and console show, then show it
 with `show_visual` and the height it answered. A visual already in a
 file is shown by passing that file's HTML. Never start a server for

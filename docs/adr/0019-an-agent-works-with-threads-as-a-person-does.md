@@ -68,7 +68,9 @@ Roma asked for the simple version: "не хочется усложнять, чт
      says "Banda is unavailable, try again" for a mistake in the call; the
      old Banda lost eleven hand-offs that way.
    - The skill's core is the server's MCP `instructions`, and each topic
-     comes through the `skill` tool (ADR 0012). The skill is a library the
+     comes through the `skill` tool (ADR 0012). _Changed by ADR 0037,
+     decision 7: the `instructions` are a brief that fits what Claude
+     Code keeps, and the core comes through `skill` too._ The skill is a library the
      same program has, so `banda mcp` answers it itself, as `banda skill`
      does, without the engine.
    - The first four tools:

@@ -12,8 +12,9 @@
 //!
 //! The same text reaches an Agent in several ways: `banda skill` prints
 //! it, `banda skill --export` writes it as an Agent Skills folder, and
-//! `banda mcp` gives the core as its instructions and each topic through
-//! its `skill` tool (ADR 0019).
+//! `banda mcp` gives a brief as its instructions, which a client keeps
+//! only the start of, and the core and each topic through its `skill`
+//! tool (ADR 0019, ADR 0037).
 
 use std::fmt::Write as _;
 use std::path::Path;
@@ -43,6 +44,7 @@ pub enum Reach {
 }
 
 const CORE: &str = include_str!("../SKILL.md");
+const BRIEF: &str = include_str!("../BRIEF.md");
 const PAGES: &[(&str, &str)] = include!(concat!(env!("OUT_DIR"), "/topics.rs"));
 
 /// Every topic, by name.
@@ -66,6 +68,14 @@ pub fn core(reach: Reach) -> String {
     text.push_str("\n\n## Topics\n\n");
     text.push_str(&list(reach));
     text
+}
+
+/// What `banda mcp` says as its `instructions`, which a client keeps only
+/// the start of (Claude Code, 4,096 characters): what Banda is, the rules
+/// an Agent needs before it would ask, as when to show a Visual, and the
+/// `skill` tool for the rest.
+pub fn brief() -> &'static str {
+    BRIEF
 }
 
 /// A topic's page, or with no topic the core; or, for a topic there is
@@ -184,6 +194,21 @@ mod tests {
         let none = read(Some("nope"), Reach::Command).unwrap_err();
         assert!(none.starts_with("There is no topic \"nope\".\n\nRead one with `banda skill"));
         assert!(none.contains("- `sidebar`: "));
+    }
+
+    #[test]
+    fn the_brief_fits_what_a_client_keeps_and_names_the_skill() {
+        // Claude Code keeps 4,096 characters of a server's instructions,
+        // its own heading over them included.
+        assert!(brief().chars().count() <= 4_000);
+        // Its rules are the core's, word for word.
+        let rules = brief()
+            .split("\n## ")
+            .skip(1)
+            .filter(|part| !part.starts_with("The Banda skill"));
+        for rule in rules {
+            assert!(CORE.contains(rule), "the core lacks: {rule}");
+        }
     }
 
     #[test]
