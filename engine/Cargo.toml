@@ -12,6 +12,7 @@ axum.workspace = true
 banda-agents = { path = "../modules/agents/engine" }
 banda-browser = { path = "../modules/browser/engine" }
 banda-git = { path = "../modules/git/engine" }
+banda-harnesses = { path = "../modules/harnesses/engine" }
 banda-terminal = { path = "../modules/terminal/engine" }
 banda-problems = { path = "../modules/problems/engine" }
 banda-workspaces = { path = "../modules/workspaces/engine" }

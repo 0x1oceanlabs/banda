@@ -19,18 +19,19 @@
 //! runs until the Harness ends it or a Person stops it.
 
 use crate::model::{
-    Account, Adapter, Choice, CliView, Cost, Exit, Failure, Field, FieldValue, HarnessOption,
-    Input, Mode, Offer, OptionChoice, OptionValue, PlanStep, Program, Settings, SignInWay,
-    SignedInAs, Skill, SlashCommand, StepState, TextFormat, ThreadId, ToolContent, ToolKind,
-    ToolStatus, TurnState, Usage, Values,
+    Account, Adapter, Choice, Cost, Exit, Failure, Field, FieldValue, HarnessOption, Input, Mode,
+    Offer, OptionChoice, OptionValue, PlanStep, Settings, SignInWay, SignedInAs, Skill,
+    SlashCommand, StepState, TextFormat, ThreadId, ToolContent, ToolKind, ToolStatus, TurnState,
+    Usage, Values,
 };
 use crate::plain;
 use crate::record::{Recording, To};
 use crate::rules::Ending;
-use crate::settings::Harness;
 use agent_client_protocol::schema::ProtocolVersion;
 use agent_client_protocol::schema::v1 as acp;
 use agent_client_protocol::{AcpAgent, AcpAgentConfig, Agent, Client, ConnectionTo, LineDirection};
+use banda_harnesses::Harness;
+use banda_harnesses::model::{CliView, Program};
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as BASE64;
 use serde::{Deserialize, Serialize};
@@ -158,7 +159,7 @@ impl Connection {
     /// Starts `harness` and agrees on ACP v1 with it.
     pub async fn start(harness: &Harness) -> Result<Arc<Connection>, String> {
         // The entry as it starts, with its CLI's path when it runs one.
-        let (harness, cli) = crate::cli::find(harness).await?;
+        let (harness, cli) = banda_harnesses::cli::find(harness).await?;
         let harness = &harness;
         let config = AcpAgentConfig::new(&harness.command)
             .args(harness.args.iter().cloned())

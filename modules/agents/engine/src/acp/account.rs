@@ -95,7 +95,7 @@ impl Connection {
     /// `harness` finds it now: updated since the start, its Threads stop
     /// warning that it is old.
     pub async fn account(&self, harness: &Harness) -> Result<Account, String> {
-        let (_, cli) = crate::cli::find(harness).await?;
+        let (_, cli) = banda_harnesses::cli::find(harness).await?;
         *self.cli.lock().unwrap() = cli.clone();
         let mut account = self.account.clone();
         if self.about.reports_account {

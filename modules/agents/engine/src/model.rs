@@ -1,6 +1,7 @@
 //! The agents module's published language: its IDs, the facts it publishes
 //! and the views a window reads. TypeScript types come from here.
 
+use banda_harnesses::model::{CliView, Program};
 use banda_kernel::{AgentId, Participant};
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -199,37 +200,6 @@ pub struct OptionChoice {
     pub description: Option<String>,
 }
 
-/// A Harness this machine can run, as `harnesses.toml` has it.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "agents/")]
-pub struct HarnessView {
-    pub id: String,
-    pub name: String,
-    /// Whether Threads start with it.
-    pub enabled: bool,
-    /// How it starts: its program, then its arguments.
-    pub command: Vec<String>,
-    /// The names of the variables it starts with. Their values may be
-    /// secrets, so they stay in the file.
-    pub env: Vec<String>,
-}
-
-impl HarnessView {
-    pub fn of(harness: &crate::settings::Harness) -> Self {
-        Self {
-            id: harness.id.clone(),
-            name: harness.name.clone(),
-            enabled: harness.enabled,
-            command: [&harness.command]
-                .into_iter()
-                .chain(&harness.args)
-                .cloned()
-                .collect(),
-            env: harness.env.keys().cloned().collect(),
-        }
-    }
-}
-
 /// What `agents.account` answers: a Harness entry on this computer as its
 /// process says when it starts, and how a Person signs in to it.
 #[derive(Clone, Debug, Serialize, Deserialize, TS)]
@@ -252,22 +222,6 @@ pub struct Account {
     /// ACP's logout, and an account is signed in. A key in its environment
     /// outlives a logout.
     pub signs_out: bool,
-}
-
-/// The Person's own CLI that a Harness runs, where it was found and the
-/// version it says.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "agents/")]
-pub struct CliView {
-    pub path: String,
-    #[ts(optional)]
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub version: Option<String>,
-    /// In plain words, that the version is older than the Harness
-    /// supports.
-    #[ts(optional)]
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub outdated: Option<String>,
 }
 
 /// A Harness's program, as it names itself when it starts: for Claude
@@ -315,16 +269,6 @@ pub struct SignInWay {
     #[ts(optional)]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub terminal: Option<Program>,
-}
-
-/// A program with its arguments, never a shell line, and what it adds to
-/// the engine's environment.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
-#[ts(export, export_to = "agents/")]
-pub struct Program {
-    pub program: String,
-    pub args: Vec<String>,
-    pub env: BTreeMap<String, String>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]

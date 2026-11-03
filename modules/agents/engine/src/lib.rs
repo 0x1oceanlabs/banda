@@ -2,7 +2,7 @@
 //! one session with a Harness in a Space, and the Agent at work in it is
 //! its own, with no name or settings (ADR 0006).
 //!
-//! - The **Harness list** is a text file of the machine ([`settings`]),
+//! - The **Harness list** is a text file of the machine (`banda-harnesses`),
 //!   and `agents.toml` says how messages are sent ([`sending`]): the
 //!   module's [`SETTINGS`].
 //! - **Threads, turns and Questions** are this module's tables and facts
@@ -23,7 +23,6 @@
 mod acp;
 mod between;
 mod changes;
-mod cli;
 mod drive;
 mod effects;
 mod files;
@@ -32,11 +31,11 @@ mod images;
 mod kept;
 mod live;
 pub mod model;
+mod old_agents;
 mod questions;
 mod record;
 mod rules;
 pub mod sending;
-pub mod settings;
 mod skills;
 mod store;
 mod transcript;
@@ -44,6 +43,8 @@ mod visuals;
 mod writer;
 
 use acp::Connection;
+use banda_harnesses::model::{HarnessView, Program};
+use banda_harnesses::{Harness, Harnesses};
 use banda_kernel::{
     AgentId, Call, Effect, Error, Module, ModuleSpace, Nothing, OnRestart, Outcome, Participant,
     Refusal, Right, Settled, SpaceId, Tool, Tx,
@@ -55,15 +56,13 @@ use changes::{ChangesAsk, TurnChanges};
 use images::Images;
 use live::Live;
 use model::{
-    Account, Body, Fact, HarnessView, Image, ImageId, Item, ItemId, Offer, Opener, Program,
-    Settings, ThreadId, ThreadList, ThreadSummary, ThreadView, TurnId, TurnState, VERSION,
-    VisualId,
+    Account, Body, Fact, Image, ImageId, Item, ItemId, Offer, Opener, Settings, ThreadId,
+    ThreadList, ThreadSummary, ThreadView, TurnId, TurnState, VERSION, VisualId,
 };
 use rules::Event;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
-use settings::{Harness, Harnesses};
 use std::fmt::Display;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -76,11 +75,7 @@ use visuals::Visuals;
 /// Harness list, which the look only checks.
 pub const SETTINGS: [banda_look::SettingsFile; 2] = [
     banda_look::SettingsFile::of::<sending::AgentsSettings>(),
-    banda_look::SettingsFile::new::<settings::HarnessFile>(
-        "harnesses.toml",
-        settings::template,
-        settings::check,
-    ),
+    banda_harnesses::FILE,
 ];
 
 pub struct Agents {
@@ -916,7 +911,7 @@ impl Module for Agents {
     }
 
     async fn opened(&self, space: ModuleSpace) -> Result<(), Error> {
-        let agents = settings::old_agents(space.data());
+        let agents = old_agents::read(space.data());
         space
             .write(move |tx| {
                 store::fill_harnesses(tx.sql(), &agents)?;

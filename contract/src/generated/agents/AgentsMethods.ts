@@ -2,6 +2,7 @@
 import type { CallMethod } from "../CallMethod";
 import type { CommandMethod } from "../CommandMethod";
 import type { Nothing } from "../Nothing";
+import type { HarnessView } from "../harnesses/HarnessView";
 import type { Account } from "./Account";
 import type { Answer } from "./Answer";
 import type { Attach } from "./Attach";
@@ -11,7 +12,6 @@ import type { Defaults } from "./Defaults";
 import type { Edit } from "./Edit";
 import type { FileQuery } from "./FileQuery";
 import type { Forked } from "./Forked";
-import type { HarnessView } from "./HarnessView";
 import type { Image } from "./Image";
 import type { ImageData } from "./ImageData";
 import type { Keep } from "./Keep";

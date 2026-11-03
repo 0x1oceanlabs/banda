@@ -1,6 +1,7 @@
 import { useCallback } from "react"
 import { type Engine, newId, type SpaceId } from "@banda/contract"
-import type { Program, SignInWay, TurnId } from "@banda/contract/agents"
+import type { SignInWay, TurnId } from "@banda/contract/agents"
+import type { Program } from "@banda/contract/harnesses"
 import { Button } from "@banda/ui/components/button"
 import { CopyButton } from "@banda/ui/components/copy-button"
 import { Spinner } from "@banda/ui/components/spinner"

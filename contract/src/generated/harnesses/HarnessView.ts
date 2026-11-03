@@ -5,7 +5,7 @@
  */
 export type HarnessView = { id: string, name: string, 
 /**
- * Whether Threads start with it.
+ * Whether it is on.
  */
 enabled: boolean, 
 /**
