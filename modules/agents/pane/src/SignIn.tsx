@@ -1,5 +1,10 @@
 import { useCallback } from "react"
-import { type Engine, newId, type SpaceId } from "@banda/contract"
+import {
+  type CommandCall,
+  type Engine,
+  newId,
+  type SpaceId,
+} from "@banda/contract"
 import type { TurnId } from "@banda/contract/agents"
 import type { Program, SignInWay } from "@banda/contract/harnesses"
 import { Button } from "@banda/ui/components/button"
@@ -22,10 +27,12 @@ export type Open = PaneProps<unknown>["open"]
 
 /**
  * Signing in to a Thread's Harness, from a turn that failed because its
- * Person must: the ways the Harness offers. One it does by itself, as
- * Codex does in the browser, signs in at a click; one in a terminal runs
- * in a terminal Pane, and its program ending well says it worked. Then
- * `turn` goes again. Banda holds none of the account's credentials.
+ * Person must: the ways the Harness offers, as the machine's module
+ * `harnesses` says. One it does by itself, as Codex does in the browser,
+ * signs in at a click; one in a terminal runs in a terminal Pane, and its
+ * program ending well says it worked. Then `turn` goes again: a sign-in
+ * on the machine, a retry in the Space (ADR 0040, decision 5). Banda
+ * holds none of the account's credentials.
  */
 export function SignIn({
   engine,
@@ -42,10 +49,11 @@ export function SignIn({
   open: Open
   onSignedIn: () => void
 }) {
+  // Read once: a sign-in changes who, not the ways.
   const found = useRead(
     useCallback(
-      () => engine.call("agents.account", { harness }, { space }),
-      [engine, space, harness]
+      () => engine.call("harnesses.account", { harness }),
+      [engine, harness]
     )
   )
   if (found.state === "loading") return <Spinner />
@@ -56,7 +64,7 @@ export function SignIn({
       engine={engine}
       space={space}
       harness={harness}
-      ways={found.value.ways}
+      ways={found.value.account.ways}
       turn={turn}
       open={open}
       onSignedIn={onSignedIn}
@@ -66,7 +74,8 @@ export function SignIn({
 
 /**
  * The ways a Harness offers to sign in, each with what it takes; `turn`
- * is the one that needed it, when a Thread asks.
+ * is the one that needed it, when a Thread asks. A way in a terminal runs
+ * in one in `space`; with no Space, its line shows, to run by hand.
  */
 export function Ways({
   engine,
@@ -78,20 +87,22 @@ export function Ways({
   onSignedIn,
 }: {
   engine: Engine
-  space: SpaceId
+  space?: SpaceId
   harness: string
   ways: SignInWay[]
   turn?: TurnId
   open: Open
-  onSignedIn: () => void
+  /** After a sign-in here, as a Thread tries its turn again. */
+  onSignedIn?: () => void
 }) {
   const signing = useAct()
-  const terminals = useModules(engine).includes("terminal")
+  // The Space a terminal runs in, where one can.
+  const terminalIn = useModules(engine).includes("terminal") ? space : undefined
   const signIn = async (way: SignInWay) => {
     const done = await signing.act(() =>
-      engine.command("agents.sign_in", { harness, way: way.id }, space)
+      engine.command("harnesses.sign_in", { harness, way: way.id })
     )
-    if (done !== undefined) onSignedIn()
+    if (done !== undefined) onSignedIn?.()
   }
   return (
     <div className="flex flex-col gap-2">
@@ -105,12 +116,11 @@ export function Ways({
           <TerminalWay
             key={way.id}
             engine={engine}
-            space={space}
             harness={harness}
             way={way}
             program={way.terminal}
             turn={turn}
-            terminals={terminals}
+            space={terminalIn}
             open={open}
             busy={signing.busy}
             onSignIn={() => void signIn(way)}
@@ -155,45 +165,52 @@ function Way({
 /**
  * A way in a terminal. It runs in a terminal Pane below, which the
  * terminal module draws and the window keeps: once its program ended with
- * code 0, that Pane sends the sign-in, which sends the `turn` that needed
- * it again too, and closes. So the sign-in lands even after a reload, or
- * with this card gone. The line stays to run by hand, where no terminal
+ * code 0, that Pane sends the sign-in on the machine, then the `turn`
+ * that needed it again in its Space, and closes. So the sign-in lands
+ * even after a reload, or with this card gone. The line stays to run by hand, where no terminal
  * runs here or the Person would rather.
  */
 function TerminalWay({
   engine,
-  space,
   harness,
   way,
   program,
   turn,
-  terminals,
+  space,
   open,
   busy,
   onSignIn,
 }: {
   engine: Engine
-  space: SpaceId
   harness: string
   way: SignInWay
   program: Program
   turn: TurnId | undefined
-  terminals: boolean
+  /** The Space a terminal runs in, if one can. */
+  space: SpaceId | undefined
   open: Open
   busy: boolean
   onSignIn: () => void
 }) {
   const starting = useAct()
   const start = async () => {
+    if (!space) return
     const terminal = newId()
     const opened = await starting.act(() =>
       engine.call("terminal.open", { terminal, ...program }, { space })
     )
     if (opened === undefined) return
-    const signIn = { harness, way: way.id, ...(turn && { turn }) }
-    const done = [
-      { method: "agents.sign_in", params: signIn, command: newId(), space },
+    const signIn = { harness, way: way.id }
+    const done: (CommandCall & { space?: SpaceId })[] = [
+      { method: "harnesses.sign_in", params: signIn, command: newId() },
     ]
+    if (turn)
+      done.push({
+        method: "agents.retry",
+        params: { turn },
+        command: newId(),
+        space,
+      })
     const title = `Sign in: ${way.name}`
     open(
       {
@@ -207,7 +224,7 @@ function TerminalWay({
   const what = `${way.name}${way.description ? ` (${way.description.trim()})` : ""}`
   return (
     <div className="flex flex-col gap-1.5">
-      {terminals ? (
+      {space ? (
         <>
           <div className="flex flex-wrap items-center gap-2">
             <Button

@@ -377,19 +377,19 @@ If Chat is removed, Agents still works through its own Thread.
   message went again already leaves nothing to do, and the retry answers
   none, as `mkdir -p` does (ADR 0040, decision 5).
 - **A Person signs in to a Harness in a way it offers** (ACP's auth
-  methods; `agents.account`; ADR 0004), and the Harness keeps the
+  methods; `harnesses.account`; ADR 0004), and the Harness keeps the
   credentials: Banda holds none and reads none of its files.
   - The engine declares that it runs terminals, so Claude Code's adapter
     offers ways in a terminal: the Harness entry's program with the way's
     arguments and environment, so an entry's own config folder gets the
     account. The Thread runs it in a terminal Pane in a tile below. Once
-    its program ended with code 0, that Pane sends the sign-in with the
-    turn that needed it (`agents.sign_in {harness, way, turn}`), and the
-    turn goes again in the same command. The workspace keeps that Pane, so the
+    its program ended with code 0, that Pane sends the sign-in on the
+    machine (`harnesses.sign_in {harness, way}`), then tries the turn that
+    needed it again in its Space (`agents.retry`). The workspace keeps that Pane, so the
     sign-in lands after a reload or with the Thread closed. The line stays
     to run by hand, after which the Person says so.
   - Codex's adapter signs in by itself in the browser when the engine asks
-    (`agents.sign_in`).
+    (`harnesses.sign_in`).
   - A sign-in writes nothing to the Space, and its receipt keeps the
     answer. Every process of that Harness entry is let go, so each reads
     the account when it next starts.
@@ -397,18 +397,22 @@ If Chat is removed, Agents still works through its own Thread.
     the Person signed in.
   - Who is signed in comes from the Harness itself: Claude Code's and
     Codex's adapters push it (`_auth/status_update`, their extension, until
-    ACP has it). `agents.account` gives it with the program's name and
+    ACP has it). `harnesses.account` gives it with the program's name and
     version; it waits a few seconds for a Harness that reports it but has
     not yet. A Harness that does not report it shows no one.
   - A Harness that declares ACP's logout signs out when asked
-    (`agents.sign_out`), and its processes are let go as after a sign-in.
+    (`harnesses.sign_out`), and its processes are let go as after a sign-in.
     The adapter signs its CLI out, so the Person's own terminal too.
   - The settings Pane's Agents, like T3 Code's provider settings, shows
     each entry with its CLI and adapter versions, who is signed in, Sign
     in, and Sign out where a logout ends the sign-in: an account's, not a
-    key's. Check again asks the Harness anew. It turns an entry on or off,
-    changes its command, and adds or removes one, writing `harnesses.toml`
-    through `banda settings` (ADR 0016). An entry with a known ID, `claude`
+    key's. Check again asks the Harness anew; a sign-in or sign-out
+    anywhere reads it again as `account_changed` arrives. It needs no
+    Space: with none, a way in a terminal shows its line to run by hand,
+    and what a new Thread starts with, which a Space offers, does not
+    show. It turns an entry on or off, changes its command, and adds or
+    removes one, writing `harnesses.toml` through `banda settings` (ADR
+    0016). An entry with a known ID, `claude`
     or `codex`, takes each key it leaves out from Banda, so a new Banda
     moves its adapter; the window shows what is wrong in the file as in
     the look's. What a new Thread on each starts with, its mode, plan and
@@ -574,8 +578,8 @@ If Chat is removed, Agents still works through its own Thread.
   Person's CLI, a process (`acp::Process`: starting, recording, agreeing
   on ACP, who is signed in) and the pool of processes. The agents module
   wraps a process with its sessions' handlers and capabilities.
-- Until the window asks it, the agents module keeps its own `harnesses`,
-  `account`, `sign_in` and `sign_out` (ADR 0040, step 4).
+- The window asks `harnesses`; the agents module's own `harnesses`,
+  `account`, `sign_in` and `sign_out` go next (ADR 0040, step 4c).
 
 ### terminal
 

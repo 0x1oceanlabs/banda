@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react"
+import { useMachine } from "./use-status"
 import {
   type Engine,
   type Event,
@@ -126,4 +127,18 @@ export function useLive<S extends { at: number }>(
   }, [engine, space, source])
 
   return held.source === source ? held.live : LOADING
+}
+
+/**
+ * A view of the machine's own log, as `useLive` keeps a Space's: it reads
+ * once the engine says which log is the machine's. Keep `source` in
+ * `useMemo`.
+ */
+export function useMachineLive<S extends { at: number }>(
+  engine: Engine,
+  source: Source<S>,
+  round = 0
+): Live<S> {
+  const machine = useMachine(engine)
+  return useLive(engine, machine ?? "", machine ? source : null, round)
 }
