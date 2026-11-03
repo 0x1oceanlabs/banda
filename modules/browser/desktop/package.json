@@ -22,7 +22,7 @@
     "electron-chrome-extensions": "4.10.0",
     "electron-chrome-web-store": "0.13.0",
     "playwright-core": "1.64.1",
-    "tldts": "7.4.19"
+    "tldts-experimental": "7.4.19"
   },
   "devDependencies": {
     "@banda/ui": "workspace:*",

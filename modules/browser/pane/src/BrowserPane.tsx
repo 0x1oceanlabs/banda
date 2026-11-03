@@ -615,6 +615,13 @@ function Stopped({
   )
 }
 
+/** A site's answers, as its pill says them. */
+const ANSWERS: [SiteAnswer, string][] = [
+  ["once", "Once"],
+  ["always", "Always"],
+  ["deny", "Deny"],
+]
+
 /**
  * What Banda draws over a page whose site a Thread may not use yet (ADR
  * 0029, decision 7, B): a pill that asks the Person whether it may, ringed
@@ -642,22 +649,19 @@ function AskSite({
         Let <ThreadLink title={title} onClick={() => onThread(agent)} /> use{" "}
         <b>{site}</b>?
       </span>
-      <Button
-        size="xs"
-        className="shrink-0 rounded-full bg-attention text-popover hover:bg-attention/90"
-        onClick={() => onAnswer("once")}
-      >
-        Once
-      </Button>
-      {(["always", "deny"] as const).map((answer) => (
+      {ANSWERS.map(([answer, words]) => (
         <Button
           key={answer}
-          variant="outline"
+          variant={answer === "once" ? "default" : "outline"}
           size="xs"
-          className="shrink-0 rounded-full capitalize"
+          className={cn(
+            "shrink-0 rounded-full",
+            answer === "once" &&
+              "bg-attention text-popover hover:bg-attention/90"
+          )}
           onClick={() => onAnswer(answer)}
         >
-          {answer}
+          {words}
         </Button>
       ))}
     </Pill>

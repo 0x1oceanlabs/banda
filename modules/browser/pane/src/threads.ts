@@ -93,9 +93,9 @@ export const handBack = (
 
 /** What the Thread hears of each answer to whether it may use a site. */
 const SAID: Record<SiteAnswer, string> = {
-  once: "allowed once",
-  always: "always allowed",
-  deny: "denied. Carry on without it",
+  once: "allowed once. Carry on.",
+  always: "always allowed. Carry on.",
+  deny: "denied. Carry on without it.",
 }
 
 /** The Person's answer to whether the Thread of `agent` may use `site`,
@@ -111,7 +111,7 @@ export const allowSite = (
     engine,
     agent,
     browserHost()?.allowed(contents, agent, answer),
-    `${site}: ${SAID[answer]}.${answer === "deny" ? "" : " Carry on."}`
+    `${site}: ${SAID[answer]}`
   )
 
 /**

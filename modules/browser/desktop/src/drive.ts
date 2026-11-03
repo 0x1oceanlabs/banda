@@ -19,23 +19,24 @@ import type {
   WaitFor,
 } from "@banda/contract/browser"
 import type { Driver, SiteAnswer, Wait } from "@banda/browser-pane/desktop"
-import { BROWSER_FILE } from "@banda/contract/browser"
+import { BROWSER_FILE, siteKey } from "@banda/contract/browser"
 import { fileOf } from "@banda/contract/look"
 import { type Broke, Look, Refused, Settings } from "@banda/desktop-kit"
-import { Context, Effect, FiberSet, Layer, RcMap, Stream } from "effect"
+import { Context, Effect, FiberSet, Layer, RcMap } from "effect"
 import type { Event, InputEvent, WebContents } from "electron"
 import { setTimeout as sleep } from "node:timers/promises"
 import type { Browser, Dialog, Frame, Page } from "playwright-core"
 import { Cdp, messageOf } from "./cdp"
 import {
   act,
-  domainOf,
   goingTo,
   hidden,
   opening,
   type Pointing,
   READING,
+  ruleAt,
   secrets,
+  siteAt,
   stepOf,
   timedOut,
   waitFor,
@@ -289,6 +290,14 @@ export class Drive extends Context.Service<
         tellWaits(tab)
         return true
       }
+      /** The Thread of `agent` waits on the tab no more: false when it
+       * did not. The tab's map stays, as its one hook on the tab's end
+       * does. */
+      const unwait = (tab: number, agent: string) => {
+        if (!waits.get(tab)?.delete(agent)) return false
+        tellWaits(tab)
+        return true
+      }
       /** Refuses a call of the Agent `by` on a tab where its Thread waits
        * for the Person, which it then asks; and every Agent's while the
        * tab is handed to the Person, who has it then. */
@@ -306,30 +315,26 @@ export class Drive extends Context.Service<
           }
           return Effect.fail(waitRefused(tab, was, by.id))
         })
-      /** The sites the Thread of each Agent may use until Banda restarts,
-       * as the Person answered Once, by the ID of its Agent. */
-      const once = new Map<string, Set<string>>()
-      /** What the Person answered Always or Deny to since the last look,
-       * which brings it back from `browser.toml`. */
-      const said = new Map<string, SiteRule>()
-      yield* Effect.forkScoped(
-        Stream.runForEach(look.changes, () => Effect.sync(() => said.clear()))
-      )
+      /** What the Person answered the Thread of each Agent of each site,
+       * by `<agent> <site>`, until Banda restarts: under `browser.toml`,
+       * which their Always and Deny also go to, and which may have changed
+       * since. */
+      const answers = new Map<string, SiteRule>()
       /** Refuses a read or an action of the Agent `by` on a site it may
        * not use (ADR 0029, decision 7, B): one the Person denied every
        * Agent; or one they have not let it use yet, which its Thread then
        * waits on the tab for them to answer. */
       const gated = (tab: number, by: Participant) =>
         Effect.suspend(() => {
-          const site = domainOf(contentsOf(tab)?.getURL() ?? "")
-          if (!site || by.kind !== "agent") return Effect.void
+          const at = siteAt(contentsOf(tab)?.getURL() ?? "")
+          if (!at || by.kind !== "agent") return Effect.void
+          const { site } = at
           return Effect.flatMap(look.current, (now) => {
             const rule =
-              said.get(site) ??
-              (now && fileOf(now.files, BROWSER_FILE).sites[site])
+              (now && ruleAt(fileOf(now.files, BROWSER_FILE).sites, at)) ??
+              answers.get(`${by.id} ${site}`)
             if (rule === "deny") return Effect.fail(denied(site))
-            if (rule === "allow" || once.get(by.id)?.has(site))
-              return Effect.void
+            if (rule === "allow") return Effect.void
             const asking: Wait = {
               agent: by.id,
               reason: "site",
@@ -589,36 +594,21 @@ export class Drive extends Context.Service<
             if (driving.has(tab)) tell(tab, null)
             return Effect.void
           }),
-        answered: (tab, agent) =>
-          Effect.sync(() => {
-            // The tab's map stays, as its one hook on the tab's end does.
-            if (!waits.get(tab)?.delete(agent)) return false
-            tellWaits(tab)
-            return true
-          }),
+        answered: (tab, agent) => Effect.sync(() => unwait(tab, agent)),
         allowed: (tab, agent, answer) =>
           Effect.gen(function* () {
             const was = waits.get(tab)?.get(agent)
             if (was?.reason !== "site") return false
             const { site } = was
-            if (answer === "once") {
-              const sites = once.get(agent) ?? new Set()
-              once.set(agent, sites.add(site))
-            } else {
-              const rule = answer === "always" ? "allow" : "deny"
-              yield* settings.write(
-                BROWSER_FILE.name,
-                `agents.sites.${JSON.stringify(site)}`,
-                rule
-              )
-              said.set(site, rule)
-            }
+            const rule = answer === "deny" ? "deny" : "allow"
+            if (answer !== "once")
+              yield* settings.write(BROWSER_FILE.name, siteKey(site), rule)
+            answers.set(`${agent} ${site}`, rule)
             // Its waits for the site on other tabs end with this one.
             for (const [at, on] of waits) {
               const other = on.get(agent)
-              if (other?.reason !== "site" || other.site !== site) continue
-              on.delete(agent)
-              tellWaits(at)
+              if (other?.reason === "site" && other.site === site)
+                unwait(at, agent)
             }
             return true
           }),

@@ -10,14 +10,14 @@ import type { Act, Navigate, WaitFor } from "@banda/contract/browser"
 import { Refused } from "@banda/desktop-kit"
 import type { WebContents } from "electron"
 import type { Locator, Page } from "playwright-core"
-import { getDomain } from "tldts"
+import { getDomain } from "tldts-experimental"
 
 /** The site of a web page at `url`, which an Agent may use once the
  * Person says so (ADR 0029, decision 7, B): its domain, as a browser
- * takes a site to be, so github.com covers gist.github.com. None for
- * this computer's own pages, which never ask, nor for a page not of the
- * web. */
-export function domainOf(url: string): string | null {
+ * takes a site to be, so github.com covers gist.github.com; and its host,
+ * which a rule may name. None for this computer's own pages, which never
+ * ask, nor for a page not of the web. */
+export function siteAt(url: string): { host: string; site: string } | null {
   let address: URL
   try {
     address = new URL(url)
@@ -27,7 +27,19 @@ export function domainOf(url: string): string | null {
   if (address.protocol !== "http:" && address.protocol !== "https:") return null
   const host = address.hostname
   if (["localhost", "127.0.0.1", "[::1]"].includes(host)) return null
-  return getDomain(host, { allowPrivateDomains: true }) ?? host
+  return { host, site: getDomain(host, { allowPrivateDomains: true }) ?? host }
+}
+
+/** The rule of `rules` for a page at `at`: its host's, or the nearest
+ * domain's above it, up to its site's. */
+export function ruleAt<R>(
+  rules: Partial<Record<string, R>>,
+  { host, site }: { host: string; site: string }
+): R | undefined {
+  for (let name = host; ; name = name.slice(name.indexOf(".") + 1)) {
+    const rule = rules[name]
+    if (rule !== undefined || name === site || !name.includes(".")) return rule
+  }
 }
 
 /** How long an element has to be there and ready for an action. */

@@ -225,12 +225,17 @@ and stay Roma's to change.
        pill at the page's foot asks "Let <Thread> use github.com?". The
        answer goes over the bridge, and the window says it in the Thread,
        as the Person's message.
-     - Once, and Always, let the Thread at once, until Banda restarts.
-       Always and Deny then go to `browser.toml`'s `[agents.sites]`, as
-       `"github.com" = "allow"`. A denied site refuses at once, and asks
-       nothing. Settings → Browser lists the sites: a line changes, or ↶
-       takes it out. No site is added there; the Person's file takes one
-       by hand.
+     - Main keeps each answer for its Thread until Banda restarts. Always
+       and Deny also go to `browser.toml`'s `[agents.sites]`, as
+       `"github.com" = "allow"`, for every Agent. The file comes first,
+       as it may have changed since: a rule names a host, or a domain
+       above it up to its site, so `"gist.github.com" = "deny"` holds
+       under an allowed github.com. A denied site refuses at once, and
+       asks nothing.
+     - Settings → Browser lists the sites: a line changes, or ↶ takes it
+       out. No site is added there; the Person's file takes one by hand.
+     - Left for later: an answer ends only its Thread's waits for the
+       site. Another Thread waiting on it asks again.
 
 7. **Who confirms a risky step: A, B and E first** (_decided_).
    - **A. The Harness asks**, as before any tool, under the Thread's mode

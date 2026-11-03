@@ -119,7 +119,9 @@ export function Settings({
       {group.rows.map(row)}
     </Group>
   ))
-  const above = (section.files ?? []).flatMap(({ name }) =>
+  // A file the section names twice says its problems once.
+  const names = new Set((section.files ?? []).map((file) => file.name))
+  const above = [...names].flatMap((name) =>
     (wrong.get(name) ?? NONE).filter((p) => !shown.has(`${name}:${p.key}`))
   )
   const own = ownFile(section)
