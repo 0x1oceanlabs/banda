@@ -1,4 +1,11 @@
-import { createContext, type ReactNode, useContext } from "react"
+import {
+  createContext,
+  type ReactNode,
+  useContext,
+  useMemo,
+  useState,
+} from "react"
+import { createPortal } from "react-dom"
 import { XIcon, type LucideIcon } from "lucide-react"
 import { cn } from "cn"
 import { Button } from "./button"
@@ -8,6 +15,27 @@ import { Button } from "./button"
  * as the one that pops it out into a window of its own (ADR 0025).
  */
 const TileActions = createContext<ReactNode>(null)
+
+/** Where a Pane's own buttons go in the header the frame draws for it. */
+const Slot = createContext<{
+  element: HTMLElement | null
+  set: (element: HTMLElement | null) => void
+} | null>(null)
+
+/** Gives the header drawn inside it a place for the buttons of the Pane
+ * drawn inside it ({@link InHeader}). */
+function HeaderSlot({ children }: { children: ReactNode }) {
+  const [element, set] = useState<HTMLElement | null>(null)
+  const slot = useMemo(() => ({ element, set }), [element])
+  return <Slot value={slot}>{children}</Slot>
+}
+
+/** A Pane's buttons, drawn in its tile's header before the window's own;
+ * nowhere when the tile draws no header. */
+function InHeader({ children }: { children: ReactNode }) {
+  const element = useContext(Slot)?.element
+  return element ? createPortal(children, element) : null
+}
 
 /**
  * A tile's header: one row as tall as every Pane's, with what the Pane puts
@@ -41,6 +69,7 @@ function PaneHeader({
       {Icon && <Icon className="size-4 shrink-0 text-muted-foreground" />}
       {children}
       <div className="ml-auto flex shrink-0 items-center gap-1">
+        <span ref={useContext(Slot)?.set} className="contents" />
         {useContext(TileActions)}
         <Button
           variant="ghost"
@@ -57,4 +86,4 @@ function PaneHeader({
   )
 }
 
-export { PaneHeader, TileActions }
+export { HeaderSlot, InHeader, PaneHeader, TileActions }

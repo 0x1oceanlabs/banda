@@ -13,7 +13,12 @@ import {
   EmptyContent,
   EmptyDescription,
 } from "@banda/ui/components/empty"
-import { PaneHeader, TileActions } from "@banda/ui/components/pane-header"
+import {
+  HeaderSlot,
+  PaneHeader,
+  TileActions,
+} from "@banda/ui/components/pane-header"
+import { DetailsRows } from "@banda/ui/components/thread-details"
 import { cn } from "@banda/ui/lib/utils"
 import { type Listed, type PaneState, type Place, within } from "@banda/ui/pane"
 import type { Args } from "@banda/ui/module"
@@ -22,7 +27,14 @@ import {
   SquareArrowDownLeftIcon,
   SquareArrowOutUpRightIcon,
 } from "lucide-react"
-import { kindOf, kindRuns, labelOf, sayLabel, useSaid } from "../registry"
+import {
+  detailsOf,
+  kindOf,
+  kindRuns,
+  labelOf,
+  sayLabel,
+  useSaid,
+} from "../registry"
 import { heightAt } from "./layout"
 import { ThreadMark } from "../sidebar/Row"
 import type { Plan } from "./arrange"
@@ -113,6 +125,7 @@ export function PaneFrame({
   const element = useRef<HTMLElement>(null)
   const { title, detail, Icon } = labelOf(entry.pane, useSaid().get(entry.id))
   const close = () => frame.close(entry.id)
+  const details = useMemo(() => detailsOf(modules), [modules])
 
   // What the Pane said it shows goes with it.
   useEffect(() => () => sayLabel(entry.id, null), [entry.id])
@@ -184,88 +197,94 @@ export function PaneFrame({
         <AgentMark className="pointer-events-none absolute top-1.5 right-1.5 z-10" />
       )}
       <TileActions value={own}>
-        {/* A stand-in draws the frame's header, as its Pane is not drawn. */}
-        {(zoomed || away || kind?.header !== false) && (
-          <PaneHeader
-            title={title}
-            icon={listed ? undefined : Icon}
-            onClose={close}
-            className={kind?.header === "bare" ? "border-b-0" : undefined}
-          >
-            {listed && (
-              <>
-                <ThreadMark
-                  listed={listed}
-                  className={listed.mark === "rest" ? "opacity-40" : undefined}
-                />
-                <span className="shrink-0 text-muted-foreground">
-                  {spaceName}
-                </span>
-              </>
-            )}
-            <h2 className="min-w-0 truncate font-medium text-muted-foreground group-data-[focused=true]/tile:text-foreground">
-              {title}
-            </h2>
-            {detail && (
-              <span className="min-w-0 shrink-[2] truncate text-xs text-muted-foreground">
-                {detail}
-              </span>
-            )}
-            {mixed && !listed && (
-              <span className="shrink-0 truncate rounded-sm bg-muted px-1.5 text-xs text-muted-foreground">
-                {spaceName}
-              </span>
-            )}
-            {zoomed && (
-              <button
-                type="button"
-                title="Back in its column (Alt+Shift+F)"
-                className="flex shrink-0 items-center gap-1 rounded-sm bg-muted px-1.5 text-xs text-muted-foreground hover:text-foreground"
-                onClick={() => frame.run("pane.zoom")}
+        <HeaderSlot>
+          <DetailsRows details={details}>
+            {/* A stand-in draws the frame's header, as its Pane is not drawn. */}
+            {(zoomed || away || kind?.header !== false) && (
+              <PaneHeader
+                title={title}
+                icon={listed ? undefined : Icon}
+                onClose={close}
+                className={kind?.header === "bare" ? "border-b-0" : undefined}
               >
-                <Minimize2Icon className="size-3" />
-                Zoomed
-              </button>
+                {listed && (
+                  <>
+                    <ThreadMark
+                      listed={listed}
+                      className={
+                        listed.mark === "rest" ? "opacity-40" : undefined
+                      }
+                    />
+                    <span className="shrink-0 text-muted-foreground">
+                      {spaceName}
+                    </span>
+                  </>
+                )}
+                <h2 className="min-w-0 truncate font-medium text-muted-foreground group-data-[focused=true]/tile:text-foreground">
+                  {title}
+                </h2>
+                {detail && (
+                  <span className="min-w-0 shrink-[2] truncate text-xs text-muted-foreground">
+                    {detail}
+                  </span>
+                )}
+                {mixed && !listed && (
+                  <span className="shrink-0 truncate rounded-sm bg-muted px-1.5 text-xs text-muted-foreground">
+                    {spaceName}
+                  </span>
+                )}
+                {zoomed && (
+                  <button
+                    type="button"
+                    title="Back in its column (Alt+Shift+F)"
+                    className="flex shrink-0 items-center gap-1 rounded-sm bg-muted px-1.5 text-xs text-muted-foreground hover:text-foreground"
+                    onClick={() => frame.run("pane.zoom")}
+                  >
+                    <Minimize2Icon className="size-3" />
+                    Zoomed
+                  </button>
+                )}
+              </PaneHeader>
             )}
-          </PaneHeader>
-        )}
-        <div className="min-h-0 flex-1">
-          {away ? (
-            <button
-              type="button"
-              title="Go to its window"
-              className="flex size-full flex-col items-center justify-center gap-2 text-sm text-muted-foreground outline-none hover:text-foreground"
-              onClick={() => popOut?.(entry.id)}
-            >
-              <SquareArrowOutUpRightIcon className="size-5" />
-              In its own window
-            </button>
-          ) : shown ? (
-            <Broken close={close}>
-              <shown.Pane
-                engine={engine}
-                space={entry.space}
-                args={entry.pane.args}
-                focused={focused}
-                open={(pane, place, space) =>
-                  frame.open(space ?? entry.space, pane, entry.id, place)
-                }
-                update={(args) =>
-                  frame.update(entry.id, { kind: entry.pane.kind, args })
-                }
-                close={close}
-                label={(label) => sayLabel(entry.id, label)}
-                run={frame.run}
-              />
-            </Broken>
-          ) : (
-            <p className="p-4 text-sm text-muted-foreground">
-              {kind
-                ? "This Pane comes back when the engine runs its module."
-                : "This window does not know this kind of Pane."}
-            </p>
-          )}
-        </div>
+            <div className="min-h-0 flex-1">
+              {away ? (
+                <button
+                  type="button"
+                  title="Go to its window"
+                  className="flex size-full flex-col items-center justify-center gap-2 text-sm text-muted-foreground outline-none hover:text-foreground"
+                  onClick={() => popOut?.(entry.id)}
+                >
+                  <SquareArrowOutUpRightIcon className="size-5" />
+                  In its own window
+                </button>
+              ) : shown ? (
+                <Broken close={close}>
+                  <shown.Pane
+                    engine={engine}
+                    space={entry.space}
+                    args={entry.pane.args}
+                    focused={focused}
+                    open={(pane, place, space) =>
+                      frame.open(space ?? entry.space, pane, entry.id, place)
+                    }
+                    update={(args) =>
+                      frame.update(entry.id, { kind: entry.pane.kind, args })
+                    }
+                    close={close}
+                    label={(label) => sayLabel(entry.id, label)}
+                    run={frame.run}
+                  />
+                </Broken>
+              ) : (
+                <p className="p-4 text-sm text-muted-foreground">
+                  {kind
+                    ? "This Pane comes back when the engine runs its module."
+                    : "This window does not know this kind of Pane."}
+                </p>
+              )}
+            </div>
+          </DetailsRows>
+        </HeaderSlot>
       </TileActions>
     </section>
   )

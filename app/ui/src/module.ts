@@ -6,6 +6,7 @@
  */
 import type { ComponentType, ReactNode } from "react"
 import type { Engine, JsonValue, SpaceId, SpaceSummary } from "@banda/contract"
+import type { Details } from "./components/thread-details"
 import type { Key } from "./lib/keys"
 import type { Lists, PaneKind, PaneState, Watch } from "./pane"
 
@@ -186,6 +187,8 @@ export type Module = {
   sources: readonly Source[]
   /** What it shows on the bar, where the look's `[bar]` puts it. */
   bar: readonly Widget[]
+  /** Its rows in a Thread's details card (ADR 0034, decision 4). */
+  threadDetails: readonly Details[]
   /**
    * Runs once the window is up, with what a module may ask of it; what
    * it returns runs when the window goes. How a module that hears the
@@ -204,6 +207,7 @@ export function defineModule<const P extends readonly Args[]>(module: {
   actions?: readonly Action[]
   sources?: readonly Source[]
   bar?: readonly Widget[]
+  threadDetails?: readonly Details[]
   start?: (window: WindowApi) => () => void
 }): Module {
   return {
@@ -216,6 +220,7 @@ export function defineModule<const P extends readonly Args[]>(module: {
     actions: module.actions ?? [],
     sources: module.sources ?? [],
     bar: module.bar ?? [],
+    threadDetails: module.threadDetails ?? [],
     start: module.start,
   }
 }

@@ -51,6 +51,8 @@ export type ThreadArgs = {
   title: string
   /** The first message, sent as the Pane opens: the Banda menu's words. */
   ask?: string
+  /** The Person hid the Thread's details card (ADR 0034, decision 4). */
+  details?: false
 }
 
 /** A Thread not yet started, on this computer's first Harness. */
