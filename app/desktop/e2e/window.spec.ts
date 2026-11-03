@@ -539,7 +539,7 @@ test("a server started in a terminal shows on the bar, opens in a browser Pane a
   await expect(screen).toHaveAttribute("data-state", "running")
   await screen.click()
   await page.keyboard.type(
-    "python3 -u -m http.server 0 --bind 127.0.0.1 > served.txt 2>&1"
+    `node -e "require('http').createServer((q, s) => s.end('served')).listen(0, '127.0.0.1', function () { console.log(' port ' + this.address().port + ' ') })" > served.txt 2>&1`
   )
   await page.keyboard.press("Enter")
   const served = join(dir, "root", "Work", "served.txt")
@@ -554,7 +554,7 @@ test("a server started in a terminal shows on the bar, opens in a browser Pane a
   const row = page.getByRole("menuitem", {
     name: new RegExp(`^localhost:${port}`),
   })
-  await expect(row).toContainText("Terminal · python3")
+  await expect(row).toContainText("Terminal · node -e")
   await page.screenshot({ path: "test-results/26-servers.png" })
   await row.click()
   await expect(page.getByRole("textbox", { name: "Address" })).toHaveValue(
