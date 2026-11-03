@@ -4,6 +4,7 @@ import { useSpaces } from "@banda/ui/hooks/use-spaces"
 import { useModules, useStatus } from "@banda/ui/hooks/use-status"
 import { shownSpaces } from "@banda/ui/lib/spaces"
 import { Shell } from "./shell/Shell"
+import { AskToShare } from "./sharing/AskToShare"
 import { FirstSpace } from "./Spaces"
 
 /**
@@ -14,7 +15,7 @@ export function App({ engine }: { engine: Engine }) {
   const status = useStatus(engine)
   const modules = useModules(engine)
   // A Space added here shows at once, as the engine answered it.
-  const { listed, put: onCreated } = useSpaces(engine)
+  const { listed, put } = useSpaces(engine)
 
   if (listed.state === "loading") {
     return (
@@ -37,18 +38,21 @@ export function App({ engine }: { engine: Engine }) {
   if (!home) {
     return (
       <div className="h-svh bg-muted/40">
-        <FirstSpace engine={engine} onCreated={onCreated} />
+        <FirstSpace engine={engine} onCreated={put} />
       </div>
     )
   }
   return (
-    <Shell
-      engine={engine}
-      status={status}
-      modules={modules}
-      spaces={spaces}
-      home={home.id}
-      onCreated={onCreated}
-    />
+    <>
+      <Shell
+        engine={engine}
+        status={status}
+        modules={modules}
+        spaces={spaces}
+        home={home.id}
+        onCreated={put}
+      />
+      <AskToShare />
+    </>
   )
 }
