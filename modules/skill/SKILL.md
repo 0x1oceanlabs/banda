@@ -91,6 +91,18 @@ window, for Playwright, Playwright MCP or Chrome DevTools MCP; its
 targets are the Person's tabs. Read `banda skill browser` before you use
 it. It exits 2 when the window is not open.
 
+## Showing the Person a Visual
+
+Show a visual the Person asks for, and data with a trend or a
+comparison, as a Visual in your Thread, with the `preview_visual` and
+`show_visual` tools of `banda mcp`: lay the page out with
+`preview_visual`, fix what its picture and console show, then show it
+with `show_visual` and the height it answered. A visual already in a
+file is shown by passing that file's HTML. Never start a server for
+one, and never describe it after: say only what it doesn't. A picture
+to post, send or use elsewhere is a `.png` file and its path, not a
+Visual. Ordinary coding work needs neither tool.
+
 ## Where things live
 
 `~/.config/banda/` (or `$BANDA_CONFIG`) holds what belongs to this machine.
