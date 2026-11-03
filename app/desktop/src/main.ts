@@ -216,6 +216,7 @@ async function ready(): Promise<void> {
     // own window is solid.
     const glass = systemGlass(now)
     const set = SYSTEM_MATERIAL?.set
+    if (window && OWN_FRAME) window.setWindowButtonPosition(buttonsAt(now))
     if (window && set && glass !== (window === clear)) {
       clear = glass ? window : null
       set(window, glass)
@@ -267,6 +268,15 @@ async function ready(): Promise<void> {
               now
                 ? lookIn(BrowserWindow.fromWebContents(event.sender), now)
                 : now
+          ),
+      ],
+    },
+    frame: {
+      current: [
+        none,
+        (_, event) =>
+          Effect.sync(() =>
+            insetOf(BrowserWindow.fromWebContents(event.sender))
           ),
       ],
     },
@@ -504,6 +514,31 @@ const SYSTEM_MATERIAL: {
 /** The background of a window that lets the system's material through. */
 const CLEAR = "#00000000"
 
+/**
+ * On macOS the window draws its own title bar (ADR 0030): the system's is
+ * hidden, and its window buttons sit at the start of Banda's bar, in the
+ * middle of its height, `INSET` px with the room around them.
+ */
+const OWN_FRAME = process.platform === "darwin"
+const BUTTONS = { x: 12, width: 54, height: 14 }
+const INSET = 2 * BUTTONS.x + BUTTONS.width
+/** Banda's bar's height before the first look comes (look/src/lib.rs). */
+const BAR_HEIGHT = 36
+
+/** Where the window buttons sit, for a bar as high as the look says. */
+function buttonsAt(now: LookValue | null): { x: number; y: number } {
+  const bar = Number.parseFloat(now?.vars["--bar-height"] ?? "") || BAR_HEIGHT
+  return { x: BUTTONS.x, y: Math.round((bar - BUTTONS.height) / 2) }
+}
+
+/** The room the window buttons take at the bar's start (`frame`):
+ * none in full screen, and `null` where the system draws the frame, as it
+ * does for a Pane's own window. */
+function insetOf(shown: BrowserWindow | null): number | null {
+  if (!OWN_FRAME || !shown || shown !== window) return null
+  return shown.isFullScreen() ? 0 : INSET
+}
+
 /** The look asks for the system's glass. */
 function systemGlass(now: LookValue | null): boolean {
   return now?.desk.glass === true && now.desk.material === "system"
@@ -531,10 +566,22 @@ function openWindow(): BrowserWindow {
       minWidth: 640,
       minHeight: 420,
       title: "Banda",
+      ...(OWN_FRAME && {
+        titleBarStyle: "hidden",
+        trafficLightPosition: buttonsAt(lookNow()),
+      }),
     },
     // The system's glass lets its material through (ADR 0023, ADR 0030).
     SYSTEM_MATERIAL !== null && systemGlass(lookNow())
   )
+  if (OWN_FRAME) {
+    // In full screen the system hides the window buttons: the bar takes
+    // back their room.
+    const tellFrame = () =>
+      tellPage(opened.webContents, BRIDGE.frame.listen, insetOf(opened))
+    opened.on("enter-full-screen", tellFrame)
+    opened.on("leave-full-screen", tellFrame)
+  }
   void opened.loadURL(PAGE)
   opened.on("closed", () => {
     window = null
@@ -583,15 +630,15 @@ function tellPopped(): void {
 
 /** A window that shows Banda's page, in the look's first colour. */
 function pageWindow(
-  size: Pick<
+  options: Omit<
     BrowserWindowConstructorOptions,
-    "width" | "height" | "minWidth" | "minHeight" | "title"
+    "show" | "backgroundColor" | "webPreferences"
   >,
   glass = false
 ): BrowserWindow {
   const current = lookNow()
   const opened = new BrowserWindow({
-    ...size,
+    ...options,
     show: false,
     ...(glass ? SYSTEM_MATERIAL?.made : {}),
     backgroundColor: glass

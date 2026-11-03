@@ -59,7 +59,10 @@ export function Bar({
     (mark === "rest" ? "" : ` · ${MARK_WORDS[mark]}`) +
     (waiting > 1 ? ` · ${waiting} wait for you` : "")
   return (
-    <header className="relative flex h-(--bar-height) shrink-0 items-center gap-1 border-b border-(--bar-rule) px-1.5">
+    // Where Banda draws the window's title bar, as on macOS (ADR 0030),
+    // the bar is it: the system's window buttons sit at its start, and its
+    // empty space moves the window, as a title bar's does.
+    <header className="relative flex h-(--bar-height) shrink-0 items-center gap-1 border-b border-(--bar-rule) px-1.5 frame:ps-[calc(var(--frame-inset)+--spacing(1.5))] frame:[-webkit-app-region:drag] frame:*:[-webkit-app-region:no-drag]">
       <Button
         variant="ghost"
         size="icon-sm"
