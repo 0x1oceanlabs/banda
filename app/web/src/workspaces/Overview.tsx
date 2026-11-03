@@ -8,7 +8,8 @@ import {
   useState,
 } from "react"
 import type { SpaceId } from "@banda/contract"
-import { labelOf } from "../registry"
+import type { Label } from "@banda/ui/pane"
+import { labelOf, useSaid } from "../registry"
 import { useLookColumns } from "../look"
 import {
   drawnColumns,
@@ -97,10 +98,11 @@ export function Overview({
   const root = useRef<HTMLDivElement>(null)
   const [screen, setScreen] = useState<Screen>()
   const [query, setQuery] = useState("")
+  const said = useSaid()
   const picked = focused(workspaces)?.id
   const found = useMemo(
-    () => (query ? matching(workspaces, query, spaceName) : undefined),
-    [workspaces, query, spaceName]
+    () => (query ? matching(workspaces, query, spaceName, said) : undefined),
+    [workspaces, query, spaceName, said]
   )
 
   // The keys come here while it is open, not to a Pane under it.
@@ -194,7 +196,9 @@ export function Overview({
 
   const type = (next: string) => {
     setQuery(next)
-    const first = next ? matching(workspaces, next, spaceName)[0] : undefined
+    const first = next
+      ? matching(workspaces, next, spaceName, said)[0]
+      : undefined
     if (first) onPick(first.id)
   }
   const onKeyDown = (event: KeyboardEvent) => {
@@ -312,6 +316,7 @@ function Row({
   onPick: (entry: string) => void
   onGo: () => void
 }) {
+  const said = useSaid()
   return (
     <div
       data-row={workspace.id}
@@ -344,7 +349,7 @@ function Row({
             }}
           >
             {column.entries.map((entry, e) => {
-              const { title, Icon } = labelOf(entry.pane)
+              const { title, Icon } = labelOf(entry.pane, said.get(entry.id))
               const space = spaceName(entry.space)
               const active = column.active === e
               return (
@@ -375,7 +380,7 @@ function Row({
                           className="min-w-0 truncate rounded-sm px-1 text-muted-foreground data-[active]:bg-muted data-[active]:text-foreground"
                           data-active={t === column.active || undefined}
                         >
-                          {labelOf(tab.pane).title}
+                          {labelOf(tab.pane, said.get(tab.id)).title}
                         </span>
                       ))}
                     </div>
@@ -401,13 +406,15 @@ function Row({
 function matching(
   workspaces: Workspaces,
   query: string,
-  spaceName: (space: SpaceId) => string
+  spaceName: (space: SpaceId) => string,
+  said: ReadonlyMap<string, Label>
 ): Entry[] {
   const words = query.toLowerCase()
   return entries(workspaces).filter((entry) =>
-    [labelOf(entry.pane).title, spaceName(entry.space)].some((text) =>
-      text.toLowerCase().includes(words)
-    )
+    [
+      labelOf(entry.pane, said.get(entry.id)).title,
+      spaceName(entry.space),
+    ].some((text) => text.toLowerCase().includes(words))
   )
 }
 

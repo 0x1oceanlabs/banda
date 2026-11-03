@@ -16,13 +16,14 @@ import {
 } from "@banda/ui/module"
 import {
   definePane,
+  type Label,
   type PaneProps,
   type PaneState,
   paneOf,
   type Watch,
 } from "@banda/ui/pane"
 import { LayoutGridIcon } from "lucide-react"
-import { useEffect, useLayoutEffect, useRef } from "react"
+import { useEffect, useLayoutEffect, useRef, useSyncExternalStore } from "react"
 import { columnsOf } from "./look"
 import { modules } from "./modules"
 import { settingsPane } from "./settings/pane"
@@ -109,11 +110,48 @@ export function identityOf(pane: PaneState): PaneState {
   )
 }
 
-/** A Pane's title, quieter detail and icon, as its kind gives them. */
-export function labelOf(pane: PaneState) {
+/** What Panes said they show now (`PaneProps.label`), by their entry:
+ * kept while the window runs, not in its layout. */
+let said: ReadonlyMap<string, Label> = new Map()
+const hearing = new Set<() => void>()
+
+/** Keeps what the Pane of `entry` says it shows now, or with `null`
+ * forgets it. */
+export function sayLabel(entry: string, label: Label | null): void {
+  const was = said.get(entry)
+  if (
+    label === null
+      ? !was
+      : was?.title === label.title && was.detail === label.detail
+  )
+    return
+  const next = new Map(said)
+  if (label === null) next.delete(entry)
+  else next.set(entry, label)
+  said = next
+  for (const hear of hearing) hear()
+}
+
+/** What Panes said they show now, by their entry. */
+export function saidNow(): ReadonlyMap<string, Label> {
+  return said
+}
+
+/** What Panes said they show now, drawn again as one says another. */
+export function useSaid(): ReadonlyMap<string, Label> {
+  return useSyncExternalStore((hear) => {
+    hearing.add(hear)
+    return () => hearing.delete(hear)
+  }, saidNow)
+}
+
+/** A Pane's title, quieter detail and icon: what it said it shows `now`,
+ * else what its kind gives. */
+export function labelOf(pane: PaneState, now?: Label) {
   const kind = kindOf(pane.kind)
   const Icon = kind?.icon
   if (!kind) return { title: "Unknown Pane", detail: null, Icon }
+  if (now) return { ...now, Icon }
   return told(
     () => ({
       title: kind.title(pane.args),

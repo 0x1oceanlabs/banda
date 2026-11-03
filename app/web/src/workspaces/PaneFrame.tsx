@@ -1,4 +1,10 @@
-import { Component, type ReactNode, useLayoutEffect, useRef } from "react"
+import {
+  Component,
+  type ReactNode,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+} from "react"
 import type { Engine, SpaceId } from "@banda/contract"
 import { Button } from "@banda/ui/components/button"
 import {
@@ -10,7 +16,7 @@ import { PaneHeader } from "@banda/ui/components/pane-header"
 import { type Listed, type PaneState, type Place, within } from "@banda/ui/pane"
 import type { Args } from "@banda/ui/module"
 import { Minimize2Icon } from "lucide-react"
-import { kindOf, kindRuns, labelOf } from "../registry"
+import { kindOf, kindRuns, labelOf, sayLabel, useSaid } from "../registry"
 import { heightAt } from "./layout"
 import { ThreadMark } from "../sidebar/Row"
 import type { Plan } from "./arrange"
@@ -92,8 +98,11 @@ export function PaneFrame({
   const kind = kindOf(entry.pane.kind)
   const shown = kind && kindRuns(entry.pane.kind, modules) ? kind : undefined
   const element = useRef<HTMLElement>(null)
-  const { title, detail, Icon } = labelOf(entry.pane)
+  const { title, detail, Icon } = labelOf(entry.pane, useSaid().get(entry.id))
   const close = () => frame.close(entry.id)
+
+  // What the Pane said it shows goes with it.
+  useEffect(() => () => sayLabel(entry.id, null), [entry.id])
 
   // As it is drawn focused, not a frame later: a key pressed meanwhile
   // would go to the tile that had the focus.
@@ -188,6 +197,7 @@ export function PaneFrame({
                 frame.update(entry.id, { kind: entry.pane.kind, args })
               }
               close={close}
+              label={(label) => sayLabel(entry.id, label)}
               run={frame.run}
             />
           </Broken>
