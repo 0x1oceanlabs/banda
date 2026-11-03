@@ -1,7 +1,7 @@
 //! The browser's tools through the kernel, as an Agent's session calls
 //! them, with a window that answers on the road, or none.
 
-use banda_browser::{Browser, ReadTab, SeenTab, Shown};
+use banda_browser::{Browser, Dialog, ReadTab, SeenTab, Shown};
 use banda_kernel::{
     AgentId, Caller, Code, Kernel, Participant, PersonId, Refusal, SpaceId, Stream,
 };
@@ -87,7 +87,9 @@ async fn with_no_window_the_tools_are_listed_and_refuse() {
             "browser_tabs",
             "browser_snapshot",
             "browser_open",
-            "browser_navigate"
+            "browser_navigate",
+            "browser_act",
+            "browser_wait_for"
         ]
     );
     let refused = kernel.call(agent(space), "browser.tabs", None, None, Value::Null);
@@ -192,6 +194,7 @@ fn shown(title: &str, loading: bool) -> Shown {
         url: "https://example.com/".into(),
         title: title.into(),
         loading,
+        ..Shown::default()
     }
 }
 
@@ -253,4 +256,106 @@ async fn only_the_web_s_addresses_are_asked_for() {
         assert_eq!(refused.code, Code::Invalid, "{refused:?}");
         assert!(refused.message.contains("http:// or https://"));
     }
+}
+
+#[tokio::test]
+async fn an_action_answers_in_a_line_and_says_what_changed() {
+    let act = json!({ "tab": 9, "action": "click", "ref": "e12" });
+    let (asked, said) = told("browser.act", act.clone(), shown("Ex", false)).await;
+    assert_eq!(asked["params"], act);
+    assert_eq!(said, "Clicked e12.");
+
+    let changed = Shown {
+        moved: true,
+        opened: vec![SeenTab {
+            id: 15,
+            url: "https://example.com/new".into(),
+            title: String::new(),
+            driven: false,
+        }],
+        dialog: Some(Dialog {
+            kind: "confirm".into(),
+            message: "Sure?".into(),
+        }),
+        download: Some("report.pdf".into()),
+        touched: true,
+        ..shown("Next", false)
+    };
+    let act = json!({ "tab": 9, "action": "press", "key": "Enter" });
+    let (_, said) = told("browser.act", act, changed).await;
+    assert_eq!(
+        said,
+        "Pressed Enter. Tab 9 shows https://example.com/, titled \"Next\". It opened tab \
+         15, at https://example.com/new. It began to download \"report.pdf\". The page \
+         shows a confirm dialog, which says \"Sure?\": the page waits until your Person \
+         answers it in the tab. The Person also acted on this page since your last \
+         snapshot. Take a new snapshot before you act by ref."
+    );
+}
+
+#[tokio::test]
+async fn an_action_without_what_it_needs_is_not_asked_for() {
+    let root = tempfile::tempdir().unwrap();
+    let owner = PersonId::new();
+    let (kernel, space) = open(root.path(), owner).await;
+    let _hear = window(&kernel, owner).await;
+    for (params, said) in [
+        (
+            json!({ "action": "click" }),
+            "browser_act's \"click\" needs a ref.",
+        ),
+        (
+            json!({ "action": "fill", "ref": "e1" }),
+            "browser_act's \"fill\" needs a text.",
+        ),
+        (
+            json!({ "action": "select", "ref": "e1", "values": [] }),
+            "browser_act's \"select\" needs values.",
+        ),
+        (
+            json!({ "action": "press" }),
+            "browser_act's \"press\" needs a key.",
+        ),
+        (
+            json!({ "action": "drag", "ref": "e1" }),
+            "browser_act's \"drag\" needs a ref to drop on, as to.",
+        ),
+        (json!({ "action": "jump", "ref": "e1" }), "unknown variant"),
+    ] {
+        let mut params = params;
+        params["tab"] = json!(9);
+        let refused = ask(&kernel, space, "browser.act", params).await.unwrap();
+        let refused = refused.unwrap_err();
+        assert_eq!(refused.code, Code::Invalid);
+        assert!(refused.message.contains(said), "{}", refused.message);
+    }
+    let wait = json!({ "tab": 9, "text": "Done", "url": "done" });
+    let refused = ask(&kernel, space, "browser.wait_for", wait).await.unwrap();
+    assert!(
+        refused
+            .unwrap_err()
+            .message
+            .contains("one of a text, a ref or an address")
+    );
+}
+
+#[tokio::test]
+async fn a_wait_is_held_to_a_minute_and_says_where_the_tab_is() {
+    let wait = json!({ "tab": 9, "text": "Done", "seconds": 600 });
+    let (asked, said) = told("browser.wait_for", wait, shown("Ex", false)).await;
+    assert_eq!(
+        asked["params"],
+        json!({ "tab": 9, "text": "Done", "seconds": 60 })
+    );
+    assert_eq!(
+        said,
+        "The page shows \"Done\". Tab 9 shows https://example.com/, titled \"Ex\"."
+    );
+    let wait = json!({ "tab": 9, "ref": "e4" });
+    let (asked, said) = told("browser.wait_for", wait, shown("Ex", false)).await;
+    assert_eq!(
+        asked["params"],
+        json!({ "tab": 9, "ref": "e4", "seconds": 15 })
+    );
+    assert!(said.starts_with("e4 shows. Tab 9"));
 }

@@ -2,11 +2,17 @@
  * What the browser's part in main answers its engine part (ADR 0029): the
  * browser's tools for Agents ask the window, which holds the pages.
  */
-import type { Navigate, OneTab, Open, SeenTab } from "@banda/contract/browser"
+import type {
+  Act,
+  Navigate,
+  OneTab,
+  Open,
+  WaitFor,
+} from "@banda/contract/browser"
 import type { Asked } from "@banda/desktop-kit"
 import { Effect } from "effect"
 import { Cdp } from "./cdp"
-import { Drive } from "./drive"
+import { Drive, seenTab } from "./drive"
 import { Tabs } from "./tabs"
 
 export const browserAsked: Asked<Tabs | Cdp | Drive> = {
@@ -16,12 +22,7 @@ export const browserAsked: Asked<Tabs | Cdp | Drive> = {
     Effect.gen(function* () {
       const tabs = yield* Tabs
       const cdp = yield* Cdp
-      return tabs.all().map((page): SeenTab => ({
-        id: page.id,
-        url: page.getURL(),
-        title: page.getTitle(),
-        driven: cdp.drives(page),
-      }))
+      return tabs.all().map((page) => seenTab(page, cdp))
     }),
   /** A tab's tree, for `browser_snapshot`; the engine checked its
    * params. */
@@ -35,4 +36,10 @@ export const browserAsked: Asked<Tabs | Cdp | Drive> = {
    * `browser_navigate`; the engine checked the address. */
   navigate: (request) =>
     Drive.use((drive) => drive.navigate(request.params as Navigate)),
+  /** One action on a ref, for `browser_act`; the engine checked that it
+   * has what it needs. */
+  act: (request) => Drive.use((drive) => drive.act(request.params as Act)),
+  /** A wait, for `browser_wait_for`; the engine held it to a minute. */
+  wait_for: (request) =>
+    Drive.use((drive) => drive.waitFor(request.params as WaitFor)),
 }

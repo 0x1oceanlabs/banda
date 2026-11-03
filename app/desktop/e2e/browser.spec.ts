@@ -653,6 +653,128 @@ test("an Agent opens a tab and takes it to an address, back, forward and again",
   expect(await agentAnswers(window, "browser_tabs", {})).toHaveLength(2)
 })
 
+test("an Agent acts in a tab by refs, hears what changed, and leaves the Person's secrets alone", async () => {
+  const form = `<title>Form</title>
+    <label>Name <input id="name"></label>
+    <label>Password <input id="pw" type="password"></label>
+    <label>Card <input autocomplete="cc-number"></label>
+    <select aria-label="Size"><option value="s">Small</option><option value="l">Large</option></select>
+    <button onclick="out.textContent = 'Hello ' + document.getElementById('name').value + ', ' + document.querySelector('select').value">Greet</button>
+    <button onclick="setTimeout(() => out.textContent = 'Late', 300)">Later</button>
+    <a href="/second">Next</a> <a href="/second" target="_blank">Elsewhere</a>
+    <a href="/file.bin">Get</a>
+    <form onsubmit="event.preventDefault(); out.textContent = 'Sent ' + q.value"><input id="q" aria-label="Query"></form>
+    <p id="out"></p>`
+  const address = await serve({
+    "/": form,
+    "/second": "<title>Second</title>",
+    "/file.bin": "bytes",
+  })
+  window = await startWindow()
+  const { app, page } = window
+  const { thread, composer } = await firstThread(page)
+  await composer.fill("hello")
+  await composer.press("Enter")
+  await expect(thread.getByText("You said: hello")).toBeVisible()
+  const opened = await agentSays(window, "browser_open", { url: `${address}/` })
+  const tab = Number(/^Opened tab (\d+)\./.exec(opened)?.[1])
+  const snapshot = () => agentSays(window, "browser_snapshot", { tab })
+  const act = (args: object) =>
+    agentSays(window, "browser_act", { tab, ...args })
+  /** The ref of the element of `role` and `name` in `tree`. */
+  const ref = (tree: string, role: string, name: string) =>
+    new RegExp(`${role} "${name}"[^\\n]*\\[ref=(e\\d+)\\]`).exec(tree)?.[1] ??
+    `no ${role} "${name}" in ${tree}`
+
+  // Fill, select and click answer in a line; the page shows what they did.
+  let tree = await snapshot()
+  const name = ref(tree, "textbox", "Name")
+  expect(await act({ action: "fill", ref: name, text: "Roma" })).toBe(
+    `Filled ${name}.`
+  )
+  const size = ref(tree, "combobox", "Size")
+  expect(await act({ action: "select", ref: size, values: ["Large"] })).toBe(
+    `Selected "Large" in ${size}.`
+  )
+  const greet = ref(tree, "button", "Greet")
+  expect(await act({ action: "click", ref: greet })).toBe(`Clicked ${greet}.`)
+  expect(await snapshot()).toContain("Hello Roma, l")
+  // Keys go to the tab, never to where the Person's focus is.
+  const query = ref(tree, "textbox", "Query")
+  expect(await act({ action: "type", ref: query, text: "a b" })).toBe(
+    `Typed into ${query}.`
+  )
+  expect(await act({ action: "press", ref: query, key: "Enter" })).toBe(
+    `Pressed Enter in ${query}.`
+  )
+  expect(await snapshot()).toContain("Sent a b")
+  await expect(composer).toHaveText("")
+
+  // A password or a card is the Person's to fill, and a snapshot hides
+  // what the Person put there.
+  tree = await snapshot()
+  for (const field of ["Password", "Card"]) {
+    const refused = await agentCalls(window, "browser_act", {
+      tab,
+      action: "type",
+      ref: ref(tree, "textbox", field),
+      text: "1234",
+    })
+    expect(refused.isError).toBe(true)
+    expect(refused.content[0]!.text).toContain("Refused (forbidden)")
+    expect(refused.content[0]!.text).toContain("the Person's to fill")
+  }
+  await inPages(app, 'document.getElementById("pw").value = "hunter2"')
+  const masked = await snapshot()
+  expect(masked).not.toContain("hunter2")
+  expect(masked).toMatch(/textbox "Password" \[ref=e\d+\]: ••••/)
+  expect(masked).toMatch(/textbox "Name" \[ref=e\d+\]: Roma/)
+
+  // The Person clicks in the page: the next answer says so, once.
+  await page.locator("[data-held-by]").click()
+  const said = await act({ action: "hover", ref: greet })
+  expect(said).toBe(
+    `Hovered over ${greet}. The Person also acted on this page since your last snapshot. Take a new snapshot before you act by ref.`
+  )
+  expect(await act({ action: "hover", ref: greet })).toBe(
+    `Hovered over ${greet}.`
+  )
+
+  // A wait holds until the page shows the text, or refuses after its time.
+  tree = await snapshot()
+  await act({ action: "click", ref: ref(tree, "button", "Later") })
+  expect(
+    await agentSays(window, "browser_wait_for", { tab, text: "Late" })
+  ).toBe(`The page shows "Late". Tab ${tab} shows ${address}/, titled "Form".`)
+  const never = await agentCalls(window, "browser_wait_for", {
+    tab,
+    text: "Never",
+    seconds: 1,
+  })
+  expect(never.content[0]!.text).toContain(`did not show "Never" within 1 s`)
+
+  // A download, a new tab and a new address are said.
+  const get = ref(tree, "link", "Get")
+  expect(await act({ action: "click", ref: get })).toBe(
+    `Clicked ${get}. It began to download "file.bin".`
+  )
+  const elsewhere = ref(tree, "link", "Elsewhere")
+  expect(await act({ action: "click", ref: elsewhere })).toMatch(
+    new RegExp(`^Clicked ${elsewhere}\\. It opened tab \\d+, at `)
+  )
+  const next = ref(tree, "link", "Next")
+  expect(await act({ action: "click", ref: next })).toBe(
+    `Clicked ${next}. Tab ${tab} shows ${address}/second, titled "Second".`
+  )
+  // A ref of a page gone is refused, and says to look again.
+  const stale = await agentCalls(window, "browser_act", {
+    tab,
+    action: "click",
+    ref: greet,
+  })
+  expect(stale.content[0]!.text).toContain("take a new snapshot")
+})
+
 /**
  * An extension as the Chrome Web Store installs one, in the browser's
  * profile: its `key` names it. Its button has a badge and a popup, which
