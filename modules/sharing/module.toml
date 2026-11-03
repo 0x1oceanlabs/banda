@@ -1,5 +1,7 @@
 # The sharing module, as it declares itself (ADR 0022). Its methods its
-# code declares; this holds the rest.
+# code declares; this holds the rest. Its part in the window's main
+# process, `desktop` (ADR 0028), posts what its engine part keeps, with
+# Chromium's network.
 id = "sharing"
 name = "Sharing"
 about = "The one part of Banda that sends anything anywhere (ADR 0039, decision 4): problem reports and usage counts, each only while the Person turned it on, and each kept here first, as it goes."

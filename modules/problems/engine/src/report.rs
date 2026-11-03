@@ -35,10 +35,7 @@ fn write(out: &mut String, report: &Report) -> std::fmt::Result {
     if !problem.frames.is_empty() {
         writeln!(out, "\n## Where\n")?;
         for frame in &problem.frames {
-            let at = match frame.line {
-                Some(line) => format!("{}:{line}", frame.file),
-                None => frame.file.clone(),
-            };
+            let at = frame.place();
             match frame.function.as_str() {
                 "" => writeln!(out, "- `{at}`")?,
                 function => writeln!(out, "- `{at}` in `{function}`")?,

@@ -6,7 +6,9 @@
 //! page and main through the API, the engine's panics through a file the
 //! panic hook writes ([`catch_panics`]). One fault is one Problem, by its
 //! fingerprint, however often it broke; a new one is said in an event, so
-//! a window that follows shows it. It keeps the newest 200.
+//! a window that follows shows it, and one that broke again on a new day
+//! or in a new version in another, which sharing hears. It keeps the
+//! newest 200.
 //!
 //! It sends nothing anywhere but an issue the Person sends to Banda on
 //! GitHub (`send_issue`, decision 3): sharing a Problem is the `sharing`
@@ -22,7 +24,7 @@ use banda_kernel::{
 };
 use issue::{Issue, Sent};
 use model::{Fingerprint, Log, Problem, Record, Recorded, Report, word};
-use rusqlite::Row;
+use rusqlite::{OptionalExtension, Row};
 use serde::de::DeserializeOwned;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -239,13 +241,23 @@ async fn take_panics(space: &ModuleSpace, folder: &Path) -> Result<(), Error> {
         .await
 }
 
-/// Keeps `record` as its Problem, and says a new one.
+/// Keeps `record` as its Problem, and says a new one, or one that broke
+/// again on a day or in a version it had not: once a day and version at
+/// most, as sharing sends it (ADR 0039, decision 6).
 fn keep(tx: &mut Tx<'_>, record: Record, author: Participant) -> Result<Recorded, Error> {
     let record = record.cut();
     let fingerprint = record.fingerprint();
     let version = banda_kernel::version();
     let now = banda_kernel::now_ms();
-    let times: u32 = tx.sql().query_row(
+    let before: Option<(String, i64)> = tx
+        .sql()
+        .query_row(
+            "SELECT version, last FROM problems_kept WHERE fingerprint = ?1",
+            [&fingerprint],
+            |row| Ok((row.get(0)?, row.get(1)?)),
+        )
+        .optional()?;
+    let (first, times): (i64, u32) = tx.sql().query_row(
         "INSERT INTO problems_kept
          (fingerprint, source, kind, message, frames, version, first, last, times)
          VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7, ?7, 1)
@@ -254,7 +266,7 @@ fn keep(tx: &mut Tx<'_>, record: Record, author: Participant) -> Result<Recorded
              message = excluded.message, frames = excluded.frames,
              version = excluded.version, last = excluded.last,
              times = times + 1
-         RETURNING times",
+         RETURNING first, times",
         rusqlite::params![
             fingerprint,
             word(record.source),
@@ -264,19 +276,32 @@ fn keep(tx: &mut Tx<'_>, record: Record, author: Participant) -> Result<Recorded
             version,
             now
         ],
-        |row| row.get(0),
+        |row| Ok((row.get(0)?, row.get(1)?)),
     )?;
-    let new = times == 1;
+    let new = before.is_none();
     if new {
         tx.sql().execute(
             "DELETE FROM problems_kept WHERE fingerprint IN
              (SELECT fingerprint FROM problems_kept ORDER BY last DESC LIMIT -1 OFFSET ?1)",
             [KEPT],
         )?;
-        let problem = Problem::first(record, fingerprint.clone(), version, now);
-        tx.emit("recorded", VERSION, Some(&fingerprint), author, &problem)?;
+    }
+    let again = before.is_some_and(|(was, last)| was != version || day(last) != day(now));
+    if new || again {
+        let problem = Problem {
+            first,
+            times,
+            ..Problem::first(record, fingerprint.clone(), version, now)
+        };
+        let kind = if new { "recorded" } else { "again" };
+        tx.emit(kind, VERSION, Some(&fingerprint), author, &problem)?;
     }
     Ok(Recorded { fingerprint, new })
+}
+
+/// The day `at` is in, in UTC.
+fn day(at: i64) -> i64 {
+    at.div_euclid(24 * 60 * 60 * 1000)
 }
 
 fn all(sql: &rusqlite::Connection) -> Result<Vec<Problem>, Error> {

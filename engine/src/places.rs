@@ -58,6 +58,16 @@ pub fn from_checkout() -> bool {
     FOLDER == "banda-local"
 }
 
+/// Which Banda this is, as `BANDA_CHANNEL` named it: `stable`, `dev` or
+/// `local`.
+pub fn channel() -> &'static str {
+    match FOLDER {
+        "banda" => "stable",
+        "banda-dev" => "dev",
+        _ => "local",
+    }
+}
+
 const RUNNING: &str = "engine.json";
 const OWNER: &str = "owner.json";
 

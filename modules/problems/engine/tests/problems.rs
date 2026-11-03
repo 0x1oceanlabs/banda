@@ -192,3 +192,30 @@ async fn only_the_person_sends_an_issue_about_a_problem_that_is_kept() {
     let body = std::fs::read_to_string(root.path().join("body")).unwrap();
     assert_eq!(body, "## What broke");
 }
+
+#[tokio::test]
+async fn a_problem_that_breaks_again_on_another_day_says_so_once() {
+    let root = tempfile::tempdir().unwrap();
+    let owner = PersonId::new();
+    let kernel = open(root.path(), owner).await;
+    record(&kernel, owner, "reading 'tabs'", 83).await;
+    // The same day: it only counts.
+    record(&kernel, owner, "reading 'tabs'", 83).await;
+    // As if it last broke yesterday.
+    let db = rusqlite::Connection::open(root.path().join("state/machine/space.sqlite3")).unwrap();
+    let day = 24 * 60 * 60 * 1000;
+    db.execute("UPDATE problems_kept SET last = last - ?1", [day])
+        .unwrap();
+    record(&kernel, owner, "reading 'tabs'", 83).await;
+    record(&kernel, owner, "reading 'tabs'", 83).await;
+
+    let machine = kernel.machine().unwrap();
+    let log = kernel
+        .follow(Participant::Person(owner), machine)
+        .await
+        .unwrap();
+    let events = log.events_after(0, Default::default(), 100).await.unwrap();
+    let kinds: Vec<&str> = events.iter().map(|e| e.kind.as_str()).collect();
+    assert_eq!(kinds, ["recorded", "again"]);
+    assert_eq!(events[1].payload["times"], 3);
+}

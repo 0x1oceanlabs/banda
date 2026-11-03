@@ -33,6 +33,16 @@ pub struct Frame {
     pub line: Option<u32>,
 }
 
+impl Frame {
+    /// Where it is: its file, and its line when it has one.
+    pub fn place(&self) -> String {
+        match self.line {
+            Some(line) => format!("{}:{line}", self.file),
+            None => self.file.clone(),
+        }
+    }
+}
+
 /// What broke, as the part of Banda it broke in says it.
 #[derive(Clone, Debug, Serialize, Deserialize, TS)]
 #[ts(export_to = "problems/")]
@@ -137,6 +147,10 @@ const FRAMES: usize = 30;
 impl Record {
     /// The record cut to what a Problem keeps.
     pub fn cut(mut self) -> Record {
+        // What a message names on the Person's computer stays there: a
+        // report and its issue go further, and the same fault on another
+        // machine gives the same fingerprint.
+        self.message = scrubbed(&self.message);
         cut(&mut self.kind, KIND);
         cut(&mut self.message, MESSAGE);
         self.frames.truncate(FRAMES);
@@ -174,6 +188,41 @@ pub fn word<T: Serialize>(value: T) -> String {
 fn cut(text: &mut String, most: usize) {
     if text.len() > most {
         text.truncate(text.floor_char_boundary(most));
+    }
+}
+
+/// `message` with each path and address in it said as `<path>` and
+/// `<address>`: what a message names on the Person's computer, as a file
+/// it could not open, stays there.
+fn scrubbed(message: &str) -> String {
+    let mut out = String::with_capacity(message.len());
+    let mut word = String::new();
+    for c in message.chars() {
+        if c.is_whitespace() || matches!(c, '\'' | '"' | '`' | '(' | ')' | '<' | '>' | ',') {
+            out.push_str(&said(&word));
+            word.clear();
+            out.push(c);
+        } else {
+            word.push(c);
+        }
+    }
+    out.push_str(&said(&word));
+    out
+}
+
+fn said(word: &str) -> String {
+    if word.contains("://") || word.contains('@') && word.contains('.') {
+        return "<address>".to_owned();
+    }
+    let drive = word.len() > 2
+        && word.as_bytes()[0].is_ascii_alphabetic()
+        && word.as_bytes()[1] == b':'
+        && matches!(word.as_bytes()[2], b'\\' | b'/');
+    let path = word.starts_with('/') || word.starts_with('~') || word.starts_with("\\\\") || drive;
+    if path {
+        "<path>".to_owned()
+    } else {
+        word.to_owned()
     }
 }
 
@@ -243,5 +292,22 @@ mod tests {
         let long = record(&"é".repeat(5_000), &[("a.ts", "f", 1); 50]).cut();
         assert!(long.message.len() <= MESSAGE);
         assert_eq!(long.frames.len(), FRAMES);
+    }
+
+    #[test]
+    fn a_message_keeps_no_path_and_no_address_of_the_person() {
+        assert_eq!(
+            scrubbed("ENOENT: no such file, open '/home/roma/work/notes.md'"),
+            "ENOENT: no such file, open '<path>'"
+        );
+        assert_eq!(
+            scrubbed(r"cannot read C:\Users\roma\a.txt or ~/x (see https://a.b/c?d)"),
+            "cannot read <path> or <path> (see <address>)"
+        );
+        assert_eq!(scrubbed("mail roma@example.com now"), "mail <address> now");
+        assert_eq!(
+            scrubbed("Cannot read properties of undefined (reading 'tabs')"),
+            "Cannot read properties of undefined (reading 'tabs')"
+        );
     }
 }

@@ -3,7 +3,7 @@
 //! on this machine only.
 
 use crate::Failure;
-use crate::places::{HOST, Places, Running, from_checkout};
+use crate::places::{HOST, Places, Running, channel, from_checkout};
 use banda_agents::{Agents, Pipe};
 use banda_browser::Browser;
 use banda_git::Git;
@@ -149,7 +149,7 @@ fn problems(places: &Places) -> Problems {
 /// from a checkout's build, as in CI and the tests, nor with
 /// `BANDA_SHARING=0`.
 fn sharing(places: &Places) -> Sharing {
-    let sharing = Sharing::new(&places.config, &places.state);
+    let sharing = Sharing::new(&places.config, &places.state).channel(channel());
     if from_checkout() {
         sharing.never(Never::Checkout)
     } else if std::env::var_os("BANDA_SHARING").is_some_and(|off| off == "0") {
