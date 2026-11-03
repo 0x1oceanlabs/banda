@@ -1,4 +1,3 @@
-import type { SpaceSummary } from "@banda/contract"
 import {
   BandaMark,
   MARK_WORDS,
@@ -6,6 +5,7 @@ import {
   waits,
 } from "@banda/ui/components/banda-mark"
 import { HarnessLogo } from "@banda/ui/components/harness-logo"
+import { SpaceBadge } from "@banda/ui/components/space-badge"
 import { ago } from "@banda/ui/lib/words"
 import { cn } from "@banda/ui/lib/utils"
 import { useNow } from "@banda/ui/hooks/use-now"
@@ -207,10 +207,6 @@ export function elapsed(ms: number): string {
   return h > 0 ? `${h}:${two(m)}:${two(s)}` : `${m}:${two(s)}`
 }
 
-/** Six hues, as Herdr's Spaces have; a Space keeps one by its id. */
-const HUES = [350, 25, 85, 160, 210, 280]
-
-/** A Space's badge: its initials on its own hue. */
 /** The colour a mark calls in: a question's, a failure's, done's green. */
 export function toneOf(mark: MarkState): string | undefined {
   if (mark === "asking") return "text-attention"
@@ -241,37 +237,4 @@ export function ThreadMark({
       className={cn("size-4 shrink-0", toneOf(listed.mark), className)}
     />
   )
-}
-
-export function SpaceBadge({ space }: { space: SpaceSummary }) {
-  const hue = HUES[hash(space.id) % HUES.length]
-  const colour = `oklch(0.6 0.15 ${hue})`
-  return (
-    <span
-      aria-hidden
-      className="inline-flex h-4 min-w-4 shrink-0 items-center justify-center rounded-sm px-0.5 text-[9.5px] leading-none font-bold tracking-wide"
-      style={{
-        color: colour,
-        backgroundColor: `color-mix(in oklab, ${colour} 16%, transparent)`,
-      }}
-    >
-      {initials(space.name)}
-    </span>
-  )
-}
-
-export function initials(name: string): string {
-  const words = name
-    .trim()
-    .split(/[\s._-]+/)
-    .filter(Boolean)
-  const letters =
-    words.length > 1 ? words[0][0] + words[1][0] : (words[0] ?? "?").slice(0, 2)
-  return letters.toUpperCase()
-}
-
-function hash(text: string): number {
-  let h = 0
-  for (const c of text) h = (h * 31 + c.charCodeAt(0)) >>> 0
-  return h
 }

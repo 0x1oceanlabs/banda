@@ -309,7 +309,12 @@ mod system {
     }
 
     fn read() -> Vec<Found> {
-        let listening = listening();
+        let mut listening = listening();
+        // What the engine holds is its own, or a socket the window's
+        // process left open to it, which all it starts holds too (#436):
+        // no server.
+        let ours: Vec<u64> = sockets("self").collect();
+        listening.retain(|inode, _| !ours.contains(inode));
         let mut sockets: Vec<u64> = listening.keys().copied().collect();
         sockets.sort_unstable();
         let mut last = LAST.lock().unwrap();
@@ -351,11 +356,7 @@ mod system {
             let Some((space, by)) = carried(environ.split(|byte| *byte == 0)) else {
                 continue;
             };
-            let Ok(held) = fs::read_dir(format!("/proc/{process}/fd")) else {
-                continue;
-            };
-            let ports: Vec<u16> = (held.flatten())
-                .filter_map(|fd| socket(&fs::read_link(fd.path()).ok()?))
+            let ports: Vec<u16> = sockets(process)
                 .filter_map(|inode| listening.get(&inode).copied())
                 .collect();
             if ports.is_empty() {
@@ -381,6 +382,16 @@ mod system {
             no_harness_s(&mut found, &read_table(), engine);
         }
         found
+    }
+
+    /// The inodes of the sockets `process` holds: none where it cannot
+    /// be read, as another user's.
+    fn sockets(process: impl std::fmt::Display) -> impl Iterator<Item = u64> {
+        let held = fs::read_dir(format!("/proc/{process}/fd"))
+            .into_iter()
+            .flatten();
+        held.flatten()
+            .filter_map(|fd| socket(&fs::read_link(fd.path()).ok()?))
     }
 
     /// The inode of a link to `socket:[12345]`.
@@ -474,7 +485,16 @@ mod system {
     pub async fn look() -> Vec<Found> {
         // It answers 1 when nothing listens.
         let said = ask("lsof", &["-iTCP", "-sTCP:LISTEN", "-P", "-n", "-F", "pcn"]).await;
-        let listening = listening(&said.unwrap_or_default());
+        let mut listening = listening(&said.unwrap_or_default());
+        // What the engine holds is its own, or a socket the window's
+        // process left open to it, which all it starts holds too (#436):
+        // no server.
+        let engine = std::process::id();
+        let ours: Vec<u16> = (listening.iter())
+            .filter(|&&(process, _)| process == engine)
+            .map(|&(_, port)| port)
+            .collect();
+        listening.retain(|(_, port)| !ours.contains(port));
         if listening.is_empty() {
             return Vec::new();
         }
@@ -485,7 +505,7 @@ mod system {
             .iter()
             .any(|found| found.server.by == StartedBy::Agent)
         {
-            no_harness_s(&mut found, &table().await, std::process::id());
+            no_harness_s(&mut found, &table().await, engine);
         }
         found
     }
@@ -546,9 +566,7 @@ mod system {
                 .with_environ(UpdateKind::Always)
                 .without_tasks(),
         );
-        let engine = std::process::id();
         (listening.into_iter())
-            .filter(|&(process, _)| process != engine)
             .filter_map(|(process, port)| {
                 let found = system.process(Pid::from_u32(process))?;
                 let (space, by) = carried(found.environ().iter().map(|p| p.as_encoded_bytes()))?;

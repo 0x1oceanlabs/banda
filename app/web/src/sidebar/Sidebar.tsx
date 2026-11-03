@@ -1,5 +1,6 @@
 import { Fragment, type ReactElement, useMemo, useState } from "react"
 import type { SpaceId, SpaceSummary } from "@banda/contract"
+import { SpaceBadge } from "@banda/ui/components/space-badge"
 import { BandaMark, MARK_WORDS } from "@banda/ui/components/banda-mark"
 import { Button } from "@banda/ui/components/button"
 import {
@@ -46,7 +47,7 @@ import {
   type SpaceLine,
 } from "./arrange"
 import { useLookSidebar } from "../look"
-import { Row, SpaceBadge } from "./Row"
+import { Row } from "./Row"
 import { pickPreset, PRESET_WORDS, type Settings } from "./settings"
 import { settle, settles, useIsSettled } from "./settled"
 

@@ -522,6 +522,52 @@ test("a Person works in a terminal in the Space, and closing it stops the shell"
   await expect.poll(() => running(shell)).toBe(false)
 })
 
+test("a server started in a terminal shows on the bar, opens in a browser Pane and stops", async () => {
+  window = await startWindow()
+  const { page, dir } = window
+  await page.getByLabel("Name").fill("Work")
+  await page.getByRole("button", { name: "Create Space" }).click()
+  await expect(page.getByRole("region", { name: "New Thread" })).toBeVisible()
+  await page.keyboard.press("Alt+KeyN")
+  await page
+    .getByRole("region", { name: "New Pane" })
+    .getByRole("button", { name: "Terminal" })
+    .click()
+  const screen = terminalTile(page).getByRole("region", {
+    name: "Terminal screen",
+  })
+  await expect(screen).toHaveAttribute("data-state", "running")
+  await screen.click()
+  await page.keyboard.type(
+    "python3 -u -m http.server 0 --bind 127.0.0.1 > served.txt 2>&1"
+  )
+  await page.keyboard.press("Enter")
+  const served = join(dir, "root", "Work", "served.txt")
+  await expect.poll(() => read(served)).toMatch(/ port \d+ /)
+  const port = read(served)!.match(/ port (\d+) /)![1]!
+
+  // The bar says its port, and its list who started it.
+  const bar = page.getByRole("banner")
+  const widget = bar.getByRole("button", { name: `Servers: localhost:${port}` })
+  await expect(widget).toHaveText(`:${port}`)
+  await widget.click()
+  const row = page.getByRole("menuitem", {
+    name: new RegExp(`^localhost:${port}`),
+  })
+  await expect(row).toContainText("Terminal · python3")
+  await page.screenshot({ path: "test-results/26-servers.png" })
+  await row.click()
+  await expect(page.getByRole("textbox", { name: "Address" })).toHaveValue(
+    new RegExp(`^localhost:${port}/?$`)
+  )
+
+  // Its square stops it, and the bar has nothing more to say.
+  await widget.click()
+  await row.hover()
+  await row.getByRole("button", { name: `Stop localhost:${port}` }).click()
+  await expect(widget).toBeHidden()
+})
+
 /** A terminal's tile: its title follows what runs in it. */
 function terminalTile(page: Page): Locator {
   return page.locator("section[data-tile]").filter({

@@ -52,7 +52,7 @@ export const DEFAULT_BAR: Bar = {
   workspaces: "numbers",
   left: [],
   center: ["sidebar.counts"],
-  right: ["workspaces.aside"],
+  right: ["workspaces.aside", "terminal.ports"],
 }
 
 /** The drawer, as `banda look` gives it with no files (ADR 0025). */

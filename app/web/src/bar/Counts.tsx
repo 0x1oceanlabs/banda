@@ -10,11 +10,12 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@banda/ui/components/dropdown-menu"
+import { SpaceBadge } from "@banda/ui/components/space-badge"
 import { cn } from "@banda/ui/lib/utils"
 import type { Lists, PaneState } from "@banda/ui/pane"
 import { useMemo, useState } from "react"
 import { useLookSidebar } from "../look"
-import { SpaceBadge, Status, ThreadMark, toneOf } from "../sidebar/Row"
+import { Status, ThreadMark, toneOf } from "../sidebar/Row"
 import { useIsSettled } from "../sidebar/settled"
 import { type Counted, inOrder, type Tally, tally } from "./tally"
 
