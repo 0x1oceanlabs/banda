@@ -34,9 +34,11 @@ type Key = (SpaceId, String);
 /// When a host was last used, and how many hold it busy now: whether it
 /// is idle, for [`Host::idle_since`]. Clones share it.
 #[derive(Clone)]
-pub struct Activity {
-    busy: Arc<AtomicUsize>,
-    last: Arc<Mutex<Instant>>,
+pub struct Activity(Arc<Used>);
+
+struct Used {
+    busy: AtomicUsize,
+    last: Mutex<Instant>,
 }
 
 /// While it lives, its host is busy, so not let go as idle.
@@ -45,39 +47,36 @@ pub struct Held(Activity);
 impl Drop for Held {
     fn drop(&mut self) {
         self.0.touch();
-        self.0.busy.fetch_sub(1, Ordering::SeqCst);
+        self.0.0.busy.fetch_sub(1, Ordering::SeqCst);
     }
 }
 
 impl Activity {
-    pub fn new() -> Self {
-        Activity {
-            busy: Arc::default(),
-            last: Arc::new(Mutex::new(Instant::now())),
-        }
-    }
-
     /// Keeps the host busy while the guard lives.
     pub fn hold(&self) -> Held {
-        self.busy.fetch_add(1, Ordering::SeqCst);
+        self.0.busy.fetch_add(1, Ordering::SeqCst);
         Held(self.clone())
     }
 
     /// Marks the host as just used.
     pub fn touch(&self) {
-        *self.last.lock().unwrap() = Instant::now();
+        *self.0.last.lock().unwrap() = Instant::now();
     }
 
     /// Since when it has been used, or `None` while it is held.
     pub fn idle_since(&self) -> Option<Instant> {
-        let busy = self.busy.load(Ordering::SeqCst) > 0;
-        (!busy).then(|| *self.last.lock().unwrap())
+        let busy = self.0.busy.load(Ordering::SeqCst) > 0;
+        (!busy).then(|| *self.0.last.lock().unwrap())
     }
 }
 
+/// Just used, and held by no one.
 impl Default for Activity {
     fn default() -> Self {
-        Activity::new()
+        Activity(Arc::new(Used {
+            busy: AtomicUsize::new(0),
+            last: Mutex::new(Instant::now()),
+        }))
     }
 }
 
@@ -214,13 +213,10 @@ impl<H: Host> Hosts<H> {
     /// let go the next time it is asked for. Who holds a host keeps it
     /// until they drop it.
     pub fn let_go(&self, space: SpaceId, harness: &str) {
-        let entry = self
-            .slots
-            .lock()
-            .unwrap()
-            .get(&(space, harness.to_owned()))
-            .cloned();
-        entry.into_iter().for_each(Self::stale);
+        let slots = self.slots.lock().unwrap();
+        if let Some(entry) = slots.get(&(space, harness.to_owned())) {
+            Self::stale(entry);
+        }
     }
 
     /// Lets go of the hosts of `harness` in every Space, as [`let_go`]
@@ -229,14 +225,13 @@ impl<H: Host> Hosts<H> {
     ///
     /// [`let_go`]: Self::let_go
     pub fn let_go_everywhere(&self, harness: &str) {
-        let entries: Vec<_> = (self.slots.lock().unwrap().iter())
+        let slots = self.slots.lock().unwrap();
+        (slots.iter())
             .filter(|((_, id), _)| id == harness)
-            .map(|(_, entry)| entry.clone())
-            .collect();
-        entries.into_iter().for_each(Self::stale);
+            .for_each(|(_, entry)| Self::stale(entry));
     }
 
-    fn stale(entry: Arc<Entry<H>>) {
+    fn stale(entry: &Arc<Entry<H>>) {
         entry.stale.store(true, Ordering::SeqCst);
         if let Ok(mut slot) = entry.slot.try_lock() {
             slot.host = None;

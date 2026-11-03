@@ -112,7 +112,7 @@ impl Host for Connection {
             agreed: agreed(&answer),
             routes,
             learned,
-            activity: Activity::new(),
+            activity: Activity::default(),
             sessions: Default::default(),
         }))
     }
@@ -123,8 +123,10 @@ impl Host for Connection {
 
     /// Since when no turn runs here, or `None` while one does.
     fn idle_since(&self) -> Option<Instant> {
-        let busy = self.routes.busy();
-        self.activity.idle_since().filter(|_| !busy)
+        if self.routes.busy() {
+            return None;
+        }
+        self.activity.idle_since()
     }
 }
 

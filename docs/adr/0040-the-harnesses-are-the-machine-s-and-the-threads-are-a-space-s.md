@@ -56,7 +56,7 @@ Roma, 2026-11-03: the third. "Modular, beautiful and elegant, as in Unix."
 4. **`agents` keeps a Space's work, and hears the machine.**
    - Its four methods `harnesses`, `account`, `sign_in` and `sign_out` go.
    - On `harnesses.account_changed`, each Space lets go of its own hosts of that Harness. Its next Turn starts with the new account.
-   - Letting go waits for no host that is starting. Each host keeps the count of account changes it started after, and one started before the latest is let go when it is next asked for. So the reaction is quick, and a sign-in never waits on a start.
+   - Letting go waits for no host that is starting. A change marks each host's place stale, without waiting for it, and a host started before the latest change is let go when it is next asked for. So the reaction is quick, and a sign-in never waits on a start.
    - Each module reads `harnesses.toml` through its own `Harnesses`, which reads the file again as it changes (`Harnesses::now`). They share the file, not a handle.
 
 5. **A sign-in from a Thread is two commands, one after the other.** The window sends `harnesses.sign_in`, then `agents.retry` for the Turn, if the first went through.

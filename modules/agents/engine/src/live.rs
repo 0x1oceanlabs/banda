@@ -111,12 +111,6 @@ impl Live {
         Ok(connection)
     }
 
-    /// Lets go of the process of `harness` in `space`: it starts again on
-    /// its next turn.
-    pub fn let_go(&self, space: SpaceId, harness: &str) {
-        self.hosts.let_go(space, harness);
-    }
-
     /// Lets go of the processes of `harness` in every Space, after the
     /// module's own sign-in, which goes in ADR 0040's step 4.
     pub fn let_go_everywhere(&self, harness: &str) {
@@ -129,8 +123,9 @@ impl Live {
         loop {
             match heard.next().await {
                 Ok(Some(event)) => {
+                    // It starts again on its next turn.
                     if let Some(harness) = &event.subject {
-                        self.let_go(space, harness);
+                        self.hosts.let_go(space, harness);
                     }
                 }
                 Ok(None) => return,
