@@ -28,6 +28,7 @@ export type { Listed } from "./generated/look/Listed"
 export type { Motion } from "./generated/look/Motion"
 export type { Columns } from "./generated/look/Columns"
 export type { Bar } from "./generated/look/Bar"
+export type { Setting } from "./generated/look/Setting"
 export type { Drawer } from "./generated/look/Drawer"
 export type { Workspaces } from "./generated/look/Workspaces"
 export type { Center } from "./generated/look/Center"
@@ -45,7 +46,12 @@ export type { Easing } from "./generated/look/Easing"
 export const WALLPAPER_URL = "app://banda/desk/wallpaper"
 
 /** The bar, as `banda look` gives it with no files. */
-export const DEFAULT_BAR: Bar = { workspaces: "numbers" }
+export const DEFAULT_BAR: Bar = {
+  workspaces: "numbers",
+  left: [],
+  center: ["sidebar.counts"],
+  right: ["workspaces.aside"],
+}
 
 /** The drawer, as `banda look` gives it with no files (ADR 0025). */
 export const DEFAULT_DRAWER: Drawer = { height: 0.6 }

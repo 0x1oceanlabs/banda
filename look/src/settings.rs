@@ -212,6 +212,23 @@ pub struct Bar {
     /// How the bar shows the workspaces: `"numbers"`, or `"dots"` with the
     /// one shown drawn long, as GNOME's.
     pub workspaces: Option<Workspaces>,
+    /// The widgets after the workspaces, by id, in order (ADR 0024).
+    pub left: Option<Vec<String>>,
+    /// The widgets in the bar's middle, by id, in order: the sidebar's
+    /// counts, `"sidebar.counts"`.
+    pub center: Option<Vec<String>>,
+    /// The widgets on the bar's right, by id, in order, before the
+    /// engine's connection: the workspaces set aside, `"workspaces.aside"`.
+    pub right: Option<Vec<String>>,
+}
+
+/// Banda's widgets in each part of the bar, by id (ADR 0024, decision 4).
+pub const BAR_LEFT: &[&str] = &[];
+pub const BAR_CENTER: &[&str] = &["sidebar.counts"];
+pub const BAR_RIGHT: &[&str] = &["workspaces.aside"];
+
+pub(crate) fn owned(ids: &[&str]) -> Vec<String> {
+    ids.iter().map(|&id| id.to_owned()).collect()
 }
 
 /// The drawer: a Thread that drops from the top over the workspace.
@@ -371,6 +388,9 @@ impl Settings {
             bar: Bar {
                 height: self.bar.height.or(under.bar.height),
                 workspaces: self.bar.workspaces.or(under.bar.workspaces),
+                left: self.bar.left.or(under.bar.left),
+                center: self.bar.center.or(under.bar.center),
+                right: self.bar.right.or(under.bar.right),
             },
             drawer: Drawer {
                 height: self.drawer.height.or(under.drawer.height),
@@ -424,6 +444,9 @@ impl Settings {
             bar: Bar {
                 height: Some(36.0),
                 workspaces: Some(Workspaces::Numbers),
+                left: Some(owned(BAR_LEFT)),
+                center: Some(owned(BAR_CENTER)),
+                right: Some(owned(BAR_RIGHT)),
             },
             drawer: Drawer {
                 height: Some(0.6),

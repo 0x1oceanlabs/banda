@@ -15,6 +15,7 @@ import type { Problem, Workspaces } from "@banda/contract/look"
 import { useLookBar, useLookProblems } from "../look"
 import type { InBar } from "../workspaces/model"
 import { BarMotion } from "./motion"
+import type { Part } from "./placed"
 
 /**
  * The bar across the window's top (ADR 0005, decision 9): the sidebar's
@@ -22,8 +23,9 @@ import { BarMotion } from "./motion"
  * the work, with how many things wait for the Person when more than one
  * does; then the workspaces, as numbers or dots, and the empty one at the
  * bottom as a `+`. A click on another goes there; on the current one,
- * opens the overview. The middle holds the sidebar's counts (ADR 0035),
- * centred on the window whatever the sides hold.
+ * opens the overview. The widgets stand after them, in the middle, centred
+ * on the window whatever the sides hold, and on the right before the
+ * engine's connection, as the look's `[bar]` lists them (ADR 0024).
  */
 export function Bar({
   status,
@@ -34,8 +36,7 @@ export function Bar({
   onSidebar,
   onPick,
   problems,
-  middle,
-  notes,
+  widgets,
 }: {
   status: Status
   /** What the modules' work calls the Person for, for the mark to show. */
@@ -49,11 +50,8 @@ export function Bar({
   onPick: (index: number) => void
   /** What the window finds wrong in the files besides, as in keys.toml. */
   problems: readonly Problem[]
-  /** What sits in the bar's middle. */
-  middle?: ReactNode
-  /** What the window says on the right, before the files' problems,
-   * until the modules' bar widgets do (ADR 0024, decision 3). */
-  notes?: ReactNode
+  /** The widgets of each part, drawn. */
+  widgets?: Partial<Record<Part, ReactNode>>
 }) {
   const mark = loudest([attention.mark, markOf(status)])
   const { waiting } = attention
@@ -86,11 +84,12 @@ export function Bar({
         current={current}
         onPick={onPick}
       />
+      <div className="flex items-center">{widgets?.left}</div>
       <div className="absolute top-1/2 left-1/2 flex -translate-1/2 items-center">
-        {middle}
+        {widgets?.center}
       </div>
       <div className="ml-auto flex items-center">
-        {notes}
+        {widgets?.right}
         <LookProblems more={problems} />
         <Connection status={status} />
       </div>

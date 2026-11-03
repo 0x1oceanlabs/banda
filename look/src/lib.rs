@@ -141,6 +141,11 @@ pub struct Desk {
 #[ts(export, export_to = "look/")]
 pub struct Bar {
     pub workspaces: Workspaces,
+    /// The widgets of each part, by id, in order (ADR 0024, decision 4):
+    /// after the workspaces, in the middle, and on the right.
+    pub left: Vec<String>,
+    pub center: Vec<String>,
+    pub right: Vec<String>,
 }
 
 /// The drawer on Alt+` (ADR 0025, decision 8).
@@ -684,6 +689,21 @@ pub fn resolve(
             columns: all.columns.resolve(),
             bar: Bar {
                 workspaces: all.bar.workspaces.unwrap_or(Workspaces::Numbers),
+                left: all
+                    .bar
+                    .left
+                    .clone()
+                    .unwrap_or_else(|| settings::owned(settings::BAR_LEFT)),
+                center: all
+                    .bar
+                    .center
+                    .clone()
+                    .unwrap_or_else(|| settings::owned(settings::BAR_CENTER)),
+                right: all
+                    .bar
+                    .right
+                    .clone()
+                    .unwrap_or_else(|| settings::owned(settings::BAR_RIGHT)),
             },
             drawer: Drawer {
                 height: all.drawer.height.unwrap_or(0.6),
