@@ -49,10 +49,11 @@ import {
 } from "lucide-react"
 import { addressOf, siteOf } from "./address"
 import { Extensions, WEB_STORE } from "./Extensions"
-import type { Download, Driver, Point } from "./desktop"
+import type { Download, Driver, Handed, Point } from "./desktop"
 import { browserHost, downloadsNow, watchDownloads } from "./host"
 import { browserKey, type Does, isTabKey } from "./keys"
-import { threadOf, useThreadOf } from "./threads"
+import { handBack, threadOf, useThreadOf } from "./threads"
+
 import {
   BLANK,
   drop,
@@ -112,6 +113,7 @@ function titleOf(tab: Tab): string {
 }
 
 function BrowserPane({
+  engine,
   space,
   args: kept,
   focused,
@@ -217,6 +219,7 @@ function BrowserPane({
         const thread = threadOf(agent)
         if (thread) open(thread.listed.pane, undefined, thread.space)
       }}
+      onHandBack={(contents, wait) => handBack(engine, contents, wait)}
       close={close}
     />
   )
@@ -240,6 +243,7 @@ function Browser({
   onStore,
   onTabKey,
   onThread,
+  onHandBack,
   close,
 }: {
   tab: Tab
@@ -252,6 +256,8 @@ function Browser({
   onTabKey: (key: TabKey) => void
   /** Goes to the Thread of the Agent that drives the page. */
   onThread: (agent: string) => void
+  /** The Person is done with what the Thread handed them in the page. */
+  onHandBack: (contents: number, wait: Handed) => void
   close: () => void
 }) {
   const root = useRef<HTMLDivElement>(null)
@@ -271,6 +277,10 @@ function Browser({
 
   // The page the Person looks at is the extensions' active tab.
   const contents = page?.contents ?? null
+  // One wait shows at a time: a handed-over tab is the Person's to use.
+  const handed = state.waits.find(
+    (wait): wait is Handed => wait.reason === "handoff"
+  )
   const stopped = state.waits.find((wait) => wait.reason === "stopped")
   useEffect(() => {
     if (focused && contents !== null) browserHost()?.shown(contents)
@@ -402,12 +412,21 @@ function Browser({
             />
           </DrawnIn>
         )}
-        {page && !state.driver && stopped && contents != null && (
+        {page && handed && contents != null && (
+          <DrawnIn element={page.over}>
+            <HandedOver
+              wait={handed}
+              onThread={onThread}
+              onDone={() => onHandBack(contents, handed)}
+            />
+          </DrawnIn>
+        )}
+        {page && !state.driver && !handed && stopped && contents != null && (
           <DrawnIn element={page.over}>
             <Stopped
               agent={stopped.agent}
               onThread={onThread}
-              onLet={() => browserHost()?.letDrive(contents, stopped.agent)}
+              onLet={() => browserHost()?.answered(contents, stopped.agent)}
             />
           </DrawnIn>
         )}
@@ -549,6 +568,46 @@ function Stopped({
         Let drive again
       </Button>
     </Pill>
+  )
+}
+
+/**
+ * What Banda draws over a page a Thread handed to the Person (ADR 0029,
+ * decisions 6 and 7, E): a card at its top, ringed as what waits for the
+ * Person, that says what is theirs to do there, and hands the tab back
+ * once they are done.
+ */
+function HandedOver({
+  wait,
+  onThread,
+  onDone,
+}: {
+  wait: Handed
+  onThread: (agent: string) => void
+  onDone: () => void
+}) {
+  const title = useThreadOf(wait.agent)?.title ?? "An Agent"
+  return (
+    <div
+      role="status"
+      aria-label={`${title} handed this tab to you`}
+      className="pointer-events-auto absolute inset-x-3 top-3 flex items-center gap-2.5 rounded-lg bg-popover py-2 pr-2 pl-3 text-xs text-popover-foreground shadow-lg ring-1 ring-attention/60"
+    >
+      <p className="min-w-0 flex-1 leading-snug">
+        <b className="text-attention">Your turn.</b> {wait.why}.{" "}
+        <span className="opacity-70">
+          <ThreadLink title={title} onClick={() => onThread(wait.agent)} />{" "}
+          waits, and never sees what you type in a password field.
+        </span>
+      </p>
+      <Button
+        size="xs"
+        className="shrink-0 bg-attention text-popover hover:bg-attention/90"
+        onClick={onDone}
+      >
+        Done — hand back
+      </Button>
+    </div>
   )
 }
 

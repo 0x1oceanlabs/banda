@@ -2,6 +2,7 @@
 import type { CallMethod } from "../CallMethod";
 import type { Nothing } from "../Nothing";
 import type { Act } from "./Act";
+import type { Handoff } from "./Handoff";
 import type { Navigate } from "./Navigate";
 import type { OneTab } from "./OneTab";
 import type { Open } from "./Open";
@@ -45,7 +46,8 @@ navigate: CallMethod<Navigate, string>,
  * address, a tab it opened, a dialog, a download. A password or a
  * card's number, expiry or code is the Person's to fill, as are
  * signing up, accepting terms, and the last press to pay, send
- * money or post in public: ask your Person for those.
+ * money or post in public: hand those to your Person with
+ * browser_handoff.
  */
 act: CallMethod<Act, string>, 
 /**
@@ -53,4 +55,12 @@ act: CallMethod<Act, string>,
  * address with a part, for 15 s or the seconds given, 60 at most.
  * It answers where the tab is then.
  */
-wait_for: CallMethod<WaitFor, string>, };
+wait_for: CallMethod<WaitFor, string>, 
+/**
+ * Hands a tab to your Person for a step that is theirs: a
+ * password or a card to fill, signing up, accepting terms, the last
+ * press to pay, send money or post in public. Say why, as "Sign in
+ * to GitHub". The tab asks them, and you may not use it meanwhile:
+ * end your turn, and their message says when they are done.
+ */
+handoff: CallMethod<Handoff, string>, };

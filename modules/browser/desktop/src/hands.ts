@@ -79,7 +79,7 @@ const focusedIsSecret = async (page: Page) => {
 const theirs = (ref: string) =>
   new Refused({
     code: "forbidden",
-    message: `${ref} is a password's or a card's field: it is the Person's to fill. Ask your Person to fill it in the tab.`,
+    message: `${ref} is a password's or a card's field: it is the Person's to fill. Hand them the tab with browser_handoff.`,
   })
 
 /** The element of `ref` in the tab's last snapshot; refused when no

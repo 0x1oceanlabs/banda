@@ -89,7 +89,8 @@ async fn with_no_window_the_tools_are_listed_and_refuse() {
             "browser_open",
             "browser_navigate",
             "browser_act",
-            "browser_wait_for"
+            "browser_wait_for",
+            "browser_handoff"
         ]
     );
     let refused = kernel.call(agent(space), "browser.tabs", None, None, Value::Null);
@@ -358,4 +359,28 @@ async fn a_wait_is_held_to_a_minute_and_says_where_the_tab_is() {
         json!({ "tab": 9, "ref": "e4", "seconds": 15 })
     );
     assert!(said.starts_with("e4 shows. Tab 9"));
+}
+
+#[tokio::test]
+async fn a_handed_tab_tells_the_agent_to_end_its_turn() {
+    let (asked, said) = told(
+        "browser.handoff",
+        json!({ "tab": 4, "why": "  Sign in to GitHub " }),
+        Value::Null,
+    )
+    .await;
+    assert_eq!(asked["params"], json!({ "tab": 4, "why": "Sign in to GitHub" }));
+    assert_eq!(
+        said,
+        "Handed tab 4 to your Person. End your turn now: their message says when they \
+         are done, and you carry on then."
+    );
+
+    let root = tempfile::tempdir().unwrap();
+    let owner = PersonId::new();
+    let (kernel, space) = open(root.path(), owner).await;
+    let _hear = window(&kernel, owner).await;
+    let why = json!({ "tab": 4, "why": " " });
+    let refused = ask(&kernel, space, "browser.handoff", why).await.unwrap();
+    assert!(refused.unwrap_err().message.contains("needs why"));
 }

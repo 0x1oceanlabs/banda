@@ -3,7 +3,7 @@
  * them (ADR 0029, decision 4): the title a driven page's pill shows, the
  * way to its Thread, and the end of its turn, which ends its drive.
  */
-import type { SpaceId } from "@banda/contract"
+import type { Engine, SpaceId } from "@banda/contract"
 import type { WindowApi } from "@banda/ui/module"
 import {
   type Listed,
@@ -12,6 +12,7 @@ import {
   type WatchProps,
 } from "@banda/ui/pane"
 import { useEffect, useSyncExternalStore } from "react"
+import type { Handed, Wait } from "./desktop"
 import { browserHost } from "./host"
 import { asking, drivers, watchPages, watchWaits } from "./pages"
 
@@ -72,9 +73,35 @@ export function followThreads(window: WindowApi): () => void {
   }
 }
 
-/** What the sidebar's row of a Thread the Person stopped on a tab says,
- * once it called there again. */
-export const STOPPED = "Stopped on a tab: let it drive again there"
+/** What the sidebar's row of a Thread that waits for the Person on a tab
+ * says: one they stopped, once it called there again; one that handed
+ * the tab over, at once. */
+const callOf = (wait: Wait) =>
+  wait.reason === "stopped"
+    ? "Stopped on a tab: let it drive again there"
+    : `Your turn in a tab: ${wait.why}`
+
+/**
+ * The Person is done with what the Thread of `wait.agent` handed them on
+ * the page of `contents` (ADR 0029, decision 6): the tab is the Thread's
+ * again, and a line in it, as the Person's message, starts its next turn.
+ */
+export function handBack(engine: Engine, contents: number, wait: Handed) {
+  browserHost()?.answered(contents, wait.agent)
+  const thread = threadOf(wait.agent)
+  if (!thread) return
+  void engine.command(
+    "agents.send",
+    {
+      thread: thread.listed.id,
+      text: `Done: ${wait.why}. Carry on.`,
+      images: [],
+      settings: null,
+      steer: false,
+    },
+    thread.space
+  )
+}
 
 /**
  * The Threads of a Space that wait for the Person on a tab, as their rows
@@ -88,23 +115,23 @@ function WaitsWatch({ space, report }: WatchProps) {
   useEffect(() => {
     let was: string | undefined
     const check = () => {
-      const listed = asking().flatMap(
-        ({ contents, agent, asked }): Listed[] => {
-          const thread = threadOf(agent)
-          if (thread?.space !== space) return []
-          return [
-            {
-              id: `browser:${contents}:${agent}`,
-              title: thread.listed.title,
-              mark: "asking",
-              changed: asked,
-              calls: STOPPED,
-              on: agent,
-              pane: thread.listed.pane,
-            },
-          ]
-        }
-      )
+      const listed = asking().flatMap(({ contents, wait, asked }): Listed[] => {
+        const { agent } = wait
+        const thread = threadOf(agent)
+        if (thread?.space !== space) return []
+        return [
+          {
+            id: `browser:${contents}:${agent}`,
+            title: thread.listed.title,
+            mark: "asking",
+            changed: asked,
+            calls: callOf(wait),
+
+            on: agent,
+            pane: thread.listed.pane,
+          },
+        ]
+      })
       const said = JSON.stringify(listed)
       if (said === was) return
       was = said

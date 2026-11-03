@@ -348,7 +348,8 @@ fn an_agent_reaches_banda_through_banda_mcp() {
                 "browser_open",
                 "browser_navigate",
                 "browser_act",
-                "browser_wait_for"
+                "browser_wait_for",
+                "browser_handoff"
             ][..],
             &arranging,
             &["problems", "problem", "skill"]

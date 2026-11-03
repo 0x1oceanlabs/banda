@@ -202,6 +202,15 @@ and stay Roma's to change.
        the browser's Watch lists the wait with `Listed.on`, its Agent.
        The window draws that wait on the Thread's row, not on a row of
        its own, and calls the Person as for a Question.
+   - Amended in step 4e, for Handed over:
+     - `browser_handoff` takes the tab and a line of why. The wait lives
+       in main, as Stopped's does, and asks at once.
+     - The tab shows a card at its top: "Your turn. <why>." with "Done —
+       hand back". The Agent hears that it should end its turn.
+     - Done lets the Thread use the tab again. The window then sends
+       "Done: <why>. Carry on." into the Thread, by `agents.send` as the
+       Person.
+     - E's refused fields now point the Agent to `browser_handoff`.
 
 7. **Who confirms a risky step: A, B and E first** (_decided_).
    - **A. The Harness asks**, as before any tool, under the Thread's mode

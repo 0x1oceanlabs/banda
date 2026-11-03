@@ -10,6 +10,7 @@
 import type { Participant } from "@banda/contract"
 import type {
   Act,
+  Handoff,
   Navigate,
   ReadTab,
   SeenTab,
@@ -191,8 +192,12 @@ export class Drive extends Context.Service<
      * the Person's programs there go on. The Thread waits until the
      * Person lets it drive again (ADR 0029, decision 6). */
     release(tab: number): Effect.Effect<void>
-    /** Lets the Thread of `agent` drive the tab again. */
-    letDrive(tab: number, agent: string): Effect.Effect<void>
+    /** The Thread of `agent` hands the tab to the Person for a step that
+     * is theirs, and waits until they hand it back. */
+    handoff(hand: Handoff, by: Participant): Effect.Effect<void, Refused>
+    /** The Person answered what the Thread of `agent` waits for on the
+     * tab: it may use the tab again. */
+    answered(tab: number, agent: string): Effect.Effect<void>
     /** The turn of the Thread of `agent` ended: it drives no tab now. */
     settled(agent: string): Effect.Effect<void>
   }
@@ -223,17 +228,20 @@ export class Drive extends Context.Service<
           from: tab,
           waits: [...(waits.get(tab)?.values() ?? [])],
         })
-      const wait = (tab: number, agent: string) => {
+      /** The tab's Thread of `wait.agent` waits for the Person; none
+       * does on a tab gone. */
+      const wait = (tab: number, wait: Wait) => {
         const contents = contentsOf(tab)
-        if (!contents) return
+        if (!contents) return false
         let on = waits.get(tab)
         if (!on) {
           on = new Map()
           waits.set(tab, on)
           contents.once("destroyed", () => waits.delete(tab))
         }
-        on.set(agent, { agent, reason: "stopped" })
+        on.set(wait.agent, wait)
         tellWaits(tab)
+        return true
       }
       /** Refuses a call of the Agent `by` on a tab where its Thread waits
        * for the Person, which it then asks. */
@@ -249,7 +257,10 @@ export class Drive extends Context.Service<
           return Effect.fail(
             new Refused({
               code: "forbidden",
-              message: `The Person stopped you on tab ${tab}. Do not use it until they let you drive again: say where you stopped and end your turn, and they will tell you.`,
+              message:
+                was.reason === "stopped"
+                  ? `The Person stopped you on tab ${tab}. Do not use it until they let you drive again: say where you stopped and end your turn, and they will tell you.`
+                  : `You handed tab ${tab} to the Person, to ${was.why}. Do not use it until they hand it back: end your turn, and their message says when.`,
             })
           )
         })
@@ -467,10 +478,26 @@ export class Drive extends Context.Service<
         release: (tab) =>
           Effect.suspend(() => {
             const driver = driving.get(tab)
-            if (driver) wait(tab, driver.agent)
+            if (driver) wait(tab, { agent: driver.agent, reason: "stopped" })
             return RcMap.invalidate(held, tab)
           }),
-        letDrive: (tab, agent) =>
+        handoff: ({ tab, why }, by) =>
+          Effect.suspend(() => {
+            if (by.kind !== "agent")
+              return Effect.fail(
+                new Refused({ message: "Only an Agent hands a tab over." })
+              )
+            const handed: Wait = {
+              agent: by.id,
+              reason: "handoff",
+              why,
+              asked: Date.now(),
+            }
+            if (!wait(tab, handed)) return Effect.fail(noTab(tab))
+            // The Person's turn: the Thread's drive there ends.
+            return RcMap.invalidate(held, tab)
+          }),
+        answered: (tab, agent) =>
           Effect.sync(() => {
             const on = waits.get(tab)
             if (!on?.delete(agent)) return
