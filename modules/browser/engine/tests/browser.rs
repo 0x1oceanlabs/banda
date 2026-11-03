@@ -369,7 +369,10 @@ async fn a_handed_tab_tells_the_agent_to_end_its_turn() {
         Value::Null,
     )
     .await;
-    assert_eq!(asked["params"], json!({ "tab": 4, "why": "Sign in to GitHub" }));
+    assert_eq!(
+        asked["params"],
+        json!({ "tab": 4, "why": "Sign in to GitHub" })
+    );
     assert_eq!(
         said,
         "Handed tab 4 to your Person. End your turn now: their message says when they \
