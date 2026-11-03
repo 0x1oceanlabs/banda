@@ -49,7 +49,7 @@ Roma, 2026-11-02:
 
 3. **Dev is built on every push to `main`, once `ci` is green on that commit.** The release workflow builds it and publishes a GitHub prerelease tagged with its version, `v0.X.Y-dev.N`, as electron-updater reads a release's version from its tag. Only the last 20 Dev releases are kept.
 
-4. **Stable is a Dev that Roma has lived with.** Roma tags a commit that has a Dev build, `v0.X.Y`. The workflow builds it again from that commit with the Stable channel and publishes a release, with its notes taken from the titles of the PRs merged since the last Stable. Stable never loses a Person's data: an update runs the modules' migrations (ADR 0002), and a change that cannot migrate does not go into a Stable.
+4. **Stable is a Dev that Roma has lived with.** Roma tags a commit that has a Dev build, `v0.X.Y`, with `node scripts/promote.mjs [dev.N]`: Dev `0.X.Y-dev.N` becomes Stable `0.X.Y` at the commit it was built from, the last Dev when none is named. Roma's own token pushes the tag, so it starts the workflow, as the workflow's token would not. Roma merges many PRs a day, so a Stable is not each Dev, nor on a clock: it is the one Roma picks. A fix to a Stable is a branch from its tag and the tag `v0.X.Y+1` on it, by hand. The workflow builds it again from that commit with the Stable channel and publishes a release, with its notes taken from the titles of the PRs merged since the last Stable. Stable never loses a Person's data: an update runs the modules' migrations (ADR 0002), and a change that cannot migrate does not go into a Stable.
 
 5. **Linux: an AppImage for x64, which updates itself.**
    - Built with electron-builder on the devbox runners, the engine inside.
