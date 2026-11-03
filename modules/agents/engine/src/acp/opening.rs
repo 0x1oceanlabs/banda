@@ -131,7 +131,7 @@ impl Connection {
         {
             if !self.agreed.forks {
                 return Err(Ending::failed(
-                    format!("{} cannot fork a conversation.", self.name),
+                    format!("{} cannot fork a conversation.", self.process.name()),
                     None,
                 ));
             }
@@ -143,7 +143,7 @@ impl Connection {
             let (session, options) = (made.session_id, made.config_options);
             return Ok(self.opened(thread, &mut sessions, session, options, folder, false));
         }
-        if let Some(session) = earlier.and_then(|e| e.continued_by(&self.harness))
+        if let Some(session) = earlier.and_then(|e| e.continued_by(self.process.harness()))
             && let Some(options) = self
                 .continue_session(&session, folder, roots, &servers)
                 .await
@@ -174,11 +174,11 @@ impl Connection {
         request: R,
         doing: &str,
     ) -> Result<R::Response, Ending> {
-        let asked = self.cx.send_request(request).block_task();
+        let asked = self.process.cx().send_request(request).block_task();
         match timeout(OPENING, asked).await {
-            Ok(made) => made.map_err(|error| failed(&self.name, &error)),
+            Ok(made) => made.map_err(|error| failed(self.process.name(), &error)),
             Err(_) => Err(Ending::failed(
-                format!("{} did not {doing} within a minute.", self.name),
+                format!("{} did not {doing} within a minute.", self.process.name()),
                 Some(Failure::HarnessStopped),
             )),
         }
@@ -197,7 +197,7 @@ impl Connection {
         opened(&self.learned, &session, options.unwrap_or_default(), folder);
         sessions.insert(thread, session.clone());
         let evidence = Evidence {
-            harness: self.harness.clone(),
+            harness: self.process.harness().to_owned(),
             session: session.0.to_string(),
             lasts: if self.agreed.loads || self.agreed.resumes {
                 Lasts::Harness
@@ -223,7 +223,7 @@ impl Connection {
             let resume = acp::ResumeSessionRequest::new(session.clone(), folder)
                 .additional_directories(roots.to_vec())
                 .mcp_servers(servers.to_vec());
-            let asked = self.cx.send_request(resume).block_task();
+            let asked = self.process.cx().send_request(resume).block_task();
             timeout(OPENING, asked)
                 .await
                 .map(|a| a.map(|r| r.config_options))
@@ -231,7 +231,7 @@ impl Connection {
             let load = acp::LoadSessionRequest::new(session.clone(), folder)
                 .additional_directories(roots.to_vec())
                 .mcp_servers(servers.to_vec());
-            let asked = self.cx.send_request(load).block_task();
+            let asked = self.process.cx().send_request(load).block_task();
             timeout(OPENING, asked)
                 .await
                 .map(|a| a.map(|r| r.config_options))

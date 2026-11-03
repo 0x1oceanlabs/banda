@@ -1,18 +1,15 @@
-//! The Harness processes: one per Space and Harness entry (ADR 0003,
-//! decision 6). Every Thread on that Harness in that Space is a session in
-//! the one process.
+//! A pool of Harness processes: one per Space and Harness entry (ADR 0003,
+//! decision 6), or per Harness on the machine, keyed by the machine's
+//! Space ID. What a host is, and when it has nothing to do, its client
+//! says ([`Host`]).
 //!
-//! - A host starts on the first turn that needs it, one start at a time.
+//! - A host starts when it is first asked for, one start at a time.
 //! - A host that keeps dying starts again after a growing pause.
-//! - A host with nothing to do for `idle` is let go. Its Threads resume
-//!   their sessions when it starts again.
-//! - After a sign-in every host of that Harness entry is let go, so each
-//!   reads the account again when it starts.
+//! - A host with nothing to do for `idle` is let go.
 //! - A host's process runs in its own process group, which is killed when
 //!   the host is dropped; an engine that dies closes the host's stdin.
 
-use crate::acp::Connection;
-use banda_harnesses::Harness;
+use crate::Harness;
 use banda_kernel::SpaceId;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, Weak};
@@ -30,15 +27,24 @@ const LOOK: Duration = Duration::from_secs(60);
 
 type Key = (SpaceId, String);
 
-pub struct Hosts {
+/// A Harness process as its client holds it.
+pub trait Host: Send + Sync + Sized + 'static {
+    /// Starts `harness`.
+    fn start(harness: &Harness) -> impl Future<Output = Result<Arc<Self>, String>> + Send;
+    /// Whether the process still answers.
+    fn alive(&self) -> bool;
+    /// Since when it has had nothing to do, or `None` while it has.
+    fn idle_since(&self) -> Option<Instant>;
+}
+
+pub struct Hosts<H> {
     idle: Duration,
-    slots: Mutex<HashMap<Key, Arc<tokio::sync::Mutex<Slot>>>>,
+    slots: Mutex<HashMap<Key, Arc<tokio::sync::Mutex<Slot<H>>>>>,
     sweeping: std::sync::Once,
 }
 
-#[derive(Default)]
-struct Slot {
-    host: Option<Arc<Connection>>,
+struct Slot<H> {
+    host: Option<Arc<H>>,
     /// The entry the host started from: a changed entry starts a new host.
     harness: Option<Harness>,
     started: Option<Instant>,
@@ -46,7 +52,18 @@ struct Slot {
     deaths: u32,
 }
 
-impl Slot {
+impl<H> Default for Slot<H> {
+    fn default() -> Self {
+        Slot {
+            host: None,
+            harness: None,
+            started: None,
+            deaths: 0,
+        }
+    }
+}
+
+impl<H> Slot<H> {
     fn died(&mut self) {
         let healthy = self.started.is_some_and(|at| at.elapsed() >= HEALTHY);
         self.deaths = if healthy { 0 } else { self.deaths + 1 };
@@ -61,8 +78,8 @@ fn pause(deaths: u32) -> Option<Duration> {
     Some(pause.min(LONGEST_PAUSE))
 }
 
-impl Hosts {
-    pub fn new(idle: Duration) -> Arc<Hosts> {
+impl<H: Host> Hosts<H> {
+    pub fn new(idle: Duration) -> Arc<Hosts<H>> {
         Arc::new(Hosts {
             idle,
             slots: Mutex::default(),
@@ -75,7 +92,7 @@ impl Hosts {
         self: &Arc<Self>,
         space: SpaceId,
         harness: &Harness,
-    ) -> Result<Arc<Connection>, String> {
+    ) -> Result<Arc<H>, String> {
         self.sweeping.call_once(|| {
             tokio::spawn(sweep(Arc::downgrade(self), self.idle));
         });
@@ -102,7 +119,7 @@ impl Hosts {
         if let Some(pause) = pause(slot.deaths) {
             tokio::time::sleep(pause).await;
         }
-        match Connection::start(harness).await {
+        match H::start(harness).await {
             Ok(host) => {
                 slot.host = Some(host.clone());
                 slot.harness = Some(harness.clone());
@@ -118,8 +135,8 @@ impl Hosts {
     }
 
     /// Lets go of every host of the Harness entry `harness`, in every
-    /// Space, once it is no longer starting. A turn that runs keeps its
-    /// host until it ends.
+    /// Space, once it is no longer starting. Who holds a host keeps it
+    /// until they drop it.
     pub async fn let_go(&self, harness: &str) {
         let slots: Vec<_> = self
             .slots
@@ -137,8 +154,8 @@ impl Hosts {
     }
 
     /// Forgets every host of `space`, as the Space is removed, and answers
-    /// them, so the turns they run can be stopped.
-    pub async fn forget(&self, space: SpaceId) -> Vec<Arc<Connection>> {
+    /// them, so what they run can be stopped.
+    pub async fn forget(&self, space: SpaceId) -> Vec<Arc<H>> {
         let slots: Vec<_> = (self.slots.lock().unwrap())
             .extract_if(|(of, _), _| *of == space)
             .map(|(_, slot)| slot)
@@ -171,7 +188,7 @@ impl Hosts {
     }
 }
 
-async fn sweep(hosts: Weak<Hosts>, idle: Duration) {
+async fn sweep<H: Host>(hosts: Weak<Hosts<H>>, idle: Duration) {
     let every = (idle / 4).clamp(Duration::from_millis(10), LOOK);
     loop {
         tokio::time::sleep(every).await;
@@ -197,7 +214,7 @@ mod tests {
 
     #[test]
     fn a_host_that_ran_long_before_it_died_starts_at_once() {
-        let mut slot = Slot {
+        let mut slot = Slot::<()> {
             started: Some(Instant::now() - HEALTHY),
             deaths: 3,
             ..Slot::default()

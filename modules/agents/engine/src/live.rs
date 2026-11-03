@@ -8,12 +8,18 @@
 //! never lost. Whether a turn was asked to stop is the turn's own state
 //! (`agents_turns.stopping`), which the rules read; memory only keeps
 //! whether its Harness was told.
+//!
+//! The Harness processes are one per Space and Harness entry: every Thread
+//! on that Harness in that Space is a session in the one process. A host
+//! with nothing to do is let go, and its Threads resume their sessions
+//! when it starts again. After a sign-in every host of that Harness entry
+//! is let go, so each reads the account again when it starts.
 
 use crate::Pipe;
 use crate::acp::{Answer, Connection, Session};
-use crate::hosts::Hosts;
 use crate::model::{ItemId, TurnId, Values};
 use banda_harnesses::Harness;
+use banda_harnesses::hosts::Hosts;
 use banda_harnesses::model::Program;
 use banda_kernel::{AgentId, ModuleSpace, SpaceId};
 use std::collections::{HashMap, HashSet};
@@ -22,7 +28,7 @@ use std::time::Duration;
 use tokio::sync::{Notify, oneshot};
 
 pub struct Live {
-    hosts: Arc<Hosts>,
+    hosts: Arc<Hosts<Connection>>,
     turns: Mutex<Turns>,
     /// Told each time a turn begins or ends, or a Question stops waiting:
     /// what waits on that ([`Live::until`]) looks again then.

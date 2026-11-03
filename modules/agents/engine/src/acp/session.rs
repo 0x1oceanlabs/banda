@@ -137,7 +137,7 @@ impl Session {
 
     /// The Harness's name, for plain words.
     pub fn name(&self) -> &str {
-        self.connection.name()
+        self.connection.process.name()
     }
 
     /// Whether the Harness takes a message into a running turn.
@@ -200,18 +200,19 @@ impl Session {
                 value,
             );
             tried.push(id);
-            let asked = connection.cx.send_request(set).block_task();
+            let asked = connection.process.cx().send_request(set).block_task();
             match timeout(OPENING, asked).await {
                 Ok(Ok(answer)) => {
                     learn(&connection.learned, session, answer.config_options);
                 }
                 Ok(Err(error)) => refused.push(format!(
                     "{} did not take the setting {name}: {}",
-                    connection.name, error.message
+                    connection.process.name(),
+                    error.message
                 )),
                 Err(_) => refused.push(format!(
                     "{} did not answer when Banda set {name}.",
-                    connection.name
+                    connection.process.name()
                 )),
             }
         };
@@ -225,7 +226,7 @@ impl Session {
             let runs = running.mode.map_or("a mode of its own", Mode::name);
             refused.push(format!(
                 "{} offers no {} here, so it runs in {runs}.",
-                connection.name,
+                connection.process.name(),
                 wanted.mode.name()
             ));
         }
@@ -241,9 +242,9 @@ impl Session {
         let request = acp::PromptRequest::new(session.clone(), blocks(prompt));
         // Sent here, not in the task: a stop that follows must reach the
         // Harness after the prompt it stops.
-        let sent = connection.cx.send_request(request);
+        let sent = connection.process.cx().send_request(request);
         let (routes, active) = (connection.routes.clone(), connection.active.clone());
-        let (session, name) = (session.clone(), connection.name.clone());
+        let (session, name) = (session.clone(), connection.process.name().to_owned());
         let done = tokio::spawn(async move {
             let answer = sent.block_task().await;
             *active.lock().unwrap() = Instant::now();
@@ -267,7 +268,7 @@ impl Session {
         let connection = &*self.connection;
         if connection.agreed.closes {
             let close = acp::CloseSessionRequest::new(self.id.clone());
-            let asked = connection.cx.send_request(close).block_task();
+            let asked = connection.process.cx().send_request(close).block_task();
             if let Ok(Err(error)) = timeout(CLOSING, asked).await {
                 tracing::info!(%error, "the Harness could not close a session");
             }
@@ -298,27 +299,37 @@ impl Session {
             prompt: blocks(prompt),
             meta: serde_json::json!({ STEERING_META: { "idleBehavior": LEAVE_IT } }),
         };
-        let sent = connection.cx.send_request(request).block_task();
+        let sent = connection.process.cx().send_request(request).block_task();
         let answer = timeout(STEERING, sent)
             .await
-            .map_err(|_| format!("{} did not take the message in time.", connection.name))?
+            .map_err(|_| {
+                format!(
+                    "{} did not take the message in time.",
+                    connection.process.name()
+                )
+            })?
             .map_err(plain)?;
         match answer.outcome {
             SteeringOutcome::Injected => Ok(Steered::Joined),
             SteeringOutcome::PromptRequired => Ok(Steered::NotNow),
             SteeringOutcome::StartedNewTurn => {
-                tracing::warn!(harness = %connection.harness, "a steered message started a turn of its own");
+                tracing::warn!(harness = %connection.process.harness(), "a steered message started a turn of its own");
                 Ok(Steered::Joined)
             }
-            SteeringOutcome::Other => {
-                Err(format!("{} could not take the message.", connection.name))
-            }
+            SteeringOutcome::Other => Err(format!(
+                "{} could not take the message.",
+                connection.process.name()
+            )),
         }
     }
 
     /// Asks the Harness to stop the session's turn.
     pub fn cancel(&self) -> Result<(), String> {
         let cancel = acp::CancelNotification::new(self.id.clone());
-        self.connection.cx.send_notification(cancel).map_err(plain)
+        self.connection
+            .process
+            .cx()
+            .send_notification(cancel)
+            .map_err(plain)
     }
 }

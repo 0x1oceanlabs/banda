@@ -382,14 +382,18 @@ dependencies = [
 name = "banda-harnesses"
 version = "0.1.0"
 dependencies = [
+ "agent-client-protocol",
+ "banda-kernel",
  "banda-look",
  "schemars 1.2.3",
  "serde",
+ "serde_json",
  "tempfile",
  "tokio",
  "toml",
  "tracing",
  "ts-rs",
+ "uuid",
 ]
 
 [[package]]
