@@ -22,9 +22,10 @@ function keep(to: string, bytes: Buffer): void {
   if (!existsSync(to) || !readFileSync(to).equals(bytes)) writeWhole(to, bytes)
 }
 
-/** Lists this AppImage among the desktop's apps; it never stops the start. */
-export function listApp(): void {
-  const image = process.env.APPIMAGE
+/** Lists this AppImage among the desktop's apps, or the one at `image`
+ * that an update moved in (ADR 0041, decision 3); it never stops the
+ * start. */
+export function listApp(image = process.env.APPIMAGE): void {
   const inside = process.env.APPDIR
   if (!image || !inside) return
   try {
