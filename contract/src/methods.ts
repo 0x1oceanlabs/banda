@@ -9,6 +9,7 @@ import type { WindowMethods } from "./generated/WindowMethods"
 import type { AgentsMethods } from "./generated/agents/AgentsMethods"
 import type { BrowserMethods } from "./generated/browser/BrowserMethods"
 import type { GitMethods } from "./generated/git/GitMethods"
+import type { ProblemsMethods } from "./generated/problems/ProblemsMethods"
 import type { TerminalMethods } from "./generated/terminal/TerminalMethods"
 import type { WorkspacesMethods } from "./generated/workspaces/WorkspacesMethods"
 
@@ -23,7 +24,8 @@ export type Methods = Prefixed<"spaces", SpacesMethods> &
   Prefixed<"browser", BrowserMethods> &
   Prefixed<"terminal", TerminalMethods> &
   Prefixed<"workspaces", WorkspacesMethods> &
-  Prefixed<"git", GitMethods>
+  Prefixed<"git", GitMethods> &
+  Prefixed<"problems", ProblemsMethods>
 
 type Kind = Methods[keyof Methods]["kind"]
 

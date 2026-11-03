@@ -17,6 +17,9 @@
 //!   such as `actions` or `space.<name>` (ADR 0017).
 //! - `banda modules` prints what each module offers, one JSON object per
 //!   line; `--unstable` lists the paths not in the contract yet (ADR 0022).
+//! - `banda problems` prints what broke in Banda, one JSON object per
+//!   line; `banda problems report <fingerprint>` prints one Problem's
+//!   report, for an Agent or an issue (ADR 0039).
 //! - `banda mcp` speaks MCP on stdio for an Agent in a Thread: the agents
 //!   module hands it to each session, with the Agent's pass (ADR 0019).
 //!
@@ -29,6 +32,7 @@ mod client;
 mod mcp;
 mod modules;
 mod places;
+mod problems;
 mod serve;
 
 use banda_kernel::{CommandId, EventFilter, Refusal, SpaceId};
@@ -152,10 +156,28 @@ enum Command {
         #[arg(long)]
         unstable: bool,
     },
+    /// Prints what broke in Banda itself, the newest first, one JSON object
+    /// per line: each Problem by its fingerprint, how often and how it broke
+    /// the last time.
+    Problems {
+        #[command(subcommand)]
+        what: Option<ProblemsCommand>,
+    },
     /// Speaks MCP on stdio for an Agent in a Thread: the tools of Banda's
     /// methods, and the Banda skill. The agents module starts it for each
     /// session, with BANDA_TOKEN and BANDA_ENGINE.
     Mcp,
+}
+
+#[derive(Subcommand)]
+enum ProblemsCommand {
+    /// Prints one Problem's report in Markdown: what broke and where,
+    /// Banda's version and system, the workspaces by their Panes' kinds,
+    /// and the last lines of the logs.
+    Report {
+        /// Its fingerprint, or as much of it as names one.
+        fingerprint: String,
+    },
 }
 
 #[derive(Subcommand)]
@@ -292,13 +314,15 @@ fn main() -> ExitCode {
         Command::Browser { web_socket } => return browser(web_socket),
         _ => {}
     }
-    tracing_subscriber::fmt()
-        .with_env_filter(
-            tracing_subscriber::EnvFilter::try_from_env("BANDA_LOG")
-                .unwrap_or_else(|_| "info".into()),
-        )
-        .with_writer(std::io::stderr)
-        .init();
+    // The engine keeps its panics and its log (ADR 0039, decision 1).
+    let serving = match cli.command {
+        Command::Serve { .. } => Places::from_env().ok(),
+        _ => None,
+    };
+    if let Some(places) = &serving {
+        banda_problems::catch_panics(places.problems());
+    }
+    logging(serving.map(|places| places.logs().join("engine.log")));
     let runtime = || tokio::runtime::Runtime::new().map_err(Failure::broken);
     let done = match cli.command {
         // It needs no places: its variables say where the engine is.
@@ -308,6 +332,76 @@ fn main() -> ExitCode {
     match done {
         Ok(()) => ExitCode::SUCCESS,
         Err(failure) => failure.exit(),
+    }
+}
+
+/// The log, on stderr, and for the engine in `file` too, which starts
+/// again past [`LOG_MOST`], the one before kept beside it.
+fn logging(file: Option<PathBuf>) {
+    use tracing_subscriber::layer::SubscriberExt;
+    use tracing_subscriber::util::SubscriberInitExt;
+    use tracing_subscriber::{EnvFilter, fmt};
+    let filter = EnvFilter::try_from_env("BANDA_LOG").unwrap_or_else(|_| "info".into());
+    let kept = file.and_then(|path| match Rolling::open(path.clone()) {
+        Ok(log) => Some(
+            fmt::layer()
+                .with_ansi(false)
+                .with_writer(std::sync::Mutex::new(log)),
+        ),
+        Err(error) => {
+            eprintln!("banda: {}: {error}", path.display());
+            None
+        }
+    });
+    tracing_subscriber::registry()
+        .with(filter)
+        .with(fmt::layer().with_writer(std::io::stderr))
+        .with(kept)
+        .init();
+}
+
+/// The most a log grows to before it starts again.
+const LOG_MOST: u64 = 4 << 20;
+
+/// A log file for this user alone that, past [`LOG_MOST`], is kept as
+/// `<name>.1.log` and starts again, as it opens and while it runs.
+struct Rolling {
+    path: PathBuf,
+    file: std::fs::File,
+    size: u64,
+}
+
+impl Rolling {
+    fn open(path: PathBuf) -> std::io::Result<Rolling> {
+        let file = banda_problems::append_private(&path)?;
+        let size = file.metadata()?.len();
+        let mut log = Rolling { path, file, size };
+        if log.size > LOG_MOST {
+            log.roll()?;
+        }
+        Ok(log)
+    }
+
+    fn roll(&mut self) -> std::io::Result<()> {
+        std::fs::rename(&self.path, self.path.with_extension("1.log"))?;
+        self.file = banda_problems::append_private(&self.path)?;
+        self.size = 0;
+        Ok(())
+    }
+}
+
+impl std::io::Write for Rolling {
+    fn write(&mut self, bytes: &[u8]) -> std::io::Result<usize> {
+        if self.size > LOG_MOST {
+            self.roll()?;
+        }
+        let written = self.file.write(bytes)?;
+        self.size += written as u64;
+        Ok(written)
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        self.file.flush()
     }
 }
 
@@ -340,6 +434,10 @@ async fn run(command: Command, places: Places) -> Result<(), Failure> {
             });
             print_call(&places, "spaces.add", None, CommandId::new(), params).await
         }
+        Command::Problems { what: None } => problems::list(&places).await,
+        Command::Problems {
+            what: Some(ProblemsCommand::Report { fingerprint }),
+        } => problems::report(&places, &fingerprint).await,
         Command::Look { .. } => unreachable!("the look runs without the engine"),
         Command::Skill { .. } => unreachable!("the skill runs without the engine"),
         Command::Settings { .. } => unreachable!("the settings run without the engine"),

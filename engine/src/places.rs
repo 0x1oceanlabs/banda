@@ -5,7 +5,7 @@
 //! |---|---|---|
 //! | root | `~/Banda` | where a new Space's folder goes |
 //! | data | `~/.local/share/banda` | each Space's data, in `spaces/<id>/` (ADR 0026) |
-//! | state | `~/.local/state/banda` | the owner's ID, the lock, `engine.json`, this machine's scope (`machine/`), the window's profile (`window/`) |
+//! | state | `~/.local/state/banda` | the owner's ID, the lock, `engine.json`, this machine's scope (`machine/`), the window's profile (`window/`), the logs (`logs/`), the engine's last panics (`problems/`) |
 //! | config | `~/.config/banda` | `harnesses.toml` |
 //!
 //! `banda` is Banda's folder: Banda Dev keeps its things in `banda-dev`, and
@@ -91,6 +91,18 @@ impl Places {
     /// is (ADR 0026): the manifest, the store and the lock.
     pub fn machine(&self) -> PathBuf {
         self.state.join("machine")
+    }
+
+    /// Where the engine and the window write their logs (ADR 0039,
+    /// decision 1).
+    pub fn logs(&self) -> PathBuf {
+        self.state.join("logs")
+    }
+
+    /// Where the engine's panic hook leaves its panics for the problems
+    /// module (ADR 0039, decision 1).
+    pub fn problems(&self) -> PathBuf {
+        self.state.join("problems")
     }
 
     /// Where the window listens for `banda menu` while it is open.

@@ -294,6 +294,7 @@ dependencies = [
  "banda-git",
  "banda-kernel",
  "banda-look",
+ "banda-problems",
  "banda-settings",
  "banda-skill",
  "banda-terminal",
@@ -407,6 +408,21 @@ dependencies = [
  "tempfile",
  "toml",
  "toml_edit",
+ "ts-rs",
+]
+
+[[package]]
+name = "banda-problems"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "banda-kernel",
+ "rusqlite",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "tracing",
  "ts-rs",
 ]
 

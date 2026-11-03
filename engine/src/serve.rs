@@ -10,6 +10,7 @@ use banda_browser::Browser;
 use banda_git::Git;
 use banda_kernel::api::{self, OwnerSecret};
 use banda_kernel::{Kernel, PROTOCOL};
+use banda_problems::Problems;
 use banda_terminal::Terminals;
 use banda_workspaces::Workspaces;
 use std::fs::{File, TryLockError};
@@ -59,6 +60,7 @@ pub async fn serve(places: Places, port: u16, with_parent: bool) -> Result<(), F
         .module(Browser::new())
         .module(Git::new())
         .module(Workspaces::new())
+        .module(Problems::new(places.problems(), places.logs()))
         .open()
         .await
         .map_err(Failure::broken)?;

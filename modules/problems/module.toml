@@ -1,0 +1,8 @@
+# The problems module, as it declares itself (ADR 0022). What its code
+# says, its methods, its code declares; this holds the rest.
+id = "problems"
+name = "Problems"
+about = "What broke in Banda itself, kept on this computer with a fingerprint, so it can be looked into (ADR 0039). It sends nothing anywhere."
+version = "0.1.0"
+from-banda = true
+settings = []

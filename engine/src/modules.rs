@@ -13,6 +13,7 @@ use banda_agents::Agents;
 use banda_browser::Browser;
 use banda_git::Git;
 use banda_kernel::Method;
+use banda_problems::Problems;
 use banda_terminal::Terminals;
 use banda_workspaces::Workspaces;
 use serde::{Deserialize, Serialize};
@@ -64,6 +65,12 @@ const FILES: &[Files] = &[
         toml: include_str!("../../modules/workspaces/module.toml"),
         window: None,
         methods: Some(Workspaces::method_list),
+    },
+    Files {
+        folder: "problems",
+        toml: include_str!("../../modules/problems/module.toml"),
+        window: None,
+        methods: Some(Problems::method_list),
     },
 ];
 
@@ -259,6 +266,7 @@ mod tests {
             Browser::new().name(),
             Git::new().name(),
             Workspaces::new().name(),
+            Problems::new("", "").name(),
         ];
         assert_eq!(with_engine, engine);
     }
