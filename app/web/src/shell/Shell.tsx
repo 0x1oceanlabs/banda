@@ -27,7 +27,13 @@ import {
   openingOf,
   settingsLinkOf,
 } from "../menu/menu"
-import { columnsOf, useLookKeys, useLookNotify, useLookSound } from "../look"
+import {
+  columnsOf,
+  useLookColumns,
+  useLookKeys,
+  useLookNotify,
+  useLookSound,
+} from "../look"
 import { modules as known } from "../modules"
 import {
   closedOf,
@@ -40,6 +46,7 @@ import {
 import { Sidebar } from "../sidebar/Sidebar"
 import { pickPreset } from "../sidebar/settings"
 import { toggleSettled } from "../sidebar/settled"
+import { useNarrow } from "./narrow"
 import type { Arranged } from "@banda/contract/workspaces"
 import {
   arrangedSource,
@@ -234,6 +241,18 @@ export function Shell({
     if (command) send(engine, command).catch(refused)
   }, [engine, workspaces, ready])
   const [sidebar, setSidebar] = useState(loadSidebar)
+  // A narrow window hides the sidebar, and shows it over the Strip only
+  // when asked; what the Person chose for a wide one is kept (ADR 0025,
+  // decision 10).
+  const narrow = useNarrow(useLookColumns().min)
+  const [over, setOver] = useState(false)
+  if (over && !narrow) setOver(false)
+  const setShown = narrow ? setOver : setSidebar
+  const toggleSidebar = useCallback(
+    () => setShown((shows) => !shows),
+    [setShown]
+  )
+  const showSidebar = useCallback(() => setShown(true), [setShown])
   const [overview, setOverview] = useState(false)
   const [menu, setMenu] = useState<Opening | null>(null)
   const [attention, setAttention] = useState(QUIET)
@@ -392,11 +411,11 @@ export function Shell({
   useEffect(
     () =>
       window.banda?.notify.listen((key) => {
-        if (key === SUMMARY) return setSidebar(true)
+        if (key === SUMMARY) return showSidebar()
         const call = heard.current.find((c) => c.key === key)
         if (call) answerCall(call)
       }),
-    [answerCall]
+    [answerCall, showSidebar]
   )
   // `banda menu ROUTE` opens the menu there (ADR 0017, decision 7).
   const spacesNow = useRef(spaces)
@@ -413,7 +432,6 @@ export function Shell({
     const thing = entry && showsOf(entry.pane)
     if (entry && thing) toggleSettled(listsNow.current, entry.space, thing)
   }, [])
-  const toggleSidebar = useCallback(() => setSidebar((shows) => !shows), [])
   const toggleOverview = useCallback(() => setOverview((opens) => !opens), [])
   // The Pane zoomed over the whole window, while it keeps the focus: the
   // focus elsewhere, or the overview, brings it back (ADR 0025, decision 4).
@@ -423,7 +441,8 @@ export function Shell({
       ? zoom
       : undefined
   if (zoom !== undefined && zoomed === undefined) setZoom(undefined)
-  const sidebarShown = sidebar && !zoomed
+  const sidebarShown = (narrow ? over : sidebar) && !zoomed
+  const hideOver = useCallback(() => setOver(false), [])
   // Each Alt+C brings the focused column to the middle, once.
   const [center, setCenter] = useState(0)
   const toCenter = useCallback(() => setCenter((n) => n + 1), [])
@@ -667,7 +686,7 @@ export function Shell({
         attention={attention}
         workspaces={inBar(workspaces)}
         current={workspaces.current}
-        sidebar={sidebar}
+        sidebar={narrow ? over : sidebar}
         onSidebar={toggleSidebar}
         problems={keyed.problems}
         middle={
@@ -686,10 +705,12 @@ export function Shell({
       />
       <div
         className="relative flex min-h-0 flex-1"
-        data-sidebar-shown={sidebarShown || undefined}
+        data-sidebar-shown={(sidebarShown && !narrow) || undefined}
       >
         {sidebarShown && (
           <Sidebar
+            over={narrow}
+            onDismiss={narrow ? hideOver : undefined}
             onMenu={() => setMenu(openingAt("root"))}
             onSettings={() => settings()}
             spaces={spaces}
@@ -711,7 +732,11 @@ export function Shell({
             onLocate={(space) => route(locateRoute(space))}
           />
         )}
-        <main className="relative min-h-0 min-w-0 flex-1">
+        <main
+          className="relative min-h-0 min-w-0 flex-1"
+          // A click beside the sidebar over the Strip hides it.
+          onPointerDown={narrow && sidebarShown ? hideOver : undefined}
+        >
           {ready && (
             <Workspaces
               workspaces={workspaces}
@@ -735,7 +760,7 @@ export function Shell({
             calling={calling}
             detail={notify.detail}
             onAnswer={answerCall}
-            onMore={() => setSidebar(true)}
+            onMore={showSidebar}
             onHold={hold}
           />
           <BandaMenu

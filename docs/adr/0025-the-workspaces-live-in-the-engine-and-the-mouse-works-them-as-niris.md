@@ -284,6 +284,11 @@ On the list, Roma decided:
     than the sidebar and one column `min` wide, the sidebar hides, and
     `Alt+A` shows it over the Strip, as it floats already (ADR 0023,
     decision 4).
+    _Built_ 2026-11-03. Over the Strip it is a panel even when the look
+    puts it on the desk, and the Strip keeps the whole width under it. It
+    goes when a Pane is opened from it, on a click beside it, or on `Esc`
+    in it. What the Person chose for a wide window is kept for when it is
+    wide again.
 
 **Consequences.**
 
@@ -313,4 +318,5 @@ On the list, Roma decided:
      numbers, a page's own buttons with `Alt`, and `Alt` and the middle
      button over the view (_built_ 2026-11-02);
   7. the overview: the drag, the arrows, typing (_built_ 2026-11-03);
-  8. the drawer, a Pane in its own window, the narrow window.
+  8. the narrow window (_built_ 2026-11-03), the drawer, a Pane in its
+     own window.
