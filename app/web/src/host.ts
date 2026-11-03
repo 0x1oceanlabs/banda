@@ -30,10 +30,10 @@ export type Notice = {
 /**
  * Where Banda's own update is (ADR 0041, decision 2), as main tells it:
  * nothing to say, a version downloading, one ready to install on quit,
- * or one that cannot install until the Person mends something. `have` is
- * the version that runs.
+ * or one that cannot install until the Person mends something. `name` is
+ * the app's, `Banda Dev`, and `have` the version that runs.
  */
-export type Update = { have: string } & (
+export type Update = { name: string; have: string } & (
   | { state: "none" }
   | { state: "downloading"; version: string; share: number }
   | { state: "ready"; version: string; notes: Note[] }
