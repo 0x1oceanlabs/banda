@@ -276,6 +276,11 @@ On the list, Roma decided:
    what was typed, then closes. Each workspace is a copy of the screen at
    half its size or less, scrolled as its Strip, and the drag is the
    Strip's (`useMoving.ts`), from anywhere on a Pane.
+   _Changed_ 2026-11-03: it shows the Panes themselves, as niri's. The
+   workspaces, drawn all along, zoom out under it over a dark backdrop,
+   each under its row, and a Strip scrolls as its row does; the overview
+   lays clear tiles over them, which take the clicks, the keys and the
+   drag. A thread's text, a terminal's screen and a page show as they run.
 
 8. **The drawer** (ADR 0005, decision 7) is on `` Alt+` ``, as a terminal
    that drops down is; `Alt+S` settles a Thread now (ADR 0008). A Thread

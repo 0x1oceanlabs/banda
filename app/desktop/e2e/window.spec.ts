@@ -2473,6 +2473,17 @@ test("the overview: the arrows and Enter, typing, the window's keys, the drag", 
   await page.keyboard.press("Alt+KeyO")
   await expect(overview).toBeFocused()
   await expect(picked).toHaveAttribute("data-tile", l!)
+  // The Panes themselves, zoomed out under it, each where its tile is.
+  const real = page.locator(`section[data-tile="${l}"]`)
+  await expect
+    .poll(async () => {
+      const [over, under] = await Promise.all([
+        tileOf(l).boundingBox(),
+        real.boundingBox(),
+      ])
+      return Math.abs(over!.x - under!.x) + Math.abs(over!.width - under!.width)
+    })
+    .toBeLessThan(2)
   await page.screenshot({ path: "test-results/7a-overview.png" })
   await page.keyboard.press("ArrowLeft")
   await expect(picked).toHaveAttribute("data-tile", t!)
@@ -2527,6 +2538,11 @@ test("the overview: the arrows and Enter, typing, the window's keys, the drag", 
   await page.keyboard.press("Escape")
   await expect(overview).toBeHidden()
   await expect.poll(() => layoutOf(page)).toEqual([[t, l]])
+  // And back at its size, filling the window.
+  await expect(real).toBeInViewport({ ratio: 0.99 })
+  expect((await real.boundingBox())!.width).toBeGreaterThan(
+    (await page.evaluate(() => innerWidth)) * 0.3
+  )
 })
 
 test("Alt+[ takes a Pane into a column, Alt+G shows it as tabs", async () => {
