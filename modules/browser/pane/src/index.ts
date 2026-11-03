@@ -3,7 +3,7 @@
  * always on. */
 import type { SpaceId } from "@banda/contract"
 import { defineModule } from "@banda/ui/module"
-import { paneOf } from "@banda/ui/pane"
+import { paneOf, type PaneState } from "@banda/ui/pane"
 import { fileAddress } from "./address"
 import { browserPane } from "./BrowserPane"
 import { frontHolder, holderOf, openWith } from "./pages"
@@ -54,18 +54,20 @@ export const browser = defineModule({
   start: (window) =>
     openWith((url, agent) => {
       const at = agent ? window.beside(agent) : null
-      const holder = at?.shown
-        ? at.right
-            .filter((pane) => pane.kind === browserPane.kind)
-            .flatMap((pane) => readArgs(pane.args as KeptArgs, "").tabs)
-            .map((tab) => holderOf(tab.id))
-            .find((holder) => holder !== undefined)
-        : frontHolder(at?.space)
+      const holder = at?.right ? browserIn(at.right) : frontHolder(at?.space)
       if (holder) return holder.open(url)
       const args = browserAt(url)
-      const pane = paneOf(browserPane, args)
-      if (at) at.open(pane)
-      else window.open(pane, undefined, { focus: false })
+      window.open(paneOf(browserPane, args), at?.space, {
+        focus: false,
+        ...(agent ? { beside: agent } : {}),
+      })
       return args.tabs[0].id
     }),
 })
+
+/** The browser Pane among `panes`, by its first tab's page. */
+function browserIn(panes: readonly PaneState[]) {
+  const pane = panes.find((each) => each.kind === browserPane.kind)
+  const tab = pane && readArgs(pane.args as KeptArgs, "").tabs[0]
+  return tab && holderOf(tab.id)
+}

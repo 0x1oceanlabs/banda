@@ -5,11 +5,12 @@
  */
 import type { SpaceId } from "@banda/contract"
 import type { Columns } from "@banda/contract/look"
-import type { Listed, PaneState } from "@banda/ui/pane"
+import type { PaneState } from "@banda/ui/pane"
+import type { Lists } from "../bar/Watches"
 import {
-  type Column,
   current,
   entries,
+  find,
   focused,
   shownIn,
   type Workspaces,
@@ -64,21 +65,20 @@ export function showing(
  */
 export function besideOf(
   workspaces: Workspaces,
-  lists: Readonly<Record<SpaceId, readonly Listed[]>>,
+  lists: Lists,
   agent: string,
   shows: Shows
 ): { space: SpaceId; from?: string; right: PaneState[] } | null {
   for (const [space, listed] of Object.entries(lists) as [
     SpaceId,
-    readonly Listed[],
+    Lists[SpaceId],
   ][]) {
     const thing = listed.find((each) => each.agent === agent)
     if (!thing) continue
     const entry = showing(workspaces, { space, about: thing.id }, shows)
-    if (!entry) return { space, right: [] }
-    const holds = (column: Column) => column.entries.includes(entry)
-    const { columns } = workspaces.list.find((w) => w.columns.some(holds))!
-    const next = columns[columns.findIndex(holds) + 1]
+    const at = entry && find(workspaces, entry.id)
+    if (!entry || !at) return { space, right: [] }
+    const next = workspaces.list[at.workspace].columns[at.column + 1]
     const right = next?.entries.map((each) => each.pane) ?? []
     return { space, from: entry.id, right }
   }

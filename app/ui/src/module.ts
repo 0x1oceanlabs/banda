@@ -28,28 +28,29 @@ export type WindowApi = {
    * focuses it: in `space`, else in the focused Pane's Space. It is a new
    * tile each time, as a browser's new window, even when another shows
    * the same Pane. With `focus: false` the focus stays where it is, as
-   * for a tab an Agent opened. */
-  open: (pane: PaneState, space?: SpaceId, how?: { focus?: boolean }) => void
-  /**
-   * Where the thing `agent` works in is, as a Thread its Agent's (ADR
-   * 0029, decision 4): its Space; whether a workspace shows its Pane, and
-   * then the Panes in the column right of it; and `open`, which shows a
-   * Pane in a new column there, else in its Space, and leaves the focus
-   * where it is. None when no module lists a thing `agent` works in.
+   * for a tab an Agent opened. With `beside`, an Agent's ID, it shows
+   * right of the Pane of the thing that Agent works in, where a
+   * workspace shows one (`beside`).
    */
+  open: (
+    pane: PaneState,
+    space?: SpaceId,
+    how?: { focus?: boolean; beside?: string }
+  ) => void
+  /** Where the thing `agent` works in is, as a Thread its Agent's (ADR
+   * 0029, decision 4); none when no module lists one. */
   beside: (agent: string) => Beside | null
   /** Runs an action by its id, a module's or the window's, as its key
    * would: how one module asks another for what it does. */
   run: (action: string, args?: Args) => void
 }
 
-/** What `WindowApi.beside` finds. */
+/** What `WindowApi.beside` finds: the thing's Space, and the Panes of
+ * the column right of its Pane, from the top; none when no workspace
+ * shows its Pane. */
 export type Beside = {
   space: SpaceId
-  shown: boolean
-  /** The Panes of the column right of its Pane, from the top. */
-  right: readonly PaneState[]
-  open: (pane: PaneState) => void
+  right: readonly PaneState[] | null
 }
 
 /**

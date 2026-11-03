@@ -560,14 +560,23 @@ export function Shell({
     const parts: Parts = {
       change,
       home,
-      open: (pane, space, how) =>
-        change((w) =>
-          opening(w, space ?? focused(w)?.space ?? home, pane, {
-            ...how,
-            place: "right",
-            again: true,
-          })
-        ),
+      open: (pane, space, { beside, ...how } = {}) =>
+        change((w) => {
+          const at = beside
+            ? besideOf(w, listsNow.current, beside, showsOf)
+            : null
+          return opening(
+            w,
+            space ?? at?.space ?? focused(w)?.space ?? home,
+            pane,
+            {
+              ...how,
+              ...(at?.from ? { from: at.from } : {}),
+              place: "right",
+              again: true,
+            }
+          )
+        }),
       beside: (agent) => {
         const at = besideOf(
           seenNow.current.state,
@@ -575,21 +584,7 @@ export function Shell({
           agent,
           showsOf
         )
-        if (!at) return null
-        const { space, from, right } = at
-        return {
-          space,
-          shown: from !== undefined,
-          right,
-          open: (pane) =>
-            change((w) =>
-              opening(w, space, pane, {
-                ...(from ? { from, place: "right" as const } : {}),
-                focus: false,
-                again: true,
-              })
-            ),
-        }
+        return at && { space: at.space, right: at.from ? at.right : null }
       },
       toggleSidebar,
       toggleOverview,
