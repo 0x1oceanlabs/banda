@@ -238,6 +238,11 @@ A module's item on the bar's right: an icon, maybe a number, that shows
 only while it has something to say. A click runs one of its module's
 actions. The look's `[bar]` says which widgets stand where.
 
+**Update**:
+A newer Banda of the same channel, which Banda downloads by itself and
+installs when it quits. The bar shows one that downloads or is ready
+(ADR 0041).
+
 **Mark**:
 Banda's sign: three tiles, the top one an Agent with eyes. Its shape and
 colour say what the work calls the Person for: it rests, works, asks them,
