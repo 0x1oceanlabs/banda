@@ -31,6 +31,14 @@ quiet() {
   fi
 }
 
+# pnpm's packages, and Electron's binary: Electron fetches that on first
+# use, and tests that load it side by side each began the fetch and broke
+# one another's. Fetched here once, it is a no-op once there.
+packages() {
+  quiet pnpm install --frozen-lockfile
+  quiet pnpm --filter @banda/desktop exec install-electron
+}
+
 # The Rust tests write contract/src/generated; a change there means the
 # TypeScript types on disk were stale.
 types() { find contract/src/generated -type f -print0 | sort -z | xargs -0 sha256sum; }
@@ -62,7 +70,7 @@ rust() {
 
 ts() {
   step "TypeScript: format, lints, types, tests"
-  quiet pnpm install --frozen-lockfile
+  packages
   pnpm exec prettier --check . --log-level warn
   # A Mac's files ignore case, so an import of ./Toasts finds toasts.ts
   # there: no two modules in a folder may differ by case alone.
@@ -86,7 +94,7 @@ window() {
   step "The desktop window, end to end"
   # The window starts the engine and the fake agent from target/debug.
   cargo build --workspace --quiet
-  quiet pnpm install --frozen-lockfile
+  packages
   pnpm --filter @banda/desktop --silent e2e
 }
 
