@@ -148,6 +148,19 @@ again hears it again from the start.
 The one place where the kernel decides whether a Participant may perform an
 action on a target. On one computer, the owner may do everything.
 
+**Problem**:
+Something that broke in Banda itself, not in the Person's work: an error in
+the window or the engine, or a crash. Banda keeps it on the computer with a
+fingerprint, and shares it only when the Person turned that on (ADR 0039). A
+Turn that failed is not a Problem.
+_Avoid_: bug, crash report.
+
+**Sharing**:
+What Banda sends to its makers, and only when the Person chose it: Problems,
+usage counts, or both. Nothing else in Banda sends anything anywhere
+(ADR 0039).
+_Avoid_: telemetry, analytics.
+
 ## Window
 
 **Window**:
