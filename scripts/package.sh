@@ -17,6 +17,12 @@ if [[ -z ${BANDA_VERSION:-} ]]; then
 fi
 echo "== Banda $BANDA_VERSION ($BANDA_CHANNEL)"
 
+# On macOS, the engine's line tables (Cargo.toml) stay in the objects it is
+# linked from, unless they are packed beside it, as banda.dSYM, which the
+# app carries.
+if [[ $(uname) == Darwin ]]; then
+  export CARGO_PROFILE_RELEASE_SPLIT_DEBUGINFO=packed
+fi
 cargo build --release --bin banda
 pnpm install --frozen-lockfile --silent
 # The app carries the licenses of what it is built from (ADR 0038).
