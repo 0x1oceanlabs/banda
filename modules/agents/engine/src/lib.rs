@@ -61,7 +61,7 @@ use images::Images;
 use issues::{AnswerIssue, DraftIssue};
 use live::Live;
 use model::{
-    Body, Fact, Image, ImageId, Item, ItemId, Offer, Opener, Settings, ThreadId, ThreadList,
+    Body, Fact, Fit, Image, ImageId, Item, ItemId, Offer, Opener, Settings, ThreadId, ThreadList,
     ThreadSummary, ThreadView, TurnId, TurnState, VERSION, VisualId,
 };
 use rules::Event;
@@ -522,8 +522,18 @@ pub struct Previewed {
     pub unread_images: Vec<String>,
 }
 
+/// What the window lays out at several widths for a Visual's heights.
+#[derive(Serialize, TS)]
+#[ts(export, export_to = "agents/")]
+pub struct Fitting<'a> {
+    pub html: &'a str,
+    pub widths: &'a [u32],
+}
+
 /// How long main has to lay a page out.
 const LAYING_OUT: Duration = Duration::from_secs(20);
+/// How long a show waits for its page's heights.
+const FITTING: Duration = Duration::from_secs(5);
 
 #[derive(Deserialize, TS)]
 #[ts(export_to = "agents/")]
@@ -1011,13 +1021,26 @@ impl Agents {
                 unread.join("; ")
             )));
         }
+        // The window lays the page out at each width the Thread may be, so
+        // its frame is as tall as it will be before it loads. With no
+        // window, or none in a few seconds, the frame takes the Agent's
+        // height: a hint holds no show up for long.
+        let fitting = Fitting {
+            html: &html,
+            widths: &visuals::FIT_WIDTHS,
+        };
+        let heights = call
+            .ask_window("heights", &fitting, FITTING)
+            .await
+            .inspect_err(|refusal| tracing::debug!(%refusal.message, "no heights for a Visual"))
+            .unwrap_or_default();
         let visual = VisualId::new();
         let space = call.space();
         let visuals = Visuals::of(space.data());
         // The file first: an item never names a page that is not there.
         visuals.keep(visual, html).await.map_err(Error::from)?;
         let shown = call
-            .command(move |tx| show_visual(tx, agent, visual, title, height))
+            .command(move |tx| show_visual(tx, agent, visual, title, height, heights))
             .await;
         if shown.is_err() {
             visuals.forget(visual).await;
@@ -1177,15 +1200,17 @@ fn show_visual(
     visual: VisualId,
     title: String,
     height: u32,
+    heights: Vec<Fit>,
 ) -> Result<(), Error> {
     let body = Body::Visual {
         visual,
         title,
         height,
+        heights,
     };
     let refused = "A Visual shows in a turn that runs.";
     let (thread, item, turn) = agent_item(tx, agent, refused, body)?;
-    let Body::Visual { title, .. } = item.body else {
+    let Body::Visual { title, heights, .. } = item.body else {
         unreachable!("a Visual was written")
     };
     let fact = Fact::VisualShown {
@@ -1194,6 +1219,7 @@ fn show_visual(
         visual,
         title,
         height,
+        heights,
     };
     emit(tx, Participant::Agent(agent), thread, &fact)
 }

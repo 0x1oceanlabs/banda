@@ -5,12 +5,13 @@
  * `allow-same-origin`, so the page runs its scripts and nothing of
  * Banda's; what it says is heard only from its own frame.
  */
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useLayoutEffect, useRef, useState } from "react"
 import type { SpaceId } from "@banda/contract"
-import type { VisualId } from "@banda/contract/agents"
 import { onThemeChange } from "@banda/ui/lib/look"
+import type { Fit, VisualId } from "@banda/contract/agents"
 import {
   heard,
+  heightAt,
   lookedAt,
   lookMessage,
   SANDBOX,
@@ -34,15 +35,20 @@ export function Visual({
   visual,
   title,
   height,
+  heights,
 }: {
   space: SpaceId
   visual: VisualId
   title: string
   /** How tall the Agent said it is, till the page says. */
   height: number
+  /** How tall the window found it at several widths, before it loads. */
+  heights: Fit[]
 }) {
   const frame = useRef<HTMLIFrameElement>(null)
   const [fits, setFits] = useState<number>()
+  /** How tall the frame is till its page says. */
+  const [guess, setGuess] = useState(height)
   // The first look goes with the address; once the page is loaded, each
   // new one is posted, so it repaints without loading again.
   const [address] = useState(() =>
@@ -52,6 +58,18 @@ export function Visual({
     frame.current?.contentWindow?.postMessage(lookMessage(lookNow()), "*")
 
   useEffect(() => onThemeChange(post), [])
+
+  // Till the page says its height, the frame takes the one the window
+  // found for its width, from its first paint.
+  useLayoutEffect(() => {
+    const own = frame.current
+    if (!own || heights.length === 0 || fits !== undefined) return
+    const fit = () => setGuess(heightAt(heights, own.clientWidth, height))
+    fit()
+    const watch = new ResizeObserver(fit)
+    watch.observe(own)
+    return () => watch.disconnect()
+  }, [heights, height, fits])
 
   useEffect(() => {
     const listen = (event: MessageEvent) => {
@@ -79,7 +97,7 @@ export function Visual({
       sandbox={SANDBOX}
       loading="lazy"
       onLoad={post}
-      style={{ height: fits ?? height }}
+      style={{ height: fits ?? guess }}
       // The frame's scheme is the window's, as the page's is, so it stays
       // clear over the Thread.
       className="-mx-2 block w-[calc(100%+1rem)] border-0 bg-transparent [color-scheme:light] dark:[color-scheme:dark]"

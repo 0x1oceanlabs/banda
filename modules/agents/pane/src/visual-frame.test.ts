@@ -2,6 +2,7 @@ import type { Look } from "@banda/contract/look"
 import { expect, test } from "vitest"
 import {
   heard,
+  heightAt,
   LOOK_KEY,
   lookedAt,
   lookMessage,
@@ -97,4 +98,19 @@ test("main's look for a page comes from the look's scheme asked, its vars and it
     variables: { "--background": "white" },
   })
   expect(visualLookOf(null, true)).toEqual({ theme: "dark", variables: {} })
+})
+
+test("a frame is as tall as the window found its page at the widest width that fits", () => {
+  const fits = [
+    { width: 320, height: 700 },
+    { width: 423, height: 500 },
+    { width: 732, height: 300 },
+  ]
+  expect(heightAt(fits, 700, 120)).toBe(500)
+  expect(heightAt(fits, 732, 120)).toBe(300)
+  expect(heightAt(fits, 2000, 120)).toBe(300)
+  // Narrower than any, the narrowest; with none, the Agent's.
+  expect(heightAt(fits, 200, 120)).toBe(700)
+  expect(heightAt([], 700, 120)).toBe(120)
+  expect(heightAt([{ width: 320, height: 5 }], 700, 120)).toBe(80)
 })
