@@ -43,6 +43,10 @@ const LOADING = 15_000
 /** How long an action's page has to start what it starts: a new address,
  * a tab, a dialog, a download. */
 const SETTLING = 300
+/** How long the Thread's cursor takes to go where its hands act: they
+ * wait for it, so the Person sees where they act before they do. The
+ * Pane's cursor glides as long. */
+const POINTING = 300
 /** The Person's input on a page, as Banda notes it (decision 5). */
 const PERSON = new Set<InputEvent["type"]>([
   "mouseDown",
@@ -354,7 +358,19 @@ export class Drive extends Context.Service<
               session.on("will-download", downloads)
               kept.acting = true
               try {
-                const acting = act(page, contents, what)
+                const acting = act(page, contents, what, (x, y) => {
+                  // Only a Thread's hands have a cursor.
+                  if (by.kind !== "agent") return Promise.resolve()
+                  // The page's pixels, as the tab's zoom draws them.
+                  const zoom = contents.getZoomFactor()
+                  tabs.tell({
+                    kind: "point",
+                    from: what.tab,
+                    x: x * zoom,
+                    y: y * zoom,
+                  })
+                  return new Promise((there) => setTimeout(there, POINTING))
+                })
                 // A dialog the action opens stops the page, and the action
                 // with it: the dialog is its answer.
                 acting.catch(() => {})

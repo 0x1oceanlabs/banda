@@ -222,16 +222,18 @@ and stay Roma's to change.
    focused last, as one the CDP endpoint opens, until step 4. 3b:
    `browser_act` and `browser_wait_for`; the Person's input noted
    (decision 5); E's refused and masked fields.
-4. The Thread on the tab, in six PRs (amended in steps 4a and 4b). 4a:
-   tabs open beside the Thread; the Person's input noted for each
-   Thread. 4b: the icon, glow and pill, as the mockup's second variant;
-   a Thread drives a tab until its turn ends; the pill's Stop. 4c: the
-   Agent's cursor; the Stopped wait with its answer, events and calls
-   (decision 6, closing #154). 4d: `browser_handoff` and its wait,
-   "Done" writing into the Thread. 4e: B's site gate, `[agents] sites`
-   in `browser.toml` and Settings. 4f: a page's dialogs drawn by Banda,
-   which the Agent may accept or dismiss, shown to Roma as a mockup
-   first.
+4. The Thread on the tab, in seven PRs (amended in steps 4a, 4b and
+   4c). 4a: tabs open beside the Thread; the Person's input noted for
+   each Thread. 4b: the icon, glow and pill, as the mockup's second
+   variant; a Thread drives a tab until its turn ends; the pill's Stop.
+   4c: the Agent's cursor: before `browser_act` acts on an element, main
+   tells the tab's Pane where the element is and waits 300 ms while the
+   cursor glides there. 4d: the Stopped wait with its answer, events and
+   calls (decision 6, closing #154), which the other two waits build on.
+   4e: `browser_handoff` and its wait, "Done" writing into the Thread.
+   4f: B's site gate, `[agents] sites` in `browser.toml` and Settings.
+   4g: a page's dialogs drawn by Banda, which the Agent may accept or
+   dismiss, shown to Roma as a mockup first.
 5. Screenshots as image content, and the tools behind a setting.
 6. The skill's `browser` topic names Banda's tools. The CDP endpoint
    stays, for the Person's own programs.

@@ -724,6 +724,10 @@ test("a Thread's tab glows and its pill says the Thread and its step, until the 
   const greet = /button "Greet" \[ref=(e\d+)\]/.exec(tree)![1]
   await agentSays(window, "browser_act", { tab, action: "click", ref: greet })
   await expect(pill).toContainText('· Clicking "Greet"')
+  // Its cursor, labelled with the Thread, went where it clicked.
+  const cursor = page.locator('[data-cursor="wait here"]')
+  await expect(cursor).toContainText("wait here")
+  await expect(cursor).not.toHaveCSS("transform", "none")
 
   // Its title goes to the Thread.
   await addressBar(page).focus()
