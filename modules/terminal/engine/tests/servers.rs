@@ -87,7 +87,9 @@ async fn a_terminal_s_server_shows_in_its_space_only_and_stops() {
     let found = servers(&mut ports, on(port)).await;
     let server = found.iter().find(|server| server.port == port).unwrap();
     assert_eq!(server.by, StartedBy::Terminal);
-    assert!(server.program.starts_with("python3"), "{server:?}");
+    // macOS's framework Python names itself `Python`.
+    let program = server.program.to_lowercase();
+    assert!(program.starts_with("python"), "{server:?}");
     let elsewhere = servers(&mut world.ports(other).await, |_| true).await;
     assert!(!on(port)(&elsewhere), "{elsewhere:?}");
     let named = json!({ "port": port, "process": server.process });
