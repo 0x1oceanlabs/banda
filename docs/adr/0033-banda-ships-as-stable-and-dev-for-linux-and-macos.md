@@ -77,7 +77,7 @@ Roma, 2026-11-02:
 1. **The channels**: `BANDA_CHANNEL`, its places, the app ID, the window class and the icon (decision 1). Tried from a checkout beside a running window.
 2. **The Linux AppImage**: electron-builder, the engine inside, the version (decision 2). Tried on Omarchy, and on a plain GNOME and KDE.
 3. **The release workflow**: Dev on every green push to `main`, Stable on a tag, the last 20 Dev releases kept (decisions 3 and 4).
-4. **Open source**: its own checklist (decision 10).
+4. **Open source**: its own checklist (decision 10), in ADR 0038.
 5. **Updates on Linux**: electron-updater for both channels (decision 5).
 6. **macOS**: the build passing on a Mac runner, then the tap and its two casks (decision 6).
 7. **A Person's first run**: what is missing (a Harness, `npx`) says how to get it, and the README tells how to install.
