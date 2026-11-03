@@ -32,8 +32,13 @@ export type PageState = {
   /** The Thread that drives it with Banda's tools, by its Agent, and the
    * step it takes: the page glows, and a pill says so (ADR 0029,
    * decision 4). */
-  driver: { agent: string; step: string } | null
+  driver: Driver | null
 }
+
+/** A Thread that drives a page, by its Agent: the step it takes, and
+ * where its cursor is, once its hands went somewhere. */
+export type Driver = { agent: string; step: string; at?: Point }
+export type Point = { x: number; y: number }
 
 /** A page not made yet. */
 export const BLANK: PageState = {
@@ -260,7 +265,15 @@ export class Page {
   driveBy(agent: string | null, step: string): void {
     const was = this.state.driver
     if (was?.agent === agent && was?.step === step) return
-    this.set({ driver: agent ? { agent, step } : null })
+    // The cursor stays where the Thread's hands went last.
+    const at = was?.agent === agent ? was?.at : undefined
+    this.set({ driver: agent ? { agent, step, ...(at && { at }) } : null })
+  }
+
+  /** The Thread's hands go to `at` in the page, its cursor with them. */
+  point(at: Point): void {
+    const was = this.state.driver
+    if (was) this.set({ driver: { ...was, at } })
   }
 
   private set(change: Partial<PageState>): void {
@@ -545,6 +558,7 @@ function hear(news: PageNews): void {
   if (news.kind === "icon") page.iconed(news.icon)
   else if (news.kind === "driven") page.drive(news.driven)
   else if (news.kind === "driver") page.driveBy(news.agent, news.step)
+  else if (news.kind === "point") page.point({ x: news.x, y: news.y })
   else if (news.kind === "open") {
     holder?.open(news.url, page.id, news.background)
   } else if (news.kind === "select") holder?.show(page.id)

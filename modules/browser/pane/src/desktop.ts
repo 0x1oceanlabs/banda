@@ -62,6 +62,9 @@ export type BrowserNews =
   /** A Thread's Agent drives the tab with Banda's tools, by its ID, and
    * the step it takes; or none does now (ADR 0029, decision 4). */
   | { kind: "driver"; from: number; agent: string | null; step: string }
+  /** Where the Thread's hands go in the tab's page next, before they act
+   * there, in the page's pixels on screen from its top left corner. */
+  | { kind: "point"; from: number; x: number; y: number }
 
 /** An extension's button, as Chrome's `action` says it, for every tab and
  * for some tabs alone (electron-chrome-extensions' `getState`). */
