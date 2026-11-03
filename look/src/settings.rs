@@ -445,7 +445,8 @@ impl Settings {
     }
 
     /// Banda's own defaults: the bottom layer, with every key set.
-    pub fn defaults() -> Settings {
+    /// `material` is the platform's, which the machine knows (ADR 0030).
+    pub fn defaults(material: Material) -> Settings {
         Settings {
             theme: None,
             mode: Some(ModeChoice::System),
@@ -459,13 +460,13 @@ impl Settings {
             },
             desk: Desk {
                 glass: Some(true),
-                material: Some(Material::PLATFORM),
+                material: Some(material),
                 wallpaper: None,
                 wallpaper_dark: None,
                 blur: Some(40.0),
                 saturation: Some(1.4),
                 grain: Some(0.04),
-                opacity: Some(Material::PLATFORM.tint()),
+                opacity: Some(material.tint()),
                 sidebar: Some(SidebarStyle::Panel),
                 sidebar_shadow: Some(0.45),
             },
@@ -546,7 +547,7 @@ mod tests {
     fn a_layer_says_only_what_it_changes() {
         let mine: Settings = toml::from_str("radius = 6\n[gaps]\ninner = 8\n").unwrap();
         let theirs: Settings = toml::from_str("[gaps]\ninner = 2\nouter = 3\n").unwrap();
-        let look = mine.over(theirs.over(Settings::defaults()));
+        let look = mine.over(theirs.over(Settings::defaults(Material::Banda)));
         assert_eq!(look.radius, Some(6.0));
         assert_eq!(look.gaps.inner, Some(8.0));
         assert_eq!(look.gaps.outer, Some(3.0));
