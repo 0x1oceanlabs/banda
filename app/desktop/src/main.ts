@@ -212,6 +212,15 @@ async function ready(): Promise<void> {
     // prefers-color-scheme follow the look's mode.
     nativeTheme.themeSource = now.mode
     const background = firstFrame(now, nativeTheme.shouldUseDarkColors)
+    // The main window's material follows the look where it can; a Pane's
+    // own window is solid.
+    const glass = systemGlass(now)
+    const set = SYSTEM_MATERIAL?.set
+    if (window && set && glass !== (window === clear)) {
+      clear = glass ? window : null
+      set(window, glass)
+      if (glass) window.setBackgroundColor(CLEAR)
+    }
     for (const shown of [window, ...popped.values()]) {
       if (!shown) continue
       if (background && shown !== clear) shown.setBackgroundColor(background)
@@ -468,15 +477,32 @@ async function served(
  * under the whole window on macOS, acrylic on Windows 11 from 22H2 (build
  * 22621), and on Linux a transparent window for the compositor to blur.
  * Windows 10 has no material: `null`, and the desk is solid there.
+ * `made` is what the window is made with; `set` changes it while the
+ * window shows, so the glass follows the look, even one that comes after
+ * the window opened, as on a Mac's first start. Linux's transparent window
+ * is made once: turning it on shows from the next start.
  */
-const SYSTEM_MATERIAL: BrowserWindowConstructorOptions | null =
+const SYSTEM_MATERIAL: {
+  made: BrowserWindowConstructorOptions
+  set?: (shown: BrowserWindow, on: boolean) => void
+} | null =
   process.platform === "darwin"
-    ? { vibrancy: "under-window" }
+    ? {
+        made: { vibrancy: "under-window" },
+        set: (shown, on) => shown.setVibrancy(on ? "under-window" : null),
+      }
     : process.platform !== "win32"
-      ? { transparent: true }
+      ? { made: { transparent: true } }
       : Number(process.getSystemVersion().split(".")[2]) >= 22621
-        ? { backgroundMaterial: "acrylic" }
+        ? {
+            made: { backgroundMaterial: "acrylic" },
+            set: (shown, on) =>
+              shown.setBackgroundMaterial(on ? "acrylic" : "none"),
+          }
         : null
+
+/** The background of a window that lets the system's material through. */
+const CLEAR = "#00000000"
 
 /** The look asks for the system's glass. */
 function systemGlass(now: LookValue | null): boolean {
@@ -507,7 +533,6 @@ function openWindow(): BrowserWindow {
       title: "Banda",
     },
     // The system's glass lets its material through (ADR 0023, ADR 0030).
-    // Electron sets this once, so turning it on shows from the next start.
     SYSTEM_MATERIAL !== null && systemGlass(lookNow())
   )
   void opened.loadURL(PAGE)
@@ -568,9 +593,9 @@ function pageWindow(
   const opened = new BrowserWindow({
     ...size,
     show: false,
-    ...(glass ? SYSTEM_MATERIAL : {}),
+    ...(glass ? SYSTEM_MATERIAL?.made : {}),
     backgroundColor: glass
-      ? "#00000000"
+      ? CLEAR
       : ((current && firstFrame(current, nativeTheme.shouldUseDarkColors)) ??
         (nativeTheme.shouldUseDarkColors ? "#0a0a0a" : "#ffffff")),
     webPreferences: {
