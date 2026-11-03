@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import { edgeSpeed, type Lane, landingAt } from "./moving"
+import { edgeSpeed, type Lane, landingAt, pushed } from "./moving"
 
 /** Three columns 12 px apart: A alone, B over C, D alone. */
 const LANES: Lane[] = [
@@ -101,5 +101,14 @@ describe("edgeSpeed", () => {
     expect(edgeSpeed(96)).toBe(24)
     expect(edgeSpeed(200)).toBe(24)
     expect(edgeSpeed(48)).toBe(6)
+  })
+})
+
+describe("pushed", () => {
+  test("back near the start, on near the end, still between", () => {
+    expect(pushed(100, 100, 1000)).toBe(-24)
+    expect(pushed(500, 100, 1000)).toBe(0)
+    expect(pushed(1100, 100, 1000)).toBe(24)
+    expect(pushed(1052, 100, 1000)).toBe(6)
   })
 })

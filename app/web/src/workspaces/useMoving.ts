@@ -6,31 +6,41 @@
  * keys send. Near the Strip's edge the Strip scrolls under it; over a
  * workspace's number in the bar it lands on that workspace, and held there
  * a moment goes to it. `Esc` puts it back.
+ *
+ * The Strip and the overview each say where it lands among what they
+ * draw, and what scrolls at their edges (`Carrying`); the rest is this.
  */
 import { type RefObject, useEffect } from "react"
 import type { Place } from "@banda/contract/workspaces"
 import type { Plan } from "./arrange"
 import { room, scrollOf, stripOf } from "./layout"
 import {
-  EDGE,
-  edgeSpeed,
   type Lane,
   landingAt,
+  nudge,
+  pushed,
   type Rect,
   standing,
 } from "./moving"
 import type { Frame } from "./PaneFrame"
 import { THRESHOLD } from "./sizing"
 
+/** Where a carried Pane lands, and the hint that shows it; none where
+ * it would stay. */
+export type Landed = { place?: Place; hint?: Rect }
+
 /** What the moving reads as it goes, as the window draws now. */
 export type Carrying = {
   /** It takes the mouse: on screen, not covered, nothing zoomed. */
   on: boolean
-  /** The workspace on screen. */
-  workspace: string | undefined
   frame: Pick<Frame, "arrange" | "focus">
   /** Goes to workspace `id`, as its number in the bar does. */
   go: (id: string) => void
+  /** Where `pane` lands with the pointer at `x`, `y`, over `hit`. */
+  land: (hit: Element, x: number, y: number, pane: string) => Landed
+  /** Scrolls, a frame's worth, what the pointer at `x`, `y` holds
+   * against its edge: whether anything moved. */
+  scroll: (x: number, y: number) => boolean
 }
 
 /** How long, in milliseconds, a Pane held over a workspace's number goes
@@ -145,15 +155,12 @@ export function useMoving(
       const hit = document.elementFromPoint(x, y)
       const number = hit?.closest<HTMLElement>("[data-workspace]") ?? undefined
       dropOn(number)
-      const strip = stripOf(carrying.current.workspace ?? "")
-      let place: Place | undefined
-      let hint: Rect | undefined
       const workspace = number?.dataset.workspace
-      if (workspace) {
-        place = { to: "column", workspace, index: LAST }
-      } else if (strip && hit && strip.contains(hit)) {
-        ;({ place, hint } = landIn(strip, x, y, carry.pane))
-      }
+      const { place, hint }: Landed = workspace
+        ? { place: { to: "column", workspace, index: LAST } }
+        : hit
+          ? carrying.current.land(hit, x, y, carry.pane)
+          : {}
       carry.place = place
       carry.hint.classList.toggle("hidden", !hint)
       if (!hint) return
@@ -175,31 +182,17 @@ export function useMoving(
       const id = number?.dataset.workspace
       if (!number || !id) return
       number.dataset.drop = ""
-      const hold = setTimeout(() => {
-        if (id !== carrying.current.workspace) carrying.current.go(id)
-      }, HOLD)
+      const hold = setTimeout(() => carrying.current.go(id), HOLD)
       carry.drop = { number, hold }
     }
 
-    // Near the Strip's edge, the Strip scrolls under the Pane: faster
-    // the nearer the edge.
+    // Near an edge, what is there scrolls under the Pane: faster the
+    // nearer the edge.
     function edge() {
       if (!carry) return
       carry.frame = requestAnimationFrame(edge)
-      const strip = stripOf(carrying.current.workspace ?? "")
-      if (!strip || carry.drop) return
-      const { left, top, bottom } = strip.getBoundingClientRect()
       const { x, y } = carry
-      if (y < top || y > bottom) return
-      const { pad, inner } = room(strip)
-      const from = left + pad
-      const by =
-        edgeSpeed(x - (from + inner - EDGE)) - edgeSpeed(from + EDGE - x)
-      if (!by) return
-      const was = strip.scrollLeft
-      scrollOf(strip).stop()
-      strip.scrollLeft += by
-      if (strip.scrollLeft !== was) aim(x, y)
+      if (!carry.drop && carrying.current.scroll(x, y)) aim(x, y)
     }
 
     const finish = (keep: boolean) => {
@@ -217,6 +210,9 @@ export function useMoving(
       delete lifted.dataset.lifted
       delete html.dataset.drag
       window.removeEventListener("keydown", onKey, true)
+      // The click the release makes is the carry's, not what it ends on.
+      window.addEventListener("click", swallow, true)
+      setTimeout(() => window.removeEventListener("click", swallow, true))
       if (!keep || !place) return
       const plan: Plan = {
         command: { method: "workspaces.move_pane", params: { pane, place } },
@@ -265,22 +261,54 @@ export function useMoving(
   }, [root, carrying])
 }
 
+function swallow(event: Event) {
+  event.stopPropagation()
+  event.preventDefault()
+}
+
+/** A Strip's `land` and `scroll`, for workspace `id`'s: beside its Panes,
+ * and its sides scroll it sideways. */
+export function inStrip(
+  id: string | undefined
+): Pick<Carrying, "land" | "scroll"> {
+  if (id === undefined) return { land: () => ({}), scroll: () => false }
+  return {
+    land: (hit, x, y, pane) => {
+      const strip = stripOf(id)
+      return strip?.contains(hit) ? landIn(strip, id, x, y, pane) : {}
+    },
+    scroll: (x, y) => {
+      const strip = stripOf(id)
+      if (!strip) return false
+      const { left, top, bottom } = strip.getBoundingClientRect()
+      if (y < top || y > bottom) return false
+      const { pad, inner } = room(strip)
+      const by = pushed(x, left + pad, inner)
+      if (by) scrollOf(strip).stop()
+      return nudge(strip, "scrollLeft", by)
+    },
+  }
+}
+
 /**
- * Where `pane`, carried to `x`, `y` over `strip`, lands, and its hint:
- * beside the Pane there, or, on an empty workspace, its first column.
+ * Where `pane`, carried to `x`, `y` over `board`, the columns of
+ * `workspace` as a Strip or the overview lays them out, lands, and its
+ * hint: beside the Pane there, or, on an empty workspace, its first
+ * column.
  */
-function landIn(
-  strip: HTMLElement,
+export function landIn(
+  board: HTMLElement,
+  workspace: string,
   x: number,
   y: number,
   pane: string
-): { place?: Place; hint?: Rect } {
-  const lanes = lanesOf(strip)
-  const { pad, gap } = room(strip)
+): Landed {
+  const lanes = lanesOf(board)
+  const { pad, gap } = room(board)
   if (lanes.length === 0) {
-    const { left, top, bottom } = strip.getBoundingClientRect()
+    const { left, top, bottom } = board.getBoundingClientRect()
     return {
-      place: { to: "column", workspace: strip.dataset.strip ?? "", index: 0 },
+      place: { to: "column", workspace, index: 0 },
       hint: standing(left + pad, top, bottom),
     }
   }
@@ -290,7 +318,7 @@ function landIn(
   return { place: { to: "beside", pane: landing.pane, side }, hint }
 }
 
-/** The Strip's columns as the window draws them, for `landingAt`. */
+/** The columns as the window draws them, for `landingAt`. */
 function lanesOf(strip: HTMLElement): Lane[] {
   const columns = strip.querySelectorAll<HTMLElement>(":scope > [data-column]")
   return [...columns].map((column) => {

@@ -162,6 +162,10 @@ pub enum Place {
     Stack { column: ColumnId, index: usize },
     /// Beside a Pane.
     Beside { pane: PaneId, side: Side },
+    /// A column of its own on a new workspace, `index` from the top: as
+    /// one dropped between two in the overview. Never under the empty one
+    /// at the bottom.
+    Workspace { index: usize },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS, JsonSchema)]
@@ -343,6 +347,11 @@ fn put(list: &mut Arrangement, column: Column, place: &Place) -> Result<(), Refu
                     columns.insert(index, column);
                 }
             }
+        }
+        Place::Workspace { index } => {
+            let mut workspace = blank();
+            workspace.columns.push(column);
+            list.insert(index.min(list.len().saturating_sub(1)), workspace);
         }
     }
     Ok(())
@@ -880,6 +889,33 @@ mod tests {
         };
         move_pane(&mut list, one, &bottom).unwrap();
         assert_eq!(layout(&list), [vec![vec![2]], vec![vec![1]], vec![]]);
+    }
+
+    #[test]
+    fn a_pane_dropped_between_workspaces_makes_one_there() {
+        let mut list = start();
+        let work = SpaceId::new();
+        let one = opened(&mut list, shown(work, "a.a", 1), None);
+        let two = opened(&mut list, shown(work, "a.a", 2), beside(one, Side::Right));
+        let three = opened(&mut list, shown(work, "a.a", 3), beside(two, Side::Below));
+        let first = list[0].columns[0].id;
+        size(&mut list, first, Some("1/3".into())).unwrap();
+        // Alone: its column goes along, with its width.
+        move_pane(&mut list, one, &Place::Workspace { index: 0 }).unwrap();
+        assert_eq!(layout(&list), [vec![vec![1]], vec![vec![2, 3]], vec![]]);
+        assert_eq!(list[0].columns[0].width.as_deref(), Some("1/3"));
+        // From a stack, between two.
+        move_pane(&mut list, three, &Place::Workspace { index: 1 }).unwrap();
+        assert_eq!(
+            layout(&list),
+            [vec![vec![1]], vec![vec![3]], vec![vec![2]], vec![]]
+        );
+        // Past the last: over the empty one at the bottom, which stays.
+        move_pane(&mut list, one, &Place::Workspace { index: 9 }).unwrap();
+        assert_eq!(
+            layout(&list),
+            [EMPTY, vec![vec![3]], vec![vec![2]], vec![vec![1]], vec![]]
+        );
     }
 
     #[test]

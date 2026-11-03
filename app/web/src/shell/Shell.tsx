@@ -57,6 +57,7 @@ import {
   type Entry,
   entries,
   focused,
+  across,
   focusEntry,
   go,
   inBar,
@@ -434,6 +435,15 @@ export function Shell({
     []
   )
   const closeOverview = useCallback(() => setOverview(false), [])
+  // Goes to workspace `id`, as its number does.
+  const goTo = useCallback(
+    (id: string) =>
+      change((w) => {
+        const index = w.list.findIndex((each) => each.id === id)
+        return index < 0 ? undefined : go(w, index)
+      }),
+    [change]
+  )
   // Alt+Space or Alt+K again, or the other of them, closes the menu.
   const toggleMenu = useCallback(
     (at: At) => setMenu((open) => (open ? null : openingAt(at))),
@@ -546,7 +556,10 @@ export function Shell({
       if (target?.closest("[data-takes-keys]")) return
       const action = actionFor(keyed.actions, event)
       if (!action) return handOn(event, target, keyed.actions)
-      const inDialog = target?.closest("[role=dialog]") != null
+      // A dialog that takes the window's keys, as the overview, has only
+      // the plain ones of its own.
+      const inDialog =
+        target?.closest("[role=dialog]:not([data-window-keys])") != null
       if (inDialog && !action.overDialogs) return
       // A terminal leaves alone a key that was taken.
       event.preventDefault()
@@ -713,12 +726,7 @@ export function Shell({
               listed={listed}
               frame={frame}
               onStep={(by) => change((w) => step(w, by))}
-              onGo={(id) =>
-                change((w) => {
-                  const index = w.list.findIndex((each) => each.id === id)
-                  return index < 0 ? undefined : go(w, index)
-                })
-              }
+              onGo={goTo}
               onStart={(pane) => parts.open(pane)}
             />
           )}
@@ -751,14 +759,10 @@ export function Shell({
             <Overview
               workspaces={workspaces}
               spaceName={spaceName}
-              onFocus={(entry) => {
-                change((w) => focusEntry(w, entry))
-                closeOverview()
-              }}
-              onGo={(index) => {
-                change((w) => go(w, index))
-                closeOverview()
-              }}
+              frame={frame}
+              onPick={(entry) => change((w) => focusEntry(w, entry))}
+              onArrow={(direction) => change((w) => across(w, direction))}
+              onGo={goTo}
               onClose={closeOverview}
             />
           )}

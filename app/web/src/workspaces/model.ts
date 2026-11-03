@@ -447,6 +447,17 @@ export function move(state: Workspaces, direction: Direction): Workspaces {
   })
 }
 
+/** Moves the focus as the overview's arrows do: as `move`, and up or
+ * down past a column's end, or from an empty workspace, to the next
+ * workspace there. */
+export function across(state: Workspaces, direction: Direction): Workspaces {
+  const next = move(state, direction)
+  if (next !== state || direction === "left" || direction === "right") {
+    return next
+  }
+  return step(state, direction === "down" ? 1 : -1)
+}
+
 /**
  * Moves the focused Pane: sideways, its whole column swaps with the next;
  * up and down, the Pane swaps with the next in its column.

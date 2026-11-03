@@ -2439,6 +2439,95 @@ test("the mouse moves Panes as niri's: a header, Alt and the left button, the ba
   await expect(bar.nth(1)).toHaveAttribute("aria-current", "true")
 })
 
+test("the overview: the arrows and Enter, typing, the window's keys, the drag", async () => {
+  window = await startWindow({ look: "[columns]\nmin = 10\n" })
+  const { page } = window
+  const { thread, composer } = await firstThread(page)
+  await expect(composer).toBeFocused()
+  const launcher = page.getByRole("region", { name: "New Pane" })
+  await page.keyboard.press("Alt+KeyN")
+  await expect(launcher).toHaveAttribute("data-focused", "true")
+  const [t, l] = await Promise.all(
+    [thread, launcher].map((tile) => tile.getAttribute("data-tile"))
+  )
+  const overview = page.getByRole("dialog", { name: "Overview" })
+  const picked = overview.locator("[data-tile][aria-current]")
+  const tileOf = (id: string | null) => overview.locator(`[data-tile="${id}"]`)
+  const bar = page.locator("[data-workspace]")
+  // Each workspace's columns as the overview draws them.
+  const drawn = () =>
+    overview
+      .locator("[data-row]")
+      .evaluateAll((rows) =>
+        rows.map((row) =>
+          [...row.querySelectorAll("[data-column]")].map((column) =>
+            [...column.querySelectorAll<HTMLElement>("[data-tile]")].map(
+              (tile) => tile.dataset.tile
+            )
+          )
+        )
+      )
+
+  // The arrows pick a Pane; Enter goes to it.
+  await page.keyboard.press("Alt+KeyO")
+  await expect(overview).toBeFocused()
+  await expect(picked).toHaveAttribute("data-tile", l!)
+  await page.screenshot({ path: "test-results/7a-overview.png" })
+  await page.keyboard.press("ArrowLeft")
+  await expect(picked).toHaveAttribute("data-tile", t!)
+  await page.keyboard.press("Enter")
+  await expect(overview).toBeHidden()
+  await expect(thread).toHaveAttribute("data-focused", "true")
+
+  // Typing finds a Pane by its title; Esc forgets the words, then goes.
+  await page.keyboard.press("Alt+KeyO")
+  await page.keyboard.type("new p")
+  await expect(overview.getByRole("status")).toHaveText("“new p”: 1 Pane")
+  await expect(picked).toHaveAttribute("data-tile", l!)
+  await expect(tileOf(t)).toHaveAttribute("data-dim", "true")
+  await page.keyboard.press("Escape")
+  await expect(overview.getByRole("status")).toBeHidden()
+  await expect(tileOf(t)).not.toHaveAttribute("data-dim")
+  await expect(overview).toBeVisible()
+
+  // The window's keys work here: Alt+Shift+Arrows move the Pane picked.
+  await page.keyboard.press("Alt+Shift+ArrowLeft")
+  await expect.poll(drawn).toEqual([[[l], [t]], []])
+  await page.keyboard.press("Alt+Shift+ArrowRight")
+  await expect.poll(drawn).toEqual([[[t], [l]], []])
+
+  // Dragged between two workspaces, a Pane makes one of its own there,
+  // and the overview stays.
+  await settled(tileOf(l))
+  const from = await within(tileOf(l), 0.5, 0.5)
+  const between = (await overview.locator('[data-between="1"]').boundingBox())!
+  await page.mouse.move(from.x, from.y)
+  await page.mouse.down()
+  await page.mouse.move(between.x + between.width / 2, between.y + 8, {
+    steps: 8,
+  })
+  await expect(page.locator("body > .bg-focus")).toBeVisible()
+  await page.screenshot({ path: "test-results/7b-overview-carried.png" })
+  await page.mouse.up()
+  await expect.poll(drawn).toEqual([[[t]], [[l]], []])
+  await expect(bar).toHaveCount(3)
+  await expect(overview).toBeVisible()
+
+  // Back beside the Thread, under it.
+  await settled(tileOf(l), tileOf(t))
+  const back = await within(tileOf(l), 0.5, 0.5)
+  const under = await within(tileOf(t), 0.5, 0.8)
+  await page.mouse.move(back.x, back.y)
+  await page.mouse.down()
+  await page.mouse.move(under.x, under.y, { steps: 8 })
+  await page.mouse.up()
+  await expect.poll(drawn).toEqual([[[t, l]], []])
+  await expect(bar).toHaveCount(2)
+  await page.keyboard.press("Escape")
+  await expect(overview).toBeHidden()
+  await expect.poll(() => layoutOf(page)).toEqual([[t, l]])
+})
+
 test("Alt+[ takes a Pane into a column, Alt+G shows it as tabs", async () => {
   window = await startWindow()
   const { page } = window

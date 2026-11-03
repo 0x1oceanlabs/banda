@@ -4,23 +4,16 @@ import type { Listed, PaneState } from "@banda/ui/pane"
 import { columnsOf, moveOf, useLookColumns } from "../look"
 import { Choices } from "../registry"
 import type { Chime } from "@banda/ui/sound"
-import type { Columns } from "@banda/contract/look"
-import {
-  displayOf,
-  type Entry,
-  heightsOf,
-  share,
-  type Workspace,
-} from "./model"
+import { type Entry, share, type Workspace } from "./model"
 import {
   ColumnMotion,
   columnIn,
+  drawnColumns,
   minWidthOf,
   type Place,
   places,
   room,
   scrollOf,
-  sized,
   widthAt,
 } from "./layout"
 import { type Frame, PaneFrame } from "./PaneFrame"
@@ -328,15 +321,6 @@ class Before extends Component<{ read: () => void }> {
   render() {
     return null
   }
-}
-
-/** The columns of `workspace` as the Strip draws them, by the look. */
-function drawnColumns(workspace: Workspace, look: Columns) {
-  return sized(workspace, look).map((column) => ({
-    ...column,
-    tabbed: displayOf(column, look) === "tabs",
-    heights: heightsOf(column),
-  }))
 }
 
 /**

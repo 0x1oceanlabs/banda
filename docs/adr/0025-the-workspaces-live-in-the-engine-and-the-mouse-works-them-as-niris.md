@@ -259,6 +259,13 @@ On the list, Roma decided:
    or bottom it scrolls. The arrows pick a Pane, `Enter` goes to it, and
    `Alt+Shift+Arrows` move it. Typing finds Panes by their title. It
    draws the columns as the workspace does, with `[columns] min`.
+   _Built_ 2026-11-03: the engine's `workspace` place makes the new
+   workspace. The overview's selection is the window's focus, as niri's,
+   so the window's keys work in it as ever; the plain arrows move it, up
+   and down past a column's end to the next workspace. `Esc` forgets
+   what was typed, then closes. Each workspace is a copy of the screen at
+   half its size or less, scrolled as its Strip, and the drag is the
+   Strip's (`useMoving.ts`), from anywhere on a Pane.
 
 8. **The drawer** (ADR 0005, decision 7) is on `` Alt+` ``, as a terminal
    that drops down is; `Alt+S` settles a Thread now (ADR 0008). A Thread
@@ -305,5 +312,5 @@ On the list, Roma decided:
   6. the mouse's moving: the insert hint, the Strip's edge, the bar's
      numbers, a page's own buttons with `Alt`, and `Alt` and the middle
      button over the view (_built_ 2026-11-02);
-  7. the overview: the drag, the arrows, typing;
+  7. the overview: the drag, the arrows, typing (_built_ 2026-11-03);
   8. the drawer, a Pane in its own window, the narrow window.
