@@ -79,3 +79,8 @@ What an Agent in a Thread may call as a tool of `banda mcp`:
 What broke in Banda itself, kept on this computer with a fingerprint, so it can be looked into (ADR 0039). It sends nothing anywhere.
 
 Its methods, `banda call problems.<method>`: `list`, `problem`, `record`.
+
+What an Agent in a Thread may call as a tool of `banda mcp`:
+
+- `problems`: What broke in Banda, the newest first, at the log's position: a window shows them, then follows the module's events. See the Banda skill's `problems` topic before looking into one.
+- `problem`: One Problem by its fingerprint, or the start of it, with what it takes to look into it: the system, and the last lines of the logs; and all of it in Markdown, as `text`.

@@ -16,7 +16,7 @@ mod panics;
 mod report;
 
 use banda_kernel::{
-    Call, Error, Module, ModuleSpace, Nothing, Participant, Refusal, Right, Scope, Tx,
+    Call, Error, Module, ModuleSpace, Nothing, Participant, Refusal, Right, Scope, Tool, Tx,
 };
 use model::{Fingerprint, Log, Problem, Record, Recorded, Report, word};
 use rusqlite::Row;
@@ -46,6 +46,8 @@ pub struct Problems {
     panics: PathBuf,
     /// Where the engine and the window write their logs.
     logs: PathBuf,
+    /// The checkout of Banda's source the engine runs from, if it does.
+    checkout: Option<PathBuf>,
 }
 
 impl Problems {
@@ -55,18 +57,29 @@ impl Problems {
         Self {
             panics: panics.into(),
             logs: logs.into(),
+            checkout: None,
         }
+    }
+
+    /// Says Banda runs from the checkout it was built in, where an Agent
+    /// can fix a Problem (ADR 0039, decision 3): not a released Banda's,
+    /// whose build's folder is another machine's.
+    pub fn from_checkout(mut self) -> Self {
+        self.checkout = panics::root().and_then(|root| root.canonicalize().ok());
+        self
     }
 }
 
 banda_kernel::methods! {
     Problems(Call) as "ProblemsMethods" in "problems/" {
         /// What broke in Banda, the newest first, at the log's position: a
-        /// window shows them, then follows the module's events.
-        call list(Nothing) -> Listed, Read;
-        /// One Problem with what it takes to look into it: the system,
-        /// and the last lines of the logs; and all of it in Markdown.
-        call problem(Fingerprint) -> Report, Read;
+        /// window shows them, then follows the module's events. See the
+        /// Banda skill's `problems` topic before looking into one.
+        call list(Nothing) -> Listed, Read, tool "problems";
+        /// One Problem by its fingerprint, or the start of it, with what
+        /// it takes to look into it: the system, and the last lines of
+        /// the logs; and all of it in Markdown, as `text`.
+        call problem(Fingerprint) -> Report, Read, tool "problem";
         /// Keeps what broke in a part of Banda, as one Problem by its
         /// fingerprint: a new one is said in an event, one known counts
         /// once more.
@@ -90,6 +103,10 @@ impl Module for Problems {
 
     fn scope(&self) -> Scope {
         Scope::Machine
+    }
+
+    fn tools(&self) -> Vec<Tool> {
+        Self::method_tools(self.name())
     }
 
     fn migrations(&self) -> &'static [&'static str] {
@@ -163,6 +180,7 @@ impl Problems {
             problem,
             system: format!("{} {}", std::env::consts::OS, std::env::consts::ARCH),
             logs,
+            checkout: self.checkout.as_ref().map(|at| at.display().to_string()),
             text: String::new(),
         };
         report.text = report::markdown(&report);

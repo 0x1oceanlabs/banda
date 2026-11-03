@@ -9,6 +9,7 @@
  */
 import type { ComponentType, ReactNode } from "react"
 import type { Engine } from "@banda/contract"
+import type { WindowApi } from "@banda/ui/module"
 import {
   aboutOf,
   type Row,
@@ -72,7 +73,17 @@ export type Section = {
   custom?: { [key: string]: CustomRow }
   /** What it shows instead of its first file's rows, as a module draws
    * it; `lit` is the part a link names. */
-  Body?: ComponentType<{ engine: Engine; lit?: string }>
+  Body?: ComponentType<SectionProps>
+}
+
+/** What a section's own Body is drawn with. */
+export type SectionProps = {
+  engine: Engine
+  /** The part of it a link names. */
+  lit?: string
+  /** Runs a window's action, as the Pane's `run`; none in a dialog of
+   * the settings. */
+  run?: WindowApi["run"]
 }
 
 export const SECTIONS: Section[] = [

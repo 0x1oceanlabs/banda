@@ -26,6 +26,7 @@ const problemsOf = (window: Window) =>
     .map(
       (line) =>
         JSON.parse(line) as {
+          fingerprint: string
           source: string
           message: string
           times: number
@@ -125,4 +126,43 @@ test("a new Problem tells once, silently, and opens in Settings → Problems (AD
   await expect(
     settings.getByRole("button", { name: /panic the index broke/ })
   ).toHaveAttribute("aria-expanded", "true")
+})
+
+test("Look into it asks an Agent in a new Thread, in the Space of Banda's checkout (ADR 0039)", async () => {
+  window = await startWindow()
+  const { page } = window
+  await expect((await firstThread(page)).composer).toBeVisible()
+  // The engine runs from this checkout; a Space is it.
+  const checkout = JSON.parse(
+    window.banda(
+      "call",
+      "spaces.add",
+      "--params",
+      JSON.stringify({
+        folder: join(import.meta.dirname, "../../.."),
+        create: false,
+      })
+    )
+  ) as { ok: { id: string } }
+  const asked = (fingerprint: string) =>
+    window
+      .banda("call", "agents.threads", "--space", checkout.ok.id)
+      .includes(`Look into Banda's Problem ${fingerprint}`)
+
+  // From the toast, and from Settings → Problems.
+  record(window, "the watch broke")
+  const toast = page.getByRole("region", { name: "Something broke in Banda" })
+  await toast.getByRole("button", { name: "Look into it" }).click()
+  await expect(toast).toBeHidden()
+  const [watch] = problemsOf(window)
+  await expect.poll(() => asked(watch!.fingerprint)).toBe(true)
+
+  record(window, "the index broke", "banda_git::index")
+  await toast.getByRole("button", { name: "Details" }).click()
+  const settings = page.getByRole("region", { name: "Settings", exact: true })
+  await settings.getByRole("button", { name: "Look into it" }).click()
+  const index = problemsOf(window).find(
+    (one) => one.message === "the index broke"
+  )
+  await expect.poll(() => asked(index!.fingerprint)).toBe(true)
 })

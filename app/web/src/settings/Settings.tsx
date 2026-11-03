@@ -39,6 +39,7 @@ export function Settings({
   focused,
   update,
   close,
+  run,
 }: PaneProps<SettingsArgs>) {
   // Where it is lives in its args, so it comes back there.
   const at = useMemo(() => parseLink(args.link), [args.link])
@@ -234,7 +235,7 @@ export function Settings({
                     {own && <OpenFile file={own} words="Open file" />}
                   </div>
                   {section.Body && (
-                    <section.Body engine={engine} lit={at.key} />
+                    <section.Body engine={engine} lit={at.key} run={run} />
                   )}
                   {groups}
                   {above.length > 0 && (

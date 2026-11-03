@@ -11,12 +11,14 @@ import type { Report } from "./Report";
 export type ProblemsMethods = { 
 /**
  * What broke in Banda, the newest first, at the log's position: a
- * window shows them, then follows the module's events.
+ * window shows them, then follows the module's events. See the
+ * Banda skill's `problems` topic before looking into one.
  */
 list: CallMethod<Nothing, Listed>, 
 /**
- * One Problem with what it takes to look into it: the system,
- * and the last lines of the logs; and all of it in Markdown.
+ * One Problem by its fingerprint, or the start of it, with what
+ * it takes to look into it: the system, and the last lines of
+ * the logs; and all of it in Markdown, as `text`.
  */
 problem: CallMethod<Fingerprint, Report>, 
 /**

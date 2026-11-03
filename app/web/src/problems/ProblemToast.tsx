@@ -8,18 +8,20 @@ import { PLACES } from "./live"
 
 /**
  * The new Problems, in one toast over the calls' (ADR 0039): the newest,
- * in its words, how many more, and Details, which opens it in Settings →
- * Problems.
+ * in its words, how many more, Look into it, which asks an Agent in a
+ * new Thread, and Details, which opens it in Settings → Problems.
  */
 export function ProblemToast({
   problem,
   more,
+  onLookInto,
   onDetails,
   onClose,
 }: {
   problem: Problem
   /** How many more new Problems came with it. */
   more: number
+  onLookInto: () => void
   onDetails: () => void
   onClose: () => void
 }) {
@@ -45,6 +47,9 @@ export function ProblemToast({
           in Settings → Problems.
         </span>
         <div className="mt-2 flex gap-1.5">
+          <Button size="sm" onClick={onLookInto}>
+            Look into it
+          </Button>
           <Button size="sm" variant="outline" onClick={onDetails}>
             Details
           </Button>
