@@ -143,7 +143,7 @@ function HarnessCard({
   ...props
 }: HarnessProps & { lit: boolean; onWritten: () => void }) {
   const { harness, file } = props
-  const { refused, write } = useWrite(onWritten)
+  const { refused, write } = useWrite({ onWritten, against: harness })
   // Asked again after each sign-in or sign-out: a new key, a new reading.
   const [readings, setReadings] = useState(0)
   const card = useRef<HTMLDivElement>(null)
@@ -529,12 +529,14 @@ function AddHarness({
       ? `There is a Harness with the ID ${wanted} already.`
       : undefined
   const ready = !wrong && command !== undefined && name.trim() !== ""
-  const { refused, write } = useWrite(() => {
-    setAsking(false)
-    setName("")
-    setId(undefined)
-    setLine("")
-    onAdded()
+  const { refused, write } = useWrite({
+    onWritten: () => {
+      setAsking(false)
+      setName("")
+      setId(undefined)
+      setLine("")
+      onAdded()
+    },
   })
   const add = () => {
     if (!ready || !command) return

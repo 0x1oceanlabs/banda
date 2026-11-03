@@ -60,9 +60,12 @@ test("Alt+, opens the settings Pane, which writes the files and follows them (AD
   await expect(border.getByRole("alert")).toBeVisible()
   expect(readFileSync(file, "utf8")).toContain("border = 3")
 
-  // ↶ takes the line out, and Banda's own shows again.
+  // ↶ takes the line out, and Banda's own shows again. The field's blur
+  // on the way sends -1 once more; only ↶'s answer counts, so the refusal
+  // goes with the value it was against.
   await border.getByRole("button", { name: "Reset tile.border" }).click()
   await expect.poll(() => readFileSync(file, "utf8")).not.toContain("border")
+  await expect(border.getByRole("alert")).toHaveCount(0)
 
   // A hand edit shows as soon as it is saved.
   writeFileSync(file, "radius = 9\n")

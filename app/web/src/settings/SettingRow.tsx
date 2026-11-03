@@ -47,7 +47,7 @@ export function SettingRow({
   Custom?: CustomRow
 }) {
   // Written through the desktop; what was wrong when it refused.
-  const { refused, write } = useWrite()
+  const { refused, write } = useWrite({ against: setting?.value })
   const settings = window.banda?.settings
   const set = (value: string) =>
     settings && write(settings.set(row.file, row.key, value))
