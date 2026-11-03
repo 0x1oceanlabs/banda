@@ -165,6 +165,16 @@ On the list, Roma decided:
      and `Ctrl+Alt+R` are Banda's now, a shell's `Alt+F` no longer comes
      through with Ctrl added (ADR 0005, decision 10); `"Alt+F" = "none"`
      in `keys.toml` gives it back.
+   - _Changed_ 2026-11-03, as Roma asked: `Alt+↑` and `Alt+↓` go on
+     past the column's end to the workspace above or below, as niri's
+     `focus-window-or-workspace-up` and `-down`; with `Shift`, the Pane
+     goes there, a column on the right, as niri's
+     `move-window-up-or-to-workspace-up`. In a column of tabs the arrows
+     step through the tabs first. A key held stops at the column's end:
+     only a new press goes on to the next workspace, so a held arrow
+     never flies through them all. The arrows that stay in the column
+     are kept as actions for `keys.toml` (`pane.focus-down`,
+     `pane.move-down`), with no key of their own.
 
 5. **The mouse, as niri's, with one grammar.**
    - **Moving a Pane.** `Alt` and the left button anywhere on it, or its

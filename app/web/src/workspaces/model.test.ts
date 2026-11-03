@@ -3,6 +3,7 @@ import { describe, expect, test } from "vitest"
 import { DEFAULT_COLUMNS } from "@banda/contract/look"
 import {
   bring,
+  carry,
   close,
   consume,
   current,
@@ -239,6 +240,22 @@ describe("moving between workspaces", () => {
     state = step(state, 1)
     expect(state.current).toBe(1)
     expect(step(state, 1)).toBe(state)
+  })
+
+  test("carries a Pane past its column's end to the workspace there", () => {
+    let state = open(start(), A, thread("t1"))
+    state = open(state, A, terminal("x1"), { place: "below" })
+    // Inside its column first, as shift does.
+    state = carry(state, "up")
+    expect(columns(state, 0)).toEqual([["x1", "t1"]])
+    expect(carry(state, "up")).toBe(state)
+    state = carry(state, "down")
+    expect(columns(state, 0)).toEqual([["t1", "x1"]])
+    state = carry(state, "down")
+    expect(state.current).toBe(1)
+    expect(columns(state, 0)).toEqual([["t1"]])
+    expect(columns(state, 1)).toEqual([["x1"]])
+    expect(focusName(state)).toBe("x1")
   })
 
   test("sends the focused Pane to another workspace and follows it", () => {

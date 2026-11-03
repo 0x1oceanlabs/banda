@@ -700,7 +700,13 @@ export function Shell({
       // A terminal leaves alone a key that was taken.
       event.preventDefault()
       event.stopPropagation()
-      action.run(parts)
+      // Held, it runs what it says it runs then, as an arrow that stops
+      // at an edge.
+      const held = event.repeat ? action.whenHeld : undefined
+      const running = held
+        ? (keyed.actions.find((one) => one.id === held) ?? action)
+        : action
+      running.run(parts)
     }
     window.addEventListener("keydown", onKey, { capture: true })
     return () => window.removeEventListener("keydown", onKey, { capture: true })

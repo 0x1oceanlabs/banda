@@ -22,7 +22,9 @@ import {
 } from "../workspaces/arrange"
 import { floorOf, roomLeft } from "../workspaces/layout"
 import {
+  across,
   bring,
+  carry,
   consume,
   current,
   type Direction,
@@ -95,6 +97,14 @@ const ARROWS: Record<Direction, string> = {
   down: "ArrowDown",
 }
 const DIRECTIONS = Object.keys(ARROWS) as Direction[]
+/**
+ * Up and down, past a column's end the arrows go on to the workspace
+ * there, as niri's `focus-window-or-workspace-down`; held, they stop at
+ * the end. The ones that stay in the column are kept with no key, for
+ * that and for `keys.toml`.
+ */
+const PAST: Partial<Record<Direction, string>> = { up: "above", down: "below" }
+const UPRIGHT = ["up", "down"] as const
 const NUMBERS = [1, 2, 3, 4, 5, 6, 7, 8, 9]
 const EDGES = [
   { side: "first", code: "Home" },
@@ -238,7 +248,7 @@ export const ACTIONS: readonly Action<Shell>[] = [
     section: "Panes",
     family: "Focus a Pane",
     title: `Focus the Pane ${direction}`,
-    keys: [{ code: ARROWS[direction], alt: true }],
+    keys: PAST[direction] ? [] : [{ code: ARROWS[direction], alt: true }],
     run: (shell: Shell) => shell.change((w) => move(w, direction)),
   })),
   ...DIRECTIONS.map((direction) => ({
@@ -246,8 +256,29 @@ export const ACTIONS: readonly Action<Shell>[] = [
     section: "Panes",
     family: "Move the Pane",
     title: `Move the Pane ${direction}`,
-    keys: [{ code: ARROWS[direction], alt: true, shift: true }],
+    keys: PAST[direction]
+      ? []
+      : [{ code: ARROWS[direction], alt: true, shift: true }],
     run: (shell: Shell) => shell.change((w) => shifting(w, direction)),
+  })),
+  ...UPRIGHT.map((direction) => ({
+    id: `pane.focus-${direction}-or-workspace`,
+    section: "Panes",
+    family: "Focus a Pane, or the workspace past it",
+    title: `Focus the Pane ${direction}, or the workspace ${PAST[direction]}`,
+    keys: [{ code: ARROWS[direction], alt: true }],
+    whenHeld: `pane.focus-${direction}`,
+    run: (shell: Shell) => shell.change((w) => across(w, direction)),
+  })),
+  ...UPRIGHT.map((direction) => ({
+    id: `pane.move-${direction}-or-to-workspace`,
+    section: "Panes",
+    family: "Move the Pane, or to the workspace past it",
+    title: `Move the Pane ${direction}, or to the workspace ${PAST[direction]}`,
+    keys: [{ code: ARROWS[direction], alt: true, shift: true }],
+    whenHeld: `pane.move-${direction}`,
+    run: (shell: Shell) =>
+      shell.change((w) => moving(w, (w) => carry(w, direction))),
   })),
   {
     id: "column.wider",
