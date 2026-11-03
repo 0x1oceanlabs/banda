@@ -24,14 +24,14 @@ use std::time::{Duration, Instant};
 use ts_rs::TS;
 
 /// The version of every event this module writes.
-pub const VERSION: u32 = 1;
+const VERSION: u32 = 1;
 
 /// What a sign-in or sign-out writes; its subject is the Harness's ID.
-pub const ACCOUNT_CHANGED: &str = "account_changed";
+const ACCOUNT_CHANGED: &str = "account_changed";
 
 /// How long the module's own process of a Harness may sit with nothing
 /// asked.
-pub const IDLE: Duration = Duration::from_secs(5 * 60);
+const IDLE: Duration = Duration::from_secs(5 * 60);
 
 /// How long a sign-in waits for every holder of the Harness's process to
 /// let go of it.
@@ -96,6 +96,7 @@ struct SignIn {
 #[derive(Serialize, Deserialize, TS)]
 #[ts(export, export_to = "harnesses/")]
 pub struct Accounted {
+    #[ts(type = "number")]
     pub at: i64,
     pub account: Account,
 }
@@ -211,7 +212,7 @@ impl Host for Asker {
     async fn start(harness: &Harness) -> Result<Arc<Self>, String> {
         let shows = acp::ClientCapabilities::new();
         let (process, _) = Process::start(harness, Client.builder(), shows, || {}).await?;
-        let activity = Activity::new();
+        let activity = Activity::default();
         Ok(Arc::new(Asker { process, activity }))
     }
 

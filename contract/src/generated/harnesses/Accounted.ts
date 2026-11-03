@@ -5,4 +5,4 @@ import type { Account } from "./Account";
  * Who is signed in to a Harness, as of the machine's log's position `at`:
  * a window reads it again on an `account_changed` after it.
  */
-export type Accounted = { at: bigint, account: Account, };
+export type Accounted = { at: number, account: Account, };
