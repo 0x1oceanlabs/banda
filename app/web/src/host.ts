@@ -27,6 +27,23 @@ export type Notice = {
   lasts: boolean
 }
 
+/**
+ * Where Banda's own update is (ADR 0041, decision 2), as main tells it:
+ * nothing to say, a version downloading, one ready to install on quit,
+ * or one that cannot install until the Person mends something. `have` is
+ * the version that runs.
+ */
+export type Update = { have: string } & (
+  | { state: "none" }
+  | { state: "downloading"; version: string; share: number }
+  | { state: "ready"; version: string; notes: Note[] }
+  | { state: "failed"; reason: string }
+)
+
+/** What one release since the Person's changed: a Dev's commit title,
+ * a Stable's PRs (ADR 0033, decision 4). */
+export type Note = { version: string; text: string }
+
 /** The page's route that draws Pane `pane` alone, in a window of its
  * own (ADR 0025, decision 9). */
 export const poppedRoute = (pane: string) => `#pane/${pane}`
@@ -135,6 +152,19 @@ export const BRIDGE = bridge({
     ask: send<[asked: PoppedAsk]>(),
     /** Calls `listener` with each thing a popped Pane asked. */
     asked: push<PoppedAsk>(),
+  },
+  /** Banda's own update (ADR 0041): main looks, downloads and installs
+   * it on quit. */
+  update: {
+    /** Where it is now. */
+    current: invoke<[], Update>(),
+    /** Calls `listener` each time that changes. */
+    listen: push<Update>(),
+    /** Looks for a new version now. */
+    check: send<[]>(),
+    /** Installs the version that is ready and starts it; nothing if none
+     * is. */
+    restart: send<[]>(),
   },
   /** The system's folder picker, which "Add Space" opens (ADR 0026). */
   folder: {

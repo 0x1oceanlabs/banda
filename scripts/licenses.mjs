@@ -30,6 +30,8 @@ const ALLOWED = new Set(
     "MIT",
     "MPL-2.0",
     "OFL-1.1",
+    // argparse, under js-yaml, under electron-updater (ADR 0041).
+    "Python-2.0",
     "Unicode-3.0",
     "Unlicense",
     "Zlib",

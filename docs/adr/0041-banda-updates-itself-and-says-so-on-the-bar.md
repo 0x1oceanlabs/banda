@@ -40,10 +40,11 @@ ADR 0024 gave the bar its widgets, and named none for Banda's own update. Roma, 
      - `update.check` looks now. The Banda menu offers it as "Check for updates".
      - `update.restart` installs the version that is ready and starts it (`quitAndInstall`). It does nothing when no version is ready.
 
-3. **The new AppImage lists itself again, and stops.**
-   - Started with `APPIMAGE_EXIT_AFTER_INSTALL=true`, Banda writes its desktop entry for its own path (`listApp`, ADR 0033 step 2), and quits before it opens a window or starts the engine.
-   - Without this, quitting would start Banda again, and the launcher's entry would point at the deleted file.
-   - Started by `update.restart`, the new one lists itself as at any start.
+3. **The old Banda lists the new AppImage, and starts it only on a restart.** Tried with three Dev builds on 2026-11-03: the first plan, where the new AppImage lists itself, left the launcher on the deleted file.
+   - An AppImage keeps the `APPIMAGE` and `APPDIR` it is given, and sets its own only when they are not there. Run by the old Banda, the new one has the old one's.
+   - So the old Banda writes the desktop entry for the new file (`listApp`, ADR 0033 step 2) when electron-updater says it moved it in (`appimage-filename-updated`).
+   - Run with `APPIMAGE_EXIT_AFTER_INSTALL=true`, as electron-updater runs the new file after it installs, Banda quits at once, before it opens a window or starts the engine. Otherwise quitting would start Banda again.
+   - `update.restart` starts the new one itself once the old one is gone, with the old one's arguments and without its `APPIMAGE` and `APPDIR`. It does not use `app.relaunch`: Electron's helper for it runs from the old AppImage, which is unmounted as Banda exits. It starts it from `bash`, which first closes what it got open from Banda. Otherwise the new Banda held the old one's profile locks and debugging port, and kept the old AppImage mounted.
 
 4. **The widget stands on the bar's right, before the engine's connection.**
    - It is the window's own state, as the connection is, so it is part of the bar and not a module's widget. When ADR 0024's step 2 brings widgets, it becomes `banda.update`, with the same look.
@@ -70,5 +71,5 @@ ADR 0024 gave the bar its widgets, and named none for Banda's own update. Roma, 
 - The order of work, each step its own PR:
   1. This ADR.
   2. Releases carry `latest-linux.yml`. Check it on a Dev release.
-  3. Main updates the AppImage: electron-updater, the start with `APPIMAGE_EXIT_AFTER_INSTALL`, and the two actions. Check it with two Dev builds: an old one installed, and it updates to the next.
+  3. Main updates the AppImage: electron-updater, the listing and the start of the new one, and the two actions. Check it with two Dev builds: an old one installed, and it updates to the next.
   4. The widget and its popover, mocked first (the mocks of 2026-11-03).

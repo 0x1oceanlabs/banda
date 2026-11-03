@@ -9,7 +9,7 @@
  * "Processes"). The modules' parts in main run here too, as the
  * browser's pages, kept apart from the page (modules.ts, ADR 0013, ADR
  * 0028). Settings are a Pane of the page; the desktop writes their files
- * (settings.ts, ADR 0016).
+ * (settings.ts, ADR 0016). It updates Banda itself (update.ts, ADR 0041).
  */
 import { join, resolve, sep } from "node:path"
 import { pathToFileURL } from "node:url"
@@ -56,6 +56,7 @@ import { NoticeArg, Notices, RecordedDesktop } from "./notices"
 import { startLog, watchProblems } from "./problems"
 import { roadLayer } from "./road"
 import { settingsLayer } from "./settings"
+import { updates } from "./update"
 import { ensure } from "./sidebar"
 
 /** What a Pane in its own window asks of the window (`PoppedAsk`). */
@@ -192,7 +193,12 @@ const popped = new Map<string, BrowserWindow>()
 /** How long the window waits for its look, so it opens in its colours. */
 const LOOK_WAIT = 300
 
-if (!app.requestSingleInstanceLock()) {
+if (process.env.APPIMAGE_EXIT_AFTER_INSTALL === "true") {
+  // electron-updater runs the AppImage it moved in once. It has the old
+  // one's APPIMAGE, so the old Banda lists the new file (update.ts), and
+  // nothing starts here (ADR 0041, decision 3).
+  app.exit(0)
+} else if (!app.requestSingleInstanceLock()) {
   app.quit()
 } else {
   app.on("second-instance", () => inFront())
@@ -237,6 +243,9 @@ async function ready(): Promise<void> {
   const write = (file: string, key: string, value: unknown) =>
     Settings.use((settings) => settings.write(file, key, value))
 
+  const update = updates((now) =>
+    tellPage(window?.webContents, BRIDGE.update.listen, now)
+  )
   serve(runtime, fromPage, BRIDGE, {
     engine: [none, () => Engine.use((engine) => engine.address)],
     look: {
@@ -316,6 +325,12 @@ async function ready(): Promise<void> {
     },
     menu: {
       open: [text, ([route]) => Effect.sync(() => openMenu(route))],
+    },
+    // Banda's own update (ADR 0041).
+    update: {
+      current: [none, () => Effect.sync(update.current)],
+      check: [none, () => Effect.sync(update.check)],
+      restart: [none, () => Effect.sync(update.restart)],
     },
     // Calls (ADR 0011).
     notify: {
