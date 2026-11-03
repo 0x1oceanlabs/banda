@@ -62,6 +62,7 @@ export function PaneFrame({
   mixed,
   frame,
   header,
+  actions,
   hidden = false,
 }: {
   entry: Entry
@@ -83,6 +84,8 @@ export function PaneFrame({
   frame: Frame
   /** Drawn in the header's place. */
   header?: ReactNode
+  /** Buttons of its own in the header, beside the close button. */
+  actions?: ReactNode
   /** Kept drawn, so the Pane keeps running, but not shown. */
   hidden?: boolean
 }) {
@@ -130,6 +133,7 @@ export function PaneFrame({
             title={title}
             icon={listed ? undefined : Icon}
             onClose={close}
+            actions={actions}
             className={kind?.header === "bare" ? "border-b-0" : undefined}
           >
             {listed && (

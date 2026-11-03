@@ -14,6 +14,7 @@ function PaneHeader({
   icon: Icon,
   onClose,
   className,
+  actions,
   children,
 }: {
   /** What the close button closes, for its label. */
@@ -22,6 +23,8 @@ function PaneHeader({
   icon?: LucideIcon | undefined
   onClose: () => void
   className?: string
+  /** Buttons of its own, beside the close button. */
+  actions?: ReactNode
   children: ReactNode
 }) {
   return (
@@ -34,16 +37,19 @@ function PaneHeader({
     >
       {Icon && <Icon className="size-4 shrink-0 text-muted-foreground" />}
       {children}
-      <Button
-        variant="ghost"
-        size="icon-xs"
-        aria-label={`Close ${title}`}
-        title="Close (Alt+W)"
-        className="ml-auto shrink-0 opacity-0 transition-opacity group-hover/tile:opacity-100 group-data-[focused=true]/tile:opacity-100 focus-visible:opacity-100"
-        onClick={onClose}
-      >
-        <XIcon />
-      </Button>
+      <div className="ml-auto flex shrink-0 items-center gap-1">
+        {actions}
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          aria-label={`Close ${title}`}
+          title="Close (Alt+W)"
+          className="shrink-0 opacity-0 transition-opacity group-hover/tile:opacity-100 group-data-[focused=true]/tile:opacity-100 focus-visible:opacity-100"
+          onClick={onClose}
+        >
+          <XIcon />
+        </Button>
+      </div>
     </header>
   )
 }

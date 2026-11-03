@@ -71,6 +71,12 @@ export type PaneState = { kind: string; args: { [key: string]: JsonValue } }
  */
 export type Place = "right" | "below" | "here"
 
+/**
+ * What a Pane draws. A part of it that keeps its own Esc, as a list of
+ * suggestions, stops the press there: what holds the Pane, as the drawer,
+ * takes an Esc that comes out of it as its own, and a text field's always
+ * has its default prevented.
+ */
 export type PaneProps<A> = {
   engine: Engine
   space: SpaceId

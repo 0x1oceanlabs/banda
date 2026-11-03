@@ -234,7 +234,11 @@ function EditWaiting({
         className="min-h-16"
         onChange={(event) => setEditing(event.target.value)}
         onKeyDown={(event) => {
-          if (event.key === "Escape") onCancel()
+          if (event.key === "Escape") {
+            // Its own: not the drawer's, nor anything around it.
+            event.stopPropagation()
+            onCancel()
+          }
           if (
             event.key === "Enter" &&
             !event.shiftKey &&

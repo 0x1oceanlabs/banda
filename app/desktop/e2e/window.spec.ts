@@ -3598,3 +3598,48 @@ test("a narrow window hides the sidebar, and Alt+A shows it over the Strip", asy
   await expect(sidebar).toBeVisible()
   await expect.poll(left).toBeGreaterThan(200)
 })
+
+test("Alt+` drops the drawer: a Thread over the workspace that stays as it was, and its pin makes it a column", async () => {
+  window = await startWindow()
+  const { page } = window
+  const { thread, composer } = await firstThread(page)
+  await composer.fill("hello")
+  await composer.press("Enter")
+  await expect(thread.getByText("You said: hello")).toBeVisible()
+  const mine = page
+    .getByRole("region", { name: "hello" })
+    .getByRole("textbox", { name: "Message to Fake AI" })
+
+  const drawer = page.getByRole("dialog", { name: "Drawer" })
+  await page.keyboard.press("Alt+Backquote")
+  await expect(drawer).toHaveAttribute("data-drawer")
+  const ask = drawer.getByRole("textbox", { name: "Message to Fake AI" })
+  await expect(ask).toBeFocused()
+  await ask.fill("quick one")
+  await ask.press("Enter")
+  await expect(drawer.getByText("You said: quick one")).toBeVisible()
+  await page.screenshot({ path: "test-results/8b-drawer.png" })
+
+  // Esc lifts it, and the focus goes back to the workspace.
+  await page.keyboard.press("Escape")
+  await expect(drawer).not.toHaveAttribute("data-drawer")
+  await expect(mine).toBeFocused()
+  // Dropped again, it is as it was.
+  await page.keyboard.press("Alt+Backquote")
+  await expect(drawer).toHaveAttribute("data-drawer")
+  await expect(drawer.getByText("You said: quick one")).toBeVisible()
+  // The key lifts it too.
+  await page.keyboard.press("Alt+Backquote")
+  await expect(drawer).not.toHaveAttribute("data-drawer")
+
+  // Its pin makes it a column of the workspace; the next drop is a new
+  // Thread.
+  await page.keyboard.press("Alt+Backquote")
+  await drawer.getByRole("button", { name: "Pin" }).click()
+  await expect(drawer).toBeHidden()
+  const pinned = page.getByRole("region", { name: "quick one" })
+  await expect(pinned.getByText("You said: quick one")).toBeVisible()
+  await page.keyboard.press("Alt+Backquote")
+  await expect(drawer).toHaveAttribute("data-drawer")
+  await expect(drawer.getByText("You said: quick one")).toBeHidden()
+})

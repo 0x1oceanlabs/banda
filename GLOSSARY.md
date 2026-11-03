@@ -186,6 +186,11 @@ knows it; the arrangement stays as it was.
 **Overview**:
 Every workspace zoomed out at once, to pick a Pane or a workspace.
 
+**Drawer**:
+A quick Thread that drops from the top over the workspace (`` Alt+` ``)
+and is lifted again as it was. It is in no workspace until its pin makes
+it a column of the one on screen.
+
 **Sidebar**:
 The list of every Thread of every Space, docked at the window's left edge.
 Each Thread shows its own Mark. A preset arranges it, and the Person's own

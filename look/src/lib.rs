@@ -88,6 +88,8 @@ pub struct Look {
     pub columns: columns::Columns,
     /// The bar, besides its height.
     pub bar: Bar,
+    /// The drawer on Alt+` (ADR 0025, decision 8).
+    pub drawer: Drawer,
     /// The layers it came from, bottom first.
     pub sources: Vec<Source>,
     /// What is wrong in the files. The look still applies: a value that
@@ -139,6 +141,19 @@ pub struct Desk {
 #[ts(export, export_to = "look/")]
 pub struct Bar {
     pub workspaces: Workspaces,
+}
+
+/// The drawer on Alt+` (ADR 0025, decision 8).
+#[derive(Clone, Debug, PartialEq, Serialize, TS)]
+#[ts(export, export_to = "look/")]
+pub struct Drawer {
+    /// How far down it drops: a share of the room under the bar.
+    pub height: f64,
+    /// The Harness its Thread starts on; this computer's first one when
+    /// `None`.
+    #[ts(optional)]
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub harness: Option<String>,
 }
 
 /// A picture Banda's glass is made of (ADR 0030).
@@ -669,6 +684,10 @@ pub fn resolve(
             columns: all.columns.resolve(),
             bar: Bar {
                 workspaces: all.bar.workspaces.unwrap_or(Workspaces::Numbers),
+            },
+            drawer: Drawer {
+                height: all.drawer.height.unwrap_or(0.6),
+                harness: all.drawer.harness.clone(),
             },
             sources,
             problems,
