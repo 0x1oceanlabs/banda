@@ -1,0 +1,11 @@
+name: An idea
+description: Something Banda should do.
+labels: [idea]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What you would like
+      description: What you want to do with Banda, and what is in the way now.
+    validations:
+      required: true
