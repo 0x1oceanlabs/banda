@@ -54,8 +54,14 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           shared-key: mac
-      # Unset BANDA_VERSION: the workspace's version, marked local.
+      # Unset BANDA_VERSION: the workspace's version, marked local. Signed
+      # ad hoc in a PR too, which electron-builder otherwise leaves unsigned:
+      # Apple silicon runs nothing unsigned.
       - run: scripts/package.sh dev
+        env:
+          CSC_FOR_PULL_REQUEST: true
+      - name: the app is signed
+        run: codesign --verify --deep --strict --verbose=2 app/desktop/dist/mac-arm64/*.app
       - uses: actions/upload-artifact@v4
         with:
           name: banda-dev-mac-${{ github.run_number }}
