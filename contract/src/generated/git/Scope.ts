@@ -3,4 +3,4 @@
 /**
  * What a diff compares (ADR 0034, decision 2).
  */
-export type Scope = { "kind": "changes", base?: string, } | { "kind": "uncommitted" } | { "kind": "staged" } | { "kind": "commit", sha: string, };
+export type Scope = { "kind": "changes", base?: string, } | { "kind": "uncommitted" } | { "kind": "staged" } | { "kind": "commit", sha: string, } | { "kind": "turn", thread: string, turn: string, };

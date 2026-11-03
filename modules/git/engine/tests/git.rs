@@ -4,12 +4,44 @@
 
 use banda_git::Git;
 use banda_git::model::{Change, Changed, Commit, Contents, Diff, Ref, Status};
-use banda_kernel::{Code, CommandId, Kernel, Participant, PersonId, Refusal, SpaceId};
+use banda_kernel::{
+    Call, Code, CommandId, Kernel, Module, Participant, PersonId, Refusal, Right, SpaceId,
+};
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
 use std::path::PathBuf;
 use std::process::Command;
 use std::sync::Arc;
+
+/// The agents module as git hears it: a turn begins and ends, a Thread
+/// goes back, as the test says.
+struct Agents;
+
+#[async_trait::async_trait]
+impl Module for Agents {
+    fn name(&self) -> &'static str {
+        "agents"
+    }
+
+    fn migrations(&self) -> &'static [&'static str] {
+        &[]
+    }
+
+    fn right(&self, _: &str) -> Option<Right> {
+        Some(Right::Write)
+    }
+
+    async fn call(&self, call: Call, kind: &str, fact: Value) -> Result<Value, Refusal> {
+        let (kind, by) = (kind.replace('_', "."), call.participant());
+        call.command(move |tx| {
+            let thread = fact["thread"].as_str().unwrap().to_owned();
+            tx.emit(&kind, 1, Some(&thread), by, &fact)?;
+            Ok(())
+        })
+        .await?;
+        Ok(Value::Null)
+    }
+}
 
 struct World {
     kernel: Arc<Kernel>,
@@ -26,6 +58,7 @@ impl World {
         let owner = PersonId::new();
         let kernel = Kernel::builder(root.path(), root.path().join(".data"), owner)
             .module(Git::new())
+            .module(Agents)
             .open()
             .await
             .unwrap();
@@ -75,6 +108,36 @@ impl World {
         self.kernel
             .call(person, method, Some(self.space), None, params)
             .await
+    }
+
+    /// The agents module says `kind` about turn `turn` of Thread `thread`.
+    async fn say(&self, kind: &str, thread: &str, turn: &str) {
+        let person = Participant::Person(self.owner);
+        let method = format!("agents.{}", kind.replace('.', "_"));
+        let fact = json!({ "thread": thread, "turn": turn });
+        (self.kernel)
+            .call(
+                person,
+                &method,
+                Some(self.space),
+                Some(CommandId::new()),
+                fact,
+            )
+            .await
+            .unwrap();
+    }
+
+    /// The checkpoints kept, once git has kept `count`.
+    async fn checkpoints(&self, count: usize) -> Vec<String> {
+        for _ in 0..500 {
+            let refs = self.git(&["for-each-ref", "--format=%(refname)", "refs/banda/"]);
+            let refs: Vec<String> = refs.lines().map(str::to_owned).collect();
+            if refs.len() == count {
+                return refs;
+            }
+            tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+        }
+        panic!("git kept no {count} checkpoints");
     }
 
     async fn ask<T: DeserializeOwned>(&self, method: &str, params: Value) -> T {
@@ -570,4 +633,62 @@ async fn reading_never_takes_or_writes_the_index() {
         .await;
     assert_eq!(paths(&diff), ["untracked.txt"]);
     std::fs::remove_file(lock).unwrap();
+}
+
+#[tokio::test]
+async fn a_turn_is_the_work_tree_from_its_checkpoint_as_it_began_to_as_it_ended() {
+    let world = World::committed().await;
+    let (thread, first, second) = (SpaceId::new(), SpaceId::new(), SpaceId::new());
+    let (thread, first, second) = (thread.to_string(), first.to_string(), second.to_string());
+    let turn = |turn: &str| json!({ "scope": { "kind": "turn", "thread": thread, "turn": turn } });
+    // Before it began: no checkpoint, so no Turn from git.
+    let refused = world.call("git.diff", turn(&first)).await.unwrap_err();
+    assert_eq!(refused.code, Code::NotFound);
+
+    world.write("staged.txt", "staged\n");
+    world.git(&["add", "staged.txt"]);
+    let index = world.index();
+    world.say("turn.started", &thread, &first).await;
+    world.checkpoints(1).await;
+    // The turn edits, makes and removes files, by its tools or its shell.
+    world.write("a.txt", "one\n2\nthree\n");
+    world.write("c.txt", "sea\n");
+    std::fs::remove_file(world.folder.join("d.txt")).unwrap();
+    // While it runs, it is the work tree now.
+    assert_eq!(
+        paths(&world.diff(turn(&first)).await),
+        ["a.txt", "c.txt", "d.txt"]
+    );
+    world.say("turn.ended", &thread, &first).await;
+    world.checkpoints(2).await;
+    // What the Person changes after it is no part of it.
+    world.write("b.txt", "bee\n");
+    let diff = world.diff(turn(&first)).await;
+    assert_eq!(paths(&diff), ["a.txt", "c.txt", "d.txt"]);
+    let a = diff.files.iter().find(|f| f.path == "a.txt").unwrap();
+    assert_eq!((a.added, a.removed), (1, 1));
+    let contents: Contents = world
+        .ask(
+            "git.contents",
+            json!({ "scope": turn(&first)["scope"], "path": "a.txt" }),
+        )
+        .await;
+    assert_eq!(contents.old.as_deref(), Some("one\ntwo\nthree\n"));
+    assert_eq!(contents.new.as_deref(), Some("one\n2\nthree\n"));
+
+    // The Person's index, branch and status stay as they were.
+    assert!(index == world.index(), "the index was written");
+    let status = world.status().await;
+    assert_eq!(status.branch.as_deref(), Some("main"));
+    assert_eq!(world.git(&["log", "--format=%s"]), "first");
+
+    // Going back to the first turn lets go of its checkpoints and of every
+    // later turn's.
+    world.say("turn.started", &thread, &second).await;
+    world.say("turn.ended", &thread, &second).await;
+    world.checkpoints(4).await;
+    world.say("thread.rewound", &thread, &first).await;
+    world.checkpoints(0).await;
+    let refused = world.call("git.diff", turn(&first)).await.unwrap_err();
+    assert_eq!(refused.code, Code::NotFound);
 }

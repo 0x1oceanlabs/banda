@@ -160,6 +160,9 @@ pub async fn stop(live: &Live, space: ModuleSpace, effect: &Effect) -> Outcome {
     }
 }
 
+/// The longest a turn waits for the modules reacting to its start.
+const REACTED: Duration = Duration::from_secs(5);
+
 /// Runs one turn to its end, and writes how it ended.
 pub async fn start(
     live: &Arc<Live>,
@@ -217,6 +220,11 @@ pub async fn start(
         Ok(None) => return Outcome::Done,
         Err(error) => return Outcome::Retry(error.to_string()),
     };
+    // What reacts to the turn's start, as git keeping the work tree as it
+    // began, does so before the Harness changes anything.
+    if !space.reacted(REACTED).await {
+        tracing::warn!(turn = %turn.id, "a turn started before all reacted to it");
+    }
     let ending = work(live, harnesses, &space, &turn, message, settings).await;
     // Stopped only if someone asked: the rules read that from the turn.
     live.end(turn.id);

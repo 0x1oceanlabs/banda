@@ -12,8 +12,9 @@ export type Scope =
   | { kind: "uncommitted" }
   | { kind: "staged" }
   | { kind: "commit"; sha: string; subject: string }
-  /** What one turn of a Thread changed, from its tool calls; `title` is
-   * the start of the message that asked for it. */
+  /** What one turn of a Thread changed: from its checkpoints, or from
+   * its tool calls where git kept none; `title` is the start of the
+   * message that asked for it. */
   | { kind: "turn"; thread: string; turn: string; title: string }
 
 export const CHANGES: Extract<Scope, { kind: "changes" }> = {

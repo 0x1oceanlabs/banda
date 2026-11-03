@@ -44,7 +44,7 @@ pub use outbox::{Effect, OnRestart, Outcome, Settled};
 pub use passes::secret;
 /// For `methods!` and `id!`, which name it from a module's crate.
 pub use schemars;
-pub use space::{Committed, ModuleSpace, Space};
+pub use space::{Committed, Heard, ModuleSpace, Space};
 pub use store::Tx;
 pub use window::{WindowAnswer, WindowRequest};
 

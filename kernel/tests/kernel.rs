@@ -3,9 +3,9 @@
 
 use banda_kernel::api::Identity;
 use banda_kernel::{
-    AgentId, Call, Caller, Code, CommandId, Effect, Error, Kernel, Module, ModuleSpace, OnRestart,
-    Outcome, Participant, PersonId, Refusal, Right, Scope, Settled, SpaceId, SpaceSummary, Stream,
-    Tx, decode,
+    AgentId, Call, Caller, Code, CommandId, Effect, Error, EventFilter, Kernel, Module,
+    ModuleSpace, OnRestart, Outcome, Participant, PersonId, Refusal, Right, Scope, Settled,
+    SpaceId, SpaceSummary, Stream, Tx, decode,
 };
 use futures::{SinkExt, StreamExt};
 use serde::Deserialize;
@@ -222,6 +222,37 @@ impl Module for Desk {
             })
             .await?;
         Ok(json!(kinds))
+    }
+}
+
+/// A module that keeps each Space it opens in, to react to the log as a
+/// test says.
+#[derive(Clone, Default)]
+struct Hears {
+    spaces: Arc<Mutex<Vec<ModuleSpace>>>,
+}
+
+#[async_trait::async_trait]
+impl Module for Hears {
+    fn name(&self) -> &'static str {
+        "hears"
+    }
+
+    fn migrations(&self) -> &'static [&'static str] {
+        &[]
+    }
+
+    fn right(&self, _: &str) -> Option<Right> {
+        None
+    }
+
+    async fn opened(&self, space: ModuleSpace) -> Result<(), Error> {
+        self.spaces.lock().unwrap().push(space);
+        Ok(())
+    }
+
+    async fn call(&self, _: Call, _: &str, _: Value) -> Result<Value, Refusal> {
+        Err(Refusal::invalid("No methods."))
     }
 }
 
@@ -1489,4 +1520,42 @@ async fn the_owner_browses_the_folders_as_a_path_is_typed() {
             .await;
         assert_eq!(refused.unwrap_err().code, Code::Forbidden, "{method}");
     }
+}
+
+#[tokio::test]
+async fn an_effect_waits_until_the_modules_reacting_to_the_log_have_reacted() {
+    let root = tempfile::tempdir().unwrap();
+    let owner = PersonId::new();
+    let (notes, hears) = (Notes::default(), Hears::default());
+    let kernel = Kernel::builder(root.path(), root.path().join(".data"), owner)
+        .module(notes.clone())
+        .module(hears.clone())
+        .open()
+        .await
+        .unwrap();
+    let space = create(&kernel, owner, "Work").await;
+    let module = hears.spaces.lock().unwrap()[0].clone();
+    let short = Duration::from_millis(50);
+    // Nothing reacts: nothing to wait for.
+    assert!(module.reacted(short).await);
+
+    let filter = EventFilter {
+        module: Some("notes".into()),
+        ..EventFilter::default()
+    };
+    let mut heard = module.react(module.at().await.unwrap(), filter);
+    let person = Participant::Person(owner);
+    add(&kernel, person, &space, "one").await.unwrap();
+    assert!(!module.reacted(short).await, "it has not heard the note");
+    let event = heard.next().await.unwrap().unwrap();
+    assert_eq!(event.kind, "added");
+    assert!(!module.reacted(short).await, "it has not handled the note");
+    // Asking for the next, it has handled the one before.
+    let next = tokio::spawn(async move { heard.next().await });
+    assert!(module.reacted(Duration::from_secs(5)).await);
+    // Gone, it reacts no more.
+    next.abort();
+    let _ = next.await;
+    add(&kernel, person, &space, "two").await.unwrap();
+    assert!(module.reacted(short).await);
 }

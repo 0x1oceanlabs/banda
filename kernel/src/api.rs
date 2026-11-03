@@ -40,12 +40,9 @@ use serde_json::Value;
 use std::collections::HashMap;
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::{broadcast, mpsc, oneshot};
+use tokio::sync::{mpsc, oneshot};
 use tokio::task::JoinHandle;
 use ts_rs::TS;
-
-/// How many stored events a subscription reads at a time.
-const PAGE: usize = 500;
 
 const HELLO_WITHIN: Duration = Duration::from_secs(10);
 
@@ -451,8 +448,7 @@ async fn hear(stream: u64, mut pieces: Stream, out: mpsc::Sender<Outgoing>) {
 }
 
 /// Replays the stored events after `after`, then forwards live ones, with no
-/// gap and no repeat: it listens before it reads, and skips what it already
-/// sent. When it falls behind the live events, it reads the log again.
+/// gap and no repeat (see [`crate::Heard`]).
 async fn follow(
     space: Arc<crate::Space>,
     subscription: u64,
@@ -460,51 +456,25 @@ async fn follow(
     filter: EventFilter,
     out: mpsc::Sender<Outgoing>,
 ) {
-    let send = |event| {
-        out.send(
-            EngineFrame::Event {
-                subscription,
-                event,
-            }
-            .into(),
-        )
-    };
-    let mut live = space.subscribe();
-    let mut last = after;
+    let mut heard = space.hear("", after, filter, false);
+    // It holds the Space only while it reads the log.
+    drop(space);
     loop {
-        loop {
-            let page = match space.events_after(last, filter.clone(), PAGE).await {
-                Ok(page) => page,
-                Err(error) => {
-                    tracing::error!(%error, "a subscription could not read the log");
-                    let _ = out.send(EngineFrame::Resync { subscription }.into()).await;
-                    return;
-                }
-            };
-            let full = page.len() == PAGE;
-            for event in page {
-                last = event.seq;
-                if send(event).await.is_err() {
-                    return;
-                }
+        let event = match heard.next().await {
+            Ok(Some(event)) => event,
+            Ok(None) => return,
+            Err(error) => {
+                tracing::error!(%error, "a subscription could not read the log");
+                let _ = out.send(EngineFrame::Resync { subscription }.into()).await;
+                return;
             }
-            if !full {
-                break;
-            }
-        }
-        loop {
-            match live.recv().await {
-                Ok(event) if event.seq > last => {
-                    last = event.seq;
-                    if filter.matches(&event) && send(Event::clone(&event)).await.is_err() {
-                        return;
-                    }
-                }
-                Ok(_) => {}
-                // Back to the log for what went by.
-                Err(broadcast::error::RecvError::Lagged(_)) => break,
-                Err(broadcast::error::RecvError::Closed) => return,
-            }
+        };
+        let frame = EngineFrame::Event {
+            subscription,
+            event,
+        };
+        if out.send(frame.into()).await.is_err() {
+            return;
         }
     }
 }

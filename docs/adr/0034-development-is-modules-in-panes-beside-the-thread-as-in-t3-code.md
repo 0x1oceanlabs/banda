@@ -85,12 +85,20 @@ the rest are our defaults, as T3 Code does, and stay Roma's to change.
    - **Turn comes from checkpoints, as T3 Code's** (_decided_). Before and
      after each turn the git engine snapshots the Space's work tree as a
      commit made through a temporary index (`add -A`, `write-tree`,
-     `commit-tree -p HEAD`), kept under `refs/banda/checkpoints/<thread>/<n>`;
-     the Person's index, `HEAD` and branch are never touched. Turn N is the
-     diff of its two snapshots, so it shows what the shell changed too, and
-     Edit from here can later put files back (decision 11). A Thread's
-     refs go with it. In a Space that is no repository, Turn comes from the
-     tool calls as today: the agents engine answers `agents.changes
+     `commit-tree -p HEAD`), kept under
+     `refs/banda/checkpoints/<thread>/<turn>/{before,after}`; the Person's
+     index, `HEAD` and branch are never touched. Turn N is the diff of its
+     two snapshots, or of the first and the work tree while it runs, so it
+     shows what the shell changed too, and Edit from here can later put
+     files back (decision 11). A Thread's refs go with it, and a turn's as
+     the Thread is rewound past it. Git hears the agents module's
+     `turn.started`, `turn.ended` and `thread.rewound` as the kernel gives a
+     module another's events (`ModuleSpace::react`); a turn asks its
+     Harness nothing until every module reacting to the log has handled
+     its start (`ModuleSpace::reacted`, at most 5 seconds), so the first
+     snapshot is taken before the Agent changes a file. In a Space that is
+     no repository, or for a turn with no snapshot, Turn comes from the
+     tool calls as before: the agents engine answers `agents.changes
      { thread, turn }` with each file's text before and after.
    - **`agents.diff` goes.** "Changed files" under a turn opens `git.diff`
      on Turn, beside the Thread. A Pane kept as `agents.diff` opens as

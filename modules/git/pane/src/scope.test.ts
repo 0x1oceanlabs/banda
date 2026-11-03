@@ -25,6 +25,9 @@ describe("a scope", () => {
       sha: "abc",
     })
     expect(asked({ kind: "uncommitted" })).toEqual({ kind: "uncommitted" })
+    expect(
+      asked({ kind: "turn", thread: "t", turn: "u", title: "Fix it" })
+    ).toEqual({ kind: "turn", thread: "t", turn: "u" })
   })
 })
 

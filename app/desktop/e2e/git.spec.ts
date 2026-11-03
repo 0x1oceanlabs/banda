@@ -111,3 +111,44 @@ test("the Diff shows a Space's changes by scope, as T3 Code's, and reads again a
   await setInFront(page, true)
   await expect(header("later.ts")).toBeVisible()
 })
+
+test("a turn's Diff is all the turn changed, its shell's work too, from git's checkpoints", async () => {
+  window = await startWindow()
+  const { page, dir } = window
+  const { thread, composer } = await firstThread(page)
+  const folder = join(dir, "root", "Work")
+  git(folder, "init", "-q", "-b", "main")
+  writeFileSync(join(folder, "notes.md"), "one\ntwo\nthree\n")
+  git(folder, "add", "-A")
+  git(folder, "commit", "-qm", "First")
+
+  // Its tool edits notes.md; its shell makes made.txt, which no tool
+  // call tells of.
+  await composer.fill("edit on disk")
+  await composer.press("Enter")
+  await expect(
+    thread.getByText("I edited notes.md and ran a script.")
+  ).toBeVisible()
+  const changed = thread.getByRole("region", { name: "Changed files" })
+  await expect(changed).toContainText("1 file changed")
+  await changed.getByRole("button", { name: /notes\.md/ }).click()
+  const diff = page.getByRole("region", { name: "Diff" })
+  await expect(diff.getByRole("button", { name: "Scope" })).toHaveText(
+    "edit on disk"
+  )
+  const files = diff.getByRole("tree")
+  for (const path of ["notes.md", "made.txt"])
+    await expect(files.getByRole("treeitem", { name: path })).toBeVisible()
+  // It opens at the file it was opened on.
+  await expect(diff.getByText("2", { exact: true })).toBeVisible()
+  await files.getByRole("treeitem", { name: "made.txt" }).click()
+  await expect(diff.getByText("by the shell")).toBeVisible()
+  await page.screenshot({ path: "test-results/git-diff-turn.png" })
+
+  // What the Person writes after the turn is no part of it.
+  writeFileSync(join(folder, "later.md"), "later\n")
+  await setInFront(page, false)
+  await setInFront(page, true)
+  await expect(files.getByRole("treeitem", { name: "made.txt" })).toBeVisible()
+  await expect(files.getByRole("treeitem", { name: "later.md" })).toHaveCount(0)
+})
