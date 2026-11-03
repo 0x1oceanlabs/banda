@@ -77,7 +77,7 @@ function Line({
   asking: boolean
   ask: (on: boolean) => void
 }) {
-  const { refused, write } = useWrite()
+  const { refused, write } = useWrite({ against: bind })
   const settings = window.banda?.settings
 
   // While it asks, the next key pressed is the line's: the line takes it

@@ -1,20 +1,35 @@
-import { useState } from "react"
+import { useRef, useState } from "react"
 import { problem } from "@banda/ui/lib/words"
 
 /**
  * Writes a setting through `banda settings` (ADR 0016), which answers what
- * was wrong when it refused, a problem a line. Keeps that until the next
- * write; `onWritten` runs after one that went through.
+ * was wrong when it refused, a problem a line. Only the last write's answer
+ * counts: one sent before it, as a field's blur on the way to ↶, answers
+ * too late to say anything. The answer stands while `against`, the value
+ * the write was against, stays: a file changed since, by hand or by a
+ * later write, takes it away. `onWritten` runs after a write that went
+ * through.
  */
-export function useWrite(onWritten?: () => void) {
-  const [refused, setRefused] = useState<string[]>([])
-  const write = (said: Promise<string[]>) =>
-    void said.then(
+export function useWrite({
+  onWritten,
+  against,
+}: { onWritten?: () => void; against?: unknown } = {}) {
+  const [said, setSaid] = useState<{ against?: string; refused: string[] }>()
+  const last = useRef(0)
+  const now = JSON.stringify(against)
+  const write = (answer: Promise<string[]>) => {
+    const mine = ++last.current
+    const say = (refused: string[]) => {
+      if (mine === last.current) setSaid({ against: now, refused })
+    }
+    void answer.then(
       (wrong) => {
-        setRefused(wrong)
+        say(wrong)
         if (wrong.length === 0) onWritten?.()
       },
-      (error: unknown) => setRefused([problem(error)])
+      (error: unknown) => say([problem(error)])
     )
+  }
+  const refused = said && said.against === now ? said.refused : []
   return { refused, write }
 }

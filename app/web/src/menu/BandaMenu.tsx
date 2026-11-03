@@ -343,9 +343,11 @@ function Menu({
   // brings the change back. What it did shows once it is written, and a
   // key refused leaves the action waiting for another.
   const done = useRef("")
-  const { refused, write: writing } = useWrite(() => {
-    setTaking(undefined)
-    setNote(done.current)
+  const { refused, write: writing } = useWrite({
+    onWritten: () => {
+      setTaking(undefined)
+      setNote(done.current)
+    },
   })
   const write = (key: Key, action: string, did: string) => {
     done.current = did
