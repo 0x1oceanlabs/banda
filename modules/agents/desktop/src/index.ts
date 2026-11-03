@@ -7,13 +7,13 @@
 import { VISUALS } from "@banda/agents-pane/visual"
 import type { DesktopModule, Engine, Look } from "@banda/desktop-kit"
 import { Effect, Layer } from "effect"
-import { lay_out } from "./preview"
+import { heights, lay_out } from "./preview"
 import { served } from "./visuals"
 
 export const agentsDesktop: DesktopModule<object, never, Engine | Look> = {
   layer: Layer.empty,
   answers: {},
-  asked: { lay_out },
+  asked: { lay_out, heights },
   served: { [VISUALS]: served },
   opened: () => Effect.void,
 }

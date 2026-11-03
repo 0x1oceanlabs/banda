@@ -637,11 +637,16 @@ pub enum Body {
         text: String,
     },
     /// A page the Agent showed its Person (ADR 0037): read with
-    /// `agents.visual`, it shows `height` pixels tall till it says its own.
+    /// `agents.visual`, it shows as tall as `heights` says for its width,
+    /// or `height` pixels, till it says its own.
     Visual {
         visual: VisualId,
         title: String,
         height: u32,
+        /// How tall the page laid out at each of several widths, as the
+        /// window found when it showed; none without a window.
+        #[serde(default)]
+        heights: Vec<Fit>,
     },
     /// An issue about a Problem of Banda's the Agent drafted, for its
     /// Person to send to Banda on GitHub, or not (ADR 0039, decision 3).
@@ -674,6 +679,14 @@ pub enum IssueState {
     Opened,
     /// The Person did not send it.
     Cancelled,
+}
+
+/// How tall a page lays out at a width, in CSS pixels.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "agents/")]
+pub struct Fit {
+    pub width: u32,
+    pub height: u32,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -975,6 +988,8 @@ pub enum Fact {
         visual: VisualId,
         title: String,
         height: u32,
+        #[serde(default)]
+        heights: Vec<Fit>,
     },
     /// The Agent drafted an issue about a Problem of Banda's (ADR 0039).
     #[serde(rename = "issue.drafted")]

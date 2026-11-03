@@ -82,6 +82,9 @@ impl Visuals {
 pub const NARROWEST: u32 = 240;
 pub const WIDEST: u32 = 1_600;
 pub const WIDTH: u32 = 728;
+/// The widths the window lays a shown page out at, for its frame's height
+/// before it loads: T3 Code's nine.
+pub const FIT_WIDTHS: [u32; 9] = [320, 423, 526, 629, 732, 835, 938, 1041, 1144];
 
 /// What an Agent may show: a page of up to [`LONGEST`] characters, with a
 /// title. It answers the title trimmed and cut at [`TITLE`], and the

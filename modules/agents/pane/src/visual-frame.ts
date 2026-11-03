@@ -7,6 +7,7 @@
  * other side. Pure, so plain tests cover it.
  */
 
+import type { Fit } from "@banda/contract/agents"
 import { type Look, shown } from "@banda/contract/look"
 
 /** The host of `app://` that serves Visuals: an origin apart from
@@ -34,6 +35,22 @@ export const SAID = {
 
 /** How tall a frame grows to fit its page, in pixels. */
 const FITS = { least: 80, most: 20_000 } as const
+
+const within = (height: number) =>
+  Math.min(FITS.most, Math.max(FITS.least, Math.ceil(height)))
+
+/** How tall a frame `width` wide is before its page says: the height the
+ * window found at the widest width laid out that fits in it (the
+ * narrowest, in a narrower frame), or else the Agent's. `fits` come
+ * narrowest first, as the window lays them out. */
+export function heightAt(
+  fits: readonly Fit[],
+  width: number,
+  height: number
+): number {
+  const fit = fits.findLast((one) => one.width <= width) ?? fits[0]
+  return within(fit?.height ?? height)
+}
 
 export type Theme = "light" | "dark"
 
@@ -162,11 +179,7 @@ export function heard(data: unknown): Heard | null {
   const said = (params ?? {}) as { height?: unknown; url?: unknown }
   if (method === SAID.size && typeof said.height === "number") {
     if (!Number.isFinite(said.height)) return null
-    const height = Math.ceil(said.height)
-    return {
-      kind: "size",
-      height: Math.min(FITS.most, Math.max(FITS.least, height)),
-    }
+    return { kind: "size", height: within(said.height) }
   }
   if (method === SAID.link && typeof said.url === "string") {
     const url = URL.parse(said.url)

@@ -1652,6 +1652,18 @@ test("an Agent shows a Visual in its Thread: its page runs apart from Banda, in 
     document.getElementById("said").textContent =
       "ran, " + typeof window.bandaEngine + ", " + cookies
   </script></body></html>`
+  // The frame's height as it first shows, before its page loads.
+  await page.evaluate(() => {
+    const seen = new MutationObserver(() => {
+      const frame = document.querySelector<HTMLIFrameElement>(
+        'iframe[title="A mockup"]'
+      )
+      if (!frame) return
+      ;(globalThis as { firstHeight?: string }).firstHeight = frame.style.height
+      seen.disconnect()
+    })
+    seen.observe(document.body, { childList: true, subtree: true })
+  })
   const said = await agentSays(window, "show_visual", {
     html,
     title: "A mockup",
@@ -1677,10 +1689,15 @@ test("an Agent shows a Visual in its Thread: its page runs apart from Banda, in 
       getComputedStyle(box).getPropertyValue("--primary").trim()
     )
   expect(painted).toBe(primary)
-  // The frame fits the page, not the height the Agent guessed.
+  // The frame fits the page, not the height the Agent guessed: from its
+  // first paint, as the window laid it out at the frame's width.
   await expect
     .poll(async () => (await frame.boundingBox())?.height ?? 0)
     .toBeGreaterThan(280)
+  const first = await page.evaluate(
+    () => (globalThis as { firstHeight?: string }).firstHeight
+  )
+  expect(parseInt(first ?? "0")).toBeGreaterThan(280)
   await page.screenshot({ path: "test-results/18m-visual.png" })
 })
 

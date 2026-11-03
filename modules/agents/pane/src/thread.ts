@@ -485,8 +485,8 @@ function project(state: ThreadState, event: Event): ThreadState {
       }
     }
     case "visual.shown": {
-      const { item: id, turn, visual, title, height } = fact.payload
-      const body = { kind: "visual", visual, title, height } as const
+      const { item: id, turn, visual, title, height, heights } = fact.payload
+      const body = { kind: "visual", visual, title, height, heights } as const
       return { ...next, items: [...state.items, item(id, body, turn)] }
     }
     case "thread.configured":

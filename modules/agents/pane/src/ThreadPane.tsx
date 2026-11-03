@@ -726,6 +726,7 @@ function Entry({
           visual={body.visual}
           title={body.title}
           height={body.height}
+          heights={body.heights}
         />
       )
   }
