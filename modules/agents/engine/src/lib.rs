@@ -48,6 +48,7 @@ use banda_kernel::{
     AgentId, Call, Effect, Error, Module, ModuleSpace, Nothing, OnRestart, Outcome, Participant,
     Refusal, Right, Settled, SpaceId, Tool, Tx,
 };
+use banda_look::OneFile as _;
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as BASE64;
 use changes::{ChangesAsk, TurnChanges};
@@ -84,6 +85,9 @@ pub const SETTINGS: [banda_look::SettingsFile; 2] = [
 
 pub struct Agents {
     harnesses: Harnesses,
+    /// The folder of its settings files, `~/.config/banda`; none in a
+    /// test that gives none.
+    config: Option<PathBuf>,
     live: Arc<Live>,
     idle: Duration,
     quiet: Duration,
@@ -124,11 +128,21 @@ impl Agents {
     pub fn new(harnesses: Harnesses) -> Self {
         Self {
             harnesses,
+            config: None,
             live: Arc::new(Live::new(hosts::IDLE, between::QUIET, None)),
             idle: hosts::IDLE,
             quiet: between::QUIET,
             listings: Arc::default(),
             pipe: None,
+        }
+    }
+
+    /// Reads its settings files in `config`, `~/.config/banda`: each new
+    /// Thread starts as `agents.toml` there says for its Harness.
+    pub fn config_in(self, config: PathBuf) -> Self {
+        Self {
+            config: Some(config),
+            ..self
         }
     }
 
@@ -156,6 +170,17 @@ impl Agents {
     fn live_again(mut self) -> Self {
         self.live = Arc::new(Live::new(self.idle, self.quiet, self.pipe.clone()));
         self
+    }
+
+    /// What a new Thread on Harness entry `id` starts with, when Threads
+    /// may start with it.
+    fn new_start(&self, id: &str) -> Result<sending::Start, Refusal> {
+        self.harness(id)?;
+        let file = self
+            .config
+            .as_ref()
+            .map(|c| c.join(sending::AgentsSettings::NAME));
+        Ok(file.map_or_else(Default::default, |file| sending::start(&file, id)))
     }
 
     fn harness(&self, id: &str) -> Result<Harness, Refusal> {
@@ -628,7 +653,7 @@ impl Agents {
         call: Call,
         OneHarness { harness }: OneHarness,
     ) -> Result<Defaults, Refusal> {
-        let start = self.harness(&harness)?.start;
+        let start = self.new_start(&harness)?;
         // What the composer shows is what the new Thread gets.
         let (at, (settings, offer)) = call
             .space()
@@ -654,8 +679,8 @@ impl Agents {
         let target = match (thread, harness) {
             (Some(thread), _) => Target::Thread(thread),
             (None, Some(harness)) => {
-                let harness = self.harness(&harness)?;
-                Target::New(harness.id, harness.start)
+                let start = self.new_start(&harness)?;
+                Target::New(harness, start)
             }
             (None, None) => {
                 return Err(Refusal::invalid(
@@ -1021,7 +1046,7 @@ struct Message {
 enum Target {
     Thread(ThreadId),
     /// A new Thread on a Harness, and what its entry starts one with.
-    New(String, settings::Start),
+    New(String, sending::Start),
 }
 
 /// What a new Thread on `harness` starts with, as the composer shows it:
@@ -1030,7 +1055,7 @@ enum Target {
 fn fresh(
     sql: &rusqlite::Connection,
     harness: &str,
-    start: &settings::Start,
+    start: &sending::Start,
 ) -> Result<(Settings, Offer), Error> {
     let offer = store::latest_offer(sql, harness)?;
     let settings = start.over(offer.as_ref());

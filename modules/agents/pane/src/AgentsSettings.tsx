@@ -61,14 +61,15 @@ import { type Open, Problem, Warning, Ways } from "./SignIn"
 import { SettingsBar } from "./ThreadSettings"
 
 /**
- * `harnesses.toml`, as the settings Pane writes it (ADR 0016): through
+ * A settings file, as the settings Pane writes it (ADR 0016): through
  * `banda settings`, which keeps the Person's text and refuses what the
  * engine would not read. Each answers what was wrong, or nothing.
  */
-export type HarnessFile = {
+export type SettingsFile = {
   /** Sets `key`, as `harness.codex.enabled`, to a TOML value. */
   set: (key: string, value: string) => Promise<string[]>
-  /** Takes `key` out; `harness.codex` takes the whole entry out. */
+  /** Takes `key` out; in `harnesses.toml`, `harness.codex` takes the
+   * whole entry out. */
   reset: (key: string) => Promise<string[]>
   /** Opens the file in the Person's editor. */
   reveal: () => void
@@ -79,7 +80,9 @@ type Props = {
   /** The Space each Harness is asked in: an account serves them all. */
   space: SpaceId
   open: Open
-  file: HarnessFile
+  harnesses: SettingsFile
+  /** What a new Thread on each Harness starts with is here. */
+  agents: SettingsFile
 }
 
 /**
@@ -128,7 +131,7 @@ export function AgentsSettings({
           />
         ))}
       {Array.isArray(list) && (
-        <AddHarness file={props.file} taken={list} onAdded={readList} />
+        <AddHarness file={props.harnesses} taken={list} onAdded={readList} />
       )}
     </div>
   )
@@ -142,7 +145,7 @@ function HarnessCard({
   onWritten,
   ...props
 }: HarnessProps & { lit: boolean; onWritten: () => void }) {
-  const { harness, file } = props
+  const { harness, harnesses } = props
   const { refused, write } = useWrite({ onWritten, against: harness })
   // Asked again after each sign-in or sign-out: a new key, a new reading.
   const [readings, setReadings] = useState(0)
@@ -161,14 +164,14 @@ function HarnessCard({
         label={`${harness.name} on`}
         on={harness.enabled}
         onChange={(on) =>
-          write(on ? file.reset(enabled) : file.set(enabled, "false"))
+          write(on ? harnesses.reset(enabled) : harnesses.set(enabled, "false"))
         }
       />
     ),
     starts: (
       <>
         {harness.enabled && <NewThreads {...props} write={write} />}
-        <HowItStarts harness={harness} file={file} write={write} />
+        <HowItStarts harness={harness} file={harnesses} write={write} />
       </>
     ),
   }
@@ -315,13 +318,14 @@ function Reading({
   )
 }
 
-/** What a new Thread on the Harness starts with, its entry's `start`:
- * the composer's own bar, over what the Harness offered in this Space. */
+/** What a new Thread on the Harness starts with, `agents.toml`'s
+ * `[start.<id>]`: the composer's own bar, over what the Harness offered in
+ * this Space. */
 function NewThreads({
   engine,
   space,
   harness,
-  file,
+  agents,
   write,
 }: HarnessProps & { write: (said: Promise<string[]>) => void }) {
   // Asked again after its own writes, and as the window comes to the
@@ -340,12 +344,13 @@ function NewThreads({
   if (read.state === "ready" && read.value !== shown) setShown(read.value)
   if (!shown) return null
   const { settings, offer } = shown
-  const start = `harness.${harness.id}.start`
+  const start = `start.${harness.id}`
   const change = (said: Promise<string[]>) =>
     write(said.finally(() => setWrites((n) => n + 1)))
   const onChange = (next: Settings) => {
     const changed = changeOf(settings, next)
-    if (changed) change(file.set(`${start}.${changed[0]}`, tomlOf(changed[1])))
+    if (changed)
+      change(agents.set(`${start}.${changed[0]}`, tomlOf(changed[1])))
   }
   return (
     <Row
@@ -363,7 +368,7 @@ function NewThreads({
         size="icon-xs"
         aria-label={`${harness.name}'s own`}
         title="The Harness's own"
-        onClick={() => change(file.reset(start))}
+        onClick={() => change(agents.reset(start))}
       >
         <Undo2Icon />
       </Button>
@@ -391,7 +396,7 @@ function HowItStarts({
   write,
 }: {
   harness: HarnessView
-  file: HarnessFile
+  file: SettingsFile
   write: (said: Promise<string[]>) => void
 }) {
   const [program = "", ...args] = harness.command
@@ -513,7 +518,7 @@ function AddHarness({
   taken,
   onAdded,
 }: {
-  file: HarnessFile
+  file: SettingsFile
   taken: HarnessView[]
   onAdded: () => void
 }) {
@@ -639,7 +644,10 @@ function AccountState({
   open,
   account,
   onChanged,
-}: Omit<HarnessProps, "file"> & { account: Account; onChanged: () => void }) {
+}: Omit<HarnessProps, "harnesses" | "agents"> & {
+  account: Account
+  onChanged: () => void
+}) {
   const who = account.signed_in_as
   if (who?.signed_in)
     return (

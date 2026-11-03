@@ -72,6 +72,7 @@ Roma, 2026-11-03: the third. "Modular, beautiful and elegant, as in Unix."
      - starting the process, recording it, and agreeing on ACP;
      - its ways to sign in and who is signed in;
      - the pool of processes (`hosts.rs`).
+   - What a new Thread on a Harness starts with leaves `harnesses.toml` for `agents.toml`, as `[start.<id>]`: one file, one module (ADR 0016). The library then knows nothing of Threads, and the module `harnesses` reads the whole of its file.
    - `agents` adds to that client what a session needs: its handlers and the capabilities it declares, its Threads' turns, what they say and what they ask. It wraps the library's connection.
    - `banda-harnesses` does not depend on `agents`. It is the lower layer: a Thread runs on a program, but a program knows nothing of Threads.
 

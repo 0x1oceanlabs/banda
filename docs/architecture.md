@@ -199,7 +199,7 @@ command (with its ID)
 | Where | What |
 |---|---|
 | The Space's folder | the files of the work |
-| Text files | the Harnesses, in the config folder; the look (`look.toml`, themes) and the sidebar (`sidebar.toml`, presets), the browser (`browser.toml`) and how messages to an Agent are sent (`agents.toml`) in `~/.config/banda/`. Layouts and keys join them later |
+| Text files | the Harnesses, in the config folder; the look (`look.toml`, themes) and the sidebar (`sidebar.toml`, presets), the browser (`browser.toml`) and how Threads start and messages to an Agent are sent (`agents.toml`) in `~/.config/banda/`. Layouts and keys join them later |
 | The Harness | its session, context and sign-in. We keep only its session ID, as evidence |
 | The OS keychain | secrets you give Banda. Its database never holds them |
 | The engine's state folder | the owner's ID; while the engine runs, its port and per-run secret |
@@ -402,9 +402,10 @@ If Chat is removed, Agents still works through its own Thread.
     through `banda settings` (ADR 0016). An entry with a known ID, `claude`
     or `codex`, takes each key it leaves out from Banda, so a new Banda
     moves its adapter; the window shows what is wrong in the file as in
-    the look's. An entry's `start` says what a new Thread on it starts
-    with: its mode, plan and options, as the composer's bar shows them
-    (`agents.defaults`), set from the same bar in the settings.
+    the look's. What a new Thread on each starts with, its mode, plan and
+    options, as the composer's bar shows them (`agents.defaults`), is
+    `agents.toml`'s `[start.<id>]`, set from the same bar in the settings:
+    `harnesses.toml` says only how the Harnesses start (ADR 0040).
 - **The Harness's notices**, such as warnings, join the Thread as lines of
   their own.
 - **A Thread has settings: a mode, Plan, and the Harness's options.** The
