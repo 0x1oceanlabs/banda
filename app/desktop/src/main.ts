@@ -23,6 +23,7 @@ import {
   protocol,
   session,
   shell,
+  type WebContents,
 } from "electron"
 import { type Look as LookValue, WALLPAPER_URL } from "@banda/contract/look"
 import { NodeServices } from "@effect/platform-node"
@@ -52,6 +53,7 @@ import { modules } from "./modules"
 import { channel, stateFolder } from "./channel"
 import { listApp } from "./entry"
 import { NoticeArg, Notices, RecordedDesktop } from "./notices"
+import { startLog, watchProblems } from "./problems"
 import { roadLayer } from "./road"
 import { settingsLayer } from "./settings"
 import { ensure } from "./sidebar"
@@ -121,7 +123,11 @@ const engineBinary =
 
 // The window keeps its profile in the engine's state folder, so Banda,
 // Banda Dev, a checkout and a test never share one (ADR 0033).
-app.setPath("userData", join(stateFolder(app.getPath("appData")), "window"))
+const state = stateFolder(app.getPath("appData"))
+app.setPath("userData", join(state, "window"))
+// The window's log and crash dumps, beside the engine's (ADR 0039).
+const banda = (contents: WebContents) => fromPage(contents.getURL())
+startLog(state, banda)
 // The name the desktop's notices and the Web Store show, and the
 // window's class (Wayland's app ID), which window rules match.
 app.setName(channel.name)
@@ -165,6 +171,14 @@ const runtime = ManagedRuntime.make(
     ),
     Layer.provide(NodeServices.layer)
   )
+)
+// What breaks in main, or crashes, is kept as the page's is (ADR 0039).
+watchProblems(
+  (record) =>
+    runtime
+      .runPromise(Engine.use((engine) => engine.client))
+      .then((client) => client.command("problems.record", record)),
+  banda
 )
 /** The last look, for what reads it at once; none before the first.
  * The window opens once the runtime is built (`ready`). */

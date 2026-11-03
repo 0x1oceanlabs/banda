@@ -11,6 +11,7 @@
     "./browser": "./src/browser.ts",
     "./terminal": "./src/terminal.ts",
     "./git": "./src/git.ts",
+    "./problems": "./src/problems.ts",
     "./workspaces": "./src/workspaces.ts",
     "./look": "./src/look.ts",
     "./sidebar": "./src/sidebar.ts",
