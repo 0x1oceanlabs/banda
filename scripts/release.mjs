@@ -7,10 +7,11 @@
 // Stable is the release of its tag v<version>, pushed by Roma, with the
 // PRs since the last Stable as its notes. Dev is a prerelease v<version>
 // made at <commit>; only the last 20 Dev releases are kept. `add` puts the
-// Mac's files on a release already out (ADR 0033, decision 6). GITHUB_TOKEN
+// Mac's files on a release already out (ADR 0033, decision 6), and says
+// `added=true` to the workflow. GITHUB_TOKEN
 // and GITHUB_REPOSITORY come from the workflow.
 import { execFileSync } from "node:child_process"
-import { readFileSync, statSync } from "node:fs"
+import { appendFileSync, readFileSync, statSync } from "node:fs"
 import { basename } from "node:path"
 
 const KEEP_DEV = 20
@@ -91,6 +92,10 @@ if (adding) {
     await upload(release, file)
   }
   console.log(release.html_url)
+  // For the next step, which puts the cask in the tap.
+  if (process.env.GITHUB_OUTPUT) {
+    appendFileSync(process.env.GITHUB_OUTPUT, "added=true\n")
+  }
   process.exit(0)
 }
 
