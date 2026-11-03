@@ -32,9 +32,8 @@ const SETTLE = 120
 export type TerminalArgs = {
   /** `null` until the Pane picks the ID of the shell it starts. */
   terminal: TerminalId | null
+  /** Its header's words till the engine says what runs in front. */
   title: string
-  /** Where what runs in front works, once the engine said. */
-  folder?: string | null
   /** It runs the Person's shell, which starts again when it is gone. */
   shell: boolean
   /** What to send once the program ended with code 0; then the Pane closes. */
@@ -51,9 +50,6 @@ export type Done = CommandCall
 export const terminalPane = definePane<TerminalArgs>({
   kind: "terminal.terminal",
   title: (args) => args.title,
-  detail: (args) => args.folder ?? null,
-  // Its title and folder change as it runs; its terminal does not.
-  identity: (args) => args.terminal,
   icon: TerminalIcon,
   start: { terminal: null, title: "Terminal", shell: true, done: null },
   letter: "T",
@@ -73,16 +69,16 @@ function TerminalPane({
   focused,
   update,
   close,
+  label,
 }: PaneProps<TerminalArgs>) {
   const [chosen] = useState(newId)
   useEffect(() => {
     if (args.terminal === null) update({ ...args, terminal: chosen })
   })
-  // Only a shell's: the engine follows what runs in front of a shell.
-  const titled = (title: Title) => {
-    if (args.title === title.program && args.folder === title.folder) return
-    update({ ...args, title: title.program, folder: title.folder })
-  }
+  // Only a shell's: the engine follows what runs in front of a shell. It
+  // changes too often to keep in the layout.
+  const titled = (title: Title) =>
+    label?.({ title: title.program, detail: title.folder })
   if (args.terminal === null) return null
   return (
     <Screen
@@ -124,8 +120,8 @@ function Screen({
   close: () => void
   titled: (title: Title) => void
 }) {
-  // The newest, so a title heard in a stream started earlier sees the
-  // newest args.
+  // The newest, so a title heard in a stream started earlier reaches the
+  // Pane as it is now.
   const heardTitle = useEffectEvent(titled)
   const mount = useRef<HTMLDivElement>(null)
   const surface = useRef<Surface | null>(null)

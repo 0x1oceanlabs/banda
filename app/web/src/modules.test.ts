@@ -4,7 +4,15 @@ import type { Module } from "@banda/ui/module"
 import { expect, test } from "vitest"
 import { keyName } from "./actions/actions"
 import { modules } from "./modules"
-import { kindRuns, kinds, labelOf, showsOf, watches } from "./registry"
+import {
+  kindRuns,
+  kinds,
+  labelOf,
+  saidNow,
+  sayLabel,
+  showsOf,
+  watches,
+} from "./registry"
 
 test("each module has its own id, and its Panes' kinds start with it (ADR 0022, decision 5)", () => {
   const ids = modules.map((m) => m.id)
@@ -78,4 +86,19 @@ test("a Pane whose args its kind cannot read is named plainly, and the window go
   expect(labelOf(broken)).toMatchObject({ title: "Pane", detail: null })
   expect(showsOf(broken)).toBeNull()
   expect(labelOf({ kind: "nobody.knows", args: {} }).title).toBe("Unknown Pane")
+})
+
+test("what a Pane says it shows now names it over its kind, till it is taken back", () => {
+  const pane = {
+    kind: "terminal.terminal",
+    args: { terminal: "t1", title: "Terminal", shell: true, done: null },
+  }
+  sayLabel("e1", { title: "pnpm dev", detail: "~/code/banda" })
+  expect(labelOf(pane, saidNow().get("e1"))).toMatchObject({
+    title: "pnpm dev",
+    detail: "~/code/banda",
+  })
+  expect(labelOf(pane, saidNow().get("e2")).title).toBe("Terminal")
+  sayLabel("e1", null)
+  expect(saidNow().has("e1")).toBe(false)
 })

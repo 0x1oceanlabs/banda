@@ -77,6 +77,9 @@ export type Place = "right" | "below" | "here"
  * takes an Esc that comes out of it as its own, and a text field's always
  * has its default prevented.
  */
+/** What a Pane says it shows now (`PaneProps.label`). */
+export type Label = { title: string; detail: string | null }
+
 export type PaneProps<A> = {
   engine: Engine
   space: SpaceId
@@ -92,6 +95,14 @@ export type PaneProps<A> = {
   update: (args: A) => void
   /** Closes this Pane, as one that finished its job does. */
   close: () => void
+  /**
+   * Says what the Pane shows now, for its header, tabs and the overview,
+   * over its kind's title and detail; `null` takes them back. Kept while
+   * the window runs, not in its layout: a terminal's title changes as
+   * often as what runs in it. None where nothing names the Pane, as in a
+   * dialog of the settings.
+   */
+  label?: (label: Label | null) => void
   /** Runs an action by its id, as `WindowApi.run` does: "Add Space" from
    * a Space picker. None where no window runs actions, as in a dialog of
    * the settings. */
@@ -130,8 +141,8 @@ export type PaneKind<A extends { [key: string]: JsonValue }> = {
   shows?: (args: A) => string | null
   /**
    * What makes it this one Pane where its args also hold what changes as
-   * it runs, as a terminal's title: its terminal. Args that change but
-   * keep it are the same Pane, which has not left (`closed`). All its
+   * it is used, as a Diff's scope: one Diff per Space. Args that change
+   * but keep it are the same Pane, which has not left (`closed`). All its
    * args, by default.
    */
   identity?: (args: A) => JsonValue

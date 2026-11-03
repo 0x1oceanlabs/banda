@@ -2,7 +2,7 @@ import { XIcon } from "lucide-react"
 import { BandaMark, MARK_WORDS } from "@banda/ui/components/banda-mark"
 import { Button } from "@banda/ui/components/button"
 import type { Chime } from "@banda/ui/sound"
-import { labelOf } from "../registry"
+import { labelOf, useSaid } from "../registry"
 import type { Entry } from "./model"
 import { AgentMark, type Frame } from "./PaneFrame"
 
@@ -27,6 +27,7 @@ export function Tabs({
   marked: (entry: Entry) => boolean
   frame: Frame
 }) {
+  const said = useSaid()
   return (
     <div
       role="tablist"
@@ -34,7 +35,7 @@ export function Tabs({
       className="flex h-9 shrink-0 items-stretch overflow-x-auto border-b text-sm [scrollbar-width:none]"
     >
       {entries.map((entry, e) => {
-        const { title, Icon } = labelOf(entry.pane)
+        const { title, Icon } = labelOf(entry.pane, said.get(entry.id))
         const call = called(entry)
         const shown = e === active
         return (
