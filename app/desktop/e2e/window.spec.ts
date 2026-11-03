@@ -3703,3 +3703,37 @@ test("a Pane pops out into a window of its own, its place keeps a stand-in, and 
   await expect(tile).toBeHidden()
   await expect.poll(windows).toBe(1)
 })
+
+test("a column moved along the Strip by Alt+Shift+Arrows stays in view", async () => {
+  window = await startWindow()
+  const { page } = window
+  const { composer } = await firstThread(page)
+  await composer.fill("hello")
+  await composer.press("Enter")
+  const thread = page.getByRole("region", { name: "hello" })
+  await expect(thread.getByText("You said: hello")).toBeVisible()
+  // Columns of one width, more than the Strip shows.
+  for (let i = 0; i < 3; i++) {
+    await page.keyboard.press("Alt+Enter")
+    await expect(page.locator("[data-column]")).toHaveCount(i + 2)
+  }
+  await page.keyboard.press("Alt+Home")
+  await expect(thread).toHaveAttribute("data-focused", "true")
+  const id = await thread.getAttribute("data-tile")
+  const place = async () =>
+    (await layoutOf(page)).findIndex((column) => column.includes(id!))
+  // To the far end and back, one column a step, the Strip following it.
+  const steps = [
+    ["ArrowRight", 1],
+    ["ArrowRight", 2],
+    ["ArrowRight", 3],
+    ["ArrowLeft", 2],
+    ["ArrowLeft", 1],
+    ["ArrowLeft", 0],
+  ] as const
+  for (const [way, at] of steps) {
+    await page.keyboard.press(`Alt+Shift+${way}`)
+    await expect.poll(place).toBe(at)
+    await expect(thread).toBeInViewport({ ratio: 0.99 })
+  }
+})

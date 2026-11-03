@@ -92,7 +92,9 @@ export function Strip({
   // The zoomed Pane, the focused one, covers the workspace; the rest
   // hide under it, their pages too.
   const zooms = live && zoomed !== undefined
-  const widths = columns.map((c) => `${c.width} ${c.min}`).join()
+  // What moves the columns: their order and their widths. A column moved
+  // along the Strip keeps the focus, and the Strip follows it.
+  const layout = columns.map((c) => `${c.id} ${c.width} ${c.min}`).join()
   const empty = workspace.columns.length === 0
 
   // Columns grow, shrink and go to new places on the look's springs.
@@ -118,7 +120,7 @@ export function Strip({
       reveal(strip, places(strip, now.current.columns), focus, before.current)
     }
     before.current = focus
-  }, [focus, widths])
+  }, [focus, layout])
   // The room changes when the window does, or the sidebar comes or goes
   // over the Strip's left: the focused column comes whole into view again.
   useEffect(() => {
