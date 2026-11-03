@@ -140,6 +140,8 @@ Codex, `codex app-server`'s rate limits.
       processes; on Linux from `/proc` first. A click opens
       `http://localhost:<port>` in a browser Pane in that Space
       (ADR 0013).
+      _Changed by ADR 0044: the servers started in Banda, an Agent's
+      too, known by `BANDA_SPACE` in their environment._
    4. **The branch and its pull request**: the focused Space's branch
       and changes, the PR's checks. They belong to the git modules,
       each a Pane of its own, and come with their ADR.
