@@ -1,3 +1,4 @@
+import { cn } from "@banda/ui/lib/utils"
 import { Component, useEffect, useLayoutEffect, useRef } from "react"
 import type { Engine, SpaceId } from "@banda/contract"
 import type { Listed, PaneState } from "@banda/ui/pane"
@@ -263,54 +264,61 @@ export function Strip({
           <Choices modules={modules} onPick={onStart} />
         </div>
       )}
-      {columns.map((column, c) => (
-        <div
-          key={column.id}
-          data-column={column.id}
-          data-entry={column.entries[column.active]?.id}
-          className="relative flex h-full shrink-0 flex-col gap-(--gap-inner)"
-          style={{
-            // Shares of the room the Strip shows, gaps between them
-            // included; never so narrow its Panes cannot be read.
-            width: widthAt(share(column.width) ?? 0.5),
-            minWidth: minWidthOf(column.min),
-          }}
-        >
-          {column.entries.map((entry, e) => (
-            <PaneFrame
-              key={entry.id}
-              entry={entry}
-              engine={engine}
-              modules={modules}
-              focused={live && workspace.focus === c && column.active === e}
-              marked={marked(entry)}
-              away={away.has(entry.id)}
-              zoomed={entry.id === zoomed}
-              height={column.tabbed ? undefined : column.heights[e]}
-              listed={listed(entry)}
-              spaceName={spaceName(entry.space)}
-              mixed={mixed}
-              frame={frame}
-              hidden={
-                zooms
-                  ? entry.id !== zoomed
-                  : column.tabbed && column.active !== e
-              }
-              header={
-                column.tabbed && column.active === e && !zooms ? (
-                  <Tabs
-                    entries={column.entries}
-                    active={column.active}
-                    called={called}
-                    marked={marked}
-                    frame={frame}
-                  />
-                ) : undefined
-              }
-            />
-          ))}
-        </div>
-      ))}
+      {columns.map((column, c) => {
+        const here = live && workspace.focus === c
+        const bar = column.tabbed && !zooms
+        return (
+          <div
+            key={column.id}
+            data-column={column.id}
+            data-entry={column.entries[column.active]?.id}
+            // A group bar sits nearer its tile than tiles to each other.
+            className={cn(
+              "relative flex h-full shrink-0 flex-col",
+              bar ? "gap-1" : "gap-(--gap-inner)"
+            )}
+            style={{
+              // Shares of the room the Strip shows, gaps between them
+              // included; never so narrow its Panes cannot be read.
+              width: widthAt(share(column.width) ?? 0.5),
+              minWidth: minWidthOf(column.min),
+            }}
+          >
+            {bar && (
+              <Tabs
+                entries={column.entries}
+                active={column.active}
+                focused={here}
+                called={called}
+                marked={marked}
+                frame={frame}
+              />
+            )}
+            {column.entries.map((entry, e) => (
+              <PaneFrame
+                key={entry.id}
+                entry={entry}
+                engine={engine}
+                modules={modules}
+                focused={here && column.active === e}
+                marked={marked(entry)}
+                away={away.has(entry.id)}
+                zoomed={entry.id === zoomed}
+                height={column.tabbed ? undefined : column.heights[e]}
+                listed={listed(entry)}
+                spaceName={spaceName(entry.space)}
+                mixed={mixed}
+                frame={frame}
+                hidden={
+                  zooms
+                    ? entry.id !== zoomed
+                    : column.tabbed && column.active !== e
+                }
+              />
+            ))}
+          </div>
+        )
+      })}
     </div>
   )
 }

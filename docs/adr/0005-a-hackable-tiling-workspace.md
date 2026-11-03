@@ -55,6 +55,7 @@ The evidence is in two notes: [tiling managers](../research/2026-11-01-tiling-ma
    - **Its own window** (_decided_). Any Pane pops out into a window of its own and back. A window manager such as Hyprland or niri then places it beside Banda or on another monitor.
    - Each workspace keeps its choice, and `Alt+V` switches it, as Omarchy does.
    - **A column is a group** (_built_ 2026-11-01), as niri's tabbed column and Hyprland's group. Its Panes stack one above another, or show as tabs: one at a time, a row of tabs in its tile's header. The tiles behind other tabs stay drawn, hidden, so their programs keep running. A tab whose Thread calls the Person carries its mark (decision 15). `[columns] display` in `look.toml` sets how a new column starts (ADR 0007).
+     - _Changed on 2026-11-03._ The tabs leave the header for a group bar over the tile, as Hyprland's groupbar: one segment per Pane, all as wide, the shown one filled, in the focus color while the column has the focus. The tile keeps its own header (Space, title, its buttons), and is shorter by the bar; its neighbours do not move. A click shows a Pane, a middle click closes it, a segment dragged carries its Pane.
    - The Strip answers "Agents keep opening things": a new Pane adds a column instead of shrinking the others. A sign-in terminal stacks under its Thread in the same column.
    - _Changed on 2026-11-02, by ADR 0025._ The Split goes, and `Alt+V` with it: the Strip is the one layout, and columns, stacks, tabs and the zoom do what the Split would.
 
