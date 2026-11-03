@@ -9,8 +9,10 @@ import { columnsOf, moveOf } from "../look"
 import { Moving } from "../motion"
 import { minOf } from "../registry"
 import {
+  displayOf,
   drawn,
   free,
+  heightsOf,
   share,
   type Width,
   widthIn,
@@ -70,6 +72,16 @@ export function sized(workspace: Workspace, look: Look) {
     ...column,
     width: widthIn(workspace, column, look),
     min: minOf(column, look.min),
+  }))
+}
+
+/** The columns of `workspace` as a Strip draws them, by the look: their
+ * widths, whether they show tabs, and their Panes' heights. */
+export function drawnColumns(workspace: Workspace, look: Look) {
+  return sized(workspace, look).map((column) => ({
+    ...column,
+    tabbed: displayOf(column, look) === "tabs",
+    heights: heightsOf(column),
   }))
 }
 

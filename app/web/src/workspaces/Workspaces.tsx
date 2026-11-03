@@ -14,7 +14,7 @@ import type { Frame } from "./PaneFrame"
 import { Strip } from "./Strip"
 import { useAltHeld } from "./alt"
 import { pixels, Swipe } from "./swipe"
-import { type Carrying, useMoving } from "./useMoving"
+import { type Carrying, inStrip, useMoving } from "./useMoving"
 
 /** How far a swipe goes, in pixels, before it moves a workspace. */
 const STEP = 24
@@ -103,17 +103,17 @@ export function Workspaces({
   // What the mouse's moving reads as it goes.
   const carrying = useRef<Carrying>({
     on: false,
-    workspace: undefined,
     frame,
     go: onGo,
+    ...inStrip(undefined),
   })
   useLayoutEffect(() => {
     step.current = onStep
     carrying.current = {
       on: !covered && zoomed === undefined,
-      workspace: workspaces.list[workspaces.current]?.id,
       frame,
       go: onGo,
+      ...inStrip(workspaces.list[workspaces.current]?.id),
     }
   })
   useMoving(root, carrying)

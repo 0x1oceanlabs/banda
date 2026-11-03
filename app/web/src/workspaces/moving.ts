@@ -35,7 +35,7 @@ export function standing(x: number, top: number, bottom: number): Rect {
 }
 
 /** The insert hint lying at `y`, from `left` to `right`. */
-function lying(y: number, left: number, right: number): Rect {
+export function lying(y: number, left: number, right: number): Rect {
   return { left, top: y - HINT / 2, width: right - left, height: HINT }
 }
 
@@ -117,4 +117,22 @@ function lastIfNone(found: number, list: readonly unknown[]): number {
 export function edgeSpeed(by: number, fastest = 24): number {
   const into = Math.min(1, Math.max(0, by / EDGE))
   return into * into * fastest
+}
+
+/** Scrolls `element` by `by`: whether it moved. */
+export function nudge(
+  element: HTMLElement,
+  side: "scrollTop" | "scrollLeft",
+  by: number
+): boolean {
+  if (!by) return false
+  const was = element[side]
+  element[side] += by
+  return element[side] !== was
+}
+
+/** How far, in pixels, what shows `size` from `from` scrolls this frame
+ * with the pointer at `at`: back near its start, on near its end. */
+export function pushed(at: number, from: number, size: number): number {
+  return edgeSpeed(at - (from + size - EDGE)) - edgeSpeed(from + EDGE - at)
 }
