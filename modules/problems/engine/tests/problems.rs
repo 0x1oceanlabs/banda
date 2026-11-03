@@ -129,3 +129,66 @@ async fn a_problem_is_named_by_its_fingerprint_s_start_with_the_logs_last_lines(
 
     assert!(ask("no-such").await.is_err());
 }
+
+#[tokio::test]
+async fn only_the_person_sends_an_issue_about_a_problem_that_is_kept() {
+    use banda_kernel::{AgentId, Code};
+    use std::os::unix::fs::PermissionsExt as _;
+    let root = tempfile::tempdir().unwrap();
+    // A `gh` that keeps what it was given, and says where it filed it.
+    let gh = root.path().join("gh");
+    std::fs::write(
+        &gh,
+        "#!/bin/sh\nhere=$(dirname \"$0\")\necho \"$@\" > \"$here/args\"\ncat > \"$here/body\"\n\
+         echo https://github.com/0x1oceanlabs/banda/issues/412\n",
+    )
+    .unwrap();
+    std::fs::set_permissions(&gh, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let owner = PersonId::new();
+    let kernel = Kernel::builder(root.path().join("spaces"), root.path().join("data"), owner)
+        .machine(root.path().join("state/machine"))
+        .module(
+            Problems::new(
+                root.path().join("state/problems"),
+                root.path().join("state/logs"),
+            )
+            .gh(gh),
+        )
+        .open()
+        .await
+        .unwrap();
+    let fingerprint = record(&kernel, owner, "broke", 1).await["fingerprint"].clone();
+    let send = |who, fingerprint: &Value| {
+        let issue =
+            json!({ "fingerprint": fingerprint, "title": "Tabs break", "body": "## What broke" });
+        kernel.call(
+            who,
+            "problems.send_issue",
+            None,
+            Some(CommandId::new()),
+            issue,
+        )
+    };
+
+    let agent = Participant::Agent(AgentId::new());
+    assert_eq!(
+        send(agent, &fingerprint).await.unwrap_err().code,
+        Code::Forbidden
+    );
+    let person = Participant::Person(owner);
+    let none = send(person, &json!("0000")).await.unwrap_err();
+    assert_eq!(none.code, Code::NotFound);
+
+    let sent = send(person, &fingerprint).await.unwrap();
+    assert_eq!(
+        sent,
+        json!({ "url": "https://github.com/0x1oceanlabs/banda/issues/412", "filed": true })
+    );
+    let given = std::fs::read_to_string(root.path().join("args")).unwrap();
+    assert_eq!(
+        given.trim(),
+        "issue create --title Tabs break --repo 0x1oceanlabs/banda --body-file -"
+    );
+    let body = std::fs::read_to_string(root.path().join("body")).unwrap();
+    assert_eq!(body, "## What broke");
+}

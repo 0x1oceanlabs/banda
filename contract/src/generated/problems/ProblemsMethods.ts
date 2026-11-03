@@ -3,10 +3,12 @@ import type { CallMethod } from "../CallMethod";
 import type { CommandMethod } from "../CommandMethod";
 import type { Nothing } from "../Nothing";
 import type { Fingerprint } from "./Fingerprint";
+import type { Issue } from "./Issue";
 import type { Listed } from "./Listed";
 import type { Record } from "./Record";
 import type { Recorded } from "./Recorded";
 import type { Report } from "./Report";
+import type { Sent } from "./Sent";
 
 export type ProblemsMethods = { 
 /**
@@ -26,4 +28,11 @@ problem: CallMethod<Fingerprint, Report>,
  * fingerprint: a new one is said in an event, one known counts
  * once more.
  */
-record: CommandMethod<Record, Recorded>, };
+record: CommandMethod<Record, Recorded>, 
+/**
+ * Sends an issue about a Problem to Banda on GitHub, as the
+ * Person wrote it, the one thing this module sends anywhere: `gh`
+ * files it, or the answer is the page that sends it from the
+ * browser.
+ */
+send_issue: CommandMethod<Issue, Sent>, };

@@ -3,6 +3,7 @@ import type { Choice } from "./Choice";
 import type { Field } from "./Field";
 import type { FieldValue } from "./FieldValue";
 import type { Image } from "./Image";
+import type { IssueState } from "./IssueState";
 import type { Output } from "./Output";
 import type { PlanStep } from "./PlanStep";
 import type { QuestionState } from "./QuestionState";
@@ -41,4 +42,12 @@ plan?: string, state: QuestionState, answer?: string,
 /**
  * What the Person filled in the form.
  */
-values?: { [key in string]: FieldValue }, } | { "kind": "notice", text: string, } | { "kind": "visual", visual: VisualId, title: string, height: number, };
+values?: { [key in string]: FieldValue }, } | { "kind": "notice", text: string, } | { "kind": "visual", visual: VisualId, title: string, height: number, } | { "kind": "issue", fingerprint: string, title: string, body: string, 
+/**
+ * The issue it comments on instead, which has the fingerprint.
+ */
+comment_on?: number, state: IssueState, 
+/**
+ * Where it went, once it did.
+ */
+url?: string, };

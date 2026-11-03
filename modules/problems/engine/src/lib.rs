@@ -8,9 +8,11 @@
 //! fingerprint, however often it broke; a new one is said in an event, so
 //! a window that follows shows it. It keeps the newest 200.
 //!
-//! It sends nothing anywhere: sharing a Problem is the `sharing` module's,
-//! and only when the Person turned it on (ADR 0039, decision 4).
+//! It sends nothing anywhere but an issue the Person sends to Banda on
+//! GitHub (`send_issue`, decision 3): sharing a Problem is the `sharing`
+//! module's, and only when the Person turned it on (decision 4).
 
+mod issue;
 pub mod model;
 mod panics;
 mod report;
@@ -18,6 +20,7 @@ mod report;
 use banda_kernel::{
     Call, Error, Module, ModuleSpace, Nothing, Participant, Refusal, Right, Scope, Tool, Tx,
 };
+use issue::{Issue, Sent};
 use model::{Fingerprint, Log, Problem, Record, Recorded, Report, word};
 use rusqlite::Row;
 use serde::de::DeserializeOwned;
@@ -48,6 +51,8 @@ pub struct Problems {
     logs: PathBuf,
     /// The checkout of Banda's source the engine runs from, if it does.
     checkout: Option<PathBuf>,
+    /// The `gh` that files a Person's issue.
+    gh: PathBuf,
 }
 
 impl Problems {
@@ -58,7 +63,13 @@ impl Problems {
             panics: panics.into(),
             logs: logs.into(),
             checkout: None,
+            gh: PathBuf::from("gh"),
         }
+    }
+
+    /// Files a Person's issue with the `gh` at `gh`, not the one on PATH.
+    pub fn gh(self, gh: PathBuf) -> Self {
+        Self { gh, ..self }
     }
 
     /// Says Banda runs from the checkout it was built in, where an Agent
@@ -84,6 +95,11 @@ banda_kernel::methods! {
         /// fingerprint: a new one is said in an event, one known counts
         /// once more.
         command record(Record) -> Recorded, Write;
+        /// Sends an issue about a Problem to Banda on GitHub, as the
+        /// Person wrote it, the one thing this module sends anywhere: `gh`
+        /// files it, or the answer is the page that sends it from the
+        /// browser.
+        command send_issue(Issue) -> Sent, Decide;
     }
 }
 
@@ -185,6 +201,18 @@ impl Problems {
         };
         report.text = report::markdown(&report);
         Ok(report)
+    }
+
+    async fn send_issue(&self, call: Call, issue: Issue) -> Result<Sent, Refusal> {
+        issue::may_send(&issue)?;
+        let fingerprint = issue.problem.fingerprint.clone();
+        let problems = call.space().read(all).await?;
+        if !problems.iter().any(|one| one.fingerprint == fingerprint) {
+            return Err(Refusal::not_found(format!(
+                "No Problem has the fingerprint \"{fingerprint}\"."
+            )));
+        }
+        Ok(issue::send(&self.gh, &issue).await)
     }
 
     async fn record(&self, call: Call, record: Record) -> Result<Recorded, Refusal> {

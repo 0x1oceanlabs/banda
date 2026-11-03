@@ -643,6 +643,37 @@ pub enum Body {
         title: String,
         height: u32,
     },
+    /// An issue about a Problem of Banda's the Agent drafted, for its
+    /// Person to send to Banda on GitHub, or not (ADR 0039, decision 3).
+    Issue {
+        fingerprint: String,
+        title: String,
+        body: String,
+        /// The issue it comments on instead, which has the fingerprint.
+        #[ts(optional)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        comment_on: Option<u32>,
+        state: IssueState,
+        /// Where it went, once it did.
+        #[ts(optional)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        url: Option<String>,
+    },
+}
+
+/// Where an issue the Agent drafted stands.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export, export_to = "agents/")]
+pub enum IssueState {
+    /// It waits for the Person.
+    Drafted,
+    /// `gh` filed it, or its comment.
+    Sent,
+    /// GitHub opened in the browser with it, for the Person to send there.
+    Opened,
+    /// The Person did not send it.
+    Cancelled,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -944,6 +975,34 @@ pub enum Fact {
         visual: VisualId,
         title: String,
         height: u32,
+    },
+    /// The Agent drafted an issue about a Problem of Banda's (ADR 0039).
+    #[serde(rename = "issue.drafted")]
+    IssueDrafted {
+        item: ItemId,
+        turn: TurnId,
+        fingerprint: String,
+        title: String,
+        body: String,
+        #[ts(optional)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        comment_on: Option<u32>,
+    },
+    /// The Person sent it, as they last wrote it, or did not: its title
+    /// and body where they changed them.
+    #[serde(rename = "issue.answered")]
+    IssueAnswered {
+        item: ItemId,
+        state: IssueState,
+        #[ts(optional)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        title: Option<String>,
+        #[ts(optional)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        body: Option<String>,
+        #[ts(optional)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        url: Option<String>,
     },
 }
 

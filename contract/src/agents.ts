@@ -96,6 +96,8 @@ const KINDS: ReadonlySet<string> = new Set(
     "question.closed": true,
     "notice.posted": true,
     "visual.shown": true,
+    "issue.drafted": true,
+    "issue.answered": true,
   } satisfies Record<Fact["kind"], true>)
 )
 

@@ -30,6 +30,7 @@ mod drive;
 mod effects;
 mod files;
 mod images;
+mod issues;
 mod kept;
 mod live;
 pub mod model;
@@ -56,6 +57,7 @@ use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as BASE64;
 use changes::{ChangesAsk, TurnChanges};
 use images::Images;
+use issues::{AnswerIssue, DraftIssue};
 use live::Live;
 use model::{
     Body, Fact, Image, ImageId, Item, ItemId, Offer, Opener, Settings, ThreadId, ThreadList,
@@ -302,6 +304,15 @@ banda_kernel::methods! {
         /// height. It shows your Person nothing and keeps nothing. The
         /// page's rules are show_visual's.
         call preview_visual(PreviewVisual) -> Previewed, Read, tool "preview_visual";
+        /// Drafts an issue about a Problem of Banda's for your Person to
+        /// send to Banda on GitHub, as the Banda skill's `problems` topic
+        /// says: they see it as a card with Send, Edit and Cancel, and only
+        /// they send it. `comment_on` an issue that has the fingerprint
+        /// already, rather than open another.
+        command draft_issue(DraftIssue) -> String, Write, tool "draft_issue";
+        /// Keeps how the Person answered a drafted issue: sent, as the
+        /// problems module sent it (`problems.send_issue`), or not.
+        command answer_issue(AnswerIssue) -> (), Decide;
         /// A Visual's page, as the window serves it.
         call visual(OneVisual) -> VisualPage, Read;
     }
@@ -952,6 +963,23 @@ impl Agents {
         })
     }
 
+    async fn draft_issue(&self, call: Call, draft: DraftIssue) -> Result<String, Refusal> {
+        let Participant::Agent(agent) = call.participant() else {
+            return Err(Refusal::forbidden(
+                "Only a Thread's Agent drafts an issue, in its own Thread.",
+            ));
+        };
+        call.command(move |tx| issues::draft(tx, agent, draft))
+            .await?;
+        Ok(issues::DRAFTED.to_owned())
+    }
+
+    async fn answer_issue(&self, call: Call, answer: AnswerIssue) -> Result<(), Refusal> {
+        let author = call.participant();
+        call.command(move |tx| issues::answer(tx, author, answer))
+            .await
+    }
+
     async fn show_visual(&self, call: Call, params: ShowVisual) -> Result<String, Refusal> {
         let ShowVisual {
             html,
@@ -1128,24 +1156,16 @@ fn show_visual(
     title: String,
     height: u32,
 ) -> Result<(), Error> {
-    let thread = rules::to_thread::own_thread(store::thread_of(tx.sql(), agent)?)?;
-    let turn = store::running(tx.sql(), thread)?
-        .ok_or_else(|| Refusal::conflict("A Visual shows in a turn that runs."))?
-        .id;
-    let author = Participant::Agent(agent);
-    let item = Item {
-        id: ItemId::new(),
-        turn: Some(turn),
-        author,
-        at: tx.now(),
-        body: Body::Visual {
-            visual,
-            title: title.clone(),
-            height,
-        },
+    let body = Body::Visual {
+        visual,
+        title,
+        height,
     };
-    store::insert_item(tx.sql(), thread, &item)?;
-    store::touch_thread(tx.sql(), thread, item.at)?;
+    let refused = "A Visual shows in a turn that runs.";
+    let (thread, item, turn) = agent_item(tx, agent, refused, body)?;
+    let Body::Visual { title, .. } = item.body else {
+        unreachable!("a Visual was written")
+    };
     let fact = Fact::VisualShown {
         item: item.id,
         turn,
@@ -1153,7 +1173,32 @@ fn show_visual(
         title,
         height,
     };
-    emit(tx, author, thread, &fact)
+    emit(tx, Participant::Agent(agent), thread, &fact)
+}
+
+/// Writes `body` by the Agent into its own Thread, in its turn that runs,
+/// or refuses with `refused` while none runs: an item an Agent's tool
+/// shows its Person, which the caller then says.
+fn agent_item(
+    tx: &mut Tx<'_>,
+    agent: AgentId,
+    refused: &str,
+    body: Body,
+) -> Result<(ThreadId, Item, TurnId), Error> {
+    let thread = rules::to_thread::own_thread(store::thread_of(tx.sql(), agent)?)?;
+    let turn = store::running(tx.sql(), thread)?
+        .ok_or_else(|| Refusal::conflict(refused))?
+        .id;
+    let item = Item {
+        id: ItemId::new(),
+        turn: Some(turn),
+        author: Participant::Agent(agent),
+        at: tx.now(),
+        body,
+    };
+    store::insert_item(tx.sql(), thread, &item)?;
+    store::touch_thread(tx.sql(), thread, item.at)?;
+    Ok((thread, item, turn))
 }
 
 /// Lets go of the pages a day old that no item names, as after a rewind.

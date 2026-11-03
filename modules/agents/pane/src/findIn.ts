@@ -18,6 +18,8 @@ function wordsOf({ body }: Item): string {
     case "question":
     case "visual":
       return body.title
+    case "issue":
+      return `${body.title}\n${body.body}`
     case "plan":
       return body.steps.map((step) => step.text).join("\n")
   }

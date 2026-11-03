@@ -140,6 +140,53 @@ test("a Question opens, then is answered or closed", () => {
   expect(closed.items[1].body).toMatchObject({ state: "closed" })
 })
 
+test("an issue the Agent drafted waits, then goes as the Person wrote it, or not (ADR 0039)", () => {
+  const drafted = play(
+    event("issue.drafted", {
+      item: "i",
+      turn: "u",
+      fingerprint: "3124d1bf35ad",
+      title: "Tabs break",
+      body: "## What broke",
+    })
+  )
+  expect(drafted.items[0].body).toEqual({
+    kind: "issue",
+    fingerprint: "3124d1bf35ad",
+    title: "Tabs break",
+    body: "## What broke",
+    state: "drafted",
+  })
+  const sent = apply(
+    drafted,
+    event(
+      "issue.answered",
+      {
+        item: "i",
+        state: "sent",
+        title: "Tabs break without a title",
+        url: "https://github.com/0x1oceanlabs/banda/issues/412",
+      },
+      { author: person }
+    )
+  )
+  expect(sent.items[0].body).toMatchObject({
+    state: "sent",
+    title: "Tabs break without a title",
+    body: "## What broke",
+    url: "https://github.com/0x1oceanlabs/banda/issues/412",
+  })
+  const cancelled = apply(
+    drafted,
+    event(
+      "issue.answered",
+      { item: "i", state: "cancelled" },
+      { author: person }
+    )
+  )
+  expect(cancelled.items[0].body).toMatchObject({ state: "cancelled" })
+})
+
 test("a Question with a form keeps what the Person filled in", () => {
   const form = [
     {
