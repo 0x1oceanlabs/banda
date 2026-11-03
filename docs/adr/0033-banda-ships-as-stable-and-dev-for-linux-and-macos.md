@@ -79,7 +79,7 @@ Roma, 2026-11-02:
 3. **The release workflow**: Dev on every green push to `main`, Stable on a tag, the last 20 Dev releases kept (decisions 3 and 4).
 4. **Open source**: its own checklist (decision 10), in ADR 0038.
 5. **Updates on Linux**: electron-updater for both channels (decision 5), in ADR 0041.
-6. **macOS**: the build passing on a Mac runner, then the tap and its two casks (decision 6).
+6. **macOS** (decision 6): 6a the build passing on a Mac runner, by hand; 6b every release, Dev and Stable, packed for the Mac too, in `release.yml`; 6c the tap and its two casks, bumped by each release; 6d the app saying a new version is out, with its `brew` command.
 7. **A Person's first run**: what is missing (a Harness, `npx`) says how to get it, and the README tells how to install.
 
 ## Consequences
