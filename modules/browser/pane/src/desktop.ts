@@ -106,19 +106,18 @@ export type Wait = { agent: string; asked?: number } &
      * they hand it back once done. */
     | { reason: "handoff"; why: string }
   )
-export type Handed = Extract<Wait, { reason: "handoff" }>
 
-/** What main answers a call of a Thread's Agent on a tab where a Thread
- * waits for the Person, `wait`: `own` when it is that Thread's own. */
-export function refusalOf(tab: number, wait: Wait, own: boolean): string {
-  if (!own)
-    return `Tab ${tab} is the Person's now, for a step of theirs. Do not use it until they hand it back.`
-  switch (wait.reason) {
-    case "stopped":
-      return `The Person stopped you on tab ${tab}. Do not use it until they let you drive again: say where you stopped and end your turn, and they will tell you.`
-    case "handoff":
-      return `You handed tab ${tab} to the Person: "${wait.why}". Do not use it until they hand it back: end your turn, and their message says when.`
-  }
+/** The one wait a page shows of `waits`, while `driven` or not: a tab
+ * handed to the Person is theirs, and a stopped Thread shows once no
+ * other drives the tab. */
+export function shownOf(
+  waits: readonly Wait[],
+  driven: boolean
+): Wait | undefined {
+  return (
+    waits.find((wait) => wait.reason === "handoff") ??
+    (driven ? undefined : waits.find((wait) => wait.reason === "stopped"))
+  )
 }
 
 /** What the sidebar's row of a Thread that waits for the Person on a tab
@@ -160,10 +159,14 @@ export const BROWSER_BRIDGE = {
   /** Stops the Thread that drives the page with Banda's tools, which
    * then waits until `answered`; the Person's own programs on it go on. */
   release: send<[contents: number]>(),
-  /** The Person answered what the Thread of `agent` waits for on the
-   * page: it may use the page again. False when it waited no more, as
+  /** The Person answered the Thread of `agent`'s wait for `reason` on the
+   * page: it may use the page again. False when it waited for none, as
    * after an answer already given. */
-  answered: invoke<[contents: number, agent: string], boolean>(),
+  answered: invoke<
+    [contents: number, agent: string, reason: Wait["reason"]],
+    boolean
+  >(),
+
   /** The turn of the Thread of `agent` ended: it drives no tab now. */
   settled: send<[agent: string]>(),
   /** Pins an extension's button to the row, or takes it off, in
