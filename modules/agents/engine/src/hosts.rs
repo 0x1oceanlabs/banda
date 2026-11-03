@@ -12,7 +12,7 @@
 //!   the host is dropped; an engine that dies closes the host's stdin.
 
 use crate::acp::Connection;
-use crate::settings::Harness;
+use banda_harnesses::Harness;
 use banda_kernel::SpaceId;
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex, Weak};

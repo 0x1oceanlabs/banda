@@ -4,10 +4,10 @@
 
 use crate::Failure;
 use crate::places::{HOST, Places, Running};
-use banda_agents::settings::Harnesses;
 use banda_agents::{Agents, Pipe};
 use banda_browser::Browser;
 use banda_git::Git;
+use banda_harnesses::Harnesses;
 use banda_kernel::api::{self, OwnerSecret};
 use banda_kernel::{Kernel, PROTOCOL};
 use banda_problems::Problems;

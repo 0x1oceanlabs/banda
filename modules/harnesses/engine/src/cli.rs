@@ -5,8 +5,8 @@
 //! a bundled one in its place. A CLI older than the entry's `minimum` runs,
 //! with a warning (ADR 0003, decision 3).
 
+use crate::Harness;
 use crate::model::CliView;
-use crate::settings::Harness;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
 use std::time::Duration;

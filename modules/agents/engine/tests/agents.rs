@@ -6,7 +6,7 @@ use banda_agents::model::{
     Body, Choice, Exit, Failure, ItemId, Mode, OptionValue, QuestionState, Settings, StepState,
     ThreadList, ThreadView, ToolContent, ToolStatus, TurnId, TurnState,
 };
-use banda_agents::settings::{Cli, Harness, Harnesses};
+use banda_harnesses::{Cli, Harness, Harnesses};
 use banda_kernel::{
     AgentId, Caller, Code, CommandId, EventFilter, Kernel, Participant, PersonId, SpaceId,
 };

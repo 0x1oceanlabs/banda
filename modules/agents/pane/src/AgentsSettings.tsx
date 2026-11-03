@@ -1,11 +1,7 @@
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react"
 import type { Engine, SpaceId } from "@banda/contract"
-import type {
-  Account,
-  Defaults,
-  HarnessView,
-  Settings,
-} from "@banda/contract/agents"
+import type { Account, Defaults, Settings } from "@banda/contract/agents"
+import type { HarnessView } from "@banda/contract/harnesses"
 import { tomlOf } from "@banda/contract/settings"
 import { Button } from "@banda/ui/components/button"
 import {

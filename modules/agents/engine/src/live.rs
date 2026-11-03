@@ -12,8 +12,9 @@
 use crate::Pipe;
 use crate::acp::{Answer, Connection, Session};
 use crate::hosts::Hosts;
-use crate::model::{ItemId, Program, TurnId, Values};
-use crate::settings::Harness;
+use crate::model::{ItemId, TurnId, Values};
+use banda_harnesses::Harness;
+use banda_harnesses::model::Program;
 use banda_kernel::{AgentId, ModuleSpace, SpaceId};
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};

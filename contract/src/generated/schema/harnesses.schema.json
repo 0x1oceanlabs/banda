@@ -1,7 +1,7 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "title": "harnesses.toml",
-  "description": "The Harnesses this machine starts Threads with, in this order.\nWithout the file, Banda starts Claude Code and Codex, each with the\nPerson's own CLI.",
+  "description": "The Harnesses this machine can start, in this order.\nWithout the file, Banda starts Claude Code and Codex, each with the\nPerson's own CLI.",
   "type": "object",
   "properties": {
     "harness": {
@@ -18,7 +18,7 @@
       "type": "object",
       "properties": {
         "id": {
-          "description": "How Threads and the window name it: `claude`, `codex`.",
+          "description": "How Banda names it: `claude`, `codex`.",
           "type": "string"
         },
         "name": {
@@ -30,7 +30,7 @@
           "type": "string"
         },
         "enabled": {
-          "description": "Whether Threads start with it. One turned off stays in the list,\nwith how it starts, for when it is turned on again.",
+          "description": "Whether it is on. One turned off stays in the list, with how it\nstarts, for when it is turned on again.",
           "type": "boolean",
           "default": true
         },
@@ -70,7 +70,7 @@
           "type": "string"
         },
         "minimum": {
-          "description": "The oldest version the adapter supports: the one it was built for.\nAn older CLI still runs, and its Threads warn.",
+          "description": "The oldest version the adapter supports: the one it was built for.\nAn older CLI still runs, with a warning.",
           "type": "string"
         }
       },

@@ -1,7 +1,7 @@
 /** Where a new Thread starts: its Space and its Harness (ADR 0006). */
 import { useMemo } from "react"
 import type { Engine, SpaceId, SpaceSummary } from "@banda/contract"
-import type { HarnessView } from "@banda/contract/agents"
+import type { HarnessView } from "@banda/contract/harnesses"
 import { useSpaces } from "@banda/ui/hooks/use-spaces"
 import { openSpaces, shownSpaces } from "@banda/ui/lib/spaces"
 import { BotIcon, FolderIcon, FolderPlusIcon } from "lucide-react"
