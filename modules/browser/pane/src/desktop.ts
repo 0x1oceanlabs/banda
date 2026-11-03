@@ -107,31 +107,6 @@ export type Wait = { agent: string; asked?: number } &
     | { reason: "handoff"; why: string }
   )
 
-/** The one wait a page shows of `waits`, while `driven` or not: a tab
- * handed to the Person is theirs, and a stopped Thread shows once no
- * other drives the tab. */
-export function shownOf(
-  waits: readonly Wait[],
-  driven: boolean
-): Wait | undefined {
-  return (
-    waits.find((wait) => wait.reason === "handoff") ??
-    (driven ? undefined : waits.find((wait) => wait.reason === "stopped"))
-  )
-}
-
-/** What the sidebar's row of a Thread that waits for the Person on a tab
- * says: one they stopped, once it called there again; one that handed the
- * tab over, at once. */
-export function callOf(wait: Wait): string {
-  switch (wait.reason) {
-    case "stopped":
-      return "Stopped on a tab: let it drive again there"
-    case "handoff":
-      return `Your turn in a tab: ${wait.why}`
-  }
-}
-
 /** A place in Banda's window, in its page's pixels. */
 export type Box = { x: number; y: number; width: number; height: number }
 
@@ -159,14 +134,10 @@ export const BROWSER_BRIDGE = {
   /** Stops the Thread that drives the page with Banda's tools, which
    * then waits until `answered`; the Person's own programs on it go on. */
   release: send<[contents: number]>(),
-  /** The Person answered the Thread of `agent`'s wait for `reason` on the
-   * page: it may use the page again. False when it waited for none, as
+  /** The Person answered what the Thread of `agent` waits for on the
+   * page: it may use the page again. False when it waited no more, as
    * after an answer already given. */
-  answered: invoke<
-    [contents: number, agent: string, reason: Wait["reason"]],
-    boolean
-  >(),
-
+  answered: invoke<[contents: number, agent: string], boolean>(),
   /** The turn of the Thread of `agent` ended: it drives no tab now. */
   settled: send<[agent: string]>(),
   /** Pins an extension's button to the row, or takes it off, in

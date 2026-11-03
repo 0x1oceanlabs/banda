@@ -49,7 +49,7 @@ import {
 } from "lucide-react"
 import { addressOf, siteOf } from "./address"
 import { Extensions, WEB_STORE } from "./Extensions"
-import { type Download, type Driver, type Point, shownOf } from "./desktop"
+import type { Download, Driver, Point, Wait } from "./desktop"
 import { browserHost, downloadsNow, watchDownloads } from "./host"
 import { browserKey, type Does, isTabKey } from "./keys"
 import { handBack, threadOf, useThreadOf, useTitleOf } from "./threads"
@@ -223,6 +223,16 @@ function BrowserPane({
       }
       close={close}
     />
+  )
+}
+
+/** The one wait a page shows of `waits`, while `driven` or not: a tab
+ * handed to the Person is theirs, and a stopped Thread shows once no
+ * other drives the tab. */
+function shownOf(waits: readonly Wait[], driven: boolean): Wait | undefined {
+  return (
+    waits.find((wait) => wait.reason === "handoff") ??
+    (driven ? undefined : waits.find((wait) => wait.reason === "stopped"))
   )
 }
 
@@ -423,7 +433,7 @@ function Browser({
                 agent={shown.agent}
                 onThread={onThread}
                 onLet={() =>
-                  void browserHost()?.answered(contents, shown.agent, "stopped")
+                  void browserHost()?.answered(contents, shown.agent)
                 }
               />
             )}
