@@ -1,7 +1,13 @@
-import type { ReactNode } from "react"
+import { createContext, type ReactNode, useContext } from "react"
 import { XIcon, type LucideIcon } from "lucide-react"
 import { cn } from "cn"
 import { Button } from "./button"
+
+/**
+ * Buttons the window puts in every Pane's header, its own or the frame's,
+ * as the one that pops it out into a window of its own (ADR 0025).
+ */
+const TileActions = createContext<ReactNode>(null)
 
 /**
  * A tile's header: one row as tall as every Pane's, with what the Pane puts
@@ -14,7 +20,6 @@ function PaneHeader({
   icon: Icon,
   onClose,
   className,
-  actions,
   children,
 }: {
   /** What the close button closes, for its label. */
@@ -23,8 +28,6 @@ function PaneHeader({
   icon?: LucideIcon | undefined
   onClose: () => void
   className?: string
-  /** Buttons of its own, beside the close button. */
-  actions?: ReactNode
   children: ReactNode
 }) {
   return (
@@ -38,7 +41,7 @@ function PaneHeader({
       {Icon && <Icon className="size-4 shrink-0 text-muted-foreground" />}
       {children}
       <div className="ml-auto flex shrink-0 items-center gap-1">
-        {actions}
+        {useContext(TileActions)}
         <Button
           variant="ghost"
           size="icon-xs"
@@ -54,4 +57,4 @@ function PaneHeader({
   )
 }
 
-export { PaneHeader }
+export { PaneHeader, TileActions }

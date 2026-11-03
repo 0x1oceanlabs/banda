@@ -67,6 +67,9 @@ export type Shell = WindowApi & {
   drawer: () => void
   /** Shows the focused Pane over the whole window, or brings it back. */
   zoom: () => void
+  /** Opens the focused Pane in a window of its own, or brings it back to
+   * its place (ADR 0025, decision 9). */
+  popOut: () => void
   /** Brings the focused column to the middle of the screen, once. */
   center: () => void
   /** Goes to what calls the Person first (ADR 0011, decision 5). */
@@ -398,6 +401,12 @@ export const ACTIONS: readonly Action<Shell>[] = [
         const entry = focused(w)
         return entry && closing(entry.id)
       }),
+  },
+  {
+    id: "pane.pop-out",
+    section: "Panes",
+    title: "The Pane in a window of its own, and back",
+    run: (shell) => shell.popOut(),
   },
   {
     id: "drawer.toggle",

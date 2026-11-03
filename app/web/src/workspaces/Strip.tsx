@@ -49,6 +49,7 @@ export function Strip({
   spaceName,
   called,
   marked,
+  away,
   zoomed,
   center,
   listed,
@@ -69,6 +70,8 @@ export function Strip({
   called: (entry: Entry) => Chime | undefined
   /** An Agent opened it, and the Person has not looked at it yet. */
   marked: (entry: Entry) => boolean
+  /** The Panes in windows of their own, which stand-ins keep the places of. */
+  away: ReadonlySet<string>
   /** The Pane shown over the whole window, if one is (`Alt+Shift+F`). */
   zoomed: string | undefined
   /** Counts Alt+C: each time it does, the focused column goes to the
@@ -279,6 +282,7 @@ export function Strip({
               modules={modules}
               focused={live && workspace.focus === c && column.active === e}
               marked={marked(entry)}
+              away={away.has(entry.id)}
               zoomed={entry.id === zoomed}
               height={column.tabbed ? undefined : column.heights[e]}
               listed={listed(entry)}

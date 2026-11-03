@@ -45,12 +45,15 @@ export const Drawer = memo(function Drawer({
 }) {
   const own: Frame = useMemo(
     () => ({
-      ...frame,
       // The focus is the drawer's while it shows; the workspace keeps its own.
       focus: () => undefined,
       open: (space, pane, _from, place) => frame.open(space, pane, "", place),
       update: (_entry, pane) => onChange(pane),
       close: onClose,
+      run: frame.run,
+      arrange: frame.arrange,
+      // It is no workspace's, so it has no place to keep for a window of
+      // its own: it has no pop-out.
     }),
     [frame, onChange, onClose]
   )

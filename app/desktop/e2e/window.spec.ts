@@ -3643,3 +3643,63 @@ test("Alt+` drops the drawer: a Thread over the workspace that stays as it was, 
   await expect(drawer).toHaveAttribute("data-drawer")
   await expect(drawer.getByText("You said: quick one")).toBeHidden()
 })
+
+test("a Pane pops out into a window of its own, its place keeps a stand-in, and closing that window brings it back", async () => {
+  window = await startWindow()
+  const { page, app } = window
+  const { thread, composer } = await firstThread(page)
+  await composer.fill("hello")
+  await composer.press("Enter")
+  await expect(thread.getByText("You said: hello")).toBeVisible()
+  const tile = page.getByRole("region", { name: "hello" })
+  const popOut = async () => {
+    const [popped] = await Promise.all([
+      app.waitForEvent("window"),
+      tile.getByRole("button", { name: "Pop out" }).click(),
+    ])
+    await popped.waitForLoadState()
+    return popped
+  }
+  const windows = () =>
+    app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length)
+
+  /** Sizes or closes the Pane's own window, as the Person would. */
+  const inPopped = (how: "size" | "close") =>
+    app.evaluate(({ BrowserWindow }, how) => {
+      const popped = BrowserWindow.getAllWindows().find((one) =>
+        one.webContents.getURL().includes("#pane/")
+      )
+      if (how === "size") popped?.setSize(640, 560)
+      else popped?.close()
+    }, how)
+
+  // The same Thread, in its own window; its place keeps a stand-in.
+  const popped = await popOut()
+  await expect(popped.getByText("You said: hello")).toBeVisible()
+  const ask = popped.getByRole("textbox", { name: "Message to Fake AI" })
+  await ask.fill("again")
+  await ask.press("Enter")
+  await expect(popped.getByText("You said: again")).toBeVisible()
+  const standIn = tile.getByRole("button", { name: "In its own window" })
+  await expect(standIn).toBeVisible()
+  await expect(composer).toBeHidden()
+  // Headless, a second window keeps no size it was made with.
+  await inPopped("size")
+  await page.screenshot({ path: "test-results/8c-stand-in.png" })
+  await popped.screenshot({ path: "test-results/8c-popped.png" })
+
+  // Closing its window brings it back to its place, as it is now.
+  await inPopped("close")
+  await expect(standIn).toBeHidden()
+  await expect(tile.getByText("You said: again")).toBeVisible()
+  await expect.poll(windows).toBe(1)
+
+  // Alt+W in its window closes the Pane, and the window with it.
+  const again = await popOut()
+  await expect(again.getByText("You said: again")).toBeVisible()
+  await again
+    .getByRole("textbox", { name: "Message to Fake AI" })
+    .press("Alt+KeyW")
+  await expect(tile).toBeHidden()
+  await expect.poll(windows).toBe(1)
+})
