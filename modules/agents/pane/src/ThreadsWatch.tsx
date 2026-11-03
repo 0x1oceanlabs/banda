@@ -20,7 +20,7 @@ export const threadsWatch: Watch = {
 function ThreadsWatch({ engine, space, report }: WatchProps) {
   const source = useMemo(() => threadsSource(engine, space), [engine, space])
   const live = useLive(engine, space, source)
-  const harnesses = useHarnesses(engine, space)
+  const harnesses = useHarnesses(engine)
   const seen = useSeen()
   const threads = live.state === "ready" ? live.view.threads : undefined
 

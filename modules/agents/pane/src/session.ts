@@ -76,7 +76,7 @@ export function useThreadSession({
   const sending = useAct()
   const acting = useAct()
   const reader = useImageReader(engine, space)
-  const harnesses = useHarnesses(engine, space)
+  const harnesses = useHarnesses(engine)
   // A new Thread starts on a Harness that is on.
   const offered = useMemo(() => harnesses.filter((h) => h.enabled), [harnesses])
   const harness =

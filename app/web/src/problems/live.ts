@@ -5,8 +5,11 @@
 import type { Engine, Event } from "@banda/contract"
 import type { Listed, Problem } from "@banda/contract/problems"
 import { useMemo } from "react"
-import { type Live, type Source, useLive } from "@banda/ui/hooks/use-live"
-import { useMachine } from "@banda/ui/hooks/use-status"
+import {
+  type Live,
+  type Source,
+  useMachineLive,
+} from "@banda/ui/hooks/use-live"
 
 /** The Problems, the newest first, from the machine's log. A Problem
  * that breaks again says nothing, so its count is the read's. */
@@ -34,12 +37,8 @@ export const PLACES: Record<Problem["source"], string> = {
 
 /** The Problems, kept current, once the engine says its machine's log. */
 export function useProblems(engine: Engine): Live<Listed> {
-  const machine = useMachine(engine)
-  const source = useMemo(
-    () => (machine ? problemsSource(engine) : null),
-    [engine, machine]
-  )
-  return useLive(engine, machine ?? "", source)
+  const source = useMemo(() => problemsSource(engine), [engine])
+  return useMachineLive(engine, source)
 }
 
 /** The Problems section's link, at one Problem. */

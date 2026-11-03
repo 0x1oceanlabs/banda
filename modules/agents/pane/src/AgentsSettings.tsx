@@ -52,6 +52,7 @@ import {
   Trash2Icon,
   Undo2Icon,
 } from "lucide-react"
+import { useAccount } from "./harnesses"
 import { commandLine, wordsOf } from "./sign-in"
 import { type Open, Problem, Warning, Ways } from "./SignIn"
 import { SettingsBar } from "./ThreadSettings"
@@ -73,8 +74,9 @@ export type SettingsFile = {
 
 type Props = {
   engine: Engine
-  /** The Space each Harness is asked in: an account serves them all. */
-  space: SpaceId
+  /** A Space, where there is one: what a new Thread starts with is
+   * offered in it, and a sign-in in a terminal runs there. */
+  space?: SpaceId
   open: Open
   harnesses: SettingsFile
   /** What a new Thread on each Harness starts with is here. */
@@ -84,7 +86,8 @@ type Props = {
 /**
  * The settings Pane's Agents (ADR 0016, decision 7), as T3 Code's
  * providers: a card per Harness entry with who is signed in, on or off,
- * and how it starts; adding one. What a message written while an Agent
+ * and how it starts; adding one. The Harnesses and their accounts are the
+ * machine's module `harnesses` (ADR 0040), so they show with no Space. What a message written while an Agent
  * works does is `agents.toml`'s, drawn from its schema under these. The
  * engine reads `harnesses.toml` again once it changed, so the list is
  * asked again after each change, and when the window comes to the front.
@@ -96,16 +99,16 @@ export function AgentsSettings({
   /** A link's Harness: it shows lit. */
   lit?: string
 }) {
-  const { engine, space } = props
+  const { engine } = props
   const [list, setList] = useState<HarnessView[] | { refused: string }>()
   const readList = useCallback(
     () =>
       void engine
-        .call("agents.harnesses", {}, { space })
+        .call("harnesses.list", {})
         .then(setList, (error: unknown) =>
           setList({ refused: problem(error) })
         ),
-    [engine, space]
+    [engine]
   )
   // Read as the window comes to the front, for the Person's own edits.
   const front = useInFront()
@@ -141,10 +144,8 @@ function HarnessCard({
   onWritten,
   ...props
 }: HarnessProps & { lit: boolean; onWritten: () => void }) {
-  const { harness, harnesses } = props
+  const { harness, harnesses, space } = props
   const { refused, write } = useWrite({ onWritten, against: harness })
-  // Asked again after each sign-in or sign-out: a new key, a new reading.
-  const [readings, setReadings] = useState(0)
   const card = useRef<HTMLDivElement>(null)
   useEffect(() => {
     if (lit) card.current?.scrollIntoView({ block: "center" })
@@ -166,18 +167,15 @@ function HarnessCard({
     ),
     starts: (
       <>
-        {harness.enabled && <NewThreads {...props} write={write} />}
+        {harness.enabled && space && (
+          <NewThreads {...props} space={space} write={write} />
+        )}
         <HowItStarts harness={harness} file={harnesses} write={write} />
       </>
     ),
   }
   return harness.enabled ? (
-    <Reading
-      key={readings}
-      {...props}
-      frame={frame}
-      readAgain={() => setReadings((n) => n + 1)}
-    />
+    <Reading {...props} frame={frame} />
   ) : (
     <Frame {...frame} about="Off: no new Thread starts on it." />
   )
@@ -256,60 +254,44 @@ function runs({ cli, adapter }: Account): string {
   return [own?.join(" "), through].filter(Boolean).join(" · ")
 }
 
-/** Asks the Harness, which starts it if it does not run. */
-function Reading({
-  frame,
-  readAgain,
-  ...props
-}: HarnessProps & { frame: FrameProps; readAgain: () => void }) {
-  const { engine, space, harness } = props
-  const account = useRead(
-    useCallback(
-      () => engine.call("agents.account", { harness: harness.id }, { space }),
-      [engine, space, harness.id]
-    )
-  )
+/** Asks the Harness, which starts it if it does not run; again at a
+ * Person's "check again", and as its account changes. */
+function Reading({ frame, ...props }: HarnessProps & { frame: FrameProps }) {
+  const { engine, harness } = props
+  const [checks, setChecks] = useState(0)
+  const read = useAccount(engine, harness.id, checks)
+  const account = read.state === "ready" ? read.view.account : undefined
   return (
     <Frame
       {...frame}
-      about={account.state === "ready" ? runs(account.value) : undefined}
-      aboutTitle={
-        account.state === "ready" ? account.value.cli?.path : undefined
-      }
+      about={account && runs(account)}
+      aboutTitle={account?.cli?.path}
       action={
-        account.state !== "loading" && (
+        read.state !== "loading" && (
           <Button
             variant="ghost"
             size="icon-xs"
             aria-label={`Check ${harness.name} again`}
             title="Check again"
-            onClick={readAgain}
+            onClick={() => setChecks((n) => n + 1)}
           >
             <RotateCwIcon />
           </Button>
         )
       }
     >
-      {account.state === "loading" && (
+      {read.state === "loading" && (
         <span className="flex items-center gap-2 text-sm text-muted-foreground">
           <Spinner /> Starting {harness.name}…
         </span>
       )}
-      {account.state === "refused" && (
+      {read.state === "refused" && (
         <Problem>
-          {harness.name} does not start: {account.refusal.message}
+          {harness.name} does not start: {read.refusal.message}
         </Problem>
       )}
-      {account.state === "ready" && account.value.cli?.outdated && (
-        <Warning>{account.value.cli.outdated}</Warning>
-      )}
-      {account.state === "ready" && (
-        <AccountState
-          {...props}
-          account={account.value}
-          onChanged={readAgain}
-        />
-      )}
+      {account?.cli?.outdated && <Warning>{account.cli.outdated}</Warning>}
+      {account && <AccountState {...props} account={account} />}
     </Frame>
   )
 }
@@ -323,7 +305,10 @@ function NewThreads({
   harness,
   agents,
   write,
-}: HarnessProps & { write: (said: Promise<string[]>) => void }) {
+}: HarnessProps & {
+  space: SpaceId
+  write: (said: Promise<string[]>) => void
+}) {
   // Asked again after its own writes, and as the window comes to the
   // front, for the Person's own edits.
   const [writes, setWrites] = useState(0)
@@ -639,11 +624,7 @@ function AccountState({
   harness,
   open,
   account,
-  onChanged,
-}: Omit<HarnessProps, "harnesses" | "agents"> & {
-  account: Account
-  onChanged: () => void
-}) {
+}: Omit<HarnessProps, "harnesses" | "agents"> & { account: Account }) {
   const who = account.signed_in_as
   if (who?.signed_in)
     return (
@@ -654,14 +635,7 @@ function AccountState({
             <span className="text-muted-foreground"> ({who.detail})</span>
           )}
         </p>
-        {account.signs_out && (
-          <SignOut
-            engine={engine}
-            space={space}
-            harness={harness}
-            onSignedOut={onChanged}
-          />
-        )}
+        {account.signs_out && <SignOut engine={engine} harness={harness} />}
       </div>
     )
   return (
@@ -677,7 +651,6 @@ function AccountState({
         harness={harness.id}
         ways={account.ways}
         open={open}
-        onSignedIn={onChanged}
       />
     </div>
   )
@@ -685,21 +658,15 @@ function AccountState({
 
 function SignOut({
   engine,
-  space,
   harness,
-  onSignedOut,
-}: Pick<HarnessProps, "engine" | "space" | "harness"> & {
-  onSignedOut: () => void
-}) {
+}: Pick<HarnessProps, "engine" | "harness">) {
   const [asking, setAsking] = useState(false)
   const signing = useAct()
   const signOut = async () => {
     const done = await signing.act(() =>
-      engine.command("agents.sign_out", { harness: harness.id }, space)
+      engine.command("harnesses.sign_out", { harness: harness.id })
     )
-    if (done === undefined) return
-    setAsking(false)
-    onSignedOut()
+    if (done !== undefined) setAsking(false)
   }
   return (
     <>

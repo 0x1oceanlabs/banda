@@ -31,7 +31,7 @@ export const filesSource: Source = {
 
 function FindAsk({ words, here, found }: FindProps) {
   const { engine, space, entered } = here
-  const all = useHarnesses(engine, space)
+  const all = useHarnesses(engine)
   const rows = useMemo((): MenuRow[] => {
     if (!entered && !words) return []
     // A Harness turned off starts no new Thread.
