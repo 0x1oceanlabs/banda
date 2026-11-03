@@ -37,9 +37,36 @@ use std::sync::Arc;
 
 #[derive(Default)]
 pub struct Git {
-    /// Held while one of its commands writes, so two of them never race
-    /// for the index's lock; `act` holds it till it ends.
-    writing: Arc<tokio::sync::Mutex<()>>,
+    writing: Writes,
+}
+
+/// Held while one of its commands writes, so two of them never race for
+/// the index's lock; `act` holds it till it ends. As it is let go, each
+/// `git.watch` reads the status again at once.
+#[derive(Clone, Default)]
+struct Writes {
+    lock: Arc<tokio::sync::Mutex<()>>,
+    done: Arc<tokio::sync::Notify>,
+}
+
+impl Writes {
+    async fn hold(&self) -> Writing {
+        Writing {
+            _lock: self.lock.clone().lock_owned().await,
+            done: self.done.clone(),
+        }
+    }
+}
+
+struct Writing {
+    _lock: tokio::sync::OwnedMutexGuard<()>,
+    done: Arc<tokio::sync::Notify>,
+}
+
+impl Drop for Writing {
+    fn drop(&mut self) {
+        self.done.notify_waiters();
+    }
 }
 
 impl Git {
@@ -170,12 +197,15 @@ impl Git {
 
     async fn change(&self, call: Call, act: stage::Act, ask: ChangeAsk) -> Result<(), Refusal> {
         let repo = Repo::open(call.space().folder()).await?;
-        let _writing = self.writing.lock().await;
+        let _writing = self.writing.hold().await;
         stage::change(&repo, act, ask).await
     }
 
     async fn watch(&self, call: Call, _: Nothing) -> Result<Stream, Refusal> {
-        Ok(watch::watch(call.space().clone()))
+        Ok(watch::watch(
+            call.space().clone(),
+            self.writing.done.clone(),
+        ))
     }
 
     async fn act(&self, call: Call, ask: ActAsk) -> Result<Stream, Refusal> {
@@ -186,7 +216,7 @@ impl Git {
         // done.
         tokio::spawn(async move {
             let tell = act::Teller(say);
-            let _writing = writing.lock().await;
+            let _writing = writing.hold().await;
             let ended = act::act(&repo, ask, &tell).await;
             tell.ended(ended).await;
         });
@@ -195,13 +225,13 @@ impl Git {
 
     async fn switch(&self, call: Call, ask: SwitchAsk) -> Result<(), Refusal> {
         let repo = Repo::open(call.space().folder()).await?;
-        let _writing = self.writing.lock().await;
+        let _writing = self.writing.hold().await;
         act::switch(&repo, &ask.name).await
     }
 
     async fn branch(&self, call: Call, ask: BranchAsk) -> Result<(), Refusal> {
         let repo = Repo::open(call.space().folder()).await?;
-        let _writing = self.writing.lock().await;
+        let _writing = self.writing.hold().await;
         act::make_branch(&repo, &ask.name, ask.from.as_deref()).await
     }
 
@@ -214,7 +244,7 @@ impl Git {
     }
 
     async fn init(&self, call: Call, _: Nothing) -> Result<(), Refusal> {
-        let _writing = self.writing.lock().await;
+        let _writing = self.writing.hold().await;
         act::init(call.space().folder()).await
     }
 }

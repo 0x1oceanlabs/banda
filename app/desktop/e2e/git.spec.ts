@@ -272,3 +272,51 @@ test("a Thread's details card shows the branch and its changes, as T3 Code's, an
     "Changes"
   )
 })
+
+test("the git button commits every change with the message the Thread's Harness wrote, and pushes, asking first on main", async () => {
+  window = await startWindow()
+  const { page, dir } = window
+  const { thread, composer } = await firstThread(page)
+  const folder = join(dir, "root", "Work")
+  const remote = join(dir, "remote.git")
+  git(dir, "init", "-q", "--bare", "--initial-branch=main", remote)
+  git(folder, "init", "-q", "-b", "main")
+  writeFileSync(join(folder, "app.ts"), "export const a = 1\n")
+  git(folder, "add", "-A")
+  git(folder, "commit", "-qm", "First")
+  git(folder, "remote", "add", "origin", remote)
+  git(folder, "push", "-q", "-u", "origin", "main")
+  writeFileSync(join(folder, "app.ts"), "export const a = 2\n")
+
+  // A started Thread's Harness writes the message.
+  await composer.fill("hello")
+  await composer.press("Enter")
+  await expect(thread.getByText("You said: hello")).toBeVisible()
+  await page.keyboard.press("Control+Shift+KeyB")
+  const card = page.getByRole("dialog", { name: "Thread details" })
+  const button = card.getByRole("button", { name: "Commit & push" })
+  await expect(button).toBeVisible()
+  await page.screenshot({ path: "test-results/git-button-ready.png" })
+
+  // On main it asks first; a feature branch is named for the change.
+  await button.click()
+  const ask = page.getByRole("dialog", { name: "Commit & push to main?" })
+  await expect(ask).toBeVisible()
+  await page.screenshot({ path: "test-results/git-button-main.png" })
+  await ask
+    .getByRole("button", { name: "Check out feature branch & continue" })
+    .click()
+  await expect(card).toContainText("to origin/feature/change-app")
+  await expect(card).toContainText("Change the app")
+  await page.screenshot({ path: "test-results/git-button-done.png" })
+  expect(git(remote, "log", "--format=%s", "feature/change-app")).toBe(
+    "Change the app\nFirst\n"
+  )
+  // The card follows: the new branch, up to date, nothing to do.
+  await expect(
+    card.getByText("feature/change-app", { exact: true })
+  ).toBeVisible()
+  await expect(card.getByRole("button", { name: "Commit" })).toBeDisabled()
+  // The Thread never showed the message's run.
+  await expect(thread.getByText("You write concise")).toBeHidden()
+})

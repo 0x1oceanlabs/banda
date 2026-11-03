@@ -52,3 +52,13 @@ export function fullDate(at: number): string {
     timeStyle: "short",
   }).format(at)
 }
+
+/** How long `ms` took: "12s", "1m 05s", "2h 03m". */
+export function duration(ms: number): string {
+  const seconds = Math.max(0, Math.floor(ms / 1000))
+  if (seconds < 60) return `${seconds}s`
+  const minutes = Math.floor(seconds / 60)
+  const pad = (n: number) => String(n).padStart(2, "0")
+  if (minutes < 60) return `${minutes}m ${pad(seconds % 60)}s`
+  return `${Math.floor(minutes / 60)}h ${pad(minutes % 60)}m`
+}

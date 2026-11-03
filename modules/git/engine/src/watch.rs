@@ -11,8 +11,9 @@ use crate::run::Opts;
 use crate::status;
 use banda_kernel::{ModuleSpace, Stream};
 use std::path::PathBuf;
+use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::mpsc;
+use tokio::sync::{Notify, mpsc};
 use tokio::task::JoinHandle;
 use tokio::time::Instant;
 
@@ -23,13 +24,18 @@ const AGAIN: Duration = Duration::from_secs(3);
 const FETCH: Duration = Duration::from_secs(30);
 const FETCH_AT_MOST: Duration = Duration::from_secs(15 * 60);
 
-/// Follows the status of `space`'s folder until the window lets go.
-pub fn watch(space: ModuleSpace) -> Stream {
+/// Follows the status of `space`'s folder until the window lets go,
+/// reading it again at once when a git command of Banda's is `written`.
+pub fn watch(space: ModuleSpace, written: Arc<Notify>) -> Stream {
     let (say, heard) = mpsc::channel(1);
     tokio::spawn(async move {
         let mut told: Option<Status> = None;
         let mut fetch = Fetch::new();
         loop {
+            // Heard from now: a write that ends during the read counts.
+            let wrote = written.notified();
+            tokio::pin!(wrote);
+            wrote.as_mut().enable();
             let read = async {
                 let at = space.at().await.ok()?;
                 status::status(space.folder(), at).await.ok()
@@ -61,6 +67,7 @@ pub fn watch(space: ModuleSpace) -> Stream {
                 () = tokio::time::sleep(AGAIN) => {}
                 // What it fetched counts now, not in a while.
                 () = fetch.ended() => {}
+                () = &mut wrote => {}
                 () = say.closed() => return,
             }
         }
