@@ -286,20 +286,40 @@ fn harness_option(option: &acp::SessionConfigOption) -> Option<HarnessOption> {
         },
         _ => Vec::new(),
     };
+    let category = category(option);
+    let levels = category.as_deref() == Some("thought_level");
     Some(HarnessOption {
         id: option.id.0.to_string(),
         name: option.name.clone(),
         description: option.description.clone(),
-        category: category(option),
         value: current(option)?,
         choices: choices
             .into_iter()
             .map(|c| OptionChoice {
                 value: c.value.0.to_string(),
-                name: c.name.clone(),
+                name: levels
+                    .then(|| level_name(&c.value.0))
+                    .flatten()
+                    .map_or_else(|| c.name.clone(), str::to_owned),
                 description: c.description.clone(),
             })
             .collect(),
+        category,
+    })
+}
+
+/// An effort level by the words Codex has for it, the same from each
+/// Harness: Claude Code says "Xhigh".
+fn level_name(value: &str) -> Option<&'static str> {
+    Some(match value {
+        "none" => "None",
+        "minimal" => "Minimal",
+        "low" => "Low",
+        "medium" => "Medium",
+        "high" => "High",
+        "xhigh" => "Extra high",
+        "max" => "Max",
+        _ => return None,
     })
 }
 
@@ -447,6 +467,22 @@ mod tests {
             ["model", "reasoning_effort"],
             "the model first; the modes stand apart"
         );
+    }
+
+    #[test]
+    fn effort_levels_have_the_same_names_from_each_harness() {
+        use acp::SessionConfigOptionCategory as Category;
+        let claude = select("effort", "xhigh", &["default", "low", "xhigh", "max"])
+            .category(Category::ThoughtLevel);
+        let names: Vec<_> = harness_option(&claude)
+            .unwrap()
+            .choices
+            .into_iter()
+            .map(|c| c.name)
+            .collect();
+        assert_eq!(names, ["default", "Low", "Extra high", "Max"]);
+        let model = select("model", "xhigh", &["xhigh"]).category(Category::Model);
+        assert_eq!(harness_option(&model).unwrap().choices[0].name, "xhigh");
     }
 
     #[test]

@@ -46,6 +46,17 @@ round too; the card is as wide as the messages, centred.
    opens one menu with each of the Harness's options and the mode ("How
    freely it acts"). Nothing rests faded beside them (this replaces ADR
    0010 decision 7's last point).
+
+   *Amended 2026-11-03, as Codex has it (Roma's call):* two triggers, not
+   one. A quiet shield, the mode's icon, opens the modes, and the
+   Harness's options the picker does not set. The model picker names the
+   Harness by its logo, then the model and the effort, the effort in the
+   theme's blue, its top level in magenta. It opens on a slider of effort
+   levels (the Harness's `thought_level` option; its `default` is no
+   stop), with Fast mode (a `model_config` toggle named fast) on the
+   left and a way back to the Harness's own defaults on the right; the
+   model's name opens the list of models, each under the logo with what
+   it is for.
 4. **Only what is on shows.** Plan is not a button: `/plan` and `/default`
    switch it, and Shift+Tab, as before. While it is on, a quiet "Plan"
    sits beside `+`, and a click turns it off. The context ring shows from
@@ -72,8 +83,8 @@ or Plan ready as part of the card). Roma did not want it now.
 ## Consequences
 
 - The composer no longer uses `InputGroup`; it is its own surface in the
-  agents Pane. Beside the send button
-  `SettingsMenu` is one trigger and one menu; the settings page keeps its
+  agents Pane. Beside the send button sit `ModeMenu` and `ModelPicker`;
+  the settings page keeps its
   bar of a Harness's defaults, Plan among them.
 - The look follows the theme's tokens only, so light and dark, Omarchy
   themes and the glass (ADR 0023) need nothing of their own.

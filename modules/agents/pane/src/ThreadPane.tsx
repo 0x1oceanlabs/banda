@@ -82,7 +82,9 @@ import { Minimap } from "./Minimap"
 import { ToolCall } from "./ToolCall"
 import { Issue } from "./Issue"
 import { Visual } from "./Visual"
-import { SettingsMenu } from "./ThreadSettings"
+import { ModelPicker } from "./ModelPicker"
+import { pickedOf } from "./picker"
+import { ModeMenu } from "./ThreadSettings"
 import { SignIn, Warning } from "./SignIn"
 import { NewThreadBar } from "./NewThread"
 import { NEW_THREAD, type ThreadArgs, useThreadSession } from "./session"
@@ -138,6 +140,7 @@ function ThreadPane(props: PaneProps<ThreadArgs>) {
     queue,
     editLast,
   } = useThreadSession(props)
+  const picked = useMemo(() => pickedOf(offer.options), [offer.options])
   const [dropping, setDropping] = useState(false)
   // What the Person looks for in the Thread, while the find bar is open.
   const [find, setFind] = useState<{ query: string; at: number }>()
@@ -327,12 +330,22 @@ function ThreadPane(props: PaneProps<ThreadArgs>) {
           onStop={stop}
         >
           {settings && (
-            <SettingsMenu
-              settings={settings}
-              offer={offer}
-              disabled={acting}
-              onChange={configure}
-            />
+            <>
+              <ModeMenu
+                settings={settings}
+                options={picked.rest}
+                disabled={acting}
+                onChange={configure}
+              />
+              <ModelPicker
+                harness={harness}
+                name={name}
+                settings={settings}
+                picked={picked}
+                disabled={acting}
+                onChange={configure}
+              />
+            </>
           )}
         </Composer>
         {/* A new Thread's Space and Harness, bare under the card. */}

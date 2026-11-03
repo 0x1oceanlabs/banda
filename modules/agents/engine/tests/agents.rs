@@ -1376,7 +1376,7 @@ async fn a_threads_settings_become_its_harnesss_options() {
     let offered: Vec<_> = view.offer.options.iter().map(|o| o.id.as_str()).collect();
     assert_eq!(
         offered,
-        ["model", "brief"],
+        ["model", "effort", "fast", "brief"],
         "the mode stands for the Harness's own"
     );
     assert!(view.offer.plans);
