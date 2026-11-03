@@ -520,10 +520,15 @@ export function drivers(): Set<string> {
 
 /** The Threads that asked the Person on a page, each with that page's
  * web contents' ID and since when. */
-export function asking(): { contents: number; wait: Wait; asked: number }[] {
+export function asking(): {
+  contents: number
+  wait: Wait & { asked: number }
+}[] {
   return [...byContents].flatMap(([contents, page]) =>
     page.state.waits.flatMap((wait) =>
-      wait.asked === undefined ? [] : [{ contents, wait, asked: wait.asked }]
+      wait.asked === undefined
+        ? []
+        : [{ contents, wait: { ...wait, asked: wait.asked } }]
     )
   )
 }

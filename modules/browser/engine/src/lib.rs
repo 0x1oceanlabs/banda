@@ -311,7 +311,8 @@ impl Browser {
     /// Hands a tab to the Person for a step that is theirs (ADR 0029,
     /// decisions 6 and 7, E): the tab asks them, and its Thread waits.
     async fn handoff(&self, call: Call, hand: Handoff) -> Result<String, Refusal> {
-        let why = hand.why.trim();
+        // The words round it say where it ends.
+        let why = hand.why.trim().trim_end_matches('.').trim_end();
         if why.is_empty() {
             return Err(Refusal::invalid(
                 "browser_handoff needs why: what the Person does in the tab.",
@@ -440,7 +441,8 @@ fn told(done: &str, shown: &Shown, place: bool) -> String {
     text
 }
 
-/// What an answer says of a page's own words, at most `TITLE` long.
+/// What an answer says of a page's own words, or a handoff's why, at most
+/// `TITLE` long.
 fn cut(words: &str) -> &str {
     &words[..words.floor_char_boundary(TITLE)]
 }

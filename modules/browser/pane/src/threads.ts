@@ -12,7 +12,7 @@ import {
   type WatchProps,
 } from "@banda/ui/pane"
 import { useEffect, useSyncExternalStore } from "react"
-import type { Handed, Wait } from "./desktop"
+import { callOf, type Handed } from "./desktop"
 import { browserHost } from "./host"
 import { asking, drivers, watchPages, watchWaits } from "./pages"
 
@@ -76,31 +76,39 @@ export function followThreads(window: WindowApi): () => void {
 /** What the sidebar's row of a Thread that waits for the Person on a tab
  * says: one they stopped, once it called there again; one that handed
  * the tab over, at once. */
-const callOf = (wait: Wait) =>
-  wait.reason === "stopped"
-    ? "Stopped on a tab: let it drive again there"
-    : `Your turn in a tab: ${wait.why}`
-
 /**
  * The Person is done with what the Thread of `wait.agent` handed them on
  * the page of `contents` (ADR 0029, decision 6): the tab is the Thread's
  * again, and a line in it, as the Person's message, starts its next turn.
  */
-export function handBack(engine: Engine, contents: number, wait: Handed) {
-  browserHost()?.answered(contents, wait.agent)
+export async function handBack(
+  engine: Engine,
+  contents: number,
+  wait: Handed
+): Promise<void> {
+  // Once: a second press finds no wait.
+  if (!(await browserHost()?.answered(contents, wait.agent))) return
   const thread = threadOf(wait.agent)
   if (!thread) return
-  void engine.command(
-    "agents.send",
-    {
-      thread: thread.listed.id,
-      text: `Done: ${wait.why}. Carry on.`,
-      images: [],
-      settings: null,
-      steer: false,
-    },
-    thread.space
-  )
+  await engine
+    .command(
+      "agents.send",
+      {
+        thread: thread.listed.id,
+        text: `Done: ${wait.why}. Carry on.`,
+        images: [],
+        settings: null,
+        steer: false,
+      },
+      thread.space
+    )
+    // What fails is kept as a Problem (ADR 0039).
+    .catch((error: unknown) =>
+      console.error(
+        "The browser could not tell the Thread it was handed back:",
+        error
+      )
+    )
 }
 
 /**
@@ -115,7 +123,7 @@ function WaitsWatch({ space, report }: WatchProps) {
   useEffect(() => {
     let was: string | undefined
     const check = () => {
-      const listed = asking().flatMap(({ contents, wait, asked }): Listed[] => {
+      const listed = asking().flatMap(({ contents, wait }): Listed[] => {
         const { agent } = wait
         const thread = threadOf(agent)
         if (thread?.space !== space) return []
@@ -124,9 +132,8 @@ function WaitsWatch({ space, report }: WatchProps) {
             id: `browser:${contents}:${agent}`,
             title: thread.listed.title,
             mark: "asking",
-            changed: asked,
+            changed: wait.asked,
             calls: callOf(wait),
-
             on: agent,
             pane: thread.listed.pane,
           },

@@ -365,7 +365,7 @@ async fn a_wait_is_held_to_a_minute_and_says_where_the_tab_is() {
 async fn a_handed_tab_tells_the_agent_to_end_its_turn() {
     let (asked, said) = told(
         "browser.handoff",
-        json!({ "tab": 4, "why": "  Sign in to GitHub " }),
+        json!({ "tab": 4, "why": "  Sign in to GitHub. " }),
         Value::Null,
     )
     .await;
