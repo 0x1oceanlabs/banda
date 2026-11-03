@@ -80,11 +80,6 @@ const noTab = (tab: number) =>
     message: `There is no tab ${tab}: browser_tabs lists them.`,
   })
 
-/** Whether `wait` keeps the Agent `agent` off its tab: its own does, and
- * a tab handed to the Person is theirs, for every Agent. */
-const blocks = (wait: Wait, agent: string) =>
-  wait.agent === agent || wait.reason === "handoff"
-
 /** What a call of the Agent `agent` on `tab` hears while `wait` blocks
  * it there (ADR 0029, decision 6). */
 const waitRefused = (tab: number, wait: Wait, agent: string) => {
@@ -106,7 +101,6 @@ const waitRefused = (tab: number, wait: Wait, agent: string) => {
 }
 
 /** A tab as an Agent sees it. */
-
 export const seenTab = (
   page: WebContents,
   cdp: Pick<Cdp["Service"], "drives">
@@ -221,13 +215,10 @@ export class Drive extends Context.Service<
     /** The Thread of `agent` hands the tab to the Person for a step that
      * is theirs, and waits until they hand it back. */
     handoff(hand: Handoff, by: Participant): Effect.Effect<void, Refused>
-    /** The Person answered the Thread of `agent`'s wait for `reason` on
-     * the tab: it may use the tab again. False when it waited for none. */
-    answered(
-      tab: number,
-      agent: string,
-      reason: Wait["reason"]
-    ): Effect.Effect<boolean>
+    /** The Person answered what the Thread of `agent` waits for on the
+     * tab (one wait at most): it may use the tab again. False when it
+     * waited for nothing. */
+    answered(tab: number, agent: string): Effect.Effect<boolean>
     /** The turn of the Thread of `agent` ended: it drives no tab now. */
     settled(agent: string): Effect.Effect<void>
   }
@@ -273,15 +264,16 @@ export class Drive extends Context.Service<
         tellWaits(tab)
         return true
       }
-      /** Refuses a call of the Agent `by` on a tab where a wait blocks
-       * it; its own wait then asks the Person. */
+      /** Refuses a call of the Agent `by` on a tab where its Thread waits
+       * for the Person, which it then asks; and every Agent's while the
+       * tab is handed to the Person, who has it then. */
       const waiting = (tab: number, by: Participant) =>
         Effect.suspend(() => {
           const on = waits.get(tab)
-          if (!on?.size || by.kind !== "agent") return Effect.void
-          let was = on.get(by.id)
-          if (!was)
-            for (const wait of on.values()) if (blocks(wait, by.id)) was = wait
+          if (!on || by.kind !== "agent") return Effect.void
+          const was =
+            on.get(by.id) ??
+            [...on.values()].find((wait) => wait.reason === "handoff")
           if (!was) return Effect.void
           if (was.agent === by.id && was.asked === undefined) {
             on.set(by.id, { ...was, asked: Date.now() })
@@ -525,12 +517,10 @@ export class Drive extends Context.Service<
             if (driving.has(tab)) tell(tab, null)
             return Effect.void
           }),
-        answered: (tab, agent, reason) =>
+        answered: (tab, agent) =>
           Effect.sync(() => {
-            const on = waits.get(tab)
-            if (on?.get(agent)?.reason !== reason) return false
             // The tab's map stays, as its one hook on the tab's end does.
-            on.delete(agent)
+            if (!waits.get(tab)?.delete(agent)) return false
             tellWaits(tab)
             return true
           }),

@@ -12,8 +12,7 @@ import {
   type WatchProps,
 } from "@banda/ui/pane"
 import { useEffect, useSyncExternalStore } from "react"
-import { callOf } from "./desktop"
-
+import type { Wait } from "./desktop"
 import { browserHost } from "./host"
 import { asking, drivers, watchPages, watchWaits } from "./pages"
 
@@ -88,7 +87,7 @@ export async function handBack(
   why: string
 ): Promise<void> {
   // Once: a second press finds no wait.
-  if (!(await browserHost()?.answered(contents, agent, "handoff"))) return
+  if (!(await browserHost()?.answered(contents, agent))) return
   const thread = threadOf(agent)
   if (!thread) return
   await engine.command(
@@ -107,7 +106,22 @@ export async function handBack(
 /** The title of the Thread of `agent`, as listed, drawn again as the
  * lists change. */
 export function useTitleOf(agent: string): string {
-  return useThreadOf(agent)?.title ?? "An Agent"
+  return useSyncExternalStore(
+    watchLists,
+    () => threadOf(agent)?.listed.title ?? "An Agent"
+  )
+}
+
+/** What the sidebar's row of a Thread that waits for the Person on a tab
+ * says: one they stopped, once it called there again; one that handed the
+ * tab over, at once. */
+function callOf(wait: Wait): string {
+  switch (wait.reason) {
+    case "stopped":
+      return "Stopped on a tab: let it drive again there"
+    case "handoff":
+      return `Your turn in a tab: ${wait.why}`
+  }
 }
 
 /**
