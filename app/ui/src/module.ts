@@ -7,7 +7,7 @@
 import type { ComponentType, ReactNode } from "react"
 import type { Engine, JsonValue, SpaceId } from "@banda/contract"
 import type { Key } from "./lib/keys"
-import type { PaneKind, PaneState, Watch } from "./pane"
+import type { Lists, PaneKind, PaneState, Watch } from "./pane"
 
 /** A Pane's args, and what an action is run with besides the window: the
  * Banda menu's words, a Space. Plain data, as `keys.toml` and the CLI will
@@ -40,6 +40,10 @@ export type WindowApi = {
   /** Where the thing `agent` works in is, as a Thread its Agent's (ADR
    * 0029, decision 4); none when no module lists one. */
   beside: (agent: string) => Beside | null
+  /** What every module lists now, as the sidebar shows it (ADR 0008). */
+  lists: () => Lists
+  /** Calls `listener` on each change of `lists`; returns how to stop. */
+  watchLists: (listener: () => void) => () => void
   /** Runs an action by its id, a module's or the window's, as its key
    * would: how one module asks another for what it does. */
   run: (action: string, args?: Args) => void

@@ -1,11 +1,10 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import type { Engine, SpaceId, SpaceSummary } from "@banda/contract"
-import type { Attention, Listed, Report, Watch } from "@banda/ui/pane"
+import type { Attention, Listed, Lists, Report, Watch } from "@banda/ui/pane"
 import { runs, watches } from "../registry"
 import { combine } from "./attention"
 
-/** What every module lists for each Space, for the sidebar. */
-export type Lists = Readonly<Record<SpaceId, readonly Listed[]>>
+export type { Lists }
 
 /** Where each Watch's list goes too, for the window to tell what calls. */
 export type Listening = {

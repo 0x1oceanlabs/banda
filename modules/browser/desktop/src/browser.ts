@@ -49,6 +49,7 @@ import {
   Window,
 } from "@banda/desktop-kit"
 import { Cdp } from "./cdp"
+import { Drive } from "./drive"
 import { BoxArg, Extensions } from "./extensions"
 import { Tabs } from "./tabs"
 
@@ -461,7 +462,7 @@ const page = Schema.Tuple([Schema.Number])
  * in through its `modules.ts` without naming them. */
 export const browserAnswers: Answers<
   typeof BROWSER_BRIDGE,
-  Browser | Extensions | Tabs | Cdp
+  Browser | Extensions | Tabs | Cdp | Drive
 > = {
   tabs: [
     Schema.Tuple([Schema.Literals(["top", "left"])]),
@@ -477,6 +478,8 @@ export const browserAnswers: Answers<
     ([request, page]) => Tabs.use((tabs) => tabs.created(request, page)),
   ],
   stop: [page, ([page]) => Cdp.use((cdp) => cdp.stop(page))],
+  release: [page, ([page]) => Drive.use((drive) => drive.release(page))],
+  settled: [text, ([agent]) => Drive.use((drive) => drive.settled(agent))],
   pin: [
     Schema.Tuple([Schema.String, Schema.Boolean]),
     ([id, pinned]) => Browser.use((browser) => browser.pin(id, pinned)),

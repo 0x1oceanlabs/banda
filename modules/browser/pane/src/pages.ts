@@ -29,6 +29,10 @@ export type PageState = {
   icon?: string
   /** An Agent drives it over CDP: the tab shows its mark. */
   driven: boolean
+  /** The Thread that drives it with Banda's tools, by its Agent, and the
+   * step it takes: the page glows, and a pill says so (ADR 0029,
+   * decision 4). */
+  driver: { agent: string; step: string } | null
 }
 
 /** A page not made yet. */
@@ -40,6 +44,7 @@ export const BLANK: PageState = {
   forward: false,
   crashed: false,
   driven: false,
+  driver: null,
 }
 
 /** The part of Electron's `<webview>` a page uses. */
@@ -79,6 +84,9 @@ export class Page {
   private readonly view: View
   /** Darkens the page as the tile's own veil darkens the tile. */
   private readonly veil: HTMLDivElement
+  /** What Banda draws over the page and not in it, as a Thread's pill:
+   * the page never sees it. */
+  readonly over: HTMLDivElement
   private ready = false
   /** Its web contents' ID, by which the desktop names it; none until it
    * attached. */
@@ -111,9 +119,11 @@ export class Page {
     this.veil = document.createElement("div")
     this.veil.style.cssText =
       "position:absolute;inset:0;background:black;pointer-events:none;opacity:0"
+    this.over = document.createElement("div")
+    this.over.style.cssText = "position:absolute;inset:0;pointer-events:none"
     this.listen()
     this.draw(null)
-    this.box.append(this.view, this.veil)
+    this.box.append(this.view, this.over, this.veil)
     layer.append(this.box)
   }
 
@@ -243,6 +253,12 @@ export class Page {
   /** An Agent drives it now, or no longer does. */
   drive(driven: boolean): void {
     this.set({ driven })
+  }
+
+  /** A Thread's Agent drives it with Banda's tools now, at `step`; or
+   * none does. */
+  driveBy(agent: string | null, step: string): void {
+    this.set({ driver: agent ? { agent, step } : null })
   }
 
   private set(change: Partial<PageState>): void {
@@ -483,6 +499,13 @@ export function watchPages(listener: () => void): () => void {
   return () => watchers.delete(listener)
 }
 
+/** The Agents whose Threads drive a page now. */
+export function drivers(): Set<string> {
+  return new Set(
+    [...pages.values()].flatMap((page) => page.state.driver?.agent ?? [])
+  )
+}
+
 /** A number that changes with any page, for `useSyncExternalStore`. */
 export function pagesVersion(): number {
   return version
@@ -519,6 +542,7 @@ function hear(news: PageNews): void {
   const holder = held.get(page.id)
   if (news.kind === "icon") page.iconed(news.icon)
   else if (news.kind === "driven") page.drive(news.driven)
+  else if (news.kind === "driver") page.driveBy(news.agent, news.step)
   else if (news.kind === "open") {
     holder?.open(news.url, page.id, news.background)
   } else if (news.kind === "select") holder?.show(page.id)

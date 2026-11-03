@@ -16,8 +16,8 @@ import { Cdp } from "./cdp"
 import { Drive, seenTab } from "./drive"
 import { Tabs } from "./tabs"
 
-/** Who asks, by their ID: the Agent of a Thread, as a rule. */
-const byOf = (request: WindowRequest) => request.by.id
+/** Who asks: the Agent of a Thread, as a rule. */
+const byOf = (request: WindowRequest) => request.by
 
 export const browserAsked: Asked<Tabs | Cdp | Drive> = {
   /** Every tab, the Person's too (decision 1); its ID is its page's, for

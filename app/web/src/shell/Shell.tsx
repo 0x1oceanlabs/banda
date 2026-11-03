@@ -434,8 +434,11 @@ export function Shell({
   }, [spaces])
   // Alt+S: the Thread in the focused Pane settles, or comes back.
   const listsNow = useRef(lists)
+  // Who hears the lists change: a module, as the browser for its tabs.
+  const listsHeard = useRef(new Set<() => void>())
   useEffect(() => {
     listsNow.current = lists
+    for (const listener of listsHeard.current) listener()
   }, [lists])
   const settle = useCallback(() => {
     const entry = focused(seenNow.current.state)
@@ -616,6 +619,11 @@ export function Shell({
         )
         return at && { space: at.space, right: at.from ? at.right : null }
       },
+      lists: () => listsNow.current,
+      watchLists: (listener) => {
+        listsHeard.current.add(listener)
+        return () => listsHeard.current.delete(listener)
+      },
       toggleSidebar,
       toggleOverview,
       drawer: () => toggleDrawer(parts),
@@ -664,6 +672,8 @@ export function Shell({
       },
       open: (...how) => partsNow.current.open(...how),
       beside: (agent) => partsNow.current.beside(agent),
+      lists: () => partsNow.current.lists(),
+      watchLists: (listener) => partsNow.current.watchLists(listener),
       run: (...how) => partsNow.current.run(...how),
     }
     const stops = known
