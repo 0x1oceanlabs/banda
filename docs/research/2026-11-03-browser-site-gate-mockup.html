@@ -1,0 +1,369 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <title>Banda — новый сайт (ADR 0029, шаг 4f)</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        --bg: #1a1b26;
+        --card: #20212e;
+        --line: #ffffff14;
+        --fg: #e4e7f7;
+        --muted: #8b8fa8;
+        --attention: #f0a35b;
+        --ok: #7ec699;
+        --bad: #e5737a;
+        --accent: #7a8cf0;
+      }
+      body {
+        margin: 0;
+        padding: 18px;
+        background: #13141c;
+        color: var(--fg);
+        font: 13px/1.45 system-ui, sans-serif;
+      }
+      h2 {
+        font-size: 13px;
+        font-weight: 600;
+        margin: 0 0 8px;
+        color: var(--muted);
+      }
+      .grid {
+        display: grid;
+        grid-template-columns: 1.25fr 1fr;
+        gap: 16px;
+      }
+      .frame {
+        border: 1px solid var(--line);
+        border-radius: 12px;
+        background: var(--bg);
+        overflow: hidden;
+      }
+      /* the tab */
+      .bar {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+        padding: 8px 10px;
+        border-bottom: 1px solid var(--line);
+        font-size: 12px;
+      }
+      .tab {
+        display: inline-flex;
+        gap: 6px;
+        align-items: center;
+        padding: 4px 9px;
+        border-radius: 7px;
+        background: #ffffff0d;
+        box-shadow: 0 0 0 1px color-mix(in srgb, var(--attention) 55%, transparent);
+      }
+      .fav {
+        width: 10px;
+        height: 10px;
+        border-radius: 3px;
+        background: #24292f;
+        outline: 1px solid #fff3;
+      }
+      .addr {
+        flex: 1;
+        padding: 4px 9px;
+        border-radius: 7px;
+        background: #ffffff08;
+        color: var(--muted);
+      }
+      .addr b {
+        color: var(--fg);
+        font-weight: 600;
+      }
+      .page {
+        position: relative;
+        height: 300px;
+        background: #f6f8fa;
+        color: #1f2328;
+        display: grid;
+        place-items: center;
+        box-shadow: inset 0 0 0 2px color-mix(in srgb, var(--attention) 70%, transparent);
+      }
+      .login {
+        width: 230px;
+        text-align: center;
+        font-size: 12px;
+      }
+      .login h3 {
+        margin: 0 0 10px;
+        font-size: 16px;
+        font-weight: 400;
+      }
+      .field {
+        height: 26px;
+        border: 1px solid #d0d7de;
+        border-radius: 6px;
+        background: #fff;
+        margin: 6px 0;
+      }
+      .green {
+        height: 28px;
+        border-radius: 6px;
+        background: #1f883d;
+        margin-top: 10px;
+      }
+      .ask {
+        position: absolute;
+        left: 50%;
+        bottom: 12px;
+        transform: translateX(-50%);
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        padding: 5px 5px 5px 10px;
+        border-radius: 999px;
+        white-space: nowrap;
+        background: color-mix(in srgb, #1a1b26 90%, transparent);
+        color: var(--fg);
+        box-shadow:
+          0 6px 20px #0004,
+          0 0 0 1px color-mix(in srgb, var(--attention) 60%, transparent);
+        font-size: 11.5px;
+      }
+      .dot {
+        width: 7px;
+        height: 7px;
+        border-radius: 50%;
+        background: var(--attention);
+      }
+      .btn {
+        padding: 3px 10px;
+        border-radius: 999px;
+        border: 1px solid transparent;
+        font-size: 11.5px;
+      }
+      .btn.solid {
+        background: var(--attention);
+        color: #1a1b26;
+        font-weight: 600;
+      }
+      .btn.line {
+        border-color: #ffffff30;
+      }
+      /* the thread */
+      .thread {
+        padding: 12px;
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        font-size: 12.5px;
+      }
+      .tool {
+        color: var(--muted);
+        font-size: 11.5px;
+      }
+      .tool code {
+        color: var(--fg);
+      }
+      .you {
+        align-self: flex-end;
+        background: #ffffff10;
+        padding: 6px 10px;
+        border-radius: 10px;
+      }
+      .say {
+        color: var(--fg);
+      }
+      /* settings */
+      .settings {
+        padding: 16px 18px;
+      }
+      .settings h1 {
+        font-size: 16px;
+        margin: 0 0 2px;
+      }
+      .about {
+        color: var(--muted);
+        font-size: 12px;
+        margin: 0 0 14px;
+      }
+      .card {
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: var(--card);
+      }
+      .card > * + * {
+        border-top: 1px solid var(--line);
+      }
+      .row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 9px 12px;
+      }
+      .row .name {
+        flex: 1;
+      }
+      .row .name small {
+        display: block;
+        color: var(--muted);
+        font-size: 11.5px;
+      }
+      .seg {
+        display: inline-flex;
+        padding: 2px;
+        gap: 2px;
+        border-radius: 8px;
+        background: #0003;
+        border: 1px solid var(--line);
+      }
+      .seg span {
+        padding: 2px 10px;
+        border-radius: 6px;
+        font-size: 11.5px;
+        color: var(--muted);
+      }
+      .seg span.on.allow {
+        background: color-mix(in srgb, var(--ok) 22%, transparent);
+        color: var(--ok);
+      }
+      .seg span.on.deny {
+        background: color-mix(in srgb, var(--bad) 22%, transparent);
+        color: var(--bad);
+      }
+      .x {
+        color: var(--muted);
+        width: 22px;
+        text-align: center;
+      }
+      .sub {
+        font-size: 12px;
+        font-weight: 600;
+        margin: 16px 0 6px 2px;
+      }
+      .hint {
+        color: var(--muted);
+        font-size: 11.5px;
+        margin: 8px 2px 0;
+      }
+      .other {
+        opacity: 0.55;
+      }
+      pre {
+        margin: 0;
+        padding: 10px 12px;
+        font-size: 11.5px;
+        color: var(--muted);
+        background: #0003;
+        border-radius: 8px;
+      }
+      .notes {
+        margin-top: 16px;
+        max-width: 980px;
+        color: var(--fg);
+      }
+      .notes li {
+        margin: 4px 0;
+      }
+      .notes b {
+        color: var(--attention);
+      }
+    </style>
+  </head>
+  <body>
+    <div class="grid">
+      <div>
+        <h2>1 · Вкладка: агент дошёл до нового сайта (вопрос из одобренного макета)</h2>
+        <div class="frame">
+          <div class="bar">
+            <span class="tab"><span class="fav"></span>GitHub · Sign in</span>
+            <span class="addr">🔒 <b>github.com</b>/login</span>
+          </div>
+          <div class="page">
+            <div class="login">
+              <h3>Sign in to GitHub</h3>
+              <div class="field"></div>
+              <div class="field"></div>
+              <div class="green"></div>
+            </div>
+            <div class="ask">
+              <span class="dot"></span>
+              <span>Let <b>Fix sign-in redirect</b> use <b>github.com</b>?</span>
+              <span class="btn solid">Once</span><span class="btn line">Always</span
+              ><span class="btn line">Deny</span>
+            </div>
+          </div>
+        </div>
+        <h2 style="margin-top: 14px">2 · Thread: что видит агент, и твой ответ сообщением от тебя</h2>
+        <div class="frame thread">
+          <div class="tool">✓ <code>browser_act</code> click e14 “continue with GitHub”</div>
+          <div class="tool">
+            ✕ <code>browser_snapshot</code> → refused: github.com needs the Person's yes. Banda asked them on
+            the tab; end your turn, their message says what they chose.
+          </div>
+          <div class="say">Banda спросил тебя на вкладке, можно ли мне github.com. Жду ответа.</div>
+          <div class="you">github.com: allowed once. Carry on.</div>
+          <div class="tool">✓ <code>browser_snapshot</code> tab 7 · github.com/login</div>
+        </div>
+      </div>
+
+      <div>
+        <h2>3 · Settings → Browser: новый блок «Sites for Agents»</h2>
+        <div class="frame settings">
+          <h1>Browser</h1>
+          <p class="about">How Banda's browser looks and searches, and the sites Agents may use.</p>
+          <div class="card other">
+            <div class="row"><span class="name">Tabs</span><span class="seg"><span class="on allow">Top</span><span>Left</span></span></div>
+            <div class="row"><span class="name">Search</span><span style="color: var(--muted)">duckduckgo.com</span></div>
+            <div class="row"><span class="name">Blocker</span><span>On</span></div>
+          </div>
+
+          <div class="sub">Sites for Agents</div>
+          <div class="card">
+            <div class="row">
+              <span class="name">github.com<small>and its subdomains: gist.github.com, api.github.com</small></span>
+              <span class="seg"><span class="on allow">Allowed</span><span>Denied</span></span>
+              <span class="x" title="Remove: ask again">↶</span>
+            </div>
+            <div class="row">
+              <span class="name">vercel.com</span>
+              <span class="seg"><span class="on allow">Allowed</span><span>Denied</span></span>
+              <span class="x">↶</span>
+            </div>
+            <div class="row">
+              <span class="name">mybank.example</span>
+              <span class="seg"><span>Allowed</span><span class="on deny">Denied</span></span>
+              <span class="x">↶</span>
+            </div>
+          </div>
+          <p class="hint">
+            An Agent asks on the tab before its first look at any other site. “Once” lasts for that Thread
+            until Banda restarts. localhost never asks. ↶ takes a site out, so Agents ask again.
+          </p>
+          <div class="sub">In browser.toml</div>
+          <pre>[agents.sites]
+"github.com" = "allow"
+"vercel.com" = "allow"
+"mybank.example" = "deny"</pre>
+        </div>
+      </div>
+    </div>
+
+    <ol class="notes">
+      <li>
+        <b>Сайт</b> = домен, как его понимает браузер: <code>github.com</code> покрывает
+        <code>gist.github.com</code> и <code>api.github.com</code>. <code>localhost</code> и
+        <code>127.0.0.1</code> не спрашивают никогда.
+      </li>
+      <li>
+        <b>Когда спрашивает:</b> на первом чтении или действии на сайте (snapshot, act, wait_for). Открыть
+        адрес и перейти по нему агент может без вопроса, как в одобренном макете. Вопрос появляется сразу,
+        с тем же звуком и строкой в сайдбаре, что у Question.
+      </li>
+      <li>
+        <b>Once</b>: только этот Thread, до перезапуска Banda. <b>Always</b> и <b>Deny</b>: для всех агентов,
+        записываются в <code>browser.toml</code>, в Settings их видно и можно поменять.
+        На запрещённом сайте агент получает отказ сразу, без вопроса.
+      </li>
+      <li>
+        Добавить сайт заранее из Settings нельзя, сайты появляются только из ответов. Если нужно, добавим
+        потом, можно и руками в <code>browser.toml</code>.
+      </li>
+    </ol>
+  </body>

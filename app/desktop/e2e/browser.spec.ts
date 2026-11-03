@@ -669,6 +669,98 @@ test("an Agent hands a tab to the Person, who hands it back, and its Thread carr
   )
 })
 
+test("an Agent asks the Person before it uses a new site: once, always or never", async () => {
+  const address = await serve({
+    "/": "<title>Sign in</title><button>Go</button>",
+  })
+  // *.localhost is this computer too, yet not localhost, which never asks.
+  const on = (name: string) => address.replace("127.0.0.1", `${name}.localhost`)
+  window = await startWindow()
+  const { page, dir } = window
+  const { thread, composer } = await firstThread(page)
+  await composer.fill("hello")
+  await composer.press("Enter")
+  await expect(thread.getByText("You said: hello")).toBeVisible()
+  const row = page
+    .getByRole("complementary", { name: "Sidebar" })
+    .getByRole("button", { name: /hello/ })
+  /** Opens a tab on the site `name`, which needs no yes, and reads it,
+   * which does: the tab asks the Person, and the Thread's row with it. */
+  const asking = async (name: string) => {
+    const opened = await agentSays(window, "browser_open", {
+      url: `${on(name)}/`,
+    })
+    const tab = Number(/^Opened tab (\d+)\./.exec(opened)?.[1])
+    const refused = await agentCalls(window, "browser_snapshot", { tab })
+    expect(refused.isError).toBe(true)
+    expect(refused.content[0]!.text).toContain(
+      `Tab ${tab} is on ${name}.localhost, which you may not use yet`
+    )
+    const pill = page.getByRole("status", {
+      name: `hello asks to use ${name}.localhost`,
+    })
+    await expect(pill).toBeVisible()
+    await expect(row).toContainText(`Asks to use ${name}.localhost`)
+    return { tab, pill }
+  }
+
+  // Once lets this Thread, and says so in it as the Person's message.
+  const first = await asking("once")
+  await page.screenshot({ path: "test-results/browser-site.png" })
+  await first.pill.getByRole("button", { name: "Once" }).click()
+  await expect(first.pill).toHaveCount(0)
+  await expect(
+    thread.getByText("You said: once.localhost: allowed once. Carry on.")
+  ).toBeVisible()
+  await expect(row).not.toContainText("Asks to use")
+  expect(
+    await agentSays(window, "browser_snapshot", { tab: first.tab })
+  ).toContain("Title: Sign in")
+
+  // Always and Deny are for every Agent, in browser.toml.
+  const file = join(dir, "config/browser.toml")
+  const second = await asking("always")
+  await second.pill.getByRole("button", { name: "Always" }).click()
+  await expect(
+    thread.getByText("You said: always.localhost: always allowed. Carry on.")
+  ).toBeVisible()
+  await expect
+    .poll(() => textOf(file))
+    .toMatch(/^"always.localhost" = "allow"$/m)
+  const third = await asking("deny")
+  await third.pill.getByRole("button", { name: "Deny" }).click()
+  await expect(
+    thread.getByText("You said: deny.localhost: denied. Carry on without it.")
+  ).toBeVisible()
+  await expect.poll(() => textOf(file)).toMatch(/^"deny.localhost" = "deny"$/m)
+  // A denied site refuses, and asks nothing.
+  const denied = await agentCalls(window, "browser_snapshot", {
+    tab: third.tab,
+  })
+  expect(denied.content[0]!.text).toContain(
+    "The Person lets no Agent use deny.localhost."
+  )
+  await expect(third.pill).toHaveCount(0)
+
+  // Settings shows them; a line changes, or ↶ takes it out.
+  await page.keyboard.press("Alt+Comma")
+  const settings = page.getByRole("region", { name: "Settings", exact: true })
+  await settings.getByRole("button", { name: "Browser" }).click()
+  const sites = settings.getByRole("radiogroup", { name: /for Agents$/ })
+  await expect(sites).toHaveCount(2)
+  await page.screenshot({ path: "test-results/browser-sites-settings.png" })
+  await settings
+    .getByRole("radiogroup", { name: "deny.localhost for Agents" })
+    .getByRole("radio", { name: "allow" })
+    .click()
+  await expect.poll(() => textOf(file)).toMatch(/^"deny.localhost" = "allow"$/m)
+  await settings
+    .getByRole("button", { name: 'Reset agents.sites."always.localhost"' })
+    .click()
+  await expect(sites).toHaveCount(1)
+  expect(textOf(file)).not.toContain("always.localhost")
+})
+
 test("an Agent opens a tab and takes it to an address, back, forward and again", async () => {
   const address = await serve({
     "/": "<title>First</title>",

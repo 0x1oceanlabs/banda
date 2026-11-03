@@ -238,6 +238,9 @@ export function Settings({
                     <section.Body engine={engine} lit={at.key} run={run} />
                   )}
                   {groups}
+                  {section.Foot && (
+                    <section.Foot engine={engine} lit={at.key} run={run} />
+                  )}
                   {above.length > 0 && (
                     <div
                       role="alert"

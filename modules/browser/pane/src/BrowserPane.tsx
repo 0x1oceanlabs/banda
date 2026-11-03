@@ -49,10 +49,16 @@ import {
 } from "lucide-react"
 import { addressOf, siteOf } from "./address"
 import { Extensions, WEB_STORE } from "./Extensions"
-import type { Download, Driver, Point, Wait } from "./desktop"
+import type { Download, Driver, Point, SiteAnswer, Wait } from "./desktop"
 import { browserHost, downloadsNow, watchDownloads } from "./host"
 import { browserKey, type Does, isTabKey } from "./keys"
-import { handBack, threadOf, useThreadOf, useTitleOf } from "./threads"
+import {
+  allowSite,
+  handBack,
+  threadOf,
+  useThreadOf,
+  useTitleOf,
+} from "./threads"
 import {
   BLANK,
   drop,
@@ -221,19 +227,21 @@ function BrowserPane({
       onHandBack={(contents, agent, why) =>
         void handBack(engine, contents, agent, why)
       }
+      onSite={(contents, agent, site, answer) =>
+        void allowSite(engine, contents, agent, site, answer)
+      }
       close={close}
     />
   )
 }
 
 /** The one wait a page shows of `waits`, while `driven` or not: a tab
- * handed to the Person is theirs, and a stopped Thread shows once no
- * other drives the tab. */
+ * handed to the Person is theirs; a site's question, then a stopped
+ * Thread, show once no other drives the tab. */
 function shownOf(waits: readonly Wait[], driven: boolean): Wait | undefined {
-  return (
-    waits.find((wait) => wait.reason === "handoff") ??
-    (driven ? undefined : waits.find((wait) => wait.reason === "stopped"))
-  )
+  const of = (reason: Wait["reason"]) =>
+    waits.find((wait) => wait.reason === reason)
+  return of("handoff") ?? (driven ? undefined : (of("site") ?? of("stopped")))
 }
 
 /** What the tabs show, and what they do. */
@@ -255,6 +263,7 @@ function Browser({
   onTabKey,
   onThread,
   onHandBack,
+  onSite,
   close,
 }: {
   tab: Tab
@@ -269,6 +278,13 @@ function Browser({
   onThread: (agent: string) => void
   /** The Person is done with what the Thread handed them in the page. */
   onHandBack: (contents: number, agent: string, why: string) => void
+  /** The Person's answer to whether the Thread may use the page's site. */
+  onSite: (
+    contents: number,
+    agent: string,
+    site: string,
+    answer: SiteAnswer
+  ) => void
   close: () => void
 }) {
   const root = useRef<HTMLDivElement>(null)
@@ -428,6 +444,15 @@ function Browser({
                 onThread={onThread}
                 onDone={() => onHandBack(contents, shown.agent, shown.why)}
               />
+            ) : shown.reason === "site" ? (
+              <AskSite
+                agent={shown.agent}
+                site={shown.site}
+                onThread={onThread}
+                onAnswer={(answer) =>
+                  onSite(contents, shown.agent, shown.site, answer)
+                }
+              />
             ) : (
               <Stopped
                 agent={shown.agent}
@@ -586,6 +611,55 @@ function Stopped({
       >
         Let drive again
       </Button>
+    </Pill>
+  )
+}
+
+/**
+ * What Banda draws over a page whose site a Thread may not use yet (ADR
+ * 0029, decision 7, B): a pill that asks the Person whether it may, ringed
+ * as what waits for them.
+ */
+function AskSite({
+  agent,
+  site,
+  onThread,
+  onAnswer,
+}: {
+  agent: string
+  site: string
+  onThread: (agent: string) => void
+  onAnswer: (answer: SiteAnswer) => void
+}) {
+  const title = useTitleOf(agent)
+  return (
+    <Pill
+      label={`${title} asks to use ${site}`}
+      className="pl-3 ring-attention/60"
+    >
+      <span className="size-1.5 shrink-0 rounded-full bg-attention" />
+      <span className="min-w-0 truncate">
+        Let <ThreadLink title={title} onClick={() => onThread(agent)} /> use{" "}
+        <b>{site}</b>?
+      </span>
+      <Button
+        size="xs"
+        className="shrink-0 rounded-full bg-attention text-popover hover:bg-attention/90"
+        onClick={() => onAnswer("once")}
+      >
+        Once
+      </Button>
+      {(["always", "deny"] as const).map((answer) => (
+        <Button
+          key={answer}
+          variant="outline"
+          size="xs"
+          className="shrink-0 rounded-full capitalize"
+          onClick={() => onAnswer(answer)}
+        >
+          {answer}
+        </Button>
+      ))}
     </Pill>
   )
 }

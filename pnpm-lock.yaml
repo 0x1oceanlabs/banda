@@ -414,6 +414,9 @@ importers:
       playwright-core:
         specifier: 1.64.1
         version: 1.64.1
+      tldts:
+        specifier: 7.4.19
+        version: 7.4.19
     devDependencies:
       '@banda/ui':
         specifier: workspace:*
@@ -4002,6 +4005,10 @@ packages:
 
   tldts-experimental@7.4.19:
     resolution: {integrity: sha512-GaXrBbI3uP7tpIi+HGuD+pQXILEAQqk+z+uqc4xRt/d0hm6mP/eG6QkdruZjCWVEh8ZVCJVtWJoBLZLAji0Z1Q==}
+
+  tldts@7.4.19:
+    resolution: {integrity: sha512-48dH6aSpQnpbzDUc4vIQZ1VjB8tkK+e8c1yx05/SZK+rkssgjEOlxDd/yU8/a4vGYQ9vRgJr9dwMq9TJ0b3X2Q==}
+    hasBin: true
 
   tmp-promise@3.0.3:
     resolution: {integrity: sha512-RwM7MoPojPxsOBYnyd2hy0bxtIlVrihNs9pj5SUvY8Zz1sQcQG2tG1hSr8PDxfgEB8RNKDhqbIlroIarSNDNsQ==}
@@ -8147,6 +8154,10 @@ snapshots:
   tldts-core@7.4.20: {}
 
   tldts-experimental@7.4.19:
+    dependencies:
+      tldts-core: 7.4.20
+
+  tldts@7.4.19:
     dependencies:
       tldts-core: 7.4.20
 

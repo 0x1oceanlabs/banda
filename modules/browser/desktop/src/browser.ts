@@ -483,6 +483,15 @@ export const browserAnswers: Answers<
     Schema.Tuple([Schema.Number, Schema.String]),
     ([page, agent]) => Drive.use((drive) => drive.answered(page, agent)),
   ],
+  allowed: [
+    Schema.Tuple([
+      Schema.Number,
+      Schema.String,
+      Schema.Literals(["once", "always", "deny"]),
+    ]),
+    ([page, agent, answer]) =>
+      Drive.use((drive) => drive.allowed(page, agent, answer)),
+  ],
   settled: [text, ([agent]) => Drive.use((drive) => drive.settled(agent))],
   pin: [
     Schema.Tuple([Schema.String, Schema.Boolean]),
