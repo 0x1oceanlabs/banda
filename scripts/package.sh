@@ -22,4 +22,4 @@ pnpm install --frozen-lockfile --silent
 # The app carries the licenses of what it is built from (ADR 0038).
 node scripts/licenses.mjs --notices target/release/THIRD-PARTY-NOTICES.txt
 pnpm --filter @banda/desktop build
-pnpm --filter @banda/desktop exec electron-builder --config electron-builder.config.mjs
+pnpm --filter @banda/desktop exec electron-builder --config electron-builder.config.mjs --publish never

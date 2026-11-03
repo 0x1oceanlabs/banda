@@ -39,7 +39,7 @@ export default {
   ],
   artifactName: `${channel.folder}-\${version}-\${arch}.\${ext}`,
   icon: channel.icon,
-  linux: { category: "Development" },
+  linux: { category: "Development", target: ["AppImage"] },
   // Apple silicon, signed ad hoc until there is a certificate (ADR 0033,
   // decision 6): a zip of the app. Ad hoc, the hardened runtime would
   // refuse Electron's own frameworks, signed by another team.
@@ -52,6 +52,13 @@ export default {
   // The static runtime, with FUSE 3 inside: it runs where only fuse3 is,
   // as on Omarchy, with no libfuse2.
   toolsets: { appimage: "1.0.3" },
-  // Releases are published by the release workflow (step 3), not here.
-  publish: null,
+  // Releases are published by the release workflow (step 3), not here:
+  // scripts/package.sh packs with --publish never. The entry makes
+  // electron-builder write the update file electron-updater reads beside
+  // the AppImage, and app-update.yml into it (ADR 0041, decision 1). A
+  // checkout's Banda Local never updates.
+  publish:
+    channel === CHANNELS.local
+      ? null
+      : { provider: "github", owner: "0x1oceanlabs", repo: "banda" },
 }
