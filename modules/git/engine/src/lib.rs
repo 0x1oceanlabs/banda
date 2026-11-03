@@ -11,6 +11,7 @@
 
 pub mod model;
 
+mod checkpoint;
 mod diff;
 mod parse;
 mod refs;
@@ -18,7 +19,7 @@ mod repo;
 mod run;
 mod status;
 
-use banda_kernel::{Call, Module, Nothing, Refusal, Right};
+use banda_kernel::{Call, Error, Module, ModuleSpace, Nothing, Refusal, Right};
 use model::{Commit, CommitsAsk, Contents, ContentsAsk, Diff, DiffAsk, Ref, RefsAsk, Status};
 use repo::Repo;
 use serde_json::Value;
@@ -64,6 +65,14 @@ impl Module for Git {
 
     fn right(&self, method: &str) -> Option<Right> {
         Self::method_right(method)
+    }
+
+    /// From now on, it keeps a checkpoint as each turn begins and ends,
+    /// before the turn's Harness is asked anything.
+    async fn opened(&self, space: ModuleSpace) -> Result<(), Error> {
+        let heard = space.react(space.at().await?, checkpoint::heard());
+        tokio::spawn(checkpoint::follow(heard));
+        Ok(())
     }
 
     async fn call(&self, call: Call, method: &str, params: Value) -> Result<Value, Refusal> {

@@ -66,7 +66,7 @@ impl Repo {
     }
 
     /// What a `--verify --quiet` git prints, or none when it says no.
-    async fn verified<I, S>(&self, args: I) -> Result<Option<String>, Failure>
+    pub async fn verified<I, S>(&self, args: I) -> Result<Option<String>, Failure>
     where
         I: IntoIterator<Item = S>,
         S: AsRef<OsStr>,

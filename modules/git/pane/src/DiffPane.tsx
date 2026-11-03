@@ -98,12 +98,13 @@ export const diffPane = definePane<DiffArgs>({
 /** What makes the Diff read again: an Agent's turn ending. */
 const TURNS = { module: "agents", kinds: ["turn.ended"] }
 
-/** What the Pane draws, as git answers it; a turn's changes come as their
- * files already diffed, and the Thread's turns that changed files. */
+/** What the Pane draws, as git answers it; a turn's changes from its tool
+ * calls come as their files already diffed. A turn's come with the
+ * Thread's turns that changed files. */
 type Drawn = Diff & { drawn?: FileDiffMetadata[]; turns?: ChangedTurn[] }
 
-/** What it asks: git for its scopes, the agents module for a turn's. */
-type Question = { git: DiffAsk } | { turn: { thread: string; turn: string } }
+/** What it asks git, and for a turn the agents module too. */
+type Question = { git: DiffAsk; turn?: { thread: string; turn: string } }
 
 /** A turn's changes as the Pane draws a diff: each file diffed from its
  * texts, whole. */
@@ -144,43 +145,40 @@ function DiffPane({ engine, space, args, update, close }: PaneProps<DiffArgs>) {
 
   const thread = scope.kind === "turn" ? scope.thread : (args.thread ?? null)
   // The question's words decide: the same words ask the same.
-  const words = JSON.stringify(
-    scope.kind === "turn"
+  const words = JSON.stringify({
+    git: { scope: asked(scope), ignore_whitespace: view.ignoreWhitespace },
+    ...(scope.kind === "turn"
       ? { turn: { thread: scope.thread, turn: scope.turn } }
-      : {
-          git: {
-            scope: asked(scope),
-            ignore_whitespace: view.ignoreWhitespace,
-          },
-        }
-  )
+      : {}),
+  })
   const question = useMemo(() => JSON.parse(words) as Question, [words])
-  const source = useMemo<Source<Drawn>>(
-    () =>
-      "git" in question
-        ? {
-            read: () => engine.call("git.diff", question.git, { space }),
-            filter: TURNS,
-            apply: () => READ_AGAIN,
-          }
-        : {
-            read: async () =>
-              turnRead(
-                await engine.call("agents.changes", question.turn, { space })
-              ),
-            filter: {
-              module: "agents",
-              subject: question.turn.thread,
-              kinds: ["turn.ended", "thread.rewound"],
-            },
-            apply: () => READ_AGAIN,
-          },
-    [engine, space, question]
-  )
+  const source = useMemo<Source<Drawn>>(() => {
+    const { git, turn } = question
+    const diff = () => engine.call("git.diff", git, { space })
+    if (!turn) return { read: diff, filter: TURNS, apply: () => READ_AGAIN }
+    return {
+      // A turn git kept no checkpoint of, or in a folder that is no
+      // repository, is what its tool calls changed.
+      read: async () => {
+        const [kept, changes] = await Promise.all([
+          diff().catch(() => null),
+          engine.call("agents.changes", turn, { space }),
+        ])
+        return kept ? { ...kept, turns: changes.turns } : turnRead(changes)
+      },
+      filter: {
+        module: "agents",
+        subject: turn.thread,
+        kinds: ["turn.ended", "thread.rewound"],
+      },
+      apply: () => READ_AGAIN,
+    }
+  }, [engine, space, question])
   const live = useLive(engine, space, source, round)
   const diff = live.state === "ready" ? live.view : undefined
 
-  const ask = "git" in question ? question.git : null
+  // A diff git answered loads its files and expands them from git.
+  const ask = diff && !diff.drawn ? question.git : null
   const files = useFiles(engine, space, ask, words, diff)
   // The files shown: tests and mocks left out when they are hidden.
   const visible = useMemo(

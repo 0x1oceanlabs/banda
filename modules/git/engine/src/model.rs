@@ -106,6 +106,10 @@ pub enum Scope {
     /// One commit against its first parent; the first commit against
     /// nothing.
     Commit { sha: String },
+    /// What a turn of an Agent's changed: the work tree as the turn began
+    /// against how it ended, or against now while it runs. Only a turn
+    /// with a checkpoint has it.
+    Turn { thread: String, turn: String },
 }
 
 /// What `git.diff` is asked.

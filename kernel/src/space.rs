@@ -19,7 +19,7 @@ use std::fs::{File, TryLockError};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::broadcast;
+use tokio::sync::{broadcast, watch};
 
 pub(crate) const MANIFEST: &str = "space.json";
 pub(crate) const LOCK: &str = "space.lock";
@@ -154,6 +154,9 @@ pub struct Space {
     modules: Arc<[Arc<dyn Module>]>,
     passes: Arc<Passes>,
     window: Arc<Window>,
+    /// How far each module reacting to the log has reacted: see
+    /// [`ModuleSpace::react`].
+    reactions: std::sync::Mutex<Vec<watch::Receiver<i64>>>,
     /// Held while the Space is open, so one engine at a time writes it.
     _lock: File,
 }
@@ -227,6 +230,7 @@ impl Space {
             modules,
             passes,
             window,
+            reactions: Default::default(),
             _lock: lock,
         });
         outbox::recover(&space, boot).await?;
@@ -297,6 +301,35 @@ impl Space {
         self.store
             .read(move |sql| Ok(events::after(sql, after, &filter, limit)?))
             .await
+    }
+
+    /// Events after `after` that match `filter`, for `module`; when it
+    /// `reacts`, the effects that wait for reactions wait for it too (see
+    /// [`ModuleSpace::react`]).
+    pub(crate) fn hear(
+        self: &Arc<Self>,
+        module: &'static str,
+        after: i64,
+        filter: EventFilter,
+        reacts: bool,
+    ) -> Heard {
+        let handled = reacts.then(|| {
+            let (handled, reaction) = watch::channel(after);
+            self.reactions.lock().unwrap().push(reaction);
+            handled
+        });
+        // Listening before the log is read, nothing falls between the two.
+        Heard {
+            live: self.subscribe(),
+            space: Arc::downgrade(self),
+            module,
+            filter,
+            last: after,
+            given: after,
+            handled,
+            read: Default::default(),
+            caught_up: false,
+        }
     }
 
     /// This Space as one module sees it.
@@ -373,6 +406,94 @@ impl Committed {
     }
 }
 
+/// Events of any module as they are committed, from a place in the log
+/// on: see [`ModuleSpace::react`]. It holds the Space only while it reads
+/// the log, so a removed Space still goes.
+pub struct Heard {
+    space: std::sync::Weak<Space>,
+    module: &'static str,
+    live: broadcast::Receiver<Arc<Event>>,
+    filter: EventFilter,
+    /// The last event heard.
+    last: i64,
+    /// The last event given.
+    given: i64,
+    /// Where it says how far it has reacted, when it reacts.
+    handled: Option<watch::Sender<i64>>,
+    /// Read from the log and not yet given.
+    read: std::collections::VecDeque<Event>,
+    /// The log is read up to the live events.
+    caught_up: bool,
+}
+
+/// How many events one read of the log takes.
+const PAGE: usize = 500;
+
+impl Heard {
+    /// The next event, in the log's order; none once the Space is gone.
+    /// Falling behind the live events, it reads the log again, so none is
+    /// missed. Asking for the next says the last one given is handled.
+    pub async fn next(&mut self) -> Result<Option<Event>, Error> {
+        self.reacted(self.given);
+        loop {
+            if let Some(event) = self.read.pop_front() {
+                self.given = event.seq;
+                return Ok(Some(event));
+            }
+            if !self.caught_up {
+                let Some(space) = self.space.upgrade() else {
+                    return Ok(None);
+                };
+                let page = space
+                    .events_after(self.last, self.filter.clone(), PAGE)
+                    .await?;
+                self.caught_up = page.len() < PAGE;
+                if let Some(last) = page.last() {
+                    self.last = last.seq;
+                }
+                self.read.extend(page);
+                continue;
+            }
+            // Everything up to the last heard is handled: the log's events
+            // were given, and the others are not its to react to.
+            match self.live.recv().await {
+                Ok(event) if event.seq > self.last => {
+                    self.last = event.seq;
+                    if self.filter.matches(&event) {
+                        self.given = event.seq;
+                        return Ok(Some(Event::clone(&event)));
+                    }
+                    self.reacted(event.seq);
+                }
+                Ok(_) => self.reacted(self.last),
+                // Back to the log for what went by.
+                Err(broadcast::error::RecvError::Lagged(_)) => self.caught_up = false,
+                Err(broadcast::error::RecvError::Closed) => return Ok(None),
+            }
+        }
+    }
+
+    /// The Space it hears, while it is open, as the module that hears it
+    /// sees it.
+    pub fn space(&self) -> Option<ModuleSpace> {
+        let space = self.space.upgrade()?;
+        Some(space.module(self.module))
+    }
+
+    /// Says it has reacted to every event up to `seq`.
+    fn reacted(&self, seq: i64) {
+        if let Some(handled) = &self.handled {
+            handled.send_if_modified(|was| {
+                let further = seq > *was;
+                if further {
+                    *was = seq;
+                }
+                further
+            });
+        }
+    }
+}
+
 /// A Space as one module sees it: it writes under that module's name, so
 /// it emits only that module's events.
 #[derive(Clone)]
@@ -444,6 +565,48 @@ impl ModuleSpace {
                 kinds: Some(kinds.iter().map(|&kind| kind.to_owned()).collect()),
             },
         }
+    }
+
+    /// Every module's stored events after `after` that match `filter`, at
+    /// most `limit`.
+    pub async fn events_after(
+        &self,
+        after: i64,
+        filter: EventFilter,
+        limit: usize,
+    ) -> Result<Vec<Event>, Error> {
+        self.space.events_after(after, filter, limit).await
+    }
+
+    /// Every module's events that match `filter`, after `after` in the
+    /// log, and then each as it is committed: how a module reacts to what
+    /// another did, as git keeps a checkpoint as a turn starts (ADR 0034).
+    /// An effect that waits for the reactions ([`ModuleSpace::reacted`])
+    /// waits until it has handled each one before.
+    pub fn react(&self, after: i64, filter: EventFilter) -> Heard {
+        self.space.hear(self.module, after, filter, true)
+    }
+
+    /// Waits until every module reacting to the log has handled what is
+    /// in it now, at most `within`, and says whether they all did: an
+    /// effect about to change the world lets them react first, as an
+    /// Agent's turn lets git keep the work tree as it began.
+    pub async fn reacted(&self, within: Duration) -> bool {
+        let Ok(at) = self.at().await else {
+            return false;
+        };
+        let reactions = {
+            let mut reactions = self.space.reactions.lock().unwrap();
+            // One whose Heard is gone reacts no more.
+            reactions.retain(|reaction| reaction.has_changed().is_ok());
+            reactions.clone()
+        };
+        let all = async {
+            for mut reaction in reactions {
+                let _ = reaction.wait_for(|handled| *handled >= at).await;
+            }
+        };
+        tokio::time::timeout(within, all).await.is_ok()
     }
 
     /// A read on the Space's reader connection.

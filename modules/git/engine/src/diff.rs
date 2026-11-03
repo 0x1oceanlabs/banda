@@ -2,6 +2,7 @@
 //! review diff reads it (`docs/research/2026-11-02-t3-code-git-backend.md`,
 //! section 1).
 
+use crate::checkpoint::{self, When};
 use crate::model::{Base, Contents, ContentsAsk, Diff, DiffAsk, FileDiff, Scope};
 use crate::parse;
 use crate::repo::{Repo, pathspec, plain_path};
@@ -39,11 +40,6 @@ struct Sides {
     /// The new side is the index (`--cached`).
     cached: bool,
     base: Option<Base>,
-}
-
-/// Whether a scope's new side has the untracked files, as added.
-fn with_untracked(scope: &Scope) -> bool {
-    matches!(scope, Scope::Changes { .. } | Scope::Uncommitted)
 }
 
 /// The sides of `scope`, with `head` the commit `HEAD` is.
@@ -91,6 +87,19 @@ async fn sides(repo: &Repo, scope: &Scope, head: Option<&str>) -> Result<Sides, 
                 ..tree(from)
             }
         }
+        Scope::Turn { thread, turn } => {
+            let kept = |side| async move {
+                checkpoint::find(repo, &checkpoint::reference(thread, turn, side)?).await
+            };
+            let (before, after) = futures::join!(kept(When::Before), kept(When::After));
+            let Some(before) = before? else {
+                return Err(Refusal::not_found("Banda kept no checkpoint of this turn."));
+            };
+            Sides {
+                to: after?,
+                ..tree(before)
+            }
+        }
     })
 }
 
@@ -116,14 +125,12 @@ impl Sides {
 /// What `ask` compares, read after the Space's event `at`.
 pub async fn diff(repo: &Repo, ask: DiffAsk, at: i64) -> Result<Diff, Refusal> {
     let head = repo.head().await?;
-    let scratch = async {
-        match with_untracked(&ask.scope) {
-            true => Scratch::with_untracked(repo, head.is_some()).await,
-            false => Ok(Scratch::none()),
-        }
+    let sides = sides(repo, &ask.scope, head.as_deref()).await?;
+    // The work tree has the untracked files too, as added.
+    let scratch = match sides.to.is_none() && !sides.cached {
+        true => Scratch::with_untracked(repo, head.is_some()).await?,
+        false => Scratch::none(),
     };
-    let (sides, scratch) = futures::join!(sides(repo, &ask.scope, head.as_deref()), scratch);
-    let (sides, scratch) = (sides?, scratch?);
     let opts = |cap| Opts {
         cap,
         index: scratch.index.as_deref(),
@@ -221,14 +228,7 @@ impl Scratch {
     /// The scratch index with the untracked files; `head` says whether
     /// the repository has a commit yet.
     async fn with_untracked(repo: &Repo, head: bool) -> Result<Scratch, Refusal> {
-        let listed = repo
-            .run(
-                ["ls-files", "--others", "--exclude-standard", "-z", "--"],
-                Opts::default(),
-            )
-            .await?;
-        let listed = String::from_utf8_lossy(&listed.stdout);
-        let mut untracked: Vec<&str> = listed.split('\0').filter(|p| !p.is_empty()).collect();
+        let mut untracked = untracked(repo).await?;
         if untracked.len() > UNTRACKED {
             return Ok(Scratch {
                 left_out: true,
@@ -254,40 +254,14 @@ impl Scratch {
                 .await?;
             let removed = String::from_utf8_lossy(&removed.stdout);
             let removed: HashSet<&str> = removed.split('\0').collect();
-            untracked.retain(|path| !removed.contains(path));
+            untracked.retain(|path| !removed.contains(path.as_str()));
         }
         if untracked.is_empty() {
             return Ok(Scratch::none());
         }
-        let folder = tempfile::Builder::new()
-            .prefix("banda-git-index-")
-            .tempdir()
-            .map_err(|error| {
-                tracing::warn!(%error, "no folder for a diff's index");
-                Refusal::internal()
-            })?;
-        let index = folder.path().join("index");
-        let own = repo
-            .run(["rev-parse", "--git-path", "index"], Opts::default())
-            .await?;
-        copy_index(&repo.top.join(own.text()), &index)?;
-        let opts = |stdin| Opts {
-            index: Some(&index),
-            stdin,
-            ..Opts::default()
-        };
-        let split = [
-            "-c",
-            "core.splitIndex=false",
-            "-c",
-            "splitIndex.sharedIndexExpire=never",
-        ];
-        if index.exists() {
-            let args = [&split[..], &["update-index", "--no-split-index"]].concat();
-            repo.run(args, opts(None)).await?;
-        }
+        let (folder, index) = own_index(repo).await?;
         let args = [
-            &split[..],
+            &INDEX[..],
             &[
                 "-c",
                 "core.preloadIndex=false",
@@ -299,14 +273,73 @@ impl Scratch {
             ],
         ]
         .concat();
-        let paths = untracked.join("\0").into_bytes();
-        repo.run(args, opts(Some(paths))).await?;
+        let opts = Opts {
+            index: Some(&index),
+            stdin: Some(untracked.join("\0").into_bytes()),
+            ..Opts::default()
+        };
+        repo.run(args, opts).await?;
         Ok(Scratch {
             _folder: Some(folder),
             index: Some(index),
             left_out: false,
         })
     }
+}
+
+/// The files git does not track and does not ignore.
+pub async fn untracked(repo: &Repo) -> Result<Vec<String>, Refusal> {
+    let listed = repo
+        .run(
+            ["ls-files", "--others", "--exclude-standard", "-z", "--"],
+            Opts::default(),
+        )
+        .await?;
+    let listed = String::from_utf8_lossy(&listed.stdout);
+    Ok(listed
+        .split('\0')
+        .filter(|p| !p.is_empty())
+        .map(str::to_owned)
+        .collect())
+}
+
+/// What every index of the engine's own is written with, as T3 Code's:
+/// whole, and with no file system monitor's help.
+pub const INDEX: [&str; 6] = [
+    "-c",
+    "core.splitIndex=false",
+    "-c",
+    "splitIndex.sharedIndexExpire=never",
+    "-c",
+    "core.fsmonitor=false",
+];
+
+/// A copy of the repository's index in a folder of its own, whole, which
+/// a git given it writes in place of the Person's (`GIT_INDEX_FILE`). The
+/// copy keeps what the index knows of each file, so git reads again only
+/// those changed. It goes with the folder.
+pub async fn own_index(repo: &Repo) -> Result<(tempfile::TempDir, PathBuf), Refusal> {
+    let folder = tempfile::Builder::new()
+        .prefix("banda-git-index-")
+        .tempdir()
+        .map_err(|error| {
+            tracing::warn!(%error, "no folder for an index of the engine's");
+            Refusal::internal()
+        })?;
+    let index = folder.path().join("index");
+    let own = repo
+        .run(["rev-parse", "--git-path", "index"], Opts::default())
+        .await?;
+    copy_index(&repo.top.join(own.text()), &index)?;
+    if index.exists() {
+        let args = [&INDEX[..], &["update-index", "--no-split-index"]].concat();
+        let opts = Opts {
+            index: Some(&index),
+            ..Opts::default()
+        };
+        repo.run(args, opts).await?;
+    }
+    Ok((folder, index))
 }
 
 /// Copies the repository's index to `to`, with its time cut to the second,
