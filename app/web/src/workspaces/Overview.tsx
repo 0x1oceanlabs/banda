@@ -8,6 +8,8 @@ import {
   useRef,
   useState,
 } from "react"
+import { XIcon } from "lucide-react"
+import { Button } from "@banda/ui/components/button"
 import type { SpaceId } from "@banda/contract"
 import { DEFAULT_OVERVIEW } from "@banda/contract/look"
 import type { Label, Listed } from "@banda/ui/pane"
@@ -35,6 +37,7 @@ import {
   type Workspaces,
 } from "./model"
 import { lying, nudge, pushed } from "./moving"
+import type { Frame } from "./PaneFrame"
 import { type Carrying, landIn, useMoving } from "./useMoving"
 
 /** Where a Pane lands before the overview is drawn: nowhere. */
@@ -107,7 +110,7 @@ export function Overview({
   listed: (entry: Entry) => Listed | undefined
   /** How the Thread a Pane shows calls the Person, if it does. */
   called: (entry: Entry) => Chime | undefined
-  frame: Carrying["frame"]
+  frame: Pick<Frame, "arrange" | "focus" | "close">
   /** Puts the focus on a Pane, and goes to its workspace. */
   onPick: (entry: string) => void
   /** Moves the focus as the arrows do here. */
@@ -349,6 +352,7 @@ export function Overview({
                   listed={listed}
                   called={called}
                   dim={found ? (entry) => !shown.has(entry.id) : undefined}
+                  onClosePane={frame.close}
                   onPick={(entry) => {
                     onPick(entry)
                     onClose()
@@ -381,6 +385,7 @@ function Row({
   called,
   dim,
   onPick,
+  onClosePane,
   onGo,
 }: {
   workspace: Workspaces["list"][number]
@@ -395,6 +400,8 @@ function Row({
   called: (entry: Entry) => Chime | undefined
   dim: ((entry: Entry) => boolean) | undefined
   onPick: (entry: string) => void
+  /** Closes a Pane, as Alt+W does: a middle click on it, or its cross. */
+  onClosePane: (entry: string) => void
   onGo: () => void
 }) {
   const said = useSaid()
@@ -448,7 +455,7 @@ function Row({
                   aria-current={entry.id === picked || undefined}
                   hidden={column.tabbed && !active}
                   // Clear: the Pane itself shows under it, zoomed out.
-                  className="relative min-h-0 rounded-tile hover:bg-black/5 aria-[current]:ring-2 aria-[current]:ring-focus data-called:ring-2 data-called:ring-attention data-lifted:bg-overview/60 data-[dim]:bg-black/50"
+                  className="group/over relative min-h-0 rounded-tile hover:bg-black/5 aria-[current]:ring-2 aria-[current]:ring-focus data-called:ring-2 data-called:ring-attention data-lifted:bg-overview/60 data-[dim]:bg-black/50"
                   style={{
                     flex: column.tabbed ? "1 1 0" : heightAt(column.heights[e]),
                   }}
@@ -456,7 +463,32 @@ function Row({
                     event.stopPropagation()
                     onPick(entry.id)
                   }}
+                  // The Pane under it, or the tab of it under it.
+                  onAuxClick={(event) => {
+                    if (event.button !== 1) return
+                    const tab = (event.target as Element).closest<HTMLElement>(
+                      "[data-pane]"
+                    )
+                    onClosePane(tab?.dataset.pane ?? entry.id)
+                  }}
                 >
+                  {/* For the mouse; the keys close a Pane with Alt+W. The
+                      focus stays with the overview, which takes the keys. */}
+                  <Button
+                    variant="secondary"
+                    size="icon-xs"
+                    tabIndex={-1}
+                    aria-label={`Close ${title}`}
+                    title="Close (Alt+W)"
+                    className="absolute top-1.5 right-1.5 z-1 rounded-full opacity-0 shadow-sm group-hover/over:opacity-100"
+                    onMouseDown={(event) => event.preventDefault()}
+                    onClick={(event) => {
+                      event.stopPropagation()
+                      onClosePane(entry.id)
+                    }}
+                  >
+                    <XIcon />
+                  </Button>
                   {/* How its Thread is, at a size to read, and what it asks
                       when it calls. */}
                   {thread && (call || thread.mark !== "rest") && (
