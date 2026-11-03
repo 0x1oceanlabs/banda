@@ -27,18 +27,20 @@
 # inner = 12                         # between tiles, in pixels
 # outer = 12                         # around the Strip
 
-# The desk the tiles float over. Its glass is Banda's own, the same on
-# every desktop: the wallpaper, blurred and tinted. Unset, the wallpaper is
-# the desktop's (Omarchy, GNOME, KDE, XFCE, hyprpaper); without one, it is
-# solid.
+# The desk the tiles float over. Who makes its glass goes by the platform.
+# On Linux Banda does, the same on every desktop: the wallpaper, blurred and
+# tinted. Unset, the wallpaper is the desktop's (Omarchy, GNOME, KDE, XFCE,
+# hyprpaper); without one, the desk is solid. On macOS and Windows the
+# system does, with a material of its own, and the keys that shape Banda's
+# glass do nothing.
 # [desk]
 # glass = true
-# material = "banda"                 # "system": the compositor blurs, from the next start
+# material = "banda"                 # the platform's; "system": the system blurs, from the next start
 # wallpaper = "~/Pictures/wall.jpg"  # a picture of your own
 # blur = 40                          # how frosted: the blur, in pixels
 # saturation = 1.4                   # the wallpaper's colours: 1 as they are, 0 grey
 # grain = 0.04                       # a fine grain over the glass: 0 none
-# opacity = 0.4                      # the desk's tint: 0 clear, 1 solid
+# opacity = 0.4                      # the desk's tint: 0 clear, 1 solid; 0.1 over the system's
 # sidebar = "panel"                  # "panel" floats as glass; "desk" sits on it
 # sidebar-shadow = 0.45              # the panel's shadow: 0 none, 1 the darkest
 
