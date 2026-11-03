@@ -1800,6 +1800,65 @@ test("an Agent shows a Visual in its Thread: its page runs apart from Banda, in 
   await page.screenshot({ path: "test-results/18m-visual.png" })
 })
 
+test("a Visual opens over the window, zoomed, or as a Pane of its own beside its Thread", async () => {
+  window = await startWindow()
+  const { page } = window
+  const { thread, composer } = await firstThread(page)
+  await composer.fill("wait")
+  await composer.press("Enter")
+  await expect(thread.getByText("Waiting.")).toBeVisible()
+  const html = `<!doctype html><html><head><style>
+    .box { height: 200px; background: var(--chart-1); border-radius: var(--radius) }
+  </style></head><body><div class="box"></div></body></html>`
+  await agentSays(window, "show_visual", { html, title: "Sales", height: 200 })
+
+  const shown = thread.locator("figure").filter({
+    has: page.locator('iframe[title="Sales"]'),
+  })
+  await expect(shown.locator("figcaption")).toHaveText("Sales")
+  // Its ways to open it larger show on hover, and to the keyboard (the
+  // test's window has no pointer that hovers).
+  const preview = shown.getByRole("button", { name: "Preview" })
+  const tools = preview.locator("..")
+  await expect(tools).toHaveCSS("opacity", "0")
+  await preview.focus()
+  await expect(tools).toHaveCSS("opacity", "1")
+  await page.screenshot({ path: "test-results/18o-visual-hover.png" })
+
+  // Preview: over the window, zoomed as a browser zooms.
+  await preview.click()
+  const over = page.getByRole("dialog", { name: "Sales" })
+  const big = over.locator('iframe[title="Sales"]')
+  await expect(big.contentFrame().locator(".box")).toBeVisible()
+  // As wide as it lays out, which the dialog's opening scale leaves be.
+  const wide = await big.evaluate((frame) => frame.clientWidth)
+  await over.getByRole("button", { name: "Zoom in" }).click()
+  await expect(over.getByText("110 %")).toBeVisible()
+  await page.keyboard.press("Control+Equal")
+  await expect(over.getByText("125 %")).toBeVisible()
+  // Laid out narrower, drawn larger: as wide as before on screen.
+  const zoomed = await big.evaluate((frame) => ({
+    laid: frame.clientWidth,
+    drawn: frame.getBoundingClientRect().width,
+  }))
+  expect(zoomed.laid).toBeCloseTo(wide / 1.25, -1)
+  expect(zoomed.drawn).toBeCloseTo(wide, -1)
+  await page.screenshot({ path: "test-results/18p-visual-preview.png" })
+  await page.keyboard.press("Escape")
+  await expect(over).toBeHidden()
+
+  // Open as Pane: a Pane of its own, beside the Thread, once.
+  await shown.getByRole("button", { name: "Open as Pane" }).click()
+  const pane = page.locator("section[data-tile]").filter({
+    has: page.getByRole("heading", { name: "Sales" }),
+  })
+  await expect(pane).toHaveCount(1)
+  await expect(
+    pane.locator('iframe[title="Sales"]').contentFrame().locator(".box")
+  ).toBeVisible()
+  await page.screenshot({ path: "test-results/18q-visual-pane.png" })
+})
+
 test("an Agent checks a Visual before it shows: its picture, its height and its console, in a window never shown", async () => {
   window = await startWindow()
   const { page, app } = window
