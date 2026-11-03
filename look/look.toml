@@ -68,6 +68,11 @@
 # height = 36
 # workspaces = "numbers"             # "numbers", or "dots" with the one shown drawn long
 
+# A Thread that drops from the top over the workspace, on Alt+`.
+# [drawer]
+# height = 0.6                       # how far down, a share of the room under the bar
+# harness = "claude"                 # the Harness it starts on; this computer's first when left out
+
 # [motion]
 # off = false                        # true stills everything
 # slowdown = 1                       # 2 is twice as slow

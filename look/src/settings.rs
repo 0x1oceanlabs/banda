@@ -47,6 +47,9 @@ pub struct Settings {
     pub focus: Focus,
     #[serde(default)]
     pub bar: Bar,
+    /// The drawer on Alt+` (ADR 0025, decision 8).
+    #[serde(default)]
+    pub drawer: Drawer,
     #[serde(default)]
     pub motion: MotionSettings,
     #[serde(default)]
@@ -211,6 +214,19 @@ pub struct Bar {
     pub workspaces: Option<Workspaces>,
 }
 
+/// The drawer: a Thread that drops from the top over the workspace.
+#[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields, rename_all = "kebab-case")]
+pub struct Drawer {
+    /// How far down it drops: a share of the room under the bar, from 0
+    /// to 1.
+    #[schemars(range(min = 0, max = 1))]
+    pub height: Option<f64>,
+    /// The Harness its Thread starts on, as `"claude"`; this computer's
+    /// first one when left out.
+    pub harness: Option<String>,
+}
+
 /// How the bar shows the workspaces.
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq, JsonSchema, TS)]
 #[serde(rename_all = "lowercase")]
@@ -356,6 +372,10 @@ impl Settings {
                 height: self.bar.height.or(under.bar.height),
                 workspaces: self.bar.workspaces.or(under.bar.workspaces),
             },
+            drawer: Drawer {
+                height: self.drawer.height.or(under.drawer.height),
+                harness: self.drawer.harness.or(under.drawer.harness),
+            },
             motion: self.motion.over(under.motion),
             columns: self.columns.over(under.columns),
             font: self.font.over(under.font),
@@ -405,6 +425,10 @@ impl Settings {
                 height: Some(36.0),
                 workspaces: Some(Workspaces::Numbers),
             },
+            drawer: Drawer {
+                height: Some(0.6),
+                harness: None,
+            },
             motion: MotionSettings::defaults(),
             columns: ColumnsSettings::defaults(),
             font: FontSettings::defaults(),
@@ -440,6 +464,7 @@ impl Settings {
             ("desk.opacity", self.desk.opacity),
             ("desk.grain", self.desk.grain),
             ("desk.sidebar-shadow", self.desk.sidebar_shadow),
+            ("drawer.height", self.drawer.height),
         ]
         .into_iter()
         .filter(|(_, v)| v.is_some_and(|v| !is_share(v)))

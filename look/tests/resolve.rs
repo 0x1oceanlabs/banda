@@ -558,8 +558,13 @@ fn the_template_says_the_defaults() {
     }
     let uncommented: String = banda_look::TEMPLATE
         .lines()
-        // Examples, not defaults: a theme's name, a picture of one's own.
-        .filter(|line| !line.starts_with("# theme") && !line.starts_with("# wallpaper"))
+        // Examples, not defaults: a theme's name, a picture of one's own,
+        // the drawer's Harness.
+        .filter(|line| {
+            !["# theme", "# wallpaper", "# harness"]
+                .iter()
+                .any(|example| line.starts_with(example))
+        })
         .map(|line| key(line).unwrap_or(line))
         .collect::<Vec<_>>()
         .join("\n");

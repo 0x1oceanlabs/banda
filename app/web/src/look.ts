@@ -8,7 +8,9 @@
 import {
   type Bar,
   type Columns,
+  type Drawer,
   DEFAULT_BAR,
+  DEFAULT_DRAWER,
   DEFAULT_COLUMNS,
   DEFAULT_KEYS,
   DEFAULT_MOTION,
@@ -116,6 +118,11 @@ export function useLookColumns(): Columns {
 /** `[bar]`: how it shows the workspaces. */
 export function useLookBar(): Bar {
   return useLook((look) => look.bar, DEFAULT_BAR)
+}
+
+/** `[drawer]`: how far it drops, and its Harness (ADR 0025, decision 8). */
+export function useLookDrawer(): Drawer {
+  return useLook((look) => look.drawer, DEFAULT_DRAWER)
 }
 
 /** What is wrong in the look's files now, for the bar to say. */

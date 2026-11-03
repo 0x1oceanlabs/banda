@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import type { Engine, SpaceId, SpaceSummary, Status } from "@banda/contract"
+import {
+  type Engine,
+  newId,
+  type SpaceId,
+  type SpaceSummary,
+  type Status,
+} from "@banda/contract"
 import { inFront, useInFront } from "@banda/ui/hooks/use-in-front"
 import { useLive } from "@banda/ui/hooks/use-live"
 import { useMachine } from "@banda/ui/hooks/use-status"
@@ -30,6 +36,7 @@ import {
 import {
   columnsOf,
   useLookColumns,
+  useLookDrawer,
   useLookKeys,
   useLookNotify,
   useLookSound,
@@ -73,12 +80,15 @@ import {
   step,
   type Workspaces as State,
 } from "../workspaces/model"
+import { Drawer } from "../workspaces/Drawer"
 import { Overview } from "../workspaces/Overview"
 import type { Frame } from "../workspaces/PaneFrame"
 import {
+  keepDrawer,
   keepLooked,
   keepSidebar,
   keepView,
+  loadDrawer,
   loadLooked,
   loadSidebar,
   loadView,
@@ -433,6 +443,50 @@ export function Shell({
     if (entry && thing) toggleSettled(listsNow.current, entry.space, thing)
   }, [])
   const toggleOverview = useCallback(() => setOverview((opens) => !opens), [])
+  // The drawer (ADR 0025, decision 8): its Pane, kept between runs, and
+  // whether it shows. Dropped with none, it gets a new Thread in the home
+  // Space, the agents module's, caught before a workspace opens it.
+  const [drawer, setDrawer] = useState(loadDrawer)
+  const [drawerShown, setDrawerShown] = useState(false)
+  // Kept from the last run, it is drawn from its first drop in this one.
+  const [dropped, setDropped] = useState(false)
+  useEffect(() => keepDrawer(drawer), [drawer])
+  const drawerLook = useLookDrawer()
+  const drawerNow = useRef(drawer)
+  useEffect(() => {
+    drawerNow.current = drawer
+  }, [drawer])
+  const toggleDrawer = useCallback(
+    (parts: Parts) => {
+      if (!drawerNow.current) {
+        const harness = drawerLook.harness
+        const catching: Parts = {
+          ...parts,
+          open: (pane, space) => {
+            const entry = { id: newId(), space: space ?? home, pane }
+            drawerNow.current = entry
+            setDrawer(entry)
+          },
+        }
+        runAction(catching, "thread.new", {
+          space: home,
+          ...(harness && { harness }),
+        })
+      }
+      setDrawerShown((shown) => !shown)
+      setDropped(true)
+    },
+    [home, drawerLook.harness]
+  )
+  const liftDrawer = useCallback(() => setDrawerShown(false), [])
+  const closeDrawer = useCallback(() => {
+    setDrawerShown(false)
+    setDrawer(undefined)
+  }, [])
+  const changeDrawer = useCallback(
+    (pane: PaneState) => setDrawer((was) => was && { ...was, pane }),
+    []
+  )
   // The Pane zoomed over the whole window, while it keeps the focus: the
   // focus elsewhere, or the overview, brings it back (ADR 0025, decision 4).
   const [zoom, setZoom] = useState<string>()
@@ -516,6 +570,7 @@ export function Shell({
         ),
       toggleSidebar,
       toggleOverview,
+      drawer: () => toggleDrawer(parts),
       zoom: toggleZoom,
       center: toCenter,
       answer,
@@ -532,6 +587,7 @@ export function Shell({
     home,
     toggleSidebar,
     toggleOverview,
+    toggleDrawer,
     toggleZoom,
     toCenter,
     answer,
@@ -595,6 +651,12 @@ export function Shell({
       change((w) => opening(w, space, pane, { place: "right" })),
     [change]
   )
+  // Pinned, the drawer's Thread is a column of the workspace on screen.
+  const pinDrawer = useCallback(() => {
+    const entry = drawerNow.current
+    closeDrawer()
+    if (entry) openPane(entry.space, entry.pane)
+  }, [closeDrawer, openPane])
   // A new Thread is the agents module's, as its key's (`thread.new`).
   const startThread = useCallback(
     (space: SpaceId, ask?: string) =>
@@ -740,7 +802,7 @@ export function Shell({
           {ready && (
             <Workspaces
               workspaces={workspaces}
-              covered={overview}
+              covered={overview || drawerShown}
               engine={engine}
               modules={modules}
               spaceName={spaceName}
@@ -780,6 +842,22 @@ export function Shell({
             actions={keyed.actions}
             binds={inForce.binds}
           />
+          {drawer && dropped && (
+            <Drawer
+              entry={drawer}
+              shown={drawerShown}
+              height={drawerLook.height}
+              engine={engine}
+              modules={modules}
+              listed={listed(drawer)}
+              spaceName={spaceName}
+              frame={frame}
+              onLift={liftDrawer}
+              onPin={pinDrawer}
+              onChange={changeDrawer}
+              onClose={closeDrawer}
+            />
+          )}
           {overview && (
             <Overview
               workspaces={workspaces}

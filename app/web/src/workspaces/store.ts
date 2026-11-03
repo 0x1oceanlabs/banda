@@ -8,12 +8,13 @@
 import { type Engine, Refused, type SpaceId } from "@banda/contract"
 import type { PaneState } from "@banda/ui/pane"
 import { keptOf, NO_VIEW, type View, viewOf } from "./arrange"
-import { focused, open, parse, start, type Width } from "./model"
+import { type Entry, focused, open, parse, start, type Width } from "./model"
 
 const WORKSPACES = "banda.workspaces"
 const VIEW = "banda.view"
 const SIDEBAR = "banda.sidebar"
 const LOOKED = "banda.looked"
+const DRAWER = "banda.drawer"
 
 /**
  * Moves the window's arrangement to the engine, which takes one once: the
@@ -82,6 +83,21 @@ export function loadLooked(): ReadonlySet<string> {
 
 export function keepLooked(ids: ReadonlySet<string>): void {
   keep(LOOKED, JSON.stringify([...ids]))
+}
+
+/** The drawer's Pane, which is in no workspace (ADR 0025, decision 8). */
+export function loadDrawer(): Entry | undefined {
+  const entry = parsed(read(DRAWER)) as Partial<Entry> | null
+  return typeof entry?.id === "string" &&
+    typeof entry.space === "string" &&
+    typeof entry.pane?.kind === "string"
+    ? (entry as Entry)
+    : undefined
+}
+
+export function keepDrawer(entry: Entry | undefined): void {
+  if (entry) keep(DRAWER, JSON.stringify(entry))
+  else forget(DRAWER)
 }
 
 function isView(value: unknown): value is View {

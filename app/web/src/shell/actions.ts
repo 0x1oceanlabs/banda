@@ -63,6 +63,8 @@ export type Shell = WindowApi & {
   change: (how: (workspaces: Workspaces) => Step) => void
   toggleSidebar: () => void
   toggleOverview: () => void
+  /** Drops the drawer, or lifts it (ADR 0025, decision 8). */
+  drawer: () => void
   /** Shows the focused Pane over the whole window, or brings it back. */
   zoom: () => void
   /** Brings the focused column to the middle of the screen, once. */
@@ -396,6 +398,15 @@ export const ACTIONS: readonly Action<Shell>[] = [
         const entry = focused(w)
         return entry && closing(entry.id)
       }),
+  },
+  {
+    id: "drawer.toggle",
+    section: "Threads",
+    title: "The drawer: a quick Thread over the workspace",
+    // As a terminal that drops down is: the key under Esc.
+    keys: [{ code: "Backquote", alt: true }],
+    overDialogs: true,
+    run: (shell) => shell.drawer(),
   },
   {
     id: "overview.toggle",

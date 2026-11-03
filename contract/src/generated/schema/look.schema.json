@@ -53,6 +53,10 @@
     "bar": {
       "$ref": "#/$defs/Bar"
     },
+    "drawer": {
+      "description": "The drawer on Alt+` (ADR 0025, decision 8).",
+      "$ref": "#/$defs/Drawer"
+    },
     "motion": {
       "$ref": "#/$defs/MotionSettings"
     },
@@ -292,6 +296,24 @@
         "numbers",
         "dots"
       ]
+    },
+    "Drawer": {
+      "description": "The drawer: a Thread that drops from the top over the workspace.",
+      "type": "object",
+      "properties": {
+        "height": {
+          "description": "How far down it drops: a share of the room under the bar, from 0\nto 1.",
+          "type": "number",
+          "format": "double",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "harness": {
+          "description": "The Harness its Thread starts on, as `\"claude\"`; this computer's\nfirst one when left out.",
+          "type": "string"
+        }
+      },
+      "additionalProperties": false
     },
     "MotionSettings": {
       "description": "`[motion]` in a `look.toml` or a theme's `banda.toml`.",

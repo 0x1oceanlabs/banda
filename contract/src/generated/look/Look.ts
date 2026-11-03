@@ -4,6 +4,7 @@ import type { Sidebar } from "../sidebar/Sidebar";
 import type { Bar } from "./Bar";
 import type { Columns } from "./Columns";
 import type { Desk } from "./Desk";
+import type { Drawer } from "./Drawer";
 import type { Keys } from "./Keys";
 import type { Motion } from "./Motion";
 import type { Notify } from "./Notify";
@@ -45,6 +46,10 @@ columns: Columns,
  * The bar, besides its height.
  */
 bar: Bar, 
+/**
+ * The drawer on Alt+` (ADR 0025, decision 8).
+ */
+drawer: Drawer, 
 /**
  * The layers it came from, bottom first.
  */

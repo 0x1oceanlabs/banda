@@ -161,7 +161,11 @@ export function FindBar({
           aria-label="Find in thread"
           onChange={(event) => onQuery(event.target.value)}
           onKeyDown={(event) => {
-            if (event.key === "Escape") onClose()
+            if (event.key === "Escape") {
+              // Its own: not the drawer's, nor anything around it.
+              event.stopPropagation()
+              onClose()
+            }
             if (event.key === "Enter") {
               event.preventDefault()
               onStep(event.shiftKey ? -1 : 1)

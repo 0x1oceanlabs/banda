@@ -86,6 +86,8 @@ export function useMenu<T>({
     if (open && event.key === "Escape") {
       setShutAt(text)
       event.preventDefault()
+      // Its own: not the drawer's, nor anything around it.
+      event.stopPropagation()
       return true
     }
     return false

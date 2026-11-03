@@ -234,6 +234,8 @@ mod every_key {
         // None: the desktop's own background, light and dark.
         "look.toml:desk.wallpaper",
         "look.toml:desk.wallpaper-dark",
+        // None: the drawer's Thread starts on this computer's first Harness.
+        "look.toml:drawer.harness",
         // None: the file's own keys, with no preset under them.
         "sidebar.toml:preset",
         // Each line says nothing unless the Person or a preset fills it.

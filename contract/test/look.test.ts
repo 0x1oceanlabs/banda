@@ -8,6 +8,7 @@ import { BROWSER_FILE } from "../src/browser"
 import {
   DEFAULT_BAR,
   DEFAULT_COLUMNS,
+  DEFAULT_DRAWER,
   DEFAULT_KEYS,
   DEFAULT_MOTION,
   type Look,
@@ -23,6 +24,7 @@ const look = (mode: Look["mode"], schemes: Look["schemes"]): Look => ({
   motion: DEFAULT_MOTION,
   columns: DEFAULT_COLUMNS,
   bar: DEFAULT_BAR,
+  drawer: DEFAULT_DRAWER,
   sources: [],
   problems: [],
   sound: {
@@ -92,6 +94,7 @@ test("the window's own motion, columns and bar are what banda look gives with no
   expect(look.motion).toEqual(DEFAULT_MOTION)
   expect(look.columns).toEqual(DEFAULT_COLUMNS)
   expect(look.bar).toEqual(DEFAULT_BAR)
+  expect(look.drawer).toEqual(DEFAULT_DRAWER)
 })
 
 test("the window's own module files are what banda look gives with none", () => {

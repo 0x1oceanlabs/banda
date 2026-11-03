@@ -273,6 +273,14 @@ On the list, Roma decided:
    the key again lifts it, and it stays as it was. Its pin makes it a
    column of the current workspace. `[drawer] height` and
    `[drawer] harness` in `look.toml`.
+   _Built_ 2026-11-03. The Thread starts in the home Space, as `thread.new`
+   makes it, and the window keeps it between runs, in no workspace. It
+   drops over the Strip only, the sidebar left beside it, and dims the
+   workspace under it; a click there lifts it too, and the focus goes back
+   where it was. While it shows it is a dialog: the window's keys that work
+   the workspace's Panes wait. What in it keeps its own `Esc`, as a
+   composer's suggestions, stops it there. `height` is a share of the room
+   under the bar, `0.6` unless the look says.
 
 9. **A Pane in its own window** (ADR 0005, decision 5): its header's menu
    and `pane.pop-out`. Its place keeps a thin stand-in, "in its own
