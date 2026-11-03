@@ -284,6 +284,9 @@ test("the git button commits every change with the message the Thread's Harness 
   writeFileSync(join(folder, "app.ts"), "export const a = 1\n")
   git(folder, "add", "-A")
   git(folder, "commit", "-qm", "First")
+  // The engine commits as the folder's git says, as for the Person.
+  git(folder, "config", "user.name", "Roma")
+  git(folder, "config", "user.email", "roma@banda.so")
   git(folder, "remote", "add", "origin", remote)
   git(folder, "push", "-q", "-u", "origin", "main")
   writeFileSync(join(folder, "app.ts"), "export const a = 2\n")
