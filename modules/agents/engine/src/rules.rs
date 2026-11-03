@@ -106,15 +106,19 @@ pub fn may_rewind(
     next(&found, Event::Rewind).map(drop)
 }
 
-/// Whether a turn may be tried again: a Person asked for it, it failed or
-/// was cut short, and nothing came after it in its Thread.
-pub fn retry(state: TurnState, latest: bool, by_itself: bool) -> Result<(), Refusal> {
+/// Whether a turn goes again: a Person asked for it, it failed or was cut
+/// short, and nothing came after it in its Thread. One whose message went
+/// again already leaves nothing to do: `false`, as `mkdir -p` answers.
+pub fn retry(state: TurnState, at: &Position, by_itself: bool) -> Result<bool, Refusal> {
+    if at.again {
+        return Ok(false);
+    }
     let turn = TurnFacts {
-        latest,
+        latest: at.latest,
         by_itself,
         ..TurnFacts::of(state)
     };
-    next(&turn, Event::Retry).map(drop)
+    next(&turn, Event::Retry).map(|_| true)
 }
 
 /// Where a turn stands among its Thread's turns, as its rules need it.
@@ -124,6 +128,8 @@ pub struct Position {
     pub first: bool,
     /// It is the latest that began, and its message waits for no other.
     pub latest: bool,
+    /// A turn after it runs its message: it went again.
+    pub again: bool,
 }
 
 /// Where `turn` stands among `turns`, in the order they were made. A turn
@@ -134,6 +140,7 @@ pub fn position(turns: &[TurnView], turn: TurnId) -> Position {
         return Position {
             first: false,
             latest: false,
+            again: false,
         };
     };
     let mut its = counted().filter(|t| t.message == found.message);
@@ -143,6 +150,7 @@ pub fn position(turns: &[TurnView], turn: TurnId) -> Position {
     Position {
         first,
         latest: last && begun.map(|t| t.id) == Some(turn),
+        again: !last,
     }
 }
 

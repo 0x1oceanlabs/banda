@@ -116,9 +116,12 @@ configure: CommandMethod<Configure, null>,
  */
 stop: CommandMethod<OneTurn, null>, 
 /**
- * Tries a failed turn's message again.
+ * Tries a failed turn's message again. A turn whose message went
+ * again already leaves nothing to do, and answers none, as
+ * `mkdir -p` does: two windows, or a Person and a terminal, may
+ * both ask.
  */
-retry: CommandMethod<OneTurn, Sent>, 
+retry: CommandMethod<OneTurn, Sent | null>, 
 /**
  * A new Thread with the conversation to the end of an ended turn:
  * its turns and items, and a fork of its session there (ADR 0027).

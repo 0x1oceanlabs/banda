@@ -894,10 +894,27 @@ async fn a_failed_turn_can_be_tried_again_once_it_is_the_latest() {
         "the message is not posted twice"
     );
 
-    let refused = retry(&sent["turn"]).await.unwrap_err();
-    assert!(refused.message.contains("latest"), "{}", refused.message);
+    let twice = retry(&sent["turn"]).await.unwrap();
+    assert_eq!(twice, Value::Null, "it went again already: nothing to do");
     let refused = retry(&again["turn"]).await.unwrap_err();
     assert!(refused.message.contains("failed"), "{}", refused.message);
+
+    // A failed turn with a later one after it, which ran another message.
+    let thread = &sent["thread"];
+    let flaky = world.send(Some(thread), "flaky two").await;
+    world
+        .until(thread, |v| {
+            state(v, &flaky["turn"]) == Some(TurnState::Failed)
+        })
+        .await;
+    let later = world.send(Some(thread), "later").await;
+    world
+        .until(thread, |v| {
+            state(v, &later["turn"]) == Some(TurnState::Done)
+        })
+        .await;
+    let refused = retry(&flaky["turn"]).await.unwrap_err();
+    assert!(refused.message.contains("latest"), "{}", refused.message);
 }
 
 /// A World whose fake agent has an account in `home`, signed out.
@@ -2393,7 +2410,11 @@ async fn a_harness_that_stops_holds_the_queue_and_its_turn_goes_again_first() {
         .unwrap();
     let again = world.on_turn("agents.retry", &crash["turn"]).await.unwrap();
     let twice = world.on_turn("agents.retry", &crash["turn"]).await;
-    assert!(twice.is_err(), "a message goes again once at a time");
+    assert_eq!(
+        twice.unwrap(),
+        Value::Null,
+        "a message goes again once at a time"
+    );
     let view = world.ended(&again).await;
     assert_eq!(state(&view, &again["turn"]), Some(TurnState::Failed));
     assert_eq!(state(&view, &after["turn"]), Some(TurnState::Queued));

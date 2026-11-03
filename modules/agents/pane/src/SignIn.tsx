@@ -191,7 +191,9 @@ function TerminalWay({
     )
     if (opened === undefined) return
     const signIn = { harness, way: way.id, ...(turn && { turn }) }
-    const done = { method: "agents.sign_in", params: signIn, command: newId() }
+    const done = [
+      { method: "agents.sign_in", params: signIn, command: newId(), space },
+    ]
     const title = `Sign in: ${way.name}`
     open(
       {

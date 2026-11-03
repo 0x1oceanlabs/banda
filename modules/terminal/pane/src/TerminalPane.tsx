@@ -36,16 +36,30 @@ export type TerminalArgs = {
   title: string
   /** It runs the Person's shell, which starts again when it is gone. */
   shell: boolean
-  /** What to send once the program ended with code 0; then the Pane closes. */
-  done: Done | null
+  /** What to send once the program ended with code 0, in order, each
+   * only once the one before went through, as `a && b` does; then the
+   * Pane closes. */
+  done: Done[] | null
 }
 
 /**
- * A command the Pane sends once its program ended with code 0: how the
- * Pane that opened it hears that it ended well, as a sign-in's does. Its
- * ID keeps it once only, whichever window sends it, after any reload.
+ * A command the Pane sends once its program ended with code 0, and where
+ * it runs: in `space`, or with none, on the machine (ADR 0040, decision
+ * 5). It is how the Pane that opened it hears that it ended well, as a
+ * sign-in's does. Its ID keeps it once only, whichever window sends it,
+ * after any reload.
  */
-export type Done = CommandCall
+export type Done = CommandCall & { space?: SpaceId }
+
+/** `done` as a list: a Pane kept from before the list has one call, sent
+ * in its Space. That shape goes once no window keeps such a Pane. */
+function listed(
+  done: Done[] | CommandCall | null,
+  space: SpaceId
+): Done[] | null {
+  if (done === null || Array.isArray(done)) return done
+  return [{ ...done, space }]
+}
 
 export const terminalPane = definePane<TerminalArgs>({
   kind: "terminal.terminal",
@@ -87,7 +101,7 @@ function TerminalPane({
       space={space}
       terminal={args.terminal}
       shell={args.shell}
-      done={args.done}
+      done={listed(args.done, space)}
       focused={focused}
       close={close}
       titled={titled}
@@ -115,7 +129,7 @@ function Screen({
   space: SpaceId
   terminal: TerminalId
   shell: boolean
-  done: Done | null
+  done: Done[] | null
   focused: boolean
   close: () => void
   titled: (title: Title) => void
@@ -141,9 +155,10 @@ function Screen({
     if (!done || sent.current) return
     if (now.is !== "ended" || now.ended.code !== 0) return
     sent.current = true
-    engine
-      .run(done, space)
-      .then(close, (error: unknown) => setProblem(words(error)))
+    const run = async () => {
+      for (const call of done) await engine.run(call, call.space)
+    }
+    run().then(close, (error: unknown) => setProblem(words(error)))
   }, [done, now, engine, space, close])
 
   useEffect(() => {

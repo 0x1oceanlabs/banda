@@ -3,7 +3,7 @@ import { defineModule } from "@banda/ui/module"
 import { terminalPane } from "./TerminalPane"
 
 export { terminalPane }
-export type { TerminalArgs } from "./TerminalPane"
+export type { Done, TerminalArgs } from "./TerminalPane"
 
 export const terminal = defineModule({
   id: "terminal",
