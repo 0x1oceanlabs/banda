@@ -248,3 +248,46 @@ jobs:
           git commit -q -m "$name $VERSION"
           # A Stable and a Dev at once: the later one goes on top.
           git push -q || { git pull -q --rebase && git push -q; }
+
+  # A Stable goes to the AUR as banda-bin, which yay and Omarchy update
+  # with the system; a Dev does not, as one changes many times a day.
+  # Pushed with Roma's AUR key, in the secret AUR_KEY.
+  aur:
+    name: AUR
+    needs: [which, linux]
+    if: needs.which.outputs.publish == 'true' && needs.which.outputs.channel == 'stable'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.which.outputs.commit }}
+      - id: node
+        run: echo "version=$(sed -n 's/^ARG NODE_VERSION=//p' ci/Dockerfile)" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ steps.node.outputs.version }}
+          package-manager-cache: false
+      - name: banda-bin in the AUR
+        env:
+          AUR_KEY: ${{ secrets.AUR_KEY }}
+          VERSION: ${{ needs.which.outputs.version }}
+          GIT_AUTHOR_NAME: github-actions[bot]
+          GIT_AUTHOR_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+          GIT_COMMITTER_NAME: github-actions[bot]
+          GIT_COMMITTER_EMAIL: 41898282+github-actions[bot]@users.noreply.github.com
+        run: |
+          image=$RUNNER_TEMP/banda-$VERSION-x86_64.AppImage
+          curl -fsSL -o "$image" \
+            "https://github.com/$GITHUB_REPOSITORY/releases/download/v$VERSION/banda-$VERSION-x86_64.AppImage"
+          key=$RUNNER_TEMP/aur-key
+          aur=$RUNNER_TEMP/aur
+          printf '%s\n' "$AUR_KEY" > "$key" && chmod 600 "$key"
+          export GIT_SSH_COMMAND="ssh -i $key -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
+          git clone -q ssh://aur@aur.archlinux.org/banda-bin.git "$aur"
+          node scripts/aur.mjs stable "$VERSION" "$image" "$aur"
+          cd "$aur"
+          git add PKGBUILD .SRCINFO
+          git diff --cached --quiet && exit 0
+          git commit -q -m "banda-bin $VERSION"
+          git push -q origin HEAD:master
