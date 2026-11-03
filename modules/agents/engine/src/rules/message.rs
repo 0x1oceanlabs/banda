@@ -42,10 +42,10 @@ const IMAGE_KINDS: [(&str, &[u8]); 4] = [
     ("image/gif", b"GIF8"),
     ("image/webp", b"RIFF"),
 ];
-const MB: usize = 1024 * 1024;
+pub(crate) const MB: usize = 1024 * 1024;
 /// The largest image, the most images and the most of their bytes one
 /// message carries, as in T3 Code.
-const LARGEST_IMAGE: usize = 10 * MB;
+pub(crate) const LARGEST_IMAGE: usize = 10 * MB;
 const MOST_IMAGES: usize = 100;
 const MOST_IMAGE_BYTES: usize = 80 * MB;
 
@@ -75,21 +75,32 @@ pub fn kept_name(name: &str, bytes: &[u8]) -> Result<String, Refusal> {
     Ok(kept)
 }
 
+/// The kind of image `bytes` are by their first bytes, of those a
+/// message can carry.
+pub fn image_kind(bytes: &[u8]) -> Option<&'static str> {
+    IMAGE_KINDS
+        .iter()
+        .find(|(kind, starts)| {
+            bytes.starts_with(starts)
+                && (*kind != "image/webp" || bytes.get(8..12) == Some(b"WEBP"))
+        })
+        .map(|(kind, _)| *kind)
+}
+
 /// Whether `bytes` can go with a message as an image of kind `mime`.
 pub fn may_attach(mime: &str, bytes: &[u8]) -> Result<(), Refusal> {
-    let Some((_, starts)) = IMAGE_KINDS.iter().find(|(kind, _)| *kind == mime) else {
+    if !IMAGE_KINDS.iter().any(|(kind, _)| *kind == mime) {
         return Err(Refusal::invalid(
             "A message can carry PNG, JPEG, GIF and WebP images.",
         ));
-    };
+    }
     if bytes.len() > LARGEST_IMAGE {
         return Err(Refusal::invalid(format!(
             "An image can be at most {} MB.",
             LARGEST_IMAGE / MB
         )));
     }
-    let webp = mime != "image/webp" || bytes.get(8..12) == Some(b"WEBP");
-    if !bytes.starts_with(starts) || !webp {
+    if image_kind(bytes) != Some(mime) {
         return Err(Refusal::invalid(format!(
             "This file is not a {mime} image."
         )));

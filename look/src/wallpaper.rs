@@ -184,7 +184,7 @@ fn hyprpaper(places: &Places, followed: &mut Vec<PathBuf>) -> Option<PathBuf> {
 }
 
 /// A path, or a `file://` URI of one, its escapes undone.
-fn path_of(named: &str) -> Option<PathBuf> {
+pub fn path_of(named: &str) -> Option<PathBuf> {
     let path = named.strip_prefix("file://").unwrap_or(named);
     if !path.starts_with('/') {
         return None;

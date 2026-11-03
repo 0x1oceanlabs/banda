@@ -1731,6 +1731,36 @@ test("an Agent checks a Visual before it shows: its picture, its height and its 
   writeFileSync("test-results/18n-visual-checked.png", png)
   // The picture is as wide as asked and as tall as the page.
   expect([png.readUInt32BE(16), png.readUInt32BE(20)]).toEqual([390, 316])
+  // A local image goes into the page, and loads there.
+  const dot = join(window.dir, "dot.png")
+  writeFileSync(
+    dot,
+    Buffer.from(
+      "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAIAAACQd1PeAAAADElEQVR4nGOImHkHAAOAAg7PaQnHAAAAAElFTkSuQmCC",
+      "base64"
+    )
+  )
+  const inlined = await agentCalls(window, "preview_visual", {
+    html: `<!doctype html><img src="${dot}" onload="console.warn('loaded ' + this.src.slice(0, 22))">`,
+  })
+  const loaded = JSON.parse(inlined.content[0]!.text)
+  expect(loaded.console).toEqual([
+    { level: "warning", text: "loaded data:image/png;base64," },
+  ])
+  expect(loaded.unread_images).toBeUndefined()
+  // An image the page names that is not there is said; a page sized by
+  // its frame is refused, with why.
+  const gone = await agentCalls(window, "preview_visual", {
+    html: '<!doctype html><img src="/nowhere/gone.png" alt="">',
+  })
+  expect(JSON.parse(gone.content[0]!.text).unread_images).toEqual([
+    "/nowhere/gone.png: not found",
+  ])
+  const tall = await agentCalls(window, "preview_visual", {
+    html: '<!doctype html><div style="height: 100vh"></div>',
+  })
+  expect(tall.isError).toBe(true)
+  expect(tall.content[0]!.text).toContain("grow again and again")
   // The window it took is gone, and the Thread shows nothing.
   expect(await windows()).toBe(before)
   await expect(thread.locator("iframe")).toHaveCount(0)

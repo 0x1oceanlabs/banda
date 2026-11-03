@@ -40,6 +40,7 @@ pub mod sending;
 mod skills;
 mod store;
 mod transcript;
+mod visual_page;
 mod visuals;
 mod writer;
 
@@ -70,7 +71,7 @@ use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
 use ts_rs::TS;
-use visuals::Visuals;
+use visuals::{Inlined, Visuals};
 
 /// The module's settings file in `~/.config/banda` (ADR 0016): how
 /// messages are sent and what a new Thread starts with, which the look
@@ -293,7 +294,10 @@ banda_kernel::methods! {
         /// warning also have -surface), --chart-1 to --chart-6, --radius,
         /// --font-sans, --font-mono. Banda's sheet sets the text colour
         /// and font. Inline <style> and <script>; web addresses load as
-        /// they are. Sound plays once your Person clicks in the page.
+        /// they are. A local image goes in by its absolute path, in src,
+        /// srcset, poster or CSS url(): PNG, JPEG, GIF, WebP or SVG, up
+        /// to 10 MiB each and 25 MiB a page. Sound plays once your Person
+        /// clicks in the page.
         command show_visual(ShowVisual) -> String, Write, tool "show_visual";
         /// Lays out an HTML page as show_visual would show it, and
         /// answers its picture, its height and what its console said:
@@ -497,6 +501,11 @@ pub struct Previewed {
     /// Its console's errors and warnings, the first 20.
     pub console: Vec<Logged>,
     pub pictures: Vec<Picture>,
+    /// The local images it names that did not go in, each `path: why`;
+    /// show_visual refuses the page until they do.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    #[ts(optional, as = "Option<Vec<String>>")]
+    pub unread_images: Vec<String>,
 }
 
 /// How long main has to lay a page out.
@@ -964,6 +973,13 @@ impl Agents {
             ));
         };
         let (title, height) = visuals::may_show(&html, &title, height)?;
+        let Inlined { html, unread } = visuals::inlined(html).await.map_err(Error::from)?;
+        if !unread.is_empty() {
+            return Err(Refusal::invalid(format!(
+                "These images did not go into the page: {}.",
+                unread.join("; ")
+            )));
+        }
         let visual = VisualId::new();
         let space = call.space();
         let visuals = Visuals::of(space.data());
@@ -990,6 +1006,7 @@ impl Agents {
             appearance,
         } = params;
         visuals::may_lay_out(&html)?;
+        let Inlined { html, unread } = visuals::inlined(html).await.map_err(Error::from)?;
         let width = width
             .unwrap_or(visuals::WIDTH)
             .clamp(visuals::NARROWEST, visuals::WIDEST);
@@ -998,7 +1015,9 @@ impl Agents {
             width,
             appearance: appearance.unwrap_or_default(),
         };
-        call.ask_window("lay_out", &asked, LAYING_OUT).await
+        let mut previewed: Previewed = call.ask_window("lay_out", &asked, LAYING_OUT).await?;
+        previewed.unread_images = unread;
+        Ok(previewed)
     }
 
     async fn visual(

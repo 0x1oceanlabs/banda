@@ -14,4 +14,9 @@ height: number,
 /**
  * Its console's errors and warnings, the first 20.
  */
-console: Array<Logged>, pictures: Array<Picture>, };
+console: Array<Logged>, pictures: Array<Picture>, 
+/**
+ * The local images it names that did not go in, each `path: why`;
+ * show_visual refuses the page until they do.
+ */
+unread_images?: Array<string>, };
