@@ -71,6 +71,8 @@ ADR 0002, decision 9, as decision 9 below says.
      in ACP, and Codex signs in by itself in the browser._
    - Tokens never pass through Banda, and Banda reads none of the
      Harness's credential files.
+     _Changed by ADR 0043, decision 2: Banda reads Claude Code's access
+     token for its limits, for that one request, and keeps it nowhere._
    - A second account is a second entry in the Harness list, with its own
      configuration folder.
 

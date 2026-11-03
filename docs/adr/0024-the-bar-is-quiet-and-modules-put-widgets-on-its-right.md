@@ -111,6 +111,8 @@ Codex, `codex app-server`'s rate limits.
       (ADR 0008).
    2. **`agents.limits`**: how much of each Harness's usage limit is
       spent, Banda's own count.
+      _Changed by ADR 0043: the widget is `harnesses.limits`, only a ring,
+      read by the module `harnesses`, and a Usage Pane counts the rest._
       - The engine's agents module reads them, on the machine where the
         Harness is signed in: for Claude Code, Anthropic's OAuth usage
         endpoint with Claude Code's own sign-in, and the

@@ -33,10 +33,22 @@ The agent program a Thread runs on, for example Claude Code or Codex. The
 engine reaches it through an adapter, ACP first. It reads what a Harness can
 do from the Harness's declared capabilities.
 
+**Limit**:
+How much of a Harness's subscription a window of time allows, such as
+Claude Code's week. Banda shows the share spent of each, and when it resets
+(ADR 0043).
+_Avoid_: quota, rate limit.
+
+**Usage**:
+The tokens a Harness's sessions spent on this computer, in Banda or not,
+and what they would cost through the API. The Usage Pane counts them from
+the Harnesses' own journals (ADR 0043).
+
 **Sign-in**:
 How a Person lets a Harness work under their account, in a way the Harness
 offers: in a terminal, as Claude Code does, or by itself in the browser, as
-Codex does. The Harness keeps the credentials; Banda holds none.
+Codex does. The Harness keeps the credentials; Banda holds none. It reads
+Claude Code's token only to ask for its limits (ADR 0043).
 _Avoid_: login, auth.
 
 **Terminal**:
