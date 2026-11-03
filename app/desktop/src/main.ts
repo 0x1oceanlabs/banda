@@ -11,6 +11,7 @@
  * 0028). Settings are a Pane of the page; the desktop writes their files
  * (settings.ts, ADR 0016). It updates Banda itself (update.ts, ADR 0041).
  */
+import { userInfo } from "node:os"
 import { join, resolve, sep } from "node:path"
 import { pathToFileURL } from "node:url"
 import {
@@ -48,6 +49,7 @@ import {
 } from "@banda/web/host"
 import { openDoor } from "./door"
 import { engineLayer } from "./engine"
+import { loginPath } from "./login"
 import { firstFrame, firstLook, lookLayer } from "./look"
 import { modules } from "./modules"
 import { channel, stateFolder } from "./channel"
@@ -163,7 +165,15 @@ const runtime = ManagedRuntime.make(
     Layer.provideMerge(modules.layer),
     Layer.provideMerge(
       Layer.mergeAll(
-        engineLayer(engineBinary),
+        engineLayer(
+          engineBinary,
+          loginPath({
+            platform: process.platform,
+            shell: process.env.SHELL ?? userInfo().shell ?? undefined,
+            own: process.env.PATH,
+            term: process.env.TERM,
+          })
+        ),
         lookLayer(engineBinary),
         settingsLayer(engineBinary),
         notices,

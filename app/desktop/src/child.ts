@@ -14,9 +14,16 @@ const LONGEST_WAIT = 10_000
 /** A program that ran this long without dying starts again at once. */
 const HEALTHY = 30_000
 /** `program args…`, its stderr the window's. Its stdin is a pipe the
- * window holds: if the window dies, the program sees it close. */
-export function command(program: string, args: string[]) {
+ * window holds: if the window dies, the program sees it close. It has the
+ * window's environment, `env` over it. */
+export function command(
+  program: string,
+  args: string[],
+  env?: Record<string, string>
+) {
   return ChildProcess.make(program, args, {
+    env,
+    extendEnv: true,
     stdin: "pipe",
     stdout: "pipe",
     stderr: "inherit",
