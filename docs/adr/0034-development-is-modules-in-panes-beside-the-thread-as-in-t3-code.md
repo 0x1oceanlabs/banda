@@ -178,7 +178,12 @@ the rest are our defaults, as T3 Code does, and stay Roma's to change.
      Commit, Push, Switch branch. They act in the focused Space.
 
    A module then needs a way to add rows to another module's Pane; it
-   comes with this decision, and `pulls` uses it for the PR rows.
+   comes with this decision, and `pulls` uses it for the PR rows: a
+   module's `threadDetails` (`@banda/ui/module`), each a component drawn
+   in a section of the card, handed to the Thread Pane by its frame. The
+   card's button goes in the header the frame draws (`InHeader`). It is at
+   the top right when the Thread holds it beside the messages (768 px and
+   280 px each side), else in a popover under its button.
 
 5. **`files`: the tree and a file, read-only at first.**
    - `files.tree`: the Space's files, with search, refresh, expand and

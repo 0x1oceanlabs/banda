@@ -217,3 +217,58 @@ test("the Diff stages, unstages and reverts a hunk, a file and all, as the Codex
   await diff.getByRole("button", { name: "Unstage b.txt" }).click()
   await expect.poll(status).toBe(" M b.txt\nM  ten.txt")
 })
+
+test("a Thread's details card shows the branch and its changes, as T3 Code's, and opens the Diff on them", async () => {
+  window = await startWindow()
+  const { page, dir } = window
+  const thread = await firstThread(page)
+  await expect(thread.composer).toBeVisible()
+  const pane = page.getByRole("region", { name: "New Thread" })
+  const toggle = pane.getByRole("button", { name: "Thread details" })
+  const card = page.getByRole("dialog", { name: "Thread details" })
+
+  // A folder that is no repository has one row: Initialize Git.
+  await toggle.click()
+  const init = card.getByRole("button", { name: "Initialize Git" })
+  await expect(init).toBeVisible()
+  await page.screenshot({ path: "test-results/git-details-init.png" })
+  await page.keyboard.press("Escape")
+
+  const folder = join(dir, "root", "Work")
+  git(folder, "init", "-q", "-b", "main")
+  writeFileSync(join(folder, "app.ts"), "export const a = 1\n")
+  git(folder, "add", "-A")
+  git(folder, "commit", "-qm", "First")
+  writeFileSync(
+    join(folder, "app.ts"),
+    "export const a = 2\nexport const b = 3\n"
+  )
+
+  // Ctrl+Shift+B opens it too; it follows the folder as it changes.
+  await thread.composer.click()
+  await page.keyboard.press("Control+Shift+KeyB")
+  await expect(card.getByText("main", { exact: true })).toBeVisible()
+  const changes = card.getByRole("button", { name: /Changes/ })
+  await expect(changes).toContainText("+2−1")
+  await page.screenshot({ path: "test-results/git-details-changes.png" })
+
+  // A Thread wide enough to hold it beside the messages has it at its
+  // top right, open until the Person hides it.
+  await page.keyboard.press("Escape")
+  await page.setViewportSize({ width: 1900, height: 900 })
+  const aside = pane.getByRole("complementary", { name: "Thread details" })
+  await expect(aside.getByText("main", { exact: true })).toBeVisible()
+  await expect(toggle).toHaveAttribute("aria-pressed", "true")
+  await page.screenshot({ path: "test-results/git-details-wide.png" })
+  await thread.composer.click()
+  await page.keyboard.press("Control+Shift+KeyB")
+  await expect(aside).toBeHidden()
+  await toggle.click()
+  await expect(aside).toBeVisible()
+
+  await aside.getByRole("button", { name: /Changes/ }).click()
+  const diff = page.getByRole("region", { name: "Diff" })
+  await expect(diff.getByRole("button", { name: "Scope" })).toHaveText(
+    "Changes"
+  )
+})

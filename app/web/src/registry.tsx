@@ -7,6 +7,7 @@
 import type { Engine, JsonValue } from "@banda/contract"
 import { Button } from "@banda/ui/components/button"
 import { Kbd } from "@banda/ui/components/kbd"
+import type { Details } from "@banda/ui/components/thread-details"
 import { useModules } from "@banda/ui/hooks/use-status"
 import {
   type AnyPaneKind,
@@ -78,6 +79,13 @@ export const widgets: ReadonlyMap<string, { widget: Widget; module: Module }> =
       module.bar.map((widget) => [widget.id, { widget, module }] as const)
     )
   )
+/** The rows a Thread's details card has of the modules that run, in the
+ * modules' order. */
+export function detailsOf(engineModules: readonly string[]): Details[] {
+  return all
+    .filter((module) => runs(module, engineModules))
+    .flatMap((module) => module.threadDetails)
+}
 
 export function kindOf(kind: string): AnyPaneKind | undefined {
   return byKind.get(kind)?.kind

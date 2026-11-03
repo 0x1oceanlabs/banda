@@ -35,6 +35,7 @@ import {
   TraceTitle,
 } from "@banda/ui/components/trace"
 import { useLive } from "@banda/ui/hooks/use-live"
+import { matches } from "@banda/ui/lib/keys"
 import { clock } from "@banda/ui/lib/words"
 import { definePane, paneOf, type PaneProps } from "@banda/ui/pane"
 import {
@@ -67,6 +68,7 @@ import { QuoteSelection } from "./Quote"
 import type { Values } from "./form"
 import { Question, QuestionDrawer } from "./Questions"
 import { ChangedFiles } from "./ChangedFiles"
+import { DETAILS_KEY, ThreadDetails, useWide } from "./Details"
 import { Plan } from "./Plan"
 import { PlanReady, ProposedPlan } from "./ProposedPlan"
 import { planTitle } from "./messageText"
@@ -139,17 +141,33 @@ function ThreadPane(props: PaneProps<ThreadArgs>) {
   // What the Person looks for in the Thread, while the find bar is open.
   const [find, setFind] = useState<{ query: string; at: number }>()
   const area = useRef<HTMLDivElement>(null)
+  const root = useRef<HTMLDivElement>(null)
   const composer = useRef<ComposerHandle>(null)
   const findField = useRef<HTMLInputElement>(null)
   const writers = useWriters(engine, space, thread)
   const found = useFound(area, find?.query ?? "", find?.at ?? 0, state)
+  // The details card: kept open on a wide Thread until hidden, popped
+  // open for a moment on a narrow one.
+  const wide = useWide(root)
+  const [popped, setPopped] = useState(false)
+  const detailsShown = wide ? args.details !== false : popped
+  const setDetailsShown = wide
+    ? (shown: boolean) =>
+        update({ ...args, details: shown ? undefined : false })
+    : setPopped
 
   return (
     // Files dropped anywhere on the Pane join the message; Mod+F finds in
     // it, as in T3 Code.
     <div
+      ref={root}
       className="flex h-full min-h-0 flex-col"
       onKeyDown={(event) => {
+        if (matches(event, DETAILS_KEY)) {
+          event.preventDefault()
+          setDetailsShown(!detailsShown)
+          return
+        }
         const mod = event.ctrlKey || event.metaKey
         // By the key's place, as the window's keys, on any layout.
         if (!mod || event.altKey || event.shiftKey || event.code !== "KeyF")
@@ -178,6 +196,15 @@ function ThreadPane(props: PaneProps<ThreadArgs>) {
         <QuoteSelection
           area={area}
           onQuote={(quote) => composer.current?.quote(quote)}
+        />
+        <ThreadDetails
+          engine={engine}
+          space={space}
+          thread={thread}
+          open={open}
+          wide={wide}
+          shown={detailsShown}
+          onShown={setDetailsShown}
         />
         {find && (
           <FindBar
