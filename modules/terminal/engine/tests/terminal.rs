@@ -217,7 +217,7 @@ async fn next(stream: &mut Stream, wanted: impl Fn(&Piece) -> bool) -> Option<Pi
     }
 }
 
-#[cfg(target_os = "linux")]
+#[cfg(any(target_os = "linux", target_os = "macos"))]
 #[tokio::test]
 async fn a_shell_says_what_runs_in_front_and_where() {
     let world = World::new().await;

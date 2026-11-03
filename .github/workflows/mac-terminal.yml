@@ -1,0 +1,43 @@
+# The terminal module reads what runs in front of a shell from macOS
+# itself (modules/terminal/engine/src/front.rs): its tests run on GitHub's
+# Apple silicon runner as it changes, or by hand:
+#
+#   gh workflow run "mac terminal" --ref <branch>
+#
+# Not on every push: while the repository is private, a macOS minute
+# costs ten.
+name: mac terminal
+
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - .github/workflows/mac-terminal.yml
+      - modules/terminal/engine/**
+
+permissions:
+  contents: read
+
+concurrency:
+  group: mac-terminal-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  test:
+    name: terminal (macOS)
+    # A fork's PR never spends this repository's macOS minutes.
+    if: >-
+      github.event_name == 'workflow_dispatch' ||
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: macos-15
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v5
+      - run: rustup toolchain install
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: mac-terminal
+      - run: cargo test -p banda-terminal
