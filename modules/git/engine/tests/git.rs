@@ -1272,6 +1272,33 @@ async fn the_watch_says_the_status_and_then_what_changed() {
 }
 
 #[tokio::test]
+async fn the_status_is_read_again_at_once_when_a_command_of_banda_wrote() {
+    let world = World::committed().await;
+    world.write("a.txt", "one\nTWO\nthree\n");
+    let person = Participant::Person(world.owner);
+    let mut heard = world
+        .kernel
+        .stream(person, "git.watch", Some(world.space), json!({}))
+        .await
+        .unwrap();
+    let first: Status = serde_json::from_value(heard.recv().await.unwrap()).unwrap();
+    assert_eq!(first.files[0].staged, Some(false));
+
+    world
+        .call("git.stage", json!({ "files": ["a.txt"] }))
+        .await
+        .unwrap();
+    // Well before the next read, three seconds on.
+    let within = std::time::Duration::from_secs(1);
+    let next = tokio::time::timeout(within, heard.recv())
+        .await
+        .expect("read again at once")
+        .unwrap();
+    let next: Status = serde_json::from_value(next).unwrap();
+    assert_eq!(next.files[0].staged, Some(true));
+}
+
+#[tokio::test]
 async fn a_prompt_says_what_the_commit_would_take_and_leaves_the_index() {
     let world = World::committed().await;
     world.write("a.txt", "one\nTWO\nthree\n");

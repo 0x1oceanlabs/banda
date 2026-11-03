@@ -12,7 +12,8 @@ import {
 } from "@banda/ui/components/trace"
 import { useNow } from "@banda/ui/hooks/use-now"
 import { CircleCheckIcon, CircleSlashIcon, LayersIcon } from "lucide-react"
-import { duration, foldTitle, type Line, summary } from "./timeline"
+import { duration } from "@banda/ui/lib/words"
+import { foldTitle, type Line, summary } from "./timeline"
 
 /** How a line shows inside a line of work or a fold: as the Thread does. */
 type Render = (line: Line) => React.ReactNode

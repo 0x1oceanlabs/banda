@@ -17,6 +17,7 @@ import { useAct } from "@banda/ui/hooks/use-act"
 import { paneOf } from "@banda/ui/pane"
 import { FileDiffIcon, GitBranchIcon, GitBranchPlusIcon } from "lucide-react"
 import { diffPane } from "./DiffPane"
+import { GitButton } from "./GitButton"
 import { VIEW } from "./diff"
 import { CHANGES } from "./scope"
 
@@ -79,7 +80,7 @@ function useGitStatus(engine: Engine, space: SpaceId): Status | null {
   )
 }
 
-function GitRows({ engine, space, open }: DetailsProps) {
+function GitRows({ engine, space, thread, open }: DetailsProps) {
   const status = useGitStatus(engine, space)
   const init = useAct()
   if (!status) return null
@@ -111,6 +112,12 @@ function GitRows({ engine, space, open }: DetailsProps) {
       >
         {status.branch ?? "Detached HEAD"}
       </DetailsRow>
+      <GitButton
+        engine={engine}
+        space={space}
+        thread={thread}
+        status={status}
+      />
       {status.files.length > 0 && (
         <DetailsRow
           icon={<FileDiffIcon />}

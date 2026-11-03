@@ -162,7 +162,11 @@ the rest are our defaults, as T3 Code does, and stay Roma's to change.
      runs the whole chain at once, every file, the message written for it.
      Disabled, it says why on hover. Its progress is in the button: the
      step, a hook's last line, a timer, then ✓ for ten seconds; only an
-     error is a toast, and it stays.
+     error is a toast, and it stays. Until a module can show a toast, the
+     error stays in the card, above the button, till it is closed. A run
+     is the Space's, not a card's: a card shown again finds it where it
+     is, and as a command of git's ends, `git.watch` reads the status
+     again at once.
    - **`▾`:** Commit (a dialog: the message, the files to leave out,
      "Commit on new branch"), Push, Create PR.
    - **On the default branch** Push and PR ask first: Abort, "Push to

@@ -449,6 +449,12 @@ async fn turn(
         )?;
         return Ok(StopReason::EndTurn);
     }
+    // Asked for a commit's message, as git.prompt asks (ADR 0034).
+    if words.contains("git commit messages") {
+        let reply = r#"{"subject": "Change the app", "body": "", "branch": "change-app"}"#;
+        say(&cx, &session, SessionUpdate::AgentMessageChunk(text(reply)))?;
+        return Ok(StopReason::EndTurn);
+    }
     if words.contains("which settings") {
         let setup = fake.setup(&session);
         let reply = format!(

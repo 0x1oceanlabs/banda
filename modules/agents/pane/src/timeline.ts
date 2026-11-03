@@ -5,6 +5,7 @@
  * runs says how long it has. Pure, so plain tests cover it.
  */
 import type { Item, ToolKind, TurnView } from "@banda/contract/agents"
+import { duration } from "@banda/ui/lib/words"
 import { changes, type FileChange } from "./changes"
 import {
   isReply,
@@ -226,16 +227,6 @@ const DID: Record<Kind, (count: number) => string> = {
   fetch: (n) => (n === 1 ? "fetched a page" : `fetched ${n} pages`),
   think: (n) => (n === 1 ? "thought" : `thought ${n} times`),
   other: (n) => (n === 1 ? "used a tool" : `used ${n} tools`),
-}
-
-/** How long `ms` took: "12s", "1m 05s", "2h 03m". */
-export function duration(ms: number): string {
-  const seconds = Math.max(0, Math.floor(ms / 1000))
-  if (seconds < 60) return `${seconds}s`
-  const minutes = Math.floor(seconds / 60)
-  const pad = (n: number) => String(n).padStart(2, "0")
-  if (minutes < 60) return `${minutes}m ${pad(seconds % 60)}s`
-  return `${Math.floor(minutes / 60)}h ${pad(minutes % 60)}m`
 }
 
 /** What a folded turn says about itself. */

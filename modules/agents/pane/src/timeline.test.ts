@@ -3,7 +3,7 @@ import type { TurnView } from "@banda/contract/agents"
 import { expect, test } from "vitest"
 import { event, person } from "./testing"
 import { apply, EMPTY, NOTHING } from "./thread"
-import { duration, foldTitle, type Line, summary, timeline } from "./timeline"
+import { foldTitle, type Line, summary, timeline } from "./timeline"
 
 function play(...events: Event[]) {
   return events.reduce(apply, EMPTY)
@@ -227,12 +227,6 @@ test("a line of work names its two largest kinds", () => {
   const items = state.items.filter((item) => item.body.kind === "tool")
   expect(summary(items)).toBe("Ran 3 commands, edited a file and 1 more")
   expect(summary(items.slice(0, 3))).toBe("Ran 2 commands and edited a file")
-})
-
-test("a duration reads as a clock would", () => {
-  expect(duration(12_400)).toBe("12s")
-  expect(duration(65_000)).toBe("1m 05s")
-  expect(duration(2 * 3600_000 + 3 * 60_000)).toBe("2h 03m")
 })
 
 test("a folded turn says how long it took, or that a Person stopped it", () => {
