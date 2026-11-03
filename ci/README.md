@@ -10,12 +10,19 @@ or `docs/` passes it without running them.
 
 A PR whose branch is in a fork never runs on devbox (ADR 0038, decision 4):
 its code could leave anything in the runners' volumes for the next run to
-build on. `ci.yml` runs it on GitHub's `ubuntu-24.04`, which has rustup and
-what Electron runs on; the job installs `ci/Dockerfile`'s Node version and
-pnpm itself. A new tool the checks need goes in both places. `release.yml`
-packs no fork's PR.
+build on.
 
-To try that path from a branch here:
+- `ci.yml` sends it to GitHub's `ubuntu-24.04`, and `release.yml` packs no
+  fork's PR. That only routes it: a fork's PR runs its own copy of the
+  workflows and could write `runs-on: devbox` back in.
+- `ci/job-started.sh` is what keeps it off. The runner runs it before every
+  job (`ACTIONS_RUNNER_HOOK_JOB_STARTED`, in `ci/Dockerfile`) and it fails a
+  job whose PR or `workflow_run` comes from another repository.
+- `ci/tools.sh` gets a check job ready on either runner. On GitHub's it
+  installs `ci/Dockerfile`'s Node and `package.json`'s pnpm; a new tool the
+  checks need goes in both.
+
+To try GitHub's path from a branch here:
 `gh workflow run ci --ref <branch> -f github-hosted=true`.
 
 ## Where they run
