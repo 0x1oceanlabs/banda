@@ -4,8 +4,6 @@ import type { Attention, Listed, Lists, Report, Watch } from "@banda/ui/pane"
 import { runs, watches } from "../registry"
 import { combine } from "./attention"
 
-export type { Lists }
-
 /** Where each Watch's list goes too, for the window to tell what calls. */
 export type Listening = {
   hear: (source: string, space: SpaceId, listed: readonly Listed[]) => void

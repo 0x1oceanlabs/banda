@@ -11,13 +11,12 @@ import {
   DropdownMenuTrigger,
 } from "@banda/ui/components/dropdown-menu"
 import { cn } from "@banda/ui/lib/utils"
-import type { PaneState } from "@banda/ui/pane"
+import type { Lists, PaneState } from "@banda/ui/pane"
 import { useMemo, useState } from "react"
 import { useLookSidebar } from "../look"
 import { SpaceBadge, Status, ThreadMark, toneOf } from "../sidebar/Row"
 import { useIsSettled } from "../sidebar/settled"
 import { type Counted, inOrder, type Tally, tally } from "./tally"
-import type { Lists } from "./Watches"
 
 /** Each count's words, after its number. */
 const WORDS: Record<Count, string> = {

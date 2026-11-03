@@ -8,8 +8,7 @@ import { useCallback } from "react"
 import { works } from "@banda/ui/components/banda-mark"
 import { useNow } from "@banda/ui/hooks/use-now"
 import { kept } from "@banda/ui/lib/kept"
-import type { Listed } from "@banda/ui/pane"
-import type { Lists } from "../bar/Watches"
+import type { Listed, Lists } from "@banda/ui/pane"
 
 /** What the Person said of a row, and when: put away, or kept out. */
 export type Say = { settled: boolean; at: number }

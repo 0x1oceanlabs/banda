@@ -258,6 +258,8 @@ export class Page {
   /** A Thread's Agent drives it with Banda's tools now, at `step`; or
    * none does. */
   driveBy(agent: string | null, step: string): void {
+    const was = this.state.driver
+    if (was?.agent === agent && was?.step === step) return
     this.set({ driver: agent ? { agent, step } : null })
   }
 

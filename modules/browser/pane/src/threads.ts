@@ -5,7 +5,7 @@
  */
 import type { SpaceId } from "@banda/contract"
 import type { WindowApi } from "@banda/ui/module"
-import type { Listed } from "@banda/ui/pane"
+import { type Listed, listedOf } from "@banda/ui/pane"
 import { useSyncExternalStore } from "react"
 import { browserHost } from "./host"
 import { drivers, watchPages } from "./pages"
@@ -17,11 +17,7 @@ let shell: WindowApi | null = null
 export function threadOf(
   agent: string
 ): { space: SpaceId; listed: Listed } | null {
-  for (const [space, listed] of Object.entries(shell?.lists() ?? {})) {
-    const found = listed.find((each) => each.agent === agent)
-    if (found) return { space: space as SpaceId, listed: found }
-  }
-  return null
+  return shell && listedOf(shell.lists(), agent)
 }
 
 const unwatched = () => () => {}

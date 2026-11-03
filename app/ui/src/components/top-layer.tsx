@@ -9,10 +9,8 @@ function TopLayer({ children }: { children: ReactNode }) {
   return createPortal(children, document.body)
 }
 
-/**
- * Draws `children` in `element`, which a module keeps out of React's
- * tree: over a browser page, in the layer the pages live in.
- */
+/** Draws `children` in `element`, a place a module keeps out of React's
+ * tree, as the box a browser page lives in. */
 function DrawnIn({
   element,
   children,

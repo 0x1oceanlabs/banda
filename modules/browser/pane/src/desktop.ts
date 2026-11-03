@@ -10,6 +10,22 @@ import type { Pressed } from "./keys"
 
 export { isAlt, type Pressed, taken } from "./keys"
 
+/** What the row shows of a page's address: its site, without `www.`. */
+export function siteOf(address: string): string {
+  try {
+    const url = new URL(address)
+    if (url.protocol === "http:" || url.protocol === "https:") {
+      return url.host.replace(/^www\./, "")
+    }
+    if (url.protocol === "about:") return address
+    return url.protocol === "file:"
+      ? decodeURIComponent(url.pathname.split("/").pop() || url.pathname)
+      : url.protocol.slice(0, -1)
+  } catch {
+    return address
+  }
+}
+
 /** The profile every page shares (ADR 0013, decision 2). */
 export const PARTITION = "persist:browser"
 

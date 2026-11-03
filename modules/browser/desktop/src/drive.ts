@@ -21,7 +21,17 @@ import { Context, Effect, FiberSet, Layer, RcMap } from "effect"
 import type { Event, InputEvent, WebContents } from "electron"
 import type { Browser, Dialog, Frame, Page } from "playwright-core"
 import { Cdp, messageOf } from "./cdp"
-import { act, hidden, secrets, stepOf, timedOut, waitFor } from "./hands"
+import {
+  act,
+  goingTo,
+  hidden,
+  opening,
+  READING,
+  secrets,
+  stepOf,
+  timedOut,
+  waitFor,
+} from "./hands"
 import { pageOf as contentsOf, Tabs } from "./tabs"
 
 /** How long a tab no call came for stays held. */
@@ -52,9 +62,6 @@ type Held = {
   /** Whether Banda's hands act in it now: their input is not the
    * Person's. */
   acting: boolean
-  /** The Agent whose Thread drives it, from its first call until its
-   * turn ends or the Person stops it (ADR 0029, decision 4). */
-  driver: string | null
   /** The tree of its last snapshot, which names the step's elements. */
   tree: string
 }
@@ -151,22 +158,6 @@ const go = async (page: Page, { tab, to }: Navigate) => {
   }
 }
 
-/** What the Pane says a Thread does while it reads a tab. */
-const READING = () => "Reading the page"
-
-/** A site as the Pane names it: its host, or the address. */
-const siteOf = (url: string) => URL.parse(url)?.host || url
-
-/** What the Pane says a Thread does as it takes a tab where `to` says. */
-const goingTo = (to: Navigate["to"]) =>
-  to === "back"
-    ? "Going back"
-    : to === "forward"
-      ? "Going forward"
-      : to === "reload"
-        ? "Reloading"
-        : `Going to ${siteOf(to)}`
-
 const nowhere = (tab: number, to: string) =>
   new Refused({ message: `Tab ${tab} has nowhere to go ${to}.` })
 
@@ -202,7 +193,9 @@ export class Drive extends Context.Service<
       const tabs = yield* Tabs
       // What Playwright's callbacks run stops with the layer.
       const run = yield* FiberSet.makeRuntime()
-      /** The tabs a Thread drives, by the ID of its Agent. */
+      /** The tabs a Thread drives, from its first call until its turn
+       * ends or the Person stops it (ADR 0029, decision 4), by the ID of
+       * its Agent. */
       const driving = new Map<number, string>()
       /** Tells the tab's Pane who drives it now, and the step it takes. */
       const tell = (tab: number, agent: string | null, step = "") => {
@@ -235,7 +228,6 @@ export class Drive extends Context.Service<
                   page,
                   touched: new Map(),
                   acting: false,
-                  driver: null,
                   tree: "",
                 }
                 // A dialog waits for the Person's answer: Playwright
@@ -256,7 +248,7 @@ export class Drive extends Context.Service<
               Effect.promise(() => {
                 if (contents && !contents.isDestroyed())
                   contents.off("input-event", noted)
-                if (kept.driver) tell(tab, null)
+                if (driving.has(tab)) tell(tab, null)
                 return kept.connection.close()
               })
           ),
@@ -279,7 +271,7 @@ export class Drive extends Context.Service<
       const inTab = <A>(
         tab: number,
         by: Participant,
-        step: (held: Held) => string,
+        step: string | ((tree: string) => string),
         work: (held: Held) => Promise<A>
       ) =>
         Effect.scoped(
@@ -288,8 +280,8 @@ export class Drive extends Context.Service<
               try: async () => {
                 if (!kept.touched.has(by.id)) kept.touched.set(by.id, false)
                 if (by.kind === "agent") {
-                  kept.driver = by.id
-                  tell(tab, by.id, step(kept))
+                  const said = typeof step === "string" ? step : step(kept.tree)
+                  tell(tab, by.id, said)
                 }
                 return await work(kept)
               },
@@ -326,28 +318,18 @@ export class Drive extends Context.Service<
           }),
         open: (url, by) =>
           Effect.flatMap(tabs.create(url, by.id), ({ id }) =>
-            inTab(
-              id,
-              by,
-              () => `Opening ${url ? siteOf(url) : "a new tab"}`,
-              (kept) => shown(id, kept, by.id)
-            )
+            inTab(id, by, opening(url), (kept) => shown(id, kept, by.id))
           ),
         navigate: (to, by) =>
-          inTab(
-            to.tab,
-            by,
-            () => goingTo(to.to),
-            async (kept) => {
-              await go(kept.page, to)
-              return shown(to.tab, kept, by.id)
-            }
-          ),
+          inTab(to.tab, by, goingTo(to.to), async (kept) => {
+            await go(kept.page, to)
+            return shown(to.tab, kept, by.id)
+          }),
         act: (what, by) =>
           inTab(
             what.tab,
             by,
-            (kept) => stepOf(kept.tree, what),
+            (tree) => stepOf(tree, what),
             async (kept) => {
               const { page } = kept
               const contents = contentsOf(what.tab)
@@ -404,7 +386,7 @@ export class Drive extends Context.Service<
           inTab(
             wait.tab,
             by,
-            (kept) => stepOf(kept.tree, wait),
+            (tree) => stepOf(tree, wait),
             async (kept) => {
               await waitFor(kept.page, wait)
               return shown(wait.tab, kept, by.id)

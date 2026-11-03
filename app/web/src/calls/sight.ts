@@ -5,8 +5,7 @@
  */
 import type { SpaceId } from "@banda/contract"
 import type { Columns } from "@banda/contract/look"
-import type { PaneState } from "@banda/ui/pane"
-import type { Lists } from "../bar/Watches"
+import { type Lists, listedOf, type PaneState } from "@banda/ui/pane"
 import {
   current,
   entries,
@@ -69,18 +68,13 @@ export function besideOf(
   agent: string,
   shows: Shows
 ): { space: SpaceId; from?: string; right: PaneState[] } | null {
-  for (const [space, listed] of Object.entries(lists) as [
-    SpaceId,
-    Lists[SpaceId],
-  ][]) {
-    const thing = listed.find((each) => each.agent === agent)
-    if (!thing) continue
-    const entry = showing(workspaces, { space, about: thing.id }, shows)
-    const at = entry && find(workspaces, entry.id)
-    if (!entry || !at) return { space, right: [] }
-    const next = workspaces.list[at.workspace].columns[at.column + 1]
-    const right = next?.entries.map((each) => each.pane) ?? []
-    return { space, from: entry.id, right }
-  }
-  return null
+  const thing = listedOf(lists, agent)
+  if (!thing) return null
+  const { space } = thing
+  const entry = showing(workspaces, { space, about: thing.listed.id }, shows)
+  const at = entry && find(workspaces, entry.id)
+  if (!entry || !at) return { space, right: [] }
+  const next = workspaces.list[at.workspace].columns[at.column + 1]
+  const right = next?.entries.map((each) => each.pane) ?? []
+  return { space, from: entry.id, right }
 }

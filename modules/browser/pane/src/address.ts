@@ -7,6 +7,9 @@
 import { useCallback } from "react"
 import { BROWSER_FILE, DEFAULT_BROWSER } from "@banda/contract/browser"
 import { useFile } from "@banda/ui/lib/look"
+import { siteOf } from "./desktop"
+
+export { siteOf }
 
 const LOCAL =
   /^(localhost|\d{1,3}(\.\d{1,3}){3}|\[[0-9a-f:]+\])(:\d+)?([/?#]|$)/i
@@ -43,20 +46,4 @@ function pageAddress(text: string): string | undefined {
   if (LOCAL.test(text)) return `http://${text}`
   if (!/\s/.test(text) && HOST.test(text)) return `https://${text}`
   return undefined
-}
-
-/** What the row shows of a page's address: its site, without `www.`. */
-export function siteOf(address: string): string {
-  try {
-    const url = new URL(address)
-    if (url.protocol === "http:" || url.protocol === "https:") {
-      return url.host.replace(/^www\./, "")
-    }
-    if (url.protocol === "about:") return address
-    return url.protocol === "file:"
-      ? decodeURIComponent(url.pathname.split("/").pop() || url.pathname)
-      : url.protocol.slice(0, -1)
-  } catch {
-    return address
-  }
 }

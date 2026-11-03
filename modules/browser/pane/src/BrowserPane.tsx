@@ -13,6 +13,7 @@ import {
 } from "react"
 import { newId } from "@banda/contract"
 import { BROWSER_FILE, type Browser as Settings } from "@banda/contract/browser"
+import { BandaMark } from "@banda/ui/components/banda-mark"
 import { Button } from "@banda/ui/components/button"
 import {
   DropdownMenu,
@@ -394,8 +395,8 @@ function Browser({
           <DrawnIn element={page.over}>
             <Driving
               driver={state.driver}
-              contents={contents}
-              onThread={() => onThread(state.driver!.agent)}
+              onThread={onThread}
+              onStop={() => stopIn(contents, true)}
             />
           </DrawnIn>
         )}
@@ -412,14 +413,15 @@ function Browser({
  */
 function Driving({
   driver,
-  contents,
   onThread,
+  onStop,
 }: {
   driver: { agent: string; step: string }
-  contents: number | null
-  onThread: () => void
+  onThread: (agent: string) => void
+  onStop: () => void
 }) {
-  const title = useThreadOf(driver.agent)?.title ?? "An Agent"
+  const thread = useThreadOf(driver.agent)
+  const title = thread?.title ?? "An Agent"
   return (
     <>
       <div
@@ -429,13 +431,19 @@ function Driving({
       <div
         role="status"
         aria-label={`${title} drives this tab`}
-        className="pointer-events-auto absolute bottom-3 left-1/2 flex max-w-[calc(100%-24px)] -translate-x-1/2 items-center gap-2 rounded-full bg-popover/85 py-1 pr-1 pl-2.5 text-xs whitespace-nowrap text-popover-foreground shadow-lg ring-1 ring-border backdrop-blur-md"
+        className="pointer-events-auto absolute bottom-3 left-1/2 flex max-w-[calc(100%-24px)] -translate-x-1/2 items-center gap-2 rounded-full bg-popover py-1 pr-1 pl-2 text-xs whitespace-nowrap text-popover-foreground shadow-lg ring-1 ring-border"
       >
-        <span className="size-[7px] shrink-0 animate-pulse rounded-full bg-primary" />
+        <BandaMark
+          state={thread?.mark ?? "running"}
+          variant="agent"
+          playful={0}
+          news={false}
+          className="size-4"
+        />
         <button
           type="button"
           title="Go to the Thread"
-          onClick={onThread}
+          onClick={() => onThread(driver.agent)}
           className="min-w-0 truncate font-semibold hover:underline"
         >
           {title}
@@ -446,9 +454,7 @@ function Driving({
           size="xs"
           className="shrink-0 rounded-full"
           aria-label={`Stop ${title} in this tab`}
-          onClick={() => {
-            if (contents !== null) browserHost()?.release(contents)
-          }}
+          onClick={onStop}
         >
           Stop
         </Button>
@@ -628,6 +634,14 @@ function TabItem({
   )
 }
 
+/** Stops what drives the page of `contents`: a Thread there alone, else
+ * every session on it (ADR 0013, decision 7). */
+function stopIn(contents: number | null | undefined, thread: boolean) {
+  if (contents == null) return
+  if (thread) browserHost()?.release(contents)
+  else browserHost()?.stop(contents)
+}
+
 /** The mark of an Agent that drives the tab, a stop under the pointer.
  * A click stops it: a Thread there alone (ADR 0029, decision 4), else
  * every session on the tab ends (ADR 0013, decision 7). */
@@ -648,9 +662,7 @@ function Driven({
       title="An Agent drives this tab: click to stop it"
       onClick={(event) => {
         event.stopPropagation()
-        if (contents == null) return
-        if (thread) browserHost()?.release(contents)
-        else browserHost()?.stop(contents)
+        stopIn(contents, thread)
       }}
       className="group/stop flex size-5 shrink-0 items-center justify-center rounded text-primary hover:bg-foreground/10 [&_svg]:size-3.5"
     >
