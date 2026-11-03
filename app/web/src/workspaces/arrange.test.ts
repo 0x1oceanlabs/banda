@@ -278,15 +278,30 @@ describe("applyChange", () => {
   test("takes the whole arrangement, or a Pane's new args", () => {
     const kept = keptOf(arranged())
     const whole = applyChange(
-      { at: 0, workspaces: [] },
+      { at: 0, workspaces: [], aside: null },
       event(3, { workspaces: kept })
     )
-    expect(whole).toEqual({ at: 3, workspaces: kept })
+    expect(whole).toEqual({ at: 3, workspaces: kept, aside: null })
     const id = kept[0].columns[0].panes[0].id
     const args = applyChange(whole, event(4, { pane: id, args: { x: "y" } }))
     expect(args.at).toBe(4)
     expect(args.workspaces[0].columns[0].panes[0].args).toEqual({ x: "y" })
     expect(args.workspaces[0].columns[1]).toEqual(kept[0].columns[1])
+  })
+
+  test("hears what is set aside only as the workspaces are set aside or come back", () => {
+    const kept = keptOf(arranged())
+    const aside = { workspaces: 1, panes: 2 }
+    const set = applyChange(
+      { at: 0, workspaces: kept, aside: null },
+      event(5, { workspaces: [], aside })
+    )
+    expect(set).toEqual({ at: 5, workspaces: [], aside })
+    expect(applyChange(set, event(6, { workspaces: kept })).aside).toEqual(
+      aside
+    )
+    const back = applyChange(set, event(7, { workspaces: kept, aside: null }))
+    expect(back.aside).toBeNull()
   })
 })
 

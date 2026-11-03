@@ -7,7 +7,6 @@ import {
   type Status,
 } from "@banda/contract"
 import { inFront, useInFront } from "@banda/ui/hooks/use-in-front"
-import { useLive } from "@banda/ui/hooks/use-live"
 import { useMachine } from "@banda/ui/hooks/use-status"
 import { openSpaces, updateSpace } from "@banda/ui/lib/spaces"
 import { IN_PROGRAM, type Lists, type PaneState, QUIET } from "@banda/ui/pane"
@@ -20,6 +19,8 @@ import { Watches } from "../bar/Watches"
 import { besideOf, isShowing, sightOf } from "../calls/sight"
 import { SUMMARY } from "../calls/system"
 import { Toasts } from "../calls/Toasts"
+import { AsidePill } from "../safe/AsidePill"
+import { WELL, wentWell } from "../safe/starts"
 import { problemLink } from "../problems/live"
 import { NOTICE, useProblemNews } from "../problems/news"
 import { ProblemToast } from "../problems/ProblemToast"
@@ -59,7 +60,6 @@ import { toggleSettled } from "../sidebar/settled"
 import { useNarrow } from "./narrow"
 import type { Arranged } from "@banda/contract/workspaces"
 import {
-  arrangedSource,
   type Asked,
   NO_VIEW,
   resolve,
@@ -69,6 +69,7 @@ import {
   viewOf,
   withAsked,
 } from "../workspaces/arrange"
+import { useArranged } from "../workspaces/useArranged"
 import {
   current,
   type Entry,
@@ -215,12 +216,14 @@ export function Shell({
   const open = useMemo(() => openSpaces(spaces), [spaces])
   // The arrangement is the engine's; the view, the window's (ADR 0025).
   const machine = useMachine(engine)
-  const source = useMemo(
-    () => (machine ? arrangedSource(engine) : null),
-    [engine, machine]
-  )
-  const live = useLive(engine, machine ?? "", source)
+  const live = useArranged(engine)
   const ready = live.state === "ready"
+  // A start that drew its workspaces and stayed up went well (ADR 0039).
+  useEffect(() => {
+    if (!ready) return
+    const well = setTimeout(wentWell, WELL)
+    return () => clearTimeout(well)
+  }, [ready])
   const [drawing, setDrawing] = useState(() =>
     looking(NOTHING_SEEN, loadView())
   )
@@ -847,6 +850,12 @@ export function Shell({
         sidebar={narrow ? over : sidebar}
         onSidebar={toggleSidebar}
         problems={keyed.problems}
+        notes={
+          ready &&
+          live.view.aside && (
+            <AsidePill engine={engine} aside={live.view.aside} />
+          )
+        }
         middle={
           <Counts
             lists={lists}

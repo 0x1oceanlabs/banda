@@ -1,7 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import type { Engine } from "@banda/contract"
-import { useLive } from "@banda/ui/hooks/use-live"
-import { useMachine, useModules } from "@banda/ui/hooks/use-status"
+import { useModules } from "@banda/ui/hooks/use-status"
 import { useSpaces } from "@banda/ui/hooks/use-spaces"
 import type { PaneState } from "@banda/ui/pane"
 import { actionFor, rebind } from "../actions/actions"
@@ -10,7 +9,8 @@ import { useLookKeys } from "../look"
 import { labelOf } from "../registry"
 import { ACTIONS, closing } from "../shell/actions"
 import type { Workspace as Kept } from "@banda/contract/workspaces"
-import { arrangedSource, send } from "./arrange"
+import { send } from "./arrange"
+import { useArranged } from "./useArranged"
 import { type Entry, samePane } from "./model"
 import { type Frame, PaneFrame } from "./PaneFrame"
 
@@ -32,12 +32,7 @@ export function Popped({
 }) {
   const modules = useModules(engine)
   const { listed: spaces } = useSpaces(engine)
-  const machine = useMachine(engine)
-  const source = useMemo(
-    () => (machine ? arrangedSource(engine) : null),
-    [engine, machine]
-  )
-  const live = useLive(engine, machine ?? "", source)
+  const live = useArranged(engine)
   const kept = live.state === "ready" ? live.view : undefined
   // Its args as it asked for them, drawn until the engine's event is.
   const [asked, setAsked] = useState<{ args: unknown; until: number }>()

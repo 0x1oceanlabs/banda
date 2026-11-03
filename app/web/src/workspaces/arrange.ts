@@ -257,13 +257,16 @@ export function arrangedSource(engine: Engine): Source<Arranged> {
 
 export function applyChange(state: Arranged, event: Event): Arranged {
   const changed = event.payload as Changed
+  // What is set aside changes only as the workspaces are set aside or
+  // come back (ADR 0039, decision 2).
+  const aside = "aside" in changed ? changed.aside : state.aside
   if ("workspaces" in changed) {
-    return { at: event.seq, workspaces: changed.workspaces }
+    return { at: event.seq, workspaces: changed.workspaces, aside }
   }
   const workspaces = withArgs(state.workspaces, (pane) =>
     pane === changed.pane ? changed.args : undefined
   )
-  return { at: event.seq, workspaces }
+  return { at: event.seq, workspaces, aside }
 }
 
 /** The arrangement a window kept, for the engine to take (decision 2). */

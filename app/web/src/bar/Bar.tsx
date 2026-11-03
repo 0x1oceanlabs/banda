@@ -35,6 +35,7 @@ export function Bar({
   onPick,
   problems,
   middle,
+  notes,
 }: {
   status: Status
   /** What the modules' work calls the Person for, for the mark to show. */
@@ -50,6 +51,9 @@ export function Bar({
   problems: readonly Problem[]
   /** What sits in the bar's middle. */
   middle?: ReactNode
+  /** What the window says on the right, before the files' problems,
+   * until the modules' bar widgets do (ADR 0024, decision 3). */
+  notes?: ReactNode
 }) {
   const mark = loudest([attention.mark, markOf(status)])
   const { waiting } = attention
@@ -86,6 +90,7 @@ export function Bar({
         {middle}
       </div>
       <div className="ml-auto flex items-center">
+        {notes}
         <LookProblems more={problems} />
         <Connection status={status} />
       </div>

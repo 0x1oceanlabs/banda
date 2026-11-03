@@ -71,6 +71,13 @@ banda_kernel::methods! {
         /// Puts a window's arrangement over the engine's, once (ADR 0025,
         /// decision 2).
         command take(Take) -> Done, Write;
+        /// Sets the workspaces aside, for a window that broke on them, and
+        /// leaves one empty workspace (ADR 0039, decision 2). Those set
+        /// aside before stay, with these after them.
+        command set_aside(Nothing) -> Done, Write;
+        /// Brings the workspaces set aside back, after the ones there are
+        /// now.
+        command bring_back(Nothing) -> Done, Write;
         /// The Panes on the workspaces, from the top down and from the
         /// left: your Space's with their args, and, when your Person lets
         /// you see the other Spaces, theirs without. `yours` marks the
@@ -199,6 +206,24 @@ pub struct Arranged {
     #[ts(type = "number")]
     pub at: i64,
     pub workspaces: Arrangement,
+    /// What is set aside, if anything is.
+    pub aside: Option<Aside>,
+}
+
+/// The workspaces set aside, as the Person is told of them.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export_to = "workspaces/")]
+pub struct Aside {
+    pub workspaces: u32,
+    pub panes: u32,
+}
+
+impl Aside {
+    fn of(list: &Arrangement) -> Option<Aside> {
+        let panes = model::panes(list).count() as u32;
+        let workspaces = list.iter().filter(|w| !w.columns.is_empty()).count() as u32;
+        (panes > 0).then_some(Aside { workspaces, panes })
+    }
 }
 
 /// What the module's events hold: the arrangement after it, or, for
@@ -207,8 +232,19 @@ pub struct Arranged {
 #[serde(untagged)]
 #[ts(export, export_to = "workspaces/")]
 pub enum Changed {
-    Whole { workspaces: Arrangement },
-    Args { pane: PaneId, args: Value },
+    /// The arrangement after the workspaces were set aside or came back,
+    /// and what is aside now.
+    Aside {
+        workspaces: Arrangement,
+        aside: Option<Aside>,
+    },
+    Whole {
+        workspaces: Arrangement,
+    },
+    Args {
+        pane: PaneId,
+        args: Value,
+    },
 }
 
 #[derive(Deserialize, TS)]
@@ -359,11 +395,15 @@ impl Module for Workspaces {
     fn migrations(&self) -> &'static [&'static str] {
         // One row keeps the whole arrangement, and whether a window's was
         // taken.
-        &["CREATE TABLE workspaces_arrangement (
+        &[
+            "CREATE TABLE workspaces_arrangement (
                one INTEGER PRIMARY KEY CHECK (one = 1),
                workspaces TEXT NOT NULL,
                taken INTEGER NOT NULL DEFAULT 0
-           )"]
+           )",
+            // The workspaces set aside, when a window broke on them.
+            "ALTER TABLE workspaces_arrangement ADD COLUMN aside TEXT",
+        ]
     }
 
     /// The first arrangement, one empty workspace, made once, so its ID
@@ -395,8 +435,44 @@ impl Module for Workspaces {
 
 impl Workspaces {
     async fn list(&self, call: Call, _: Nothing) -> Result<Arranged, Refusal> {
-        let (at, workspaces) = call.space().view(load).await?;
-        Ok(Arranged { at, workspaces })
+        let (at, (workspaces, aside)) = call
+            .space()
+            .view(|sql| Ok((load(sql)?, Aside::of(&load_aside(sql)?))))
+            .await?;
+        Ok(Arranged {
+            at,
+            workspaces,
+            aside,
+        })
+    }
+
+    async fn set_aside(&self, call: Call, _: Nothing) -> Result<Done, Refusal> {
+        change(&call, "set_aside", None, Say::Aside, |list, tx| {
+            if model::panes(list).next().is_none() {
+                return Ok(());
+            }
+            let mut aside = load_aside(tx.sql())?;
+            aside.extend(std::mem::replace(list, model::start()));
+            aside.retain(|w| !w.columns.is_empty());
+            keep_aside(tx, &aside)
+        })
+        .await
+        .map(|((), at)| Done { at })
+    }
+
+    async fn bring_back(&self, call: Call, _: Nothing) -> Result<Done, Refusal> {
+        change(&call, "brought_back", None, Say::Aside, |list, tx| {
+            let aside = load_aside(tx.sql())?;
+            if aside.is_empty() {
+                return Ok(());
+            }
+            // The ones there are now first; a Pane shown in both, once.
+            let now = std::mem::replace(list, aside);
+            model::take(list, now)?;
+            keep_aside(tx, &[])
+        })
+        .await
+        .map(|((), at)| Done { at })
     }
 
     async fn open(&self, call: Call, open: Open) -> Result<Opened, Refusal> {
@@ -635,6 +711,8 @@ enum Say {
     Whole,
     /// Only this Pane's new args.
     Args(PaneId),
+    /// The whole arrangement after it, and what is set aside now.
+    Aside,
 }
 
 /// A change about one thing, which answers only where it stands.
@@ -678,6 +756,10 @@ where
                 args: model::args_of(&list, pane).cloned().unwrap_or_default(),
             },
             Say::Whole => Changed::Whole { workspaces: list },
+            Say::Aside => Changed::Aside {
+                aside: Aside::of(&load_aside(tx.sql())?),
+                workspaces: list,
+            },
         };
         let event = tx.emit(kind, VERSION, subject.as_deref(), author, &said)?;
         Ok((answer, Some(event.seq)))
@@ -691,7 +773,13 @@ fn load(sql: &rusqlite::Connection) -> Result<Arrangement, Error> {
         [],
         |row| row.get(0),
     )?;
-    let mut list: Arrangement = serde_json::from_str(&text)?;
+    parsed(&text)
+}
+
+/// An arrangement as this module keeps it, each Pane's args as its kind
+/// reads them now.
+fn parsed(text: &str) -> Result<Arrangement, Error> {
+    let mut list: Arrangement = serde_json::from_str(text)?;
     for pane in list
         .iter_mut()
         .flat_map(|w| &mut w.columns)
@@ -700,6 +788,28 @@ fn load(sql: &rusqlite::Connection) -> Result<Arrangement, Error> {
         pane.shows.upgrade();
     }
     Ok(list)
+}
+
+/// The workspaces set aside; none when there are none.
+fn load_aside(sql: &rusqlite::Connection) -> Result<Arrangement, Error> {
+    let text: Option<String> = sql.query_row(
+        "SELECT aside FROM workspaces_arrangement WHERE one = 1",
+        [],
+        |row| row.get(0),
+    )?;
+    Ok(text.as_deref().map(parsed).transpose()?.unwrap_or_default())
+}
+
+/// Keeps `aside` as the workspaces set aside; none, when it is empty.
+fn keep_aside(tx: &Tx<'_>, aside: &[model::Workspace]) -> Result<(), Error> {
+    let kept = (!aside.is_empty())
+        .then(|| serde_json::to_string(aside))
+        .transpose()?;
+    tx.sql().execute(
+        "UPDATE workspaces_arrangement SET aside = ?1 WHERE one = 1",
+        [kept],
+    )?;
+    Ok(())
 }
 
 fn keep(tx: &Tx<'_>, list: &Arrangement) -> Result<(), Error> {

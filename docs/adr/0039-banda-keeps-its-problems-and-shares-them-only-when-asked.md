@@ -56,7 +56,11 @@ Roma, 2026-11-03:
    - A new Problem tells the Person, as a call does (ADR 0011) but silently (Roma, 2026-11-03: "a notification when there is a bug, so it gets fixed"). It shows a toast "Something broke in Banda" while the window is in front, or a system notification while it is not, and nothing while the desktop is quiet. A Problem that breaks again only counts. `problems = false` under `[notify]` in `look.toml` turns it off. Until step 3, its button is Details, which opens it in Settings.
    - `problems` sends nothing anywhere. The one exception is an issue the Person sends (decision 3).
 
-2. **After two starts that broke, Banda offers to start without the workspaces.** A window that broke on what it restored, as on 2026-11-02, then opens empty. The workspaces stay in the engine, untouched, for the next start.
+2. **After two starts that broke, Banda offers to start without the workspaces.** A window that broke on what it restored, as on 2026-11-02, then opens empty. (Amended in step 2, as Roma chose on 2026-11-03.)
+   - A start that draws its workspaces and stays up five seconds went well. The window counts the starts that did not, in its own storage. After two in a row, a card asks first: "Banda didn't start the last two times", with Open without the workspaces and Open as usual.
+   - When the page breaks while it runs, on what no error boundary caught, a card shows at once in its place: "Banda's window broke", with Open again and Open without the workspaces. It is a Problem too.
+   - Without the workspaces, the engine sets them aside (`workspaces.set_aside`): it keeps them, not deletes them, and the window opens on one empty workspace.
+   - While they are aside, the bar says "Workspaces set aside · 1 workspace, 2 Panes" with Bring them back, and Settings → Spaces has the same row. `workspaces.bring_back` puts them after the workspaces there are by then, and a Pane shown in both shows once.
 
 3. **An Agent looks into a Problem, and the Person sends the issue.**
    - A new Problem brings a Toast: "Something broke in Banda" with "Look into it". Nothing starts by itself: looking into it costs the Person's model.

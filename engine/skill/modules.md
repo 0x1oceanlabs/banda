@@ -65,7 +65,7 @@ Its methods, `banda call git.<method>`: `status`, `diff`, `refs`, `commits`, `co
 
 How this machine's Panes are arranged: workspaces one under another, each a Strip of columns.
 
-Its methods, `banda call workspaces.<method>`: `list`, `open`, `close`, `update`, `move_pane`, `move_column`, `size`, `height`, `even`, `maximize`, `display`, `tidy`, `take`, `panes`, `open_pane`, `move_own`, `close_own`.
+Its methods, `banda call workspaces.<method>`: `list`, `open`, `close`, `update`, `move_pane`, `move_column`, `size`, `height`, `even`, `maximize`, `display`, `tidy`, `take`, `set_aside`, `bring_back`, `panes`, `open_pane`, `move_own`, `close_own`.
 
 What an Agent in a Thread may call as a tool of `banda mcp`:
 

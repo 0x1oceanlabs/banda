@@ -290,3 +290,75 @@ async fn an_agent_arranges_its_own_spaces_panes_and_sees_the_others_when_let() {
         2
     );
 }
+
+#[tokio::test]
+async fn the_workspaces_set_aside_stay_and_come_back_after_the_ones_there_are() {
+    let root = tempfile::tempdir().unwrap();
+    let owner = PersonId::new();
+    let machine = Machine::open(root.path(), owner).await;
+    let space = SpaceId::new();
+    let open =
+        |url: &str| json!({ "space": space, "kind": "browser.browser", "args": { "url": url } });
+
+    // Nothing to set aside: nothing changes or is said.
+    let nothing = machine
+        .command("workspaces.set_aside", json!({}))
+        .await
+        .unwrap();
+    assert_eq!(nothing["at"], Value::Null);
+    assert_eq!(machine.list().await["aside"], Value::Null);
+
+    machine.command("workspaces.open", open("a")).await.unwrap();
+    machine.command("workspaces.open", open("b")).await.unwrap();
+    let before = machine.list().await["workspaces"].clone();
+    machine
+        .command("workspaces.set_aside", json!({}))
+        .await
+        .unwrap();
+    let aside = machine.list().await;
+    assert_eq!(aside["aside"], json!({ "workspaces": 1, "panes": 2 }));
+    let empty = aside["workspaces"].as_array().unwrap();
+    assert_eq!(empty.len(), 1);
+    assert!(empty[0]["columns"].as_array().unwrap().is_empty());
+    // The event says the arrangement after it and what is aside.
+    let (kind, said) = machine.events().await.pop().unwrap();
+    assert_eq!(kind, "set_aside");
+    assert_eq!(said["aside"], aside["aside"]);
+    assert_eq!(said["workspaces"], aside["workspaces"]);
+
+    // Kept across a restart.
+    drop(machine);
+    let machine = Machine::open(root.path(), owner).await;
+    assert_eq!(machine.list().await["aside"]["panes"], 2);
+
+    // Work goes on; what comes back goes after it, a Pane shown in both
+    // once.
+    machine.command("workspaces.open", open("c")).await.unwrap();
+    machine.command("workspaces.open", open("a")).await.unwrap();
+    machine
+        .command("workspaces.bring_back", json!({}))
+        .await
+        .unwrap();
+    let back = machine.list().await;
+    assert_eq!(back["aside"], Value::Null);
+    let urls: Vec<Value> = back["workspaces"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .flat_map(|w| w["columns"].as_array().unwrap().clone())
+        .flat_map(|c| c["panes"].as_array().unwrap().clone())
+        .map(|p| p["args"]["url"].clone())
+        .collect();
+    assert_eq!(urls, [json!("c"), json!("a"), json!("b")]);
+    assert_eq!(back["workspaces"][1]["id"], before[0]["id"]);
+    let last = back["workspaces"]
+        .as_array()
+        .unwrap()
+        .last()
+        .unwrap()
+        .clone();
+    assert!(last["columns"].as_array().unwrap().is_empty());
+    let (kind, said) = machine.events().await.pop().unwrap();
+    assert_eq!(kind, "brought_back");
+    assert_eq!(said["aside"], Value::Null);
+}

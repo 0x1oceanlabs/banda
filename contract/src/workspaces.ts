@@ -4,6 +4,7 @@
  * column's display is the look's `Display`.
  */
 export type { Arranged } from "./generated/workspaces/Arranged"
+export type { Aside } from "./generated/workspaces/Aside"
 export type { Changed } from "./generated/workspaces/Changed"
 export type { Column } from "./generated/workspaces/Column"
 export type { ColumnId } from "./generated/workspaces/ColumnId"
