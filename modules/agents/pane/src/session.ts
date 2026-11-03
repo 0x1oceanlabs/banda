@@ -21,6 +21,7 @@ import { READ_AGAIN, type Source, useLive } from "@banda/ui/hooks/use-live"
 import type { PaneProps } from "@banda/ui/pane"
 import { type Attaching, useAttachments } from "./Attachments"
 import type { Values } from "./form"
+import type { HarnessView } from "@banda/contract/harnesses"
 import { harnessName, useHarnesses } from "./harnesses"
 import { useThread } from "./live-thread"
 import { settledTurn } from "./marks"
@@ -107,15 +108,17 @@ export function useThreadSession({
   }, [focused, front, thread, settled])
 
   // A Thread not yet started keeps its settings here until its first
-  // message, starting from its Harness's.
-  const defaults = useHarnessDefaults(
+  // message, starting from its Harness's; each Harness's, as the model
+  // picker chooses the Harness with the model (ADR 0031, decision 6).
+  const everyDefaults = useHarnessDefaults(
     engine,
     space,
-    thread === null && harness !== "" ? harness : null
+    thread === null ? offered : null
   )
+  const defaults = everyDefaults?.[harness]
   const [drafts, setDrafts] = useState<Record<string, Settings>>({})
-  const settings =
-    thread === null ? (drafts[harness] ?? defaults?.settings) : state?.settings
+  const draftOf = (id: string) => drafts[id] ?? everyDefaults?.[id]?.settings
+  const settings = thread === null ? draftOf(harness) : state?.settings
   const offer: Offer =
     (thread === null ? defaults?.offer : state?.offer) ?? NO_OFFER
   const configure = (next: Settings) => {
@@ -265,8 +268,6 @@ export function useThreadSession({
     /** The turn that runs now, if one does. */
     turn: state && working(state),
     harness,
-    /** The Harnesses a new Thread may start on. */
-    harnesses: offered,
     /** The Harness's name, as the Thread speaks of its Agent. */
     name,
     reader,
@@ -279,6 +280,21 @@ export function useThreadSession({
     settings,
     offer,
     configure,
+    /** A new Thread's Harnesses, each with what it would start with, for
+     * the model picker to choose one by its model; none once it started. */
+    starts:
+      thread === null && everyDefaults
+        ? offered.flatMap(({ id, name }) => {
+            const settings = draftOf(id)
+            const offer = everyDefaults[id]?.offer
+            return settings && offer ? [{ id, name, settings, offer }] : []
+          })
+        : undefined,
+    /** Starts the new Thread on `next` instead, with `settings`. */
+    startOn: (next: string, settings?: Settings) => {
+      if (settings) setDrafts((drafts) => ({ ...drafts, [next]: settings }))
+      update({ ...args, harness: next })
+    },
     /** Whether the Thread plans first, when its Harness offers plans. */
     plan: offer.plans ? settings?.plan : undefined,
     setPlan: (plan: boolean) => settings && configure({ ...settings, plan }),
@@ -317,25 +333,38 @@ export function useThreadSession({
 const OFFERED = { module: "agents", kinds: ["thread.offered"] }
 
 /**
- * What a new Thread on `harness` starts with: full access, and what the
- * Harness last offered, such as its models.
+ * What a new Thread on each of `harnesses` starts with: full access, and
+ * what the Harness last offered, such as its models.
  */
 function useHarnessDefaults(
   engine: Engine,
   space: SpaceId,
-  harness: string | null
-): Defaults | undefined {
-  const source = useMemo<Source<Defaults> | null>(
-    () =>
-      harness === null
-        ? null
-        : {
-            read: () => engine.call("agents.defaults", { harness }, { space }),
-            filter: OFFERED,
-            apply: () => READ_AGAIN,
+  offered: HarnessView[] | null
+): Record<string, Defaults> | undefined {
+  type Every = { at: number; each: Record<string, Defaults> }
+  const source = useMemo<Source<Every> | null>(() => {
+    const harnesses = offered?.map((h) => h.id) ?? []
+    return harnesses.length === 0
+      ? null
+      : {
+          read: async () => {
+            const each = await Promise.all(
+              harnesses.map((harness) =>
+                engine.call("agents.defaults", { harness }, { space })
+              )
+            )
+            return {
+              // The earliest, so nothing offered since any read is missed.
+              at: Math.min(...each.map((d) => d.at)),
+              each: Object.fromEntries(
+                harnesses.map((harness, i) => [harness, each[i]])
+              ),
+            }
           },
-    [engine, space, harness]
-  )
+          filter: OFFERED,
+          apply: () => READ_AGAIN,
+        }
+  }, [engine, space, offered])
   const live = useLive(engine, space, source)
-  return live.state === "ready" ? live.view : undefined
+  return live.state === "ready" ? live.view.each : undefined
 }

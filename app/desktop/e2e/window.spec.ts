@@ -58,9 +58,6 @@ test("a Person makes a Space, starts a Thread in it, and works with it", async (
   await expect(page.getByRole("region", { name: "New Thread" })).toBeVisible()
   await expect(composer).toBeFocused()
   await expect(
-    thread.getByRole("button", { name: "Harness: Fake AI" })
-  ).toBeVisible()
-  await expect(
     thread.getByRole("button", { name: "Space: Work" })
   ).toBeVisible()
   await page.screenshot({ path: "test-results/1-first-space.png" })
@@ -68,8 +65,7 @@ test("a Person makes a Space, starts a Thread in it, and works with it", async (
   await composer.press("Enter")
   await expect(thread.getByText("You said: hello")).toBeVisible()
   await expect(page.getByRole("region", { name: "hello" })).toBeVisible()
-  // Once started, the Thread's Harness is its own.
-  await expect(thread.getByRole("button", { name: /^Harness:/ })).toBeHidden()
+  // Once started, the Thread's Space is its own.
   await expect(thread.getByRole("button", { name: /^Space:/ })).toBeHidden()
   const sidebar = page.getByRole("complementary", { name: "Sidebar" })
   await expect(sidebar.getByRole("button", { name: /hello/ })).toBeVisible()
@@ -622,6 +618,47 @@ test("a Person chooses the model and the mode under the message box", async () =
   await expect(planMode).toBeHidden()
   await page.mouse.move(0, 0)
   await page.screenshot({ path: "test-results/7-after-the-plan.png" })
+})
+
+test("a new Thread's Harness is chosen with its model", async () => {
+  window = await startWindow({ other: true })
+  const { page } = window
+  await firstThread(page)
+  // The tile, by its title: the box is named for the Harness it writes to.
+  const thread = page.getByRole("region", { name: "New Thread" })
+  // Before any Thread ran, each Harness is a row of its own.
+  await thread.getByRole("button", { name: "Model: Fake AI" }).click()
+  const models = page.getByRole("listbox", { name: "Model" })
+  await expect(
+    models.getByRole("option", { name: "Fake AI", selected: true })
+  ).toBeVisible()
+  await models.getByRole("option", { name: "Other AI" }).click()
+  const toOther = thread.getByRole("textbox", { name: "Message to Other AI" })
+  await expect(toOther).toBeVisible()
+  await toOther.fill("hello")
+  await toOther.press("Enter")
+  await expect(page.getByText("You said: hello")).toBeVisible()
+
+  // Once a Thread ran on it, a Harness's models are under its name.
+  await page.keyboard.press("Alt+Enter")
+  const next = page.getByRole("region", { name: "New Thread" })
+  await next.getByRole("button", { name: "Model: Fake AI" }).click()
+  const other = page
+    .getByRole("listbox", { name: "Model" })
+    .getByRole("group", { name: "Other AI" })
+  await expect(other.getByRole("option")).toHaveText(["Fast", "Smart"])
+  await expect(other).toBeVisible()
+  await page.screenshot({ path: "test-results/6-every-harness.png" })
+  await other.getByRole("option", { name: "Smart" }).click()
+  await expect(
+    next.getByRole("button", { name: "Model: Smart, Medium" })
+  ).toBeVisible()
+  const message = next.getByRole("textbox", { name: "Message to Other AI" })
+  await message.fill("which settings")
+  await message.press("Enter")
+  await expect(
+    page.getByText(/Mode bypassPermissions, model smart/)
+  ).toBeVisible()
 })
 
 test("a Person fills in the form an Agent asks with", async () => {
