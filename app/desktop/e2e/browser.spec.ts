@@ -621,6 +621,54 @@ test("an Agent reads a tab's tree with refs and new errors, until the Person sto
   expect(none.content[0]!.text).toContain("browser_tabs lists them")
 })
 
+test("an Agent hands a tab to the Person, who hands it back, and its Thread carries on", async () => {
+  const address = await serve({
+    "/": "<title>Sign in</title><button>Go</button>",
+  })
+  window = await startWindow()
+  const { page } = window
+  const { thread, composer } = await firstThread(page)
+  await composer.fill("hello")
+  await composer.press("Enter")
+  await expect(thread.getByText("You said: hello")).toBeVisible()
+  const opened = await agentSays(window, "browser_open", { url: `${address}/` })
+  const tab = Number(/^Opened tab (\d+)\./.exec(opened)?.[1])
+
+  // The tab asks the Person at once, and its Thread's row with it.
+  const why = "Sign in to the site"
+  expect(await agentSays(window, "browser_handoff", { tab, why })).toBe(
+    `Handed tab ${tab} to your Person. End your turn now: their message says when they are done, and you carry on then.`
+  )
+  const card = page.getByRole("status", {
+    name: "hello handed this tab to you",
+  })
+  await expect(card).toContainText(`Your turn. ${why}.`)
+  const row = page
+    .getByRole("complementary", { name: "Sidebar" })
+    .getByRole("button", { name: /hello/ })
+  await expect(row).toContainText(`Your turn in a tab: ${why}`)
+  await expect(row).toContainText("Asks you")
+  await page.screenshot({ path: "test-results/browser-handoff.png" })
+  // Meanwhile the tab is the Person's.
+  const refused = await agentCalls(window, "browser_snapshot", { tab })
+  expect(refused.isError).toBe(true)
+  expect(refused.content[0]!.text).toContain(
+    `You handed tab ${tab} to the Person, to ${why}.`
+  )
+
+  // Done hands it back, and says so in the Thread, as the Person's
+  // message, which starts its next turn.
+  await card.getByRole("button", { name: "Done — hand back" }).click()
+  await expect(card).toHaveCount(0)
+  await expect(
+    thread.getByText(`You said: Done: ${why}. Carry on.`)
+  ).toBeVisible()
+  await expect(row).not.toContainText("Your turn in a tab")
+  expect(await agentSays(window, "browser_snapshot", { tab })).toContain(
+    "Title: Sign in"
+  )
+})
+
 test("an Agent opens a tab and takes it to an address, back, forward and again", async () => {
   const address = await serve({
     "/": "<title>First</title>",

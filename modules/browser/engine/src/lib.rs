@@ -178,6 +178,16 @@ pub struct WaitFor {
     pub seconds: Option<u32>,
 }
 
+/// What `browser_handoff` hands the Person.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS, JsonSchema)]
+#[ts(export, export_to = "browser/")]
+pub struct Handoff {
+    /// The tab's id, as `browser_tabs` lists it.
+    pub tab: u32,
+    /// What the Person does there, in a line, as "Sign in to GitHub".
+    pub why: String,
+}
+
 /// A dialog a page shows: an alert, a confirm, a prompt, or one before
 /// it unloads.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -296,6 +306,27 @@ impl Browser {
         let within = Duration::from_secs(seconds.into()) + WAITING_SPARE;
         let shown: Shown = call.ask_window("wait_for", &wait, within).await?;
         Ok(told(&done, &shown, true))
+    }
+
+    /// Hands a tab to the Person for a step that is theirs (ADR 0029,
+    /// decisions 6 and 7, E): the tab asks them, and its Thread waits.
+    async fn handoff(&self, call: Call, hand: Handoff) -> Result<String, Refusal> {
+        let why = hand.why.trim();
+        if why.is_empty() {
+            return Err(Refusal::invalid(
+                "browser_handoff needs why: what the Person does in the tab.",
+            ));
+        }
+        let hand = Handoff {
+            why: cut(why).to_owned(),
+            ..hand
+        };
+        let () = call.ask_window("handoff", &hand, LISTING).await?;
+        Ok(format!(
+            "Handed tab {} to your Person. End your turn now: their message says when \
+             they are done, and you carry on then.",
+            hand.tab
+        ))
     }
 }
 
@@ -479,12 +510,19 @@ banda_kernel::methods! {
         /// address, a tab it opened, a dialog, a download. A password or a
         /// card's number, expiry or code is the Person's to fill, as are
         /// signing up, accepting terms, and the last press to pay, send
-        /// money or post in public: ask your Person for those.
+        /// money or post in public: hand those to your Person with
+        /// browser_handoff.
         call act(Act) -> String, Write, tool "browser_act";
         /// Waits until a tab shows a text, an element by its ref, or an
         /// address with a part, for 15 s or the seconds given, 60 at most.
         /// It answers where the tab is then.
         call wait_for(WaitFor) -> String, Read, tool "browser_wait_for";
+        /// Hands a tab to your Person for a step that is theirs: a
+        /// password or a card to fill, signing up, accepting terms, the last
+        /// press to pay, send money or post in public. Say why, as "Sign in
+        /// to GitHub". The tab asks them, and you may not use it meanwhile:
+        /// end your turn, and their message says when they are done.
+        call handoff(Handoff) -> String, Write, tool "browser_handoff";
     }
 }
 

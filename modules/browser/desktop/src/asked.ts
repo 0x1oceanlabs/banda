@@ -4,6 +4,7 @@
  */
 import type {
   Act,
+  Handoff,
   Navigate,
   OneTab,
   Open,
@@ -54,5 +55,10 @@ export const browserAsked: Asked<Tabs | Cdp | Drive> = {
   wait_for: (request) =>
     Drive.use((drive) =>
       drive.waitFor(request.params as WaitFor, byOf(request))
+    ),
+  /** A tab handed to the Person, for `browser_handoff`. */
+  handoff: (request) =>
+    Drive.use((drive) =>
+      Effect.as(drive.handoff(request.params as Handoff, byOf(request)), null)
     ),
 }

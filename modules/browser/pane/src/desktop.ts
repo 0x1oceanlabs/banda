@@ -92,17 +92,21 @@ export type Driver = { agent: string; step: string; at?: Point }
 export type Point = { x: number; y: number }
 
 /**
- * A Thread that waits for the Person on a tab, by its Agent, and why: the
- * Person stopped it there. Its calls on the tab are refused until the
- * Person lets it drive again (ADR 0029, decision 6). Once it called again
- * and was refused, it `asked` the Person, since then. A handed-over tab
- * and a new site wait too, in later steps.
+ * A Thread that waits for the Person on a tab, by its Agent, and why (ADR
+ * 0029, decision 6). Its calls on the tab are refused until the Person
+ * answers. It `asked` the Person since then: one they stopped asks once
+ * it calls there again and is refused; one that handed the tab over asks
+ * at once. A new site waits too, in a later step.
  */
-export type Wait = {
-  agent: string
-  reason: "stopped"
-  asked?: number
-}
+export type Wait = { agent: string; asked?: number } &
+  /** The Person stopped it there; they let it drive again. */
+  (
+    | { reason: "stopped" }
+    /** It handed the tab to the Person for a step that is theirs, `why`;
+     * they hand it back once done. */
+    | { reason: "handoff"; why: string }
+  )
+export type Handed = Extract<Wait, { reason: "handoff" }>
 
 /** A place in Banda's window, in its page's pixels. */
 export type Box = { x: number; y: number; width: number; height: number }
@@ -129,10 +133,11 @@ export const BROWSER_BRIDGE = {
   /** Stops the Agents that drive the page: their sessions on it end. */
   stop: send<[contents: number]>(),
   /** Stops the Thread that drives the page with Banda's tools, which
-   * then waits until `letDrive`; the Person's own programs on it go on. */
+   * then waits until `answered`; the Person's own programs on it go on. */
   release: send<[contents: number]>(),
-  /** Lets the Thread of `agent` drive the page again, after a stop. */
-  letDrive: send<[contents: number, agent: string]>(),
+  /** The Person answered what the Thread of `agent` waits for on the
+   * page: it may use the page again. */
+  answered: send<[contents: number, agent: string]>(),
   /** The turn of the Thread of `agent` ended: it drives no tab now. */
   settled: send<[agent: string]>(),
   /** Pins an extension's button to the row, or takes it off, in
