@@ -147,7 +147,7 @@ impl Session {
 
     /// Keeps the Harness's process from being let go as idle, while the
     /// returned guard lives.
-    pub fn keep(&self) -> Kept {
+    pub fn keep(&self) -> Held {
         self.connection.keep()
     }
 
@@ -243,11 +243,11 @@ impl Session {
         // Sent here, not in the task: a stop that follows must reach the
         // Harness after the prompt it stops.
         let sent = connection.process.cx().send_request(request);
-        let (routes, active) = (connection.routes.clone(), connection.active.clone());
+        let (routes, activity) = (connection.routes.clone(), connection.activity.clone());
         let (session, name) = (session.clone(), connection.process.name().to_owned());
         let done = tokio::spawn(async move {
             let answer = sent.block_task().await;
-            *active.lock().unwrap() = Instant::now();
+            activity.touch();
             routes.ended(&session);
             match answer {
                 Ok(answer) => ending(&answer.stop_reason),

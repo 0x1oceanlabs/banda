@@ -6,12 +6,16 @@
 //! - A host starts when it is first asked for, one start at a time.
 //! - A host that keeps dying starts again after a growing pause.
 //! - A host with nothing to do for `idle` is let go.
+//! - A host is let go when its account changes ([`Hosts::let_go`]), and
+//!   one that was starting then is let go the next time it is asked for,
+//!   so letting go never waits on a start (ADR 0040, decision 4).
 //! - A host's process runs in its own process group, which is killed when
 //!   the host is dropped; an engine that dies closes the host's stdin.
 
 use crate::Harness;
 use banda_kernel::SpaceId;
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, Weak};
 use std::time::{Duration, Instant};
 
@@ -27,6 +31,56 @@ const LOOK: Duration = Duration::from_secs(60);
 
 type Key = (SpaceId, String);
 
+/// When a host was last used, and how many hold it busy now: whether it
+/// is idle, for [`Host::idle_since`]. Clones share it.
+#[derive(Clone)]
+pub struct Activity {
+    busy: Arc<AtomicUsize>,
+    last: Arc<Mutex<Instant>>,
+}
+
+/// While it lives, its host is busy, so not let go as idle.
+pub struct Held(Activity);
+
+impl Drop for Held {
+    fn drop(&mut self) {
+        self.0.touch();
+        self.0.busy.fetch_sub(1, Ordering::SeqCst);
+    }
+}
+
+impl Activity {
+    pub fn new() -> Self {
+        Activity {
+            busy: Arc::default(),
+            last: Arc::new(Mutex::new(Instant::now())),
+        }
+    }
+
+    /// Keeps the host busy while the guard lives.
+    pub fn hold(&self) -> Held {
+        self.busy.fetch_add(1, Ordering::SeqCst);
+        Held(self.clone())
+    }
+
+    /// Marks the host as just used.
+    pub fn touch(&self) {
+        *self.last.lock().unwrap() = Instant::now();
+    }
+
+    /// Since when it has been used, or `None` while it is held.
+    pub fn idle_since(&self) -> Option<Instant> {
+        let busy = self.busy.load(Ordering::SeqCst) > 0;
+        (!busy).then(|| *self.last.lock().unwrap())
+    }
+}
+
+impl Default for Activity {
+    fn default() -> Self {
+        Activity::new()
+    }
+}
+
 /// A Harness process as its client holds it.
 pub trait Host: Send + Sync + Sized + 'static {
     /// Starts `harness`.
@@ -39,8 +93,25 @@ pub trait Host: Send + Sync + Sized + 'static {
 
 pub struct Hosts<H> {
     idle: Duration,
-    slots: Mutex<HashMap<Key, Arc<tokio::sync::Mutex<Slot<H>>>>>,
+    slots: Mutex<HashMap<Key, Arc<Entry<H>>>>,
     sweeping: std::sync::Once,
+}
+
+/// A Space's place for one Harness's host.
+struct Entry<H> {
+    /// Its account changed since its host started: set without waiting
+    /// for the slot, which a start holds.
+    stale: AtomicBool,
+    slot: tokio::sync::Mutex<Slot<H>>,
+}
+
+impl<H> Default for Entry<H> {
+    fn default() -> Self {
+        Entry {
+            stale: AtomicBool::new(false),
+            slot: tokio::sync::Mutex::default(),
+        }
+    }
 }
 
 struct Slot<H> {
@@ -96,20 +167,24 @@ impl<H: Host> Hosts<H> {
         self.sweeping.call_once(|| {
             tokio::spawn(sweep(Arc::downgrade(self), self.idle));
         });
-        let slot = self
+        let entry = self
             .slots
             .lock()
             .unwrap()
             .entry((space, harness.id.clone()))
             .or_default()
             .clone();
-        let mut slot = slot.lock().await;
+        let mut slot = entry.slot.lock().await;
+        // Taken before the start: a change during it marks it again.
+        let stale = entry.stale.swap(false, Ordering::SeqCst);
         if let Some(host) = &slot.host {
-            if host.alive() && slot.harness.as_ref() == Some(harness) {
+            let current = slot.harness.as_ref() == Some(harness) && !stale;
+            if host.alive() && current {
                 return Ok(host.clone());
             }
             if host.alive() {
-                // The entry changed: the old host goes, and its sessions with it.
+                // The entry or its account changed: the old host goes, and
+                // its sessions with it.
                 slot.host = None;
                 slot.deaths = 0;
             } else {
@@ -134,20 +209,36 @@ impl<H: Host> Hosts<H> {
         }
     }
 
-    /// Lets go of every host of the Harness entry `harness`, in every
-    /// Space, once it is no longer starting. Who holds a host keeps it
+    /// Lets go of the host of the Harness entry `harness` in `space`, as
+    /// its account changed. It waits for none: a host that is starting is
+    /// let go the next time it is asked for. Who holds a host keeps it
     /// until they drop it.
-    pub async fn let_go(&self, harness: &str) {
-        let slots: Vec<_> = self
+    pub fn let_go(&self, space: SpaceId, harness: &str) {
+        let entry = self
             .slots
             .lock()
             .unwrap()
-            .iter()
+            .get(&(space, harness.to_owned()))
+            .cloned();
+        entry.into_iter().for_each(Self::stale);
+    }
+
+    /// Lets go of the hosts of `harness` in every Space, as [`let_go`]
+    /// does: for the agents module's own sign-in, which goes with it (ADR
+    /// 0040, step 4).
+    ///
+    /// [`let_go`]: Self::let_go
+    pub fn let_go_everywhere(&self, harness: &str) {
+        let entries: Vec<_> = (self.slots.lock().unwrap().iter())
             .filter(|((_, id), _)| id == harness)
-            .map(|(_, slot)| slot.clone())
+            .map(|(_, entry)| entry.clone())
             .collect();
-        for slot in slots {
-            let mut slot = slot.lock().await;
+        entries.into_iter().for_each(Self::stale);
+    }
+
+    fn stale(entry: Arc<Entry<H>>) {
+        entry.stale.store(true, Ordering::SeqCst);
+        if let Ok(mut slot) = entry.slot.try_lock() {
             slot.host = None;
             slot.deaths = 0;
         }
@@ -156,23 +247,23 @@ impl<H: Host> Hosts<H> {
     /// Forgets every host of `space`, as the Space is removed, and answers
     /// them, so what they run can be stopped.
     pub async fn forget(&self, space: SpaceId) -> Vec<Arc<H>> {
-        let slots: Vec<_> = (self.slots.lock().unwrap())
+        let entries: Vec<_> = (self.slots.lock().unwrap())
             .extract_if(|(of, _), _| *of == space)
-            .map(|(_, slot)| slot)
+            .map(|(_, entry)| entry)
             .collect();
         let mut hosts = Vec::new();
-        for slot in slots {
-            hosts.extend(slot.lock().await.host.take());
+        for entry in entries {
+            hosts.extend(entry.slot.lock().await.host.take());
         }
         hosts
     }
 
     /// Lets go of every host that has had nothing to do for `idle`.
     fn release_idle(&self) {
-        let slots: Vec<_> = self.slots.lock().unwrap().values().cloned().collect();
-        for slot in slots {
+        let entries: Vec<_> = self.slots.lock().unwrap().values().cloned().collect();
+        for entry in entries {
             // A host that is starting is not idle.
-            let Ok(mut slot) = slot.try_lock() else {
+            let Ok(mut slot) = entry.slot.try_lock() else {
                 continue;
             };
             let idle = slot
@@ -210,6 +301,53 @@ mod tests {
         assert_eq!(pause(2), Some(Duration::from_secs(1)));
         assert_eq!(pause(4), Some(Duration::from_secs(4)));
         assert_eq!(pause(40), Some(LONGEST_PAUSE));
+    }
+
+    /// A host that counts its starts, each held until `GO` lets it on.
+    struct Counted(usize);
+
+    static STARTS: AtomicUsize = AtomicUsize::new(0);
+    static GO: tokio::sync::Semaphore = tokio::sync::Semaphore::const_new(0);
+
+    impl Host for Counted {
+        async fn start(_: &Harness) -> Result<Arc<Self>, String> {
+            GO.acquire().await.unwrap().forget();
+            Ok(Arc::new(Counted(STARTS.fetch_add(1, Ordering::SeqCst) + 1)))
+        }
+
+        fn alive(&self) -> bool {
+            true
+        }
+
+        fn idle_since(&self) -> Option<Instant> {
+            None
+        }
+    }
+
+    #[tokio::test]
+    async fn an_account_changed_while_a_host_starts_starts_it_again_when_next_asked() {
+        let hosts = Hosts::<Counted>::new(Duration::from_secs(60));
+        let known = crate::Harnesses::known();
+        let (space, harness) = (SpaceId::new(), known.find(&known.views()[0].id).unwrap());
+        let starting = tokio::spawn({
+            let (hosts, harness) = (hosts.clone(), harness.clone());
+            async move { hosts.get(space, &harness).await.unwrap().0 }
+        });
+        // Its start holds the slot: letting go does not wait for it.
+        while hosts.slots.lock().unwrap().is_empty() {
+            tokio::task::yield_now().await;
+        }
+        hosts.let_go(space, &harness.id);
+        GO.add_permits(1);
+        assert_eq!(starting.await.unwrap(), 1);
+        GO.add_permits(1);
+        let again = hosts.get(space, &harness).await.unwrap();
+        assert_eq!(again.0, 2, "it read the account before it changed");
+        assert_eq!(
+            hosts.get(space, &harness).await.unwrap().0,
+            2,
+            "then it stays"
+        );
     }
 
     #[test]

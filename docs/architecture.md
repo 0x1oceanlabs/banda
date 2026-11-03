@@ -271,6 +271,7 @@ If Chat is removed, Agents still works through its own Thread.
 | Module | Its words | When |
 |---|---|---|
 | agents | Thread, Harness, Agent, Turn, Question | first |
+| harnesses | Harness, account; the machine's (ADR 0040) | first |
 | terminal | Terminal | first |
 | browser | Tab; the window's, with no engine part; every Agent reaches it over CDP (ADR 0013) | first |
 | files | the Space's files | soon |
@@ -542,6 +543,32 @@ If Chat is removed, Agents still works through its own Thread.
 - Its methods and their rights are the `methods!` table in
   `modules/agents/engine/src/lib.rs`, and its facts in `model.rs`.
 
+### harnesses
+
+- **The machine's Harnesses** (ADR 0040): the ones this computer can
+  start, and who is signed in to each, with no Space, so a Person signs in
+  before making one. `harnesses.list`, `harnesses.account` (with the
+  machine's log position it is current at), `harnesses.sign_in {harness,
+  way}` and `harnesses.sign_out`. It owns `harnesses.toml`.
+- It asks through a Harness process of its own, with no session, in a
+  pool keyed by the machine's ID, let go after five minutes with nothing
+  asked.
+- **A sign-in or sign-out writes `harnesses.account_changed`**, its
+  subject the Harness's ID and nothing else. Every holder of that
+  Harness's process lets go of it: this module, and each Space's agents
+  module, which hears the machine's log (`ModuleSpace::react_to_machine`)
+  and lets go of its own hosts of it without waiting. A host that was
+  starting then is let go the next time it is asked for (`hosts.rs`
+  marks it stale). The command answers once every reaction handled
+  the event, so a call after it finds every old process gone.
+- **The code that speaks to a Harness is the crate `banda-harnesses`**,
+  which knows nothing of Threads: the list and its file, finding the
+  Person's CLI, a process (`acp::Process`: starting, recording, agreeing
+  on ACP, who is signed in) and the pool of processes. The agents module
+  wraps a process with its sessions' handlers and capabilities.
+- Until the window asks it, the agents module keeps its own `harnesses`,
+  `account`, `sign_in` and `sign_out` (ADR 0040, step 4).
+
 ### terminal
 
 - **A Terminal is a program on a PTY** in the engine, run as the Person:
@@ -603,10 +630,11 @@ module reaches a Harness through an adapter:
   adapters (ADR 0003). A native adapter is added only where ACP blocks
   something users need; a native Codex adapter comes later, for its rate
   limits.
-- **The ACP adapter** is `acp.rs` (the Harness's process and opening a
-  session) with a file per concept under `acp/`: a session, what the
-  Harness says, its options and modes, failures, what it asks, and who
-  is signed in. A turn holds a `Session`, its process and session as
+- **The ACP adapter** is the agents module's `acp.rs` (a Harness's
+  sessions, on a process `banda-harnesses` starts, agrees on ACP with
+  and asks who is signed in) with a file per concept under `acp/`:
+  opening a session, a session, what the Harness says, its options and
+  modes, failures, and what it asks. A turn holds a `Session`, its process and session as
   one handle (`prompt`, `steer`, `cancel`, `settle`, `running`); what
   listens between turns holds it weakly, so a process let go stops.
   `acp/routes.rs` alone says where what a session says goes: to the turn

@@ -29,14 +29,13 @@ use agent_client_protocol::schema::v1 as acp;
 use agent_client_protocol::{Agent, Builder, Client, ConnectionTo, HandleDispatchFrom};
 use banda_harnesses::Harness;
 use banda_harnesses::acp::Process;
-use banda_harnesses::hosts::Host;
+use banda_harnesses::hosts::{Activity, Held, Host};
 use banda_harnesses::model::Program;
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as BASE64;
 use serde::{Deserialize, Serialize};
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
-use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, Weak};
 use std::time::{Duration, Instant};
 use tokio::sync::{mpsc, oneshot};
@@ -89,11 +88,9 @@ pub struct Connection {
     agreed: Agreed,
     routes: Routes,
     learned: Learned,
-    /// When a turn last began or ended here.
-    active: Arc<Mutex<Instant>>,
-    /// The turns the Agent went on with by itself here, which keep the
-    /// host as the engine's turns do.
-    kept: Arc<AtomicUsize>,
+    /// When a turn last began or ended here, and the turns the Agent went
+    /// on with by itself here, which keep the host as the engine's do.
+    activity: Activity,
     /// The Harness's session for each Thread, in this process.
     sessions: tokio::sync::Mutex<HashMap<ThreadId, acp::SessionId>>,
 }
@@ -115,8 +112,7 @@ impl Host for Connection {
             agreed: agreed(&answer),
             routes,
             learned,
-            active: Arc::new(Mutex::new(Instant::now())),
-            kept: Arc::default(),
+            activity: Activity::new(),
             sessions: Default::default(),
         }))
     }
@@ -127,21 +123,8 @@ impl Host for Connection {
 
     /// Since when no turn runs here, or `None` while one does.
     fn idle_since(&self) -> Option<Instant> {
-        let busy = self.routes.busy() || self.kept.load(Ordering::SeqCst) > 0;
-        (!busy).then(|| *self.active.lock().unwrap())
-    }
-}
-
-/// While it lives, its host is not let go as idle.
-pub struct Kept {
-    kept: Arc<AtomicUsize>,
-    active: Arc<Mutex<Instant>>,
-}
-
-impl Drop for Kept {
-    fn drop(&mut self) {
-        *self.active.lock().unwrap() = Instant::now();
-        self.kept.fetch_sub(1, Ordering::SeqCst);
+        let busy = self.routes.busy();
+        self.activity.idle_since().filter(|_| !busy)
     }
 }
 
@@ -152,17 +135,13 @@ impl Connection {
     }
 
     /// Keeps the host while the Agent goes on by itself, as a turn does.
-    pub fn keep(&self) -> Kept {
-        self.kept.fetch_add(1, Ordering::SeqCst);
-        Kept {
-            kept: self.kept.clone(),
-            active: self.active.clone(),
-        }
+    pub fn keep(&self) -> Held {
+        self.activity.hold()
     }
 
     /// Marks the host as just used, so it is not let go as idle.
     pub fn touch(&self) {
-        *self.active.lock().unwrap() = Instant::now();
+        self.activity.touch();
     }
 
     /// What a session runs with, as `known` holds it, with what the
