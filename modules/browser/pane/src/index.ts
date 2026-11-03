@@ -9,7 +9,7 @@ import { browserPane } from "./BrowserPane"
 import { frontHolder, holderOf, openWith } from "./pages"
 import { webSource } from "./sources"
 import { browserAt, type KeptArgs, NEW_BROWSER, readArgs } from "./tabs"
-import { followThreads } from "./threads"
+import { followThreads, waitsWatch } from "./threads"
 
 export const browser = defineModule({
   id: "browser",
@@ -47,6 +47,7 @@ export const browser = defineModule({
     },
   ],
   sources: [webSource],
+  watches: [waitsWatch],
   // A tab an Agent opens goes beside its Thread (ADR 0029, decision 4):
   // to the browser of the column right of the Thread's Pane, or a new
   // one there; with the Thread not shown, to its Space's browser the

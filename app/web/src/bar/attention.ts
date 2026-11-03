@@ -4,7 +4,7 @@
  * Pure, so plain tests cover it.
  */
 import { loudest } from "@banda/ui/components/banda-mark"
-import type { Attention } from "@banda/ui/pane"
+import type { Attention, Listed } from "@banda/ui/pane"
 
 export function combine(reports: Iterable<Attention>): Attention {
   const all = [...reports]
@@ -12,4 +12,29 @@ export function combine(reports: Iterable<Attention>): Attention {
     mark: loudest(all.map((report) => report.mark)),
     waiting: all.reduce((sum, report) => sum + report.waiting, 0),
   }
+}
+
+/**
+ * A Space's list as the sidebar draws it: what a module says of another's
+ * Thread (`Listed.on`) goes on that Thread's row, the louder mark and its
+ * call with it, and has no row of its own.
+ */
+export function folded(listed: readonly Listed[]): readonly Listed[] {
+  const about = listed.filter((thing) => thing.on !== undefined)
+  if (!about.length) return listed
+  return listed
+    .filter((thing) => thing.on === undefined)
+    .map((thing) => {
+      const of = about.filter((each) => each.on === thing.agent)
+      if (thing.agent === undefined || !of.length) return thing
+      const mark = loudest([thing.mark, ...of.map((each) => each.mark)])
+      if (mark === thing.mark) return thing
+      const loud = of.find((each) => each.mark === mark)!
+      return {
+        ...thing,
+        mark,
+        changed: Math.max(thing.changed, loud.changed),
+        ...(loud.calls !== undefined && { calls: loud.calls }),
+      }
+    })
 }

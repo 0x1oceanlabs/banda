@@ -2,7 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 import type { Engine, SpaceId, SpaceSummary } from "@banda/contract"
 import type { Attention, Listed, Lists, Report, Watch } from "@banda/ui/pane"
 import { runs, watches } from "../registry"
-import { combine } from "./attention"
+import { combine, folded } from "./attention"
 
 /** Where each Watch's list goes too, for the window to tell what calls. */
 export type Listening = {
@@ -54,7 +54,9 @@ export function Watches({
     for (const { space, listed } of Object.values(reports)) {
       lists[space] = [...(lists[space] ?? []), ...listed]
     }
-    return lists
+    return Object.fromEntries(
+      Object.entries(lists).map(([space, listed]) => [space, folded(listed)])
+    ) as Lists
   }, [reports])
   useEffect(() => onLists(lists), [onLists, lists])
 

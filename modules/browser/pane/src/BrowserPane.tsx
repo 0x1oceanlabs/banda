@@ -271,6 +271,7 @@ function Browser({
 
   // The page the Person looks at is the extensions' active tab.
   const contents = page?.contents ?? null
+  const stopped = state.waits.find((wait) => wait.reason === "stopped")
   useEffect(() => {
     if (focused && contents !== null) browserHost()?.shown(contents)
   }, [focused, contents])
@@ -401,6 +402,15 @@ function Browser({
             />
           </DrawnIn>
         )}
+        {page && !state.driver && stopped && contents != null && (
+          <DrawnIn element={page.over}>
+            <Stopped
+              agent={stopped.agent}
+              onThread={onThread}
+              onLet={() => browserHost()?.letDrive(contents, stopped.agent)}
+            />
+          </DrawnIn>
+        )}
       </div>
     </div>
   )
@@ -464,6 +474,50 @@ function Driving({
         </Button>
       </div>
     </>
+  )
+}
+
+/**
+ * What Banda draws over a page where the Person stopped a Thread (ADR
+ * 0029, decision 6): a pill with the Thread, ringed as what waits for the
+ * Person, and the answer that lets it drive there again.
+ */
+function Stopped({
+  agent,
+  onThread,
+  onLet,
+}: {
+  agent: string
+  onThread: (agent: string) => void
+  onLet: () => void
+}) {
+  const title = useThreadOf(agent)?.title ?? "An Agent"
+  return (
+    <div
+      role="status"
+      aria-label={`${title} is stopped in this tab`}
+      className="pointer-events-auto absolute bottom-3 left-1/2 flex max-w-[calc(100%-24px)] -translate-x-1/2 items-center gap-2 rounded-full bg-popover py-1 pr-1 pl-3 text-xs whitespace-nowrap text-popover-foreground shadow-lg ring-1 ring-attention/60"
+    >
+      <span className="min-w-0 truncate">
+        Stopped{" "}
+        <button
+          type="button"
+          title="Go to the Thread"
+          onClick={() => onThread(agent)}
+          className="font-semibold hover:underline"
+        >
+          {title}
+        </button>
+      </span>
+      <Button
+        variant="outline"
+        size="xs"
+        className="shrink-0 rounded-full"
+        onClick={onLet}
+      >
+        Let drive again
+      </Button>
+    </div>
   )
 }
 

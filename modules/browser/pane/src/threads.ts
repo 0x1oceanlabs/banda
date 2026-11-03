@@ -5,13 +5,24 @@
  */
 import type { SpaceId } from "@banda/contract"
 import type { WindowApi } from "@banda/ui/module"
-import { type Listed, listedOf } from "@banda/ui/pane"
-import { useSyncExternalStore } from "react"
+import {
+  type Listed,
+  listedOf,
+  type Watch,
+  type WatchProps,
+} from "@banda/ui/pane"
+import { useEffect, useSyncExternalStore } from "react"
 import { browserHost } from "./host"
-import { drivers, watchPages } from "./pages"
+import { asking, drivers, watchPages } from "./pages"
 
 /** The window, while the module runs. */
 let shell: WindowApi | null = null
+/** What hears the lists change, from before the module runs. */
+const listening = new Set<() => void>()
+const watchLists = (listener: () => void) => {
+  listening.add(listener)
+  return () => void listening.delete(listener)
+}
 
 /** The Thread of `agent` as the window lists it, and its Space. */
 export function threadOf(
@@ -20,14 +31,9 @@ export function threadOf(
   return shell && listedOf(shell.lists(), agent)
 }
 
-const unwatched = () => () => {}
-
 /** The Thread of `agent` as listed, drawn again as the lists change. */
 export function useThreadOf(agent: string): Listed | null {
-  return useSyncExternalStore(
-    shell?.watchLists ?? unwatched,
-    () => threadOf(agent)?.listed ?? null
-  )
+  return useSyncExternalStore(watchLists, () => threadOf(agent)?.listed ?? null)
 }
 
 /**
@@ -55,9 +61,59 @@ export function followThreads(window: WindowApi): () => void {
     for (const agent of turns.keys())
       if (!driving.has(agent)) turns.delete(agent)
   }
-  const stops = [window.watchLists(check), watchPages(check)]
+  const heard = () => {
+    for (const listener of listening) listener()
+  }
+  const stops = [window.watchLists(heard), watchLists(check), watchPages(check)]
+  heard()
   return () => {
     for (const stop of stops) stop()
     if (shell === window) shell = null
   }
+}
+
+/** What the sidebar's row of a Thread the Person stopped on a tab says,
+ * once it called there again. */
+export const STOPPED = "Stopped on a tab: let it drive again there"
+
+/**
+ * The Threads of a Space that wait for the Person on a tab, as their rows
+ * show it (ADR 0029, decision 6): a Thread the Person stopped asks them
+ * once it calls there again, and the window calls them as for a
+ * Harness's Question. Stopping it calls nobody: the Person did.
+ */
+export const waitsWatch: Watch = { Watch: WaitsWatch }
+
+function WaitsWatch({ space, report }: WatchProps) {
+  useEffect(() => {
+    let was: string | undefined
+    const check = () => {
+      const listed = asking().flatMap(({ contents, wait }): Listed[] => {
+        const thread = threadOf(wait.agent)
+        if (thread?.space !== space || wait.asked === null) return []
+        return [
+          {
+            id: `browser:${contents}:${wait.agent}`,
+            title: thread.listed.title,
+            mark: "asking",
+            changed: wait.asked,
+            calls: STOPPED,
+            on: wait.agent,
+            pane: thread.listed.pane,
+          },
+        ]
+      })
+      const said = JSON.stringify(listed)
+      if (said === was) return
+      was = said
+      const mark = listed.length ? "asking" : "rest"
+      report({ mark, waiting: listed.length, listed })
+    }
+    check()
+    const stops = [watchLists(check), watchPages(check)]
+    return () => {
+      for (const stop of stops) stop()
+    }
+  }, [space, report])
+  return null
 }

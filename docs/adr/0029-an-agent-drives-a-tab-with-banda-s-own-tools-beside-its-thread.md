@@ -190,6 +190,18 @@ and stay Roma's to change.
    - Once holds for that Thread until Banda restarts, as a site's camera
      answer does (ADR 0013 decision 8). Always and Deny go to
      `browser.toml`'s `[agents] sites`, which Settings shows and edits.
+   - Amended in step 4d, for Stopped:
+     - The wait lives with its tab in the window's main process, not in
+       the engine part, and ends with the tab. A tab's ID lasts only as
+       long as the window, so events in the engine would outlive the tabs
+       they name.
+     - The answer goes over the window's bridge, which no Agent reaches.
+       That guarantees what `Decide` would: only the Person answers.
+     - Stopping calls nobody, since the Person just did it. The Thread
+       asks once it calls on the tab again and is refused. From then on,
+       the browser's Watch lists the wait with `Listed.on`, its Agent.
+       The window draws that wait on the Thread's row, not on a row of
+       its own, and calls the Person as for a Question.
 
 7. **Who confirms a risky step: A, B and E first** (_decided_).
    - **A. The Harness asks**, as before any tool, under the Thread's mode
