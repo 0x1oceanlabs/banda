@@ -6,6 +6,7 @@ import {
   type SpaceSummary,
   type Status,
 } from "@banda/contract"
+import { works } from "@banda/ui/components/banda-mark"
 import { inFront, useInFront } from "@banda/ui/hooks/use-in-front"
 import { useMachine } from "@banda/ui/hooks/use-status"
 import { openSpaces, updateSpace } from "@banda/ui/lib/spaces"
@@ -863,6 +864,11 @@ export function Shell({
         onSidebar={toggleSidebar}
         problems={[...keyed.problems, ...bar.problems]}
         widgets={bar.parts}
+        working={
+          Object.values(lists)
+            .flat()
+            .filter((listed) => works(listed.mark)).length
+        }
         onPick={(index) =>
           index === workspaces.current
             ? toggleOverview()

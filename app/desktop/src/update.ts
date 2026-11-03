@@ -32,12 +32,13 @@ export type Updates = {
 
 /** Starts looking for Banda's update; `tell` hears each change. */
 export function updates(tell: (now: Update) => void): Updates {
-  const have = app.getVersion()
-  let now: Update = { have, state: "none" }
+  const known = { name: channel.name, have: app.getVersion() }
+  const { have } = known
+  let now: Update = { ...known, state: "none" }
   const image = process.env.APPIMAGE
   if (!image) return { current: () => now, check() {}, restart() {} }
-  const set = (next: DistributiveOmit<Update, "have">) => {
-    now = { have, ...next }
+  const set = (next: DistributiveOmit<Update, "name" | "have">) => {
+    now = { ...known, ...next }
     tell(now)
   }
 
@@ -174,9 +175,11 @@ const ENTITIES: Record<string, string> = {
   "#39": "'",
 }
 
+/** A block's tags part words; an inline one's, as `<code>`, do not. */
 function textOf(html: string): string {
   return html
-    .replace(/<[^>]*>/g, " ")
+    .replace(/<\/?(p|br|li|ul|ol|div|h[1-6])\b[^>]*>/gi, " ")
+    .replace(/<[^>]*>/g, "")
     .replace(/&(amp|lt|gt|quot|#39);/g, (_, name: string) => ENTITIES[name]!)
     .replace(/\s+/g, " ")
     .trim()

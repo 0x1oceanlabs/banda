@@ -16,6 +16,7 @@ import { useLookBar, useLookProblems } from "../look"
 import type { InBar } from "../workspaces/model"
 import { BarMotion } from "./motion"
 import type { Part } from "./placed"
+import { UpdateWidget } from "./Update"
 
 /**
  * The bar across the window's top (ADR 0005, decision 9): the sidebar's
@@ -37,6 +38,7 @@ export function Bar({
   onPick,
   problems,
   widgets,
+  working = 0,
 }: {
   status: Status
   /** What the modules' work calls the Person for, for the mark to show. */
@@ -52,6 +54,8 @@ export function Bar({
   problems: readonly Problem[]
   /** The widgets of each part, drawn. */
   widgets?: Partial<Record<Part, ReactNode>>
+  /** How many Threads work now, which a restart into an update stops. */
+  working?: number
 }) {
   const mark = loudest([attention.mark, markOf(status)])
   const { waiting } = attention
@@ -93,6 +97,7 @@ export function Bar({
       </div>
       <div className="ml-auto flex items-center">
         {widgets?.right}
+        <UpdateWidget working={working} />
         <LookProblems more={problems} />
         <Connection status={status} />
       </div>

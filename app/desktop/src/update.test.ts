@@ -12,7 +12,10 @@ it("lists what changed since the Person's version, as text", () => {
           version: "0.1.0-dev.66",
           note: "<p>Built from 6c3d557: fix(ci): the runner&#39;s hook ends in .sh</p>",
         },
-        { version: "0.1.0-dev.65", note: "<p>a &amp; b &lt;c&gt;</p>" },
+        {
+          version: "0.1.0-dev.65",
+          note: "<p>Built from <code>3e145b7</code>: a &amp; b &lt;c&gt;</p><p>next</p>",
+        },
         { version: "0.1.0-dev.64", note: null },
         { version: "0.1.0-dev.62", note: "<p>the Person's own</p>" },
       ]),
@@ -23,7 +26,7 @@ it("lists what changed since the Person's version, as text", () => {
       version: "0.1.0-dev.66",
       text: "Built from 6c3d557: fix(ci): the runner's hook ends in .sh",
     },
-    { version: "0.1.0-dev.65", text: "a & b <c>" },
+    { version: "0.1.0-dev.65", text: "Built from 3e145b7: a & b <c> next" },
   ])
 })
 
