@@ -508,6 +508,36 @@ export function Shell({
     []
   )
   const closeOverview = useCallback(() => setOverview(false), [])
+  // The Panes in windows of their own (ADR 0025, decision 9): main keeps
+  // which, and their places here keep stand-ins.
+  const [away, setAway] = useState<ReadonlySet<string>>(() => new Set())
+  const awayNow = useRef(away)
+  useEffect(() => {
+    awayNow.current = away
+  }, [away])
+  useEffect(() => {
+    const popped = window.banda?.popped
+    if (!popped) return
+    let on = true
+    void popped.current().then((ids) => on && setAway(new Set(ids)))
+    const stop = popped.listen((ids) => setAway(new Set(ids)))
+    return () => {
+      on = false
+      stop()
+    }
+  }, [])
+  // Its window opens as big as its tile.
+  const popOut = useCallback((entry: string) => {
+    const tile = document.querySelector(`[data-tile="${CSS.escape(entry)}"]`)
+    const size = tile?.getBoundingClientRect()
+    window.banda?.popped.open(entry, size?.width ?? 0, size?.height ?? 0)
+  }, [])
+  const togglePopOut = useCallback(() => {
+    const entry = focused(seenNow.current.state)?.id
+    if (!entry) return
+    if (awayNow.current.has(entry)) window.banda?.popped.close(entry)
+    else popOut(entry)
+  }, [popOut])
   // Goes to workspace `id`, as its number does.
   const goTo = useCallback(
     (id: string) =>
@@ -590,6 +620,7 @@ export function Shell({
       toggleOverview,
       drawer: () => toggleDrawer(parts),
       zoom: toggleZoom,
+      popOut: togglePopOut,
       center: toCenter,
       answer,
       settle,
@@ -607,6 +638,7 @@ export function Shell({
     toggleOverview,
     toggleDrawer,
     toggleZoom,
+    togglePopOut,
     toCenter,
     answer,
     settle,
@@ -730,8 +762,22 @@ export function Shell({
       close: (entry) => change(() => closing(entry)),
       run: parts.run,
       arrange: (plan) => change(() => plan),
+      popOut,
     }),
-    [change, update, parts]
+    [change, update, parts, popOut]
+  )
+  // What a Pane in its own window asks, the window does, as for its own.
+  useEffect(
+    () =>
+      window.banda?.popped.asked((asked) => {
+        if ("open" in asked) {
+          const { space, pane, from, place } = asked.open
+          frame.open(space, pane, from, place)
+        } else if ("run" in asked) {
+          parts.run(asked.run.action, asked.run.args)
+        }
+      }),
+    [frame, parts]
   )
   const called = useCallback(
     (entry: Entry) =>
@@ -827,6 +873,7 @@ export function Shell({
               spaceName={spaceName}
               called={called}
               marked={marked}
+              away={away}
               zoomed={zoomed}
               center={center}
               listed={listed}

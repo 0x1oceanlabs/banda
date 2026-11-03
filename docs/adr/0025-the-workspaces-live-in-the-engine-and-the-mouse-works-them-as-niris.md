@@ -287,6 +287,17 @@ On the list, Roma decided:
    window", which focuses that window when clicked. Closing that window
    brings the Pane back to its place; `Alt+W` closes the Pane. So no work
    is lost by closing a window.
+   _Built_ 2026-11-03. The header's pop-out button, beside its close
+   button, opens it in a window as big as its tile; the window keeps no
+   menu, so the button stands in for one, and `pane.pop-out` has no key
+   until one is wanted (`keys.toml`). Its place keeps its header, with a
+   dashed stand-in under it the tile's size, so the columns do not move.
+   Which Panes are out is the window's, not the engine's, and not kept
+   between runs: they come back when Banda starts. What the Pane opens,
+   as a Thread its terminal, opens in the window beside its place, the
+   window brought to the front. In its own window, `Alt+W` closes the Pane
+   and the window with it; its header's other button, or `pane.pop-out`,
+   brings it back.
 
 10. **A narrow window hides the sidebar.** When the window is narrower
     than the sidebar and one column `min` wide, the sidebar hides, and
@@ -326,5 +337,5 @@ On the list, Roma decided:
      numbers, a page's own buttons with `Alt`, and `Alt` and the middle
      button over the view (_built_ 2026-11-02);
   7. the overview: the drag, the arrows, typing (_built_ 2026-11-03);
-  8. the narrow window (_built_ 2026-11-03), the drawer, a Pane in its
-     own window.
+  8. the narrow window, the drawer, a Pane in its own window (_built_
+     2026-11-03).

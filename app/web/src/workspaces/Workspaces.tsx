@@ -33,6 +33,7 @@ export function Workspaces({
   spaceName,
   called,
   marked,
+  away,
   zoomed,
   center,
   listed,
@@ -51,6 +52,8 @@ export function Workspaces({
   called: (entry: Entry) => Chime | undefined
   /** An Agent opened it, and the Person has not looked at it yet. */
   marked: (entry: Entry) => boolean
+  /** The Panes in windows of their own, which stand-ins keep the places of. */
+  away: ReadonlySet<string>
   /** The Pane shown over the whole window, if one is. */
   zoomed: string | undefined
   /** Counts Alt+C, for the current workspace's Strip. */
@@ -163,6 +166,7 @@ export function Workspaces({
               spaceName={spaceName}
               called={called}
               marked={marked}
+              away={away}
               zoomed={zoomed}
               center={center}
               listed={listed}

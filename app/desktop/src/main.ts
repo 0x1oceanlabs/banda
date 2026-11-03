@@ -3,8 +3,9 @@
  * from `app://banda` and hands the page the engine's address. It also
  * runs `banda look --follow` and hands the page each look (ADR 0007),
  * writes the preset the page picks into `sidebar.toml` (ADR 0008), and
- * opens the system's folder picker for "Add Space" (ADR 0026); nothing
- * else crosses from Node to the page (docs/architecture.md,
+ * opens the system's folder picker for "Add Space" (ADR 0026), and a
+ * Pane in a window of its own, the same page at `#pane/<id>` (ADR 0025,
+ * decision 9); nothing else crosses from Node to the page (docs/architecture.md,
  * "Processes"). The modules' parts in main run here too, as the
  * browser's pages, kept apart from the page (modules.ts, ADR 0013, ADR
  * 0028). Settings are a Pane of the page; the desktop writes their files
@@ -38,7 +39,12 @@ import {
   text,
   Window,
 } from "@banda/desktop-kit"
-import { BRIDGE } from "@banda/web/host"
+import {
+  BRIDGE,
+  type PoppedAsk as PoppedAskValue,
+  poppedOf,
+  poppedRoute,
+} from "@banda/web/host"
 import { openDoor } from "./door"
 import { engineLayer } from "./engine"
 import { firstFrame, firstLook, lookLayer } from "./look"
@@ -49,6 +55,27 @@ import { NoticeArg, Notices, RecordedDesktop } from "./notices"
 import { roadLayer } from "./road"
 import { settingsLayer } from "./settings"
 import { ensure } from "./sidebar"
+
+/** What a Pane in its own window asks of the window (`PoppedAsk`). */
+const PoppedAsk = Schema.Union([
+  Schema.Struct({
+    open: Schema.Struct({
+      space: Schema.String,
+      pane: Schema.Struct({
+        kind: Schema.String,
+        args: Schema.Record(Schema.String, Schema.MutableJson),
+      }),
+      from: Schema.String,
+      place: Schema.optional(Schema.Literals(["right", "below", "here"])),
+    }),
+  }),
+  Schema.Struct({
+    run: Schema.Struct({
+      action: Schema.String,
+      args: Schema.optional(Schema.Record(Schema.String, Schema.MutableJson)),
+    }),
+  }),
+]) satisfies Schema.Decoder<PoppedAskValue>
 
 /** The page's origin; the engine lets it in (kernel/src/api.rs, APP_ORIGIN). */
 const ORIGIN = "app://banda"
@@ -145,6 +172,8 @@ const lookNow = () => runtime.runSync(Look.use((look) => look.current))
 let window: BrowserWindow | null = null
 /** The window that lets the desktop through, if one does (ADR 0023). */
 let clear: BrowserWindow | null = null
+/** The Panes in windows of their own, by their IDs (ADR 0025, decision 9). */
+const popped = new Map<string, BrowserWindow>()
 
 /** How long the window waits for its look, so it opens in its colours. */
 const LOOK_WAIT = 300
@@ -163,9 +192,11 @@ async function ready(): Promise<void> {
     // prefers-color-scheme follow the look's mode.
     nativeTheme.themeSource = now.mode
     const background = firstFrame(now, nativeTheme.shouldUseDarkColors)
-    if (!window) return
-    if (background && window !== clear) window.setBackgroundColor(background)
-    tellPage(window.webContents, BRIDGE.look.listen, lookIn(window, now))
+    for (const shown of [window, ...popped.values()]) {
+      if (!shown) continue
+      if (background && shown !== clear) shown.setBackgroundColor(background)
+      tellPage(shown.webContents, BRIDGE.look.listen, lookIn(shown, now))
+    }
   }
   runtime.runFork(
     Look.use((look) =>
@@ -283,6 +314,29 @@ async function ready(): Promise<void> {
       ],
       quiet: [none, () => Notices.use((notices) => notices.quiet)],
     },
+    // Panes in windows of their own (ADR 0025, decision 9): the window
+    // pops them out; what they ask goes to it.
+    popped: {
+      open: [
+        Schema.Tuple([Schema.String, Schema.Number, Schema.Number]),
+        ([pane, width, height], event) =>
+          Effect.sync(() => {
+            if (event.sender === window?.webContents)
+              popOut(pane, width, height)
+          }),
+      ],
+      close: [text, ([pane]) => Effect.sync(() => popped.get(pane)?.close())],
+      current: [none, () => Effect.succeed([...popped.keys()])],
+      ask: [
+        Schema.Tuple([PoppedAsk]),
+        ([asked], event) =>
+          Effect.sync(() => {
+            const from = BrowserWindow.fromWebContents(event.sender)
+            if (!from || ![...popped.values()].includes(from)) return
+            tellPage(inFront()?.webContents, BRIDGE.popped.asked, asked)
+          }),
+      ],
+    },
     // "Add Space"'s folder picker (ADR 0026).
     folder: {
       pick: [
@@ -322,13 +376,13 @@ function answered(key: string) {
   tellPage(inFront()?.webContents, BRIDGE.notify.listen, key)
 }
 
-/** The window, brought to the front; none when it is closed. */
-function inFront(): BrowserWindow | null {
-  if (!window) return null
-  if (window.isMinimized()) window.restore()
-  window.show()
-  window.focus()
-  return window
+/** The window, or `shown`, brought to the front; none when it is closed. */
+function inFront(shown = window): BrowserWindow | null {
+  if (!shown) return null
+  if (shown.isMinimized()) shown.restore()
+  shown.show()
+  shown.focus()
+  return shown
 }
 
 /** Serves the built page; nothing outside its folder. */
@@ -402,13 +456,50 @@ function openWindow(): BrowserWindow {
     // sets this once, so turning it on shows from the next start.
     systemGlass(lookNow())
   )
-  runtime.runSync(modules.opened(opened.webContents))
   void opened.loadURL(PAGE)
   opened.on("closed", () => {
     window = null
     if (clear === opened) clear = null
+    // Their Panes are the window's: they go with it.
+    for (const one of popped.values()) one.close()
   })
   return opened
+}
+
+/**
+ * Opens Pane `pane` in a window of its own, `width` by `height`, the page
+ * at `#pane/<id>` drawing it alone; or brings its window to the front.
+ * The window keeps the Pane's place; closing this one brings it back.
+ */
+function popOut(pane: string, width: number, height: number): void {
+  const route = poppedRoute(pane)
+  if (poppedOf(route) !== pane) return
+  const shown = popped.get(pane)
+  if (shown) {
+    inFront(shown)
+    return
+  }
+  const size = (at: number, least: number) =>
+    Math.max(least, Math.min(Math.round(at) || least, 4096))
+  const opened = pageWindow({
+    width: size(width, 480),
+    height: size(height, 360),
+    minWidth: 320,
+    minHeight: 240,
+    title: "Banda",
+  })
+  void opened.loadURL(`${PAGE}${route}`)
+  opened.on("closed", () => {
+    popped.delete(pane)
+    tellPopped()
+  })
+  popped.set(pane, opened)
+  tellPopped()
+}
+
+/** Tells the window which Panes are in windows of their own. */
+function tellPopped(): void {
+  tellPage(window?.webContents, BRIDGE.popped.listen, [...popped.keys()])
 }
 
 /** A window that shows Banda's page, in the look's first colour. */
@@ -440,6 +531,8 @@ function pageWindow(
     },
   })
   if (glass) clear = opened
+  // The modules' parts hear of each window that shows the page.
+  runtime.runSync(modules.opened(opened.webContents))
   opened.once("ready-to-show", () => opened.show())
   opened.on("focus", () => opened.flashFrame(false))
   const contents = opened.webContents

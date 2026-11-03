@@ -7,7 +7,9 @@
  * pages live in it too (ADR 0013).
  */
 import { BROWSER_BRIDGE, type BrowserHost } from "@banda/browser-pane/desktop"
-import type { Address } from "@banda/contract"
+import type { Address, SpaceId } from "@banda/contract"
+import type { Args } from "@banda/ui/module"
+import type { PaneState, Place } from "@banda/ui/pane"
 import { bridge, type HostOf, invoke, push, send } from "@banda/contract/bridge"
 import type { Listed, Look } from "@banda/contract/look"
 
@@ -24,6 +26,25 @@ export type Notice = {
   /** It stays until taken back, as one that waits for the Person does. */
   lasts: boolean
 }
+
+/** The page's route that draws Pane `pane` alone, in a window of its
+ * own (ADR 0025, decision 9). */
+export const poppedRoute = (pane: string) => `#pane/${pane}`
+
+/** The Pane the page at `hash` draws alone, if it is such a window's: an
+ * ID as the engine makes them. */
+export function poppedOf(hash: string): string | undefined {
+  return /^#pane\/([\w-]{1,64})$/.exec(hash)?.[1]
+}
+
+/**
+ * What a Pane in its own window asks of the window, which has the
+ * workspaces: to open a Pane beside it, as a Thread its terminal, or to
+ * run an action.
+ */
+export type PoppedAsk =
+  | { open: { space: SpaceId; pane: PaneState; from: string; place?: Place } }
+  | { run: { action: string; args?: Args } }
 
 /**
  * Every channel between the page and the desktop (ADR 0028), by where it
@@ -87,6 +108,27 @@ export const BRIDGE = bridge({
     listen: push<string>(),
     /** Whether the desktop is quiet now: its Do Not Disturb is on. */
     quiet: invoke<[], boolean>(),
+  },
+  /**
+   * Panes in windows of their own (ADR 0025, decision 9). The window keeps
+   * each in its place; main opens its own window on the page at
+   * `#pane/<id>`, and tells the window when it closes.
+   */
+  popped: {
+    /** Opens Pane `pane` in a window of its own, as big as its tile, or
+     * brings that window to the front. */
+    open: send<[pane: string, width: number, height: number]>(),
+    /** Closes Pane `pane`'s window: it is back in its place. */
+    close: send<[pane: string]>(),
+    /** The Panes in windows of their own now. */
+    current: invoke<[], string[]>(),
+    /** Calls `listener` with them each time they change. */
+    listen: push<string[]>(),
+    /** What a Pane in its own window asks of the window: main hands it on
+     * and brings the window to the front. */
+    ask: send<[asked: PoppedAsk]>(),
+    /** Calls `listener` with each thing a popped Pane asked. */
+    asked: push<PoppedAsk>(),
   },
   /** The system's folder picker, which "Add Space" opens (ADR 0026). */
   folder: {
