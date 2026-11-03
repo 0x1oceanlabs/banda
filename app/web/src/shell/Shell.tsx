@@ -23,6 +23,7 @@ import { AsidePill } from "../safe/AsidePill"
 import { WELL, wentWell } from "../safe/starts"
 import { problemLink } from "../problems/live"
 import { NOTICE, useProblemNews } from "../problems/news"
+import { lookingInto } from "../problems/look"
 import { ProblemToast } from "../problems/ProblemToast"
 import { first, type Heard, useCalls, type Where } from "../calls/useCalls"
 import { BandaMenu } from "../menu/BandaMenu"
@@ -932,6 +933,12 @@ export function Shell({
               newProblem && (
                 <ProblemToast
                   {...newProblem}
+                  onLookInto={() => {
+                    problemNews.dismiss()
+                    void lookingInto(engine, newProblem.problem.fingerprint)
+                      .then((thread) => parts.run("thread.new", thread))
+                      .catch(() => undefined)
+                  }}
                   onDetails={() => {
                     problemNews.dismiss()
                     settings(problemLink(newProblem.problem.fingerprint))

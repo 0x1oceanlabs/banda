@@ -351,11 +351,18 @@ fn an_agent_reaches_banda_through_banda_mcp() {
                 "browser_wait_for"
             ][..],
             &arranging,
-            &["skill"]
+            &["problems", "problem", "skill"]
         ]
         .concat()
     );
     assert_eq!(tools[1]["inputSchema"]["required"], json!(["thread"]));
+
+    // An Agent reads what broke in Banda, to look into it (ADR 0039).
+    let (error, listed) = mcp.call(90, "problems", json!({}));
+    assert!(!error, "{listed}");
+    assert!(serde_json::from_str::<Value>(&listed).unwrap()["problems"].is_array());
+    let (error, said) = mcp.call(91, "problem", json!({ "fingerprint": "0000" }));
+    assert!(error, "{said}");
 
     let (error, threads) = mcp.call(4, "threads", json!({}));
     assert!(!error, "{threads}");

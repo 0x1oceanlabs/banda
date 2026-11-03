@@ -3,7 +3,7 @@
 //! on this machine only.
 
 use crate::Failure;
-use crate::places::{HOST, Places, Running};
+use crate::places::{FOLDER, HOST, Places, Running};
 use banda_agents::{Agents, Pipe};
 use banda_browser::Browser;
 use banda_git::Git;
@@ -64,7 +64,7 @@ pub async fn serve(places: Places, port: u16, with_parent: bool) -> Result<(), F
         .module(Browser::new())
         .module(Git::new())
         .module(Workspaces::new())
-        .module(Problems::new(places.problems(), places.logs()))
+        .module(problems(&places))
         .open()
         .await
         .map_err(Failure::broken)?;
@@ -128,4 +128,14 @@ async fn stopped(with_parent: bool) {
         () = parent => {}
     }
     tracing::info!("the engine stops");
+}
+
+/// What broke in Banda (ADR 0039), and, from a checkout's build, the
+/// checkout an Agent fixes it in.
+fn problems(places: &Places) -> Problems {
+    let problems = Problems::new(places.problems(), places.logs());
+    match FOLDER {
+        "banda-local" => problems.from_checkout(),
+        _ => problems,
+    }
 }

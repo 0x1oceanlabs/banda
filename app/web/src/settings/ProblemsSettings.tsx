@@ -13,20 +13,22 @@ import { Spinner } from "@banda/ui/components/spinner"
 import { cn } from "@banda/ui/lib/utils"
 import { clock } from "@banda/ui/lib/words"
 import { PLACES, useProblems } from "../problems/live"
+import { lookingInto } from "../problems/look"
+import type { SectionProps } from "./sections"
 import { Group, Rows } from "./SettingRow"
 
 /** Where the window keeps when the section was last open. */
 const SEEN = "banda.problems.seen"
 
-export function ProblemsSettings({
-  engine,
-  lit,
-}: {
-  engine: Engine
-  /** The Problem a link names: `problems/<fingerprint>`. */
-  lit?: string
-}) {
+export function ProblemsSettings({ engine, lit, run }: SectionProps) {
   const live = useProblems(engine)
+  // A new Thread is the agents module's action, as its key's.
+  const lookInto =
+    run &&
+    ((fingerprint: string) =>
+      void lookingInto(engine, fingerprint)
+        .then((thread) => run("thread.new", thread))
+        .catch(() => undefined))
   // What was new stays marked while the section is open.
   const [seen] = useState(() => Number(localStorage.getItem(SEEN)) || 0)
   useEffect(() => {
@@ -65,6 +67,7 @@ export function ProblemsSettings({
               problem={problem}
               fresh={problem.first > seen}
               open={open === problem.fingerprint}
+              onLookInto={lookInto && (() => lookInto(problem.fingerprint))}
               onToggle={() =>
                 setPick({
                   lit,
@@ -91,12 +94,16 @@ function ProblemRow({
   problem,
   fresh,
   open,
+  onLookInto,
   onToggle,
 }: {
   engine: Engine
   problem: Problem
   fresh: boolean
   open: boolean
+  /** Asks an Agent about it in a new Thread; none where no window runs
+   * actions. */
+  onLookInto?: () => void
   onToggle: () => void
 }) {
   const [copied, setCopied] = useState<"copied" | "failed">()
@@ -167,6 +174,11 @@ function ProblemRow({
             </ol>
           )}
           <div className="flex items-center gap-1.5">
+            {onLookInto && (
+              <Button size="sm" onClick={onLookInto}>
+                Look into it
+              </Button>
+            )}
             <Button size="sm" variant="secondary" onClick={() => void copy()}>
               {copied === "copied" ? "Copied" : "Copy report"}
             </Button>

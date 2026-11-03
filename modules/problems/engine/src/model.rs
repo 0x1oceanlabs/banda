@@ -1,5 +1,6 @@
 //! A Problem and its fingerprint (ADR 0039, decision 1).
 
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
 
@@ -94,9 +95,10 @@ impl Problem {
 }
 
 /// One Problem, by its fingerprint or as much of it as names one.
-#[derive(Deserialize, TS)]
+#[derive(Deserialize, TS, JsonSchema)]
 #[ts(export_to = "problems/")]
 pub struct Fingerprint {
+    /// Its fingerprint, as `problems` lists it, or its start.
     pub fingerprint: String,
 }
 
@@ -109,6 +111,10 @@ pub struct Report {
     pub system: String,
     /// The last lines of each log there is.
     pub logs: Vec<Log>,
+    /// The checkout of Banda's source the engine runs from, where an Agent
+    /// can fix it; none for a released Banda. Not in `text`: it is a path
+    /// of the Person's.
+    pub checkout: Option<String>,
     /// All of it in Markdown, as `banda problems report` prints it and
     /// the Person copies it.
     pub text: String,

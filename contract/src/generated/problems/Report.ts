@@ -15,6 +15,12 @@ system: string,
  */
 logs: Array<Log>, 
 /**
+ * The checkout of Banda's source the engine runs from, where an Agent
+ * can fix it; none for a released Banda. Not in `text`: it is a path
+ * of the Person's.
+ */
+checkout: string | null, 
+/**
  * All of it in Markdown, as `banda problems report` prints it and
  * the Person copies it.
  */

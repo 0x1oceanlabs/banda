@@ -131,7 +131,7 @@ fn unhashed(function: &str) -> &str {
 }
 
 /// The repository's root, where this crate was built.
-fn root() -> Option<&'static Path> {
+pub(crate) fn root() -> Option<&'static Path> {
     Path::new(env!("CARGO_MANIFEST_DIR")).ancestors().nth(3)
 }
 

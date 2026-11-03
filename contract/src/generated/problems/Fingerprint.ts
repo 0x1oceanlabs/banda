@@ -3,4 +3,8 @@
 /**
  * One Problem, by its fingerprint or as much of it as names one.
  */
-export type Fingerprint = { fingerprint: string, };
+export type Fingerprint = { 
+/**
+ * Its fingerprint, as `problems` lists it, or its start.
+ */
+fingerprint: string, };
