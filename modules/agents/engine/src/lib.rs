@@ -47,7 +47,7 @@ mod writer;
 
 use acp::Connection;
 use banda_harnesses::hosts::IDLE;
-use banda_harnesses::model::{Account, HarnessView, Program};
+use banda_harnesses::model::Program;
 use banda_harnesses::{Harness, Harnesses};
 use banda_kernel::{
     AgentId, Call, Effect, Error, Module, ModuleSpace, Nothing, OnRestart, Outcome, Participant,
@@ -181,43 +181,26 @@ impl Agents {
         Ok(file.map_or_else(Default::default, |file| sending::start(&file, id)))
     }
 
+    /// The Harness list it starts from, which the machine's module
+    /// `harnesses` shares (ADR 0040).
+    pub fn harnesses(&self) -> Harnesses {
+        self.harnesses.clone()
+    }
+
     fn harness(&self, id: &str) -> Result<Harness, Refusal> {
         self.harnesses.get(id).map_err(Refusal::invalid)
     }
 
-    /// After a sign-in or a sign-out: ACP has a client start the Harness
-    /// again, so it reads the account anew, in every Space, since they
-    /// share it. Then the receipt keeps the answer, and the kernel answers
-    /// the same command, sent again, from it.
-    async fn start_again(&self, call: &Call, harness: &str) -> Result<(), Refusal> {
-        self.live.let_go_everywhere(harness);
-        call.command(|_| Ok(())).await
-    }
-
-    /// Harness entry `id` with its process in `space`, started if need be.
-    async fn running(
-        &self,
-        space: SpaceId,
-        id: &str,
-    ) -> Result<(Harness, Arc<Connection>), Refusal> {
+    /// Harness entry `id`'s process in `space`, started if need be.
+    async fn running(&self, space: SpaceId, id: &str) -> Result<Arc<Connection>, Refusal> {
         let harness = self.harness(id)?;
         let connection = self.live.connection(space, &harness).await;
-        Ok((harness, connection.map_err(Refusal::conflict)?))
+        connection.map_err(Refusal::conflict)
     }
 }
 
 banda_kernel::methods! {
     Agents(Call) as "AgentsMethods" in "agents/" {
-        /// The Harnesses this machine can start.
-        call harnesses(Nothing) -> Vec<HarnessView>, Read;
-        /// A Harness as it says: its program, who is signed in, how to sign
-        /// in. A Harness's account serves every Space on this computer.
-        call account(OneHarness) -> Account, Manage;
-        /// Signs in with one of those ways, then the Harness starts again,
-        /// and the `turn` that needed it goes again.
-        command sign_in(SignIn) -> Option<Sent>, Manage;
-        /// Asks the Harness to sign out, then it starts again.
-        command sign_out(OneHarness) -> (), Manage;
         /// The Threads of this Space, the latest first: each one's ID, title
         /// and Harness, what it was last asked, how its latest turn stands,
         /// and the Questions it waits on.
@@ -329,19 +312,6 @@ banda_kernel::methods! {
 #[ts(export_to = "agents/")]
 struct OneHarness {
     harness: String,
-}
-
-#[derive(Deserialize, TS)]
-#[ts(export_to = "agents/")]
-struct SignIn {
-    harness: String,
-    way: String,
-    /// The turn that failed for it, which goes again in the same command:
-    /// a terminal that sends it once its program ended well sends one
-    /// command, which its ID keeps from being done twice.
-    #[serde(default)]
-    #[ts(optional = nullable)]
-    turn: Option<TurnId>,
 }
 
 /// What `agents.write` is asked.
@@ -641,78 +611,6 @@ fn emit(
 
 /// The handlers of the module's methods, one each (ADR 0014).
 impl Agents {
-    async fn harnesses(&self, _: Call, _: Nothing) -> Result<Vec<HarnessView>, Refusal> {
-        Ok(self.harnesses.views())
-    }
-
-    async fn account(
-        &self,
-        call: Call,
-        OneHarness { harness }: OneHarness,
-    ) -> Result<Account, Refusal> {
-        let (harness, connection) = self.running(call.space().id(), &harness).await?;
-        connection
-            .process()
-            .account(&harness)
-            .await
-            .map_err(Refusal::conflict)
-    }
-
-    async fn sign_in(
-        &self,
-        call: Call,
-        SignIn { harness, way, turn }: SignIn,
-    ) -> Result<Option<Sent>, Refusal> {
-        let (harness, connection) = self.running(call.space().id(), &harness).await?;
-        let found = connection
-            .process()
-            .ways()
-            .iter()
-            .find(|w| w.id == way)
-            .ok_or_else(|| {
-                Refusal::not_found(format!("{} offers no such way to sign in.", harness.name))
-            })?;
-        // A way in a terminal ran already: the Person signed in there.
-        if found.terminal.is_none() {
-            connection
-                .process()
-                .sign_in(&way)
-                .await
-                .map_err(Refusal::conflict)?;
-        }
-        drop(connection);
-        // The machine's module `harnesses` does not hear it: until the
-        // window asks it (ADR 0040, step 4), its own process may answer
-        // from the old account until it is let go as idle.
-        self.live.let_go_everywhere(&harness.id);
-        let author = call.participant();
-        call.command(move |tx| match turn {
-            // A turn that went again already, or cannot, leaves the
-            // sign-in as it is: the Person is signed in.
-            Some(turn) => match retry(tx, author, turn) {
-                Err(Error::Refused(_)) => Ok(None),
-                answer => answer,
-            },
-            None => Ok(None),
-        })
-        .await
-    }
-
-    async fn sign_out(
-        &self,
-        call: Call,
-        OneHarness { harness }: OneHarness,
-    ) -> Result<(), Refusal> {
-        let (harness, connection) = self.running(call.space().id(), &harness).await?;
-        connection
-            .process()
-            .sign_out()
-            .await
-            .map_err(Refusal::conflict)?;
-        drop(connection);
-        self.start_again(&call, &harness.id).await
-    }
-
     async fn threads(&self, call: Call, _: Nothing) -> Result<ThreadList, Refusal> {
         let (at, threads) = call.space().view(store::threads).await?;
         Ok(ThreadList { at, threads })
@@ -797,7 +695,7 @@ impl Agents {
         if harness.is_empty() {
             return Err(Refusal::conflict("This Thread's Harness is gone."));
         }
-        let (_, connection) = self.running(call.space().id(), &harness).await?;
+        let connection = self.running(call.space().id(), &harness).await?;
         let text = aside::write(connection, call.space().folder(), &settings, prompt).await?;
         Ok(Written { text })
     }

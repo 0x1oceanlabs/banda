@@ -2,8 +2,6 @@
 import type { CallMethod } from "../CallMethod";
 import type { CommandMethod } from "../CommandMethod";
 import type { Nothing } from "../Nothing";
-import type { Account } from "../harnesses/Account";
-import type { HarnessView } from "../harnesses/HarnessView";
 import type { Answer } from "./Answer";
 import type { AnswerIssue } from "./AnswerIssue";
 import type { Attach } from "./Attach";
@@ -28,7 +26,6 @@ import type { Previewed } from "./Previewed";
 import type { Send } from "./Send";
 import type { Sent } from "./Sent";
 import type { ShowVisual } from "./ShowVisual";
-import type { SignIn } from "./SignIn";
 import type { ThreadList } from "./ThreadList";
 import type { ThreadView } from "./ThreadView";
 import type { TurnChanges } from "./TurnChanges";
@@ -37,24 +34,6 @@ import type { WriteAsk } from "./WriteAsk";
 import type { Written } from "./Written";
 
 export type AgentsMethods = { 
-/**
- * The Harnesses this machine can start.
- */
-harnesses: CallMethod<Nothing, Array<HarnessView>>, 
-/**
- * A Harness as it says: its program, who is signed in, how to sign
- * in. A Harness's account serves every Space on this computer.
- */
-account: CallMethod<OneHarness, Account>, 
-/**
- * Signs in with one of those ways, then the Harness starts again,
- * and the `turn` that needed it goes again.
- */
-sign_in: CommandMethod<SignIn, Sent | null>, 
-/**
- * Asks the Harness to sign out, then it starts again.
- */
-sign_out: CommandMethod<OneHarness, null>, 
 /**
  * The Threads of this Space, the latest first: each one's ID, title
  * and Harness, what it was last asked, how its latest turn stands,

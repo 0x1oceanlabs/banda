@@ -57,13 +57,12 @@ pub async fn serve(places: Places, port: u16, with_parent: bool) -> Result<(), F
     let kernel = Kernel::builder(&places.root, &places.data, owner)
         .machine(places.machine())
         .module(
-            Agents::new(harnesses)
+            Agents::new(harnesses.clone())
                 .config_in(places.config.clone())
                 .piped(pipe),
         )
-        .module(HarnessesModule::new(
-            Harnesses::load(&places.harnesses()).map_err(Failure::broken)?,
-        ))
+        // One list, which both read again as its file changes.
+        .module(HarnessesModule::new(harnesses))
         .module(Terminals::new())
         .module(Browser::new())
         .module(Git::new())

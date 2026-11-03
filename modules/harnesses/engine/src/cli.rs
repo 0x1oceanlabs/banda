@@ -7,13 +7,53 @@
 
 use crate::Harness;
 use crate::model::CliView;
+use std::collections::BTreeMap;
 use std::os::unix::fs::PermissionsExt;
 use std::path::{Path, PathBuf};
+use std::sync::Mutex;
 use std::time::Duration;
 use tokio::time::timeout;
 
 /// How long a CLI may take to say its version.
 const ASKING: Duration = Duration::from_secs(5);
+
+/// The version each CLI said, by its path, at the latest look: a fact of
+/// this computer, whichever process looked. So a Person who updated it and
+/// checked again sees every Thread on it stop warning.
+static SAID: Mutex<BTreeMap<String, Option<String>>> = Mutex::new(BTreeMap::new());
+
+/// Where a Harness's CLI was found, and the least version its entry asks
+/// for: what tells, at each look, whether it is old.
+pub struct Located {
+    pub path: String,
+    minimum: Option<String>,
+}
+
+impl Located {
+    pub fn new(path: String, harness: &Harness) -> Self {
+        let minimum = harness.cli.as_ref().and_then(|cli| cli.minimum.clone());
+        Self { path, minimum }
+    }
+
+    /// Why it is old, for the Harness `name`, as the latest look found.
+    pub fn outdated(&self, name: &str) -> Option<String> {
+        let version = SAID.lock().unwrap().get(&self.path).cloned()??;
+        warning(name, &self.path, &version, self.minimum.as_deref()?)
+    }
+}
+
+/// What a Harness's CLI at `path` that says `version` warns, when it is
+/// older than `minimum`.
+fn warning(name: &str, path: &str, version: &str, minimum: &str) -> Option<String> {
+    older(version, minimum).then(|| {
+        let program = Path::new(path).file_name().unwrap_or_default();
+        format!(
+            "{} {version} is older than {minimum}, which Banda's {name} adapter was built \
+             for. It still runs, but some things may not work until you update it.",
+            program.display(),
+        )
+    })
+}
 
 /// Finds the CLI `harness` names, and the version it says. The entry it
 /// returns sets the adapter's variable to the CLI's path.
@@ -29,18 +69,8 @@ pub async fn find(harness: &Harness) -> Result<(Harness, Option<CliView>), Strin
     })?;
     let path = path.display().to_string();
     let version = version_of(&path, harness).await;
-    let outdated = match (&version, &cli.minimum) {
-        (Some(version), Some(minimum)) if older(version, minimum) => {
-            let name = Path::new(&path).file_name().unwrap_or_default();
-            Some(format!(
-                "{} {version} is older than {minimum}, which Banda's {} adapter was built \
-                 for. It still runs, but some things may not work until you update it.",
-                name.display(),
-                harness.name
-            ))
-        }
-        _ => None,
-    };
+    SAID.lock().unwrap().insert(path.clone(), version.clone());
+    let outdated = Located::new(path.clone(), harness).outdated(&harness.name);
     let mut started = harness.clone();
     started.env.insert(cli.variable.clone(), path.clone());
     let view = CliView {
