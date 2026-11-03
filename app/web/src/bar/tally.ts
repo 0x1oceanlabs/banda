@@ -12,8 +12,7 @@ import {
   waits,
   works,
 } from "@banda/ui/components/banda-mark"
-import type { Listed } from "@banda/ui/pane"
-import type { Lists } from "./Watches"
+import type { Listed, Lists } from "@banda/ui/pane"
 
 /** A Thread counted, with the Space it is in. */
 export type Counted = { space: SpaceId; listed: Listed }

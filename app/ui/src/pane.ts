@@ -217,6 +217,19 @@ export type Listed = {
 /** What every module lists for each Space, for the sidebar. */
 export type Lists = Readonly<Record<SpaceId, readonly Listed[]>>
 
+/** The thing `agent` works in, as a Thread its Agent's, and its Space;
+ * none when no module lists one. */
+export function listedOf(
+  lists: Lists,
+  agent: string
+): { space: SpaceId; listed: Listed } | null {
+  for (const [space, listed] of Object.entries(lists)) {
+    const found = listed.find((each) => each.agent === agent)
+    if (found) return { space: space as SpaceId, listed: found }
+  }
+  return null
+}
+
 /** What a Watch says about one Space: what calls the Person, and its list. */
 export type Report = Attention & { listed: readonly Listed[] }
 

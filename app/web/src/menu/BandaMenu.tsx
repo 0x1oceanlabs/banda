@@ -34,7 +34,7 @@ import {
   SearchIcon,
 } from "lucide-react"
 import { KEYS_FILE, keyName, writeBind } from "../actions/actions"
-import type { Lists } from "../bar/Watches"
+import type { Lists } from "@banda/ui/pane"
 import { useLookSidebar } from "../look"
 import { runs, sources as allSources } from "../registry"
 import type { Shell } from "../shell/actions"

@@ -22,7 +22,7 @@ import {
 import { Kbd } from "@banda/ui/components/kbd"
 import { ScrollArea } from "@banda/ui/components/scroll-area"
 import { cn } from "@banda/ui/lib/utils"
-import type { PaneState } from "@banda/ui/pane"
+import type { Lists, PaneState } from "@banda/ui/pane"
 import {
   ChevronDownIcon,
   ChevronRightIcon,
@@ -38,7 +38,6 @@ import {
   SquarePenIcon,
 } from "lucide-react"
 import { keyName } from "../actions/actions"
-import type { Lists } from "../bar/Watches"
 import { LOCATE, MENU_KEY } from "../menu/menu"
 import {
   arrange,

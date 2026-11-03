@@ -10,10 +10,9 @@
 import type { Browsed, SpaceId, SpaceSummary } from "@banda/contract"
 import { waits } from "@banda/ui/components/banda-mark"
 import type { Key } from "@banda/ui/lib/keys"
-import type { Listed } from "@banda/ui/pane"
+import type { Listed, Lists } from "@banda/ui/pane"
 import type { Action, MenuRow } from "@banda/ui/module"
 import { keyName } from "../actions/actions"
-import type { Lists } from "../bar/Watches"
 import type { Shell } from "../shell/actions"
 import { settles } from "../sidebar/settled"
 

@@ -5,7 +5,8 @@
  * (decision 7, E): the hands never type there, and a snapshot hides what
  * they hold.
  */
-import type { Act, WaitFor } from "@banda/contract/browser"
+import { siteOf } from "@banda/browser-pane/desktop"
+import type { Act, Navigate, WaitFor } from "@banda/contract/browser"
 import { Refused } from "@banda/desktop-kit"
 import type { WebContents } from "electron"
 import type { Locator, Page } from "playwright-core"
@@ -103,6 +104,22 @@ const nameOf = (tree: string, ref: string) => {
   if (!name) return ref
   return `"${name.length > NAMED ? `${name.slice(0, NAMED - 1)}…` : name}"`
 }
+
+// What the tab's Pane says a Thread does (ADR 0029, decision 4).
+
+export const READING = "Reading the page"
+
+export const opening = (url?: string) =>
+  `Opening ${url ? siteOf(url) : "a new tab"}`
+
+const GOING: Partial<Record<Navigate["to"], string>> = {
+  back: "Going back",
+  forward: "Going forward",
+  reload: "Reloading",
+}
+
+export const goingTo = (to: Navigate["to"]) =>
+  GOING[to] ?? `Going to ${siteOf(to)}`
 
 /** What the tab's Pane says the Thread does with `what` (ADR 0029,
  * decision 4), naming elements as the tab's last snapshot, `tree`, does:
