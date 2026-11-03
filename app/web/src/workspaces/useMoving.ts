@@ -1,3 +1,4 @@
+import { cn } from "@banda/ui/lib/utils"
 /**
  * The mouse moves Panes, as niri's (ADR 0025, decision 6): a Pane's header
  * or its tab, dragged, carries it, and so does `Alt` and the left button
@@ -41,6 +42,8 @@ export type Carrying = {
   /** Scrolls, a frame's worth, what the pointer at `x`, `y` holds
    * against its edge: whether anything moved. */
   scroll: (x: number, y: number) => boolean
+  /** It is over the overview's dark backdrop: the hint is ringed. */
+  dark?: boolean
 }
 
 /** How long, in milliseconds, a Pane held over a workspace's number goes
@@ -60,6 +63,8 @@ const GHOST_LOOK =
   "pointer-events-none fixed top-0 left-0 z-50 max-w-60 truncate rounded-md border bg-popover px-2.5 py-1.5 text-sm text-popover-foreground shadow-md"
 const HINT_LOOK =
   "pointer-events-none fixed top-0 left-0 z-50 hidden rounded-full bg-focus"
+/** The hint on the overview's backdrop, where the focus colour may not show. */
+const DARK_HINT = "ring-1 ring-overview-foreground/70"
 
 /** A press that carries the Pane once it moves `THRESHOLD`. */
 type Press = {
@@ -143,7 +148,7 @@ export function useMoving(
           .querySelector(`[data-tile="${from.pane}"]`)
           ?.getAttribute("aria-label") ?? ""
       const hint = document.createElement("div")
-      hint.className = HINT_LOOK
+      hint.className = cn(HINT_LOOK, carrying.current.dark && DARK_HINT)
       document.body.append(ghost, hint)
       carry = { ...from, ghost, hint, frame: requestAnimationFrame(edge) }
       window.addEventListener("keydown", onKey, true)

@@ -16,6 +16,8 @@ import {
   heightAt,
   minWidthOf,
   room,
+  scrollOf,
+  stackOf,
   stripOf,
   widthAt,
 } from "./layout"
@@ -44,6 +46,10 @@ const ARROWS: Record<string, Direction> = {
   ArrowDown: "down",
 }
 
+/** A tabbed column's group bar, as `Tabs` draws it (`h-6 gap-1`): its
+ * height, and the gap between its segments, in rem. */
+const TABS = { height: 1.5, gap: 0.25 }
+
 /** The room beside a workspace, in pixels: its number. */
 const NUMBER = 32
 
@@ -51,6 +57,8 @@ const NUMBER = 32
  * columns have, the gaps, and the room the overview has for it, in
  * pixels. */
 type Screen = {
+  /** How far in from the Strip's left the screen shows: past the sidebar. */
+  from: number
   inner: number
   height: number
   gap: number
@@ -62,7 +70,7 @@ type Screen = {
  * Every workspace zoomed out, one under another, as niri's overview
  * (ADR 0025, decision 7): each a small copy of the screen, its columns
  * as wide as the Strip draws them, with `[columns] min`, scrolled as the
- * Strip is; each Pane by its icon, title and Space.
+ * Strip is.
  *
  * The arrows pick a Pane, and up or down past a column's end go to the
  * workspace there; `Enter` goes to it. The window's keys work as ever:
@@ -72,7 +80,9 @@ type Screen = {
  * workspaces, where it makes a new one. A click on a Pane goes to it; on
  * a workspace, there. `Esc` goes back.
  *
- * It draws the layout, not the Panes' pictures.
+ * What shows is the workspaces themselves, zoomed out under it over a dark
+ * backdrop, as niri's: each stands under its row, so a Pane's tile here
+ * lies over the Pane, and those take no clicks or keys while it is open.
  */
 export function Overview({
   workspaces,
@@ -114,10 +124,11 @@ export function Overview({
     const measure = () => {
       const strip = document.querySelector<HTMLElement>("[data-strip]")
       if (!strip) return
-      const { inner, gap } = room(strip)
+      const { inner, gap, pad } = room(strip)
       const outer = parseFloat(getComputedStyle(strip).paddingRight) || 0
       const own = room(element)
       setScreen({
+        from: pad - outer,
         inner,
         height: strip.clientHeight,
         gap,
@@ -133,17 +144,56 @@ export function Overview({
   const zoom = screen
     ? Math.min(ZOOM, screen.room / (screen.inner + 2 * screen.outer))
     : 0
-  // Each workspace scrolled as its Strip is, once it is drawn.
-  const scrolled = useRef(false)
+  // The workspaces themselves, zoomed out under their rows: each stands
+  // where its row is, and its Strip scrolls as the row does, or the row as
+  // the Strip, whichever moved, so what shows is the Panes as they are.
+  const from = (screen?.from ?? 0) * zoom
+  const ids = workspaces.list.map((workspace) => workspace.id).join()
   useLayoutEffect(() => {
-    if (!zoom || scrolled.current) return
-    scrolled.current = true
-    for (const row of root.current?.querySelectorAll<HTMLElement>(
-      "[data-row]"
-    ) ?? []) {
-      row.scrollLeft = (stripOf(row.dataset.row ?? "")?.scrollLeft ?? 0) * zoom
+    const element = root.current
+    if (!element || !zoom) return
+    const all = [...element.querySelectorAll<HTMLElement>("[data-row]")]
+      .map((row) => {
+        const id = row.dataset.row ?? ""
+        return { row, stack: stackOf(id), strip: stripOf(id) }
+      })
+      .flatMap(({ row, stack, strip }) =>
+        stack && strip ? [{ row, stack, strip, x: NaN, y: NaN, at: NaN }] : []
+      )
+    let frame = 0
+    const step = () => {
+      // Every read, then every write: the page lays out once.
+      const over = element.getBoundingClientRect()
+      const read = all.map(({ row, strip }) => ({
+        box: row.getBoundingClientRect(),
+        row: row.scrollLeft,
+        strip: strip.scrollLeft,
+      }))
+      all.forEach((one, i) => {
+        const { box, row, strip } = read[i]
+        const x = box.left - over.left - from
+        const y = box.top - over.top
+        if (x !== one.x || y !== one.y) {
+          one.stack.style.transform = `translate(${x}px, ${y}px) scale(${zoom})`
+          one.x = x
+          one.y = y
+        }
+        if (!Number.isNaN(one.at) && row !== one.at) {
+          // The Person scrolled the row: the Strip goes with it.
+          scrollOf(one.strip).stop()
+          one.strip.scrollLeft = row / zoom
+          one.at = row
+        } else if (Number.isNaN(one.at) || Math.abs(strip * zoom - row) >= 1) {
+          // The row as its Strip, as the browser rounds it.
+          one.row.scrollLeft = strip * zoom
+          one.at = one.row.scrollLeft
+        }
+      })
+      frame = requestAnimationFrame(step)
     }
-  }, [zoom])
+    step()
+    return () => cancelAnimationFrame(frame)
+  }, [zoom, from, ids])
   // The Pane picked, or its workspace, in view.
   const current = workspaces.list[workspaces.current]?.id
   useEffect(() => {
@@ -159,6 +209,7 @@ export function Overview({
   useLayoutEffect(() => {
     carrying.current = {
       on: true,
+      dark: true,
       frame,
       go: onGo,
       land: (hit, x, y, pane) => {
@@ -236,7 +287,7 @@ export function Overview({
       aria-label="Overview"
       data-window-keys=""
       tabIndex={-1}
-      className="absolute inset-0 z-10 overflow-y-auto bg-muted/80 px-6 pb-6 pl-[calc(--spacing(6)+var(--sidebar-inset))] backdrop-blur-sm outline-none"
+      className="absolute inset-0 z-10 overflow-y-auto px-6 pb-6 pl-[calc(--spacing(6)+var(--sidebar-inset))] outline-none"
       onClick={onClose}
       onKeyDown={onKeyDown}
     >
@@ -259,7 +310,7 @@ export function Overview({
               {/* Dropped here, a Pane makes a workspace of its own. */}
               <div data-between={i} className="ml-8 h-4" />
               <div className="flex gap-2">
-                <span className="w-6 shrink-0 pt-0.5 text-center text-xs text-muted-foreground tabular-nums">
+                <span className="w-6 shrink-0 pt-0.5 text-center text-xs text-overview-foreground/60 tabular-nums">
                   {i + 1}
                 </span>
                 <Row
@@ -323,7 +374,7 @@ function Row({
       role="group"
       aria-label={`Workspace ${number}`}
       aria-current={current || undefined}
-      className="flex shrink-0 cursor-pointer gap-(--gap-inner) overflow-x-auto overflow-y-hidden rounded-lg bg-background ring-1 ring-border [scrollbar-width:none] hover:ring-ring/60 aria-[current]:ring-2 aria-[current]:ring-ring"
+      className="flex shrink-0 cursor-pointer gap-(--gap-inner) overflow-x-auto overflow-y-hidden rounded-lg ring-1 ring-overview-foreground/10 [scrollbar-width:none] hover:ring-overview-foreground/30 aria-[current]:ring-2 aria-[current]:ring-overview-foreground/70"
       style={{
         width: (screen.inner + 2 * screen.outer) * zoom,
         height: screen.height * zoom,
@@ -334,9 +385,6 @@ function Row({
         onGo()
       }}
     >
-      {workspace.columns.length === 0 && (
-        <span className="m-auto text-xs text-muted-foreground">Empty</span>
-      )}
       {drawnColumns(workspace, look).map((column) => {
         return (
           <div
@@ -349,7 +397,7 @@ function Row({
             }}
           >
             {column.entries.map((entry, e) => {
-              const { title, Icon } = labelOf(entry.pane, said.get(entry.id))
+              const { title } = labelOf(entry.pane, said.get(entry.id))
               const space = spaceName(entry.space)
               const active = column.active === e
               return (
@@ -362,7 +410,8 @@ function Row({
                   aria-label={`${title} in ${space}`}
                   aria-current={entry.id === picked || undefined}
                   hidden={column.tabbed && !active}
-                  className="flex min-h-0 flex-col justify-center gap-1 overflow-hidden rounded-md border bg-muted/40 p-2 text-xs hover:border-ring/60 hover:bg-muted aria-[current]:border-focus aria-[current]:ring-1 aria-[current]:ring-focus data-[dim]:opacity-40"
+                  // Clear: the Pane itself shows under it, zoomed out.
+                  className="relative min-h-0 rounded-tile hover:bg-black/5 aria-[current]:ring-2 aria-[current]:ring-focus data-lifted:bg-overview/60 data-[dim]:bg-black/50"
                   style={{
                     flex: column.tabbed ? "1 1 0" : heightAt(column.heights[e]),
                   }}
@@ -371,27 +420,26 @@ function Row({
                     onPick(entry.id)
                   }}
                 >
+                  {/* Over the column's group bar, each tab of it: one
+                      carries its Pane. */}
                   {column.tabbed && active && (
-                    <div data-handle="" className="flex min-w-0 gap-1">
-                      {column.entries.map((tab, t) => (
+                    <div
+                      data-handle=""
+                      className="absolute inset-x-0 top-0 flex"
+                      style={{
+                        height: TABS.height * zoom,
+                        gap: TABS.gap * zoom,
+                      }}
+                    >
+                      {column.entries.map((tab) => (
                         <span
                           key={tab.id}
                           data-pane={tab.id}
-                          className="min-w-0 truncate rounded-sm px-1 text-muted-foreground data-[active]:bg-muted data-[active]:text-foreground"
-                          data-active={t === column.active || undefined}
-                        >
-                          {labelOf(tab.pane, said.get(tab.id)).title}
-                        </span>
+                          className="min-w-0 flex-1"
+                        />
                       ))}
                     </div>
                   )}
-                  <span className="flex min-w-0 items-center gap-1.5 font-medium">
-                    {Icon && <Icon className="size-3.5 shrink-0" />}
-                    <span className="truncate">{title}</span>
-                  </span>
-                  <span className="truncate text-muted-foreground">
-                    {space}
-                  </span>
                 </div>
               )
             })}

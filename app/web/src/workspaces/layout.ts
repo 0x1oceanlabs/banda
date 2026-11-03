@@ -59,6 +59,11 @@ export function stripOf(id: string): HTMLElement | null {
   return document.querySelector<HTMLElement>(`[data-strip="${id}"]`)
 }
 
+/** What draws workspace `id` in the window's stack, round its Strip. */
+export function stackOf(id: string): HTMLElement | null {
+  return document.querySelector<HTMLElement>(`[data-stack="${id}"]`)
+}
+
 /** The column `id` of `strip`, while it is drawn. */
 export function columnIn(strip: HTMLElement, id: string): HTMLElement | null {
   return strip.querySelector<HTMLElement>(`:scope > [data-column="${id}"]`)

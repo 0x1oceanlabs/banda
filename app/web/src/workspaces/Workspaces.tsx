@@ -1,3 +1,4 @@
+import { cn } from "@banda/ui/lib/utils"
 import { useEffect, useLayoutEffect, useRef } from "react"
 import type { Engine, SpaceId } from "@banda/contract"
 import {
@@ -28,6 +29,7 @@ const STEP = 24
 export function Workspaces({
   workspaces,
   covered,
+  overview,
   engine,
   modules,
   spaceName,
@@ -43,8 +45,11 @@ export function Workspaces({
   onStart,
 }: {
   workspaces: State
-  /** The overview covers them: no Pane has the focus. */
+  /** The overview or the drawer covers them: no Pane has the focus. */
   covered: boolean
+  /** The overview shows them zoomed out, each under its row there, which
+   * places it (`Overview`): the stack stands still. */
+  overview: boolean
   engine: Engine
   modules: readonly string[]
   spaceName: (space: SpaceId) => string
@@ -76,7 +81,8 @@ export function Workspaces({
     if (!stack) return
     place.current ??= stackPlace(stack, workspaces.current)
     const moving = place.current
-    // A workspace just drawn takes its place in the stack as it stands.
+    // A workspace just drawn takes its place in the stack as it stands,
+    // and so does every one when the overview, which placed them, closes.
     if (!moving.moving) moving.to(moving.value, { kind: "off" })
     if (moving.target !== workspaces.current) {
       moving.to(workspaces.current, moveOf("workspace"))
@@ -145,7 +151,11 @@ export function Workspaces({
     // Clipped, not hidden: the stack moves by transforms only, and nothing
     // scrolled into view in a Pane may slide the next workspace in. Its own
     // stacking context keeps the layer under the overview and the toasts.
-    <div ref={root} className="relative isolate h-full min-h-0 overflow-clip">
+    <div
+      ref={root}
+      data-overview={overview || undefined}
+      className="relative isolate h-full min-h-0 overflow-clip data-overview:bg-overview"
+    >
       {workspaces.list.map((workspace, i) => {
         const current = i === workspaces.current
         const live = current && !covered
@@ -156,7 +166,13 @@ export function Workspaces({
             aria-label={`Workspace ${i + 1}`}
             aria-hidden={!live}
             inert={!live}
-            className="absolute inset-0"
+            data-stack={workspace.id}
+            className={cn(
+              "absolute inset-0 origin-top-left",
+              // A screen of its own, the sidebar's room cut off.
+              overview &&
+                "bg-desk [clip-path:inset(0_0_0_var(--sidebar-inset,0px)_round_16px)]"
+            )}
           >
             <Strip
               workspace={workspace}
@@ -193,6 +209,8 @@ function stackPlace(stack: HTMLElement, at: number): Moving {
   return new Moving(
     (place) => {
       shown = place
+      // The overview places them while it is open.
+      if (stack.dataset.overview != null) return
       for (const [i, child] of [...stack.children].entries()) {
         ;(child as HTMLElement).style.transform =
           `translateY(${(i - place) * 100}%)`

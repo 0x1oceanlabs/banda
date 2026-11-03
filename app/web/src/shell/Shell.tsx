@@ -899,6 +899,7 @@ export function Shell({
             <Workspaces
               workspaces={workspaces}
               covered={overview || drawerShown}
+              overview={overview}
               engine={engine}
               modules={modules}
               spaceName={spaceName}

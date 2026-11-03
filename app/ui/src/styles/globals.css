@@ -28,6 +28,8 @@
   --color-desk: var(--desk);
   --color-panel: var(--panel);
   --color-tile: var(--tile);
+  --color-overview: var(--overview);
+  --color-overview-foreground: var(--overview-foreground);
   --color-chart-5: var(--chart-5);
   --color-chart-4: var(--chart-4);
   --color-chart-3: var(--chart-3);
@@ -178,6 +180,9 @@
   --desk: color-mix(in oklab, var(--muted) 40%, var(--background));
   --panel: var(--sidebar);
   --tile: var(--background);
+  /* Under the workspaces the overview zooms out, as niri's backdrop. */
+  --overview: oklch(0.24 0 0);
+  --overview-foreground: oklch(0.98 0 0);
   /* What floats over all of them: menus, dialogs, toasts, as bg-popover.
      Solid; on glass it is the panel's glass, in the popover's colour. */
   --floating: var(--popover);
