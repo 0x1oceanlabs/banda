@@ -1,3 +1,4 @@
+import { cn } from "@banda/ui/lib/utils"
 import {
   type CSSProperties,
   type KeyboardEvent,
@@ -9,8 +10,10 @@ import {
 } from "react"
 import type { SpaceId } from "@banda/contract"
 import { DEFAULT_OVERVIEW } from "@banda/contract/look"
-import type { Label } from "@banda/ui/pane"
+import type { Label, Listed } from "@banda/ui/pane"
+import type { Chime } from "@banda/ui/sound"
 import { labelOf, useSaid } from "../registry"
+import { ThreadMark } from "../sidebar/Row"
 import { useLookColumns, useLookOverview } from "../look"
 import {
   drawnColumns,
@@ -48,8 +51,13 @@ const ARROWS: Record<string, Direction> = {
  * height, and the gap between its segments, in rem. */
 const TABS = { height: 1.5, gap: 0.25 }
 
-/** The room beside a workspace, in pixels: its number. */
-const NUMBER = 32
+/** How tall an empty workspace is drawn, in pixels: a place to drop. */
+const EMPTY = 40
+
+/** The room beside a workspace, in pixels: its label, and a gap. */
+const NUMBER = 48
+/** Its label's width, in pixels: its number and its count. */
+const LABEL = 40
 
 /** The screen a workspace fills, as a Strip draws it: the room its
  * columns have, the gaps, and the room the overview has for it, in
@@ -85,6 +93,8 @@ type Screen = {
 export function Overview({
   workspaces,
   spaceName,
+  listed,
+  called,
   frame,
   onPick,
   onArrow,
@@ -93,6 +103,10 @@ export function Overview({
 }: {
   workspaces: Workspaces
   spaceName: (space: SpaceId) => string
+  /** The Thread a Pane shows, as its module lists it, if it shows one. */
+  listed: (entry: Entry) => Listed | undefined
+  /** How the Thread a Pane shows calls the Person, if it does. */
+  called: (entry: Entry) => Chime | undefined
   frame: Carrying["frame"]
   /** Puts the focus on a Pane, and goes to its workspace. */
   onPick: (entry: string) => void
@@ -293,12 +307,16 @@ export function Overview({
     >
       <p
         role="status"
-        className="sticky top-2 z-1 mx-auto mb-2 h-7 w-fit rounded-full border bg-popover px-3 py-1 text-sm text-popover-foreground shadow-sm empty:invisible"
+        className={cn(
+          "sticky top-2 z-1 mx-auto mb-2 h-7 w-fit rounded-full border bg-popover px-3 py-1 text-sm shadow-sm",
+          found ? "text-popover-foreground" : "text-muted-foreground"
+        )}
       >
-        {found &&
-          (found.length
-            ? `“${query}”: ${found.length} ${found.length === 1 ? "Pane" : "Panes"}`
-            : `No Pane is called “${query}”`)}
+        {found
+          ? found.length
+            ? `“${query}”: ${panes(found.length)}`
+            : `No Pane is called “${query}”`
+          : "Type to find a Pane"}
       </p>
       {screen && zoom > 0 && (
         <ol
@@ -308,11 +326,17 @@ export function Overview({
           {workspaces.list.map((workspace, i) => (
             <li key={workspace.id} className="flex flex-col">
               {/* Dropped here, a Pane makes a workspace of its own. */}
-              <div data-between={i} className="ml-8 h-4" />
-              <div className="flex gap-2">
-                <span className="w-6 shrink-0 pt-0.5 text-center text-xs text-overview-foreground/60 tabular-nums">
-                  {i + 1}
-                </span>
+              <div
+                data-between={i}
+                className="h-4"
+                style={{ marginLeft: NUMBER }}
+              />
+              <div className="flex" style={{ gap: NUMBER - LABEL }}>
+                <WorkspaceLabel
+                  workspace={workspace}
+                  number={i + 1}
+                  current={i === workspaces.current}
+                />
                 <Row
                   workspace={workspace}
                   number={i + 1}
@@ -322,6 +346,8 @@ export function Overview({
                   zoom={zoom}
                   screen={screen}
                   spaceName={spaceName}
+                  listed={listed}
+                  called={called}
                   dim={found ? (entry) => !shown.has(entry.id) : undefined}
                   onPick={(entry) => {
                     onPick(entry)
@@ -351,6 +377,8 @@ function Row({
   zoom,
   screen,
   spaceName,
+  listed,
+  called,
   dim,
   onPick,
   onGo,
@@ -363,21 +391,26 @@ function Row({
   zoom: number
   screen: Screen
   spaceName: (space: SpaceId) => string
+  listed: (entry: Entry) => Listed | undefined
+  called: (entry: Entry) => Chime | undefined
   dim: ((entry: Entry) => boolean) | undefined
   onPick: (entry: string) => void
   onGo: () => void
 }) {
   const said = useSaid()
+  const empty = workspace.columns.length === 0
   return (
     <div
       data-row={workspace.id}
+      data-empty={empty || undefined}
       role="group"
       aria-label={`Workspace ${number}`}
       aria-current={current || undefined}
-      className="flex shrink-0 cursor-pointer gap-(--gap-inner) overflow-x-auto overflow-y-hidden rounded-lg ring-1 ring-overview-foreground/10 [scrollbar-width:none] hover:ring-overview-foreground/30 aria-[current]:ring-2 aria-[current]:ring-overview-foreground/70"
+      // An empty one is a slim place to drop a Pane, not a whole screen.
+      className="flex shrink-0 cursor-pointer gap-(--gap-inner) overflow-x-auto overflow-y-hidden rounded-lg outline-1 outline-overview-foreground/10 [scrollbar-width:none] hover:outline-overview-foreground/30 aria-[current]:outline-2 aria-[current]:outline-overview-foreground/70 data-empty:items-center data-empty:justify-center data-empty:text-xs data-empty:text-overview-foreground/50 data-empty:outline-dashed"
       style={{
         width: (screen.inner + 2 * screen.outer) * zoom,
-        height: screen.height * zoom,
+        height: empty ? EMPTY : screen.height * zoom,
         padding: screen.outer * zoom,
       }}
       onClick={(event) => {
@@ -385,6 +418,7 @@ function Row({
         onGo()
       }}
     >
+      {empty && "Empty: drop a Pane here"}
       {drawnColumns(workspace, look).map((column) => {
         return (
           <div
@@ -400,6 +434,8 @@ function Row({
               const { title } = labelOf(entry.pane, said.get(entry.id))
               const space = spaceName(entry.space)
               const active = column.active === e
+              const thread = listed(entry)
+              const call = called(entry)
               return (
                 <div
                   key={entry.id}
@@ -407,11 +443,12 @@ function Row({
                   data-tile={entry.id}
                   data-handle=""
                   data-dim={dim?.(entry) || undefined}
+                  data-called={call ? "" : undefined}
                   aria-label={`${title} in ${space}`}
                   aria-current={entry.id === picked || undefined}
                   hidden={column.tabbed && !active}
                   // Clear: the Pane itself shows under it, zoomed out.
-                  className="relative min-h-0 rounded-tile hover:bg-black/5 aria-[current]:ring-2 aria-[current]:ring-focus data-lifted:bg-overview/60 data-[dim]:bg-black/50"
+                  className="relative min-h-0 rounded-tile hover:bg-black/5 aria-[current]:ring-2 aria-[current]:ring-focus data-called:ring-2 data-called:ring-attention data-lifted:bg-overview/60 data-[dim]:bg-black/50"
                   style={{
                     flex: column.tabbed ? "1 1 0" : heightAt(column.heights[e]),
                   }}
@@ -420,6 +457,16 @@ function Row({
                     onPick(entry.id)
                   }}
                 >
+                  {/* How its Thread is, at a size to read, and what it asks
+                      when it calls. */}
+                  {thread && (call || thread.mark !== "rest") && (
+                    <span className="pointer-events-none absolute top-1.5 left-1.5 z-1 flex max-w-[calc(100%-0.75rem)] items-center gap-1 rounded-full bg-popover/95 px-1.5 py-0.5 text-xs text-popover-foreground shadow-sm">
+                      <ThreadMark listed={thread} className="size-3.5" />
+                      {call && thread.calls && (
+                        <span className="min-w-0 truncate">{thread.calls}</span>
+                      )}
+                    </span>
+                  )}
                   {/* Over the column's group bar, each tab of it: one
                       carries its Pane. */}
                   {column.tabbed && active && (
@@ -448,6 +495,41 @@ function Row({
       })}
     </div>
   )
+}
+
+/** A workspace's number, and how many Panes it holds. */
+function WorkspaceLabel({
+  workspace,
+  number,
+  current,
+}: {
+  workspace: Workspaces["list"][number]
+  number: number
+  current: boolean
+}) {
+  const count = workspace.columns.reduce(
+    (n, column) => n + column.entries.length,
+    0
+  )
+  return (
+    <span
+      className={cn(
+        "shrink-0 pt-0.5 text-center tabular-nums",
+        current ? "text-overview-foreground" : "text-overview-foreground/60"
+      )}
+      style={{ width: LABEL }}
+    >
+      <span className="block text-sm font-medium">{number}</span>
+      {count > 0 && (
+        <span className="block text-[10px] opacity-70">{panes(count)}</span>
+      )}
+    </span>
+  )
+}
+
+/** "1 Pane", "3 Panes". */
+function panes(n: number): string {
+  return `${n} ${n === 1 ? "Pane" : "Panes"}`
 }
 
 /** The Panes whose title or Space has `query` in it, from the top down. */

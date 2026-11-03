@@ -171,7 +171,9 @@ export function Workspaces({
               "absolute inset-0 origin-top-left",
               // A screen of its own, the sidebar's room cut off.
               overview &&
-                "bg-desk [clip-path:inset(0_0_0_var(--sidebar-inset,0px)_round_16px)]"
+                "bg-desk [clip-path:inset(0_0_0_var(--sidebar-inset,0px)_round_16px)]",
+              // An empty one shows as its slim row in the overview alone.
+              overview && workspace.columns.length === 0 && "invisible"
             )}
           >
             <Strip
