@@ -10,6 +10,8 @@ import type { GitStatus } from "@banda/ui/components/file-tree"
 export type Scope =
   | { kind: "changes"; base: string | null }
   | { kind: "uncommitted" }
+  /** The work tree against the index: what is not staged yet. */
+  | { kind: "unstaged" }
   | { kind: "staged" }
   | { kind: "commit"; sha: string; subject: string }
   /** What one turn of a Thread changed: from its checkpoints, or from
@@ -29,6 +31,8 @@ export function labelOf(scope: Scope): string {
       return "Changes"
     case "uncommitted":
       return "Uncommitted"
+    case "unstaged":
+      return "Unstaged"
     case "staged":
       return "Staged"
     case "commit":

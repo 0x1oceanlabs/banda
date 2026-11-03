@@ -57,9 +57,9 @@ What an Agent in a Thread may call as a tool of `banda mcp`:
 
 ## Git (`git`)
 
-The Space's folder as git sees it: its branch, its changes, and the diff against a base, the last commit or the index.
+The Space's folder as git sees it: its branch, its changes, and the diff against a base, the last commit or the index; it stages, unstages and reverts them.
 
-Its methods, `banda call git.<method>`: `status`, `diff`, `refs`, `commits`, `contents`.
+Its methods, `banda call git.<method>`: `status`, `diff`, `refs`, `commits`, `contents`, `stage`, `unstage`, `revert`.
 
 ## Workspaces (`workspaces`)
 

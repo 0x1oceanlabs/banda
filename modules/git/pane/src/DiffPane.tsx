@@ -13,7 +13,7 @@ import type {
   ChangesAsk,
   TurnChanges,
 } from "@banda/contract/agents"
-import type { Diff, DiffAsk } from "@banda/contract/git"
+import type { ChangeAsk, Diff, DiffAsk } from "@banda/contract/git"
 import { Button } from "@banda/ui/components/button"
 import {
   CodeDiff,
@@ -22,7 +22,7 @@ import {
   filesOf,
   keyOf,
   pathOf,
-  type CodeViewHandle,
+  type CodeDiffHandle,
   type FileDiffMetadata,
 } from "@banda/ui/components/code-diff"
 import { DiffCounts } from "@banda/ui/components/diff"
@@ -49,7 +49,16 @@ import {
 } from "@banda/ui/components/empty"
 import { ChangedFiles, type TreeFile } from "@banda/ui/components/file-tree"
 import { PaneHeader } from "@banda/ui/components/pane-header"
+import {
+  Popover,
+  PopoverClose,
+  PopoverContent,
+  PopoverDescription,
+  PopoverTitle,
+  PopoverTrigger,
+} from "@banda/ui/components/popover"
 import { Spinner } from "@banda/ui/components/spinner"
+import { useAct } from "@banda/ui/hooks/use-act"
 import { useInFront } from "@banda/ui/hooks/use-in-front"
 import { READ_AGAIN, useLive, type Source } from "@banda/ui/hooks/use-live"
 import { useRead, type Read } from "@banda/ui/hooks/use-read"
@@ -63,12 +72,17 @@ import {
   Columns2Icon,
   FileDiffIcon,
   FolderTreeIcon,
+  MinusIcon,
+  PlusIcon,
   RefreshCwIcon,
   Rows2Icon,
   Settings2Icon,
+  Undo2Icon,
+  XIcon,
 } from "lucide-react"
 import { AT_ONCE, asked, VIEW, viewOf, type View } from "./diff"
 import { CHANGES, changeOf, isTest, labelOf, type Scope } from "./scope"
+import { actsOf, allOf, fileAsk, hunkAsk, type Act } from "./stage"
 
 /**
  * What changed in the Space's folder, as T3 Code's Diff shows it (ADR
@@ -244,7 +258,7 @@ function DiffPane({ engine, space, args, update, close }: PaneProps<DiffArgs>) {
     })
   const allFolded = shown.length > 0 && folded.size === shown.length
 
-  const viewer = useRef<CodeViewHandle<undefined, undefined>>(null)
+  const viewer = useRef<CodeDiffHandle>(null)
   const [selected, setSelected] = useState<string | null>(null)
   const reveal = (path: string) => {
     setSelected(path)
@@ -292,12 +306,25 @@ function DiffPane({ engine, space, args, update, close }: PaneProps<DiffArgs>) {
     return () => cancelAnimationFrame(frame)
   }, [wanted, files.byPath])
 
+  // Staging and reverting, one at a time; the Diff reads again after.
+  const acts = actsOf(scope)
+  const acting = useAct()
+  const act = (what: Act, ask: ChangeAsk) => {
+    if (acting.busy) return
+    void acting
+      .act(() => engine.call(`git.${what}`, ask, { space }))
+      .then(again)
+  }
+  // What went wrong shows until the next try, or until dismissed.
+  const [dismissed, setDismissed] = useState<string>()
+  const failed = acting.problem !== dismissed ? acting.problem : undefined
+
   const added = diff?.files.reduce((sum, file) => sum + file.added, 0) ?? 0
   const removed = diff?.files.reduce((sum, file) => sum + file.removed, 0) ?? 0
   const count = diff?.files.length ?? 0
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div className="@container/diff flex h-full min-h-0 flex-col">
       <PaneHeader title="Diff" icon={diffPane.icon} onClose={close}>
         <ScopeMenu
           engine={engine}
@@ -325,6 +352,21 @@ function DiffPane({ engine, space, args, update, close }: PaneProps<DiffArgs>) {
           </span>
         )}
         <div className="ml-auto flex shrink-0 items-center gap-0.5">
+          {visible.length > 0 && acts.length > 0 && (
+            <Acts
+              acts={acts}
+              words="wide"
+              disabled={acting.busy}
+              what="all"
+              asked={
+                visible.length === 1
+                  ? visible[0]!.path
+                  : `all ${visible.length} files`
+              }
+              about="Every unstaged change in them goes, and an untracked file is deleted."
+              onAct={(what) => act(what, allOf(visible))}
+            />
+          )}
           <Tool label="Read again" onClick={again}>
             <RefreshCwIcon />
           </Tool>
@@ -389,6 +431,22 @@ function DiffPane({ engine, space, args, update, close }: PaneProps<DiffArgs>) {
           </DropdownMenu>
         </div>
       </PaneHeader>
+      {failed !== undefined && (
+        <div
+          role="alert"
+          className="flex shrink-0 items-center gap-2 border-b px-3 py-1.5 text-xs text-destructive"
+        >
+          <span className="min-w-0 flex-1">{failed}</span>
+          <Button
+            variant="ghost"
+            size="icon-xs"
+            aria-label="Dismiss"
+            onClick={() => setDismissed(failed)}
+          >
+            <XIcon />
+          </Button>
+        </div>
+      )}
       {live.state === "refused" ? (
         <Blank title="No diff">{live.refusal.message}</Blank>
       ) : !diff ? (
@@ -426,6 +484,38 @@ function DiffPane({ engine, space, args, update, close }: PaneProps<DiffArgs>) {
             layout={view.layout}
             wrap={view.wrap}
             {...(files.whole ? { load: files.whole } : {})}
+            {...(acts.length > 0
+              ? {
+                  actions: (file: FileDiffMetadata) => (
+                    <Acts
+                      acts={acts}
+                      disabled={acting.busy}
+                      what={pathOf(file)}
+                      about={
+                        file.type === "new"
+                          ? "This untracked file is deleted."
+                          : "Its unstaged changes go."
+                      }
+                      onAct={(what) => act(what, fileAsk(file))}
+                    />
+                  ),
+                  hunkActions: (file: FileDiffMetadata, hunk: number) => {
+                    const ask = hunkAsk(file, hunk)
+                    return (
+                      ask && (
+                        <Acts
+                          acts={acts}
+                          disabled={acting.busy}
+                          words="shown"
+                          what="this hunk"
+                          about={`Its lines in ${pathOf(file)} go back to what is staged.`}
+                          onAct={(what) => act(what, ask)}
+                        />
+                      )
+                    )
+                  },
+                }
+              : {})}
             prefix={(key) => (
               <Button
                 variant="ghost"
@@ -455,6 +545,134 @@ function DiffPane({ engine, space, args, update, close }: PaneProps<DiffArgs>) {
   )
 }
 
+const ICONS: Record<Act, typeof PlusIcon> = {
+  stage: PlusIcon,
+  unstage: MinusIcon,
+  revert: Undo2Icon,
+}
+const NAMES: Record<Act, string> = {
+  stage: "Stage",
+  unstage: "Unstage",
+  revert: "Revert",
+}
+
+/** What can be done to a file or a hunk: icons in a file's header, or
+ * named on a hunk's plate. Revert asks first. */
+function Acts({
+  acts,
+  disabled,
+  words,
+  what,
+  asked = what,
+  about,
+  onAct,
+}: {
+  acts: Act[]
+  disabled: boolean
+  /** Each is named beside its icon, or only in a wide Diff; its label
+   * names it always. */
+  words?: "shown" | "wide"
+  /** What it is done to, as its label names it. */
+  what: string
+  /** What it is done to, as Revert's question names it. */
+  asked?: string
+  /** What reverting it does. */
+  about: string
+  onAct: (what: Act) => void
+}) {
+  return (
+    <span className="flex items-center gap-0.5">
+      {acts.map((each) => {
+        const label = `${NAMES[each]} ${what}`
+        const look = {
+          variant: "ghost" as const,
+          size: words ? ("xs" as const) : ("icon-xs" as const),
+          "aria-label": label,
+          title: label,
+          disabled,
+        }
+        const Icon = ICONS[each]
+        const name =
+          words === "wide" ? <Wide>{label}</Wide> : words && NAMES[each]
+        const face = (
+          <>
+            <Icon {...(words ? { "data-icon": "inline-start" } : {})} />
+            {name}
+          </>
+        )
+        return each === "revert" ? (
+          <Revert
+            key={each}
+            title={`Revert ${asked}?`}
+            about={`${about} This can't be undone.`}
+            look={look}
+            onRevert={() => onAct(each)}
+          >
+            {face}
+          </Revert>
+        ) : (
+          <Button key={each} {...look} onClick={() => onAct(each)}>
+            {face}
+          </Button>
+        )
+      })}
+    </span>
+  )
+}
+
+/** Words a button shows only in a wide Diff; its label keeps them. */
+function Wide({ children }: { children: ReactNode }) {
+  return <span className="hidden @2xl/diff:inline">{children}</span>
+}
+
+/** A Revert button that asks first, as it cannot be undone. */
+function Revert({
+  title,
+  about,
+  look,
+  onRevert,
+  children,
+}: {
+  title: string
+  about: string
+  /** The trigger's look, label and whether it is off. */
+  look: Parameters<typeof Button>[0]
+  onRevert: () => void
+  children: ReactNode
+}) {
+  return (
+    <Popover>
+      <PopoverTrigger
+        render={
+          <Button
+            variant="ghost"
+            size="xs"
+            className="text-destructive hover:text-destructive"
+            {...look}
+          />
+        }
+      >
+        {children}
+      </PopoverTrigger>
+      <PopoverContent>
+        <PopoverTitle className="break-all">{title}</PopoverTitle>
+        <PopoverDescription>{about}</PopoverDescription>
+        <div className="mt-2 flex justify-end gap-1.5">
+          <PopoverClose render={<Button variant="ghost" size="sm" />}>
+            Cancel
+          </PopoverClose>
+          <PopoverClose
+            render={<Button variant="destructive" size="sm" />}
+            onClick={onRevert}
+          >
+            Revert
+          </PopoverClose>
+        </div>
+      </PopoverContent>
+    </Popover>
+  )
+}
+
 /** The Pane's words where it has nothing to draw. */
 function Blank({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -470,6 +688,7 @@ function Blank({ title, children }: { title: string; children: ReactNode }) {
 const EMPTY: Record<Scope["kind"], string> = {
   changes: "This branch changes nothing its base does not have.",
   uncommitted: "Nothing changed since the last commit.",
+  unstaged: "Everything changed is staged.",
   staged: "Nothing is staged.",
   commit: "This commit changes no files.",
   turn: "This turn changed no files.",
@@ -657,8 +876,9 @@ function Listed<T>({
   return children(read.value)
 }
 
-/** The scope menu, as T3 Code's: Changes, Uncommitted, Staged, and the
- * branch's commits in a submenu, read as it opens. */
+/** The scope menu, as T3 Code's: Changes, Uncommitted, and the Codex
+ * app's Unstaged and Staged, and the branch's commits in a submenu, read
+ * as it opens. */
 function ScopeMenu({
   engine,
   space,
@@ -728,7 +948,11 @@ function ScopeMenu({
           value={value}
           onValueChange={(next) => {
             if (next === "changes") onChange(CHANGES)
-            else if (next === "uncommitted" || next === "staged")
+            else if (
+              next === "uncommitted" ||
+              next === "unstaged" ||
+              next === "staged"
+            )
               onChange({ kind: next })
           }}
         >
@@ -741,6 +965,11 @@ function ScopeMenu({
             value="uncommitted"
             name="Uncommitted"
             about="Everything since the last commit"
+          />
+          <Choice
+            value="unstaged"
+            name="Unstaged"
+            about="What is not staged yet"
           />
           <Choice
             value="staged"

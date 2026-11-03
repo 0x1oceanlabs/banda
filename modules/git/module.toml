@@ -2,7 +2,7 @@
 # its methods and its Panes, its code declares; this holds the rest.
 id = "git"
 name = "Git"
-about = "The Space's folder as git sees it: its branch, its changes, and the diff against a base, the last commit or the index."
+about = "The Space's folder as git sees it: its branch, its changes, and the diff against a base, the last commit or the index; it stages, unstages and reverts them."
 version = "0.1.0"
 from-banda = true
 settings = []

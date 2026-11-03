@@ -6,8 +6,9 @@
 //! (`status`), the diff of a scope (`diff`, `contents`), the branches to
 //! compare with (`refs`) and the branch's commits (`commits`). These only
 //! read, and never take the repository's locks, so they run beside the
-//! Person's own git and an Agent's. A folder git does not know is no
-//! repository: `status` says so, and the rest refuse.
+//! Person's own git and an Agent's. `stage`, `unstage` and `revert` write,
+//! one at a time. A folder git does not know is no repository: `status`
+//! says so, and the rest refuse.
 
 pub mod model;
 
@@ -17,19 +18,26 @@ mod parse;
 mod refs;
 mod repo;
 mod run;
+mod stage;
 mod status;
 
 use banda_kernel::{Call, Error, Module, ModuleSpace, Nothing, Refusal, Right};
-use model::{Commit, CommitsAsk, Contents, ContentsAsk, Diff, DiffAsk, Ref, RefsAsk, Status};
+use model::{
+    ChangeAsk, Commit, CommitsAsk, Contents, ContentsAsk, Diff, DiffAsk, Ref, RefsAsk, Status,
+};
 use repo::Repo;
 use serde_json::Value;
 
 #[derive(Default)]
-pub struct Git;
+pub struct Git {
+    /// Held while one of its commands writes, so two of them never race
+    /// for the index's lock.
+    writing: tokio::sync::Mutex<()>,
+}
 
 impl Git {
     pub fn new() -> Self {
-        Self
+        Self::default()
     }
 }
 
@@ -50,6 +58,14 @@ banda_kernel::methods! {
         /// A file's text before and after a scope, to show the lines its
         /// diff leaves out.
         call contents(ContentsAsk) -> Contents, Read;
+        /// Stages files, or the lines of one hunk, from the work tree.
+        call stage(ChangeAsk) -> (), Write;
+        /// Takes files, or the lines of one hunk, out of the index, back
+        /// to `HEAD`.
+        call unstage(ChangeAsk) -> (), Write;
+        /// Puts files, or the lines of one hunk, in the work tree back as
+        /// the index has them; an untracked file goes. It cannot be undone.
+        call revert(ChangeAsk) -> (), Write;
     }
 }
 
@@ -106,5 +122,23 @@ impl Git {
 
     async fn contents(&self, call: Call, ask: ContentsAsk) -> Result<Contents, Refusal> {
         diff::contents(&Repo::open(call.space().folder()).await?, ask).await
+    }
+
+    async fn stage(&self, call: Call, ask: ChangeAsk) -> Result<(), Refusal> {
+        self.change(call, stage::Act::Stage, ask).await
+    }
+
+    async fn unstage(&self, call: Call, ask: ChangeAsk) -> Result<(), Refusal> {
+        self.change(call, stage::Act::Unstage, ask).await
+    }
+
+    async fn revert(&self, call: Call, ask: ChangeAsk) -> Result<(), Refusal> {
+        self.change(call, stage::Act::Revert, ask).await
+    }
+
+    async fn change(&self, call: Call, act: stage::Act, ask: ChangeAsk) -> Result<(), Refusal> {
+        let repo = Repo::open(call.space().folder()).await?;
+        let _writing = self.writing.lock().await;
+        stage::change(&repo, act, ask).await
     }
 }

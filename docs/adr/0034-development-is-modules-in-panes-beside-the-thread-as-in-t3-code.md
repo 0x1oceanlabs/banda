@@ -63,7 +63,8 @@ the rest are our defaults, as T3 Code does, and stay Roma's to change.
    calls of 2026-11-02 after it are marked _decided_ below.
    - Its scopes, as T3 Code's: **Changes** (the branch and the work tree
      against a base, the default), **Uncommitted** (the work tree against
-     `HEAD`), **Staged** (the index, as the Codex app's), **Commit** (one of
+     `HEAD`), **Unstaged** (the work tree against the index) and **Staged**
+     (the index against `HEAD`), as the Codex app's, **Commit** (one of
      the branch's commits: "No commits on this branch.") and **Turn** (what
      a turn of a Thread changed, the latest first).
    - It is drawn with `@pierre/diffs` and its tree with `@pierre/trees`, as
@@ -76,7 +77,16 @@ the rest are our defaults, as T3 Code does, and stay Roma's to change.
      files at a time as one scrolls.
    - **Stage, unstage and revert**, as the Codex app's (_decided_): a hunk,
      a file or the whole diff, from its header and the file's; revert asks
-     first. T3 Code has none of them.
+     first. T3 Code has none of them. Roma's calls of 2026-11-03: Unstaged
+     stages and reverts, Staged unstages, the other scopes only show; a
+     hunk's buttons float at its top right while the pointer is on it;
+     revert always asks, in a popover, as it cannot be undone. A hunk is
+     the lines the Diff drew: the engine diffs the file again with no
+     context, takes every change in those lines (whitespace too, though
+     the Diff hid it) and applies only those (`git apply --unidiff-zero`,
+     `--cached` for the index), and changes nothing when the file's objects
+     are no longer the patch's. A file is `add --all`, `reset` or
+     `checkout`; an untracked file reverted is deleted.
    - The base, for Changes, is "Automatic" (where the branch left the
      default branch) or a ref picked from a list with search.
    - Its toolbar, as T3 Code's: refresh, expand or collapse all files,

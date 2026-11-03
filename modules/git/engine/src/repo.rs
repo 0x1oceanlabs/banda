@@ -55,6 +55,29 @@ impl Repo {
         git(&self.top, args, opts).await?.checked()
     }
 
+    /// Runs `args`, git's options and a command that reads pathspecs, on
+    /// `paths` given on stdin as they are, no glob nor magic: as many as
+    /// there are, and any name.
+    pub async fn run_on_paths(
+        &self,
+        args: &[&str],
+        paths: &[&str],
+        index: Option<&Path>,
+    ) -> Result<Ran, Failure> {
+        let args = [
+            &["--literal-pathspecs"][..],
+            args,
+            &["--pathspec-from-file=-", "--pathspec-file-nul"],
+        ]
+        .concat();
+        let opts = Opts {
+            index,
+            stdin: Some(paths.join("\0").into_bytes()),
+            ..Opts::default()
+        };
+        self.run(args, opts).await
+    }
+
     /// Whether a git that only answers yes or no, as `show-ref --quiet`,
     /// says yes.
     async fn yes<I, S>(&self, args: I) -> Result<bool, Failure>
