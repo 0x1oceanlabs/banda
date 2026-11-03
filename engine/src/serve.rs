@@ -3,7 +3,7 @@
 //! on this machine only.
 
 use crate::Failure;
-use crate::places::{FOLDER, HOST, Places, Running};
+use crate::places::{HOST, Places, Running, from_checkout};
 use banda_agents::{Agents, Pipe};
 use banda_browser::Browser;
 use banda_git::Git;
@@ -11,6 +11,7 @@ use banda_harnesses::{Harnesses, HarnessesModule};
 use banda_kernel::api::{self, OwnerSecret};
 use banda_kernel::{Kernel, PROTOCOL};
 use banda_problems::Problems;
+use banda_sharing::{Never, Sharing};
 use banda_terminal::Terminals;
 use banda_workspaces::Workspaces;
 use std::fs::{File, TryLockError};
@@ -68,6 +69,7 @@ pub async fn serve(places: Places, port: u16, with_parent: bool) -> Result<(), F
         .module(Git::new())
         .module(Workspaces::new())
         .module(problems(&places))
+        .module(sharing(&places))
         .open()
         .await
         .map_err(Failure::broken)?;
@@ -137,8 +139,23 @@ async fn stopped(with_parent: bool) {
 /// checkout an Agent fixes it in.
 fn problems(places: &Places) -> Problems {
     let problems = Problems::new(places.problems(), places.logs());
-    match FOLDER {
-        "banda-local" => problems.from_checkout(),
-        _ => problems,
+    if from_checkout() {
+        problems.from_checkout()
+    } else {
+        problems
+    }
+}
+
+/// The one part of Banda that sends anything (ADR 0039, decision 4): never
+/// from a checkout's build, as in CI and the tests, nor with
+/// `BANDA_SHARING=0`.
+fn sharing(places: &Places) -> Sharing {
+    let sharing = Sharing::new(&places.config, &places.state);
+    if from_checkout() {
+        sharing.never(Never::Checkout)
+    } else if std::env::var_os("BANDA_SHARING").is_some_and(|off| off == "0") {
+        sharing.never(Never::Run)
+    } else {
+        sharing
     }
 }

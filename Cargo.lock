@@ -297,6 +297,7 @@ dependencies = [
  "banda-look",
  "banda-problems",
  "banda-settings",
+ "banda-sharing",
  "banda-skill",
  "banda-terminal",
  "banda-workspaces",
@@ -429,6 +430,7 @@ dependencies = [
  "tempfile",
  "toml",
  "toml_edit",
+ "tracing",
  "ts-rs",
 ]
 
@@ -456,10 +458,28 @@ dependencies = [
  "banda-browser",
  "banda-harnesses",
  "banda-look",
+ "banda-sharing",
  "schemars 1.2.3",
  "serde_json",
  "tempfile",
  "toml_edit",
+]
+
+[[package]]
+name = "banda-sharing"
+version = "0.1.0"
+dependencies = [
+ "async-trait",
+ "banda-kernel",
+ "banda-look",
+ "rusqlite",
+ "schemars 1.2.3",
+ "serde",
+ "serde_json",
+ "tempfile",
+ "tokio",
+ "ts-rs",
+ "uuid",
 ]
 
 [[package]]

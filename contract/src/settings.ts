@@ -7,6 +7,7 @@ import agents from "./generated/schema/agents.schema.json"
 import browser from "./generated/schema/browser.schema.json"
 import harnesses from "./generated/schema/harnesses.schema.json"
 import look from "./generated/schema/look.schema.json"
+import sharing from "./generated/schema/sharing.schema.json"
 import sidebar from "./generated/schema/sidebar.schema.json"
 import type { JsonValue } from "./generated/serde_json/JsonValue"
 
@@ -38,6 +39,7 @@ export const SCHEMAS: { [file: string]: Schema } = {
   "browser.toml": browser as Schema,
   "agents.toml": agents as Schema,
   "harnesses.toml": harnesses as Schema,
+  "sharing.toml": sharing as Schema,
 }
 
 /** One value a key may take, and what it means. */

@@ -29,12 +29,14 @@ import {
   PaletteIcon,
   PanelLeftIcon,
   SettingsIcon,
+  Share2Icon,
 } from "lucide-react"
 import { Agents } from "./Agents"
 import { General } from "./General"
 import { Keys } from "./Keys"
 import { ProblemsSettings } from "./ProblemsSettings"
 import { PlaySound, PresetPicker } from "./rows"
+import { SharingSettings } from "./SharingSettings"
 import { SpacesSettings } from "./SpacesSettings"
 import { ThemePicker } from "./ThemePicker"
 
@@ -54,8 +56,9 @@ export type SectionFile = {
   tables?: string[]
   /** One heading over all its rows, instead of one for each table. */
   title?: string
-  /** Its tables are the section's Body's to draw, as its first file is,
-   * not rows: `agents.toml`'s `start`, on each Harness's card. */
+  /** Its tables are the section's Body's to draw, not rows: the Harness
+   * list of `harnesses.toml`, and `agents.toml`'s `start`, on each
+   * Harness's card. */
   drawn?: boolean
 }
 
@@ -64,16 +67,18 @@ export type Section = {
   id: string
   title: string
   icon: LucideIcon
-  /** The files its rows are in, its own first: the one it opens, and
-   * the one its Body draws. None for Files, which lists them. */
+  /** The files its rows are in, its own first: the one it opens. None
+   * for Files, which lists them. */
   files?: SectionFile[]
   /** What it holds, under its title. */
   about: string
   /** Its own rows, by key. */
   custom?: { [key: string]: CustomRow }
-  /** What it shows instead of its first file's rows, as a module draws
-   * it; `lit` is the part a link names. */
+  /** What it shows over its rows, as a module draws it; `lit` is the
+   * part a link names. */
   Body?: ComponentType<SectionProps>
+  /** Its Body is under its rows, not over them. */
+  below?: boolean
 }
 
 /** What a section's own Body is drawn with. */
@@ -137,7 +142,7 @@ export const SECTIONS: Section[] = [
     title: "Agents",
     icon: BotIcon,
     files: [
-      { name: "harnesses.toml" },
+      { name: "harnesses.toml", drawn: true },
       { name: "agents.toml", tables: ["start"], drawn: true },
       { name: "agents.toml", title: "Writing to an Agent" },
     ],
@@ -156,7 +161,7 @@ export const SECTIONS: Section[] = [
     id: "keys",
     title: "Keys",
     icon: KeyboardIcon,
-    files: [{ name: "keys.toml" }],
+    files: [{ name: "keys.toml", drawn: true }],
     about:
       "Your keys over Banda's own, as Hyprland's binds: each line a key and the action it runs, or none, so the key goes to the Pane.",
     Body: Keys,
@@ -168,6 +173,17 @@ export const SECTIONS: Section[] = [
     about:
       "What broke in Banda itself. It is kept on this computer only, and nothing is sent.",
     Body: ProblemsSettings,
+  },
+  {
+    id: "sharing",
+    title: "Sharing",
+    icon: Share2Icon,
+    files: [{ name: "sharing.toml", title: "What Banda sends" }],
+    about:
+      "What Banda sends to its makers, and only what you turn on. It goes to PostHog (US) with a random ID that is not you: no IP, no location, no profile.",
+    // The ID and what went, under the switches.
+    Body: SharingSettings,
+    below: true,
   },
   {
     id: "files",
@@ -184,8 +200,7 @@ const GROUPS = new Map(
   SECTIONS.map((section) => [
     section,
     (section.files ?? [])
-      // A Body draws its first file, and the tables it says it draws.
-      .filter((file, i) => !(section.Body && i === 0) && !file.drawn)
+      .filter((file) => !file.drawn)
       .flatMap((file) =>
         file.title
           ? [{ title: file.title, rows: rowsFor(file) }]

@@ -13,6 +13,7 @@
     "./git": "./src/git.ts",
     "./harnesses": "./src/harnesses.ts",
     "./problems": "./src/problems.ts",
+    "./sharing": "./src/sharing.ts",
     "./workspaces": "./src/workspaces.ts",
     "./look": "./src/look.ts",
     "./sidebar": "./src/sidebar.ts",

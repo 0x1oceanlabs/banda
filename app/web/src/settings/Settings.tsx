@@ -123,6 +123,9 @@ export function Settings({
     (wrong.get(name) ?? NONE).filter((p) => !shown.has(`${name}:${p.key}`))
   )
   const own = ownFile(section)
+  const body = section.Body && (
+    <section.Body engine={engine} lit={at.key} run={run} />
+  )
 
   // A Pane as wide as a column: in a narrow one, the sections are a row
   // of icons over the page; in a wide one, a list beside it.
@@ -234,10 +237,9 @@ export function Settings({
                     </div>
                     {own && <OpenFile file={own} words="Open file" />}
                   </div>
-                  {section.Body && (
-                    <section.Body engine={engine} lit={at.key} run={run} />
-                  )}
+                  {!section.below && body}
                   {groups}
+                  {section.below && body}
                   {above.length > 0 && (
                     <div
                       role="alert"

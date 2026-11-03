@@ -1,0 +1,225 @@
+//! The sharing module: the one part of Banda that sends anything anywhere
+//! (ADR 0039, decision 4). Nothing else in Banda calls PostHog, and this
+//! sends only what the Person turned on in `sharing.toml`: problem
+//! reports, usage counts, or neither, as it starts.
+//!
+//! It is the machine's, as the problems are. What it shares it reads from
+//! the file each time; the ID it sends with is random, made when sharing
+//! turns on and erased when all of it turns off, so turned on again, no
+//! history joins up (decision 7). Each event is kept here before it goes,
+//! for the Person to read in Settings → Sharing, and kept seven days
+//! (decision 8). A Banda run from a checkout, as in CI and the tests,
+//! never sends, nor one run with `BANDA_SHARING=0`.
+
+pub mod settings;
+
+use banda_kernel::{Call, Error, Module, Nothing, Refusal, Right, Scope};
+use rusqlite::Row;
+use serde::{Deserialize, Serialize};
+use serde_json::Value;
+use settings::Shares;
+use std::path::PathBuf;
+use std::sync::Mutex;
+use ts_rs::TS;
+use uuid::Uuid;
+
+/// The module's settings file in `~/.config/banda` (ADR 0016): what the
+/// Person shares, which the look resolves for the window.
+pub const SETTINGS: [banda_look::SettingsFile; 1] =
+    [banda_look::SettingsFile::of::<settings::SharingSettings>()];
+
+/// How long an event is kept, sent or waiting: seven days, in ms.
+const KEPT_MS: i64 = 7 * 24 * 60 * 60 * 1000;
+
+pub struct Sharing {
+    /// `sharing.toml`.
+    file: PathBuf,
+    /// The file the ID is kept in, while anything is shared.
+    id: PathBuf,
+    /// Why this Banda never sends, whatever is on.
+    never: Option<Never>,
+    /// Held while the ID is made, read or erased.
+    ids: Mutex<()>,
+}
+
+/// Why a Banda never sends, whatever its file turns on.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export, export_to = "sharing/")]
+pub enum Never {
+    /// It runs from a checkout of Banda's source, as in CI and the tests.
+    Checkout,
+    /// `BANDA_SHARING=0` turned it off for this run.
+    Run,
+}
+
+impl Sharing {
+    /// Shares as `sharing.toml` in `config` says, with the ID kept in
+    /// the `state` folder.
+    pub fn new(config: impl Into<PathBuf>, state: impl Into<PathBuf>) -> Self {
+        Self {
+            file: config
+                .into()
+                .join(<settings::SharingSettings as banda_look::OneFile>::NAME),
+            id: state.into().join("sharing-id"),
+            never: None,
+            ids: Mutex::new(()),
+        }
+    }
+
+    /// Never sends, for `why`.
+    pub fn never(self, why: Never) -> Self {
+        Self {
+            never: Some(why),
+            ..self
+        }
+    }
+
+    /// The ID while anything is shared, made as sharing turns on, or made
+    /// `anew`; none, and the one there was erased, while nothing is. It is
+    /// looked at as the window reads the state; the step that sends looks
+    /// before each event too.
+    fn id(&self, shares: Shares, anew: bool) -> Result<Option<String>, Error> {
+        let _held = self.ids.lock().unwrap_or_else(|held| held.into_inner());
+        if !shares.any() {
+            return match std::fs::remove_file(&self.id) {
+                Err(error) if error.kind() != std::io::ErrorKind::NotFound => Err(error.into()),
+                _ => Ok(None),
+            };
+        }
+        let kept = std::fs::read_to_string(&self.id).ok();
+        let kept = kept.map(|kept| kept.trim().to_owned());
+        if let Some(kept) = kept.filter(|kept| !anew && Uuid::parse_str(kept).is_ok()) {
+            return Ok(Some(kept));
+        }
+        let id = Uuid::new_v4().to_string();
+        if let Some(folder) = self.id.parent() {
+            std::fs::create_dir_all(folder)?;
+        }
+        std::fs::write(&self.id, &id)?;
+        Ok(Some(id))
+    }
+
+    async fn shared(&self, call: &Call, shares: Shares, anew: bool) -> Result<Shared, Refusal> {
+        let id = self.id(shares, anew)?;
+        let since = banda_kernel::now_ms() - KEPT_MS;
+        let sent = call.space().read(move |sql| kept(sql, since)).await?;
+        Ok(Shared {
+            shares,
+            id,
+            never: self.never,
+            sent,
+        })
+    }
+}
+
+banda_kernel::methods! {
+    Sharing(Call) as "SharingMethods" in "sharing/" {
+        /// What Banda shares, the ID it sends with, why it never sends if
+        /// it does not, and each event of the last seven days, as it went.
+        call state(Nothing) -> Shared, Read;
+        /// A new random ID, so that what goes from now on joins up with
+        /// nothing sent before. Only while something is shared.
+        command new_id(Nothing) -> Shared, Decide;
+    }
+}
+
+/// What Banda shares, and what it sent.
+#[derive(Serialize, Deserialize, TS)]
+#[ts(export_to = "sharing/")]
+pub struct Shared {
+    #[serde(flatten)]
+    #[ts(flatten)]
+    pub shares: Shares,
+    /// The random ID it sends with, while anything is shared.
+    pub id: Option<String>,
+    /// Why this Banda never sends, whatever is on.
+    pub never: Option<Never>,
+    /// The events of the last seven days, the newest first.
+    pub sent: Vec<Sent>,
+}
+
+/// One event, kept before it goes.
+#[derive(Serialize, Deserialize, TS)]
+#[ts(export, export_to = "sharing/")]
+pub struct Sent {
+    /// Its name: `$exception` or `day`.
+    pub event: String,
+    /// What it is about, in a few words.
+    pub about: String,
+    /// The exact JSON that goes.
+    pub json: String,
+    /// When it was made, and when it went: none while it waits. In ms
+    /// since the epoch.
+    #[ts(type = "number")]
+    pub made: i64,
+    #[ts(type = "number | null")]
+    pub sent: Option<i64>,
+}
+
+#[async_trait::async_trait]
+impl Module for Sharing {
+    fn name(&self) -> &'static str {
+        "sharing"
+    }
+
+    fn scope(&self) -> Scope {
+        Scope::Machine
+    }
+
+    fn migrations(&self) -> &'static [&'static str] {
+        // Each event, as it goes or waits to.
+        &["CREATE TABLE sharing_sent (
+               id INTEGER PRIMARY KEY,
+               event TEXT NOT NULL,
+               about TEXT NOT NULL,
+               json TEXT NOT NULL,
+               made INTEGER NOT NULL,
+               sent INTEGER
+           )"]
+    }
+
+    fn right(&self, method: &str) -> Option<Right> {
+        Self::method_right(method)
+    }
+
+    async fn call(&self, call: Call, method: &str, params: Value) -> Result<Value, Refusal> {
+        self.dispatch(call, method, params).await
+    }
+}
+
+impl Sharing {
+    async fn state(&self, call: Call, _: Nothing) -> Result<Shared, Refusal> {
+        self.shared(&call, settings::read(&self.file), false).await
+    }
+
+    async fn new_id(&self, call: Call, _: Nothing) -> Result<Shared, Refusal> {
+        let shares = settings::read(&self.file);
+        if !shares.any() {
+            return Err(Refusal::conflict(
+                "Nothing is shared: an ID is made as sharing turns on.",
+            ));
+        }
+        self.shared(&call, shares, true).await
+    }
+}
+
+/// The events made `since`, the newest first.
+fn kept(sql: &rusqlite::Connection, since: i64) -> Result<Vec<Sent>, Error> {
+    let mut query = sql.prepare(
+        "SELECT event, about, json, made, sent FROM sharing_sent
+         WHERE made >= ?1 ORDER BY made DESC, id DESC",
+    )?;
+    let rows = query.query_map([since], sent)?;
+    Ok(rows.collect::<Result<_, _>>()?)
+}
+
+fn sent(row: &Row<'_>) -> rusqlite::Result<Sent> {
+    Ok(Sent {
+        event: row.get(0)?,
+        about: row.get(1)?,
+        json: row.get(2)?,
+        made: row.get(3)?,
+        sent: row.get(4)?,
+    })
+}

@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["engine", "kernel", "look", "settings", "modules/agents/engine", "modules/browser/engine", "modules/git/engine", "modules/harnesses/engine", "modules/problems/engine", "modules/skill", "modules/terminal/engine", "modules/workspaces/engine", "tools/fake-agent"]
+members = ["engine", "kernel", "look", "settings", "modules/agents/engine", "modules/browser/engine", "modules/git/engine", "modules/harnesses/engine", "modules/problems/engine", "modules/sharing/engine", "modules/skill", "modules/terminal/engine", "modules/workspaces/engine", "tools/fake-agent"]
 
 [workspace.package]
 version = "0.1.0"
@@ -34,7 +34,7 @@ tracing = "0.1"
 tracing-subscriber = { version = "0.3.23", features = ["env-filter"] }
 tokio-tungstenite = "0.29"
 ts-rs = { version = "12.0.1", features = ["uuid-impl", "serde-json-impl"] }
-uuid = { version = "1.29.0", features = ["v7", "serde"] }
+uuid = { version = "1.29.0", features = ["v4", "v7", "serde"] }
 
 [workspace.lints.rust]
 unsafe_code = "forbid"
