@@ -143,7 +143,8 @@ pub struct Desk {
     #[schemars(range(min = 0, max = 1))]
     pub grain: Option<f64>,
     /// The desk's tint over the blurred desktop, from 0 (clear) to 1
-    /// (solid), with glass on.
+    /// (solid), with glass on: unset, 0.1 on macOS and Windows, whose
+    /// material is tinted already, and 0.4 on Linux.
     #[schemars(range(min = 0, max = 1))]
     pub opacity: Option<f64>,
     /// `"panel"`: the sidebar floats as a glass panel. `"desk"`: its rows
@@ -190,6 +191,16 @@ impl Material {
     } else {
         Material::Banda
     };
+
+    /// The desk's tint over the platform's glass by default: light over the
+    /// system's material, which is tinted already, denser over Banda's,
+    /// where the wallpaper shows in its own colours (ADR 0030).
+    pub const fn tint(self) -> f64 {
+        match self {
+            Material::System => 0.1,
+            Material::Banda => 0.4,
+        }
+    }
 }
 
 /// How the sidebar sits on the desk.
@@ -418,7 +429,7 @@ impl Settings {
                 blur: Some(40.0),
                 saturation: Some(1.4),
                 grain: Some(0.04),
-                opacity: Some(0.4),
+                opacity: Some(Material::PLATFORM.tint()),
                 sidebar: Some(SidebarStyle::Panel),
                 sidebar_shadow: Some(0.45),
             },

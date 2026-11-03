@@ -85,6 +85,16 @@ export const BRIDGE = bridge({
     /** Opens the file in the Person's editor, from the template if new. */
     edit: invoke(),
   },
+  /**
+   * The window's frame (ADR 0030). Where Banda draws its own title bar, as
+   * on macOS, the room in px the system's window buttons take at the start
+   * of the bar: 0 in full screen, where the system hides them. `null`
+   * where the system draws the frame.
+   */
+  frame: {
+    current: invoke<[], number | null>(),
+    listen: push<number | null>(),
+  },
   /** The browser's pages: their tabs, icons and downloads. */
   browser: BROWSER_BRIDGE,
   /**

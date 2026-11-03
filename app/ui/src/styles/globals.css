@@ -9,6 +9,8 @@
    narrow window, it is a panel all the same (ADR 0025). */
 @custom-variant sidebar-desk (&:is([data-sidebar="desk"] *):not([data-sidebar-over] *));
 @custom-variant glass (&:is([data-glass] *));
+/* Where Banda draws the window's title bar, as on macOS (ADR 0030). */
+@custom-variant frame (&:is([data-frame] *));
 @source "../../../web/src/**/*.{ts,tsx}";
 @source "../../../../modules/*/pane/src/**/*.{ts,tsx}";
 @source "../**/*.{ts,tsx}";
