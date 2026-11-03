@@ -45,8 +45,9 @@ const PERSON = new Set<InputEvent["type"]>([
 type Held = {
   readonly connection: Browser
   readonly page: Page
-  /** Whether the Person acted on it since the last snapshot. */
-  touched: boolean
+  /** Each Agent that called on it, by its ID, and whether the Person
+   * acted on it since its last snapshot, until the Agent hears so. */
+  readonly touched: Map<string, boolean>
   /** Whether Banda's hands act in it now: their input is not the
    * Person's. */
   acting: boolean
@@ -74,10 +75,12 @@ const refused = (error: unknown) =>
   error instanceof Refused ? error : new Refused({ message: messageOf(error) })
 
 /** Where the tab of `held` is once it loaded, or `LOADING` passed, and
- * what `changed`. The Person's input is said once. */
+ * what `changed`, as the Agent `by` hears it: the Person's input since its
+ * last snapshot is said once. */
 const shown = async (
   tab: number,
   held: Held,
+  by: string,
   changed: Partial<Shown> = {}
 ): Promise<Shown> => {
   const { page } = held
@@ -91,8 +94,8 @@ const shown = async (
         throw error
       }
     ))
-  const touched = held.touched
-  held.touched = false
+  const touched = held.touched.get(by) ?? false
+  held.touched.set(by, false)
   return {
     tab,
     url: page.url(),
@@ -148,16 +151,18 @@ const nowhere = (tab: number, to: string) =>
 export class Drive extends Context.Service<
   Drive,
   {
+    // Each is asked for by the Agent `by`, by its ID.
     /** The tab's tree with its refs, address, title and new errors. */
-    snapshot(tab: number): Effect.Effect<ReadTab, Refused>
-    /** A new tab, at `url` or blank, once it loaded. */
-    open(url?: string): Effect.Effect<Shown, Refused>
+    snapshot(tab: number, by: string): Effect.Effect<ReadTab, Refused>
+    /** A new tab, at `url` or blank, once it loaded: beside the Thread
+     * of `by` (`Tabs.create`). */
+    open(url: string | undefined, by: string): Effect.Effect<Shown, Refused>
     /** The tab, where `to` says, once it loaded. */
-    navigate(to: Navigate): Effect.Effect<Shown, Refused>
+    navigate(to: Navigate, by: string): Effect.Effect<Shown, Refused>
     /** The tab, once `act` is done in it, and what it changed. */
-    act(act: Act): Effect.Effect<Shown, Refused>
+    act(act: Act, by: string): Effect.Effect<Shown, Refused>
     /** The tab, once it shows what `wait` says. */
-    waitFor(wait: WaitFor): Effect.Effect<Shown, Refused>
+    waitFor(wait: WaitFor, by: string): Effect.Effect<Shown, Refused>
   }
 >()("banda/Drive") {
   static readonly layer = Layer.effect(Drive)(
@@ -189,7 +194,7 @@ export class Drive extends Context.Service<
                 const kept: Held = {
                   connection,
                   page,
-                  touched: false,
+                  touched: new Map(),
                   acting: false,
                 }
                 // A dialog waits for the Person's answer: Playwright
@@ -197,8 +202,9 @@ export class Drive extends Context.Service<
                 page.on("dialog", () => {})
                 const contents = contentsOf(tab)
                 const noted = (_: Event, input: InputEvent) => {
-                  if (!kept.acting && PERSON.has(input.type))
-                    kept.touched = true
+                  if (kept.acting || !PERSON.has(input.type)) return
+                  for (const agent of kept.touched.keys())
+                    kept.touched.set(agent, true)
                 }
                 contents?.on("input-event", noted)
                 return { kept, contents, noted }
@@ -223,16 +229,21 @@ export class Drive extends Context.Service<
               )
             : Effect.succeed(kept)
         )
-      /** Does `work` in the tab, connected to it. */
-      const inTab = <A>(tab: number, work: (held: Held) => Promise<A>) =>
+      /** Does `work` in the tab for the Agent `by`, connected to it. */
+      const inTab = <A>(
+        tab: number,
+        by: string,
+        work: (held: Held) => Promise<A>
+      ) =>
         Effect.scoped(
-          Effect.flatMap(heldOf(tab), (kept) =>
-            Effect.tryPromise({ try: () => work(kept), catch: refused })
-          )
+          Effect.flatMap(heldOf(tab), (kept) => {
+            if (!kept.touched.has(by)) kept.touched.set(by, false)
+            return Effect.tryPromise({ try: () => work(kept), catch: refused })
+          })
         )
       return {
-        snapshot: (tab) =>
-          inTab(tab, async (kept) => {
+        snapshot: (tab, by) =>
+          inTab(tab, by, async (kept) => {
             const { page } = kept
             const [title, tree, values, messages, thrown] = await Promise.all([
               page.title(),
@@ -241,7 +252,7 @@ export class Drive extends Context.Service<
               page.consoleMessages(),
               page.pageErrors(),
             ])
-            kept.touched = false
+            kept.touched.set(by, false)
             // Playwright keeps the last 200 of each: cleared, the next
             // snapshot says the new ones.
             await Promise.all([
@@ -261,17 +272,17 @@ export class Drive extends Context.Service<
               errors,
             }
           }),
-        open: (url) =>
-          Effect.flatMap(tabs.create(url), ({ id }) =>
-            inTab(id, (kept) => shown(id, kept))
+        open: (url, by) =>
+          Effect.flatMap(tabs.create(url, by), ({ id }) =>
+            inTab(id, by, (kept) => shown(id, kept, by))
           ),
-        navigate: (to) =>
-          inTab(to.tab, async (kept) => {
+        navigate: (to, by) =>
+          inTab(to.tab, by, async (kept) => {
             await go(kept.page, to)
-            return shown(to.tab, kept)
+            return shown(to.tab, kept, by)
           }),
-        act: (what) =>
-          inTab(what.tab, async (kept) => {
+        act: (what, by) =>
+          inTab(what.tab, by, async (kept) => {
             const { page } = kept
             const contents = contentsOf(what.tab)
             if (!contents) throw noTab(what.tab)
@@ -314,17 +325,17 @@ export class Drive extends Context.Service<
               .all()
               .filter((page) => !before.has(page.id))
               .map((page) => seenTab(page, cdp))
-            return shown(what.tab, kept, {
+            return shown(what.tab, kept, by, {
               moved,
               opened,
               download,
               dialog: opens,
             })
           }),
-        waitFor: (wait) =>
-          inTab(wait.tab, async (kept) => {
+        waitFor: (wait, by) =>
+          inTab(wait.tab, by, async (kept) => {
             await waitFor(kept.page, wait)
-            return shown(wait.tab, kept)
+            return shown(wait.tab, kept, by)
           }),
       }
     })

@@ -35,9 +35,9 @@ export type BrowserNews =
   /** A page's icon, as a data URL: Banda's page shows no other images. */
   | { kind: "icon"; from: number; icon: string }
   | { kind: "download"; download: Download }
-  /** An extension opens a tab: the Pane in front takes it, and answers
-   * `created` with its page's ID. */
-  | { kind: "create"; request: string; url: string }
+  /** An extension opens a tab, or an Agent, which names itself: a Pane
+   * takes it, and answers `created` with its page's ID. */
+  | { kind: "create"; request: string; url: string; agent?: string }
   /** An extension shows a tab, or closes one. */
   | { kind: "select"; from: number }
   | { kind: "close"; from: number }

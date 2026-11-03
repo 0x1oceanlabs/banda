@@ -205,8 +205,8 @@ pub struct Shown {
     pub dialog: Option<Dialog>,
     /// The file it began to download meanwhile.
     pub download: Option<String>,
-    /// Whether the Person acted on the page since the last snapshot
-    /// (ADR 0029, decision 5).
+    /// Whether the Person acted on the page since the asking Agent's last
+    /// snapshot (ADR 0029, decision 5).
     pub touched: bool,
 }
 

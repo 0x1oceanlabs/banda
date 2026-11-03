@@ -6,9 +6,9 @@ import { defineModule } from "@banda/ui/module"
 import { paneOf } from "@banda/ui/pane"
 import { fileAddress } from "./address"
 import { browserPane } from "./BrowserPane"
-import { openWith } from "./pages"
+import { frontHolder, holderOf, openWith } from "./pages"
 import { webSource } from "./sources"
-import { browserAt, NEW_BROWSER } from "./tabs"
+import { browserAt, type KeptArgs, NEW_BROWSER, readArgs } from "./tabs"
 
 export const browser = defineModule({
   id: "browser",
@@ -46,12 +46,26 @@ export const browser = defineModule({
     },
   ],
   sources: [webSource],
-  // A tab an Agent or an extension opens with no browser Pane to take it
-  // gets one, beside the Person's Pane, which keeps the focus.
+  // A tab an Agent opens goes beside its Thread (ADR 0029, decision 4):
+  // to the browser of the column right of the Thread's Pane, or a new
+  // one there; with the Thread not shown, to its Space's browser the
+  // Person was in last, or a new one. An extension's goes to the browser
+  // the Person was in last. The Person's Pane keeps the focus.
   start: (window) =>
-    openWith((url) => {
+    openWith((url, agent) => {
+      const at = agent ? window.beside(agent) : null
+      const holder = at?.shown
+        ? at.right
+            .filter((pane) => pane.kind === browserPane.kind)
+            .flatMap((pane) => readArgs(pane.args as KeptArgs, "").tabs)
+            .map((tab) => holderOf(tab.id))
+            .find((holder) => holder !== undefined)
+        : frontHolder(at?.space)
+      if (holder) return holder.open(url)
       const args = browserAt(url)
-      window.open(paneOf(browserPane, args), undefined, { focus: false })
+      const pane = paneOf(browserPane, args)
+      if (at) at.open(pane)
+      else window.open(pane, undefined, { focus: false })
       return args.tabs[0].id
     }),
 })

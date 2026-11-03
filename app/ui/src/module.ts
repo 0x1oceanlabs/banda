@@ -30,9 +30,26 @@ export type WindowApi = {
    * the same Pane. With `focus: false` the focus stays where it is, as
    * for a tab an Agent opened. */
   open: (pane: PaneState, space?: SpaceId, how?: { focus?: boolean }) => void
+  /**
+   * Where the thing `agent` works in is, as a Thread its Agent's (ADR
+   * 0029, decision 4): its Space; whether a workspace shows its Pane, and
+   * then the Panes in the column right of it; and `open`, which shows a
+   * Pane in a new column there, else in its Space, and leaves the focus
+   * where it is. None when no module lists a thing `agent` works in.
+   */
+  beside: (agent: string) => Beside | null
   /** Runs an action by its id, a module's or the window's, as its key
    * would: how one module asks another for what it does. */
   run: (action: string, args?: Args) => void
+}
+
+/** What `WindowApi.beside` finds. */
+export type Beside = {
+  space: SpaceId
+  shown: boolean
+  /** The Panes of the column right of its Pane, from the top. */
+  right: readonly PaneState[]
+  open: (pane: PaneState) => void
 }
 
 /**

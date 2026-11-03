@@ -28,7 +28,7 @@ dialog: Dialog | null,
  */
 download: string | null, 
 /**
- * Whether the Person acted on the page since the last snapshot
- * (ADR 0029, decision 5).
+ * Whether the Person acted on the page since the asking Agent's last
+ * snapshot (ADR 0029, decision 5).
  */
 touched: boolean, };

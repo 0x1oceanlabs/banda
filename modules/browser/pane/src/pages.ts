@@ -9,6 +9,7 @@
  * darkens as the tile does. A page whose slot is gone waits out of sight
  * until its Pane comes back, or leaves every workspace.
  */
+import type { SpaceId } from "@banda/contract"
 import { HELD_BY, paneLayer } from "@banda/ui/pane"
 import { type BrowserNews, PARTITION } from "./desktop"
 import { browserHost, hearNews } from "./host"
@@ -384,9 +385,11 @@ export function pageAt(id: string): Page | undefined {
   return pages.get(id)
 }
 
-/** What a browser Pane does with its tabs when a page or an extension
- * asks. */
+/** What a browser Pane does with its tabs when a page, an extension or
+ * an Agent asks. */
 export type Holder = {
+  /** The Space of its Pane. */
+  space: SpaceId
   /** Opens a tab at `url`, beside the tab `from` when a page of its tabs
    * opened it, and behind it when in the `background`; the tab's ID. */
   open: (url: string, from?: string, background?: boolean) => string
@@ -410,29 +413,38 @@ export function hold(ids: readonly string[], holder: Holder): () => void {
   }
 }
 
-/** The browser Pane the Person was in last, which takes an extension's
- * tabs. */
-let front: Holder | null = null
+/** The browser Pane that holds the tab of `id`, if one does. */
+export function holderOf(id: string): Holder | undefined {
+  return held.get(id)
+}
+
+/** The browser Panes the Person was in, the last one last. */
+let fronts: Holder[] = []
 
 /** `holder`'s Pane has the focus. */
 export function toFront(holder: Holder): void {
-  front = holder
+  const holding = new Set(held.values())
+  fronts = [...fronts.filter((h) => h !== holder && holding.has(h)), holder]
 }
 
-/** The Pane in front, else the last that holds a tab; none without one. */
-function frontHolder(): Holder | undefined {
-  const holders = [...held.values()]
-  return front && holders.includes(front) ? front : holders.at(-1)
+/** The browser Pane of `space`, or of any Space, the Person was in last,
+ * else the last that holds a tab; none without one. */
+export function frontHolder(space?: SpaceId): Holder | undefined {
+  const holding = new Set(held.values())
+  const fits = (h: Holder) => holding.has(h) && (!space || h.space === space)
+  return fronts.findLast(fits) ?? [...holding].findLast(fits)
 }
 
-/** Opens a browser Pane with a tab of `url`, and says the tab's ID. */
-type Opener = (url: string) => string
+/** Opens a tab at `url` for an extension, or for `agent`, where it goes;
+ * the tab's ID. */
+type Opener = (url: string, agent?: string) => string
 
-/** What opens a Pane for a tab when no Pane holds one: the module's
- * start sets it, as the window lets it open Panes. */
+/** Where a tab an extension or an Agent asks for opens: the module's
+ * start sets it, as the window lets it find and open Panes. */
 let opener: Opener | null = null
 
-/** Sets what opens a Pane for a tab no Pane takes; returns how to stop. */
+/** Sets where a tab an extension or an Agent asks for opens; returns how
+ * to stop. */
 export function openWith(open: Opener): () => void {
   opener = open
   return () => {
@@ -440,10 +452,10 @@ export function openWith(open: Opener): () => void {
   }
 }
 
-/** Makes the tab an extension or an Agent asked for, in the Pane in front
- * or in a new one, and tells the desktop its page. */
-function create(request: string, url: string): void {
-  const id = frontHolder()?.open(url) ?? opener?.(url)
+/** Makes the tab an extension or an Agent asked for, and tells the
+ * desktop its page. */
+function create(request: string, url: string, agent?: string): void {
+  const id = opener?.(url, agent)
   const page = id ? pageOf(id, url) : null
   if (!page) browserHost()?.created(request, null)
   else page.attached((contents) => browserHost()?.created(request, contents))
@@ -487,7 +499,7 @@ const byContents = new Map<number, Page>()
 // A page's icon, the pages it opens, which its Pane makes tabs of, and
 // the tabs extensions open, show and close.
 hearNews((news) => {
-  if (news.kind === "create") return create(news.request, news.url)
+  if (news.kind === "create") return create(news.request, news.url, news.agent)
   if (news.kind === "download") return
   hear(news)
 })

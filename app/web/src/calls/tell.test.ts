@@ -3,7 +3,7 @@ import type { Chime } from "@banda/ui/sound"
 import { expect, test } from "vitest"
 import { consume, open, start } from "../workspaces/model"
 import { DEFAULT_NOTIFY as NOTIFY } from "./settings"
-import { type Shows, showing, sightOf } from "./sight"
+import { besideOf, type Shows, showing, sightOf } from "./sight"
 import { type Call, callsOf, newsOf, tell } from "./tell"
 import { alive, LIFE, released, told } from "./toasts"
 import { first, type Heard } from "./useCalls"
@@ -128,6 +128,36 @@ test("the Person looks at the focused Pane of the window in front", () => {
   expect(
     sightOf(grouped, { space: "s", about: "t1" }, true, shows, tabbed)
   ).toBe("in-window")
+})
+
+test("what an Agent opens goes beside the Pane of the Thread it works in", () => {
+  const shows: Shows = (pane) => (pane.args.thread as string) ?? null
+  const listed = (id: string, agent: string): Listed => ({
+    id,
+    title: id,
+    mark: "rest",
+    changed: 0,
+    agent,
+    pane: call(id, "done").pane,
+  })
+  const browser = { kind: "browser", args: { url: "a" } }
+  const lists = { s: [listed("t1", "a1"), listed("t2", "a2")] }
+  // t1 | browser | t2, and t2 is shown nowhere else.
+  let w = open(start(), "s", call("t1", "done").pane)
+  w = open(w, "s", browser, { place: "right" })
+  w = open(w, "s", call("t2", "done").pane, { place: "right" })
+  const t1 = showing(w, { space: "s", about: "t1" }, shows)!
+  expect(besideOf(w, lists, "a1", shows)).toEqual({
+    space: "s",
+    from: t1.id,
+    right: [browser],
+  })
+  // The last column has none right of it.
+  expect(besideOf(w, lists, "a2", shows)?.right).toEqual([])
+  // A Thread no Pane shows has its Space alone; no Thread, nothing.
+  const gone = open(start(), "s", browser)
+  expect(besideOf(gone, lists, "a1", shows)).toEqual({ space: "s", right: [] })
+  expect(besideOf(w, lists, "a3", shows)).toBeNull()
 })
 
 test("a toast goes away by itself; a new call of its thing replaces it", () => {
