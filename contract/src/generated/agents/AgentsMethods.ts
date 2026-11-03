@@ -172,7 +172,10 @@ files: CallMethod<FileQuery, Array<string>>,
  * warning also have -surface), --chart-1 to --chart-6, --radius,
  * --font-sans, --font-mono. Banda's sheet sets the text colour
  * and font. Inline <style> and <script>; web addresses load as
- * they are. Sound plays once your Person clicks in the page.
+ * they are. A local image goes in by its absolute path, in src,
+ * srcset, poster or CSS url(): PNG, JPEG, GIF, WebP or SVG, up
+ * to 10 MiB each and 25 MiB a page. Sound plays once your Person
+ * clicks in the page.
  */
 show_visual: CommandMethod<ShowVisual, string>, 
 /**

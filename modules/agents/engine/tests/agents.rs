@@ -3267,6 +3267,57 @@ async fn an_agent_shows_its_person_a_visual_in_its_own_turn() {
         empty.message,
         "A Visual needs its page: a whole HTML document."
     );
+    // A local image goes into the page as it is kept; one not there, or
+    // not an image, refuses the page, as a page sized by its frame does.
+    let pictures = tempfile::tempdir().unwrap();
+    let dot = pictures.path().join("dot.png");
+    std::fs::write(&dot, b"\x89PNG\r\n\x1a\nrest").unwrap();
+    let secret = pictures.path().join("secret.png");
+    std::fs::write(&secret, b"TOKEN=hunter2").unwrap();
+    let with = |src: &std::path::Path| format!("<!doctype html><img src=\"{}\">", src.display());
+    let shown = world
+        .call(
+            agent,
+            "agents.show_visual",
+            json!({ "html": with(&dot), "title": "A dot", "height": 100 }),
+        )
+        .await
+        .unwrap();
+    assert!(shown.as_str().unwrap().starts_with("Shown"));
+    let view = world.thread(&thread).await;
+    let Body::Visual { visual, .. } = &view.items.last().unwrap().body else {
+        panic!("a Visual")
+    };
+    let kept = world
+        .call(world.person(), "agents.visual", json!({ "visual": visual }))
+        .await
+        .unwrap();
+    assert_eq!(
+        kept["html"],
+        "<!doctype html><img src=\"data:image/png;base64,iVBORw0KGgpyZXN0\">"
+    );
+    for (html, said) in [
+        (with(&secret), format!("{}: not an image", secret.display())),
+        (
+            with(&pictures.path().join("gone.png")),
+            "gone.png: not found".into(),
+        ),
+        (
+            "<!doctype html><div style=\"height:100vh\"></div>".into(),
+            "(vh)".into(),
+        ),
+    ] {
+        let refused = world
+            .call(
+                agent,
+                "agents.show_visual",
+                json!({ "html": html, "title": "t", "height": 300 }),
+            )
+            .await
+            .unwrap_err();
+        assert_eq!(refused.code, Code::Invalid);
+        assert!(refused.message.contains(&said), "{}", refused.message);
+    }
     let none = world
         .call(
             world.person(),
@@ -3293,7 +3344,7 @@ async fn an_agent_shows_its_person_a_visual_in_its_own_turn() {
         .unwrap()
         .flat_map(|space| std::fs::read_dir(space.unwrap().path().join("visuals")).unwrap())
         .count();
-    assert_eq!(kept, 1, "only the Visual that showed keeps its page");
+    assert_eq!(kept, 2, "only the Visuals that showed keep their pages");
 }
 
 #[tokio::test]

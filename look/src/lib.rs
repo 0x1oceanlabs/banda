@@ -48,6 +48,7 @@ use std::time::Duration;
 use theme::{Places, Theme};
 use toml::Spanned;
 use ts_rs::TS;
+pub use wallpaper::path_of;
 
 /// Light or dark.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, TS)]
