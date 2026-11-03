@@ -64,6 +64,16 @@ ts() {
   step "TypeScript: format, lints, types, tests"
   quiet pnpm install --frozen-lockfile
   pnpm exec prettier --check . --log-level warn
+  # A Mac's files ignore case, so an import of ./Toasts finds toasts.ts
+  # there: no two modules in a folder may differ by case alone.
+  local clash
+  clash=$(git ls-files '*.ts' '*.tsx' '*.mts' '*.js' '*.mjs' |
+    sed -E 's/\.(test\.)?[mc]?[jt]sx?$//' | sort -u | sort -f | uniq -di)
+  if [[ -n $clash ]]; then
+    echo "Modules that differ by case alone, which a Mac cannot tell apart:" >&2
+    echo "$clash" >&2
+    return 1
+  fi
   pnpm exec eslint .
   quiet pnpm -r typecheck
   quiet pnpm -r test

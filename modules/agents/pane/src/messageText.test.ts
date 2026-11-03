@@ -1,5 +1,5 @@
 import { expect, test } from "vitest"
-import { clamped, planTitle } from "./messages"
+import { clamped, planTitle } from "./messageText"
 
 test("a short message shows whole", () => {
   expect(clamped("hello")).toBe(false)
