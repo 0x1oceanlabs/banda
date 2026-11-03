@@ -179,6 +179,20 @@ pub enum Material {
     System,
 }
 
+impl Material {
+    /// The platform's own, where `[desk] material` says nothing. macOS and
+    /// Windows have materials of their own, which a window asks for; on
+    /// Linux the compositors mostly do not blur, so Banda draws the glass
+    /// itself (ADR 0030, decision 1).
+    pub fn platform() -> Material {
+        if cfg!(any(target_os = "macos", target_os = "windows")) {
+            Material::System
+        } else {
+            Material::Banda
+        }
+    }
+}
+
 /// How the sidebar sits on the desk.
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq, JsonSchema, TS)]
 #[serde(rename_all = "lowercase")]
@@ -385,7 +399,8 @@ impl Settings {
     }
 
     /// Banda's own defaults: the bottom layer, with every key set.
-    pub fn defaults() -> Settings {
+    /// `material` is the platform's, which the machine knows (ADR 0030).
+    pub fn defaults(material: Material) -> Settings {
         Settings {
             theme: None,
             mode: Some(ModeChoice::System),
@@ -399,7 +414,7 @@ impl Settings {
             },
             desk: Desk {
                 glass: Some(true),
-                material: Some(Material::Banda),
+                material: Some(material),
                 wallpaper: None,
                 wallpaper_dark: None,
                 blur: Some(40.0),
@@ -481,7 +496,7 @@ mod tests {
     fn a_layer_says_only_what_it_changes() {
         let mine: Settings = toml::from_str("radius = 6\n[gaps]\ninner = 8\n").unwrap();
         let theirs: Settings = toml::from_str("[gaps]\ninner = 2\nouter = 3\n").unwrap();
-        let look = mine.over(theirs.over(Settings::defaults()));
+        let look = mine.over(theirs.over(Settings::defaults(Material::Banda)));
         assert_eq!(look.radius, Some(6.0));
         assert_eq!(look.gaps.inner, Some(8.0));
         assert_eq!(look.gaps.outer, Some(3.0));

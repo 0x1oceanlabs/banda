@@ -3,7 +3,7 @@
 //! `look.toml` (ADR 0007, decisions 2 and 3).
 
 use crate::palette::Palette;
-use crate::settings::Settings;
+use crate::settings::{Material, Settings};
 use crate::{Mode, Problem};
 use serde::Serialize;
 use std::path::{Path, PathBuf};
@@ -37,10 +37,14 @@ pub struct Places {
     /// The `gsettings` program, which reads GNOME's and its family's
     /// settings with their schemas' defaults.
     pub gsettings: Option<PathBuf>,
+    /// Who makes the desk's glass where `[desk] material` says nothing:
+    /// the platform's own (ADR 0030, decision 1).
+    pub material: Material,
 }
 
 impl Places {
-    /// Only `config`: no Omarchy, no system fonts, as a test wants.
+    /// Only `config`: no Omarchy, no system fonts, and Banda the maker of
+    /// the glass, as a test wants.
     pub fn at(config: &Path) -> Places {
         Places {
             config: config.to_owned(),
@@ -52,6 +56,7 @@ impl Places {
             desktops: Vec::new(),
             config_home: None,
             gsettings: None,
+            material: Material::Banda,
         }
     }
 
@@ -110,6 +115,7 @@ impl Places {
                 }),
             },
             config_home: Some(config_home),
+            material: Material::platform(),
         }
     }
 

@@ -82,6 +82,9 @@ impl Machine {
                 desktops: Vec::new(),
                 config_home: None,
                 gsettings: None,
+                // The desk these tests describe is a Linux one, which
+                // Banda glasses itself (ADR 0030, decision 1).
+                material: Material::Banda,
             },
             _dir: dir,
         }
@@ -310,6 +313,36 @@ fn the_desk_is_banda_glass_made_of_the_wallpaper() {
             wrong.problems
         );
     }
+}
+
+/// macOS and Windows blur behind a window themselves, so there the desk is
+/// glass with no picture to make it of, and `[desk] material` still wins
+/// (ADR 0030, decision 1).
+#[test]
+fn the_platform_says_who_makes_the_glass_and_the_person_overrules_it() {
+    let mut machine = Machine::new(true);
+    let picture = machine.background("1-mountains.jpg");
+    machine.places.material = Material::System;
+
+    // The system's: glass, and Omarchy's background is left unread.
+    let system = machine.look();
+    assert!(system.desk.glass);
+    assert_eq!(system.desk.material, Material::System);
+    assert_eq!(picture_of(&system), None);
+
+    // Banda's, asked for on such a machine: its glass is the wallpaper.
+    machine.look_toml("[desk]\nmaterial = \"banda\"\n");
+    let own = machine.look();
+    assert_eq!(own.desk.material, Material::Banda);
+    assert_eq!(picture_of(&own), Some(picture.display().to_string()));
+
+    // The system's, asked for on a Linux one: glass without the picture.
+    machine.places.material = Material::Banda;
+    machine.look_toml("[desk]\nmaterial = \"system\"\n");
+    let theirs = machine.look();
+    assert!(theirs.desk.glass);
+    assert_eq!(theirs.desk.material, Material::System);
+    assert_eq!(picture_of(&theirs), None);
 }
 
 #[test]

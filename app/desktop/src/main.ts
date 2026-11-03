@@ -554,6 +554,14 @@ function pageWindow(
     ...size,
     show: false,
     transparent: glass,
+    // The system makes the glass: the window asks for the platform's own
+    // material, under the whole window (ADR 0030, decision 4).
+    ...(glass && process.platform === "darwin"
+      ? { vibrancy: "under-window" as const }
+      : {}),
+    ...(glass && process.platform === "win32"
+      ? { backgroundMaterial: "acrylic" as const }
+      : {}),
     backgroundColor: glass
       ? "#00000000"
       : ((current && firstFrame(current, nativeTheme.shouldUseDarkColors)) ??
