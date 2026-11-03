@@ -8,6 +8,7 @@
 //!   `quickly`, it stops waiting after 300 milliseconds, as Codex does when
 //!   a question times out.
 //! - `which settings`: replies with the session's mode, model and brevity.
+//! - `which effort`: replies with the session's effort and whether it is fast.
 //! - `plan done`: in the plan mode, switches to accepting edits, as Claude
 //!   Code does when a Person accepts its plan.
 //! - `propose`: asks to leave plan mode with its plan, as Claude Code does.
@@ -71,8 +72,8 @@
 //! both, as a Harness that lost them would.
 //!
 //! Each session has options as Claude Code's do: a `mode` with Claude
-//! Code's modes, a `model`, and `brief`, on or off, for a client that shows
-//! such options. With `FAKE_AGENT_NO_MODES` set it has no modes, as an ACP
+//! Code's modes, a `model`, an `effort`, and `fast` and `brief`, on or off,
+//! for a client that shows such options. With `FAKE_AGENT_NO_MODES` set it has no modes, as an ACP
 //! agent other than Claude Code and Codex. With `FAKE_AGENT_NO_IMAGES` set
 //! it takes no images, and with `FAKE_AGENT_NO_STEERING` no message into a
 //! running turn.
@@ -164,6 +165,8 @@ type Kept = (String, String);
 struct Setup {
     mode: String,
     model: String,
+    effort: String,
+    fast: bool,
     brief: bool,
     /// The folder it works in.
     folder: std::path::PathBuf,
@@ -174,6 +177,8 @@ impl Default for Setup {
         Setup {
             mode: "default".into(),
             model: "fast".into(),
+            effort: "medium".into(),
+            fast: false,
             brief: false,
             folder: Default::default(),
         }
@@ -188,6 +193,12 @@ const MODES: [(&str, &str); 5] = [
     ("bypassPermissions", "Bypass permissions"),
 ];
 const MODELS: [(&str, &str); 2] = [("fast", "Fast"), ("smart", "Smart")];
+const EFFORTS: [(&str, &str); 4] = [
+    ("low", "Low"),
+    ("medium", "Medium"),
+    ("high", "High"),
+    ("max", "Max"),
+];
 
 fn select(values: &[(&str, &str)]) -> Vec<SessionConfigSelectOption> {
     values
@@ -235,7 +246,15 @@ impl Fake {
             SessionConfigOption::select("model", "Model", setup.model, select(&MODELS))
                 .category(SessionConfigOptionCategory::Model),
         );
+        options.push(
+            SessionConfigOption::select("effort", "Effort", setup.effort, select(&EFFORTS))
+                .category(SessionConfigOptionCategory::ThoughtLevel),
+        );
         if self.toggles.load(Ordering::Relaxed) {
+            options.push(
+                SessionConfigOption::boolean("fast", "Fast mode", setup.fast)
+                    .category(SessionConfigOptionCategory::Other("model_config".into())),
+            );
             options.push(SessionConfigOption::boolean("brief", "Brief", setup.brief));
         }
         options
@@ -275,15 +294,18 @@ impl Fake {
         match &*option.id.0 {
             "mode" => setup.mode = choose(&MODES, &request.value)?,
             "model" => setup.model = choose(&MODELS, &request.value)?,
-            _ => {
-                setup.brief = request
-                    .value
-                    .as_bool()
-                    .ok_or_else(|| Error::invalid_params().data("on or off"))?
-            }
+            "effort" => setup.effort = choose(&EFFORTS, &request.value)?,
+            "fast" => setup.fast = on_off(&request.value)?,
+            _ => setup.brief = on_off(&request.value)?,
         }
         Ok(())
     }
+}
+
+fn on_off(value: &SessionConfigOptionValue) -> Result<bool, Error> {
+    value
+        .as_bool()
+        .ok_or_else(|| Error::invalid_params().data("on or off"))
 }
 
 fn say(cx: &ConnectionTo<Client>, session: &SessionId, update: SessionUpdate) -> Result<(), Error> {
@@ -453,6 +475,16 @@ async fn turn(
     if words.contains("git commit messages") {
         let reply = r#"{"subject": "Change the app", "body": "", "branch": "change-app"}"#;
         say(&cx, &session, SessionUpdate::AgentMessageChunk(text(reply)))?;
+        return Ok(StopReason::EndTurn);
+    }
+    if words.contains("which effort") {
+        let setup = fake.setup(&session);
+        let reply = format!("Effort {}, fast {}", setup.effort, setup.fast);
+        say(
+            &cx,
+            &session,
+            SessionUpdate::AgentMessageChunk(text(&reply)),
+        )?;
         return Ok(StopReason::EndTurn);
     }
     if words.contains("which settings") {

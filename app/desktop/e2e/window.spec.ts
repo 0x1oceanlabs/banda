@@ -554,40 +554,55 @@ test("a Person chooses the model and the mode under the message box", async () =
   window = await startWindow()
   const { page } = window
   const { thread, composer } = await firstThread(page)
-  // One trigger beside the send button names what the Thread runs with,
-  // and one menu sets it (ADR 0031).
-  const runsWith = (what: RegExp) => thread.getByRole("button", { name: what })
+  // A shield beside the send button names the mode, and the model picker
+  // the model and its effort, once the Harness offered them (ADR 0031).
+  const mode = (name: string) =>
+    thread.getByRole("button", { name: `Mode: ${name}` })
+  const model = (name: string) =>
+    thread.getByRole("button", { name: `Model: ${name}` })
 
-  await expect(runsWith(/^Runs with Full access$/)).toBeVisible()
+  await expect(mode("Full access")).toBeVisible()
+  await expect(thread.getByRole("button", { name: /^Model:/ })).toBeHidden()
   await composer.fill("which settings")
   await composer.press("Enter")
   await expect(
     thread.getByText("Mode bypassPermissions, model fast, brief false")
   ).toBeVisible()
 
-  // The Harness offered its options with its first turn.
-  await runsWith(/^Runs with Fast/).click()
-  await page.getByRole("menuitem", { name: "Model: Fast" }).click()
-  await page.getByRole("menuitemradio", { name: "Smart" }).click()
-  await expect(runsWith(/^Runs with Smart, Full access$/)).toBeVisible()
-  await runsWith(/^Runs with/).click()
-  await page.getByRole("menuitem", { name: "Mode: Full access" }).click()
-  await expect(
-    page.getByRole("menuitemradio", { name: /Supervised/ })
-  ).toBeVisible()
-  await page.screenshot({ path: "test-results/6-modes.png" })
+  // The Harness offered its options with its first turn. The picker
+  // opens on the effort; the model's name opens the models.
+  await model("Fast, Medium").click()
+  const effort = page.getByRole("slider", { name: "Effort" })
+  await expect(effort).toHaveAttribute("aria-valuetext", "Medium")
+  await page.getByRole("button", { name: "Models" }).click()
+  await page.getByRole("option", { name: "Smart" }).click()
+  await expect(model("Smart, Medium")).toBeVisible()
+  await model("Smart, Medium").click()
+  await effort.focus()
+  await effort.press("End")
+  await expect(model("Smart, Max")).toBeVisible()
+  const fast = page.getByRole("button", { name: "Fast mode" })
+  await fast.click()
+  await expect(fast).toHaveAttribute("aria-pressed", "true")
+  await page.screenshot({ path: "test-results/6-effort.png" })
+  await page.keyboard.press("Escape")
+
+  await mode("Full access").click()
   await page.getByRole("menuitemradio", { name: /Supervised/ }).click()
-  await runsWith(/^Runs with/).click()
+  await mode("Supervised").click()
   const brief = page.getByRole("menuitemcheckbox", { name: "Brief" })
   await brief.click()
   await expect(brief).toHaveAttribute("aria-checked", "true")
+  await page.screenshot({ path: "test-results/6-modes.png" })
   await page.keyboard.press("Escape")
-  await expect(runsWith(/^Runs with Smart, Brief, Supervised$/)).toBeVisible()
   await composer.fill("which settings now")
   await composer.press("Enter")
   await expect(
     thread.getByText("Mode default, model smart, brief true")
   ).toBeVisible()
+  await composer.fill("which effort")
+  await composer.press("Enter")
+  await expect(thread.getByText("Effort max, fast true")).toBeVisible()
 
   // Plan shows only while it is on.
   const planMode = thread.getByRole("button", { name: "Plan", exact: true })
@@ -603,7 +618,7 @@ test("a Person chooses the model and the mode under the message box", async () =
   await composer.fill("plan done")
   await composer.press("Enter")
   await expect(thread.getByText("The plan is ready.")).toBeVisible()
-  await expect(runsWith(/Auto-accept edits$/)).toBeVisible()
+  await expect(mode("Auto-accept edits")).toBeVisible()
   await expect(planMode).toBeHidden()
   await page.mouse.move(0, 0)
   await page.screenshot({ path: "test-results/7-after-the-plan.png" })
