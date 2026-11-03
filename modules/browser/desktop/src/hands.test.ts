@@ -1,5 +1,5 @@
 import { expect, test } from "vitest"
-import { domainOf, stepOf } from "./hands"
+import { ruleAt, siteAt, stepOf } from "./hands"
 
 const tree = `- generic [ref=e1]:
   - button "Greet" [ref=e2]
@@ -27,11 +27,16 @@ test("a step names its elements as the last snapshot does, and says no text type
 })
 
 test("a site is its page's domain, and this computer's own pages none", () => {
-  expect(domainOf("https://gist.github.com/x")).toBe("github.com")
-  expect(domainOf("https://a.b.co.uk")).toBe("b.co.uk")
-  expect(domainOf("https://roma.github.io/")).toBe("roma.github.io")
-  expect(domainOf("http://192.168.1.2:8080/")).toBe("192.168.1.2")
-  expect(domainOf("http://site.localhost:5173/")).toBe("site.localhost")
+  const site = (url: string) => siteAt(url)?.site
+  expect(siteAt("https://gist.github.com/x")).toEqual({
+    host: "gist.github.com",
+    site: "github.com",
+  })
+  expect(site("https://a.b.co.uk")).toBe("b.co.uk")
+  expect(site("https://roma.github.io/")).toBe("roma.github.io")
+  expect(site("http://192.168.1.2:8080/")).toBe("192.168.1.2")
+  expect(site("http://[fe80::1]/")).toBe("[fe80::1]")
+  expect(site("http://site.localhost:5173/")).toBe("site.localhost")
   for (const own of [
     "http://localhost:5173/",
     "http://127.0.0.1/",
@@ -40,5 +45,20 @@ test("a site is its page's domain, and this computer's own pages none", () => {
     "file:///home/roma/notes.html",
     "not an address",
   ])
-    expect(domainOf(own)).toBeNull()
+    expect(siteAt(own)).toBeNull()
+})
+
+test("a rule is the host's, or the nearest domain's above it up to the site", () => {
+  const rules = { "github.com": "allow", "gist.github.com": "deny" }
+  const at = (url: string) => ruleAt(rules, siteAt(url)!)
+  expect(at("https://gist.github.com/")).toBe("deny")
+  expect(at("https://a.gist.github.com/")).toBe("deny")
+  expect(at("https://api.github.com/")).toBe("allow")
+  expect(at("https://github.com/")).toBe("allow")
+  expect(at("https://gitlab.com/")).toBeUndefined()
+  // Above the site is another site's.
+  expect(
+    ruleAt({ "co.uk": "allow" }, siteAt("https://b.co.uk/")!)
+  ).toBeUndefined()
+  expect(at("http://[fe80::1]/")).toBeUndefined()
 })

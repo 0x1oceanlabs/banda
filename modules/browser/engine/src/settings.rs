@@ -135,7 +135,7 @@ impl OneFile for BrowserSettings {
     }
 
     /// The search is an http or https address with `%s` in it, and each
-    /// site a bare name, as github.com.
+    /// site a bare name, as a page's host is: github.com.
     fn check(&mut self, path: &Path, text: &str, problems: &mut Vec<Problem>) {
         if let Some(sites) = self
             .agents
@@ -143,15 +143,16 @@ impl OneFile for BrowserSettings {
             .and_then(|agents| agents.sites.as_mut())
         {
             sites.retain(|site, _| {
+                // As a page's host names it: lowercase, an IPv6 one in [].
                 let bare = !site.is_empty()
-                    && site.chars().all(|c| c.is_ascii_alphanumeric() || "-.".contains(c))
-                    && site == &site.to_ascii_lowercase();
+                    && site.chars().all(|c| {
+                        c.is_ascii_lowercase() || c.is_ascii_digit() || "-._:[]".contains(c)
+                    });
                 if !bare {
-                    problems.push(Problem::at(
+                    problems.push(Problem::of_key(
                         path,
-                        text,
-                        None,
-                        format!("agents.sites: {site:?} is a site's bare name in lowercase, as github.com"),
+                        "agents.sites",
+                        format!("{site:?} is a site's bare name in lowercase, as github.com"),
                     ));
                 }
                 bare

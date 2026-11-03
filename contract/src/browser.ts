@@ -32,6 +32,9 @@ export const DEFAULT_BROWSER: Browser = {
   sites: {},
 }
 
+/** The key of `site` in `browser.toml`: `agents.sites."github.com"`. */
+export const siteKey = (site: string) => `agents.sites.${JSON.stringify(site)}`
+
 /** The browser's `browser.toml`. */
 export const BROWSER_FILE: ModuleFile<Browser> = {
   name: "browser.toml",

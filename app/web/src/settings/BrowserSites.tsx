@@ -5,7 +5,7 @@
  * takes it out, so Agents ask again. `banda settings` writes the file, and
  * the look brings the sites back.
  */
-import { BROWSER_FILE, type SiteRule } from "@banda/contract/browser"
+import { BROWSER_FILE, type SiteRule, siteKey } from "@banda/contract/browser"
 import { tomlOf } from "@banda/contract/settings"
 import { useWrite } from "@banda/ui/hooks/use-write"
 import { useFile } from "@banda/ui/lib/look"
@@ -51,7 +51,7 @@ function Site({
 }) {
   const { refused, write } = useWrite({ against: rule })
   const settings = window.banda?.settings
-  const key = `agents.sites.${JSON.stringify(site)}`
+  const key = siteKey(site)
   return (
     <RowFrame
       dataKey={key}
