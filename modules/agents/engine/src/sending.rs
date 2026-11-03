@@ -130,14 +130,7 @@ impl Start {
 /// and the Harness chooses; a wrong key is logged and left out, as the
 /// look leaves it out, and the rest still reads.
 pub fn start(file: &Path, harness: &str) -> Start {
-    let Ok(text) = std::fs::read_to_string(file) else {
-        return Start::default();
-    };
-    let mut problems = Vec::new();
-    let read = banda_look::file::read::<AgentsSettings>(file, &text, &mut problems);
-    for problem in &problems {
-        tracing::warn!(%problem, "agents.toml");
-    }
+    let read = banda_look::file::read_at::<AgentsSettings>(file);
     let start = read.and_then(|settings| settings.start?.remove(harness));
     start.unwrap_or_default()
 }

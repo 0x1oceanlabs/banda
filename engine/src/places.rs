@@ -52,6 +52,12 @@ impl Running {
 /// (`app/desktop/src/channel.ts`).
 pub const FOLDER: &str = env!("BANDA_FOLDER");
 
+/// Whether this Banda was built from a checkout, not released: its own
+/// folder, `banda-local`.
+pub fn from_checkout() -> bool {
+    FOLDER == "banda-local"
+}
+
 const RUNNING: &str = "engine.json";
 const OWNER: &str = "owner.json";
 

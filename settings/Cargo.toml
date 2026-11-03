@@ -12,6 +12,7 @@ banda-agents = { path = "../modules/agents/engine" }
 banda-browser = { path = "../modules/browser/engine" }
 banda-harnesses = { path = "../modules/harnesses/engine" }
 banda-look = { path = "../look" }
+banda-sharing = { path = "../modules/sharing/engine" }
 schemars.workspace = true
 serde_json.workspace = true
 toml_edit.workspace = true

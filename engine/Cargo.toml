@@ -15,6 +15,7 @@ banda-git = { path = "../modules/git/engine" }
 banda-harnesses = { path = "../modules/harnesses/engine" }
 banda-terminal = { path = "../modules/terminal/engine" }
 banda-problems = { path = "../modules/problems/engine" }
+banda-sharing = { path = "../modules/sharing/engine" }
 banda-workspaces = { path = "../modules/workspaces/engine" }
 banda-kernel = { path = "../kernel" }
 banda-look = { path = "../look" }

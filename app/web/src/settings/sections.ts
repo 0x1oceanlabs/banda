@@ -29,6 +29,7 @@ import {
   PaletteIcon,
   PanelLeftIcon,
   SettingsIcon,
+  Share2Icon,
 } from "lucide-react"
 import { Agents } from "./Agents"
 import { BrowserSites } from "./BrowserSites"
@@ -36,6 +37,7 @@ import { General } from "./General"
 import { Keys } from "./Keys"
 import { ProblemsSettings } from "./ProblemsSettings"
 import { PlaySound, PresetPicker } from "./rows"
+import { SharingSettings } from "./SharingSettings"
 import { SpacesSettings } from "./SpacesSettings"
 import { ThemePicker } from "./ThemePicker"
 
@@ -175,6 +177,16 @@ export const SECTIONS: Section[] = [
     about:
       "What broke in Banda itself. It is kept on this computer only, and nothing is sent.",
     Body: ProblemsSettings,
+  },
+  {
+    id: "sharing",
+    title: "Sharing",
+    icon: Share2Icon,
+    files: [{ name: "sharing.toml", title: "What Banda sends" }],
+    about:
+      "What Banda sends to its makers, and only what you turn on. It goes to PostHog (US) with a random ID that is not you: no IP, no location, no profile.",
+    // The ID and what went, under the switches.
+    Foot: SharingSettings,
   },
   {
     id: "files",

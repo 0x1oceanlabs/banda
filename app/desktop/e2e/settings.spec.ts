@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync } from "node:fs"
+import { existsSync, readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { expect, type Locator, type Page, test } from "@playwright/test"
 import { firstThread, startWindow, textOf, type Window } from "./window"
@@ -306,4 +306,44 @@ test("Keys: the lines of keys.toml, a key changed and taken out, and the reset c
   await expect
     .poll(() => readFileSync(file, "utf8"))
     .toBe('[binds]\n# mine\n"Alt+Q" = "pane.close"\n')
+})
+
+test("Sharing: nothing on and no ID, then an ID as a switch turns on, and a Banda from a checkout never sends (ADR 0039)", async () => {
+  window = await startWindow()
+  const { page, dir } = window
+  const file = join(dir, "config/sharing.toml")
+  const { composer } = await firstThread(page)
+  await expect(composer).toBeVisible()
+  const settings = await openSettings(page)
+  await settings
+    .getByRole("navigation", { name: "Settings sections" })
+    .getByRole("button", { name: /Sharing/ })
+    .click()
+
+  const problems = settings.locator('[data-key="problems"]').getByRole("switch")
+  await expect(problems).toHaveAttribute("aria-checked", "false")
+  await expect(
+    settings.locator('[data-key="usage"]').getByRole("switch")
+  ).toHaveAttribute("aria-checked", "false")
+  await expect(settings).toContainText("None while nothing is shared")
+  await expect(settings).toContainText("Nothing sent.")
+  await expect(settings).toContainText("This Banda runs from a checkout")
+
+  await problems.click()
+  await expect
+    .poll(() => (existsSync(file) ? readFileSync(file, "utf8") : ""))
+    .toMatch(/^problems = true$/m)
+  const newId = settings.getByRole("button", { name: "New ID" })
+  await expect(newId).toBeVisible()
+  const id = readFileSync(join(dir, "state/sharing-id"), "utf8")
+  await newId.click()
+  await expect
+    .poll(() => readFileSync(join(dir, "state/sharing-id"), "utf8"))
+    .not.toBe(id)
+  await page.screenshot({ path: "test-results/settings-sharing.png" })
+
+  // All of it off: the ID goes.
+  await problems.click()
+  await expect(newId).toHaveCount(0)
+  await expect(settings).toContainText("None while nothing is shared")
 })
