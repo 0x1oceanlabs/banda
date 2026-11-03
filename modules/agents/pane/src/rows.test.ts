@@ -12,7 +12,7 @@ const thread = (more: Partial<ListedThread> = {}): ListedThread => ({
   ...more,
 })
 
-test("a quiet Thread lists its title, Harness and what it was asked", () => {
+test("a quiet Thread lists its title, Harness, Agent and what it was asked", () => {
   const listed = listedOf(
     thread({ message: "fix the form\nand more" }),
     {},
@@ -26,6 +26,7 @@ test("a quiet Thread lists its title, Harness and what it was asked", () => {
     said: "fix the form",
     by: "Claude",
     harness: "claude",
+    agent: "a1",
     pane: { kind: "agents.thread", args: { thread: "t1", harness: "claude" } },
   })
   expect(listed.calls).toBeUndefined()

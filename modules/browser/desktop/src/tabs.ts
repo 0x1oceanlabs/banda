@@ -32,8 +32,9 @@ export class Tabs extends Context.Service<
     readonly changes: Stream.Stream<Change>
     /** Banda's page attached `page`: a tab's, until it goes. */
     attached(page: WebContents): void
-    /** Asks the Pane in front for a tab at `url`; its page, once made. */
-    create(url?: string): Effect.Effect<WebContents, Refused>
+    /** Asks for a tab at `url`, in the Pane in front, or beside the
+     * Thread of `agent`; its page, once made. */
+    create(url?: string, agent?: string): Effect.Effect<WebContents, Refused>
     /** A Pane made the page, by its ID, for the tab asked for with
      * `request`; or none, when it could not. */
     created(request: string, page: number | null): Effect.Effect<void>
@@ -63,12 +64,12 @@ export class Tabs extends Context.Service<
             publish({ kind: "gone", page })
           })
         },
-        create: (url = "about:blank") =>
+        create: (url = "about:blank", agent) =>
           Effect.gen(function* () {
             const request = randomUUID()
             const made = yield* Deferred.make<number | null>()
             creating.set(request, made)
-            tell({ kind: "create", request, url })
+            tell({ kind: "create", request, url, ...(agent ? { agent } : {}) })
             const id = yield* Deferred.await(made).pipe(
               Effect.timeoutOption(CREATING),
               Effect.ensuring(Effect.sync(() => creating.delete(request)))

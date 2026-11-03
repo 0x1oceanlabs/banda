@@ -207,6 +207,9 @@ export type Listed = {
   by?: string
   /** That Harness's id, which picks its logo where Banda has one. */
   harness?: string
+  /** The Agent that works in it, as a Thread's own: what it opens, as a
+   * tab, opens beside its Pane (ADR 0029, decision 4). */
+  agent?: string
   /** What a click on it opens. */
   pane: PaneState
 }

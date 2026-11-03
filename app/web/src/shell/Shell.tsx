@@ -17,7 +17,7 @@ import { actionFor, rebind } from "../actions/actions"
 import { Bar } from "../bar/Bar"
 import { Counts } from "../bar/Counts"
 import { type Lists, Watches } from "../bar/Watches"
-import { isShowing, sightOf } from "../calls/sight"
+import { besideOf, isShowing, sightOf } from "../calls/sight"
 import { SUMMARY } from "../calls/system"
 import { Toasts } from "../calls/Toasts"
 import { first, type Heard, useCalls, type Where } from "../calls/useCalls"
@@ -568,6 +568,29 @@ export function Shell({
             again: true,
           })
         ),
+      beside: (agent) => {
+        const at = besideOf(
+          seenNow.current.state,
+          listsNow.current,
+          agent,
+          showsOf
+        )
+        if (!at) return null
+        const { space, from, right } = at
+        return {
+          space,
+          shown: from !== undefined,
+          right,
+          open: (pane) =>
+            change((w) =>
+              opening(w, space, pane, {
+                ...(from ? { from, place: "right" as const } : {}),
+                focus: false,
+                again: true,
+              })
+            ),
+        }
+      },
       toggleSidebar,
       toggleOverview,
       drawer: () => toggleDrawer(parts),
@@ -613,6 +636,7 @@ export function Shell({
         return partsNow.current.home
       },
       open: (...how) => partsNow.current.open(...how),
+      beside: (agent) => partsNow.current.beside(agent),
       run: (...how) => partsNow.current.run(...how),
     }
     const stops = known

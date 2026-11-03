@@ -610,8 +610,8 @@ test("an Agent opens a tab and takes it to an address, back, forward and again",
   await composer.fill("hello")
   await composer.press("Enter")
   await expect(thread.getByText("You said: hello")).toBeVisible()
-  // With no browser, the tab gets a Pane of its own, and the answer is a
-  // line: the tab, where it is, its title.
+  // With no browser, the tab gets a Pane of its own beside the Thread,
+  // and the answer is a line: the tab, where it is, its title.
   const opened = await agentSays(window, "browser_open", { url: `${address}/` })
   const id = Number(/^Opened tab (\d+)\./.exec(opened)?.[1])
   expect(opened).toBe(
@@ -651,6 +651,55 @@ test("an Agent opens a tab and takes it to an address, back, forward and again",
     /^Opened tab (\d+)\. Tab \1 shows about:blank, untitled\.$/
   )
   expect(await agentAnswers(window, "browser_tabs", {})).toHaveLength(2)
+})
+
+test("an Agent's tab opens beside its Thread, in the browser there, and the Person keeps the focus", async () => {
+  const address = await serve({
+    "/": "<title>First</title>",
+    "/second": "<title>Second</title>",
+    "/mine": "<title>Mine</title>",
+  })
+  window = await startWindow()
+  const { page } = window
+  const { thread, composer } = await firstThread(page)
+  await composer.fill("hello")
+  await composer.press("Enter")
+  await expect(thread.getByText("You said: hello")).toBeVisible()
+  // The Person's own browser, left of the Thread, focused last.
+  await page.keyboard.press("Alt+Shift+Enter")
+  const bar = addressBar(page)
+  await bar.fill(`${address}/mine`)
+  await bar.press("Enter")
+  const mine = page.getByRole("region", { name: "Mine" })
+  await expect(mine).toBeVisible()
+  // The window hears its keys from the bar, not the page.
+  await bar.focus()
+  await page.keyboard.press("Alt+Shift+Home")
+  await composer.click()
+  const threadBox = async () => (await thread.boundingBox())!
+  await expect
+    .poll(async () => (await mine.boundingBox())!.x < (await threadBox()).x)
+    .toBe(true)
+
+  // No browser right of the Thread: one opens there, out of focus, and
+  // the Person's keeps its one tab.
+  await agentSays(window, "browser_open", { url: `${address}/` })
+  const first = page.getByRole("region", { name: "First" })
+  await expect(first).toBeVisible()
+  await expect(composer).toBeFocused()
+  const right = await threadBox()
+  expect((await first.boundingBox())!.x).toBeGreaterThanOrEqual(
+    right.x + right.width
+  )
+  const tabs = page.getByRole("tablist", { name: "Tabs" })
+  await expect(tabs).toHaveCount(2)
+  await expect(tabs.first().getByRole("tab")).toHaveText(["Mine"])
+
+  // The next one is a tab of the browser beside the Thread.
+  await agentSays(window, "browser_open", { url: `${address}/second` })
+  await expect(tabs.last().getByRole("tab")).toHaveText(["First", "Second"])
+  await expect(tabs.first().getByRole("tab")).toHaveText(["Mine"])
+  await expect(composer).toBeFocused()
 })
 
 test("an Agent acts in a tab by refs, hears what changed, and leaves the Person's secrets alone", async () => {

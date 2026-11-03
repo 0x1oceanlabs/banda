@@ -108,6 +108,7 @@ function titleOf(tab: Tab): string {
 }
 
 function BrowserPane({
+  space,
   args: kept,
   focused,
   update,
@@ -137,6 +138,7 @@ function BrowserPane({
     const change = (next: BrowserArgs | null) =>
       next ? now.current.update(next) : now.current.close()
     return {
+      space,
       open: (url, from, background = false) => {
         const tab = { ...blankTab(newId()), url }
         if (background) pageOf(tab.id, url)

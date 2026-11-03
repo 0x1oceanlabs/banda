@@ -5,8 +5,9 @@
  */
 import type { SpaceId } from "@banda/contract"
 import type { Columns } from "@banda/contract/look"
-import type { PaneState } from "@banda/ui/pane"
+import type { Listed, PaneState } from "@banda/ui/pane"
 import {
+  type Column,
   current,
   entries,
   focused,
@@ -53,4 +54,33 @@ export function showing(
   shows: Shows
 ) {
   return entries(workspaces).find((entry) => isShowing(entry, thing, shows))
+}
+
+/**
+ * Where the thing `agent` works in is, for `WindowApi.beside`: its Space,
+ * from what the modules list; the entry that shows it, on any workspace;
+ * and the Panes of the column right of that entry's. None when nothing
+ * listed is that Agent's.
+ */
+export function besideOf(
+  workspaces: Workspaces,
+  lists: Readonly<Record<SpaceId, readonly Listed[]>>,
+  agent: string,
+  shows: Shows
+): { space: SpaceId; from?: string; right: PaneState[] } | null {
+  for (const [space, listed] of Object.entries(lists) as [
+    SpaceId,
+    readonly Listed[],
+  ][]) {
+    const thing = listed.find((each) => each.agent === agent)
+    if (!thing) continue
+    const entry = showing(workspaces, { space, about: thing.id }, shows)
+    if (!entry) return { space, right: [] }
+    const holds = (column: Column) => column.entries.includes(entry)
+    const { columns } = workspaces.list.find((w) => w.columns.some(holds))!
+    const next = columns[columns.findIndex(holds) + 1]
+    const right = next?.entries.map((each) => each.pane) ?? []
+    return { space, from: entry.id, right }
+  }
+  return null
 }

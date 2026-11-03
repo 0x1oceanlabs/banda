@@ -1,6 +1,7 @@
 /**
  * Each Thread as the sidebar lists it (ADR 0008): its title, its mark, what
- * calls its Person, what it was last asked, and the Pane a click opens.
+ * calls its Person, what it was last asked, its Agent, and the Pane a
+ * click opens.
  * The window arranges the rows; this says only what each one is. Pure, so
  * plain tests cover it.
  */
@@ -38,6 +39,7 @@ export function listedOf(
     ...(said ? { said } : {}),
     ...(harness ? { by: harness } : {}),
     ...(thread.harness ? { harness: thread.harness } : {}),
+    agent: thread.agent,
     pane: threadPaneOf(thread),
   }
 }

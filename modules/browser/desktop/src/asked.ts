@@ -9,11 +9,15 @@ import type {
   Open,
   WaitFor,
 } from "@banda/contract/browser"
+import type { WindowRequest } from "@banda/contract"
 import type { Asked } from "@banda/desktop-kit"
 import { Effect } from "effect"
 import { Cdp } from "./cdp"
 import { Drive, seenTab } from "./drive"
 import { Tabs } from "./tabs"
+
+/** Who asks, by their ID: the Agent of a Thread, as a rule. */
+const byOf = (request: WindowRequest) => request.by.id
 
 export const browserAsked: Asked<Tabs | Cdp | Drive> = {
   /** Every tab, the Person's too (decision 1); its ID is its page's, for
@@ -27,19 +31,28 @@ export const browserAsked: Asked<Tabs | Cdp | Drive> = {
   /** A tab's tree, for `browser_snapshot`; the engine checked its
    * params. */
   snapshot: (request) =>
-    Drive.use((drive) => drive.snapshot((request.params as OneTab).tab)),
-  /** A new tab, for `browser_open`: in the Pane in front, as one the CDP
-   * endpoint opens, until a Thread's tab opens beside it (step 4). */
+    Drive.use((drive) =>
+      drive.snapshot((request.params as OneTab).tab, byOf(request))
+    ),
+  /** A new tab, for `browser_open`, beside the asking Agent's Thread
+   * (decision 4). */
   open: (request) =>
-    Drive.use((drive) => drive.open((request.params as Open).url)),
+    Drive.use((drive) =>
+      drive.open((request.params as Open).url, byOf(request))
+    ),
   /** A tab to an address, back, forward or again, for
    * `browser_navigate`; the engine checked the address. */
   navigate: (request) =>
-    Drive.use((drive) => drive.navigate(request.params as Navigate)),
+    Drive.use((drive) =>
+      drive.navigate(request.params as Navigate, byOf(request))
+    ),
   /** One action on a ref, for `browser_act`; the engine checked that it
    * has what it needs. */
-  act: (request) => Drive.use((drive) => drive.act(request.params as Act)),
+  act: (request) =>
+    Drive.use((drive) => drive.act(request.params as Act, byOf(request))),
   /** A wait, for `browser_wait_for`; the engine held it to a minute. */
   wait_for: (request) =>
-    Drive.use((drive) => drive.waitFor(request.params as WaitFor)),
+    Drive.use((drive) =>
+      drive.waitFor(request.params as WaitFor, byOf(request))
+    ),
 }
