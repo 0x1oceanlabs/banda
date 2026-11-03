@@ -20,6 +20,17 @@ done
 
 step() { printf '\n== %s\n' "$*"; }
 
+# Runs a command quietly, and shows all it said only if it fails: pnpm's
+# --silent hides a failing test's output too, which left CI red with no
+# reason given.
+quiet() {
+  local said
+  if ! said=$("$@" 2>&1); then
+    printf '%s\n' "$said" >&2
+    return 1
+  fi
+}
+
 # The Rust tests write contract/src/generated; a change there means the
 # TypeScript types on disk were stale.
 types() { find contract/src/generated -type f -print0 | sort -z | xargs -0 sha256sum; }
@@ -51,18 +62,18 @@ rust() {
 
 ts() {
   step "TypeScript: format, lints, types, tests"
-  pnpm install --frozen-lockfile --silent
+  quiet pnpm install --frozen-lockfile
   pnpm exec prettier --check . --log-level warn
   pnpm exec eslint .
-  pnpm -r --silent typecheck
-  pnpm -r --silent test
+  quiet pnpm -r typecheck
+  quiet pnpm -r test
 }
 
 window() {
   step "The desktop window, end to end"
   # The window starts the engine and the fake agent from target/debug.
   cargo build --workspace --quiet
-  pnpm install --frozen-lockfile --silent
+  quiet pnpm install --frozen-lockfile
   pnpm --filter @banda/desktop --silent e2e
 }
 
