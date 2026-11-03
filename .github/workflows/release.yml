@@ -1,8 +1,16 @@
 # Banda's releases (ADR 0033, step 3): Dev on every push to main once `ci`
 # is green on it, Stable on a tag v0.X.Y. Each packs the AppImage with
 # scripts/package.sh on devbox and publishes it with scripts/release.mjs,
-# beside latest-linux.yml, which electron-updater reads (ADR 0041).
-# A PR that changes how Banda is packed packs it too, publishing nothing.
+# beside latest-linux.yml, which electron-updater reads (ADR 0041). The
+# Mac's zip is packed on GitHub's Apple silicon runner at the same time and
+# added to the release once it is out (decision 6), so Linux never waits
+# for the Mac.
+#
+# A PR that changes how Banda is packed packs both, publishing nothing, as
+# a run by hand does on any branch, to try a Mac build:
+#
+#   gh workflow run release --ref <branch>
+#   gh run download <run id>
 name: release
 
 on:
@@ -20,6 +28,7 @@ on:
       - app/desktop/electron-builder.config.mjs
       - app/desktop/src/channel.ts
       - app/desktop/package.json
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -27,8 +36,8 @@ permissions:
 # One Dev at a time; a newer push waits, and one waiting is replaced by the
 # next, so the last of a burst of merges is the one built. A run that builds
 # nothing (its `ci` failed or was cancelled) is in a group of its own, so it
-# replaces no Dev. A tag's or a PR's run is in its ref's group, so no PR
-# replaces a Dev waiting either.
+# replaces no Dev. A tag's, a PR's or a run by hand is in its ref's group,
+# so none of them replaces a Dev waiting either.
 concurrency:
   group: >-
     release-${{
@@ -42,40 +51,49 @@ env:
   CARGO_TERM_COLOR: always
 
 jobs:
-  pack:
-    name: pack
+  which:
+    name: which Banda
     # A Dev only from a push to main whose `ci` passed, and a PR packed only
     # from a branch of this repository: a fork's code never runs on devbox
-    # (ADR 0038, decision 4; ci/job-started.sh refuses it there anyway).
+    # (ADR 0038, decision 4; ci/job-started.sh refuses it there anyway) nor
+    # on this repository's Mac runners.
     if: >-
       github.event_name == 'push' ||
+      github.event_name == 'workflow_dispatch' ||
       github.event_name == 'pull_request' &&
       github.event.pull_request.head.repo.full_name == github.repository ||
       github.event_name == 'workflow_run' &&
       github.event.workflow_run.conclusion == 'success' &&
       github.event.workflow_run.event == 'push'
     runs-on: devbox
-    timeout-minutes: 45
-    # To publish. A PR's run gets it too, packing its own branch on devbox
-    # but publishing nothing.
-    permissions:
-      contents: write
+    timeout-minutes: 5
+    outputs:
+      channel: ${{ steps.which.outputs.channel }}
+      version: ${{ steps.which.outputs.version }}
+      commit: ${{ steps.which.outputs.commit }}
+      publish: ${{ steps.which.outputs.publish }}
     steps:
       - uses: actions/checkout@v5
         with:
           ref: ${{ github.event.workflow_run.head_sha || github.sha }}
           # The tags, to find the last Stable.
           fetch-depth: 0
-      - name: target/ from the runner's volume, and rust-toolchain.toml's toolchain
-        run: ci/target.sh && rustup toolchain install
-      - name: which Banda, and its version
-        id: which
+      - id: which
         env:
           EVENT: ${{ github.event_name }}
         run: |
+          echo "commit=$(git rev-parse HEAD)" >> "$GITHUB_OUTPUT"
           if [[ $EVENT == push ]]; then
             echo "channel=stable" >> "$GITHUB_OUTPUT"
             echo "version=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+            echo "publish=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "channel=dev" >> "$GITHUB_OUTPUT"
+          # A PR's or a run by hand is the workspace's version, marked
+          # local (scripts/package.sh), and publishes nothing.
+          if [[ $EVENT != workflow_run ]]; then
+            echo "publish=false" >> "$GITHUB_OUTPUT"
             exit 0
           fi
           # Dev is the next minor after the last Stable, or the workspace's
@@ -87,29 +105,108 @@ jobs:
           else
             next=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
           fi
-          echo "channel=dev" >> "$GITHUB_OUTPUT"
           echo "version=$next-dev.$GITHUB_RUN_NUMBER" >> "$GITHUB_OUTPUT"
+          echo "publish=true" >> "$GITHUB_OUTPUT"
+
+  linux:
+    name: pack
+    needs: which
+    runs-on: devbox
+    timeout-minutes: 45
+    # To publish. A PR's run gets it too, packing its own branch on devbox
+    # but publishing nothing.
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.which.outputs.commit }}
+          # release.mjs finds the last Stable's tag for a Stable's notes.
+          fetch-depth: 0
+      - name: target/ from the runner's volume, and rust-toolchain.toml's toolchain
+        run: ci/target.sh && rustup toolchain install
       - name: pack
         env:
-          BANDA_VERSION: ${{ steps.which.outputs.version }}
-        run: scripts/package.sh ${{ steps.which.outputs.channel }}
+          BANDA_VERSION: ${{ needs.which.outputs.version }}
+        run: scripts/package.sh ${{ needs.which.outputs.channel }}
       - name: publish
-        if: github.event_name != 'pull_request'
+        if: needs.which.outputs.publish == 'true'
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: >-
           node scripts/release.mjs
-          ${{ steps.which.outputs.channel }}
-          ${{ steps.which.outputs.version }}
-          "$(git rev-parse HEAD)"
+          ${{ needs.which.outputs.channel }}
+          ${{ needs.which.outputs.version }}
+          ${{ needs.which.outputs.commit }}
           app/desktop/dist/*.AppImage
           app/desktop/dist/latest-linux.yml
-      - name: keep what a PR packed
-        if: github.event_name == 'pull_request'
+      - name: keep what was packed
+        if: needs.which.outputs.publish != 'true'
         uses: actions/upload-artifact@v4
         with:
-          name: banda-${{ steps.which.outputs.version }}
+          name: banda-linux-${{ github.run_number }}
           path: |
             app/desktop/dist/*.AppImage
             app/desktop/dist/latest-linux.yml
           retention-days: 3
+
+  mac:
+    name: pack (macOS)
+    needs: which
+    runs-on: macos-15
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.which.outputs.commit }}
+      # The Node ci/Dockerfile pins, and package.json's pnpm.
+      - id: node
+        run: echo "version=$(sed -n 's/^ARG NODE_VERSION=//p' ci/Dockerfile)" >> "$GITHUB_OUTPUT"
+      - uses: actions/setup-node@v5
+        with:
+          node-version: ${{ steps.node.outputs.version }}
+          # It would cache pnpm's store before pnpm is installed.
+          package-manager-cache: false
+      - run: npm install --global --silent "$(jq -r .packageManager package.json)"
+      - run: rustup toolchain install
+      # One cache for every run, a release's, a PR's or by hand.
+      - uses: Swatinem/rust-cache@v2
+        with:
+          shared-key: mac
+      # Signed ad hoc in a PR too, which electron-builder otherwise leaves
+      # unsigned: Apple silicon runs nothing unsigned.
+      - name: pack
+        run: scripts/package.sh ${{ needs.which.outputs.channel }}
+        env:
+          BANDA_VERSION: ${{ needs.which.outputs.version }}
+          CSC_FOR_PULL_REQUEST: true
+      - name: the app is signed
+        run: codesign --verify --deep --strict --verbose=2 app/desktop/dist/mac-arm64/*.app
+      - uses: actions/upload-artifact@v4
+        with:
+          name: banda-mac-${{ github.run_number }}
+          path: |
+            app/desktop/dist/*.zip
+            app/desktop/dist/latest-mac.yml
+          retention-days: 3
+
+  mac-publish:
+    name: publish (macOS)
+    needs: [which, linux, mac]
+    if: needs.which.outputs.publish == 'true'
+    runs-on: devbox
+    timeout-minutes: 10
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ needs.which.outputs.commit }}
+      - uses: actions/download-artifact@v4
+        with:
+          name: banda-mac-${{ github.run_number }}
+          path: mac
+      - name: add the Mac's zip to the release
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: node scripts/release.mjs add ${{ needs.which.outputs.version }} mac/*.zip mac/latest-mac.yml

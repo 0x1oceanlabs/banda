@@ -2,24 +2,30 @@
 // step 3), for the release workflow:
 //
 //   node scripts/release.mjs <stable|dev> <version> <commit> <files…>
+//   node scripts/release.mjs add <version> <files…>
 //
 // Stable is the release of its tag v<version>, pushed by Roma, with the
 // PRs since the last Stable as its notes. Dev is a prerelease v<version>
-// made at <commit>; only the last 20 Dev releases are kept. GITHUB_TOKEN
+// made at <commit>; only the last 20 Dev releases are kept. `add` puts the
+// Mac's files on a release already out (ADR 0033, decision 6). GITHUB_TOKEN
 // and GITHUB_REPOSITORY come from the workflow.
 import { execFileSync } from "node:child_process"
 import { readFileSync, statSync } from "node:fs"
 import { basename } from "node:path"
 
 const KEEP_DEV = 20
-const [channel, version, commit, ...files] = process.argv.slice(2)
+const [channel, version, ...files] = process.argv.slice(2)
+const adding = channel === "add"
+const commit = adding ? "" : files.shift()
 if (
-  !["stable", "dev"].includes(channel) ||
+  !["stable", "dev", "add"].includes(channel) ||
   !version ||
-  !commit ||
+  !(adding || commit) ||
   !files.length
 ) {
-  throw new Error("release.mjs <stable|dev> <version> <commit> <files…>")
+  throw new Error(
+    "release.mjs <stable|dev> <version> <commit> <files…>, or add <version> <files…>"
+  )
 }
 const repo = process.env.GITHUB_REPOSITORY
 const token = process.env.GITHUB_TOKEN
@@ -56,6 +62,37 @@ async function github(method, path, body, base = "https://api.github.com") {
 const tag = `v${version}`
 const git = (...args) => execFileSync("git", args, { encoding: "utf8" }).trim()
 const releases = await github("GET", `/repos/${repo}/releases?per_page=100`)
+
+async function upload(release, file) {
+  const name = basename(file)
+  console.log(
+    `${tag}: ${name}, ${(statSync(file).size / 2 ** 20).toFixed(0)} MB`
+  )
+  await github(
+    "POST",
+    `/repos/${repo}/releases/${release.id}/assets?name=${encodeURIComponent(name)}`,
+    readFileSync(file),
+    "https://uploads.github.com"
+  )
+}
+
+if (adding) {
+  // A Dev skipped (its commit changes a workflow) has no release to add to.
+  const release = releases.find((r) => r.tag_name === tag && !r.draft)
+  if (!release) {
+    console.log(`::warning::${tag} is not out: its Mac files are not added.`)
+    process.exit(0)
+  }
+  // A run again replaces what it added before.
+  for (const file of files) {
+    const same = release.assets.find((a) => a.name === basename(file))
+    if (same)
+      await github("DELETE", `/repos/${repo}/releases/assets/${same.id}`)
+    await upload(release, file)
+  }
+  console.log(release.html_url)
+  process.exit(0)
+}
 
 // A run again (the same run number, so the same tag): a release it left
 // as a draft goes; one it published is done.
@@ -98,18 +135,7 @@ const release = await github("POST", `/repos/${repo}/releases`, {
 // A file that fails to go up takes the draft with it: a draft left behind
 // only waits for a run again of the same number, which may never come.
 try {
-  for (const file of files) {
-    const name = basename(file)
-    console.log(
-      `${tag}: ${name}, ${(statSync(file).size / 2 ** 20).toFixed(0)} MB`
-    )
-    await github(
-      "POST",
-      `/repos/${repo}/releases/${release.id}/assets?name=${encodeURIComponent(name)}`,
-      readFileSync(file),
-      "https://uploads.github.com"
-    )
-  }
+  for (const file of files) await upload(release, file)
 } catch (error) {
   await github("DELETE", `/repos/${repo}/releases/${release.id}`)
   throw error
