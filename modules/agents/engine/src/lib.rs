@@ -254,8 +254,11 @@ banda_kernel::methods! {
         command configure(Configure) -> (), Decide;
         /// Stops a turn.
         command stop(OneTurn) -> (), Write;
-        /// Tries a failed turn's message again.
-        command retry(OneTurn) -> Sent, Write;
+        /// Tries a failed turn's message again. A turn whose message went
+        /// again already leaves nothing to do, and answers none, as
+        /// `mkdir -p` does: two windows, or a Person and a terminal, may
+        /// both ask.
+        command retry(OneTurn) -> Option<Sent>, Write;
         /// A new Thread with the conversation to the end of an ended turn:
         /// its turns and items, and a fork of its session there (ADR 0027).
         command fork(OneTurn) -> Forked, Write;
@@ -667,7 +670,7 @@ impl Agents {
             // sign-in as it is: the Person is signed in.
             Some(turn) => match retry(tx, author, turn) {
                 Err(Error::Refused(_)) => Ok(None),
-                answer => answer.map(Some),
+                answer => answer,
             },
             None => Ok(None),
         })
@@ -891,7 +894,7 @@ impl Agents {
         call.command(move |tx| rewind(tx, author, turn)).await
     }
 
-    async fn retry(&self, call: Call, OneTurn { turn }: OneTurn) -> Result<Sent, Refusal> {
+    async fn retry(&self, call: Call, OneTurn { turn }: OneTurn) -> Result<Option<Sent>, Refusal> {
         let author = call.participant();
         call.command(move |tx| retry(tx, author, turn)).await
     }
@@ -1501,20 +1504,22 @@ fn send_now(tx: &mut Tx<'_>, author: Participant, turn: TurnId) -> Result<(), Er
 /// Tries a failed turn's message again, in a new turn with the Thread's
 /// settings now; a held queue goes on after it. The failed turn stays as
 /// it ended.
-fn retry(tx: &mut Tx<'_>, author: Participant, turn: TurnId) -> Result<Sent, Error> {
+fn retry(tx: &mut Tx<'_>, author: Participant, turn: TurnId) -> Result<Option<Sent>, Error> {
     let found = turn_of(tx, turn)?;
     let turns = store::turns(tx.sql(), found.thread)?;
-    let latest = rules::position(&turns, found.id).latest;
-    rules::retry(found.state, latest, found.opener.by_itself())?;
+    let at = rules::position(&turns, found.id);
+    if !rules::retry(found.state, &at, found.opener.by_itself())? {
+        return Ok(None);
+    }
     // Queued first, it starts before a held queue goes on.
     // One another Thread's Agent asked for still answers that Thread.
     let (thread, agent, message) = (found.thread, found.agent, found.message);
     let from = found.answers();
     let again = writer::queue(tx, author, thread, agent, message, Opener::Retry, from)?;
     writer::resume(tx, author, found.thread)?;
-    Ok(Sent {
+    Ok(Some(Sent {
         thread: found.thread,
         turn: again,
         item: found.message,
-    })
+    }))
 }

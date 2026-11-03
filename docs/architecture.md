@@ -373,7 +373,9 @@ If Chat is removed, Agents still works through its own Thread.
   sign-in needed, usage limit (with when it resets, if the Harness says),
   Harness stopped, or provider error. The Thread's latest turn that failed
   or was cut short can be tried again (`agents.retry`): its message goes
-  in a new turn, and the failed one stays as it ended.
+  in a new turn, and the failed one stays as it ended. A turn whose
+  message went again already leaves nothing to do, and the retry answers
+  none, as `mkdir -p` does (ADR 0040, decision 5).
 - **A Person signs in to a Harness in a way it offers** (ACP's auth
   methods; `agents.account`; ADR 0004), and the Harness keeps the
   credentials: Banda holds none and reads none of its files.
@@ -604,9 +606,11 @@ If Chat is removed, Agents still works through its own Thread.
     again when the engine lost it.
   - Another Pane that started a program opens it on that terminal, as a
     sign-in does: `{kind: "terminal.terminal", args: {terminal, title,
-    shell: false, done}}`. `done` is a command the Pane sends once the
-    program ended with code 0; its ID keeps it once only. Then the Pane
-    closes.
+    shell: false, done}}`. `done` is a list of commands the Pane sends
+    once the program ended with code 0, in order, each only once the one
+    before went through, as `a && b` does. Each says where it runs: a
+    Space, or with none, the machine (ADR 0040, decision 5). Its ID keeps
+    each once only. Then the Pane closes.
   - It sends what the Person types one call after another, as the engine
     runs calls side by side.
   - Closing the Pane closes its terminal. Moving it to another column or
