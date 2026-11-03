@@ -1,6 +1,6 @@
 //! The servers started in Banda, through the kernel, as the bar's widget
 //! hears them (ADR 0044): a terminal's and an Agent's show in their Space
-//! only, a Harness's own do not, and a server stops.
+//! only, a Harness's own and the engine's do not, and a server stops.
 
 mod common;
 
@@ -100,9 +100,14 @@ async fn a_terminal_s_server_shows_in_its_space_only_and_stops() {
 }
 
 #[tokio::test]
-async fn an_agent_s_server_is_known_by_its_space_and_a_harness_s_own_is_not() {
+async fn an_agent_s_server_is_known_by_its_space_and_a_harness_s_or_the_engine_s_is_not() {
     let world = World::new().await;
     let mut ports = world.ports(world.space).await;
+    // A socket the engine holds, and leaves open to what it starts, as
+    // the window's process leaves one to the engine.
+    let leaked = std::net::TcpListener::bind("127.0.0.1:0").unwrap();
+    rustix::io::fcntl_setfd(&leaked, rustix::io::FdFlags::empty()).unwrap();
+    let leaked = leaked.local_addr().unwrap().port();
     // As a Harness's CLI listens for an editor: in its process's group.
     let (_cli, own) = as_a_harness(&world, false).await;
     // As an Agent's tool runs a server: a job of its own.
@@ -110,6 +115,7 @@ async fn an_agent_s_server_is_known_by_its_space_and_a_harness_s_own_is_not() {
 
     let found = servers(&mut ports, on(port)).await;
     assert!(!on(own)(&found), "{found:?}");
+    assert!(!on(leaked)(&found), "{found:?}");
     let server = found.iter().find(|server| server.port == port).unwrap();
     assert_eq!(server.by, StartedBy::Agent);
     assert_ne!(Some(server.process), tool.id(), "the server, not its shell");
