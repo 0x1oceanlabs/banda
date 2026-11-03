@@ -59,19 +59,17 @@ import { settle, settles, useIsSettled } from "./settled"
  * desktop, and the new arrangement comes back with the look.
  */
 export function Sidebar({
-  spaces,
-  lists,
-  home,
-  isCurrent,
-  onMenu,
-  onSettings,
-  onOpen,
-  onNewThread,
-  onAddSpace,
-  onPin,
-  onSpaceSettings,
-  onLocate,
+  over,
+  onDismiss,
+  ...props
 }: {
+  /**
+   * Shown over the Strip in a narrow window (ADR 0025, decision 10): a
+   * panel whatever the look, gone once it has done its work, a Pane or
+   * a menu opened, or on Esc in it.
+   */
+  over?: boolean
+  onDismiss?: () => void
   spaces: SpaceSummary[]
   lists: Lists
   /** The Space a new Thread from the header starts in. */
@@ -97,6 +95,20 @@ export function Sidebar({
   /** Finds the folder of a Space whose folder is missing (ADR 0026). */
   onLocate: (space: SpaceId) => void
 }) {
+  const { spaces, lists, home, isCurrent, onPin } = props
+  const done =
+    <A extends unknown[]>(act: (...args: A) => void) =>
+    (...args: A) => {
+      onDismiss?.()
+      act(...args)
+    }
+  const onMenu = done(props.onMenu)
+  const onSettings = done(props.onSettings)
+  const onOpen = done(props.onOpen)
+  const onNewThread = done(props.onNewThread)
+  const onAddSpace = done(props.onAddSpace)
+  const onSpaceSettings = done(props.onSpaceSettings)
+  const onLocate = done(props.onLocate)
   const settings = useLookSidebar()
   const { preset, presets } = settings
   const host = window.banda
@@ -162,7 +174,19 @@ export function Sidebar({
   return (
     <aside
       aria-label="Sidebar"
-      className="absolute inset-y-(--gap-outer) left-(--gap-outer) z-20 flex w-(--sidebar-width) flex-col overflow-hidden rounded-tile border bg-panel shadow-(--panel-shadow) sidebar-desk:inset-y-0 sidebar-desk:left-0 sidebar-desk:rounded-none sidebar-desk:border-0 sidebar-desk:bg-desk sidebar-desk:shadow-none"
+      onKeyDown={(event) => {
+        // Not Esc in a menu it opened, drawn elsewhere in the page.
+        if (
+          event.key === "Escape" &&
+          event.currentTarget.contains(event.target as Node)
+        )
+          onDismiss?.()
+      }}
+      className={cn(
+        "absolute inset-y-(--gap-outer) left-(--gap-outer) z-20 flex w-(--sidebar-width) flex-col overflow-hidden rounded-tile border bg-panel shadow-(--panel-shadow)",
+        !over &&
+          "sidebar-desk:inset-y-0 sidebar-desk:left-0 sidebar-desk:rounded-none sidebar-desk:border-0 sidebar-desk:bg-desk sidebar-desk:shadow-none"
+      )}
     >
       <div className="flex items-center gap-0.5 px-2 pt-2 pb-1">
         <button

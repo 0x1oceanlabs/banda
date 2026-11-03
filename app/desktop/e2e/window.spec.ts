@@ -3549,3 +3549,52 @@ test("Edit from here takes the Thread back to before a message, as in T3 Code, a
   await composer.press("Enter")
   await expect(thread.getByText("I remember: apples.")).toBeVisible()
 })
+
+test("a narrow window hides the sidebar, and Alt+A shows it over the Strip", async () => {
+  window = await startWindow()
+  const { app, page } = window
+  const { thread, composer } = await firstThread(page)
+  await composer.fill("hello")
+  await composer.press("Enter")
+  await expect(thread.getByText("You said: hello")).toBeVisible()
+  const sidebar = page.getByRole("complementary", { name: "Sidebar" })
+  await expect(sidebar).toBeVisible()
+
+  const resize = async (width: number) => {
+    await app.evaluate(
+      ({ BrowserWindow }, width) =>
+        BrowserWindow.getAllWindows()[0]?.setContentSize(width, 800),
+      width
+    )
+    await page.setViewportSize({ width, height: 800 })
+  }
+  // Narrower than the sidebar and a column `[columns] min` (30rem) wide.
+  await page.screenshot({ path: "test-results/8a-wide.png" })
+  await resize(700)
+  await expect(sidebar).toBeHidden()
+  const left = async () => (await thread.boundingBox())?.x ?? 0
+  await expect.poll(left).toBeLessThan(40)
+  await page.screenshot({ path: "test-results/8a-narrow-hidden.png" })
+
+  // Alt+A shows it over the Strip, which stays where it was.
+  await page.keyboard.press("Alt+A")
+  await expect(sidebar).toBeVisible()
+  await expect.poll(left).toBeLessThan(40)
+  await page.screenshot({ path: "test-results/8a-narrow.png" })
+  // A click beside it, Esc in it, or a Pane opened from it hides it.
+  await page.mouse.click(600, 400)
+  await expect(sidebar).toBeHidden()
+  await page.keyboard.press("Alt+A")
+  await sidebar.getByRole("button", { name: /hello/ }).focus()
+  await page.keyboard.press("Escape")
+  await expect(sidebar).toBeHidden()
+  await page.keyboard.press("Alt+A")
+  await sidebar.getByRole("button", { name: /hello/ }).click()
+  await expect(sidebar).toBeHidden()
+  await expect(thread).toHaveAttribute("data-focused", "true")
+
+  // Wide again, the sidebar is as the Person left it.
+  await resize(1280)
+  await expect(sidebar).toBeVisible()
+  await expect.poll(left).toBeGreaterThan(200)
+})

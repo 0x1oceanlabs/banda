@@ -44,8 +44,14 @@ export function floorIn(
   room: { gap: number; inner: number },
   min: number
 ): number {
-  const rem = parseFloat(getComputedStyle(document.documentElement).fontSize)
-  return room.inner > 0 ? (min * rem + room.gap) / (room.inner + room.gap) : 0
+  return room.inner > 0
+    ? (min * remInPx() + room.gap) / (room.inner + room.gap)
+    : 0
+}
+
+/** A rem, in pixels: the root's size, as `[font] size` sets it. */
+export function remInPx(): number {
+  return parseFloat(getComputedStyle(document.documentElement).fontSize)
 }
 
 /** The Strip of workspace `id`, while it is drawn. */

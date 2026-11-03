@@ -5,8 +5,9 @@
 @import "streamdown/styles.css";
 
 @custom-variant dark (&:is(.dark *));
-/* A sidebar right on the desk, not a panel (ADR 0023). */
-@custom-variant sidebar-desk (&:is([data-sidebar="desk"] *));
+/* A sidebar right on the desk, not a panel (ADR 0023); over the Strip, in a
+   narrow window, it is a panel all the same (ADR 0025). */
+@custom-variant sidebar-desk (&:is([data-sidebar="desk"] *):not([data-sidebar-over] *));
 @custom-variant glass (&:is([data-glass] *));
 @source "../../../web/src/**/*.{ts,tsx}";
 @source "../../../../modules/*/pane/src/**/*.{ts,tsx}";
