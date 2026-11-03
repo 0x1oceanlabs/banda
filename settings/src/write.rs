@@ -112,10 +112,24 @@ pub fn reset(config: &Path, name: &str, key: &str) -> Result<(), Vec<Problem>> {
         && let Ok(table) = walk(&mut open.document, tables, &open.path)
         && let Some(Item::ArrayOfTables(list)) = table.get_mut(list.get())
     {
-        let before = list.len();
-        list.retain(|entry| id_of(entry) != Some(&leaf));
-        if list.len() == before {
+        let Some(at) = list.iter().position(|entry| id_of(entry) == Some(&leaf)) else {
             return Ok(());
+        };
+        // Its comments go to the entry after it, or the file's end, as a
+        // key's do: the file's own header among them, when it was first.
+        let comments = (list.get(at).and_then(|entry| entry.decor().prefix()))
+            .and_then(|prefix| prefix.as_str())
+            .filter(|prefix| prefix.contains('#'))
+            .map(str::to_owned);
+        list.remove(at);
+        if let Some(comments) = comments {
+            match list.get_mut(at) {
+                Some(next) => prepend(next.decor_mut(), &comments),
+                None => {
+                    let trailing = open.document.trailing().as_str().unwrap_or_default();
+                    open.document.set_trailing(format!("{comments}{trailing}"));
+                }
+            }
         }
         return open.save(None);
     }
@@ -288,9 +302,13 @@ fn remove(table: &mut dyn TableLike, leaf: &str) -> Option<String> {
         names.find(|name| *name == leaf);
         names.next().map(str::to_owned)
     };
-    let comments = table
-        .key(leaf)
-        .and_then(|key| key.leaf_decor().prefix()?.as_str())
+    // A key's comments are its own; a table's, as `[start.fake]`'s, its
+    // header's.
+    let comments = match table.get(leaf) {
+        Some(Item::Table(own)) => own.decor().prefix(),
+        _ => table.key(leaf).and_then(|key| key.leaf_decor().prefix()),
+    };
+    let comments = (comments.and_then(|prefix| prefix.as_str()))
         .filter(|prefix| prefix.contains('#'))
         .map(str::to_owned);
     table.remove(leaf);
@@ -486,6 +504,43 @@ mod tests {
             text,
             "#:schema ./schemas/look.schema.json\n# Mine.\n[tile]\nborder = 3\n"
         );
+    }
+
+    #[test]
+    fn a_new_threads_start_is_a_table_of_its_harness() {
+        let config = tempfile::tempdir().unwrap();
+        let read = || std::fs::read_to_string(config.path().join("agents.toml")).unwrap();
+        set(
+            config.path(),
+            "agents.toml",
+            "start.fake.mode",
+            "supervised",
+        )
+        .unwrap();
+        assert!(
+            read().contains("[start.fake]\nmode = \"supervised\"\n"),
+            "{}",
+            read()
+        );
+        reset(config.path(), "agents.toml", "start.fake").unwrap();
+        assert!(!read().contains("[start.fake]"), "{}", read());
+        assert!(read().contains("# enter = \"steer\""), "the comments stay");
+    }
+
+    #[test]
+    fn an_entry_taken_out_leaves_the_files_comments() {
+        let config = tempfile::tempdir().unwrap();
+        let read = || std::fs::read_to_string(config.path().join("harnesses.toml")).unwrap();
+        set(
+            config.path(),
+            "harnesses.toml",
+            "harness.claude.enabled",
+            "false",
+        )
+        .unwrap();
+        reset(config.path(), "harnesses.toml", "harness.claude").unwrap();
+        assert!(read().starts_with("#:schema "), "{}", read());
+        assert!(!read().contains("id = \"claude\""), "{}", read());
     }
 
     #[test]

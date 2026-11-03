@@ -53,6 +53,9 @@ export type SectionFile = {
   tables?: string[]
   /** One heading over all its rows, instead of one for each table. */
   title?: string
+  /** Its tables are the section's Body's to draw, as its first file is,
+   * not rows: `agents.toml`'s `start`, on each Harness's card. */
+  drawn?: boolean
 }
 
 export type Section = {
@@ -124,6 +127,7 @@ export const SECTIONS: Section[] = [
     icon: BotIcon,
     files: [
       { name: "harnesses.toml" },
+      { name: "agents.toml", tables: ["start"], drawn: true },
       { name: "agents.toml", title: "Writing to an Agent" },
     ],
     about:
@@ -169,8 +173,8 @@ const GROUPS = new Map(
   SECTIONS.map((section) => [
     section,
     (section.files ?? [])
-      // A Body draws its first file.
-      .slice(section.Body ? 1 : 0)
+      // A Body draws its first file, and the tables it says it draws.
+      .filter((file, i) => !(section.Body && i === 0) && !file.drawn)
       .flatMap((file) =>
         file.title
           ? [{ title: file.title, rows: rowsFor(file) }]

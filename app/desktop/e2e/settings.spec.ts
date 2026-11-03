@@ -137,20 +137,20 @@ test("Agents show who is signed in to each Harness, and write harnesses.toml", a
   await asking.getByRole("button", { name: "Sign out" }).click()
   await expect(fake.getByText("Not signed in.")).toBeVisible()
 
-  // What a new Thread starts with is the entry's, set from the
+  // What a new Thread starts with is agents.toml's, set from the
   // composer's own bar, and ↶ gives it back to the Harness.
+  const agents = join(dir, "config/agents.toml")
   await fake.getByRole("button", { name: "Mode: Full access" }).click()
   await page.getByRole("menuitemradio", { name: /Supervised/ }).click()
   await expect
-    .poll(() => readFileSync(file, "utf8"))
-    .toContain('[harness.start]\nmode = "supervised"')
+    .poll(() => textOf(agents))
+    .toContain('[start.fake]\nmode = "supervised"')
   await expect(
     fake.getByRole("button", { name: "Mode: Supervised" })
   ).toBeVisible()
   await fake.getByRole("button", { name: "Fake AI's own" }).click()
-  await expect
-    .poll(() => readFileSync(file, "utf8"))
-    .not.toContain("[harness.start]")
+  await expect.poll(() => textOf(agents)).not.toContain("[start.fake]")
+  expect(readFileSync(file, "utf8")).not.toContain("[harness.start]")
 
   // Off, the entry stays in the file, and no new Thread starts on it.
   await fake.getByRole("switch", { name: "Fake AI on" }).click()

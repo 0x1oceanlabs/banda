@@ -134,8 +134,9 @@ pub trait OneFile: Default + Serialize + DeserializeOwned + JsonSchema {
 }
 
 /// Reads `text`, the file at `path`, as a `T`, as [`crate::read`] reads a
-/// file, then checks it.
-fn read<T: OneFile>(path: &Path, text: &str, problems: &mut Vec<Problem>) -> Option<T> {
+/// file, then checks it: a wrong key is named in `problems` and left
+/// out, and the rest still reads. The engine reads a module's file so too.
+pub fn read<T: OneFile>(path: &Path, text: &str, problems: &mut Vec<Problem>) -> Option<T> {
     let mut settings: T = crate::read(path, text, problems)?;
     settings.check(path, text, problems);
     Some(settings)

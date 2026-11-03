@@ -5,7 +5,7 @@
  * terminal, over the window.
  */
 import { useCallback, useState } from "react"
-import { AgentsSettings, type HarnessFile } from "@banda/agents-pane/settings"
+import { AgentsSettings, type SettingsFile } from "@banda/agents-pane/settings"
 import type { Engine } from "@banda/contract"
 import { Dialog, DialogContent, DialogTitle } from "@banda/ui/components/dialog"
 import { Spinner } from "@banda/ui/components/spinner"
@@ -13,19 +13,21 @@ import { useRead } from "@banda/ui/hooks/use-read"
 import type { PaneState } from "@banda/ui/pane"
 import { terminal } from "@banda/terminal-pane"
 
-const FILE = "harnesses.toml"
-
 /** The Panes a sign-in opens: a terminal. Not the whole registry, which
  * would load every module's Panes into this window. */
 const kinds = terminal.panes
 
-const file: HarnessFile = {
+/** A settings file, written through `banda settings`. */
+const written = (name: string): SettingsFile => ({
   set: (key, value) =>
-    window.banda?.settings.set(FILE, key, value) ?? Promise.resolve([]),
+    window.banda?.settings.set(name, key, value) ?? Promise.resolve([]),
   reset: (key) =>
-    window.banda?.settings.reset(FILE, key) ?? Promise.resolve([]),
-  reveal: () => void window.banda?.settings.reveal(FILE),
-}
+    window.banda?.settings.reset(name, key) ?? Promise.resolve([]),
+  reveal: () => void window.banda?.settings.reveal(name),
+})
+
+const harnesses = written("harnesses.toml")
+const agents = written("agents.toml")
 
 export function Agents({ engine, lit }: { engine: Engine; lit?: string }) {
   // An account serves every Space on this computer: any one asks.
@@ -56,7 +58,8 @@ export function Agents({ engine, lit }: { engine: Engine; lit?: string }) {
         engine={engine}
         space={space}
         open={setPane}
-        file={file}
+        harnesses={harnesses}
+        agents={agents}
         lit={lit}
       />
       <Dialog

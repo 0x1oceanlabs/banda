@@ -55,7 +55,11 @@ pub async fn serve(places: Places, port: u16, with_parent: bool) -> Result<(), F
     };
     let kernel = Kernel::builder(&places.root, &places.data, owner)
         .machine(places.machine())
-        .module(Agents::new(harnesses).piped(pipe))
+        .module(
+            Agents::new(harnesses)
+                .config_in(places.config.clone())
+                .piped(pipe),
+        )
         .module(Terminals::new())
         .module(Browser::new())
         .module(Git::new())

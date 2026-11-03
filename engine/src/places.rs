@@ -6,7 +6,7 @@
 //! | root | `~/Banda` | where a new Space's folder goes |
 //! | data | `~/.local/share/banda` | each Space's data, in `spaces/<id>/` (ADR 0026) |
 //! | state | `~/.local/state/banda` | the owner's ID, the lock, `engine.json`, this machine's scope (`machine/`), the window's profile (`window/`), the logs (`logs/`), the engine's last panics (`problems/`) |
-//! | config | `~/.config/banda` | `harnesses.toml` |
+//! | config | `~/.config/banda` | `harnesses.toml`, `agents.toml` and the look's files |
 //!
 //! `banda` is Banda's folder: Banda Dev keeps its things in `banda-dev`, and
 //! a build from a checkout in `banda-local` ([`FOLDER`], ADR 0033). The root is theirs together. `BANDA_ROOT`, `BANDA_DATA`,

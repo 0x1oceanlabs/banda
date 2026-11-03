@@ -1,7 +1,14 @@
 #:schema ./schemas/agents.schema.json
-# How messages to an Agent are sent (ADR 0016). Every key is optional:
-# what you leave out is Banda's default, written below. Check a change
-# with: banda settings check
+# How Threads start and messages to an Agent are sent (ADR 0016). Every
+# key is optional: what you leave out is Banda's default, written below.
+# Check a change with: banda settings check
+
+# What a new Thread on a Harness starts with, by the Harness's ID. The
+# Agents section sets it from the composer's bar; what it leaves out, the
+# Harness chooses.
+# [start.claude]
+# mode = "auto"
+# model = "opus"
 
 # What Enter does with a message written while the Agent works: "steer",
 # into the turn, so the Agent reads it as it works, or "queue", so it
