@@ -39,6 +39,7 @@ import {
   BotIcon,
   DownloadIcon,
   GlobeIcon,
+  MousePointer2Icon,
   PanelLeftIcon,
   PanelTopIcon,
   PlusIcon,
@@ -48,19 +49,17 @@ import {
 } from "lucide-react"
 import { addressOf, siteOf } from "./address"
 import { Extensions, WEB_STORE } from "./Extensions"
-import type { Download } from "./desktop"
+import type { Download, Driver, Point } from "./desktop"
 import { browserHost, downloadsNow, watchDownloads } from "./host"
 import { browserKey, type Does, isTabKey } from "./keys"
 import { threadOf, useThreadOf } from "./threads"
 import {
   BLANK,
   drop,
-  type Driver,
   type Holder,
   hold,
   type Page,
   type PageState,
-  type Point,
   pageAt,
   pageOf,
   pagesVersion,
@@ -478,18 +477,12 @@ function Cursor({ at, title }: { at: Point; title: string }) {
       className="absolute top-0 left-0 flex items-start transition-transform duration-300 ease-out motion-reduce:transition-none"
       style={{ transform: `translate(${at.x}px, ${at.y}px)` }}
     >
-      <svg
-        viewBox="0 0 24 24"
-        className="-mt-[1.5px] -ml-[3px] size-[18px] drop-shadow-[0_1px_2px_rgb(0_0_0_/_0.3)]"
-      >
-        <path
-          d="M4 2l16 9-7 2-3 7z"
-          fill="var(--primary)"
-          stroke="white"
-          strokeWidth="1.6"
-          strokeLinejoin="round"
-        />
-      </svg>
+      <MousePointer2Icon
+        fill="var(--primary)"
+        stroke="white"
+        strokeWidth={1.6}
+        className="-mt-[3px] -ml-[3px] size-[18px] drop-shadow-[0_1px_2px_rgb(0_0_0_/_0.3)]"
+      />
       <span className="mt-3 -ml-1 max-w-40 truncate rounded-md bg-primary px-1.5 py-px text-[10.5px] font-semibold text-primary-foreground">
         {title}
       </span>

@@ -59,12 +59,10 @@ export type BrowserNews =
   | { kind: "close"; from: number }
   /** An Agent drives the tab over CDP, or no longer does. */
   | { kind: "driven"; from: number; driven: boolean }
-  /** A Thread's Agent drives the tab with Banda's tools, by its ID, and
-   * the step it takes; or none does now (ADR 0029, decision 4). */
-  | { kind: "driver"; from: number; agent: string | null; step: string }
-  /** Where the Thread's hands go in the tab's page next, before they act
-   * there, in the page's pixels on screen from its top left corner. */
-  | { kind: "point"; from: number; x: number; y: number }
+  /** A Thread's Agent drives the tab with Banda's tools, by its ID: the
+   * step it takes, and where its hands went last; or none does now (ADR
+   * 0029, decision 4). */
+  | { kind: "driver"; from: number; driver: Driver | null }
 
 /** An extension's button, as Chrome's `action` says it, for every tab and
  * for some tabs alone (electron-chrome-extensions' `getState`). */
@@ -83,6 +81,12 @@ export type ActionLook = {
   /** Changes when the icon does, to fetch it again. */
   iconModified?: number
 }
+
+/** A Thread that drives a tab, by its Agent: the step it takes, and
+ * where its hands went last, in the page's CSS pixels from the top left
+ * corner of its view. */
+export type Driver = { agent: string; step: string; at?: Point }
+export type Point = { x: number; y: number }
 
 /** A place in Banda's window, in its page's pixels. */
 export type Box = { x: number; y: number; width: number; height: number }

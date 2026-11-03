@@ -209,24 +209,31 @@ const keyboard = (tab: WebContents) => ({
 export type Pointing = (x: number, y: number) => Promise<void>
 
 /** Does `act` in `page`, whose web contents are `tab`, pointing at each
- * element before it acts on it. */
+ * element before it acts on it, for a Thread's hands. */
 export async function act(
   page: Page,
   tab: WebContents,
   act: Act,
-  point: Pointing
+  point?: Pointing
 ): Promise<void> {
   const keys = keyboard(tab)
   const ready = { timeout: READY }
   const ref = act.ref ?? ""
   /** `element`, in view, once the hands pointed at it. */
   const aimed = async (element: Locator) => {
+    if (!point) return element
     await element.scrollIntoViewIfNeeded(ready)
     const box = await element.boundingBox()
     if (box) await point(box.x + box.width / 2, box.y + box.height / 2)
     return element
   }
-  const element = async () => aimed(await elementOf(page, ref))
+  /** The element of `ref`, refused first when `guarded` and it is a
+   * secret field, then aimed at. */
+  const element = async (guarded = false) => {
+    const found = await elementOf(page, ref)
+    if (guarded && (await secretOf(found))) throw theirs(ref)
+    return aimed(found)
+  }
   try {
     switch (act.action) {
       case "click":
@@ -235,9 +242,7 @@ export async function act(
         return await (await element()).dblclick(ready)
       case "type":
       case "fill": {
-        const field = await elementOf(page, ref)
-        if (await secretOf(field)) throw theirs(ref)
-        await aimed(field)
+        const field = await element(true)
         const text = act.text ?? ""
         if (act.action === "type") await field.focus(ready)
         else {
@@ -255,12 +260,8 @@ export async function act(
         const key = act.key ?? ""
         // A key that types a letter types it where the focus is.
         const types = [...key].length === 1
-        if (act.ref) {
-          const field = await elementOf(page, ref)
-          if (types && (await secretOf(field))) throw theirs(ref)
-          await aimed(field)
-          await field.focus(ready)
-        } else if (types && (await focusedIsSecret(page)))
+        if (act.ref) await (await element(types)).focus(ready)
+        else if (types && (await focusedIsSecret(page)))
           throw theirs("The focused field")
         return keys.press(key)
       }
@@ -274,9 +275,8 @@ export async function act(
       }
       case "drag": {
         const from = await element()
-        const to = await elementOf(page, act.to ?? "")
-        await from.dragTo(to, ready)
-        return void (await aimed(to))
+        const to = await aimed(await elementOf(page, act.to ?? ""))
+        return await from.dragTo(to, ready)
       }
     }
   } catch (error) {
