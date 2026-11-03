@@ -11,6 +11,7 @@ import {
   type Drawer,
   DEFAULT_BAR,
   DEFAULT_DRAWER,
+  DEFAULT_OVERVIEW,
   DEFAULT_COLUMNS,
   DEFAULT_KEYS,
   DEFAULT_MOTION,
@@ -19,6 +20,7 @@ import {
   type Motion,
   type Move,
   type Notify,
+  type Overview,
   type Problem,
   shown,
   WALLPAPER_URL,
@@ -118,6 +120,11 @@ export function useLookColumns(): Columns {
 /** `[bar]`: how it shows the workspaces. */
 export function useLookBar(): Bar {
   return useLook((look) => look.bar, DEFAULT_BAR)
+}
+
+/** `[overview]`: how far it zooms out (ADR 0025, decision 7). */
+export function useLookOverview(): Overview {
+  return useLook((look) => look.overview, DEFAULT_OVERVIEW)
 }
 
 /** `[drawer]`: how far it drops, and its Harness (ADR 0025, decision 8). */

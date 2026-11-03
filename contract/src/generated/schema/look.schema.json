@@ -57,6 +57,10 @@
       "description": "The drawer on Alt+` (ADR 0025, decision 8).",
       "$ref": "#/$defs/Drawer"
     },
+    "overview": {
+      "description": "The overview on Alt+O (ADR 0025, decision 7).",
+      "$ref": "#/$defs/Overview"
+    },
     "motion": {
       "$ref": "#/$defs/MotionSettings"
     },
@@ -311,6 +315,20 @@
         "harness": {
           "description": "The Harness its Thread starts on, as `\"claude\"`; this computer's\nfirst one when left out.",
           "type": "string"
+        }
+      },
+      "additionalProperties": false
+    },
+    "Overview": {
+      "description": "The overview: every workspace zoomed out, one under another.",
+      "type": "object",
+      "properties": {
+        "zoom": {
+          "description": "How far it zooms the workspaces out, at most, as niri's: 0.5 is\nhalf their size. Less, where the window is too narrow for it.",
+          "type": "number",
+          "format": "double",
+          "minimum": 0,
+          "maximum": 1
         }
       },
       "additionalProperties": false

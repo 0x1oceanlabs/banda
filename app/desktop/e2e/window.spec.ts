@@ -2440,6 +2440,23 @@ test("the mouse moves Panes as niri's: a header, Alt and the left button, the ba
   await expect(bar.nth(1)).toHaveAttribute("aria-current", "true")
 })
 
+test("the overview zooms out as far as [overview] zoom says", async () => {
+  window = await startWindow({ look: "[overview]\nzoom = 0.2\n" })
+  const { page } = window
+  const { composer } = await firstThread(page)
+  await expect(composer).toBeFocused()
+  await page.keyboard.press("Alt+KeyO")
+  const row = page
+    .getByRole("dialog", { name: "Overview" })
+    .getByRole("group", { name: "Workspace 1" })
+  await expect(row).toBeVisible()
+  const width = (await row.boundingBox())!.width
+  const room = await page.evaluate(() => innerWidth)
+  // A fifth of the screen it copies, which is the window less the sidebar.
+  expect(width / room).toBeGreaterThan(0.1)
+  expect(width / room).toBeLessThan(0.2)
+})
+
 test("the overview: the arrows and Enter, typing, the window's keys, the drag", async () => {
   window = await startWindow({ look: "[columns]\nmin = 10\n" })
   const { page } = window

@@ -50,6 +50,9 @@ pub struct Settings {
     /// The drawer on Alt+` (ADR 0025, decision 8).
     #[serde(default)]
     pub drawer: Drawer,
+    /// The overview on Alt+O (ADR 0025, decision 7).
+    #[serde(default)]
+    pub overview: Overview,
     #[serde(default)]
     pub motion: MotionSettings,
     #[serde(default)]
@@ -227,6 +230,16 @@ pub struct Drawer {
     pub harness: Option<String>,
 }
 
+/// The overview: every workspace zoomed out, one under another.
+#[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields, rename_all = "kebab-case")]
+pub struct Overview {
+    /// How far it zooms the workspaces out, at most, as niri's: 0.5 is
+    /// half their size. Less, where the window is too narrow for it.
+    #[schemars(range(min = 0, max = 1))]
+    pub zoom: Option<f64>,
+}
+
 /// How the bar shows the workspaces.
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq, JsonSchema, TS)]
 #[serde(rename_all = "lowercase")]
@@ -376,6 +389,9 @@ impl Settings {
                 height: self.drawer.height.or(under.drawer.height),
                 harness: self.drawer.harness.or(under.drawer.harness),
             },
+            overview: Overview {
+                zoom: self.overview.zoom.or(under.overview.zoom),
+            },
             motion: self.motion.over(under.motion),
             columns: self.columns.over(under.columns),
             font: self.font.over(under.font),
@@ -429,6 +445,7 @@ impl Settings {
                 height: Some(0.6),
                 harness: None,
             },
+            overview: Overview { zoom: Some(0.35) },
             motion: MotionSettings::defaults(),
             columns: ColumnsSettings::defaults(),
             font: FontSettings::defaults(),
@@ -465,6 +482,7 @@ impl Settings {
             ("desk.grain", self.desk.grain),
             ("desk.sidebar-shadow", self.desk.sidebar_shadow),
             ("drawer.height", self.drawer.height),
+            ("overview.zoom", self.overview.zoom),
         ]
         .into_iter()
         .filter(|(_, v)| v.is_some_and(|v| !is_share(v)))

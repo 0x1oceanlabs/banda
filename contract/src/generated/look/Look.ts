@@ -8,6 +8,7 @@ import type { Drawer } from "./Drawer";
 import type { Keys } from "./Keys";
 import type { Motion } from "./Motion";
 import type { Notify } from "./Notify";
+import type { Overview } from "./Overview";
 import type { Problem } from "./Problem";
 import type { Schemes } from "./Schemes";
 import type { Setting } from "./Setting";
@@ -50,6 +51,10 @@ bar: Bar,
  * The drawer on Alt+` (ADR 0025, decision 8).
  */
 drawer: Drawer, 
+/**
+ * The overview on Alt+O (ADR 0025, decision 7).
+ */
+overview: Overview, 
 /**
  * The layers it came from, bottom first.
  */
