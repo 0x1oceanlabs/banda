@@ -989,6 +989,8 @@ export function Shell({
             <Overview
               workspaces={workspaces}
               spaceName={spaceName}
+              listed={listed}
+              called={called}
               frame={frame}
               onPick={(entry) => change((w) => focusEntry(w, entry))}
               onArrow={(direction) => change((w) => across(w, direction))}

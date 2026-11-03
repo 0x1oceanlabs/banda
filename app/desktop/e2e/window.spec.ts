@@ -2567,7 +2567,7 @@ test("the overview: the arrows and Enter, typing, the window's keys, the drag", 
   await expect(picked).toHaveAttribute("data-tile", l!)
   await expect(tileOf(t)).toHaveAttribute("data-dim", "true")
   await page.keyboard.press("Escape")
-  await expect(overview.getByRole("status")).toBeHidden()
+  await expect(overview.getByRole("status")).toHaveText("Type to find a Pane")
   await expect(tileOf(t)).not.toHaveAttribute("data-dim")
   await expect(overview).toBeVisible()
 
@@ -3004,6 +3004,25 @@ async function sendAndGoBelow(page: Page, composer: Locator, text: string) {
   await page.keyboard.press("Alt+PageDown")
   await expect(thread).toBeHidden()
 }
+
+test("the overview shows how each Thread is, rings the one that calls, and draws an empty workspace slim", async () => {
+  window = await startWindow()
+  const { page } = window
+  const { composer } = await firstThread(page)
+  await sendAndGoBelow(page, composer, "slow hello")
+  await page.keyboard.press("Alt+KeyO")
+  const overview = page.getByRole("dialog", { name: "Overview" })
+  await expect(overview.getByRole("status")).toHaveText("Type to find a Pane")
+  const tile = overview.getByRole("button", { name: "slow hello in Work" })
+  // Done out of sight, it calls: its mark says so, and it is ringed.
+  await expect(tile).toHaveAttribute("data-called", "")
+  await expect(tile.getByRole("img", { name: "Done" })).toBeVisible()
+  await expect(overview.getByText("1 Pane", { exact: true })).toBeVisible()
+  const empty = overview.getByRole("group", { name: "Workspace 2" })
+  await expect(empty).toHaveAttribute("data-empty", "true")
+  expect((await empty.boundingBox())!.height).toBeLessThan(60)
+  await page.screenshot({ path: "test-results/7c-overview-marks.png" })
+})
 
 test("a Thread that finishes out of sight shows a toast, and it goes there", async () => {
   window = await startWindow()

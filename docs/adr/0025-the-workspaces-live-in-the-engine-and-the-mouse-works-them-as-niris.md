@@ -284,6 +284,11 @@ On the list, Roma decided:
    _Changed_ 2026-11-03: half was too big, two workspaces at most on a
    laptop's screen, so it zooms out to 0.35 by default, and
    `[overview] zoom` in `look.toml` sets it, as niri's `overview { zoom }`.
+   _Changed_ 2026-11-03: over each Thread's tile, at a size to read, its
+   mark, and what it asks when it calls, the tile ringed in the attention
+   colour then. Beside each workspace its number and how many Panes it
+   holds; an empty one is a slim dashed place to drop a Pane, not a whole
+   screen; and the search says it is there before anything is typed.
 
 8. **The drawer** (ADR 0005, decision 7) is on `` Alt+` ``, as a terminal
    that drops down is; `Alt+S` settles a Thread now (ADR 0008). A Thread
