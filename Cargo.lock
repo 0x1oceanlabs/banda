@@ -438,6 +438,7 @@ version = "0.1.0"
 dependencies = [
  "async-trait",
  "banda-kernel",
+ "percent-encoding",
  "rusqlite",
  "schemars 1.2.3",
  "serde",

@@ -47,12 +47,15 @@ Space can fix it.
    `gh`, say the address to look at:
    `https://github.com/0x1oceanlabs/banda/issues?q=<fingerprint>`.
 2. An issue has it: say which, whether it is closed, and in which version
-   it was fixed if it says. Offer a comment with what is new: this
-   version, this system, how many times.
-3. None has it: write the issue for the Person, its title what the
-   Person saw, in a few words, and its body the report's `text` with
-   what you found above it. Give both in your answer.
+   it was fixed if it says. If it is open, draft a comment with what is
+   new, this version, this system, how many times: `draft_issue` with
+   `comment_on` its number.
+3. None has it: draft the issue with `draft_issue`, its title what the
+   Person saw, in a few words, and its body what you found, then the
+   report's `text`.
 
-Never open an issue or comment yourself: the Person sends it, or not.
+`draft_issue` shows your Person a card with Send, Edit and Cancel. Never
+open an issue or comment yourself, with `gh` or otherwise: the Person
+sends it, or not.
 A report holds no Thread's words, no paths outside Banda's code, and the
 Panes by their kinds alone; keep it so.

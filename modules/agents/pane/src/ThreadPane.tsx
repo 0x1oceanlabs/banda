@@ -80,6 +80,7 @@ import { FindBar, useFound } from "./Find"
 import { holds } from "./findIn"
 import { Minimap } from "./Minimap"
 import { ToolCall } from "./ToolCall"
+import { Issue } from "./Issue"
 import { Visual } from "./Visual"
 import { SettingsMenu } from "./ThreadSettings"
 import { SignIn, Warning } from "./SignIn"
@@ -232,6 +233,7 @@ function ThreadPane(props: PaneProps<ThreadArgs>) {
           <Transcript
             // Each Thread scrolls on its own, from where it was left.
             key={thread}
+            engine={engine}
             space={space}
             thread={thread}
             forYou={Boolean(asking || planned)}
@@ -385,6 +387,7 @@ type Answering = {
 }
 
 function Transcript({
+  engine,
   space,
   thread,
   forYou,
@@ -404,6 +407,7 @@ function Transcript({
   ...answers
 }: Answering &
   Writers & {
+    engine: Engine
     space: SpaceId
     thread: string
     /** The Thread waits for its Person: a Question, or a plan. */
@@ -451,6 +455,7 @@ function Transcript({
       case "item":
         return (
           <Entry
+            engine={engine}
             space={space}
             item={line.item}
             onFork={forkAt(line.item)}
@@ -603,6 +608,7 @@ function ScrollToEnd({ queued, forYou }: { queued: number; forYou: boolean }) {
 type OpenDiff = (turn: string, path?: string) => void
 
 function Entry({
+  engine,
   space,
   item,
   live,
@@ -615,6 +621,7 @@ function Entry({
   answering,
   onAnswer,
 }: Answering & {
+  engine: Engine
   space: SpaceId
   item: Item
   /** From {@link AgentMessage}'s `onFork`. */
@@ -710,6 +717,8 @@ function Entry({
           </TraceLine>
         </Trace>
       )
+    case "issue":
+      return <Issue engine={engine} space={space} item={item.id} issue={body} />
     case "visual":
       return (
         <Visual

@@ -111,6 +111,8 @@ export type Tool = Extract<Body, { kind: "tool" }>
 /** A Question the Agent asks, as the Thread shows it. */
 export type QuestionBody = Extract<Body, { kind: "question" }>
 
+export type IssueBody = Extract<Body, { kind: "issue" }>
+
 /** An item that is a Question. */
 export type Asked = Item & { body: QuestionBody }
 
@@ -455,6 +457,31 @@ function project(state: ThreadState, event: Event): ThreadState {
       return {
         ...next,
         items: [...state.items, item(id, { kind: "notice", text }, turn)],
+      }
+    }
+    case "issue.drafted": {
+      const { item: id, turn, ...draft } = fact.payload
+      const body = { kind: "issue", ...draft, state: "drafted" } as const
+      return { ...next, items: [...state.items, item(id, body, turn)] }
+    }
+    case "issue.answered": {
+      const { item: id, state: answered, title, body, url } = fact.payload
+      return {
+        ...next,
+        items: changeItem(state, id, (one) =>
+          one.body.kind === "issue"
+            ? {
+                ...one,
+                body: {
+                  ...one.body,
+                  state: answered,
+                  title: title ?? one.body.title,
+                  body: body ?? one.body.body,
+                  url,
+                },
+              }
+            : one
+        ),
       }
     }
     case "visual.shown": {

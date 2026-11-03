@@ -5,10 +5,12 @@ import type { Nothing } from "../Nothing";
 import type { Account } from "../harnesses/Account";
 import type { HarnessView } from "../harnesses/HarnessView";
 import type { Answer } from "./Answer";
+import type { AnswerIssue } from "./AnswerIssue";
 import type { Attach } from "./Attach";
 import type { ChangesAsk } from "./ChangesAsk";
 import type { Configure } from "./Configure";
 import type { Defaults } from "./Defaults";
+import type { DraftIssue } from "./DraftIssue";
 import type { Edit } from "./Edit";
 import type { FileQuery } from "./FileQuery";
 import type { Forked } from "./Forked";
@@ -190,6 +192,19 @@ show_visual: CommandMethod<ShowVisual, string>,
  * page's rules are show_visual's.
  */
 preview_visual: CallMethod<PreviewVisual, Previewed>, 
+/**
+ * Drafts an issue about a Problem of Banda's for your Person to
+ * send to Banda on GitHub, as the Banda skill's `problems` topic
+ * says: they see it as a card with Send, Edit and Cancel, and only
+ * they send it. `comment_on` an issue that has the fingerprint
+ * already, rather than open another.
+ */
+draft_issue: CommandMethod<DraftIssue, string>, 
+/**
+ * Keeps how the Person answered a drafted issue: sent, as the
+ * problems module sent it (`problems.send_issue`), or not.
+ */
+answer_issue: CommandMethod<AnswerIssue, null>, 
 /**
  * A Visual's page, as the window serves it.
  */

@@ -24,6 +24,11 @@ body:
     validations:
       required: true
   - type: input
+    id: fingerprint
+    attributes:
+      label: The Problem's fingerprint
+      description: If Banda kept what broke, its fingerprint from Settings → Problems, as 3124d1bf35ad. It finds the same fault in other issues.
+  - type: input
     id: harness
     attributes:
       label: The Harness

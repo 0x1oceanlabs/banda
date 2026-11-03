@@ -288,6 +288,7 @@ fn texts(view: &ThreadView) -> Vec<String> {
             Body::Notice { text } => format!("notice: {text}"),
             Body::Plan { steps } => format!("plan: {} steps", steps.len()),
             Body::Visual { title, height, .. } => format!("visual: {title} ({height}px)"),
+            Body::Issue { title, state, .. } => format!("issue: {title} ({state:?})"),
         })
         .collect()
 }
@@ -3098,6 +3099,16 @@ async fn threads_one_thread_send_show_visual_and_preview_visual_are_an_agents_to
         .call(agent, "spaces.tools", None, None, Value::Null)
         .await
         .unwrap();
+    // The last: an issue the Agent drafts, which only its Person sends.
+    let draft = tools.as_array_mut().unwrap().pop().unwrap();
+    assert_eq!(
+        (&draft["name"], &draft["method"]),
+        (&json!("draft_issue"), &json!("agents.draft_issue"))
+    );
+    assert_eq!(
+        draft["schema"]["required"],
+        json!(["fingerprint", "title", "body"])
+    );
     let preview = tools.as_array_mut().unwrap().pop().unwrap();
     assert_eq!(
         (&preview["name"], &preview["method"]),
@@ -3954,4 +3965,89 @@ async fn the_real_harnesses_write_a_commits_message() {
         assert_eq!(std::fs::read_to_string(&notes).unwrap(), "apples\npears\n");
         assert_eq!(texts(&world.thread(&thread).await), before);
     }
+}
+
+#[tokio::test]
+async fn an_agent_drafts_an_issue_that_only_its_person_answers() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let sent = world.send(None, "wait").await;
+    let thread = sent["thread"].clone();
+    world
+        .until(&thread, |v| {
+            texts(v).contains(&"message: Waiting.".to_owned())
+        })
+        .await;
+    let agent = Participant::Agent(world.threads().await.threads[0].agent);
+    let draft = |title: &str| {
+        world.call(
+            agent,
+            "agents.draft_issue",
+            json!({ "fingerprint": "3124d1bf35ad", "title": title, "body": "## What broke" }),
+        )
+    };
+
+    // The Agent drafts it in its own Thread; the Person sees a card.
+    let said = draft("Tabs break").await.unwrap();
+    assert!(
+        said.as_str()
+            .unwrap()
+            .starts_with("Shown to your Person as a card")
+    );
+    assert_eq!(draft(" ").await.unwrap_err().code, Code::Invalid);
+    let view = world.thread(&thread).await;
+    assert_eq!(texts(&view).last().unwrap(), "issue: Tabs break (Drafted)");
+    let item = view.items.last().unwrap().id;
+    let url = "https://github.com/0x1oceanlabs/banda/issues/412";
+    let answer = |who, answer: Value| {
+        let mut answer = answer;
+        answer["item"] = json!(item);
+        world.call(who, "agents.answer_issue", answer)
+    };
+
+    // Only the Person answers it, sent as they last wrote it; once.
+    let sent = json!({ "state": "sent", "title": "Tabs break, no title", "body": "## What broke", "url": url });
+    assert_eq!(
+        answer(agent, sent.clone()).await.unwrap_err().code,
+        Code::Forbidden
+    );
+    let unsent = json!({ "state": "sent" });
+    assert_eq!(
+        answer(world.person(), unsent).await.unwrap_err().code,
+        Code::Invalid
+    );
+    answer(world.person(), sent.clone()).await.unwrap();
+    let view = world.thread(&thread).await;
+    assert_eq!(
+        texts(&view).last().unwrap(),
+        "issue: Tabs break, no title (Sent)"
+    );
+    let Body::Issue {
+        url: went, body, ..
+    } = &view.items.last().unwrap().body
+    else {
+        panic!("an issue")
+    };
+    assert_eq!(
+        (went.as_deref(), body.as_str()),
+        (Some(url), "## What broke")
+    );
+    assert_eq!(
+        answer(world.person(), sent).await.unwrap_err().code,
+        Code::Conflict
+    );
+
+    // Or the Person does not send it.
+    draft("Tabs break").await.unwrap();
+    let other = world.thread(&thread).await.items.last().unwrap().id;
+    let cancel = json!({ "item": other, "state": "cancelled" });
+    world
+        .call(world.person(), "agents.answer_issue", cancel)
+        .await
+        .unwrap();
+    let view = world.thread(&thread).await;
+    assert_eq!(
+        texts(&view).last().unwrap(),
+        "issue: Tabs break (Cancelled)"
+    );
 }

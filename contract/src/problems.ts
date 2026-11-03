@@ -8,12 +8,14 @@ import type { Source } from "./generated/problems/Source"
 
 export type { Fingerprint } from "./generated/problems/Fingerprint"
 export type { Frame } from "./generated/problems/Frame"
+export type { Issue } from "./generated/problems/Issue"
 export type { Listed } from "./generated/problems/Listed"
 export type { Log } from "./generated/problems/Log"
 export type { Problem } from "./generated/problems/Problem"
 export type { Recorded } from "./generated/problems/Recorded"
 export type { Record } from "./generated/problems/Record"
 export type { Report } from "./generated/problems/Report"
+export type { Sent } from "./generated/problems/Sent"
 export type { Source } from "./generated/problems/Source"
 
 /**
