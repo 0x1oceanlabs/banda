@@ -65,6 +65,12 @@ round too; the card is as wide as the messages, centred.
    Thread's mark do; the button turning into Stop is enough.
 6. **A new Thread's Space and Harness sit under the card**, in a bare row
    without a surface, as T3 Code's environment and branch.
+
+   *Amended 2026-11-03 (Roma's call):* only the Space sits there. The
+   Harness is chosen with the model: a new Thread's list of models holds
+   every Harness's, each under its logo and name, and choosing one starts
+   the Thread on that Harness with that model. A Harness that has not run
+   in the Space yet is one row of its own, until it says its models.
 7. **The messages fade out at both ends**, under the header and above the
    composer, while there is more that way (shadcn's `scroll-fade`, a mask,
    so it works on glass too); at the end, the last line is not faded.

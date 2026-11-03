@@ -110,7 +110,6 @@ function ThreadPane(props: PaneProps<ThreadArgs>) {
     state,
     turn,
     harness,
-    harnesses,
     name,
     reader,
     sending,
@@ -119,6 +118,8 @@ function ThreadPane(props: PaneProps<ThreadArgs>) {
     settings,
     offer,
     configure,
+    starts,
+    startOn,
     plan,
     setPlan,
     history,
@@ -344,22 +345,22 @@ function ThreadPane(props: PaneProps<ThreadArgs>) {
                 picked={picked}
                 disabled={acting}
                 onChange={configure}
+                starts={starts}
+                onStart={startOn}
               />
             </>
           )}
         </Composer>
-        {/* A new Thread's Space and Harness, bare under the card. */}
+        {/* A new Thread's Space, bare under the card; its Harness is chosen
+          with the model. */}
         {thread === null && (
           <NewThreadBar
             engine={engine}
             space={space}
-            harness={harness}
-            harnesses={harnesses}
             disabled={sending}
             onSpace={(other) =>
               open(paneOf(threadPane, { ...args, harness }), "here", other)
             }
-            onHarness={(next) => update({ ...args, harness: next })}
             onAddSpace={run && (() => run("space.add"))}
           />
         )}
