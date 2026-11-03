@@ -850,16 +850,15 @@ function Keys({ keyOf, bind }: { keyOf: Key; bind?: Bind }) {
 /** A family's keys at once: its mods, then each key, `1–9` for a run of
  * digits. None when they differ in their mods. */
 function FamilyKeys({ actions }: { actions: readonly Action<Shell>[] }) {
-  const keys = actions.map((action) => action.keys?.[0])
+  // Of the family's keys; an action with none, kept for keys.toml, adds
+  // nothing.
+  const keys = actions.flatMap((action) => action.keys?.[0] ?? [])
   const first = keys[0]
-  if (
-    !first ||
-    keys.some((key) => !key || !sameKey(key, { ...first, code: key.code }))
-  )
+  if (!first || keys.some((key) => !sameKey(key, { ...first, code: key.code })))
     return null
   const parts = keyName(first).split("+")
   const mods = parts.slice(0, -1)
-  const names = keys.map((key) => (key ? keyName({ code: key.code }) : ""))
+  const names = keys.map((key) => keyName({ code: key.code }))
   const run =
     names.every((name, n) => name === String(Number(names[0]) + n)) &&
     names.length > 2

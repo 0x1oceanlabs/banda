@@ -1848,7 +1848,8 @@ test("Alt+K is the key sheet: sections and families, and Tab binds or frees a ke
   await page.keyboard.press("Alt+KeyK")
   for (const section of ["Threads", "Panes", "Columns", "Workspaces", "Banda"])
     await expect(menu.getByRole("group", { name: section })).toBeVisible()
-  const focus = menu.getByRole("option", { name: /^Focus a Pane/ })
+  // Sideways; up and down are the family that goes on past a column.
+  const focus = menu.getByRole("option", { name: /^Focus a Pane(?!,)/ })
   await expect(focus).toContainText("←")
   await expect(
     menu.getByRole("option", { name: /^Go to a workspace/ })
@@ -3736,4 +3737,48 @@ test("a column moved along the Strip by Alt+Shift+Arrows stays in view", async (
     await expect.poll(place).toBe(at)
     await expect(thread).toBeInViewport({ ratio: 0.99 })
   }
+})
+
+test("Alt+Up and Down go on past a column's end to the workspace there, and with Shift take the Pane along", async () => {
+  window = await startWindow()
+  const { page } = window
+  const { composer } = await firstThread(page)
+  await composer.fill("hello")
+  await composer.press("Enter")
+  const thread = page.getByRole("region", { name: "hello" })
+  await expect(thread.getByText("You said: hello")).toBeVisible()
+  const numbers = page.getByRole("navigation", { name: "Workspaces" })
+  const on = (n: string) =>
+    expect(
+      numbers.getByRole("button", { name: `Workspace ${n}` })
+    ).toHaveAttribute("aria-current", "true")
+  // A launcher on the workspace below, the Thread alone on this one.
+  await page.keyboard.press("Alt+KeyN")
+  const launcher = page.getByRole("region", { name: "New Pane" })
+  await expect(launcher).toHaveAttribute("data-focused", "true")
+  await page.keyboard.press("Alt+Shift+Digit2")
+  await on("2")
+  await page.keyboard.press("Alt+PageUp")
+  await on("1")
+  await expect(thread).toHaveAttribute("data-focused", "true")
+
+  // A key held stops at the column's end; a new press goes on.
+  await page.keyboard.down("Alt")
+  await page.keyboard.down("ArrowDown")
+  await on("2")
+  await page.keyboard.down("ArrowDown")
+  await page.keyboard.down("ArrowDown")
+  await page.keyboard.up("ArrowDown")
+  await page.keyboard.up("Alt")
+  await on("2")
+  await expect(launcher).toHaveAttribute("data-focused", "true")
+  await page.keyboard.press("Alt+ArrowUp")
+  await on("1")
+  await expect(thread).toHaveAttribute("data-focused", "true")
+
+  // With Shift the Thread goes along, as a column beside the launcher.
+  await page.keyboard.press("Alt+Shift+ArrowDown")
+  await on("2")
+  await expect(thread).toHaveAttribute("data-focused", "true")
+  await expect(launcher).toBeVisible()
 })

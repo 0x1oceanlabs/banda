@@ -458,6 +458,17 @@ export function across(state: Workspaces, direction: Direction): Workspaces {
   return step(state, direction === "down" ? 1 : -1)
 }
 
+/** Moves the focused Pane as `shift` does, and up or down past its
+ * column's end to the workspace there, a column on the right, as niri's
+ * `move-window-down-or-to-workspace-down`. */
+export function carry(state: Workspaces, direction: Direction): Workspaces {
+  const next = shift(state, direction)
+  if (next !== state || direction === "left" || direction === "right") {
+    return next
+  }
+  return send(state, state.current + (direction === "down" ? 1 : -1))
+}
+
 /**
  * Moves the focused Pane: sideways, its whole column swaps with the next;
  * up and down, the Pane swaps with the next in its column.

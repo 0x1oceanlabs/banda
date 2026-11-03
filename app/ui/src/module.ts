@@ -77,6 +77,9 @@ export type Action<Context = WindowApi> = {
   /** Its key works while a dialog is open, as the Banda menu's own do;
    * any other key there is the dialog's. */
   overDialogs?: true
+  /** What its key runs instead while held down, repeating, by id: an
+   * arrow that goes on past an edge stops there until pressed again. */
+  whenHeld?: string
   /** Run by its id alone, with the args another module gives: the Banda
    * menu and its key sheet leave it out. */
   unlisted?: true
