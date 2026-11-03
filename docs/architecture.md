@@ -72,7 +72,9 @@ banda call/follow   the CLI: the same API, for people, scripts and Agents
   Its tools are `spaces.tools`, read once as it connects: the module
   methods marked `tool` in their `methods!` tables. It adds `skill`,
   which it answers itself from the Banda skill. Its
-  `instructions` are the skill's core. A refused or malformed call is a
+  `instructions` are the skill's brief (`modules/skill/BRIEF.md`), under
+  the 4,096 characters Claude Code keeps of them; the core and its topics
+  come through `skill` (ADR 0037, decision 7). A refused or malformed call is a
   tool result marked `isError`, with the refusal and that nothing was
   done; only an engine that does not answer is a JSON-RPC error.
 - **The CLI prints JSON.** `banda call <method>` prints `{"ok": …}`, as

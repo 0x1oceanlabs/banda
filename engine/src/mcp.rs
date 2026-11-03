@@ -177,7 +177,7 @@ fn initialize(params: &Value) -> Value {
         "protocolVersion": version,
         "capabilities": { "tools": {} },
         "serverInfo": { "name": "banda", "version": env!("BANDA_VERSION") },
-        "instructions": banda_skill::core(Reach::Tool),
+        "instructions": banda_skill::brief(),
     })
 }
 

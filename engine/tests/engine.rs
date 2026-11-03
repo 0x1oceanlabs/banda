@@ -322,7 +322,7 @@ fn an_agent_reaches_banda_through_banda_mcp() {
     let welcome = mcp.ask(1, "initialize", hello)["result"].clone();
     assert_eq!(welcome["protocolVersion"], "2025-06-18");
     assert_eq!(welcome["serverInfo"]["name"], "banda");
-    assert!(text(&welcome["instructions"]).contains("the `skill` tool"));
+    assert_eq!(text(&welcome["instructions"]), banda_skill::brief());
     // A notification gets no answer: the next line answers the ping.
     mcp.tell(json!({ "jsonrpc": "2.0", "method": "notifications/initialized" }));
     assert_eq!(mcp.ask(2, "ping", json!({}))["result"], json!({}));

@@ -156,6 +156,15 @@ allow-forms allow-popups allow-downloads`. The frame says
    - A picture to post, send or use elsewhere is a `.png` file and its
      path, not a Visual.
    - Ordinary coding work needs neither tool.
+   - _Amended 2026-11-03, after the step 5 trial:_ Claude Code keeps
+     only the first 4,096 characters of a server's `instructions`, and
+     the core is longer, so the rule never reached it. `banda mcp` now
+     says a brief of its own as its `instructions` (`modules/skill/
+     BRIEF.md`, tested to fit): what Banda is, this rule, and the `skill`
+     tool for the core and its topics. This changes ADR 0019's "the
+     skill's core is the server's MCP `instructions`"; `banda skill` and
+     the exported skill still start with the core, which holds the rule
+     too.
 
 8. **Markdown shows media, diagrams and math, as T3's** (_decided_: as
    in T3).
