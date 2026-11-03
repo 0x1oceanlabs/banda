@@ -153,8 +153,6 @@ struct Fake {
     /// The words each session was asked to remember, each with the ID of
     /// the reply that said so.
     kept: Arc<Mutex<HashMap<SessionId, Vec<Kept>>>>,
-    /// The folder each session works in.
-    folders: Arc<Mutex<HashMap<SessionId, std::path::PathBuf>>>,
 }
 
 /// A word a session was asked to remember, and the ID of the reply that
@@ -167,6 +165,8 @@ struct Setup {
     mode: String,
     model: String,
     brief: bool,
+    /// The folder it works in.
+    folder: std::path::PathBuf,
 }
 
 impl Default for Setup {
@@ -175,6 +175,7 @@ impl Default for Setup {
             mode: "default".into(),
             model: "fast".into(),
             brief: false,
+            folder: Default::default(),
         }
     }
 }
@@ -198,6 +199,14 @@ fn select(values: &[(&str, &str)]) -> Vec<SessionConfigSelectOption> {
 impl Fake {
     fn cancelled(&self, session: &SessionId) -> bool {
         self.cancelled.lock().unwrap().contains(session)
+    }
+
+    /// `session` works in `folder`.
+    fn at_folder(&self, session: SessionId, folder: std::path::PathBuf) {
+        (self.setups.lock().unwrap())
+            .entry(session)
+            .or_default()
+            .folder = folder;
     }
 
     fn setup(&self, session: &SessionId) -> Setup {
@@ -679,8 +688,7 @@ async fn turn(
     if words.contains("on disk") {
         // It edits a file with its tool, and its shell makes another, as
         // a real Harness does, in the session's folder.
-        let folder = (fake.folders.lock().unwrap()).get(&session).cloned();
-        let folder = folder.unwrap_or_default();
+        let folder = fake.setup(&session).folder;
         let notes = folder.join("notes.md");
         let old = std::fs::read_to_string(&notes).ok();
         let _ = std::fs::write(&notes, "one\n2\nthree\n");
@@ -1163,7 +1171,7 @@ async fn main() -> Result<(), Error> {
                         let _ = std::fs::write(file, roots);
                     }
                     let id = fake.new_session();
-                    (fake.folders.lock().unwrap()).insert(id.clone(), request.cwd.clone());
+                    fake.at_folder(id.clone(), request.cwd.clone());
                     let options = fake.options(&id);
                     responder
                         .respond(NewSessionResponse::new(id.clone()).config_options(options))?;
@@ -1230,8 +1238,7 @@ async fn main() -> Result<(), Error> {
                     if forgets() {
                         return responder.respond_with_error(Error::resource_not_found(None));
                     }
-                    (fake.folders.lock().unwrap())
-                        .insert(request.session_id.clone(), request.cwd.clone());
+                    fake.at_folder(request.session_id.clone(), request.cwd.clone());
                     let options = fake.options(&request.session_id);
                     responder.respond(LoadSessionResponse::new().config_options(options))
                 }

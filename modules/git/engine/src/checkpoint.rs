@@ -62,12 +62,13 @@ pub async fn find(repo: &Repo, reference: &str) -> Result<Option<String>, Refusa
 /// those git ignores, as a commit whose parent is `HEAD`, so a later look
 /// can tell whether `HEAD` moved. With more untracked files than a diff
 /// takes in, none is kept: the turn shows what its tool calls changed.
-pub async fn capture(repo: &Repo, reference: &str) -> Result<bool, Refusal> {
-    if untracked(repo).await?.len() > UNTRACKED {
+pub async fn capture(repo: &Repo, reference: &str) -> Result<(), Refusal> {
+    let (untracked, own, head) = futures::join!(untracked(repo), own_index(repo), repo.head());
+    if untracked?.len() > UNTRACKED {
         tracing::info!(%reference, "too many untracked files for a checkpoint");
-        return Ok(false);
+        return Ok(());
     }
-    let (_folder, index) = own_index(repo).await?;
+    let ((_folder, index), head) = (own?, head?);
     let opts = || Opts {
         index: Some(&index),
         ..Opts::default()
@@ -85,14 +86,13 @@ pub async fn capture(repo: &Repo, reference: &str) -> Result<bool, Refusal> {
         "-m",
         "Banda checkpoint",
     ];
-    let head = repo.head().await?;
     if let Some(head) = &head {
         commit.extend(["-p", head]);
     }
     let commit = repo.run(commit, Opts::default()).await?.text();
     repo.run(["update-ref", reference, &commit], Opts::default())
         .await?;
-    Ok(true)
+    Ok(())
 }
 
 /// Lets go of the checkpoints of `turns` of `thread`.

@@ -456,7 +456,7 @@ async fn follow(
     filter: EventFilter,
     out: mpsc::Sender<Outgoing>,
 ) {
-    let mut heard = space.hear("", after, filter, false);
+    let mut heard = space.hear(after, filter, None);
     // It holds the Space only while it reads the log.
     drop(space);
     loop {

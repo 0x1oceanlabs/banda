@@ -42,6 +42,16 @@ struct Sides {
     base: Option<Base>,
 }
 
+/// Whether a scope's new side is the work tree; none for a turn's, which
+/// is while the turn runs.
+fn work_tree(scope: &Scope) -> Option<bool> {
+    match scope {
+        Scope::Changes { .. } | Scope::Uncommitted => Some(true),
+        Scope::Staged | Scope::Commit { .. } => Some(false),
+        Scope::Turn { .. } => None,
+    }
+}
+
 /// The sides of `scope`, with `head` the commit `HEAD` is.
 async fn sides(repo: &Repo, scope: &Scope, head: Option<&str>) -> Result<Sides, Refusal> {
     let tree = |from: String| Sides {
@@ -125,11 +135,24 @@ impl Sides {
 /// What `ask` compares, read after the Space's event `at`.
 pub async fn diff(repo: &Repo, ask: DiffAsk, at: i64) -> Result<Diff, Refusal> {
     let head = repo.head().await?;
-    let sides = sides(repo, &ask.scope, head.as_deref()).await?;
     // The work tree has the untracked files too, as added.
-    let scratch = match sides.to.is_none() && !sides.cached {
-        true => Scratch::with_untracked(repo, head.is_some()).await?,
-        false => Scratch::none(),
+    let committed = head.is_some();
+    let scratch = |work_tree: bool| async move {
+        match work_tree {
+            true => Scratch::with_untracked(repo, committed).await,
+            false => Ok(Scratch::none()),
+        }
+    };
+    let (sides, scratch) = match work_tree(&ask.scope) {
+        Some(work_tree) => {
+            let both = futures::join!(sides(repo, &ask.scope, head.as_deref()), scratch(work_tree));
+            (both.0?, both.1?)
+        }
+        None => {
+            let sides = sides(repo, &ask.scope, head.as_deref()).await?;
+            let scratch = scratch(sides.to.is_none()).await?;
+            (sides, scratch)
+        }
     };
     let opts = |cap| Opts {
         cap,

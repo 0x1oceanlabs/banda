@@ -31,11 +31,12 @@ impl Module for Agents {
         Some(Right::Write)
     }
 
-    async fn call(&self, call: Call, kind: &str, fact: Value) -> Result<Value, Refusal> {
-        let (kind, by) = (kind.replace('_', "."), call.participant());
+    /// `say { kind, thread, turn }` writes the fact `kind` about `thread`.
+    async fn call(&self, call: Call, _: &str, fact: Value) -> Result<Value, Refusal> {
+        let by = call.participant();
         call.command(move |tx| {
-            let thread = fact["thread"].as_str().unwrap().to_owned();
-            tx.emit(&kind, 1, Some(&thread), by, &fact)?;
+            let (kind, thread) = (fact["kind"].as_str().unwrap(), fact["thread"].as_str());
+            tx.emit(kind, 1, thread, by, &fact)?;
             Ok(())
         })
         .await?;
@@ -113,12 +114,11 @@ impl World {
     /// The agents module says `kind` about turn `turn` of Thread `thread`.
     async fn say(&self, kind: &str, thread: &str, turn: &str) {
         let person = Participant::Person(self.owner);
-        let method = format!("agents.{}", kind.replace('.', "_"));
-        let fact = json!({ "thread": thread, "turn": turn });
+        let fact = json!({ "kind": kind, "thread": thread, "turn": turn });
         (self.kernel)
             .call(
                 person,
-                &method,
+                "agents.say",
                 Some(self.space),
                 Some(CommandId::new()),
                 fact,

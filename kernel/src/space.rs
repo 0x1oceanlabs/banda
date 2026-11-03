@@ -303,17 +303,16 @@ impl Space {
             .await
     }
 
-    /// Events after `after` that match `filter`, for `module`; when it
-    /// `reacts`, the effects that wait for reactions wait for it too (see
+    /// Events after `after` that match `filter`; as a module's reaction,
+    /// the effects that wait for reactions wait for it too (see
     /// [`ModuleSpace::react`]).
     pub(crate) fn hear(
         self: &Arc<Self>,
-        module: &'static str,
         after: i64,
         filter: EventFilter,
-        reacts: bool,
+        reaction_of: Option<&'static str>,
     ) -> Heard {
-        let handled = reacts.then(|| {
+        let handled = reaction_of.map(|_| {
             let (handled, reaction) = watch::channel(after);
             self.reactions.lock().unwrap().push(reaction);
             handled
@@ -322,7 +321,7 @@ impl Space {
         Heard {
             live: self.subscribe(),
             space: Arc::downgrade(self),
-            module,
+            module: reaction_of,
             filter,
             last: after,
             given: after,
@@ -411,7 +410,8 @@ impl Committed {
 /// the log, so a removed Space still goes.
 pub struct Heard {
     space: std::sync::Weak<Space>,
-    module: &'static str,
+    /// The module whose reaction it is.
+    module: Option<&'static str>,
     live: broadcast::Receiver<Arc<Event>>,
     filter: EventFilter,
     /// The last event heard.
@@ -454,8 +454,6 @@ impl Heard {
                 self.read.extend(page);
                 continue;
             }
-            // Everything up to the last heard is handled: the log's events
-            // were given, and the others are not its to react to.
             match self.live.recv().await {
                 Ok(event) if event.seq > self.last => {
                     self.last = event.seq;
@@ -463,21 +461,22 @@ impl Heard {
                         self.given = event.seq;
                         return Ok(Some(Event::clone(&event)));
                     }
-                    self.reacted(event.seq);
                 }
-                Ok(_) => self.reacted(self.last),
+                Ok(_) => {}
                 // Back to the log for what went by.
                 Err(broadcast::error::RecvError::Lagged(_)) => self.caught_up = false,
                 Err(broadcast::error::RecvError::Closed) => return Ok(None),
             }
+            // Everything up to the last heard is handled: the log's events
+            // were given, and the others are not its to react to.
+            self.reacted(self.last);
         }
     }
 
-    /// The Space it hears, while it is open, as the module that hears it
-    /// sees it.
+    /// The Space it hears, while it is open, as the module reacting sees
+    /// it.
     pub fn space(&self) -> Option<ModuleSpace> {
-        let space = self.space.upgrade()?;
-        Some(space.module(self.module))
+        Some(self.space.upgrade()?.module(self.module?))
     }
 
     /// Says it has reacted to every event up to `seq`.
@@ -584,7 +583,7 @@ impl ModuleSpace {
     /// An effect that waits for the reactions ([`ModuleSpace::reacted`])
     /// waits until it has handled each one before.
     pub fn react(&self, after: i64, filter: EventFilter) -> Heard {
-        self.space.hear(self.module, after, filter, true)
+        self.space.hear(after, filter, Some(self.module))
     }
 
     /// Waits until every module reacting to the log has handled what is
