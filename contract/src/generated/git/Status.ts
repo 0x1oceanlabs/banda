@@ -37,6 +37,11 @@ ahead?: number,
  */
 behind?: number, 
 /**
+ * The remote pushed to when the branch has no upstream: `origin`, or
+ * else the first; none when the repository has no remote.
+ */
+remote?: string, 
+/**
  * The repository's default branch, as `main`: `origin/HEAD`'s, or
  * `main`, or `master`, the first that is there.
  */

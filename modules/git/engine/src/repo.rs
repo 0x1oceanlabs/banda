@@ -2,6 +2,8 @@
 //! default branch, and the base a branch left, as T3 Code resolves them
 //! (`docs/research/2026-11-02-t3-code-git-backend.md`, section 1).
 
+use crate::model::Commit;
+use crate::parse::{self, Porcelain};
 use crate::run::{Failure, Opts, Ran, Reason, git};
 use banda_kernel::Refusal;
 use std::ffi::OsStr;
@@ -80,7 +82,7 @@ impl Repo {
 
     /// Whether a git that only answers yes or no, as `show-ref --quiet`,
     /// says yes.
-    async fn yes<I, S>(&self, args: I) -> Result<bool, Failure>
+    pub async fn yes<I, S>(&self, args: I) -> Result<bool, Failure>
     where
         I: IntoIterator<Item = S>,
         S: AsRef<OsStr>,
@@ -143,19 +145,40 @@ impl Repo {
             .map(|r| r.to_string()))
     }
 
-    async fn has_ref(&self, full: &str) -> Result<bool, Failure> {
+    /// A config value, as `branch.main.remote`; none when it is not set.
+    pub async fn config(&self, key: &str) -> Result<Option<String>, Failure> {
+        self.verified(["config", "--get", key]).await
+    }
+
+    /// The commit `HEAD` is, as `git.commits` says one.
+    pub async fn said_head(&self) -> Result<Commit, Failure> {
+        let ran = self
+            .run(["log", "-1", "-z", parse::LOG_FORMAT], Opts::default())
+            .await?;
+        parse::log(&ran.stdout).pop().ok_or(Failure(Reason::BadRef))
+    }
+
+    /// The branch, its upstream and what changed, as
+    /// `status --porcelain=2 --branch` says them. Ahead and behind read
+    /// only the refs git has already fetched.
+    pub async fn porcelain(&self) -> Result<Porcelain, Failure> {
+        let said = self
+            .run(
+                ["status", "--porcelain=2", "--branch", "-z"],
+                Opts::default(),
+            )
+            .await?;
+        Ok(parse::porcelain(&said.stdout))
+    }
+
+    pub async fn has_ref(&self, full: &str) -> Result<bool, Failure> {
         self.yes(["show-ref", "--verify", "--quiet", full]).await
     }
 
-    /// The default branch's name, as `main`: the primary remote's
-    /// `HEAD`, or `main`, or `master`, the first that is here or on that
-    /// remote. T3 Code never reads `init.defaultBranch`, and nor does this.
-    pub async fn default_branch(&self) -> Result<Option<String>, Failure> {
-        let remote = self.primary_remote().await?;
-        self.default_on(remote.as_deref()).await
-    }
-
-    /// The default branch's name with the primary remote already known.
+    /// The default branch's name, as `main`, with the primary remote
+    /// known: that remote's `HEAD`, or `main`, or `master`, the first that
+    /// is here or on that remote. T3 Code never reads
+    /// `init.defaultBranch`, and nor does this.
     pub async fn default_on(&self, remote: Option<&str>) -> Result<Option<String>, Failure> {
         if let Some(name) = self.remote_head(remote).await? {
             return Ok(Some(name));
@@ -337,6 +360,23 @@ fn short(full: &str) -> String {
 /// A path git takes as it is, from the top: no glob, no magic.
 pub fn pathspec(path: &str) -> String {
     format!(":(top,literal){path}")
+}
+
+/// Each of `paths`, when each is a file's path from the top that stays
+/// inside it.
+pub fn plain_paths(paths: &[String]) -> Result<Vec<&str>, Refusal> {
+    paths.iter().map(|path| plain_path(path)).collect()
+}
+
+/// A folder of the engine's own, gone when it is dropped.
+pub fn scratch(prefix: &str) -> Result<tempfile::TempDir, Refusal> {
+    tempfile::Builder::new()
+        .prefix(prefix)
+        .tempdir()
+        .map_err(|error| {
+            tracing::warn!(%error, "no folder of the engine's own");
+            Refusal::internal()
+        })
 }
 
 /// `path`, when it is a file's path from the top that stays inside it.

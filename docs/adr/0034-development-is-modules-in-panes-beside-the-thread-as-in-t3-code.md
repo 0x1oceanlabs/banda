@@ -128,10 +128,14 @@ the rest are our defaults, as T3 Code does, and stay Roma's to change.
      credentials.
    - Reads: `git.status` (branch, upstream, ahead and behind, the changed
      files with `+N −M`), `git.diff { scope }`, `git.refs`, `git.commits`.
-   - Commands: `git.commit { message?, files, branch? }`, `git.push`,
-     `git.pull`, `git.switch { ref }`, `git.branch { name, from? }`,
-     `git.stage`, `git.unstage`, `git.revert` (a file or a hunk),
-     `git.init`. Each says in a line what went wrong.
+   - Commands: `git.act { action, message?, files?, branch? }`, a stream
+     that commits, pushes or pulls, each step after the one before
+     succeeded, as T3 Code's stacked action: it says each step, each hook
+     as it begins (from git's trace2 events) and each line it prints, its
+     credentials taken out, then how it ended. `git.switch { name }`,
+     `git.branch { name, from? }`, `git.stage`, `git.unstage`,
+     `git.revert` (a file or a hunk), `git.init`. Each says in a line what
+     went wrong; a hook or a remote that stopped it says its last line.
    - A message left empty is written by a Harness in one short run, as T3
      Code's text model writes it (_decided_): from the staged diff, in the
      repository's style; with "Commit on new branch" it names the branch
@@ -160,6 +164,11 @@ the rest are our defaults, as T3 Code does, and stay Roma's to change.
      main", or "Check out feature branch & continue", the branch named for
      it.
    - **Changes `+N −M`** opens `git.diff` on Changes.
+   - Roma's calls of 2026-11-03: the card is open when a Thread starts,
+     as T3 Code's, and the header's button and its key hide it; an empty
+     message is written by the Thread's own Harness, in a short run of its
+     own that the Thread does not show; a setting for another model comes
+     later, as T3 Code's "Source control writer".
    - The same actions are in the Banda menu (ADR 0017), under Git: Diff,
      Commit, Push, Switch branch. They act in the focused Space.
 
@@ -246,9 +255,10 @@ Each a PR, tried in the window, with `/simplify` before it:
 2. **Turns from checkpoints.** The snapshots before and after each turn,
    Turn from them in a repository, the refs gone with their Thread.
 3. **Stage, unstage and revert** in `git.diff`.
-4. **Thread details and the main button.** The card, the way a module
-   adds rows to it, the branch, the git commands, `git.watch`, the
-   message a Harness writes, the Banda menu's Git actions.
+4. **Thread details and the main button**, in four PRs: (a) the git
+   commands and `git.watch`; (b) the message a Harness writes; (c) the
+   card, the way a module adds rows to it, the branch, the main button
+   and its dialogs; (d) the Banda menu's Git actions.
 5. **Files.** `files.tree`, `files.file`, paths in replies as links,
    `agents.files` moved.
 6. **A pull request.** `pulls` on `gh`, `pulls.pull`, Create PR from

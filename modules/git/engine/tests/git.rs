@@ -3,7 +3,9 @@
 //! alone, never in the Person's global config.
 
 use banda_git::Git;
-use banda_git::model::{Change, Changed, Commit, Contents, Diff, Ref, Status};
+use banda_git::model::{
+    Change, Changed, Commit, Contents, Diff, Done, Progress, Ref, Status, Step,
+};
 use banda_kernel::{
     Call, Code, CommandId, Kernel, Module, Participant, PersonId, Refusal, Right, SpaceId,
 };
@@ -156,20 +158,74 @@ impl World {
     /// Runs git in the Space's folder, as the Person would, and says what
     /// it printed.
     fn git(&self, args: &[&str]) -> String {
-        let out = Command::new("git")
-            .args(args)
-            .current_dir(&self.folder)
-            .env_remove("GIT_DIR")
-            .env_remove("GIT_INDEX_FILE")
-            .env_remove("GIT_WORK_TREE")
-            .output()
+        run_git(&self.folder, args)
+    }
+
+    /// A stream's pieces until it says how it ended, or for `within`.
+    async fn stream(&self, method: &str, params: Value, within: u64) -> Vec<Value> {
+        let person = Participant::Person(self.owner);
+        let mut heard = self
+            .kernel
+            .stream(person, method, Some(self.space), params)
+            .await
             .unwrap();
-        assert!(
-            out.status.success(),
-            "git {args:?}: {}",
-            String::from_utf8_lossy(&out.stderr)
+        let mut pieces = Vec::new();
+        let end = tokio::time::Instant::now() + std::time::Duration::from_secs(within);
+        while let Ok(Some(piece)) = tokio::time::timeout_at(end, heard.recv()).await {
+            let ended = matches!(piece["kind"].as_str(), Some("done" | "failed"));
+            pieces.push(piece);
+            if ended {
+                break;
+            }
+        }
+        pieces
+    }
+
+    /// What `git.act` said as it went.
+    async fn act(&self, ask: Value) -> Vec<Progress> {
+        let pieces = self.stream("git.act", ask, 60).await;
+        pieces
+            .into_iter()
+            .map(|p| serde_json::from_value(p).unwrap())
+            .collect()
+    }
+
+    /// A bare repository beside the Space's folder, as its `origin`, with
+    /// `main` pushed and followed.
+    fn remote(&self) -> PathBuf {
+        let remote = self._root.path().join("remote.git");
+        run_git(
+            self._root.path(),
+            &[
+                "init",
+                "--quiet",
+                "--bare",
+                "--initial-branch=main",
+                "remote.git",
+            ],
         );
-        String::from_utf8(out.stdout).unwrap().trim_end().to_owned()
+        self.git(&["remote", "add", "origin", remote.to_str().unwrap()]);
+        self.git(&["push", "--quiet", "-u", "origin", "main"]);
+        remote
+    }
+
+    /// Another clone of the remote, as another Person's, which commits
+    /// `path` on `branch` and pushes it.
+    fn theirs(&self, branch: &str, path: &str) {
+        let root = self._root.path();
+        if !root.join("theirs").exists() {
+            run_git(root, &["clone", "--quiet", "remote.git", "theirs"]);
+            let theirs = root.join("theirs");
+            run_git(&theirs, &["config", "user.name", "Bo"]);
+            run_git(&theirs, &["config", "user.email", "bo@example.com"]);
+            run_git(&theirs, &["config", "commit.gpgsign", "false"]);
+        }
+        let theirs = root.join("theirs");
+        run_git(&theirs, &["checkout", "--quiet", "-B", branch]);
+        std::fs::write(theirs.join(path), "theirs\n").unwrap();
+        run_git(&theirs, &["add", "--all"]);
+        run_git(&theirs, &["commit", "--quiet", "-m", "theirs"]);
+        run_git(&theirs, &["push", "--quiet", "origin", branch]);
     }
 
     fn write(&self, path: &str, text: &str) {
@@ -189,6 +245,43 @@ impl World {
         let index = self.folder.join(".git/index");
         let about = std::fs::metadata(&index).unwrap();
         (std::fs::read(&index).unwrap(), about.modified().unwrap())
+    }
+}
+
+/// Runs git in `folder`, and says what it printed.
+fn run_git(folder: &std::path::Path, args: &[&str]) -> String {
+    let out = Command::new("git")
+        .args(args)
+        .current_dir(folder)
+        .env_remove("GIT_DIR")
+        .env_remove("GIT_INDEX_FILE")
+        .env_remove("GIT_WORK_TREE")
+        .output()
+        .unwrap();
+    assert!(
+        out.status.success(),
+        "git {args:?}: {}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    String::from_utf8(out.stdout).unwrap().trim_end().to_owned()
+}
+
+/// How `git.act` ended.
+fn ended(said: &[Progress]) -> &Progress {
+    said.last().expect("git.act said something")
+}
+
+fn failed(said: &[Progress]) -> &str {
+    match ended(said) {
+        Progress::Failed { message } => message,
+        other => panic!("it did not fail: {other:?}"),
+    }
+}
+
+fn done(said: &[Progress]) -> &Done {
+    match ended(said) {
+        Progress::Done { done } => done,
+        other => panic!("it did not end well: {other:?}"),
     }
 }
 
@@ -900,4 +993,280 @@ async fn a_hunk_of_a_file_changed_since_the_diff_changes_nothing() {
         .unwrap_err();
     assert_eq!(refused.code, Code::Conflict);
     assert_eq!(world.git(&["diff", "--cached"]), "");
+}
+
+#[tokio::test]
+async fn the_button_commits_every_change_and_pushes_it() {
+    let world = World::committed().await;
+    let remote = world.remote();
+    world.write("a.txt", "one\nTWO\nthree\n");
+    world.write("new.txt", "new\n");
+    let said = world
+        .act(json!({ "action": "commit_push", "message": "Add new\n\nWith a body." }))
+        .await;
+
+    let steps: Vec<&Progress> = said
+        .iter()
+        .filter(|p| matches!(p, Progress::Step { .. }))
+        .collect();
+    assert_eq!(
+        steps,
+        [
+            &Progress::Step {
+                step: Step::Committing
+            },
+            &Progress::Step {
+                step: Step::Pushing
+            }
+        ]
+    );
+    let short = world.git(&["rev-parse", "--short", "HEAD"]);
+    assert_eq!(
+        done(&said),
+        &Done {
+            title: format!("Pushed {short} to origin/main"),
+            detail: Some("Add new".to_owned()),
+        }
+    );
+    assert_eq!(
+        world.git(&["log", "-1", "--format=%B"]),
+        "Add new\n\nWith a body."
+    );
+    let pushed = run_git(&remote, &["rev-parse", "main"]);
+    assert_eq!(pushed, world.git(&["rev-parse", "HEAD"]));
+    let status = world.status().await;
+    assert!(status.files.is_empty());
+    assert_eq!(status.remote.as_deref(), Some("origin"));
+    assert_eq!((status.ahead, status.behind), (Some(0), Some(0)));
+}
+
+#[tokio::test]
+async fn a_new_branch_is_pushed_under_its_own_name_and_followed() {
+    let world = World::committed().await;
+    world.remote();
+    world.write("a.txt", "changed\n");
+    let said = world
+        .act(json!({ "action": "commit_push", "message": "Change a", "branch": "feature/a" }))
+        .await;
+
+    assert_eq!(
+        said[0],
+        Progress::Step {
+            step: Step::Branching
+        }
+    );
+    assert!(done(&said).title.ends_with(" to origin/feature/a"));
+    let status = world.status().await;
+    assert_eq!(status.branch.as_deref(), Some("feature/a"));
+    assert_eq!(status.upstream.as_deref(), Some("origin/feature/a"));
+    assert_eq!(
+        world.git(&["rev-parse", "main"]),
+        world.git(&["rev-parse", "HEAD~1"])
+    );
+}
+
+#[tokio::test]
+async fn a_commit_of_chosen_files_takes_them_alone() {
+    let world = World::committed().await;
+    world.write("a.txt", "changed\n");
+    world.write("b.txt", "changed\n");
+    world.git(&["add", "b.txt"]);
+    let said = world
+        .act(json!({ "action": "commit", "message": "Change a", "files": ["a.txt"] }))
+        .await;
+
+    let short = world.git(&["rev-parse", "--short", "HEAD"]);
+    assert_eq!(done(&said).title, format!("Committed {short}"));
+    assert_eq!(
+        world.git(&["show", "--name-only", "--format=", "HEAD"]),
+        "a.txt"
+    );
+    assert_eq!(world.git(&["status", "--porcelain"]), " M b.txt");
+}
+
+#[tokio::test]
+async fn a_commit_needs_a_message_changes_and_a_branch_to_push() {
+    let world = World::committed().await;
+    let refused = world
+        .stream(
+            "git.act",
+            json!({ "action": "commit", "message": "Nothing" }),
+            10,
+        )
+        .await;
+    assert_eq!(
+        refused[0]["message"],
+        "Nothing to commit: the work tree is clean."
+    );
+    world.write("a.txt", "changed\n");
+    let said = world
+        .act(json!({ "action": "commit", "message": "  " }))
+        .await;
+    assert_eq!(failed(&said), "A commit needs a message.");
+    let said = world
+        .act(json!({ "action": "push", "message": "No" }))
+        .await;
+    assert_eq!(
+        failed(&said),
+        "Only a commit takes a message, files or a new branch."
+    );
+
+    world.git(&["checkout", "--quiet", "--detach"]);
+    let said = world.act(json!({ "action": "push" })).await;
+    assert_eq!(said.len(), 1);
+    assert_eq!(failed(&said), "HEAD is detached: check out a branch first.");
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn a_hook_says_its_name_and_lines_and_one_that_fails_stops_the_commit() {
+    use std::os::unix::fs::PermissionsExt;
+    let world = World::committed().await;
+    let hook = world.folder.join(".git/hooks/pre-commit");
+    std::fs::write(&hook, "#!/bin/sh\necho checking things >&2\nexit 1\n").unwrap();
+    std::fs::set_permissions(&hook, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let head = world.git(&["rev-parse", "HEAD"]);
+    world.write("a.txt", "changed\n");
+    let said = world
+        .act(json!({ "action": "commit", "message": "Change a" }))
+        .await;
+
+    assert!(
+        said.contains(&Progress::Hook {
+            name: "pre-commit".to_owned()
+        }),
+        "{said:?}"
+    );
+    assert!(
+        said.contains(&Progress::Line {
+            line: "checking things".to_owned()
+        }),
+        "{said:?}"
+    );
+    assert_eq!(
+        failed(&said),
+        "The pre-commit hook stopped it: checking things"
+    );
+    assert_eq!(world.git(&["rev-parse", "HEAD"]), head);
+}
+
+#[tokio::test]
+async fn a_branch_behind_pulls_and_one_that_diverged_cannot_push() {
+    let world = World::committed().await;
+    world.remote();
+    world.theirs("main", "theirs.txt");
+    world.git(&["fetch", "--quiet"]);
+    assert_eq!(world.status().await.behind, Some(1));
+
+    let said = world.act(json!({ "action": "pull" })).await;
+    assert_eq!(done(&said).title, "Pulled");
+    assert_eq!(
+        world.git(&["rev-parse", "HEAD"]),
+        world.git(&["rev-parse", "origin/main"])
+    );
+    let said = world.act(json!({ "action": "pull" })).await;
+    assert_eq!(done(&said).title, "Already up to date");
+
+    world.theirs("main", "more.txt");
+    world.write("a.txt", "ours\n");
+    let said = world
+        .act(json!({ "action": "commit_push", "message": "Ours" }))
+        .await;
+    assert_eq!(
+        failed(&said),
+        "The remote has commits this branch lacks: pull them first."
+    );
+    world.git(&["fetch", "--quiet"]);
+    let said = world.act(json!({ "action": "pull" })).await;
+    assert_eq!(
+        failed(&said),
+        "This branch and its upstream both have commits the other lacks: rebase or merge first."
+    );
+}
+
+#[tokio::test]
+async fn branches_are_made_and_switched_to_a_remote_one_through_its_own() {
+    let world = World::committed().await;
+    world.remote();
+    world.theirs("topic", "topic.txt");
+    world.git(&["fetch", "--quiet"]);
+
+    world
+        .call("git.branch", json!({ "name": "feature" }))
+        .await
+        .unwrap();
+    assert_eq!(world.status().await.branch.as_deref(), Some("feature"));
+    let refused = world
+        .call("git.branch", json!({ "name": "main" }))
+        .await
+        .unwrap_err();
+    assert_eq!(refused.message, "A branch of that name is there already.");
+    let refused = world
+        .call("git.branch", json!({ "name": "a..b" }))
+        .await
+        .unwrap_err();
+    assert_eq!(refused.code, Code::Invalid);
+
+    world
+        .call("git.switch", json!({ "name": "origin/topic" }))
+        .await
+        .unwrap();
+    let status = world.status().await;
+    assert_eq!(status.branch.as_deref(), Some("topic"));
+    assert_eq!(status.upstream.as_deref(), Some("origin/topic"));
+    world
+        .call("git.switch", json!({ "name": "main" }))
+        .await
+        .unwrap();
+    world
+        .call("git.switch", json!({ "name": "origin/topic" }))
+        .await
+        .unwrap();
+    assert_eq!(world.status().await.branch.as_deref(), Some("topic"));
+
+    world.write("topic.txt", "mine\n");
+    let refused = world
+        .call("git.switch", json!({ "name": "main" }))
+        .await
+        .unwrap_err();
+    assert_eq!(
+        refused.message,
+        "This would lose changes in some files: commit or stash them first."
+    );
+    let refused = world
+        .call("git.switch", json!({ "name": "nope" }))
+        .await
+        .unwrap_err();
+    assert_eq!(refused.code, Code::NotFound);
+}
+
+#[tokio::test]
+async fn a_folder_becomes_a_repository_once() {
+    let world = World::bare().await;
+    world.call("git.init", json!({})).await.unwrap();
+    assert!(world.status().await.repo);
+    let refused = world.call("git.init", json!({})).await.unwrap_err();
+    assert_eq!(refused.code, Code::Conflict);
+}
+
+#[tokio::test]
+async fn the_watch_says_the_status_and_then_what_changed() {
+    let world = World::committed().await;
+    let person = Participant::Person(world.owner);
+    let mut heard = world
+        .kernel
+        .stream(person, "git.watch", Some(world.space), json!({}))
+        .await
+        .unwrap();
+    let first: Status = serde_json::from_value(heard.recv().await.unwrap()).unwrap();
+    assert!(first.files.is_empty());
+
+    world.write("new.txt", "new\n");
+    let within = std::time::Duration::from_secs(10);
+    let next = tokio::time::timeout(within, heard.recv())
+        .await
+        .unwrap()
+        .unwrap();
+    let next: Status = serde_json::from_value(next).unwrap();
+    assert_eq!(next.files.len(), 1);
 }

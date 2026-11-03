@@ -18,14 +18,7 @@ pub async fn status(folder: &Path, at: i64) -> Result<Status, Failure> {
             ..Status::default()
         });
     };
-    // With ahead and behind, which read only refs git has already fetched.
-    let said = repo
-        .run(
-            ["status", "--porcelain=2", "--branch", "-z"],
-            Opts::default(),
-        )
-        .await?;
-    let said = parse::porcelain(&said.stdout);
+    let said = repo.porcelain().await?;
     let against = match &said.head {
         Some(head) => head.clone(),
         None => repo.empty_tree().await?,
@@ -43,7 +36,13 @@ pub async fn status(folder: &Path, at: i64) -> Result<Status, Failure> {
         ],
         Opts::default(),
     );
-    let (counted, default_branch) = futures::join!(counted, repo.default_branch());
+    let remote = async {
+        let remote = repo.primary_remote().await?;
+        let default = repo.default_on(remote.as_deref()).await?;
+        Ok::<_, Failure>((remote, default))
+    };
+    let (counted, remote) = futures::join!(counted, remote);
+    let (remote, default_branch) = remote?;
     let counts: HashMap<String, (u32, u32)> = parse::numstat(&counted?.stdout)
         .into_iter()
         .map(|f| (f.path, (f.added, f.removed)))
@@ -60,7 +59,8 @@ pub async fn status(folder: &Path, at: i64) -> Result<Status, Failure> {
         ahead: said.upstream.as_ref().and(said.ahead),
         behind: said.upstream.as_ref().and(said.behind),
         upstream: said.upstream,
-        default_branch: default_branch?,
+        remote,
+        default_branch,
         added: files.iter().map(|f| f.added).sum(),
         removed: files.iter().map(|f| f.removed).sum(),
         files,
