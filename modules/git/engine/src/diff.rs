@@ -340,13 +340,7 @@ pub const INDEX: [&str; 6] = [
 /// copy keeps what the index knows of each file, so git reads again only
 /// those changed. It goes with the folder.
 pub async fn own_index(repo: &Repo) -> Result<(tempfile::TempDir, PathBuf), Refusal> {
-    let folder = tempfile::Builder::new()
-        .prefix("banda-git-index-")
-        .tempdir()
-        .map_err(|error| {
-            tracing::warn!(%error, "no folder for an index of the engine's");
-            Refusal::internal()
-        })?;
+    let folder = crate::repo::scratch("banda-git-index-")?;
     let index = folder.path().join("index");
     let own = repo
         .run(["rev-parse", "--git-path", "index"], Opts::default())

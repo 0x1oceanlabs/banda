@@ -35,6 +35,11 @@ pub struct Status {
     #[ts(optional)]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub behind: Option<u32>,
+    /// The remote pushed to when the branch has no upstream: `origin`, or
+    /// else the first; none when the repository has no remote.
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub remote: Option<String>,
     /// The repository's default branch, as `main`: `origin/HEAD`'s, or
     /// `main`, or `master`, the first that is there.
     #[ts(optional)]
@@ -287,4 +292,100 @@ pub struct HunkAsk {
     /// The file's object before and after, as short as the patch has it.
     pub old_id: String,
     pub new_id: String,
+}
+
+/// What `git.act` does at once, as T3 Code's git button: each step after
+/// the one before it succeeded.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export, export_to = "git/")]
+pub enum Action {
+    Commit,
+    Push,
+    CommitPush,
+    Pull,
+}
+
+/// What `git.act` is asked.
+#[derive(Clone, Debug, Deserialize, TS)]
+#[ts(export, export_to = "git/")]
+pub struct ActAsk {
+    pub action: Action,
+    /// The commit's message: its first line the subject, the rest its
+    /// body.
+    #[serde(default)]
+    #[ts(optional)]
+    pub message: Option<String>,
+    /// Only these files are committed, by their path from the top; every
+    /// change when none are given. Others staged are unstaged first.
+    #[serde(default)]
+    #[ts(optional)]
+    pub files: Option<Vec<String>>,
+    /// A branch made from here and switched to first, the changes taken
+    /// along, for the commit and the push.
+    #[serde(default)]
+    #[ts(optional)]
+    pub branch: Option<String>,
+}
+
+/// What `git.act` says as it goes: a step, a hook and what it prints,
+/// then how it ended.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+#[ts(export, export_to = "git/")]
+pub enum Progress {
+    /// A step begins.
+    Step { step: Step },
+    /// A hook begins, as `pre-commit`.
+    Hook { name: String },
+    /// A line git or its hook wrote, its credentials taken out.
+    Line { line: String },
+    /// All of it was done.
+    Done { done: Done },
+    /// A step failed, and the ones after it were not done.
+    Failed { message: String },
+}
+
+/// A step of `git.act`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export, export_to = "git/")]
+pub enum Step {
+    Branching,
+    Committing,
+    Pushing,
+    Pulling,
+}
+
+/// How `git.act` ended, as its button says it for ten seconds.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "git/")]
+pub struct Done {
+    /// As `Pushed a1b2c3d to origin/main`.
+    pub title: String,
+    /// As the commit's subject.
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub detail: Option<String>,
+}
+
+/// What `git.switch` is asked: a branch here, or a remote's, which a
+/// branch of its own then follows.
+#[derive(Clone, Debug, Deserialize, TS)]
+#[ts(export, export_to = "git/")]
+pub struct SwitchAsk {
+    /// As `main`, or `origin/main`.
+    pub name: String,
+}
+
+/// What `git.branch` is asked: a new branch, switched to.
+#[derive(Clone, Debug, Deserialize, TS)]
+#[ts(export, export_to = "git/")]
+pub struct BranchAsk {
+    pub name: String,
+    /// Where it starts; `HEAD` when none is given, the changes taken
+    /// along.
+    #[serde(default)]
+    #[ts(optional)]
+    pub from: Option<String>,
 }

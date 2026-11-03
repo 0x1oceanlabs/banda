@@ -6,12 +6,15 @@
 //! (`status`), the diff of a scope (`diff`, `contents`), the branches to
 //! compare with (`refs`) and the branch's commits (`commits`). These only
 //! read, and never take the repository's locks, so they run beside the
-//! Person's own git and an Agent's. `stage`, `unstage` and `revert` write,
-//! one at a time. A folder git does not know is no repository: `status`
-//! says so, and the rest refuse.
+//! Person's own git and an Agent's; `watch` follows the status as it
+//! changes. `stage`, `unstage`, `revert`, `act` (the git button's commit,
+//! push and pull), `switch`, `branch` and `init` write, one at a time. A
+//! folder git does not know is no repository: `status` says so, `init`
+//! makes it one, and the rest refuse.
 
 pub mod model;
 
+mod act;
 mod checkpoint;
 mod diff;
 mod parse;
@@ -20,19 +23,22 @@ mod repo;
 mod run;
 mod stage;
 mod status;
+mod watch;
 
-use banda_kernel::{Call, Error, Module, ModuleSpace, Nothing, Refusal, Right};
+use banda_kernel::{Call, Error, Module, ModuleSpace, Nothing, Refusal, Right, Stream};
 use model::{
-    ChangeAsk, Commit, CommitsAsk, Contents, ContentsAsk, Diff, DiffAsk, Ref, RefsAsk, Status,
+    ActAsk, BranchAsk, ChangeAsk, Commit, CommitsAsk, Contents, ContentsAsk, Diff, DiffAsk,
+    Progress, Ref, RefsAsk, Status, SwitchAsk,
 };
 use repo::Repo;
 use serde_json::Value;
+use std::sync::Arc;
 
 #[derive(Default)]
 pub struct Git {
     /// Held while one of its commands writes, so two of them never race
-    /// for the index's lock.
-    writing: tokio::sync::Mutex<()>,
+    /// for the index's lock; `act` holds it till it ends.
+    writing: Arc<tokio::sync::Mutex<()>>,
 }
 
 impl Git {
@@ -66,6 +72,20 @@ banda_kernel::methods! {
         /// Puts files, or the lines of one hunk, in the work tree back as
         /// the index has them; an untracked file goes. It cannot be undone.
         call revert(ChangeAsk) -> (), Write;
+        /// The status again each time it changes, first as it is now. It
+        /// fetches the upstream's remote every 30 seconds meanwhile.
+        stream watch(Nothing) -> Status, Read;
+        /// Commits every change or the files asked, pushes, or pulls, each
+        /// step after the one before succeeded, saying each and each hook
+        /// as it goes, then how it ended. It runs the repository's hooks.
+        stream act(ActAsk) -> Progress, Write;
+        /// Switches to a branch here, or to a remote's through a branch
+        /// that follows it; the changes go along, or git refuses.
+        call switch(SwitchAsk) -> (), Write;
+        /// Makes a branch, and switches to it.
+        call branch(BranchAsk) -> (), Write;
+        /// Makes the Space's folder a git repository.
+        call init(Nothing) -> (), Write;
     }
 }
 
@@ -93,6 +113,10 @@ impl Module for Git {
 
     async fn call(&self, call: Call, method: &str, params: Value) -> Result<Value, Refusal> {
         self.dispatch(call, method, params).await
+    }
+
+    async fn stream(&self, call: Call, method: &str, params: Value) -> Result<Stream, Refusal> {
+        self.dispatch_stream(call, method, params).await
     }
 }
 
@@ -140,5 +164,41 @@ impl Git {
         let repo = Repo::open(call.space().folder()).await?;
         let _writing = self.writing.lock().await;
         stage::change(&repo, act, ask).await
+    }
+
+    async fn watch(&self, call: Call, _: Nothing) -> Result<Stream, Refusal> {
+        Ok(watch::watch(call.space().clone()))
+    }
+
+    async fn act(&self, call: Call, ask: ActAsk) -> Result<Stream, Refusal> {
+        let repo = Repo::open(call.space().folder()).await?;
+        let writing = self.writing.clone();
+        let (say, heard) = tokio::sync::mpsc::channel(64);
+        // It goes on when the window lets go: a commit is not left half
+        // done.
+        tokio::spawn(async move {
+            let tell = act::Teller(say);
+            let _writing = writing.lock().await;
+            let ended = act::act(&repo, ask, &tell).await;
+            tell.ended(ended).await;
+        });
+        Ok(heard)
+    }
+
+    async fn switch(&self, call: Call, ask: SwitchAsk) -> Result<(), Refusal> {
+        let repo = Repo::open(call.space().folder()).await?;
+        let _writing = self.writing.lock().await;
+        act::switch(&repo, &ask.name).await
+    }
+
+    async fn branch(&self, call: Call, ask: BranchAsk) -> Result<(), Refusal> {
+        let repo = Repo::open(call.space().folder()).await?;
+        let _writing = self.writing.lock().await;
+        act::make_branch(&repo, &ask.name, ask.from.as_deref()).await
+    }
+
+    async fn init(&self, call: Call, _: Nothing) -> Result<(), Refusal> {
+        let _writing = self.writing.lock().await;
+        act::init(call.space().folder()).await
     }
 }

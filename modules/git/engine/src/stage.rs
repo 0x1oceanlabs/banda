@@ -11,7 +11,7 @@
 
 use crate::diff::{sides, untracked};
 use crate::model::{ChangeAsk, HunkAsk, Scope};
-use crate::repo::{Repo, pathspec, plain_path};
+use crate::repo::{Repo, pathspec, plain_paths};
 use crate::run::{Opts, Reason, git};
 use banda_kernel::Refusal;
 use std::collections::HashSet;
@@ -32,11 +32,7 @@ const MOVED: &str = "This changed since the Diff was read: look again.";
 
 /// Does `act` to `ask`'s files, or to the lines of its hunk.
 pub async fn change(repo: &Repo, act: Act, ask: ChangeAsk) -> Result<(), Refusal> {
-    let files = ask
-        .files
-        .iter()
-        .map(|path| plain_path(path))
-        .collect::<Result<Vec<_>, _>>()?;
+    let files = plain_paths(&ask.files)?;
     match (ask.hunk, files.as_slice()) {
         (_, []) => Err(Refusal::invalid("Name the files to change.")),
         (None, files) => whole(repo, act, files).await,

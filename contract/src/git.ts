@@ -1,10 +1,14 @@
 /**
  * The git module's words for TypeScript: what `git.status` reads, what
  * `git.diff` and `git.contents` compare, the branches and commits to
- * compare with, and what `git.stage`, `git.unstage` and `git.revert`
- * change.
+ * compare with, what `git.stage`, `git.unstage` and `git.revert`
+ * change, and what the git button asks `git.act`, `git.switch` and
+ * `git.branch` and hears back.
  */
+export type { ActAsk } from "./generated/git/ActAsk"
+export type { Action } from "./generated/git/Action"
 export type { Base } from "./generated/git/Base"
+export type { BranchAsk } from "./generated/git/BranchAsk"
 export type { Change } from "./generated/git/Change"
 export type { ChangeAsk } from "./generated/git/ChangeAsk"
 export type { Changed } from "./generated/git/Changed"
@@ -14,9 +18,13 @@ export type { Contents } from "./generated/git/Contents"
 export type { ContentsAsk } from "./generated/git/ContentsAsk"
 export type { Diff } from "./generated/git/Diff"
 export type { DiffAsk } from "./generated/git/DiffAsk"
+export type { Done } from "./generated/git/Done"
 export type { FileDiff } from "./generated/git/FileDiff"
 export type { HunkAsk } from "./generated/git/HunkAsk"
+export type { Progress } from "./generated/git/Progress"
 export type { Ref } from "./generated/git/Ref"
 export type { RefsAsk } from "./generated/git/RefsAsk"
 export type { Scope } from "./generated/git/Scope"
 export type { Status } from "./generated/git/Status"
+export type { Step } from "./generated/git/Step"
+export type { SwitchAsk } from "./generated/git/SwitchAsk"
