@@ -21,6 +21,8 @@ What the repository holds, checked on 2026-11-02:
 
 Roma, 2026-11-03:
 
+- "Maybe CI checks only mine, and doesn't run for outside ones." (on a fork's PR)
+
 - "Apache." (the license)
 - No CLA and no DCO.
 - The history stays as it is, with the ADRs, the research, the issues and the PRs.
@@ -34,12 +36,13 @@ Roma, 2026-11-03:
 
 3. **The history opens as it is.** It has no secrets, and the ADRs, the research, the issues and the PRs, Roma's words in them too, are how Banda came to be. Nothing is rewritten.
 
-4. **A fork's PR never runs on devbox.**
-   - The runner refuses it. On a `pull_request` event GitHub runs the workflows from the PR's own merge, so a fork could write `runs-on: devbox` back into them. The runner image runs `ci/job-started.sh` before every job, and it fails a job whose PR or `workflow_run` comes from another repository.
-   - The workflows route it. In `ci.yml`, a PR whose branch is in a fork runs every job on GitHub's `ubuntu-24.04`, where `ci/tools.sh` installs `ci/Dockerfile`'s Node and `package.json`'s pnpm, and runs the same `scripts/check.sh` parts. The required status `ci` is the same. `release.yml` packs a PR only from a branch of this repository.
+4. **A fork's PR is not checked: Roma takes it in by hand.**
+   - `ci.yml` skips every check on a PR whose branch is in a fork, and its `ci` fails, so it cannot be merged as it is. `release.yml` packs no fork's PR. Nothing of it runs anywhere, on devbox or on GitHub's runners.
+   - To take it, Roma reads it, pushes its commits to a branch of this repository and opens a PR of that branch. CI runs there on devbox, and the commits keep their author.
+   - The runner refuses it too. On a `pull_request` event GitHub runs the workflows from the PR's own merge, so a fork could rewrite them and send its jobs to devbox. The runner image runs `ci/job-started.sh` before every job, and it fails a job whose PR or `workflow_run` comes from another repository.
    - A branch of this repository runs on devbox as now: Roma's, an agent's, Renovate's. Only people with write access push branches here.
    - Neither workflow uses `pull_request_target`, which runs with the repository's token and secrets.
-   - In the repository's settings, every PR from someone outside waits for Roma's approval before its workflows run, so a fork's run costs no GitHub minutes until someone has looked at it.
+   - In the repository's settings, every PR from someone outside waits for Roma's approval before its workflows run.
 
 5. **The repository says what it is to someone who did not build it.**
    - `README.md`: what Banda is, a picture, how to install it, what it needs (Claude Code or Codex, `npx`), and that Banda sends nothing anywhere.
@@ -51,7 +54,7 @@ Roma, 2026-11-03:
 
 ## Steps
 
-1. **CI for a public repository**: the runners' hook, a fork's PR on GitHub's runners, `release.yml` only for this repository (decision 4). Roma rebuilds the runners' image on devbox (`ci/devbox.sh compose up -d --build`) for the hook to take effect.
+1. **CI for a public repository**: the runners' hook, no checks on a fork's PR, `release.yml` only for this repository (decision 4). Roma rebuilds the runners' image on devbox (`ci/devbox.sh compose up -d --build`) for the hook to take effect.
 2. **The license**: `LICENSE`, `NOTICE`, `Apache-2.0` in every crate and package, and a check in `check.sh` that every dependency's license is one that decision 1 allows (decision 1).
 3. **The files for people**: the README, `CONTRIBUTING.md`, `SECURITY.md`, the issue template (decision 5).
 4. **Opening**: Roma checks that the runners refuse a fork's job, sets the settings and changes the visibility (decision 6). Then ADR 0033's step 5 (updates on Linux) and the macOS Dev builds can start.
@@ -59,7 +62,7 @@ Roma, 2026-11-03:
 ## Consequences
 
 - Anyone can read, build, fork and ship Banda, under Apache-2.0's terms.
-- A PR from outside costs devbox nothing. It is slower than one from here, as it builds cold on GitHub's runners every time.
-- A change to how CI installs its tools is made twice: in `ci/Dockerfile` for devbox and in `ci/tools.sh` for GitHub's runners.
+- A PR from outside costs devbox and GitHub's minutes nothing, and runs nothing until Roma has read it.
+- Every outside PR waits on Roma: nobody else can take it in, and its author sees no checks on it.
 - What Roma decided and wrote in issues and ADRs is public from the switch on.
 - Banda cannot later be relicensed, say as source-available, without every contributor's consent.

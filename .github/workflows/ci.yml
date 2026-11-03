@@ -2,11 +2,10 @@
 # (ci/README.md). One required status, `ci`, sums them up: a PR that changes
 # only docs passes it without running them.
 #
-# A PR from a fork never runs on devbox (ADR 0038, decision 4): its code
-# could leave anything in the runners' volumes. It runs on GitHub's runners,
-# where ci/tools.sh installs what ci/Dockerfile has on devbox. This only
-# routes it: a fork can rewrite this file, and ci/job-started.sh on the
-# runner refuses its job.
+# A PR from a fork is not checked at all (ADR 0038, decision 4): `ci` fails
+# on it, so it cannot be merged as it is. Roma reads it and takes its
+# commits to a branch here, where CI runs. A fork can rewrite this file, so
+# ci/job-started.sh on the runner is what keeps its code off devbox.
 name: ci
 
 on:
@@ -14,11 +13,6 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
-    inputs:
-      github-hosted:
-        description: Run on GitHub's runners, as a fork's PR does
-        type: boolean
-        default: false
 
 # Nothing here publishes; a PR's code gets a read-only token.
 permissions:
@@ -36,16 +30,14 @@ env:
 jobs:
   changes:
     name: what changed
-    # A PR whose branch is not in this repository is a fork's, even when the
-    # fork is gone. The other jobs run where this one did.
-    runs-on: >-
-      ${{ (github.event_name == 'pull_request' &&
-           github.event.pull_request.head.repo.full_name != github.repository ||
-           inputs.github-hosted) && 'ubuntu-24.04' || 'devbox' }}
+    # Not a fork's PR, even one whose fork is gone; `check` follows it.
+    if: >-
+      github.event_name != 'pull_request' ||
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: devbox
     timeout-minutes: 5
     outputs:
       code: ${{ steps.diff.outputs.code }}
-      runs-on: ${{ runner.environment == 'github-hosted' && 'ubuntu-24.04' || 'devbox' }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -64,7 +56,7 @@ jobs:
     name: check
     needs: changes
     if: needs.changes.outputs.code == 'true'
-    runs-on: ${{ needs.changes.outputs.runs-on }}
+    runs-on: devbox
     timeout-minutes: 45
     strategy:
       # Every part reports, so a red run shows all it broke.
@@ -74,8 +66,8 @@ jobs:
         parts: [rust ts, window]
     steps:
       - uses: actions/checkout@v5
-      - name: Node, pnpm and rust-toolchain.toml's toolchain, and target/ on devbox
-        run: ci/tools.sh
+      - name: target/ from the runner's volume, and rust-toolchain.toml's toolchain
+        run: ci/target.sh && rustup toolchain install
       - run: scripts/check.sh ${{ matrix.parts }}
       - name: The window's traces
         if: failure() && matrix.parts == 'window'
@@ -89,10 +81,14 @@ jobs:
     name: ci
     needs: [changes, check]
     if: always()
-    # It runs nothing of the PR's, so it may stand on either.
-    runs-on: ${{ needs.changes.outputs.runs-on || 'ubuntu-24.04' }}
+    runs-on: devbox
     timeout-minutes: 5
     steps:
+      - name: A fork's PR is not checked here
+        if: needs.changes.result == 'skipped'
+        run: |
+          echo "::error::A fork's PR is not checked here (ADR 0038, decision 4): Roma takes its commits to a branch of this repository."
+          exit 1
       - name: Every part passed or had nothing to check
         run: |
           echo "changes=${{ needs.changes.result }} check=${{ needs.check.result }}"
