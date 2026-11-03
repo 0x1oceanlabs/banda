@@ -18,5 +18,7 @@ echo "== Banda $BANDA_VERSION ($BANDA_CHANNEL)"
 
 cargo build --release --bin banda
 pnpm install --frozen-lockfile --silent
+# The app carries the licenses of what it is built from (ADR 0038).
+node scripts/licenses.mjs --notices target/release/THIRD-PARTY-NOTICES.txt
 pnpm --filter @banda/desktop build
 pnpm --filter @banda/desktop exec electron-builder --config electron-builder.config.mjs

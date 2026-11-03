@@ -32,6 +32,8 @@ Roma, 2026-11-03:
 ## Decision
 
 1. **Banda is under the Apache License 2.0.** A permissive license brings people and companies in, and its patent grant protects whoever contributes and whoever uses Banda. `LICENSE` holds its text and `NOTICE` names Banda and the code it took from others. Every crate and package says `Apache-2.0`.
+   - What Banda ships may be under a permissive license, or MPL-2.0, which binds only its own files; nothing that would bind Banda's code, as the GPL does. `scripts/licenses.mjs` holds the list and `check.sh` checks every crate the engine is built from and every npm package the window and the page run on against it. A license not on it is Roma's call.
+   - The app carries `LICENSE`, `NOTICE` and `THIRD-PARTY-NOTICES.txt` in its resources, the last with each of those packages' license texts, as MIT and BSD ask of a copy.
 
 2. **A contribution comes in under the same license, with nothing to sign.** Apache-2.0's section 5 already says so. There is no CLA and no `Signed-off-by`. The price is that the license cannot be changed later without every contributor.
 

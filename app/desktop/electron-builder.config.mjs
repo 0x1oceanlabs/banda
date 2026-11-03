@@ -25,9 +25,17 @@ export default {
   // out of the bundle come from node_modules.
   files: ["out/**"],
   // Where main looks for them packed: resources/banda and resources/web/dist.
+  // Beside them, Banda's license and the notices of what it is built from
+  // (scripts/licenses.mjs, ADR 0038).
   extraResources: [
     { from: "../../target/release/banda", to: "banda" },
     { from: "../web/dist", to: "web/dist" },
+    { from: "../../LICENSE", to: "LICENSE" },
+    { from: "../../NOTICE", to: "NOTICE" },
+    {
+      from: "../../target/release/THIRD-PARTY-NOTICES.txt",
+      to: "THIRD-PARTY-NOTICES.txt",
+    },
   ],
   artifactName: `${channel.folder}-\${version}-\${arch}.\${ext}`,
   linux: { icon: channel.icon, category: "Development" },
