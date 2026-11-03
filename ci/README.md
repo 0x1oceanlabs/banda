@@ -6,6 +6,18 @@
 `devbox`. One status, `ci`, sums them up. A PR that changes only Markdown
 or `docs/` passes it without running them.
 
+## A fork's PR
+
+A PR whose branch is in a fork never runs on devbox (ADR 0038, decision 4):
+its code could leave anything in the runners' volumes for the next run to
+build on. `ci.yml` runs it on GitHub's `ubuntu-24.04`, which has rustup and
+what Electron runs on; the job installs `ci/Dockerfile`'s Node version and
+pnpm itself. A new tool the checks need goes in both places. `release.yml`
+packs no fork's PR.
+
+To try that path from a branch here:
+`gh workflow run ci --ref <branch> -f github-hosted=true`.
+
 ## Where they run
 
 The runners are containers on the rootless Docker engine of devbox's OS user

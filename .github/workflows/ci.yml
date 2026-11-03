@@ -1,6 +1,10 @@
 # scripts/check.sh's parts side by side on the runners on devbox
 # (ci/README.md). One required status, `ci`, sums them up: a PR that changes
 # only docs passes it without running them.
+#
+# A PR from a fork never runs on devbox (ADR 0038, decision 4): its code
+# could leave anything in the runners' volumes. It runs on GitHub's runners,
+# which install what ci/Dockerfile has on devbox.
 name: ci
 
 on:
@@ -8,6 +12,11 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+    inputs:
+      github-hosted:
+        description: Run on GitHub's runners, as a fork's PR does
+        type: boolean
+        default: false
 
 # Nothing here publishes; a PR's code gets a read-only token.
 permissions:
@@ -25,10 +34,16 @@ env:
 jobs:
   changes:
     name: what changed
-    runs-on: devbox
+    # A PR whose branch is not in this repository is a fork's, even when the
+    # fork is gone. The other jobs run where this one did.
+    runs-on: >-
+      ${{ (github.event_name == 'pull_request' &&
+           github.event.pull_request.head.repo.full_name != github.repository ||
+           inputs.github-hosted) && 'ubuntu-24.04' || 'devbox' }}
     timeout-minutes: 5
     outputs:
       code: ${{ steps.diff.outputs.code }}
+      runs-on: ${{ runner.environment == 'github-hosted' && 'ubuntu-24.04' || 'devbox' }}
     steps:
       - uses: actions/checkout@v5
         with:
@@ -47,7 +62,7 @@ jobs:
     name: check
     needs: changes
     if: needs.changes.outputs.code == 'true'
-    runs-on: devbox
+    runs-on: ${{ needs.changes.outputs.runs-on }}
     timeout-minutes: 45
     strategy:
       # Every part reports, so a red run shows all it broke.
@@ -57,8 +72,24 @@ jobs:
         parts: [rust ts, window]
     steps:
       - uses: actions/checkout@v5
-      - name: target/ from the runner's volume, and rust-toolchain.toml's toolchain
-        run: ci/target.sh && rustup toolchain install
+      - name: target/ from the runner's volume
+        if: runner.environment == 'self-hosted'
+        run: ci/target.sh
+      # GitHub's image has rustup and what Electron runs on, not ci/Dockerfile's
+      # Node and pnpm.
+      - name: ci/Dockerfile's Node version
+        if: runner.environment == 'github-hosted'
+        id: node
+        run: echo "version=$(sed -n 's/^ARG NODE_VERSION=//p' ci/Dockerfile)" >> "$GITHUB_OUTPUT"
+      - if: runner.environment == 'github-hosted'
+        uses: actions/setup-node@v5
+        with:
+          node-version: ${{ steps.node.outputs.version }}
+      - name: pnpm, which switches itself to package.json's pin
+        if: runner.environment == 'github-hosted'
+        run: npm install --global pnpm@11
+      - name: rust-toolchain.toml's toolchain
+        run: rustup toolchain install
       - run: scripts/check.sh ${{ matrix.parts }}
       - name: The window's traces
         if: failure() && matrix.parts == 'window'
@@ -72,7 +103,8 @@ jobs:
     name: ci
     needs: [changes, check]
     if: always()
-    runs-on: devbox
+    # It runs nothing of the PR's, so it may stand on either.
+    runs-on: ${{ needs.changes.outputs.runs-on || 'ubuntu-24.04' }}
     timeout-minutes: 5
     steps:
       - name: Every part passed or had nothing to check
