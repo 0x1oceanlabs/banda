@@ -26,13 +26,12 @@ permissions:
 # One Dev at a time; a newer push waits, and one waiting is replaced by the
 # next, so the last of a burst of merges is the one built. A run that builds
 # nothing (its `ci` failed or was cancelled) is in a group of its own, so it
-# replaces no Dev. A PR's group is marked as one, so no branch, a fork's
-# called `dev` either, replaces a Dev waiting.
+# replaces no Dev. A tag's or a PR's run is in its ref's group, so no PR
+# replaces a Dev waiting either.
 concurrency:
   group: >-
     release-${{
-      github.event_name == 'push' && github.ref ||
-      github.event_name == 'pull_request' && format('pr-{0}', github.head_ref) ||
+      github.event_name != 'workflow_run' && github.ref ||
       (github.event.workflow_run.conclusion == 'success' &&
        github.event.workflow_run.event == 'push') && 'dev' ||
       github.run_id }}
@@ -44,17 +43,16 @@ env:
 jobs:
   pack:
     name: pack
-    # A Dev only from a push to main of this repository whose `ci` passed,
-    # and a PR packed only from a branch of this repository: a fork's code
-    # never runs on devbox (ADR 0038, decision 4).
+    # A Dev only from a push to main whose `ci` passed, and a PR packed only
+    # from a branch of this repository: a fork's code never runs on devbox
+    # (ADR 0038, decision 4; ci/job-started.sh refuses it there anyway).
     if: >-
       github.event_name == 'push' ||
       github.event_name == 'pull_request' &&
       github.event.pull_request.head.repo.full_name == github.repository ||
       github.event_name == 'workflow_run' &&
       github.event.workflow_run.conclusion == 'success' &&
-      github.event.workflow_run.event == 'push' &&
-      github.event.workflow_run.head_repository.full_name == github.repository
+      github.event.workflow_run.event == 'push'
     runs-on: devbox
     timeout-minutes: 45
     # To publish. A PR's run gets it too, packing its own branch on devbox

@@ -4,7 +4,9 @@
 #
 # A PR from a fork never runs on devbox (ADR 0038, decision 4): its code
 # could leave anything in the runners' volumes. It runs on GitHub's runners,
-# which install what ci/Dockerfile has on devbox.
+# where ci/tools.sh installs what ci/Dockerfile has on devbox. This only
+# routes it: a fork can rewrite this file, and ci/job-started.sh on the
+# runner refuses its job.
 name: ci
 
 on:
@@ -72,24 +74,8 @@ jobs:
         parts: [rust ts, window]
     steps:
       - uses: actions/checkout@v5
-      - name: target/ from the runner's volume
-        if: runner.environment == 'self-hosted'
-        run: ci/target.sh
-      # GitHub's image has rustup and what Electron runs on, not ci/Dockerfile's
-      # Node and pnpm.
-      - name: ci/Dockerfile's Node version
-        if: runner.environment == 'github-hosted'
-        id: node
-        run: echo "version=$(sed -n 's/^ARG NODE_VERSION=//p' ci/Dockerfile)" >> "$GITHUB_OUTPUT"
-      - if: runner.environment == 'github-hosted'
-        uses: actions/setup-node@v5
-        with:
-          node-version: ${{ steps.node.outputs.version }}
-      - name: pnpm, which switches itself to package.json's pin
-        if: runner.environment == 'github-hosted'
-        run: npm install --global pnpm@11
-      - name: rust-toolchain.toml's toolchain
-        run: rustup toolchain install
+      - name: Node, pnpm and rust-toolchain.toml's toolchain, and target/ on devbox
+        run: ci/tools.sh
       - run: scripts/check.sh ${{ matrix.parts }}
       - name: The window's traces
         if: failure() && matrix.parts == 'window'
