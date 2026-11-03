@@ -35,14 +35,15 @@ RUN mkdir -p /opt/actions-runner && cd /opt/actions-runner \
     && ./bin/installdependencies.sh && rm -rf /var/lib/apt/lists/*
 RUN useradd --create-home --uid 1001 ci && mkdir /state && chown ci:ci /state
 COPY --chmod=0755 entrypoint.sh /usr/local/bin/banda-runner
-# Fails a fork's job before it starts (ADR 0038, decision 4).
-COPY --chmod=0755 job-started.sh /usr/local/bin/banda-job-started
+# Fails a fork's job before it starts (ADR 0038, decision 4). The runner
+# takes a hook only by its extension, so the name keeps its .sh.
+COPY --chmod=0755 job-started.sh /usr/local/bin/banda-job-started.sh
 # All a run keeps lives in /state, the runner's volume. Debug info is most
 # of a debug target/, and no check reads it.
 ENV RUSTUP_HOME=/state/rustup CARGO_HOME=/state/cargo BANDA_CI_TARGET=/state/target \
     XDG_DATA_HOME=/state/data XDG_CACHE_HOME=/state/cache \
     CARGO_PROFILE_DEV_DEBUG=0 \
-    ACTIONS_RUNNER_HOOK_JOB_STARTED=/usr/local/bin/banda-job-started \
+    ACTIONS_RUNNER_HOOK_JOB_STARTED=/usr/local/bin/banda-job-started.sh \
     PATH=/usr/local/cargo/bin:$PATH
 USER ci
 WORKDIR /state
