@@ -1,6 +1,7 @@
 //! What runs in front in a terminal, and where: the process group the
-//! terminal gives what is typed, read as tmux names a window. Linux has it
-//! in `/proc`; elsewhere a terminal has no title yet.
+//! terminal gives what is typed, read as tmux names a window. Its words and
+//! folder come from the system: `/proc` on Linux, the kernel's process
+//! arguments and `proc_pidinfo` on macOS, which `sysinfo` reads.
 
 use crate::model::Title;
 use std::os::fd::OwnedFd;
@@ -20,6 +21,7 @@ pub struct Front {
     shell: Option<i32>,
     home: Option<PathBuf>,
     seen: Option<(i32, Title)>,
+    reader: Reader,
 }
 
 impl Front {
@@ -29,12 +31,13 @@ impl Front {
             shell,
             home: dirs::home_dir(),
             seen: None,
+            reader: Reader::new(),
         }
     }
 
     /// What runs in front now, if it can tell. A program other than the
-    /// shell keeps its words and folder while it runs, so `/proc` is read
-    /// only when another one comes to the front.
+    /// shell keeps its words and folder while it runs, so the system is
+    /// asked only when another one comes to the front.
     pub fn look(&mut self) -> Option<Title> {
         let group = rustix::termios::tcgetpgrp(&self.pty).ok()?.as_raw_pid();
         if let Some((seen, title)) = &self.seen
@@ -43,25 +46,86 @@ impl Front {
         {
             return Some(title.clone());
         }
-        let title = read(group, self.home.as_deref())?;
+        let title = self.read(group)?;
         self.seen = Some((group, title.clone()));
         Some(title)
     }
+
+    /// What `process` runs and where.
+    fn read(&mut self, process: i32) -> Option<Title> {
+        let (words, folder) = self.reader.read(process)?;
+        Some(Title {
+            program: program_of(&words)?,
+            folder: shown(&folder, self.home.as_deref()),
+        })
+    }
 }
 
-/// What `process` runs and where, from `/proc`.
-fn read(process: i32, home: Option<&Path>) -> Option<Title> {
-    let line = std::fs::read(format!("/proc/{process}/cmdline")).ok()?;
-    let words: Vec<String> = line
-        .split(|byte| *byte == 0)
-        .filter(|word| !word.is_empty())
-        .map(|word| String::from_utf8_lossy(word).into_owned())
-        .collect();
-    let folder = std::fs::read_link(format!("/proc/{process}/cwd")).ok()?;
-    Some(Title {
-        program: program_of(&words)?,
-        folder: shown(&folder, home),
-    })
+/// Reads a process's words and folder from `/proc`.
+#[cfg(not(target_os = "macos"))]
+struct Reader;
+
+#[cfg(not(target_os = "macos"))]
+impl Reader {
+    fn new() -> Reader {
+        Reader
+    }
+
+    fn read(&mut self, process: i32) -> Option<(Vec<String>, PathBuf)> {
+        let line = std::fs::read(format!("/proc/{process}/cmdline")).ok()?;
+        let words = line
+            .split(|byte| *byte == 0)
+            .filter(|word| !word.is_empty())
+            .map(|word| String::from_utf8_lossy(word).into_owned())
+            .collect();
+        let folder = std::fs::read_link(format!("/proc/{process}/cwd")).ok()?;
+        Some((words, folder))
+    }
+}
+
+/// Reads a process's words and folder as macOS gives them, through
+/// `sysinfo`: the engine has no unsafe code of its own.
+#[cfg(target_os = "macos")]
+struct Reader {
+    /// None where `sysinfo` cannot read this system.
+    system: Option<sysinfo::System>,
+    /// The process read last, forgotten once it is gone.
+    last: Option<sysinfo::Pid>,
+}
+
+#[cfg(target_os = "macos")]
+impl Reader {
+    fn new() -> Reader {
+        Reader {
+            system: sysinfo::System::new().ok(),
+            last: None,
+        }
+    }
+
+    fn read(&mut self, process: i32) -> Option<(Vec<String>, PathBuf)> {
+        use sysinfo::{Pid, ProcessRefreshKind, ProcessesToUpdate, UpdateKind};
+        let system = self.system.as_mut()?;
+        let pid = Pid::from_u32(u32::try_from(process).ok()?);
+        let asked = match self.last.replace(pid) {
+            Some(last) if last != pid => vec![pid, last],
+            _ => vec![pid],
+        };
+        system.refresh_processes_specifics(
+            ProcessesToUpdate::Some(&asked),
+            true,
+            ProcessRefreshKind::nothing()
+                .with_cmd(UpdateKind::Always)
+                .with_cwd(UpdateKind::Always)
+                .without_tasks(),
+        );
+        let found = system.process(pid)?;
+        let words = found
+            .cmd()
+            .iter()
+            .map(|word| word.to_string_lossy().into_owned())
+            .collect();
+        Some((words, found.cwd()?.to_path_buf()))
+    }
 }
 
 /// A command line in a few words: `-bash` is `bash`, a script stands for
