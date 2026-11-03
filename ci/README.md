@@ -17,6 +17,8 @@ build on, and Roma decides what comes in.
 - To take it, Roma reads it, pushes its commits to a branch here
   (`gh pr checkout <n>`, then `git push origin HEAD:<kind>/<slug>`) and opens
   a PR of that branch. CI runs there, and the commits keep their author.
+  Roma merges that PR by hand: no agent arms auto-merge on someone else's
+  commits.
 - A fork's PR runs its own copy of the workflows and could undo all that.
   `ci/job-started.sh` is what keeps its code off devbox: the runner runs it
   before every job (`ACTIONS_RUNNER_HOOK_JOB_STARTED`, in `ci/Dockerfile`)

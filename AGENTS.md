@@ -30,6 +30,10 @@ the window's end-to-end tests too, on runners on devbox
 ([`ci/README.md`](ci/README.md)); the `ci` status sums them up. Merge with
 `gh pr merge --auto --rebase` and go on: the PR merges itself once `ci` is
 green. A red `ci` is yours to fix, on the PR or, after a merge, on `main`.
+That is for Roma's PRs and yours. A PR with someone else's commits, taken
+in from a fork, Roma merges by hand: never arm auto-merge on it
+([ADR 0038](docs/adr/0038-banda-is-open-source-under-apache-2-0.md),
+decision 4).
 
 Renovate opens the dependency PRs on Mondays
 ([`.github/renovate.json5`](.github/renovate.json5)), and none merges

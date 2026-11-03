@@ -22,6 +22,7 @@ What the repository holds, checked on 2026-11-02:
 Roma, 2026-11-03:
 
 - "Maybe CI checks only mine, and doesn't run for outside ones." (on a fork's PR)
+- "Auto-merge stays only for mine; from outside, without."
 
 - "Apache." (the license)
 - No CLA and no DCO.
@@ -38,7 +39,7 @@ Roma, 2026-11-03:
 
 4. **A fork's PR is not checked: Roma takes it in by hand.**
    - `ci.yml` skips every check on a PR whose branch is in a fork, and its `ci` fails, so it cannot be merged as it is. `release.yml` packs no fork's PR. Nothing of it runs anywhere, on devbox or on GitHub's runners.
-   - To take it, Roma reads it, pushes its commits to a branch of this repository and opens a PR of that branch. CI runs there on devbox, and the commits keep their author.
+   - To take it, Roma reads it, pushes its commits to a branch of this repository and opens a PR of that branch. CI runs there on devbox, and the commits keep their author. Roma merges that PR by hand; auto-merge is only for Roma's own PRs and Roma's agents'.
    - The runner refuses it too. On a `pull_request` event GitHub runs the workflows from the PR's own merge, so a fork could rewrite them and send its jobs to devbox. The runner image runs `ci/job-started.sh` before every job, and it fails a job whose PR or `workflow_run` comes from another repository.
    - A branch of this repository runs on devbox as now: Roma's, an agent's, Renovate's. Only people with write access push branches here.
    - Neither workflow uses `pull_request_target`, which runs with the repository's token and secrets.
