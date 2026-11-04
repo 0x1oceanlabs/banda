@@ -17,10 +17,10 @@ describe("the update's line on hover", () => {
       state: "out",
       version: "0.1.0-dev.66",
       notes: [],
-      command: "brew upgrade --cask banda-dev",
+      command: "brew update && brew upgrade --cask banda-dev",
     }
     expect(lineOf(out)).toBe(
-      "Banda Dev 0.1.0-dev.66 is out: brew upgrade --cask banda-dev"
+      "Banda Dev 0.1.0-dev.66 is out: brew update && brew upgrade --cask banda-dev"
     )
   })
 

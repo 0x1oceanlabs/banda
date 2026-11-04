@@ -157,7 +157,7 @@ test("Banda Dev's widget stays on the bar and updates now (ADR 0045)", async () 
 test("on macOS the widget says a version is out, with its brew command (ADR 0033, decision 6)", async () => {
   window = await startWindow()
   const { page, app } = window
-  const command = "brew upgrade --cask banda-dev"
+  const command = "brew update && brew upgrade --cask banda-dev"
   const out = {
     name: "Banda Dev",
     have: "0.1.0-dev.62",

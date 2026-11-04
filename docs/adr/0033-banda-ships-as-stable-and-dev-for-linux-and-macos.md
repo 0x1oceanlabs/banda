@@ -59,7 +59,7 @@ Roma, 2026-11-02:
 
 6. **macOS: an app for Apple silicon, through our own Homebrew tap, until there is a certificate.**
    - The build is signed ad hoc and not notarized. The tap `0x1oceanlabs/homebrew-banda` has two casks, `banda` and `banda-dev`. Each takes the quarantine off the app it installs, so Gatekeeper lets it open.
-   - The app does not update itself, since Squirrel.Mac needs a signed app. It checks the releases as on Linux and says that a new version is out, with the command: `brew upgrade --cask banda`.
+   - The app does not update itself, since Squirrel.Mac needs a signed app. It checks the releases as on Linux and says that a new version is out, with the command: `brew update && brew upgrade --cask banda`, one line that works as it is copied (`brew upgrade` alone may read a tap a day old).
    - It is built on GitHub's macOS runners. While the repository is private, only Stable is built for macOS; Dev follows once it is public, where those runners are free.
    - Nobody has run Banda on a Mac yet. Its first step is that the engine and the window build and pass `check.sh` there. The glass (ADR 0030, #192) is tried there too.
    - With a Developer ID, the app is signed and notarized and updates itself as on Linux. That is a new ADR then.
