@@ -304,6 +304,12 @@ On the list, Roma decided:
    (`workspaces.move_workspace`). The empty one at the bottom has no
    handle and none lands under it; `Esc` puts one carried back, and a
    click on a number goes to its workspace.
+   _Changed_ 2026-11-04: the workspaces zoom out into their rows on
+   opening, and the selected one grows back on closing, on
+   `[motion.overview]` (ADR 0007). A toggle halfway reverses the motion;
+   the Panes stay out of reach until it ends. The overview's frames
+   follow the scaled tiles' corners, and its selected and calling Panes
+   have an inset frame, so no ring is cut at a workspace's edge.
 
 8. **The drawer** (ADR 0005, decision 7) is on `` Alt+` ``, as a terminal
    that drops down is; `Alt+S` settles a Thread now (ADR 0008). A Thread

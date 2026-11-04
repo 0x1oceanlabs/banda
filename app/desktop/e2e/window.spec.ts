@@ -2948,9 +2948,9 @@ test("the overview: the arrows and Enter, typing, the window's keys, the drag", 
   await expect.poll(() => layoutOf(page)).toEqual([[t, l]])
   // And back at its size, filling the window.
   await expect(real).toBeInViewport({ ratio: 0.99 })
-  expect((await real.boundingBox())!.width).toBeGreaterThan(
-    (await page.evaluate(() => innerWidth)) * 0.3
-  )
+  await expect
+    .poll(async () => (await real.boundingBox())!.width)
+    .toBeGreaterThan((await page.evaluate(() => innerWidth)) * 0.3)
 })
 
 test("Alt+[ takes a Pane into a column, Alt+G shows it as tabs", async () => {

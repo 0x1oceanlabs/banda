@@ -4,4 +4,4 @@ import type { Move } from "./Move";
 /**
  * What the window runs for each event.
  */
-export type Motion = { workspace: Move, strip: Move, move: Move, resize: Move, open: Move, close: Move, };
+export type Motion = { workspace: Move, strip: Move, move: Move, resize: Move, open: Move, close: Move, overview: Move, };
