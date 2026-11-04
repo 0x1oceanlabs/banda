@@ -1,9 +1,11 @@
 /** The notifications module's window part (ADR 0022, ADR 0056): it tells
  * the Person of what calls, and its bell on the bar shows the last toasts
  * again (ADR 0048). */
+import type { SpaceId } from "@banda/contract"
 import { defineModule } from "@banda/ui/module"
 import { BellWidget } from "./Bell"
 import { startTelling, type Teller } from "./teller"
+import { GO_TO } from "./system"
 import { toldOf } from "./told"
 
 /** What tells, while the window runs the module. */
@@ -20,6 +22,31 @@ export const notifications = defineModule({
     },
   ],
   actions: [
+    {
+      // What a call's toast's button does: goes to its thing.
+      id: GO_TO,
+      title: "Go to what calls",
+      section: "Notifications",
+      unlisted: true,
+      run: (_, args) => {
+        const { space, about, pane } = args ?? {}
+        if (typeof space !== "string" || typeof about !== "string") return
+        if (!pane || typeof pane !== "object" || Array.isArray(pane)) return
+        if (typeof pane.kind !== "string") return
+        const paneArgs = pane.args
+        if (
+          !paneArgs ||
+          typeof paneArgs !== "object" ||
+          Array.isArray(paneArgs)
+        )
+          return
+        teller?.goTo({
+          space: space as SpaceId,
+          about,
+          pane: { kind: pane.kind, args: paneArgs },
+        })
+      },
+    },
     {
       // What another module tells the Person, in plain data (ADR 0056,
       // decision 2): `Told`.

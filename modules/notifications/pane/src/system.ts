@@ -12,6 +12,7 @@ import type { Chime } from "@banda/ui/sound"
 import type { Notify } from "@banda/contract/look"
 import type { Call } from "@banda/ui/pane"
 import type { Desktop, Notice } from "./desktop"
+import type { Told } from "./told"
 import { loudestChime } from "./sound"
 
 /** More calls than this at once make one notice that names them all. */
@@ -35,6 +36,25 @@ export function noticeOf(call: Call, detail: boolean): Notice {
     body: detail && call.detail ? `${said} · ${call.detail}` : said,
     answer: ANSWER[call.chime],
     lasts: call.chime !== "done",
+  }
+}
+
+/** The action that goes to a call's thing: `{ space, about, pane }`. */
+export const GO_TO = "notifications.go-to"
+
+/**
+ * A call as a toast tells it (ADR 0056, decision 2), in the words of its
+ * system notification, with a button that goes there.
+ */
+export function toldOfCall(call: Call, detail: boolean): Told {
+  const { key, title, body, answer } = noticeOf(call, detail)
+  const { space, about, pane } = call
+  return {
+    key,
+    kind: call.chime,
+    title,
+    ...(body ? { body } : {}),
+    buttons: [{ label: answer, action: GO_TO, args: { space, about, pane } }],
   }
 }
 

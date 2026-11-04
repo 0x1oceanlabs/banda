@@ -5,11 +5,12 @@
  * the Person will notice it: a toast, or a system notification. A call
  * that stops, or that the Person looks at, takes them back.
  */
-import { toast, toastUnseen } from "@banda/ui/components/sonner"
-import type { WindowApi } from "@banda/ui/module"
-import { type Call, callsOf, type Lists } from "@banda/ui/pane"
+import { toast } from "@banda/ui/components/sonner"
+import type { Thing, WindowApi } from "@banda/ui/module"
+import { type Call, callsOf, type Lists, type PaneState } from "@banda/ui/pane"
 import { type Chime, player } from "@banda/ui/sound"
 import { type Desktop, desktopOf } from "./desktop"
+import { keep } from "./recent"
 import { GATHER, loudestChime, type Played, plays } from "./sound"
 import {
   iconOf,
@@ -19,15 +20,19 @@ import {
   quietNow,
   SUMMARY,
   summaryOf,
+  toldOfCall,
 } from "./system"
 import { newsOf, placeOf, tell } from "./tell"
-import { toastCall, toastTold } from "./toast"
+import { toastTold } from "./toast"
 import { type Button, clicked, type Told } from "./told"
 
 /** What tells: what calls, from the lists, and what a module tells. */
 export type Teller = {
   /** Tells what a module told, where the Person will notice it. */
   told: (told: Told) => Promise<void>
+  /** Goes to a thing that calls, as its toast's button does: its toast
+   * and its notification go. */
+  goTo: (thing: Thing & { pane: PaneState }) => void
   stop: () => void
 }
 
@@ -75,10 +80,11 @@ export function startTelling(
     )
     if (!place) return
     if (!told.silent) sounds(told.kind)
+    // Kept, wherever it is told, so the bell shows it again (ADR 0056,
+    // decision 2).
+    keep(told)
     if (place.toast) toastTold(told, press)
-    if (!place.system) return
-    toastUnseen((options) => toastTold(told, press, options))
-    if (!desktop) return
+    if (!place.system || !desktop) return
     toldThere.set(told.key, told)
     desktop.show({
       key: told.key,
@@ -88,9 +94,9 @@ export function startTelling(
       lasts: told.kind === "asking",
     })
   }
-  const answer = (call: Call) => {
-    window.goTo(call)
-    withdraw([call.key])
+  const answer = (thing: Thing & { pane: PaneState }) => {
+    window.goTo(thing)
+    withdraw([`${thing.space}:${thing.about}`])
   }
 
   const tellNews = async () => {
@@ -104,18 +110,13 @@ export function startTelling(
     for (const call of news.values()) {
       const telling = tell(call.chime, window.sight(call), notify, quiet)
       if (telling.sound) chimes.push(call.chime)
+      const told = toldOfCall(call, notify.detail)
+      if (telling.toast || telling.system) keep(told)
       if (telling.toast) {
         toasted.add(call.key)
-        toastCall(call, notify.detail, answer)
+        toastTold(told, press)
       }
-      if (telling.system) {
-        notices.push(call)
-        // Kept with the toasts unseen, so the bell shows it again (ADR
-        // 0048, decision 2).
-        toastUnseen((options) =>
-          toastCall(call, notify.detail, answer, options)
-        )
-      }
+      if (telling.system) notices.push(call)
     }
     const chime = loudestChime(chimes)
     if (chime) sounds(chime)
@@ -175,6 +176,7 @@ export function startTelling(
   ]
   return {
     told,
+    goTo: answer,
     stop: () => {
       clearTimeout(timer)
       for (const stop of stops) stop()

@@ -3456,7 +3456,7 @@ test("the bell shows the last toasts again, and Esc or a button closes them (ADR
   const { composer } = await firstThread(page)
   // Nothing yet.
   await bell.click()
-  await expect(last).toContainText("Nothing since Banda started")
+  await expect(last).toContainText("Nothing yet")
   await page.keyboard.press("Escape")
   await expect(last).toBeHidden()
 
