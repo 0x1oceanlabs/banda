@@ -17,6 +17,8 @@ export type Told = {
   /** Its kind, which colours its edge and picks its Mark. */
   kind: Chime
   title: string
+  /** The Space it is of, by name, when the window has more than one. */
+  space?: string
   /** A line in code type, before the words. */
   code?: string
   /** What it says. */
@@ -46,6 +48,7 @@ export function toldOf(args: Args | undefined): Told | null {
     key,
     kind,
     title,
+    space,
     code,
     body,
     notice,
@@ -69,6 +72,7 @@ export function toldOf(args: Args | undefined): Told | null {
     key,
     kind: kind as Chime,
     title,
+    ...(text(space) ? { space } : {}),
     ...(text(code) ? { code } : {}),
     ...(text(body) ? { body } : {}),
     ...(text(notice) ? { notice } : {}),

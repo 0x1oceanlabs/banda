@@ -218,6 +218,10 @@ export function Shell({
   // A Space whose folder is missing lists nothing and starts nothing
   // until the Person locates it (ADR 0026, decision 6).
   const open = useMemo(() => openSpaces(spaces), [spaces])
+  const openNow = useRef(open)
+  useEffect(() => {
+    openNow.current = open
+  }, [open])
   // The arrangement is the engine's; the view, the window's (ADR 0025).
   const machine = useMachine(engine)
   const live = useArranged(engine)
@@ -669,6 +673,7 @@ export function Shell({
       },
       goTo: goToCall,
       look: () => lookNow.current,
+      spaces: () => openNow.current,
       toggleSidebar,
       showSidebar,
       toggleOverview,
@@ -739,6 +744,7 @@ export function Shell({
       watchSight: (listener) => partsNow.current.watchSight(listener),
       goTo: (thing) => partsNow.current.goTo(thing),
       look: () => partsNow.current.look(),
+      spaces: () => partsNow.current.spaces(),
     }
     const stops = known
       .filter((module) => running.split(",").includes(module.id))

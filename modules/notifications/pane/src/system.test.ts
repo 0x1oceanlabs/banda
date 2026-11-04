@@ -1,5 +1,5 @@
 import { expect, test } from "vitest"
-import { loudestOf, noticeOf, summaryOf } from "./system"
+import { loudestOf, noticeOf, summaryOf, toldOfCall } from "./system"
 import type { Call } from "@banda/ui/pane"
 
 const heard = (about: string, chime: Call["chime"], detail?: string) =>
@@ -40,4 +40,15 @@ test("many calls at once make one notice that names them all", () => {
   })
   expect(loudestOf(calls)).toBe("failed")
   expect(summaryOf([heard("A", "done"), heard("B", "done")]).lasts).toBe(false)
+})
+
+test("with more than one Space, a call's notice and toast name its Space", () => {
+  expect(noticeOf(heard("Tests", "done"), true, "banda").title).toBe(
+    "Tests · banda"
+  )
+  expect(toldOfCall(heard("Tests", "done"), true, "banda")).toMatchObject({
+    title: "Tests",
+    space: "banda",
+  })
+  expect(toldOfCall(heard("Tests", "done"), true).space).toBeUndefined()
 })
