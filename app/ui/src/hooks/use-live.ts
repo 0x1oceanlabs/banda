@@ -69,23 +69,32 @@ export function useLive<S extends { at: number }>(
     let stopped = false
     let unfollow = () => {}
     let frame = 0
+    // Each read is numbered: only the newest one's answer is held, and
+    // only it follows.
+    let newest = 0
     const hold = (live: Live<S>) => {
       if (!stopped) setHeld({ source, live })
     }
 
     const start = async (): Promise<void> => {
       if (stopped) return
+      const read = ++newest
+      unfollow()
+      unfollow = () => {}
+      cancelAnimationFrame(frame)
+      frame = 0
+      const stale = () => stopped || read !== newest
       let view: S
       try {
         view = await source.read()
       } catch (error) {
-        if (stopped) return
+        if (stale()) return
         if (error instanceof Refused)
           hold({ state: "refused", refusal: error.refusal })
-        else setTimeout(() => void start(), AGAIN)
+        else setTimeout(() => void (stale() || start()), AGAIN)
         return
       }
-      if (stopped) return
+      if (stale()) return
       hold({ state: "ready", view })
       unfollow = engine.follow(
         space,
@@ -94,7 +103,6 @@ export function useLive<S extends { at: number }>(
         (event) => {
           const next = source.apply(view, event)
           if (next === READ_AGAIN) {
-            unfollow()
             void start()
             return
           }
@@ -106,17 +114,14 @@ export function useLive<S extends { at: number }>(
           })
         },
         (refusal) => {
+          if (stale()) return
           if (refusal) hold({ state: "refused", refusal })
-          else if (!stopped) void start()
+          else void start()
         }
       )
     }
 
-    again.current = () => {
-      unfollow()
-      unfollow = () => {}
-      void start()
-    }
+    again.current = () => void start()
     void start()
     return () => {
       again.current = () => {}
