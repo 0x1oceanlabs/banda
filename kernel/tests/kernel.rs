@@ -1354,6 +1354,94 @@ async fn a_space_is_renamed_pinned_and_archived_and_added_back() {
     );
 }
 
+/// Makes a scratch Space, for a Thread in No Space, under `command`.
+async fn create_scratch(
+    kernel: &Kernel,
+    owner: PersonId,
+    command: CommandId,
+) -> Result<SpaceSummary, Refusal> {
+    let params = json!({ "scratch": true });
+    let person = Participant::Person(owner);
+    let made = (kernel.call(person, "spaces.create", None, Some(command), params)).await?;
+    Ok(serde_json::from_value(made).unwrap())
+}
+
+#[tokio::test]
+async fn a_scratch_space_is_a_new_folder_with_no_name() {
+    let root = tempfile::tempdir().unwrap();
+    let (owner, notes) = (PersonId::new(), Notes::default());
+    let kernel = open(root.path(), owner, &notes).await;
+    let command = CommandId::new();
+    let made = create_scratch(&kernel, owner, command).await.unwrap();
+    assert_eq!(
+        (made.scratch, made.name.as_str()),
+        (true, ""),
+        "no name is asked"
+    );
+    let scratch = root.path().join("scratch").canonicalize().unwrap();
+    assert_eq!(Path::new(&made.folder).parent(), Some(scratch.as_path()));
+    let again = create_scratch(&kernel, owner, command).await.unwrap();
+    assert_eq!(again, made, "the same command gets the same Space");
+    let other = create_scratch(&kernel, owner, CommandId::new()).await;
+    assert_ne!(other.unwrap().folder, made.folder, "a Thread each");
+    let person = Participant::Person(owner);
+    add(&kernel, person, &made, "works as any Space")
+        .await
+        .unwrap();
+
+    for bad in [json!({ "scratch": true, "name": "Work" }), json!({})] {
+        let refused = spaces(&kernel, owner, "create", bad.clone()).await;
+        assert_eq!(refused.unwrap_err().code, Code::Invalid, "{bad}");
+    }
+}
+
+#[tokio::test]
+async fn a_scratch_space_becomes_a_space_once_named_and_stays_one() {
+    let root = tempfile::tempdir().unwrap();
+    let (owner, notes) = (PersonId::new(), Notes::default());
+    let kernel = open(root.path(), owner, &notes).await;
+    let made = create_scratch(&kernel, owner, CommandId::new())
+        .await
+        .unwrap();
+    let kept = create_scratch(&kernel, owner, CommandId::new())
+        .await
+        .unwrap();
+    let update = |params| spaces(&kernel, owner, "update", params);
+    for (bad, why) in [
+        (
+            json!({ "space": made.id, "scratch": false }),
+            "it needs a name",
+        ),
+        (
+            json!({ "space": made.id, "name": "Expenses" }),
+            "no name in No Space",
+        ),
+    ] {
+        assert_eq!(update(bad).await.unwrap_err().code, Code::Invalid, "{why}");
+    }
+    let space = update(json!({ "space": made.id, "scratch": false, "name": "Expenses" }))
+        .await
+        .unwrap();
+    let space: SpaceSummary = serde_json::from_value(space).unwrap();
+    assert_eq!(
+        (space.scratch, space.name.as_str(), &space.folder),
+        (false, "Expenses", &made.folder),
+        "it stays where it is"
+    );
+    let back = update(json!({ "space": made.id, "scratch": true })).await;
+    assert_eq!(back.unwrap_err().code, Code::Invalid, "no way back");
+
+    drop(kernel);
+    let kernel = reopen(root.path(), owner, &notes, 2).await;
+    let spaces = kernel.spaces().await;
+    let scratch = |id| spaces.iter().find(|s| s.id == id).unwrap().scratch;
+    assert_eq!(
+        (scratch(made.id), scratch(kept.id)),
+        (false, true),
+        "space.json keeps it"
+    );
+}
+
 #[tokio::test]
 async fn a_removed_space_loses_its_threads_but_keeps_its_files() {
     let root = tempfile::tempdir().unwrap();

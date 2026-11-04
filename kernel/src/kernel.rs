@@ -2,7 +2,7 @@ use crate::access::{self, Caller, Right};
 use crate::methods::{Asks, Nothing, Tool};
 use crate::module::{Call, Module, Scope, Stream, Wall};
 use crate::passes::Passes;
-use crate::space::{GONE, Manifest, Shared, Space, UNFINISHED};
+use crate::space::{self, GONE, Manifest, Shared, Space, UNFINISHED};
 use crate::window::Window;
 use crate::{AgentId, CommandId, Error, Participant, PersonId, Refusal, SpaceId};
 use serde::{Deserialize, Serialize};
@@ -58,6 +58,13 @@ impl Entry {
         }
     }
 
+    fn scratch(&self) -> bool {
+        match self {
+            Entry::Open(space) => space.scratch(),
+            Entry::Missing { manifest, .. } => manifest.scratch,
+        }
+    }
+
     fn folder(&self) -> &Path {
         match self {
             Entry::Open(space) => space.folder(),
@@ -80,6 +87,9 @@ pub struct SpaceSummary {
     /// Its Agents see the other Spaces' Panes (ADR 0032). Only the Person
     /// sets it.
     pub sees_others: bool,
+    /// One Thread's Space, in No Space (ADR 0046): its name is empty, and
+    /// the Space pickers leave it out.
+    pub scratch: bool,
     /// Its folder was gone as the engine started: none of its Threads
     /// open until the Person locates it (`spaces.locate`).
     pub missing: bool,
@@ -229,7 +239,9 @@ crate::methods! {
     Kernel(Own<'_>) as "SpacesMethods" in "./" {
         /// This computer's Spaces.
         call list(Nothing) -> Vec<SpaceSummary>, Read;
-        /// Makes a Space: a new folder under the root, by its name.
+        /// Makes a Space: a new folder under the root, by its name. A
+        /// scratch one, for a Thread in No Space, takes no name: its folder
+        /// is new under `scratch/`.
         command create(CreateSpace) -> SpaceSummary, Manage;
         /// Adds a folder as a Space. A folder that already is one answers
         /// that Space, back from the archive if it was there.
@@ -237,8 +249,8 @@ crate::methods! {
         /// The folders that match a path as it is typed, for the field
         /// that picks a Space's folder. Only the owner browses.
         call browse(Browse) -> Browsed, Manage;
-        /// Renames, pins or archives a Space, or lets its Agents see the
-        /// other Spaces' Panes.
+        /// Renames, pins or archives a Space, lets its Agents see the
+        /// other Spaces' Panes, or makes a Space of a scratch one, named.
         command update(UpdateSpace) -> SpaceSummary, Manage;
         /// Names the folder a missing Space's work is in now, and opens
         /// the Space there.
@@ -272,7 +284,14 @@ impl Asks for Own<'_> {
 
 #[derive(Deserialize, TS)]
 struct CreateSpace {
-    name: String,
+    /// The Space's name, and its folder's. None for a scratch Space.
+    #[serde(default)]
+    #[ts(optional)]
+    name: Option<String>,
+    /// A Space for one Thread in No Space (ADR 0046).
+    #[serde(default)]
+    #[ts(optional)]
+    scratch: Option<bool>,
 }
 
 #[derive(Deserialize, TS)]
@@ -332,6 +351,11 @@ struct UpdateSpace {
     #[serde(default)]
     #[ts(optional)]
     sees_others: Option<bool>,
+    /// `false` makes a Space of a scratch one, which needs a name then.
+    /// No Space takes no Space back.
+    #[serde(default)]
+    #[ts(optional)]
+    scratch: Option<bool>,
 }
 
 #[derive(Deserialize, TS)]
@@ -348,6 +372,9 @@ struct OneSpace {
 
 /// The most folders `spaces.browse` answers.
 const BROWSED: usize = 200;
+
+/// Where the scratch Spaces' folders go, under the root (ADR 0046).
+const SCRATCH: &str = "scratch";
 
 /// A pass is for its Space, so it stops at this machine's scope but for
 /// the tools (ADR 0032).
@@ -607,13 +634,51 @@ impl Kernel {
         Ok(self.tools.clone())
     }
 
-    async fn create(
+    async fn create(&self, ask: Own<'_>, create: CreateSpace) -> Result<SpaceSummary, Refusal> {
+        let (author, command) = (ask.participant, ask.command_id()?);
+        match (create.name, create.scratch == Some(true)) {
+            (None, true) => self.create_scratch(author, command).await,
+            (Some(name), false) => self.create_space(&name, author, command).await,
+            (Some(_), true) => Err(Refusal::invalid(
+                "A scratch Space has no name until it becomes a Space.",
+            )),
+            (None, false) => Err(Refusal::invalid("A Space needs a name.")),
+        }
+    }
+
+    /// A Space for one Thread in No Space: a new folder
+    /// `scratch/<date>-<id8>` under the root, by the command, and no name. The same command
+    /// again gets the Space it made.
+    async fn create_scratch(
         &self,
-        ask: Own<'_>,
-        CreateSpace { name }: CreateSpace,
+        author: Participant,
+        command: CommandId,
     ) -> Result<SpaceSummary, Refusal> {
-        self.create_space(&name, ask.participant, ask.command_id()?)
-            .await
+        let _adding = self.adding.lock().await;
+        let spaces = self.spaces.read().await;
+        let made = spaces.values().find_map(|entry| match entry {
+            Entry::Open(space) if space.command() == command => Some(space.summary()),
+            _ => None,
+        });
+        drop(spaces);
+        if let Some(made) = made {
+            return Ok(made);
+        }
+        // A UUIDv7 ends in its random part.
+        let id = command.to_string();
+        let date = crate::utc_date(crate::now_ms());
+        let folder = (self.root.join(SCRATCH)).join(format!("{date}-{}", &id[id.len() - 8..]));
+        std::fs::create_dir_all(&folder).map_err(Error::from)?;
+        let placed = async {
+            let mut manifest = Manifest::new(&folder_found(&folder)?, "", author, command);
+            manifest.scratch = true;
+            self.place_space(manifest).await
+        }
+        .await;
+        if placed.is_err() {
+            let _ = std::fs::remove_dir(&folder);
+        }
+        placed
     }
 
     /// `spaces.add` of a new folder `~/Banda/<name>`; one already there
@@ -690,7 +755,7 @@ impl Kernel {
                 (None, None) => "/",
             };
             let name = Space::name_of(name)?;
-            self.place_space(&canonical, name, author, command).await
+            (self.place_space(Manifest::new(&canonical, name, author, command))).await
         }
         .await;
         if made && added.is_err() {
@@ -706,15 +771,10 @@ impl Kernel {
         spaces.values().find(|s| s.folder() == folder).cloned()
     }
 
-    /// Makes the data of a new Space for `folder`, opens it and lists it.
-    async fn place_space(
-        &self,
-        folder: &Path,
-        name: &str,
-        author: Participant,
-        command: CommandId,
-    ) -> Result<SpaceSummary, Refusal> {
-        let (data, manifest) = Space::create(&self.spaces_data, folder, name, author, command)?;
+    /// Makes the data of a new Space, whose folder exists, opens it and
+    /// lists it.
+    async fn place_space(&self, manifest: Manifest) -> Result<SpaceSummary, Refusal> {
+        let data = space::place(&self.spaces_data, &manifest, |_| Ok(()))?;
         let space = match self.open_space(data.clone(), manifest).await {
             Ok(space) => space,
             Err(error) => {
@@ -782,6 +842,28 @@ impl Kernel {
 
     async fn update(&self, _: Own<'_>, update: UpdateSpace) -> Result<SpaceSummary, Refusal> {
         let name = update.name.as_deref().map(Space::name_of).transpose()?;
+        let mut spaces = self.spaces.write().await;
+        let Some(entry) = spaces.get_mut(&update.space) else {
+            return Err(no_space());
+        };
+        // A scratch Space has no name; a Space has one.
+        let was = entry.scratch();
+        match (was, update.scratch.unwrap_or(was), name.is_some()) {
+            (false, true, _) => {
+                return Err(Refusal::invalid("A Space does not go back to No Space."));
+            }
+            (true, true, true) => {
+                return Err(Refusal::invalid(
+                    "A Thread in No Space has no name until it becomes a Space.",
+                ));
+            }
+            (true, false, false) => {
+                return Err(Refusal::invalid(
+                    "A Space made of a Thread in No Space needs a name.",
+                ));
+            }
+            _ => {}
+        }
         let change = |manifest: &mut Manifest| {
             if let Some(name) = name {
                 manifest.name = name.to_owned();
@@ -795,15 +877,17 @@ impl Kernel {
             if let Some(sees_others) = update.sees_others {
                 manifest.sees_others = sees_others;
             }
+            if let Some(scratch) = update.scratch {
+                manifest.scratch = scratch;
+            }
         };
         // A missing Space keeps its name, pin and archive too.
-        match self.spaces.write().await.get_mut(&update.space) {
-            Some(Entry::Open(space)) => Ok(space.change(change)?),
-            Some(Entry::Missing { data, manifest }) => {
+        match entry {
+            Entry::Open(space) => Ok(space.change(change)?),
+            Entry::Missing { data, manifest } => {
                 manifest.change_in(data, change)?;
                 Ok(manifest.summary(true))
             }
-            None => Err(no_space()),
         }
     }
 

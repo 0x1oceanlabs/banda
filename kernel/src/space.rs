@@ -53,6 +53,10 @@ pub(crate) struct Manifest {
     /// (ADR 0032).
     #[serde(default, skip_serializing_if = "std::ops::Not::not")]
     pub sees_others: bool,
+    /// One Thread's Space in No Space (ADR 0046): its folder is under
+    /// `scratch/`, and it has no name until the Person makes a Space of it.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub scratch: bool,
 }
 
 impl Manifest {
@@ -68,6 +72,7 @@ impl Manifest {
             pinned: false,
             archived: false,
             sees_others: false,
+            scratch: false,
         }
     }
 
@@ -80,6 +85,7 @@ impl Manifest {
             pinned: self.pinned,
             archived: self.archived,
             sees_others: self.sees_others,
+            scratch: self.scratch,
             missing,
         }
     }
@@ -194,20 +200,6 @@ impl Space {
         })
     }
 
-    /// Makes a Space's data in `spaces` for the folder `folder`, which
-    /// exists. Answers where it is, and its manifest.
-    pub(crate) fn create(
-        spaces: &Path,
-        folder: &Path,
-        name: &str,
-        author: Participant,
-        command: CommandId,
-    ) -> Result<(PathBuf, Manifest), Error> {
-        let manifest = Manifest::new(folder, name, author, command);
-        let data = place(spaces, &manifest, |_| Ok(()))?;
-        Ok((data, manifest))
-    }
-
     /// `data` is the Space's `spaces/<id>/`, and `manifest` the one there,
     /// which names the folder.
     pub(crate) async fn open(
@@ -294,6 +286,11 @@ impl Space {
     /// Whether its Agents see the other Spaces' Panes (ADR 0032).
     pub fn sees_others(&self) -> bool {
         self.manifest.lock().unwrap().sees_others
+    }
+
+    /// Whether it is one Thread's Space, in No Space (ADR 0046).
+    pub fn scratch(&self) -> bool {
+        self.manifest.lock().unwrap().scratch
     }
 
     pub fn summary(&self) -> SpaceSummary {

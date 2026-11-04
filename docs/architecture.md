@@ -102,7 +102,11 @@ The kernel holds only what every module needs, and it names no module.
   Space), `spaces.browse` lists folders as a path is typed,
   `spaces.update` renames, pins or archives, and `spaces.remove` forgets
   a Space: its modules stop what runs there (`Module::closing`), its data
-  becomes `<id>.gone` and is deleted, and its folder is not touched.
+  becomes `<id>.gone` and is deleted, and its folder is not touched. A
+  Thread in No Space has a Space of its own, `scratch` in `space.json`
+  (ADR 0046): `spaces.create { scratch: true }` makes it, with no name, in
+  a new folder `~/Banda/scratch/<date>-<id8>/`, and `spaces.update
+  { scratch: false, name }` makes a Space of it.
 - **Event log.** Append-only, with typed events, one per Space. Windows and
   the CLI subscribe to it. A subscription sends only what its view needs.
   The database itself refuses to change or delete an event.

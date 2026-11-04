@@ -91,3 +91,38 @@ pub fn now_ms() -> i64 {
         .map(|d| i64::try_from(d.as_millis()).unwrap_or(i64::MAX))
         .unwrap_or(0)
 }
+
+/// The UTC date of `ms` since the Unix epoch: `2026-11-04`.
+pub fn utc_date(ms: i64) -> String {
+    // Days since 1970 to a civil date (Howard Hinnant's `civil_from_days`).
+    let days = ms.div_euclid(86_400_000) + 719_468;
+    let era = days.div_euclid(146_097);
+    let of_era = days - era * 146_097;
+    let year_of_era = (of_era - of_era / 1460 + of_era / 36_524 - of_era / 146_096) / 365;
+    let of_year = of_era - (365 * year_of_era + year_of_era / 4 - year_of_era / 100);
+    let shifted = (5 * of_year + 2) / 153;
+    let day = of_year - (153 * shifted + 2) / 5 + 1;
+    let month = if shifted < 10 {
+        shifted + 3
+    } else {
+        shifted - 9
+    };
+    let year = year_of_era + era * 400 + i64::from(month <= 2);
+    format!("{year:04}-{month:02}-{day:02}")
+}
+
+#[cfg(test)]
+mod tests {
+    #[test]
+    fn a_date_is_read_from_the_clock_by_utc() {
+        for (ms, date) in [
+            (0, "1970-01-01"),
+            (-1_000, "1969-12-31"),
+            (951_868_799_000, "2000-02-29"),
+            (1_793_836_799_000, "2026-11-04"),
+            (4_107_628_799_000, "2100-03-01"),
+        ] {
+            assert_eq!(super::utc_date(ms), date, "{ms}");
+        }
+    }
+}
