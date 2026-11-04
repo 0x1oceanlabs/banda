@@ -16,7 +16,7 @@
 use crate::acp::Process;
 use crate::hosts::{Activity, Held, Host, Hosts};
 use crate::limits::Reader;
-use crate::model::{Account, HarnessView, Limits};
+use crate::model::{Account, HarnessView, Limits, LimitsLook};
 use crate::usage::UsageNow;
 use crate::{FILE, Harness, Harnesses};
 use agent_client_protocol::Client;
@@ -142,8 +142,10 @@ pub struct LimitsNow {
     /// Every Harness Banda reads the limits of; none while `[limits]
     /// read` is off.
     pub limits: Vec<Limits>,
-    /// The share spent from which the bar's ring warns: `[limits] warn`.
+    /// The share spent from which the bar's widget warns: `[limits] warn`.
     pub warn: u8,
+    /// How the bar's widget shows the room left: `[limits] look`.
+    pub look: LimitsLook,
 }
 
 #[derive(Deserialize, TS)]
@@ -224,8 +226,13 @@ impl HarnessesModule {
         // Read before the limits are: a read kept after it is a later event.
         let at = space.at().await?;
         let (limits, settings) = self.limits.now(space, read).await?;
-        let warn = settings.warn;
-        Ok(LimitsNow { at, limits, warn })
+        let (warn, look) = (settings.warn, settings.look);
+        Ok(LimitsNow {
+            at,
+            limits,
+            warn,
+            look,
+        })
     }
 
     async fn usage(&self, call: Call, args: AskUsage) -> Result<UsageNow, Refusal> {

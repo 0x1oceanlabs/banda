@@ -29,6 +29,8 @@ struct Answer {
     /// `default_claude_max_20x`.
     subscription: Option<String>,
     tier: Option<String>,
+    /// The address it is signed in with, from Claude Code's `.claude.json`.
+    email: Option<String>,
     /// Its token expired, so main asked nothing.
     expired: bool,
     status: Option<u16>,
@@ -52,7 +54,17 @@ pub(super) async fn read(space: &ModuleSpace, harness: &Harness) -> Result<Found
     found(answer)
 }
 
+/// What main's answer says, with the address it is signed in with, the
+/// read failed or not.
 fn found(answer: Answer) -> Result<Found, Failure> {
+    let email = answer.email.clone().filter(|_| answer.signed_in);
+    match limits(answer) {
+        Ok(found) => Ok(Found { email, ..found }),
+        Err(failure) => Err(Failure { email, ..failure }),
+    }
+}
+
+fn limits(answer: Answer) -> Result<Found, Failure> {
     if !answer.signed_in {
         return Ok(Found::none("No one is signed in to Claude Code."));
     }
@@ -72,6 +84,7 @@ fn found(answer: Answer) -> Result<Found, Failure> {
             return Err(Failure {
                 why: "Anthropic asked Banda to wait before it reads the limits again.".into(),
                 wait: Some(WAIT),
+                email: None,
             });
         }
         Some(status) => return Err(Failure::new(format!("Anthropic answered {status}."))),
@@ -81,6 +94,7 @@ fn found(answer: Answer) -> Result<Found, Failure> {
     let note = (windows.is_empty()).then(|| "Anthropic says this account has no limits.".into());
     Ok(Found {
         plan: plan(answer.subscription.as_deref(), answer.tier.as_deref()),
+        email: None,
         windows,
         note,
     })
@@ -172,6 +186,7 @@ mod tests {
             signed_in: true,
             subscription: Some("max".into()),
             tier: Some("default_claude_max_20x".into()),
+            email: Some("p@example.com".into()),
             status: Some(200),
             body: Some(body),
             ..Answer::default()
@@ -194,6 +209,7 @@ mod tests {
         });
         let found = found(answered(body)).unwrap();
         assert_eq!(found.plan.as_deref(), Some("Max 20x"));
+        assert_eq!(found.email.as_deref(), Some("p@example.com"));
         let said: Vec<(&str, f64)> = (found.windows.iter())
             .map(|w| (w.label.as_str(), w.used))
             .collect();
@@ -216,9 +232,16 @@ mod tests {
         let expired = Answer {
             signed_in: true,
             expired: true,
+            email: Some("p@example.com".into()),
             ..Answer::default()
         };
-        assert!(found(expired).unwrap_err().why.contains("next turn"));
+        let expired = found(expired).unwrap_err();
+        assert!(expired.why.contains("next turn"));
+        assert_eq!(
+            expired.email.as_deref(),
+            Some("p@example.com"),
+            "still named"
+        );
         let wait = Answer {
             status: Some(429),
             ..answered(Value::Null)

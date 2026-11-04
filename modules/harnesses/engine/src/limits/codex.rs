@@ -1,7 +1,7 @@
 //! Codex's limits (ADR 0043, decision 3): the entry's `codex app-server`,
 //! with its CLI and its `CODEX_HOME`, asked `initialize`, then
-//! `account/rateLimits/read`, and `account/read` for the plan when the
-//! limits name none. Codex reads its own sign-in. The process stops after.
+//! `account/rateLimits/read`, and `account/read` for the account's email,
+//! and its plan when the limits name none. Codex reads its own sign-in. The process stops after.
 
 use super::{Failure, Found, window};
 use crate::model::{LimitWindow, WindowKind};
@@ -38,10 +38,7 @@ pub(super) async fn read(harness: &Harness) -> Result<Found, Failure> {
         .say(json!({ "method": "initialized", "params": {} }))
         .await?;
     let limits = server.ask("account/rateLimits/read", json!({})).await;
-    let account = match &limits {
-        Ok(limits) if plan_of(limits).is_some() => None,
-        _ => server.ask("account/read", json!({})).await.ok(),
-    };
+    let account = server.ask("account/read", json!({})).await.ok();
     found(limits, account.as_ref())
 }
 
@@ -61,12 +58,19 @@ fn found(limits: Result<Value, Failure>, account: Option<&Value>) -> Result<Foun
     let plan = plan_of(&limits)
         .or_else(|| account?.pointer("/account/planType")?.as_str())
         .map(plan_name);
+    let email = (account.and_then(|answer| answer.pointer("/account/email")?.as_str()))
+        .filter(|email| !email.is_empty())
+        .map(str::to_owned);
     let windows = windows(&limits);
     if windows.is_empty() {
-        return Err(Failure::new("Codex's app-server answered no limits."));
+        return Err(Failure {
+            email,
+            ..Failure::new("Codex's app-server answered no limits.")
+        });
     }
     Ok(Found {
         plan,
+        email,
         windows,
         note: None,
     })
@@ -296,5 +300,15 @@ mod tests {
             found(Ok(limits), Some(&plan)).unwrap().plan.as_deref(),
             Some("Plus")
         );
+    }
+
+    #[test]
+    fn the_account_names_its_email_and_the_limits_their_plan() {
+        let account = json!({
+            "account": { "type": "chatgpt", "email": "p@example.com", "planType": "plus" }
+        });
+        let found = found(Ok(answered()), Some(&account)).unwrap();
+        assert_eq!(found.email.as_deref(), Some("p@example.com"));
+        assert_eq!(found.plan.as_deref(), Some("Pro"), "the limits' plan first");
     }
 }

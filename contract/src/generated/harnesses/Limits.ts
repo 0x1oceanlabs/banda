@@ -9,13 +9,23 @@ import type { LimitsFailed } from "./LimitsFailed";
  */
 export type Limits = { harness: string, 
 /**
- * The Harness's name: `Claude Code`.
+ * The entry's name, which names the account: `Claude Code`, `Work`.
  */
 name: string, 
 /**
  * The account's plan, as the Harness names it: `Max 20x`, `Plus`.
  */
 plan?: string, 
+/**
+ * The address the account is signed in with, when the Harness says
+ * it (ADR 0055, decision 1).
+ */
+email?: string, 
+/**
+ * The other entries of its Harness signed in to the same account:
+ * they share its limits, so only the first is listed.
+ */
+also?: Array<string>, 
 /**
  * Each limit's window, the account's own first. None when the
  * account has no limits, as one signed in with an API key.

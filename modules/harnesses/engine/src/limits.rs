@@ -72,6 +72,8 @@ impl Kind {
 #[derive(Debug, Default, PartialEq)]
 struct Found {
     plan: Option<String>,
+    /// The address the account is signed in with.
+    email: Option<String>,
     windows: Vec<LimitWindow>,
     note: Option<String>,
 }
@@ -91,6 +93,9 @@ impl Found {
 struct Failure {
     why: String,
     wait: Option<Duration>,
+    /// The address the account is signed in with, when the read still
+    /// said it, as an expired sign-in does.
+    email: Option<String>,
 }
 
 impl Failure {
@@ -98,6 +103,7 @@ impl Failure {
         Failure {
             why: why.into(),
             wait: None,
+            email: None,
         }
     }
 }
@@ -195,7 +201,8 @@ impl Reader {
                 }
             }
         }
-        Ok((kept, settings))
+        let kinds = harnesses.iter().map(Kind::of);
+        Ok((shared(kept.into_iter().zip(kinds)), settings))
     }
 
     /// Reads `harness` on its own, unless it was within `since`, it is
@@ -248,18 +255,21 @@ async fn keep(space: &ModuleSpace, id: &str, read: Result<Found, Failure>) -> Re
             let limits = match read {
                 Ok(Found {
                     plan,
+                    email,
                     windows,
                     note,
                 }) => Limits {
                     plan,
+                    email,
                     windows,
                     note,
                     read_at: Some(now),
                     failed: None,
                     ..before
                 },
-                Err(Failure { why, .. }) => Limits {
+                Err(Failure { why, email, .. }) => Limits {
                     failed: Some(LimitsFailed { at: now, why }),
+                    email: email.or(before.email),
                     ..before
                 },
             };
@@ -279,6 +289,29 @@ async fn keep(space: &ModuleSpace, id: &str, read: Result<Found, Failure>) -> Re
             Ok(())
         })
         .await
+}
+
+/// The limits of `kept`, in their order, each with its entry's Kind: an
+/// entry signed in to the same account as an earlier one of its Kind
+/// shares its limits, so it is not listed, and its ID goes in the
+/// earlier one's `also` (ADR 0055, decision 1). One with no email is
+/// never merged.
+fn shared(kept: impl IntoIterator<Item = (Limits, Option<Kind>)>) -> Vec<Limits> {
+    let mut listed: Vec<(Limits, Option<Kind>)> = Vec::new();
+    for (mut limits, kind) in kept {
+        limits.also.clear();
+        let first = limits.email.as_deref().and_then(|email| {
+            listed.iter_mut().find(|(earlier, of)| {
+                *of == kind
+                    && (earlier.email.as_deref()).is_some_and(|e| e.eq_ignore_ascii_case(email))
+            })
+        });
+        match first {
+            Some((earlier, _)) => earlier.also.push(limits.harness),
+            None => listed.push((limits, kind)),
+        }
+    }
+    listed.into_iter().map(|(limits, _)| limits).collect()
 }
 
 /// A Harness not read yet. Its name is the list's, as a window reads it.
@@ -388,6 +421,44 @@ mod tests {
         );
         assert_eq!(instant("2024-02-29T00:00:00Z"), Some(1_709_164_800_000));
         assert_eq!(instant("tomorrow"), None);
+    }
+
+    #[test]
+    fn entries_signed_in_to_one_account_share_its_limits() {
+        let entry = |id: &str, email: Option<&str>, kind| {
+            let limits = Limits {
+                harness: id.into(),
+                email: email.map(Into::into),
+                ..Limits::default()
+            };
+            (limits, Some(kind))
+        };
+        let listed = shared([
+            entry("claude", Some("p@example.com"), Kind::Claude),
+            entry("codex", Some("p@example.com"), Kind::Codex),
+            entry("work", Some("w@example.com"), Kind::Claude),
+            entry("again", Some("P@example.com"), Kind::Claude),
+            entry("nobody", None, Kind::Claude),
+            entry("nobody-too", None, Kind::Claude),
+        ]);
+        let said: Vec<(&str, Vec<&str>)> = (listed.iter())
+            .map(|l| {
+                (
+                    l.harness.as_str(),
+                    l.also.iter().map(String::as_str).collect(),
+                )
+            })
+            .collect();
+        assert_eq!(
+            said,
+            [
+                ("claude", vec!["again"]),
+                ("codex", vec![]),
+                ("work", vec![]),
+                ("nobody", vec![]),
+                ("nobody-too", vec![]),
+            ]
+        );
     }
 
     #[test]

@@ -1,6 +1,7 @@
 //! What the window reads of a Harness, written once in Rust for
 //! TypeScript too (ADR 0014).
 
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use ts_rs::TS;
@@ -140,12 +141,22 @@ pub struct SignInWay {
 #[ts(export, export_to = "harnesses/")]
 pub struct Limits {
     pub harness: String,
-    /// The Harness's name: `Claude Code`.
+    /// The entry's name, which names the account: `Claude Code`, `Work`.
     pub name: String,
     /// The account's plan, as the Harness names it: `Max 20x`, `Plus`.
     #[ts(optional)]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub plan: Option<String>,
+    /// The address the account is signed in with, when the Harness says
+    /// it (ADR 0055, decision 1).
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub email: Option<String>,
+    /// The other entries of its Harness signed in to the same account:
+    /// they share its limits, so only the first is listed.
+    #[ts(as = "Option<Vec<String>>", optional)]
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub also: Vec<String>,
     /// Each limit's window, the account's own first. None when the
     /// account has no limits, as one signed in with an API key.
     pub windows: Vec<LimitWindow>,
@@ -206,4 +217,34 @@ pub enum WindowKind {
     Weekly,
     Monthly,
     Other,
+}
+
+/// How the bar's widget shows the room left: `[limits] look` (ADR 0055,
+/// decision 2).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, TS, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+#[ts(export, export_to = "harnesses/")]
+pub enum LimitsLook {
+    /// A gauge.
+    #[default]
+    Icon,
+    /// A thin bar and the share.
+    Meter,
+    /// The share alone.
+    Number,
+    /// Each Harness's share: `Claude 74% · Codex 12%`.
+    Providers,
+}
+
+impl LimitsLook {
+    /// The look named `name`, as the file writes it.
+    pub(crate) fn named(name: &str) -> Option<Self> {
+        match name {
+            "icon" => Some(Self::Icon),
+            "meter" => Some(Self::Meter),
+            "number" => Some(Self::Number),
+            "providers" => Some(Self::Providers),
+            _ => None,
+        }
+    }
 }

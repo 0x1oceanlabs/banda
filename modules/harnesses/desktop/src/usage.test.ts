@@ -47,6 +47,7 @@ test("the sign-in in Claude Code's folder asks Anthropic once, and the answer ho
     signed_in: true,
     subscription: "max",
     tier: "default_claude_max_20x",
+    email: undefined,
     status: 200,
     body: { five_hour: { utilization: 3 } },
   })
@@ -72,7 +73,10 @@ test("an entry's own folder is read, and an expired or missing sign-in asks noth
     signed_in: true,
     expired: true,
   })
-  expect(await usage(given, undefined, signal)).toEqual({ signed_in: false })
+  expect(await usage(given, undefined, signal)).toEqual({
+    signed_in: false,
+    email: undefined,
+  })
   expect(asked).toEqual([])
 })
 
@@ -86,6 +90,32 @@ test("on macOS the Keychain holds it, under the folder's own item", async () => 
   expect(await usage(given, undefined, signal)).toMatchObject({
     status: 429,
     body: undefined,
+  })
+  expect(asked).toHaveLength(1)
+})
+
+test("the address signed in comes from .claude.json, beside the home for the default folder", async () => {
+  const account = (email: string) =>
+    JSON.stringify({ oauthAccount: { emailAddress: email }, projects: {} })
+  const expired = { ...signed, expiresAt: NOW - 1 }
+  const { given, asked } = means({
+    "/home/p/.claude/.credentials.json": login(signed),
+    "/home/p/.claude.json": account("p@example.com"),
+    "/home/p/.claude/.claude.json": account("not@example.com"),
+    "/work/.credentials.json": login(expired),
+    "/work/.claude.json": account("w@example.com"),
+    "/gone/.claude.json": "{ not json",
+  })
+  const answer = await usage(given, undefined, signal)
+  expect(answer).toMatchObject({ status: 200, email: "p@example.com" })
+  expect(JSON.stringify(answer)).not.toContain("secret")
+  expect(await usage(given, "/work", signal)).toMatchObject({
+    expired: true,
+    email: "w@example.com",
+  })
+  expect(await usage(given, "/gone", signal)).toEqual({
+    signed_in: false,
+    email: undefined,
   })
   expect(asked).toHaveLength(1)
 })
