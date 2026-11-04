@@ -767,7 +767,8 @@ pub fn set_turn(
 pub fn last_begun(sql: &Connection, thread: ThreadId) -> Result<Option<LatestTurn>, Error> {
     Ok(sql
         .query_row(
-            "SELECT id, state, COALESCE(started_at, created_at), reason, note FROM agents_turns
+            "SELECT id, state, COALESCE(started_at, created_at), reason, note, failure
+             FROM agents_turns
              WHERE thread = ?1 AND state NOT IN (?2, ?3)
              ORDER BY created_at DESC, id DESC LIMIT 1",
             params![thread, word(TurnState::Queued), word(TurnState::Withdrawn)],
@@ -778,6 +779,9 @@ pub fn last_begun(sql: &Connection, thread: ThreadId) -> Result<Option<LatestTur
                     began: row.get(2)?,
                     reason: row.get(3)?,
                     note: row.get(4)?,
+                    failure: row
+                        .get::<_, Option<String>>(5)?
+                        .and_then(|said| serde_json::from_str(&said).ok()),
                 })
             },
         )
@@ -1155,13 +1159,22 @@ pub fn open_questions(sql: &Connection, turn: TurnId) -> Result<Vec<Item>, Error
 /// first.
 pub fn asking(sql: &Connection, thread: ThreadId) -> Result<Vec<Asking>, Error> {
     let mut statement = sql.prepare(&format!(
-        "SELECT id, json_extract(body, '$.title') FROM agents_items
+        "SELECT id, json_extract(body, '$.title'),
+                CASE WHEN json_extract(body, '$.form') IS NULL
+                      AND json_extract(body, '$.plan') IS NULL
+                     THEN json_extract(body, '$.choices') END
+         FROM agents_items
          WHERE thread = ?1 AND {OPEN_QUESTION} ORDER BY rowid"
     ))?;
     let rows = statement.query_map(params![thread, open_word()?], |row| {
+        let choices = row
+            .get::<_, Option<String>>(2)?
+            .and_then(|said| serde_json::from_str(&said).ok())
+            .unwrap_or_default();
         Ok(Asking {
             item: row.get(0)?,
             title: row.get::<_, Option<String>>(1)?.unwrap_or_default(),
+            choices,
         })
     })?;
     Ok(rows.collect::<rusqlite::Result<_>>()?)
@@ -1372,6 +1385,7 @@ pub fn last_reply(
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::model::{Choice, Field};
 
     fn migrated() -> Connection {
         let sql = Connection::open_in_memory().unwrap();
@@ -1593,6 +1607,7 @@ mod tests {
             began: 1,
             reason: None,
             note: None,
+            failure: None,
         });
         assert_eq!(listed().latest, running, "a turn that waits never began");
         set_turn(&sql, ran, TurnState::Running, None, None, 7).unwrap();
@@ -1608,11 +1623,18 @@ mod tests {
                 began: 7,
                 reason: Some("It broke.".to_owned()),
                 note: Some("Tried twice.".to_owned()),
+                failure: None,
             }),
             "nor one a Person took back"
         );
 
-        let question = |state: QuestionState| {
+        let allow = Choice {
+            id: "allow".to_owned(),
+            name: "Allow".to_owned(),
+            allows: true,
+            always: false,
+        };
+        let asked = |state: QuestionState, form: Option<Vec<Field>>| {
             let item = Item {
                 id: ItemId::new(),
                 turn: Some(ran),
@@ -1620,8 +1642,8 @@ mod tests {
                 at: 0,
                 body: Body::Question {
                     title: "Which?".to_owned(),
-                    choices: Vec::new(),
-                    form: None,
+                    choices: vec![allow.clone()],
+                    form: form.clone(),
                     plan: None,
                     state,
                     answer: None,
@@ -1631,6 +1653,7 @@ mod tests {
             insert_item(&sql, summary.id, &item).unwrap();
             item.id
         };
+        let question = |state| asked(state, None);
         question(QuestionState::Answered);
         let first = question(QuestionState::Open);
         question(QuestionState::Closed);
@@ -1641,6 +1664,13 @@ mod tests {
             listed().asking[0].title,
             "Which?",
             "each names what it asks"
+        );
+        // A click answers one with no form: its choices are listed.
+        assert_eq!(listed().asking[0].choices, std::slice::from_ref(&allow));
+        asked(QuestionState::Open, Some(Vec::new()));
+        assert!(
+            listed().asking[2].choices.is_empty(),
+            "one with a form is answered in its Thread"
         );
     }
 

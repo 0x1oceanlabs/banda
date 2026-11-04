@@ -265,6 +265,19 @@ export type Listed = {
   /** Its latest snooze (ADR 0074): the sidebar puts it away while it
    * sleeps. */
   snooze?: ListedSnooze
+  /**
+   * What answers its call there and then, as buttons on its toast (ADR
+   * 0056, decision 3): each an action by its id and args, Allow and Deny
+   * of a Question, Try again of a failed turn.
+   */
+  answers?: readonly Answering[]
+}
+
+/** One way to answer a call: an action, by its id, with its args. */
+export type Answering = {
+  label: string
+  action: string
+  args?: { [key: string]: JsonValue }
 }
 
 /**
@@ -307,6 +320,8 @@ export type Call = {
   pane: PaneState
   /** When it last changed, in ms since the epoch. */
   since: number
+  /** What answers it there and then (`Listed.answers`). */
+  answers?: readonly Answering[]
 }
 
 /** The marks that call for the Person, and their calls. */
@@ -368,6 +383,7 @@ export function callsOf(lists: Lists, now = Date.now()): Call[] {
           ...(detail ? { detail } : {}),
           pane: thing.pane,
           since: thing.changed,
+          ...(thing.answers?.length ? { answers: thing.answers } : {}),
         },
       ]
     })

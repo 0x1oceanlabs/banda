@@ -143,6 +143,23 @@ test("a Thread's Questions ask until they are answered or closed", () => {
   const settled = [answered, closed].reduce(applyThreads, asking)
   expect(settled.threads[0].asking).toEqual([])
   expect(applyThreads(settled, closed)).toBe(settled)
+
+  // A click answers one with choices and no form: the list keeps them.
+  const allow = { id: "allow", name: "Allow", allows: true, always: false }
+  const choosing = event(
+    "question.asked",
+    { item: "q3", turn: "u1", title: "Run it?", choices: [allow] },
+    { subject: "t1" }
+  )
+  const form = event(
+    "question.asked",
+    { item: "q4", turn: "u1", title: "Which?", choices: [allow], form: [] },
+    { subject: "t1" }
+  )
+  expect([choosing, form].reduce(applyThreads, one).threads[0].asking).toEqual([
+    { item: "q3", title: "Run it?", choices: [allow] },
+    { item: "q4", title: "Which?" },
+  ])
 })
 
 test("a fact about a Thread the list does not have changes nothing", () => {

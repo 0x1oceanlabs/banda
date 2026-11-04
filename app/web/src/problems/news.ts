@@ -48,7 +48,11 @@ export function toldOf(news: readonly Problem[]): Args {
         args: { link: problemLink(fingerprint) },
       },
     ],
-    click: 1,
+    open: {
+      label: "Details",
+      action: "settings.open",
+      args: { link: problemLink(fingerprint) },
+    },
     silent: true,
   }
 }

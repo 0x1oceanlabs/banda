@@ -857,6 +857,10 @@ pub const LISTED_MESSAGE: usize = 200;
 pub struct Asking {
     pub item: ItemId,
     pub title: String,
+    /// Its choices, when a click on one answers it: no form to fill in
+    /// and no plan to read (ADR 0056, decision 3).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub choices: Vec<Choice>,
 }
 
 /// A Thread's latest turn that began, and where it stands: it runs, or how
@@ -877,6 +881,10 @@ pub struct LatestTurn {
     #[ts(optional)]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub note: Option<String>,
+    /// What failed, when the turn failed for a reason the Person mends.
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub failure: Option<Failure>,
 }
 
 /// What the agents module publishes, version 1: each fact is an Event's

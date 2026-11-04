@@ -1,7 +1,7 @@
 import { BandaMark } from "@banda/ui/components/banda-mark"
 import { type ExternalToast, toast } from "@banda/ui/components/sonner"
 import type { Chime } from "@banda/ui/sound"
-import type { Button, Told } from "./told"
+import { type Button, clicked, type Told } from "./told"
 
 /** How long each call's toast shows, in ms: the louder, the longer (ADR
  * 0011, decision 2). */
@@ -33,14 +33,15 @@ export function toastTold(
 ): string | number {
   const [main, other] = told.buttons
   const id = options?.id ?? told.key
-  if (main) clicks.set(String(id), () => run(main))
+  const opens = clicked(told)
+  if (opens) clicks.set(String(id), () => run(opens))
   else clicks.delete(String(id))
   return KIND[told.kind](titleOf(told), {
     id,
     testId: String(id),
     duration: LIFE[told.kind],
     closeButton: told.close === true,
-    className: main ? "cursor-pointer" : "",
+    className: opens ? "cursor-pointer" : "",
     classNames: { description: "line-clamp-2" },
     icon: markOf(told.kind),
     description: (
@@ -74,11 +75,11 @@ function titleOf(told: Told) {
   )
 }
 
-/** What a click on each toast does, by its id: its first button's. */
+/** What a click on each toast does, by its id (`Told.open`). */
 const clicks = new Map<string, () => void>()
 
 /**
- * A click anywhere on a toast does what its first button does, and the
+ * A click anywhere on a toast does what its `open` says, and the
  * toast goes (ADR 0056, decision 3); a click on a button is the button's,
  * and a swipe is Sonner's. Returns how to stop.
  */

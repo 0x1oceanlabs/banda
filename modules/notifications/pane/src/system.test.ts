@@ -1,5 +1,5 @@
 import { expect, test } from "vitest"
-import { loudestOf, noticeOf, summaryOf, toldOfCall } from "./system"
+import { GO_TO, loudestOf, noticeOf, summaryOf, toldOfCall } from "./system"
 import type { Call } from "@banda/ui/pane"
 
 const heard = (about: string, chime: Call["chime"], detail?: string) =>
@@ -51,4 +51,24 @@ test("with more than one Project, a call's notice and toast name its Project", (
     project: "banda",
   })
   expect(toldOfCall(heard("Tests", "done"), true).project).toBeUndefined()
+})
+
+test("what answers a call there and then are its toast's buttons; a click opens it", () => {
+  const allow = {
+    label: "Allow",
+    action: "agents.answer",
+    args: { choice: "once" },
+  }
+  const deny = {
+    label: "Deny",
+    action: "agents.answer",
+    args: { choice: "no" },
+  }
+  const told = toldOfCall(
+    { ...heard("Tests", "asking"), answers: [allow, deny] },
+    true
+  )
+  expect(told.buttons).toEqual([allow, deny])
+  expect(told.open).toMatchObject({ label: "Answer", action: GO_TO })
+  expect(toldOfCall(heard("Tests", "done"), true).open).toBeUndefined()
 })

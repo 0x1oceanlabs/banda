@@ -34,6 +34,27 @@
       }
     },
     {
+      "id": "agents.answer",
+      "title": "Answer a Question",
+      "section": "Threads",
+      "keys": [],
+      "unlisted": true
+    },
+    {
+      "id": "agents.retry",
+      "title": "Try a turn again",
+      "section": "Threads",
+      "keys": [],
+      "unlisted": true
+    },
+    {
+      "id": "agents.show",
+      "title": "Show a Thread",
+      "section": "Threads",
+      "keys": [],
+      "unlisted": true
+    },
+    {
       "id": "agents.composer.send",
       "title": "Send the message, as agents.toml says Enter does",
       "section": "Composer",

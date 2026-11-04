@@ -98,7 +98,7 @@ export function applyThreads(state: ThreadList, event: Event): ThreadList {
       }))
     }
     case "turn.ended": {
-      const { turn, state: ended, reason, note } = fact.payload
+      const { turn, state: ended, reason, note, failure } = fact.payload
       // A turn a Person took back never began, so it is no one's latest.
       if (ended === "withdrawn") return state
       return change(
@@ -113,6 +113,7 @@ export function applyThreads(state: ThreadList, event: Event): ThreadList {
               thread.latest?.turn === turn ? thread.latest.began : event.at,
             ...(reason ? { reason } : {}),
             ...(note ? { note } : {}),
+            ...(failure ? { failure } : {}),
           },
         }),
         true
@@ -124,11 +125,17 @@ export function applyThreads(state: ThreadList, event: Event): ThreadList {
       return change(state, event, (thread) => ({ ...thread, title, was }))
     }
     case "question.asked": {
-      const { item, title } = fact.payload
+      const { item, title, choices, form, plan } = fact.payload
+      // A click answers one with no form and no plan, as the engine lists
+      // it (ADR 0056, decision 3).
+      const asking =
+        form === undefined && plan === undefined && choices.length > 0
+          ? { item, title, choices }
+          : { item, title }
       return change(state, event, (thread) =>
         thread.asking.some((asking) => asking.item === item)
           ? thread
-          : { ...thread, asking: [...thread.asking, { item, title }] }
+          : { ...thread, asking: [...thread.asking, asking] }
       )
     }
     case "question.answered":

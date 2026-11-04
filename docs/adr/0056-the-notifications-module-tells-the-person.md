@@ -26,8 +26,8 @@ On 2026-11-04 Roma looked at the flow and at seven styles of toast. He kept the 
    - Its title names the Space when the window has more than one: `Deploy docs · banda`.
    - A click anywhere on it does what its first button does: Open, or Answer.
    - A call that asks stays until it is answered or the Person looks at it; `done` still goes after 5 s, `failed` after 8 s.
-   - A thing that calls says what may answer it, as buttons (`Listed.answers`): a Question with choices and no form shows them, Allow and Deny; a turn that failed for its sign-in shows Sign in, else Try again. A Question with a form shows Answer, which opens it.
-   - The desktop's notification shows those buttons where it can (macOS); elsewhere a click opens the Thread.
+   - A thing that calls says what may answer it, as buttons (`Listed.answers`): a Question with choices and no form or plan shows two of them, Allow and Deny; a turn that failed for its sign-in shows Sign in, which shows the Thread and its sign-in card, else Try again. A click anywhere else opens the Thread. A Question with a form shows Answer, which opens it.
+   - The desktop's notification keeps one button, Open or Answer, which opens the Thread: Electron shows more only on macOS, and those wait until Roma has used the toast's.
    - `done` calls that come while a `done` toast shows join it: one toast, `2 Threads done`, a line each. A call that asks or failed is never joined.
    - The line on the edge stays.
 

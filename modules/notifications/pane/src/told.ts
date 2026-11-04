@@ -32,9 +32,9 @@ export type Told = {
   notice?: string
   /** Its buttons, the main one first: two at most. */
   buttons: readonly Button[]
-  /** The button a click on the desktop's notification runs: the first
-   * if none says. */
-  click?: number
+  /** What a click on it does, on its toast or the desktop's
+   * notification: its first button's if it says nothing. */
+  open?: Button
   /** It plays no sound. */
   silent?: boolean
   /** Its toast has a button that closes it. */
@@ -60,21 +60,14 @@ export function toldOf(args: Args | undefined): Told | null {
     body,
     notice,
     buttons,
-    click,
+    open,
     silent,
     close,
   } = args
   if (!text(key) || !text(kind) || !KINDS.has(kind) || !text(title)) return null
   if (!Array.isArray(buttons)) return null
-  const said = buttons.flatMap((button): Button[] => {
-    if (!button || typeof button !== "object" || Array.isArray(button))
-      return []
-    const { label, action, args } = button
-    if (!text(label) || !text(action)) return []
-    const given =
-      args && typeof args === "object" && !Array.isArray(args) ? { args } : {}
-    return [{ label, action, ...given }]
-  })
+  const said = buttons.flatMap(buttonOf)
+  const opens = buttonOf(open ?? null)[0]
   return {
     key,
     kind: kind as Chime,
@@ -86,13 +79,23 @@ export function toldOf(args: Args | undefined): Told | null {
     ...(text(body) ? { body } : {}),
     ...(text(notice) ? { notice } : {}),
     buttons: said.slice(0, 2),
-    ...(typeof click === "number" ? { click } : {}),
+    ...(opens ? { open: opens } : {}),
     ...(silent === true ? { silent } : {}),
     ...(close === true ? { close } : {}),
   }
 }
 
-/** The button a click on its desktop notification runs. */
+/** What a click on its toast or its desktop notification runs. */
 export function clicked(told: Told): Button | undefined {
-  return told.buttons[told.click ?? 0]
+  return told.open ?? told.buttons[0]
+}
+
+/** A button, if `value` is one. */
+function buttonOf(value: JsonValue): Button[] {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return []
+  const { label, action, args } = value
+  if (!text(label) || !text(action)) return []
+  const given =
+    args && typeof args === "object" && !Array.isArray(args) ? { args } : {}
+  return [{ label, action, ...given }]
 }

@@ -3833,6 +3833,27 @@ test("a click anywhere on a toast does what its button does (ADR 0056)", async (
   await expect(toast).toBeHidden()
 })
 
+test("a Question is answered from its toast, which stays until then (ADR 0056)", async () => {
+  window = await startWindow()
+  const { page } = window
+  const { composer } = await firstThread(page)
+  // It ends its turn, and asks later by itself, out of sight.
+  await sendAndGoBelow(page, composer, "background asks")
+
+  const calls = page.getByRole("region", { name: "Notifications" })
+  const toast = calls.getByRole("listitem").filter({ hasText: "Asks you" })
+  await expect(toast).toBeVisible()
+  await expect(toast.getByRole("button", { name: "Reject" })).toBeVisible()
+  await page.screenshot({ path: "test-results/23-toast-question.png" })
+  await toast.getByRole("button", { name: "Allow", exact: true }).click()
+  await expect(toast).toBeHidden()
+  // Answered, it asks no more.
+  const sidebar = page.getByRole("complementary", { name: "Sidebar" })
+  await expect(
+    sidebar.getByRole("button", { name: /background asks/ })
+  ).not.toContainText("Asks you")
+})
+
 test("the bell shows the last toasts again, and Esc or a button closes them (ADR 0048)", async () => {
   window = await startWindow()
   const { page } = window
