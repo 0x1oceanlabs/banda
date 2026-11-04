@@ -50,7 +50,7 @@ export function PersonMessage({
         {text && (
           <Bubble variant="muted" align="end">
             <BubbleContent
-              className={cn("rounded-2xl whitespace-pre-wrap", clamp.className)}
+              className={cn("whitespace-pre-wrap", clamp.className)}
             >
               {text}
             </BubbleContent>

@@ -188,7 +188,7 @@ function ThreadContent(props: PaneProps<ThreadArgs>) {
     // it, as in T3 Code.
     <div
       ref={root}
-      className="flex h-full min-h-0 flex-col"
+      className="@container/thread flex h-full min-h-0 flex-col"
       onKeyDown={(event) => {
         if (matches(event, DETAILS_KEY)) {
           event.preventDefault()
@@ -302,7 +302,10 @@ function ThreadContent(props: PaneProps<ThreadArgs>) {
           />
         )}
       </div>
-      <div className="mx-auto flex w-full max-w-3xl flex-col gap-1.5 px-4 pb-4">
+      <div
+        data-chat
+        className="mx-auto flex w-full max-w-3xl flex-col gap-1.5 px-(--chat-gutter) pb-4"
+      >
         {offer.outdated && (
           <div className="px-1">
             <Warning>{offer.outdated}</Warning>
@@ -573,7 +576,10 @@ function Transcript({
           ref={viewport}
           aria-label={`Thread with ${name}`}
         >
-          <MessageScrollerContent className="mx-auto w-full max-w-3xl gap-4 px-4 pt-4 pb-2">
+          <MessageScrollerContent
+            data-chat
+            className="mx-auto w-full max-w-3xl gap-4 px-(--chat-gutter) pt-4 pb-2"
+          >
             {forkedFrom && (
               <MessageScrollerItem key="forked-from">
                 <Writer
