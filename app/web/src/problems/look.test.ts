@@ -9,6 +9,7 @@ const space = (id: string, folder: string, missing = false): SpaceSummary => ({
   pinned: false,
   archived: false,
   sees_others: false,
+  scratch: false,
   missing,
 })
 

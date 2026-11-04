@@ -20,6 +20,11 @@ archived: boolean,
  */
 sees_others: boolean, 
 /**
+ * One Thread's Space, in No Space (ADR 0046): its name is empty, and
+ * the Space pickers leave it out.
+ */
+scratch: boolean, 
+/**
  * Its folder was gone as the engine started: none of its Threads
  * open until the Person locates it (`spaces.locate`).
  */

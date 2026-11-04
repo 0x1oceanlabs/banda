@@ -55,23 +55,9 @@ fn write(out: &mut String, report: &Report) -> std::fmt::Result {
 
 /// `ms` since the epoch as a UTC minute: `2026-11-03 18:41 UTC`.
 fn utc(ms: i64) -> String {
-    let minutes = ms.div_euclid(60_000);
-    let (days, minute) = (minutes.div_euclid(1440), minutes.rem_euclid(1440));
-    // Howard Hinnant's civil_from_days.
-    let z = days + 719_468;
-    let era = z.div_euclid(146_097);
-    let doe = z.rem_euclid(146_097);
-    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    let mp = (5 * doy + 2) / 153;
-    let day = doy - (153 * mp + 2) / 5 + 1;
-    let month = if mp < 10 { mp + 3 } else { mp - 9 };
-    let year = yoe + era * 400 + i64::from(month <= 2);
-    format!(
-        "{year}-{month:02}-{day:02} {:02}:{:02} UTC",
-        minute / 60,
-        minute % 60
-    )
+    let minute = ms.div_euclid(60_000).rem_euclid(1440);
+    let date = banda_kernel::utc_date(ms);
+    format!("{date} {:02}:{:02} UTC", minute / 60, minute % 60)
 }
 
 #[cfg(test)]

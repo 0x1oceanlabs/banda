@@ -18,7 +18,9 @@ export type SpacesMethods = {
  */
 list: CallMethod<Nothing, Array<SpaceSummary>>, 
 /**
- * Makes a Space: a new folder under the root, by its name.
+ * Makes a Space: a new folder under the root, by its name. A
+ * scratch one, for a Thread in No Space, takes no name: its folder
+ * is new under `scratch/`.
  */
 create: CommandMethod<CreateSpace, SpaceSummary>, 
 /**
@@ -32,8 +34,8 @@ add: CommandMethod<AddSpace, SpaceSummary>,
  */
 browse: CallMethod<Browse, Browsed>, 
 /**
- * Renames, pins or archives a Space, or lets its Agents see the
- * other Spaces' Panes.
+ * Renames, pins or archives a Space, lets its Agents see the
+ * other Spaces' Panes, or makes a Space of a scratch one, named.
  */
 update: CommandMethod<UpdateSpace, SpaceSummary>, 
 /**
