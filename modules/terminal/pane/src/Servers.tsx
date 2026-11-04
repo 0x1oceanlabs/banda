@@ -135,14 +135,16 @@ function Row({
         aria-label={`Stop ${address(server.port)}`}
         title="Stop server"
         tabIndex={-1}
-        className="flex size-6 items-center justify-center rounded-md text-destructive! opacity-0 group-hover/dropdown-menu-item:opacity-100 group-focus/dropdown-menu-item:opacity-100 hover:bg-destructive/10"
+        className="flex size-6 items-center justify-center rounded-md opacity-0 group-hover/dropdown-menu-item:opacity-100 group-focus/dropdown-menu-item:opacity-100 hover:bg-destructive/10"
         onClick={(event) => {
           // The row opens what its square stops.
           event.stopPropagation()
           stop()
         }}
       >
-        <SquareIcon className="size-2.5 fill-current" />
+        {/* A focused menu row sets the colour of everything inside it, the
+            square inside the icon too, so fill and stroke name red themselves. */}
+        <SquareIcon className="size-2.5 fill-destructive stroke-destructive" />
       </button>
     </DropdownMenuItem>
   )
