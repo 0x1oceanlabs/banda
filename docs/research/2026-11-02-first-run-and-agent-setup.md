@@ -7,7 +7,8 @@
   - **I**: the CLIs' own docs (code.claude.com, learn.chatgpt.com, github.com/openai/codex), npm, Homebrew and AUR metadata, and Roma's machine (`claude` 2.1.316 through mise, `codex` 0.166.0 standalone): only `--help`, `--version` and status commands.
   - **E**: Banda at `df5d28e`.
 - **Marks:** **V** = verified, read in code or run. **I** = inferred, our reading.
-- **Mockup:** [2026-11-02-first-run-mockup.html](2026-11-02-first-run-mockup.html).
+- **Mockup:** [2026-11-04-first-run-mockup.html](2026-11-04-first-run-mockup.html), the simple plan Roma took.
+- **Outcome:** on 2026-11-04 Roma found sections 4–6 too much and took a simpler plan: [ADR 0059](../adr/0059-banda-carries-the-adapters-and-the-person-brings-the-agents.md). Section 7 adds what was measured for it.
 
 ## 0. In short
 
@@ -170,3 +171,12 @@ The card is one component in `modules/agents/pane`, used by the first run, by Se
 2. **Recent folders** from Claude Code's and Codex's own history on the first screen, or only Add Space?
 3. **Install from Banda** with the vendor's `curl … | sh` in a terminal after a click, or only show the command to copy?
 4. **The Claude plan line** (section 3): go on as T3 and Zed do, or ask Anthropic first?
+
+## 7. Carrying the adapters (added 2026-11-04)
+
+- **Bundled** (V): each adapter installed with `--omit=optional --ignore-scripts` (73 MB and 21 MB of `node_modules`), then bundled by esbuild (`--bundle --platform=node --format=esm --minify`, with a `createRequire` banner): `claude-agent-acp` 0.99.1 is 2.2 MB, `codex-acp` 2.5.0 is 1.1 MB.
+- **On Electron's Node** (V): Electron 45 with `ELECTRON_RUN_AS_NODE=1` is Node v24.22.1, above the adapters' `>=22`. Both bundles, given `CLAUDE_CODE_EXECUTABLE` and `CODEX_PATH`, answer ACP `initialize`; Claude's also sends `_auth/status_update`. No prompt was sent, so a whole Thread through a bundle is not yet tried.
+- **Fuses** (V): Banda sets no Electron fuses, so `RunAsNode` is on in a packed build too.
+- **Size** (V): the Dev build 0.1.0-dev.197 is 158 MB (AppImage) and 163 MB (macOS zip); the two bundles add 3.3 MB.
+- **Licenses** (V, npm): both adapters are Apache-2.0, `@openai/codex` is Apache-2.0, `@anthropic-ai/claude-agent-sdk` says "SEE LICENSE IN README.md" (Anthropic's terms). Roma decided to bundle it (ADR 0059).
+- **Updating a CLI** (V, `--help`): `claude update` and `codex update` exist.
