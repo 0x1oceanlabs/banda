@@ -165,6 +165,9 @@ export type WidgetProps = {
 export type Widget = {
   /** Unique, its module's id first: `harnesses.limits`. */
   id: string
+  /** What it shows, in a line, as `banda modules` and the skill say it:
+   * how the Person tells which id to write in `[bar]`. */
+  about: string
   Widget: ComponentType<WidgetProps>
 }
 

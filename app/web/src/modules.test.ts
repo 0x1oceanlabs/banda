@@ -63,6 +63,7 @@ function windowOf(module: Module) {
     })),
     sources: module.sources.map(({ id, label }) => ({ id, label })),
     watches: module.watches.length,
+    bar: module.bar.map(({ id, about }) => ({ id, about })),
   }
 }
 

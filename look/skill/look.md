@@ -49,6 +49,10 @@ Every key, with its default:
   sidebar: `[desk]` `sidebar-shadow = 0`.
 - "Sidebar right on the glass": `[desk]` `sidebar = "desk"`; a floating
   panel is `"panel"`.
+- "Hide that on the bar", "put it in the middle": `[bar]` lists each
+  part's widgets by id, in order, and a part's list replaces Banda's (the
+  defaults above), so leave the id out, or move it to `center`. What each
+  module's widget shows is in the `modules` topic and `banda modules`.
 - "Less motion": `[motion]` `slowdown = 2`, or `off = true`.
 - "No sounds": `[sound]` `family = "off"`. Only when something fails:
   `done = false` and `asking = false`.
