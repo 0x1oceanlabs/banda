@@ -38,7 +38,7 @@ pub fn watch(space: ModuleSpace, written: Arc<Notify>) -> Stream {
             wrote.as_mut().enable();
             let read = async {
                 let at = space.at().await.ok()?;
-                status::status(space.folder(), at).await.ok()
+                status::status(&space.folder(), at).await.ok()
             };
             if let Some(mut status) = read.await {
                 // The same but for its position is no change.

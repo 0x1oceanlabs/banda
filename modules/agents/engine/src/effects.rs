@@ -476,7 +476,7 @@ async fn work(
     let (session, opened) = connection
         .session(
             thread,
-            space.folder(),
+            &space.folder(),
             &[kept::folder(space.data())],
             earlier.as_ref(),
             banda,

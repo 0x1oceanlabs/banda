@@ -160,27 +160,27 @@ impl Git {
         // Read before git is: an event after it may change what git reads,
         // and a Pane following it reads again.
         let at = call.space().at().await?;
-        Ok(status::status(call.space().folder(), at).await?)
+        Ok(status::status(&call.space().folder(), at).await?)
     }
 
     async fn diff(&self, call: Call, ask: DiffAsk) -> Result<Diff, Refusal> {
         // Read before git is: an event after it may change what git reads,
         // and a Pane following it reads again.
         let at = call.space().at().await?;
-        let repo = Repo::open(call.space().folder()).await?;
+        let repo = Repo::open(&call.space().folder()).await?;
         diff::diff(&repo, ask, at).await
     }
 
     async fn refs(&self, call: Call, ask: RefsAsk) -> Result<Vec<Ref>, Refusal> {
-        refs::refs(&Repo::open(call.space().folder()).await?, ask).await
+        refs::refs(&Repo::open(&call.space().folder()).await?, ask).await
     }
 
     async fn commits(&self, call: Call, ask: CommitsAsk) -> Result<Vec<Commit>, Refusal> {
-        refs::commits(&Repo::open(call.space().folder()).await?, ask).await
+        refs::commits(&Repo::open(&call.space().folder()).await?, ask).await
     }
 
     async fn contents(&self, call: Call, ask: ContentsAsk) -> Result<Contents, Refusal> {
-        diff::contents(&Repo::open(call.space().folder()).await?, ask).await
+        diff::contents(&Repo::open(&call.space().folder()).await?, ask).await
     }
 
     async fn stage(&self, call: Call, ask: ChangeAsk) -> Result<(), Refusal> {
@@ -196,7 +196,7 @@ impl Git {
     }
 
     async fn change(&self, call: Call, act: stage::Act, ask: ChangeAsk) -> Result<(), Refusal> {
-        let repo = Repo::open(call.space().folder()).await?;
+        let repo = Repo::open(&call.space().folder()).await?;
         let _writing = self.writing.hold().await;
         stage::change(&repo, act, ask).await
     }
@@ -209,7 +209,7 @@ impl Git {
     }
 
     async fn act(&self, call: Call, ask: ActAsk) -> Result<Stream, Refusal> {
-        let repo = Repo::open(call.space().folder()).await?;
+        let repo = Repo::open(&call.space().folder()).await?;
         let writing = self.writing.clone();
         let (say, heard) = tokio::sync::mpsc::channel(64);
         // It goes on when the window lets go: a commit is not left half
@@ -224,27 +224,27 @@ impl Git {
     }
 
     async fn switch(&self, call: Call, ask: SwitchAsk) -> Result<(), Refusal> {
-        let repo = Repo::open(call.space().folder()).await?;
+        let repo = Repo::open(&call.space().folder()).await?;
         let _writing = self.writing.hold().await;
         act::switch(&repo, &ask.name).await
     }
 
     async fn branch(&self, call: Call, ask: BranchAsk) -> Result<(), Refusal> {
-        let repo = Repo::open(call.space().folder()).await?;
+        let repo = Repo::open(&call.space().folder()).await?;
         let _writing = self.writing.hold().await;
         act::make_branch(&repo, &ask.name, ask.from.as_deref()).await
     }
 
     async fn prompt(&self, call: Call, ask: PromptAsk) -> Result<Prompted, Refusal> {
-        message::prompt(&Repo::open(call.space().folder()).await?, ask).await
+        message::prompt(&Repo::open(&call.space().folder()).await?, ask).await
     }
 
     async fn written(&self, call: Call, ask: WrittenAsk) -> Result<Message, Refusal> {
-        message::written(&Repo::open(call.space().folder()).await?, ask).await
+        message::written(&Repo::open(&call.space().folder()).await?, ask).await
     }
 
     async fn init(&self, call: Call, _: Nothing) -> Result<(), Refusal> {
         let _writing = self.writing.hold().await;
-        act::init(call.space().folder()).await
+        act::init(&call.space().folder()).await
     }
 }

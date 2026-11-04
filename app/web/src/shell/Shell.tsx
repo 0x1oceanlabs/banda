@@ -907,6 +907,7 @@ export function Shell({
       >
         {sidebarShown && (
           <Sidebar
+            engine={engine}
             over={narrow}
             onDismiss={narrow ? hideOver : undefined}
             onMenu={() => setMenu(openingAt("root"))}

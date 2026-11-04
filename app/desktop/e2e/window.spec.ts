@@ -4585,3 +4585,117 @@ test("No Space keeps its first attachment and message in one folder", async () =
   await expect(page.getByText("I see 1 image: image/png.")).toBeVisible()
   expect(readdirSync(join(dir, "root", "scratch"))).toHaveLength(1)
 })
+
+test("a No Space Thread becomes a Space and keeps working after its folder moves", async () => {
+  window = await startWindow()
+  const { page, dir } = window
+  const composer = page.getByRole("textbox", { name: "Message to Fake AI" })
+  await composer.fill("promote this")
+  await composer.press("Enter")
+  const thread = page.getByRole("region", { name: "promote this", exact: true })
+  await expect(
+    thread.getByRole("button", { name: /^Worked for/ })
+  ).toBeVisible()
+  const scratch = join(dir, "root", "scratch")
+  const original = join(scratch, readdirSync(scratch)[0])
+  writeFileSync(join(original, "notes.txt"), "keep my files")
+  await page
+    .getByRole("group", { name: "No Space", exact: true })
+    .getByRole("button", { name: /promote this/ })
+    .click({ button: "right" })
+  await page.getByRole("menuitem", { name: "Make a Space from it…" }).click()
+  const dialog = page.getByRole("dialog", {
+    name: "Make a Space from this Thread",
+  })
+  await dialog.getByLabel("Name", { exact: true }).fill("Promoted")
+  await dialog.getByRole("button", { name: "Make Space", exact: true }).click()
+  await expect(dialog).toBeHidden()
+  expect(existsSync(original)).toBe(false)
+  expect(readFileSync(join(dir, "root", "Promoted", "notes.txt"), "utf8")).toBe(
+    "keep my files"
+  )
+  await expect(
+    page.getByRole("group", { name: "No Space", exact: true })
+  ).not.toContainText("promote this")
+  await composer.fill("after moving")
+  await composer.press("Enter")
+  await expect(thread.getByText("You said: after moving")).toBeVisible()
+})
+
+test("promotion can keep the folder where it is", async () => {
+  window = await startWindow()
+  const { page, dir } = window
+  const composer = page.getByRole("textbox", { name: "Message to Fake AI" })
+  await composer.fill("keep here")
+  await composer.press("Enter")
+  await expect(page.getByRole("button", { name: /^Worked for/ })).toBeVisible()
+  const scratch = join(dir, "root", "scratch")
+  const original = join(scratch, readdirSync(scratch)[0])
+  await page
+    .getByRole("group", { name: "No Space", exact: true })
+    .getByRole("button", { name: /keep here/ })
+    .click({ button: "right" })
+  await page.getByRole("menuitem", { name: "Make a Space from it…" }).click()
+  const dialog = page.getByRole("dialog", {
+    name: "Make a Space from this Thread",
+  })
+  await dialog.getByLabel("Name", { exact: true }).fill("Kept")
+  await dialog.getByRole("radio", { name: /Keep it where it is/ }).check()
+  await dialog.getByRole("button", { name: "Make Space", exact: true }).click()
+  await expect(dialog).toBeHidden()
+  expect(existsSync(original)).toBe(true)
+  expect(existsSync(join(dir, "root", "Kept"))).toBe(false)
+})
+
+test("moving a No Space folder waits for its Turn and terminals", async () => {
+  window = await startWindow()
+  const { page, dir } = window
+  const composer = page.getByRole("textbox", { name: "Message to Fake AI" })
+  await composer.fill("please ask first")
+  await composer.press("Enter")
+  const thread = page.getByRole("region", {
+    name: "please ask first",
+    exact: true,
+  })
+  const question = thread.getByRole("group", { name: "Run a check" })
+  await expect(question).toBeVisible()
+  const row = page
+    .getByRole("group", { name: "No Space", exact: true })
+    .getByRole("button", { name: /please ask first/ })
+  const dialog = page.getByRole("dialog", {
+    name: "Make a Space from this Thread",
+  })
+  const openPromotion = async () => {
+    await row.click({ button: "right" })
+    await page.getByRole("menuitem", { name: "Make a Space from it…" }).click()
+    await dialog.getByLabel("Name", { exact: true }).fill("Later")
+    await dialog
+      .getByRole("button", { name: "Make Space", exact: true })
+      .click()
+  }
+  await openPromotion()
+  await expect(dialog.getByRole("alert")).toContainText("Turn")
+  expect(existsSync(join(dir, "root", "Later"))).toBe(false)
+  await dialog.getByRole("button", { name: "Cancel", exact: true }).click()
+  await question.getByRole("button", { name: "Allow", exact: true }).click()
+  await expect(
+    thread.getByRole("button", { name: /^Worked for/ })
+  ).toBeVisible()
+  await page.keyboard.press("Alt+KeyN")
+  await page
+    .getByRole("region", { name: "New Pane" })
+    .getByRole("button", { name: "Terminal" })
+    .click()
+  const terminal = terminalTile(page)
+  await expect(
+    terminal.getByRole("region", { name: "Terminal screen" })
+  ).toHaveAttribute("data-state", "running")
+  await openPromotion()
+  await expect(dialog.getByRole("alert")).toContainText("terminals")
+  expect(existsSync(join(dir, "root", "Later"))).toBe(false)
+  await dialog.getByRole("button", { name: "Cancel", exact: true }).click()
+  await terminal.getByRole("button", { name: /^Close / }).click()
+  await openPromotion()
+  await expect(dialog).toBeHidden()
+  expect(existsSync(join(dir, "root", "Later"))).toBe(true)
+})

@@ -140,6 +140,21 @@ impl Module for Terminals {
         self.dispatch_stream(call, method, params).await
     }
 
+    async fn can_move(&self, space: ModuleSpace) -> Result<(), Refusal> {
+        if self
+            .open
+            .lock()
+            .unwrap()
+            .values()
+            .any(|terminal| terminal.space == space.id())
+        {
+            return Err(Refusal::conflict(
+                "Close the open terminals in this Space before moving its folder.",
+            ));
+        }
+        Ok(())
+    }
+
     /// A removed Space's programs stop, as `close` stops one.
     async fn closing(&self, space: ModuleSpace) {
         let closed: Vec<_> = (self.open.lock().unwrap())
@@ -168,7 +183,7 @@ impl Terminals {
         };
         let id = open.terminal;
         let started =
-            Terminal::start(space.id(), space.folder(), open).map_err(Refusal::invalid)?;
+            Terminal::start(space.id(), &space.folder(), open).map_err(Refusal::invalid)?;
         open_now.insert(id, started);
         drop(open_now);
         if let Some(ended) = ended {
