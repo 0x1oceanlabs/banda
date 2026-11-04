@@ -66,6 +66,14 @@ impl Kind {
         let program = std::path::Path::new(&cli.program).file_stem();
         named(&cli.variable).or_else(|| named(program?.to_str()?))
     }
+
+    /// The ID Banda knows it by, as its built-in entry's.
+    pub(crate) fn id(self) -> &'static str {
+        match self {
+            Kind::Claude => "claude",
+            Kind::Codex => "codex",
+        }
+    }
 }
 
 /// What a read found.
@@ -195,6 +203,7 @@ impl Reader {
         let now = banda_kernel::now_ms();
         for (limits, harness) in kept.iter_mut().zip(&harnesses) {
             limits.name.clone_from(&harness.name);
+            limits.kind = Kind::of(harness).map(|kind| kind.id().to_owned());
             for window in &mut limits.windows {
                 if window.resets_at.is_some_and(|at| at <= now) {
                     window.used = 0.0;

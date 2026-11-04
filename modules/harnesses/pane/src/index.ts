@@ -27,7 +27,7 @@ export const harnesses = defineModule({
     {
       id: "harnesses.limits",
       about:
-        "The fullest usage limit; click for each account's limits and resets.",
+        "The room left of each Harness's best account; click for each account's limits.",
       Widget: LimitsWidget,
     },
   ],

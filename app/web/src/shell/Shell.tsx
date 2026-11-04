@@ -692,6 +692,9 @@ export function Shell({
           .then((thread) => runAction(parts, "thread.new", thread))
           .catch(() => undefined),
       run: (action, args) => runAction(parts, action, args),
+      writeSetting: (file, key, value) =>
+        window.banda?.settings.set(file, key, value) ??
+        Promise.resolve(["Only Banda's app writes the settings."]),
     }
     return parts
   }, [
@@ -745,6 +748,7 @@ export function Shell({
       goTo: (thing) => partsNow.current.goTo(thing),
       look: () => partsNow.current.look(),
       spaces: () => partsNow.current.spaces(),
+      writeSetting: (...how) => partsNow.current.writeSetting(...how),
     }
     const stops = known
       .filter((module) => running.split(",").includes(module.id))
