@@ -8,7 +8,7 @@
 //! comes, its credentials taken out, and a failure says its last line.
 
 use crate::model::{ActAsk, Action, Change, Changed, Done, Progress, Step};
-use crate::repo::{Repo, chosen, in_way, nothing_to_commit, scratch};
+use crate::repo::{Repo, branch_refs, chosen, in_way, scratch};
 use crate::run::{Failure, Opts, Ran, Reason, git};
 use banda_kernel::Refusal;
 use serde_json::Value;
@@ -87,9 +87,7 @@ pub async fn act(repo: &Repo, ask: ActAsk, tell: &Teller) -> Result<Done, Refusa
     let files = chosen(&ask.files)?;
     let said = repo.porcelain().await?;
     if said.files.is_empty() {
-        return Err(Refusal::conflict(
-            "Nothing to commit: the work tree is clean.",
-        ));
+        return Err(nothing_to_commit(false));
     }
     // `add --all` would take a conflict as resolved, its markers and all.
     let fought: Vec<&str> = (said.files.iter())
@@ -159,6 +157,16 @@ fn with_old_paths<'a>(files: Vec<&'a str>, changed: &'a [Changed]) -> Vec<&'a st
     all
 }
 
+/// Why there is nothing to commit, as the button's commit and the prompt
+/// for its message both say it: the work tree is clean, or the files
+/// `chosen` have no changes.
+pub(crate) fn nothing_to_commit(chosen: bool) -> Refusal {
+    Refusal::conflict(match chosen {
+        true => "Nothing to commit: those files have no changes.",
+        false => "Nothing to commit: the work tree is clean.",
+    })
+}
+
 fn detached() -> Refusal {
     Refusal::conflict("HEAD is detached: check out a branch first.")
 }
@@ -194,7 +202,7 @@ async fn commit(
         }
     }
     if repo.yes(["diff", "--cached", "--quiet", "--"]).await? {
-        return Err(nothing_to_commit());
+        return Err(nothing_to_commit(true));
     }
     let stdin = Some(message.as_bytes().to_vec());
     let args = ["commit", "--quiet", "--file=-"];
@@ -290,9 +298,12 @@ async fn pull(repo: &Repo, branch: &str, tell: &Teller) -> Result<Done, Refusal>
 /// along, or git refuses.
 pub async fn switch(repo: &Repo, name: &str) -> Result<(), Refusal> {
     ref_name(name)?;
-    let to = if repo.has_branch(name).await? {
+    let Some(found) = repo.first_there(branch_refs(name)).await? else {
+        return Err(Failure(Reason::BadRef).into());
+    };
+    let to = if found.full.starts_with("refs/heads/") {
         vec![name.to_owned()]
-    } else if repo.has_ref(&format!("refs/remotes/{name}")).await? {
+    } else {
         let ran = repo
             .run(
                 [
@@ -322,8 +333,6 @@ pub async fn switch(repo: &Repo, name: &str) -> Result<(), Refusal> {
             Some(local) => vec![local],
             None => vec!["--track".to_owned(), name.to_owned()],
         }
-    } else {
-        return Err(Failure(Reason::BadRef).into());
     };
     // `--` after it, so a ref gone stale is no path, whose checkout would
     // throw the Person's changes away (T3 Code).

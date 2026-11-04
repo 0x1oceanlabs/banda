@@ -27,8 +27,9 @@ pub async fn refs(repo: &Repo, RefsAsk { query }: RefsAsk) -> Result<Vec<Ref>, R
         Opts::default(),
     );
     let remote = repo.primary_remote().await?;
-    let (listed, default) = futures::join!(listed, repo.default_on(remote.as_deref()));
-    let (listed, default) = (listed?, default?);
+    let default = repo.default_branch(remote.as_deref(), None);
+    let (listed, default) = futures::join!(listed, default);
+    let (listed, default) = (listed?, default?.map(|default| default.name));
     let remote_default = match (&remote, &default) {
         (Some(remote), Some(default)) => Some(format!("{remote}/{default}")),
         _ => None,

@@ -427,6 +427,23 @@ async fn a_branch_with_an_upstream_is_ahead_and_behind_it() {
 }
 
 #[tokio::test]
+async fn the_default_checked_out_with_no_upstream_is_compared_with_the_remote_copy() {
+    let world = World::committed().await;
+    world.git(&["branch", "master"]);
+    world.git(&["remote", "add", "origin", "../nowhere"]);
+    world.git(&["update-ref", "refs/remotes/origin/main", "HEAD"]);
+    world.write("e.txt", "ours\n");
+    world.commit("ours");
+
+    let changes = world.diff(json!({ "scope": { "kind": "changes" } })).await;
+    // As the status counts it: not `master`, the next name tried.
+    let base = changes.base.as_ref().map(|base| base.name.as_str());
+    assert_eq!(base, Some("origin/main"));
+    assert_eq!(paths(&changes), ["e.txt"]);
+    assert_eq!(world.status().await.ahead_of_default, Some(1));
+}
+
+#[tokio::test]
 async fn a_branch_never_pushed_counts_its_commits_past_the_default() {
     let world = World::committed().await;
     world.remote();
@@ -553,6 +570,20 @@ async fn staged_is_the_index_against_head() {
     assert_eq!(paths(&staged), ["a.txt"]);
     assert_eq!((staged.files[0].added, staged.files[0].removed), (1, 1));
     assert!(staged.patch.contains("+TWO"));
+}
+
+#[tokio::test]
+async fn a_repository_of_sha256_objects_is_compared_with_its_own_empty_tree() {
+    let world = World::bare().await;
+    world.git(&["init", "--quiet", "--object-format=sha256"]);
+    world.write("first.txt", "hello\nworld\n");
+    world.git(&["add", "first.txt"]);
+
+    let status = world.status().await;
+    assert_eq!(file(&status.files, "first.txt").added, 2);
+    let first = world.diff(json!({ "scope": { "kind": "staged" } })).await;
+    assert_eq!(paths(&first), ["first.txt"]);
+    assert!(first.patch.contains("+hello"), "{}", first.patch);
 }
 
 #[tokio::test]
