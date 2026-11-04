@@ -8,7 +8,7 @@
 
 use crate::diff::diff;
 use crate::model::{DiffAsk, FileDiff, Message, PromptAsk, Prompted, Scope, WrittenAsk};
-use crate::repo::{Repo, chosen, in_way};
+use crate::repo::{Repo, chosen, in_way, nothing_to_commit};
 use banda_kernel::Refusal;
 use serde::Deserialize;
 
@@ -40,9 +40,7 @@ pub async fn prompt(repo: &Repo, ask: PromptAsk) -> Result<Prompted, Refusal> {
     );
     let read = read?;
     if read.files.is_empty() {
-        return Err(Refusal::conflict(
-            "Nothing to commit: those files have no changes.",
-        ));
+        return Err(nothing_to_commit());
     }
     let files: Vec<String> = read.files.iter().map(listed).collect();
     // A repository with no commits has no subjects yet.

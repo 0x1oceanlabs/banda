@@ -11,7 +11,8 @@
 //! when the file is no longer as the Diff drew it; a revert of files
 //! whole checks them so too, by the objects the Diff drew.
 
-use crate::diff::{sides, untracked};
+use crate::diff::sides;
+use crate::index::untracked;
 use crate::model::{ChangeAsk, HunkAsk, Objects, Scope};
 use crate::repo::{Repo, pathspec, plain_path, plain_paths};
 use crate::run::{Opts, Reason, git};

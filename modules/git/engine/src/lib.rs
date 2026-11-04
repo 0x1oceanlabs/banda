@@ -17,6 +17,7 @@ pub mod model;
 mod act;
 mod checkpoint;
 mod diff;
+mod index;
 mod message;
 mod parse;
 mod refs;
