@@ -22,7 +22,7 @@ import {
   UNNAMED,
 } from "./images"
 import { type ImageReader, useUrl } from "./MessageImages"
-import { Preview } from "./Preview"
+import { ImagePreview } from "@banda/ui/components/image-preview"
 import { useDraftImages } from "./drafts"
 
 /** What `agents.attach` takes for one image. */
@@ -213,14 +213,14 @@ function Attachment({
       )}
     >
       {url && (
-        <Preview name={called} url={url}>
+        <ImagePreview name={called} url={url}>
           <DialogTrigger
             aria-label={`Open ${called}`}
             className="block size-full cursor-zoom-in rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-inset"
           >
             <ThumbnailImage src={url} alt={called} />
           </DialogTrigger>
-        </Preview>
+        </ImagePreview>
       )}
       {(!image || url === undefined) && (
         <ThumbnailBusy>

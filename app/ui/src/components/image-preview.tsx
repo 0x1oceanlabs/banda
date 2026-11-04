@@ -1,14 +1,16 @@
-import { Dialog, DialogContent, DialogTitle } from "@banda/ui/components/dialog"
+import { Dialog, DialogContent, DialogTitle } from "./dialog"
 
 /** An image shown whole over the Pane. `children` hold the
  * `DialogTrigger` that opens it. */
-export function Preview({
+export function ImagePreview({
   name,
   url,
   children,
+  alt = name,
 }: {
   name: string
   url: string
+  alt?: string
   children: React.ReactNode
 }) {
   return (
@@ -18,7 +20,7 @@ export function Preview({
         <DialogTitle className="pr-8">{name}</DialogTitle>
         <img
           src={url}
-          alt={name}
+          alt={alt}
           className="max-h-[calc(100vh-8rem)] min-h-0 rounded-md object-contain"
         />
       </DialogContent>

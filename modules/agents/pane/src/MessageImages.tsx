@@ -10,7 +10,7 @@ import {
 } from "@banda/ui/components/thumbnail"
 import { ImageOffIcon } from "lucide-react"
 import { UNNAMED, urlOf } from "./images"
-import { Preview } from "./Preview"
+import { ImagePreview } from "@banda/ui/components/image-preview"
 
 /** Shows the images a Thread's messages carry. */
 export type ImageReader = {
@@ -104,7 +104,7 @@ function MessageImage({
       </Thumbnail>
     )
   return (
-    <Preview name={name} url={url}>
+    <ImagePreview name={name} url={url}>
       <Thumbnail
         render={<DialogTrigger />}
         aria-label={`Open ${name}`}
@@ -113,7 +113,7 @@ function MessageImage({
       >
         <ThumbnailImage src={url} alt={name} />
       </Thumbnail>
-    </Preview>
+    </ImagePreview>
   )
 }
 

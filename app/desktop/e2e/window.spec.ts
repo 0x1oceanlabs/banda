@@ -4404,11 +4404,13 @@ test("markdown shows local images, video and audio, with an image preview and wo
     resolve(import.meta.dirname, "media.wav"),
     join(folder, "sound.wav")
   )
+  writeFileSync(join(folder, "corrupt.png"), "not an image")
   const markdown = [
     "![Sample picture](<./a picture.png>)",
     `![A video](${join(folder, "clip.webm")})`,
     "![A sound](sound.wav)",
     "![Missing](./absent.png)",
+    "![Corrupt](./corrupt.png)",
     "![Notes](./notes.txt)",
   ].join("\n\n")
   await composer.fill(markdown)
@@ -4427,6 +4429,9 @@ test("markdown shows local images, video and audio, with an image preview and wo
   ).toBeVisible()
   await expect(
     thread.getByRole("link", { name: "Notes", exact: true })
+  ).toBeVisible()
+  await expect(
+    thread.getByRole("link", { name: "Corrupt (unavailable)", exact: true })
   ).toBeVisible()
   const video = thread.locator("video")
   const audio = thread.locator("audio")
