@@ -3291,13 +3291,12 @@ test("a Thread that finishes out of sight shows a toast, and it goes there", asy
   const { composer } = await firstThread(page)
   await sendAndGoBelow(page, composer, "slow hello")
 
-  const calls = page.getByRole("region", { name: "Calls" })
-  const toast = calls.getByRole("button", { name: /slow hello/ })
+  const calls = page.getByRole("region", { name: "Notifications" })
+  const toast = calls.getByRole("listitem").filter({ hasText: "slow hello" })
   await expect(toast).toContainText("Done")
-  await expect(toast).toContainText("Open")
   await page.screenshot({ path: "test-results/23-toast.png" })
 
-  await toast.click()
+  await toast.getByRole("button", { name: "Open" }).click()
   const thread = page.getByRole("region", { name: "slow hello" })
   await expect(thread).toHaveAttribute("data-focused", "true")
   await expect(toast).toBeHidden()
@@ -3317,7 +3316,7 @@ test("a Thread that finishes on screen makes its sound, and no toast", async () 
   const notes = await countNotes(page)
   await sendAndLeave(page, composer, "slow hello")
   await expect.poll(notes).toBeGreaterThan(0)
-  await expect(page.getByRole("region", { name: "Calls" })).toBeHidden()
+  await expect(page.getByRole("region", { name: "Notifications" })).toBeHidden()
 })
 
 test("Alt+U goes to the Thread that calls", async () => {
@@ -3325,8 +3324,10 @@ test("Alt+U goes to the Thread that calls", async () => {
   const { page } = window
   const { composer } = await firstThread(page)
   await sendAndGoBelow(page, composer, "slow hello")
-  const calls = page.getByRole("region", { name: "Calls" })
-  await expect(calls.getByRole("button", { name: /slow hello/ })).toBeVisible()
+  const calls = page.getByRole("region", { name: "Notifications" })
+  await expect(
+    calls.getByRole("listitem").filter({ hasText: "slow hello" })
+  ).toBeVisible()
 
   await page.keyboard.press("Alt+U")
   const thread = page.getByRole("region", { name: "slow hello" })
@@ -3474,7 +3475,7 @@ test("[notify] in look.toml chooses where a call is told: always the desktop, ne
       name: "Done",
     })
   ).toBeVisible()
-  await expect(page.getByRole("region", { name: "Calls" })).toBeHidden()
+  await expect(page.getByRole("region", { name: "Notifications" })).toBeHidden()
 })
 
 test("a Thread settles from its row's menu, as in T3 Code, and Alt+S brings it back", async () => {

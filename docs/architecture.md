@@ -810,7 +810,7 @@ modules/*/desktop  a module's part in Electron main
   - It gathers the news for a tenth of a second and tells of each where
     the Person looks (`tell.ts`): nothing while they look at it; the sound
     when it is on screen; the sound and a toast when it is elsewhere in
-    the window (`Toasts.tsx`, gone by itself after 5 to 12 s); the sound
+    the window (Sonner's, `callToast.tsx`, gone by itself after 5 to 12 s); the sound
     and a system notification when the window is behind (`system.ts`).
     `Alt+U` goes to what calls, the loudest first.
   - A system notification is the desktop's (`app/desktop/src/notices.ts`):

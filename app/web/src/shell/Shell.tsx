@@ -7,6 +7,7 @@ import {
   type Status,
 } from "@banda/contract"
 import { works } from "@banda/ui/components/banda-mark"
+import { Toaster } from "@banda/ui/components/sonner"
 import { inFront, useInFront } from "@banda/ui/hooks/use-in-front"
 import { useMachine } from "@banda/ui/hooks/use-status"
 import { openSpaces, updateSpace } from "@banda/ui/lib/spaces"
@@ -19,12 +20,11 @@ import { useWidgets } from "../bar/Widgets"
 import { Watches } from "../bar/Watches"
 import { besideOf, isShowing, sightOf } from "../calls/sight"
 import { SUMMARY } from "../calls/system"
-import { Toasts } from "../calls/Toasts"
 import { WELL, wentWell } from "../safe/starts"
 import { problemLink } from "../problems/live"
 import { NOTICE, useProblemNews } from "../problems/news"
+import type { ProblemAnswers } from "../problems/problemToast"
 import { lookingInto } from "../problems/look"
-import { ProblemToast } from "../problems/ProblemToast"
 import { first, type Heard, useCalls, type Where } from "../calls/useCalls"
 import { BandaMenu } from "../menu/BandaMenu"
 import {
@@ -138,6 +138,10 @@ const NOTHING_SEEN: Seen = {
 
 /** How long a change waits for its event before the next goes anyway. */
 const DRAWN_WITHIN = 2000
+
+/** Where the toasts stand: at the window's top right, below the bar
+ * (ADR 0011, decision 2). */
+const UNDER_BAR = { top: "calc(var(--bar-height) + 0.5rem)", right: "0.5rem" }
 
 /** The workspaces `view` draws of what `seen` keeps; the view then keeps
  * where each ID it holds stands now. */
@@ -295,20 +299,7 @@ export function Shell({
     []
   )
   const notify = useLookNotify()
-  const calls = useCalls(useLookSound(), notify, where)
-  const { hear, leave, calling, hold, dismiss, seen } = calls
-  // A new Problem of Banda's own tells too, silently (ADR 0039).
-  const problemNews = useProblemNews(engine, notify, inFront, where.desktop)
-  const newProblem = problemNews.shown
-  const listening = useMemo(() => ({ hear, leave }), [hear, leave])
   const front = useInFront()
-  // What the Person looks at is seen: its toast and notification go.
-  useEffect(() => {
-    for (const call of calling)
-      if (sightOf(workspaces, call, front, showsOf, columnsOf()) === "looking")
-        seen(call.key)
-  }, [calling, workspaces, front, seen])
-  const toasts = calls.toasts
   useEffect(() => keepSidebar(sidebar), [sidebar])
   // A Pane an Agent opened is marked until the Person looks at it: has
   // it in focus, the window in front (ADR 0032).
@@ -411,13 +402,24 @@ export function Shell({
     },
     [engine, answeredAt]
   )
+  // Answered, the call is seen, and its toast and notification go.
   const answerCall = useCallback(
-    (call: Heard) => {
-      dismiss(call.key)
-      change((w) => answering(w, call))
-    },
-    [change, dismiss]
+    (call: Heard) => change((w) => answering(w, call)),
+    [change]
   )
+  const { hear, leave, calling, seen } = useCalls(
+    useLookSound(),
+    notify,
+    where,
+    answerCall
+  )
+  const listening = useMemo(() => ({ hear, leave }), [hear, leave])
+  // What the Person looks at is seen: its toast and notification go.
+  useEffect(() => {
+    for (const call of calling)
+      if (sightOf(workspaces, call, front, showsOf, columnsOf()) === "looking")
+        seen(call.key)
+  }, [calling, workspaces, front, seen])
   const heard = useRef(calling)
   useEffect(() => {
     heard.current = calling
@@ -680,6 +682,18 @@ export function Shell({
   useEffect(() => {
     partsNow.current = parts
   }, [parts])
+  // A new Problem of Banda's own tells too, silently (ADR 0039).
+  const problemAnswers: ProblemAnswers = useMemo(
+    () => ({
+      lookInto: (problem) =>
+        void lookingInto(engine, problem.fingerprint)
+          .then((thread) => partsNow.current.run("thread.new", thread))
+          .catch(() => undefined),
+      details: (problem) => settings(problemLink(problem.fingerprint)),
+    }),
+    [engine, settings]
+  )
+  useProblemNews(engine, notify, inFront, where.desktop, problemAnswers)
   const running = known
     .filter((module) => runs(module, modules))
     .map((module) => module.id)
@@ -929,35 +943,7 @@ export function Shell({
               onStart={(pane) => parts.open(pane)}
             />
           )}
-          <Toasts
-            toasts={toasts}
-            calling={calling}
-            detail={notify.detail}
-            first={
-              newProblem && (
-                <ProblemToast
-                  {...newProblem}
-                  onLookInto={() => {
-                    problemNews.dismiss()
-                    void lookingInto(engine, newProblem.problem.fingerprint)
-                      .then((thread) => parts.run("thread.new", thread))
-                      .catch(() => undefined)
-                  }}
-                  onDetails={() => {
-                    problemNews.dismiss()
-                    settings(problemLink(newProblem.problem.fingerprint))
-                  }}
-                  onClose={problemNews.dismiss}
-                />
-              )
-            }
-            onAnswer={answerCall}
-            onMore={showSidebar}
-            onHold={(holds) => {
-              hold(holds)
-              problemNews.hold(holds)
-            }}
-          />
+          <Toaster position="top-right" offset={UNDER_BAR} />
           <BandaMenu
             opening={menu}
             onClose={closeMenu}

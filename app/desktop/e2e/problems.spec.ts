@@ -94,7 +94,10 @@ test("a new Problem tells once, silently, and opens in Settings → Problems (AD
 
   // In front: a toast, whose Details opens the Problem in Settings.
   record(window, "the watch broke")
-  const toast = page.getByRole("region", { name: "Something broke in Banda" })
+  const toast = page
+    .getByRole("region", { name: "Notifications" })
+    .getByRole("listitem")
+    .filter({ hasText: "Something broke in Banda" })
   await expect(toast).toContainText("panic: the watch broke")
   await toast.getByRole("button", { name: "Details" }).click()
   await expect(toast).toBeHidden()
@@ -151,7 +154,10 @@ test("Look into it asks an Agent in a new Thread, in the Space of Banda's checko
 
   // From the toast, and from Settings → Problems.
   record(window, "the watch broke")
-  const toast = page.getByRole("region", { name: "Something broke in Banda" })
+  const toast = page
+    .getByRole("region", { name: "Notifications" })
+    .getByRole("listitem")
+    .filter({ hasText: "Something broke in Banda" })
   await toast.getByRole("button", { name: "Look into it" }).click()
   await expect(toast).toBeHidden()
   const [watch] = problemsOf(window)
