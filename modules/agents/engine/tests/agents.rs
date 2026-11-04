@@ -3980,3 +3980,119 @@ async fn an_agent_drafts_an_issue_that_only_its_person_answers() {
         "issue: Tabs break (Cancelled)"
     );
 }
+
+#[test]
+fn tool_images_are_kept_as_files_in_order_and_survive_restart() {
+    let root = tempfile::tempdir().unwrap();
+    across_a_restart(
+        root.path(),
+        || Agents::new(harnesses()),
+        async |world| {
+            let (thread, view) = world.finish(None, "tool images").await;
+            let content = view
+                .items
+                .iter()
+                .find_map(|item| match &item.body {
+                    Body::Tool {
+                        content,
+                        status: ToolStatus::Done,
+                        ..
+                    } => Some(content),
+                    _ => None,
+                })
+                .expect("the updated tool result");
+            assert!(
+                matches!(&content[0], ToolContent::Text { text } if text == "Before the screenshot.")
+            );
+            assert!(
+                matches!(&content[2], ToolContent::Text { text } if text.starts_with("Image could not be shown:"))
+            );
+            assert!(
+                matches!(&content[4], ToolContent::Text { text } if text == "After the screenshot.")
+            );
+            let images: Vec<_> = content
+                .iter()
+                .filter_map(|part| match part {
+                    ToolContent::Image { image } => Some(image.clone()),
+                    _ => None,
+                })
+                .collect();
+            assert_eq!(images.len(), 2);
+            for image in &images {
+                let read = world
+                    .call(world.person(), "agents.image", json!({"image": image.id}))
+                    .await
+                    .unwrap();
+                assert_eq!(read["mime"], "image/png");
+                let bytes = BASE64.decode(read["data"].as_str().unwrap()).unwrap();
+                assert_eq!(bytes.len(), image.size as usize);
+                assert_eq!(
+                    bytes,
+                    include_bytes!("../../../../app/desktop/e2e/shot.png")
+                );
+                let text = serde_json::to_string(&view).unwrap();
+                assert!(
+                    !text.contains(read["data"].as_str().unwrap()),
+                    "binary payloads stay out of Thread snapshots"
+                );
+            }
+            (thread, images[0].id)
+        },
+        async |world, (thread, image)| {
+            let reopened = world.thread(&thread).await;
+            assert!(reopened.items.iter().any(|item| matches!(&item.body, Body::Tool { content, .. } if content.iter().any(|part| matches!(part, ToolContent::Image { image: kept } if kept.id == image)))));
+            assert!(
+                world
+                    .call(world.person(), "agents.image", json!({"image":image}))
+                    .await
+                    .is_ok()
+            );
+        },
+    );
+}
+
+#[tokio::test]
+async fn a_tool_update_with_images_can_arrive_before_the_start_and_be_forked() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let (thread, view) = world.finish(None, "tool images raw update only").await;
+    let image = view
+        .items
+        .iter()
+        .find_map(|item| match &item.body {
+            Body::Tool { content, .. } => content.iter().find_map(|part| match part {
+                ToolContent::Image { image } => Some(image.clone()),
+                _ => None,
+            }),
+            _ => None,
+        })
+        .unwrap();
+    let turn = view.turns[0].id;
+    // The Harness must name a reply to fork its session at that point.
+    let (_, named) = world.finish(Some(&thread), "remember screenshots").await;
+    let fork_at = named.turns[1].id;
+    let fork = world
+        .call(world.person(), "agents.fork", json!({"turn":fork_at}))
+        .await
+        .unwrap();
+    world
+        .call(world.person(), "agents.rewind", json!({"turn":turn}))
+        .await
+        .unwrap();
+    assert!(
+        !world
+            .thread(&thread)
+            .await
+            .items
+            .iter()
+            .any(|item| matches!(item.body, Body::Tool { .. }))
+    );
+    let forked = world.thread(&fork["thread"]).await;
+    assert!(forked.items.iter().any(|item| matches!(&item.body, Body::Tool {content, ..} if content.iter().any(|part| matches!(part, ToolContent::Image {image: kept} if kept.id == image.id)))));
+    assert!(
+        world
+            .call(world.person(), "agents.image", json!({"image":image.id}))
+            .await
+            .is_ok()
+    );
+}

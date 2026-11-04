@@ -4699,3 +4699,49 @@ test("moving a No Space folder waits for its Turn and terminals", async () => {
   await expect(dialog).toBeHidden()
   expect(existsSync(join(dir, "root", "Later"))).toBe(true)
 })
+
+test("a tool's images show when opened, enlarge on a click, and remain after a reload", async () => {
+  window = await startWindow()
+  const { page } = window
+  const { thread, composer } = await firstThread(page)
+  await composer.fill("tool images raw")
+  await composer.press("Enter")
+  await expect(thread.getByText("The screenshots are ready.")).toBeVisible()
+  for (let pass = 0; pass < 2; pass++) {
+    await openWork(thread)
+    const tool = thread.getByRole("button", {
+      name: "Screenshot result",
+      exact: true,
+    })
+    const images = thread.getByRole("button", {
+      name: "Open An image",
+      exact: true,
+    })
+    await expect(images).toHaveCount(0)
+    await tool.click()
+    await expect(images).toHaveCount(2)
+    await expect(thread.getByText("Before the screenshot.")).toBeVisible()
+    await expect(thread.getByText("After the screenshot.")).toBeVisible()
+    await expect(thread.getByText(/^Image could not be shown:/)).toBeVisible()
+    await expect
+      .poll(() =>
+        images
+          .first()
+          .locator("img")
+          .evaluate((img: HTMLImageElement) => img.naturalWidth)
+      )
+      .toBeGreaterThan(0)
+    await images.first().click()
+    const preview = page.getByRole("dialog", { name: "An image", exact: true })
+    await expect(
+      preview.getByRole("img", { name: "An image", exact: true })
+    ).toBeVisible()
+    await page.keyboard.press("Escape")
+    await expect(preview).toBeHidden()
+    await page.screenshot({ path: `test-results/21-tool-images-${pass}.png` })
+    if (pass === 0) {
+      await page.reload()
+      await expect(thread.getByText("The screenshots are ready.")).toBeVisible()
+    }
+  }
+})

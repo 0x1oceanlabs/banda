@@ -3,8 +3,8 @@
 
 use crate::model::{
     Asking, Body, Failure, Image, ImageId, Item, ItemId, LISTED_MESSAGE, LatestTurn, ListedThread,
-    Offer, Opener, QuestionState, Settings, ThreadId, ThreadSummary, TurnId, TurnState, TurnView,
-    Usage, VisualId,
+    Offer, Opener, QuestionState, Settings, ThreadId, ThreadSummary, ToolContent, TurnId,
+    TurnState, TurnView, Usage, VisualId,
 };
 use banda_kernel::{AgentId, Error, Participant, Refusal};
 use rusqlite::{Connection, OptionalExtension, Row, params};
@@ -305,8 +305,18 @@ pub fn attach_image(
 /// Lets go of the images added before `before` that no message carried,
 /// and answers which they were.
 pub fn drop_unsent_images(sql: &Connection, before: i64) -> Result<Vec<ImageId>, Error> {
-    let mut dropped =
-        sql.prepare("DELETE FROM agents_images WHERE item IS NULL AND added_at < ?1 RETURNING id")?;
+    let mut dropped = sql.prepare(
+        "DELETE FROM agents_images WHERE item IS NULL AND added_at < ?1
+         AND NOT EXISTS (
+           SELECT 1 FROM agents_items, json_each(agents_items.body, '$.images') AS image
+           WHERE json_extract(image.value, '$.id') = agents_images.id
+         )
+         AND NOT EXISTS (
+           SELECT 1 FROM agents_items, json_each(agents_items.body, '$.content') AS part
+           WHERE json_extract(part.value, '$.kind') = 'image'
+             AND json_extract(part.value, '$.image.id') = agents_images.id
+         ) RETURNING id",
+    )?;
     let ids = dropped.query_map(params![before], |row| row.get(0))?;
     Ok(ids.collect::<Result<_, _>>()?)
 }
@@ -375,6 +385,31 @@ pub fn carry_images(sql: &Connection, images: &[Image], item: ItemId) -> Result<
             "UPDATE agents_images SET item = ?2 WHERE id = ?1",
             params![image.id, item],
         )?;
+    }
+    Ok(())
+}
+
+/// Keep tool images in the same ledger as message images, linked to the
+/// tool item so ordinary attachment sweeps do not remove them.
+pub fn tool_images(
+    sql: &Connection,
+    content: &[ToolContent],
+    item: ItemId,
+    author: Participant,
+    at: i64,
+) -> Result<(), Error> {
+    // A content update replaces the previous result. Its images wait a
+    // day like unused attachments; references in surviving forks protect
+    // them during the sweep.
+    sql.execute(
+        "UPDATE agents_images SET item = NULL, added_at = ?2 WHERE item = ?1",
+        params![item, at],
+    )?;
+    for part in content {
+        if let ToolContent::Image { image } = part {
+            attach_image(sql, image, author, at)?;
+            carry_images(sql, std::slice::from_ref(image), item)?;
+        }
     }
     Ok(())
 }
@@ -1385,5 +1420,111 @@ mod tests {
             ],
             "a Harness once named stays"
         );
+    }
+    #[test]
+    fn an_unsent_sweep_keeps_images_still_referenced_by_a_fork() {
+        let sql = migrated();
+        let agent = AgentId::new();
+        let author = Participant::Agent(agent);
+        let summary = ThreadSummary {
+            id: ThreadId::new(),
+            harness: "fake".into(),
+            title: "Fork".into(),
+            updated_at: 0,
+        };
+        insert_thread(&sql, &summary, agent, author, &Settings::default()).unwrap();
+        for tool in [false, true] {
+            let image = Image {
+                id: ImageId::new(),
+                mime: "image/png".into(),
+                name: None,
+                size: 8,
+            };
+            attach_image(&sql, &image, author, 0).unwrap();
+            let body = if tool {
+                Body::Tool {
+                    title: "Shot".into(),
+                    tool: crate::model::ToolKind::Fetch,
+                    status: crate::model::ToolStatus::Done,
+                    content: vec![ToolContent::Image {
+                        image: image.clone(),
+                    }],
+                    output: None,
+                }
+            } else {
+                Body::Message {
+                    text: "Shot".into(),
+                    images: vec![image.clone()],
+                    answers: false,
+                }
+            };
+            let item = Item {
+                id: ItemId::new(),
+                turn: None,
+                author,
+                at: 0,
+                body,
+            };
+            put(&sql, summary.id, &item, None).unwrap();
+            assert!(
+                drop_unsent_images(&sql, 10).unwrap().is_empty(),
+                "the surviving fork still names it"
+            );
+            sql.execute("DELETE FROM agents_items WHERE id = ?1", params![item.id])
+                .unwrap();
+            assert_eq!(drop_unsent_images(&sql, 10).unwrap(), vec![image.id]);
+        }
+    }
+    #[test]
+    fn replaced_tool_images_wait_the_grace_period_before_they_are_swept() {
+        let sql = migrated();
+        let agent = AgentId::new();
+        let author = Participant::Agent(agent);
+        let summary = ThreadSummary {
+            id: ThreadId::new(),
+            harness: "fake".into(),
+            title: "Shot".into(),
+            updated_at: 0,
+        };
+        insert_thread(&sql, &summary, agent, author, &Settings::default()).unwrap();
+        let image = || Image {
+            id: ImageId::new(),
+            mime: "image/png".into(),
+            name: None,
+            size: 8,
+        };
+        let old = image();
+        let new = image();
+        let mut item = Item {
+            id: ItemId::new(),
+            turn: None,
+            author,
+            at: 0,
+            body: Body::Tool {
+                title: "Shot".into(),
+                tool: crate::model::ToolKind::Fetch,
+                status: crate::model::ToolStatus::Running,
+                content: vec![ToolContent::Image { image: old.clone() }],
+                output: None,
+            },
+        };
+        put(&sql, summary.id, &item, None).unwrap();
+        tool_images(
+            &sql,
+            &[ToolContent::Image { image: old.clone() }],
+            item.id,
+            author,
+            0,
+        )
+        .unwrap();
+        let content = vec![ToolContent::Image { image: new.clone() }];
+        tool_images(&sql, &content, item.id, author, 20).unwrap();
+        if let Body::Tool { content: shown, .. } = &mut item.body {
+            *shown = content;
+        }
+        set_body(&sql, item.id, &item.body).unwrap();
+        assert!(drop_unsent_images(&sql, 20).unwrap().is_empty());
+        assert_eq!(drop_unsent_images(&sql, 21).unwrap(), vec![old.id]);
+        assert!(image_kind(&sql, new.id).unwrap().is_some());
     }
 }

@@ -70,14 +70,14 @@ export function MessageImages({
     <ul aria-label="Images" className="flex flex-wrap justify-end gap-2">
       {images.map((image) => (
         <li key={image.id}>
-          <MessageImage image={image} reader={reader} />
+          <ThreadImage image={image} reader={reader} />
         </li>
       ))}
     </ul>
   )
 }
 
-function MessageImage({
+export function ThreadImage({
   image,
   reader,
 }: {

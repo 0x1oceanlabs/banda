@@ -58,7 +58,7 @@ use options::*;
 pub use routes::Between;
 use routes::*;
 use said::*;
-pub use said::{Answer, Said, ToolChange};
+pub use said::{Answer, Said, ToolChange, ToolPart};
 use session::*;
 pub use session::{Prompt, PromptImage, Session, Steered, WeakSession};
 

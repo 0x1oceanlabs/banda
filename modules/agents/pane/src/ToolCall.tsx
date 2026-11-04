@@ -35,6 +35,7 @@ import {
 } from "lucide-react"
 import { type FileChange, fileChange, total } from "./changes"
 import { FileDiff } from "./FileDiff"
+import { ThreadImage, type ImageReader } from "./MessageImages"
 import type { Tool } from "./thread"
 
 /** A tool call's content as the window shows it: a diff with its lines. */
@@ -42,12 +43,14 @@ type Part =
   Exclude<ToolContent, { kind: "diff" }> | ({ kind: "diff" } & FileChange)
 
 /** A tool call in a Thread: its line, and, opened, what it changed in
- * files, what it said and what its command printed. */
+ * files, its text and images, and what its command printed. */
 export function ToolCall({
   tool,
+  reader,
   onOpenDiff,
 }: {
   tool: Tool
+  reader: ImageReader
   /** Opens a file this call changed in a Diff Pane. */
   onOpenDiff?: (path: string) => void
 }) {
@@ -87,6 +90,10 @@ export function ToolCall({
         <TraceCollapsibleContent className="flex flex-col gap-2">
           {shown.map((part, at) => {
             switch (part.kind) {
+              case "image":
+                return (
+                  <ThreadImage key={at} image={part.image} reader={reader} />
+                )
               case "diff":
                 return (
                   <FileDiff

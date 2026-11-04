@@ -184,8 +184,11 @@ allow-forms allow-popups allow-downloads`. The frame says
      are refused. Banda's CSP gains `img-src` and `media-src` for it.
    - Mermaid diagrams and math (KaTeX) render, with Streamdown's own
      plugins `@streamdown/mermaid` and `@streamdown/math`.
-   - A tool's result that carries an image keeps it (`ToolContent::Image`,
-     today dropped in `acp.rs`), and shows it when its line is opened.
+   - A tool's result that carries an image keeps it (`ToolContent::Image`)
+     and shows it when its line is opened. Its bytes use the existing
+     Space image storage; facts carry only image metadata. The same
+     validation and limits as message images apply. A rejected image
+     becomes explanatory text, preserving the rest of the result.
 
 **Build order.** One PR each. Each step is tried in a real window and,
 with Roma's go for the paid calls, by a real Claude Code and Codex.
