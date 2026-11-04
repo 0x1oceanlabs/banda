@@ -189,8 +189,14 @@ impl Repo {
         Ok(ran.text().lines().map(str::to_owned).collect())
     }
 
+    /// Whether the ref `full` is here, as `refs/heads/main`.
     pub async fn has_ref(&self, full: &str) -> Result<bool, Failure> {
         self.yes(["show-ref", "--verify", "--quiet", full]).await
+    }
+
+    /// Whether the branch `name` is here, as `main`.
+    pub async fn has_branch(&self, name: &str) -> Result<bool, Failure> {
+        self.has_ref(&format!("refs/heads/{name}")).await
     }
 
     /// The default branch's name, as `main`, with the primary remote
@@ -202,18 +208,58 @@ impl Repo {
             return Ok(Some(name));
         }
         for name in DEFAULTS {
-            if self.has_ref(&format!("refs/heads/{name}")).await? {
-                return Ok(Some(name.to_owned()));
-            }
-            if let Some(remote) = remote
-                && self
-                    .has_ref(&format!("refs/remotes/{remote}/{name}"))
-                    .await?
-            {
+            if self.default_tip(remote, name, None).await?.is_some() {
                 return Ok(Some(name.to_owned()));
             }
         }
         Ok(None)
+    }
+
+    /// The names the default branch may have, in the order tried: what
+    /// `remote`'s `HEAD` names, then `main`, then `master`.
+    async fn default_names(&self, remote: Option<&str>) -> Result<Vec<String>, Failure> {
+        let mut names: Vec<String> = Vec::new();
+        names.extend(self.remote_head(remote).await?);
+        for name in DEFAULTS {
+            if !names.iter().any(|n| n == name) {
+                names.push(name.to_owned());
+            }
+        }
+        Ok(names)
+    }
+
+    /// Where the default branch `name` is, the one rule for it: `remote`'s
+    /// copy first, else the branch here, but not when it is
+    /// `checked_out`, as a branch is no base of its own. None when neither
+    /// is there. [`Repo::base`] compares with it and the status counts
+    /// from it; [`Repo::default_on`] only asks whether it is there.
+    pub async fn default_tip(
+        &self,
+        remote: Option<&str>,
+        name: &str,
+        checked_out: Option<&str>,
+    ) -> Result<Option<Found>, Failure> {
+        let mut tips = Vec::new();
+        tips.extend(remote.map(|remote| Found {
+            name: format!("{remote}/{name}"),
+            full: format!("refs/remotes/{remote}/{name}"),
+        }));
+        if checked_out != Some(name) {
+            tips.push(Found {
+                name: name.to_owned(),
+                full: format!("refs/heads/{name}"),
+            });
+        }
+        if tips.is_empty() {
+            return Ok(None);
+        }
+        // Which of them are there, at once.
+        let mut args = vec!["for-each-ref", "--format=%(refname)"];
+        args.extend(tips.iter().map(|tip| tip.full.as_str()));
+        let there = self.run(args, Opts::default()).await?.text();
+        Ok(tips
+            .into_iter()
+            .find(|tip| there.lines().any(|line| line == tip.full)))
     }
 
     /// The branch `remote`'s `HEAD` names, as `main`.
@@ -234,23 +280,16 @@ impl Repo {
 
     /// The base a branch is compared with: `asked`, as a branch here, a
     /// remote's branch or any commit; or else ("Automatic") the default
-    /// branch, the primary remote's copy first, or the branch's upstream
-    /// when the default is the branch checked out. None when Automatic
-    /// finds nothing.
+    /// branch where [`Repo::default_tip`] finds it, or the branch's
+    /// upstream when the default is the branch checked out. None when
+    /// Automatic finds nothing.
     pub async fn base(&self, asked: Option<&str>) -> Result<Option<Found>, Refusal> {
         if let Some(asked) = asked {
             return Ok(Some(self.asked_base(asked).await?));
         }
         let remote = self.primary_remote().await?;
         let branch = self.branch().await?;
-        let mut names: Vec<String> = Vec::new();
-        names.extend(self.remote_head(remote.as_deref()).await?);
-        for name in DEFAULTS {
-            if !names.iter().any(|n| n == name) {
-                names.push(name.to_owned());
-            }
-        }
-        for name in names {
+        for name in self.default_names(remote.as_deref()).await? {
             if branch.as_deref() == Some(name.as_str()) {
                 let upstream = format!("{name}@{{upstream}}");
                 let full = self
@@ -270,18 +309,11 @@ impl Repo {
                 }
                 continue;
             }
-            if let Some(remote) = &remote {
-                let full = format!("refs/remotes/{remote}/{name}");
-                if self.has_ref(&full).await? {
-                    return Ok(Some(Found {
-                        name: format!("{remote}/{name}"),
-                        full,
-                    }));
-                }
-            }
-            let full = format!("refs/heads/{name}");
-            if self.has_ref(&full).await? {
-                return Ok(Some(Found { name, full }));
+            let found = self
+                .default_tip(remote.as_deref(), &name, branch.as_deref())
+                .await?;
+            if found.is_some() {
+                return Ok(found);
             }
         }
         Ok(None)
