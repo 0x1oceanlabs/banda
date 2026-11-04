@@ -147,7 +147,7 @@ export function VisualFrame({
 }
 
 /** A Visual in its Thread, with its title under it and, on hover, the
- * ways to open it larger. */
+ * ways to open it larger in a reserved row above the page. */
 export function Visual({
   space,
   visual,
@@ -160,23 +160,27 @@ export function Visual({
 }) {
   const [previewing, setPreviewing] = useState(false)
   return (
-    <figure className="group/visual relative">
+    <figure className="group/visual">
+      {/* Keep the actions above the page, with their space reserved so
+          revealing them never covers content or moves the frame. */}
+      <div className="mb-1 flex justify-end">
+        <div className="flex gap-0.5 rounded-lg bg-popover p-0.5 text-popover-foreground opacity-0 shadow-sm ring-1 ring-foreground/10 transition-opacity group-hover/visual:opacity-100 focus-within:opacity-100">
+          <Button variant="ghost" size="xs" onClick={() => setPreviewing(true)}>
+            <Maximize2Icon />
+            Preview
+          </Button>
+          <Button variant="ghost" size="xs" onClick={onOpen}>
+            <PanelRightIcon />
+            Open as Pane
+          </Button>
+        </div>
+      </div>
       <VisualFrame
         space={space}
         {...visual}
         // The page's own gutter sits in the Thread's margin.
         className="-mx-2"
       />
-      <div className="absolute top-2 right-0 flex gap-0.5 rounded-lg bg-popover p-0.5 text-popover-foreground opacity-0 shadow-sm ring-1 ring-foreground/10 transition-opacity group-hover/visual:opacity-100 focus-within:opacity-100">
-        <Button variant="ghost" size="xs" onClick={() => setPreviewing(true)}>
-          <Maximize2Icon />
-          Preview
-        </Button>
-        <Button variant="ghost" size="xs" onClick={onOpen}>
-          <PanelRightIcon />
-          Open as Pane
-        </Button>
-      </div>
       <figcaption className="mt-1.5 text-xs text-muted-foreground">
         {visual.title}
       </figcaption>

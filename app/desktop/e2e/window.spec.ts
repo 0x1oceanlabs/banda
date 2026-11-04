@@ -1817,8 +1817,18 @@ test("a Visual opens over the window, zoomed, or as a Pane of its own beside its
   const preview = shown.getByRole("button", { name: "Preview" })
   const tools = preview.locator("..")
   await expect(tools).toHaveCSS("opacity", "0")
+  const frame = shown.locator('iframe[title="Sales"]')
+  await expect(frame.contentFrame().locator(".box")).toBeVisible()
+  const before = await frame.boundingBox()
   await preview.focus()
   await expect(tools).toHaveCSS("opacity", "1")
+  // The controls sit above the HTML, never covering its first content.
+  // Revealing them does not move or resize the page.
+  const controls = await tools.boundingBox()
+  const after = await frame.boundingBox()
+  expect(controls).not.toBeNull()
+  expect(after).toEqual(before)
+  expect(controls!.y + controls!.height).toBeLessThanOrEqual(after!.y)
   await page.screenshot({ path: "test-results/18o-visual-hover.png" })
 
   // Preview: over the window, zoomed as a browser zooms.
