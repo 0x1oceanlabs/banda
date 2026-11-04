@@ -43,7 +43,9 @@ navigate: CallMethod<Navigate, string>,
 /**
  * Does one action in a tab, on an element by its ref from the
  * tab's last snapshot: click, double_click, type, fill, select,
- * press, hover, scroll or drag. It answers in a line, and says
+ * press, hover, scroll, drag, dialog_accept or dialog_dismiss.
+ * Dialog answers need dialog, the ID from the snapshot or action;
+ * accepting a prompt may include text. It answers in a line, and says
  * what changed: the
  * address, a tab it opened, a dialog, a download. A password or a
  * card's number, expiry or code is the Person's to fill, as are

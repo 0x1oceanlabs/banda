@@ -3,4 +3,4 @@
 /**
  * What `browser_act` does.
  */
-export type Action = "click" | "double_click" | "type" | "fill" | "select" | "press" | "hover" | "scroll" | "drag";
+export type Action = "click" | "double_click" | "type" | "fill" | "select" | "press" | "hover" | "scroll" | "drag" | "dialog_accept" | "dialog_dismiss";

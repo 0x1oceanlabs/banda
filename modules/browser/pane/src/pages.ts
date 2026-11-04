@@ -9,6 +9,7 @@
  * darkens as the tile does. A page whose slot is gone waits out of sight
  * until its Pane comes back, or leaves every workspace.
  */
+import type { Dialog } from "@banda/contract/browser"
 import type { SpaceId } from "@banda/contract"
 import { HELD_BY, paneLayer } from "@banda/ui/pane"
 import { type BrowserNews, type Driver, PARTITION, type Wait } from "./desktop"
@@ -34,6 +35,7 @@ export type PageState = {
    * decision 4). */
   driver: Driver | null
   /** The Threads that wait for the Person here (ADR 0029, decision 6). */
+  dialog: Dialog | null
   waits: readonly Wait[]
 }
 
@@ -48,6 +50,7 @@ export const BLANK: PageState = {
   driven: false,
   driver: null,
   waits: [],
+  dialog: null,
 }
 
 /** The part of Electron's `<webview>` a page uses. */
@@ -268,6 +271,17 @@ export class Page {
     const zoom = this.view.getZoomFactor()
     const at = driver?.at && { x: driver.at.x * zoom, y: driver.at.y * zoom }
     this.set({ driver: driver && { ...driver, at } })
+  }
+
+  dialogDraft: string | undefined
+
+  draftDialog(text: string): void {
+    this.dialogDraft = text
+  }
+
+  dialoged(dialog: Dialog | null): void {
+    if (this.state.dialog?.id !== dialog?.id) this.dialogDraft = undefined
+    this.set({ dialog })
   }
 
   /** The Threads that wait for the Person here now. */
@@ -577,7 +591,8 @@ function hear(news: PageNews): void {
     return
   }
   const holder = held.get(page.id)
-  if (news.kind === "icon") page.iconed(news.icon)
+  if (news.kind === "dialog") page.dialoged(news.dialog)
+  else if (news.kind === "icon") page.iconed(news.icon)
   else if (news.kind === "driven") page.drive(news.driven)
   else if (news.kind === "driver") page.driveBy(news.driver)
   else if (news.kind === "waits") page.waited(news.waits)

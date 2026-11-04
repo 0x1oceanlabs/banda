@@ -1302,3 +1302,155 @@ test("on glass a terminal and a browser's page are as clear as any tile", async 
   await expect(page.locator("html")).not.toHaveAttribute("data-glass")
   await expect(held).toHaveCSS("opacity", "1")
 })
+
+test("page dialogs stay in their tab and the Person and Agent answer the same dialog once", async () => {
+  const address = await serve({
+    "/": `<title>Dialogs</title>
+      <button onclick="out.textContent = String(confirm('Remove tea?'))">Confirm</button>
+      <button onclick="out.textContent = JSON.stringify(prompt('Gift message?', 'Enjoy your tea!'))">Prompt</button>
+      <button onclick="alert('Basket updated'); out.textContent = 'Alert done'">Alert</button>
+      <button onclick="out.textContent = JSON.stringify(frames[0].prompt('Frame message?', 'Frame default'))">Frame prompt</button>
+      <iframe src="/frame"></iframe>
+      <p id="out"></p>`,
+    "/frame": "<title>Child</title>",
+    "/onload": "<title>On load</title><script>alert('Hello on load')</script>",
+  })
+  window = await startWindow()
+  const { page } = window
+  // The Electron test harness also attaches a CDP client to webviews.
+  // Keep that client from auto-dismissing dialogs behind Banda's UI.
+  window.app.context().on("page", (entry) => entry.on("dialog", () => {}))
+  for (const entry of window.app.context().pages()) entry.on("dialog", () => {})
+  const { thread, composer } = await firstThread(page)
+  await composer.fill("hello")
+  await composer.press("Enter")
+  await expect(thread.getByText("You said: hello")).toBeVisible()
+  const opened = await agentSays(window, "browser_open", { url: address })
+  const tab = Number(/^Opened tab (\d+)\./.exec(opened)?.[1])
+  const snapshot = () => agentSays(window, "browser_snapshot", { tab })
+  const click = async (name: string) => {
+    const tree = await snapshot()
+    const ref = new RegExp(`button "${name}"[^\\n]*\\[ref=(e\\d+)\\]`).exec(
+      tree
+    )![1]
+    const said = await agentSays(window, "browser_act", {
+      tab,
+      action: "click",
+      ref,
+    })
+    expect(said).toMatch(/dialog \(id ([^)]+)\)/)
+    return /dialog \(id ([^)]+)\)/.exec(said)![1]
+  }
+  const card = page.getByRole("dialog", { name: /says/ })
+  const first = await click("Confirm")
+  await expect(card).toContainText("Remove tea?")
+  await page.screenshot({ path: "test-results/browser-page-dialog.png" })
+  expect(await snapshot()).toContain(`confirm dialog (id ${first})`)
+  const bounds = await card.boundingBox()
+  const view = await page.locator("[data-held-by]").boundingBox()
+  expect(
+    Math.abs(bounds!.x + bounds!.width / 2 - view!.x - view!.width / 2)
+  ).toBeLessThan(3)
+  expect(
+    Math.abs(bounds!.y + bounds!.height / 2 - view!.y - view!.height / 2)
+  ).toBeLessThan(3)
+  await card.getByRole("button", { name: "Cancel", exact: true }).click()
+  await expect(card).toHaveCount(0)
+  expect(await snapshot()).toContain("false")
+  const stale = await agentCalls(window, "browser_act", {
+    tab,
+    action: "dialog_accept",
+    dialog: first,
+  })
+  expect(stale.content[0]!.text).toContain("Refused (conflict)")
+
+  const accepted = await click("Confirm")
+  await agentSays(window, "browser_act", {
+    tab,
+    action: "dialog_accept",
+    dialog: accepted,
+  })
+  expect(await snapshot()).toContain("true")
+
+  const prompt = await click("Prompt")
+  await expect(card.getByRole("textbox", { name: "Response" })).toHaveValue(
+    "Enjoy your tea!"
+  )
+  await card.getByRole("textbox", { name: "Response" }).fill("For Roma")
+  await page.getByRole("button", { name: "New tab", exact: true }).click()
+  await expect(card).toHaveCount(0)
+  await page.getByRole("tab", { name: "Dialogs", exact: true }).click()
+  await expect(card.getByRole("textbox", { name: "Response" })).toHaveValue(
+    "For Roma"
+  )
+  // An empty submitted string is a value; dismissing a prompt returns null.
+  await agentSays(window, "browser_act", {
+    tab,
+    action: "dialog_accept",
+    dialog: prompt,
+    text: "",
+  })
+  await expect(card).toHaveCount(0)
+  expect(await snapshot()).toContain('""')
+  const again = await click("Prompt")
+  await agentSays(window, "browser_act", {
+    tab,
+    action: "dialog_dismiss",
+    dialog: again,
+  })
+  expect(await snapshot()).toContain("null")
+
+  const nested = await click("Frame prompt")
+  await expect(card.getByRole("textbox", { name: "Response" })).toHaveValue(
+    "Frame default"
+  )
+  await agentSays(window, "browser_act", {
+    tab,
+    action: "dialog_accept",
+    dialog: nested,
+    text: "From frame",
+  })
+  expect(await snapshot()).toContain("From frame")
+
+  // External Playwright and Banda answer the same callback.
+  const browser = await chromium.connectOverCDP(window.banda("browser").trim())
+  try {
+    const remote = browser
+      .contexts()[0]!
+      .pages()
+      .find((entry) => entry.url() === `${address}/`)!
+    remote.once("dialog", (dialog) => {
+      void dialog.accept("From CDP")
+    })
+    const tree = await snapshot()
+    const ref = /button "Prompt"[^\n]*\[ref=(e\d+)\]/.exec(tree)![1]
+    await agentSays(window, "browser_act", { tab, action: "click", ref })
+    await expect(card).toHaveCount(0)
+    expect(await snapshot()).toContain("From CDP")
+  } finally {
+    await browser.close()
+  }
+
+  const alert = await click("Alert")
+  await expect(
+    card.getByRole("button", { name: "Cancel", exact: true })
+  ).toHaveCount(0)
+  await agentSays(window, "browser_handoff", { tab, why: "Check the basket" })
+  const forbidden = await agentCalls(window, "browser_act", {
+    tab,
+    action: "dialog_accept",
+    dialog: alert,
+  })
+  expect(forbidden.content[0]!.text).toContain("Refused (forbidden)")
+  await card.getByRole("button", { name: "OK", exact: true }).click()
+  await expect(card).toHaveCount(0)
+  await page.getByRole("button", { name: "Done — hand back" }).click()
+  expect(await snapshot()).toContain("Alert done")
+  const loaded = await agentSays(window, "browser_open", {
+    url: `${address}/onload`,
+  })
+  expect(loaded).toContain("Hello on load")
+  await expect(card).toContainText("Hello on load")
+  await card.getByRole("button", { name: "OK", exact: true }).click()
+  await expect(card).toHaveCount(0)
+})

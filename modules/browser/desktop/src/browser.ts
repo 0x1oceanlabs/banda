@@ -11,6 +11,7 @@
  */
 import { randomUUID } from "node:crypto"
 import { existsSync } from "node:fs"
+import { fileURLToPath } from "node:url"
 import { join, parse } from "node:path"
 import {
   BROWSER_BRIDGE,
@@ -49,6 +50,7 @@ import {
   Window,
 } from "@banda/desktop-kit"
 import { Cdp } from "./cdp"
+import { Dialogs } from "./dialogs"
 import { Drive } from "./drive"
 import { BoxArg, Extensions } from "./extensions"
 import { Tabs } from "./tabs"
@@ -81,6 +83,7 @@ export class Browser extends Context.Service<
     Effect.gen(function* () {
       const extensions = yield* Extensions
       const tabs = yield* Tabs
+      const dialogs = yield* Dialogs
       const window = yield* Window
       const settings = yield* Settings
       const look = yield* Look
@@ -106,7 +109,8 @@ export class Browser extends Context.Service<
           yield* write("pinned", pinned ? [...others, id] : others)
         }).pipe(Effect.provideService(Look, look))
       return {
-        host: (contents) => Effect.sync(() => host(contents, tabs, extensions)),
+        host: (contents) =>
+          Effect.sync(() => host(contents, tabs, extensions, dialogs)),
         tabs: (where) => write("tabs", where),
         pin: (id, pinned) =>
           Effect.andThen(extensions.named(id), pin(id, pinned)),
@@ -126,14 +130,17 @@ export class Browser extends Context.Service<
 function host(
   contents: WebContents,
   tabs: Tabs["Service"],
-  extensions: Extensions["Service"]
+  extensions: Extensions["Service"],
+  dialogs: Dialogs["Service"]
 ): void {
   contents.on("will-attach-webview", (event, prefs, params) => {
     if (params.partition !== PARTITION || !OPENS.test(params.src)) {
       event.preventDefault()
       return
     }
-    delete prefs.preload
+    prefs.preload = fileURLToPath(
+      new URL("./browser-preload.cjs", import.meta.url)
+    )
     prefs.nodeIntegration = false
     prefs.nodeIntegrationInSubFrames = false
     prefs.contextIsolation = true
@@ -147,6 +154,7 @@ function host(
   contents.on("did-attach-webview", (_event, page) => {
     const tell = (news: BrowserNews) =>
       tellPage(contents, BROWSER_BRIDGE.listen, news)
+    dialogs.attached(page)
     tabs.attached(page)
     keys(page, contents)
     keep(page, tell, extensions)
@@ -462,7 +470,7 @@ const page = Schema.Tuple([Schema.Number])
  * in through its `modules.ts` without naming them. */
 export const browserAnswers: Answers<
   typeof BROWSER_BRIDGE,
-  Browser | Extensions | Tabs | Cdp | Drive
+  Browser | Extensions | Tabs | Cdp | Drive | Dialogs
 > = {
   tabs: [
     Schema.Tuple([Schema.Literals(["top", "left"])]),
@@ -471,11 +479,25 @@ export const browserAnswers: Answers<
   reveal: [text, ([path]) => Browser.use((browser) => browser.reveal(path))],
   shown: [
     page,
-    ([page]) => Extensions.use((extensions) => extensions.shown(page)),
+    ([page]) =>
+      Effect.andThen(
+        Extensions.use((extensions) => extensions.shown(page)),
+        Dialogs.use((dialogs) => Effect.sync(() => dialogs.replay(page)))
+      ),
   ],
   created: [
     Schema.Tuple([Schema.String, Schema.NullOr(Schema.Number)]),
     ([request, page]) => Tabs.use((tabs) => tabs.created(request, page)),
+  ],
+  dialog: [
+    Schema.Tuple([
+      Schema.Number,
+      Schema.String,
+      Schema.Boolean,
+      Schema.optional(Schema.String),
+    ]),
+    ([tab, id, accept, text]) =>
+      Dialogs.use((dialogs) => dialogs.answer(tab, id, accept, text)),
   ],
   stop: [page, ([page]) => Cdp.use((cdp) => cdp.stop(page))],
   release: [page, ([page]) => Drive.use((drive) => drive.release(page))],

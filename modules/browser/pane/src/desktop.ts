@@ -4,7 +4,7 @@
  * desktop takes from them, and the bridge on `window.banda.browser`.
  */
 import { type HostOf, invoke, push, send } from "@banda/contract/bridge"
-import type { Tabs } from "@banda/contract/browser"
+import type { Dialog, Tabs } from "@banda/contract/browser"
 
 import type { Pressed } from "./keys"
 
@@ -28,6 +28,8 @@ export function siteOf(address: string): string {
 
 /** The profile every page shares (ADR 0013, decision 2). */
 export const PARTITION = "persist:browser"
+/** The sandboxed prompt shim has no other capability. */
+export const PROMPT_CHANNEL = "banda:browser-prompt"
 
 /** A download, as the row shows it while it runs and once it ended. */
 export type Download = {
@@ -46,6 +48,7 @@ export type Download = {
  * page's web contents (`<webview>`'s `getWebContentsId()`).
  */
 export type BrowserNews =
+  | { kind: "dialog"; from: number; dialog: Dialog | null }
   /** A page opens another in a tab of its own, as a link with Ctrl does. */
   | { kind: "open"; from: number; url: string; background: boolean }
   /** A page's icon, as a data URL: Banda's page shows no other images. */
@@ -135,6 +138,9 @@ export const BROWSER_BRIDGE = {
   shown: send<[contents: number]>(),
   /** The page made for a `create`; none when no browser could take it. */
   created: send<[request: string, contents: number | null]>(),
+  /** Answers the current page dialog, by its ID. */
+  dialog:
+    invoke<[contents: number, id: string, accept: boolean, text?: string]>(),
   /** Stops the Agents that drive the page: their sessions on it end. */
   stop: send<[contents: number]>(),
   /** Stops the Thread that drives the page with Banda's tools, which

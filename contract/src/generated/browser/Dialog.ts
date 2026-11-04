@@ -4,4 +4,4 @@
  * A dialog a page shows: an alert, a confirm, a prompt, or one before
  * it unloads.
  */
-export type Dialog = { kind: string, message: string, };
+export type Dialog = { id: string, kind: string, message: string, url: string, default_prompt: string, };

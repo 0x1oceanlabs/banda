@@ -14,6 +14,7 @@ import {
 import { newId } from "@banda/contract"
 import { BROWSER_FILE, type Browser as Settings } from "@banda/contract/browser"
 import { BandaMark } from "@banda/ui/components/banda-mark"
+import { PageDialog } from "./PageDialog"
 import { Button } from "@banda/ui/components/button"
 import {
   DropdownMenu,
@@ -324,8 +325,8 @@ function Browser({
     if (page && !switched && !was.page) return page.focus()
     if (!focused) return
     if (!switched && root.current?.contains(document.activeElement)) return
-    if (page) page.focus()
-    else address.current?.focus()
+    if (page && !page.state.dialog) page.focus()
+    else if (!page) address.current?.focus()
   }, [focused, page, tab.id])
 
   const open = (typed: string) => {
@@ -430,6 +431,25 @@ function Browser({
         >
           <Notice state={state} page={page} url={tab.url} />
         </div>
+        {page && state.dialog && contents !== null && (
+          <DrawnIn element={page.over}>
+            <PageDialog
+              key={state.dialog.id}
+              dialog={state.dialog}
+              focused={focused}
+              initialText={page.dialogDraft ?? state.dialog.default_prompt}
+              onText={(text) => {
+                page.draftDialog(text)
+              }}
+              onAnswer={(accept, text) =>
+                browserHost()!.dialog(contents, state.dialog!.id, accept, text)
+              }
+              onDone={() => {
+                if (!page.state.dialog) page.focus()
+              }}
+            />
+          </DrawnIn>
+        )}
         {page && state.driver && (
           <DrawnIn element={page.over}>
             <Driving
@@ -855,12 +875,19 @@ function TabItem({
   const page = pageAt(tab.id)
   const state = page?.state
   const words = state?.title || titleOf(tab)
-  const mark = (state?.driven || state?.driver) && (
-    <Driven
-      contents={page?.contents}
-      words={words}
-      thread={state.driver !== null}
+  const mark = state?.dialog ? (
+    <span
+      className="size-1.5 shrink-0 rounded-full bg-attention"
+      aria-label="Page dialog"
     />
+  ) : (
+    (state?.driven || state?.driver) && (
+      <Driven
+        contents={page?.contents}
+        words={words}
+        thread={state.driver !== null}
+      />
+    )
   )
   return (
     <div

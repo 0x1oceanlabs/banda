@@ -160,6 +160,7 @@ fn read(title: &str, tree: String, errors: Vec<String>) -> ReadTab {
         title: title.into(),
         tree,
         errors,
+        dialog: None,
     }
 }
 
@@ -275,6 +276,9 @@ async fn an_action_answers_in_a_line_and_says_what_changed() {
             driven: false,
         }],
         dialog: Some(Dialog {
+            id: "d1".into(),
+            url: "https://example.com/".into(),
+            default_prompt: String::new(),
             kind: "confirm".into(),
             message: "Sure?".into(),
         }),
@@ -288,8 +292,7 @@ async fn an_action_answers_in_a_line_and_says_what_changed() {
         said,
         "Pressed Enter. Tab 9 shows https://example.com/, titled \"Next\". It opened tab \
          15, at https://example.com/new. It began to download \"report.pdf\". The page \
-         shows a confirm dialog, which says \"Sure?\": the page waits until your Person \
-         answers it in the tab. The Person also acted on this page since your last \
+         shows a confirm dialog (id d1), which says \"Sure?\". Prompt default: \"\". Use browser_act with action dialog_accept or dialog_dismiss and this dialog ID; the page waits for an answer. The Person also acted on this page since your last \
          snapshot. Take a new snapshot before you act by ref."
     );
 }
