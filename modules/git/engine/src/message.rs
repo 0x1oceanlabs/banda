@@ -209,14 +209,15 @@ fn branch_name(wanted: &str) -> String {
     }
 }
 
-/// `name`, or `name-2`, `name-3` and on, the first no branch here has.
+/// `name`, or `name-2`, `name-3` and on, the first no branch here has
+/// nor is in the way of (`fix` is of `fix/login`).
 async fn free(repo: &Repo, name: &str) -> Result<String, Refusal> {
     for n in 1.. {
         let tried = match n {
             1 => name.to_owned(),
             n => format!("{name}-{n}"),
         };
-        if !repo.has_ref(&format!("refs/heads/{tried}")).await? {
+        if repo.branch_in_way(&tried).await?.is_none() {
             return Ok(tried);
         }
     }

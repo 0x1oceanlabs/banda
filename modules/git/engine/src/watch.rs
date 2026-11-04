@@ -3,17 +3,18 @@
 //! and says it only when it changed; and it fetches the upstream's remote
 //! now and then, as T3 Code does, so ahead and behind count what the
 //! remote has, backing off while that fails. A fetch runs beside the
-//! reads, which go on meanwhile.
+//! reads, which go on meanwhile, and never while a command of Banda's
+//! writes in the repository.
 
 use crate::model::Status;
 use crate::repo::Repo;
 use crate::run::Opts;
-use crate::status;
+use crate::{Repositories, status};
 use banda_kernel::{ModuleSpace, Stream};
+use std::ffi::OsStr;
 use std::path::PathBuf;
-use std::sync::Arc;
 use std::time::Duration;
-use tokio::sync::{Notify, mpsc};
+use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
 use tokio::time::Instant;
 
@@ -25,21 +26,28 @@ const FETCH: Duration = Duration::from_secs(30);
 const FETCH_AT_MOST: Duration = Duration::from_secs(15 * 60);
 
 /// Follows the status of `space`'s folder until the window lets go,
-/// reading it again at once when a git command of Banda's is `written`.
-pub fn watch(space: ModuleSpace, written: Arc<Notify>) -> Stream {
+/// reading it again at once when a git command of Banda's has written in
+/// its repository.
+pub fn watch(space: ModuleSpace, repositories: Repositories) -> Stream {
     let (say, heard) = mpsc::channel(1);
     tokio::spawn(async move {
         let mut told: Option<Status> = None;
         let mut fetch = Fetch::new();
         loop {
+            let folder = space.folder();
+            // Read before git is: an event after it may change what git
+            // reads.
+            let at = space.at().await.ok();
+            let found = Repo::find(&folder).await;
+            let writes = match &found {
+                Ok(Some(repo)) => repositories.of(&repo.top),
+                _ => repositories.of(&folder),
+            };
             // Heard from now: a write that ends during the read counts.
-            let wrote = written.notified();
+            let wrote = writes.done.notified();
             tokio::pin!(wrote);
             wrote.as_mut().enable();
-            let read = async {
-                let at = space.at().await.ok()?;
-                status::status(&space.folder(), at).await.ok()
-            };
+            let read = async { status::read(found, at?).await.ok() };
             if let Some(mut status) = read.await {
                 // The same but for its position is no change.
                 let at = status.at;
@@ -60,8 +68,9 @@ pub fn watch(space: ModuleSpace, written: Arc<Notify>) -> Stream {
                 upstream: Some(_),
                 ..
             }) = &told
+                && !writes.busy()
             {
-                fetch.start(space.folder().to_path_buf(), branch.clone());
+                fetch.start(folder, branch.clone());
             }
             tokio::select! {
                 () = tokio::time::sleep(AGAIN) => {}
@@ -118,6 +127,15 @@ impl Fetch {
     }
 }
 
+/// What a fetch nobody asked for runs with, as T3 Code's: no prompt for a
+/// password, from git, a credential manager or ssh.
+const UNASKED: [(&str, &str); 4] = [
+    ("GCM_INTERACTIVE", "never"),
+    ("GIT_ASKPASS", ""),
+    ("SSH_ASKPASS", ""),
+    ("SSH_ASKPASS_REQUIRE", "never"),
+];
+
 /// Fetches the remote `branch` follows, saying whether it did.
 async fn fetch(folder: PathBuf, branch: String) -> bool {
     let fetched = async {
@@ -125,16 +143,23 @@ async fn fetch(folder: PathBuf, branch: String) -> bool {
         let key = format!("branch.{branch}.remote");
         let remote = repo.config(&key).await.ok()??;
         // No gc: one that fails would leave its packs behind each time,
-        // until the disk is full (T3 Code).
+        // until the disk is full (T3 Code). No FETCH_HEAD, which only a
+        // merge after the fetch reads.
         let args = [
             "fetch",
             "--quiet",
             "--no-tags",
             "--no-auto-gc",
+            "--no-write-fetch-head",
             "--",
             &remote,
         ];
-        repo.run(args, Opts::default()).await.ok()
+        let env = UNASKED.map(|(name, value)| (name, OsStr::new(value)));
+        let opts = Opts {
+            env: &env,
+            ..Opts::default()
+        };
+        repo.run(args, opts).await.ok()
     };
     fetched.await.is_some()
 }

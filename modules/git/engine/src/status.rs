@@ -5,18 +5,36 @@
 use crate::model::Status;
 use crate::parse;
 use crate::repo::Repo;
-use crate::run::{Failure, Opts};
+use crate::run::{Failure, Opts, Reason, UNTRUSTED};
 use std::collections::HashMap;
 use std::path::Path;
 
 /// The folder's status, read after the Space's event `at`; `repo: false`
 /// in a folder git does not know.
 pub async fn status(folder: &Path, at: i64) -> Result<Status, Failure> {
-    let Some(repo) = Repo::find(folder).await? else {
-        return Ok(Status {
-            at,
-            ..Status::default()
-        });
+    read(Repo::find(folder).await, at).await
+}
+
+/// The status of the repository `found` for a folder, read after the
+/// Space's event `at`: `repo: false` when none was, with the problem when
+/// git would not look.
+pub async fn read(found: Result<Option<Repo>, Failure>, at: i64) -> Result<Status, Failure> {
+    let repo = match found {
+        Ok(Some(repo)) => repo,
+        Ok(None) => {
+            return Ok(Status {
+                at,
+                ..Status::default()
+            });
+        }
+        Err(Failure(Reason::Untrusted)) => {
+            return Ok(Status {
+                at,
+                problem: Some(UNTRUSTED.to_owned()),
+                ..Status::default()
+            });
+        }
+        Err(failure) => return Err(failure),
     };
     let said = repo.porcelain().await?;
     let against = match &said.head {
@@ -54,6 +72,7 @@ pub async fn status(folder: &Path, at: i64) -> Result<Status, Failure> {
     Ok(Status {
         at,
         repo: true,
+        problem: None,
         branch: said.branch,
         head: said.head,
         ahead: said.upstream.as_ref().and(said.ahead),

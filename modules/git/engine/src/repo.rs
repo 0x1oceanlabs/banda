@@ -64,7 +64,7 @@ impl Repo {
         &self,
         args: &[&str],
         paths: &[&str],
-        index: Option<&Path>,
+        opts: Opts<'_>,
     ) -> Result<Ran, Failure> {
         let args = [
             &["--literal-pathspecs"][..],
@@ -73,9 +73,8 @@ impl Repo {
         ]
         .concat();
         let opts = Opts {
-            index,
             stdin: Some(paths.join("\0").into_bytes()),
-            ..Opts::default()
+            ..opts
         };
         self.run(args, opts).await
     }
@@ -169,6 +168,51 @@ impl Repo {
             )
             .await?;
         Ok(parse::porcelain(&said.stdout))
+    }
+
+    /// The branch here that keeps a branch `name` from being made: one of
+    /// that name, or one whose name is a folder of it or in it, as `fix`
+    /// is to `fix/login`, which git keeps as files and folders. None when
+    /// `name` is free.
+    pub async fn branch_in_way(&self, name: &str) -> Result<Option<String>, Failure> {
+        let ran = self
+            .run(
+                ["for-each-ref", "--format=%(refname:strip=2)", "refs/heads"],
+                Opts::default(),
+            )
+            .await?;
+        let text = ran.text();
+        let inside = |outer: &str, inner: &str| {
+            inner
+                .strip_prefix(outer)
+                .is_some_and(|rest| rest.starts_with('/'))
+        };
+        Ok(text
+            .lines()
+            .find(|b| *b == name || inside(b, name) || inside(name, b))
+            .map(str::to_owned))
+    }
+
+    /// The other work tree of this repository's that has `branch` checked
+    /// out, by its folder; none when no other has.
+    pub async fn checked_out_elsewhere(&self, branch: &str) -> Result<Option<String>, Failure> {
+        let ran = self
+            .run(["worktree", "list", "--porcelain", "-z"], Opts::default())
+            .await?;
+        let text = String::from_utf8_lossy(&ran.stdout);
+        let full = format!("branch refs/heads/{branch}");
+        let mut folder = None;
+        for field in text.split('\0') {
+            if let Some(path) = field.strip_prefix("worktree ") {
+                folder = Some(path);
+            } else if field == full
+                && let Some(path) = folder
+                && Path::new(path) != self.top
+            {
+                return Ok(Some(path.to_owned()));
+            }
+        }
+        Ok(None)
     }
 
     pub async fn has_ref(&self, full: &str) -> Result<bool, Failure> {

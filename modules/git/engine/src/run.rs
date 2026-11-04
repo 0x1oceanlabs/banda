@@ -4,11 +4,12 @@
 //! Every git the module runs goes through [`git`]: in the folder it is
 //! given, with no prompts and no optional locks, so a status read beside
 //! the Person's own git never takes `.git/index.lock`; at most eight at
-//! once; stopped after 30 seconds, or the time a command that writes is
-//! given; its output cut at a cap, which it says. What git writes on
-//! stderr can hold a remote's credentials, so it goes to the engine's log
-//! only, and a caller hears a [`Reason`]; a line a caller follows has its
-//! credentials taken out ([`redact`]).
+//! once; stopped after 30 seconds, or [`LONG`] for one that writes, with
+//! SIGTERM first so it takes its lock files away; its output cut at a cap,
+//! which it says. What git writes on stderr can hold a remote's
+//! credentials, so it goes to the engine's log only, and a caller hears a
+//! [`Reason`]; a line a caller follows has its credentials taken out
+//! ([`redact`]).
 
 use banda_kernel::Refusal;
 use std::ffi::OsStr;
@@ -20,7 +21,18 @@ use tokio::sync::{Semaphore, mpsc};
 
 /// How long one git may run.
 const TIME: Duration = Duration::from_secs(30);
-/// How many gits run at once, in every Space together.
+/// How long a git that writes may run: a commit and its hooks, a push, a
+/// pull, a checkout of many files.
+pub const LONG: Duration = Duration::from_secs(10 * 60);
+/// How long a git asked to stop has to end before it is killed.
+#[cfg(unix)]
+const STOPPING: Duration = Duration::from_secs(2);
+/// How long the pipes are read on after git ended: a child it left, as a
+/// hook's, may hold them open.
+const LEFT_OPEN: Duration = Duration::from_secs(1);
+/// How many gits run at once, in every Space together; one given longer
+/// than [`TIME`] runs beside them, as T3 Code's, so a hook that hangs
+/// keeps no read waiting.
 static RUNNING: Semaphore = Semaphore::const_new(8);
 /// The most of stdout a git keeps unless asked otherwise: 16 MiB, as T3
 /// Code gives its diff and status metadata.
@@ -48,6 +60,16 @@ pub struct Opts<'a> {
     /// Hears each line git and its hooks write on stderr as it comes,
     /// its credentials taken out.
     pub lines: Option<mpsc::UnboundedSender<String>>,
+}
+
+impl Opts<'_> {
+    /// For a git that writes: it may run for [`LONG`].
+    pub fn writes() -> Self {
+        Opts {
+            time: Some(LONG),
+            ..Opts::default()
+        }
+    }
 }
 
 /// What a git that ran said.
@@ -94,6 +116,12 @@ impl Ran {
             .map(redact)
     }
 
+    /// What it wrote on stderr, for a caller that reads more than its
+    /// reason; never to be shown raw, as it can hold credentials.
+    pub fn said(&self) -> String {
+        String::from_utf8_lossy(&self.stderr).into_owned()
+    }
+
     /// It wrote nothing on stderr.
     pub fn quiet(&self) -> bool {
         self.stderr.iter().all(u8::is_ascii_whitespace)
@@ -124,6 +152,9 @@ pub enum Reason {
     Unauthorized,
     /// A switch or a pull would lose changes in the work tree.
     WouldLose,
+    /// Another user owns the repository, and git does not trust it
+    /// (`safe.directory`).
+    Untrusted,
     /// Anything else, which only the log tells.
     Other,
 }
@@ -143,11 +174,15 @@ impl Reason {
         };
         if says(&["not a git repository"]) {
             Reason::NotRepository
+        } else if says(&["detected dubious ownership"]) {
+            Reason::Untrusted
         } else if says(&[".lock': file exists", "index.lock", "config.lock"]) {
             Reason::Locked
         } else if says(&[
             "would be overwritten by checkout",
             "would be removed by checkout",
+            "would be overwritten by merge",
+            "would be removed by merge",
         ]) {
             Reason::WouldLose
         } else if says(&["not possible to fast-forward", "diverging branches"]) {
@@ -212,6 +247,7 @@ impl From<Failure> for Refusal {
             Reason::WouldLose => Refusal::conflict(
                 "This would lose changes in some files: commit or stash them first.",
             ),
+            Reason::Untrusted => Refusal::conflict(UNTRUSTED),
             Reason::Other => {
                 Refusal::conflict("Git could not read this; the engine's log says why.")
             }
@@ -221,6 +257,8 @@ impl From<Failure> for Refusal {
 
 /// What the git methods but `status` say in a folder git does not know.
 const NOT_A_REPOSITORY: &str = "This Space's folder is not a git repository.";
+/// What they say, and `status` too, in a repository git does not trust.
+pub const UNTRUSTED: &str = "Git does not trust this folder, as another user owns it: add it to git's safe.directory to use it here.";
 
 /// Runs `git args` in `folder`. A git that exits with another code than 0
 /// is no error here: [`Ran::checked`] makes it one, and a probe such as
@@ -236,10 +274,16 @@ where
         .map(|a| a.to_string_lossy())
         .collect::<Vec<_>>()
         .join(" ");
-    let _turn = RUNNING
-        .acquire()
-        .await
-        .expect("the semaphore is never closed");
+    let time = opts.time.unwrap_or(TIME);
+    let _turn = match time <= TIME {
+        true => Some(
+            RUNNING
+                .acquire()
+                .await
+                .expect("the semaphore is never closed"),
+        ),
+        false => None,
+    };
     let mut command = tokio::process::Command::new("git");
     command
         .args(&args)
@@ -254,6 +298,9 @@ where
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .kill_on_drop(true);
+    // A group of its own, so stopping it stops the hooks it runs too.
+    #[cfg(unix)]
+    command.process_group(0);
     for name in ELSEWHERE {
         command.env_remove(name);
     }
@@ -269,68 +316,106 @@ where
     let stdin = child.stdin.take();
     let stdout = child.stdout.take().expect("stdout is piped");
     let stderr = child.stderr.take().expect("stderr is piped");
+    let (mut out, mut err) = (Vec::new(), Vec::new());
     let ran = async {
-        let feed = async {
+        let feeding = async {
             if let (Some(mut stdin), Some(bytes)) = (stdin, opts.stdin) {
                 // A git that stops reading early says why on stderr.
                 let _ = stdin.write_all(&bytes).await;
             }
         };
-        let read = async {
-            let (stdout, truncated) = capped(stdout, cap, false).await;
-            if truncated {
-                // It has more to say than is kept: stop it, so its stderr
-                // ends too.
-                let _ = child.start_kill();
+        let reading = capped(stdout, cap, false, &mut out);
+        let hearing = capped_lines(stderr, STDERR, opts.lines.as_ref(), &mut err);
+        tokio::pin!(feeding, reading, hearing);
+        let (mut fed, mut read, mut heard, mut truncated) = (false, false, false, false);
+        // It ends as git does, not as its pipes do.
+        let exited = loop {
+            tokio::select! {
+                () = &mut feeding, if !fed => fed = true,
+                more = &mut reading, if !read => {
+                    read = true;
+                    if more {
+                        // It has more to say than is kept: stop it, so its
+                        // stderr ends too.
+                        truncated = true;
+                        let _ = child.start_kill();
+                    }
+                }
+                () = &mut hearing, if !heard => heard = true,
+                exited = child.wait() => break exited,
             }
-            (stdout, truncated)
         };
-        let stderr = capped_lines(stderr, STDERR, opts.lines.as_ref());
-        let ((stdout, truncated), (stderr, _), ()) = tokio::join!(read, stderr, feed);
-        let exited = child.wait().await;
+        let rest = async {
+            let more = async { !read && reading.await };
+            let ended = async {
+                if !heard {
+                    hearing.await
+                }
+            };
+            tokio::join!(more, ended).0
+        };
+        truncated |= tokio::time::timeout(LEFT_OPEN, rest).await.unwrap_or(false);
         let success = truncated || exited.is_ok_and(|status| status.success());
-        Ran {
-            stdout,
-            truncated,
-            success,
-            stderr,
-            args: said.clone(),
-        }
+        (truncated, success)
     };
-    match tokio::time::timeout(opts.time.unwrap_or(TIME), ran).await {
-        Ok(ran) => Ok(ran),
-        Err(_) => {
-            tracing::warn!(args = %said, "git ran past its time and was stopped");
-            Err(Failure(Reason::TimedOut))
-        }
-    }
+    let Ok((truncated, success)) = tokio::time::timeout(time, ran).await else {
+        tracing::warn!(args = %said, "git ran past its time and was stopped");
+        stop(&mut child).await;
+        return Err(Failure(Reason::TimedOut));
+    };
+    Ok(Ran {
+        stdout: out,
+        truncated,
+        success,
+        stderr: err,
+        args: said,
+    })
 }
 
-/// Up to `cap` bytes of `from`, read to its end, and whether it had more;
-/// each line said to `lines` as it comes, past the cap too.
+/// Stops a git that ran past its time: SIGTERM to it and its hooks
+/// first, on which git takes its lock files away, as `index.lock`; killed
+/// if it has not ended soon after.
+async fn stop(child: &mut tokio::process::Child) {
+    #[cfg(unix)]
+    if let Some(group) = child
+        .id()
+        .and_then(|id| i32::try_from(id).ok())
+        .and_then(rustix::process::Pid::from_raw)
+    {
+        let _ = rustix::process::kill_process_group(group, rustix::process::Signal::TERM);
+        if tokio::time::timeout(STOPPING, child.wait()).await.is_ok() {
+            return;
+        }
+        let _ = rustix::process::kill_process_group(group, rustix::process::Signal::KILL);
+    }
+    let _ = child.start_kill();
+    let _ = child.wait().await;
+}
+
+/// Up to `cap` bytes of `from` into `kept`, read to its end, and whether
+/// it had more; each line said to `lines` as it comes, past the cap too.
 async fn capped_lines(
     from: impl AsyncRead + Unpin,
     cap: usize,
     lines: Option<&mpsc::UnboundedSender<String>>,
-) -> (Vec<u8>, bool) {
+    kept: &mut Vec<u8>,
+) {
     let Some(lines) = lines else {
-        return capped(from, cap, true).await;
+        capped(from, cap, true, kept).await;
+        return;
     };
     let mut from = tokio::io::BufReader::new(from);
-    let mut kept = Vec::new();
-    let mut more = false;
     let mut line = Vec::new();
     loop {
         line.clear();
         // A line ends at `\n`; one a progress meter redraws with `\r`
         // comes whole once it ends.
         match tokio::io::AsyncBufReadExt::read_until(&mut from, b'\n', &mut line).await {
-            Ok(0) | Err(_) => return (kept, more),
+            Ok(0) | Err(_) => return,
             Ok(_) => {}
         }
         let room = cap - kept.len();
         kept.extend_from_slice(&line[..line.len().min(room)]);
-        more |= line.len() > room;
         let text = String::from_utf8_lossy(&line);
         if let Some(last) = text.split('\r').map(str::trim).rfind(|l| !l.is_empty()) {
             let _ = lines.send(redact(last));
@@ -357,15 +442,20 @@ pub fn redact(line: &str) -> String {
     out
 }
 
-/// Up to `cap` bytes of `from`, and whether it had more. Past the cap it
-/// stops reading, or with `drain` reads on to the end and keeps none of it.
-async fn capped(mut from: impl AsyncRead + Unpin, cap: usize, drain: bool) -> (Vec<u8>, bool) {
-    let mut kept = Vec::new();
+/// Up to `cap` bytes of `from` into `kept`, and whether it had more.
+/// Past the cap it stops reading, or with `drain` reads on to the end and
+/// keeps none of it. What it read stays in `kept` if it is dropped.
+async fn capped(
+    mut from: impl AsyncRead + Unpin,
+    cap: usize,
+    drain: bool,
+    kept: &mut Vec<u8>,
+) -> bool {
     let mut more = false;
     let mut chunk = vec![0; 64 * 1024];
     loop {
         let n = match from.read(&mut chunk).await {
-            Ok(0) | Err(_) => return (kept, more),
+            Ok(0) | Err(_) => return more,
             Ok(n) => n,
         };
         let room = cap - kept.len();
@@ -373,7 +463,7 @@ async fn capped(mut from: impl AsyncRead + Unpin, cap: usize, drain: bool) -> (V
         if n > room {
             more = true;
             if !drain {
-                return (kept, more);
+                return more;
             }
         }
     }
@@ -397,6 +487,74 @@ mod tests {
         let rejected = " ! [rejected]        main -> main (fetch first)\nerror: failed to push some refs to 'x'\n";
         assert_eq!(Reason::of(rejected), Reason::Rejected);
         assert_eq!(Reason::of("hint: something\n"), Reason::Other);
+        let pull = "error: Your local changes to the following files would be overwritten by merge:\n\ta.txt\n";
+        assert_eq!(Reason::of(pull), Reason::WouldLose);
+        let owned = "fatal: detected dubious ownership in repository at '/r'\n";
+        assert_eq!(Reason::of(owned), Reason::Untrusted);
+    }
+
+    /// A repository in a folder of its own, its one file committed, with
+    /// `hook` as its pre-commit hook.
+    #[cfg(unix)]
+    fn with_hook(hook: &str) -> tempfile::TempDir {
+        use std::os::unix::fs::PermissionsExt;
+        let folder = tempfile::tempdir().unwrap();
+        let run = |args: &[&str]| {
+            let ran = std::process::Command::new("git")
+                .args(["-c", "user.name=Ann", "-c", "user.email=ann@example.com"])
+                .args(args)
+                .current_dir(folder.path())
+                .output()
+                .unwrap();
+            assert!(ran.status.success(), "{args:?}");
+        };
+        run(&["init", "--quiet"]);
+        std::fs::write(folder.path().join("a.txt"), "one\n").unwrap();
+        run(&["add", "a.txt"]);
+        run(&["commit", "--quiet", "--no-gpg-sign", "-m", "first"]);
+        let file = folder.path().join(".git/hooks/pre-commit");
+        std::fs::write(&file, hook).unwrap();
+        std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o755)).unwrap();
+        std::fs::write(folder.path().join("a.txt"), "two\n").unwrap();
+        folder
+    }
+
+    const COMMIT: [&str; 9] = [
+        "-c",
+        "user.name=Ann",
+        "-c",
+        "user.email=ann@example.com",
+        "commit",
+        "--quiet",
+        "--no-gpg-sign",
+        "-am",
+        "second",
+    ];
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_git_past_its_time_is_stopped_and_takes_its_lock_away() {
+        let folder = with_hook("#!/bin/sh\nsleep 30\n");
+        let began = std::time::Instant::now();
+        let opts = Opts {
+            time: Some(Duration::from_secs(1)),
+            ..Opts::default()
+        };
+        let ran = git(folder.path(), COMMIT, opts).await;
+        assert_eq!(ran.err(), Some(Failure(Reason::TimedOut)));
+        assert!(began.elapsed() < Duration::from_secs(10));
+        assert!(!folder.path().join(".git/index.lock").exists());
+    }
+
+    #[cfg(unix)]
+    #[tokio::test]
+    async fn a_git_ends_as_it_exits_though_its_hook_left_a_child_with_its_stderr() {
+        let folder = with_hook("#!/bin/sh\nsleep 30 >&2 &\necho checked >&2\n");
+        let began = std::time::Instant::now();
+        let ran = git(folder.path(), COMMIT, Opts::writes()).await.unwrap();
+        assert!(ran.success);
+        assert!(began.elapsed() < Duration::from_secs(10));
+        assert_eq!(ran.last_line().as_deref(), Some("checked"));
     }
 
     #[test]

@@ -7,9 +7,9 @@
 //! push or a pull as long too. What a hook or a remote says comes as it
 //! comes, its credentials taken out, and a failure says its last line.
 
-use crate::model::{ActAsk, Action, Done, Progress, Step};
+use crate::model::{ActAsk, Action, Change, Changed, Done, Progress, Step};
 use crate::repo::{Repo, chosen, scratch};
-use crate::run::{Failure, Opts, Ran, Reason, git};
+use crate::run::{Failure, LONG, Opts, Ran, Reason, git, redact};
 use banda_kernel::Refusal;
 use serde_json::Value;
 use std::collections::HashMap;
@@ -19,8 +19,6 @@ use std::path::Path;
 use std::time::Duration;
 use tokio::sync::mpsc;
 
-/// How long a commit, its hooks, a push or a pull may run.
-const LONG: Duration = Duration::from_secs(10 * 60);
 /// How often the trace is read for the hook that began.
 const TRACED: Duration = Duration::from_millis(100);
 
@@ -93,6 +91,19 @@ pub async fn act(repo: &Repo, ask: ActAsk, tell: &Teller) -> Result<Done, Refusa
             "Nothing to commit: the work tree is clean.",
         ));
     }
+    // `add --all` would take a conflict as resolved, its markers and all.
+    let fought: Vec<&str> = (said.files.iter())
+        .filter(|f| f.status == Change::Conflicted)
+        .map(|f| f.path.as_str())
+        .collect();
+    if !fought.is_empty() {
+        return Err(Refusal::conflict(format!(
+            "Resolve the conflicts first: {}.",
+            some_of(&fought)
+        )));
+    }
+    // A rename chosen takes where it was too, so its old path goes.
+    let files = files.map(|files| with_old_paths(files, &said.files));
     let mut branch = said.branch;
     if let Some(name) = ask.branch {
         tell.step(Step::Branching).await;
@@ -107,10 +118,47 @@ pub async fn act(repo: &Repo, ask: ActAsk, tell: &Teller) -> Result<Done, Refusa
     match branch {
         Some(branch) if ask.action == Action::CommitPush => {
             tell.step(Step::Pushing).await;
-            push(repo, &branch, tell).await
+            // The commit stays made: what failed is the push alone.
+            push(repo, &branch, tell).await.map_err(|mut refusal| {
+                refusal.message = format!(
+                    "{}, but the push failed. {}",
+                    committed.title, refusal.message
+                );
+                refusal
+            })
         }
         _ => Ok(committed),
     }
+}
+
+/// A few of `paths`, as `a.txt, b.txt and 3 more`.
+fn some_of(paths: &[&str]) -> String {
+    const FEW: usize = 3;
+    let named = paths[..paths.len().min(FEW)].join(", ");
+    match paths.len().saturating_sub(FEW) {
+        0 => named,
+        more => format!("{named} and {more} more"),
+    }
+}
+
+/// `files`, and where each renamed one of them was: the rename's other
+/// side, which a commit of it takes too, so the old path is removed.
+fn with_old_paths<'a>(files: Vec<&'a str>, changed: &'a [Changed]) -> Vec<&'a str> {
+    let mut all = files.clone();
+    for file in changed {
+        let Some(old) = file.old_path.as_deref() else {
+            continue;
+        };
+        let new = file.path.as_str();
+        if files.iter().any(|f| *f == new || *f == old) {
+            for path in [new, old] {
+                if !all.contains(&path) {
+                    all.push(path);
+                }
+            }
+        }
+    }
+    all
 }
 
 fn detached() -> Refusal {
@@ -129,7 +177,7 @@ async fn commit(
         // Every change, as T3 Code's button commits: what `.gitignore`
         // leaves out stays out.
         None => {
-            repo.run(["add", "--all"], Opts::default()).await?;
+            repo.run(["add", "--all"], Opts::writes()).await?;
         }
         // Only these: what else was staged is unstaged first, as T3 Code
         // does, so the commit holds what the Person chose.
@@ -142,8 +190,9 @@ async fn commit(
                     "A merge is going on: commit all of it, or end it first.",
                 ));
             }
-            repo.run(["reset", "--quiet"], Opts::default()).await?;
-            repo.run_on_paths(&["add", "--all"], files, None).await?;
+            repo.run(["reset", "--quiet"], Opts::writes()).await?;
+            repo.run_on_paths(&["add", "--all"], files, Opts::writes())
+                .await?;
         }
     }
     if repo.yes(["diff", "--cached", "--quiet", "--"]).await? {
@@ -197,7 +246,7 @@ async fn push(repo: &Repo, branch: &str, tell: &Teller) -> Result<Done, Refusal>
         // another git holds the config's lock (T3 Code).
         for (key, value) in [("remote", remote.as_str()), ("merge", own.as_str())] {
             let key = format!("branch.{branch}.{key}");
-            repo.run(["config", &key, value], Opts::default()).await?;
+            repo.run(["config", &key, value], Opts::writes()).await?;
         }
     }
     let head = repo.said_head().await?;
@@ -218,8 +267,10 @@ async fn pull(repo: &Repo, branch: &str, tell: &Teller) -> Result<Done, Refusal>
             "--symbolic-full-name",
             "@{upstream}",
         ])
-        .await?
-        .ok_or_else(|| Refusal::conflict("This branch follows no upstream: push it first."))?;
+        .await?;
+    let Some(upstream) = upstream else {
+        return Err(no_upstream(repo, branch).await?);
+    };
     let before = repo.head().await?;
     let args = ["pull", "--quiet", "--ff-only", "--no-rebase"];
     traced(repo, &args, None, "Git could not pull", tell).await?;
@@ -232,6 +283,25 @@ async fn pull(repo: &Repo, branch: &str, tell: &Teller) -> Result<Done, Refusal>
             title: "Pulled".to_owned(),
             detail: Some(format!("Updated {branch} from {upstream}.")),
         },
+    })
+}
+
+/// Why `branch` has no upstream to pull: it never had one, or the one it
+/// follows is gone from the remote, as after a pull request merged.
+async fn no_upstream(repo: &Repo, branch: &str) -> Result<Refusal, Refusal> {
+    let (remote, merge) = (
+        format!("branch.{branch}.remote"),
+        format!("branch.{branch}.merge"),
+    );
+    let (remote, merge) = futures::join!(repo.config(&remote), repo.config(&merge));
+    Ok(match (remote?, merge?) {
+        (Some(remote), Some(merge)) => {
+            let name = merge.strip_prefix("refs/heads/").unwrap_or(&merge);
+            Refusal::conflict(format!(
+                "Its upstream {remote}/{name} is gone from the remote."
+            ))
+        }
+        _ => Refusal::conflict("This branch follows no upstream: push it first."),
     })
 }
 
@@ -258,20 +328,49 @@ pub async fn switch(repo: &Repo, name: &str) -> Result<(), Refusal> {
             .lines()
             .find_map(|l| l.split_once('\t').filter(|(_, up)| *up == name))
             .map(|(local, _)| local.to_owned());
-        match follows {
+        // The branch `--track` would make, when one of its name is here
+        // already but follows another: that one is switched to.
+        let own = match follows {
+            Some(_) => None,
+            None => tracked_name(repo, name).await?,
+        };
+        let own = match own {
+            Some(own) if repo.has_ref(&format!("refs/heads/{own}")).await? => Some(own),
+            _ => None,
+        };
+        match follows.or(own) {
             Some(local) => vec![local],
             None => vec!["--track".to_owned(), name.to_owned()],
         }
     } else {
         return Err(Failure(Reason::BadRef).into());
     };
+    if let [local] = &to[..]
+        && let Some(folder) = repo.checked_out_elsewhere(local).await?
+    {
+        return Err(Refusal::conflict(format!(
+            "{local} is checked out in another worktree at {folder}."
+        )));
+    }
     // `--` after it, so a ref gone stale is no path, whose checkout would
     // throw the Person's changes away (T3 Code).
     let mut args = vec!["checkout", "--quiet"];
     args.extend(to.iter().map(String::as_str));
     args.push("--");
-    repo.run(args, Opts::default()).await?;
+    repo.run(args, Opts::writes()).await?;
     Ok(())
+}
+
+/// The name a remote's branch has here, as `checkout --track` names it:
+/// `origin/fix/a` is `fix/a`. None when no remote's name begins it.
+async fn tracked_name(repo: &Repo, name: &str) -> Result<Option<String>, Failure> {
+    let ran = repo.run(["remote"], Opts::default()).await?;
+    Ok(ran
+        .text()
+        .lines()
+        .filter_map(|remote| name.strip_prefix(remote)?.strip_prefix('/'))
+        .find(|own| !own.is_empty())
+        .map(str::to_owned))
 }
 
 /// Makes the branch `name` at `from`, or at `HEAD` with the changes
@@ -281,8 +380,17 @@ pub async fn make_branch(repo: &Repo, name: &str, from: Option<&str>) -> Result<
     if !repo.yes(["check-ref-format", "--branch", name]).await? {
         return Err(Refusal::invalid("Git takes no branch of that name."));
     }
-    if repo.has_ref(&format!("refs/heads/{name}")).await? {
-        return Err(Refusal::conflict("A branch of that name is there already."));
+    match repo.branch_in_way(name).await? {
+        Some(there) if there == name => {
+            return Err(Refusal::conflict("A branch of that name is there already."));
+        }
+        // Git keeps `fix` as a file, so `fix/login` can be no folder.
+        Some(there) => {
+            return Err(Refusal::conflict(format!(
+                "The branch {there} is there, so git can make no branch {name}: name it otherwise."
+            )));
+        }
+        None => {}
     }
     let mut args = vec!["checkout", "--quiet", "-b", name];
     if let Some(from) = from {
@@ -290,7 +398,7 @@ pub async fn make_branch(repo: &Repo, name: &str, from: Option<&str>) -> Result<
         args.push(from);
     }
     args.push("--");
-    repo.run(args, Opts::default()).await?;
+    repo.run(args, Opts::writes()).await?;
     Ok(())
 }
 
@@ -301,7 +409,7 @@ pub async fn init(folder: &Path) -> Result<(), Refusal> {
             "This folder is in a git repository already.",
         ));
     }
-    git(folder, ["init", "--quiet"], Opts::default())
+    git(folder, ["init", "--quiet"], Opts::writes())
         .await?
         .checked()?;
     Ok(())
@@ -369,11 +477,36 @@ fn failed(ran: &Ran, hook: Option<&str>, what: &str) -> Refusal {
         None if reason == Reason::Other => what.to_owned(),
         None => return Failure(reason).into(),
     };
-    match ran.last_line() {
+    // What a remote said as it refused a push says more than git's own
+    // "failed to push some refs".
+    match refused(&ran.said()).or_else(|| ran.last_line()) {
         Some(line) => Refusal::conflict(format!("{said}: {line}")),
         None if hook.is_some() => Refusal::conflict(format!("{said}.")),
         None => Failure(reason).into(),
     }
+}
+
+/// Why the remote refused a push, from what git wrote on stderr: the
+/// last line its hook said (`remote: …`) and the reason on the ref's
+/// `! [remote rejected] main -> main (…)` line; none when it said neither.
+fn refused(stderr: &str) -> Option<String> {
+    let lines: Vec<&str> = stderr.lines().map(str::trim).collect();
+    let why = lines
+        .iter()
+        .filter(|l| l.starts_with("! [remote rejected]") || l.starts_with("! [rejected]"))
+        .find_map(|l| Some(l.rsplit_once('(')?.1.strip_suffix(')')?.to_owned()));
+    let said = lines
+        .iter()
+        .filter_map(|l| l.strip_prefix("remote:"))
+        .map(str::trim)
+        .rfind(|l| !l.is_empty());
+    let said = match (said, why) {
+        (Some(said), Some(why)) => format!("{said} ({why})"),
+        (Some(said), None) => said.to_owned(),
+        (None, Some(why)) => format!("the remote refused it ({why})"),
+        (None, None) => return None,
+    };
+    Some(redact(&said))
 }
 
 /// The hooks git ran, read from its trace2 events as git writes them:
