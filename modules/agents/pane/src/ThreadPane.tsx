@@ -38,7 +38,7 @@ import {
 } from "@banda/ui/components/trace"
 import { useLive } from "@banda/ui/hooks/use-live"
 import { matches } from "@banda/ui/lib/keys"
-import { clock } from "@banda/ui/lib/words"
+import { clock, duration } from "@banda/ui/lib/words"
 import { definePane, paneOf, type PaneProps } from "@banda/ui/pane"
 import {
   ArrowDownIcon,
@@ -74,7 +74,7 @@ import { DETAILS_KEY, ThreadDetails, useWide } from "./Details"
 import { Plan } from "./Plan"
 import { PlanReady, ProposedPlan } from "./ProposedPlan"
 import { planTitle } from "./messageText"
-import { type Line, timeline } from "./timeline"
+import { awaiting, type Line, thoughtTimes, timeline } from "./timeline"
 import { Fold, key, WorkLine, Working } from "./Work"
 import { Queue, type QueueActions } from "./Queue"
 import { ScrollPlace } from "./ScrollPlace"
@@ -481,6 +481,8 @@ function Transcript({
   }) {
   const turn = working(state)
   const lines = useMemo(() => timeline(state), [state])
+  const asks = useMemo(() => awaiting(state), [state])
+  const thoughts = useMemo(() => thoughtTimes(state), [state])
   const last = state.items.at(-1)
   const turns = useMemo(
     () => new Map(state.turns.map((one) => [one.id, one])),
@@ -511,6 +513,9 @@ function Transcript({
             item={line.item}
             onFork={forkAt(line.item)}
             onEdit={editAt(line.item)}
+            turn={line.item.turn ? turns.get(line.item.turn)?.state : undefined}
+            asks={asks.has(line.item.id)}
+            took={thoughts.get(line.item.id)}
             live={turn?.state === "running" && line.item === last}
             reader={reader}
             onOpenDiff={onOpenDiff}
@@ -533,7 +538,7 @@ function Transcript({
         return (
           <WorkLine
             items={line.items}
-            live={line.live}
+            turn={line.turn ? turns.get(line.turn)?.state : undefined}
             found={holds(line, finding)}
             render={render}
           />
@@ -548,7 +553,7 @@ function Transcript({
           />
         )
       case "working":
-        return <Working turn={line.turn} name={name} />
+        return <Working turn={line.turn} name={name} doing={line.doing} />
       case "ended":
         return (
           <Ended
@@ -578,7 +583,7 @@ function Transcript({
         >
           <MessageScrollerContent
             data-chat
-            className="mx-auto w-full max-w-3xl gap-4 px-(--chat-gutter) pt-4 pb-2"
+            className="mx-auto w-full max-w-3xl gap-5 px-(--chat-gutter) pt-4 pb-6"
           >
             {forkedFrom && (
               <MessageScrollerItem key="forked-from">
@@ -598,6 +603,13 @@ function Transcript({
                 scrollAnchor={
                   line.kind === "item" && line.item.author.kind === "person"
                 }
+                // A message's actions show under it, over the room before
+                // the next row: room of its own, so they paint there.
+                className={
+                  line.kind === "item" && line.item.body.kind === "message"
+                    ? "-mb-6 pb-6"
+                    : undefined
+                }
               >
                 {render(line)}
               </MessageScrollerItem>
@@ -607,7 +619,7 @@ function Transcript({
                 <Trace>
                   <TraceLine status="running">
                     <TraceIcon>
-                      <Spinner />
+                      <Spinner className="motion-reduce:animate-none" />
                     </TraceIcon>
                     <TraceTitle>{`${name} is getting ready…`}</TraceTitle>
                   </TraceLine>
@@ -669,6 +681,9 @@ function Entry({
   engine,
   space,
   item,
+  turn,
+  asks,
+  took,
   live,
   reader,
   onOpenDiff,
@@ -683,6 +698,12 @@ function Entry({
   engine: Engine
   space: SpaceId
   item: Item
+  /** How its turn stands, if it has one. */
+  turn?: TurnView["state"]
+  /** It is a call that waits for its Person's answer. */
+  asks: boolean
+  /** How long it took, in ms, when it is a thought and that is known. */
+  took?: number
   /** From {@link AgentMessage}'s `onFork`. */
   onFork?: (() => void) | null
   /** From {@link PersonMessage}'s `onEdit`. */
@@ -733,10 +754,16 @@ function Entry({
                 <TraceIcon>
                   <BrainIcon />
                 </TraceIcon>
-                <TraceTitle>{live ? "Thinking" : "Thought"}</TraceTitle>
+                <TraceTitle>
+                  {live
+                    ? "Thinking"
+                    : took !== undefined && took >= 1000
+                      ? `Thought for ${duration(took)}`
+                      : "Thought"}
+                </TraceTitle>
               </TraceLine>
             </TraceCollapsibleTrigger>
-            <TraceCollapsibleContent>
+            <TraceCollapsibleContent inset>
               <Markdown streaming={live} className="text-muted-foreground">
                 {body.text}
               </Markdown>
@@ -746,13 +773,17 @@ function Entry({
       )
     case "tool": {
       // A call that failed changed nothing the turn's changes show.
-      const turn = body.status !== "failed" ? item.turn : undefined
+      const changed = body.status !== "failed" ? item.turn : undefined
       return (
         <ToolCall
           tool={body}
           reader={reader}
+          turn={turn}
+          asks={asks}
           onOpenDiff={
-            turn === undefined ? undefined : (path) => onOpenDiff(turn, path)
+            changed === undefined
+              ? undefined
+              : (path) => onOpenDiff(changed, path)
           }
         />
       )
@@ -791,8 +822,9 @@ function Entry({
 }
 
 /** A turn that did not finish: why, what to do about it, and Try again
- * when its message can be sent again. One that failed because its Person
- * must sign in offers the ways to, while it can go again. */
+ * when its message can be sent again. One that failed says so in plain
+ * words beside a red icon (ADR 0058, decision 1). One that failed because
+ * its Person must sign in offers the ways to, while it can go again. */
 function Ended({
   turn,
   busy,
@@ -809,7 +841,10 @@ function Ended({
   const advice = !signsIn && turn.failure && adviceFor(turn.failure)
   return (
     <Trace>
-      <TraceLine status={failed ? "error" : undefined}>
+      <TraceLine
+        status={failed ? "error" : undefined}
+        className={failed ? "text-foreground" : undefined}
+      >
         <TraceIcon>
           {turn.state === "stopped" ? <CircleSlashIcon /> : <CircleAlertIcon />}
         </TraceIcon>
@@ -820,7 +855,7 @@ function Ended({
       {(advice || onRetry) && (
         <div className="flex flex-wrap items-center gap-2 pl-6">
           {advice && (
-            <span className="text-xs text-muted-foreground">{advice}</span>
+            <span className="text-meta text-muted-foreground">{advice}</span>
           )}
           {onRetry && (
             <Button
