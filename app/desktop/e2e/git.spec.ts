@@ -112,6 +112,11 @@ test("the Diff shows a Space's changes by scope, as T3 Code's, and reads again a
   await setInFront(page, false)
   await setInFront(page, true)
   await expect(header("later.ts")).toBeVisible()
+
+  // A commit from a terminal shows too, as the folder's status changes.
+  git(folder, "add", "-A")
+  git(folder, "commit", "-qm", "Later")
+  await expect(header("later.ts")).toHaveCount(0, { timeout: 10_000 })
 })
 
 test("a turn's Diff is all the turn changed, its shell's work too, from git's checkpoints", async () => {
@@ -178,6 +183,7 @@ test("the Diff stages, unstages and reverts a hunk, a file and all, as the Codex
 
   await page.keyboard.press("Alt+KeyN")
   const launcher = page.getByRole("region", { name: "New Pane" })
+  await expect(launcher).toHaveAttribute("data-focused", "true")
   await expect(launcher.getByRole("button", { name: /Diff/ })).toBeVisible()
   await page.keyboard.press("KeyD")
   const diff = page.getByRole("region", { name: "Diff" })
@@ -340,6 +346,8 @@ test("the branch picker makes and switches branches, and ▾ commits chosen file
   git(folder, "commit", "-qm", "First")
   git(folder, "remote", "add", "origin", remote)
   git(folder, "push", "-q", "-u", "origin", "main")
+  git(folder, "push", "-q", "origin", "main:release")
+  git(folder, "fetch", "-q", "origin")
   git(folder, "branch", "other")
   writeFileSync(join(folder, "a.ts"), "export const a = 2\n")
   writeFileSync(join(folder, "b.ts"), "export const b = 2\n")
@@ -350,7 +358,8 @@ test("the branch picker makes and switches branches, and ▾ commits chosen file
   await page.keyboard.press("Control+Shift+KeyB")
   const card = page.getByRole("dialog", { name: "Thread details" })
 
-  // The picker lists the branches here and the remote's in one list.
+  // The picker lists the branches here and the remote's in one list, a
+  // remote's left out when one here has its name, as T3 Code's.
   await card.getByRole("button", { name: /^main/ }).click()
   const search = page.getByRole("textbox", { name: "Search branches" })
   await expect(search).toBeFocused()
@@ -360,8 +369,11 @@ test("the branch picker makes and switches branches, and ▾ commits chosen file
   ).toBeVisible()
   await expect(options.getByRole("option", { name: "other" })).toBeVisible()
   await expect(
-    options.getByRole("option", { name: /^origin\/main/ })
+    options.getByRole("option", { name: /^origin\/release.*remote/ })
   ).toBeVisible()
+  await expect(
+    options.getByRole("option", { name: /^origin\/main/ })
+  ).toHaveCount(0)
   await page.screenshot({
     path: "test-results/git-branches.png",
     animations: "disabled",
@@ -374,14 +386,28 @@ test("the branch picker makes and switches branches, and ▾ commits chosen file
   ).toBeVisible()
   await page.keyboard.press("Escape")
   await expect(search).toBeFocused()
-  // The keys move the choice, the current branch first, then the default.
+  // The keys move the choice, the current branch first.
   await search.press("ArrowDown")
+  await expect(options.getByRole("option", { name: "other" })).toHaveAttribute(
+    "aria-selected",
+    "true"
+  )
+  // Enter takes the first branch the words find, not a new one of them.
+  await search.fill("oth")
+  await expect(options.getByRole("option", { name: "other" })).toHaveAttribute(
+    "aria-selected",
+    "true"
+  )
   await expect(
-    options.getByRole("option", { name: /^origin\/main/ })
-  ).toHaveAttribute("aria-selected", "true")
-  // Words no branch has make one, the choice Enter takes, and switch to
-  // it, the changes along.
-  await search.fill("feature/menu")
+    options.getByRole("option", { name: "Create branch “oth”" })
+  ).toBeVisible()
+  await search.press("Enter")
+  await expect(card.getByRole("button", { name: /^other/ })).toBeVisible()
+  expect(git(folder, "branch", "--show-current")).toBe("other\n")
+  // Words no branch has make one of the name they make, the choice Enter
+  // takes when nothing is listed, and switch to it, the changes along.
+  await card.getByRole("button", { name: /^other/ }).click()
+  await search.fill("feature/Menu")
   await expect(
     options.getByRole("option", { name: "Create branch “feature/menu”" })
   ).toHaveAttribute("aria-selected", "true")
@@ -448,10 +474,18 @@ test("Alt+D shows the Diff beside the Thread and hides it, and Alt+Shift+G opens
   await thread.composer.click()
   await page.keyboard.press("Alt+KeyD")
   const diff = page.getByRole("region", { name: "Diff" })
-  await expect(diff.getByRole("button", { name: "Scope" })).toHaveText(
-    "Changes"
-  )
+  const scope = diff.getByRole("button", { name: "Scope" })
+  await expect(scope).toHaveText("Changes")
   await expect(diff.getByText("app.ts").first()).toBeVisible()
+  // On another scope it is still the Space's one Diff: the key goes to it.
+  await scope.click()
+  await page.getByRole("menuitemradio", { name: /Unstaged/ }).click()
+  await expect(scope).toHaveText("Unstaged")
+  await thread.composer.click()
+  await page.keyboard.press("Alt+KeyD")
+  await expect(diff).toHaveCount(1)
+  await expect(diff).toHaveAttribute("data-focused", "true")
+  await expect(scope).toHaveText("Unstaged")
   await page.keyboard.press("Alt+KeyD")
   await expect(diff).toBeHidden()
 
@@ -481,4 +515,44 @@ test("Alt+D shows the Diff beside the Thread and hides it, and Alt+Shift+G opens
   await expect(
     page.getByRole("option", { name: /Switch branch/ })
   ).toBeVisible()
+})
+
+test("a branch diverged from its upstream neither syncs nor pulls, and says why, as T3 Code's", async () => {
+  window = await startWindow()
+  const { page, dir } = window
+  const { composer } = await firstThread(page)
+  await expect(composer).toBeVisible()
+  const folder = join(dir, "root", "Work")
+  const remote = join(dir, "remote.git")
+  const theirs = join(dir, "theirs")
+  git(dir, "init", "-q", "--bare", "--initial-branch=main", remote)
+  git(folder, "init", "-q", "-b", "main")
+  writeFileSync(join(folder, "a.ts"), "export const a = 1\n")
+  git(folder, "add", "-A")
+  git(folder, "commit", "-qm", "First")
+  git(folder, "remote", "add", "origin", remote)
+  git(folder, "push", "-q", "-u", "origin", "main")
+  // Another's commit on the remote, and one of ours: ahead and behind.
+  git(dir, "clone", "-q", remote, theirs)
+  writeFileSync(join(theirs, "b.ts"), "export const b = 1\n")
+  git(theirs, "add", "-A")
+  git(theirs, "commit", "-qm", "Theirs")
+  git(theirs, "push", "-q")
+  writeFileSync(join(folder, "c.ts"), "export const c = 1\n")
+  git(folder, "add", "-A")
+  git(folder, "commit", "-qm", "Ours")
+  git(folder, "fetch", "-q")
+
+  await composer.click()
+  await page.keyboard.press("Control+Shift+KeyB")
+  const card = page.getByRole("dialog", { name: "Thread details" })
+  await expect(card.getByText("↑1 ↓1")).toBeVisible()
+  const diverged = "Branch has diverged from upstream. Rebase or merge first."
+  const sync = card.getByRole("button", { name: "Sync branch" })
+  await expect(sync).toBeDisabled()
+  await expect(card.getByTitle(diverged)).toBeVisible()
+  await card.getByRole("button", { name: "More git actions" }).click()
+  const pull = page.getByRole("menuitem", { name: "Pull" })
+  await expect(pull).toHaveAttribute("aria-disabled", "true")
+  await expect(page.getByRole("menu").getByTitle(diverged)).toBeVisible()
 })
