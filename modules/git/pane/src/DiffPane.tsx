@@ -51,7 +51,7 @@ import {
   Settings2Icon,
 } from "lucide-react"
 import { Acts } from "./Acts"
-import { AT_ONCE, asked, VIEW, viewOf, type View } from "./diff"
+import { AT_ONCE, asked, viewOf, type View } from "./diff"
 import { More, turnRead, useFiles, type Drawn } from "./files"
 import { BaseMenu, ScopeMenu } from "./ScopeMenu"
 import { CHANGES, changeOf, isTest, labelOf, type Scope } from "./scope"
@@ -66,9 +66,11 @@ import { GitAlert } from "./GitAlert"
  * an Agent's turn ends, as the folder's status changes, as the window
  * comes back, and on its button.
  */
-export type DiffArgs = {
+type DiffArgs = {
   scope: Scope
-  view: View
+  /** How it draws; none draws as T3 Code's (`VIEW`), as a Diff an Agent
+   * or a Thread opens. */
+  view?: View
   /** The Thread whose turns the menu offers, kept as the scope leaves a
    * turn: the one it was opened on. */
   thread?: string | null
@@ -82,7 +84,7 @@ export const diffPane = definePane<DiffArgs>({
   detail: (args) => labelOf(args.scope),
   icon: FileDiffIcon,
   letter: "D",
-  start: { scope: CHANGES, view: VIEW, file: null },
+  start: { scope: CHANGES, file: null },
   header: false,
   // One Diff per Space: another scope is the same Pane.
   identity: () => "diff",

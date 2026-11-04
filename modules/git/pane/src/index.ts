@@ -6,9 +6,6 @@ import { PICKER } from "./BranchPicker"
 import { changesDiff, gitDetails } from "./Details"
 import { diffPane } from "./DiffPane"
 
-export { diffPane }
-export type { DiffArgs } from "./DiffPane"
-
 /** T3 Code's Mod+D: the focused Pane's Space's Diff beside it, the one
  * shown if there is; on the Diff, it closes. */
 const toggleDiff: Action = {

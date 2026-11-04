@@ -17,7 +17,6 @@ import { FileDiffIcon, GitBranchPlusIcon } from "lucide-react"
 import { BranchPicker, PICKER } from "./BranchPicker"
 import { diffPane } from "./DiffPane"
 import { GitButton } from "./GitButton"
-import { VIEW } from "./diff"
 import { CHANGES } from "./scope"
 import { useGitStatus } from "./status"
 import { GitAlert } from "./GitAlert"
@@ -89,6 +88,6 @@ function GitRows({
 
 /** The Diff on the Space's changes: the Changes row's, and Alt+D's. */
 export const changesDiff = () =>
-  paneOf(diffPane, { scope: CHANGES, view: VIEW, file: null })
+  paneOf(diffPane, { scope: CHANGES, file: null })
 
 export const gitDetails: Details = { id: "git.branch", Rows: GitRows }
