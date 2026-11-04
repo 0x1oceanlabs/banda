@@ -25,11 +25,10 @@ import { cn } from "@banda/ui/lib/utils"
 import { ChevronDownIcon } from "lucide-react"
 import { CHANGES, labelOf, type Scope } from "./scope"
 
-/** Reads a list each time its menu opens; `onOpenChange` goes on the menu. */
-function useReadOnOpen<T>(read: () => Promise<T>) {
-  const [open, setOpen] = useState(false)
-  const reading = useMemo(() => (open ? read : null), [open, read])
-  return { list: useRead(reading), onOpenChange: setOpen }
+/** Reads a menu's list each time it opens: while `open`, and again as
+ * `read` changes; `read` is kept, as with `useCallback`. */
+function useReadWhen<T>(open: boolean, read: () => Promise<T>): Read<T> {
+  return useRead(useMemo(() => (open ? read : null), [open, read]))
 }
 
 /** A list read for a menu, or why it is not there yet. */
@@ -70,28 +69,22 @@ export function ScopeMenu({
 }) {
   const [open, setOpen] = useState(false)
   const base = scope.kind === "changes" ? scope.base : null
-  const commits = useRead(
-    useMemo(
+  const commits = useReadWhen(
+    open,
+    useCallback(
       () =>
-        open
-          ? () =>
-              engine.call("git.commits", base === null ? {} : { base }, {
-                space,
-              })
-          : null,
-      [open, engine, space, base]
+        engine.call("git.commits", base === null ? {} : { base }, { space }),
+      [engine, space, base]
     )
   )
-  const turns = useRead(
-    useMemo(
-      () =>
-        open && thread !== null
-          ? () =>
-              engine
-                .call("agents.changes", { thread }, { space })
-                .then((changes) => changes.turns)
-          : null,
-      [open, engine, space, thread]
+  const turns = useReadWhen(
+    open && thread !== null,
+    useCallback(
+      async () =>
+        thread === null
+          ? []
+          : (await engine.call("agents.changes", { thread }, { space })).turns,
+      [engine, space, thread]
     )
   )
   const value =
@@ -258,11 +251,13 @@ export function BaseMenu({
   found: string
   onChange: (base: string | null) => void
 }) {
-  const branches = useReadOnOpen(
+  const [open, setOpen] = useState(false)
+  const branches = useReadWhen(
+    open,
     useCallback(() => engine.call("git.refs", {}, { space }), [engine, space])
   )
   return (
-    <DropdownMenu onOpenChange={branches.onOpenChange}>
+    <DropdownMenu onOpenChange={setOpen}>
       <DropdownMenuTrigger
         render={
           <Button
@@ -289,7 +284,7 @@ export function BaseMenu({
             name="Automatic"
             about="Where it left the default branch"
           />
-          <Listed read={branches.list} none="No other branches">
+          <Listed read={branches} none="No other branches">
             {(list) =>
               list
                 .filter((branch) => !branch.current)

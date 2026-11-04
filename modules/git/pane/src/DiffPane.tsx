@@ -6,24 +6,15 @@ import {
   useState,
   type ReactNode,
 } from "react"
-import { Refused } from "@banda/contract"
-import type { ChangesAsk } from "@banda/contract/agents"
-import type { ChangeAsk, Diff, DiffAsk } from "@banda/contract/git"
+import type { ChangeAsk } from "@banda/contract/git"
 import { Button } from "@banda/ui/components/button"
 import {
   CodeDiff,
-  keyOf,
   pathOf,
   type CodeDiffHandle,
   type FileDiffMetadata,
 } from "@banda/ui/components/code-diff"
 import { DiffCounts } from "@banda/ui/components/diff"
-import {
-  DropdownMenu,
-  DropdownMenuCheckboxItem,
-  DropdownMenuContent,
-  DropdownMenuTrigger,
-} from "@banda/ui/components/dropdown-menu"
 import {
   Empty,
   EmptyDescription,
@@ -34,29 +25,17 @@ import { ChangedFiles, type TreeFile } from "@banda/ui/components/file-tree"
 import { PaneHeader } from "@banda/ui/components/pane-header"
 import { Spinner } from "@banda/ui/components/spinner"
 import { useAct } from "@banda/ui/hooks/use-act"
-import { useInFront } from "@banda/ui/hooks/use-in-front"
-import { READ_AGAIN, useLive, type Source } from "@banda/ui/hooks/use-live"
-import { cn } from "@banda/ui/lib/utils"
 import { definePane, type PaneProps } from "@banda/ui/pane"
-import {
-  ChevronDownIcon,
-  ChevronRightIcon,
-  ChevronsDownUpIcon,
-  ChevronsUpDownIcon,
-  Columns2Icon,
-  FileDiffIcon,
-  FolderTreeIcon,
-  RefreshCwIcon,
-  Rows2Icon,
-  Settings2Icon,
-} from "lucide-react"
+import { ChevronDownIcon, ChevronRightIcon, FileDiffIcon } from "lucide-react"
 import { Acts } from "./Acts"
-import { AT_ONCE, asked, viewOf, type View } from "./diff"
-import { More, turnRead, useFiles, type Drawn } from "./files"
+import { AT_ONCE, viewOf, type View } from "./diff"
+import { DiffToolbar } from "./DiffToolbar"
+import { More, useFiles } from "./files"
+import { useFolds } from "./folds"
+import { useDiffRead, type Drawn } from "./read"
 import { BaseMenu, ScopeMenu } from "./ScopeMenu"
 import { CHANGES, changeOf, isTest, labelOf, type Scope } from "./scope"
 import { actsOf, allOf, fileAsk, hunkAsk, type Act } from "./stage"
-import { useGitStatus } from "./status"
 import { GitAlert } from "./GitAlert"
 
 /**
@@ -70,7 +49,7 @@ type DiffArgs = {
   scope: Scope
   /** How it draws; none draws as T3 Code's (`VIEW`), as a Diff an Agent
    * or a Thread opens. */
-  view?: View
+  view?: Partial<View>
   /** The Thread whose turns the menu offers, kept as the scope leaves a
    * turn: the one it was opened on. */
   thread?: string | null
@@ -91,115 +70,19 @@ export const diffPane = definePane<DiffArgs>({
   Pane: DiffPane,
 })
 
-/** What makes the Diff read again: an Agent's turn ending. */
-const TURNS = { module: "agents", kinds: ["turn.ended"] }
-
-/** Whether two reads of git's diff say the same. */
-function sameDiff(a: Diff, b: Diff): boolean {
-  return (
-    a.patch === b.patch &&
-    a.truncated === b.truncated &&
-    JSON.stringify([a.files, a.base]) === JSON.stringify([b.files, b.base])
-  )
-}
-
-/** Calls `changed` with `value` as it changes from what it was, as the
- * Pane draws; none (`null`) is no value, and is not heard. */
-function useChanged<T>(value: T | null, changed: (now: T) => void): void {
-  const [was, setWas] = useState(value)
-  if (value === null || value === was) return
-  setWas(value)
-  if (was !== null) changed(value)
-}
-
-/** Git has no checkpoint of the turn, or the folder is no repository. */
-function noCheckpoint(error: unknown): boolean {
-  if (!(error instanceof Refused)) return false
-  const { code } = error.refusal
-  return code === "not_found" || code === "conflict"
-}
-
 function DiffPane({ engine, space, args, update, close }: PaneProps<DiffArgs>) {
   const scope = args.scope
   const view = viewOf(args.view)
   const set = (next: Partial<View>) =>
     update({ ...args, view: { ...view, ...next } })
 
-  // It reads again on its button and as the window comes back, keeping
-  // what it shows until the answer.
-  const [round, setRound] = useState(0)
-  const again = () => setRound((n) => n + 1)
-  const front = useInFront()
-  useChanged(front, (now) => now && again())
-  // And, while in front, as the folder changes under it as the card sees
-  // it: a commit, a pull or a switch from the card or a terminal, a file
-  // written. A turn's or a commit's changes stay what they were.
-  const follows = front && scope.kind !== "turn" && scope.kind !== "commit"
-  const status = useGitStatus(engine, space, follows)
-  const seen = useMemo(() => {
-    if (!status) return null
-    if (scope.kind === "staged")
-      return JSON.stringify([
-        status.head,
-        status.files.map((file) => [file.path, file.staged]),
-      ])
-    return JSON.stringify([status.head, status.branch, status.files])
-  }, [status, scope.kind])
-  useChanged(seen, again)
-
   const thread = scope.kind === "turn" ? scope.thread : (args.thread ?? null)
-  // The question's words decide: the same words ask the same.
-  const words = JSON.stringify({
-    scope: asked(scope),
-    ignore_whitespace: view.ignoreWhitespace,
-  })
-  const question = useMemo(() => JSON.parse(words) as DiffAsk, [words])
-  // A read the same as the last keeps its view, so nothing is drawn again.
-  const last = useRef<Drawn>(undefined)
-  const source = useMemo<Source<Drawn>>(() => {
-    const diff = () => engine.call("git.diff", question, { space })
-    const turn = question.scope.kind === "turn" ? question.scope : null
-    if (!turn)
-      return {
-        read: async () => {
-          const read: Drawn = await diff()
-          const was = last.current
-          if (was && sameDiff(was, read)) {
-            was.at = read.at
-            return was
-          }
-          last.current = read
-          return read
-        },
-        filter: TURNS,
-        apply: () => READ_AGAIN,
-      }
-    const changes = (asked: ChangesAsk) =>
-      engine.call("agents.changes", asked, { space })
-    return {
-      read: async () => {
-        const [kept, turns] = await Promise.all([
-          diff().catch((error: unknown) => {
-            if (!noCheckpoint(error)) throw error
-            return null
-          }),
-          changes({ thread: turn.thread }),
-        ])
-        if (kept) return { ...kept, turns: turns.turns }
-        // A turn git kept no checkpoint of, or in a folder that is no
-        // repository, is what its tool calls changed.
-        return turnRead(await changes({ thread: turn.thread, turn: turn.turn }))
-      },
-      filter: {
-        module: "agents",
-        subject: turn.thread,
-        kinds: ["turn.ended", "thread.rewound"],
-      },
-      apply: () => READ_AGAIN,
-    }
-  }, [engine, space, question])
-  const live = useLive(engine, space, source, round)
-  const diff = live.state === "ready" ? live.view : undefined
+  const { live, diff, question, words, again, fresh } = useDiffRead(
+    engine,
+    space,
+    scope,
+    view.ignoreWhitespace
+  )
 
   // A diff git answered loads its files and expands them from git.
   const ask = diff && !diff.drawn ? question : null
@@ -236,42 +119,12 @@ function DiffPane({ engine, space, args, update, close }: PaneProps<DiffArgs>) {
     [visible, files.byPath]
   )
 
-  // Files open folded, as T3 Code opens them, but for those flipped since.
-  const [folds, setFolds] = useState<{
-    all: boolean
-    flipped: ReadonlySet<string>
-  }>({ all: true, flipped: new Set() })
-  const folded = useMemo(
-    () =>
-      new Set(
-        shown.map(keyOf).filter((key) => folds.all !== folds.flipped.has(key))
-      ),
-    [shown, folds]
-  )
-  const flip = (key: string) =>
-    setFolds(({ all, flipped }) => {
-      const next = new Set(flipped)
-      if (!next.delete(key)) next.add(key)
-      return { all, flipped: next }
-    })
-  const allFolded = shown.length > 0 && folded.size === shown.length
-
   const viewer = useRef<CodeDiffHandle>(null)
-  const [selected, setSelected] = useState<string | null>(null)
-  const reveal = (path: string) => {
-    setSelected(path)
-    const file = files.byPath.get(path)
-    if (!file) {
-      files.load([path])
-      return
-    }
-    const key = keyOf(file)
-    if (folded.has(key)) flip(key)
-    // The view scrolls once the file is drawn open.
-    requestAnimationFrame(() =>
-      viewer.current?.scrollTo({ type: "item", id: key, align: "start" })
-    )
-  }
+  const { folded, flip, allFolded, foldAll, selected, reveal } = useFolds(
+    shown,
+    files,
+    viewer
+  )
 
   // A turn opened from its Thread takes the words the engine names it by.
   const named =
@@ -316,10 +169,8 @@ function DiffPane({ engine, space, args, update, close }: PaneProps<DiffArgs>) {
     void acting
       .act(() => engine.call(`git.${what}`, ask, { space }))
       .then(() => {
-        // The read after is a new view, though it says the same.
-        last.current = undefined
         setBefore(shown)
-        again()
+        fresh()
       })
   }
   // What went wrong shows until the next try, or until dismissed.
@@ -358,7 +209,13 @@ function DiffPane({ engine, space, args, update, close }: PaneProps<DiffArgs>) {
             <DiffCounts added={added} removed={removed} />
           </span>
         )}
-        <div className="ml-auto flex shrink-0 items-center gap-0.5">
+        <DiffToolbar
+          view={view}
+          onView={set}
+          onAgain={again}
+          folded={shown.length > 0 ? allFolded : null}
+          onFold={foldAll}
+        >
           {visible.length > 0 && acts.length > 0 && (
             <Acts
               acts={acts}
@@ -374,69 +231,7 @@ function DiffPane({ engine, space, args, update, close }: PaneProps<DiffArgs>) {
               onAct={(what) => act(what, allOf(visible, files.byPath))}
             />
           )}
-          <Tool label="Read again" onClick={again}>
-            <RefreshCwIcon />
-          </Tool>
-          {shown.length > 0 && (
-            <Tool
-              label={allFolded ? "Expand all files" : "Collapse all files"}
-              onClick={() => setFolds({ all: !allFolded, flipped: new Set() })}
-            >
-              {allFolded ? <ChevronsUpDownIcon /> : <ChevronsDownUpIcon />}
-            </Tool>
-          )}
-          <Tool
-            label={view.layout === "split" ? "Stacked" : "Split"}
-            onClick={() =>
-              set({ layout: view.layout === "split" ? "stacked" : "split" })
-            }
-          >
-            {view.layout === "split" ? <Rows2Icon /> : <Columns2Icon />}
-          </Tool>
-          <Tool
-            label={view.tree ? "Hide file tree" : "Show file tree"}
-            pressed={view.tree}
-            onClick={() => set({ tree: !view.tree })}
-          >
-            <FolderTreeIcon />
-          </Tool>
-          <DropdownMenu>
-            <DropdownMenuTrigger
-              render={
-                <Button
-                  variant="ghost"
-                  size="icon-xs"
-                  aria-label="Diff options"
-                  title="Diff options"
-                />
-              }
-            >
-              <Settings2Icon />
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-auto min-w-52">
-              <DropdownMenuCheckboxItem
-                checked={view.wrap}
-                onCheckedChange={(wrap) => set({ wrap })}
-              >
-                Wrap lines
-              </DropdownMenuCheckboxItem>
-              <DropdownMenuCheckboxItem
-                checked={view.ignoreWhitespace}
-                onCheckedChange={(ignoreWhitespace) =>
-                  set({ ignoreWhitespace })
-                }
-              >
-                Ignore whitespace
-              </DropdownMenuCheckboxItem>
-              <DropdownMenuCheckboxItem
-                checked={view.hideTests}
-                onCheckedChange={(hideTests) => set({ hideTests })}
-              >
-                Hide tests and mocks
-              </DropdownMenuCheckboxItem>
-            </DropdownMenuContent>
-          </DropdownMenu>
-        </div>
+        </DiffToolbar>
       </PaneHeader>
       {failed !== undefined && (
         <GitAlert
@@ -563,31 +358,4 @@ const EMPTY: Record<Scope["kind"], string> = {
   staged: "Nothing is staged.",
   commit: "This commit changes no files.",
   turn: "This turn changed no files.",
-}
-
-/** A quiet button in the header, its words its label and tooltip. */
-function Tool({
-  label,
-  pressed,
-  onClick,
-  children,
-}: {
-  label: string
-  pressed?: boolean
-  onClick: () => void
-  children: ReactNode
-}) {
-  return (
-    <Button
-      variant="ghost"
-      size="icon-xs"
-      aria-label={label}
-      title={label}
-      {...(pressed === undefined ? {} : { "aria-pressed": pressed })}
-      className={cn(pressed && "bg-muted text-foreground")}
-      onClick={onClick}
-    >
-      {children}
-    </Button>
-  )
 }
