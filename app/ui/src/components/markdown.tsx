@@ -2,10 +2,12 @@ import { code } from "@streamdown/code"
 import { createMathPlugin } from "@streamdown/math"
 import { mermaid } from "@streamdown/mermaid"
 import { cn } from "cn"
+
 import { Streamdown, defaultRehypePlugins } from "streamdown"
 import { useDark } from "../hooks/use-dark"
 import { localImages } from "../lib/markdown-media"
 import { MarkdownImage } from "./markdown-media"
+import { MarkdownLink } from "./markdown-link"
 
 /** Single-dollar math matches what Agents write; KaTeX leaves code alone. */
 const math = createMathPlugin({ singleDollarTextMath: true })
@@ -14,7 +16,8 @@ const diagrams = {
   light: { config: { theme: "default" as const } },
   dark: { config: { theme: "dark" as const } },
 }
-const components = { img: MarkdownImage }
+const components = { img: MarkdownImage, a: MarkdownLink }
+
 const rehypePlugins = [
   defaultRehypePlugins.raw,
   defaultRehypePlugins.sanitize,
@@ -33,8 +36,8 @@ const controls = {
 /**
  * Markdown as an Agent writes it, such as a reply or a thought (ADR 0010,
  * decision 2). While `streaming`, unfinished markdown closes as it comes
- * and Copy waits for the end. A link opens in the Person's browser: the
- * window sends every web address there.
+ * and Copy waits for the end. The host supplies web-link navigation
+ * through MarkdownLinks (ADR 0051).
  */
 function Markdown({
   children,

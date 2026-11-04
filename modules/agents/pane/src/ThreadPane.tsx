@@ -1,4 +1,5 @@
 import { ThreadMedia } from "./ThreadMedia"
+import { MarkdownLinks } from "@banda/ui/components/markdown-link"
 import { useMemo, useRef, useState } from "react"
 import type { Engine, SpaceId } from "@banda/contract"
 import type {
@@ -109,7 +110,14 @@ function ThreadPane(props: PaneProps<ThreadArgs>) {
   props = { ...props, space: props.args.scratch ?? props.space }
   return (
     <ThreadMedia space={props.space}>
-      <ThreadContent {...props} />
+      <MarkdownLinks
+        open={(address, external) => {
+          if (external) window.open(address, "_blank", "noopener,noreferrer")
+          else props.run?.("browser.open", { address, space: props.space })
+        }}
+      >
+        <ThreadContent {...props} />
+      </MarkdownLinks>
     </ThreadMedia>
   )
 }

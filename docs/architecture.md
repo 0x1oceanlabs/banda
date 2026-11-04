@@ -935,6 +935,16 @@ banda/
   GLOSSARY.md
 ```
 
+## Links in a Thread
+
+An HTTP(S) Markdown link opens in Banda through `browser.open`, in the
+source Thread's Space (ADR 0051). Ctrl+click uses the existing desktop
+route to the system browser. The Thread supplies the opener to the UI's
+Markdown renderer; it names no browser module. A Thread in its own window
+relays the action through the existing window bridge. Named links show
+their destination's host; bare URLs are ellipsized visually, keeping the
+full text and `href` for copying. Local-file links are a separate contract.
+
 ## Media in a Thread
 
 Markdown in a Thread shows local images, video and audio (ADR 0037,
