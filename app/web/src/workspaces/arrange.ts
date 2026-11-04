@@ -405,6 +405,25 @@ export function columnMoved(
   }
 }
 
+/** Moves the workspace on screen one up or down, as niri's
+ * `move-workspace-up`, and stays on it; nothing when it would not move,
+ * as the engine keeps the empty one at the bottom there. */
+export function workspaceMoved(
+  state: Workspaces,
+  by: 1 | -1
+): Plan | undefined {
+  const last = state.list.length - 1
+  const index = clamp(state.current + by, last)
+  if (state.current === last || index === state.current) return undefined
+  const workspace = state.list[state.current].id
+  return {
+    command: {
+      method: "workspaces.move_workspace",
+      params: { workspace, index },
+    },
+  }
+}
+
 /** What changed of the focused column, its width, the whole screen, how
  * it shows its Panes or its Panes' heights, as a command. */
 export function resized(
