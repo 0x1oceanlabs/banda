@@ -446,6 +446,12 @@ pub fn chosen(files: &Option<Vec<String>>) -> Result<Option<Vec<&str>>, Refusal>
     }
 }
 
+/// Why a commit is not made of files with no changes: the button's
+/// commit and the prompt for its message say the same.
+pub fn nothing_to_commit() -> Refusal {
+    Refusal::conflict("Nothing to commit: those files have no changes.")
+}
+
 /// A folder of the engine's own, gone when it is dropped.
 pub fn scratch(prefix: &str) -> Result<tempfile::TempDir, Refusal> {
     tempfile::Builder::new()

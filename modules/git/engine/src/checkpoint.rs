@@ -6,7 +6,7 @@
 //! branch are never touched, and kept under refs of Banda's own,
 //! `refs/banda/checkpoints/<thread>/<turn>/{before,after}`.
 
-use crate::diff::{INDEX, UNTRACKED, own_index, untracked};
+use crate::index::{INDEX, UNTRACKED, own_index, untracked};
 use crate::repo::Repo;
 use crate::run::Opts;
 use banda_kernel::{Event, EventFilter, Heard, ModuleSpace, Refusal};

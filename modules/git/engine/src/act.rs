@@ -8,7 +8,7 @@
 //! comes, its credentials taken out, and a failure says its last line.
 
 use crate::model::{ActAsk, Action, Change, Changed, Done, Progress, Step};
-use crate::repo::{Repo, chosen, in_way, scratch};
+use crate::repo::{Repo, chosen, in_way, nothing_to_commit, scratch};
 use crate::run::{Failure, Opts, Ran, Reason, git};
 use banda_kernel::Refusal;
 use serde_json::Value;
@@ -194,9 +194,7 @@ async fn commit(
         }
     }
     if repo.yes(["diff", "--cached", "--quiet", "--"]).await? {
-        return Err(Refusal::conflict(
-            "Nothing to commit: those files have no changes.",
-        ));
+        return Err(nothing_to_commit());
     }
     let stdin = Some(message.as_bytes().to_vec());
     let args = ["commit", "--quiet", "--file=-"];
