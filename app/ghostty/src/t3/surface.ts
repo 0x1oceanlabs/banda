@@ -11,6 +11,7 @@ import {
 } from "./core";
 import {
   measureGhosttyCell,
+  onDevicePixel,
   renderGhosttySnapshot,
   terminalGridSize,
   type GhosttyCellRange,
@@ -1250,7 +1251,8 @@ export class GhosttyTerminalSurface {
 
   private readonly onDevicePixelRatioChange = () => {
     this.watchDevicePixelRatio();
-    this.fit();
+    // Banda: a row's height is in the screen's pixels, so a new scale measures again.
+    this.applyFontMetrics();
   };
 
   private watchDevicePixelRatio(): void {
@@ -1980,12 +1982,16 @@ export class GhosttyTerminalSurface {
     // Move the origin only on full repaint; dirty-row updates cannot mix origins.
     const scrollState = this.readScrollbarState();
     const anchorBottom = scrollState !== null && scrollState.total > scrollState.len;
-    const nextOriginY = terminalContentOriginY(
-      this.mountHeight,
-      CONTENT_PADDING,
-      this.rows,
-      this.metrics.height,
-      anchorBottom,
+    // Banda: on a screen pixel's edge, as the rows' height is.
+    const nextOriginY = onDevicePixel(
+      terminalContentOriginY(
+        this.mountHeight,
+        CONTENT_PADDING,
+        this.rows,
+        this.metrics.height,
+        anchorBottom,
+      ),
+      this.canvasDevicePixelRatio || 1,
     );
     if (nextOriginY !== this.originY) {
       this.originY = nextOriginY;
