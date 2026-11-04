@@ -1052,6 +1052,47 @@ async fn revert_puts_a_hunk_or_a_file_back_and_an_untracked_file_goes() {
     assert_eq!(world.git(&["status", "--porcelain"]), " M ten.txt");
 }
 
+/// The work tree's object of `path` as `diff` drew it.
+fn new_id(diff: &Diff, path: &str) -> String {
+    let start = diff
+        .patch
+        .find(&format!("diff --git a/{path} b/{path}\n"))
+        .unwrap();
+    let index = diff.patch[start..]
+        .lines()
+        .find_map(|line| line.strip_prefix("index "))
+        .unwrap();
+    let ids = index.split(' ').next().unwrap();
+    ids.split_once("..").unwrap().1.to_owned()
+}
+
+#[tokio::test]
+async fn a_file_written_since_the_diff_is_not_reverted() {
+    let world = World::new().await;
+    world.write("ten.txt", TEN);
+    world.commit("ten");
+    world.write("ten.txt", &TEN.replace("1\n", "one\n"));
+    world.write("new.txt", "new\n");
+    let unstaged = world.diff(json!({ "scope": { "kind": "unstaged" } })).await;
+    let ids = json!({
+        "ten.txt": new_id(&unstaged, "ten.txt"),
+        "new.txt": new_id(&unstaged, "new.txt"),
+    });
+    // An Agent writes on after the Diff was read.
+    world.write("ten.txt", &TEN.replace("1\n", "ONE\n"));
+
+    let both = json!({ "files": ["ten.txt", "new.txt"], "ids": ids });
+    let refused = world.call("git.revert", both.clone()).await.unwrap_err();
+    assert_eq!(refused.code, Code::Conflict);
+    assert!(world.git(&["diff"]).contains("+ONE"));
+    assert!(world.folder.join("new.txt").exists());
+
+    // As the Diff drew them, they go back.
+    world.write("ten.txt", &TEN.replace("1\n", "one\n"));
+    world.call("git.revert", both).await.unwrap();
+    assert_eq!(world.git(&["status", "--porcelain"]), "");
+}
+
 #[tokio::test]
 async fn a_hunk_of_a_file_changed_since_the_diff_changes_nothing() {
     let world = World::new().await;

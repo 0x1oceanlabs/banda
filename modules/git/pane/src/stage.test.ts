@@ -39,6 +39,7 @@ describe("what the Diff can do", () => {
     const [ten] = filesOf(PATCH, "test")
     expect(hunkAsk(ten!, 1)).toEqual({
       files: ["ten.txt"],
+      ids: { "ten.txt": "3e913d0" },
       hunk: {
         old_start: 7,
         old_lines: 4,
@@ -58,7 +59,10 @@ describe("what the Diff can do", () => {
   it("takes a new file's hunk as the file", () => {
     const [, made] = filesOf(PATCH, "test")
     expect(hunkAsk(made!, 0)).toEqual(fileAsk(made!))
-    expect(fileAsk(made!)).toEqual({ files: ["new.txt"] })
+    expect(fileAsk(made!)).toEqual({
+      files: ["new.txt"],
+      ids: { "new.txt": "3e757e7" },
+    })
   })
 
   it("names a renamed file by both its paths", () => {
@@ -73,6 +77,22 @@ describe("what the Diff can do", () => {
         },
         { path: "c.txt", added: 1, removed: 0, binary: false },
       ])
-    ).toEqual({ files: ["b.txt", "a.txt", "c.txt"] })
+    ).toEqual({ files: ["b.txt", "a.txt", "c.txt"], ids: {} })
+  })
+
+  it("checks a revert of them all by the objects of those drawn", () => {
+    const [ten, made] = filesOf(PATCH, "test")
+    const drawn = new Map([["ten.txt", ten!]])
+    const files = [made!, ten!].map((file) => ({
+      path: file.name,
+      added: 1,
+      removed: 1,
+      binary: false,
+    }))
+    // new.txt is not drawn yet: only ten.txt is checked.
+    expect(allOf(files, drawn)).toEqual({
+      files: ["new.txt", "ten.txt"],
+      ids: { "ten.txt": "3e913d0" },
+    })
   })
 })

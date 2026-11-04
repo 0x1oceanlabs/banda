@@ -1,6 +1,7 @@
 //! The git module's words on the wire.
 
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use ts_rs::TS;
 
 /// The Space's folder as git sees it, as `git.status` answers.
@@ -289,6 +290,12 @@ pub struct ChangeAsk {
     #[serde(default)]
     #[ts(optional)]
     pub hunk: Option<HunkAsk>,
+    /// The work tree's object of each file as the Diff drew it, by path,
+    /// as short as the patch has it: a revert of files whole changes
+    /// nothing when one is no longer so, as a hunk's does.
+    #[serde(default)]
+    #[ts(optional)]
+    pub ids: Option<BTreeMap<String, String>>,
 }
 
 /// A hunk of a file as the Diff drew it: its lines on either side, and

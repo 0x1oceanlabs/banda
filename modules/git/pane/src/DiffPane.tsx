@@ -386,7 +386,7 @@ function DiffPane({ engine, space, args, update, close }: PaneProps<DiffArgs>) {
                   : `all ${visible.length} files`
               }
               about="Every unstaged change in them goes, and an untracked file is deleted."
-              onAct={(what) => act(what, allOf(visible))}
+              onAct={(what) => act(what, allOf(visible, files.byPath))}
             />
           )}
           <Tool label="Read again" onClick={again}>
