@@ -74,8 +74,11 @@ test("a Person makes a Space, starts a Thread in it, and works with it", async (
 
   await composer.fill("please ask first")
   await composer.press("Enter")
+  // The Question waits on the composer, saying in words what it allows;
+  // the Thread keeps a line in its place.
   const question = thread.getByRole("group", { name: "Run a check" })
-  await expect(question).toBeVisible()
+  await expect(question).toContainText("Allow Fake AI to run a command?")
+  await expect(thread.getByText("Waiting for you: Run a check")).toBeVisible()
   // The Thread's Mark, and the bar's, say it asks the Person.
   const row = sidebar.getByRole("button", { name: /hello/ })
   await expect(row).toContainText("Asks you")
@@ -87,7 +90,7 @@ test("a Person makes a Space, starts a Thread in it, and works with it", async (
   // The turn ended: its work folds behind how long it took.
   await expect(question).toBeHidden()
   await openWork(thread)
-  await expect(question.getByText("You chose: Allow")).toBeVisible()
+  await expect(thread.getByText("Allowed: Run a check")).toBeVisible()
   // The Person watched it finish, so nothing calls for them.
   await expect(row).not.toContainText("Asks you")
   await expect(mark).toHaveAccessibleName("Sidebar")
@@ -748,8 +751,10 @@ test("a Person fills in the form an Agent asks with", async () => {
   await question.getByRole("button", { name: "Next" }).click()
   await question.getByRole("button", { name: "Submit" }).click()
   await expect(thread.getByText("You chose Blue.")).toBeVisible()
-  await expect(question.getByText("Colour", { exact: true })).toBeVisible()
-  await expect(question.getByRole("button")).toHaveCount(0)
+  await expect(question).toBeHidden()
+  // Answered, it is one line, its answers opening from it.
+  await thread.getByRole("button", { name: "Answered: Which colour?" }).click()
+  await expect(thread.getByText("Colour", { exact: true })).toBeVisible()
 
   await composer.fill("choose once more")
   await composer.press("Enter")
@@ -797,13 +802,13 @@ test("a plan waits for the Person to implement it", async () => {
   await expect(ready).toBeHidden()
 })
 
-test("a plan Claude Code asks to carry out shows in its card, answered there", async () => {
+test("a plan Claude Code asks to carry out shows in its card, answered on the composer", async () => {
   window = await startWindow()
   const { page } = window
   const { thread, composer, planMode } = await planning(page)
 
   // The fake agent asks to leave plan mode with its plan, as Claude Code
-  // does: the plan is the card, its answers under it.
+  // does: the plan is the card, its answers on the composer.
   await composer.fill("propose")
   await composer.press("Enter")
   const proposed = thread.getByRole("group", { name: "Proposed plan" })
@@ -811,8 +816,10 @@ test("a plan Claude Code asks to carry out shows in its card, answered there", a
     proposed.getByRole("heading", { name: "Tidy the notes" })
   ).toBeVisible()
   await expect(proposed).toContainText("Sort them.")
+  await expect(proposed).toContainText("Waiting for you: Approve Plan")
   await page.screenshot({ path: "test-results/7c-plan-asked.png" })
-  await proposed
+  await thread
+    .getByRole("group", { name: "Approve Plan" })
     .getByRole("button", { name: "Yes, manually approve edits" })
     .click()
   await expect(thread.getByText("The notes are tidy.")).toBeVisible()
@@ -836,7 +843,7 @@ test("a message sent while the Agent asks says no to it", async () => {
   await expect(question.getByRole("button", { name: "More" })).toBeVisible()
   await expect(composer).toHaveAttribute(
     "aria-placeholder",
-    /^Send a message to say no/
+    /^Answer above, or write to say no/
   )
   await composer.fill("something else instead")
   await composer.press("Enter")
@@ -845,6 +852,28 @@ test("a message sent while the Agent asks says no to it", async () => {
   ).toBeVisible()
   await openWork(thread)
   await expect(thread.getByText("I did not run the check.")).toBeVisible()
+})
+
+test("a Question's keys answer it from the composer: Esc says no, Enter allows", async () => {
+  window = await startWindow()
+  const { thread, composer } = await firstThread(window.page)
+
+  await composer.fill("please ask first")
+  await composer.press("Enter")
+  const question = thread.getByRole("group", { name: "Run a check" })
+  await expect(question).toBeVisible()
+  await composer.press("Escape")
+  await expect(question).toBeHidden()
+  await openWork(thread)
+  await expect(thread.getByText("Declined: Run a check")).toBeVisible()
+
+  // Asked again, Enter in the empty composer gives the main answer.
+  await composer.fill("please ask first")
+  await composer.press("Enter")
+  await expect(question).toBeVisible()
+  await composer.press("Enter")
+  await expect(thread.getByText("The check passed.")).toBeVisible()
+  await expect(question).toBeHidden()
 })
 
 test("a tool call opens on what it changed and what it printed", async () => {

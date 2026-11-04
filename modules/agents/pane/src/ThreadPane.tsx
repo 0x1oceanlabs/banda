@@ -5,7 +5,6 @@ import type { Engine, SpaceId } from "@banda/contract"
 import type {
   Failure,
   Item,
-  ItemId,
   ListedThread,
   TurnView,
 } from "@banda/contract/agents"
@@ -67,8 +66,9 @@ import { Composer, type ComposerHandle } from "./Composer"
 import type { ImageReader } from "./MessageImages"
 import { AgentMessage, PersonMessage, Writer, type Writers } from "./Messages"
 import { QuoteSelection } from "./Quote"
-import type { Values } from "./form"
-import { Question, QuestionDrawer } from "./Questions"
+import { type AnswerKeys, pressOf, Question, QuestionDrawer } from "./Questions"
+import { aboutOf, keyAnswer } from "./asking"
+import { drafted } from "./drafts"
 import { ChangedFiles } from "./ChangedFiles"
 import { DETAILS_KEY, ThreadDetails, useWide } from "./Details"
 import { Plan } from "./Plan"
@@ -171,6 +171,13 @@ function ThreadContent(props: PaneProps<ThreadArgs>) {
   const root = useRef<HTMLDivElement>(null)
   const composer = useRef<ComposerHandle>(null)
   const findField = useRef<HTMLInputElement>(null)
+  const dock = useRef<HTMLDivElement>(null)
+  // Esc and Enter answer the Question that waits, from anywhere in the
+  // Pane that leaves them free (ADR 0058, decision 6).
+  const answerKeys = useRef<AnswerKeys>(null)
+  // Whether the composer held a message as a key went down: by the time
+  // the key reaches the Pane, Enter may have sent it.
+  const written = useRef(false)
   const writers = useWriters(engine, space, thread)
   const found = useFound(area, find?.query ?? "", find?.at ?? 0, state)
   // The details card: kept open on a wide Thread until hidden, popped
@@ -189,10 +196,24 @@ function ThreadContent(props: PaneProps<ThreadArgs>) {
     <div
       ref={root}
       className="@container/thread flex h-full min-h-0 flex-col"
+      onKeyDownCapture={() => {
+        written.current = thread !== null && drafted(thread)
+      }}
       onKeyDown={(event) => {
         if (matches(event, DETAILS_KEY)) {
           event.preventDefault()
           setDetailsShown(!detailsShown)
+          return
+        }
+        const press =
+          asking && thread !== null
+            ? pressOf(event, root.current, dock.current, written.current)
+            : undefined
+        const answer = press && keyAnswer(press)
+        if (answer && answerKeys.current?.(answer)) {
+          // Its own: not the workspace drawer's Esc, nor the composer's.
+          event.preventDefault()
+          event.stopPropagation()
           return
         }
         const mod = event.ctrlKey || event.metaKey
@@ -272,7 +293,6 @@ function ThreadContent(props: PaneProps<ThreadArgs>) {
             name={name}
             reader={reader}
             answering={acting}
-            onAnswer={answer}
             onRetry={retry}
             onFork={fork}
             onRewind={(turn, message) =>
@@ -303,6 +323,7 @@ function ThreadContent(props: PaneProps<ThreadArgs>) {
         )}
       </div>
       <div
+        ref={dock}
         data-chat
         className="mx-auto flex w-full max-w-3xl flex-col gap-1.5 px-(--chat-gutter) pb-4"
       >
@@ -323,11 +344,16 @@ function ThreadContent(props: PaneProps<ThreadArgs>) {
             onImplement={implement}
           />
         )}
-        {asking?.body.form && (
+        {asking && (
           <QuestionDrawer
+            // A new Question opens afresh.
+            key={asking.id}
             item={asking}
+            about={state && aboutOf(state.items, asking)}
+            name={name}
             answering={acting}
             onAnswer={(choice, values) => answer(asking.id, choice, values)}
+            keys={answerKeys}
           />
         )}
         <Composer
@@ -337,7 +363,7 @@ function ThreadContent(props: PaneProps<ThreadArgs>) {
           history={history}
           placeholder={
             asking
-              ? `${asking.body.form ? "Answer above, or write" : "Send a message"} to say no and tell ${name} what to do instead`
+              ? `Answer above, or write to say no and tell ${name} what to do instead`
               : planned
                 ? "Write to refine the plan, or implement it"
                 : undefined
@@ -430,9 +456,9 @@ function Start({ name }: { name: string }) {
 }
 
 type Answering = {
-  /** Whether an answer is on its way; the choices wait for it. */
+  /** Whether a command is on its way; what acts waits for it. A Question
+   * is answered on the composer (ADR 0058, decision 6). */
   answering: boolean
-  onAnswer: (item: ItemId, choice: string, values?: Values) => void
 }
 
 function Transcript({
@@ -692,8 +718,6 @@ function Entry({
   onOpenThread,
   onFork,
   onEdit,
-  answering,
-  onAnswer,
 }: Answering & {
   engine: Engine
   space: SpaceId
@@ -791,13 +815,7 @@ function Entry({
     case "plan":
       return <Plan steps={body.steps} />
     case "question":
-      return (
-        <Question
-          question={body}
-          answering={answering}
-          onAnswer={(choice, values) => onAnswer(item.id, choice, values)}
-        />
-      )
+      return <Question question={body} />
     case "notice":
       return (
         <Trace>
