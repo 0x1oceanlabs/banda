@@ -72,6 +72,16 @@ pub trait Module: Send + Sync + 'static {
     /// goes.
     async fn closing(&self, _space: ModuleSpace) {}
 
+    /// Refuses a folder move while this module still has work in the Space.
+    /// The kernel excludes new calls while checking every module and moving.
+    async fn can_move(&self, _space: ModuleSpace) -> Result<(), Refusal> {
+        Ok(())
+    }
+
+    /// The folder changed. Let go of idle processes whose working directory
+    /// was the old folder; future work reads the Space's new folder.
+    async fn moved(&self, _space: ModuleSpace) {}
+
     /// One of its methods, already allowed. `method` comes without the
     /// module's prefix.
     async fn call(&self, call: Call, method: &str, params: Value) -> Result<Value, Refusal>;

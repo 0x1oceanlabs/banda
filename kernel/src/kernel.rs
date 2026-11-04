@@ -65,10 +65,10 @@ impl Entry {
         }
     }
 
-    fn folder(&self) -> &Path {
+    fn folder(&self) -> PathBuf {
         match self {
             Entry::Open(space) => space.folder(),
-            Entry::Missing { manifest, .. } => &manifest.folder,
+            Entry::Missing { manifest, .. } => manifest.folder.clone(),
         }
     }
 }
@@ -356,6 +356,10 @@ struct UpdateSpace {
     #[serde(default)]
     #[ts(optional)]
     scratch: Option<bool>,
+    /// Move a scratch Space's folder here when promoting it. Omit to keep it.
+    #[serde(default)]
+    #[ts(optional)]
+    folder: Option<String>,
 }
 
 #[derive(Deserialize, TS)]
@@ -457,6 +461,7 @@ impl Kernel {
         }
         let (module, rest, right) = self.method(method)?;
         let (space, wall) = self.place(&**module, method, space, only).await?;
+        let _moving = space.moving.read().await;
         let scope = space.module(module.name());
         // A read is not a command: it keeps no receipt, so its ID is free.
         let command = command.filter(|_| right != Right::Read);
@@ -841,7 +846,9 @@ impl Kernel {
     }
 
     async fn update(&self, _: Own<'_>, update: UpdateSpace) -> Result<SpaceSummary, Refusal> {
+        let _adding = self.adding.lock().await;
         let name = update.name.as_deref().map(Space::name_of).transpose()?;
+        let target = update.folder.as_deref().map(from_home).transpose()?;
         let mut spaces = self.spaces.write().await;
         let Some(entry) = spaces.get_mut(&update.space) else {
             return Err(no_space());
@@ -864,7 +871,59 @@ impl Kernel {
             }
             _ => {}
         }
+        if target.is_some() && update.scratch != Some(false) {
+            return Err(Refusal::invalid(
+                "A folder move must make a Space from a Thread in No Space.",
+            ));
+        }
+        let opened = match entry {
+            Entry::Open(space) => Some(space.clone()),
+            _ => None,
+        };
+        let _moving = match (&opened, &target) {
+            (Some(space), Some(_)) => Some(space.moving.try_write().map_err(|_| {
+                Refusal::conflict(
+                    "Another operation is using this Space. Try moving it again when it finishes.",
+                )
+            })?),
+            _ => None,
+        };
+        let old = entry.folder();
+        let target = if let Some(target) = target {
+            let parent = target
+                .parent()
+                .ok_or_else(|| Refusal::invalid("Choose a folder with a parent."))?;
+            let parent = folder_found(parent)?;
+            let leaf = target
+                .file_name()
+                .ok_or_else(|| Refusal::invalid("Choose a folder name."))?;
+            Some(parent.join(leaf))
+        } else {
+            None
+        };
+        let relocating = target.as_ref().filter(|target| **target != old);
+        if let Some(target) = relocating {
+            if !was {
+                return Err(Refusal::invalid(
+                    "Only a Thread in No Space can move its folder this way.",
+                ));
+            }
+            if std::fs::symlink_metadata(target).is_ok() {
+                return Err(Refusal::conflict(
+                    "The destination already exists. Choose a new folder.",
+                ));
+            }
+            let space = opened
+                .as_ref()
+                .ok_or_else(|| Refusal::conflict("Locate the missing folder before moving it."))?;
+            for module in space.modules() {
+                module.can_move(space.module(module.name())).await?;
+            }
+        }
         let change = |manifest: &mut Manifest| {
+            if let Some(target) = &target {
+                manifest.folder = target.clone();
+            }
             if let Some(name) = name {
                 manifest.name = name.to_owned();
             }
@@ -882,13 +941,23 @@ impl Kernel {
             }
         };
         // A missing Space keeps its name, pin and archive too.
-        match entry {
-            Entry::Open(space) => Ok(space.change(change)?),
-            Entry::Missing { data, manifest } => {
-                manifest.change_in(data, change)?;
-                Ok(manifest.summary(true))
+        let result = match entry {
+            Entry::Open(space) => match relocating {
+                Some(target) => space.move_to(target, change),
+                None => space.change(change),
+            },
+            Entry::Missing { data, manifest } => manifest
+                .change_in(data, change)
+                .map(|()| manifest.summary(true)),
+        };
+        if let Some(space) = opened.as_ref()
+            && space.folder() != old
+        {
+            for module in space.modules() {
+                module.moved(space.module(module.name())).await;
             }
         }
+        Ok(result?)
     }
 
     /// Opens a missing Space at the folder its work is in now, written

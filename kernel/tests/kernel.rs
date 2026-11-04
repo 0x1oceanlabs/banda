@@ -1720,3 +1720,93 @@ async fn an_effect_waits_until_the_modules_reacting_to_the_log_have_reacted() {
     add(&kernel, person, &space, "two").await.unwrap();
     assert!(module.reacted(short).await);
 }
+
+#[tokio::test]
+async fn promotion_moves_files_and_keeps_the_open_space_and_log() {
+    let root = tempfile::tempdir().unwrap();
+    let (owner, notes) = (PersonId::new(), Notes::default());
+    let kernel = open(root.path(), owner, &notes).await;
+    let made = create_scratch(&kernel, owner, CommandId::new())
+        .await
+        .unwrap();
+    let held = kernel.space(made.id).await.unwrap();
+    std::fs::write(held.folder().join("work.txt"), "keep me").unwrap();
+    let destination = root.path().join("Promoted");
+    let params =
+        json!({"space": made.id, "scratch": false, "name": "Promoted", "folder": destination});
+    let promoted: SpaceSummary = serde_json::from_value(
+        spaces(&kernel, owner, "update", params.clone())
+            .await
+            .unwrap(),
+    )
+    .unwrap();
+    assert_eq!(promoted.id, made.id);
+    assert!(!promoted.scratch);
+    assert_eq!(held.folder(), destination);
+    assert!(!Path::new(&made.folder).exists());
+    assert_eq!(
+        std::fs::read_to_string(destination.join("work.txt")).unwrap(),
+        "keep me"
+    );
+    let again: SpaceSummary =
+        serde_json::from_value(spaces(&kernel, owner, "update", params).await.unwrap()).unwrap();
+    assert_eq!(again, promoted);
+    drop(held);
+    drop(kernel);
+    let kernel = reopen(root.path(), owner, &notes, 1).await;
+    assert_eq!(kernel.spaces().await[0], promoted);
+}
+
+#[tokio::test]
+async fn promotion_never_overwrites_a_destination_or_promotes_after_a_failed_move() {
+    let root = tempfile::tempdir().unwrap();
+    let (owner, notes) = (PersonId::new(), Notes::default());
+    let kernel = open(root.path(), owner, &notes).await;
+    let made = create_scratch(&kernel, owner, CommandId::new())
+        .await
+        .unwrap();
+    let destination = root.path().join("Taken");
+    std::fs::create_dir(&destination).unwrap();
+    let refused = spaces(
+        &kernel,
+        owner,
+        "update",
+        json!({"space": made.id, "scratch": false, "name": "Taken", "folder": destination}),
+    )
+    .await
+    .unwrap_err();
+    assert_eq!(refused.code, Code::Conflict);
+    assert_eq!(kernel.spaces().await[0], made);
+    assert!(Path::new(&made.folder).is_dir());
+    assert!(destination.is_dir());
+}
+
+#[tokio::test]
+async fn a_restart_finishes_a_journaled_folder_move() {
+    let root = tempfile::tempdir().unwrap();
+    let (owner, notes) = (PersonId::new(), Notes::default());
+    let kernel = open(root.path(), owner, &notes).await;
+    let made = create_scratch(&kernel, owner, CommandId::new())
+        .await
+        .unwrap();
+    let space = kernel.space(made.id).await.unwrap();
+    let destination = root.path().join("Recovered");
+    let mut next: Value =
+        serde_json::from_slice(&std::fs::read(space.data().join("space.json")).unwrap()).unwrap();
+    next["folder"] = json!(destination);
+    next["name"] = json!("Recovered");
+    next["scratch"] = json!(false);
+    std::fs::write(
+        space.data().join("move.json"),
+        serde_json::to_vec(&next).unwrap(),
+    )
+    .unwrap();
+    std::fs::rename(&made.folder, &destination).unwrap();
+    drop(space);
+    drop(kernel);
+    let kernel = reopen(root.path(), owner, &notes, 1).await;
+    let recovered = &kernel.spaces().await[0];
+    assert_eq!(recovered.name, "Recovered");
+    assert!(!recovered.scratch && !recovered.missing);
+    assert_eq!(recovered.folder, destination.to_str().unwrap());
+}

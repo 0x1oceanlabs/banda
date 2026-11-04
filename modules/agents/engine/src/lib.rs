@@ -669,7 +669,7 @@ impl Agents {
         // A file in the Space's folder is named from there, as git names it.
         let folder = call.space().folder();
         for file in &mut files {
-            if let Ok(inside) = std::path::Path::new(&file.path).strip_prefix(folder) {
+            if let Ok(inside) = std::path::Path::new(&file.path).strip_prefix(&folder) {
                 file.path = inside.to_string_lossy().replace('\\', "/");
             }
         }
@@ -696,7 +696,7 @@ impl Agents {
             return Err(Refusal::conflict("This Thread's Harness is gone."));
         }
         let connection = self.running(call.space().id(), &harness).await?;
-        let text = aside::write(connection, call.space().folder(), &settings, prompt).await?;
+        let text = aside::write(connection, &call.space().folder(), &settings, prompt).await?;
         Ok(Written { text })
     }
 
@@ -1045,6 +1045,22 @@ impl Module for Agents {
             tokio::spawn(live.let_go_as_accounts_change(space.id(), heard));
         }
         Ok(())
+    }
+
+    async fn can_move(&self, space: ModuleSpace) -> Result<(), Refusal> {
+        let (_, busy) = space.view(|sql| {
+            Ok(sql.query_row("SELECT EXISTS(SELECT 1 FROM agents_turns WHERE state IN ('running', 'queued'))", [], |row| row.get::<_, bool>(0))?)
+        }).await?;
+        if busy {
+            return Err(Refusal::conflict(
+                "A Turn is running or queued in this Space. Stop it before moving the folder.",
+            ));
+        }
+        Ok(())
+    }
+
+    async fn moved(&self, space: ModuleSpace) {
+        self.live.close(space.id()).await;
     }
 
     async fn closing(&self, space: ModuleSpace) {

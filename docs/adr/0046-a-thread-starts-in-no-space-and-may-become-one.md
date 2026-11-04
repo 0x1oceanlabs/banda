@@ -45,7 +45,8 @@ The second: nothing new below the kernel, and a Space stays one folder.
 ## Consequences
 
 - A Person can chat at once on first run, and sign in from the Thread's own card or from the settings.
-- The kernel learns one flag and a move. agents, terminal, git, browser and harnesses do not change.
+- The kernel learns one flag and a move. Modules keep their existing Space scope. Agents and Terminal refuse moves through `Module::can_move`; Agents drops idle Harness processes through `Module::moved`. The kernel names no module. Folder reads return an owned snapshot, so existing Space handles see the new path.
+- A move excludes new module calls, refuses a destination that already exists, and journals the new manifest before an atomic rename. On restart the journal finishes a rename whose manifest was not yet written. Cross-filesystem moves are refused; no copy-and-delete fallback runs.
 - `~/Banda/scratch/` fills with small folders. They are the Person's to read, copy or delete, and "Show the folder" opens them.
 - A Person who adds `~/Banda/scratch` itself as a Space gets a Space over the scratch folders. Nothing breaks; it is just odd.
 - Threads in No Space each live in their own log, so an Agent there sees no other No Space Thread unless the Space lets it see others (ADR 0032).

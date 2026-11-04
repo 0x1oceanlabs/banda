@@ -1,5 +1,6 @@
+import { MakeSpace } from "./MakeSpace"
 import { Fragment, type ReactElement, useMemo, useState } from "react"
-import type { SpaceId, SpaceSummary } from "@banda/contract"
+import type { Engine, SpaceId, SpaceSummary } from "@banda/contract"
 import { SpaceBadge } from "@banda/ui/components/space-badge"
 import { BandaMark, MARK_WORDS } from "@banda/ui/components/banda-mark"
 import { Button } from "@banda/ui/components/button"
@@ -70,6 +71,7 @@ export function Sidebar({
    */
   over?: boolean
   onDismiss?: () => void
+  engine: Engine
   spaces: SpaceSummary[]
   lists: Lists
   /** The Space a new Thread from the header starts in. */
@@ -97,6 +99,7 @@ export function Sidebar({
   onLocate: (space: SpaceId) => void
 }) {
   const { spaces, lists, home, isCurrent, onPin } = props
+  const [making, setMaking] = useState<SpaceSummary>()
   const done =
     <A extends unknown[]>(act: (...args: A) => void) =>
     (...args: A) => {
@@ -166,6 +169,7 @@ export function Sidebar({
       onOpen={onOpen}
       onSettle={(row) => settle(row.listed.id, row.state !== "settled")}
       onNoSpace={onNoSpace}
+      onMakeSpace={setMaking}
       onNewThread={onNewThread}
       withMenu={withMenu}
     />
@@ -326,6 +330,13 @@ export function Sidebar({
           Settings
         </Button>
       </div>
+      {making && (
+        <MakeSpace
+          engine={props.engine}
+          space={making}
+          onClose={() => setMaking(undefined)}
+        />
+      )}
     </aside>
   )
 }
@@ -340,6 +351,7 @@ function SectionView({
   onMore,
   onOpen,
   onSettle,
+  onMakeSpace,
   onNoSpace,
   onNewThread,
   withMenu,
@@ -353,6 +365,7 @@ function SectionView({
   onOpen: (space: SpaceId, pane: PaneState) => void
   /** Settles the row, or brings it back. */
   onSettle: (row: Arranged) => void
+  onMakeSpace: (space: SpaceSummary) => void
   onNoSpace: () => void
   onNewThread: (space: SpaceId) => void
   withMenu: WithMenu
@@ -418,6 +431,11 @@ function SectionView({
                 />
               </ContextMenuTrigger>
               <ContextMenuContent>
+                {row.space.scratch && (
+                  <DropdownMenuItem onClick={() => onMakeSpace(row.space)}>
+                    Make a Space from it…
+                  </DropdownMenuItem>
+                )}
                 <DropdownMenuItem
                   disabled={row.state !== "settled" && !settles(row.listed)}
                   onClick={() => onSettle(row)}

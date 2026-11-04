@@ -6,4 +6,8 @@ export type UpdateSpace = { space: SpaceId, name?: string, pinned?: boolean, arc
  * `false` makes a Space of a scratch one, which needs a name then.
  * No Space takes no Space back.
  */
-scratch?: boolean, };
+scratch?: boolean, 
+/**
+ * Move a scratch Space's folder here when promoting it. Omit to keep it.
+ */
+folder?: string, };

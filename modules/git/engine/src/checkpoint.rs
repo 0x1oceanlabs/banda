@@ -135,7 +135,7 @@ async fn on(space: &ModuleSpace, event: &Event) -> Result<(), Refusal> {
     let (Some(thread), Some(turn)) = (&event.subject, event.payload["turn"].as_str()) else {
         return Ok(());
     };
-    let Some(repo) = Repo::find(space.folder()).await? else {
+    let Some(repo) = Repo::find(&space.folder()).await? else {
         return Ok(());
     };
     match event.kind.as_str() {

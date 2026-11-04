@@ -91,9 +91,17 @@ impl Manifest {
     }
 
     pub fn read(data: &Path) -> Result<Manifest, Error> {
-        Ok(serde_json::from_slice(&std::fs::read(
-            data.join(MANIFEST),
-        )?)?)
+        let mut manifest: Manifest = serde_json::from_slice(&std::fs::read(data.join(MANIFEST))?)?;
+        let journal = data.join("move.json");
+        if journal.exists() {
+            let next: Manifest = serde_json::from_slice(&std::fs::read(&journal)?)?;
+            if !manifest.folder.exists() && next.folder.is_dir() {
+                next.write(data)?;
+                manifest = next;
+            }
+            std::fs::remove_file(journal)?;
+        }
+        Ok(manifest)
     }
 
     /// Changes it with `change`, kept only once it is written to `data`.
@@ -156,11 +164,11 @@ pub(crate) fn place(
 
 pub struct Space {
     id: SpaceId,
-    folder: PathBuf,
+    pub(crate) moving: tokio::sync::RwLock<()>,
     /// `spaces/<id>/` in the engine's data.
     data: PathBuf,
     /// Its `space.json`, as the Person changes its name, pin and archive.
-    /// Its ID and folder never change while it is open.
+    /// Its ID stays fixed; a promotion may move its folder.
     manifest: std::sync::Mutex<Manifest>,
     /// Where its data went once it was removed: deleted as it closes.
     removed: std::sync::Mutex<Option<PathBuf>>,
@@ -231,7 +239,7 @@ impl Space {
             .map_err(|_| Error::Closed)??;
         let space = Arc::new(Space {
             id: manifest.id,
-            folder,
+            moving: Default::default(),
             data,
             manifest: std::sync::Mutex::new(manifest),
             removed: Default::default(),
@@ -259,8 +267,8 @@ impl Space {
         self.id
     }
 
-    pub fn folder(&self) -> &Path {
-        &self.folder
+    pub fn folder(&self) -> PathBuf {
+        self.manifest.lock().unwrap().folder.clone()
     }
 
     /// What Banda keeps for this Space, outside its folder.
@@ -301,6 +309,42 @@ impl Space {
     pub(crate) fn change(&self, change: impl FnOnce(&mut Manifest)) -> Result<SpaceSummary, Error> {
         (self.manifest.lock().unwrap()).change_in(&self.data, change)?;
         Ok(self.summary())
+    }
+
+    /// Journal the next manifest before renaming. A restart finishes a move
+    /// whose rename succeeded before the manifest could be written.
+    pub(crate) fn move_to(
+        &self,
+        target: &Path,
+        change: impl FnOnce(&mut Manifest),
+    ) -> Result<SpaceSummary, Error> {
+        let mut manifest = self.manifest.lock().unwrap();
+        let mut next = manifest.clone();
+        change(&mut next);
+        let journal = self.data.join("move.json");
+        let pending = self.data.join("move.pending");
+        let file = std::fs::File::create(&pending)?;
+        serde_json::to_writer(&file, &next)?;
+        file.sync_all()?;
+        std::fs::rename(pending, &journal)?;
+        if let Err(error) = rustix::fs::renameat_with(
+            rustix::fs::CWD,
+            &manifest.folder,
+            rustix::fs::CWD,
+            target,
+            rustix::fs::RenameFlags::NOREPLACE,
+        ) {
+            std::fs::remove_file(&journal)?;
+            return Err(
+                Refusal::conflict(format!("The folder could not be moved: {error}")).into(),
+            );
+        }
+        // The journal is authoritative if writing space.json fails. Keep the
+        // live path correct too; a retry must never create another Space.
+        *manifest = next;
+        manifest.write(&self.data)?;
+        std::fs::remove_file(journal)?;
+        Ok(manifest.summary(false))
     }
 
     /// The log's position now.
@@ -558,8 +602,8 @@ impl ModuleSpace {
 
     /// The Space's work folder. A module of this machine gets the
     /// machine's state folder: no work of a Person's is there.
-    pub fn folder(&self) -> &Path {
-        &self.space.folder
+    pub fn folder(&self) -> PathBuf {
+        self.space.folder()
     }
 
     /// Where this module may keep files of its own for the Space, outside
