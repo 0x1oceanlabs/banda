@@ -12,11 +12,11 @@
 //! whole checks them so too, by the objects the Diff drew.
 
 use crate::diff::{sides, untracked};
-use crate::model::{ChangeAsk, HunkAsk, Scope};
+use crate::model::{ChangeAsk, HunkAsk, Objects, Scope};
 use crate::repo::{Repo, pathspec, plain_path, plain_paths};
 use crate::run::{Opts, Reason, git};
 use banda_kernel::Refusal;
-use std::collections::{BTreeMap, HashSet};
+use std::collections::{BTreeMap, HashMap, HashSet};
 
 /// What is done to the files.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -38,10 +38,8 @@ pub async fn change(repo: &Repo, act: Act, ask: ChangeAsk) -> Result<(), Refusal
     match (ask.hunk, files.as_slice()) {
         (_, []) => Err(Refusal::invalid("Name the files to change.")),
         (None, files) => {
-            if act == Act::Revert
-                && let Some(ids) = &ask.ids
-            {
-                unchanged(repo, ids).await?;
+            if act == Act::Revert {
+                unchanged(repo, &ask.ids).await?;
             }
             whole(repo, act, files).await
         }
@@ -73,54 +71,126 @@ async fn whole(repo: &Repo, act: Act, files: &[&str]) -> Result<(), Refusal> {
     }
 }
 
-/// Whether each file in `ids` is still the object the Diff drew in the
-/// work tree: a revert would lose what was written since. A file gone is
-/// all zeros.
-async fn unchanged(repo: &Repo, ids: &BTreeMap<String, String>) -> Result<(), Refusal> {
-    let mut hashed: Vec<(&str, &str)> = Vec::new();
-    for (path, id) in ids {
-        let path = plain_path(path)?;
-        if id.len() < 7 || !id.bytes().all(|b| b.is_ascii_hexdigit()) {
+/// Whether each file in `ids` is still as the Diff drew it, in the index
+/// and in the work tree: a revert would lose what was written or staged
+/// since. A side the file is not on is all zeros. Files the Diff named
+/// no objects of, as those Revert all had not drawn, go unchecked.
+async fn unchanged(repo: &Repo, ids: &BTreeMap<String, Objects>) -> Result<(), Refusal> {
+    if ids.is_empty() {
+        return Ok(());
+    }
+    let moved = || Refusal::conflict(MOVED);
+    let mut paths = Vec::new();
+    for (path, objects) in ids {
+        paths.push(plain_path(path)?);
+        if !short_id(&objects.old_id) || !short_id(&objects.new_id) {
             return Err(Refusal::invalid(
                 "An object is named in hex, 7 or more long.",
             ));
         }
-        let gone = id.bytes().all(|b| b == b'0');
+    }
+    let staged = staged(repo, &paths).await?;
+    // Each work tree file read once: gone, a link by where it points, or
+    // a file, which git hashes all at once.
+    let mut files: Vec<(&str, &str)> = Vec::new();
+    for (path, objects) in ids {
+        let (old, new) = (objects.old_id.as_str(), objects.new_id.as_str());
+        let in_index = staged.get(path.as_str()).map(String::as_str);
+        let index_same = match in_index {
+            None => zero(old),
+            // An intent to add stages no content: git diffs it as none.
+            Some(id) => id.starts_with(old) || (zero(old) && id == EMPTY_BLOB),
+        };
+        if !index_same {
+            return Err(moved());
+        }
         let file = repo.top.join(path);
         match std::fs::symlink_metadata(&file) {
-            Err(_) if gone => {}
-            Ok(_) if !gone => hashed.push((path, id)),
-            _ => return Err(Refusal::conflict(MOVED)),
+            Err(_) if zero(new) => {}
+            Ok(about) if !zero(new) && about.is_symlink() => {
+                let to = std::fs::read_link(&file).map_err(|_| moved())?;
+                let opts = Opts {
+                    stdin: Some(to.into_os_string().into_encoded_bytes()),
+                    ..Opts::default()
+                };
+                let ran = repo
+                    .run(["hash-object", "--no-filters", "--stdin"], opts)
+                    .await?;
+                if !ran.text().starts_with(new) {
+                    return Err(moved());
+                }
+            }
+            // A path `--stdin-paths` would read as two.
+            Ok(_) if !zero(new) && !path.contains(['\n', '\r']) => files.push((path, new)),
+            Ok(_) if !zero(new) => {
+                let ran = repo
+                    .run(["hash-object", "--", path], Opts::default())
+                    .await?;
+                if !ran.text().starts_with(new) {
+                    return Err(moved());
+                }
+            }
+            _ => return Err(moved()),
         }
     }
-    for (path, id) in hashed {
-        if !object_of(repo, path).await?.starts_with(id) {
-            return Err(Refusal::conflict(MOVED));
-        }
+    if files.is_empty() {
+        return Ok(());
     }
-    Ok(())
+    let listed: String = files.iter().map(|(path, _)| format!("{path}\n")).collect();
+    let opts = Opts {
+        stdin: Some(listed.into_bytes()),
+        ..Opts::default()
+    };
+    let ran = repo.run(["hash-object", "--stdin-paths"], opts).await?;
+    let hashed = ran.text();
+    let same = hashed.lines().count() == files.len()
+        && hashed
+            .lines()
+            .zip(&files)
+            .all(|(id, (_, new))| id.starts_with(new));
+    same.then_some(()).ok_or_else(moved)
 }
 
-/// The object `path` in the work tree is, as git diffs it: a link's is
-/// of where it points.
-async fn object_of(repo: &Repo, path: &str) -> Result<String, Refusal> {
-    let file = repo.top.join(path);
-    let link = std::fs::read_link(&file).ok();
-    let ran = match link {
-        Some(to) => {
-            let opts = Opts {
-                stdin: Some(to.into_os_string().into_encoded_bytes()),
-                ..Opts::default()
-            };
-            repo.run(["hash-object", "--no-filters", "--stdin"], opts)
-                .await?
+/// The empty file's object: what an intent to add stages.
+const EMPTY_BLOB: &str = "e69de29bb2d1d6434b8b29ae775ad8c2e48c5391";
+
+/// Whether `id` is no object: the side a file is not on.
+fn zero(id: &str) -> bool {
+    id.bytes().all(|b| b == b'0')
+}
+
+/// Whether `id` names an object as a patch shortens it: hex, 7 or more.
+fn short_id(id: &str) -> bool {
+    id.len() >= 7 && id.bytes().all(|b| b.is_ascii_hexdigit())
+}
+
+/// The object each of `paths` is in the index, merged; a path not there
+/// is left out.
+async fn staged<'a>(repo: &Repo, paths: &[&'a str]) -> Result<HashMap<&'a str, String>, Refusal> {
+    let mut args = vec![
+        "ls-files".to_owned(),
+        "--stage".into(),
+        "-z".into(),
+        "--".into(),
+    ];
+    args.extend(paths.iter().map(|path| pathspec(path)));
+    let listed = repo.run(args, Opts::default()).await?;
+    let text = String::from_utf8_lossy(&listed.stdout);
+    let mut staged = HashMap::new();
+    for entry in text.split('\0') {
+        // `<mode> <object> <stage>\t<path>`; a conflict's stages are not 0.
+        let Some((about, path)) = entry.split_once('\t') else {
+            continue;
+        };
+        let mut about = about.split(' ');
+        let (_, id, stage) = (about.next(), about.next(), about.next());
+        if let (Some(id), Some("0")) = (id, stage)
+            && let Some(asked) = paths.iter().find(|asked| **asked == path)
+        {
+            staged.insert(*asked, id.to_owned());
         }
-        None => {
-            repo.run(["hash-object", "--", path], Opts::default())
-                .await?
-        }
-    };
-    Ok(ran.text())
+    }
+    Ok(staged)
 }
 
 /// Removes an untracked file: a file or a link inside the repository,
@@ -244,9 +314,8 @@ fn same_objects(header: &str, hunk: &HunkAsk) -> bool {
     let Some((old, new)) = ids.split_once("..") else {
         return false;
     };
-    let short = |id: &str| id.len() >= 7 && id.bytes().all(|b| b.is_ascii_hexdigit());
-    short(&hunk.old_id)
-        && short(&hunk.new_id)
+    short_id(&hunk.old_id)
+        && short_id(&hunk.new_id)
         && old.starts_with(&hunk.old_id)
         && new.starts_with(&hunk.new_id)
 }

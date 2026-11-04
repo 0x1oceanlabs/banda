@@ -854,7 +854,8 @@ async fn a_turn_is_the_work_tree_from_its_checkpoint_as_it_began_to_as_it_ended(
 /// What the Diff sends to change the `n`th hunk of `path` in `diff`: the
 /// hunk's lines and the file's objects, read from the patch as the Pane
 /// reads them.
-fn hunk_of(diff: &Diff, path: &str, n: usize) -> Value {
+/// The patch of `path` in `diff`, and its objects from its `index` line.
+fn patch_of<'a>(diff: &'a Diff, path: &str) -> (&'a str, &'a str, &'a str) {
     let start = (diff.patch.match_indices("diff --git "))
         .map(|(at, _)| at)
         .find(|at| {
@@ -875,6 +876,11 @@ fn hunk_of(diff: &Diff, path: &str, n: usize) -> Value {
         .next()
         .unwrap();
     let (old_id, new_id) = ids.split_once("..").unwrap();
+    (file, old_id, new_id)
+}
+
+fn hunk_of(diff: &Diff, path: &str, n: usize) -> Value {
+    let (file, old_id, new_id) = patch_of(diff, path);
     let header = file
         .lines()
         .filter(|l| l.starts_with("@@ "))
@@ -1052,18 +1058,10 @@ async fn revert_puts_a_hunk_or_a_file_back_and_an_untracked_file_goes() {
     assert_eq!(world.git(&["status", "--porcelain"]), " M ten.txt");
 }
 
-/// The work tree's object of `path` as `diff` drew it.
-fn new_id(diff: &Diff, path: &str) -> String {
-    let start = diff
-        .patch
-        .find(&format!("diff --git a/{path} b/{path}\n"))
-        .unwrap();
-    let index = diff.patch[start..]
-        .lines()
-        .find_map(|line| line.strip_prefix("index "))
-        .unwrap();
-    let ids = index.split(' ').next().unwrap();
-    ids.split_once("..").unwrap().1.to_owned()
+/// The objects of `path` as `diff` drew it, as a file's revert sends them.
+fn objects(diff: &Diff, path: &str) -> Value {
+    let (_, old_id, new_id) = patch_of(diff, path);
+    json!({ "old_id": old_id, "new_id": new_id })
 }
 
 #[tokio::test]
@@ -1075,8 +1073,8 @@ async fn a_file_written_since_the_diff_is_not_reverted() {
     world.write("new.txt", "new\n");
     let unstaged = world.diff(json!({ "scope": { "kind": "unstaged" } })).await;
     let ids = json!({
-        "ten.txt": new_id(&unstaged, "ten.txt"),
-        "new.txt": new_id(&unstaged, "new.txt"),
+        "ten.txt": objects(&unstaged, "ten.txt"),
+        "new.txt": objects(&unstaged, "new.txt"),
     });
     // An Agent writes on after the Diff was read.
     world.write("ten.txt", &TEN.replace("1\n", "ONE\n"));
@@ -1089,6 +1087,15 @@ async fn a_file_written_since_the_diff_is_not_reverted() {
 
     // As the Diff drew them, they go back.
     world.write("ten.txt", &TEN.replace("1\n", "one\n"));
+    // Something else staged since: the work tree is as drawn, the index
+    // is not.
+    world.write("ten.txt", &TEN.replace("1\n", "uno\n"));
+    world.git(&["add", "ten.txt"]);
+    world.write("ten.txt", &TEN.replace("1\n", "one\n"));
+    let staged = json!({ "files": ["ten.txt"], "ids": { "ten.txt": ids["ten.txt"] } });
+    let refused = world.call("git.revert", staged).await.unwrap_err();
+    assert_eq!(refused.code, Code::Conflict);
+    world.git(&["reset", "--quiet", "ten.txt"]);
     world.call("git.revert", both).await.unwrap();
     assert_eq!(world.git(&["status", "--porcelain"]), "");
 }

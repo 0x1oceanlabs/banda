@@ -4,7 +4,7 @@
  * unstages, a hunk, a file or all of it at a time. Pure, so plain tests
  * cover it.
  */
-import type { ChangeAsk, FileDiff } from "@banda/contract/git"
+import type { ChangeAsk, FileDiff, Objects } from "@banda/contract/git"
 import { pathOf, type FileDiffMetadata } from "@banda/ui/components/code-diff"
 import type { Scope } from "./scope"
 
@@ -27,13 +27,18 @@ function pathsOf(path: string, old: string | undefined | null): string[] {
   return old && old !== path ? [path, old] : [path]
 }
 
-/** The work tree's object of each file drawn, by path, as its patch
- * names it: a revert of them whole changes nothing when one is no longer
- * so, as an Agent wrote on after the Diff was read. */
+/** Each drawn file's objects, by path, as its patch names them, the
+ * index's and the work tree's: a revert of them whole changes nothing
+ * when one is no longer so, as when an Agent wrote on after the Diff was
+ * read, or the file was staged since. */
 function idsOf(drawn: readonly (FileDiffMetadata | undefined)[]) {
-  const ids: Record<string, string> = {}
+  const ids: Record<string, Objects> = {}
   for (const file of drawn)
-    if (file?.newObjectId) ids[pathOf(file)] = file.newObjectId
+    if (file?.prevObjectId && file.newObjectId)
+      ids[pathOf(file)] = {
+        old_id: file.prevObjectId,
+        new_id: file.newObjectId,
+      }
   return ids
 }
 

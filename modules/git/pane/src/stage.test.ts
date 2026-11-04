@@ -39,7 +39,7 @@ describe("what the Diff can do", () => {
     const [ten] = filesOf(PATCH, "test")
     expect(hunkAsk(ten!, 1)).toEqual({
       files: ["ten.txt"],
-      ids: { "ten.txt": "3e913d0" },
+      ids: { "ten.txt": { old_id: "97b3d1a", new_id: "3e913d0" } },
       hunk: {
         old_start: 7,
         old_lines: 4,
@@ -61,7 +61,7 @@ describe("what the Diff can do", () => {
     expect(hunkAsk(made!, 0)).toEqual(fileAsk(made!))
     expect(fileAsk(made!)).toEqual({
       files: ["new.txt"],
-      ids: { "new.txt": "3e757e7" },
+      ids: { "new.txt": { old_id: "0000000", new_id: "3e757e7" } },
     })
   })
 
@@ -92,7 +92,7 @@ describe("what the Diff can do", () => {
     // new.txt is not drawn yet: only ten.txt is checked.
     expect(allOf(files, drawn)).toEqual({
       files: ["new.txt", "ten.txt"],
-      ids: { "ten.txt": "3e913d0" },
+      ids: { "ten.txt": { old_id: "97b3d1a", new_id: "3e913d0" } },
     })
   })
 })

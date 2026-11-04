@@ -290,12 +290,22 @@ pub struct ChangeAsk {
     #[serde(default)]
     #[ts(optional)]
     pub hunk: Option<HunkAsk>,
-    /// The work tree's object of each file as the Diff drew it, by path,
-    /// as short as the patch has it: a revert of files whole changes
-    /// nothing when one is no longer so, as a hunk's does.
+    /// Each file's objects as the Diff drew it, by path: a revert of
+    /// files whole changes nothing when one is no longer so, as a hunk's
+    /// does. None to check is empty.
     #[serde(default)]
-    #[ts(optional)]
-    pub ids: Option<BTreeMap<String, String>>,
+    #[ts(as = "Option<BTreeMap<String, Objects>>", optional)]
+    pub ids: BTreeMap<String, Objects>,
+}
+
+/// A file's objects from its patch's `index` line, as short as the patch
+/// has them: the index's (`old_id`) and the work tree's (`new_id`), all
+/// zeros where it is not.
+#[derive(Clone, Debug, Deserialize, TS)]
+#[ts(export, export_to = "git/")]
+pub struct Objects {
+    pub old_id: String,
+    pub new_id: String,
 }
 
 /// A hunk of a file as the Diff drew it: its lines on either side, and

@@ -8,7 +8,7 @@
  * click copies its name. Alt+Shift+G opens it in the focused Thread, as
  * T3 Code's Mod+Shift+G.
  */
-import { useEffect, useId, useState } from "react"
+import { useEffect, useId, useMemo, useState } from "react"
 import type { Engine, SpaceId } from "@banda/contract"
 import type { Ref, Status } from "@banda/contract/git"
 import {
@@ -33,6 +33,7 @@ import { useAct } from "@banda/ui/hooks/use-act"
 import { problem } from "@banda/ui/lib/words"
 import { ChevronDownIcon, GitBranchIcon, PlusIcon } from "lucide-react"
 import { branchName, finds, listedOf, taken } from "./branches"
+import { GitAlert } from "./GitAlert"
 
 /** What Alt+Shift+G asks the focused Thread's card to open. */
 export const PICKER = "git.branch"
@@ -160,12 +161,13 @@ function Branches({
   }, [engine, space, full, words])
 
   const searched = found?.words === words
+  const made = branchName(words)
+  const listedAll = useMemo(() => listedOf(all ?? []), [all])
   const listed = searched
     ? listedOf(found.refs)
-    : listedOf(all ?? []).filter((ref) => finds(ref, words))
+    : listedAll.filter((ref) => finds(ref, words, made))
   // The list is cut when the engine kept some back, and has not searched.
   const cut = full && !searched
-  const made = branchName(words)
   const creates =
     made !== "" &&
     !taken([...(all ?? []), ...(searched ? found.refs : [])], made)
@@ -278,9 +280,7 @@ function Branches({
         )}
       </SuggestionList>
       {acting.problem && (
-        <p role="alert" className="px-2 pt-1 text-xs text-destructive">
-          {acting.problem}
-        </p>
+        <GitAlert className="px-2 pt-1">{acting.problem}</GitAlert>
       )}
       {cut && !words && (
         <p className="px-2 pt-1.5 pb-0.5 text-[11px] text-muted-foreground">

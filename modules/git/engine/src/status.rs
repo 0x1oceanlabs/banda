@@ -58,20 +58,21 @@ async fn of(repo: Repo, at: i64) -> Result<Status, Failure> {
     let remote = async {
         let remote = repo.primary_remote().await?;
         let default = repo.default_on(remote.as_deref()).await?;
-        Ok::<_, Failure>((remote, default))
+        // A branch never pushed: how far it is past the default.
+        let ahead = match (&said.upstream, &said.head, &default) {
+            (None, Some(_), Some(default)) => {
+                ahead_of(&repo, remote.as_deref(), default, said.branch.as_deref()).await?
+            }
+            _ => None,
+        };
+        Ok::<_, Failure>((remote, default, ahead))
     };
     let (counted, remote) = futures::join!(counted, remote);
-    let (remote, default_branch) = remote?;
+    let (remote, default_branch, ahead_of_default) = remote?;
     let counts: HashMap<String, (u32, u32)> = parse::numstat(&counted?.stdout)
         .into_iter()
         .map(|f| (f.path, (f.added, f.removed)))
         .collect();
-    let ahead_of_default = match (&said.upstream, &said.head, &default_branch) {
-        (None, Some(_), Some(default)) => {
-            ahead_of(&repo, remote.as_deref(), default, said.branch.as_deref()).await?
-        }
-        _ => None,
-    };
     let mut files = said.files;
     for file in &mut files {
         (file.added, file.removed) = counts.get(&file.path).copied().unwrap_or_default();
@@ -95,8 +96,8 @@ async fn of(repo: Repo, at: i64) -> Result<Status, Failure> {
 }
 
 /// How many commits `HEAD` has that `default` does not: the remote's copy
-/// of it, else the one here unless it is the branch checked out. None
-/// when neither is there to count from.
+/// of it, else the one here unless it is the branch checked out, as
+/// `Repo::base` finds it but for that. None when neither is there.
 async fn ahead_of(
     repo: &Repo,
     remote: Option<&str>,
@@ -108,18 +109,25 @@ async fn ahead_of(
     if branch != Some(default) {
         tips.push(format!("refs/heads/{default}"));
     }
-    for tip in tips {
-        if !repo.has_ref(&tip).await? {
-            continue;
-        }
-        let range = format!("{tip}..HEAD");
-        let counted = repo
-            .run(
-                ["rev-list", "--count", range.as_str(), "--"],
-                Opts::default(),
-            )
-            .await?;
-        return Ok(counted.text().parse().ok());
+    if tips.is_empty() {
+        return Ok(None);
     }
-    Ok(None)
+    // Which of them are there, at once.
+    let mut args = vec!["for-each-ref", "--format=%(refname)"];
+    args.extend(tips.iter().map(String::as_str));
+    let there = repo.run(args, Opts::default()).await?.text();
+    let Some(tip) = tips
+        .iter()
+        .find(|tip| there.lines().any(|line| line == *tip))
+    else {
+        return Ok(None);
+    };
+    let range = format!("{tip}..HEAD");
+    let counted = repo
+        .run(
+            ["rev-list", "--count", range.as_str(), "--"],
+            Opts::default(),
+        )
+        .await?;
+    Ok(counted.text().parse().ok())
 }

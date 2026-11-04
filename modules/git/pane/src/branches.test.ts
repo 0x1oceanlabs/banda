@@ -1,4 +1,6 @@
 import type { Ref } from "@banda/contract/git"
+import { readFileSync } from "node:fs"
+import { join } from "node:path"
 import { expect, test } from "vitest"
 import { branchName, finds, listedOf, taken } from "./branches"
 
@@ -10,12 +12,11 @@ const ref = (name: string, more: Partial<Ref> = {}): Ref => ({
   ...more,
 })
 
-test("Create branch makes a name of the words, as T3 Code's", () => {
-  expect(branchName("  My Fix ")).toBe("my-fix")
-  expect(branchName("fix: the  card's look!")).toBe("fix-the-cards-look")
-  expect(branchName("feature//Big.Thing")).toBe("feature/big-thing")
-  expect(branchName("-/-")).toBe("")
-  expect(branchName("a".repeat(80))).toHaveLength(64)
+test("Create branch makes a name of the words as the engine names a branch", () => {
+  const cases = JSON.parse(
+    readFileSync(join(import.meta.dirname, "../../branch-names.json"), "utf8")
+  ) as { words: string; name: string }[]
+  for (const { words, name } of cases) expect(branchName(words)).toBe(name)
 })
 
 test("a remote's branch is left out when one here has its name", () => {
@@ -31,14 +32,17 @@ test("a remote's branch is left out when one here has its name", () => {
 })
 
 test("a search finds by the words and by the name they make", () => {
-  expect(finds(ref("other"), "oth")).toBe(true)
-  expect(finds(ref("my-fix"), "My fix")).toBe(true)
-  expect(finds(ref("main"), "oth")).toBe(false)
+  expect(finds(ref("other"), "oth", "oth")).toBe(true)
+  expect(finds(ref("my-fix"), "My fix", "my-fix")).toBe(true)
+  expect(finds(ref("main"), "oth", "oth")).toBe(false)
 })
 
 test("a name a remote's branch has is taken too", () => {
   const refs = [ref("main"), ref("origin/feature/x", { remote: true })]
   expect(taken(refs, "main")).toBe(true)
   expect(taken(refs, "feature/x")).toBe(true)
-  expect(taken(refs, "feature")).toBe(false)
+  expect(taken(refs, "feature/y")).toBe(false)
+  // A folder of a name, and a name of a folder, are in each other's way.
+  expect(taken(refs, "feature")).toBe(true)
+  expect(taken(refs, "main/x")).toBe(true)
 })
