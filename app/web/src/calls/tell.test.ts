@@ -5,7 +5,6 @@ import { consume, open, start } from "../workspaces/model"
 import { DEFAULT_NOTIFY as NOTIFY } from "./settings"
 import { besideOf, type Shows, showing, sightOf } from "./sight"
 import { type Call, callsOf, newsOf, tell } from "./tell"
-import { alive, LIFE, released, told } from "./toast"
 import { first, type Heard } from "./useCalls"
 
 const call = (about: string, chime: Chime): Call => ({
@@ -158,17 +157,6 @@ test("what an Agent opens goes beside the Pane of the Thread it works in", () =>
   const gone = open(start(), "s", browser)
   expect(besideOf(gone, lists, "a1", shows)).toEqual({ space: "s", right: [] })
   expect(besideOf(w, lists, "a3", shows)).toBeNull()
-})
-
-test("a toast goes away by itself; a new call of its thing replaces it", () => {
-  let toasts = told([], "a", "done", 0)
-  toasts = told(toasts, "b", "asking", 1000)
-  toasts = told(toasts, "a", "failed", 2000)
-  expect(toasts.map((t) => t.key)).toEqual(["a", "b"])
-  expect(alive(toasts, 2000 + LIFE.failed).map((t) => t.key)).toEqual(["b"])
-  // Held for 10 s, let go: none went away meanwhile.
-  const held = released(toasts, 10_000, 20_000)
-  expect(alive(held, 20_000 + 1000).length).toBe(2)
 })
 
 test("Alt+U answers the loudest call first, then the one that called first", () => {

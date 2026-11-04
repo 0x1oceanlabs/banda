@@ -5,16 +5,15 @@
  * desktop is quiet or `[notify] problems` is off. Only a Problem new
  * since the window last told of one tells: one that breaks again counts.
  */
-import { useCallback, useEffect, useRef } from "react"
+import { useEffect, useRef } from "react"
 import type { Engine } from "@banda/contract"
 import type { Notify } from "@banda/contract/look"
 import type { Problem } from "@banda/contract/problems"
 import type { Host } from "../host"
 import { quietNow } from "../calls/system"
 import { placeOf } from "../calls/tell"
-import { told } from "../calls/toast"
-import { useToasts } from "../calls/useToasts"
 import { PLACES, useProblems } from "./live"
+import { type ProblemAnswers, toastProblems } from "./problemToast"
 
 /** The key of a Problem's system notification. */
 export const NOTICE = "problem:"
@@ -22,29 +21,18 @@ export const NOTICE = "problem:"
 /** Where the window keeps when it last told of a Problem. */
 const TOLD = "banda.problems.told"
 
-export type ProblemNews = {
-  /** The newest Problem a toast tells of, and how many more came with it:
-   * one toast for them all, as each opens the same section. */
-  shown?: { problem: Problem; more: number }
-  /** The Person saw them: the toast goes. */
-  dismiss: () => void
-  /** The pointer holds the toast, or lets it go. */
-  hold: (holds: boolean) => void
-}
-
 export function useProblemNews(
   engine: Engine,
   notify: Notify,
   front: () => boolean,
-  desktop: Host["notify"] | undefined
-): ProblemNews {
+  desktop: Host["notify"] | undefined,
+  answers: ProblemAnswers
+): void {
   const live = useProblems(engine)
-  const settings = useRef({ notify, desktop })
+  const settings = useRef({ notify, desktop, answers })
   useEffect(() => {
-    settings.current = { notify, desktop }
-  }, [notify, desktop])
-  const { toasts, setToasts, hold } = useToasts()
-  const problems = live.state === "ready" ? live.view.problems : []
+    settings.current = { notify, desktop, answers }
+  }, [notify, desktop, answers])
 
   useEffect(() => {
     if (live.state !== "ready") return
@@ -57,27 +45,9 @@ export function useProblemNews(
     localStorage.setItem(TOLD, String(newest || Date.now()))
     if (news.length === 0) return
     void tellOf(news, front(), settings.current).then((toast) => {
-      if (!toast) return
-      const now = Date.now()
-      setToasts((toasts) =>
-        news.reduceRight(
-          (all, problem) => told(all, problem.fingerprint, "failed", now),
-          toasts
-        )
-      )
+      if (toast) toastProblems(news, settings.current.answers)
     })
-  }, [live, front, setToasts])
-
-  const dismiss = useCallback(() => setToasts([]), [setToasts])
-  const shown = toasts.flatMap((toast) => {
-    const problem = problems.find((one) => one.fingerprint === toast.key)
-    return problem ? [problem] : []
-  })
-  return {
-    ...(shown[0] && { shown: { problem: shown[0], more: shown.length - 1 } }),
-    dismiss,
-    hold,
-  }
+  }, [live, front])
 }
 
 /** Tells of `news` on the desktop when that is where; whether a toast

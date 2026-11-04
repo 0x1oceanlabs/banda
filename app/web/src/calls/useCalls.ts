@@ -1,10 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import type { SpaceId } from "@banda/contract"
 import { callOrder } from "@banda/ui/components/banda-mark"
+import { toast } from "@banda/ui/components/sonner"
 import type { Listed } from "@banda/ui/pane"
 import { type Chime, player, type SoundSettings } from "@banda/ui/sound"
 import type { Notify } from "@banda/contract/look"
 import type { Host } from "../host"
+import { toastCall } from "./callToast"
 import { GATHER, loudestChime, type Played, plays } from "./calls"
 import {
   iconOf,
@@ -16,8 +18,6 @@ import {
   summaryOf,
 } from "./system"
 import { type Call, callsOf, newsOf, type Sight, tell } from "./tell"
-import { type Toast, told } from "./toast"
-import { useToasts } from "./useToasts"
 
 /** A call as the window heard it: of a Space, since a time, by a key. */
 export type Heard = Call & {
@@ -45,12 +45,6 @@ export type Calls = {
   leave: (source: string) => void
   /** Everything that calls now, from every Watch. */
   calling: readonly Heard[]
-  /** The toasts, the newest first. */
-  toasts: readonly Toast[]
-  /** The pointer holds the toasts, or lets them go. */
-  hold: (holds: boolean) => void
-  /** Takes a toast away, as when it was answered. */
-  dismiss: (key: string) => void
   /**
    * The Person sees what calls: its toast and its notification go, while
    * the call may still wait for them, as a Question does.
@@ -69,28 +63,32 @@ export type Calls = {
 export function useCalls(
   sound: SoundSettings,
   notify: Notify,
-  where: Where
+  where: Where,
+  /** What a toast's button does: goes to its call. */
+  answer: (call: Heard) => void
 ): Calls {
-  const settings = useRef({ sound, notify, where })
+  const settings = useRef({ sound, notify, where, answer })
   useEffect(() => {
-    settings.current = { sound, notify, where }
-  }, [sound, notify, where])
+    settings.current = { sound, notify, where, answer }
+  }, [sound, notify, where, answer])
 
   const lists = useRef(new Map<string, Heard[]>())
   const [calling, setCalling] = useState<readonly Heard[]>([])
-  const { toasts, setToasts, hold } = useToasts()
   const gathered = useRef<Heard[]>([])
   const last = useRef<Played | undefined>(undefined)
   const timer = useRef(0)
   useEffect(() => () => clearTimeout(timer.current), [])
 
-  // The notices the desktop shows: one per thing, and one for many.
+  // The toasts up, and the notices the desktop shows: one per thing, and
+  // one for many.
+  const toasted = useRef(new Set<string>())
   const noticed = useRef(new Set<string>())
   const summarized = useRef(new Set<string>())
   const withdraw = useCallback((keys: Iterable<string>) => {
     const desktop = settings.current.where.desktop
     const had = summarized.current.size
     for (const key of keys) {
+      if (toasted.current.delete(key)) toast.dismiss(key)
       if (noticed.current.delete(key)) desktop?.withdraw(key)
       summarized.current.delete(key)
     }
@@ -101,27 +99,19 @@ export function useCalls(
     timer.current = 0
     const news = new Map(gathered.current.map((call) => [call.key, call]))
     gathered.current = []
-    const { sound, notify, where } = settings.current
+    const { sound, notify, where, answer } = settings.current
     const { desktop } = where
     const quiet = await quietNow(notify, desktop)
     const chimes: Chime[] = []
     const notices: Heard[] = []
-    const now = Date.now()
-    let next: Toast[] | undefined
     for (const call of news.values()) {
       const telling = tell(call.chime, where.sight(call), notify, quiet)
       if (telling.sound) chimes.push(call.chime)
-      if (telling.toast) next = told(next ?? [], call.key, call.chime, now)
+      if (telling.toast) {
+        toasted.current.add(call.key)
+        toastCall(call, notify.detail, answer)
+      }
       if (telling.system) notices.push(call)
-    }
-    if (next) {
-      const added = next
-      setToasts((toasts) =>
-        added.reduceRight(
-          (all, toast) => told(all, toast.key, toast.chime, now),
-          toasts as Toast[]
-        )
-      )
     }
     const chime = loudestChime(chimes)
     const at = performance.now()
@@ -150,9 +140,7 @@ export function useCalls(
     (gone: readonly Heard[]) => {
       setCalling([...lists.current.values()].flat())
       if (gone.length === 0) return
-      const keys = new Set(gone.map((call) => call.key))
-      setToasts((toasts) => toasts.filter((toast) => !keys.has(toast.key)))
-      withdraw(keys)
+      withdraw(gone.map((call) => call.key))
     },
     [withdraw]
   )
@@ -189,24 +177,9 @@ export function useCalls(
     [changed]
   )
 
-  const dismiss = useCallback(
-    (key: string) =>
-      setToasts((toasts) =>
-        toasts.some((toast) => toast.key === key)
-          ? toasts.filter((toast) => toast.key !== key)
-          : toasts
-      ),
-    []
-  )
-  const seen = useCallback(
-    (key: string) => {
-      dismiss(key)
-      withdraw([key])
-    },
-    [dismiss, withdraw]
-  )
+  const seen = useCallback((key: string) => withdraw([key]), [withdraw])
 
-  return { hear, leave, calling, toasts, hold, dismiss, seen }
+  return { hear, leave, calling, seen }
 }
 
 /** The call to answer first, in the order calls are answered. */
