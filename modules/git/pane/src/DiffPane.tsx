@@ -1,5 +1,4 @@
 import {
-  useCallback,
   useEffect,
   useEffectEvent,
   useMemo,
@@ -7,19 +6,12 @@ import {
   useState,
   type ReactNode,
 } from "react"
-import { Refused, type Engine, type SpaceId } from "@banda/contract"
-import type {
-  ChangedTurn,
-  ChangesAsk,
-  TurnChanges,
-} from "@banda/contract/agents"
+import { Refused } from "@banda/contract"
+import type { ChangesAsk } from "@banda/contract/agents"
 import type { ChangeAsk, Diff, DiffAsk } from "@banda/contract/git"
 import { Button } from "@banda/ui/components/button"
 import {
   CodeDiff,
-  countsOf,
-  fileOf,
-  filesOf,
   keyOf,
   pathOf,
   type CodeDiffHandle,
@@ -30,15 +22,6 @@ import {
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
-  DropdownMenuGroup,
-  DropdownMenuItem,
-  DropdownMenuLabel,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuSeparator,
-  DropdownMenuSub,
-  DropdownMenuSubContent,
-  DropdownMenuSubTrigger,
   DropdownMenuTrigger,
 } from "@banda/ui/components/dropdown-menu"
 import {
@@ -49,19 +32,10 @@ import {
 } from "@banda/ui/components/empty"
 import { ChangedFiles, type TreeFile } from "@banda/ui/components/file-tree"
 import { PaneHeader } from "@banda/ui/components/pane-header"
-import {
-  Popover,
-  PopoverClose,
-  PopoverContent,
-  PopoverDescription,
-  PopoverTitle,
-  PopoverTrigger,
-} from "@banda/ui/components/popover"
 import { Spinner } from "@banda/ui/components/spinner"
 import { useAct } from "@banda/ui/hooks/use-act"
 import { useInFront } from "@banda/ui/hooks/use-in-front"
 import { READ_AGAIN, useLive, type Source } from "@banda/ui/hooks/use-live"
-import { useRead, type Read } from "@banda/ui/hooks/use-read"
 import { cn } from "@banda/ui/lib/utils"
 import { definePane, type PaneProps } from "@banda/ui/pane"
 import {
@@ -72,14 +46,14 @@ import {
   Columns2Icon,
   FileDiffIcon,
   FolderTreeIcon,
-  MinusIcon,
-  PlusIcon,
   RefreshCwIcon,
   Rows2Icon,
   Settings2Icon,
-  Undo2Icon,
 } from "lucide-react"
+import { Acts } from "./Acts"
 import { AT_ONCE, asked, VIEW, viewOf, type View } from "./diff"
+import { More, turnRead, useFiles, type Drawn } from "./files"
+import { BaseMenu, ScopeMenu } from "./ScopeMenu"
 import { CHANGES, changeOf, isTest, labelOf, type Scope } from "./scope"
 import { actsOf, allOf, fileAsk, hunkAsk, type Act } from "./stage"
 import { useGitStatus } from "./status"
@@ -118,11 +92,6 @@ export const diffPane = definePane<DiffArgs>({
 /** What makes the Diff read again: an Agent's turn ending. */
 const TURNS = { module: "agents", kinds: ["turn.ended"] }
 
-/** What the Pane draws, as git answers it; a turn's changes from its tool
- * calls come as their files already diffed. A turn's come with the
- * Thread's turns that changed files. */
-type Drawn = Diff & { drawn?: FileDiffMetadata[]; turns?: ChangedTurn[] }
-
 /** Whether two reads of git's diff say the same. */
 function sameDiff(a: Diff, b: Diff): boolean {
   return (
@@ -146,26 +115,6 @@ function noCheckpoint(error: unknown): boolean {
   if (!(error instanceof Refused)) return false
   const { code } = error.refusal
   return code === "not_found" || code === "conflict"
-}
-
-/** A turn's changes as the Pane draws a diff: each file diffed from its
- * texts, whole. */
-function turnRead(changes: TurnChanges): Drawn {
-  const drawn = changes.files.map((file) =>
-    fileOf(file.path, file.old, file.new)
-  )
-  return {
-    at: changes.at,
-    files: changes.files.map((file, index) => ({
-      path: file.path,
-      ...countsOf(drawn[index]!),
-      binary: false,
-    })),
-    patch: "",
-    truncated: false,
-    drawn,
-    turns: changes.turns,
-  }
 }
 
 function DiffPane({ engine, space, args, update, close }: PaneProps<DiffArgs>) {
@@ -593,134 +542,6 @@ function DiffPane({ engine, space, args, update, close }: PaneProps<DiffArgs>) {
   )
 }
 
-const ICONS: Record<Act, typeof PlusIcon> = {
-  stage: PlusIcon,
-  unstage: MinusIcon,
-  revert: Undo2Icon,
-}
-const NAMES: Record<Act, string> = {
-  stage: "Stage",
-  unstage: "Unstage",
-  revert: "Revert",
-}
-
-/** What can be done to a file or a hunk: icons in a file's header, or
- * named on a hunk's plate. Revert asks first. */
-function Acts({
-  acts,
-  disabled,
-  words,
-  what,
-  asked = what,
-  about,
-  onAct,
-}: {
-  acts: Act[]
-  disabled: boolean
-  /** Each is named beside its icon, or only in a wide Diff; its label
-   * names it always. */
-  words?: "shown" | "wide"
-  /** What it is done to, as its label names it. */
-  what: string
-  /** What it is done to, as Revert's question names it. */
-  asked?: string
-  /** What reverting it does. */
-  about: string
-  onAct: (what: Act) => void
-}) {
-  return (
-    <span className="flex items-center gap-0.5">
-      {acts.map((each) => {
-        const label = `${NAMES[each]} ${what}`
-        const look = {
-          variant: "ghost" as const,
-          size: words ? ("xs" as const) : ("icon-xs" as const),
-          "aria-label": label,
-          title: label,
-          disabled,
-        }
-        const Icon = ICONS[each]
-        const name =
-          words === "wide" ? <Wide>{label}</Wide> : words && NAMES[each]
-        const face = (
-          <>
-            <Icon {...(words ? { "data-icon": "inline-start" } : {})} />
-            {name}
-          </>
-        )
-        return each === "revert" ? (
-          <Revert
-            key={each}
-            title={`Revert ${asked}?`}
-            about={`${about} This can't be undone.`}
-            look={look}
-            onRevert={() => onAct(each)}
-          >
-            {face}
-          </Revert>
-        ) : (
-          <Button key={each} {...look} onClick={() => onAct(each)}>
-            {face}
-          </Button>
-        )
-      })}
-    </span>
-  )
-}
-
-/** Words a button shows only in a wide Diff; its label keeps them. */
-function Wide({ children }: { children: ReactNode }) {
-  return <span className="hidden @2xl/diff:inline">{children}</span>
-}
-
-/** A Revert button that asks first, as it cannot be undone. */
-function Revert({
-  title,
-  about,
-  look,
-  onRevert,
-  children,
-}: {
-  title: string
-  about: string
-  /** The trigger's look, label and whether it is off. */
-  look: Parameters<typeof Button>[0]
-  onRevert: () => void
-  children: ReactNode
-}) {
-  return (
-    <Popover>
-      <PopoverTrigger
-        render={
-          <Button
-            variant="ghost"
-            size="xs"
-            className="text-destructive hover:text-destructive"
-            {...look}
-          />
-        }
-      >
-        {children}
-      </PopoverTrigger>
-      <PopoverContent>
-        <PopoverTitle className="break-all">{title}</PopoverTitle>
-        <PopoverDescription>{about}</PopoverDescription>
-        <div className="mt-2 flex justify-end gap-1.5">
-          <PopoverClose render={<Button variant="ghost" size="sm" />}>
-            Cancel
-          </PopoverClose>
-          <PopoverClose
-            render={<Button variant="destructive" size="sm" />}
-            onClick={onRevert}
-          >
-            Revert
-          </PopoverClose>
-        </div>
-      </PopoverContent>
-    </Popover>
-  )
-}
-
 /** The Pane's words where it has nothing to draw. */
 function Blank({ title, children }: { title: string; children: ReactNode }) {
   return (
@@ -740,136 +561,6 @@ const EMPTY: Record<Scope["kind"], string> = {
   staged: "Nothing is staged.",
   commit: "This commit changes no files.",
   turn: "This turn changed no files.",
-}
-
-/** A short number for a patch, so highlighting kept for one is not used
- * for another. */
-function hashOf(text: string): string {
-  let hash = 5381
-  for (let i = 0; i < text.length; i++)
-    hash = (Math.imul(hash, 33) ^ text.charCodeAt(i)) | 0
-  return (hash >>> 0).toString(36)
-}
-
-/**
- * The files of a diff as the view draws them, by path: those its patch
- * holds, and those it left out, loaded by name a few at a time as they
- * come into view. A diff read again with the same patch keeps them all, so
- * nothing is drawn again. `whole` reads a file's both sides for its context
- * to expand.
- */
-function useFiles(
-  engine: Engine,
-  space: SpaceId,
-  ask: DiffAsk | null,
-  words: string,
-  diff: Drawn | undefined
-) {
-  const patch = diff?.patch ?? ""
-  const hashed = useMemo(() => hashOf(patch), [patch])
-  const basis = `${words}:${hashed}`
-  const drawn = diff?.drawn
-  const inPatch = useMemo(
-    () => drawn ?? filesOf(patch, basis),
-    [drawn, patch, basis]
-  )
-  // What loaded by name belongs to one patch.
-  const [loaded, setLoaded] = useState<{
-    basis: string
-    files: FileDiffMetadata[]
-  }>({ basis, files: [] })
-  const [loading, setLoading] = useState(false)
-  const byPath = useMemo(() => {
-    const extra = loaded.basis === basis ? loaded.files : []
-    return new Map([...inPatch, ...extra].map((file) => [pathOf(file), file]))
-  }, [inPatch, loaded, basis])
-  const missing = useMemo(
-    () =>
-      (diff?.files ?? [])
-        .filter((file) => !byPath.has(file.path))
-        .map((file) => file.path),
-    [diff, byPath]
-  )
-
-  const load = (paths: string[]) => {
-    if (!ask || loading || paths.length === 0) return
-    setLoading(true)
-    engine
-      .call("git.diff", { ...ask, files: paths }, { space })
-      .then((more) => {
-        const files = filesOf(more.patch, `${basis}:${paths.join("\0")}`)
-        setLoaded((was) => ({
-          basis,
-          files: [...(was.basis === basis ? was.files : []), ...files],
-        }))
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false))
-  }
-
-  // A turn's files come whole; git's are read whole to expand.
-  const whole = useMemo(
-    () =>
-      ask &&
-      (async (file: FileDiffMetadata) => {
-        const contents = await engine.call(
-          "git.contents",
-          {
-            scope: ask.scope,
-            path: pathOf(file),
-            ...(file.prevName ? { old_path: file.prevName } : {}),
-          },
-          { space }
-        )
-        if (contents.too_large)
-          throw new Error("The file is too large to expand.")
-        return {
-          oldFile: {
-            name: file.prevName ?? pathOf(file),
-            contents: contents.old ?? "",
-          },
-          newFile: { name: pathOf(file), contents: contents.new ?? "" },
-        }
-      }),
-    [engine, space, ask]
-  )
-
-  return { byPath, missing, loading, load, whole }
-}
-
-/** The end of the files drawn, while more wait: they load as it shows. */
-function More({
-  left,
-  loading,
-  onSeen,
-}: {
-  left: number
-  loading: boolean
-  onSeen: () => void
-}) {
-  const box = useRef<HTMLDivElement>(null)
-  const seen = useEffectEvent(onSeen)
-  useEffect(() => {
-    const element = box.current
-    if (!element) return
-    const watch = new IntersectionObserver(
-      (entries) => {
-        if (entries.some((entry) => entry.isIntersecting)) seen()
-      },
-      { rootMargin: "600px" }
-    )
-    watch.observe(element)
-    return () => watch.disconnect()
-  }, [])
-  return (
-    <div
-      ref={box}
-      className="flex h-12 items-center justify-center gap-2 text-xs text-muted-foreground"
-    >
-      {loading && <Spinner className="size-3" />}
-      {left === 1 ? "1 more file" : `${left} more files`}
-    </div>
-  )
 }
 
 /** A quiet button in the header, its words its label and tooltip. */
@@ -896,292 +587,5 @@ function Tool({
     >
       {children}
     </Button>
-  )
-}
-
-/** Reads a list each time its menu opens; `onOpenChange` goes on the menu. */
-function useReadOnOpen<T>(read: () => Promise<T>) {
-  const [open, setOpen] = useState(false)
-  const reading = useMemo(() => (open ? read : null), [open, read])
-  return { list: useRead(reading), onOpenChange: setOpen }
-}
-
-/** A list read for a menu, or why it is not there yet. */
-function Listed<T>({
-  read,
-  none,
-  children,
-}: {
-  read: Read<T[]>
-  none: string
-  children: (items: T[]) => ReactNode
-}) {
-  if (read.state === "loading")
-    return <DropdownMenuLabel>Reading…</DropdownMenuLabel>
-  if (read.state === "refused")
-    return <DropdownMenuLabel>{read.refusal.message}</DropdownMenuLabel>
-  if (read.value.length === 0)
-    return <DropdownMenuLabel>{none}</DropdownMenuLabel>
-  return children(read.value)
-}
-
-/** The scope menu, as T3 Code's: Changes, Uncommitted, and the Codex
- * app's Unstaged and Staged, and the branch's commits in a submenu, read
- * as it opens. */
-function ScopeMenu({
-  engine,
-  space,
-  scope,
-  thread,
-  onChange,
-}: {
-  engine: Engine
-  space: SpaceId
-  scope: Scope
-  /** The Thread whose turns it offers; none offers none. */
-  thread: string | null
-  onChange: (scope: Scope) => void
-}) {
-  const [open, setOpen] = useState(false)
-  const base = scope.kind === "changes" ? scope.base : null
-  const commits = useRead(
-    useMemo(
-      () =>
-        open
-          ? () =>
-              engine.call("git.commits", base === null ? {} : { base }, {
-                space,
-              })
-          : null,
-      [open, engine, space, base]
-    )
-  )
-  const turns = useRead(
-    useMemo(
-      () =>
-        open && thread !== null
-          ? () =>
-              engine
-                .call("agents.changes", { thread }, { space })
-                .then((changes) => changes.turns)
-          : null,
-      [open, engine, space, thread]
-    )
-  )
-  const value =
-    scope.kind === "commit"
-      ? `commit:${scope.sha}`
-      : scope.kind === "turn"
-        ? `turn:${scope.turn}`
-        : scope.kind
-  return (
-    <DropdownMenu onOpenChange={setOpen}>
-      <DropdownMenuTrigger
-        render={
-          <Button
-            variant="ghost"
-            size="sm"
-            className="min-w-0 font-medium"
-            aria-label="Scope"
-          />
-        }
-      >
-        <span className="truncate">{labelOf(scope)}</span>
-        <ChevronDownIcon
-          data-icon="inline-end"
-          className="text-muted-foreground"
-        />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="start" className="w-auto min-w-56">
-        <DropdownMenuRadioGroup
-          value={value}
-          onValueChange={(next) => {
-            if (next === "changes") onChange(CHANGES)
-            else if (
-              next === "uncommitted" ||
-              next === "unstaged" ||
-              next === "staged"
-            )
-              onChange({ kind: next })
-          }}
-        >
-          <Choice
-            value="changes"
-            name="Changes"
-            about="This branch against its base"
-          />
-          <Choice
-            value="uncommitted"
-            name="Uncommitted"
-            about="Everything since the last commit"
-          />
-          <Choice
-            value="unstaged"
-            name="Unstaged"
-            about="What is not staged yet"
-          />
-          <Choice
-            value="staged"
-            name="Staged"
-            about="What a commit would take"
-          />
-        </DropdownMenuRadioGroup>
-        <DropdownMenuSeparator />
-        {thread !== null && (
-          <DropdownMenuSub>
-            <DropdownMenuSubTrigger>Turns</DropdownMenuSubTrigger>
-            <DropdownMenuSubContent className="max-h-96 w-80 overflow-y-auto">
-              <DropdownMenuGroup>
-                <Listed read={turns} none="No turn changed files">
-                  {(list) =>
-                    list.map((turn) => (
-                      <DropdownMenuItem
-                        key={turn.turn}
-                        onClick={() =>
-                          onChange({
-                            kind: "turn",
-                            thread,
-                            turn: turn.turn,
-                            title: turn.said,
-                          })
-                        }
-                        className={cn(
-                          value === `turn:${turn.turn}` && "bg-accent"
-                        )}
-                      >
-                        <span className="shrink-0 text-xs text-muted-foreground tabular-nums">
-                          {turn.n}
-                        </span>
-                        <span className="truncate">{turn.said || "Turn"}</span>
-                      </DropdownMenuItem>
-                    ))
-                  }
-                </Listed>
-              </DropdownMenuGroup>
-            </DropdownMenuSubContent>
-          </DropdownMenuSub>
-        )}
-        <DropdownMenuSub>
-          <DropdownMenuSubTrigger>Commits</DropdownMenuSubTrigger>
-          <DropdownMenuSubContent className="max-h-96 w-80 overflow-y-auto">
-            <DropdownMenuGroup>
-              <Listed read={commits} none="No commits on this branch">
-                {(list) =>
-                  list.map((commit) => (
-                    <DropdownMenuItem
-                      key={commit.sha}
-                      onClick={() =>
-                        onChange({
-                          kind: "commit",
-                          sha: commit.sha,
-                          subject: commit.subject,
-                        })
-                      }
-                      className={cn(
-                        value === `commit:${commit.sha}` && "bg-accent"
-                      )}
-                    >
-                      <span className="shrink-0 font-mono text-xs text-muted-foreground">
-                        {commit.short}
-                      </span>
-                      <span className="truncate">{commit.subject}</span>
-                    </DropdownMenuItem>
-                  ))
-                }
-              </Listed>
-            </DropdownMenuGroup>
-          </DropdownMenuSubContent>
-        </DropdownMenuSub>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  )
-}
-
-/** A radio choice of a menu: its name, and what it means under it. */
-function Choice({
-  value,
-  name,
-  about,
-}: {
-  value: string
-  name: string
-  about: string
-}) {
-  return (
-    <DropdownMenuRadioItem value={value} closeOnClick>
-      <span className="flex flex-col">
-        <span>{name}</span>
-        <span className="text-xs text-muted-foreground">{about}</span>
-      </span>
-    </DropdownMenuRadioItem>
-  )
-}
-
-/** What Changes compares against: "Automatic", the default branch where
- * the branch left it, or a branch chosen, read as the menu opens. */
-function BaseMenu({
-  engine,
-  space,
-  base,
-  found,
-  onChange,
-}: {
-  engine: Engine
-  space: SpaceId
-  base: string | null
-  found: string
-  onChange: (base: string | null) => void
-}) {
-  const branches = useReadOnOpen(
-    useCallback(() => engine.call("git.refs", {}, { space }), [engine, space])
-  )
-  return (
-    <DropdownMenu onOpenChange={branches.onOpenChange}>
-      <DropdownMenuTrigger
-        render={
-          <Button
-            variant="ghost"
-            size="sm"
-            className="min-w-0 font-normal text-muted-foreground"
-            aria-label="Base"
-          />
-        }
-      >
-        <span className="truncate">vs {found}</span>
-        <ChevronDownIcon data-icon="inline-end" />
-      </DropdownMenuTrigger>
-      <DropdownMenuContent
-        align="start"
-        className="max-h-96 w-auto min-w-56 overflow-y-auto"
-      >
-        <DropdownMenuRadioGroup
-          value={base ?? ""}
-          onValueChange={(next) => onChange(next === "" ? null : String(next))}
-        >
-          <Choice
-            value=""
-            name="Automatic"
-            about="Where it left the default branch"
-          />
-          <Listed read={branches.list} none="No other branches">
-            {(list) =>
-              list
-                .filter((branch) => !branch.current)
-                .map((branch) => (
-                  <DropdownMenuRadioItem
-                    key={branch.name}
-                    value={branch.name}
-                    closeOnClick
-                  >
-                    <span className="truncate font-mono text-xs">
-                      {branch.name}
-                    </span>
-                  </DropdownMenuRadioItem>
-                ))
-            }
-          </Listed>
-        </DropdownMenuRadioGroup>
-      </DropdownMenuContent>
-    </DropdownMenu>
   )
 }
