@@ -209,7 +209,7 @@
   --desk-grain: 0.04;
   --tile-shadow: none;
   --panel-shadow: none;
-  --bar-rule: var(--border);
+  --bar-rule: transparent;
   /* The sidebar floats over the Strip's left: the Strip's columns start
      past it, and scroll on under it. */
   --sidebar-width: 16rem;
@@ -296,7 +296,6 @@ html[data-glass] {
     0 18px 40px -12px rgb(0 0 0 / var(--tile-shadow-strength)),
     0 2px 6px rgb(0 0 0 / calc(var(--tile-shadow-strength) * 0.36));
   --panel-shadow: 0 12px 32px -14px rgb(0 0 0 / var(--sidebar-shadow-strength));
-  --bar-rule: transparent;
   /* shadcn's fills, lines and quiet text are the text's own colour,
      thinned, not greys made for a solid page: they take the colour of the
      glass under them, so a current number or tab shows on any wallpaper
