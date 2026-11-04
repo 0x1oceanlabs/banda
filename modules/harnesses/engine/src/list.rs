@@ -84,6 +84,7 @@ pub struct Harnesses(Arc<Mutex<List>>);
 struct List {
     harnesses: Arc<[Harness]>,
     limits: LimitsSettings,
+    usage: UsageSettings,
     /// The file the list follows, and its text when last read: none when
     /// it was not there. The text, not its time and size, tells a change,
     /// as the look's files do: two quick saves of one length share both.
@@ -108,6 +109,24 @@ struct HarnessFile {
     /// 0043).
     #[serde(default)]
     limits: LimitsEntry,
+    /// Whether local session journals are counted (ADR 0043).
+    #[serde(default)]
+    usage: UsageSettings,
+}
+
+/// Local journal collection. Turning it off preserves saved totals but reads no files.
+#[derive(Clone, Copy, Debug, Deserialize, JsonSchema)]
+#[serde(default, deny_unknown_fields)]
+pub struct UsageSettings {
+    /// Read Claude Code and Codex session journals on this computer.
+    #[schemars(extend("default" = true))]
+    pub read: bool,
+}
+
+impl Default for UsageSettings {
+    fn default() -> Self {
+        Self { read: true }
+    }
 }
 
 /// The `[limits]` table. Every key is optional.
@@ -245,15 +264,27 @@ impl HarnessEntry {
 impl Harnesses {
     pub fn new(harnesses: Vec<Harness>) -> Self {
         let limits = LimitsSettings::default();
-        Self::with(Read { harnesses, limits }, None)
+        Self::with(
+            Read {
+                harnesses,
+                limits,
+                usage: UsageSettings::default(),
+            },
+            None,
+        )
     }
 
     fn with(read: Read, file: Option<(PathBuf, Option<String>)>) -> Self {
-        let Read { harnesses, limits } = read;
+        let Read {
+            harnesses,
+            limits,
+            usage,
+        } = read;
         let harnesses = harnesses.into();
         Self(Arc::new(Mutex::new(List {
             harnesses,
             limits,
+            usage,
             file,
         })))
     }
@@ -286,13 +317,17 @@ impl Harnesses {
         let List {
             harnesses,
             limits,
+            usage,
             file,
         } = &mut *list;
         if let Some((path, was)) = file {
             match read(path) {
                 Ok(text) if text != *was => {
                     match listed(path, text.as_deref()) {
-                        Ok(read) => (*harnesses, *limits) = (read.harnesses.into(), read.limits),
+                        Ok(read) => {
+                            (*harnesses, *limits, *usage) =
+                                (read.harnesses.into(), read.limits, read.usage)
+                        }
                         Err(error) => tracing::warn!(%error, "the Harness list does not read"),
                     }
                     *was = text;
@@ -302,6 +337,11 @@ impl Harnesses {
             }
         }
         (harnesses.clone(), *limits)
+    }
+
+    pub(crate) fn usage(&self) -> (Arc<[Harness]>, UsageSettings) {
+        let (harnesses, _) = self.followed();
+        (harnesses, self.0.lock().unwrap().usage)
     }
 
     pub fn find(&self, id: &str) -> Option<Harness> {
@@ -363,6 +403,7 @@ fn known() -> Vec<Harness> {
 struct Read {
     harnesses: Vec<Harness>,
     limits: LimitsSettings,
+    usage: UsageSettings,
 }
 
 fn parse(path: &Path, text: &str) -> Result<Read, Problem> {
@@ -375,7 +416,11 @@ fn parse(path: &Path, text: &str) -> Result<Read, Problem> {
         })
         .collect::<Result<_, _>>()?;
     let limits = file.limits.limits(path, text)?;
-    Ok(Read { harnesses, limits })
+    Ok(Read {
+        harnesses,
+        limits,
+        usage: file.usage,
+    })
 }
 
 /// The file's text; none when it is not there.
@@ -394,6 +439,7 @@ fn listed(path: &Path, text: Option<&str>) -> Result<Read, String> {
         None => Ok(Read {
             harnesses: known(),
             limits: LimitsSettings::default(),
+            usage: UsageSettings::default(),
         }),
     }
 }
@@ -444,7 +490,7 @@ fn template() -> String {
          # this file, the ones below. An entry with the ID of one Banda knows\n\
          # takes each key it leaves out from Banda, the adapter's version too;\n\
          # any other ID needs a name and a command. Check a change with:\n\
-         # banda settings check\n{ids}"
+         # banda settings check\n\n[usage]\nread = true\n{ids}"
     )
 }
 

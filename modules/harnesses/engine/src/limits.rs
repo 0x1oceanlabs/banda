@@ -45,7 +45,7 @@ pub(crate) const TABLE: &str = "CREATE TABLE harnesses_limits (
 
 /// Which Harness's limits Banda can read.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-enum Kind {
+pub(crate) enum Kind {
     Claude,
     Codex,
 }
@@ -54,7 +54,7 @@ impl Kind {
     /// What `harness` runs: the CLI its adapter is told of, by the
     /// variable or the program's name, else its ID. So a second account,
     /// an entry of its own with Claude Code's adapter, is Claude Code's.
-    fn of(harness: &Harness) -> Option<Kind> {
+    pub(crate) fn of(harness: &Harness) -> Option<Kind> {
         let named = |name: &str| match name {
             "claude" | "CLAUDE_CODE_EXECUTABLE" => Some(Kind::Claude),
             "codex" | "CODEX_PATH" => Some(Kind::Codex),
@@ -329,7 +329,7 @@ fn window(
 
 /// The milliseconds since 1970 of an RFC 3339 time, as Anthropic writes
 /// one: `2026-11-04T12:00:00.123456+00:00`.
-fn instant(text: &str) -> Option<i64> {
+pub(crate) fn instant(text: &str) -> Option<i64> {
     let (date, time) = text.split_once(['T', 't', ' '])?;
     let mut date = date.splitn(3, '-').map(str::parse::<i64>);
     let (year, month, day) = (date.next()?.ok()?, date.next()?.ok()?, date.next()?.ok()?);

@@ -10,6 +10,7 @@ publish.workspace = true
 [dependencies]
 agent-client-protocol = { workspace = true, features = ["process"] }
 async-trait.workspace = true
+dirs.workspace = true
 banda-kernel = { path = "../../../kernel" }
 banda-look = { path = "../../../look" }
 rusqlite.workspace = true

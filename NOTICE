@@ -15,3 +15,7 @@ Banda includes code from others, under their own licenses:
   app/ghostty/src/t3/fonts/LICENSE. Copyright (c) 2014 Ryan L McIntyre.
 
 app/ghostty/README.md says where each came from, at which commit.
+
+- LiteLLM's model price data, in modules/harnesses/engine/src/usage/prices.json:
+  MIT, modules/harnesses/engine/src/usage/LICENSE-LITELLM.
+  Copyright (c) 2023 Berri AI. The snapshot records its source and commit.

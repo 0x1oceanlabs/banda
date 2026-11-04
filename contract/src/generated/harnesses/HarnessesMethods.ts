@@ -4,10 +4,12 @@ import type { CommandMethod } from "../CommandMethod";
 import type { Nothing } from "../Nothing";
 import type { Accounted } from "./Accounted";
 import type { AskLimits } from "./AskLimits";
+import type { AskUsage } from "./AskUsage";
 import type { HarnessView } from "./HarnessView";
 import type { LimitsNow } from "./LimitsNow";
 import type { OneHarness } from "./OneHarness";
 import type { SignIn } from "./SignIn";
+import type { UsageNow } from "./UsageNow";
 
 export type HarnessesMethods = { 
 /**
@@ -35,4 +37,10 @@ sign_out: CommandMethod<OneHarness, null>,
  * task, look how much is left. `read` reads them anew, at most
  * once a minute; `limits_changed` says when that read is kept.
  */
-limits: CallMethod<AskLimits, LimitsNow>, };
+limits: CallMethod<AskLimits, LimitsNow>, 
+/**
+ * Local journal token usage and USD API estimates, including
+ * sessions outside Banda. UTC daily rows for a bounded interval;
+ * unpriced requests are explicit. `read` collects new records.
+ */
+usage: CallMethod<AskUsage, UsageNow>, };
