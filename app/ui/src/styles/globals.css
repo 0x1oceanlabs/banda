@@ -415,3 +415,63 @@ html[data-sidebar="desk"] [data-sidebar-shown] {
   background-color: color-mix(in oklab, var(--color-primary) 55%, transparent);
   color: var(--color-primary-foreground);
 }
+
+/* A diagram in a reply is one card: Streamdown's own has a "mermaid" bar
+   and a box inside a box. The card is the ground a little inked, as the
+   diagram's own colours mix it (`lib/diagram-look.ts`); expand and copy
+   sit in its corner. In the reply the diagram stays still, so the thread
+   scrolls over it; fullscreen is where it zooms and pans. */
+[data-streamdown="mermaid-block"] {
+  gap: 0;
+  padding: 0;
+  border-color: color-mix(in srgb, var(--foreground) 13%, var(--background));
+  border-radius: calc(var(--radius) * 1.4);
+  background: color-mix(in srgb, var(--foreground) 3.5%, var(--background));
+}
+[data-streamdown="mermaid-block"] > :first-child {
+  display: none;
+}
+[data-streamdown="mermaid-block"] > :last-child {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  padding: 2rem 1.5rem 1.25rem;
+}
+[data-streamdown="mermaid-block"] [data-streamdown="mermaid"] {
+  pointer-events: none;
+}
+[data-streamdown="mermaid-block"]
+  [data-streamdown="mermaid"]
+  > div
+  > .absolute {
+  display: none;
+}
+[data-streamdown="mermaid"] .node > rect {
+  rx: 6px;
+  ry: 6px;
+}
+[data-streamdown="mermaid-block-actions"] {
+  gap: 0.125rem;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  backdrop-filter: none;
+  opacity: 0.55;
+  transition: opacity 150ms;
+}
+[data-streamdown="mermaid-block"]:hover
+  [data-streamdown="mermaid-block-actions"],
+[data-streamdown="mermaid-block-actions"]:focus-within {
+  opacity: 1;
+}
+[data-streamdown="mermaid-block-actions"] button {
+  display: grid;
+  place-items: center;
+  width: 1.75rem;
+  height: 1.75rem;
+  padding: 0;
+  border-radius: calc(var(--radius) * 0.7);
+}
+[data-streamdown="mermaid-block-actions"] button:hover {
+  background: color-mix(in srgb, var(--foreground) 8%, var(--background));
+}
