@@ -49,7 +49,7 @@ export function App({ engine }: { engine: Engine }) {
         home={home?.id ?? machine}
         onCreated={put}
       />
-      <AskToShare />
+      {spaces.length > 0 && <AskToShare />}
     </>
   )
 }

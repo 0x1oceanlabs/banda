@@ -246,12 +246,16 @@ export async function firstThread(
   page: Page
 ): Promise<{ thread: Locator; composer: Locator }> {
   await expect(page.getByRole("region", { name: "New Thread" })).toBeVisible()
-  await page.keyboard.press("Alt+KeyW")
+  await page
+    .getByRole("region", { name: "New Thread" })
+    .getByRole("button", { name: "Close New Thread", exact: true })
+    .click()
   await page.getByRole("button", { name: "Add Space", exact: true }).click()
   const menu = page.getByRole("dialog", { name: "Banda menu" })
   await menu.getByRole("option", { name: /New Space/ }).click()
   await menu.getByRole("combobox").fill("Work")
   await menu.getByRole("combobox").press("Enter")
+  await expect(menu).toBeHidden()
   const composer = page.getByRole("textbox", { name: "Message to Fake AI" })
   const thread = page.locator("section").filter({ has: composer })
   return { thread, composer }

@@ -1,7 +1,7 @@
 import { writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { expect, test } from "@playwright/test"
-import { startWindow, type Window } from "./window"
+import { firstThread, startWindow, type Window } from "./window"
 
 let window: Window
 test.afterEach(async () => window?.close())
@@ -9,8 +9,7 @@ test.afterEach(async () => window?.close())
 test("the limits ring follows the machine, opens its accounts, and hides with reading off", async () => {
   window = await startWindow()
   const { page, dir } = window
-  await page.getByLabel("Name").fill("Work")
-  await page.getByRole("button", { name: "Create Space" }).click()
+  await firstThread(page)
   await expect(page.getByRole("region", { name: "New Thread" })).toBeVisible()
   const ring = page.getByRole("button", { name: /^Usage limits:/ })
   await expect(ring).toHaveCount(0)
