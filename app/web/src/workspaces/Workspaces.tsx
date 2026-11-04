@@ -181,9 +181,11 @@ export function Workspaces({
             data-stack={workspace.id}
             className={cn(
               "absolute inset-0 origin-top-left",
-              // A screen of its own, the sidebar's room cut off.
+              // A plate of its own: the overview sizes it to what shows of
+              // the Strip, from its screen to the whole of it, and rounds it
+              // round the tiles, the outer gap between them.
               overview &&
-                "bg-desk [clip-path:inset(0_0_0_var(--sidebar-inset,0px)_round_var(--tile-radius))] glass:bg-transparent",
+                "overflow-clip rounded-[calc(var(--tile-radius)+var(--gap-outer))] bg-desk glass:bg-transparent",
               // An empty one shows as its slim row in the overview alone.
               overview &&
                 workspace.columns.length === 0 &&

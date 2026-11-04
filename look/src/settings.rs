@@ -281,7 +281,8 @@ pub struct Drawer {
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct Overview {
     /// How far it zooms the workspaces out, at most, as niri's: 0.5 is
-    /// half their size. Less, where the window is too narrow for it.
+    /// half their size. Less, where the window is too narrow for it, or
+    /// too short for them all, down to 0.15.
     #[schemars(range(min = 0, max = 1))]
     pub zoom: Option<f64>,
 }

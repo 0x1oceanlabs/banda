@@ -345,7 +345,7 @@
       "type": "object",
       "properties": {
         "zoom": {
-          "description": "How far it zooms the workspaces out, at most, as niri's: 0.5 is\nhalf their size. Less, where the window is too narrow for it.",
+          "description": "How far it zooms the workspaces out, at most, as niri's: 0.5 is\nhalf their size. Less, where the window is too narrow for it, or\ntoo short for them all, down to 0.15.",
           "type": "number",
           "format": "double",
           "minimum": 0,

@@ -2717,7 +2717,7 @@ test("the mouse moves Panes as niri's: a header, Alt and the left button, the ba
   await expect(bar.nth(1)).toHaveAttribute("aria-current", "true")
 })
 
-test("in the overview a middle click or a cross closes a Pane, and the wheel scrolls a workspace sideways", async () => {
+test("the overview shows every column of a workspace, and a middle click or a cross closes a Pane", async () => {
   window = await startWindow()
   const { page } = window
   const { thread, composer } = await firstThread(page)
@@ -2735,19 +2735,56 @@ test("in the overview a middle click or a cross closes a Pane, and the wheel scr
   await expect.poll(() => layoutOf(page)).toEqual([[t], [a], [b], [c]])
   const strip = page.locator("[data-strip]").first()
   const scrolled = () => strip.evaluate((s) => s.scrollLeft)
+  // Four half-screen columns: the screen shows the last two, once the
+  // Strip has scrolled there.
+  let before = -1
+  await expect
+    .poll(async () => {
+      const [was, now] = [before, await scrolled()]
+      before = now
+      return now > 0 && now === was
+    })
+    .toBe(true)
 
   await page.keyboard.press("Alt+KeyO")
   const overview = page.getByRole("dialog", { name: "Overview" })
   const tileOf = (id: string | null) => overview.locator(`[data-tile="${id}"]`)
+  const row = overview.getByRole("group", { name: "Workspace 1" })
+  // Every column shows in its row, and each Pane itself under its tile,
+  // the ones off the screen too.
+  const ids = [t, a, b, c]
+  await expect
+    .poll(async () => {
+      const box = (await row.boundingBox())!
+      const boxes = await Promise.all(
+        ids.flatMap((id) => [
+          tileOf(id).boundingBox(),
+          page.locator(`section[data-tile="${id}"]`).boundingBox(),
+        ])
+      )
+      return boxes.every(
+        (one, i) =>
+          one !== null &&
+          one.x >= box.x - 1 &&
+          one.x + one.width <= box.x + box.width + 1 &&
+          (i % 2 === 0 ||
+            Math.abs(one.x - boxes[i - 1]!.x) +
+              Math.abs(one.width - boxes[i - 1]!.width) <
+              2)
+      )
+    })
+    .toBe(true)
+  await page.screenshot({ path: "test-results/7d-overview-whole.png" })
+  // Closed, the Strip is scrolled as it was.
+  await page.keyboard.press("Escape")
+  await expect(overview).toBeHidden()
+  await expect.poll(scrolled).toBe(before)
+
   // A middle click closes the Pane under it.
+  await page.keyboard.press("Alt+KeyO")
+  await expect(overview).toBeVisible()
   await tileOf(c).click({ button: "middle" })
   await expect.poll(() => layoutOf(page)).toEqual([[t], [a], [b]])
-
-  // Sideways, the row scrolls, and the Strip under it with it.
-  await expect.poll(scrolled).toBeGreaterThan(0)
-  await overview.getByRole("group", { name: "Workspace 1" }).hover()
-  await page.mouse.wheel(-2000, 0)
-  await expect.poll(scrolled).toBe(0)
 
   // Its cross, shown as the mouse is over it, closes it too.
   await tileOf(a).hover()
@@ -2854,7 +2891,7 @@ test("the overview zooms out as far as [overview] zoom says", async () => {
   expect(width / room).toBeLessThan(0.2)
 })
 
-test("the overview: the arrows and Enter, typing, the window's keys, the drag", async () => {
+test("the overview: the arrows and Enter, the window's keys, the drag", async () => {
   window = await startWindow({ look: "[columns]\nmin = 10\n" })
   const { page } = window
   const { thread, composer } = await firstThread(page)
@@ -2905,15 +2942,13 @@ test("the overview: the arrows and Enter, typing, the window's keys, the drag", 
   await expect(overview).toBeHidden()
   await expect(thread).toHaveAttribute("data-focused", "true")
 
-  // Typing finds a Pane by its title; Esc forgets the words, then goes.
+  // Typing does nothing here: the overview has no search.
   await page.keyboard.press("Alt+KeyO")
   await page.keyboard.type("new p")
-  await expect(overview.getByRole("status")).toHaveText("“new p”: 1 Pane")
+  await expect(overview.getByRole("status")).toHaveCount(0)
+  await expect(picked).toHaveAttribute("data-tile", t!)
+  await page.keyboard.press("ArrowRight")
   await expect(picked).toHaveAttribute("data-tile", l!)
-  await expect(tileOf(t)).toHaveAttribute("data-dim", "true")
-  await page.keyboard.press("Escape")
-  await expect(overview.getByRole("status")).toHaveText("Type to find a Pane")
-  await expect(tileOf(t)).not.toHaveAttribute("data-dim")
   await expect(overview).toBeVisible()
 
   // The window's keys work here: Alt+Shift+Arrows move the Pane picked.
@@ -3374,12 +3409,13 @@ test("the overview shows how each Thread is, rings the one that calls, and draws
   await sendAndGoBelow(page, composer, "slow hello")
   await page.keyboard.press("Alt+KeyO")
   const overview = page.getByRole("dialog", { name: "Overview" })
-  await expect(overview.getByRole("status")).toHaveText("Type to find a Pane")
+  // Only what is there: no search, and a workspace's number alone.
+  await expect(overview.getByRole("status")).toHaveCount(0)
   const tile = overview.getByRole("button", { name: "slow hello in Work" })
   // Done out of sight, it calls: its mark says so, and it is ringed.
   await expect(tile).toHaveAttribute("data-called", "")
   await expect(tile.getByRole("img", { name: "Done" })).toBeVisible()
-  await expect(overview.getByText("1 Pane", { exact: true })).toBeVisible()
+  await expect(overview.getByText("1 Pane", { exact: true })).toHaveCount(0)
   const empty = overview.getByRole("group", { name: "Workspace 2" })
   await expect(empty).toHaveAttribute("data-empty", "true")
   expect((await empty.boundingBox())!.height).toBeLessThan(60)
