@@ -107,16 +107,16 @@ export const threadPane = definePane<ThreadArgs>({
 })
 
 function ThreadPane(props: PaneProps<ThreadArgs>) {
-  props = { ...props, space: props.args.scratch ?? props.space }
+  const space = props.args.scratch ?? props.space
   return (
-    <ThreadMedia space={props.space}>
+    <ThreadMedia space={space}>
       <MarkdownLinks
         open={(address, external) => {
           if (external) window.open(address, "_blank", "noopener,noreferrer")
-          else props.run?.("browser.open", { address, space: props.space })
+          else props.run?.("browser.open", { address, space })
         }}
       >
-        <ThreadContent {...props} />
+        <ThreadContent {...props} space={space} />
       </MarkdownLinks>
     </ThreadMedia>
   )
