@@ -382,8 +382,7 @@ test("Terminal: terminal.toml's rows write the file, and a terminal open follows
   })
   const { page, dir } = window
   const file = join(dir, "config/terminal.toml")
-  await page.getByLabel("Name").fill("Work")
-  await page.getByRole("button", { name: "Create Space" }).click()
+  await firstThread(page)
   await expect(page.getByRole("region", { name: "New Thread" })).toBeVisible()
   await page.keyboard.press("Alt+KeyN")
   await page
