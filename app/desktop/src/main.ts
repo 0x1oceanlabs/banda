@@ -54,7 +54,6 @@ import { firstFrame, firstLook, lookLayer } from "./look"
 import { modules } from "./modules"
 import { channel, stateFolder } from "./channel"
 import { listApp } from "./entry"
-import { NoticeArg, Notices, RecordedDesktop } from "./notices"
 import { startLog, watchProblems } from "./problems"
 import { roadLayer } from "./road"
 import { settingsLayer } from "./settings"
@@ -144,20 +143,9 @@ protocol.registerSchemesAsPrivileged([
   },
 ])
 
-/**
- * Where the page's notices go: the desktop's notification server, or, for
- * the end-to-end tests, a list they read (`BANDA_DESKTOP=recorded`).
- */
-const notices =
-  process.env.BANDA_DESKTOP === "recorded"
-    ? Notices.recorded(
-        ((globalThis as { bandaDesktop?: RecordedDesktop }).bandaDesktop =
-          new RecordedDesktop())
-      )
-    : Notices.system
-
 /** Main's services (ADR 0020): the engine and the look as children, the
- * settings, the notices, over them the modules' own, the browser's
+ * settings, over them the modules' own, the browser's and the
+ * notifications'
  * (modules.ts), and the road that answers what the modules' engine parts
  * ask (road.ts). They start with the first effect run, and stop when it
  * is disposed. */
@@ -177,7 +165,6 @@ const runtime = ManagedRuntime.make(
         ),
         lookLayer(engineBinary),
         settingsLayer(engineBinary),
-        notices,
         Window.layer(() => window)
       )
     ),
@@ -256,7 +243,7 @@ async function ready(): Promise<void> {
   // The page asks for nothing but to write to the clipboard, as "Copy
   // path" and a terminal's copy do: no camera, no notifications, no
   // location, no reading the clipboard. Its system notifications go through the desktop
-  // (notices.ts).
+  // (the notifications module, `@banda/notifications-desktop`).
   session.defaultSession.setPermissionRequestHandler(
     (_contents, permission, answer) =>
       answer(permission === "clipboard-sanitized-write")
@@ -365,26 +352,6 @@ async function ready(): Promise<void> {
       now: [none, () => Effect.sync(update.now)],
       later: [none, () => Effect.sync(update.later)],
     },
-    // Calls (ADR 0011).
-    notify: {
-      show: [
-        Schema.Tuple([NoticeArg]),
-        ([notice]) =>
-          Effect.andThen(
-            Notices.use((notices) => notices.show(notice, answered)),
-            // The workspace that holds the window lights up in the
-            // desktop's bar.
-            Effect.sync(() => {
-              if (window && !window.isFocused()) window.flashFrame(true)
-            })
-          ),
-      ],
-      withdraw: [
-        text,
-        ([key]) => Notices.use((notices) => notices.withdraw(key)),
-      ],
-      quiet: [none, () => Notices.use((notices) => notices.quiet)],
-    },
     // Panes in windows of their own (ADR 0025, decision 9): the window
     // pops them out; what they ask goes to it.
     popped: {
@@ -439,12 +406,6 @@ function openMenu(route: unknown): string {
   if (!shown) return "no window"
   tellPage(shown.webContents, BRIDGE.menu.listen, route)
   return "ok"
-}
-
-/** The Person clicked a notice: the window comes to the front, and the
- * page goes to what called. */
-function answered(key: string) {
-  tellPage(inFront()?.webContents, BRIDGE.notify.listen, key)
 }
 
 /** The window, or `shown`, brought to the front; none when it is closed. */

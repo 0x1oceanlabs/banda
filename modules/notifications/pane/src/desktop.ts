@@ -1,7 +1,8 @@
 /**
- * The desktop's notifications, on `window.banda.notify`
+ * The desktop's notifications, on `window.banda.notifications`
  * (app/desktop/src/preload.ts): the window's table takes the bridge in
- * (app/web/src/host.ts); none outside Banda's desktop window.
+ * (app/web/src/host.ts), and the module's desktop part answers it
+ * (`@banda/notifications-desktop`); none outside Banda's desktop window.
  */
 import { type HostOf, invoke, push, send } from "@banda/contract/bridge"
 
@@ -40,5 +41,6 @@ export type Desktop = HostOf<typeof NOTIFY_BRIDGE>
 /** The desktop's notifications; none outside Banda's desktop window. */
 export function desktopOf(): Desktop | undefined {
   if (typeof window === "undefined") return undefined
-  return (window as unknown as { banda?: { notify?: Desktop } }).banda?.notify
+  return (window as unknown as { banda?: { notifications?: Desktop } }).banda
+    ?.notifications
 }

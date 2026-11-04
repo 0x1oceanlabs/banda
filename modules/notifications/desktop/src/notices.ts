@@ -1,15 +1,16 @@
 /**
- * The desktop's side of Banda's calls (ADR 0011, decisions 3 and 4): it
- * shows a system notification the page asks for, takes it back, says when
- * the Person clicks it, and reads whether the desktop is quiet. The page
- * decides what to say and when; this only speaks to the desktop.
+ * The desktop's side of Banda's notifications (ADR 0011, decisions 3 and
+ * 4; ADR 0056): it shows a system notification the module's window part
+ * asks for, takes it back, says when the Person clicks it, and reads
+ * whether the desktop is quiet. The window part decides what to say and
+ * when; this only speaks to the desktop.
  */
-import type { Notice } from "@banda/web/host"
+import type { Notice } from "@banda/notifications-pane/desktop"
 import { Context, Effect, Layer, Schema } from "effect"
 import { ChildProcess, ChildProcessSpawner } from "effect/process"
 import { Notification, nativeImage } from "electron"
 
-/** A notice the page asks the desktop to show. */
+/** A notice the window part asks the desktop to show. */
 export const NoticeArg = Schema.Struct({
   key: Schema.String,
   title: Schema.String,

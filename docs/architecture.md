@@ -840,8 +840,9 @@ modules/*/desktop  a module's part in Electron main
   - Another part tells the Person in plain data, by running
     `notifications.tell` with a `Told` (`told.ts`): a key, a kind, the
     words and buttons that are actions by id. The Problems do (ADR 0039).
-  - A system notification is the desktop's (`app/desktop/src/notices.ts`):
-    the module asks for it through `window.banda.notify`, its bridge, with the mark
+  - A system notification is the desktop's, through the module's desktop
+    part (`modules/notifications/desktop/src/notices.ts`):
+    the module asks for it through `window.banda.notifications`, its bridge, with the mark
     still in its state as its icon (`stillMark`, drawn to a PNG), and the
     desktop shows it silent, takes it back once the Person sees the
     Thread, and says when they click it; the window comes to the front and
