@@ -4564,9 +4564,26 @@ test("No Space creates a folder only on the first message", async () => {
   await composer.press("Enter")
   await expect(page.getByText("You said: scratch hello")).toBeVisible()
   await expect(
-    page.getByRole("group", { name: "No Space", exact: true })
+    page.getByRole("complementary", { name: "Sidebar" })
   ).toContainText("scratch hello")
   expect(existsSync(join(dir, "root", "scratch"))).toBe(true)
+  await expect(
+    page.getByRole("group", { name: "No Space", exact: true })
+  ).toHaveCount(0)
+  const view = page.getByRole("button", { name: /^View: / })
+  await view.click()
+  await page.getByRole("menuitemradio", { name: /^spaces/ }).click()
+  await expect(
+    page.getByRole("group", { name: "No Space", exact: true })
+  ).toContainText("scratch hello")
+  await view.click()
+  await page.getByRole("menuitemradio", { name: /^places/ }).click()
+  await expect(
+    page.getByRole("group", { name: "No Space", exact: true })
+  ).toHaveCount(0)
+  await expect(
+    page.getByRole("complementary", { name: "Sidebar" })
+  ).toContainText("scratch hello")
 })
 
 test("No Space keeps its first attachment and message in one folder", async () => {
@@ -4600,7 +4617,7 @@ test("a No Space Thread becomes a Space and keeps working after its folder moves
   const original = join(scratch, readdirSync(scratch)[0])
   writeFileSync(join(original, "notes.txt"), "keep my files")
   await page
-    .getByRole("group", { name: "No Space", exact: true })
+    .getByRole("complementary", { name: "Sidebar" })
     .getByRole("button", { name: /promote this/ })
     .click({ button: "right" })
   await page.getByRole("menuitem", { name: "Make a Space from it…" }).click()
@@ -4615,8 +4632,8 @@ test("a No Space Thread becomes a Space and keeps working after its folder moves
     "keep my files"
   )
   await expect(
-    page.getByRole("group", { name: "No Space", exact: true })
-  ).not.toContainText("promote this")
+    page.getByRole("complementary", { name: "Sidebar" })
+  ).toContainText("promote this")
   await composer.fill("after moving")
   await composer.press("Enter")
   await expect(thread.getByText("You said: after moving")).toBeVisible()
@@ -4632,7 +4649,7 @@ test("promotion can keep the folder where it is", async () => {
   const scratch = join(dir, "root", "scratch")
   const original = join(scratch, readdirSync(scratch)[0])
   await page
-    .getByRole("group", { name: "No Space", exact: true })
+    .getByRole("complementary", { name: "Sidebar" })
     .getByRole("button", { name: /keep here/ })
     .click({ button: "right" })
   await page.getByRole("menuitem", { name: "Make a Space from it…" }).click()
@@ -4660,7 +4677,7 @@ test("moving a No Space folder waits for its Turn and terminals", async () => {
   const question = thread.getByRole("group", { name: "Run a check" })
   await expect(question).toBeVisible()
   const row = page
-    .getByRole("group", { name: "No Space", exact: true })
+    .getByRole("complementary", { name: "Sidebar" })
     .getByRole("button", { name: /please ask first/ })
   const dialog = page.getByRole("dialog", {
     name: "Make a Space from this Thread",
