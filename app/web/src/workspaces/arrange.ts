@@ -415,7 +415,12 @@ export function workspaceMoved(
   const last = state.list.length - 1
   const index = clamp(state.current + by, last)
   if (state.current === last || index === state.current) return undefined
-  const workspace = state.list[state.current].id
+  return workspaceTo(state.list[state.current].id, index)
+}
+
+/** Moves a workspace to `index` from the top, counted as if it had left
+ * its place: one dragged by its number in the overview. */
+export function workspaceTo(workspace: string, index: number): Plan {
   return {
     command: {
       method: "workspaces.move_workspace",

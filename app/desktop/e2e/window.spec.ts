@@ -2744,6 +2744,87 @@ test("in the overview a middle click or a cross closes a Pane, and the wheel scr
   await expect(overview).toBeVisible()
 })
 
+test("in the overview a workspace's number carries it up or down, Esc puts it back, and a click goes there", async () => {
+  // Small enough that every workspace shows at once.
+  window = await startWindow({ look: "[overview]\nzoom = 0.2\n" })
+  const { page } = window
+  const { thread, composer } = await firstThread(page)
+  await expect(composer).toBeFocused()
+  // The Thread on workspace 1, a launcher on 2 and one on 3.
+  const t = await thread.getAttribute("data-tile")
+  const launcher = page.getByRole("region", { name: "New Pane" })
+  const opened: (string | null)[] = []
+  for (const n of [2, 3]) {
+    await page.keyboard.press("Alt+KeyN")
+    await expect(launcher).toHaveCount(n - 1)
+    const fresh = launcher.and(page.locator('[data-focused="true"]'))
+    await expect(fresh).not.toHaveAttribute("data-tile", opened[0] ?? "")
+    opened.push(await fresh.getAttribute("data-tile"))
+    await page.keyboard.press(`Alt+Shift+Digit${n}`)
+    await onWorkspace(page, String(n))
+  }
+  const [a, b] = opened
+  await page.keyboard.press("Alt+KeyO")
+  const overview = page.getByRole("dialog", { name: "Overview" })
+  const order = () =>
+    overview
+      .locator("[data-row]")
+      .evaluateAll((rows) =>
+        rows.map(
+          (row) => row.querySelector<HTMLElement>("[data-tile]")?.dataset.tile
+        )
+      )
+  await expect.poll(order).toEqual([t, a, b, undefined])
+  const number = (n: number) =>
+    overview.getByRole("button", { name: `Move workspace ${n}` })
+  // The empty one at the bottom has no handle.
+  await expect(number(4)).toHaveCount(0)
+  const drag = async (n: number, to: number) => {
+    const from = (await number(n).boundingBox())!
+    const over = (await overview
+      .getByRole("group", { name: `Workspace ${to}` })
+      .boundingBox())!
+    await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2)
+    await page.mouse.down()
+    await page.mouse.move(from.x + from.width / 2, over.y + 4, { steps: 8 })
+  }
+
+  // Carried over the first, the one it passes steps aside, its Panes along.
+  await drag(3, 1)
+  const stack = page.locator(`[data-stack]:has([data-tile="${b}"])`)
+  const row = overview.getByRole("group", { name: "Workspace 3" })
+  await expect
+    .poll(async () => {
+      const [s, r] = [await stack.boundingBox(), await row.boundingBox()]
+      return Math.abs(s!.y - r!.y) < 2
+    })
+    .toBe(true)
+  // Once the ones passed have stepped aside.
+  await page.waitForTimeout(300)
+  await page.screenshot({ path: "test-results/7e-overview-reorder.png" })
+  // Esc puts it back, and the overview stays.
+  await page.keyboard.press("Escape")
+  await page.mouse.up()
+  await expect(overview).toBeVisible()
+  await expect.poll(order).toEqual([t, a, b, undefined])
+  await expect(overview.locator("li[data-lifted]")).toHaveCount(0)
+
+  // Dropped there, it is first, and the numbers count again.
+  await drag(3, 1)
+  await page.mouse.up()
+  await expect.poll(order).toEqual([b, t, a, undefined])
+  await expect(overview).toBeVisible()
+
+  // A click on a number goes to its workspace.
+  await number(3).click()
+  await expect(overview).toBeHidden()
+  await onWorkspace(page, "3")
+  await expect(page.locator(`section[data-tile="${a}"]`)).toHaveAttribute(
+    "data-focused",
+    "true"
+  )
+})
+
 test("the overview zooms out as far as [overview] zoom says", async () => {
   window = await startWindow({ look: "[overview]\nzoom = 0.2\n" })
   const { page } = window

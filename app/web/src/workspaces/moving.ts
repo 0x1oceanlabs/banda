@@ -136,3 +136,15 @@ export function nudge(
 export function pushed(at: number, from: number, size: number): number {
   return edgeSpeed(at - (from + size - EDGE)) - edgeSpeed(from + EDGE - at)
 }
+
+/** Swallows the click a release makes, once: a drag's, not what it ends
+ * on. */
+export function swallowClick() {
+  window.addEventListener("click", swallow, true)
+  setTimeout(() => window.removeEventListener("click", swallow, true))
+}
+
+function swallow(event: Event) {
+  event.stopPropagation()
+  event.preventDefault()
+}

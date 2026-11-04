@@ -1,6 +1,7 @@
 import { cn } from "@banda/ui/lib/utils"
 import {
   type CSSProperties,
+  type HTMLAttributes,
   type KeyboardEvent,
   useEffect,
   useLayoutEffect,
@@ -8,13 +9,14 @@ import {
   useRef,
   useState,
 } from "react"
-import { XIcon } from "lucide-react"
+import { GripHorizontalIcon, XIcon } from "lucide-react"
 import { Button } from "@banda/ui/components/button"
 import type { SpaceId } from "@banda/contract"
 import { DEFAULT_OVERVIEW } from "@banda/contract/look"
 import type { Label, Listed } from "@banda/ui/pane"
 import type { Chime } from "@banda/ui/sound"
 import { labelOf, useSaid } from "../registry"
+import { workspaceTo } from "./arrange"
 import { ThreadMark } from "../sidebar/Row"
 import { useLookColumns, useLookOverview } from "../look"
 import {
@@ -38,6 +40,7 @@ import {
 } from "./model"
 import { lying, nudge, pushed } from "./moving"
 import type { Frame } from "./PaneFrame"
+import { STEP_ASIDE, useReorder } from "./reorder"
 import { type Carrying, landIn, useMoving } from "./useMoving"
 
 /** Where a Pane lands before the overview is drawn: nowhere. */
@@ -87,7 +90,9 @@ type Screen = {
  * title or Space, and the arrows step through those. The mouse carries a
  * Pane as on a Strip, from anywhere on it: beside another, or between two
  * workspaces, where it makes a new one. A click on a Pane goes to it; on
- * a workspace, there. `Esc` goes back.
+ * a workspace, there. A workspace's number carries it, and its Panes,
+ * up or down, the others stepping aside; the empty one at the bottom
+ * stays. `Esc` puts one carried back, or goes back.
  *
  * What shows is the workspaces themselves, zoomed out under it over a dark
  * backdrop, as niri's: each stands under its row, so a Pane's tile here
@@ -165,17 +170,21 @@ export function Overview({
   // where its row is, and its Strip scrolls as the row does, or the row as
   // the Strip, whichever moved, so what shows is the Panes as they are.
   const from = (screen?.from ?? 0) * zoom
-  const ids = workspaces.list.map((workspace) => workspace.id).join()
+  const order = workspaces.list.map((workspace) => workspace.id)
+  const ids = order.join()
   useLayoutEffect(() => {
     const element = root.current
     if (!element || !zoom) return
     const all = [...element.querySelectorAll<HTMLElement>("[data-row]")]
       .map((row) => {
         const id = row.dataset.row ?? ""
-        return { row, stack: stackOf(id), strip: stripOf(id) }
+        const place = row.closest("li")
+        return { row, place, stack: stackOf(id), strip: stripOf(id) }
       })
-      .flatMap(({ row, stack, strip }) =>
-        stack && strip ? [{ row, stack, strip, x: NaN, y: NaN, at: NaN }] : []
+      .flatMap(({ row, place, stack, strip }) =>
+        stack && strip
+          ? [{ row, place, stack, strip, x: NaN, y: NaN, at: NaN, up: false }]
+          : []
       )
     let frame = 0
     const step = () => {
@@ -188,6 +197,12 @@ export function Overview({
       }))
       all.forEach((one, i) => {
         const { box, row, strip } = read[i]
+        // One carried by its number draws over the others, its Panes too.
+        const up = one.place?.hasAttribute("data-lifted") ?? false
+        if (up !== one.up) {
+          one.stack.style.zIndex = up ? "1" : ""
+          one.up = up
+        }
         const x = box.left - over.left - from
         const y = box.top - over.top
         if (x !== one.x || y !== one.y) {
@@ -261,6 +276,11 @@ export function Overview({
     }
   })
   useMoving(root, carrying)
+  // A workspace's number carries it up or down.
+  const list = useRef<HTMLOListElement>(null)
+  const reorder = useReorder(list, root, order, (id, index) =>
+    frame.arrange(workspaceTo(id, index))
+  )
 
   const type = (next: string) => {
     setQuery(next)
@@ -323,11 +343,16 @@ export function Overview({
       </p>
       {screen && zoom > 0 && (
         <ol
+          ref={list}
           className="mx-auto flex w-fit flex-col"
           style={{ "--gap-inner": `${screen.gap * zoom}px` } as CSSProperties}
         >
           {workspaces.list.map((workspace, i) => (
-            <li key={workspace.id} className="flex flex-col">
+            <li
+              key={workspace.id}
+              className="group/place relative flex flex-col transition-transform ease-out data-held:transition-none data-lifted:z-1"
+              style={{ transitionDuration: `${STEP_ASIDE}ms` }}
+            >
               {/* Dropped here, a Pane makes a workspace of its own. */}
               <div
                 data-between={i}
@@ -339,6 +364,17 @@ export function Overview({
                   workspace={workspace}
                   number={i + 1}
                   current={i === workspaces.current}
+                  movable={i < workspaces.list.length - 1}
+                  onGo={() => {
+                    if (!reorder.clicked()) return
+                    onGo(workspace.id)
+                    onClose()
+                  }}
+                  onPointerDown={(event) => reorder.press(event, i)}
+                  onPointerMove={reorder.drag}
+                  onPointerUp={reorder.drop}
+                  onPointerCancel={reorder.cancel}
+                  onLostPointerCapture={reorder.cancel}
                 />
                 <Row
                   workspace={workspace}
@@ -414,7 +450,7 @@ function Row({
       aria-label={`Workspace ${number}`}
       aria-current={current || undefined}
       // An empty one is a slim place to drop a Pane, not a whole screen.
-      className="flex shrink-0 cursor-pointer gap-(--gap-inner) overflow-x-auto overflow-y-hidden rounded-lg outline-1 outline-overview-foreground/10 [scrollbar-width:none] hover:outline-overview-foreground/30 aria-[current]:outline-2 aria-[current]:outline-overview-foreground/70 data-empty:items-center data-empty:justify-center data-empty:text-xs data-empty:text-overview-foreground/50 data-empty:outline-dashed"
+      className="flex shrink-0 cursor-pointer gap-(--gap-inner) overflow-x-auto overflow-y-hidden rounded-lg outline-1 outline-overview-foreground/10 [scrollbar-width:none] group-data-lifted/place:shadow-[0_14px_30px_rgb(0_0_0/0.6)] hover:outline-overview-foreground/30 aria-[current]:outline-2 aria-[current]:outline-overview-foreground/70 data-empty:items-center data-empty:justify-center data-empty:text-xs data-empty:text-overview-foreground/50 data-empty:outline-dashed"
       style={{
         width: (screen.inner + 2 * screen.outer) * zoom,
         height: empty ? EMPTY : screen.height * zoom,
@@ -529,33 +565,78 @@ function Row({
   )
 }
 
-/** A workspace's number, and how many Panes it holds. */
+/** A workspace's number, and how many Panes it holds; `movable`, the
+ * number carries it up or down, and a click goes there. */
 function WorkspaceLabel({
   workspace,
   number,
   current,
+  movable,
+  onGo,
+  ...pointer
 }: {
   workspace: Workspaces["list"][number]
   number: number
   current: boolean
-}) {
+  movable: boolean
+  onGo: () => void
+} & Pick<
+  HTMLAttributes<HTMLElement>,
+  | "onPointerDown"
+  | "onPointerMove"
+  | "onPointerUp"
+  | "onPointerCancel"
+  | "onLostPointerCapture"
+>) {
   const count = workspace.columns.reduce(
     (n, column) => n + column.entries.length,
     0
   )
-  return (
-    <span
-      className={cn(
-        "shrink-0 pt-0.5 text-center tabular-nums",
-        current ? "text-overview-foreground" : "text-overview-foreground/60"
-      )}
-      style={{ width: LABEL }}
-    >
+  const look = cn(
+    "group/number shrink-0 self-start rounded-md pt-0.5 pb-1 text-center tabular-nums select-none",
+    current ? "text-overview-foreground" : "text-overview-foreground/60"
+  )
+  const said = (
+    <>
       <span className="block text-sm font-medium">{number}</span>
       {count > 0 && (
         <span className="block text-[10px] opacity-70">{panes(count)}</span>
       )}
-    </span>
+    </>
+  )
+  // The empty one at the bottom stays: it has no handle.
+  if (!movable) {
+    return (
+      <span className={look} style={{ width: LABEL }}>
+        {said}
+      </span>
+    )
+  }
+  return (
+    <button
+      type="button"
+      // The focus stays with the overview, which takes the keys.
+      tabIndex={-1}
+      aria-label={`Move workspace ${number}`}
+      title="Drag to move (Alt+Shift+PageUp/PageDown)"
+      className={cn(
+        look,
+        "cursor-grab group-data-lifted/place:cursor-grabbing group-data-lifted/place:bg-overview-foreground/15 hover:bg-overview-foreground/10 active:cursor-grabbing"
+      )}
+      style={{ width: LABEL }}
+      onMouseDown={(event) => event.preventDefault()}
+      onClick={(event) => {
+        event.stopPropagation()
+        onGo()
+      }}
+      {...pointer}
+    >
+      {said}
+      <GripHorizontalIcon
+        aria-hidden
+        className="mx-auto size-3 opacity-0 group-hover/number:opacity-70 group-data-lifted/place:opacity-70"
+      />
+    </button>
   )
 }
 
