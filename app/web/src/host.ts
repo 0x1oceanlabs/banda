@@ -142,7 +142,7 @@ export const BRIDGE = bridge({
   },
   /** The desktop's notifications and its quiet: the notifications
    * module's (ADR 0056). */
-  notify: NOTIFY_BRIDGE,
+  notifications: NOTIFY_BRIDGE,
   /**
    * Panes in windows of their own (ADR 0025, decision 9). The window keeps
    * each in its place; main opens its own window on the page at

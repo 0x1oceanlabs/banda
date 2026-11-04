@@ -9,6 +9,7 @@
 import { agentsDesktop } from "@banda/agents-desktop"
 import { browserDesktop } from "@banda/browser-desktop"
 import { harnessesDesktop } from "@banda/harnesses-desktop"
+import { notificationsDesktop } from "@banda/notifications-desktop"
 import { sharingDesktop } from "@banda/sharing-desktop"
 import type { Asked, DesktopModule } from "@banda/desktop-kit"
 import { Layer } from "effect"
@@ -29,6 +30,7 @@ const asked: Readonly<
         | typeof agentsDesktop
         | typeof sharingDesktop
         | typeof harnessesDesktop
+        | typeof notificationsDesktop
       >
     >
   >
@@ -40,9 +42,17 @@ const asked: Readonly<
 }
 
 export const modules = {
-  layer: Layer.mergeAll(browserDesktop.layer, agentsDesktop.layer),
+  layer: Layer.mergeAll(
+    browserDesktop.layer,
+    agentsDesktop.layer,
+    notificationsDesktop.layer
+  ),
   /** Under where the bridge's table takes each module in. */
-  answers: { browser: browserDesktop.answers, agents: agentsDesktop.answers },
+  answers: {
+    browser: browserDesktop.answers,
+    agents: agentsDesktop.answers,
+    notifications: notificationsDesktop.answers,
+  },
   asked,
   /** By the host of `app://` each serves. */
   served: agentsDesktop.served,

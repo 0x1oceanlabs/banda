@@ -299,7 +299,7 @@ export async function sendAndLeave(
   await expect(page.getByRole("region", { name: "New Thread" })).toBeVisible()
 }
 
-/** What the recorded desktop was asked to show (app/desktop/src/notices.ts). */
+/** What the recorded desktop was asked to show (modules/notifications/desktop/src/notices.ts). */
 export type Recorded = {
   shown: {
     key: string
