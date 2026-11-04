@@ -295,22 +295,8 @@ export function Sidebar({
               No Threads yet
             </p>
           ) : (
-            arranged.sections
-              .filter((section) => section.key !== "no-space")
-              .map(drawn)
+            arranged.sections.map(drawn)
           )}
-          {arranged.sections
-            .filter((section) => section.key === "no-space")
-            .map(drawn)}
-          {!arranged.sections.some((section) => section.key === "no-space") &&
-            drawn({
-              key: "no-space",
-              label: "No Space",
-              rows: [],
-              folded: toggled.has("no-space"),
-              mark: "rest",
-              waiting: 0,
-            })}
         </div>
       </ScrollArea>
       {arranged.shelves.length > 0 && (

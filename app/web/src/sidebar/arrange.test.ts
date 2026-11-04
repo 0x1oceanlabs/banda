@@ -183,24 +183,60 @@ test("folded comes from the settings, and the Person's toggle turns it over", ()
   ).toBe(true)
 })
 
-test("scratch Threads form one group after regular Spaces in every preset", () => {
+test("scratch Threads follow grouping, sorting, shelves and filtering like other Threads", () => {
   const scratch = { ...space("scratch", "", "/scratch"), scratch: true }
+  const allSpaces = [...spaces, scratch]
+  const allLists = {
+    ...lists,
+    scratch: [
+      listed("loose", "rest", 7),
+      listed("busy", "running", 8),
+      listed("old", "rest", 0),
+    ],
+  }
   for (const by of ["space", "state", "none"] as const) {
+    const settings = over(resolve("inbox"), {
+      group: { by, bottom: ["settled"] },
+      spaces: { list: true },
+    })
     const result = arrange(
-      { ...lists, scratch: [listed("loose", "rest", 7)] },
-      [...spaces, scratch],
-      over(DEFAULT_SIDEBAR, { group: { by }, spaces: { list: true } })
+      allLists,
+      allSpaces,
+      settings,
+      undefined,
+      new Set(),
+      (row) => row.id === "old"
     )
     expect(result.spaces?.some((line) => line.space.scratch)).toBe(false)
-    expect(result.sections.at(-1)?.label).toBe("No Space")
-    expect(result.sections.at(-1)?.rows.map((row) => row.listed.id)).toEqual([
-      "loose",
-    ])
+    if (by === "space") {
+      expect(result.sections.at(-1)?.label).toBe("No Space")
+      expect(result.sections.at(-1)?.rows.map((row) => row.listed.id)).toEqual([
+        "busy",
+        "loose",
+        "old",
+      ])
+    } else {
+      expect(result.sections.some((s) => s.key === "no-space")).toBe(false)
+      const mixed = result.sections.flatMap((s) => s.rows)
+      expect(mixed.some((row) => row.space.scratch)).toBe(true)
+      if (by === "state")
+        expect(
+          result.shelves
+            .find((s) => s.key === "settled")
+            ?.rows.map((r) => r.listed.id)
+        ).toContain("old")
+      if (by === "none")
+        expect(
+          result.sections[0].rows.findIndex((r) => r.listed.id === "busy")
+        ).toBeLessThan(
+          result.sections[0].rows.findIndex((r) => r.listed.id === "loose")
+        )
+    }
+    const filtered = arrange(allLists, allSpaces, settings, landing.id)
     expect(
-      result.sections
-        .slice(0, -1)
+      [...filtered.sections, ...filtered.shelves]
         .flatMap((s) => s.rows)
-        .some((r) => r.space.scratch)
-    ).toBe(false)
+        .every((r) => r.space.id === landing.id)
+    ).toBe(true)
   }
 })

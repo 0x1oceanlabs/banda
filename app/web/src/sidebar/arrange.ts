@@ -81,34 +81,7 @@ export function arrange(
   toggled: ReadonlySet<string> = new Set(),
   settled: (listed: Listed) => boolean = () => false
 ): Arranged {
-  const scratch = spaces.filter((space) => space.scratch && !space.archived)
-  if (scratch.length > 0) {
-    const arranged = arrange(
-      lists,
-      spaces.filter((space) => !space.scratch),
-      settings,
-      only,
-      toggled,
-      settled
-    )
-    const rows: Row[] = scratch
-      .flatMap((space) =>
-        (lists[space.id] ?? []).map((listed) => ({
-          space,
-          listed,
-          state: stateOf(listed, settled),
-        }))
-      )
-      .sort(order(settings.sort.by))
-    arranged.sections.push({
-      key: "no-space",
-      label: "No Space",
-      rows,
-      folded: toggled.has("no-space"),
-      ...rollup(rows),
-    })
-    return arranged
-  }
+  const named = spaces.filter((space) => !space.scratch)
   const all: Row[] = spaces.flatMap((space) =>
     (lists[space.id] ?? []).map((listed) => ({
       space,
@@ -142,15 +115,15 @@ export function arrange(
       : sections.filter((section) => section.rows.length > 0)
 
   const listed = settings.spaces.list
-    ? { spaces: spaceLines(all, spaces, settings) }
+    ? { spaces: spaceLines(all, named, settings) }
     : {}
 
   switch (settings.group.by) {
     case "space":
       return {
         ...listed,
-        sections: kept(
-          orderSpaces(all, spaces, settings).map((space) =>
+        sections: kept([
+          ...orderSpaces(all, named, settings).map((space) =>
             section(
               space.id,
               space.name,
@@ -158,8 +131,17 @@ export function arrange(
               space,
               space.name
             )
-          )
-        ),
+          ),
+          ...(rows.some((row) => row.space.scratch)
+            ? [
+                section(
+                  "no-space",
+                  "No Space",
+                  rows.filter((row) => row.space.scratch)
+                ),
+              ]
+            : []),
+        ]),
         shelves: [],
       }
     case "none":
