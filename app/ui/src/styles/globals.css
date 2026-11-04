@@ -6,6 +6,7 @@
 @import "@fontsource-variable/jetbrains-mono";
 @import "@fontsource-variable/jetbrains-mono/wght-italic.css";
 @import "streamdown/styles.css";
+@import "katex/dist/katex.min.css";
 
 @custom-variant dark (&:is(.dark *));
 /* A sidebar right on the desk, not a panel (ADR 0023); over the Strip, in a
@@ -19,6 +20,8 @@
 @source "../**/*.{ts,tsx}";
 @source "../../../ghostty/src/**/*.ts";
 @source "../../node_modules/streamdown/dist/*.js";
+@source "../../node_modules/@streamdown/mermaid/dist/*.js";
+@source "../../node_modules/@streamdown/math/dist/*.js";
 
 @theme inline {
   --font-heading: var(--font-sans);
