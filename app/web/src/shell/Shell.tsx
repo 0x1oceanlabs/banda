@@ -1067,6 +1067,7 @@ export function Shell({
     .join()
   useEffect(() => {
     const api: WindowApi = {
+      engine: partsNow.current.engine,
       get home() {
         return partsNow.current.home
       },

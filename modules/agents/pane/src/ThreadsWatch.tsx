@@ -36,10 +36,11 @@ function ThreadsWatch({ engine, project, report }: WatchProps) {
         listedOf(
           thread,
           seen,
-          thread.harness && harnessName(harnesses, thread.harness)
+          thread.harness && harnessName(harnesses, thread.harness),
+          project
         )
       ),
-    [threads, seen, harnesses]
+    [threads, seen, harnesses, project]
   )
   // It reports once it read its list: what calls then already was.
   useEffect(() => {

@@ -1,6 +1,6 @@
 import type { ListedThread } from "@banda/contract/agents"
 import { expect, test } from "vitest"
-import { FAILED, listedOf } from "./rows"
+import { ANSWER, FAILED, listedOf, RETRY, SHOW } from "./rows"
 
 const thread = (more: Partial<ListedThread> = {}): ListedThread => ({
   id: "t1",
@@ -94,4 +94,52 @@ test("a renamed Thread lists the title it had before", () => {
     "hello there"
   )
   expect(listedOf(thread(), {}, "").was).toBeUndefined()
+})
+
+test("a toast answers a Question by its choices, and a failed turn by trying again or signing in", () => {
+  const choices = [
+    { id: "always", name: "Always", allows: true, always: true },
+    { id: "once", name: "Allow", allows: true, always: false },
+    { id: "no", name: "Deny", allows: false, always: false },
+  ]
+  const asking = thread({
+    latest: { turn: "u1", state: "running", began: 3 },
+    asking: [{ item: "q1", title: "Run npm test?", choices }],
+  })
+  expect(listedOf(asking, {}, "", "p").answers).toEqual([
+    {
+      label: "Allow",
+      action: ANSWER,
+      args: { project: "p", item: "q1", choice: "once" },
+    },
+    {
+      label: "Deny",
+      action: ANSWER,
+      args: { project: "p", item: "q1", choice: "no" },
+    },
+  ])
+  // One with a form is answered in its Thread: no buttons.
+  const form = thread({
+    latest: { turn: "u1", state: "running", began: 3 },
+    asking: [{ item: "q1", title: "Which?" }],
+  })
+  expect(listedOf(form, {}, "", "p").answers).toBeUndefined()
+
+  const failed = (failure?: { class: "sign_in" }) =>
+    thread({
+      latest: {
+        turn: "u1",
+        state: "failed",
+        began: 3,
+        ...(failure && { failure }),
+      },
+    })
+  expect(listedOf(failed(), {}, "", "p").answers).toEqual([
+    { label: "Try again", action: RETRY, args: { project: "p", turn: "u1" } },
+  ])
+  expect(
+    listedOf(failed({ class: "sign_in" }), {}, "", "p").answers
+  ).toMatchObject([{ label: "Sign in", action: SHOW }])
+  // Seen, it calls no more.
+  expect(listedOf(failed(), { t1: "u1" }, "", "p").answers).toBeUndefined()
 })

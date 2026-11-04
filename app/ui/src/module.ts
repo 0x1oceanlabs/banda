@@ -70,6 +70,9 @@ export type AnyPaneKind = PaneKind<Args>
  * What a module needs that this lacks is added here, not reached around.
  */
 export type WindowApi = {
+  /** The engine, as a module's action asks it: to answer a Question
+   * from its toast. */
+  engine: Engine
   /** The Project a new Thread starts in. */
   home: ProjectId
   /** Shows a new Pane right of the focused one, with its width, and

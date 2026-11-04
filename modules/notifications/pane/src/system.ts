@@ -57,14 +57,18 @@ export function toldOfCall(
   projectName?: string
 ): Told {
   const { key, body, answer } = noticeOf(call, detail)
-  const { project, about, pane, title } = call
+  const { project, about, pane, title, answers } = call
+  const goes = { label: answer, action: GO_TO, args: { project, about, pane } }
+  // What answers it there and then are its buttons; a click opens it.
+  const buttons = answers?.length ? answers.slice(0, 2) : [goes]
   return {
     key,
     kind: call.chime,
     title,
     ...(projectName ? { project: projectName } : {}),
     ...(body ? { body } : {}),
-    buttons: [{ label: answer, action: GO_TO, args: { project, about, pane } }],
+    buttons,
+    ...(answers?.length ? { open: goes } : {}),
   }
 }
 
