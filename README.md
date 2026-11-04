@@ -10,32 +10,61 @@ through: Threads where you work with an Agent (Claude Code or Codex), the
 terminal, a browser, the Diff of what changed. You work with Agents you
 already have, in the folders you already have.
 
-Banda is young: it runs on Linux now, and macOS comes next.
+Banda runs on Linux (x64) and macOS (Apple silicon). Only Banda Dev is
+published for now; a Stable release will come later.
 
 ## Install it
 
-Download the newest AppImage from
-[Releases](https://github.com/0x1oceanlabs/banda/releases), make it
-executable, and start it:
+### macOS
+
+Install [Homebrew](https://brew.sh), then Banda Dev from our tap:
 
 ```sh
-chmod +x banda-*-x86_64.AppImage
-./banda-*-x86_64.AppImage
+brew install --cask 0x1oceanlabs/banda/banda-dev
 ```
 
-It adds itself to your launcher on its first start. Two builds install side
-by side and keep apart:
+Open **Banda Dev** from Applications. The app is signed ad hoc and is not
+notarized yet; the cask removes its quarantine so macOS lets it open.
 
-- **Banda** (`banda-0.X.Y-x86_64.AppImage`): the one to work in.
-- **Banda Dev** (`banda-dev-0.X.Y-dev.N-x86_64.AppImage`, a pre-release):
-  what `main` is now, out after every merge.
+### Linux
 
-It needs FUSE 3, as most distributions have.
+Download the newest `banda-dev-…-x86_64.AppImage` from
+[Releases](https://github.com/0x1oceanlabs/banda/releases), make that file
+executable, and start it from the folder containing the download:
+
+```sh
+chmod +x ./banda-dev-*-x86_64.AppImage
+./banda-dev-*-x86_64.AppImage
+```
+
+It needs FUSE 3 and adds itself to your launcher on its first start.
+
+## Updates
+
+Banda Dev is published after a green push to `main`. Its widget on the bar
+shows the running version and checks for a new one a minute after launch,
+then every hour. The Banda menu's **Check for updates** checks at once.
+
+- **Linux AppImage:** downloads a new version in the background and
+  installs it when you quit. **Update now** in the widget downloads and
+  restarts at once; the popover warns that a restart stops active turns.
+- **macOS:** tells you when a new version is out and offers a command to
+  copy. Homebrew installs it:
+
+  ```sh
+  brew update && brew upgrade --cask banda-dev
+  ```
+
+  Quit Banda Dev before upgrading, then open it again. If the Mac's files
+  are still being published, Banda checks again in a minute.
+
+Banda Dev keeps its data and settings apart from the future Stable app
+and from Banda Local, which runs from a checkout.
 
 ## What it needs
 
 - **A Harness**: Claude Code (`claude`) or Codex (`codex`), installed and
-  logged in, and recent: Banda says so if it is too old. It runs as it
+  signed in, and recent: Banda says so if it is too old. It runs as it
   would in your terminal, so its account, its plan and its settings are
   yours.
 - **Node.js with `npx`**: Banda talks to each Harness through its Agent
@@ -59,7 +88,6 @@ decisions in [`docs/adr/`](docs/adr/), the words in
 [`GLOSSARY.md`](GLOSSARY.md). How to help: [`CONTRIBUTING.md`](CONTRIBUTING.md).
 
 ### Run it from a checkout
-
 
 You need Rust (stable), Node 24 and pnpm 11.
 
@@ -93,21 +121,15 @@ beside it, `pnpm --filter @banda/desktop dev`.
 ### Pack it
 
 ```sh
-scripts/package.sh dev    # or stable, or local: app/desktop/dist/*.AppImage
+scripts/package.sh dev    # or local
 ```
 
-It builds the engine for release, the page and the window, and packs them
-into an AppImage (ADR 0033). `BANDA_VERSION` names its version, `0.X.Y` or
-`0.X.Y-dev.N`; unset, it is the workspace's, marked local. On its first
-start the AppImage lists itself among the desktop's apps. The release
-workflow packs and publishes Dev on every green push to `main`, and Stable
-on a tag `v0.X.Y` (`.github/workflows/release.yml`). While the repository
-is private, `gh` fetches one:
-
-```sh
-gh release list --repo 0x1oceanlabs/banda           # the newest first
-gh release download v0.1.0-dev.42 --repo 0x1oceanlabs/banda --pattern '*.AppImage'
-```
+It builds the engine for release, the page and the window, and packs an
+AppImage on Linux or an Apple silicon app in a zip on macOS, under
+`app/desktop/dist/` (ADR 0033). `BANDA_VERSION` names its version; unset,
+it is the workspace's version, marked local. The release workflow packs
+and publishes Dev on a green push to `main`
+([`.github/workflows/release.yml`](.github/workflows/release.yml)).
 
 The ways to bring Banda to Linux: [`docs/research/2026-11-02-linux-distribution.md`](docs/research/2026-11-02-linux-distribution.md).
 
