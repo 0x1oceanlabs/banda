@@ -77,6 +77,11 @@ export type WindowApi = {
   spaces: () => readonly SpaceSummary[]
   /** How the look says to tell and to sound: `[notify]` and `[sound]`. */
   look: () => { notify: Notify; sound: SoundSettings }
+  /** Sets `key` in the settings' file `file` (ADR 0016), as `limits.look`
+   * in `harnesses.toml`, to `value`, written in TOML (`tomlOf`); what was
+   * wrong, if refused. The file is the one source: what reads it hears
+   * the change as any other. */
+  writeSetting: (file: string, key: string, value: string) => Promise<string[]>
 }
 
 /** What `WindowApi.beside` finds: the thing's Space, and the Panes of

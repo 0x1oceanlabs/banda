@@ -143,6 +143,13 @@ pub struct Limits {
     pub harness: String,
     /// The entry's name, which names the account: `Claude Code`, `Work`.
     pub name: String,
+    /// Which Harness the account is of, by the ID Banda knows it by:
+    /// `claude`, `codex`. Two accounts of one Harness have the same, as
+    /// the bar's widget counts the room of each Harness (ADR 0055,
+    /// decision 2).
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub kind: Option<String>,
     /// The account's plan, as the Harness names it: `Max 20x`, `Plus`.
     #[ts(optional)]
     #[serde(default, skip_serializing_if = "Option::is_none")]

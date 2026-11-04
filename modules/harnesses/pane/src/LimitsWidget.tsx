@@ -1,6 +1,22 @@
-import type { Limits, LimitsNow, LimitWindow } from "@banda/contract/harnesses"
-import { Button } from "@banda/ui/components/button"
-import { HarnessLogo } from "@banda/ui/components/harness-logo"
+import type {
+  Limits,
+  LimitsLook,
+  LimitsNow,
+  LimitWindow,
+  UsageNow,
+} from "@banda/contract/harnesses"
+import { tomlOf } from "@banda/contract/settings"
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuTrigger,
+} from "@banda/ui/components/context-menu"
+import {
+  DropdownMenuGroup,
+  DropdownMenuLabel,
+  DropdownMenuRadioGroup,
+  DropdownMenuRadioItem,
+} from "@banda/ui/components/dropdown-menu"
 import {
   Popover,
   PopoverContent,
@@ -16,21 +32,48 @@ import { useNow } from "@banda/ui/hooks/use-now"
 import { cn } from "@banda/ui/lib/utils"
 import { MINUTE, ago, fullDate, problem } from "@banda/ui/lib/words"
 import type { WidgetProps } from "@banda/ui/module"
+import { GaugeIcon } from "lucide-react"
 import { useMemo, useState } from "react"
 import {
+  type Room,
+  backWords,
+  colourOf,
   elapsedOf,
+  fullestOf,
+  harnessName,
+  harnessOf,
+  mostRoomOf,
   paceWords,
+  readAtOf,
   resetWords,
+  roomsOf,
+  shareOf,
+  shortName,
+  someOut,
   staleOf,
+  todayWords,
   toneOf,
   tooltipOf,
   usedOf,
 } from "./limits"
 
+/** The looks the Person picks from, as its context menu names them. */
+const LOOKS: readonly { look: LimitsLook; words: string }[] = [
+  { look: "icon", words: "Icon" },
+  { look: "meter", words: "Meter and share" },
+  { look: "number", words: "Share" },
+  { look: "providers", words: "Share of each Harness" },
+]
+
+/** A share's colour on the bar: the bar's own until `warn`. */
+function loudOf(used: number, warn: number): string | undefined {
+  return used >= warn ? toneOf(used, warn) : undefined
+}
+
 /** The machine's snapshot and event log keep this current even while
  * its popover is closed. Opening requests a provider read; the engine
  * owns the one-minute bound and publishes the result on that same log. */
-export function LimitsWidget({ engine }: WidgetProps) {
+export function LimitsWidget({ engine, window }: WidgetProps) {
   const [round, setRound] = useState(0)
   const source = useMemo<Source<LimitsNow>>(
     () => ({
@@ -44,130 +87,264 @@ export function LimitsWidget({ engine }: WidgetProps) {
   // harnesses.toml (including reading off) produces no limits event.
   const now = useNow(MINUTE)
   const live = useMachineLive(engine, source, now + round)
+  const [open, setOpen] = useState(false)
   const [error, setError] = useState<string>()
+  const [usage, setUsage] = useState<UsageNow>()
   if (live.state !== "ready") return null
-  const limits = live.view.limits
-  const windows = limits.flatMap((l) =>
-    l.windows.map((w) => ({ limits: l, used: usedOf(w, now) }))
-  )
-  if (windows.length === 0) return null
-  const fullest = windows.reduce((a, b) => (b.used > a.used ? b : a))
+  const { limits, warn, look } = live.view
+  const share = shareOf(limits, now)
+  if (!share) return null
   const words = tooltipOf(limits, now)
-  const around = 2 * Math.PI * 8
+  // The engine reads harnesses.toml as it answers: read again once written.
+  const pick = (next: LimitsLook) =>
+    void window
+      .writeSetting("harnesses.toml", "limits.look", tomlOf(next))
+      .then((refused) =>
+        refused.length > 0
+          ? setError(refused.join(" "))
+          : setRound((round) => round + 1)
+      )
   return (
-    <Popover
-      onOpenChange={(open) => {
-        if (!open) return
-        setError(undefined)
-        void engine
-          .call("harnesses.limits", { read: true })
-          .then(() => setRound((round) => round + 1))
-          .catch((error) => setError(problem(error)))
-      }}
-    >
-      <PopoverTrigger
-        render={
-          <Button
-            variant="ghost"
-            size="icon-sm"
-            aria-label={`Usage limits: ${words}`}
-            title={words}
-            className={cn(
-              toneOf(fullest.used, live.view.warn),
-              fullest.used >= 100
-                ? "hover:text-destructive aria-expanded:text-destructive"
-                : fullest.used >= live.view.warn
-                  ? "hover:text-warning aria-expanded:text-warning"
-                  : undefined,
-              staleOf(fullest.limits, now) && "opacity-50"
-            )}
-          />
-        }
-      >
-        <svg
-          viewBox="0 0 20 20"
-          className="size-4"
-          fill="none"
-          stroke="currentColor"
-          strokeWidth="2"
-          aria-hidden="true"
+    <ContextMenu>
+      <ContextMenuTrigger className="flex">
+        <Popover
+          open={open}
+          onOpenChange={(opening) => {
+            setOpen(opening)
+            if (!opening) return
+            setError(undefined)
+            void engine
+              .call("harnesses.limits", { read: true })
+              .then(() => setRound((round) => round + 1))
+              .catch((error) => setError(problem(error)))
+            void engine
+              .call("harnesses.usage", {})
+              .then(setUsage)
+              .catch(() => setUsage(undefined))
+          }}
         >
-          <circle cx="10" cy="10" r="8" className="opacity-20" />
-          <circle
-            cx="10"
-            cy="10"
-            r="8"
-            strokeDasharray={around}
-            strokeDashoffset={around * (1 - fullest.used / 100)}
-            transform="rotate(-90 10 10)"
-            className="transition-[stroke-dashoffset]"
-          />
-        </svg>
-      </PopoverTrigger>
-      <PopoverContent className="max-h-[min(32rem,80vh)] w-[min(24rem,calc(100vw-2rem))] gap-3 overflow-y-auto">
-        <PopoverTitle className="sr-only">Usage limits</PopoverTitle>
-        <div className="flex flex-col gap-3">
-          {limits.map((l) => (
-            <Account
-              key={l.harness}
-              limits={l}
-              now={now}
-              warn={live.view.warn}
+          <PopoverTrigger
+            render={
+              <button
+                type="button"
+                aria-label={`Usage limits: ${words}`}
+                title={words}
+                className={cn(
+                  "flex h-6 items-center gap-1.5 rounded-md px-2 text-xs text-muted-foreground tabular-nums outline-none hover:bg-muted hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 data-popup-open:bg-muted data-popup-open:text-foreground",
+                  staleOf(share.best, now) && "opacity-50"
+                )}
+              />
+            }
+          >
+            <Look
+              look={look}
+              share={share.share}
+              rooms={roomsOf(limits, now)}
+              warn={warn}
             />
-          ))}
-        </div>
-        {error && (
-          <p role="alert" className="text-xs text-destructive">
-            {error}
-          </p>
-        )}
-      </PopoverContent>
-    </Popover>
+            {someOut(limits, now) && (
+              <span
+                className="-ml-0.5 size-[5px] shrink-0 rounded-full bg-warning"
+                aria-hidden="true"
+              />
+            )}
+          </PopoverTrigger>
+          <PopoverContent className="max-h-[min(36rem,80vh)] w-[min(340px,calc(100vw-2rem))] gap-0 overflow-y-auto p-0">
+            <PopoverTitle className="sr-only">Usage limits</PopoverTitle>
+            <Accounts limits={limits} now={now} warn={warn} />
+            {error && (
+              <p
+                role="alert"
+                className="border-t border-border px-4 py-2 text-xs text-muted-foreground"
+              >
+                {error}
+              </p>
+            )}
+            <Foot
+              limits={limits}
+              usage={usage}
+              now={now}
+              onUsage={() => {
+                setOpen(false)
+                window.run("harnesses.usage")
+              }}
+            />
+          </PopoverContent>
+        </Popover>
+      </ContextMenuTrigger>
+      <ContextMenuContent className="min-w-48">
+        <DropdownMenuGroup>
+          <DropdownMenuLabel>Show the limits as</DropdownMenuLabel>
+          <DropdownMenuRadioGroup
+            value={look}
+            onValueChange={(next: LimitsLook) => pick(next)}
+          >
+            {LOOKS.map((one) => (
+              <DropdownMenuRadioItem
+                key={one.look}
+                value={one.look}
+                closeOnClick
+              >
+                {one.words}
+              </DropdownMenuRadioItem>
+            ))}
+          </DropdownMenuRadioGroup>
+        </DropdownMenuGroup>
+      </ContextMenuContent>
+    </ContextMenu>
+  )
+}
+
+/** The widget in the look the Person picked (ADR 0055, decision 2). */
+export function Look({
+  look,
+  share,
+  rooms,
+  warn,
+}: {
+  look: LimitsLook
+  share: number
+  rooms: readonly Room[]
+  warn: number
+}) {
+  const loud = loudOf(share, warn)
+  const shown = `${Math.round(share)}%`
+  switch (look) {
+    case "meter":
+      return (
+        <>
+          <span
+            className={cn(
+              "relative h-[3px] w-[22px] overflow-hidden rounded-full bg-foreground/10",
+              loud
+            )}
+            aria-hidden="true"
+          >
+            <span
+              className="absolute inset-y-0 left-0 rounded-full bg-current"
+              style={{ width: `${share}%` }}
+            />
+          </span>
+          <span className={loud}>{shown}</span>
+        </>
+      )
+    case "number":
+      return <span className={loud}>{shown}</span>
+    case "providers":
+      return rooms.map((room, i) => (
+        <span key={room.harness} className="flex items-center gap-1.5">
+          {i > 0 && <span className="text-muted-foreground/60">·</span>}
+          <span className="text-muted-foreground/70">
+            {shortName(room.harness)}
+          </span>
+          <span className={loudOf(room.share, warn)}>
+            {Math.round(room.share)}%
+          </span>
+        </span>
+      ))
+    case "icon":
+      return <GaugeIcon className={cn("size-4", loud)} aria-hidden="true" />
+  }
+}
+
+/** Every account, by Harness (ADR 0055, decision 3). */
+function Accounts({
+  limits,
+  now,
+  warn,
+}: {
+  limits: readonly Limits[]
+  now: number
+  warn: number
+}) {
+  const room = mostRoomOf(limits, now)
+  const placed = limits.map((l, place) => ({ limits: l, place }))
+  const harnesses = [...new Set(limits.map(harnessOf))]
+  return harnesses.flatMap((harness) =>
+    placed
+      .filter((each) => harnessOf(each.limits) === harness)
+      .map((each) => (
+        <Account
+          key={each.limits.harness}
+          limits={each.limits}
+          colour={colourOf(each.place)}
+          mostRoom={room.has(each.limits.harness)}
+          now={now}
+          warn={warn}
+        />
+      ))
   )
 }
 
 function Account({
   limits,
+  colour,
+  mostRoom,
   now,
   warn,
 }: {
   limits: Limits
+  colour: string
+  mostRoom: boolean
   now: number
   warn: number
 }) {
+  const out = limits.windows.length > 0 && fullestOf(limits, now) >= 100
+  const pace = limits.windows
+    .map((w) => paceWords(w, now))
+    .find((words) => words !== undefined)
+  // A Harness's own entry is named by it already: "Codex", not "Codex Codex".
+  const harness = harnessName(limits)
+  const what = [harness === limits.name ? undefined : harness, limits.plan]
+    .filter(Boolean)
+    .join(" · ")
   return (
     <section
       aria-label={limits.name}
-      className="flex flex-col gap-2 border-border not-first:border-t not-first:pt-3"
+      className="flex flex-col border-t border-border px-4 py-3.5 first-of-type:border-t-0"
     >
-      <div className="flex items-center gap-2">
-        <HarnessLogo id={limits.harness} name={limits.name} fallback={null} />
-        <span className="font-medium">{limits.name}</span>
-        {limits.plan && (
-          <span className="ml-auto text-xs text-muted-foreground">
-            {limits.plan}
+      <div className="mb-2 flex items-center gap-2">
+        <span className="flex min-w-0 items-center gap-2">
+          <span
+            className="size-1.5 shrink-0 rounded-full"
+            style={{ background: colour }}
+            aria-hidden="true"
+          />
+          <span className="truncate font-medium">{limits.name}</span>
+        </span>
+        <span
+          className="truncate text-xs text-muted-foreground/70"
+          title={limits.email}
+        >
+          {what}
+        </span>
+        {out ? (
+          <span className="ml-auto shrink-0 text-[11.5px] text-destructive">
+            {backWords(limits, now)}
           </span>
+        ) : (
+          mostRoom && (
+            <span className="ml-auto shrink-0 text-[11.5px] text-muted-foreground">
+              most room
+            </span>
+          )
         )}
       </div>
-      {limits.windows.map((w) => (
+      {limits.windows.slice(0, 2).map((w) => (
         <WindowRow key={w.id} window={w} now={now} warn={warn} />
       ))}
+      {pace && <p className="mt-2 text-xs text-warning">{pace}</p>}
       {limits.note && (
         <p className="text-xs text-muted-foreground">{limits.note}</p>
       )}
-      <div className="text-xs text-muted-foreground">
-        {limits.read_at !== undefined && (
-          <p title={fullDate(limits.read_at)}>
-            Read {ago(limits.read_at, now)}
-            {ago(limits.read_at, now) === "now" ? "" : " ago"}
-          </p>
-        )}
-        {limits.failed && (
-          <p className="text-warning" title={fullDate(limits.failed.at)}>
-            {limits.failed.why}
-          </p>
-        )}
-      </div>
+      {limits.failed && (
+        <p
+          className="mt-1 text-xs text-muted-foreground"
+          title={fullDate(limits.failed.at)}
+        >
+          {limits.failed.why}
+        </p>
+      )}
     </section>
   )
 }
@@ -183,17 +360,15 @@ function WindowRow({
 }) {
   const used = usedOf(window, now)
   const elapsed = elapsedOf(window, now)
-  const pace = paceWords(window, now)
+  const loud = loudOf(used, warn)
   return (
-    <div className="flex flex-col gap-1.5">
-      <div className="flex items-center justify-between gap-2 text-xs">
-        <span className="text-muted-foreground">{window.label}</span>
-        <span className={cn("font-medium tabular-nums", toneOf(used, warn))}>
-          {Math.round(used)}%
-        </span>
-      </div>
+    <div
+      className="grid h-5 grid-cols-[56px_1fr_34px] items-center gap-2.5 text-xs"
+      title={`${window.label}: ${resetWords(window, now)}${window.resets_at === undefined ? "" : `, ${fullDate(window.resets_at)}`}`}
+    >
+      <span className="truncate text-muted-foreground">{window.label}</span>
       <div
-        className="relative h-1.5 rounded-full bg-foreground/10"
+        className="relative h-1 rounded-full bg-foreground/10"
         role="meter"
         aria-label={`${window.label} used`}
         aria-valuemin={0}
@@ -201,28 +376,64 @@ function WindowRow({
         aria-valuenow={used}
       >
         <div
-          className={cn("h-full rounded-full bg-current", toneOf(used, warn))}
+          className={cn(
+            "absolute inset-y-0 left-0 rounded-full",
+            used >= 100
+              ? "bg-destructive"
+              : used >= warn
+                ? "bg-warning"
+                : "bg-foreground/85"
+          )}
           style={{ width: `${used}%` }}
         />
-        {elapsed !== undefined && (
+        {elapsed !== undefined && used < 100 && (
           <span
-            className="absolute -top-0.5 h-2.5 w-px bg-muted-foreground"
+            className="absolute -top-[3px] h-2.5 w-px bg-muted-foreground/70"
             style={{ left: `${elapsed}%` }}
             title={`Even pace: ${Math.round(elapsed)}% used by now`}
           />
         )}
       </div>
-      <p
-        className="text-right text-xs text-muted-foreground"
-        title={
-          window.resets_at === undefined
-            ? undefined
-            : fullDate(window.resets_at)
-        }
+      <span className={cn("text-right tabular-nums", loud)}>
+        {Math.round(used)}%
+      </span>
+    </div>
+  )
+}
+
+/** Today's usage, when the limits were read, and the way to the Pane. */
+function Foot({
+  limits,
+  usage,
+  now,
+  onUsage,
+}: {
+  limits: readonly Limits[]
+  usage: UsageNow | undefined
+  now: number
+  onUsage: () => void
+}) {
+  const today = todayWords(usage)
+  const read = readAtOf(limits)
+  const since = read === undefined ? undefined : ago(read, now)
+  return (
+    <div className="flex items-center justify-between gap-3 border-t border-border px-4 py-2.5 text-xs text-muted-foreground/70">
+      <div className="flex min-w-0 flex-col tabular-nums">
+        {today && <span className="truncate">{today}</span>}
+        {read !== undefined && (
+          <span title={fullDate(read)}>
+            Read {since}
+            {since === "now" ? "" : " ago"}
+          </span>
+        )}
+      </div>
+      <button
+        type="button"
+        className="shrink-0 rounded-sm font-medium text-foreground outline-none hover:underline hover:underline-offset-3 focus-visible:ring-3 focus-visible:ring-ring/50"
+        onClick={onUsage}
       >
-        {resetWords(window, now)}
-      </p>
-      {pace && <p className="text-xs text-warning">{pace}</p>}
+        Usage →
+      </button>
     </div>
   )
 }

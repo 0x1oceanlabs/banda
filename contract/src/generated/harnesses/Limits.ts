@@ -13,6 +13,13 @@ export type Limits = { harness: string,
  */
 name: string, 
 /**
+ * Which Harness the account is of, by the ID Banda knows it by:
+ * `claude`, `codex`. Two accounts of one Harness have the same, as
+ * the bar's widget counts the room of each Harness (ADR 0055,
+ * decision 2).
+ */
+kind?: string, 
+/**
  * The account's plan, as the Harness names it: `Max 20x`, `Plus`.
  */
 plan?: string, 
