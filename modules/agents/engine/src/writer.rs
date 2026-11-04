@@ -204,6 +204,7 @@ fn end(
         state,
         reason: reason.clone(),
         failure,
+        note: store::note(tx.sql(), turn.id)?,
     };
     emit(tx, author, turn.thread, &ended)?;
     // The answer goes back by itself, as a message from this Thread's

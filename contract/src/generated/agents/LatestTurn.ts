@@ -14,4 +14,8 @@ began: number,
 /**
  * Why it ended as it did, when the Harness or the engine said.
  */
-reason?: string, };
+reason?: string, 
+/**
+ * What its Agent tells its Person, with `notify` (ADR 0057).
+ */
+note?: string, };

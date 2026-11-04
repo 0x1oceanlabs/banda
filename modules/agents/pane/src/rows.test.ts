@@ -55,6 +55,19 @@ test("a failed Thread says why, or that it failed", () => {
   expect(listedOf(failed(), { t1: "u1" }, "").calls).toBeUndefined()
 })
 
+test("a done Thread says what its Agent told of its turn, once it is unseen", () => {
+  const done = (note?: string) =>
+    thread({ latest: { turn: "u1", state: "done", began: 3, note } })
+  expect(listedOf(done("PR #470 is open"), {}, "")).toMatchObject({
+    mark: "done",
+    calls: "PR #470 is open",
+  })
+  expect(listedOf(done(), {}, "").calls).toBeUndefined()
+  expect(
+    listedOf(done("PR #470 is open"), { t1: "u1" }, "").calls
+  ).toBeUndefined()
+})
+
 test("what it was asked shows only when it says more than the title", () => {
   expect(listedOf(thread({ message: "Hello" }), {}, "").said).toBeUndefined()
 })

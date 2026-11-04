@@ -94,7 +94,7 @@ export function applyThreads(state: ThreadList, event: Event): ThreadList {
       }))
     }
     case "turn.ended": {
-      const { turn, state: ended, reason } = fact.payload
+      const { turn, state: ended, reason, note } = fact.payload
       // A turn a Person took back never began, so it is no one's latest.
       if (ended === "withdrawn") return state
       return change(
@@ -108,6 +108,7 @@ export function applyThreads(state: ThreadList, event: Event): ThreadList {
             began:
               thread.latest?.turn === turn ? thread.latest.began : event.at,
             ...(reason ? { reason } : {}),
+            ...(note ? { note } : {}),
           },
         }),
         true

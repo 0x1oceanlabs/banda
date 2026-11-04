@@ -16,6 +16,7 @@ import type { Image } from "./Image";
 import type { ImageData } from "./ImageData";
 import type { Keep } from "./Keep";
 import type { Kept } from "./Kept";
+import type { Notify } from "./Notify";
 import type { OneHarness } from "./OneHarness";
 import type { OneImage } from "./OneImage";
 import type { OneThread } from "./OneThread";
@@ -184,6 +185,15 @@ draft_issue: CommandMethod<DraftIssue, string>,
  * problems module sent it (`problems.send_issue`), or not.
  */
 answer_issue: CommandMethod<AnswerIssue, null>, 
+/**
+ * Tells your Person, when this turn ends, in one line: what is
+ * done, or what you need of them. Their toast and system
+ * notification say it in place of what they asked. Call it last,
+ * once a turn worth telling of is done; a second call replaces
+ * the first. It shows nothing until the turn ends, and nothing
+ * while they look at your Thread.
+ */
+notify: CommandMethod<Notify, string>, 
 /**
  * A Visual's page, as the window serves it.
  */

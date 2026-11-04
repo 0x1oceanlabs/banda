@@ -804,6 +804,10 @@ pub struct LatestTurn {
     #[ts(optional)]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub reason: Option<String>,
+    /// What its Agent tells its Person, with `notify` (ADR 0057).
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
 }
 
 /// What the agents module publishes, version 1: each fact is an Event's
@@ -869,6 +873,10 @@ pub enum Fact {
         #[ts(optional)]
         #[serde(default, skip_serializing_if = "Option::is_none")]
         failure: Option<Failure>,
+        /// What its Agent tells its Person, with `notify` (ADR 0057).
+        #[ts(optional)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        note: Option<String>,
     },
     /// A message waits for a turn of its own: a failed turn's, tried
     /// again, or one that could not join the turn it was sent into.

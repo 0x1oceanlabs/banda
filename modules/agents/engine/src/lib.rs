@@ -34,6 +34,7 @@ mod issues;
 mod kept;
 mod live;
 pub mod model;
+mod notes;
 mod old_agents;
 mod questions;
 mod rules;
@@ -64,6 +65,7 @@ use model::{
     Body, Fact, Fit, Image, ImageId, Item, ItemId, Offer, Opener, Settings, ThreadId, ThreadList,
     ThreadSummary, ThreadView, TurnId, TurnState, VERSION, VisualId,
 };
+use notes::Notify;
 use rules::Event;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -303,6 +305,13 @@ banda_kernel::methods! {
         /// Keeps how the Person answered a drafted issue: sent, as the
         /// problems module sent it (`problems.send_issue`), or not.
         command answer_issue(AnswerIssue) -> (), Decide;
+        /// Tells your Person, when this turn ends, in one line: what is
+        /// done, or what you need of them. Their toast and system
+        /// notification say it in place of what they asked. Call it last,
+        /// once a turn worth telling of is done; a second call replaces
+        /// the first. It shows nothing until the turn ends, and nothing
+        /// while they look at your Thread.
+        command notify(Notify) -> String, Write, tool "notify";
         /// A Visual's page, as the window serves it.
         call visual(OneVisual) -> VisualPage, Read;
     }
@@ -885,6 +894,17 @@ impl Agents {
         call.command(move |tx| issues::draft(tx, agent, draft))
             .await?;
         Ok(issues::DRAFTED.to_owned())
+    }
+
+    async fn notify(&self, call: Call, notify: Notify) -> Result<String, Refusal> {
+        let Participant::Agent(agent) = call.participant() else {
+            return Err(Refusal::forbidden(
+                "Only a Thread's Agent tells its Person, from its own Thread.",
+            ));
+        };
+        call.command(move |tx| notes::note(tx, agent, notify))
+            .await?;
+        Ok(notes::NOTED.to_owned())
     }
 
     async fn answer_issue(&self, call: Call, answer: AnswerIssue) -> Result<(), Refusal> {

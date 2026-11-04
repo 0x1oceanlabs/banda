@@ -3028,7 +3028,14 @@ async fn threads_one_thread_send_show_visual_and_preview_visual_are_an_agents_to
     // The machine's module `harnesses` comes first, with its own.
     let limits = tools.as_array_mut().unwrap().remove(0);
     assert_eq!(limits["method"], "harnesses.limits");
-    // The last: an issue the Agent drafts, which only its Person sends.
+    // The last: a line the Agent tells its Person when its turn ends.
+    let notify = tools.as_array_mut().unwrap().pop().unwrap();
+    assert_eq!(
+        (&notify["name"], &notify["method"]),
+        (&json!("notify"), &json!("agents.notify"))
+    );
+    assert_eq!(notify["schema"]["required"], json!(["text"]));
+    // An issue the Agent drafts, which only its Person sends.
     let draft = tools.as_array_mut().unwrap().pop().unwrap();
     assert_eq!(
         (&draft["name"], &draft["method"]),
@@ -3894,6 +3901,60 @@ async fn the_real_harnesses_write_a_commits_message() {
         assert_eq!(std::fs::read_to_string(&notes).unwrap(), "apples\npears\n");
         assert_eq!(texts(&world.thread(&thread).await), before);
     }
+}
+
+#[tokio::test]
+async fn an_agent_tells_its_person_what_its_turn_ends_with() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let sent = world.send(None, "wait").await;
+    let thread = sent["thread"].clone();
+    world
+        .until(&thread, |v| {
+            texts(v).contains(&"message: Waiting.".to_owned())
+        })
+        .await;
+    let agent = Participant::Agent(world.threads().await.threads[0].agent);
+    let notify = |who, text: &str| world.call(who, "agents.notify", json!({ "text": text }));
+
+    // One line a turn, from its own Agent: the last one is kept.
+    let said = notify(agent, "Started the build").await.unwrap();
+    assert!(
+        said.as_str()
+            .unwrap()
+            .starts_with("Kept: your Person sees it")
+    );
+    notify(agent, " PR #470 is open, CI green ").await.unwrap();
+    for text in ["", "two\nlines", &"x".repeat(141)] {
+        assert_eq!(notify(agent, text).await.unwrap_err().code, Code::Invalid);
+    }
+    assert_eq!(
+        notify(world.person(), "Hi").await.unwrap_err().code,
+        Code::Forbidden
+    );
+
+    // The turn that ends carries it, and the list keeps it.
+    world
+        .call(
+            world.person(),
+            "agents.stop",
+            json!({ "turn": sent["turn"] }),
+        )
+        .await
+        .unwrap();
+    world
+        .until(&thread, |v| {
+            state(v, &sent["turn"]) == Some(TurnState::Stopped)
+        })
+        .await;
+    let latest = world.threads().await.threads[0].latest.clone().unwrap();
+    assert_eq!(latest.note.as_deref(), Some("PR #470 is open, CI green"));
+
+    // With no turn that runs, there is nothing to keep it on.
+    assert_eq!(
+        notify(agent, "Late").await.unwrap_err().code,
+        Code::Conflict
+    );
 }
 
 #[tokio::test]

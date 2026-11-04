@@ -147,6 +147,10 @@ CREATE UNIQUE INDEX agents_turns_one_running ON agents_turns (thread)
 -- message its Harness cannot take while it works (ADR 0018, decision 3).
 ALTER TABLE agents_turns ADD COLUMN stopping INTEGER NOT NULL DEFAULT 0;
 "#,
+    r#"
+-- What the turn's Agent tells its Person when it ends (ADR 0057).
+ALTER TABLE agents_turns ADD COLUMN note TEXT;
+"#,
 ];
 
 fn json<T: Serialize>(value: &T) -> Result<String, Error> {
@@ -703,7 +707,7 @@ pub fn set_turn(
 pub fn last_begun(sql: &Connection, thread: ThreadId) -> Result<Option<LatestTurn>, Error> {
     Ok(sql
         .query_row(
-            "SELECT id, state, COALESCE(started_at, created_at), reason FROM agents_turns
+            "SELECT id, state, COALESCE(started_at, created_at), reason, note FROM agents_turns
              WHERE thread = ?1 AND state NOT IN (?2, ?3)
              ORDER BY created_at DESC, id DESC LIMIT 1",
             params![thread, word(TurnState::Queued), word(TurnState::Withdrawn)],
@@ -713,10 +717,33 @@ pub fn last_begun(sql: &Connection, thread: ThreadId) -> Result<Option<LatestTur
                     state: word_of(row, 1)?,
                     began: row.get(2)?,
                     reason: row.get(3)?,
+                    note: row.get(4)?,
                 })
             },
         )
         .optional()?)
+}
+
+/// Keeps what `turn`'s Agent tells its Person when it ends, in place of
+/// what it told before (ADR 0057).
+pub fn set_note(sql: &Connection, turn: TurnId, note: &str) -> Result<(), Error> {
+    sql.execute(
+        "UPDATE agents_turns SET note = ?2 WHERE id = ?1",
+        params![turn, note],
+    )?;
+    Ok(())
+}
+
+/// What `turn`'s Agent tells its Person when it ends, if it said.
+pub fn note(sql: &Connection, turn: TurnId) -> Result<Option<String>, Error> {
+    Ok(sql
+        .query_row(
+            "SELECT note FROM agents_turns WHERE id = ?1",
+            params![turn],
+            |row| row.get(0),
+        )
+        .optional()?
+        .flatten())
 }
 
 pub fn turns(sql: &Connection, thread: ThreadId) -> Result<Vec<TurnView>, Error> {
@@ -1339,11 +1366,13 @@ mod tests {
             state: TurnState::Running,
             began: 1,
             reason: None,
+            note: None,
         });
         assert_eq!(listed().latest, running, "a turn that waits never began");
         set_turn(&sql, ran, TurnState::Running, None, None, 7).unwrap();
         assert_eq!(listed().latest.unwrap().began, 7, "it began when it ran");
         set_turn(&sql, ran, TurnState::Failed, Some("It broke."), None, 100).unwrap();
+        set_note(&sql, ran, "Tried twice.").unwrap();
         add(TurnState::Withdrawn);
         assert_eq!(
             listed().latest,
@@ -1352,6 +1381,7 @@ mod tests {
                 state: TurnState::Failed,
                 began: 7,
                 reason: Some("It broke.".to_owned()),
+                note: Some("Tried twice.".to_owned()),
             }),
             "nor one a Person took back"
         );
