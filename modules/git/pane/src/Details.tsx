@@ -4,9 +4,6 @@
  * `+N −M`, which opens the Diff on them; one Initialize Git row instead
  * when the Space's folder is no repository. They follow `git.watch`.
  */
-import { useCallback, useSyncExternalStore } from "react"
-import type { Engine, SpaceId } from "@banda/contract"
-import type { Status } from "@banda/contract/git"
 import {
   type Details,
   type DetailsProps,
@@ -21,65 +18,7 @@ import { diffPane } from "./DiffPane"
 import { GitButton } from "./GitButton"
 import { VIEW } from "./diff"
 import { CHANGES } from "./scope"
-
-/** A Space's `git.watch`, shared by every card that shows it: one
- * stream, one fetch every 30 seconds, however many Threads are open. */
-type Watched = {
-  status: Status | null
-  hearing: Set<() => void>
-  stop: () => void
-  leaving?: ReturnType<typeof setTimeout>
-}
-
-const watched = new WeakMap<Engine, Map<SpaceId, Watched>>()
-
-/** How long a Space's watch stays after its last card went: a popover
- * opened again has the status at once, and fetches no more. */
-const LINGER = 60_000
-
-function watching(engine: Engine, space: SpaceId): Watched {
-  let spaces = watched.get(engine)
-  if (!spaces) watched.set(engine, (spaces = new Map()))
-  const known = spaces.get(space)
-  if (known) return known
-  const made: Watched = { status: null, hearing: new Set(), stop: () => {} }
-  const tell = (status: Status | null) => {
-    made.status = status
-    for (const hear of made.hearing) hear()
-  }
-  made.stop = engine.stream(space, "git.watch", {}, tell, () => {
-    // The engine ended it: the next card to come starts it again.
-    spaces.delete(space)
-    tell(null)
-  })
-  spaces.set(space, made)
-  return made
-}
-
-/** The Space's status as `git.watch` says it; none until it first does,
- * or when the engine refuses it. */
-function useGitStatus(engine: Engine, space: SpaceId): Status | null {
-  const subscribe = useCallback(
-    (hear: () => void) => {
-      const watch = watching(engine, space)
-      clearTimeout(watch.leaving)
-      watch.hearing.add(hear)
-      return () => {
-        watch.hearing.delete(hear)
-        if (watch.hearing.size > 0) return
-        watch.leaving = setTimeout(() => {
-          watch.stop()
-          watched.get(engine)?.delete(space)
-        }, LINGER)
-      }
-    },
-    [engine, space]
-  )
-  return useSyncExternalStore(
-    subscribe,
-    () => watched.get(engine)?.get(space)?.status ?? null
-  )
-}
+import { useGitStatus } from "./status"
 
 function GitRows({
   engine,
