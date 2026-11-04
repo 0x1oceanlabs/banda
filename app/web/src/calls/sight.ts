@@ -5,7 +5,9 @@
  */
 import type { SpaceId } from "@banda/contract"
 import type { Columns } from "@banda/contract/look"
-import { type Lists, listedOf, type PaneState } from "@banda/ui/pane"
+import { callOrder } from "@banda/ui/components/banda-mark"
+import type { Sight } from "@banda/ui/module"
+import { type Call, type Lists, listedOf, type PaneState } from "@banda/ui/pane"
 import {
   current,
   entries,
@@ -14,7 +16,6 @@ import {
   shownIn,
   type Workspaces,
 } from "../workspaces/model"
-import type { Sight } from "./tell"
 
 /** The thing a Pane shows, as the registry knows it. */
 export type Shows = (pane: PaneState) => string | null
@@ -77,4 +78,14 @@ export function besideOf(
   const next = workspaces.list[at.workspace].columns[at.column + 1]
   const right = next?.entries.map((each) => each.pane) ?? []
   return { space, from: entry.id, right }
+}
+
+/** The call to answer first, in the order calls are answered. */
+export function first(calling: readonly Call[]): Call | undefined {
+  return [...calling].sort(
+    callOrder(
+      (call) => call.chime,
+      (call) => call.since
+    )
+  )[0]
 }

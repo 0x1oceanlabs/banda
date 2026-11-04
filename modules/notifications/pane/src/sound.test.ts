@@ -1,5 +1,5 @@
 import { expect, test } from "vitest"
-import { loudestChime, plays, QUIET_FOR } from "./calls"
+import { loudestChime, plays, QUIET_FOR } from "./sound"
 
 test("calls that come together make the loudest sound", () => {
   expect(loudestChime([])).toBeUndefined()

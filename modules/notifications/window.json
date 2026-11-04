@@ -1,6 +1,14 @@
 {
   "panes": [],
-  "actions": [],
+  "actions": [
+    {
+      "id": "notifications.tell",
+      "title": "Tell the Person",
+      "section": "Notifications",
+      "keys": [],
+      "unlisted": true
+    }
+  ],
   "sources": [],
   "watches": 0,
   "bar": [

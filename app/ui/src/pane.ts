@@ -11,6 +11,7 @@ import type { ComponentType } from "react"
 import type { LucideIcon } from "lucide-react"
 import type { Engine, JsonValue, SpaceId } from "@banda/contract"
 import type { MarkState } from "./components/banda-mark"
+import type { Chime } from "./sound/families"
 
 /**
  * Marks where a program reads the keys, as in a terminal. Banda's Alt keys
@@ -223,6 +224,56 @@ export type Listed = {
 
 /** What every module lists for each Space, for the sidebar. */
 export type Lists = Readonly<Record<SpaceId, readonly Listed[]>>
+
+/**
+ * One thing that calls its Person now, as the lists say it (ADR 0011):
+ * of a Space, by a key that stays the thing's.
+ */
+export type Call = {
+  /** `space:about`, one per thing. */
+  key: string
+  space: SpaceId
+  /** The thing, as its Pane names it (`PaneKind.shows`). */
+  about: string
+  chime: Chime
+  title: string
+  /** What it said, in a line: what it asks, why it failed, its task. */
+  detail?: string
+  /** What answering the call opens. */
+  pane: PaneState
+  /** When it last changed, in ms since the epoch. */
+  since: number
+}
+
+/** The marks that call for the Person, and their calls. */
+const CHIMES: Partial<Record<MarkState, Chime>> = {
+  done: "done",
+  asking: "asking",
+  failed: "failed",
+}
+
+/** The things in the lists that call their Person now. */
+export function callsOf(lists: Lists): Call[] {
+  return Object.entries(lists).flatMap(([space, listed]) =>
+    (listed ?? []).flatMap((thing): Call[] => {
+      const chime = CHIMES[thing.mark]
+      if (!chime) return []
+      const detail = thing.calls ?? thing.said
+      return [
+        {
+          key: `${space}:${thing.id}`,
+          space: space as SpaceId,
+          about: thing.id,
+          chime,
+          title: thing.title,
+          ...(detail ? { detail } : {}),
+          pane: thing.pane,
+          since: thing.changed,
+        },
+      ]
+    })
+  )
+}
 
 /** The thing `agent` works in, as a Thread its Agent's, and its Space;
  * none when no module lists one. */

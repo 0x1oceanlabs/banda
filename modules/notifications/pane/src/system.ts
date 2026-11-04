@@ -1,5 +1,5 @@
 /**
- * What the window asks the desktop to show for its calls (ADR 0011,
+ * What the notifications module asks the desktop to show for its calls (ADR 0011,
  * decision 3): a notice per thing, or one for many that came at once, each
  * with the mark in its state as its icon.
  */
@@ -10,9 +10,9 @@ import {
 } from "@banda/ui/components/banda-mark"
 import type { Chime } from "@banda/ui/sound"
 import type { Notify } from "@banda/contract/look"
-import type { Host, Notice } from "../host"
-import { loudestChime } from "./calls"
-import type { Heard } from "./useCalls"
+import type { Call } from "@banda/ui/pane"
+import type { Desktop, Notice } from "./desktop"
+import { loudestChime } from "./sound"
 
 /** More calls than this at once make one notice that names them all. */
 export const MANY = 2
@@ -27,7 +27,7 @@ const ANSWER: Record<Chime, string> = {
 }
 
 /** A notice of one call. One that waits for the Person stays. */
-export function noticeOf(call: Heard, detail: boolean): Notice {
+export function noticeOf(call: Call, detail: boolean): Notice {
   const said = MARK_WORDS[call.chime]
   return {
     key: call.key,
@@ -39,7 +39,7 @@ export function noticeOf(call: Heard, detail: boolean): Notice {
 }
 
 /** One notice of many calls at once, named in it. */
-export function summaryOf(calls: readonly Heard[]): Notice {
+export function summaryOf(calls: readonly Call[]): Notice {
   return {
     key: SUMMARY,
     title: `${calls.length} Threads call you`,
@@ -50,7 +50,7 @@ export function summaryOf(calls: readonly Heard[]): Notice {
 }
 
 /** The loudest of many calls, for the summary's icon. */
-export function loudestOf(calls: readonly Heard[]): Chime {
+export function loudestOf(calls: readonly Call[]): Chime {
   return loudestChime(calls.map((call) => call.chime)) ?? "done"
 }
 
@@ -101,7 +101,7 @@ async function drawn(svg: string): Promise<string | undefined> {
 /** Whether the desktop is quiet now, when `[notify]` keeps its quiet. */
 export async function quietNow(
   notify: Notify,
-  desktop: Host["notify"] | undefined
+  desktop: Desktop | undefined
 ): Promise<boolean> {
   return desktop && notify.quiet === "desktop"
     ? await desktop.quiet().catch(() => false)

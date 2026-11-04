@@ -600,6 +600,9 @@ importers:
 
   modules/notifications/pane:
     dependencies:
+      '@banda/contract':
+        specifier: workspace:*
+        version: link:../../../contract
       '@banda/ui':
         specifier: workspace:*
         version: link:../../../app/ui
