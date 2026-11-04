@@ -1,0 +1,17 @@
+[
+  { "words": "Search box!", "name": "search-box" },
+  { "words": "  My Fix ", "name": "my-fix" },
+  { "words": "fix/Login  page", "name": "fix/login-page" },
+  { "words": "fix: the card's look", "name": "fix-the-card-s-look" },
+  { "words": "feature//Big.Thing", "name": "feature/big-thing" },
+  { "words": "_private_", "name": "_private_" },
+  { "words": "--//", "name": "" },
+  {
+    "words": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
+    "name": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  },
+  {
+    "words": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx-y",
+    "name": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  }
+]

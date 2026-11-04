@@ -182,10 +182,22 @@ fn subject(said: &str) -> String {
     }
 }
 
-/// A branch name from what a Harness wanted: lower case, letters,
-/// digits, `/`, `_` and `-` only, at most 64 long, in `feature/` when it
-/// names no folder of its own.
+/// A branch name from what a Harness wanted, as [`slug`] makes it, in
+/// `feature/` when it names no folder of its own.
 fn branch_name(wanted: &str) -> String {
+    match slug(wanted) {
+        name if name.is_empty() => format!("{PREFIX}update"),
+        name if name.contains('/') => name,
+        name => format!("{PREFIX}{name}"),
+    }
+}
+
+/// A name of `wanted` as git takes it: lower case, letters, digits, `/`,
+/// `_` and `-` only, each other character a `-`, no `-` nor `/` twice or
+/// at an end, at most 64 long; empty when none is left. The branch
+/// picker's Create branch makes the same (`branches.ts`), as
+/// `branch-names.json` holds both to.
+fn slug(wanted: &str) -> String {
     let mut name = String::new();
     for c in wanted.trim().to_lowercase().chars() {
         let c = match c {
@@ -201,12 +213,7 @@ fn branch_name(wanted: &str) -> String {
         }
     }
     let name: String = name.trim_matches(['-', '/']).chars().take(BRANCH).collect();
-    let name = name.trim_end_matches(['-', '/']);
-    match name {
-        "" => format!("{PREFIX}update"),
-        name if name.contains('/') => name.to_owned(),
-        name => format!("{PREFIX}{name}"),
-    }
+    name.trim_end_matches(['-', '/']).to_owned()
 }
 
 /// `name`, or `name-2`, `name-3` and on, the first no branch here has
@@ -243,6 +250,20 @@ mod tests {
         assert_eq!(branch_name("fix/Login  page"), "fix/login-page");
         assert_eq!(branch_name("--//"), "feature/update");
         assert_eq!(branch_name(&"x".repeat(80)).len(), PREFIX.len() + BRANCH);
+    }
+
+    #[test]
+    fn a_name_is_made_as_the_branch_picker_makes_it() {
+        #[derive(serde::Deserialize)]
+        struct Case {
+            words: String,
+            name: String,
+        }
+        let cases: Vec<Case> =
+            serde_json::from_str(include_str!("../../branch-names.json")).unwrap();
+        for case in cases {
+            assert_eq!(slug(&case.words), case.name, "{:?}", case.words);
+        }
     }
 
     #[test]
