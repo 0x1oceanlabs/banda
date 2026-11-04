@@ -131,7 +131,6 @@ export async function run(
           case "step":
           case "hook":
             line = undefined
-            clearTimeout(showing)
             return step(
               piece.kind === "step"
                 ? STEPS[piece.step]
@@ -143,7 +142,6 @@ export async function run(
             return
           case "done": {
             ended = true
-            clearTimeout(showing)
             const done: Run = { is: "done", ...piece.done }
             set(space, done)
             // ✓ stays ten seconds, then the button is back.
@@ -155,11 +153,11 @@ export async function run(
           }
           case "failed":
             ended = true
-            clearTimeout(showing)
             return set(space, { is: "failed", message: piece.message })
         }
       },
       (refusal) => {
+        // A line due after it ended shows nowhere: the run is not running.
         clearTimeout(showing)
         if (ended) return
         const message = !refusal

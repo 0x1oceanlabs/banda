@@ -40,10 +40,14 @@ export class Refused extends Error {
   }
 }
 
+/** What a call, or a stream heard `once`, says when the connection broke
+ * before the engine answered. */
+const LOST = "The engine went away before it answered."
+
 /** The connection broke before the engine answered. */
 export class Lost extends Error {
   constructor() {
-    super("The engine went away before it answered.")
+    super(LOST)
     this.name = "Lost"
   }
 }
@@ -405,7 +409,7 @@ export class Engine {
     for (const [id, hearing] of this.#hearing) {
       if (!hearing.once || !hearing.sent) continue
       this.#hearing.delete(id)
-      hearing.onEnd({ code: "may_have_run", message: new Lost().message })
+      hearing.onEnd({ code: "may_have_run", message: LOST })
     }
     if (!this.#closed && this.#status.state !== "refused") this.#retry()
   }

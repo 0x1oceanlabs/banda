@@ -78,12 +78,12 @@ import {
   Rows2Icon,
   Settings2Icon,
   Undo2Icon,
-  XIcon,
 } from "lucide-react"
 import { AT_ONCE, asked, VIEW, viewOf, type View } from "./diff"
 import { CHANGES, changeOf, isTest, labelOf, type Scope } from "./scope"
 import { actsOf, allOf, fileAsk, hunkAsk, type Act } from "./stage"
 import { useGitStatus } from "./status"
+import { GitAlert } from "./GitAlert"
 
 /**
  * What changed in the Space's folder, as T3 Code's Diff shows it (ADR
@@ -123,6 +123,24 @@ const TURNS = { module: "agents", kinds: ["turn.ended"] }
  * Thread's turns that changed files. */
 type Drawn = Diff & { drawn?: FileDiffMetadata[]; turns?: ChangedTurn[] }
 
+/** Whether two reads of git's diff say the same. */
+function sameDiff(a: Diff, b: Diff): boolean {
+  return (
+    a.patch === b.patch &&
+    a.truncated === b.truncated &&
+    JSON.stringify([a.files, a.base]) === JSON.stringify([b.files, b.base])
+  )
+}
+
+/** Calls `changed` with `value` as it changes from what it was, as the
+ * Pane draws; none (`null`) is no value, and is not heard. */
+function useChanged<T>(value: T | null, changed: (now: T) => void): void {
+  const [was, setWas] = useState(value)
+  if (value === null || value === was) return
+  setWas(value)
+  if (was !== null) changed(value)
+}
+
 /** Git has no checkpoint of the turn, or the folder is no repository. */
 function noCheckpoint(error: unknown): boolean {
   if (!(error instanceof Refused)) return false
@@ -161,24 +179,22 @@ function DiffPane({ engine, space, args, update, close }: PaneProps<DiffArgs>) {
   const [round, setRound] = useState(0)
   const again = () => setRound((n) => n + 1)
   const front = useInFront()
-  const [wasFront, setWasFront] = useState(front)
-  if (front !== wasFront) {
-    setWasFront(front)
-    if (front) again()
-  }
-  // And as the folder changes under it, as the card sees it: a commit,
-  // a pull or a switch from the card or a terminal, a file written. A
-  // turn's changes stay what the turn did.
-  const status = useGitStatus(engine, space)
-  const seen =
-    status && scope.kind !== "turn"
-      ? JSON.stringify([status.head, status.branch, status.files])
-      : null
-  const [wasSeen, setWasSeen] = useState(seen)
-  if (seen !== null && seen !== wasSeen) {
-    setWasSeen(seen)
-    if (wasSeen !== null) again()
-  }
+  useChanged(front, (now) => now && again())
+  // And, while in front, as the folder changes under it as the card sees
+  // it: a commit, a pull or a switch from the card or a terminal, a file
+  // written. A turn's or a commit's changes stay what they were.
+  const follows = front && scope.kind !== "turn" && scope.kind !== "commit"
+  const status = useGitStatus(engine, space, follows)
+  const seen = useMemo(() => {
+    if (!status) return null
+    if (scope.kind === "staged")
+      return JSON.stringify([
+        status.head,
+        status.files.map((file) => [file.path, file.staged]),
+      ])
+    return JSON.stringify([status.head, status.branch, status.files])
+  }, [status, scope.kind])
+  useChanged(seen, again)
 
   const thread = scope.kind === "turn" ? scope.thread : (args.thread ?? null)
   // The question's words decide: the same words ask the same.
@@ -187,10 +203,26 @@ function DiffPane({ engine, space, args, update, close }: PaneProps<DiffArgs>) {
     ignore_whitespace: view.ignoreWhitespace,
   })
   const question = useMemo(() => JSON.parse(words) as DiffAsk, [words])
+  // A read the same as the last keeps its view, so nothing is drawn again.
+  const last = useRef<Drawn>(undefined)
   const source = useMemo<Source<Drawn>>(() => {
     const diff = () => engine.call("git.diff", question, { space })
     const turn = question.scope.kind === "turn" ? question.scope : null
-    if (!turn) return { read: diff, filter: TURNS, apply: () => READ_AGAIN }
+    if (!turn)
+      return {
+        read: async () => {
+          const read: Drawn = await diff()
+          const was = last.current
+          if (was && sameDiff(was, read)) {
+            was.at = read.at
+            return was
+          }
+          last.current = read
+          return read
+        },
+        filter: TURNS,
+        apply: () => READ_AGAIN,
+      }
     const changes = (asked: ChangesAsk) =>
       engine.call("agents.changes", asked, { space })
     return {
@@ -333,6 +365,8 @@ function DiffPane({ engine, space, args, update, close }: PaneProps<DiffArgs>) {
     void acting
       .act(() => engine.call(`git.${what}`, ask, { space }))
       .then(() => {
+        // The read after is a new view, though it says the same.
+        last.current = undefined
         setBefore(shown)
         again()
       })
@@ -454,20 +488,12 @@ function DiffPane({ engine, space, args, update, close }: PaneProps<DiffArgs>) {
         </div>
       </PaneHeader>
       {failed !== undefined && (
-        <div
-          role="alert"
-          className="flex shrink-0 items-center gap-2 border-b px-3 py-1.5 text-xs text-destructive"
+        <GitAlert
+          className="shrink-0 items-center border-b px-3 py-1"
+          onDismiss={() => setDismissed(failed)}
         >
-          <span className="min-w-0 flex-1">{failed}</span>
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            aria-label="Dismiss"
-            onClick={() => setDismissed(failed)}
-          >
-            <XIcon />
-          </Button>
-        </div>
+          {failed}
+        </GitAlert>
       )}
       {live.state === "refused" ? (
         <Blank title="No diff">{live.refusal.message}</Blank>
@@ -740,7 +766,8 @@ function useFiles(
   diff: Drawn | undefined
 ) {
   const patch = diff?.patch ?? ""
-  const basis = `${words}:${hashOf(patch)}`
+  const hashed = useMemo(() => hashOf(patch), [patch])
+  const basis = `${words}:${hashed}`
   const drawn = diff?.drawn
   const inPatch = useMemo(
     () => drawn ?? filesOf(patch, basis),

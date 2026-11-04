@@ -32,12 +32,10 @@ import { cn } from "@banda/ui/lib/utils"
 import {
   CheckIcon,
   ChevronDownIcon,
-  CircleAlertIcon,
   CloudDownloadIcon,
   CloudUploadIcon,
   GitCommitIcon,
   InfoIcon,
-  XIcon,
 } from "lucide-react"
 import { dismiss, hearRun, run, runOf } from "./chain"
 import { CommitDialog } from "./CommitDialog"
@@ -49,6 +47,7 @@ import {
   type Quick,
   quickOf,
 } from "./quick"
+import { GitAlert } from "./GitAlert"
 
 const ICONS: Record<Quick["icon"], typeof GitCommitIcon> = {
   commit: GitCommitIcon,
@@ -107,23 +106,12 @@ export function GitButton({
   return (
     <>
       {now.is === "failed" && (
-        <div
-          role="alert"
-          className="flex items-start gap-2 rounded-lg bg-destructive/10 py-1 pr-1 pl-2 text-xs text-destructive"
+        <GitAlert
+          className="rounded-lg bg-destructive/10 py-1 pr-1 pl-2"
+          onDismiss={() => dismiss(space)}
         >
-          <CircleAlertIcon className="mt-0.5 size-3.5 shrink-0" />
-          <span className="min-w-0 flex-1 py-0.5 break-words">
-            {now.message}
-          </span>
-          <Button
-            variant="ghost"
-            size="icon-xs"
-            aria-label="Close"
-            onClick={() => dismiss(space)}
-          >
-            <XIcon />
-          </Button>
-        </div>
+          {now.message}
+        </GitAlert>
       )}
       <div
         className={cn(

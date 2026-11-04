@@ -11,7 +11,7 @@ import { showing } from "../calls/sight"
 import { columnsOf } from "../look"
 import { type At, MENU_KEY } from "../menu/menu"
 import { modules } from "../modules"
-import { launcher, minOf, showsOf, widthOf } from "../registry"
+import { identityOf, launcher, minOf, showsOf, widthOf } from "../registry"
 import { settingsPane } from "../settings/pane"
 import {
   columnMoved,
@@ -165,14 +165,19 @@ function moving(w: Workspaces, how: (w: Workspaces) => Workspaces): Step {
 }
 
 /** Shows a Pane of a Space and focuses it, as `how` says; a new column
- * takes its width. */
+ * takes its width. A Pane is the one shown as its kind names it, so a
+ * Space has one Diff. */
 export function opening(
   workspaces: Workspaces,
   space: SpaceId,
   pane: PaneState,
   how: Omit<Opening, "width"> = {}
 ): Step {
-  const next = open(workspaces, space, pane, { ...how, width: widthOf(pane) })
+  const next = open(workspaces, space, pane, {
+    identity: identityOf,
+    ...how,
+    width: widthOf(pane),
+  })
   const plan = opened(workspaces, next)
   if (!plan) return next
   return how.focus === false ? { ...plan, focus: false } : plan
@@ -188,10 +193,11 @@ export function bringing(
   const next = bring(workspaces, space, pane, {
     place: "right",
     width: widthOf(pane),
+    identity: identityOf,
   })
   const away = entries(workspaces).find(
     (entry) =>
-      samePane(entry, { space, pane }) &&
+      samePane(entry, { space, pane }, identityOf) &&
       !current(workspaces).columns.some((c) => c.entries.includes(entry))
   )
   // The one that moved here shows anew in `next`, under another ID.

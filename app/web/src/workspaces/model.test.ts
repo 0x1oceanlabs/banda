@@ -129,7 +129,7 @@ describe("opening", () => {
     expect(entries(state)).toHaveLength(2)
   })
 
-  test("a Pane its kind names the same gets the focus, though its args differ", () => {
+  test("a Pane its kind names the same shows the args asked, or keeps its own", () => {
     const diff = (scope: string): PaneState => ({
       kind: "git.diff",
       args: { scope },
@@ -138,13 +138,24 @@ describe("opening", () => {
       pane.kind === "git.diff" ? { kind: pane.kind, args: {} } : pane
     let state = open(start(), A, thread("t1"))
     state = open(state, A, diff("staged"), { place: "right" })
+    const id = focused(state)!.id
+    state = open(state, A, thread("t1"))
+    // Kept: it only gets the focus, as Alt+D gives it.
+    state = open(state, A, diff("changes"), {
+      place: "right",
+      identity,
+      keep: true,
+    })
+    expect(columns(state)).toEqual([["t1"], ["staged"]])
+    expect(focused(state)!.id).toBe(id)
+    // Else the same tile shows the scope asked.
     state = open(state, A, thread("t1"))
     state = open(state, A, diff("changes"), { place: "right", identity })
-    expect(columns(state)).toEqual([["t1"], ["staged"]])
-    expect(focusName(state)).toBe("staged")
+    expect(columns(state)).toEqual([["t1"], ["changes"]])
+    expect(focused(state)!.id).toBe(id)
     // Without it, the args decide.
-    state = open(state, A, diff("changes"), { place: "right" })
-    expect(columns(state)).toEqual([["t1"], ["staged"], ["changes"]])
+    state = open(state, A, diff("staged"), { place: "right" })
+    expect(columns(state)).toEqual([["t1"], ["changes"], ["staged"]])
   })
 
   test("again, the same Pane opens as a new tile each time, as New Thread does", () => {
