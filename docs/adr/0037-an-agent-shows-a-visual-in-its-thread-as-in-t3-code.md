@@ -112,8 +112,10 @@ allow-forms allow-popups allow-downloads`. The frame says
      The limits are 10 MiB per image and 25 MiB per page. An image not
      found refuses the show and is listed by the check.
    - What the page says to the window is read only from its own frame:
-     its height, at any time; a link or a key, only with the frame
-     focused and just clicked. A link opens as Banda opens links.
+     its height, at any time; a key, with the frame focused; a link,
+     with the frame focused and just clicked. A link opens as Banda
+     opens links. Keys keep working after the click’s transient
+     activation expires. Only Esc and Ctrl or ⌘ with + − 0 pass.
    - Sound needs a click in the frame, as in T3: Chromium's own rule.
 
 5. **A Visual wears the look, and follows it.**

@@ -37,5 +37,6 @@ test("the script Banda puts in is a script, and names the frame's words", () => 
   expect(script).toContain("ui/notifications/size-changed")
   expect(script).toContain("ui/notifications/host-context-changed")
   expect(script).toContain("ui/open-link")
+  expect(script).toContain("banda/key")
   expect(script).toContain("banda-look=")
 })

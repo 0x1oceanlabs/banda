@@ -31,7 +31,36 @@ export const SAID = {
   size: "ui/notifications/size-changed",
   /** The page to the window: open this address. */
   link: "ui/open-link",
+  /** The page to the window: a key it left to the window. Banda's own
+   * word, as MCP Apps has none. */
+  key: "banda/key",
 } as const
+
+/** The keys a page leaves to the window, when it does not take them:
+ * `Esc`, and Ctrl or ⌘ with + − 0, so a preview closes and zooms with
+ * the keyboard in its page too. No other, so a page cannot press the
+ * window's keys. */
+export const PASSED = ["Escape", "Equal", "Minus", "Digit0"] as const
+
+type PassedCode = (typeof PASSED)[number]
+
+/** What each passed key types, as a US keyboard's does. */
+const TYPES: Record<PassedCode, [string, string]> = {
+  Escape: ["Escape", "Escape"],
+  Equal: ["=", "+"],
+  Minus: ["-", "_"],
+  Digit0: ["0", ")"],
+}
+
+/** A key the page passed: its code and key, and what was held. */
+export type Passed = {
+  code: PassedCode
+  key: string
+  ctrlKey: boolean
+  metaKey: boolean
+  shiftKey: boolean
+  altKey: boolean
+}
 
 /** How tall a frame grows to fit its page, in pixels. */
 const FITS = { least: 80, most: 20_000 } as const
@@ -174,13 +203,18 @@ export function lookMessage(look: VisualLook): unknown {
 }
 
 export type Heard =
-  { kind: "size"; height: number } | { kind: "link"; url: string }
+  | { kind: "size"; height: number }
+  | { kind: "link"; url: string }
+  | { kind: "key"; key: Passed }
+
+const held = (said: Record<string, unknown>, name: keyof Passed) =>
+  said[name] === true
 
 /** What a page said, if it is something the window takes. */
 export function heard(data: unknown): Heard | null {
   if (typeof data !== "object" || data === null) return null
   const { method, params } = data as { method?: unknown; params?: unknown }
-  const said = (params ?? {}) as { height?: unknown; url?: unknown }
+  const said = (params ?? {}) as Record<string, unknown>
   if (method === SAID.size && typeof said.height === "number") {
     if (!Number.isFinite(said.height)) return null
     return { kind: "size", height: within(said.height) }
@@ -190,6 +224,23 @@ export function heard(data: unknown): Heard | null {
     return url && (url.protocol === "https:" || url.protocol === "http:")
       ? { kind: "link", url: url.href }
       : null
+  }
+  if (method === SAID.key) {
+    const code = PASSED.find((one) => one === said.code)
+    const ctrl = held(said, "ctrlKey") || held(said, "metaKey")
+    // Esc on its own; the rest with Ctrl or ⌘.
+    if (!code || (code === "Escape") === ctrl) return null
+    return {
+      kind: "key",
+      key: {
+        code,
+        key: TYPES[code][held(said, "shiftKey") ? 1 : 0],
+        ctrlKey: held(said, "ctrlKey"),
+        metaKey: held(said, "metaKey"),
+        shiftKey: held(said, "shiftKey"),
+        altKey: held(said, "altKey"),
+      },
+    }
   }
   return null
 }
