@@ -242,6 +242,19 @@ export function closing(pane: string): Plan {
   return { command: { method: "workspaces.close", params: { pane } } }
 }
 
+/**
+ * Closes a Pane that shows the thing, on any workspace, as a Thread the
+ * Person settles leaves them (ADR 0008, decision 4); nothing when none
+ * shows it.
+ */
+export function closingShown(
+  workspaces: Workspaces,
+  thing: { space: SpaceId; about: string }
+): Plan | undefined {
+  const entry = showing(workspaces, thing, showsOf)
+  return entry && closing(entry.id)
+}
+
 /** Every action: the modules' (`modules.ts`), then the window's own. */
 export const ACTIONS: readonly Action<Shell>[] = [
   ...modules.flatMap((module) => module.actions),

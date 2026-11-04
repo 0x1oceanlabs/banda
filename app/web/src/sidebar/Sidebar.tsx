@@ -50,7 +50,7 @@ import {
 import { useLookSidebar } from "../look"
 import { Row } from "./Row"
 import { pickPreset, PRESET_WORDS, type Settings } from "./settings"
-import { settle, settles, useIsSettled } from "./settled"
+import { settles, useIsSettled } from "./settled"
 
 /**
  * The sidebar, docked at the window's left edge (ADR 0005, decision 8):
@@ -89,6 +89,11 @@ export function Sidebar({
   onOpen: (space: SpaceId, pane: PaneState) => void
   onNewThread: (space: SpaceId) => void
   onNoSpace: () => void
+  /**
+   * Settles a row's Thread, which closes the Panes that show it, or
+   * brings it back (ADR 0008, decision 4).
+   */
+  onSettle: (space: SpaceId, thing: string, settled: boolean) => void
   /** Opens "Add Space" in the Banda menu (ADR 0026). */
   onAddSpace: () => void
   /** Pins the Space, so it comes first, or unpins it (ADR 0026). */
@@ -167,7 +172,9 @@ export function Sidebar({
       onToggle={() => setToggled((set) => flip(set, section.key))}
       onMore={() => setMore((set) => flip(set, section.key))}
       onOpen={onOpen}
-      onSettle={(row) => settle(row.listed.id, row.state !== "settled")}
+      onSettle={(row) =>
+        props.onSettle(row.space.id, row.listed.id, row.state !== "settled")
+      }
       onNoSpace={onNoSpace}
       onMakeSpace={setMaking}
       onNewThread={onNewThread}
