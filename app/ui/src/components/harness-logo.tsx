@@ -5,7 +5,7 @@
  * Icons.tsx, Copyright (c) 2026 T3 Tools Inc.); the marks are their owners'.
  */
 import type { ReactNode } from "react"
-import { cn } from "cn"
+import { cn } from "../lib/utils"
 
 /** Each logo by the id of the Harness it stands for (harnesses.toml). */
 const LOGOS: Readonly<

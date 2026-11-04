@@ -16,7 +16,7 @@ import Paragraph from "@tiptap/extension-paragraph"
 import Text from "@tiptap/extension-text"
 import { Gapcursor, UndoRedo } from "@tiptap/extensions"
 import { EditorContent, useEditor } from "@tiptap/react"
-import { cn } from "cn"
+import { cn } from "../lib/utils"
 import {
   itemKey,
   newLine,

@@ -7,7 +7,7 @@ import {
 } from "react"
 import { createPortal } from "react-dom"
 import { XIcon, type LucideIcon } from "lucide-react"
-import { cn } from "cn"
+import { cn } from "../lib/utils"
 import { Button } from "./button"
 
 /**

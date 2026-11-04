@@ -1,5 +1,5 @@
 import { useEffect, useId, useRef } from "react"
-import { cn } from "cn"
+import { cn } from "../lib/utils"
 
 /**
  * Banda's mark: three tiles, the window's tiling, and the top one, tipped

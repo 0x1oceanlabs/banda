@@ -1,4 +1,4 @@
-import { cn } from "cn"
+import { cn } from "../lib/utils"
 
 /** On or off, as a setting is: a click turns it the other way. */
 function Switch({

@@ -1,7 +1,7 @@
 import { code } from "@streamdown/code"
 import { createMathPlugin } from "@streamdown/math"
 import { mermaid } from "@streamdown/mermaid"
-import { cn } from "cn"
+import { cn } from "../lib/utils"
 import { useMemo } from "react"
 
 import { Streamdown, defaultRehypePlugins } from "streamdown"
