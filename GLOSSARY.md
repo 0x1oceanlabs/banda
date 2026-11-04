@@ -278,5 +278,5 @@ notification when the window is behind. `Alt+U` goes to it.
 
 **Toast**:
 A short card at the window's top right that tells of a Call whose Thread is
-not on screen, or of a new Problem; Sonner's, stacked (ADR 0047). It goes
+not on screen, or of a new Problem; Sonner's, stacked (ADR 0048). It goes
 away by itself; the Mark remembers, and the bell shows the last ones again.
