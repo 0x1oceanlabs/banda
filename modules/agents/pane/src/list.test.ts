@@ -104,7 +104,7 @@ test("a Thread keeps its latest turn that began, and how it ended", () => {
 
   const ended = event(
     "turn.ended",
-    { turn: "u1", state: "failed", reason: "It broke." },
+    { turn: "u1", state: "failed", reason: "It broke.", note: "Tried twice." },
     { subject: "t1" }
   )
   const failed = applyThreads(running, ended)
@@ -113,6 +113,7 @@ test("a Thread keeps its latest turn that began, and how it ended", () => {
     state: "failed",
     began: started.at,
     reason: "It broke.",
+    note: "Tried twice.",
   })
   expect(failed.threads[0].updated_at).toBe(ended.at)
 })

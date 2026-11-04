@@ -345,6 +345,7 @@ fn an_agent_reaches_banda_through_banda_mcp() {
                 "show_visual",
                 "preview_visual",
                 "draft_issue",
+                "notify",
                 "limits",
                 "browser_tabs",
                 "browser_snapshot",
