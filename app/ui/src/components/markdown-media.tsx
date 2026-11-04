@@ -1,6 +1,7 @@
 import { localMedia } from "../lib/markdown-media"
 import { createContext, useContext, useEffect, useState } from "react"
-import { Dialog, DialogContent, DialogTitle, DialogTrigger } from "./dialog"
+import { DialogTrigger } from "./dialog"
+import { ImagePreview } from "./image-preview"
 
 /** The desktop signs local paths; markdown never reads the filesystem. */
 export type MediaResolver = (path: string) => Promise<string | null>
@@ -42,7 +43,6 @@ export function MarkdownImage({
   const path = typeof src === "string" ? src : ""
   const kind = kindOf(path)
   const [loaded, setLoaded] = useState<{ path: string; url: string | null }>()
-  const [failed, setFailed] = useState(false)
   const local = localMedia(path)
   useEffect(() => {
     if (!resolve || !local || !kind) return
@@ -52,7 +52,6 @@ export function MarkdownImage({
         (url) => {
           if (current) {
             setLoaded({ path, url })
-            setFailed(false)
           }
         },
         () => {
@@ -71,7 +70,7 @@ export function MarkdownImage({
   if (!local) return <img src={path} alt={alt} />
   const name = alt || path.split("/").at(-1) || path
   const url = loaded?.path === path ? loaded.url : undefined
-  if (!kind || !resolve || url === null || failed)
+  if (!kind || !resolve || url === null)
     return (
       <a
         href={path}
@@ -88,6 +87,10 @@ export function MarkdownImage({
         Loading {name}…
       </span>
     )
+  const unavailable = () =>
+    setLoaded((now) =>
+      now?.path === path && now.url === url ? { path, url: null } : now
+    )
   if (kind === "video")
     return (
       <video
@@ -95,7 +98,7 @@ export function MarkdownImage({
         aria-label={name}
         controls
         preload="metadata"
-        onError={() => setFailed(true)}
+        onError={unavailable}
         className="my-2 max-h-96 max-w-full rounded-md"
       />
     )
@@ -108,13 +111,13 @@ export function MarkdownImage({
           aria-label={name}
           controls
           preload="metadata"
-          onError={() => setFailed(true)}
+          onError={unavailable}
           className="max-w-full"
         />
       </span>
     )
   return (
-    <Dialog>
+    <ImagePreview name={name} url={url} alt={alt}>
       <DialogTrigger
         aria-label={`Open ${name}`}
         className="my-2 block max-w-full cursor-zoom-in rounded-md focus-visible:ring-2 focus-visible:ring-ring"
@@ -122,18 +125,11 @@ export function MarkdownImage({
         <img
           src={url}
           alt={alt}
-          onError={() => setFailed(true)}
+          onError={unavailable}
+          loading="lazy"
           className="max-h-96 max-w-full rounded-md object-contain"
         />
       </DialogTrigger>
-      <DialogContent className="max-h-[calc(100%-2rem)] w-auto sm:max-w-[calc(100%-4rem)]">
-        <DialogTitle className="pr-8">{name}</DialogTitle>
-        <img
-          src={url}
-          alt={alt}
-          className="max-h-[calc(100vh-8rem)] min-h-0 rounded-md object-contain"
-        />
-      </DialogContent>
-    </Dialog>
+    </ImagePreview>
   )
 }
