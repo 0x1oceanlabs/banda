@@ -77,8 +77,10 @@ and decided:
      window's share in large type, its bar with the even-pace mark,
      "Ahead of pace", "On pace", "Under pace" or "Out", and its reset.
    - **Cost** and **Tokens**, with 24 hours, 7, 30 or 90 days: the sum in
-     large type, a chart of each day (each hour for 24 hours) stacked by
-     account, by account with its share, and by model. Tokens also part
+     large type, a chart of each day stacked by account, by account with
+     its share, and by model. The sums are kept by day (ADR 0043,
+     decision 6), so 24 hours has no chart over time: its accounts' shares
+     stand in one stacked bar. Tokens also part
      input, cache read, cache write and output, and the cache's hit rate.
    - The chart is an area or bars, a toggle beside it; each tab keeps its
      own, Cost an area and Tokens bars by default.
