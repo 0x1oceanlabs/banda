@@ -51,6 +51,13 @@ pub struct Status {
     #[ts(optional)]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub default_branch: Option<String>,
+    /// How many commits `HEAD` has that the default branch does not, the
+    /// remote's copy of it first: for a branch with no upstream, whose
+    /// Push has nothing to push without them. None when it has an
+    /// upstream, or there is no default to count from.
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ahead_of_default: Option<u32>,
     /// What changed against `HEAD`, in the index and the work tree, by
     /// path.
     pub files: Vec<Changed>,

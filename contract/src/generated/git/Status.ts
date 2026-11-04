@@ -53,6 +53,13 @@ remote?: string,
  */
 default_branch?: string, 
 /**
+ * How many commits `HEAD` has that the default branch does not, the
+ * remote's copy of it first: for a branch with no upstream, whose
+ * Push has nothing to push without them. None when it has an
+ * upstream, or there is no default to count from.
+ */
+ahead_of_default?: number, 
+/**
  * What changed against `HEAD`, in the index and the work tree, by
  * path.
  */

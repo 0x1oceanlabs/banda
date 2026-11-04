@@ -1,6 +1,6 @@
 import type { Status } from "@banda/contract/git"
 import { expect, test } from "vitest"
-import { askOf, asksFirst, menuOf, quickOf } from "./quick"
+import { askOf, asksFirst, menuOf, onDefault, quickOf } from "./quick"
 
 const STATUS: Status = {
   at: 0,
@@ -81,4 +81,35 @@ test("the ▾ menu says which of Commit, Push and Pull can run, and why not", ()
   expect(menuOf(STATUS).commit.hint).toMatch(/clean/)
   // A branch never pushed pushes its commits.
   expect(menuOf({ ...STATUS, upstream: undefined }).push.can).toBe(true)
+})
+
+test("a branch diverged from its upstream pulls neither from ▾", () => {
+  const diverged = menuOf({ ...STATUS, ahead: 1, behind: 1 })
+  expect(diverged.pull).toEqual({
+    can: false,
+    hint: "Branch has diverged from upstream. Rebase or merge first.",
+  })
+  expect(diverged.push.can).toBe(false)
+})
+
+test("a branch just made, no commit of its own, has nothing to push", () => {
+  const fresh = { upstream: undefined, ahead: undefined, behind: undefined }
+  expect(button({ ...fresh, ahead_of_default: 0 })).toMatchObject({
+    label: "Push",
+    action: null,
+    hint: "No local commits to push.",
+  })
+  expect(menuOf({ ...STATUS, ...fresh, ahead_of_default: 0 }).push.can).toBe(
+    false
+  )
+  expect(button({ ...fresh, ahead_of_default: 2 }).action).toBe("push")
+})
+
+test("only a branch named as the default is on it", () => {
+  expect(onDefault({ ...STATUS, branch: "main" })).toBe(true)
+  expect(onDefault(STATUS)).toBe(false)
+  // Detached, and no default known: not on it.
+  expect(
+    onDefault({ ...STATUS, branch: undefined, default_branch: undefined })
+  ).toBe(false)
 })

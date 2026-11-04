@@ -66,6 +66,12 @@ async fn of(repo: Repo, at: i64) -> Result<Status, Failure> {
         .into_iter()
         .map(|f| (f.path, (f.added, f.removed)))
         .collect();
+    let ahead_of_default = match (&said.upstream, &said.head, &default_branch) {
+        (None, Some(_), Some(default)) => {
+            ahead_of(&repo, remote.as_deref(), default, said.branch.as_deref()).await?
+        }
+        _ => None,
+    };
     let mut files = said.files;
     for file in &mut files {
         (file.added, file.removed) = counts.get(&file.path).copied().unwrap_or_default();
@@ -81,8 +87,39 @@ async fn of(repo: Repo, at: i64) -> Result<Status, Failure> {
         upstream: said.upstream,
         remote,
         default_branch,
+        ahead_of_default,
         added: files.iter().map(|f| f.added).sum(),
         removed: files.iter().map(|f| f.removed).sum(),
         files,
     })
+}
+
+/// How many commits `HEAD` has that `default` does not: the remote's copy
+/// of it, else the one here unless it is the branch checked out. None
+/// when neither is there to count from.
+async fn ahead_of(
+    repo: &Repo,
+    remote: Option<&str>,
+    default: &str,
+    branch: Option<&str>,
+) -> Result<Option<u32>, Failure> {
+    let mut tips = Vec::new();
+    tips.extend(remote.map(|remote| format!("refs/remotes/{remote}/{default}")));
+    if branch != Some(default) {
+        tips.push(format!("refs/heads/{default}"));
+    }
+    for tip in tips {
+        if !repo.has_ref(&tip).await? {
+            continue;
+        }
+        let range = format!("{tip}..HEAD");
+        let counted = repo
+            .run(
+                ["rev-list", "--count", range.as_str(), "--"],
+                Opts::default(),
+            )
+            .await?;
+        return Ok(counted.text().parse().ok());
+    }
+    Ok(None)
 }
