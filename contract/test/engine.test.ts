@@ -228,3 +228,35 @@ test("a window runs a terminal and hears what it prints, until it closes", async
   await client.call("terminal.close", { terminal }, { space: space.id })
   await expect.poll(() => closed).toBe(true)
 })
+
+test("a stream heard once ends when the connection breaks, and is not asked again", async () => {
+  await serve()
+  client = new Engine(address)
+  const space = await client.command("spaces.create", {
+    name: "Work",
+  })
+  const terminal = newId()
+  await client.call(
+    "terminal.open",
+    {
+      terminal,
+      program: "sh",
+      args: ["-c", "sleep 100"],
+      size: { cols: 80, rows: 24 },
+    },
+    { space: space.id }
+  )
+  const ends: (string | undefined)[] = []
+  client.stream(
+    space.id,
+    "terminal.watch",
+    { terminal },
+    () => {},
+    (refusal) => ends.push(refusal?.code),
+    { once: true }
+  )
+  await expect.poll(() => client!.status.state).toBe("open")
+  await stop()
+  await until(client, "lost")
+  await expect.poll(() => ends).toEqual(["may_have_run"])
+})

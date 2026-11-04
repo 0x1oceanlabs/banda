@@ -67,6 +67,10 @@ type Hearing = {
   params: JsonValue
   onPiece: (piece: unknown) => void
   onEnd: (refusal?: Refusal) => void
+  /** Never said again after a reconnect (`stream`'s `once`). */
+  once: boolean
+  /** The engine was asked for it on this connection. */
+  sent: boolean
 }
 
 /** A command breaks off at most this often before its caller hears why. */
@@ -82,7 +86,8 @@ const LONGEST_WAIT = 5000
  * - A call made while the engine is away waits for it.
  * - A subscription goes on after a reconnect from the last event it
  *   delivered, so a Pane sees no gap and no repeat.
- * - A stream is heard again after a reconnect, from its start.
+ * - A stream is heard again after a reconnect, from its start; one heard
+ *   `once` ends instead.
  */
 export class Engine {
   readonly #address: () => Promise<Address>
@@ -201,13 +206,18 @@ export class Engine {
    * and keeps nowhere. After a reconnect the engine says it again from its
    * start. `onEnd` hears when the module ends it, or refuses it. Returns how
    * to stop. A stream of this machine's, `window.requests`, has no Space.
+   *
+   * A stream that does something, as a commit, is heard `once`: asked
+   * again it would do it again. When the connection breaks after it was
+   * asked, it ends with `may_have_run` instead, and the caller checks.
    */
   stream<M extends MethodOf<"stream">>(
     space: SpaceId | undefined,
     method: M,
     params: Params<M>,
     onPiece: (piece: Answer<M>) => void,
-    onEnd: (refusal?: Refusal) => void
+    onEnd: (refusal?: Refusal) => void,
+    { once = false }: { once?: boolean } = {}
   ): () => void {
     const id = this.#nextId++
     const hearing: Hearing = {
@@ -216,6 +226,8 @@ export class Engine {
       params: params as JsonValue,
       onPiece: onPiece as (piece: unknown) => void,
       onEnd,
+      once,
+      sent: false,
     }
     this.#hearing.set(id, hearing)
     if (this.#status.state === "open") this.#hear(id, hearing)
@@ -294,6 +306,7 @@ export class Engine {
   }
 
   #hear(id: number, hearing: Hearing): void {
+    hearing.sent = true
     this.#send({
       type: "stream",
       id,
@@ -388,6 +401,12 @@ export class Engine {
   #drop(): void {
     this.#socket = null
     this.#fail(new Lost())
+    // What is heard once and was asked may have run: it ends, not again.
+    for (const [id, hearing] of this.#hearing) {
+      if (!hearing.once || !hearing.sent) continue
+      this.#hearing.delete(id)
+      hearing.onEnd({ code: "may_have_run", message: new Lost().message })
+    }
     if (!this.#closed && this.#status.state !== "refused") this.#retry()
   }
 
