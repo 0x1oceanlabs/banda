@@ -21,7 +21,7 @@ import {
 import { DiffCounts, DiffPath } from "@banda/ui/components/diff"
 import { Textarea } from "@banda/ui/components/textarea"
 import type { Commit } from "./chain"
-import { onDefault } from "./quick"
+import { NO_HARNESS, onDefault } from "./quick"
 
 /** Drawn while it is open, so each opening starts with every file taken
  * and no message. */
@@ -53,7 +53,7 @@ export function CommitDialog({
     taken.length === 0
       ? "Choose a file to commit."
       : !message.trim() && !writes
-        ? "Write a message: a new Thread's Harness cannot yet."
+        ? NO_HARNESS
         : undefined
   const commit = (feature: boolean) => {
     onClose()

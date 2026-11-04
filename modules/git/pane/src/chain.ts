@@ -8,6 +8,7 @@
 import type { Engine, SpaceId } from "@banda/contract"
 import type { Action, Step } from "@banda/contract/git"
 import { problem } from "@banda/ui/lib/words"
+import { NO_HARNESS } from "./quick"
 
 export type Run =
   | { is: "idle" }
@@ -82,10 +83,7 @@ export async function run(
   // A commit with no message of the Person's: the Harness writes it.
   const writes = commits && !own
   if (writes && thread === null)
-    return set(space, {
-      is: "failed",
-      message: "A new Thread has no Harness to write the message yet.",
-    })
+    return set(space, { is: "failed", message: NO_HARNESS })
   const step = (label: string) =>
     set(space, { is: "running", label, since: Date.now() })
   step(writes ? "Writing commit message…" : "Starting…")
