@@ -292,8 +292,11 @@ function Models({
         className="max-h-80 overflow-y-auto"
       >
         {groups.map((group, i) => {
+          // Beside its name, the logo only decorates the row.
           const logo = (
-            <HarnessLogo id={group.id} name={group.name} fallback={null} />
+            <span aria-hidden className="contents">
+              <HarnessLogo id={group.id} name={group.name} fallback={null} />
+            </span>
           )
           const here = group.id === current
           return (
