@@ -24,10 +24,18 @@ import { cn } from "@banda/ui/lib/utils"
 import { MINUTE, fullDate } from "@banda/ui/lib/words"
 import { definePane, type PaneProps } from "@banda/ui/pane"
 import { GaugeIcon } from "lucide-react"
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import {
+  lazy,
+  Suspense,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react"
 import { elapsedOf, paceOf, paceWords, resetWords, usedOf } from "./limits"
 import { Dot, Quiet, Segment, Segments } from "./parts"
-import { Spend, type Form } from "./Spend"
+import type { Form } from "./Spend"
 import { type Account, type Period, PERIODS, accountsOf, spanOf } from "./usage"
 
 export type UsageArgs = {
@@ -55,6 +63,12 @@ export const usagePane = definePane<UsageArgs>({
   identity: () => "usage",
   Pane: UsagePane,
 })
+
+/** The charts load with the Pane's first Cost or Tokens, not with the
+ * window: Recharts is the heaviest part of the module. */
+const Spend = lazy(() =>
+  import("./Spend").then(({ Spend }) => ({ default: Spend }))
+)
 
 const TABS = [
   ["limits", "Limits"],
@@ -455,5 +469,9 @@ function SpendTab({
         harnesses.toml.
       </Quiet>
     )
-  return <Spend usage={live.view} {...props} />
+  return (
+    <Suspense fallback={null}>
+      <Spend usage={live.view} {...props} />
+    </Suspense>
+  )
 }
