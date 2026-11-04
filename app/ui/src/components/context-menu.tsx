@@ -1,7 +1,7 @@
 "use client"
 
 import { ContextMenu as ContextMenuPrimitive } from "@base-ui/react/context-menu"
-import { cn } from "cn"
+import { cn } from "../lib/utils"
 
 /**
  * A menu a right click opens where the pointer is. Its items are the

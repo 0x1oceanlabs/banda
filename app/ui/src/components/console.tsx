@@ -1,4 +1,4 @@
-import { cn } from "cn"
+import { cn } from "../lib/utils"
 
 /** What a command printed: its text in a small block that scrolls, and a
  * footer for how it ended. */

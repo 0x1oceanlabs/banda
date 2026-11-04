@@ -1,4 +1,4 @@
-import { cn } from "cn"
+import { cn } from "../lib/utils"
 
 /** A file change, line by line: a header, then its lines in a small block
  * that scrolls both ways. */

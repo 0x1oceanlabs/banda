@@ -7,7 +7,7 @@ import type { GitStatusEntry } from "@pierre/trees"
 import { FileTree, useFileTree } from "@pierre/trees/react"
 import { useEffect, useRef } from "react"
 import { useDark } from "../hooks/use-dark"
-import { cn } from "cn"
+import { cn } from "../lib/utils"
 
 export type { GitStatus } from "@pierre/trees"
 

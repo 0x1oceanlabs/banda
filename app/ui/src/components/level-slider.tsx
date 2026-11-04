@@ -1,6 +1,6 @@
 import { useState } from "react"
 import { Slider as SliderPrimitive } from "@base-ui/react/slider"
-import { cn } from "cn"
+import { cn } from "../lib/utils"
 
 /** The colour of level `at` of `last`, in the theme's blue; the top
  * level stands out in its magenta. As text unless `as` says otherwise. */

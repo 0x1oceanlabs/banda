@@ -1,6 +1,6 @@
 /** A key as a key cap, and a key with its mods, as shadcn/ui draws them. */
 import type * as React from "react"
-import { cn } from "cn"
+import { cn } from "../lib/utils"
 
 function Kbd({ className, ...props }: React.ComponentProps<"kbd">) {
   return (

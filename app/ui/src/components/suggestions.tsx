@@ -1,4 +1,4 @@
-import { cn } from "cn"
+import { cn } from "../lib/utils"
 
 /** What a field could take next, in a list that opens beside it while the
  * focus stays in the field: the field moves the choice with its keys and

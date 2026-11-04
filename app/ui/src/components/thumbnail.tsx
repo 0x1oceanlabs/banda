@@ -1,6 +1,6 @@
 import { mergeProps } from "@base-ui/react/merge-props"
 import { useRender } from "@base-ui/react/use-render"
-import { cn } from "cn"
+import { cn } from "../lib/utils"
 import { XIcon } from "lucide-react"
 
 /** A small picture in a frame: an image waiting to be sent, or one a

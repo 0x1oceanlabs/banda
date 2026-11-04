@@ -27,7 +27,7 @@ import {
   useSyncExternalStore,
 } from "react"
 import { useDark } from "../hooks/use-dark"
-import { cn } from "cn"
+import { cn } from "../lib/utils"
 
 export type { FileDiffMetadata } from "@pierre/diffs"
 

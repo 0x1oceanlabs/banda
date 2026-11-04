@@ -1,5 +1,5 @@
 import { Meter as MeterPrimitive } from "@base-ui/react/meter"
-import { cn } from "cn"
+import { cn } from "../lib/utils"
 
 const RADIUS = 6
 const AROUND = 2 * Math.PI * RADIUS

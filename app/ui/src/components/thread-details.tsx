@@ -12,7 +12,7 @@ import {
   useContext,
 } from "react"
 import type { Engine, SpaceId } from "@banda/contract"
-import { cn } from "cn"
+import { cn } from "../lib/utils"
 import type { PaneState, Place } from "../pane"
 
 export type DetailsProps = {
