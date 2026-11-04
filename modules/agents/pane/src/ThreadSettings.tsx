@@ -29,10 +29,14 @@ import {
   ShieldIcon,
   type LucideIcon,
 } from "lucide-react"
+import { cn } from "@banda/ui/lib/utils"
+import { FOOTER_CONTROL } from "./Composer"
 import { choose, chosen } from "./thread"
 
-/** The modes in the order of how freely the Agent acts (ADR 0003, decision 9). */
-const MODES: (Choice & { id: Mode; icon: LucideIcon })[] = [
+/** The modes in the order of how freely the Agent acts (ADR 0003,
+ * decision 9); `short`, the word the composer's footer shows for a name
+ * too long for it. */
+const MODES: (Choice & { id: Mode; icon: LucideIcon; short?: string })[] = [
   {
     id: "supervised",
     name: "Supervised",
@@ -42,6 +46,7 @@ const MODES: (Choice & { id: Mode; icon: LucideIcon })[] = [
   {
     id: "accept_edits",
     name: "Auto-accept edits",
+    short: "Accept edits",
     about: "Edits files without asking, and asks before anything else.",
     icon: ShieldCheckIcon,
   },
@@ -58,6 +63,12 @@ const MODES: (Choice & { id: Mode; icon: LucideIcon })[] = [
     icon: ShieldAlertIcon,
   },
 ]
+
+/** A menu that floats as the chat's popups do (ADR 0058): a block's
+ * corner over the menu's own fill, ring and shadow. */
+const MENU = "rounded-(--block-radius) shadow-md"
+/** A row of such a menu: a button's corner, room around its words. */
+const ROW = "py-1.5 pl-2.5"
 
 /** A choice in a menu: its icon, its name, and what it means under it. */
 type Choice = {
@@ -80,10 +91,10 @@ function ChoiceItems({
   return (
     <DropdownMenuRadioGroup value={value} onValueChange={onChange}>
       {choices.map(({ id, name, about, icon: Icon }) => (
-        <DropdownMenuRadioItem key={id} value={id} closeOnClick>
+        <DropdownMenuRadioItem key={id} value={id} closeOnClick className={ROW}>
           {Icon && <Icon />}
           <span className="flex flex-col">
-            <span>{name}</span>
+            <span className="font-medium">{name}</span>
             {about && (
               <span className="text-xs text-muted-foreground">{about}</span>
             )}
@@ -115,9 +126,10 @@ function nameOf(choices: Choice[], value: string): string {
 
 /**
  * How freely a Thread's Agent acts, as a quiet shield beside the model
- * picker, as Codex shows its permissions (ADR 0031): the mode's icon, and
- * a menu of the modes. The Harness's options the picker does not set are
- * in it too. Plan is not: `/plan`, `/default` and Shift+Tab switch it.
+ * picker, as Codex shows its permissions (ADR 0031): the mode's icon, its
+ * word too once the Thread is wide enough (ADR 0058), and a menu of the
+ * modes. The Harness's options the picker does not set are in it too.
+ * Plan is not: `/plan`, `/default` and Shift+Tab switch it.
  */
 export function ModeMenu({
   settings,
@@ -139,16 +151,23 @@ export function ModeMenu({
         render={
           <Button
             variant="ghost"
-            size="icon-sm"
-            className="text-muted-foreground"
+            size="sm"
+            className={cn(FOOTER_CONTROL, "px-[7px] @min-[40rem]/thread:px-2")}
             aria-label={`Mode: ${mode.name}`}
             title={mode.name}
           />
         }
       >
         <mode.icon />
+        <span className="hidden @min-[40rem]/thread:inline">
+          {mode.short ?? mode.name}
+        </span>
       </DropdownMenuTrigger>
-      <DropdownMenuContent side="top" align="end" className="w-auto min-w-64">
+      <DropdownMenuContent
+        side="top"
+        align="end"
+        className={cn("w-auto min-w-64", MENU)}
+      >
         <ModeItems settings={settings} onChange={onChange} />
         {options.length > 0 && <DropdownMenuSeparator />}
         {options.map((option) =>
@@ -163,6 +182,7 @@ export function ModeMenu({
           ) : (
             <DropdownMenuCheckboxItem
               key={option.id}
+              className={ROW}
               checked={chosen(settings, option) === true}
               onCheckedChange={(on) =>
                 onChange(choose(settings, option.id, on))
@@ -193,11 +213,14 @@ function Submenu({
   const now = nameOf(choices, value)
   return (
     <DropdownMenuSub>
-      <DropdownMenuSubTrigger aria-label={`${what}: ${now}`}>
+      <DropdownMenuSubTrigger
+        aria-label={`${what}: ${now}`}
+        className="px-2.5 py-1.5"
+      >
         <span className="flex-1">{what}</span>
         <span className="pl-4 text-muted-foreground">{now}</span>
       </DropdownMenuSubTrigger>
-      <DropdownMenuSubContent className="min-w-48">
+      <DropdownMenuSubContent className={cn("min-w-48", MENU)}>
         <ChoiceItems value={value} choices={choices} onChange={onChange} />
       </DropdownMenuSubContent>
     </DropdownMenuSub>
@@ -303,6 +326,7 @@ export function Pick({
             type="button"
             variant="ghost"
             size="xs"
+            className="font-normal"
             aria-label={`${what}: ${now}`}
           />
         }
@@ -311,15 +335,15 @@ export function Pick({
         {now}
         <ChevronDownIcon data-icon="inline-end" />
       </DropdownMenuTrigger>
-      <DropdownMenuContent side="top" className="w-auto min-w-48">
+      <DropdownMenuContent side="top" className={cn("w-auto min-w-48", MENU)}>
         <DropdownMenuGroup>
-          <DropdownMenuLabel>{what}</DropdownMenuLabel>
+          <DropdownMenuLabel className="px-2.5">{what}</DropdownMenuLabel>
           <ChoiceItems value={value} choices={choices} onChange={onChange} />
         </DropdownMenuGroup>
         {more && (
           <>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={more.run}>
+            <DropdownMenuItem className="px-2.5 py-1.5" onClick={more.run}>
               {more.icon}
               {more.title}
             </DropdownMenuItem>
@@ -403,7 +427,9 @@ function ModeItems({
 }) {
   return (
     <DropdownMenuGroup>
-      <DropdownMenuLabel>How freely it acts</DropdownMenuLabel>
+      <DropdownMenuLabel className="px-2.5">
+        How freely it acts
+      </DropdownMenuLabel>
       <ChoiceItems
         value={settings.mode}
         choices={MODES}

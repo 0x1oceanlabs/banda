@@ -58,11 +58,12 @@ export function QuoteSelection({
 
   if (!shown) return null
   return (
+    // It floats as the chat's popups do (ADR 0058), a pill.
     <Button
       ref={button}
-      variant="secondary"
-      size="xs"
-      className="absolute z-20 shadow-md"
+      variant="ghost"
+      size="sm"
+      className="absolute z-20 rounded-full bg-popover px-2.5 text-xs text-popover-foreground shadow-md ring-1 ring-foreground/10 hover:bg-accent dark:hover:bg-accent"
       style={{ left: shown.x, top: shown.y }}
       // The selection stays while the button is pressed.
       onPointerDown={(event) => event.preventDefault()}

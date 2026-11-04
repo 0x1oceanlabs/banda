@@ -90,14 +90,15 @@ export function ThreadImage({
     return (
       <Thumbnail
         title={`${name} could not be shown.`}
-        className="flex size-24 items-center justify-center text-muted-foreground"
+        size="lg"
+        className="flex items-center justify-center text-muted-foreground"
       >
         <ImageOffIcon className="size-5" />
       </Thumbnail>
     )
   if (url === undefined)
     return (
-      <Thumbnail title={name} className="size-24">
+      <Thumbnail title={name} size="lg">
         <ThumbnailBusy>
           <Spinner />
         </ThumbnailBusy>
@@ -109,7 +110,8 @@ export function ThreadImage({
         render={<DialogTrigger />}
         aria-label={`Open ${name}`}
         title={name}
-        className="size-24 cursor-zoom-in"
+        size="lg"
+        className="cursor-zoom-in"
       >
         <ThumbnailImage src={url} alt={name} />
       </Thumbnail>

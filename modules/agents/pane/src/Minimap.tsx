@@ -8,7 +8,9 @@ const SAYS = 80
 /**
  * A minimap of what the Person sent, as T3 Code's (ADR 0010, decision
  * 9): a mark for each message down the Thread's edge, which names it and
- * goes to it. Inside the Thread's message scroller.
+ * goes to it. Inside the Thread's message scroller, in a lane of its own
+ * by the scrollbar, in the outer half of the Thread's side room, so a
+ * mark never touches a bubble's edge (ADR 0058).
  */
 export function Minimap({
   messages,
@@ -20,7 +22,7 @@ export function Minimap({
   return (
     <nav
       aria-label="Your messages"
-      className="absolute top-1/2 right-3 z-10 flex h-[min(60%,calc(var(--marks)*0.75rem))] -translate-y-1/2 flex-col"
+      className="absolute top-1/2 right-1.5 z-10 flex h-[min(60%,calc(var(--marks)*0.75rem))] -translate-y-1/2 flex-col"
       style={{ "--marks": messages.length } as React.CSSProperties}
     >
       {messages.map(({ id, text }) => {
@@ -36,7 +38,7 @@ export function Minimap({
               scrollToMessage(id, { align: "start", behavior: "smooth" })
             }
           >
-            <span className="h-0.5 w-2.5 rounded-full bg-muted-foreground/40 transition-all group-hover/mark:w-4 group-hover/mark:bg-foreground group-focus-visible/mark:w-4 group-focus-visible/mark:bg-ring" />
+            <span className="h-0.5 w-1.5 rounded-full bg-muted-foreground/40 transition-all group-hover/mark:w-2.5 group-hover/mark:bg-foreground group-focus-visible/mark:w-2.5 group-focus-visible/mark:bg-ring" />
           </button>
         )
       })}

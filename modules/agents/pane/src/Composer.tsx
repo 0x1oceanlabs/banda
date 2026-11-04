@@ -34,6 +34,7 @@ import { useDraft } from "./drafts"
 import { keyFor, steers, useEnterKey } from "./enter-key"
 import { recall } from "./history"
 import { imagesAmong } from "./images"
+import { placeholder as says } from "./placeholder"
 import { ownCommand, type Suggested } from "./slash"
 import { type FindFiles, useFileMenu } from "./FileMenu"
 import { useSkillMenu, useSlashMenu } from "./SlashMenu"
@@ -82,7 +83,8 @@ export function Composer({
    * or ↓ asks. */
   history: () => readonly string[]
 
-  /** What the empty box says, instead of asking to write to `name`. */
+  /** What the empty box says, instead of asking to write to `name` or,
+   * while a turn runs, to steer it. */
   placeholder?: string
   /** Whether plan mode is on, where the Harness has one: Shift+Tab
    * switches it. */
@@ -293,77 +295,75 @@ export function Composer({
           event.target.value = ""
         }}
       />
-      {/* A card as Codex's: on the tile's own colour with a soft shadow
-          in light, a little lighter with a hairline in dark; files
-          dragged over tint it (ADR 0031). */}
+      {/* The shape of what docks on it (ADR 0058, decision 8): the
+          bubble's corner, a block's fill and a line, one recipe in light
+          and dark; the line firms up while it is in use. Files dragged
+          over tint it (ADR 0031). The pictures and the text start at one
+          inset. */}
       <div
         data-dropping={dropping || undefined}
-        className="flex flex-col rounded-lg bg-background shadow-[0_0_0_1px_rgb(0_0_0/0.04),0_2px_8px_rgb(0_0_0/0.04),0_4px_40px_8px_rgb(0_0_0/0.024)] transition-colors data-dropping:bg-accent/45 data-dropping:inset-ring data-dropping:inset-ring-primary dark:bg-foreground/8 dark:shadow-[inset_0_0_1px_rgb(255_255_255/0.2)]"
+        className="flex flex-col rounded-bubble border bg-block transition-colors focus-within:border-foreground/15 data-dropping:border-primary data-dropping:bg-accent/45"
       >
         {images.adding.length > 0 && (
-          <div className="px-3 pt-3">
+          <div className="px-3.5 pt-3">
             <AttachmentList images={images} />
           </div>
         )}
-        <div className="px-1.5 pt-1.5">
-          <PromptEditor
-            ref={field}
-            value={text}
-            placeholder={
-              placeholder ??
-              `Write to ${name}. @ files, / commands${skills.length > 0 ? ", $ skills" : ""}`
+        <PromptEditor
+          ref={field}
+          value={text}
+          placeholder={placeholder ?? says(name, steering, skills.length > 0)}
+          skills={skillNames}
+          attributes={{
+            "aria-label": `Message to ${name}`,
+            ...Object.assign({}, ...menus.map((menu) => menu.field)),
+          }}
+          className="max-h-48 px-3.5 pt-3 pb-1.5"
+          onTyping={setTyping}
+          onChange={(value) => {
+            setText(value)
+            setBack(0)
+          }}
+          onPaste={(event) => takePaste(event, "caret")}
+          onKeyDown={(event) => {
+            if (menus.some((menu) => menu.onKeyDown(event))) return
+            if (event.key === "Tab" && event.shiftKey && plan !== undefined) {
+              event.preventDefault()
+              onPlanMode(!plan)
+              return
             }
-            skills={skillNames}
-            attributes={{
-              "aria-label": `Message to ${name}`,
-              ...Object.assign({}, ...menus.map((menu) => menu.field)),
-            }}
-            className="max-h-48 min-h-10"
-            onTyping={setTyping}
-            onChange={(value) => {
-              setText(value)
-              setBack(0)
-            }}
-            onPaste={(event) => takePaste(event, "caret")}
-            onKeyDown={(event) => {
-              if (menus.some((menu) => menu.onKeyDown(event))) return
-              if (event.key === "Tab" && event.shiftKey && plan !== undefined) {
-                event.preventDefault()
-                onPlanMode(!plan)
-                return
-              }
-              const up = event.key === "ArrowUp"
-              if (plain(event) && (up || event.key === "ArrowDown")) {
-                // Within a message of more lines, the caret moves first.
-                if (!(field.current?.atEdge(up) ?? true)) return
-                const waits = onEditLast !== undefined
-                const step = recall(history(), back, text, up, waits)
-                if (!step) return
-                event.preventDefault()
-                if (step === "edit") return onEditLast?.()
-                setText(step.text)
-                setBack(step.back)
-                return
-              }
-              if (
-                event.key === "Enter" &&
-                !event.shiftKey &&
-                !event.isComposing
-              ) {
-                event.preventDefault()
-                // Ctrl (⌘ on a Mac) does the other thing.
-                void send(steers(enter, event.ctrlKey || event.metaKey))
-              }
-            }}
-          />
-        </div>
+            const up = event.key === "ArrowUp"
+            if (plain(event) && (up || event.key === "ArrowDown")) {
+              // Within a message of more lines, the caret moves first.
+              if (!(field.current?.atEdge(up) ?? true)) return
+              const waits = onEditLast !== undefined
+              const step = recall(history(), back, text, up, waits)
+              if (!step) return
+              event.preventDefault()
+              if (step === "edit") return onEditLast?.()
+              setText(step.text)
+              setBack(step.back)
+              return
+            }
+            if (
+              event.key === "Enter" &&
+              !event.shiftKey &&
+              !event.isComposing
+            ) {
+              event.preventDefault()
+              // Ctrl (⌘ on a Mac) does the other thing.
+              void send(steers(enter, event.ctrlKey || event.metaKey))
+            }
+          }}
+        />
         {/* One row: + on the left, what is on beside it; what the Thread
-            runs with and the button on the right (ADR 0031). */}
-        <div className="flex items-center gap-1 px-2 pb-2">
+            runs with and the button on the right (ADR 0031), every one
+            28px (ADR 0058, decision 8). */}
+        <div className="flex items-center gap-0.5 px-2 pt-1 pb-2">
           <Button
             variant="ghost"
-            size="icon"
-            className="text-muted-foreground"
+            size="icon-sm"
+            className={FOOTER_ICON}
             aria-label="Add files"
             title="Add images and files"
             onClick={() => files.current?.click()}
@@ -373,8 +373,8 @@ export function Composer({
           {plan && (
             <Button
               variant="ghost"
-              size="xs"
-              className="text-muted-foreground"
+              size="sm"
+              className={FOOTER_CONTROL}
               aria-label="Plan"
               title="Plan mode is on. Click, Shift+Tab or /default turns it off."
               onClick={() => onPlanMode(false)}
@@ -382,15 +382,14 @@ export function Composer({
               Plan
             </Button>
           )}
-          <div className="flex min-w-0 flex-1 items-center justify-end">
+          <div className="flex min-w-0 flex-1 items-center justify-end gap-0.5">
             {children}
           </div>
           {usage && <ContextUsed usage={usage} />}
           {working && !written ? (
             <Button
-              variant="ghost"
-              size="icon"
-              className="rounded-full bg-foreground/12 hover:bg-foreground/16"
+              size="icon-sm"
+              className="ml-1 rounded-full"
               aria-label="Stop"
               onClick={() => onStop(working)}
             >
@@ -399,9 +398,9 @@ export function Composer({
           ) : (
             <Button
               type="submit"
-              size="icon"
+              size="icon-sm"
               // With nothing to send it is not faded but quiet (ADR 0031).
-              className="rounded-full inset-shadow-[0_1px_0_rgb(255_255_255/0.3)] hover:scale-105 hover:bg-primary/90 disabled:bg-foreground/10 disabled:text-muted-foreground disabled:opacity-100 disabled:inset-shadow-none"
+              className="ml-1 rounded-full hover:bg-primary/90 disabled:bg-foreground/10 disabled:text-muted-foreground disabled:opacity-100"
               aria-label={look.label}
               title={look.title?.(name, enter)}
               disabled={!ready}
@@ -439,6 +438,18 @@ export type ComposerHandle = {
   putBack: (text: string, images: Image[]) => void
 }
 
+/** A control in the composer's footer (ADR 0058, decision 8): 28px with a
+ * button's corner, its words meta-sized, muted until hovered or open;
+ * its hover the raised fill, which shows on the composer's block. For a
+ * ghost `Button` of size `sm`. */
+export const FOOTER_CONTROL =
+  "h-7 gap-1.5 rounded-md px-2 text-xs font-normal text-muted-foreground hover:bg-raised hover:text-foreground aria-expanded:bg-raised aria-expanded:text-foreground dark:hover:bg-raised"
+
+/** {@link FOOTER_CONTROL} with only an icon, for a ghost `Button` of size
+ * `icon-sm`. */
+export const FOOTER_ICON =
+  "rounded-md text-muted-foreground hover:bg-raised hover:text-foreground aria-expanded:bg-raised aria-expanded:text-foreground dark:hover:bg-raised [&_svg:not([class*='size-'])]:size-3.5"
+
 /** A pasted text this long or longer is kept as a file, as in T3 Code. */
 const LONG_PASTE = 32 * 1024
 /** A long text kept as a file, as the message names it. */
@@ -463,11 +474,7 @@ const PRIMARY: Record<
     title?: (name: string, enter: Enter) => string
   }
 > = {
-  send: {
-    label: "Send",
-    // Small and firm, as T3 Code's.
-    icon: <ArrowUpIcon absoluteStrokeWidth strokeWidth={1.8} />,
-  },
+  send: { label: "Send", icon: <ArrowUpIcon /> },
   steer: {
     label: "Steer",
     icon: <CornerUpRightIcon />,
@@ -513,9 +520,10 @@ function ContextUsed({ usage: { used, size, cost } }: { usage: Usage }) {
     <span
       title={words}
       data-full={share >= NEARLY_FULL || undefined}
-      className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground tabular-nums data-full:text-destructive"
+      className="flex h-7 shrink-0 items-center gap-1.5 px-1.5 text-xs text-muted-foreground tabular-nums data-full:text-destructive"
     >
       <RingMeter
+        className="size-3.5"
         value={share}
         aria-label="Context used"
         getAriaValueText={() => words}

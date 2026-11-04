@@ -29,7 +29,8 @@ export function NewThreadBar({
   const spaces = useShownSpaces(engine)
   const machine = useMachine(engine)
   return (
-    <div className="flex min-w-0 items-center gap-0.5 px-1 text-muted-foreground">
+    // In meta words, its icon in line with the composer's text above it.
+    <div className="flex min-w-0 items-center gap-0.5 px-2.5 text-muted-foreground">
       {machine && (
         <Pick
           what="Space"

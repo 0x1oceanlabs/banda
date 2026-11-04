@@ -2,13 +2,15 @@ import { cn } from "../lib/utils"
 
 /** What a field could take next, in a list that opens beside it while the
  * focus stays in the field: the field moves the choice with its keys and
- * names it with `aria-activedescendant`. */
+ * names it with `aria-activedescendant`. It floats as the chat's popups
+ * do (ADR 0058): a block's corner, the popover's fill, a hairline ring and
+ * one shadow. */
 function Suggestions({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="suggestions"
       className={cn(
-        "z-50 flex max-h-72 flex-col overflow-y-auto rounded-lg bg-popover p-1 text-sm text-popover-foreground shadow-md ring-1 ring-foreground/10",
+        "z-50 flex max-h-72 flex-col overflow-y-auto rounded-block bg-popover p-1 text-sm text-popover-foreground shadow-md ring-1 ring-foreground/10",
         className
       )}
       {...props}
@@ -43,7 +45,7 @@ function Suggestion({
       aria-selected={selected ?? false}
       data-slot="suggestion"
       className={cn(
-        "flex min-w-0 cursor-default items-center gap-2 rounded-md px-2 py-1.5 outline-none select-none hover:bg-accent/60 aria-selected:bg-accent aria-selected:text-accent-foreground",
+        "flex min-w-0 cursor-default items-center gap-2 rounded-md px-2.5 py-1.5 outline-none select-none hover:bg-accent/60 aria-selected:bg-accent aria-selected:text-accent-foreground",
         className
       )}
       onMouseDown={(event) => {
@@ -86,7 +88,7 @@ function SuggestionsEmpty({ className, ...props }: React.ComponentProps<"p">) {
   return (
     <p
       data-slot="suggestions-empty"
-      className={cn("px-2 py-1.5 text-muted-foreground", className)}
+      className={cn("px-2.5 py-1.5 text-muted-foreground", className)}
       {...props}
     />
   )

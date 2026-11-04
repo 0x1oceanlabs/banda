@@ -2,25 +2,15 @@ import { useState } from "react"
 import { Slider as SliderPrimitive } from "@base-ui/react/slider"
 import { cn } from "../lib/utils"
 
-/** The colour of level `at` of `last`, in the theme's blue; the top
- * level stands out in its magenta. As text unless `as` says otherwise. */
-export function levelTone(
-  at: number,
-  last: number,
-  as: "text" | "bg" = "text"
-) {
-  const top = at === last
-  if (as === "bg") return top ? "bg-(--ansi-5)" : "bg-(--ansi-4)"
-  return top ? "text-(--ansi-5)" : "text-(--ansi-4)"
-}
-
 const GLIDE = "duration-150 ease-[cubic-bezier(0.2,0.7,0.2,1)]"
 
 /**
  * A few named levels as stops on a track, as Codex draws its effort: the
- * thumb rides inside the track, the fill wraps it, the top level in its
- * own colour. A level is chosen when the thumb is let go. `unset`, no
- * level is chosen yet: the track is empty and the thumb a ring at `at`.
+ * thumb rides inside the track, the fill wraps it. The fill is the look's
+ * own primary, every level alike: a level is not a warning, and the
+ * terminal's palette is not the window's (ADR 0058, decision 1). A level
+ * is chosen when the thumb is let go. `unset`, no level is chosen yet:
+ * the track is empty and the thumb a ring at `at`.
  */
 export function LevelSlider({
   names,
@@ -72,12 +62,7 @@ export function LevelSlider({
               )}
             >
               {/* From the track's start to 2px past the thumb. */}
-              <span
-                className={cn(
-                  "absolute inset-y-0 -right-3 -left-0.5 rounded-full transition-colors",
-                  levelTone(at, last, "bg")
-                )}
-              />
+              <span className="absolute inset-y-0 -right-3 -left-0.5 rounded-full bg-primary" />
             </SliderPrimitive.Indicator>
             {names.map((name, i) => (
               <span
@@ -85,7 +70,9 @@ export function LevelSlider({
                 aria-hidden
                 className={cn(
                   "pointer-events-none absolute top-1/2 size-1 -translate-x-1/2 -translate-y-1/2 rounded-full transition-colors",
-                  i < at && !unset ? "bg-white/50" : "bg-foreground/25",
+                  i < at && !unset
+                    ? "bg-primary-foreground/50"
+                    : "bg-foreground/25",
                   i === at && "invisible"
                 )}
                 style={{ left: left(i) }}
@@ -96,10 +83,10 @@ export function LevelSlider({
               getAriaValueText={(_, value) => names[value] ?? ""}
               className={cn(
                 "size-5 cursor-grab rounded-full outline-none data-dragging:scale-92 data-dragging:cursor-grabbing",
-                "focus-visible:ring-3 focus-visible:ring-(--ansi-4)/50 motion-reduce:transition-none",
+                "focus-visible:ring-3 focus-visible:ring-ring/50 motion-reduce:transition-none",
                 unset
                   ? "inset-ring-[1.5px] inset-ring-foreground/30"
-                  : "bg-white shadow-[0_0_0_0.5px_rgb(0_0_0/0.14),0_1px_2px_rgb(0_0_0/0.22),0_2px_6px_rgb(0_0_0/0.12)] group-hover/level:shadow-[0_0_0_0.5px_rgb(0_0_0/0.14),0_1px_3px_rgb(0_0_0/0.28),0_3px_10px_rgb(0_0_0/0.16)]",
+                  : "bg-primary-foreground shadow-[0_0_0_0.5px_rgb(0_0_0/0.14),0_1px_2px_rgb(0_0_0/0.22),0_2px_6px_rgb(0_0_0/0.12)] group-hover/level:shadow-[0_0_0_0.5px_rgb(0_0_0/0.14),0_1px_3px_rgb(0_0_0/0.28),0_3px_10px_rgb(0_0_0/0.16)]",
                 glide
                   ? `transition-[inset-inline-start,scale,box-shadow] ${GLIDE}`
                   : "transition-[scale,box-shadow] duration-150"

@@ -16,6 +16,7 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@banda/ui/components/empty"
+import { HarnessLogo } from "@banda/ui/components/harness-logo"
 import { Markdown } from "@banda/ui/components/markdown"
 import {
   MessageScroller,
@@ -268,7 +269,7 @@ function ThreadContent(props: PaneProps<ThreadArgs>) {
           />
         )}
         {thread === null ? (
-          <Start name={name} />
+          <Start harness={harness} name={name} />
         ) : live.state === "loading" ? (
           <Centered>
             <Spinner />
@@ -438,17 +439,23 @@ function Centered({ children }: { children: React.ReactNode }) {
   )
 }
 
-function Start({ name }: { name: string }) {
+/** A Thread not yet started: whom it writes to, by the Harness's logo,
+ * and one quiet line (ADR 0058). */
+function Start({ harness, name }: { harness: string; name: string }) {
   return (
     <Empty className="h-full">
-      <EmptyHeader>
-        <EmptyMedia variant="icon">
-          <BotIcon />
+      <EmptyHeader className="gap-1">
+        <EmptyMedia className="mb-2">
+          <HarnessLogo
+            id={harness}
+            name={name}
+            className="size-6"
+            fallback={<BotIcon className="size-6 text-muted-foreground" />}
+          />
         </EmptyMedia>
         <EmptyTitle>Write to {name}</EmptyTitle>
         <EmptyDescription>
-          Say what you need. {name} answers here, and asks you before it does
-          anything that needs your yes.
+          It asks you before anything that needs your yes.
         </EmptyDescription>
       </EmptyHeader>
     </Empty>
@@ -677,22 +684,29 @@ function Transcript({
   )
 }
 
-/** The button to the end of the Thread, once it is scrolled up: it says
- * what waits there, as T3 Code's does. */
+/** The button to the end of the Thread, once it is scrolled up: a round
+ * ↓ that floats as the chat's popups do, and says what waits there, as
+ * T3 Code's does; a dot in the attention colour says the Thread waits for
+ * its Person (ADR 0058). */
 function ScrollToEnd({ queued, forYou }: { queued: number; forYou: boolean }) {
-  const below = [
-    queued > 0 && `${queued} queued`,
-    forYou && "waiting for you",
-  ].filter((said) => said !== false)
+  const says = queued > 0 || forYou
   return (
     <MessageScrollerButton
-      size={below.length > 0 ? "sm" : "icon-sm"}
-      className="rounded-full shadow-sm"
+      size={says ? "sm" : "icon-sm"}
+      className="gap-1.5 rounded-full border-transparent bg-popover px-3 text-xs text-popover-foreground shadow-md ring-1 ring-foreground/10 hover:bg-accent data-[size=icon-sm]:px-0"
     >
       <ArrowDownIcon />
-      <span className={below.length === 0 ? "sr-only" : undefined}>
-        {["Scroll to end", ...below].join(" · ")}
-      </span>
+      <span className="sr-only">Scroll to end{says && " · "}</span>
+      {queued > 0 && `${queued} queued`}
+      {queued > 0 && forYou && (
+        <span className="text-muted-foreground"> · </span>
+      )}
+      {forYou && (
+        <>
+          <span aria-hidden className="size-1.5 rounded-full bg-attention" />
+          waiting for you
+        </>
+      )}
     </MessageScrollerButton>
   )
 }
