@@ -121,13 +121,20 @@ export function useThreadSession({
   const settings = thread === null ? draftOf(harness) : state?.settings
   const offer: Offer =
     (thread === null ? defaults?.offer : state?.offer) ?? NO_OFFER
-  const configure = (next: Settings) => {
+  const configure = async (next: Settings): Promise<boolean> => {
     if (thread === null) {
       setDrafts((drafts) => ({ ...drafts, [harness]: next }))
-      return
+      return true
     }
-    void acting.act(() =>
-      engine.command("agents.configure", { thread, settings: next }, space)
+    return (
+      (await acting.act(async () => {
+        await engine.command(
+          "agents.configure",
+          { thread, settings: next },
+          space
+        )
+        return true
+      })) === true
     )
   }
 
