@@ -3854,6 +3854,39 @@ test("a Question is answered from its toast, which stays until then (ADR 0056)",
   ).not.toContainText("Asks you")
 })
 
+test("Threads done while one's toast shows join it in one toast, a line each (ADR 0056)", async () => {
+  window = await startWindow()
+  const { page } = window
+  const { composer } = await firstThread(page)
+  await composer.fill("slow hello")
+  await composer.press("Enter")
+  await expect(page.getByRole("region", { name: "slow hello" })).toBeVisible()
+  await page.keyboard.press("Alt+Enter")
+  const second = page
+    .getByRole("region", { name: "New Thread" })
+    .getByRole("textbox", { name: "Message to Fake AI" })
+  await expect(second).toBeFocused()
+  await second.fill("slow again")
+  await second.press("Enter")
+  const sidebar = page.getByRole("complementary", { name: "Sidebar" })
+  await expect(
+    sidebar.getByRole("button", { name: /slow again/ })
+  ).toBeVisible()
+  // Both finish out of sight, on the workspace above.
+  await page.keyboard.press("Alt+PageDown")
+
+  const calls = page.getByRole("region", { name: "Notifications" })
+  const joined = calls
+    .getByRole("listitem")
+    .filter({ hasText: "2 Threads done" })
+  await expect(joined).toContainText("slow hello")
+  await expect(joined).toContainText("slow again")
+  // Each shows once: in the joined toast, not in one of its own.
+  await expect(
+    calls.getByRole("listitem").filter({ hasText: "slow hello" })
+  ).toHaveCount(1)
+})
+
 test("the bell shows the last toasts again, and Esc or a button closes them (ADR 0048)", async () => {
   window = await startWindow()
   const { page } = window

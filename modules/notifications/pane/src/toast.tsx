@@ -42,7 +42,7 @@ export function toastTold(
     duration: LIFE[told.kind],
     closeButton: told.close === true,
     className: opens ? "cursor-pointer" : "",
-    classNames: { description: "line-clamp-2" },
+    classNames: { description: "line-clamp-3 whitespace-pre-line" },
     icon: markOf(told.kind),
     description: (
       <>
