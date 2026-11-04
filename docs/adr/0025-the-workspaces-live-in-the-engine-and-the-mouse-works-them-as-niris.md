@@ -320,6 +320,19 @@ On the list, Roma decided:
    overview tile draws no second selection frame. The overview still
    owns the keys. The labels and controls fade near the overview's resting
    view, rather than looking like another set of windows during the zoom.
+   _Changed_ 2026-11-04, as Roma asked: "I thought all the windows would
+   show at once, not only those in the screen's frame as in niri", and the
+   frame round a workspace drew badly, and the search and the Pane counts
+   were more than it needs. Each workspace shows whole, every column, not
+   only its screen: a wide one is drawn smaller, down to 0.6 of the zoom,
+   and past that its row scrolls; a line under a wide one shows what its
+   screen shows. The zoom also shrinks, down to 0.15, until every
+   workspace fits in the overview's height. A Strip stops clipping while
+   the overview is open and keeps its scroll aside for when it closes; its
+   workspace is a plate of the desk sized to what shows, from the screen
+   to the whole Strip, which grows with the zoom instead of a frame drawn
+   over it at the end; the selected one is lit a little. Beside each, its
+   number alone. No search: typing does nothing there.
 
 8. **The drawer** (ADR 0005, decision 7) is on `` Alt+` ``, as a terminal
    that drops down is; `Alt+S` settles a Thread now (ADR 0008). A Thread

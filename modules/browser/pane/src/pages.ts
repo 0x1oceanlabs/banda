@@ -98,7 +98,9 @@ export class Page {
   /** Who waits for it to attach. */
   private attaching: ((contents: number) => void)[] = []
   private slot: Slot | null = null
-  /** What cuts the slot: its ancestors that clip, and the tile's corner. */
+  /** What may cut the slot: its ancestors, of which those that clip as
+   * the page is drawn do, and the tile's corner. The overview shows a
+   * whole Strip, which clips no more, and clips its screen instead. */
   private clips: HTMLElement[] = []
   private radius = 0
   private drawn = ""
@@ -134,7 +136,7 @@ export class Page {
   /** Shows the page over `element`, until `release`. */
   show(element: HTMLElement, selected: boolean): void {
     if (this.slot?.element !== element) {
-      this.clips = clipsOf(element, this.box.parentElement!)
+      this.clips = ancestorsOf(element, this.box.parentElement!)
       this.radius = cornerOf(element)
     }
     this.slot = { element, selected }
@@ -212,6 +214,7 @@ export class Page {
     const layer = this.box.parentElement!.getBoundingClientRect()
     let { top, left, right, bottom } = rect
     for (const clip of this.clips) {
+      if (!clips(clip)) continue
       const cut = clip.getBoundingClientRect()
       top = Math.max(top, cut.top)
       left = Math.max(left, cut.left)
@@ -350,17 +353,20 @@ export class Page {
   }
 }
 
-/** The ancestors of `slot` that clip it, up to the one that holds `layer`. */
-function clipsOf(slot: HTMLElement, layer: HTMLElement): HTMLElement[] {
-  const clips: HTMLElement[] = []
+/** The ancestors of `slot`, up to the one that holds `layer`. */
+function ancestorsOf(slot: HTMLElement, layer: HTMLElement): HTMLElement[] {
+  const ancestors: HTMLElement[] = []
   for (let at = slot.parentElement; at; at = at.parentElement) {
     if (at.contains(layer)) break
-    const style = getComputedStyle(at)
-    if (style.overflowX !== "visible" || style.overflowY !== "visible") {
-      clips.push(at)
-    }
+    ancestors.push(at)
   }
-  return clips
+  return ancestors
+}
+
+/** Whether `element` clips what it holds, as it is drawn now. */
+function clips(element: HTMLElement): boolean {
+  const style = getComputedStyle(element)
+  return style.overflowX !== "visible" || style.overflowY !== "visible"
 }
 
 /** The rounding of the tile's inner corner at the slot's bottom. */

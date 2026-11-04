@@ -9,31 +9,32 @@ import {
   useRef,
   useState,
 } from "react"
-import { GripHorizontalIcon, SearchIcon, XIcon } from "lucide-react"
+import { GripHorizontalIcon, PlusIcon, XIcon } from "lucide-react"
 import { Button } from "@banda/ui/components/button"
 import type { SpaceId } from "@banda/contract"
 import { DEFAULT_OVERVIEW } from "@banda/contract/look"
-import type { Label, Listed } from "@banda/ui/pane"
+import type { Listed } from "@banda/ui/pane"
 import type { Chime } from "@banda/ui/sound"
 import { labelOf, useSaid } from "../registry"
 import { workspaceTo } from "./arrange"
 import { ThreadMark } from "../sidebar/Row"
 import { moveOf, useLookColumns, useLookOverview } from "../look"
-import { Moving } from "../motion"
+import { afterMoves, cancelAfterMoves, Moving } from "../motion"
+import { fit, ROW } from "./fit"
 import {
   drawnColumns,
   heightAt,
-  minWidthOf,
+  holdScroll,
+  releaseScroll,
+  remInPx,
   room,
-  scrollOf,
+  scrolled,
   stackOf,
   stripOf,
-  widthAt,
 } from "./layout"
 import {
   type Direction,
   type Entry,
-  entries,
   find,
   focused,
   share,
@@ -58,26 +59,36 @@ const ARROWS: Record<string, Direction> = {
  * height, and the gap between its segments, in rem. */
 const TABS = { height: 1.5, gap: 0.25 }
 
-/** How tall an empty workspace is drawn, in pixels: a place to drop. */
-const EMPTY = 40
-
-/** The room beside a workspace, in pixels: its label, and a gap. */
-const NUMBER = 48
-/** Its label's width, in pixels: its number and its count. */
-const LABEL = 40
+/** The room beside a workspace, in pixels: its number, and a gap. */
+const NUMBER = 36
+/** Its number's width, in pixels. */
+const LABEL = 28
+/** How far the selected workspace's plate is lit, out of 100, and every
+ * plate's on glass, which has no desk of its own. */
+const LIT = 7
+const GLASS = 3
 
 /** The screen a workspace fills, as a Strip draws it: the room its
- * columns have, the gaps, and the room the overview has for it, in
+ * columns have, the gaps, and the room the overview has for them all, in
  * pixels. */
 type Screen = {
   /** How far in from the Strip's left the screen shows: past the sidebar. */
   from: number
+  /** The Strip's width, which the overview keeps as it shows it whole. */
+  width: number
   inner: number
   height: number
   gap: number
   outer: number
-  room: number
+  room: { width: number; height: number }
+  /** A rem, in pixels: a column's least width is in rem. */
+  rem: number
 }
+
+/** A workspace as the overview fits it in: its zoom, its width drawn
+ * whole at full size from its left outer gap to its right one, and each
+ * column's width there, in pixels. */
+type Fitted = { zoom: number; whole: number; wide: boolean; columns: number[] }
 
 /**
  * Every workspace zoomed out, one under another, as niri's overview
@@ -85,10 +96,14 @@ type Screen = {
  * as wide as the Strip draws them, with `[columns] min`, scrolled as the
  * Strip is.
  *
+ * Each shows whole, every column of it, not only the screen it fills, and
+ * all of them fit in at once while they can be read (`fit`): a wide one is
+ * drawn smaller, past that its row scrolls, and a line under it shows what
+ * its screen shows.
+ *
  * The arrows pick a Pane, and up or down past a column's end go to the
  * workspace there; `Enter` goes to it. The window's keys work as ever:
- * `Alt+Shift+Arrows` move the Pane picked. Typing finds Panes by their
- * title or Space, and the arrows step through those. The mouse carries a
+ * `Alt+Shift+Arrows` move the Pane picked. The mouse carries a
  * Pane as on a Strip, from anywhere on it: beside another, or between two
  * workspaces, where it makes a new one. A click on a Pane goes to it; on
  * a workspace, there. A workspace's number carries it, and its Panes,
@@ -98,6 +113,8 @@ type Screen = {
  * What shows is the workspaces themselves, zoomed out over the desk's
  * theme or glass (ADR 0052): each stands under its row, so a Pane's tile here
  * lies over the Pane, and those take no clicks or keys while it is open.
+ * Each is a plate of the desk, sized to what shows of its Strip: no frame
+ * is drawn over it, so none jumps or blurs as it zooms.
  */
 export function Overview({
   open,
@@ -135,8 +152,6 @@ export function Overview({
   const most = useLookOverview().zoom || DEFAULT_OVERVIEW.zoom
   const root = useRef<HTMLDivElement>(null)
   const [screen, setScreen] = useState<Screen>()
-  const [query, setQuery] = useState("")
-  const said = useSaid()
   const picked = focused(workspaces)?.id
   const current = workspaces.list[workspaces.current]?.id
   const index = workspaces.current
@@ -146,10 +161,6 @@ export function Overview({
   // zooming must not move every screen by a whole height in one frame.
   const originAt = useRef(index)
   const origin = useRef<Moving | null>(null)
-  const found = useMemo(
-    () => (query ? matching(workspaces, query, spaceName, said) : undefined),
-    [workspaces, query, spaceName, said]
-  )
 
   // The keys come here while it is open, not to a Pane under it.
   useEffect(() => {
@@ -162,16 +173,29 @@ export function Overview({
     const measure = () => {
       const strip = document.querySelector<HTMLElement>("[data-strip]")
       if (!strip) return
-      const { inner, gap, pad } = room(strip)
+      const { gap, pad } = room(strip)
       const outer = parseFloat(getComputedStyle(strip).paddingRight) || 0
+      // As the window lays the Strips out: the overview pins each to it.
+      const width =
+        strip.closest("[data-stack]")?.parentElement?.clientWidth ??
+        strip.clientWidth
       const own = room(element)
+      const style = getComputedStyle(element)
       setScreen({
         from: pad - outer,
-        inner,
+        width,
+        inner: width - pad - outer,
         height: strip.clientHeight,
         gap,
         outer,
-        room: own.inner - NUMBER,
+        room: {
+          width: own.inner - NUMBER,
+          height:
+            element.clientHeight -
+            (parseFloat(style.paddingTop) || 0) -
+            (parseFloat(style.paddingBottom) || 0),
+        },
+        rem: remInPx(),
       })
     }
     measure()
@@ -179,13 +203,49 @@ export function Overview({
     watch.observe(element)
     return () => watch.disconnect()
   }, [])
-  const zoom = screen
-    ? Math.min(most, screen.room / (screen.inner + 2 * screen.outer))
-    : 0
-  // The workspaces themselves, zoomed out under their rows: each stands
-  // where its row is, and its Strip scrolls as the row does, or the row as
-  // the Strip, whichever moved, so what shows is the Panes as they are.
-  const from = (screen?.from ?? 0) * zoom
+  // Each workspace whole, and all of them in the room there is.
+  const fitted = useMemo(() => {
+    if (!screen) return undefined
+    const widths = workspaces.list.map((workspace) => {
+      const columns = drawnColumns(workspace, look).map((column) =>
+        Math.max(
+          (share(column.width) ?? 0.5) * (screen.inner + screen.gap) -
+            screen.gap,
+          Math.min(screen.inner, column.min * screen.rem)
+        )
+      )
+      const across =
+        columns.reduce((sum, width) => sum + width, 0) +
+        screen.gap * Math.max(0, columns.length - 1)
+      // A workspace is never narrower than its screen.
+      const whole = Math.max(across, screen.inner) + 2 * screen.outer
+      return { columns, whole: columns.length ? whole : 0 }
+    })
+    const { zoom, rows, wide } = fit({
+      widths: widths.map((one) => one.whole),
+      screen: { width: screen.inner + 2 * screen.outer, height: screen.height },
+      room: screen.room,
+      most,
+    })
+    const each = new Map<string, Fitted>(
+      workspaces.list.map((workspace, i) => [
+        workspace.id,
+        {
+          zoom: rows[i],
+          whole: widths[i].whole || screen.inner + 2 * screen.outer,
+          wide: wide[i],
+          columns: widths[i].columns,
+        },
+      ])
+    )
+    return { zoom, each }
+  }, [workspaces, look, screen, most])
+  const zoom = fitted?.zoom ?? 0
+  // What the frames read of the fit: they run outside React's renders.
+  const fits = useRef(fitted?.each)
+  useLayoutEffect(() => {
+    fits.current = fitted?.each
+  })
   const order = workspaces.list.map((workspace) => workspace.id)
   const ids = order.join()
   useLayoutEffect(() => {
@@ -234,38 +294,60 @@ export function Overview({
     },
     []
   )
+  // Closed, every Strip clips its screen again, scrolled where it was
+  // headed, and its plate is the screen.
+  useLayoutEffect(
+    () => () => {
+      for (const strip of document.querySelectorAll<HTMLElement>(
+        "[data-strip]"
+      )) {
+        strip.style.overflow = ""
+        strip.style.width = ""
+        strip.style.transform = ""
+        releaseScroll(strip)
+        const stack = strip.closest<HTMLElement>("[data-stack]")
+        if (!stack) continue
+        stack.style.width = ""
+        stack.style.backgroundImage = ""
+      }
+    },
+    []
+  )
   useLayoutEffect(() => {
     const element = root.current
-    if (!element || !zoom) return
+    if (!element || !zoom || !screen) return
     const focusClip = document.querySelector<HTMLElement>(
       "[data-overview-focus-clip]"
     )
     const focusFrame = focusClip?.querySelector<HTMLElement>(
       "[data-overview-focus]"
     )
+    const glass = document.querySelector("[data-glass]") !== null
     const all = [...element.querySelectorAll<HTMLElement>("[data-row]")]
       .map((row) => {
         const id = row.dataset.row ?? ""
         const place = row.closest("li")
-        return { row, place, stack: stackOf(id), strip: stripOf(id) }
+        const track = place?.querySelector<HTMLElement>("[data-shown]")
+        return { id, row, place, track, stack: stackOf(id), strip: stripOf(id) }
       })
-      .flatMap(({ row, place, stack, strip }) =>
+      .flatMap(({ id, row, place, track, stack, strip }) =>
         stack && strip
           ? [
               {
+                id,
                 row,
                 place,
+                track,
                 stack,
                 strip,
-                x: NaN,
-                y: NaN,
-                scale: NaN,
-                at: NaN,
+                drawn: "",
+                shown: "",
                 up: false,
               },
             ]
           : []
       )
+    const { from, width, height } = screen
     let frame = 0
     const step = () => {
       // Every read, then every write: the page lays out once.
@@ -273,7 +355,6 @@ export function Overview({
       // A Person's spring may overshoot; a miniature never flips or grows
       // past its normal size. Moving keeps its raw progress and velocity.
       const amount = Math.max(0, Math.min(1, progress.current))
-      const scale = 1 + (zoom - 1) * amount
       // A move can reparent the Pane without changing its ID: read the
       // current element, rather than keeping the old section in a cache.
       const selected = document.querySelector<HTMLElement>(
@@ -283,93 +364,116 @@ export function Overview({
       const stroke = focusFrame
         ? parseFloat(getComputedStyle(focusFrame).outlineWidth)
         : 0
-      const read = all.map(({ row, strip, stack }) => ({
-        box: row.getBoundingClientRect(),
-        row: row.scrollLeft,
-        strip: strip.scrollLeft,
-        pane: stack === owner ? selected?.getBoundingClientRect() : undefined,
-        stack: stack === owner ? stack.getBoundingClientRect() : undefined,
-        width: stack === owner ? stack.offsetWidth : 0,
-        height: stack === owner ? stack.offsetHeight : 0,
-        radius:
-          stack === owner && selected
+      const read = all.map(({ row, strip, stack }) => {
+        // Before it stops clipping, while its scroll is still there.
+        holdScroll(strip)
+        const mine = stack === owner && selected
+        return {
+          box: row.getBoundingClientRect(),
+          row: row.scrollLeft,
+          scroll: scrolled(strip),
+          pane: mine ? selected.getBoundingClientRect() : undefined,
+          strip: mine ? strip.getBoundingClientRect() : undefined,
+          // Until it first shows whole, a Strip still clips, scrolled.
+          shift: mine ? strip.scrollLeft : 0,
+          corner: mine
+            ? parseFloat(getComputedStyle(stack).borderTopLeftRadius)
+            : 0,
+          radius: mine
             ? parseFloat(getComputedStyle(selected).borderTopLeftRadius)
             : 0,
-        border:
-          stack === owner && selected
+          border: mine
             ? parseFloat(getComputedStyle(selected).borderTopWidth)
             : 0,
-      }))
+        }
+      })
       if (focusClip) focusClip.style.visibility = "hidden"
       all.forEach((one, i) => {
-        const { box, row, strip } = read[i]
+        const fitted = fits.current?.get(one.id)
+        if (!fitted) return
+        const { box, row, scroll } = read[i]
+        const zoomed = fitted.zoom
+        const scale = 1 + (zoomed - 1) * amount
         // One carried by its number draws over the others, its Panes too.
         const up = one.place?.hasAttribute("data-lifted") ?? false
         if (up !== one.up) {
           one.stack.style.zIndex = up ? "1" : ""
           one.up = up
         }
-        const x = (box.left - over.left - from) * amount
+        // What shows of the Strip, from its screen to its row, in its own
+        // pixels from its left: the screen shows past the sidebar, the
+        // row from there on, as far as it is scrolled.
+        const left =
+          (scroll + from) * (1 - amount) + (from + row / zoomed) * amount
+        const across =
+          (width - from) * (1 - amount) + (box.width / zoomed) * amount
+        // Where that stands: on the screen, then under its row.
+        const x = from * (1 - amount) + (box.left - over.left) * amount
         const normal = (i - originAt.current) * over.height
         const y = normal + (box.top - over.top - normal) * amount
-        if (x !== one.x || y !== one.y || scale !== one.scale) {
+        const lit = (i === index ? LIT : glass ? GLASS : 0) * amount
+        const drawn = `${x} ${y} ${scale} ${left} ${across} ${lit}`
+        if (drawn !== one.drawn) {
+          one.drawn = drawn
+          // The Strip shows whole, as wide as ever; its plate clips it.
+          one.strip.style.overflow = "visible"
+          one.strip.style.width = `${width}px`
+          one.strip.style.transform = `translateX(${-left}px)`
+          one.stack.style.width = `${across}px`
           one.stack.style.transform = `translate(${x}px, ${y}px) scale(${scale})`
-          one.x = x
-          one.y = y
-          one.scale = scale
+          one.stack.style.backgroundImage = lit
+            ? `linear-gradient(${tint(lit)}, ${tint(lit)})`
+            : ""
         }
-        let scrolled = strip
-        if (!Number.isNaN(one.at) && row !== one.at) {
-          // The Person scrolled the row: the Strip goes with it.
-          scrollOf(one.strip).stop()
-          one.strip.scrollLeft = row / zoom
-          scrolled = row / zoom
-          one.at = row
-        } else if (Number.isNaN(one.at) || Math.abs(strip * zoom - row) >= 1) {
-          // The row as its Strip, as the browser rounds it.
-          one.row.scrollLeft = strip * zoom
-          one.at = one.row.scrollLeft
+        // What the screen shows, on the line under a wide one.
+        if (one.track) {
+          const shown = `${(scroll / fitted.whole) * 100}% ${((width - from) / fitted.whole) * 100}%`
+          if (shown !== one.shown) {
+            one.shown = shown
+            const [at, wide] = shown.split(" ")
+            one.track.style.left = at
+            one.track.style.width = wide
+          }
         }
         // One frame follows the actual Pane, outside the scaled screens
         // and the fading overview UI. Fractional CSS outlines on a scaled
         // element round to whole pixels and would pulse while zooming.
-        const { pane, stack, radius, border, width, height } = read[i]
+        const { pane, strip, shift, corner, radius, border } = read[i]
         if (
           focusClip &&
           focusFrame &&
           pane &&
-          stack &&
+          strip &&
           pane.width &&
           pane.height
         ) {
-          const was = stack.width / width
-          const inset = from / zoom
-          const left =
-            ((pane.left - stack.left) / was - inset - (scrolled - strip)) *
-            scale
-          const top = ((pane.top - stack.top) / was) * scale
+          // The Pane in the Strip's own pixels, as wide as ever.
+          const was = strip.width / width
+          const paneLeft =
+            ((pane.left - strip.left) / was + shift - left) * scale
+          const paneTop = ((pane.top - strip.top) / was) * scale
           const paneWidth = (pane.width / was) * scale
           const paneHeight = (pane.height / was) * scale
-          const clipWidth = (width - inset) * scale
+          const clipWidth = across * scale
           const clipHeight = height * scale
           // Tuck the frame in smoothly if a configured outer ring would
-          // leave the shrinking viewport. Keep the stroke itself steady.
+          // leave the plate. Keep the stroke itself steady.
           const margin = Math.max(
             0,
             Math.min(
-              left,
-              top,
-              clipWidth - left - paneWidth,
-              clipHeight - top - paneHeight
+              paneLeft,
+              paneTop,
+              clipWidth - paneLeft - paneWidth,
+              clipHeight - paneTop - paneHeight
             ) - 0.5
           )
           const tuck = Math.max(0, stroke - border - margin)
           focusClip.style.visibility = "visible"
-          focusClip.style.transform = `translate(${x + inset * scale}px, ${y}px)`
+          focusClip.style.transform = `translate(${x}px, ${y}px)`
           focusClip.style.width = `${clipWidth}px`
           focusClip.style.height = `${clipHeight}px`
-          focusClip.style.borderRadius = `calc(var(--tile-radius) * ${scale})`
-          focusFrame.style.transform = `translate(${left + tuck}px, ${top + tuck}px)`
+          focusClip.style.borderRadius = `${corner * scale}px`
+          focusFrame.style.transform = `translate(${paneLeft + tuck}px, ${paneTop + tuck}px)`
           focusFrame.style.width = `${Math.max(0, paneWidth - 2 * tuck)}px`
           focusFrame.style.height = `${Math.max(0, paneHeight - 2 * tuck)}px`
           focusFrame.style.borderRadius = `${Math.max(0, radius * scale - tuck)}px`
@@ -379,11 +483,13 @@ export function Overview({
         onExited()
         return
       }
-      frame = requestAnimationFrame(step)
+      // After the columns' and the scroll's moves, so it reads where they
+      // put the Panes this frame, not the last.
+      frame = afterMoves(step)
     }
     step()
-    return () => cancelAnimationFrame(frame)
-  }, [zoom, from, ids, open, onExited])
+    return () => cancelAfterMoves(frame)
+  }, [zoom, screen, ids, index, open, onExited])
   // The Pane picked, or its workspace, in view.
   useEffect(() => {
     const element = root.current
@@ -439,41 +545,16 @@ export function Overview({
     frame.arrange(workspaceTo(id, index))
   )
 
-  const type = (next: string) => {
-    setQuery(next)
-    const first = next
-      ? matching(workspaces, next, spaceName, said)[0]
-      : undefined
-    if (first) onPick(first.id)
-  }
   const onKeyDown = (event: KeyboardEvent) => {
     if (event.ctrlKey || event.metaKey || event.altKey) return
     const { key } = event
     const direction = ARROWS[key]
-    if (key === "Escape") {
-      if (query) setQuery("")
-      else onClose()
-    } else if (key === "Enter") {
-      onClose()
-    } else if (direction && found) {
-      // Through what was found, in order, around.
-      const at = found.findIndex((entry) => entry.id === picked)
-      const by = direction === "left" || direction === "up" ? -1 : 1
-      const next = found.at((at + by) % found.length)
-      if (next) onPick(next.id)
-    } else if (direction) {
-      onArrow(direction)
-    } else if (key === "Backspace") {
-      type(query.slice(0, -1))
-    } else if (key.length === 1 && (key !== " " || query)) {
-      type(query + key)
-    } else {
-      return
-    }
+    if (key === "Escape" || key === "Enter") onClose()
+    else if (direction) onArrow(direction)
+    else return
     event.preventDefault()
   }
 
-  const shown = new Set(found?.map((entry) => entry.id))
   return (
     <div
       ref={root}
@@ -484,111 +565,113 @@ export function Overview({
       data-overview-state={open ? "open" : "closing"}
       data-window-keys=""
       tabIndex={-1}
-      className="absolute inset-0 z-10 overflow-y-auto px-6 pb-6 pl-[calc(--spacing(6)+var(--sidebar-inset))] opacity-0 outline-none"
-      style={
-        {
-          "--overview-radius": `calc(var(--tile-radius) * ${zoom})`,
-        } as CSSProperties
-      }
+      className="absolute inset-0 z-10 overflow-y-auto px-6 pt-2 pb-6 pl-[calc(--spacing(6)+var(--sidebar-inset))] opacity-0 outline-none"
       onClick={onClose}
       onKeyDown={onKeyDown}
     >
-      <p
-        role="status"
-        className={cn(
-          "sticky top-3 z-2 mx-auto mb-2 flex h-9 w-fit max-w-full items-center gap-2 rounded-lg border border-overview-foreground/15 bg-popover px-3 text-sm shadow-sm",
-          found ? "text-popover-foreground" : "text-muted-foreground"
-        )}
-        onClick={(event) => event.stopPropagation()}
-      >
-        <SearchIcon aria-hidden className="size-3.5 shrink-0 opacity-70" />
-        <span className="truncate">
-          {found
-            ? found.length
-              ? `“${query}”: ${panes(found.length)}`
-              : `No Pane is called “${query}”`
-            : "Type to find a Pane"}
-        </span>
-      </p>
-      {screen && zoom > 0 && (
-        <ol
-          ref={list}
-          className="mx-auto flex w-fit flex-col"
-          style={{ "--gap-inner": `${screen.gap * zoom}px` } as CSSProperties}
-        >
-          {workspaces.list.map((workspace, i) => (
-            <li
-              key={workspace.id}
-              className="group/place relative flex flex-col transition-transform ease-out data-held:transition-none data-lifted:z-1 motion-reduce:transition-none"
-              style={{ transitionDuration: `${STEP_ASIDE}ms` }}
-            >
-              {/* Dropped here, a Pane makes a workspace of its own. */}
-              <div
-                data-between={i}
-                className="h-4"
-                style={{ marginLeft: NUMBER }}
-              />
-              <div className="flex" style={{ gap: NUMBER - LABEL }}>
-                <WorkspaceLabel
-                  workspace={workspace}
-                  number={i + 1}
-                  current={i === workspaces.current}
-                  movable={i < workspaces.list.length - 1}
-                  onGo={() => {
-                    if (!reorder.clicked()) return
-                    onGo(workspace.id)
-                    onClose()
-                  }}
-                  onPointerDown={(event) => reorder.press(event, i)}
-                  onPointerMove={reorder.drag}
-                  onPointerUp={reorder.drop}
-                  onPointerCancel={reorder.cancel}
-                  onLostPointerCapture={reorder.cancel}
+      {screen && fitted && zoom > 0 && (
+        <ol ref={list} className="mx-auto flex w-fit flex-col">
+          {workspaces.list.map((workspace, i) => {
+            const row = fitted.each.get(workspace.id)
+            if (!row) return null
+            const shown = Math.min(screen.room.width, row.whole * row.zoom)
+            return (
+              <li
+                key={workspace.id}
+                className="group/place relative flex flex-col transition-transform ease-out data-held:transition-none data-lifted:z-1 motion-reduce:transition-none"
+                style={{ transitionDuration: `${STEP_ASIDE}ms` }}
+              >
+                {/* Dropped here, a Pane makes a workspace of its own. */}
+                <div
+                  data-between={i}
+                  style={{ marginLeft: NUMBER, height: ROW.between }}
                 />
-                <Row
-                  workspace={workspace}
-                  number={i + 1}
-                  current={i === workspaces.current}
-                  picked={picked}
-                  look={look}
-                  zoom={zoom}
-                  screen={screen}
-                  spaceName={spaceName}
-                  listed={listed}
-                  called={called}
-                  dim={found ? (entry) => !shown.has(entry.id) : undefined}
-                  onClosePane={frame.close}
-                  onPick={(entry) => {
-                    onPick(entry)
-                    onClose()
-                  }}
-                  onGo={() => {
-                    onGo(workspace.id)
-                    onClose()
-                  }}
-                />
-              </div>
-            </li>
-          ))}
+                <div className="flex" style={{ gap: NUMBER - LABEL }}>
+                  <WorkspaceLabel
+                    number={i + 1}
+                    current={i === workspaces.current}
+                    movable={i < workspaces.list.length - 1}
+                    onGo={() => {
+                      if (!reorder.clicked()) return
+                      onGo(workspace.id)
+                      onClose()
+                    }}
+                    onPointerDown={(event) => reorder.press(event, i)}
+                    onPointerMove={reorder.drag}
+                    onPointerUp={reorder.drop}
+                    onPointerCancel={reorder.cancel}
+                    onLostPointerCapture={reorder.cancel}
+                  />
+                  <div className="flex flex-col" style={{ width: shown }}>
+                    <Row
+                      workspace={workspace}
+                      number={i + 1}
+                      current={i === workspaces.current}
+                      picked={picked}
+                      look={look}
+                      fit={row}
+                      width={shown}
+                      zoom={zoom}
+                      screen={screen}
+                      spaceName={spaceName}
+                      listed={listed}
+                      called={called}
+                      onClosePane={frame.close}
+                      onPick={(entry) => {
+                        onPick(entry)
+                        onClose()
+                      }}
+                      onGo={() => {
+                        onGo(workspace.id)
+                        onClose()
+                      }}
+                    />
+                    {/* What its screen shows of a workspace wider than it. */}
+                    {row.wide && (
+                      <div
+                        aria-hidden
+                        className="relative flex items-end"
+                        style={{ height: ROW.track }}
+                      >
+                        <div className="relative h-0.5 w-full rounded-full bg-overview-foreground/10">
+                          <div
+                            data-shown=""
+                            className="absolute inset-y-0 rounded-full bg-overview-foreground/45"
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </li>
+            )
+          })}
         </ol>
       )}
     </div>
   )
 }
 
-/** One workspace, zoomed out: its columns as its Strip lays them out. */
+/** A lit plate's tint, `percent` of the overview's foreground. */
+function tint(percent: number): string {
+  return `color-mix(in oklab, var(--overview-foreground) ${percent}%, transparent)`
+}
+
+/** One workspace, zoomed out: its columns as its Strip lays them out, all
+ * of them, as wide as its row has room for. */
 function Row({
   workspace,
   number,
   current,
   picked,
   look,
+  fit,
+  width,
   zoom,
   screen,
   spaceName,
   listed,
   called,
-  dim,
   onPick,
   onClosePane,
   onGo,
@@ -598,12 +681,15 @@ function Row({
   current: boolean
   picked: string | undefined
   look: ReturnType<typeof useLookColumns>
+  fit: Fitted
+  /** How wide the row is: the whole workspace, or the room there is. */
+  width: number
+  /** The zoom of an empty one. */
   zoom: number
   screen: Screen
   spaceName: (space: SpaceId) => string
   listed: (entry: Entry) => Listed | undefined
   called: (entry: Entry) => Chime | undefined
-  dim: ((entry: Entry) => boolean) | undefined
   onPick: (entry: string) => void
   /** Closes a Pane, as Alt+W does: a middle click on it, or its cross. */
   onClosePane: (entry: string) => void
@@ -611,6 +697,7 @@ function Row({
 }) {
   const said = useSaid()
   const empty = workspace.columns.length === 0
+  const scale = empty ? zoom : fit.zoom
   return (
     <div
       data-row={workspace.id}
@@ -619,28 +706,32 @@ function Row({
       aria-label={`Workspace ${number}`}
       aria-current={current || undefined}
       // An empty one is a slim place to drop a Pane, not a whole screen.
-      className="flex shrink-0 cursor-pointer gap-(--gap-inner) overflow-x-auto overflow-y-hidden rounded-(--overview-radius) outline-1 outline-overview-foreground/15 transition-[outline-color,box-shadow] duration-150 [scrollbar-width:none] group-data-lifted/place:shadow-[0_12px_28px_rgb(0_0_0/0.4)] hover:outline-overview-foreground/35 aria-[current]:outline-overview-foreground/50 data-empty:items-center data-empty:justify-center data-empty:text-xs data-empty:text-overview-foreground/50 data-empty:outline-dashed motion-reduce:transition-none"
-      style={{
-        width: (screen.inner + 2 * screen.outer) * zoom,
-        height: empty ? EMPTY : screen.height * zoom,
-        padding: screen.outer * zoom,
-      }}
+      className="flex shrink-0 cursor-pointer gap-(--gap-inner) overflow-x-auto overflow-y-hidden rounded-(--overview-plate) [scrollbar-width:none] group-data-lifted/place:shadow-[0_12px_28px_rgb(0_0_0/0.4)] data-empty:items-center data-empty:justify-center data-empty:bg-overview-foreground/4 data-empty:text-overview-foreground/40 data-empty:transition-colors data-empty:hover:bg-overview-foreground/8 motion-reduce:transition-none"
+      style={
+        {
+          width,
+          height: empty ? ROW.empty : screen.height * scale,
+          padding: screen.outer * scale,
+          "--gap-inner": `${screen.gap * scale}px`,
+          "--overview-radius": `calc(var(--tile-radius) * ${scale})`,
+          "--overview-plate": `calc((var(--tile-radius) + var(--gap-outer)) * ${scale})`,
+        } as CSSProperties
+      }
       onClick={(event) => {
         event.stopPropagation()
         onGo()
       }}
     >
-      {empty && "Empty: drop a Pane here"}
-      {drawnColumns(workspace, look).map((column) => {
+      {empty && (
+        <PlusIcon aria-label="Empty: drop a Pane here" className="size-3.5" />
+      )}
+      {drawnColumns(workspace, look).map((column, c) => {
         return (
           <div
             key={column.id}
             data-column={column.id}
             className="flex h-full shrink-0 flex-col gap-(--gap-inner)"
-            style={{
-              width: widthAt(share(column.width) ?? 0.5),
-              minWidth: minWidthOf(column.min * zoom),
-            }}
+            style={{ width: (fit.columns[c] ?? 0) * scale }}
           >
             {column.entries.map((entry, e) => {
               const { title } = labelOf(entry.pane, said.get(entry.id))
@@ -654,14 +745,13 @@ function Row({
                   role="button"
                   data-tile={entry.id}
                   data-handle=""
-                  data-dim={dim?.(entry) || undefined}
                   data-called={call ? "" : undefined}
                   aria-label={`${title} in ${space}`}
                   aria-current={entry.id === picked || undefined}
                   hidden={column.tabbed && !active}
                   // Clear: the Pane itself shows under it, zoomed out.
                   className={cn(
-                    "group/over relative min-h-0 rounded-(--overview-radius) inset-ring-(--overview-frame) transition-[background-color,box-shadow] duration-150 hover:bg-overview-foreground/5 data-lifted:bg-black/50 data-[dim]:bg-black/50 motion-reduce:transition-none",
+                    "group/over relative min-h-0 rounded-(--overview-radius) inset-ring-(--overview-frame) transition-[background-color,box-shadow] duration-150 hover:bg-overview-foreground/5 data-lifted:bg-black/50 motion-reduce:transition-none",
                     entry.id !== picked &&
                       (call ? "inset-ring-2" : "hover:inset-ring-1")
                   )}
@@ -722,8 +812,8 @@ function Row({
                       data-handle=""
                       className="absolute inset-x-0 top-0 flex"
                       style={{
-                        height: TABS.height * zoom,
-                        gap: TABS.gap * zoom,
+                        height: TABS.height * scale,
+                        gap: TABS.gap * scale,
                       }}
                     >
                       {column.entries.map((tab) => (
@@ -745,17 +835,15 @@ function Row({
   )
 }
 
-/** A workspace's number, and how many Panes it holds; `movable`, the
- * number carries it up or down, and a click goes there. */
+/** A workspace's number, bright on the one picked; `movable`, the number
+ * carries it up or down, and a click goes there. */
 function WorkspaceLabel({
-  workspace,
   number,
   current,
   movable,
   onGo,
   ...pointer
 }: {
-  workspace: Workspaces["list"][number]
   number: number
   current: boolean
   movable: boolean
@@ -768,27 +856,17 @@ function WorkspaceLabel({
   | "onPointerCancel"
   | "onLostPointerCapture"
 >) {
-  const count = workspace.columns.reduce(
-    (n, column) => n + column.entries.length,
-    0
-  )
   const look = cn(
-    "group/number shrink-0 self-start rounded-md pt-0.5 pb-1 text-center tabular-nums transition-colors duration-150 select-none motion-reduce:transition-none",
-    current ? "text-overview-foreground" : "text-overview-foreground/60"
-  )
-  const said = (
-    <>
-      <span className="block text-sm font-medium">{number}</span>
-      {count > 0 && (
-        <span className="block text-[10px] opacity-70">{panes(count)}</span>
-      )}
-    </>
+    "group/number shrink-0 self-start rounded-md pt-0.5 pb-1 text-center text-sm font-medium tabular-nums transition-colors duration-150 select-none motion-reduce:transition-none",
+    current
+      ? "text-overview-foreground"
+      : "text-overview-foreground/50 group-hover/place:text-overview-foreground/80"
   )
   // The empty one at the bottom stays: it has no handle.
   if (!movable) {
     return (
       <span className={look} style={{ width: LABEL }}>
-        {said}
+        {number}
       </span>
     )
   }
@@ -811,33 +889,12 @@ function WorkspaceLabel({
       }}
       {...pointer}
     >
-      {said}
+      <span className="block">{number}</span>
       <GripHorizontalIcon
         aria-hidden
         className="mx-auto size-3 opacity-0 group-hover/number:opacity-70 group-data-lifted/place:opacity-70 [@media(hover:none)]:opacity-70"
       />
     </button>
-  )
-}
-
-/** "1 Pane", "3 Panes". */
-function panes(n: number): string {
-  return `${n} ${n === 1 ? "Pane" : "Panes"}`
-}
-
-/** The Panes whose title or Space has `query` in it, from the top down. */
-function matching(
-  workspaces: Workspaces,
-  query: string,
-  spaceName: (space: SpaceId) => string,
-  said: ReadonlyMap<string, Label>
-): Entry[] {
-  const words = query.toLowerCase()
-  return entries(workspaces).filter((entry) =>
-    [
-      labelOf(entry.pane, said.get(entry.id)).title,
-      spaceName(entry.space),
-    ].some((text) => text.toLowerCase().includes(words))
   )
 }
 

@@ -97,6 +97,9 @@ export function drawnColumns(workspace: Workspace, look: Look) {
 }
 
 const scrolls = new WeakMap<HTMLElement, Moving>()
+/** The scroll of each Strip the overview shows whole: it shows no scroll
+ * then, and keeps this one for when it closes. */
+const held = new WeakMap<HTMLElement, number>()
 
 /** A Strip's scroll, moving on the look's spring. */
 export function scrollOf(strip: HTMLElement): Moving {
@@ -104,13 +107,37 @@ export function scrollOf(strip: HTMLElement): Moving {
   if (!scroll) {
     scroll = new Moving(
       (left) => {
-        strip.scrollLeft = left
+        if (held.has(strip)) held.set(strip, left)
+        else strip.scrollLeft = left
       },
-      () => strip.scrollLeft
+      () => scrolled(strip)
     )
     scrolls.set(strip, scroll)
   }
   return scroll
+}
+
+/** How far a Strip is scrolled: as it shows, or as it will once the
+ * overview, which shows it whole, closes. */
+export function scrolled(strip: HTMLElement): number {
+  return held.get(strip) ?? strip.scrollLeft
+}
+
+/**
+ * Keeps a Strip's scroll aside while the overview shows it whole, before
+ * it stops clipping: its scroll goes on moving there, as a focus that
+ * changes in the overview moves it. Called again, it keeps what it has.
+ */
+export function holdScroll(strip: HTMLElement): void {
+  if (!held.has(strip)) held.set(strip, strip.scrollLeft)
+}
+
+/** Gives a Strip its scroll back once it clips again. */
+export function releaseScroll(strip: HTMLElement): void {
+  const left = held.get(strip)
+  if (left === undefined) return
+  held.delete(strip)
+  strip.scrollLeft = left
 }
 
 /**

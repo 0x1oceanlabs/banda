@@ -74,7 +74,8 @@ test("the open overview follows the theme and keeps the desk's glass tinted once
   const desk = await colour(page.locator(".h-svh.bg-desk"), "backgroundColor")
   expect(desk.alpha).toBeGreaterThan(0)
   expect(desk.alpha).toBeLessThan(1)
-  const hint = overview.getByRole("status")
+  // The controls over a Pane take the popover's surface: frosted glass.
+  const hint = overview.getByRole("button", { name: /^Close / }).first()
   await expect
     .poll(async () => (await colour(hint, "backgroundColor")).alpha)
     .toBeGreaterThan(desk.alpha)
@@ -357,9 +358,6 @@ test("overview frames stay aligned on resize, and reduced motion and motion off 
   expect(await scaleOf(stack)).toBeCloseTo(0.35, 3)
   const tile = overview.locator("[data-tile]").first()
   await expect(tile).toHaveCSS("border-top-left-radius", "0px")
-  // The search hint takes a click without dismissing the overview.
-  await overview.getByRole("status").click()
-  await expect(overview).toBeVisible()
   await page.screenshot({
     path: "test-results/overview-polished-dark-square.png",
   })
