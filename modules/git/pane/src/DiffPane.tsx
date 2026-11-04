@@ -83,12 +83,14 @@ import {
 import { AT_ONCE, asked, VIEW, viewOf, type View } from "./diff"
 import { CHANGES, changeOf, isTest, labelOf, type Scope } from "./scope"
 import { actsOf, allOf, fileAsk, hunkAsk, type Act } from "./stage"
+import { useGitStatus } from "./status"
 
 /**
  * What changed in the Space's folder, as T3 Code's Diff shows it (ADR
  * 0034, decision 2): one Pane, its scope chosen from a menu in its header,
  * files drawn by `@pierre/diffs` beside a tree of them. It reads again as
- * an Agent's turn ends, as the window comes back, and on its button.
+ * an Agent's turn ends, as the folder's status changes, as the window
+ * comes back, and on its button.
  */
 export type DiffArgs = {
   scope: Scope
@@ -163,6 +165,19 @@ function DiffPane({ engine, space, args, update, close }: PaneProps<DiffArgs>) {
   if (front !== wasFront) {
     setWasFront(front)
     if (front) again()
+  }
+  // And as the folder changes under it, as the card sees it: a commit,
+  // a pull or a switch from the card or a terminal, a file written. A
+  // turn's changes stay what the turn did.
+  const status = useGitStatus(engine, space)
+  const seen =
+    status && scope.kind !== "turn"
+      ? JSON.stringify([status.head, status.branch, status.files])
+      : null
+  const [wasSeen, setWasSeen] = useState(seen)
+  if (seen !== null && seen !== wasSeen) {
+    setWasSeen(seen)
+    if (wasSeen !== null) again()
   }
 
   const thread = scope.kind === "turn" ? scope.thread : (args.thread ?? null)
