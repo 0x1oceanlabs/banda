@@ -1,45 +1,18 @@
 /**
  * The files of the Diff as its view draws them: from git's patch, loaded
- * a few at a time past a cut one, or a turn's from its tool calls, each
- * read whole to expand.
+ * a few at a time past a cut one, or a turn's as they came, each read
+ * whole to expand.
  */
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react"
 import type { Engine, SpaceId } from "@banda/contract"
-import type { ChangedTurn, TurnChanges } from "@banda/contract/agents"
-import type { Diff, DiffAsk } from "@banda/contract/git"
+import type { DiffAsk } from "@banda/contract/git"
 import {
-  countsOf,
-  fileOf,
   filesOf,
   pathOf,
   type FileDiffMetadata,
 } from "@banda/ui/components/code-diff"
 import { Spinner } from "@banda/ui/components/spinner"
-
-/** What the Pane draws, as git answers it; a turn's changes from its tool
- * calls come as their files already diffed. A turn's come with the
- * Thread's turns that changed files. */
-export type Drawn = Diff & { drawn?: FileDiffMetadata[]; turns?: ChangedTurn[] }
-
-/** A turn's changes as the Pane draws a diff: each file diffed from its
- * texts, whole. */
-export function turnRead(changes: TurnChanges): Drawn {
-  const drawn = changes.files.map((file) =>
-    fileOf(file.path, file.old, file.new)
-  )
-  return {
-    at: changes.at,
-    files: changes.files.map((file, index) => ({
-      path: file.path,
-      ...countsOf(drawn[index]!),
-      binary: false,
-    })),
-    patch: "",
-    truncated: false,
-    drawn,
-    turns: changes.turns,
-  }
-}
+import type { Drawn } from "./read"
 
 /** A short number for a patch, so highlighting kept for one is not used
  * for another. */
@@ -135,6 +108,9 @@ export function useFiles(
 
   return { byPath, missing, loading, load, whole }
 }
+
+/** A diff's files as {@link useFiles} has them. */
+export type Files = ReturnType<typeof useFiles>
 
 /** The end of the files drawn, while more wait: they load as it shows. */
 export function More({
