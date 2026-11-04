@@ -2022,6 +2022,7 @@ export class GhosttyTerminalSurface {
       fontSize: this.fontSize,
       fontFamily: this.fontFamily,
       ligatures: this.ligatures,
+      ratio: this.canvasDevicePixelRatio || 1,
       padding: CONTENT_PADDING,
       originY: this.originY,
       forceFull: this.forceFullRender,

@@ -5,6 +5,9 @@ import {
   type GhosttyColor,
   type GhosttySnapshot,
 } from "./core";
+import { drawGlyph, drawsItself, onDevicePixel } from "../glyphs";
+
+export { onDevicePixel };
 
 export interface GhosttyCellMetrics {
   readonly width: number;
@@ -18,8 +21,6 @@ export interface GhosttyCellRange {
 }
 
 const DEFAULT_SELECTION_BACKGROUND = "rgba(72, 122, 191, 0.35)";
-const POWERLINE_SOLID_RIGHT = "\ue0b0";
-const POWERLINE_SOLID_LEFT = "\ue0b2";
 
 function cssColor(color: GhosttyColor): string {
   return `rgb(${color.r}, ${color.g}, ${color.b})`;
@@ -35,30 +36,6 @@ function sameTextStyle(left: GhosttyCell, right: GhosttyCell): boolean {
   );
 }
 
-function isSolidPowerlineSeparator(text: string): boolean {
-  return text === POWERLINE_SOLID_RIGHT || text === POWERLINE_SOLID_LEFT;
-}
-
-// Fallback fonts inset or scale these private-use glyphs, leaving a gap where
-// the separator should meet the next cell. Fill the triangle from the cell's
-// own edges instead, as native terminals do.
-function fillSolidPowerlineSeparator(
-  context: CanvasRenderingContext2D,
-  text: string,
-  left: number,
-  top: number,
-  metrics: GhosttyCellMetrics,
-): void {
-  const right = left + metrics.width;
-  const [base, point] = text === POWERLINE_SOLID_RIGHT ? [left, right] : [right, left];
-  context.beginPath();
-  context.moveTo(base, top);
-  context.lineTo(point, top + metrics.height / 2);
-  context.lineTo(base, top + metrics.height);
-  context.closePath();
-  context.fill();
-}
-
 function ghosttyTextRunEnd(
   cells: readonly GhosttyCell[],
   start: number,
@@ -72,7 +49,13 @@ function ghosttyTextRunEnd(
       end += 1;
       continue;
     }
-    if (next.text.length === 0 || isSolidPowerlineSeparator(next.text) || !sameStyle(next)) break;
+    if (
+      next.text.length === 0 ||
+      // Banda: a glyph the terminal draws itself, powerline's too, is a run of its own.
+      drawsItself(next.text) ||
+      !sameStyle(next)
+    )
+      break;
     end += 1;
   }
   return end;
@@ -82,11 +65,6 @@ function fontForCell(cell: GhosttyCell, fontSize: number, fontFamily: string): s
   const style = cell.italic ? "italic" : "normal";
   const weight = cell.bold ? "700" : "400";
   return `${style} ${weight} ${fontSize}px ${fontFamily}`;
-}
-
-/** `value` CSS pixels moved to the nearest edge of a screen pixel. */
-export function onDevicePixel(value: number, ratio: number): number {
-  return Math.round(value * ratio) / ratio;
 }
 
 export function measureGhosttyCell(
@@ -131,6 +109,8 @@ export function renderGhosttySnapshot(options: {
   readonly fontSize: number;
   readonly fontFamily: string;
   readonly ligatures?: boolean;
+  /** Banda: the screen's pixels per CSS pixel, for the edges drawn on them. */
+  readonly ratio?: number;
   readonly padding: number;
   readonly forceFull: boolean;
   readonly cursorOn: boolean;
@@ -155,6 +135,17 @@ export function renderGhosttySnapshot(options: {
   const selectionBackground = options.selectionBackground ?? DEFAULT_SELECTION_BACKGROUND;
   const hoveredLinkRange = options.hoveredLinkRange ?? null;
   const originY = options.originY ?? padding;
+  const ratio = options.ratio ?? 1;
+  // Banda: a cell's edge on a screen pixel's, so two side by side share it.
+  const cellX = (column: number) => onDevicePixel(padding + column * metrics.width, ratio);
+  const cellOf = (column: number, top: number) => ({
+    left: cellX(column),
+    top,
+    width: cellX(column + 1) - cellX(column),
+    height: metrics.height,
+    ratio,
+    fontSize,
+  });
   const rowsToDraw = forceFull
     ? Array.from({ length: snapshot.rows }, (_, index) => index)
     : [...snapshot.dirtyRows];
@@ -208,8 +199,8 @@ export function renderGhosttySnapshot(options: {
         backgroundEnd += 1;
       }
       if (first.selected || !ghosttyColorsEqual(first.background, snapshot.background)) {
-        const left = padding + backgroundStart * metrics.width;
-        const width = (backgroundEnd - backgroundStart) * metrics.width;
+        const left = cellX(backgroundStart);
+        const width = cellX(backgroundEnd) - left;
         if (!ghosttyColorsEqual(first.background, snapshot.background)) {
           context.fillStyle = cssColor(first.background);
           context.fillRect(left, top, width, metrics.height);
@@ -230,16 +221,10 @@ export function renderGhosttySnapshot(options: {
         runStart += 1;
         continue;
       }
-      if (isSolidPowerlineSeparator(first.text)) {
+      if (drawsItself(first.text)) {
         if (!first.invisible) {
           context.fillStyle = cssColor(first.foreground);
-          fillSolidPowerlineSeparator(
-            context,
-            first.text,
-            padding + runStart * metrics.width,
-            top,
-            metrics,
-          );
+          drawGlyph(context, first.text, cellOf(runStart, top));
         }
         runStart += 1;
         continue;
@@ -284,41 +269,43 @@ export function renderGhosttySnapshot(options: {
         continue;
       }
       context.fillStyle = cssColor(cell.foreground);
-      const left = padding + column * metrics.width;
+      const { left, width } = cellOf(column, top);
       if (cell.underline || hoveredLink) {
-        context.fillRect(left, top + metrics.height - 2, metrics.width, 1);
+        context.fillRect(left, top + metrics.height - 2, width, 1);
       }
       if (cell.strikethrough) {
-        context.fillRect(left, top + Math.floor(metrics.height * 0.55), metrics.width, 1);
+        context.fillRect(left, top + Math.floor(metrics.height * 0.55), width, 1);
       }
-      if (cell.overline) context.fillRect(left, top + 1, metrics.width, 1);
+      if (cell.overline) context.fillRect(left, top + 1, width, 1);
     }
   }
 
   if (cursorOn && snapshot.cursorVisible && snapshot.cursorX >= 0 && snapshot.cursorY >= 0) {
-    const left = padding + snapshot.cursorX * metrics.width;
     const top = originY + snapshot.cursorY * metrics.height;
+    // Banda: on the cell's edges, as its background and glyph are.
+    const under = cellOf(snapshot.cursorX, top);
+    const { left, width } = under;
     context.fillStyle = cssColor(snapshot.cursor);
     if (!focused) {
       context.strokeStyle = cssColor(snapshot.cursor);
-      context.strokeRect(left + 0.5, top + 0.5, metrics.width - 1, metrics.height - 1);
+      context.strokeRect(left + 0.5, top + 0.5, width - 1, metrics.height - 1);
     } else if (snapshot.cursorStyle === 0) {
       context.fillRect(left, top, 2, metrics.height);
     } else if (snapshot.cursorStyle === 2) {
-      context.fillRect(left, top + metrics.height - 2, metrics.width, 2);
+      context.fillRect(left, top + metrics.height - 2, width, 2);
     } else if (snapshot.cursorStyle === 3) {
       context.strokeStyle = cssColor(snapshot.cursor);
-      context.strokeRect(left + 0.5, top + 0.5, metrics.width - 1, metrics.height - 1);
+      context.strokeRect(left + 0.5, top + 0.5, width - 1, metrics.height - 1);
     } else {
-      context.fillRect(left, top, metrics.width, metrics.height);
+      context.fillRect(left, top, width, metrics.height);
       const cell = snapshot.rowData[snapshot.cursorY]?.cells[snapshot.cursorX];
       if (cell?.text) {
         context.fillStyle = cssColor(snapshot.background);
-        if (isSolidPowerlineSeparator(cell.text)) {
-          fillSolidPowerlineSeparator(context, cell.text, left, top, metrics);
+        if (drawsItself(cell.text)) {
+          drawGlyph(context, cell.text, under);
         } else {
           context.font = fontForCell(cell, fontSize, fontFamily);
-          context.fillText(cell.text, left, top + metrics.baseline, metrics.width);
+          context.fillText(cell.text, left, top + metrics.baseline, width);
         }
       }
     }
