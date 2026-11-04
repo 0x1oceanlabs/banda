@@ -8,7 +8,7 @@
 
 use crate::diff::diff;
 use crate::model::{DiffAsk, FileDiff, Message, PromptAsk, Prompted, Scope, WrittenAsk};
-use crate::repo::{Repo, chosen};
+use crate::repo::{Repo, chosen, in_way};
 use banda_kernel::Refusal;
 use serde::Deserialize;
 
@@ -212,16 +212,15 @@ fn branch_name(wanted: &str) -> String {
 /// `name`, or `name-2`, `name-3` and on, the first no branch here has
 /// nor is in the way of (`fix` is of `fix/login`).
 async fn free(repo: &Repo, name: &str) -> Result<String, Refusal> {
-    for n in 1.. {
-        let tried = match n {
-            1 => name.to_owned(),
-            n => format!("{name}-{n}"),
-        };
-        if repo.branch_in_way(&tried).await?.is_none() {
-            return Ok(tried);
-        }
-    }
-    unreachable!("some name is free")
+    let branches = repo.branches().await?;
+    let tried = (1..).map(|n| match n {
+        1 => name.to_owned(),
+        n => format!("{name}-{n}"),
+    });
+    Ok(tried
+        .into_iter()
+        .find(|tried| in_way(&branches, tried).is_none())
+        .expect("some name is free"))
 }
 
 #[cfg(test)]

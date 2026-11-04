@@ -89,11 +89,39 @@ impl World {
     /// A Space whose folder is a repository with no commits, on `main`.
     async fn new() -> World {
         let world = World::bare().await;
-        world.git(&["-c", "init.defaultBranch=main", "init", "--quiet"]);
-        world.git(&["config", "user.name", "Ann"]);
-        world.git(&["config", "user.email", "ann@example.com"]);
-        world.git(&["config", "commit.gpgsign", "false"]);
+        repository(&world.folder);
         world
+    }
+
+    /// Another Space of the same engine, named `name`, whose folder is a
+    /// repository with no commits, on `main`.
+    async fn space(&self, name: &str) -> (SpaceId, PathBuf) {
+        let made = (self.kernel)
+            .call(
+                Participant::Person(self.owner),
+                "spaces.create",
+                None,
+                Some(CommandId::new()),
+                json!({ "name": name }),
+            )
+            .await
+            .unwrap();
+        let space: SpaceId = serde_json::from_value(made["id"].clone()).unwrap();
+        let folder = self
+            .kernel
+            .space(space)
+            .await
+            .unwrap()
+            .folder()
+            .to_path_buf();
+        repository(&folder);
+        (space, folder)
+    }
+
+    /// Makes `.git/hooks/<name>` run `script`.
+    #[cfg(unix)]
+    fn hook(&self, name: &str, script: &str) {
+        executable(&self.folder.join(".git/hooks").join(name), script);
     }
 
     /// A repository with one commit on `main`: `a.txt`, `b.txt`, `d.txt`.
@@ -246,6 +274,26 @@ impl World {
         let about = std::fs::metadata(&index).unwrap();
         (std::fs::read(&index).unwrap(), about.modified().unwrap())
     }
+}
+
+/// Makes `folder` a repository with no commits, on `main`, configured in
+/// it alone.
+fn repository(folder: &std::path::Path) {
+    run_git(
+        folder,
+        &["-c", "init.defaultBranch=main", "init", "--quiet"],
+    );
+    run_git(folder, &["config", "user.name", "Ann"]);
+    run_git(folder, &["config", "user.email", "ann@example.com"]);
+    run_git(folder, &["config", "commit.gpgsign", "false"]);
+}
+
+/// Writes `text` to `file`, a program anyone may run.
+#[cfg(unix)]
+fn executable(file: &std::path::Path, text: &str) {
+    use std::os::unix::fs::PermissionsExt;
+    std::fs::write(file, text).unwrap();
+    std::fs::set_permissions(file, std::fs::Permissions::from_mode(0o755)).unwrap();
 }
 
 /// Makes the git the engine runs take every repository for another
@@ -1134,11 +1182,11 @@ async fn a_commit_needs_a_message_changes_and_a_branch_to_push() {
 #[cfg(unix)]
 #[tokio::test]
 async fn a_hook_says_its_name_and_lines_and_one_that_fails_stops_the_commit() {
-    use std::os::unix::fs::PermissionsExt;
     let world = World::committed().await;
-    let hook = world.folder.join(".git/hooks/pre-commit");
-    std::fs::write(&hook, "#!/bin/sh\necho checking things >&2\nexit 1\n").unwrap();
-    std::fs::set_permissions(&hook, std::fs::Permissions::from_mode(0o755)).unwrap();
+    world.hook(
+        "pre-commit",
+        "#!/bin/sh\necho checking things >&2\nexit 1\n",
+    );
     let head = world.git(&["rev-parse", "HEAD"]);
     world.write("a.txt", "changed\n");
     let said = world
@@ -1488,14 +1536,12 @@ async fn a_pull_whose_upstream_is_gone_says_so() {
 #[cfg(unix)]
 #[tokio::test]
 async fn a_push_the_remote_refuses_says_what_it_said() {
-    use std::os::unix::fs::PermissionsExt;
     // A remote in a folder runs its hook as a child of this git, so the
     // hook is heard by name too.
     let world = World::committed().await;
     let remote = world.remote();
-    let hook = remote.join("hooks/pre-receive");
-    std::fs::write(&hook, "#!/bin/sh\necho 'Protected branch' >&2\nexit 1\n").unwrap();
-    std::fs::set_permissions(&hook, std::fs::Permissions::from_mode(0o755)).unwrap();
+    let refusing = "#!/bin/sh\necho 'Protected branch' >&2\nexit 1\n";
+    executable(&remote.join("hooks/pre-receive"), refusing);
     world.write("a.txt", "changed\n");
     let said = world
         .act(json!({ "action": "commit_push", "message": "Change a" }))
@@ -1607,40 +1653,12 @@ async fn a_turn_heard_begun_twice_is_let_go_once() {
 #[cfg(unix)]
 #[tokio::test]
 async fn a_command_in_one_repository_keeps_none_in_another_waiting() {
-    use std::os::unix::fs::PermissionsExt;
     let world = World::committed().await;
-    // A second Space of the same engine, with a repository of its own.
-    let second = (world.kernel)
-        .call(
-            Participant::Person(world.owner),
-            "spaces.create",
-            None,
-            Some(CommandId::new()),
-            json!({ "name": "Other" }),
-        )
-        .await
-        .unwrap();
-    let second: SpaceId = serde_json::from_value(second["id"].clone()).unwrap();
-    let other = world
-        .kernel
-        .space(second)
-        .await
-        .unwrap()
-        .folder()
-        .to_path_buf();
-    for args in [
-        &["-c", "init.defaultBranch=main", "init", "--quiet"][..],
-        &["config", "user.name", "Ann"],
-        &["config", "user.email", "ann@example.com"],
-    ] {
-        run_git(&other, args);
-    }
+    let (second, other) = world.space("Other").await;
     std::fs::write(other.join("a.txt"), "one\n").unwrap();
     run_git(&other, &["add", "--all"]);
     run_git(&other, &["commit", "--quiet", "-m", "first"]);
-    let hook = world.folder.join(".git/hooks/pre-commit");
-    std::fs::write(&hook, "#!/bin/sh\nsleep 5\n").unwrap();
-    std::fs::set_permissions(&hook, std::fs::Permissions::from_mode(0o755)).unwrap();
+    world.hook("pre-commit", "#!/bin/sh\nsleep 5\n");
     world.write("a.txt", "changed\n");
     let person = Participant::Person(world.owner);
     let mut slow = (world.kernel)
@@ -1677,11 +1695,12 @@ async fn a_command_in_one_repository_keeps_none_in_another_waiting() {
     );
 }
 
-/// When `OTHER_OWNER` is not set, runs `test` again in a git of its own
-/// with it set, and says whether it passed; when it is, says none.
-fn as_another_owner(test: &str) -> Option<bool> {
+/// When `OTHER_OWNER` is not set, runs `test` again in a test binary of
+/// its own with it set, which must pass, and says it did; when it is set,
+/// says the test is to run here.
+fn as_another_owner(test: &str) -> bool {
     if std::env::var_os(OTHER_OWNER).is_some() {
-        return None;
+        return false;
     }
     let ran = Command::new(std::env::current_exe().unwrap())
         .args(["--exact", test, "--nocapture"])
@@ -1690,19 +1709,16 @@ fn as_another_owner(test: &str) -> Option<bool> {
         .unwrap();
     let said = String::from_utf8_lossy(&ran.stdout);
     assert!(
-        said.contains("1 passed"),
+        ran.status.success() && said.contains("1 passed"),
         "{said}{}",
         String::from_utf8_lossy(&ran.stderr)
     );
-    Some(ran.status.success())
+    true
 }
 
 #[tokio::test]
 async fn a_repository_another_user_owns_says_why_git_will_not_read_it() {
-    if let Some(passed) =
-        as_another_owner("a_repository_another_user_owns_says_why_git_will_not_read_it")
-    {
-        assert!(passed);
+    if as_another_owner("a_repository_another_user_owns_says_why_git_will_not_read_it") {
         return;
     }
     let world = World::committed().await;

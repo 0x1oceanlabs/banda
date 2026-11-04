@@ -145,22 +145,16 @@ fn pick(patch: &str, hunk: &HunkAsk) -> Option<String> {
 /// applied, or applied in reverse, leaves the file where it is. None when
 /// git named no new side.
 fn lines_alone(header: &str) -> Option<String> {
-    const MOVES: [&str; 8] = [
+    const MOVES: [&str; 4] = ["rename from ", "rename to ", "copy from ", "copy to "];
+    /// What git says of a move beside it.
+    const ABOUT: [&str; 4] = [
         "similarity index ",
         "dissimilarity index ",
-        "rename from ",
-        "rename to ",
-        "copy from ",
-        "copy to ",
         "old mode ",
         "new mode ",
     ];
-    let moved = header.lines().any(|line| {
-        ["rename from ", "copy from "]
-            .iter()
-            .any(|m| line.starts_with(m))
-    });
-    if !moved {
+    let said = |line: &str, words: &[&str]| words.iter().any(|w| line.starts_with(w));
+    if !header.lines().any(|line| said(line, &MOVES)) {
         return Some(header.to_owned());
     }
     // Its name as git wrote it after `+++ `: `b/path`, or quoted.
@@ -174,7 +168,7 @@ fn lines_alone(header: &str) -> Option<String> {
         let line = match line {
             line if line.starts_with("diff --git ") => format!("diff --git {old} {new}"),
             line if line.starts_with("--- ") => format!("--- {old}"),
-            line if MOVES.iter().any(|m| line.starts_with(m)) => continue,
+            line if said(line, &MOVES) || said(line, &ABOUT) => continue,
             line => line.to_owned(),
         };
         alone.push_str(&line);

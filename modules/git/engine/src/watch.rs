@@ -3,16 +3,16 @@
 //! and says it only when it changed; and it fetches the upstream's remote
 //! now and then, as T3 Code does, so ahead and behind count what the
 //! remote has, backing off while that fails. A fetch runs beside the
-//! reads, which go on meanwhile, and never while a command of Banda's
-//! writes in the repository.
+//! reads, which go on meanwhile; none begins while a command of Banda's
+//! writes in the repository, and none keeps one waiting: git locks each
+//! remote branch it updates itself.
 
 use crate::model::Status;
 use crate::repo::Repo;
-use crate::run::Opts;
-use crate::{Repositories, status};
+use crate::run::{Opts, Pool};
+use crate::{Repositories, Writes, status};
 use banda_kernel::{ModuleSpace, Stream};
 use std::ffi::OsStr;
-use std::path::PathBuf;
 use std::time::Duration;
 use tokio::sync::mpsc;
 use tokio::task::JoinHandle;
@@ -39,9 +39,13 @@ pub fn watch(space: ModuleSpace, repositories: Repositories) -> Stream {
             // reads.
             let at = space.at().await.ok();
             let found = Repo::find(&folder).await;
-            let writes = match &found {
-                Ok(Some(repo)) => repositories.of(&repo.top),
-                _ => repositories.of(&folder),
+            let top = match &found {
+                Ok(Some(repo)) => Some(repo.top.clone()),
+                _ => None,
+            };
+            let writes = match &top {
+                Some(top) => repositories.of(top),
+                None => repositories.of_folder(&folder),
             };
             // Heard from now: a write that ends during the read counts.
             let wrote = writes.done.notified();
@@ -68,9 +72,9 @@ pub fn watch(space: ModuleSpace, repositories: Repositories) -> Stream {
                 upstream: Some(_),
                 ..
             }) = &told
-                && !writes.busy()
+                && let Some(top) = top
             {
-                fetch.start(folder, branch.clone());
+                fetch.start(Repo { top }, branch.clone(), &writes);
             }
             tokio::select! {
                 () = tokio::time::sleep(AGAIN) => {}
@@ -101,10 +105,14 @@ impl Fetch {
         }
     }
 
-    /// Starts one when it is due and none runs.
-    fn start(&mut self, folder: PathBuf, branch: String) {
-        if self.running.is_none() && Instant::now() >= self.next {
-            self.running = Some(tokio::spawn(fetch(folder, branch)));
+    /// Starts one when it is due, none runs and no command of Banda's
+    /// writes in the repository.
+    fn start(&mut self, repo: Repo, branch: String, writes: &Writes) {
+        if self.running.is_some() || Instant::now() < self.next {
+            return;
+        }
+        if !writes.busy() {
+            self.running = Some(tokio::spawn(fetch(repo, branch)));
         }
     }
 
@@ -136,10 +144,9 @@ const UNASKED: [(&str, &str); 4] = [
     ("SSH_ASKPASS_REQUIRE", "never"),
 ];
 
-/// Fetches the remote `branch` follows, saying whether it did.
-async fn fetch(folder: PathBuf, branch: String) -> bool {
+/// Fetches the remote `branch` follows, and says whether it did.
+async fn fetch(repo: Repo, branch: String) -> bool {
     let fetched = async {
-        let repo = Repo::find(&folder).await.ok()??;
         let key = format!("branch.{branch}.remote");
         let remote = repo.config(&key).await.ok()??;
         // No gc: one that fails would leave its packs behind each time,
@@ -157,6 +164,7 @@ async fn fetch(folder: PathBuf, branch: String) -> bool {
         let env = UNASKED.map(|(name, value)| (name, OsStr::new(value)));
         let opts = Opts {
             env: &env,
+            pool: Pool::Long,
             ..Opts::default()
         };
         repo.run(args, opts).await.ok()

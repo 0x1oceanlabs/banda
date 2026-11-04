@@ -5,7 +5,8 @@
 use crate::model::Status;
 use crate::parse;
 use crate::repo::Repo;
-use crate::run::{Failure, Opts, Reason, UNTRUSTED};
+use crate::run::{Failure, Opts};
+use banda_kernel::Refusal;
 use std::collections::HashMap;
 use std::path::Path;
 
@@ -16,26 +17,26 @@ pub async fn status(folder: &Path, at: i64) -> Result<Status, Failure> {
 }
 
 /// The status of the repository `found` for a folder, read after the
-/// Space's event `at`: `repo: false` when none was, with the problem when
-/// git would not look.
+/// Space's event `at`: `repo: false` when none was, with why when git
+/// could not look, as in a repository another user owns.
 pub async fn read(found: Result<Option<Repo>, Failure>, at: i64) -> Result<Status, Failure> {
-    let repo = match found {
-        Ok(Some(repo)) => repo,
-        Ok(None) => {
-            return Ok(Status {
-                at,
-                ..Status::default()
-            });
-        }
-        Err(Failure(Reason::Untrusted)) => {
-            return Ok(Status {
-                at,
-                problem: Some(UNTRUSTED.to_owned()),
-                ..Status::default()
-            });
-        }
-        Err(failure) => return Err(failure),
+    let problem = match found {
+        Ok(Some(repo)) => return of(repo, at).await,
+        Ok(None) => None,
+        // One that passes, as a lock held, is an error: the window keeps
+        // what it showed.
+        Err(failure) if !failure.0.lasting() => return Err(failure),
+        Err(failure) => Some(Refusal::from(failure).message),
     };
+    Ok(Status {
+        at,
+        problem,
+        ..Status::default()
+    })
+}
+
+/// The status of `repo`, read after the Space's event `at`.
+async fn of(repo: Repo, at: i64) -> Result<Status, Failure> {
     let said = repo.porcelain().await?;
     let against = match &said.head {
         Some(head) => head.clone(),
