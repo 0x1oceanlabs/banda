@@ -212,7 +212,7 @@ export function Working({
           <span className="min-w-0 truncate text-muted-foreground/70 tabular-nums">
             {"· "}
             {doing.kind === "asking" ? (
-              <span className="text-attention">Waiting for you</span>
+              "Waiting for you"
             ) : doing.kind === "thinking" ? (
               "Thinking"
             ) : (
