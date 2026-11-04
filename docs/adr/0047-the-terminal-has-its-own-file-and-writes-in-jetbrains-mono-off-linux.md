@@ -53,9 +53,9 @@ What was wrong:
    - Ligatures are on, as in Ghostty.
    - These keys first. Scrollback, line height, copy on select and the shell wait until someone asks for them.
 
-3. **The terminal draws box-drawing, block and braille glyphs itself, and a cell is whole screen pixels wide and tall.**
+3. **The terminal draws box-drawing, block and braille glyphs itself, and a cell's edges are on screen pixels.**
    - Lines, corners, blocks, shades and braille (U+2500–U+259F, U+2800–U+28FF), with the powerline triangles the adapter already draws, are filled from the cell's own edges, as Ghostty, Kitty and WezTerm do. A frame then joins across rows and columns in any font.
-   - The cell's width is rounded to screen pixels too, as its height is since #452, and the text is spread to it by the canvas's letter spacing, so a line of text keeps to its cells.
+   - A cell's edges are on screen pixels', as its height is since #452: each background, selection and drawn glyph runs from one edge to the next, so cells side by side share their edge and leave no seam. The width itself stays the font's, so text keeps to its cells: spreading the text to a rounded width with the canvas's letter spacing was weighed, and Chromium turns ligatures off once letter spacing is not zero (decision 2 keeps them on).
    - Each is a `Banda:` change in the vendored adapter, noted in its README, until T3 Code has its own.
 
 **Consequences.**
@@ -73,5 +73,5 @@ Each step is its own PR.
 2. This ADR.
 3. JetBrains Mono shipped, and fontconfig asked on Linux only (closes #438).
 4. `terminal.toml`: the template, the schema, `banda look`, the Settings section, and the Pane reading it: font, size, ligatures, cursor.
-5. Box-drawing, block and braille glyphs drawn, and whole-pixel cell width. A before and after of Claude Code, htop and lazygit, shown to Roma first.
+5. Box-drawing, block and braille glyphs drawn, and cells' edges on screen pixels. A before and after, shown to Roma first.
 6. The adapter brought up to T3 Code's newest.

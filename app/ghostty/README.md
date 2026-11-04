@@ -36,7 +36,10 @@ Import paths, so the files find each other here, and the tests import
   letter on its own (`textRendering`), as `terminal.toml` says (ADR 0047);
 - the surface takes a `cursor`, and `setCursor`: Ghostty's own default
   cursor (options 22 and 23), which a reset and DECSCUSR 0 come back to,
-  and not only its blink.
+  and not only its blink;
+- box-drawing, block and braille glyphs are drawn from the cell's own
+  edges (`src/glyphs.ts`, Banda's), and each cell's edges, behind its
+  background too, are on screen pixels (ADR 0047, decision 3).
 
 T3's tests of its own terminal drawer are not brought: they test T3's
 transport, not the adapter.
