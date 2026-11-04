@@ -30,8 +30,9 @@ export type Notice = {
 /**
  * Where Banda's own update is (ADR 0041, decision 2), as main tells it:
  * nothing to say, a look the Person asked for, a version downloading, one
- * ready to install on quit, or one that cannot install until the Person
- * mends something. `name` is the app's, `Banda Dev`, and `have` the
+ * ready to install on quit, one out that the Person installs with
+ * `command` (on macOS, through brew: ADR 0033, decision 6), or one that
+ * cannot install until the Person mends something. `name` is the app's, `Banda Dev`, and `have` the
  * version that runs. `always` keeps the widget on the bar with nothing to
  * say, as Banda Dev's is (ADR 0045).
  */
@@ -53,6 +54,7 @@ export type Update = { name: string; have: string; always: boolean } & (
       restarts: boolean
     }
   | { state: "ready"; version: string; notes: Note[] }
+  | { state: "out"; version: string; notes: Note[]; command: string }
   | { state: "failed"; reason: string }
 )
 

@@ -5,7 +5,8 @@
  * seconds, and is whole once the version is ready; a click shows what
  * changed and restarts into it. In `--destructive` only when the Person
  * has to mend something. Banda Dev's stays on the bar, dimmed, with
- * "Update now" (ADR 0045).
+ * "Update now" (ADR 0045). On macOS it is whole once a version is out,
+ * and a click shows what changed and the brew command to copy.
  */
 import { Button } from "@banda/ui/components/button"
 import {
@@ -117,6 +118,27 @@ function About({ update, working }: { update: Update; working: number }) {
         </div>
       </>
     )
+  if (update.state === "out")
+    return (
+      <>
+        <PopoverTitle>
+          {update.name} {update.version}
+        </PopoverTitle>
+        <PopoverDescription>
+          You have {update.have} · install it with brew
+        </PopoverDescription>
+        <Notes notes={update.notes} />
+        <div className="mt-2 flex items-center gap-1.5 rounded-md bg-muted py-1 pr-1 pl-2">
+          <code className="min-w-0 flex-1 truncate text-xs">
+            {update.command}
+          </code>
+          <Copy text={update.command} />
+        </div>
+        <div className="mt-2 flex justify-end">
+          <Later />
+        </div>
+      </>
+    )
   if (update.state === "failed")
     return (
       <>
@@ -190,6 +212,27 @@ function UpdateNow({ disabled = false }: { disabled?: boolean }) {
       onClick={() => window.banda?.update.now()}
     >
       Update now
+    </Button>
+  )
+}
+
+/** Copies `text`, and says so a moment. */
+function Copy({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false)
+  useEffect(() => {
+    if (!copied) return
+    const timer = setTimeout(() => setCopied(false), 1500)
+    return () => clearTimeout(timer)
+  }, [copied])
+  return (
+    <Button
+      size="sm"
+      variant="ghost"
+      onClick={() =>
+        void navigator.clipboard.writeText(text).then(() => setCopied(true))
+      }
+    >
+      {copied ? "Copied" : "Copy"}
     </Button>
   )
 }
