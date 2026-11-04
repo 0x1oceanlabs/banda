@@ -22,6 +22,13 @@ const off = (label: string, hint: string, icon: Quick["icon"]): Quick => ({
 })
 
 const UP_TO_DATE = "Branch is up to date. No action needed."
+const DIVERGED = "Branch has diverged from upstream. Rebase or merge first."
+const NO_COMMITS = "No local commits to push."
+
+/** Whether `status`'s branch is the repository's default. */
+export function onDefault(status: Status): boolean {
+  return status.branch !== undefined && status.branch === status.default_branch
+}
 
 /** The button for `status`, with `writes` when a Harness is there to
  * write a commit's message: a new Thread's is not, till it starts. */
@@ -56,12 +63,7 @@ export function quickOf(
     if (hint) return off("Push", hint, "push")
     return { label: "Push", action: "push", icon: "push" }
   }
-  if (ahead > 0 && behind > 0)
-    return off(
-      "Sync branch",
-      "Branch has diverged from upstream. Rebase or merge first.",
-      "info"
-    )
+  if (ahead > 0 && behind > 0) return off("Sync branch", DIVERGED, "info")
   if (behind > 0) return { label: "Pull", action: "pull", icon: "pull" }
   if (ahead > 0) return { label: "Push", action: "push", icon: "push" }
   return off("Commit", UP_TO_DATE, "commit")
@@ -70,11 +72,7 @@ export function quickOf(
 /** Whether `action` on `status`'s branch asks first: a push on the
  * default branch does, a commit alone never. */
 export function asksFirst(status: Status, action: Action): boolean {
-  return (
-    (action === "push" || action === "commit_push") &&
-    status.branch !== undefined &&
-    status.branch === status.default_branch
-  )
+  return (action === "push" || action === "commit_push") && onDefault(status)
 }
 
 /** What the default branch's question says, as T3 Code's. */
@@ -104,10 +102,21 @@ function pushOf(status: Status): Item {
     return no("Branch is behind upstream. Pull before pushing.")
   if (status.upstream === undefined) {
     if (!status.remote) return no('Add an "origin" remote before pushing.')
-    // A branch never pushed: its commits are its own, if it has any.
-    return status.head ? CAN : no("No local commits to push.")
+    // A branch never pushed: its commits past the default are its own,
+    // if it has any; a branch just made has none.
+    return status.head && status.ahead_of_default !== 0 ? CAN : no(NO_COMMITS)
   }
-  return (status.ahead ?? 0) > 0 ? CAN : no("No local commits to push.")
+  return (status.ahead ?? 0) > 0 ? CAN : no(NO_COMMITS)
+}
+
+/** Whether `status`'s branch can be pulled, and why not: a branch
+ * diverged cannot, as the button's Sync branch says. */
+function pullOf(status: Status): Item {
+  if (status.upstream === undefined)
+    return no("The branch follows no upstream to pull from.")
+  if ((status.behind ?? 0) === 0)
+    return no("Branch is up to date with its upstream.")
+  return (status.ahead ?? 0) > 0 ? no(DIVERGED) : CAN
 }
 
 /** The `▾` menu's items for `status`, as T3 Code's; and what Pull and
@@ -125,12 +134,7 @@ export function menuOf(status: Status): {
         ? CAN
         : no("Worktree is clean. Make changes before committing."),
     push: pushOf(status),
-    pull:
-      status.upstream === undefined
-        ? no("The branch follows no upstream to pull from.")
-        : (status.behind ?? 0) > 0
-          ? CAN
-          : no("Branch is up to date with its upstream."),
+    pull: pullOf(status),
     follows: status.upstream,
   }
 }

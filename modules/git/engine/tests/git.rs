@@ -427,6 +427,18 @@ async fn a_branch_with_an_upstream_is_ahead_and_behind_it() {
 }
 
 #[tokio::test]
+async fn a_branch_never_pushed_counts_its_commits_past_the_default() {
+    let world = World::committed().await;
+    world.remote();
+    assert_eq!(world.status().await.ahead_of_default, None);
+    world.git(&["switch", "--quiet", "-c", "fresh"]);
+    assert_eq!(world.status().await.ahead_of_default, Some(0));
+    world.write("e.txt", "ours\n");
+    world.commit("ours");
+    assert_eq!(world.status().await.ahead_of_default, Some(1));
+}
+
+#[tokio::test]
 async fn a_repository_with_no_commits_has_a_branch_but_no_head() {
     let world = World::new().await;
     world.write("first.txt", "hello\nworld\n");

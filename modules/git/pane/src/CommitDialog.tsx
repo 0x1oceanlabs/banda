@@ -21,6 +21,7 @@ import {
 import { DiffCounts, DiffPath } from "@banda/ui/components/diff"
 import { Textarea } from "@banda/ui/components/textarea"
 import type { Commit } from "./chain"
+import { onDefault } from "./quick"
 
 /** Drawn while it is open, so each opening starts with every file taken
  * and no message. */
@@ -78,7 +79,7 @@ export function CommitDialog({
             <span className="truncate">
               {status.branch ?? "(detached HEAD)"}
             </span>
-            {status.branch === status.default_branch && (
+            {onDefault(status) && (
               <span className="ml-auto text-xs text-amber-600 dark:text-amber-400">
                 Default branch
               </span>
