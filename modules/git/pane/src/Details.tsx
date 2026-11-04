@@ -16,7 +16,7 @@ import { DiffCounts } from "@banda/ui/components/diff"
 import { useAct } from "@banda/ui/hooks/use-act"
 import { paneOf } from "@banda/ui/pane"
 import { FileDiffIcon, GitBranchPlusIcon } from "lucide-react"
-import { BranchPicker } from "./BranchPicker"
+import { BranchPicker, PICKER } from "./BranchPicker"
 import { diffPane } from "./DiffPane"
 import { GitButton } from "./GitButton"
 import { VIEW } from "./diff"
@@ -81,7 +81,14 @@ function useGitStatus(engine: Engine, space: SpaceId): Status | null {
   )
 }
 
-function GitRows({ engine, space, thread, open }: DetailsProps) {
+function GitRows({
+  engine,
+  space,
+  thread,
+  open,
+  opening,
+  opened,
+}: DetailsProps) {
   const status = useGitStatus(engine, space)
   const init = useAct()
   if (!status) return null
@@ -106,7 +113,13 @@ function GitRows({ engine, space, thread, open }: DetailsProps) {
     )
   return (
     <>
-      <BranchPicker engine={engine} space={space} status={status} />
+      <BranchPicker
+        engine={engine}
+        space={space}
+        status={status}
+        asked={opening === PICKER}
+        onOpened={opened}
+      />
       <GitButton
         engine={engine}
         space={space}
@@ -118,9 +131,7 @@ function GitRows({ engine, space, thread, open }: DetailsProps) {
           icon={<FileDiffIcon />}
           title="Open the Diff on these changes"
           end={<DiffCounts added={status.added} removed={status.removed} />}
-          onClick={() =>
-            open(paneOf(diffPane, { scope: CHANGES, view: VIEW, file: null }))
-          }
+          onClick={() => open(changesDiff())}
         >
           Changes
         </DetailsRow>
@@ -128,5 +139,9 @@ function GitRows({ engine, space, thread, open }: DetailsProps) {
     </>
   )
 }
+
+/** The Diff on the Space's changes: the Changes row's, and Alt+D's. */
+export const changesDiff = () =>
+  paneOf(diffPane, { scope: CHANGES, view: VIEW, file: null })
 
 export const gitDetails: Details = { id: "git.branch", Rows: GitRows }

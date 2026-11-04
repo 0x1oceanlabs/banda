@@ -4,7 +4,8 @@
  * behind; pressed, a search over the branches here and on remotes in one
  * list, which switches to the one picked, and Create branch with the
  * words; the keys move the choice. A branch's right click copies its
- * name.
+ * name. Alt+Shift+G opens it in the focused Thread, as T3 Code's
+ * Mod+Shift+G.
  */
 import { useEffect, useId, useState } from "react"
 import type { Engine, SpaceId } from "@banda/contract"
@@ -30,16 +31,29 @@ import { DetailsRow } from "@banda/ui/components/thread-details"
 import { useAct } from "@banda/ui/hooks/use-act"
 import { ChevronDownIcon, GitBranchIcon, PlusIcon } from "lucide-react"
 
+/** What Alt+Shift+G asks the focused Thread's card to open. */
+export const PICKER = "git.branch"
+
 export function BranchPicker({
   engine,
   space,
   status,
+  asked,
+  onOpened,
 }: {
   engine: Engine
   space: SpaceId
   status: Status
+  /** Alt+Shift+G asked for it: open until it closes, then `onOpened`. */
+  asked: boolean
+  onOpened: () => void
 }) {
-  const [open, setOpen] = useState(false)
+  const [own, setOwn] = useState(false)
+  const open = own || asked
+  const setOpen = (open: boolean) => {
+    setOwn(open)
+    if (!open && asked) onOpened()
+  }
   return (
     <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger

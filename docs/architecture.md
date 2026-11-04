@@ -239,7 +239,9 @@ registries from them. `start` runs once with the window API, for a module
 that acts on the window when the desktop tells it something.
 `threadDetails` are its rows in a Thread's details card (ADR 0034): the
 frame hands every Pane the rows of the modules that run, and a Pane puts
-its own buttons in the header the frame draws with `InHeader`.
+its own buttons in the header the frame draws with `InHeader`. A
+module's key asks the focused Thread's card to show and open a part of
+its rows with `askDetails`, as git's Alt+Shift+G its branch picker.
 `module.toml` holds only what no code says.
 `banda modules` prints the three as one JSON per module
 (`engine/src/modules.rs`), and the skill's `modules` topic is written
