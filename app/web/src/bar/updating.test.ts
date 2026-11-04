@@ -11,6 +11,19 @@ import {
 const known = { name: "Banda Dev", have: "0.1.0-dev.62", always: true }
 
 describe("the update's line on hover", () => {
+  it("on macOS, says what is out and the command that installs it", () => {
+    const out: Update = {
+      ...known,
+      state: "out",
+      version: "0.1.0-dev.66",
+      notes: [],
+      command: "brew upgrade --cask banda-dev",
+    }
+    expect(lineOf(out)).toBe(
+      "Banda Dev 0.1.0-dev.66 is out: brew upgrade --cask banda-dev"
+    )
+  })
+
   it("says what downloads, how far, and what is ready", () => {
     const downloading: Update = {
       ...known,

@@ -2,8 +2,10 @@
  * Banda's own update (ADR 0041, decision 2). electron-updater reads the
  * channel's releases, a minute after the start and then every hour for
  * Banda Dev, every four for Banda; it downloads a new version at once and
- * installs it when Banda quits. Only an AppImage updates: Banda Local, run
- * from a checkout, has none, and says nothing.
+ * installs it when Banda quits. Only an AppImage updates. On macOS, where
+ * an app signed ad hoc cannot, Banda only looks, and says that a version
+ * is out with the brew command that installs it (ADR 0033, decision 6).
+ * Banda Local, run from a checkout, has none, and says nothing.
  *
  * What it tells the page is one `Update`, for the bar (decision 4). A look
  * or a download that fails for want of a network says nothing, and the
@@ -41,13 +43,18 @@ export type Updates = {
 /** Starts looking for Banda's update; `tell` hears each change. */
 export function updates(tell: (now: Update) => void): Updates {
   const image = process.env.APPIMAGE
+  const brew =
+    process.platform === "darwin" &&
+    app.isPackaged &&
+    channel !== CHANNELS.local
   const known = {
     name: channel.name,
     have: app.getVersion(),
-    always: Boolean(image) && channel === CHANNELS.dev,
+    always: Boolean(image || brew) && channel === CHANNELS.dev,
   }
   const { have } = known
   let now: Update = { ...known, state: "none" }
+  if (!image && brew) return brewUpdates(known, tell)
   if (!image) {
     const nothing = () => {}
     return {
@@ -159,6 +166,68 @@ export function updates(tell: (now: Update) => void): Updates {
       if (now.state === "downloading") set({ ...now, restarts })
     },
     restart,
+  }
+}
+
+/**
+ * macOS's: electron-updater only looks, at the same times, and a version
+ * out is `out`, with the brew command that installs it. "Update now" is
+ * a look the Person asked for.
+ */
+function brewUpdates(
+  known: { name: string; have: string; always: boolean },
+  tell: (now: Update) => void
+): Updates {
+  let now: Update = { ...known, state: "none" }
+  const set = (next: DistributiveOmit<Update, keyof typeof known>) => {
+    now = { ...known, ...next }
+    tell(now)
+  }
+  const command = `brew upgrade --cask ${channel.folder}`
+  let asked = false
+  let looked: number | undefined
+  autoUpdater.autoDownload = false
+  autoUpdater.autoInstallOnAppQuit = false
+  autoUpdater.fullChangelog = true
+  autoUpdater.logger = { info() {}, debug() {}, warn: console.warn, error() {} }
+  autoUpdater.on("update-available", (info: UpdateInfo) => {
+    asked = false
+    set({
+      state: "out",
+      version: info.version,
+      notes: notesOf(info, known.have),
+      command,
+    })
+  })
+  autoUpdater.on("update-not-available", () => {
+    looked = Date.now()
+    asked = false
+    if (now.state !== "out") set({ state: "none", looked })
+  })
+  autoUpdater.on("error", (error: Error) => {
+    console.warn("Banda could not look for its update:", error.message)
+    if (!asked) return
+    asked = false
+    looked = Date.now()
+    set({ state: "none", looked, missed: firstLine(error.message) })
+  })
+  const look = (byPerson: boolean) => {
+    if (byPerson && known.always) {
+      asked = true
+      set({ state: "looking" })
+    }
+    // The same error comes as an "error" event.
+    autoUpdater.checkForUpdates().catch(() => {})
+  }
+  setTimeout(() => look(false), FIRST_LOOK)
+  setInterval(() => look(false), EVERY)
+  const nothing = () => {}
+  return {
+    current: () => now,
+    check: () => look(true),
+    now: () => look(true),
+    later: nothing,
+    restart: nothing,
   }
 }
 

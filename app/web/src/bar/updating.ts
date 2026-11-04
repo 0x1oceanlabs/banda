@@ -21,6 +21,8 @@ export function lineOf(update: Update): string {
       return `Downloading ${named(update.version)} · ${percentOf(update.share)}`
     case "ready":
       return `${named(update.version)} is ready: it installs when you quit ${update.name}`
+    case "out":
+      return `${named(update.version)} is out: ${update.command}`
     case "failed":
       return `${update.name} cannot update itself: ${update.reason}`
   }

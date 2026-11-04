@@ -153,3 +153,45 @@ test("Banda Dev's widget stays on the bar and updates now (ADR 0045)", async () 
     "Could not update: net::ERR_INTERNET_DISCONNECTED"
   )
 })
+
+test("on macOS the widget says a version is out, with its brew command (ADR 0033, decision 6)", async () => {
+  window = await startWindow()
+  const { page, app } = window
+  const command = "brew upgrade --cask banda-dev"
+  const out = {
+    name: "Banda Dev",
+    have: "0.1.0-dev.62",
+    always: true,
+    state: "out",
+    version: "0.1.0-dev.66",
+    notes: [{ version: "0.1.0-dev.66", text: "Built from 6c3d557: the hook" }],
+    command,
+  }
+  await firstThread(page)
+  await app.evaluate(({ BrowserWindow, ipcMain }, value) => {
+    ipcMain.removeHandler("update.current")
+    ipcMain.handle("update.current", () => value)
+    BrowserWindow.getAllWindows()[0]?.webContents.send("update.listen", value)
+  }, out)
+
+  await page
+    .getByRole("button", { name: `Banda Dev 0.1.0-dev.66 is out: ${command}` })
+    .click()
+  const popover = page.locator("[data-slot=popover-content]")
+  await expect(popover).toContainText(
+    "You have 0.1.0-dev.62 · install it with brew"
+  )
+  await expect(popover).toContainText("dev.66Built from 6c3d557: the hook")
+  await expect(popover.getByText(command)).toBeVisible()
+  // brew installs it: no Restart, no Update now.
+  await expect(popover.getByRole("button", { name: "Restart" })).toHaveCount(0)
+  await expect(popover.getByRole("button", { name: "Update now" })).toHaveCount(
+    0
+  )
+  await popover.getByRole("button", { name: "Copy" }).click()
+  await expect(popover.getByRole("button", { name: "Copied" })).toBeVisible()
+  expect(await app.evaluate(({ clipboard }) => clipboard.readText())).toBe(
+    command
+  )
+  await page.screenshot({ path: "test-results/8-update-out.png" })
+})
