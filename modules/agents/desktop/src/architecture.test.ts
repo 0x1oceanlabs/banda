@@ -10,7 +10,7 @@ import { expect, test } from "vitest"
 
 const ALLOWED = [
   /^@banda\/desktop-kit$/,
-  /^@banda\/agents-pane\/visual$/,
+  /^@banda\/agents-pane\/(visual|desktop)$/,
   /^@banda\/contract(\/[a-z]+)?$/,
   /^effect(\/[a-z]+)?$/,
   /^@effect\//,

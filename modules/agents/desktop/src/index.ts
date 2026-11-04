@@ -2,18 +2,46 @@
  * The agents module's part in the window's main process (ADR 0028): it
  * serves the Visuals Agents show in their Threads at `app://visuals`, and
  * lays a page out for the check before one shows (ADR 0037). It answers
- * no channel of the bridge.
+ * the local media channel of the bridge.
  */
+import { AGENTS_BRIDGE } from "@banda/agents-pane/desktop"
+import { Files } from "./files"
+import { resolve } from "node:path"
+import { Engine } from "@banda/desktop-kit"
 import { VISUALS } from "@banda/agents-pane/visual"
-import type { DesktopModule, Engine, Look } from "@banda/desktop-kit"
-import { Effect, Layer } from "effect"
+import type { DesktopModule, Look } from "@banda/desktop-kit"
+import { Effect, Schema } from "effect"
 import { heights, lay_out } from "./preview"
 import { served } from "./visuals"
 
-export const agentsDesktop: DesktopModule<object, never, Engine | Look> = {
-  layer: Layer.empty,
-  answers: {},
+export const agentsDesktop: DesktopModule<
+  typeof AGENTS_BRIDGE,
+  Files,
+  Engine | Look
+> = {
+  layer: Files.layer,
+  answers: {
+    media: [
+      Schema.Tuple([Schema.String, Schema.String]),
+      ([space, path]) =>
+        Effect.gen(function* () {
+          // Refuse network, home-relative and URI paths before resolving.
+          if (!path || /^(?:~|[a-z][a-z0-9+.-]*:|[/\\]{2})/i.test(path))
+            return null
+          const client = yield* Engine.use((engine) => engine.client)
+          const spaces = yield* Effect.promise(() =>
+            client.call("spaces.list", {})
+          )
+          const folder = spaces.find((one) => one.id === space)?.folder
+          if (!folder) return null
+          return yield* Files.use((files) => files.issue(resolve(folder, path)))
+        }),
+    ],
+  },
   asked: { lay_out, heights },
-  served: { [VISUALS]: served },
+  served: {
+    [VISUALS]: served,
+    files: (request) => Files.use((files) => files.serve(request)),
+  },
   opened: () => Effect.void,
 }

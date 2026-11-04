@@ -921,6 +921,18 @@ banda/
   GLOSSARY.md
 ```
 
+## Media in a Thread
+
+Markdown in a Thread shows local images, video and audio (ADR 0037,
+step 6). The agents Pane supplies the markdown renderer a resolver for
+its Space. The agents desktop part resolves relative paths against that
+Space's folder and gives only supported media a signed `app://files`
+URL. Its signer lives in the main runtime, never on disk. A URL lasts an
+hour and names the canonical path, device and inode; serving checks the
+identity again through the opened file. Byte ranges let players seek
+without reading the whole file. Nothing plays automatically. Images
+open larger on a click; a missing or unsupported file stays a link.
+
 ## Checks that hold the shape
 
 - **Architecture tests.** The kernel names no module, no module reads

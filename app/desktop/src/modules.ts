@@ -42,7 +42,7 @@ const asked: Readonly<
 export const modules = {
   layer: Layer.mergeAll(browserDesktop.layer, agentsDesktop.layer),
   /** Under where the bridge's table takes each module in. */
-  answers: { browser: browserDesktop.answers },
+  answers: { browser: browserDesktop.answers, agents: agentsDesktop.answers },
   asked,
   /** By the host of `app://` each serves. */
   served: agentsDesktop.served,

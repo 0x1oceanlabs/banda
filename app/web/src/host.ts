@@ -6,6 +6,7 @@
  * notifications (ADR 0011) and to pick a folder (ADR 0026). The browser's
  * pages live in it too (ADR 0013).
  */
+import { AGENTS_BRIDGE } from "@banda/agents-pane/desktop"
 import { BROWSER_BRIDGE, type BrowserHost } from "@banda/browser-pane/desktop"
 import type { Address, SpaceId } from "@banda/contract"
 import type { Args } from "@banda/ui/module"
@@ -115,6 +116,7 @@ export const BRIDGE = bridge({
   },
   /** The browser's pages: their tabs, icons and downloads. */
   browser: BROWSER_BRIDGE,
+  agents: AGENTS_BRIDGE,
   /**
    * The settings' files (ADR 0016): the desktop changes them through
    * `banda settings`; the look brings each change back.
