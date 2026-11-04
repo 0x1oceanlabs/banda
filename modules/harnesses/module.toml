@@ -3,7 +3,7 @@
 # draws its file in the Agents section.
 id = "harnesses"
 name = "Harnesses"
-about = "The agent programs this computer can start, and who is signed in to each."
+about = "The agent programs this computer can start, who is signed in to each, and how much of its usage limits is spent."
 version = "0.1.0"
 from-banda = true
 # The settings files it owns, in ~/.config/banda.

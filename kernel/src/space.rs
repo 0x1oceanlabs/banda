@@ -596,6 +596,12 @@ impl ModuleSpace {
         (window.ask(method, self.space.id, by, params, within)).await
     }
 
+    /// Whether a window is open to ask: a module's own work that only a
+    /// window does, or that only a window shows, waits for one.
+    pub fn window_open(&self) -> bool {
+        self.space.window.open()
+    }
+
     /// One change in one transaction, outside any command: what a module
     /// writes as its effects run. Its events go out after commit.
     pub async fn write<T: Send + 'static>(

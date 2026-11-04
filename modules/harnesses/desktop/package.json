@@ -1,0 +1,27 @@
+{
+  "name": "@banda/harnesses-desktop",
+  "version": "0.0.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "type": "module",
+  "description": "The harnesses module's part in the window's main process (ADR 0028, ADR 0043): it asks Anthropic for Claude Code's usage limits with Claude Code's own sign-in, which only it reads.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --dir src"
+  },
+  "dependencies": {
+    "@banda/contract": "workspace:*",
+    "@banda/desktop-kit": "workspace:*",
+    "effect": "4.1.1"
+  },
+  "devDependencies": {
+    "@banda/ui": "workspace:*",
+    "@types/node": "^24",
+    "electron": "45.1.0",
+    "typescript": "~6.0.2",
+    "vitest": "^5.0.5"
+  }
+}

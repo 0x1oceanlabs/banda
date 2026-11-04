@@ -158,6 +158,12 @@ impl Window {
         Ok(())
     }
 
+    /// Whether a window holds the road and hears it still.
+    pub(crate) fn open(&self) -> bool {
+        let state = self.0.lock().unwrap();
+        (state.holder.as_ref()).is_some_and(|holder| !holder.send.is_closed())
+    }
+
     /// Asks the window and waits for its answer, at most `within`.
     pub(crate) async fn ask(
         &self,

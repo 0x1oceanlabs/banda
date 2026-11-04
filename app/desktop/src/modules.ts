@@ -8,6 +8,7 @@
  */
 import { agentsDesktop } from "@banda/agents-desktop"
 import { browserDesktop } from "@banda/browser-desktop"
+import { harnessesDesktop } from "@banda/harnesses-desktop"
 import { sharingDesktop } from "@banda/sharing-desktop"
 import type { Asked, DesktopModule } from "@banda/desktop-kit"
 import { Layer } from "effect"
@@ -23,13 +24,19 @@ const asked: Readonly<
   Record<
     string,
     Asked<
-      Uses<typeof browserDesktop | typeof agentsDesktop | typeof sharingDesktop>
+      Uses<
+        | typeof browserDesktop
+        | typeof agentsDesktop
+        | typeof sharingDesktop
+        | typeof harnessesDesktop
+      >
     >
   >
 > = {
   browser: browserDesktop.asked,
   agents: agentsDesktop.asked,
   sharing: sharingDesktop.asked,
+  harnesses: harnessesDesktop.asked,
 }
 
 export const modules = {
