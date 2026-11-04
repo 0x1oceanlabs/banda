@@ -1,5 +1,5 @@
 import { BandaMark } from "@banda/ui/components/banda-mark"
-import { toast } from "@banda/ui/components/sonner"
+import { type ExternalToast, toast } from "@banda/ui/components/sonner"
 import type { Chime } from "@banda/ui/sound"
 import { noticeOf } from "./system"
 import type { Heard } from "./useCalls"
@@ -24,20 +24,22 @@ export const markOf = (chime: Chime) => (
  * Tells of a call in Sonner's toast (ADR 0048), in the words of its
  * system notification: what calls, what it said unless `detail` is off,
  * and a button that goes there. Its id is the call's key, so the thing's
- * next call replaces it.
+ * next call replaces it; `options` are Sonner's beside.
  */
 export function toastCall(
   call: Heard,
   detail: boolean,
-  answer: (call: Heard) => void
-): void {
+  answer: (call: Heard) => void,
+  options?: ExternalToast
+): string | number {
   const { title, body, answer: label } = noticeOf(call, detail)
-  KIND[call.chime](title, {
+  return KIND[call.chime](title, {
     id: call.key,
     duration: LIFE[call.chime],
     icon: markOf(call.chime),
     description: body,
     action: { label, onClick: () => answer(call) },
     classNames: { description: "line-clamp-2" },
+    ...options,
   })
 }

@@ -1,0 +1,28 @@
+{
+  "name": "@banda/notifications-pane",
+  "version": "0.0.0",
+  "private": true,
+  "license": "Apache-2.0",
+  "type": "module",
+  "description": "The notifications module's window part: the bell that shows the last toasts again.",
+  "exports": {
+    ".": "./src/index.ts"
+  },
+  "scripts": {
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@banda/ui": "workspace:*",
+    "lucide-react": "^1.65.0",
+    "react": "^19.3.1"
+  },
+  "devDependencies": {
+    "@types/node": "^24",
+    "@types/react": "^19",
+    "@types/react-dom": "^19",
+    "typescript": "~6.0.2",
+    "vite": "^8",
+    "vitest": "^5"
+  }
+}

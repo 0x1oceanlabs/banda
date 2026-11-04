@@ -5,13 +5,14 @@
  * desktop is quiet or `[notify] problems` is off. Only a Problem new
  * since the window last told of one tells: one that breaks again counts.
  */
+import { toastUnseen } from "@banda/ui/components/sonner"
 import { useEffect, useRef } from "react"
 import type { Engine } from "@banda/contract"
 import type { Notify } from "@banda/contract/look"
 import type { Problem } from "@banda/contract/problems"
 import type { Host } from "../host"
 import { quietNow } from "../calls/system"
-import { placeOf } from "../calls/tell"
+import { type Place, placeOf } from "../calls/tell"
 import { PLACES, useProblems } from "./live"
 import { type ProblemAnswers, toastProblems } from "./problemToast"
 
@@ -44,23 +45,28 @@ export function useProblemNews(
     // The first time, what already broke is no news.
     localStorage.setItem(TOLD, String(newest || Date.now()))
     if (news.length === 0) return
-    void tellOf(news, front(), settings.current).then((toast) => {
-      if (toast) toastProblems(news, settings.current.answers)
+    void tellOf(news, front(), settings.current).then((place) => {
+      const { answers } = settings.current
+      if (place?.toast) toastProblems(news, answers)
+      // Told on the desktop, they are kept with the toasts unseen, so the
+      // bell shows them again (ADR 0048, decision 2).
+      else if (place?.system)
+        toastUnseen((options) => toastProblems(news, answers, options))
     })
   }, [live, front])
 }
 
-/** Tells of `news` on the desktop when that is where; whether a toast
- * should tell of them instead. */
+/** Tells of `news` on the desktop when that is where; where they are told,
+ * if anywhere. */
 async function tellOf(
   news: Problem[],
   inFront: boolean,
   { notify, desktop }: { notify: Notify; desktop?: Host["notify"] }
-): Promise<boolean> {
-  if (!notify.problems) return false
+): Promise<Place | null> {
+  if (!notify.problems) return null
   const sight = inFront ? "in-window" : "away"
   const place = placeOf(sight, notify, await quietNow(notify, desktop))
-  if (!place) return false
+  if (!place) return null
   if (place.system && desktop)
     for (const problem of news)
       desktop.show({
@@ -70,5 +76,5 @@ async function tellOf(
         answer: "Details",
         lasts: false,
       })
-  return place.toast
+  return place
 }

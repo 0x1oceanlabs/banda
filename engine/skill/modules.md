@@ -79,6 +79,10 @@ Its actions, which `keys.toml` binds by id:
 
 Its methods, `banda call git.<method>`: `status`, `diff`, `refs`, `commits`, `contents`, `stage`, `unstage`, `revert`, `watch`, `act`, `switch`, `branch`, `init`, `prompt`, `written`.
 
+## Notifications (`notifications`)
+
+The bell on the bar, which shows the last toasts again.
+
 ## Workspaces (`workspaces`)
 
 How this machine's Panes are arranged: workspaces one under another, each a Strip of columns.

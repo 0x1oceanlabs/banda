@@ -442,7 +442,10 @@ fn the_bar_s_widgets_stand_where_look_toml_lists_them() {
     let bar = machine.look().bar;
     assert!(bar.left.is_empty());
     assert_eq!(bar.center, ["sidebar.counts"]);
-    assert_eq!(bar.right, ["workspaces.aside", "terminal.ports"]);
+    assert_eq!(
+        bar.right,
+        ["workspaces.aside", "terminal.ports", "notifications.recent"]
+    );
 
     // A list replaces Banda's for its part, and [] empties it.
     machine.look_toml("[bar]\ncenter = []\nright = [\"git.branch\", \"workspaces.aside\"]\n");

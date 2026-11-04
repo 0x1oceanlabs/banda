@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from "react"
 import type { SpaceId } from "@banda/contract"
 import { callOrder } from "@banda/ui/components/banda-mark"
-import { toast } from "@banda/ui/components/sonner"
+import { toast, toastUnseen } from "@banda/ui/components/sonner"
 import type { Listed } from "@banda/ui/pane"
 import { type Chime, player, type SoundSettings } from "@banda/ui/sound"
 import type { Notify } from "@banda/contract/look"
@@ -111,7 +111,14 @@ export function useCalls(
         toasted.current.add(call.key)
         toastCall(call, notify.detail, answer)
       }
-      if (telling.system) notices.push(call)
+      if (telling.system) {
+        notices.push(call)
+        // Kept with the toasts unseen, so the bell shows it again (ADR
+        // 0048, decision 2).
+        toastUnseen((options) =>
+          toastCall(call, notify.detail, answer, options)
+        )
+      }
     }
     const chime = loudestChime(chimes)
     const at = performance.now()

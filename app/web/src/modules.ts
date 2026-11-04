@@ -7,6 +7,13 @@ import { agents } from "@banda/agents-pane"
 import { browser } from "@banda/browser-pane"
 import { git } from "@banda/git-pane"
 import { terminal } from "@banda/terminal-pane"
+import { notifications } from "@banda/notifications-pane"
 import type { Module } from "@banda/ui/module"
 
-export const modules: readonly Module[] = [agents, terminal, browser, git]
+export const modules: readonly Module[] = [
+  agents,
+  terminal,
+  browser,
+  git,
+  notifications,
+]
