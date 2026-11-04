@@ -181,12 +181,14 @@ impl Open {
         walk(&mut self.document, &self.tables, &self.path)
     }
 
-    /// Writes the file when it changed, and refuses when it would now be
-    /// wrong: when it was right before, as a whole; when it was wrong
-    /// already, the key `alone`.
+    /// Writes the file when it changed, or is not there yet: a key set is
+    /// the Person's word, though it says what the template does. Refuses
+    /// when it would now be wrong:
+    /// when it was right before, as a whole; when it was wrong already,
+    /// the key `alone`.
     fn save(self, alone: Option<&str>) -> Result<(), Vec<Problem>> {
         let text = self.document.to_string();
-        if text == self.was {
+        if text == self.was && self.path.exists() {
             return Ok(());
         }
         let problems = check_text(&self.path, &text);
@@ -408,6 +410,22 @@ mod tests {
         assert!(
             text.contains("# by = \"attention\""),
             "the template's comments stay"
+        );
+    }
+
+    #[test]
+    fn a_key_set_to_its_templates_value_writes_a_file_not_there() {
+        let config = tempfile::tempdir().unwrap();
+        let file = config.path().join("sharing.toml");
+        set(config.path(), "sharing.toml", "problems", "false").unwrap();
+        let text = std::fs::read_to_string(&file).unwrap();
+        assert!(text.contains("\nproblems = false\n"), "{text}");
+        // Once there, the same value writes nothing.
+        let before = std::fs::metadata(&file).unwrap().modified().unwrap();
+        set(config.path(), "sharing.toml", "problems", "false").unwrap();
+        assert_eq!(
+            std::fs::metadata(&file).unwrap().modified().unwrap(),
+            before
         );
     }
 
