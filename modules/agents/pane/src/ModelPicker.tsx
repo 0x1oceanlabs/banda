@@ -55,7 +55,8 @@ export function ModelPicker({
   settings: Settings
   picked: Picked
   disabled: boolean
-  onChange: (settings: Settings) => void
+  /** Whether the settings were accepted; a refusal restores the old level. */
+  onChange: (settings: Settings) => Promise<boolean>
   /** A new Thread's Harnesses, if it can start on another. */
   starts?: Start[]
   /** Starts the new Thread on another Harness, with `settings`. */
@@ -64,8 +65,9 @@ export function ModelPicker({
   const { model, effort, fast } = picked
   const [open, setOpen] = useState(false)
   const [view, setView] = useState<"levels" | "models">("levels")
-  // The level under the thumb while it is dragged, before it is chosen.
-  const [sliding, setSliding] = useState<number>()
+  // Keep the preview through the configure round trip. New settings
+  // replace it; clearing it on release would animate back to the old level.
+  const [sliding, setSliding] = useState<{ settings: Settings; at: number }>()
   const others = starts && starts.length > 1 ? starts : undefined
   if (!model && !effort && !others) return null
 
@@ -73,8 +75,9 @@ export function ModelPicker({
   const now = model?.choices.find((choice) => choice.value === value)
   const levels = effort ? levelsOf(effort) : []
   const chosenLevel = levelAt(settings, effort)
-  const at = sliding ?? chosenLevel.at
-  const unset = chosenLevel.unset && sliding === undefined
+  const preview = sliding?.settings === settings ? sliding.at : undefined
+  const at = preview ?? chosenLevel.at
+  const unset = chosenLevel.unset && preview === undefined
   const level = unset ? undefined : levels[at]
   const reset = resetOf(settings, picked)
   const logo = <HarnessLogo id={harness} name={name} fallback={null} />
@@ -92,10 +95,13 @@ export function ModelPicker({
   )
   const label = [what, level?.name].filter(Boolean).join(", ")
   // Only a change goes to the Harness: each is a round trip to it.
-  const pick = (option: HarnessOption, next: OptionValue) => {
-    setSliding(undefined)
-    if (next !== chosen(settings, option))
-      onChange(choose(settings, option.id, next))
+  const pick = async (option: HarnessOption, next: OptionValue) => {
+    if (next === chosen(settings, option)) {
+      setSliding(undefined)
+      return
+    }
+    if (!(await onChange(choose(settings, option.id, next))))
+      setSliding(undefined)
   }
   const shown = effort ? view : "models"
   // The models: this Harness's alone; for a new Thread, every Harness's.
@@ -192,7 +198,7 @@ export function ModelPicker({
               label="Effort"
               at={at}
               unset={unset}
-              onSlide={setSliding}
+              onSlide={(at) => setSliding({ settings, at })}
               onChoose={(index) => pick(effort, levels[index].value)}
             />
           </>
