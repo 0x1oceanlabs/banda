@@ -8,14 +8,15 @@
 //! change in those lines and applies just those, so a hunk drawn with
 //! whitespace hidden takes its whitespace along, and a hunk of a renamed
 //! file changes its lines alone, never the rename. Nothing is changed
-//! when the file is no longer as the Diff drew it.
+//! when the file is no longer as the Diff drew it; a revert of files
+//! whole checks them so too, by the objects the Diff drew.
 
 use crate::diff::{sides, untracked};
 use crate::model::{ChangeAsk, HunkAsk, Scope};
-use crate::repo::{Repo, pathspec, plain_paths};
+use crate::repo::{Repo, pathspec, plain_path, plain_paths};
 use crate::run::{Opts, Reason, git};
 use banda_kernel::Refusal;
-use std::collections::HashSet;
+use std::collections::{BTreeMap, HashSet};
 
 /// What is done to the files.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -36,7 +37,14 @@ pub async fn change(repo: &Repo, act: Act, ask: ChangeAsk) -> Result<(), Refusal
     let files = plain_paths(&ask.files)?;
     match (ask.hunk, files.as_slice()) {
         (_, []) => Err(Refusal::invalid("Name the files to change.")),
-        (None, files) => whole(repo, act, files).await,
+        (None, files) => {
+            if act == Act::Revert
+                && let Some(ids) = &ask.ids
+            {
+                unchanged(repo, ids).await?;
+            }
+            whole(repo, act, files).await
+        }
         (Some(hunk), files) => lines(repo, act, files, hunk).await,
     }
 }
@@ -63,6 +71,56 @@ async fn whole(repo: &Repo, act: Act, files: &[&str]) -> Result<(), Refusal> {
             gone.into_iter().try_for_each(|path| remove(repo, path))
         }
     }
+}
+
+/// Whether each file in `ids` is still the object the Diff drew in the
+/// work tree: a revert would lose what was written since. A file gone is
+/// all zeros.
+async fn unchanged(repo: &Repo, ids: &BTreeMap<String, String>) -> Result<(), Refusal> {
+    let mut hashed: Vec<(&str, &str)> = Vec::new();
+    for (path, id) in ids {
+        let path = plain_path(path)?;
+        if id.len() < 7 || !id.bytes().all(|b| b.is_ascii_hexdigit()) {
+            return Err(Refusal::invalid(
+                "An object is named in hex, 7 or more long.",
+            ));
+        }
+        let gone = id.bytes().all(|b| b == b'0');
+        let file = repo.top.join(path);
+        match std::fs::symlink_metadata(&file) {
+            Err(_) if gone => {}
+            Ok(_) if !gone => hashed.push((path, id)),
+            _ => return Err(Refusal::conflict(MOVED)),
+        }
+    }
+    for (path, id) in hashed {
+        if !object_of(repo, path).await?.starts_with(id) {
+            return Err(Refusal::conflict(MOVED));
+        }
+    }
+    Ok(())
+}
+
+/// The object `path` in the work tree is, as git diffs it: a link's is
+/// of where it points.
+async fn object_of(repo: &Repo, path: &str) -> Result<String, Refusal> {
+    let file = repo.top.join(path);
+    let link = std::fs::read_link(&file).ok();
+    let ran = match link {
+        Some(to) => {
+            let opts = Opts {
+                stdin: Some(to.into_os_string().into_encoded_bytes()),
+                ..Opts::default()
+            };
+            repo.run(["hash-object", "--no-filters", "--stdin"], opts)
+                .await?
+        }
+        None => {
+            repo.run(["hash-object", "--", path], Opts::default())
+                .await?
+        }
+    };
+    Ok(ran.text())
 }
 
 /// Removes an untracked file: a file or a link inside the repository,

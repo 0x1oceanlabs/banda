@@ -16,4 +16,10 @@ files: Array<string>,
 /**
  * Only these lines of the one file in `files`.
  */
-hunk?: HunkAsk, };
+hunk?: HunkAsk, 
+/**
+ * The work tree's object of each file as the Diff drew it, by path,
+ * as short as the patch has it: a revert of files whole changes
+ * nothing when one is no longer so, as a hunk's does.
+ */
+ids?: { [key in string]: string }, };

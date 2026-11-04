@@ -27,14 +27,30 @@ function pathsOf(path: string, old: string | undefined | null): string[] {
   return old && old !== path ? [path, old] : [path]
 }
 
-/** All the files of a diff, whole. */
-export function allOf(files: readonly FileDiff[]): ChangeAsk {
-  return { files: files.flatMap((file) => pathsOf(file.path, file.old_path)) }
+/** The work tree's object of each file drawn, by path, as its patch
+ * names it: a revert of them whole changes nothing when one is no longer
+ * so, as an Agent wrote on after the Diff was read. */
+function idsOf(drawn: readonly (FileDiffMetadata | undefined)[]) {
+  const ids: Record<string, string> = {}
+  for (const file of drawn)
+    if (file?.newObjectId) ids[pathOf(file)] = file.newObjectId
+  return ids
 }
 
-/** One file, whole. */
+/** All the files of a diff, whole, checked by those `drawn` of them. */
+export function allOf(
+  files: readonly FileDiff[],
+  drawn: ReadonlyMap<string, FileDiffMetadata> = new Map()
+): ChangeAsk {
+  return {
+    files: files.flatMap((file) => pathsOf(file.path, file.old_path)),
+    ids: idsOf(files.map((file) => drawn.get(file.path))),
+  }
+}
+
+/** One file, whole, checked by its object. */
 export function fileAsk(file: FileDiffMetadata): ChangeAsk {
-  return { files: pathsOf(pathOf(file), file.prevName) }
+  return { files: pathsOf(pathOf(file), file.prevName), ids: idsOf([file]) }
 }
 
 /** The lines of one hunk of a file: the file whole when its hunk is all
