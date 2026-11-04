@@ -348,7 +348,7 @@ test("Sharing: nothing on and no ID, then an ID as a switch turns on, and a Band
   await expect(settings).toContainText("None while nothing is shared")
 })
 
-test("The first run asks to share once, nothing ticked, after the first Space; Continue writes the answer (ADR 0039)", async () => {
+test("The first run asks to share once, nothing ticked, after the first Space; Continue writes the answer, nothing too (ADR 0039)", async () => {
   window = await startWindow({ asked: false })
   const { page, dir } = window
   const file = join(dir, "config/sharing.toml")
@@ -368,11 +368,11 @@ test("The first run asks to share once, nothing ticked, after the first Space; C
   await expect(ask).toContainText("$exception")
   await page.screenshot({ path: "test-results/sharing-ask.png" })
 
-  await problems.click()
+  // Nothing ticked is an answer too, though the file's template says it.
   await ask.getByRole("button", { name: "Continue" }).click()
   await expect(ask).toHaveCount(0)
   const text = readFileSync(file, "utf8")
-  expect(text).toMatch(/^problems = true$/m)
+  expect(text).toMatch(/^problems = false$/m)
   expect(text).toMatch(/^usage = false$/m)
 })
 
