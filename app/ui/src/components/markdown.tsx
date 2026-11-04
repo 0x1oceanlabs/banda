@@ -2,9 +2,10 @@ import { code } from "@streamdown/code"
 import { createMathPlugin } from "@streamdown/math"
 import { mermaid } from "@streamdown/mermaid"
 import { cn } from "cn"
+import { useMemo } from "react"
 
 import { Streamdown, defaultRehypePlugins } from "streamdown"
-import { useDark } from "../hooks/use-dark"
+import { useDiagramLook } from "../lib/diagram-look"
 import { localImages } from "../lib/markdown-media"
 import { MarkdownImage } from "./markdown-media"
 import { MarkdownLink } from "./markdown-link"
@@ -12,10 +13,6 @@ import { MarkdownLink } from "./markdown-link"
 /** Single-dollar math matches what Agents write; KaTeX leaves code alone. */
 const math = createMathPlugin({ singleDollarTextMath: true })
 const plugins = { code, math, mermaid }
-const diagrams = {
-  light: { config: { theme: "default" as const } },
-  dark: { config: { theme: "dark" as const } },
-}
 const components = { img: MarkdownImage, a: MarkdownLink }
 
 const rehypePlugins = [
@@ -26,7 +23,9 @@ const rehypePlugins = [
   localImages(true),
 ]
 
-/** Copy on code, tables and diagrams; diagrams can open fullscreen. */
+/** Copy on code, tables and diagrams; diagrams can open fullscreen, where
+ * they zoom and pan. In the reply a diagram stays still, so the thread
+ * scrolls over it (`globals.css`, the diagram card). */
 const controls = {
   code: { copy: true, download: false },
   table: { copy: true, download: false, fullscreen: false },
@@ -48,7 +47,8 @@ function Markdown({
   streaming?: boolean
   className?: string
 }) {
-  const dark = useDark()
+  const diagram = useDiagramLook()
+  const mermaid = useMemo(() => ({ config: diagram }), [diagram])
   return (
     <Streamdown
       data-slot="markdown"
@@ -58,7 +58,7 @@ function Markdown({
       )}
       isAnimating={streaming}
       plugins={plugins}
-      mermaid={dark ? diagrams.dark : diagrams.light}
+      mermaid={mermaid}
       components={components}
       rehypePlugins={rehypePlugins}
       controls={controls}
