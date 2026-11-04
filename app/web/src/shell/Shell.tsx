@@ -270,7 +270,10 @@ export function Shell({
     [setShown]
   )
   const showSidebar = useCallback(() => setShown(true), [setShown])
-  const [overview, setOverview] = useState(false)
+  const [overviewState, setOverview] = useState<"closed" | "open" | "closing">(
+    "closed"
+  )
+  const overview = overviewState !== "closed"
   const [menu, setMenu] = useState<Opening | null>(null)
   const [attention, setAttention] = useState(QUIET)
   const [lists, setLists] = useState<Lists>({})
@@ -453,7 +456,10 @@ export function Shell({
     const thing = entry && showsOf(entry.pane)
     if (entry && thing) toggleSettled(listsNow.current, entry.space, thing)
   }, [])
-  const toggleOverview = useCallback(() => setOverview((opens) => !opens), [])
+  const toggleOverview = useCallback(
+    () => setOverview((was) => (was === "open" ? "closing" : "open")),
+    []
+  )
   // The drawer (ADR 0025, decision 8): its Pane, kept between runs, and
   // whether it shows. Dropped with none, it gets a new Thread in the home
   // Space, the agents module's, caught before a workspace opens it.
@@ -518,7 +524,11 @@ export function Shell({
       ),
     []
   )
-  const closeOverview = useCallback(() => setOverview(false), [])
+  const closeOverview = useCallback(() => setOverview("closing"), [])
+  const leftOverview = useCallback(
+    () => setOverview((was) => (was === "closing" ? "closed" : was)),
+    []
+  )
   // The Panes in windows of their own (ADR 0025, decision 9): main keeps
   // which, and their places here keep stand-ins.
   const [away, setAway] = useState<ReadonlySet<string>>(() => new Set())
@@ -982,6 +992,8 @@ export function Shell({
           )}
           {overview && (
             <Overview
+              open={overviewState === "open"}
+              onExited={leftOverview}
               workspaces={workspaces}
               spaceName={spaceName}
               listed={listed}

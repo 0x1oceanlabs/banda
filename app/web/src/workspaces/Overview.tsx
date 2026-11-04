@@ -9,7 +9,7 @@ import {
   useRef,
   useState,
 } from "react"
-import { GripHorizontalIcon, XIcon } from "lucide-react"
+import { GripHorizontalIcon, SearchIcon, XIcon } from "lucide-react"
 import { Button } from "@banda/ui/components/button"
 import type { SpaceId } from "@banda/contract"
 import { DEFAULT_OVERVIEW } from "@banda/contract/look"
@@ -18,7 +18,8 @@ import type { Chime } from "@banda/ui/sound"
 import { labelOf, useSaid } from "../registry"
 import { workspaceTo } from "./arrange"
 import { ThreadMark } from "../sidebar/Row"
-import { useLookColumns, useLookOverview } from "../look"
+import { moveOf, useLookColumns, useLookOverview } from "../look"
+import { Moving } from "../motion"
 import {
   drawnColumns,
   heightAt,
@@ -99,6 +100,8 @@ type Screen = {
  * lies over the Pane, and those take no clicks or keys while it is open.
  */
 export function Overview({
+  open,
+  onExited,
   workspaces,
   spaceName,
   listed,
@@ -109,6 +112,9 @@ export function Overview({
   onGo,
   onClose,
 }: {
+  /** Kept drawn while closing; the Panes take the focus once it lands. */
+  open: boolean
+  onExited: () => void
   workspaces: Workspaces
   spaceName: (space: SpaceId) => string
   /** The Thread a Pane shows, as its module lists it, if it shows one. */
@@ -132,13 +138,23 @@ export function Overview({
   const [query, setQuery] = useState("")
   const said = useSaid()
   const picked = focused(workspaces)?.id
+  const current = workspaces.list[workspaces.current]?.id
+  const index = workspaces.current
+  const progress = useRef(0)
+  const motion = useRef<Moving | null>(null)
+  // The normal stack's origin moves too: picking another workspace while
+  // zooming must not move every screen by a whole height in one frame.
+  const originAt = useRef(index)
+  const origin = useRef<Moving | null>(null)
   const found = useMemo(
     () => (query ? matching(workspaces, query, spaceName, said) : undefined),
     [workspaces, query, spaceName, said]
   )
 
   // The keys come here while it is open, not to a Pane under it.
-  useEffect(() => root.current?.focus(), [])
+  useEffect(() => {
+    if (open) root.current?.focus()
+  }, [open])
   // How big a screen is, from a Strip as drawn: every one is as big.
   useLayoutEffect(() => {
     const element = root.current
@@ -173,6 +189,49 @@ export function Overview({
   const order = workspaces.list.map((workspace) => workspace.id)
   const ids = order.join()
   useLayoutEffect(() => {
+    if (!zoom) return
+    if (!origin.current) {
+      // A workspace switch may still be moving when the overview opens.
+      const first = document.querySelector<HTMLElement>("[data-stack]")
+      if (first?.offsetHeight)
+        originAt.current =
+          -new DOMMatrixReadOnly(getComputedStyle(first).transform).m42 /
+          first.offsetHeight
+      origin.current = new Moving(
+        (value) => {
+          originAt.current = value
+        },
+        () => originAt.current
+      )
+    }
+    origin.current.to(index, moveOf("overview"))
+  }, [index, zoom])
+  useLayoutEffect(() => {
+    const element = root.current
+    if (!element || !zoom) return
+    const backdrop = document.querySelector<HTMLElement>(
+      "[data-overview-backdrop]"
+    )
+    motion.current ??= new Moving(
+      (value) => {
+        progress.current = value
+        const opacity = String(Math.max(0, Math.min(1, value)))
+        element.style.opacity = opacity
+        if (backdrop) backdrop.style.opacity = opacity
+      },
+      () => progress.current
+    )
+    const moving = motion.current
+    moving.to(open ? 1 : 0, moveOf("overview"))
+  }, [open, zoom])
+  useEffect(
+    () => () => {
+      motion.current?.stop()
+      origin.current?.stop()
+    },
+    []
+  )
+  useLayoutEffect(() => {
     const element = root.current
     if (!element || !zoom) return
     const all = [...element.querySelectorAll<HTMLElement>("[data-row]")]
@@ -183,13 +242,29 @@ export function Overview({
       })
       .flatMap(({ row, place, stack, strip }) =>
         stack && strip
-          ? [{ row, place, stack, strip, x: NaN, y: NaN, at: NaN, up: false }]
+          ? [
+              {
+                row,
+                place,
+                stack,
+                strip,
+                x: NaN,
+                y: NaN,
+                scale: NaN,
+                at: NaN,
+                up: false,
+              },
+            ]
           : []
       )
     let frame = 0
     const step = () => {
       // Every read, then every write: the page lays out once.
       const over = element.getBoundingClientRect()
+      // A Person's spring may overshoot; a miniature never flips or grows
+      // past its normal size. Moving keeps its raw progress and velocity.
+      const amount = Math.max(0, Math.min(1, progress.current))
+      const scale = 1 + (zoom - 1) * amount
       const read = all.map(({ row, strip }) => ({
         box: row.getBoundingClientRect(),
         row: row.scrollLeft,
@@ -203,12 +278,14 @@ export function Overview({
           one.stack.style.zIndex = up ? "1" : ""
           one.up = up
         }
-        const x = box.left - over.left - from
-        const y = box.top - over.top
-        if (x !== one.x || y !== one.y) {
-          one.stack.style.transform = `translate(${x}px, ${y}px) scale(${zoom})`
+        const x = (box.left - over.left - from) * amount
+        const normal = (i - originAt.current) * over.height
+        const y = normal + (box.top - over.top - normal) * amount
+        if (x !== one.x || y !== one.y || scale !== one.scale) {
+          one.stack.style.transform = `translate(${x}px, ${y}px) scale(${scale})`
           one.x = x
           one.y = y
+          one.scale = scale
         }
         if (!Number.isNaN(one.at) && row !== one.at) {
           // The Person scrolled the row: the Strip goes with it.
@@ -221,13 +298,16 @@ export function Overview({
           one.at = one.row.scrollLeft
         }
       })
+      if (!open && progress.current === 0 && !origin.current?.moving) {
+        onExited()
+        return
+      }
       frame = requestAnimationFrame(step)
     }
     step()
     return () => cancelAnimationFrame(frame)
-  }, [zoom, from, ids])
+  }, [zoom, from, ids, open, onExited])
   // The Pane picked, or its workspace, in view.
-  const current = workspaces.list[workspaces.current]?.id
   useEffect(() => {
     const element = root.current
     const at =
@@ -322,24 +402,36 @@ export function Overview({
       ref={root}
       role="dialog"
       aria-label="Overview"
+      aria-hidden={!open || undefined}
+      inert={!open}
+      data-overview-state={open ? "open" : "closing"}
       data-window-keys=""
       tabIndex={-1}
-      className="absolute inset-0 z-10 overflow-y-auto px-6 pb-6 pl-[calc(--spacing(6)+var(--sidebar-inset))] outline-none"
+      className="absolute inset-0 z-10 overflow-y-auto px-6 pb-6 pl-[calc(--spacing(6)+var(--sidebar-inset))] opacity-0 outline-none"
+      style={
+        {
+          "--overview-radius": `calc(var(--tile-radius) * ${zoom})`,
+        } as CSSProperties
+      }
       onClick={onClose}
       onKeyDown={onKeyDown}
     >
       <p
         role="status"
         className={cn(
-          "sticky top-2 z-1 mx-auto mb-2 h-7 w-fit rounded-full border bg-popover px-3 py-1 text-sm shadow-sm",
-          found ? "text-popover-foreground" : "text-muted-foreground"
+          "sticky top-3 z-2 mx-auto mb-2 flex h-9 w-fit max-w-full items-center gap-2 rounded-lg border border-overview-foreground/15 bg-overview px-3 text-sm shadow-sm",
+          found ? "text-overview-foreground" : "text-overview-foreground/60"
         )}
+        onClick={(event) => event.stopPropagation()}
       >
-        {found
-          ? found.length
-            ? `“${query}”: ${panes(found.length)}`
-            : `No Pane is called “${query}”`
-          : "Type to find a Pane"}
+        <SearchIcon aria-hidden className="size-3.5 shrink-0 opacity-70" />
+        <span className="truncate">
+          {found
+            ? found.length
+              ? `“${query}”: ${panes(found.length)}`
+              : `No Pane is called “${query}”`
+            : "Type to find a Pane"}
+        </span>
       </p>
       {screen && zoom > 0 && (
         <ol
@@ -350,7 +442,7 @@ export function Overview({
           {workspaces.list.map((workspace, i) => (
             <li
               key={workspace.id}
-              className="group/place relative flex flex-col transition-transform ease-out data-held:transition-none data-lifted:z-1"
+              className="group/place relative flex flex-col transition-transform ease-out data-held:transition-none data-lifted:z-1 motion-reduce:transition-none"
               style={{ transitionDuration: `${STEP_ASIDE}ms` }}
             >
               {/* Dropped here, a Pane makes a workspace of its own. */}
@@ -450,7 +542,7 @@ function Row({
       aria-label={`Workspace ${number}`}
       aria-current={current || undefined}
       // An empty one is a slim place to drop a Pane, not a whole screen.
-      className="flex shrink-0 cursor-pointer gap-(--gap-inner) overflow-x-auto overflow-y-hidden rounded-lg outline-1 outline-overview-foreground/10 [scrollbar-width:none] group-data-lifted/place:shadow-[0_14px_30px_rgb(0_0_0/0.6)] hover:outline-overview-foreground/30 aria-[current]:outline-2 aria-[current]:outline-overview-foreground/70 data-empty:items-center data-empty:justify-center data-empty:text-xs data-empty:text-overview-foreground/50 data-empty:outline-dashed"
+      className="flex shrink-0 cursor-pointer gap-(--gap-inner) overflow-x-auto overflow-y-hidden rounded-(--overview-radius) outline-1 outline-overview-foreground/15 transition-[outline-color,box-shadow] duration-150 [scrollbar-width:none] group-data-lifted/place:shadow-[0_12px_28px_rgb(0_0_0/0.4)] hover:outline-overview-foreground/35 aria-[current]:outline-overview-foreground/50 data-empty:items-center data-empty:justify-center data-empty:text-xs data-empty:text-overview-foreground/50 data-empty:outline-dashed motion-reduce:transition-none"
       style={{
         width: (screen.inner + 2 * screen.outer) * zoom,
         height: empty ? EMPTY : screen.height * zoom,
@@ -491,10 +583,20 @@ function Row({
                   aria-current={entry.id === picked || undefined}
                   hidden={column.tabbed && !active}
                   // Clear: the Pane itself shows under it, zoomed out.
-                  className="group/over relative min-h-0 rounded-tile hover:bg-black/5 aria-[current]:ring-2 aria-[current]:ring-focus data-called:ring-2 data-called:ring-attention data-lifted:bg-overview/60 data-[dim]:bg-black/50"
-                  style={{
-                    flex: column.tabbed ? "1 1 0" : heightAt(column.heights[e]),
-                  }}
+                  className="group/over relative min-h-0 rounded-(--overview-radius) inset-ring-(--overview-frame) transition-[background-color,box-shadow] duration-150 hover:bg-overview-foreground/5 hover:inset-ring-1 aria-[current]:inset-ring-2 data-called:inset-ring-2 data-lifted:bg-overview/60 data-[dim]:bg-black/50 motion-reduce:transition-none"
+                  style={
+                    {
+                      flex: column.tabbed
+                        ? "1 1 0"
+                        : heightAt(column.heights[e]),
+                      "--overview-frame":
+                        entry.id === picked
+                          ? "var(--focus)"
+                          : call
+                            ? "var(--attention)"
+                            : "color-mix(in oklab, var(--overview-foreground) 35%, transparent)",
+                    } as CSSProperties
+                  }
                   onClick={(event) => {
                     event.stopPropagation()
                     onPick(entry.id)
@@ -516,7 +618,7 @@ function Row({
                     tabIndex={-1}
                     aria-label={`Close ${title}`}
                     title="Close (Alt+W)"
-                    className="absolute top-1.5 right-1.5 z-1 rounded-full opacity-0 shadow-sm group-hover/over:opacity-100"
+                    className="absolute top-1.5 right-1.5 z-1 rounded-md border border-overview-foreground/20 bg-overview text-overview-foreground opacity-0 shadow-sm transition-opacity duration-150 group-hover/over:opacity-100 hover:bg-overview hover:text-destructive motion-reduce:transition-none [@media(hover:none)]:opacity-100"
                     onMouseDown={(event) => event.preventDefault()}
                     onClick={(event) => {
                       event.stopPropagation()
@@ -528,7 +630,7 @@ function Row({
                   {/* How its Thread is, at a size to read, and what it asks
                       when it calls. */}
                   {thread && (call || thread.mark !== "rest") && (
-                    <span className="pointer-events-none absolute top-1.5 left-1.5 z-1 flex max-w-[calc(100%-0.75rem)] items-center gap-1 rounded-full bg-popover/95 px-1.5 py-0.5 text-xs text-popover-foreground shadow-sm">
+                    <span className="pointer-events-none absolute top-1.5 left-1.5 z-1 flex max-w-[calc(100%-3rem)] items-center gap-1 rounded-md border border-overview-foreground/15 bg-overview px-1.5 py-0.5 text-xs text-overview-foreground shadow-sm">
                       <ThreadMark listed={thread} className="size-3.5" />
                       {call && thread.calls && (
                         <span className="min-w-0 truncate">{thread.calls}</span>
@@ -593,7 +695,7 @@ function WorkspaceLabel({
     0
   )
   const look = cn(
-    "group/number shrink-0 self-start rounded-md pt-0.5 pb-1 text-center tabular-nums select-none",
+    "group/number shrink-0 self-start rounded-md pt-0.5 pb-1 text-center tabular-nums transition-colors duration-150 select-none motion-reduce:transition-none",
     current ? "text-overview-foreground" : "text-overview-foreground/60"
   )
   const said = (
@@ -634,7 +736,7 @@ function WorkspaceLabel({
       {said}
       <GripHorizontalIcon
         aria-hidden
-        className="mx-auto size-3 opacity-0 group-hover/number:opacity-70 group-data-lifted/place:opacity-70"
+        className="mx-auto size-3 opacity-0 group-hover/number:opacity-70 group-data-lifted/place:opacity-70 [@media(hover:none)]:opacity-70"
       />
     </button>
   )

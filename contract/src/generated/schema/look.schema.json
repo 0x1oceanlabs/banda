@@ -390,6 +390,10 @@
         "close": {
           "description": "A tile going: it fades out, shrinking to four fifths, as the rest close in.",
           "$ref": "#/$defs/Event"
+        },
+        "overview": {
+          "description": "The workspaces zooming out into the overview, and back.",
+          "$ref": "#/$defs/Event"
         }
       },
       "additionalProperties": false

@@ -81,6 +81,12 @@ export function Workspaces({
     if (!stack) return
     place.current ??= stackPlace(stack, workspaces.current)
     const moving = place.current
+    // The overview owns the transforms. Keep the stack's resting place
+    // ready for the workspace the overview grows back on closing.
+    if (overview) {
+      moving.to(workspaces.current, { kind: "off" })
+      return
+    }
     // A workspace just drawn takes its place in the stack as it stands,
     // and so does every one when the overview, which placed them, closes.
     if (!moving.moving) moving.to(moving.value, { kind: "off" })
@@ -154,8 +160,14 @@ export function Workspaces({
     <div
       ref={root}
       data-overview={overview || undefined}
-      className="relative isolate h-full min-h-0 overflow-clip data-overview:bg-overview"
+      className="relative isolate h-full min-h-0 overflow-clip"
     >
+      {overview && (
+        <div
+          data-overview-backdrop=""
+          className="pointer-events-none absolute inset-0 bg-overview opacity-0"
+        />
+      )}
       {workspaces.list.map((workspace, i) => {
         const current = i === workspaces.current
         const live = current && !covered
@@ -171,9 +183,11 @@ export function Workspaces({
               "absolute inset-0 origin-top-left",
               // A screen of its own, the sidebar's room cut off.
               overview &&
-                "bg-desk [clip-path:inset(0_0_0_var(--sidebar-inset,0px)_round_16px)]",
+                "bg-desk [clip-path:inset(0_0_0_var(--sidebar-inset,0px)_round_var(--tile-radius))]",
               // An empty one shows as its slim row in the overview alone.
-              overview && workspace.columns.length === 0 && "invisible"
+              overview &&
+                workspace.columns.length === 0 &&
+                "invisible opacity-0"
             )}
           >
             <Strip
@@ -213,9 +227,11 @@ function stackPlace(stack: HTMLElement, at: number): Moving {
       shown = place
       // The overview places them while it is open.
       if (stack.dataset.overview != null) return
-      for (const [i, child] of [...stack.children].entries()) {
-        ;(child as HTMLElement).style.transform =
-          `translateY(${(i - place) * 100}%)`
+      const screens = stack.querySelectorAll<HTMLElement>(
+        ":scope > [data-stack]"
+      )
+      for (const [i, child] of [...screens].entries()) {
+        child.style.transform = `translateY(${(i - place) * 100}%)`
       }
     },
     () => shown

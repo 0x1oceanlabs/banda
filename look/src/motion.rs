@@ -38,6 +38,9 @@ pub struct MotionSettings {
     /// A tile going: it fades out, shrinking to four fifths, as the rest close in.
     #[serde(default)]
     pub close: Event,
+    /// The workspaces zooming out into the overview, and back.
+    #[serde(default)]
+    pub overview: Event,
 }
 
 /// One event's table: `off`, and a `spring` or an `easing`.
@@ -102,6 +105,7 @@ pub struct Motion {
     pub resize: Move,
     pub open: Move,
     pub close: Move,
+    pub overview: Move,
 }
 
 /// One event's move, resolved: no move, a spring or an easing.
@@ -144,6 +148,7 @@ impl MotionSettings {
             resize: self.resize.over(under.resize),
             open: self.open.over(under.open),
             close: self.close.over(under.close),
+            overview: self.overview.over(under.overview),
         }
     }
 
@@ -182,11 +187,12 @@ impl MotionSettings {
             // niri's window-open and window-close.
             open: easing(150.0, "easeOutExpo"),
             close: easing(150.0, "easeOutQuad"),
+            overview: spring(),
         }
     }
 
     /// The events by their keys, for checks.
-    fn events(&self) -> [(&'static str, &Event); 6] {
+    fn events(&self) -> [(&'static str, &Event); 7] {
         [
             ("workspace", &self.workspace),
             ("strip", &self.strip),
@@ -194,6 +200,7 @@ impl MotionSettings {
             ("resize", &self.resize),
             ("open", &self.open),
             ("close", &self.close),
+            ("overview", &self.overview),
         ]
     }
 
@@ -314,6 +321,7 @@ impl MotionSettings {
             resize: event(&self.resize),
             open: event(&self.open),
             close: event(&self.close),
+            overview: event(&self.overview),
         }
     }
 }
@@ -415,6 +423,7 @@ mod tests {
         let motion = MotionSettings::defaults().resolve();
         assert_eq!(motion.workspace, Move::Spring(SPRING));
         assert_eq!(motion.strip, Move::Spring(SPRING));
+        assert_eq!(motion.overview, Move::Spring(SPRING));
         assert_eq!(
             motion.open,
             Move::Easing(Easing {
@@ -452,10 +461,15 @@ mod tests {
             .resolve();
         assert_eq!(one.workspace, Move::Off);
         assert_eq!(one.strip, Move::Spring(SPRING));
+        let overview = read("[motion.overview]\noff = true\n")
+            .over(MotionSettings::defaults())
+            .resolve();
+        assert_eq!(overview.overview, Move::Off);
         let all = read("[motion]\noff = true\n")
             .over(MotionSettings::defaults())
             .resolve();
         assert_eq!((all.workspace, all.strip), (Move::Off, Move::Off));
+        assert_eq!(all.overview, Move::Off);
     }
 
     #[test]
