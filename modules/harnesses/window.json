@@ -1,6 +1,15 @@
 {
-  "panes": [],
-  "actions": [],
+  "panes": [
+    "harnesses.usage"
+  ],
+  "actions": [
+    {
+      "id": "harnesses.usage",
+      "title": "Usage",
+      "section": "Harnesses",
+      "keys": []
+    }
+  ],
   "sources": [],
   "watches": 0,
   "bar": [
