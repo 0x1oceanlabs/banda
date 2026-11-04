@@ -86,6 +86,8 @@ export type PaneProps<A> = {
   args: A
   /** Whether this tile has the focus: keys go to it. */
   focused: boolean
+  /** Looks selected while the overview owns the keys; defaults to focused. */
+  selected?: boolean
   /**
    * Opens a Pane of this Pane's Space, or of `space` when it is given; a
    * Pane already shown gets the focus instead, unless it opens `here`.

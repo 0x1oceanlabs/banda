@@ -45,6 +45,7 @@ const VIEW_STEP = 48
 export function Strip({
   workspace,
   live,
+  selected,
   engine,
   modules,
   spaceName,
@@ -64,6 +65,8 @@ export function Strip({
    * not cover it. Only then its focus is a Pane's.
    */
   live: boolean
+  /** Keeps the selection visible while the overview owns the keys. */
+  selected: boolean
   engine: Engine
   modules: readonly string[]
   spaceName: (space: SpaceId) => string
@@ -265,7 +268,7 @@ export function Strip({
         </div>
       )}
       {columns.map((column, c) => {
-        const here = live && workspace.focus === c
+        const here = workspace.focus === c
         const bar = column.tabbed && !zooms
         return (
           <div
@@ -288,7 +291,7 @@ export function Strip({
               <Tabs
                 entries={column.entries}
                 active={column.active}
-                focused={here}
+                focused={selected && here}
                 called={called}
                 marked={marked}
                 frame={frame}
@@ -300,7 +303,8 @@ export function Strip({
                 entry={entry}
                 engine={engine}
                 modules={modules}
-                focused={here && column.active === e}
+                focused={live && here && column.active === e}
+                selected={selected && here && column.active === e}
                 marked={marked(entry)}
                 away={away.has(entry.id)}
                 zoomed={entry.id === zoomed}

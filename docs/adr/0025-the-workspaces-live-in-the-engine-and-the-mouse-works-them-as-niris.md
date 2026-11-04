@@ -314,6 +314,12 @@ On the list, Roma decided:
    and theme. A solid desk gets a quiet theme ground; a glass desk keeps
    its existing glass, tinted once. The search hint, close buttons and
    Thread badges take the popover's surface.
+   _Changed_ 2026-11-04 (ADR 0054): the selected Pane keeps its brightness
+   and one frame throughout the zoom. The frame follows the actual Pane
+   in the unscaled workspace layer, keeping a steady stroke; the clear
+   overview tile draws no second selection frame. The overview still
+   owns the keys. The labels and controls fade near the overview's resting
+   view, rather than looking like another set of windows during the zoom.
 
 8. **The drawer** (ADR 0005, decision 7) is on `` Alt+` ``, as a terminal
    that drops down is; `Alt+S` settles a Thread now (ADR 0008). A Thread

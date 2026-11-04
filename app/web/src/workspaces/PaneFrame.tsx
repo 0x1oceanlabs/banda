@@ -81,6 +81,7 @@ export function PaneFrame({
   engine,
   modules,
   focused,
+  selected = focused,
   marked,
   zoomed = false,
   height,
@@ -97,6 +98,8 @@ export function PaneFrame({
   engine: Engine
   modules: readonly string[]
   focused: boolean
+  /** Looks selected while the overview owns the keys. */
+  selected?: boolean
   /** An Agent opened it, and the Person has not looked at it yet. */
   marked: boolean
   /** Over the whole window (`Alt+Shift+F`): its header says so, even a
@@ -165,7 +168,7 @@ export function PaneFrame({
             className={cn(
               "shrink-0",
               !alone &&
-                "opacity-0 transition-opacity group-hover/tile:opacity-100 group-data-[focused=true]/tile:opacity-100 focus-visible:opacity-100"
+                "opacity-0 transition-opacity group-hover/tile:opacity-100 group-data-[selected=true]/tile:opacity-100 focus-visible:opacity-100"
             )}
             onClick={() => popOut(entry.id)}
           >
@@ -181,6 +184,7 @@ export function PaneFrame({
       tabIndex={-1}
       aria-label={title}
       data-focused={focused}
+      data-selected={selected}
       data-marked={marked || undefined}
       data-zoomed={zoomed || undefined}
       data-away={away || undefined}
@@ -190,7 +194,7 @@ export function PaneFrame({
       onPointerDownCapture={take}
       onFocusCapture={take}
       style={height === undefined ? undefined : { flex: heightAt(height) }}
-      className="group/tile relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-tile border-(length:--tile-border) border-focus-inactive bg-tile shadow-(--tile-shadow) outline-none after:pointer-events-none after:absolute after:inset-0 after:bg-black after:opacity-(--tile-dim) data-alone:rounded-none data-alone:border-0 data-alone:shadow-none data-alone:outline-none data-away:border-dashed data-away:bg-transparent data-away:shadow-none data-marked:border-attention data-zoomed:fixed data-zoomed:inset-0 data-zoomed:z-10 data-zoomed:rounded-none data-zoomed:border-0 data-zoomed:shadow-none data-zoomed:outline-none data-[focused=true]:border-focus data-[focused=true]:outline-[length:calc(var(--tile-border)+var(--focus-ring))] data-[focused=true]:outline-offset-[calc(-1*var(--tile-border))] data-[focused=true]:outline-focus data-[focused=true]:outline-solid data-[focused=true]:after:opacity-0"
+      className="group/tile relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-tile border-(length:--tile-border) border-focus-inactive bg-tile shadow-(--tile-shadow) outline-none after:pointer-events-none after:absolute after:inset-0 after:bg-black after:opacity-(--tile-dim) data-alone:rounded-none data-alone:border-0 data-alone:shadow-none data-alone:outline-none data-away:border-dashed data-away:bg-transparent data-away:shadow-none data-marked:border-attention data-zoomed:fixed data-zoomed:inset-0 data-zoomed:z-10 data-zoomed:rounded-none data-zoomed:border-0 data-zoomed:shadow-none data-zoomed:outline-none data-[selected=true]:border-focus data-[selected=true]:outline-[length:calc(var(--tile-border)+var(--focus-ring))] data-[selected=true]:outline-offset-[calc(-1*var(--tile-border))] data-[selected=true]:outline-focus data-[selected=true]:outline-solid data-[selected=true]:after:opacity-0"
     >
       {/* On the border, where no page covers it. */}
       {marked && (
@@ -220,7 +224,7 @@ export function PaneFrame({
                     </span>
                   </>
                 )}
-                <h2 className="min-w-0 truncate font-medium text-muted-foreground group-data-[focused=true]/tile:text-foreground">
+                <h2 className="min-w-0 truncate font-medium text-muted-foreground group-data-[selected=true]/tile:text-foreground">
                   {title}
                 </h2>
                 {detail && (
@@ -264,6 +268,7 @@ export function PaneFrame({
                     space={entry.space}
                     args={entry.pane.args}
                     focused={focused}
+                    selected={selected}
                     open={(pane, place, space) =>
                       frame.open(space ?? entry.space, pane, entry.id, place)
                     }
