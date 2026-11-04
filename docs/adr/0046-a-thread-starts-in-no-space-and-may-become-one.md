@@ -16,7 +16,7 @@ What Banda has now:
 - `spaces.locate` already points a Space at another folder, for one whose folder went missing (ADR 0026, step 7).
 - Since ADR 0040, the Harnesses and their accounts are the machine's, so signing in needs no Space.
 
-Roma, 2026-11-03: a T3-like hidden project, "folder per Thread, promote later", as its own ADR after ADR 0040's step 4b. Roma, 2026-11-04, on the mock: call it "No Space", since Banda says Space, not project.
+Roma, 2026-11-03: a T3-like hidden project, "folder per Thread, promote later", as its own ADR after ADR 0040's step 4b. Roma, 2026-11-04, on the mock: call it "No Space", since Banda says Space, not project. Then, OK on the choices below: a Space per Thread, `~/Banda/scratch/`, a Thread on first run, a move to `~/Banda/<name>/` by default.
 
 Two ways were weighed:
 
