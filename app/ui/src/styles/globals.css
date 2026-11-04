@@ -191,9 +191,10 @@
   --desk: color-mix(in oklab, var(--muted) 40%, var(--background));
   --panel: var(--sidebar);
   --tile: var(--background);
-  /* Under the workspaces the overview zooms out, as niri's backdrop. */
-  --overview: oklch(0.24 0 0);
-  --overview-foreground: oklch(0.98 0 0);
+  /* The overview follows the desk's theme (ADR 0052). A little of the
+     text colour sets the miniature screens apart on a solid desk. */
+  --overview: color-mix(in oklab, var(--desk) 94%, var(--foreground));
+  --overview-foreground: var(--foreground);
   /* What floats over all of them: menus, dialogs, toasts, as bg-popover.
      Solid; on glass it is the panel's glass, in the popover's colour. */
   --floating: var(--popover);
@@ -271,6 +272,8 @@ html[data-glass] body::before {
   opacity: var(--desk-grain);
 }
 html[data-glass] {
+  /* The shell has already tinted the glass: the overview adds no sheet. */
+  --overview: transparent;
   --desk: color-mix(
     in oklab,
     var(--background) var(--desk-opacity),

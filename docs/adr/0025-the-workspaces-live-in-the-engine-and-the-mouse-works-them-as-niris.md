@@ -310,6 +310,10 @@ On the list, Roma decided:
    the Panes stay out of reach until it ends. The overview's frames
    follow the scaled tiles' corners, and its selected and calling Panes
    have an inset frame, so no ring is cut at a workspace's edge.
+   _Changed_ 2026-11-04 (ADR 0052): the backdrop takes the desk's material
+   and theme. A solid desk gets a quiet theme ground; a glass desk keeps
+   its existing glass, tinted once. The search hint, close buttons and
+   Thread badges take the popover's surface.
 
 8. **The drawer** (ADR 0005, decision 7) is on `` Alt+` ``, as a terminal
    that drops down is; `Alt+S` settles a Thread now (ADR 0008). A Thread
