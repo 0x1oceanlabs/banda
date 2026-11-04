@@ -18,19 +18,20 @@ import type { WebContents } from "electron"
 import { browserAsked } from "./asked"
 import { Browser, browserAnswers, userAgent } from "./browser"
 import { Cdp } from "./cdp"
+import { Dialogs } from "./dialogs"
 import { Drive } from "./drive"
 import { Extensions } from "./extensions"
 import { Tabs } from "./tabs"
 
 export const browserDesktop: DesktopModule<
   typeof BROWSER_BRIDGE,
-  Browser | Cdp | Drive | Extensions | Tabs,
+  Browser | Cdp | Drive | Dialogs | Extensions | Tabs,
   Window | Look | Settings | Engine
 > = {
   layer: Drive.layer.pipe(
     Layer.provideMerge(Layer.mergeAll(Browser.layer, Cdp.layer(userAgent))),
     Layer.provideMerge(Extensions.layer),
-    Layer.provideMerge(Tabs.layer)
+    Layer.provideMerge(Dialogs.layer.pipe(Layer.provideMerge(Tabs.layer)))
   ),
   answers: browserAnswers,
   asked: browserAsked,

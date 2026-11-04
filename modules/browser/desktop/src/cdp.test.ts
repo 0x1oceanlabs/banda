@@ -1,9 +1,15 @@
+import { vi } from "vitest"
+vi.mock("electron", async () => {
+  const { EventEmitter } = await import("node:events")
+  return { ipcMain: new EventEmitter() }
+})
 import { existsSync, mkdtempSync, readFileSync, statSync } from "node:fs"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 import { expect, it } from "@effect/vitest"
 import { Effect, Layer, Stream } from "effect"
 import type { WebContents } from "electron"
+import { Dialogs } from "./dialogs"
 import { Cdp } from "./cdp"
 import { Engine, Window } from "@banda/desktop-kit"
 import { Tabs } from "./tabs"
@@ -110,7 +116,7 @@ function endpointOver(pages: WebContents[], told: BrowserNews[] = []) {
   const layer = Cdp.layer(() => "Banda's browser").pipe(
     Layer.provide(
       Layer.mergeAll(
-        tabs,
+        Dialogs.layer.pipe(Layer.provideMerge(tabs)),
         engine,
         Window.layer(() => null)
       )

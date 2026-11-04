@@ -108,6 +108,9 @@ pub enum Action {
     Scroll,
     /// Drags the element of `ref` onto the element of `to`.
     Drag,
+    /// Answers the page dialog named by `dialog`.
+    DialogAccept,
+    DialogDismiss,
 }
 
 /// Which way `scroll` scrolls a page.
@@ -127,11 +130,15 @@ pub struct Act {
     pub tab: u32,
     pub action: Action,
     /// The element's ref, from the tab's last snapshot, as e12. Every
-    /// action but press and scroll needs one.
+    /// element action but press and scroll needs one; dialog answers use dialog instead.
     #[serde(default, rename = "ref", skip_serializing_if = "Option::is_none")]
     #[ts(optional, rename = "ref")]
     pub target: Option<String>,
-    /// What type and fill put in.
+    /// The ID of the page dialog to answer, from the last snapshot or action.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub dialog: Option<String>,
+    /// What type and fill put in, or the text accepting a prompt submits.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub text: Option<String>,
@@ -193,8 +200,11 @@ pub struct Handoff {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "browser/")]
 pub struct Dialog {
+    pub id: String,
     pub kind: String,
     pub message: String,
+    pub url: String,
+    pub default_prompt: String,
 }
 
 /// A tab as the window left it, once it opened it, moved it, acted in it
@@ -231,6 +241,7 @@ pub struct ReadTab {
     pub tree: String,
     /// The page's errors since the last snapshot.
     pub errors: Vec<String>,
+    pub dialog: Option<Dialog>,
 }
 
 /// The browser's engine part.
@@ -341,6 +352,21 @@ fn done(act: &Act) -> Result<String, Refusal> {
     let target = || act.target.as_deref().ok_or_else(|| missing("a ref"));
     let text = || act.text.as_deref().ok_or_else(|| missing("a text"));
     Ok(match act.action {
+        Action::DialogAccept | Action::DialogDismiss => {
+            let id = act
+                .dialog
+                .as_deref()
+                .filter(|id| !id.is_empty())
+                .ok_or_else(|| missing("a dialog ID, as dialog"))?;
+            format!(
+                "{} dialog {id}.",
+                if act.action == Action::DialogAccept {
+                    "Accepted"
+                } else {
+                    "Dismissed"
+                }
+            )
+        }
         Action::Click => format!("Clicked {}.", target()?),
         Action::DoubleClick => format!("Double-clicked {}.", target()?),
         Action::Type | Action::Fill => {
@@ -424,13 +450,7 @@ fn told(done: &str, shown: &Shown, place: bool) -> String {
         let _ = write!(text, " It began to download \"{}\".", cut(name));
     }
     if let Some(dialog) = &shown.dialog {
-        let _ = write!(
-            text,
-            " The page shows a {} dialog, which says \"{}\": the page waits until \
-             your Person answers it in the tab.",
-            dialog.kind,
-            cut(&dialog.message)
-        );
+        text.push_str(&dialog_said(dialog));
     }
     if shown.touched {
         text.push_str(
@@ -439,6 +459,17 @@ fn told(done: &str, shown: &Shown, place: bool) -> String {
         );
     }
     text
+}
+
+/// A page's untrusted dialog text, and the ID needed to answer it.
+fn dialog_said(dialog: &Dialog) -> String {
+    format!(
+        " The page shows a {} dialog (id {}), which says \"{}\". Prompt default: \"{}\". Use browser_act with action dialog_accept or dialog_dismiss and this dialog ID; the page waits for an answer.",
+        dialog.kind,
+        dialog.id,
+        cut(&dialog.message),
+        cut(&dialog.default_prompt)
+    )
 }
 
 /// What an answer says of a page's own words, or a handoff's why, at most
@@ -456,6 +487,10 @@ fn said(read: &ReadTab) -> String {
          the other browser tools until the next snapshot.\n\n",
         read.url, read.title
     );
+    if let Some(dialog) = &read.dialog {
+        text.push_str(&dialog_said(dialog));
+        text.push_str("\n\n");
+    }
     let tree = &read.tree;
     if tree.len() <= CAP {
         text.push_str(tree);
@@ -509,7 +544,9 @@ banda_kernel::methods! {
         call navigate(Navigate) -> String, Write, tool "browser_navigate";
         /// Does one action in a tab, on an element by its ref from the
         /// tab's last snapshot: click, double_click, type, fill, select,
-        /// press, hover, scroll or drag. It answers in a line, and says
+        /// press, hover, scroll, drag, dialog_accept or dialog_dismiss.
+        /// Dialog answers need dialog, the ID from the snapshot or action;
+        /// accepting a prompt may include text. It answers in a line, and says
         /// what changed: the
         /// address, a tab it opened, a dialog, a download. A password or a
         /// card's number, expiry or code is the Person's to fill, as are

@@ -886,10 +886,14 @@ modules/*/desktop  a module's part in Electron main
   draws an empty slot, and its page follows the slot on every frame, cut
   to what the workspace shows of it (`modules/browser/pane/src/pages.ts`).
   - The desktop attaches a page only in the `persist:browser` profile,
-    sandboxed, with no preload and no Node; a site asks before it uses the
+    sandboxed, context-isolated and without Node. A fixed sandboxed preload
+    supplies synchronous `prompt` (ADR 0060); a site asks before it uses the
     camera, the location or another program (the `Browser` service,
     `modules/browser/desktop/src/browser.ts`; the extensions are
     `Extensions`, ADR 0020).
+  - Page dialogs are owned by `Dialogs` in main and drawn at the center of
+    their page. Native callbacks, the prompt shim, the Person's bridge and
+    Agent actions share a dialog ID; the first answer wins (ADR 0060).
   - Banda's Alt keys and the browser's Ctrl keys are taken from the page in
     `before-input-event` and pressed again in the window, so the actions
     and the Pane hear them as their own.

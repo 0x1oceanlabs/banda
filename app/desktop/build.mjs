@@ -49,6 +49,12 @@ await Promise.all([
   }),
   build({
     ...common,
+    entryPoints: ["../../modules/browser/desktop/src/preload.ts"],
+    outfile: "out/browser-preload.cjs",
+    format: "cjs",
+  }),
+  build({
+    ...common,
     entryPoints: ["src/preload.ts"],
     outfile: "out/preload.cjs",
     format: "cjs",

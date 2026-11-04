@@ -1,0 +1,487 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Banda · Page dialogs</title>
+    <style>
+      html,
+      body {
+        margin: 0;
+        background: transparent;
+      }
+      #banda-dialogs {
+        color-scheme: light dark;
+        --b-bg: light-dark(#fafafa, #191a20);
+        --b-surface: light-dark(#fff, #22232b);
+        --b-text: light-dark(#232329, #e8e8ed);
+        --b-muted: light-dark(#686972, #a0a1ad);
+        --b-line: light-dark(#dedee4, #393a44);
+        --b-soft: light-dark(#f1f1f4, #2c2d36);
+        --b-primary: light-dark(#24242b, #ececf2);
+        --b-onprimary: light-dark(#fff, #22232b);
+        --b-attention: light-dark(#b85416, #f3a96d);
+        font:
+          14px/1.5 system-ui,
+          sans-serif;
+        color: var(--b-text);
+      }
+      #banda-dialogs * {
+        box-sizing: border-box;
+      }
+      #banda-dialogs button,
+      #banda-dialogs input,
+      #banda-dialogs select {
+        font: inherit;
+        color: inherit;
+      }
+      #banda-dialogs button,
+      #banda-dialogs select {
+        cursor: pointer;
+      }
+      #banda-dialogs button:focus-visible,
+      #banda-dialogs input:focus-visible,
+      #banda-dialogs select:focus-visible {
+        outline: 2px solid var(--b-attention);
+        outline-offset: 3px;
+      }
+      #banda-dialogs .demo-controls {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 14px;
+        padding-right: 80px;
+      }
+      #banda-dialogs .demo-controls label {
+        color: var(--b-muted);
+      }
+      #banda-dialogs select {
+        border: 1px solid var(--b-line);
+        border-radius: 7px;
+        background: var(--b-surface);
+        padding: 6px 10px;
+        max-width: 100%;
+      }
+      #banda-dialogs .pane {
+        border: 1px solid var(--b-line);
+        border-radius: 12px;
+        background: var(--b-bg);
+        overflow: hidden;
+      }
+      #banda-dialogs .chrome {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        flex-wrap: wrap;
+        padding: 9px 12px;
+        border-bottom: 1px solid var(--b-line);
+        background: var(--b-surface);
+      }
+      #banda-dialogs .tab {
+        background: transparent;
+        border: 0;
+        border-radius: 6px;
+        padding: 5px 9px;
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        white-space: nowrap;
+      }
+      #banda-dialogs .tab[aria-selected="true"] {
+        background: var(--b-soft);
+      }
+      #banda-dialogs .dot {
+        width: 6px;
+        height: 6px;
+        display: inline-block;
+        border-radius: 50%;
+        background: var(--b-attention);
+      }
+      #banda-dialogs .address {
+        margin-left: auto;
+        color: var(--b-muted);
+        font-size: 12px;
+        overflow-wrap: anywhere;
+      }
+      #banda-dialogs .viewport {
+        position: relative;
+        min-height: 438px;
+      }
+      #banda-dialogs .shop,
+      #banda-dialogs .docs {
+        padding: 30px 24px;
+      }
+      #banda-dialogs .brand {
+        font-weight: 600;
+        margin-bottom: 25px;
+      }
+      #banda-dialogs h2 {
+        font-size: 20px;
+        font-weight: 500;
+        margin: 0 0 14px;
+      }
+      #banda-dialogs p {
+        margin: 0 0 14px;
+      }
+      #banda-dialogs .item {
+        display: flex;
+        justify-content: space-between;
+        gap: 20px;
+        padding: 14px 0;
+        border-bottom: 1px solid var(--b-line);
+      }
+      #banda-dialogs .subtle {
+        color: var(--b-muted);
+        font-size: 12px;
+      }
+      #banda-dialogs .shop .action {
+        margin-top: 22px;
+      }
+      #banda-dialogs .veil {
+        position: absolute;
+        inset: 0;
+        background: light-dark(#ffffff65, #11121a65);
+        padding: 18px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+      }
+      #banda-dialogs .dialog {
+        width: 100%;
+        max-width: 410px;
+        padding: 20px;
+        background: var(--b-surface);
+        border: 1px solid var(--b-line);
+        border-radius: 12px;
+        box-shadow: 0 12px 35px light-dark(#00000018, #00000050);
+      }
+      #banda-dialogs .origin {
+        color: var(--b-muted);
+        font-size: 12px;
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        margin-bottom: 12px;
+      }
+      #banda-dialogs .origin .globe {
+        font-size: 16px;
+      }
+      #banda-dialogs .message {
+        white-space: pre-wrap;
+        overflow-wrap: anywhere;
+        max-height: 160px;
+        overflow-y: auto;
+      }
+      #banda-dialogs .field {
+        display: block;
+        width: 100%;
+        background: var(--b-bg);
+        border: 1px solid var(--b-line);
+        border-radius: 7px;
+        padding: 8px 10px;
+        margin: 0 0 18px;
+      }
+      #banda-dialogs .actions {
+        display: flex;
+        justify-content: flex-end;
+        flex-wrap: wrap;
+        gap: 8px;
+      }
+      #banda-dialogs .action {
+        border: 1px solid var(--b-line);
+        background: var(--b-surface);
+        border-radius: 7px;
+        padding: 6px 15px;
+        min-height: 34px;
+      }
+      #banda-dialogs .primary {
+        background: var(--b-primary);
+        color: var(--b-onprimary);
+        border-color: var(--b-primary);
+      }
+      #banda-dialogs .waiting {
+        position: absolute;
+        bottom: 12px;
+        left: 12px;
+        right: 12px;
+        width: fit-content;
+        max-width: calc(100% - 24px);
+        background: var(--b-surface);
+        border: 1px solid var(--b-line);
+        border-radius: 20px;
+        padding: 6px 12px;
+        font-size: 12px;
+        display: flex;
+        align-items: center;
+        gap: 7px;
+      }
+      #banda-dialogs .result {
+        min-height: 24px;
+        margin-top: 12px;
+        color: var(--b-muted);
+        font-size: 12px;
+        overflow-wrap: anywhere;
+      }
+      #banda-dialogs .demo-bottom {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        flex-wrap: wrap;
+        margin-top: 10px;
+      }
+      #banda-dialogs .demo-bottom label {
+        color: var(--b-muted);
+        font-size: 12px;
+      }
+      #banda-dialogs [hidden] {
+        display: none !important;
+      }
+      @media (max-width: 460px) {
+        #banda-dialogs .chrome {
+          gap: 4px;
+        }
+        #banda-dialogs .address {
+          width: 100%;
+          margin-left: 9px;
+        }
+        #banda-dialogs .veil {
+          padding: 12px;
+        }
+        #banda-dialogs .dialog {
+          padding: 16px;
+        }
+        #banda-dialogs .viewport {
+          min-height: 475px;
+        }
+        #banda-dialogs .demo-controls {
+          padding-right: 0;
+        }
+        #banda-dialogs .action {
+          min-height: 40px;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="banda-dialogs">
+      <div class="demo-controls">
+        <label for="scenario">Диалог страницы</label>
+        <select id="scenario">
+          <option value="confirm">Confirm · подтверждение</option>
+          <option value="alert">Alert · сообщение</option>
+          <option value="prompt">Prompt · ввод текста</option>
+          <option value="beforeunload">Перед уходом со страницы</option>
+        </select>
+      </div>
+      <section class="pane" aria-label="Browser Pane">
+        <div class="chrome" role="tablist" aria-label="Browser tabs">
+          <button
+            class="tab"
+            id="shop-tab"
+            role="tab"
+            aria-selected="true"
+            aria-controls="shop-panel"
+          >
+            <span class="dot" id="tab-dot"></span>Leaf & Bean
+          </button>
+          <button
+            class="tab"
+            id="docs-tab"
+            role="tab"
+            aria-selected="false"
+            aria-controls="docs-panel"
+          >
+            Docs
+          </button>
+          <span class="address" id="address">shop.localhost</span>
+        </div>
+        <div
+          class="viewport"
+          id="shop-panel"
+          role="tabpanel"
+          aria-labelledby="shop-tab"
+        >
+          <div class="shop" id="shop-content" inert>
+            <div class="brand">Leaf & Bean</div>
+            <h2>Your basket</h2>
+            <div class="item">
+              <span
+                >Jasmine green tea<br /><span class="subtle"
+                  >100 g · In stock</span
+                ></span
+              ><span>€8.50</span>
+            </div>
+            <div class="item"><span>Delivery</span><span>€3.00</span></div>
+            <button class="action" id="page-action">Remove item</button>
+          </div>
+          <div class="veil" id="veil">
+            <section
+              class="dialog"
+              role="dialog"
+              aria-labelledby="dialog-origin"
+              aria-describedby="dialog-message"
+              aria-modal="false"
+            >
+              <div class="origin" id="dialog-origin">
+                <span class="globe" aria-hidden="true">◎</span>shop.localhost
+                says
+              </div>
+              <p class="message" id="dialog-message">
+                Remove Jasmine green tea from your basket?
+              </p>
+              <label id="prompt-label" for="prompt-value" hidden
+                >Gift message</label
+              >
+              <input
+                class="field"
+                id="prompt-value"
+                aria-label="Gift message"
+                value="Enjoy your tea!"
+                hidden
+              />
+              <div class="actions">
+                <button class="action" id="cancel">Cancel</button>
+                <button class="action primary" id="accept">OK</button>
+              </div>
+            </section>
+          </div>
+          <div class="waiting" id="waiting">
+            <span class="dot" aria-hidden="true"></span>Compare delivery · Page
+            dialog
+          </div>
+        </div>
+        <div
+          class="viewport"
+          id="docs-panel"
+          role="tabpanel"
+          aria-labelledby="docs-tab"
+          hidden
+        >
+          <div class="docs">
+            <div class="brand">Banda docs</div>
+            <h2>Keyboard shortcuts</h2>
+            <p>
+              Ctrl+L — address<br />Ctrl+T — new tab<br />Ctrl+Tab — next tab
+            </p>
+            <p class="subtle">
+              Другие вкладки доступны, пока магазин ждёт ответа.
+            </p>
+          </div>
+        </div>
+      </section>
+      <div class="demo-bottom">
+        <label for="actor">Проверить ответ</label>
+        <select id="actor">
+          <option value="person">Человек</option>
+          <option value="agent">Агент</option>
+        </select>
+        <button class="action" id="reopen">Показать снова</button>
+      </div>
+      <div class="result" id="result" role="status" aria-live="polite">
+        Страница ждёт ответа. Остальная Banda доступна.
+      </div>
+    </div>
+    <script>
+      ;(() => {
+        const root = document.getElementById("banda-dialogs")
+        const el = (id) => root.querySelector("#" + id)
+        const scenarios = {
+          confirm: {
+            message: "Remove Jasmine green tea from your basket?",
+            accept: "OK",
+            cancel: "Cancel",
+            action: "Remove item",
+          },
+          alert: {
+            message: "Your basket has been updated.",
+            accept: "OK",
+            action: "Update basket",
+          },
+          prompt: {
+            message: "Add a gift message:",
+            accept: "OK",
+            cancel: "Cancel",
+            action: "Add gift message",
+          },
+          beforeunload: {
+            message: "Leave site?\nChanges you made may not be saved.",
+            accept: "Leave",
+            cancel: "Stay",
+            action: "Leave site",
+          },
+        }
+        let opened = true
+        function tab(shop) {
+          el("shop-tab").setAttribute("aria-selected", String(shop))
+          el("docs-tab").setAttribute("aria-selected", String(!shop))
+          el("shop-panel").hidden = !shop
+          el("docs-panel").hidden = shop
+          el("address").textContent = shop ? "shop.localhost" : "docs.banda.so"
+        }
+        function open() {
+          const kind = el("scenario").value
+          const s = scenarios[kind]
+          opened = true
+          tab(true)
+          el("dialog-message").textContent = s.message
+          el("dialog-origin").lastChild.textContent =
+            kind === "beforeunload" ? "shop.localhost" : "shop.localhost says"
+          el("cancel").hidden = !s.cancel
+          el("cancel").textContent = s.cancel || "Cancel"
+          el("accept").textContent = s.accept
+          el("prompt-label").hidden = kind !== "prompt"
+          el("prompt-value").hidden = kind !== "prompt"
+          el("prompt-value").value = "Enjoy your tea!"
+          el("veil").hidden = false
+          el("waiting").hidden = false
+          el("tab-dot").hidden = false
+          el("shop-content").inert = true
+          el("page-action").textContent = s.action
+          el("result").textContent =
+            "Страница ждёт ответа. Остальная Banda доступна."
+        }
+        function answer(accepted) {
+          if (!opened) return
+          const kind = el("scenario").value
+          const s = scenarios[kind]
+          const who = el("actor").value === "agent" ? "Агент" : "Человек"
+          const value =
+            kind === "prompt" && accepted
+              ? " «" + el("prompt-value").value + "»"
+              : ""
+          opened = false
+          el("veil").hidden = true
+          el("waiting").hidden = true
+          el("tab-dot").hidden = true
+          el("shop-content").inert = false
+          el("result").textContent =
+            who +
+            ": " +
+            (accepted ? s.accept : s.cancel || "OK") +
+            value +
+            ". Страница продолжает работу."
+          el("page-action").focus({ preventScroll: true })
+        }
+        el("scenario").addEventListener("change", open)
+        el("reopen").addEventListener("click", open)
+        el("page-action").addEventListener("click", open)
+        el("accept").addEventListener("click", () => answer(true))
+        el("cancel").addEventListener("click", () => answer(false))
+        el("shop-tab").addEventListener("click", () => tab(true))
+        el("docs-tab").addEventListener("click", () => tab(false))
+        el("veil").addEventListener("keydown", (e) => {
+          if (e.key === "Escape") {
+            e.preventDefault()
+            answer(el("scenario").value === "alert")
+          }
+          if (e.key === "Enter" && e.target === el("prompt-value")) {
+            e.preventDefault()
+            answer(true)
+          }
+        })
+        open()
+      })()
+    </script>
+  </body>
+</html>

@@ -188,6 +188,10 @@ export function stepOf(tree: string, what: Act | WaitFor): string {
     return `Waiting for ${what.url}`
   }
   switch (what.action) {
+    case "dialog_accept":
+      return "Accepting a page dialog"
+    case "dialog_dismiss":
+      return "Dismissing a page dialog"
     case "click":
       return `Clicking ${name}`
     case "double_click":

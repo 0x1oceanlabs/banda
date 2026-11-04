@@ -45,6 +45,7 @@ import { HttpServerRequest, HttpServerResponse } from "effect/http"
 import { Socket } from "effect/socket"
 import type { Debugger, WebContents } from "electron"
 import { Engine, Refused, Window, writeWhole } from "@banda/desktop-kit"
+import { Dialogs } from "./dialogs"
 import { type Change, Tabs } from "./tabs"
 
 /** The protocol's version, as Chromium names it. */
@@ -83,6 +84,12 @@ const Command = Schema.fromJsonString(
   })
 )
 const decode = Schema.decodeUnknownOption(Command)
+const dialogAnswer = Schema.decodeUnknownOption(
+  Schema.Struct({
+    accept: Schema.Boolean,
+    promptText: Schema.optional(Schema.String),
+  })
+)
 
 /** What goes to a client: an answer, or an event. */
 type Message = {
@@ -149,6 +156,7 @@ export class Cdp extends Context.Service<
     Layer.effect(Cdp)(
       Effect.gen(function* () {
         const tabs = yield* Tabs
+        const dialogs = yield* Dialogs
         const engine = yield* Engine
         const window = yield* Window
         const token = randomBytes(24).toString("hex")
@@ -568,6 +576,31 @@ export class Cdp extends Context.Service<
               refuse(-32001, "Session with given id not found.")
               return Effect.void
             }
+            if (method === "Page.handleJavaScriptDialog") {
+              const choice = Option.getOrUndefined(dialogAnswer(params))
+              if (!choice) {
+                refuse(
+                  -32602,
+                  "A dialog answer needs accept, a boolean, and optional promptText."
+                )
+                return Effect.void
+              }
+              const dialog = dialogs.current(route.page.id)
+              if (dialog)
+                return dialogs
+                  .answer(
+                    route.page.id,
+                    dialog.id,
+                    choice.accept,
+                    choice.promptText
+                  )
+                  .pipe(
+                    Effect.match({
+                      onSuccess: () => answer({}),
+                      onFailure: (error) => refuse(-32000, error.message),
+                    })
+                  )
+            }
             // The tab is the Pane's: closing its page closes the tab.
             if (method === "Page.close") {
               tabs.tell({ kind: "close", from: route.page.id })
@@ -610,6 +643,39 @@ export class Cdp extends Context.Service<
               sessions: new Set(),
               ...(only && { only }),
             }
+            // Electron replaces prompt() in the renderer. Its sandboxed shim
+            // emits the same protocol events as a native dialog.
+            yield* Effect.forkScoped(
+              Stream.runForEach(dialogs.changes, (change) =>
+                Effect.sync(() => {
+                  if (!change.synthetic) return
+                  for (const sessionId of client.sessions) {
+                    const route = routes.get(sessionId)
+                    if (route?.page.id !== change.tab) continue
+                    client.send({
+                      sessionId,
+                      method:
+                        change.accepted === undefined
+                          ? "Page.javascriptDialogOpening"
+                          : "Page.javascriptDialogClosed",
+                      params:
+                        change.accepted === undefined
+                          ? {
+                              type: "prompt",
+                              message: change.dialog.message,
+                              defaultPrompt: change.dialog.default_prompt,
+                              url: change.dialog.url,
+                              hasBrowserHandler: true,
+                            }
+                          : {
+                              result: change.accepted,
+                              userInput: change.text ?? "",
+                            },
+                    })
+                  }
+                })
+              )
+            )
             // A tab's socket hears of its tab alone.
             const changes = only
               ? Stream.filter(tabs.changes, (change) => change.page === only)

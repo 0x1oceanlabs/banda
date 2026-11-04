@@ -12,11 +12,15 @@ export type Act = {
 tab: number, action: Action, 
 /**
  * The element's ref, from the tab's last snapshot, as e12. Every
- * action but press and scroll needs one.
+ * element action but press and scroll needs one; dialog answers use dialog instead.
  */
 ref?: string, 
 /**
- * What type and fill put in.
+ * The ID of the page dialog to answer, from the last snapshot or action.
+ */
+dialog?: string, 
+/**
+ * What type and fill put in, or the text accepting a prompt submits.
  */
 text?: string, 
 /**
