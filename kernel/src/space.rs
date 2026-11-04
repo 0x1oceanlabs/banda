@@ -4,6 +4,7 @@
 //! folder, the SQLite, the lock, and the modules' files.
 
 use crate::events::{self, Event, EventFilter};
+use crate::kernel::Entry;
 use crate::module::Module;
 use crate::outbox;
 use crate::passes::Passes;
@@ -14,11 +15,13 @@ use crate::{
 };
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use std::collections::BTreeMap;
 use std::fmt::Display;
 use std::fs::{File, TryLockError};
 use std::path::{Path, PathBuf};
 use std::sync::Arc;
 use std::time::Duration;
+use tokio::sync::RwLock;
 use tokio::sync::{broadcast, watch};
 
 pub(crate) const MANIFEST: &str = "space.json";
@@ -126,6 +129,19 @@ impl Manifest {
     }
 }
 
+/// What a module of the machine counts in every Space's log: see
+/// [`ModuleSpace::tally`].
+#[derive(Clone, Debug, Default)]
+pub struct Tally {
+    pub module: String,
+    pub kind: String,
+    /// The payload's field it counts by; none counts them all as one.
+    pub by: Option<String>,
+    /// From when, and till when, in ms since the epoch.
+    pub from: i64,
+    pub to: i64,
+}
+
 /// What a Space shares with the engine and every other Space.
 pub(crate) struct Shared {
     pub owner: PersonId,
@@ -133,6 +149,9 @@ pub(crate) struct Shared {
     pub window: Arc<Window>,
     /// This machine's scope; none for the machine itself.
     pub machine: Option<Arc<Space>>,
+    /// Every Space, for the machine itself only: weak, as each Space holds
+    /// the machine.
+    pub spaces: Option<std::sync::Weak<RwLock<BTreeMap<SpaceId, Entry>>>>,
 }
 
 /// Puts a Space's data in place as `spaces/<id>/`, whole or not at all:
@@ -183,6 +202,10 @@ pub struct Space {
     /// This machine's scope, which its modules may hear (ADR 0040,
     /// decision 3); none for the machine itself, or with no module of it.
     machine: Option<Arc<Space>>,
+    /// Every Space of this machine, for the machine's own scope, whose
+    /// modules count them: none for a Space. Weak, as each Space holds the
+    /// machine.
+    spaces: Option<std::sync::Weak<RwLock<BTreeMap<SpaceId, Entry>>>>,
     /// Dropped with the Space: what hears the machine for it ends then.
     open: watch::Sender<()>,
     /// Held while the Space is open, so one engine at a time writes it.
@@ -222,6 +245,7 @@ impl Space {
             passes,
             window,
             machine,
+            spaces,
         } = engine;
         let folder = manifest.folder.clone();
         if !folder.is_dir() {
@@ -250,6 +274,7 @@ impl Space {
             window,
             reactions: Default::default(),
             machine,
+            spaces,
             open: watch::Sender::new(()),
             _lock: lock,
         });
@@ -678,6 +703,27 @@ impl ModuleSpace {
         self.space.events_after(after, filter, limit).await
     }
 
+    /// The log's position as it stood at `at`, in ms since the epoch: its
+    /// last event made before then, or 0. With [`ModuleSpace::events_after`],
+    /// what the log took in a span of time.
+    pub async fn position_at(&self, at: i64) -> Result<i64, Error> {
+        (self.space.store)
+            .read(move |sql| Ok(events::position_at(sql, at)?))
+            .await
+    }
+
+    /// The newest of every module's stored events before `before` in the
+    /// log that matches `filter`.
+    pub async fn event_before(
+        &self,
+        before: i64,
+        filter: EventFilter,
+    ) -> Result<Option<Event>, Error> {
+        (self.space.store)
+            .read(move |sql| Ok(events::before(sql, before, &filter)?))
+            .await
+    }
+
     /// Every module's events that match `filter`, after `after` in the
     /// log, and then each as it is committed: how a module reacts to what
     /// another did, as git keeps a checkpoint as a turn starts (ADR 0034).
@@ -704,6 +750,50 @@ impl ModuleSpace {
         heard.module = None;
         heard.from = Some(self.space.open.subscribe());
         Ok(Some(heard))
+    }
+
+    /// How many Spaces this machine has, the missing too. None for a
+    /// module of a Space.
+    pub async fn spaces(&self) -> Option<usize> {
+        Some(self.space.spaces.as_ref()?.upgrade()?.read().await.len())
+    }
+
+    /// How many events of `tally.module`'s `tally.kind` every open Space's
+    /// log took in `tally.from..tally.to`, in ms since the epoch, by the
+    /// text of their payload's `tally.by` field, or `""` without one. Only
+    /// these numbers cross the wall, for a module of the machine, which
+    /// never hears a Space's log (ADR 0040, decision 3, as ADR 0039 amends
+    /// it): no Space, subject, author or word. So `by` names a field whose
+    /// values are a few names, such as a Harness's. None for a module of
+    /// a Space.
+    pub async fn tally(&self, tally: Tally) -> Result<Option<BTreeMap<String, u64>>, Error> {
+        let Some(spaces) = self.space.spaces.as_ref().and_then(|s| s.upgrade()) else {
+            return Ok(None);
+        };
+        let by = tally.by.clone().unwrap_or_default();
+        if !by.chars().all(|c| c.is_ascii_lowercase() || c == '_') {
+            return Err(Refusal::invalid("A tally is by a plain field of the payload.").into());
+        }
+        let open: Vec<Arc<Space>> = (spaces.read().await.values())
+            .filter_map(|entry| match entry {
+                Entry::Open(space) => Some(space.clone()),
+                Entry::Missing { .. } => None,
+            })
+            .collect();
+        // The payload itself is no text: all of it counts as one.
+        let path = match by.as_str() {
+            "" => "$".to_owned(),
+            by => format!("$.{by}"),
+        };
+        let mut all = BTreeMap::new();
+        for space in open {
+            let (tally, path) = (tally.clone(), path.clone());
+            let read = move |sql: &rusqlite::Connection| Ok(events::tally(sql, &tally, &path)?);
+            for (by, count) in space.store.read(read).await? {
+                *all.entry(by).or_default() += count;
+            }
+        }
+        Ok(Some(all))
     }
 
     /// Waits until every module reacting to the log has handled what is

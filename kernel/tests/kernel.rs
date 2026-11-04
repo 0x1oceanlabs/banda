@@ -1204,6 +1204,70 @@ async fn a_module_of_a_space_hears_the_machine_until_its_space_closes() {
     assert!(own.unwrap().is_none());
 }
 
+/// A module of the machine counts what every Space's log took, only as
+/// numbers: what the usage summary is made of (ADR 0039, step 5).
+#[tokio::test]
+async fn a_module_of_the_machine_counts_every_spaces_events() {
+    let dir = tempfile::tempdir().unwrap();
+    let owner = PersonId::new();
+    let person = Participant::Person(owner);
+    let (notes, hears) = (Notes::default(), Hears::default());
+    let listens = Hears {
+        machine: true,
+        ..Hears::default()
+    };
+    let kernel = Kernel::builder(dir.path().join("root"), dir.path().join("data"), owner)
+        .module(notes.clone())
+        .module(hears.clone())
+        .module(listens.clone())
+        .machine(dir.path().join("machine"))
+        .open()
+        .await
+        .unwrap();
+    let machine = listens.spaces.lock().unwrap()[0].clone();
+    assert_eq!(machine.spaces().await, Some(0));
+    let (work, home) = (
+        create(&kernel, owner, "Work").await,
+        create(&kernel, owner, "Home").await,
+    );
+    let from = banda_kernel::now_ms();
+    for (space, text) in [(&work, "a"), (&work, "b"), (&home, "a")] {
+        add(&kernel, person, space, text).await.unwrap();
+    }
+    let to = banda_kernel::now_ms() + 1;
+    let tally = |by: Option<&str>, from, to| banda_kernel::Tally {
+        module: "notes".into(),
+        kind: "added".into(),
+        by: by.map(str::to_owned),
+        from,
+        to,
+    };
+
+    assert_eq!(machine.spaces().await, Some(2));
+    let all = machine.tally(tally(None, from, to)).await.unwrap().unwrap();
+    assert_eq!(all, [("".to_owned(), 3)].into());
+    let by = machine
+        .tally(tally(Some("text"), from, to))
+        .await
+        .unwrap()
+        .unwrap();
+    assert_eq!(by, [("a".to_owned(), 2), ("b".to_owned(), 1)].into());
+    // Only what the log took in that time.
+    let later = machine
+        .tally(tally(None, to, to + 1000))
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(later.is_empty());
+    // By a plain field only.
+    assert!(machine.tally(tally(Some("$.x"), from, to)).await.is_err());
+
+    // A module of a Space counts nothing beyond its wall.
+    let module = hears.spaces.lock().unwrap()[0].clone();
+    assert_eq!(module.spaces().await, None);
+    assert!(module.tally(tally(None, from, to)).await.unwrap().is_none());
+}
+
 #[tokio::test]
 async fn a_module_of_the_machine_needs_the_machines_folder() {
     let dir = tempfile::tempdir().unwrap();

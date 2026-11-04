@@ -92,6 +92,7 @@ Roma, 2026-11-03:
      - `turns`: the number of Turns;
      - `panes`: the Panes opened, by kind;
      - `spaces` and `workspaces`: how many there are.
+   - Made in step 5, as Roma chose on 2026-11-04: the Threads and Turns are counted in every Space's log by the kernel, which gives the machine's `sharing` only the numbers (ADR 0040, decision 3, amended). A day is a UTC day, and `day` is stamped with its midnight, so when it went says no time of day. It carries `day`, its date, and `country` beside `locale`. Only a day that usage was on all of is counted: turned on, or with a new ID, counting starts with the next whole day. A day in which nothing was counted sends nothing.
    - What never goes: a Thread's title or words, prompts, answers, paths, addresses, a Space's name, git, the time of day, the IP.
    - `docs/sharing.md` lists every event and field. It is written from the contract, as `engine/skill/modules.md` is, so it cannot drift.
 
