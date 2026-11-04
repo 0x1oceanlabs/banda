@@ -10,7 +10,7 @@ import type { Action, Step } from "@banda/contract/git"
 import { problem } from "@banda/ui/lib/words"
 import { NO_HARNESS } from "./quick"
 
-export type Run =
+type Run =
   | { is: "idle" }
   | { is: "running"; label: string; line?: string; since: number }
   | { is: "done"; title: string; detail?: string }

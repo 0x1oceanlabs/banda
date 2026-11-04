@@ -39,7 +39,7 @@ export type View = {
 }
 
 /** T3 Code's defaults: stacked, wrapped, whitespace ignored. */
-export const VIEW: View = {
+const VIEW: View = {
   layout: "stacked",
   wrap: true,
   ignoreWhitespace: true,
