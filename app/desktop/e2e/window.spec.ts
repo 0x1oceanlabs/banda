@@ -2542,6 +2542,14 @@ test("the mouse sizes as niri's: the gaps, Alt and the right button, a double cl
 })
 
 /** The workspace on screen: each column's tiles, top down, by ID. */
+/** Expects the top bar to mark workspace `n` as the one on screen. */
+function onWorkspace(page: Page, n: string) {
+  const numbers = page.getByRole("navigation", { name: "Workspaces" })
+  return expect(
+    numbers.getByRole("button", { name: `Workspace ${n}` })
+  ).toHaveAttribute("aria-current", "true")
+}
+
 function layoutOf(page: Page) {
   return page.evaluate(() =>
     [
@@ -4172,11 +4180,7 @@ test("Alt+Up and Down go on past a column's end to the workspace there, and with
   await composer.press("Enter")
   const thread = page.getByRole("region", { name: "hello" })
   await expect(thread.getByText("You said: hello")).toBeVisible()
-  const numbers = page.getByRole("navigation", { name: "Workspaces" })
-  const on = (n: string) =>
-    expect(
-      numbers.getByRole("button", { name: `Workspace ${n}` })
-    ).toHaveAttribute("aria-current", "true")
+  const on = (n: string) => onWorkspace(page, n)
   // A launcher on the workspace below, the Thread alone on this one.
   await page.keyboard.press("Alt+KeyN")
   const launcher = page.getByRole("region", { name: "New Pane" })
@@ -4206,4 +4210,33 @@ test("Alt+Up and Down go on past a column's end to the workspace there, and with
   await on("2")
   await expect(thread).toHaveAttribute("data-focused", "true")
   await expect(launcher).toBeVisible()
+})
+
+test("Alt+Shift+PageUp and PageDown move the workspace on screen, never under the empty one", async () => {
+  window = await startWindow()
+  const { page } = window
+  const { thread, composer } = await firstThread(page)
+  await expect(composer).toBeFocused()
+  const on = (n: string) => onWorkspace(page, n)
+  // The Thread on workspace 1, a launcher on 2, the empty one under.
+  await page.keyboard.press("Alt+KeyN")
+  const launcher = page.getByRole("region", { name: "New Pane" })
+  await expect(launcher).toHaveAttribute("data-focused", "true")
+  await page.keyboard.press("Alt+Shift+Digit2")
+  await on("2")
+
+  // Up, the launcher's workspace goes first, and stays on screen.
+  await page.keyboard.press("Alt+Shift+PageUp")
+  await on("1")
+  await expect(launcher).toHaveAttribute("data-focused", "true")
+  await page.keyboard.press("Alt+PageDown")
+  await on("2")
+  await expect(thread).toHaveAttribute("data-focused", "true")
+
+  // Down, the Thread's would go under the empty one: it stays.
+  await page.keyboard.press("Alt+Shift+PageDown")
+  await on("2")
+  await page.keyboard.press("Alt+PageUp")
+  await on("1")
+  await expect(launcher).toHaveAttribute("data-focused", "true")
 })

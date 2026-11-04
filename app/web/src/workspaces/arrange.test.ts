@@ -13,6 +13,7 @@ import {
   tidied,
   viewOf,
   withAsked,
+  workspaceMoved,
 } from "./arrange"
 import {
   close,
@@ -25,6 +26,7 @@ import {
   send,
   shift,
   start,
+  step,
   tabs,
   widen,
   type Workspaces,
@@ -217,6 +219,24 @@ describe("plans", () => {
       method: "workspaces.move_column",
       params: { column, workspace: current(before).id, index: 0 },
     })
+  })
+
+  test("the workspace on screen moves up or down, never under the empty one", () => {
+    // Two workspaces with Panes, on the second, and the empty one under.
+    const state = send(arranged(), 1)
+    expect(state.list.map((w) => w.columns.length)).toEqual([2, 1, 0])
+    expect(workspaceMoved(state, -1)?.command).toEqual({
+      method: "workspaces.move_workspace",
+      params: { workspace: state.list[1].id, index: 0 },
+    })
+    expect(workspaceMoved(state, 1)).toBeUndefined()
+    const first = step(state, -1)
+    expect(workspaceMoved(first, -1)).toBeUndefined()
+    expect(workspaceMoved(first, 1)?.command.params).toEqual({
+      workspace: first.list[0].id,
+      index: 1,
+    })
+    expect(workspaceMoved(step(state, 1), -1)).toBeUndefined()
   })
 
   test("the focused column's width, whole screen and display", () => {

@@ -175,6 +175,12 @@ On the list, Roma decided:
      never flies through them all. The arrows that stay in the column
      are kept as actions for `keys.toml` (`pane.focus-down`,
      `pane.move-down`), with no key of their own.
+   - _Changed_ 2026-11-04: `Alt+Shift+PageUp` and `Alt+Shift+PageDown`
+     move the workspace on screen up or down, its columns and all, as
+     niri's `move-workspace-up` and `-down`, and stay on it
+     (`workspaces.move_workspace`). Its number is its place: the ones it
+     passes take the next. The empty one at the bottom stays there, and
+     none goes under it.
 
 5. **The mouse, as niri's, with one grammar.**
    - **Moving a Pane.** `Alt` and the left button anywhere on it, or its

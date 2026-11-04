@@ -19,6 +19,7 @@ import {
   opened,
   type Plan,
   resized,
+  workspaceMoved,
 } from "../workspaces/arrange"
 import { floorOf, roomLeft } from "../workspaces/layout"
 import {
@@ -105,6 +106,7 @@ const DIRECTIONS = Object.keys(ARROWS) as Direction[]
  */
 const PAST: Partial<Record<Direction, string>> = { up: "above", down: "below" }
 const UPRIGHT = ["up", "down"] as const
+const PAGES = { up: "PageUp", down: "PageDown" } as const
 const NUMBERS = [1, 2, 3, 4, 5, 6, 7, 8, 9]
 const EDGES = [
   { side: "first", code: "Home" },
@@ -455,20 +457,26 @@ export const ACTIONS: readonly Action<Shell>[] = [
     keys: [{ code: "KeyO", alt: true }],
     run: (shell) => shell.toggleOverview(),
   },
-  {
-    id: "workspace.up",
-    section: "Workspaces",
-    title: "The workspace above",
-    keys: [{ code: "PageUp", alt: true }],
-    run: (shell) => shell.change((w) => step(w, -1)),
-  },
-  {
-    id: "workspace.down",
-    section: "Workspaces",
-    title: "The workspace below",
-    keys: [{ code: "PageDown", alt: true }],
-    run: (shell) => shell.change((w) => step(w, 1)),
-  },
+  ...UPRIGHT.flatMap((direction): Action<Shell>[] => {
+    const code = PAGES[direction]
+    const by = direction === "up" ? -1 : 1
+    return [
+      {
+        id: `workspace.${direction}`,
+        section: "Workspaces",
+        title: `The workspace ${PAST[direction]}`,
+        keys: [{ code, alt: true }],
+        run: (shell) => shell.change((w) => step(w, by)),
+      },
+      {
+        id: `workspace.move-${direction}`,
+        section: "Workspaces",
+        title: `Move the workspace ${direction}`,
+        keys: [{ code, alt: true, shift: true }],
+        run: (shell) => shell.change((w) => workspaceMoved(w, by)),
+      },
+    ]
+  }),
   {
     id: "workspace.new",
     section: "Workspaces",

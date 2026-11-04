@@ -54,6 +54,9 @@ banda_kernel::methods! {
         command move_pane(MovePane) -> Done, Write;
         /// Moves a column, its Panes and all, to a workspace.
         command move_column(MoveColumn) -> Done, Write;
+        /// Moves a workspace, its columns and all, up or down; never under
+        /// the empty one at the bottom.
+        command move_workspace(MoveWorkspace) -> Done, Write;
         /// Gives a column its width; it no longer takes the whole screen.
         command size(Size) -> Done, Write;
         /// Gives a Pane its share of its column's height; left out, an
@@ -326,6 +329,15 @@ pub struct MoveColumn {
 
 #[derive(Deserialize, TS)]
 #[ts(export_to = "workspaces/")]
+pub struct MoveWorkspace {
+    pub workspace: WorkspaceId,
+    /// From the top, counted as if it had left its place; past the last,
+    /// the last above the empty one.
+    pub index: usize,
+}
+
+#[derive(Deserialize, TS)]
+#[ts(export_to = "workspaces/")]
 pub struct Size {
     pub column: ColumnId,
     /// A share of the screen, such as `"1/2"`; left out, the look's.
@@ -525,6 +537,14 @@ impl Workspaces {
         } = moving;
         done(&call, "moved", column, Say::Whole, move |list, _| {
             Ok(model::move_column(list, column, workspace, index)?)
+        })
+        .await
+    }
+
+    async fn move_workspace(&self, call: Call, moving: MoveWorkspace) -> Result<Done, Refusal> {
+        let MoveWorkspace { workspace, index } = moving;
+        done(&call, "moved", workspace, Say::Whole, move |list, _| {
+            Ok(model::move_workspace(list, workspace, index)?)
         })
         .await
     }

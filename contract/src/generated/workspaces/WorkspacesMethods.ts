@@ -9,6 +9,7 @@ import type { Maximize } from "./Maximize";
 import type { MoveColumn } from "./MoveColumn";
 import type { MoveOwn } from "./MoveOwn";
 import type { MovePane } from "./MovePane";
+import type { MoveWorkspace } from "./MoveWorkspace";
 import type { OneColumn } from "./OneColumn";
 import type { OnePane } from "./OnePane";
 import type { Open } from "./Open";
@@ -48,6 +49,11 @@ move_pane: CommandMethod<MovePane, Done>,
  * Moves a column, its Panes and all, to a workspace.
  */
 move_column: CommandMethod<MoveColumn, Done>, 
+/**
+ * Moves a workspace, its columns and all, up or down; never under
+ * the empty one at the bottom.
+ */
+move_workspace: CommandMethod<MoveWorkspace, Done>, 
 /**
  * Gives a column its width; it no longer takes the whole screen.
  */

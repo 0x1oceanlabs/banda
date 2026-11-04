@@ -351,7 +351,7 @@ fn put(list: &mut Arrangement, column: Column, place: &Place) -> Result<(), Refu
         Place::Workspace { index } => {
             let mut workspace = blank();
             workspace.columns.push(column);
-            list.insert(index.min(list.len().saturating_sub(1)), workspace);
+            list.insert(above_empty(list, index), workspace);
         }
     }
     Ok(())
@@ -424,6 +424,26 @@ pub fn move_column(
     let moving = list[w].columns.remove(c);
     put(list, moving, &Place::Column { workspace, index })?;
     normalize(list);
+    Ok(())
+}
+
+/// Moves a workspace, its columns and all, `index` from the top, counted
+/// as if it had left its place already: as niri's `move-workspace-up`, or
+/// one dragged in the overview. Past the last, the last above the empty
+/// one at the bottom, which stays where it is.
+pub fn move_workspace(
+    list: &mut Arrangement,
+    workspace: WorkspaceId,
+    index: usize,
+) -> Result<(), Refusal> {
+    let w = workspace_at(list, workspace)?;
+    if w + 1 == list.len() {
+        return Err(Refusal::invalid(
+            "The empty workspace at the bottom stays there.",
+        ));
+    }
+    let moving = list.remove(w);
+    list.insert(above_empty(list, index), moving);
     Ok(())
 }
 
@@ -522,6 +542,12 @@ pub fn take(list: &mut Arrangement, taken: Arrangement) -> Result<(), Refusal> {
     tidy(&mut all, None);
     *list = all;
     Ok(())
+}
+
+/// `index` from the top, or past the last, the last above the empty
+/// workspace at the bottom.
+fn above_empty(list: &Arrangement, index: usize) -> usize {
+    index.min(list.len().saturating_sub(1))
 }
 
 /// Keeps the rules: a column with no Pane goes, and the last workspace is
@@ -931,6 +957,32 @@ mod tests {
         let bottom = list[1].id;
         move_column(&mut list, first, bottom, 0).unwrap();
         assert_eq!(layout(&list), [vec![vec![2]], vec![vec![1, 3]], vec![]]);
+    }
+
+    #[test]
+    fn a_workspace_moves_whole_but_never_under_the_empty_one() {
+        let mut list = start();
+        for n in 1..=3 {
+            opened(&mut list, shown(SpaceId::new(), "agents.thread", n), None);
+        }
+        let ids: Vec<WorkspaceId> = list.iter().map(|w| w.id).collect();
+
+        move_workspace(&mut list, ids[2], 0).unwrap();
+        assert_eq!(
+            layout(&list),
+            [vec![vec![3]], vec![vec![1]], vec![vec![2]], vec![]]
+        );
+        // Past the last, the last above the empty one.
+        move_workspace(&mut list, ids[2], 9).unwrap();
+        assert_eq!(
+            layout(&list),
+            [vec![vec![1]], vec![vec![2]], vec![vec![3]], vec![]]
+        );
+        assert_eq!(list.last().map(|w| w.id), Some(ids[3]));
+
+        let refused = move_workspace(&mut list, ids[3], 0).unwrap_err();
+        assert!(refused.message.contains("stays there"), "{refused:?}");
+        assert!(move_workspace(&mut list, WorkspaceId::new(), 0).is_err());
     }
 
     #[test]
