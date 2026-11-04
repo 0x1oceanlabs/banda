@@ -118,6 +118,22 @@ command = "/path/to/banda/target/debug/banda-fake-agent"
 For the page with live reload, run `pnpm --filter @banda/web dev` and,
 beside it, `pnpm --filter @banda/desktop dev`.
 
+### Try a branch
+
+```sh
+scripts/try.sh                   # this checkout or worktree
+scripts/try.sh agents-turn-run   # a worktree's slug in ../banda-worktrees
+```
+
+It builds the tree and opens a Banda Local window from it, with a trial
+of its own in `~/.local/state/banda-trial/<slug>`: its Spaces and
+settings never touch the Banda you work in, and trials of several
+branches run at once. The fake agent is its Harness, so a trial costs no
+tokens; `--real` offers Claude Code and Codex instead, `--fresh` forgets
+the trial's Spaces, `--no-build` starts what was built last, `--list` and
+`--forget` look after the trials. Set `CARGO_TARGET_DIR` to one folder
+for every tree and only Banda's own crates build again.
+
 ### Pack it
 
 ```sh

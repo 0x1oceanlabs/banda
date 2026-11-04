@@ -931,6 +931,7 @@ banda/
   contract/           the engine's API for TypeScript: generated types and the client
   tools/fake-agent/   a scripted ACP agent for tests and window checks; it replays recordings too
   scripts/check.sh    every check a change must pass
+  scripts/try.sh      builds a tree and opens a window of its own from it, to click through
   docs/               adr/ · architecture.md · research/
   GLOSSARY.md
 ```
