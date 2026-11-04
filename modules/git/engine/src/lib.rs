@@ -42,19 +42,32 @@ pub struct Git {
     writing: Repositories,
 }
 
-/// Each repository's [`Writes`], by its top folder, or by the folder of a
-/// Space that is no repository yet: a hook that runs long in one keeps no
-/// other waiting. Every Space in a repository shares its own.
+/// Each repository's [`Writes`], by its top folder as git names it, or by
+/// the folder of a Space that is no repository yet, its links followed as
+/// git follows them: a hook that runs long in one keeps no other waiting.
+/// Every Space in a repository shares its own.
 #[derive(Clone, Default)]
 pub(crate) struct Repositories(Arc<Mutex<HashMap<PathBuf, Writes>>>);
 
 impl Repositories {
+    /// The repository's at `top`, as `rev-parse --show-toplevel` says it.
     pub(crate) fn of(&self, top: &Path) -> Writes {
         let mut known = self
             .0
             .lock()
             .unwrap_or_else(|poisoned| poisoned.into_inner());
-        known.entry(top.to_owned()).or_default().clone()
+        match known.get(top) {
+            Some(writes) => writes.clone(),
+            None => known.entry(top.to_owned()).or_default().clone(),
+        }
+    }
+
+    /// The one of a folder that is no repository yet.
+    pub(crate) fn of_folder(&self, folder: &Path) -> Writes {
+        match folder.canonicalize() {
+            Ok(top) => self.of(&top),
+            Err(_) => self.of(folder),
+        }
     }
 }
 
@@ -266,7 +279,7 @@ impl Git {
 
     async fn init(&self, call: Call, _: Nothing) -> Result<(), Refusal> {
         let folder = call.space().folder();
-        let _writing = self.writing.of(&folder).hold().await;
+        let _writing = self.writing.of_folder(&folder).hold().await;
         act::init(&folder).await
     }
 }

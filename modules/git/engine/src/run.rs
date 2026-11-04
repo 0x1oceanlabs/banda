@@ -17,6 +17,7 @@ use std::path::Path;
 use std::process::Stdio;
 use std::time::Duration;
 use tokio::io::{AsyncRead, AsyncReadExt, AsyncWriteExt};
+use tokio::process::Child;
 use tokio::sync::{Semaphore, mpsc};
 
 /// How long one git may run.
@@ -25,14 +26,12 @@ const TIME: Duration = Duration::from_secs(30);
 /// pull, a checkout of many files.
 pub const LONG: Duration = Duration::from_secs(10 * 60);
 /// How long a git asked to stop has to end before it is killed.
-#[cfg(unix)]
 const STOPPING: Duration = Duration::from_secs(2);
 /// How long the pipes are read on after git ended: a child it left, as a
 /// hook's, may hold them open.
 const LEFT_OPEN: Duration = Duration::from_secs(1);
-/// How many gits run at once, in every Space together; one given longer
-/// than [`TIME`] runs beside them, as T3 Code's, so a hook that hangs
-/// keeps no read waiting.
+/// How many gits of [`Pool::Shared`] run at once, in every Space
+/// together.
 static RUNNING: Semaphore = Semaphore::const_new(8);
 /// The most of stdout a git keeps unless asked otherwise: 16 MiB, as T3
 /// Code gives its diff and status metadata.
@@ -43,6 +42,18 @@ const STDERR: usize = 64 * 1024;
 /// The environment git would otherwise take from the engine's and that
 /// would point it elsewhere, as when the engine runs inside a git hook.
 const ELSEWHERE: [&str; 4] = ["GIT_DIR", "GIT_WORK_TREE", "GIT_INDEX_FILE", "GIT_PREFIX"];
+
+/// Whether a git waits its turn among the [`RUNNING`] ones.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Pool {
+    /// It waits its turn: a read, done in a moment.
+    #[default]
+    Shared,
+    /// It runs at once, beside them, as T3 Code's long ones do: a write,
+    /// whose hook may run for minutes, or a fetch, which keeps no read
+    /// waiting either.
+    Long,
+}
 
 /// How a git runs, beyond its arguments.
 #[derive(Default)]
@@ -60,13 +71,15 @@ pub struct Opts<'a> {
     /// Hears each line git and its hooks write on stderr as it comes,
     /// its credentials taken out.
     pub lines: Option<mpsc::UnboundedSender<String>>,
+    pub pool: Pool,
 }
 
 impl Opts<'_> {
-    /// For a git that writes: it may run for [`LONG`].
+    /// For a git that writes: it may run for [`LONG`], beside the reads.
     pub fn writes() -> Self {
         Opts {
             time: Some(LONG),
+            pool: Pool::Long,
             ..Opts::default()
         }
     }
@@ -116,10 +129,27 @@ impl Ran {
             .map(redact)
     }
 
-    /// What it wrote on stderr, for a caller that reads more than its
-    /// reason; never to be shown raw, as it can hold credentials.
-    pub fn said(&self) -> String {
-        String::from_utf8_lossy(&self.stderr).into_owned()
+    /// Why the remote refused a push, its credentials taken out: the last
+    /// line its hook said (`remote: …`) and the reason on the ref's
+    /// `! [remote rejected] main -> main (…)` line; none when it said
+    /// neither.
+    pub fn refused(&self) -> Option<String> {
+        let stderr = String::from_utf8_lossy(&self.stderr);
+        let lines: Vec<&str> = stderr.lines().map(str::trim).collect();
+        let why = (lines.iter())
+            .filter(|l| l.starts_with("! [remote rejected]") || l.starts_with("! [rejected]"))
+            .find_map(|l| Some(l.rsplit_once('(')?.1.strip_suffix(')')?.to_owned()));
+        let said = (lines.iter())
+            .filter_map(|l| l.strip_prefix("remote:"))
+            .map(str::trim)
+            .rfind(|l| !l.is_empty());
+        let said = match (said, why) {
+            (Some(said), Some(why)) => format!("{said} ({why})"),
+            (Some(said), None) => said.to_owned(),
+            (None, Some(why)) => format!("the remote refused it ({why})"),
+            (None, None) => return None,
+        };
+        Some(redact(&said))
     }
 
     /// It wrote nothing on stderr.
@@ -133,8 +163,9 @@ impl Ran {
     }
 }
 
-/// Why a git failed, as a caller hears it: never its own words.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// Why a git failed, as a caller hears it: never its own words, but the
+/// names of a branch and a folder.
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Reason {
     /// The folder is in no repository.
     NotRepository,
@@ -152,6 +183,9 @@ pub enum Reason {
     Unauthorized,
     /// A switch or a pull would lose changes in the work tree.
     WouldLose,
+    /// The branch a switch asked for is checked out in another work tree
+    /// of the repository's, at `folder`.
+    CheckedOut { branch: String, folder: String },
     /// Another user owns the repository, and git does not trust it
     /// (`safe.directory`).
     Untrusted,
@@ -160,6 +194,12 @@ pub enum Reason {
 }
 
 impl Reason {
+    /// Whether it stays till the Person changes something, unlike a lock
+    /// held or a remote out of reach: the status says it then.
+    pub fn lasting(&self) -> bool {
+        matches!(self, Reason::Untrusted)
+    }
+
     /// The reason in what git wrote on stderr, from its `fatal:` and
     /// `error:` lines alone.
     fn of(stderr: &str) -> Reason {
@@ -174,6 +214,8 @@ impl Reason {
         };
         if says(&["not a git repository"]) {
             Reason::NotRepository
+        } else if let Some(reason) = checked_out(stderr) {
+            reason
         } else if says(&["detected dubious ownership"]) {
             Reason::Untrusted
         } else if says(&[".lock': file exists", "index.lock", "config.lock"]) {
@@ -220,8 +262,28 @@ impl Reason {
     }
 }
 
+/// The branch and the other work tree in git's `fatal: 'topic' is already
+/// used by worktree at '/w'`, or before git 2.42 `is already checked out
+/// at '/w'`.
+fn checked_out(stderr: &str) -> Option<Reason> {
+    stderr.lines().find_map(|line| {
+        let said = line.strip_prefix("fatal: '")?;
+        let (branch, rest) = said.split_once('\'')?;
+        let folder = [
+            " is already used by worktree at '",
+            " is already checked out at '",
+        ]
+        .iter()
+        .find_map(|words| rest.strip_prefix(words))?;
+        Some(Reason::CheckedOut {
+            branch: branch.to_owned(),
+            folder: folder.strip_suffix('\'')?.to_owned(),
+        })
+    })
+}
+
 /// A git that failed, and why.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Failure(pub Reason);
 
 impl From<Failure> for Refusal {
@@ -247,6 +309,9 @@ impl From<Failure> for Refusal {
             Reason::WouldLose => Refusal::conflict(
                 "This would lose changes in some files: commit or stash them first.",
             ),
+            Reason::CheckedOut { branch, folder } => Refusal::conflict(format!(
+                "{branch} is checked out in another worktree at {folder}."
+            )),
             Reason::Untrusted => Refusal::conflict(UNTRUSTED),
             Reason::Other => {
                 Refusal::conflict("Git could not read this; the engine's log says why.")
@@ -258,7 +323,7 @@ impl From<Failure> for Refusal {
 /// What the git methods but `status` say in a folder git does not know.
 const NOT_A_REPOSITORY: &str = "This Space's folder is not a git repository.";
 /// What they say, and `status` too, in a repository git does not trust.
-pub const UNTRUSTED: &str = "Git does not trust this folder, as another user owns it: add it to git's safe.directory to use it here.";
+const UNTRUSTED: &str = "Git does not trust this folder, as another user owns it: add it to git's safe.directory to use it here.";
 
 /// Runs `git args` in `folder`. A git that exits with another code than 0
 /// is no error here: [`Ran::checked`] makes it one, and a probe such as
@@ -274,15 +339,14 @@ where
         .map(|a| a.to_string_lossy())
         .collect::<Vec<_>>()
         .join(" ");
-    let time = opts.time.unwrap_or(TIME);
-    let _turn = match time <= TIME {
-        true => Some(
+    let _turn = match opts.pool {
+        Pool::Shared => Some(
             RUNNING
                 .acquire()
                 .await
                 .expect("the semaphore is never closed"),
         ),
-        false => None,
+        Pool::Long => None,
     };
     let mut command = tokio::process::Command::new("git");
     command
@@ -296,8 +360,7 @@ where
             None => Stdio::null(),
         })
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .kill_on_drop(true);
+        .stderr(Stdio::piped());
     // A group of its own, so stopping it stops the hooks it runs too.
     #[cfg(unix)]
     command.process_group(0);
@@ -312,10 +375,15 @@ where
         tracing::warn!(%error, args = %said, "git did not start");
         Failure(Reason::Other)
     })?;
+    let time = opts.time.unwrap_or(TIME);
     let cap = opts.cap.unwrap_or(OUTPUT);
     let stdin = child.stdin.take();
     let stdout = child.stdout.take().expect("stdout is piped");
     let stderr = child.stderr.take().expect("stderr is piped");
+    let mut running = Running {
+        child: Some(child),
+        ended: false,
+    };
     let (mut out, mut err) = (Vec::new(), Vec::new());
     let ran = async {
         let feeding = async {
@@ -338,11 +406,11 @@ where
                         // It has more to say than is kept: stop it, so its
                         // stderr ends too.
                         truncated = true;
-                        let _ = child.start_kill();
+                        running.terminate();
                     }
                 }
                 () = &mut hearing, if !heard => heard = true,
-                exited = child.wait() => break exited,
+                exited = running.wait() => break exited,
             }
         };
         let rest = async {
@@ -360,7 +428,7 @@ where
     };
     let Ok((truncated, success)) = tokio::time::timeout(time, ran).await else {
         tracing::warn!(args = %said, "git ran past its time and was stopped");
-        stop(&mut child).await;
+        running.stop().await;
         return Err(Failure(Reason::TimedOut));
     };
     Ok(Ran {
@@ -372,28 +440,89 @@ where
     })
 }
 
-/// Stops a git that ran past its time: SIGTERM to it and its hooks
-/// first, on which git takes its lock files away, as `index.lock`; killed
-/// if it has not ended soon after.
-async fn stop(child: &mut tokio::process::Child) {
-    #[cfg(unix)]
-    if let Some(group) = child
-        .id()
-        .and_then(|id| i32::try_from(id).ok())
-        .and_then(rustix::process::Pid::from_raw)
-    {
-        let _ = rustix::process::kill_process_group(group, rustix::process::Signal::TERM);
-        if tokio::time::timeout(STOPPING, child.wait()).await.is_ok() {
+/// A git running, in a process group of its own with the hooks it runs.
+/// Let go before it ended, as when its call is, it is stopped as
+/// [`Running::stop`] stops it, meanwhile.
+struct Running {
+    /// Taken only as it is stopped.
+    child: Option<Child>,
+    ended: bool,
+}
+
+impl Running {
+    fn child(&mut self) -> &mut Child {
+        self.child.as_mut().expect("there till it is stopped")
+    }
+
+    async fn wait(&mut self) -> std::io::Result<std::process::ExitStatus> {
+        let exited = self.child().wait().await;
+        self.ended = exited.is_ok();
+        exited
+    }
+
+    /// Asks it and its hooks to stop.
+    fn terminate(&mut self) {
+        terminate(self.child());
+    }
+
+    /// Stops it and its hooks, and waits till it has.
+    async fn stop(mut self) {
+        if let Some(child) = self.child.take() {
+            stopped(child).await;
+        }
+    }
+}
+
+impl Drop for Running {
+    fn drop(&mut self) {
+        let Some(mut child) = self.child.take() else {
+            return;
+        };
+        if self.ended {
             return;
         }
+        match tokio::runtime::Handle::try_current() {
+            Ok(runtime) => drop(runtime.spawn(stopped(child))),
+            Err(_) => drop(child.start_kill()),
+        }
+    }
+}
+
+/// The process group a git leads, while it runs.
+#[cfg(unix)]
+fn group(child: &Child) -> Option<rustix::process::Pid> {
+    let id = i32::try_from(child.id()?).ok()?;
+    rustix::process::Pid::from_raw(id)
+}
+
+/// Asks a git and its hooks to stop: SIGTERM, on which git takes its lock
+/// files away, as `index.lock`.
+fn terminate(child: &mut Child) {
+    #[cfg(unix)]
+    if let Some(group) = group(child) {
+        let _ = rustix::process::kill_process_group(group, rustix::process::Signal::TERM);
+        return;
+    }
+    let _ = child.start_kill();
+}
+
+/// Stops a git and its hooks: asked first, killed if it has not ended
+/// soon after.
+async fn stopped(mut child: Child) {
+    terminate(&mut child);
+    if tokio::time::timeout(STOPPING, child.wait()).await.is_ok() {
+        return;
+    }
+    #[cfg(unix)]
+    if let Some(group) = group(&child) {
         let _ = rustix::process::kill_process_group(group, rustix::process::Signal::KILL);
     }
     let _ = child.start_kill();
     let _ = child.wait().await;
 }
 
-/// Up to `cap` bytes of `from` into `kept`, read to its end, and whether
-/// it had more; each line said to `lines` as it comes, past the cap too.
+/// Up to `cap` bytes of `from` into `kept`, read to its end; each line
+/// said to `lines` as it comes, past the cap too.
 async fn capped_lines(
     from: impl AsyncRead + Unpin,
     cap: usize,
@@ -491,17 +620,24 @@ mod tests {
         assert_eq!(Reason::of(pull), Reason::WouldLose);
         let owned = "fatal: detected dubious ownership in repository at '/r'\n";
         assert_eq!(Reason::of(owned), Reason::Untrusted);
+        let topic = |folder: &str| Reason::CheckedOut {
+            branch: "topic".into(),
+            folder: folder.into(),
+        };
+        let used = "fatal: 'topic' is already used by worktree at '/w x'\n";
+        assert_eq!(Reason::of(used), topic("/w x"));
+        let older = "fatal: 'topic' is already checked out at '/w'\n";
+        assert_eq!(Reason::of(older), topic("/w"));
     }
 
-    /// A repository in a folder of its own, its one file committed, with
-    /// `hook` as its pre-commit hook.
+    /// A repository in a folder of its own, its one file committed and
+    /// changed since, with `hook` as its pre-commit hook.
     #[cfg(unix)]
     fn with_hook(hook: &str) -> tempfile::TempDir {
         use std::os::unix::fs::PermissionsExt;
         let folder = tempfile::tempdir().unwrap();
         let run = |args: &[&str]| {
             let ran = std::process::Command::new("git")
-                .args(["-c", "user.name=Ann", "-c", "user.email=ann@example.com"])
                 .args(args)
                 .current_dir(folder.path())
                 .output()
@@ -509,9 +645,12 @@ mod tests {
             assert!(ran.status.success(), "{args:?}");
         };
         run(&["init", "--quiet"]);
+        run(&["config", "user.name", "Ann"]);
+        run(&["config", "user.email", "ann@example.com"]);
+        run(&["config", "commit.gpgsign", "false"]);
         std::fs::write(folder.path().join("a.txt"), "one\n").unwrap();
         run(&["add", "a.txt"]);
-        run(&["commit", "--quiet", "--no-gpg-sign", "-m", "first"]);
+        run(&["commit", "--quiet", "-m", "first"]);
         let file = folder.path().join(".git/hooks/pre-commit");
         std::fs::write(&file, hook).unwrap();
         std::fs::set_permissions(&file, std::fs::Permissions::from_mode(0o755)).unwrap();
@@ -519,17 +658,7 @@ mod tests {
         folder
     }
 
-    const COMMIT: [&str; 9] = [
-        "-c",
-        "user.name=Ann",
-        "-c",
-        "user.email=ann@example.com",
-        "commit",
-        "--quiet",
-        "--no-gpg-sign",
-        "-am",
-        "second",
-    ];
+    const COMMIT: [&str; 4] = ["commit", "--quiet", "-am", "second"];
 
     #[cfg(unix)]
     #[tokio::test]
