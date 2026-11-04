@@ -2,10 +2,11 @@
  * The branch row of a Thread's details and its picker (ADR 0034,
  * decision 4), as T3 Code's: the branch with how far it is ahead and
  * behind; pressed, a search over the branches here and on remotes in one
- * list, which switches to the one picked, and Create branch with the
- * words; the keys move the choice. A branch's right click copies its
- * name. Alt+Shift+G opens it in the focused Thread, as T3 Code's
- * Mod+Shift+G.
+ * list, a remote's left out when one here has its name, which switches to
+ * the one picked, and Create branch with a name made of the words; the
+ * keys move the choice, Enter picks the first listed. A branch's right
+ * click copies its name. Alt+Shift+G opens it in the focused Thread, as
+ * T3 Code's Mod+Shift+G.
  */
 import { useEffect, useId, useState } from "react"
 import type { Engine, SpaceId } from "@banda/contract"
@@ -29,7 +30,9 @@ import {
 } from "@banda/ui/components/suggestions"
 import { DetailsRow } from "@banda/ui/components/thread-details"
 import { useAct } from "@banda/ui/hooks/use-act"
+import { problem } from "@banda/ui/lib/words"
 import { ChevronDownIcon, GitBranchIcon, PlusIcon } from "lucide-react"
+import { branchName, finds, listedOf, taken } from "./branches"
 
 /** What Alt+Shift+G asks the focused Thread's card to open. */
 export const PICKER = "git.branch"
@@ -98,6 +101,7 @@ function Branches({
   const [query, setQuery] = useState("")
   const words = query.trim()
   const [all, setAll] = useState<Ref[]>()
+  const [unread, setUnread] = useState<string>()
   const [found, setFound] = useState<{ words: string; refs: Ref[] }>()
   const [chosen, setChosen] = useState({ words: "", at: 0 })
   const acting = useAct()
@@ -107,7 +111,7 @@ function Branches({
     void engine
       .call("git.refs", {}, { space })
       .then((refs) => current && setAll(refs))
-      .catch(() => current && setAll([]))
+      .catch((error: unknown) => current && setUnread(problem(error)))
     return () => {
       current = false
     }
@@ -131,16 +135,19 @@ function Branches({
     }
   }, [engine, space, full, words])
 
-  const lower = words.toLowerCase()
-  const listed =
-    found?.words === words
-      ? found.refs
-      : (all ?? []).filter((ref) => ref.name.toLowerCase().includes(lower))
-  const taken = listed.some((ref) => !ref.remote && ref.name === words)
-  const creates = words !== "" && !taken
-  // Enter picks the first branch, or makes one of words no branch has.
+  const searched = found?.words === words
+  const listed = searched
+    ? listedOf(found.refs)
+    : listedOf(all ?? []).filter((ref) => finds(ref, words))
+  // The list is cut when the engine kept some back, and has not searched.
+  const cut = full && !searched
+  const made = branchName(words)
+  const creates =
+    made !== "" &&
+    !taken([...(all ?? []), ...(searched ? found.refs : [])], made)
+  // Enter picks the first branch listed; Create when none is.
   const choices = listed.length + (creates ? 1 : 0)
-  const at = chosen.words === words ? chosen.at : creates ? listed.length : 0
+  const at = chosen.words === words ? chosen.at : 0
   const act = async (run: () => Promise<unknown>) => {
     if ((await acting.act(run)) !== undefined) onDone()
   }
@@ -152,7 +159,7 @@ function Branches({
   }
   const create = () => {
     if (!acting.busy)
-      void act(() => engine.call("git.branch", { name: words }, { space }))
+      void act(() => engine.call("git.branch", { name: made }, { space }))
   }
   const choose = (at: number) => {
     const ref = listed[at]
@@ -231,11 +238,14 @@ function Branches({
             onClick={create}
           >
             <PlusIcon className="size-4 shrink-0" />
-            <span className="truncate">Create branch “{words}”</span>
+            <span className="truncate">Create branch “{made}”</span>
           </Suggestion>
         )}
+        {unread && <SuggestionsEmpty>{unread}</SuggestionsEmpty>}
         {all && choices === 0 && (
-          <SuggestionsEmpty>No branches yet.</SuggestionsEmpty>
+          <SuggestionsEmpty>
+            {words ? "No branch matches." : "No branches yet."}
+          </SuggestionsEmpty>
         )}
       </SuggestionList>
       {acting.problem && (
@@ -243,9 +253,11 @@ function Branches({
           {acting.problem}
         </p>
       )}
-      <p className="px-2 pt-1.5 pb-0.5 text-[11px] text-muted-foreground">
-        {listed.length === 1 ? "1 branch" : `${listed.length} branches`}
-      </p>
+      {cut && !words && (
+        <p className="px-2 pt-1.5 pb-0.5 text-[11px] text-muted-foreground">
+          Showing {listed.length} branches: search to find others.
+        </p>
+      )}
     </div>
   )
 }
