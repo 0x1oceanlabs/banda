@@ -19,7 +19,7 @@ What was wrong:
 1. **On Linux the terminal writes in the system's monospace; on macOS and Windows in JetBrains Mono, which Banda ships.**
    - On Linux people choose their terminal's font on purpose, so the generic `monospace` stays fontconfig's, as ADR 0007 has it: Omarchy's font on Omarchy.
    - Only Linux asks fontconfig. On macOS and Windows `monospace` is JetBrains Mono, so a fontconfig Homebrew brought changes nothing (#438).
-   - Banda ships JetBrains Mono as Inter is shipped: variable, roman and italic, Latin and Cyrillic, OFL 1.1, from `@fontsource-variable`. It is there on every system, so `mono = "JetBrains Mono"` names it on Linux too, and it is the fallback where fontconfig answers nothing.
+   - Banda ships JetBrains Mono as Inter is shipped: variable, roman and italic, Latin and Cyrillic, OFL 1.1, from `@fontsource-variable`, under its name there, `JetBrains Mono Variable`, as Inter's is `Inter Variable`. It is there on every system, so `mono = "JetBrains Mono Variable"` names it on Linux too, and it is what `monospace` becomes wherever fontconfig answers nothing.
    - The plain font, not a Nerd Font's patched one: the patched one is several times the size and changes the metrics, and its Mono cut draws icons small. Icons come from Symbols Nerd Font Mono, which the adapter already ships as a fallback, as Ghostty and WezTerm do.
    - The code in a Thread and in a diff writes in the same `[font] mono`, so it follows.
    - The interface stays in Inter, shipped already (`sans = "Inter Variable"`).
@@ -33,7 +33,7 @@ What was wrong:
    # The font: a font's name or a CSS list. Left out, the look's
    # [font] mono: on Linux the system's monospace, on macOS and
    # Windows JetBrains Mono. Missing icons come from Symbols Nerd Font.
-   # font = "JetBrains Mono"
+   # font = "JetBrains Mono Variable"
 
    # The text's size, in pixels. Left out, three quarters of the
    # look's [font] size: 12 at 14.
