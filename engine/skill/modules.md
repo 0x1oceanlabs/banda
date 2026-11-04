@@ -48,6 +48,10 @@ Programs the Person runs in a terminal: a shell, or a Harness's sign-in.
 
 Its settings: `terminal.toml`.
 
+Its actions, which `keys.toml` binds by id:
+
+- New terminal (`terminal.new`), Ctrl+Alt+Return
+
 Its widgets on the bar, which `[bar]` in look.toml places by id:
 
 - `terminal.ports`: The servers started in Banda: the first one's port and how many more; a click lists them.

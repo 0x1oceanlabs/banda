@@ -97,3 +97,36 @@ test("a plain letter is never the window's: it belongs to the Pane", () => {
     "pane.close"
   )
 })
+
+test("New terminal has its own key, and keys.toml can replace or free it", () => {
+  const enter = press("Enter", { ctrlKey: true, altKey: true })
+  expect(actionFor(ACTIONS, enter)?.id).toBe("terminal.new")
+
+  const { actions, problems } = rebind(ACTIONS, {
+    file: "/c/keys.toml",
+    binds: [
+      {
+        code: "Enter",
+        ctrl: true,
+        alt: true,
+        shift: false,
+        text: "Ctrl+Alt+Return",
+        line: 2,
+      },
+      {
+        code: "KeyT",
+        ctrl: true,
+        alt: true,
+        shift: false,
+        text: "Ctrl+Alt+T",
+        action: "terminal.new",
+        line: 3,
+      },
+    ],
+  })
+  expect(problems).toEqual([])
+  expect(actionFor(actions, enter)).toBeUndefined()
+  expect(
+    actionFor(actions, press("KeyT", { ctrlKey: true, altKey: true }))?.id
+  ).toBe("terminal.new")
+})

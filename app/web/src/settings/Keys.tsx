@@ -27,8 +27,9 @@ export function Keys({ lit }: { lit?: string }) {
     <div className="flex flex-col gap-3">
       <div className="flex items-center gap-3 px-1">
         <p className="flex-1 text-xs text-muted-foreground">
-          The key sheet lists every action with all its keys; add a key or free
-          one there, and its line shows here.
+          Choose an action in the key sheet, press Tab, then Add a key. Assign a
+          key to another action to change what it runs. Change or reset your
+          keys below.
         </p>
         <Button
           variant="outline"

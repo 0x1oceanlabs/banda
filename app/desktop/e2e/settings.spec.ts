@@ -308,6 +308,110 @@ test("Keys: the lines of keys.toml, a key changed and taken out, and the reset c
     .toBe('[binds]\n# mine\n"Alt+Q" = "pane.close"\n')
 })
 
+test("New terminal: Ctrl+Alt+Enter opens a shell, and its keys can be assigned, changed and freed", async () => {
+  window = await startWindow()
+  const { page, dir } = window
+  const file = join(dir, "config/keys.toml")
+  const { composer } = await firstThread(page)
+  await expect(composer).toBeFocused()
+  const screens = page.getByRole("region", { name: "Terminal screen" })
+
+  // The default key opens a working shell in the focused Space. Another
+  // press from the terminal opens another shell, rather than typing in it.
+  await page.keyboard.press("Control+Alt+Enter")
+  await expect(screens).toHaveCount(1)
+  await expect(screens).toHaveAttribute("data-state", "running")
+  await screens.click()
+  await page.keyboard.type("pwd > terminal-folder.txt")
+  await page.keyboard.press("Enter")
+  await expect
+    .poll(() => textOf(join(dir, "root/Work/terminal-folder.txt")).trim())
+    .toBe(join(dir, "root/Work"))
+  await page.keyboard.press("Control+Alt+Enter")
+  await expect(screens).toHaveCount(2)
+  await expect(screens.last()).toHaveAttribute("data-state", "running")
+  await page.keyboard.press("Alt+KeyW")
+  await expect(screens).toHaveCount(1)
+  await page.keyboard.press("Alt+KeyW")
+  await expect(screens).toHaveCount(0)
+
+  // New terminal is in the same key sheet as every other action. A key
+  // assigned there is a line in Settings > Keys, ready to change.
+  const settings = await openSettings(page)
+  await settings
+    .getByRole("navigation", { name: "Settings sections" })
+    .getByRole("button", { name: /Keys/ })
+    .click()
+  await settings.getByRole("button", { name: "Open the key sheet" }).click()
+  const menu = page.getByRole("dialog", { name: "Banda menu" })
+  const search = menu.getByRole("combobox", { name: "Search" })
+  await search.fill("New terminal")
+  await expect(
+    menu.getByRole("option", { name: /^New terminal/ })
+  ).toBeVisible()
+  await search.press("Tab")
+  const acts = menu.getByRole("listbox", { name: "Actions" })
+  await acts.getByRole("option", { name: "Add a key…" }).click()
+  await search.press("F8")
+  await expect(menu.getByRole("status")).toContainText(
+    "F8 runs “New terminal” now"
+  )
+  await expect.poll(() => textOf(file)).toMatch(/^"?F8"? = "terminal.new"$/m)
+  await search.press("Escape")
+  await expect(menu).toBeHidden()
+  await settings
+    .locator('[data-key="F8"]')
+    .getByRole("button", { name: "Change F8" })
+    .click()
+  await page.keyboard.press("Control+Alt+KeyT")
+  await expect
+    .poll(() => textOf(file))
+    .toContain('"Ctrl+Alt+T" = "terminal.new"')
+  expect(textOf(file)).not.toMatch(/^"?F8"?\s*=/m)
+  await expect(settings.locator('[data-key="Ctrl+Alt+T"]')).toContainText(
+    "terminal.new"
+  )
+  await page.screenshot({ path: "test-results/settings-terminal-key.png" })
+  await settings.getByRole("button", { name: "Close Settings" }).click()
+  await expect(settings).toBeHidden()
+  await composer.click()
+
+  // The previous key is gone; the new one and the default both work.
+  await page.keyboard.press("F8")
+  await page.keyboard.press("Control+Alt+KeyT")
+  await expect(screens).toHaveCount(1)
+  await expect(screens).toHaveAttribute("data-state", "running")
+  await page.keyboard.press("Control+Alt+Enter")
+  await expect(screens).toHaveCount(2)
+  await expect(screens.last()).toHaveAttribute("data-state", "running")
+  await page.keyboard.press("Alt+KeyW")
+  await expect(screens).toHaveCount(1)
+  await page.keyboard.press("Alt+KeyW")
+  await expect(screens).toHaveCount(0)
+
+  // Freeing its default leaves only the custom key in force, at once.
+  await page.keyboard.press("Alt+KeyK")
+  await search.fill("New terminal")
+  await search.press("Tab")
+  await acts.getByRole("option", { name: "Free Ctrl+Alt+Return" }).click()
+  await expect(menu.getByRole("status")).toContainText(
+    "Ctrl+Alt+Return goes to the Pane now"
+  )
+  await expect.poll(() => textOf(file)).toContain('"Ctrl+Alt+Return" = "none"')
+  await expect(
+    menu
+      .getByRole("option", { name: /^New terminal/ })
+      .locator("[data-slot=kbd-group]")
+  ).toHaveCount(1)
+  await search.press("Escape")
+  await expect(menu).toBeHidden()
+  await composer.click()
+  await page.keyboard.press("Control+Alt+Enter")
+  await page.keyboard.press("Control+Alt+KeyT")
+  await expect(screens).toHaveCount(1)
+  await expect(screens).toHaveAttribute("data-state", "running")
+})
+
 test("Sharing: nothing on and no ID, then an ID as a switch turns on, and a Banda from a checkout never sends (ADR 0039)", async () => {
   window = await startWindow()
   const { page, dir } = window
