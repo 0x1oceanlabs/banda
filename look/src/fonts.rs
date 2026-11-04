@@ -2,10 +2,11 @@
 //! decision 2).
 //!
 //! A family is a font's name, a CSS list of them, or a generic name such
-//! as `monospace`. A generic name is the system's choice, which fontconfig
-//! holds: Omarchy sets the monospace one, and `omarchy-font-current` asks
-//! `fc-match` for it as this does. So the terminal writes in Omarchy's
-//! font, and follows it when it changes.
+//! as `monospace`. A generic name is the system's choice, which on Linux
+//! fontconfig holds: Omarchy sets the monospace one, and
+//! `omarchy-font-current` asks `fc-match` for it as this does. So the
+//! terminal writes in Omarchy's font, and follows it when it changes
+//! (ADR 0047: elsewhere, the font the window ships).
 
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -17,7 +18,8 @@ use std::process::Command;
 pub struct FontSettings {
     /// The interface's text.
     pub sans: Option<String>,
-    /// The terminal's and code's.
+    /// The terminal's and code's. `monospace`, the default, is the
+    /// system's on Linux and JetBrains Mono elsewhere.
     pub mono: Option<String>,
     /// The interface's usual text, in pixels; everything measured in text
     /// grows with it, as with a zoom.
@@ -29,6 +31,8 @@ pub const SIZES: std::ops::RangeInclusive<f64> = 8.0..=32.0;
 /// shadcn's usual text is `text-sm`, 0.875 of the root's.
 const TEXT_SM: f64 = 0.875;
 const GENERIC: [&str; 5] = ["monospace", "sans-serif", "serif", "system-ui", "cursive"];
+/// The monospace the window ships, as `@fontsource-variable` names it.
+const SHIPPED_MONO: &str = "JetBrains Mono Variable";
 
 impl FontSettings {
     pub fn over(self, under: FontSettings) -> FontSettings {
@@ -108,7 +112,8 @@ fn family(value: Option<&str>, generic: &str, system: &dyn Fn(&str) -> Option<St
         return value.to_owned();
     }
     if GENERIC.contains(&value) {
-        return match system(value) {
+        let shipped = (value == "monospace").then(|| SHIPPED_MONO.to_owned());
+        return match system(value).or(shipped) {
             Some(name) => format!("{}, {value}", quoted(&name)),
             None => value.to_owned(),
         };
@@ -150,7 +155,11 @@ mod tests {
             family(Some("monospace"), "monospace", &geist),
             "\"GeistMono Nerd Font\", monospace"
         );
-        assert_eq!(family(Some("monospace"), "monospace", &none), "monospace");
+        assert_eq!(
+            family(Some("monospace"), "monospace", &none),
+            "\"JetBrains Mono Variable\", monospace"
+        );
+        assert_eq!(family(Some("serif"), "sans-serif", &none), "serif");
         assert_eq!(
             family(Some("\"Iosevka\", monospace"), "monospace", &none),
             "\"Iosevka\", monospace"

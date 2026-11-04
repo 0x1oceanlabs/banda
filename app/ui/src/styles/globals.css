@@ -2,6 +2,9 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 @import "@fontsource-variable/inter";
+/* The monospace where the system names none, as on macOS (ADR 0047). */
+@import "@fontsource-variable/jetbrains-mono";
+@import "@fontsource-variable/jetbrains-mono/wght-italic.css";
 @import "streamdown/styles.css";
 
 @custom-variant dark (&:is(.dark *));
@@ -209,7 +212,7 @@
   /* [font]: the two families, and the root's size that makes the usual
      text (text-sm) 14px. Everything measured in rem grows with it. */
   --font-family-sans: "Inter Variable", sans-serif;
-  --font-family-mono: monospace;
+  --font-family-mono: "JetBrains Mono Variable", monospace;
   --text-root: 16px;
   /* Scrollbars as T3 Code draws them: a thin thumb in the border's
      colour on no track, as the ScrollArea's. The terminal's too. */
