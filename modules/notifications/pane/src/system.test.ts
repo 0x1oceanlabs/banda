@@ -1,5 +1,13 @@
 import { expect, test } from "vitest"
-import { GO_TO, loudestOf, noticeOf, summaryOf, toldOfCall } from "./system"
+import {
+  GO_TO,
+  JOINED,
+  joinedOf,
+  loudestOf,
+  noticeOf,
+  summaryOf,
+  toldOfCall,
+} from "./system"
 import type { Call } from "@banda/ui/pane"
 
 const heard = (about: string, chime: Call["chime"], detail?: string) =>
@@ -71,4 +79,19 @@ test("what answers a call there and then are its toast's buttons; a click opens 
   expect(told.buttons).toEqual([allow, deny])
   expect(told.open).toMatchObject({ label: "Answer", action: GO_TO })
   expect(toldOfCall(heard("Tests", "done"), true).open).toBeUndefined()
+})
+
+test("done calls that show at once join in one toast, a line each", () => {
+  const joined = joinedOf(
+    [heard("Docs", "done", "PR #470 is open"), heard("Tests", "done")],
+    true
+  )
+  expect(joined).toMatchObject({
+    key: JOINED,
+    kind: "done",
+    title: "2 Threads done",
+    body: "Docs: PR #470 is open\nTests",
+    buttons: [{ label: "Show", action: "sidebar.show" }],
+  })
+  expect(joinedOf([heard("Docs", "done", "PR #470")], false).body).toBe("Docs")
 })

@@ -20,6 +20,8 @@ import {
   noticeOf,
   quietNow,
   SUMMARY,
+  JOINED,
+  joinedOf,
   summaryOf,
   toldOfCall,
 } from "./system"
@@ -105,6 +107,25 @@ export function startTelling(
     if (projects.length < 2) return undefined
     return projects.find((each) => each.id === project)?.name || undefined
   }
+  // The `done` calls the joined toast shows, while it does.
+  let joined: Call[] = []
+  // Toasts a `done` call: joined with those that show, if any do.
+  const toastDone = (call: Call, told: Told, detail: boolean) => {
+    const up = new Set(toast.getToasts().map((one) => String(one.id)))
+    const showing = [
+      ...(up.has(JOINED) ? joined : []),
+      ...[...toasted].flatMap((key) => {
+        const was = calling.find((one) => one.key === key)
+        return was?.chime === "done" && up.has(key) ? [was] : []
+      }),
+    ].filter((one) => one.key !== call.key)
+    if (showing.length === 0) return void toastTold(told, press)
+    for (const one of showing) if (up.has(one.key)) toast.dismiss(one.key)
+    joined = [
+      ...new Map([...showing, call].map((one) => [one.key, one])).values(),
+    ]
+    toastTold(joinedOf(joined, detail), press)
+  }
   const answer = (thing: Thing & { pane: PaneState }) => {
     window.goTo(thing)
     withdraw([`${thing.project}:${thing.about}`])
@@ -125,7 +146,8 @@ export function startTelling(
       if (telling.toast || telling.system) keep(told)
       if (telling.toast) {
         toasted.add(call.key)
-        toastTold(told, press)
+        if (call.chime === "done") toastDone(call, told, notify.detail)
+        else toastTold(told, press)
       }
       if (telling.system) notices.push(call)
     }

@@ -72,6 +72,28 @@ export function toldOfCall(
   }
 }
 
+/** The key of the toast `done` calls join in. */
+export const JOINED = "done"
+
+/**
+ * `done` calls whose toasts show at once, joined in one (ADR 0056,
+ * decision 3): how many, and a line each. Its button shows the sidebar,
+ * which lists them; each is also kept on its own for the bell.
+ */
+export function joinedOf(calls: readonly Call[], detail: boolean): Told {
+  return {
+    key: JOINED,
+    kind: "done",
+    title: `${calls.length} Threads done`,
+    body: calls
+      .map((call) =>
+        detail && call.detail ? `${call.title}: ${call.detail}` : call.title
+      )
+      .join("\n"),
+    buttons: [{ label: "Show", action: "sidebar.show" }],
+  }
+}
+
 /** One notice of many calls at once, named in it. */
 export function summaryOf(calls: readonly Call[]): Notice {
   return {
