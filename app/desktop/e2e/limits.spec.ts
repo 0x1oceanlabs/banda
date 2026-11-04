@@ -14,7 +14,8 @@ test("the limits ring follows the machine, opens its accounts, and hides with re
   const ring = page.getByRole("button", { name: /^Usage limits:/ })
   await expect(ring).toHaveCount(0)
   const cli = join(dir, "codex")
-  // No paid model or credentials: only the app-server's limits protocol.
+  // No paid model or credentials: only the app-server's limits and
+  // account protocol. Each account has its own email, so none is merged.
   writeFileSync(
     cli,
     `#!/usr/bin/env node
@@ -22,7 +23,9 @@ const lines = require("readline").createInterface({ input: process.stdin })
 lines.on("line", line => {
   const { id, method } = JSON.parse(line)
   if (id === undefined) return
-  const result = method === "initialize" ? {} : {
+  const result = method === "initialize" ? {} : method === "account/read" ? {
+    account: { type: "chatgpt", email: process.env.TEST_EMAIL || "p@example.com", planType: "pro" }
+  } : {
     rateLimits: { planType: "pro", primary: { usedPercent: Number(process.env.TEST_LIMIT_USED || 85), windowDurationMins: 10080, resetsAt: Math.floor(Date.now() / 1000) + 3 * 86400 } }
   }
   process.stdout.write(JSON.stringify({ id, result }) + "\\n")
@@ -60,7 +63,7 @@ lines.on("line", line => {
   await page.keyboard.press("Escape")
   await expect(popup).toBeHidden()
   await expect(ring).toBeFocused()
-  config += `\n[[harness]]\nid = "codex-work"\nname = "Work account"\ncommand = "acp"\ncli = { program = ${JSON.stringify(cli)}, variable = "CODEX_PATH" }\nenv = { TEST_LIMIT_USED = "100" }\n`
+  config += `\n[[harness]]\nid = "codex-work"\nname = "Work account"\ncommand = "acp"\ncli = { program = ${JSON.stringify(cli)}, variable = "CODEX_PATH" }\nenv = { TEST_LIMIT_USED = "100", TEST_EMAIL = "w@example.com" }\n`
   writeFileSync(join(dir, "config/harnesses.toml"), config)
   window.banda("call", "harnesses.limits", "--params", '{"read":true}')
   await expect(ring).toHaveClass(/text-destructive/)
