@@ -13,11 +13,14 @@ import {
   statSync,
   writeSync,
 } from "node:fs"
+import { readFile } from "node:fs/promises"
 import { dirname, join } from "node:path"
+import { fileURLToPath } from "node:url"
 import { format } from "node:util"
 import {
   fromRoot,
   keeper,
+  type MapOf,
   type Record,
   recordOf,
 } from "@banda/contract/problems"
@@ -115,7 +118,7 @@ export function watchProblems(
   const keep = keeper(send)
   const thrown = (error: unknown) => {
     console.error("banda: main:", error)
-    keep(recordOf(error, "main", own))
+    void recordOf(error, "main", own, mapOf).then(keep)
   }
   process.on("uncaughtException", thrown)
   process.on("unhandledRejection", thrown)
@@ -148,8 +151,9 @@ const crash = (reason: string, message: string): Record => ({
 })
 
 /**
- * A script of main's, as the repository names it: its bundle, in a
- * checkout's path, or in a packaged app's archive as `app/desktop`'s.
+ * A script of main's, as the repository names it: as its bundle's map
+ * names its sources, or the bundle, in a checkout's path, or in a
+ * packaged app's archive as `app/desktop`'s.
  */
 function own(script: string): string | null {
   const path = script.replace(/^file:\/\//, "")
@@ -157,3 +161,12 @@ function own(script: string): string | null {
   const packaged = /\/app\.asar\/(.*)$/.exec(path)
   return fromRoot(path) ?? (packaged ? `app/desktop/${packaged[1]}` : null)
 }
+
+/** The map beside main's bundle (build.mjs), read as a Problem is kept. */
+const mapOf: MapOf = async (script) =>
+  JSON.parse(
+    await readFile(
+      `${script.startsWith("file:") ? fileURLToPath(script) : script}.map`,
+      "utf8"
+    )
+  )

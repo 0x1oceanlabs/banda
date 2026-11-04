@@ -2,6 +2,11 @@
  * The problems module's words for TypeScript (ADR 0039, decision 1), and
  * a JavaScript error as the Record the page and the window's main keep.
  */
+import {
+  originalPositionFor,
+  type SourceMapInput,
+  TraceMap,
+} from "@jridgewell/trace-mapping"
 import type { Frame } from "./generated/problems/Frame"
 import type { Record } from "./generated/problems/Record"
 import type { Source } from "./generated/problems/Source"
@@ -24,8 +29,21 @@ export type { Source } from "./generated/problems/Source"
  */
 export type Own = (script: string) => string | null
 
-/** What was thrown, as the Record of `source`, with Banda's own frames. */
-export function recordOf(thrown: unknown, source: Source, own: Own): Record {
+/**
+ * The map a built script has beside it, as JSON, or `null` for one with
+ * none. Built, Banda's maps keep only where each place of a script is in
+ * its source, not the source's text (ADR 0039, decision 9).
+ */
+export type MapOf = (script: string) => Promise<unknown>
+
+/** What was thrown, as the Record of `source`, with Banda's own frames,
+ * read through the maps of the scripts they are in. */
+export async function recordOf(
+  thrown: unknown,
+  source: Source,
+  own: Own,
+  mapOf: MapOf
+): Promise<Record> {
   const error =
     thrown instanceof Error
       ? thrown
@@ -34,7 +52,7 @@ export function recordOf(thrown: unknown, source: Source, own: Own): Record {
     source,
     kind: error.name || "Error",
     message: error.message,
-    frames: framesOf(error.stack ?? "", own),
+    frames: await framesOf(error.stack ?? "", own, mapOf),
   }
 }
 
@@ -48,23 +66,52 @@ function safe(thrown: unknown): string {
 }
 
 /** V8's `at function (script:line:column)`, or `at script:line:column`. */
-const FRAME = /^\s*at (?:async )?(?:(.+?) \()?(.+?):(\d+):\d+\)?$/
+const FRAME = /^\s*at (?:async )?(?:(.+?) \()?(.+?):(\d+):(\d+)\)?$/
 
-/** A V8 stack's frames that are Banda's own, nearest first. */
-export function framesOf(stack: string, own: Own): Frame[] {
-  const frames: Frame[] = []
-  for (const line of stack.split("\n")) {
-    const [, named, script, number] = FRAME.exec(line) ?? []
-    if (!script || !number) continue
-    const file = own(script)
-    if (file === null) continue
-    frames.push({
-      file,
-      function: (named ?? "").replace(/^new /, ""),
-      line: Number(number),
-    })
+/**
+ * A V8 stack's frames that are Banda's own, nearest first. A frame of a
+ * script with a map is named as the map names its source, with no
+ * function: built, a function's name is short and changes with each
+ * build, and a map names what a place calls, not the function it is in.
+ * Each map is read once for the stack, and not kept.
+ */
+export async function framesOf(
+  stack: string,
+  own: Own,
+  mapOf: MapOf
+): Promise<Frame[]> {
+  const maps = new Map<string, Promise<TraceMap | null>>()
+  const mapped = (script: string) => {
+    let map = maps.get(script)
+    if (!map) {
+      map = mapOf(script)
+        .then((read) =>
+          read ? new TraceMap(read as SourceMapInput, `${script}.map`) : null
+        )
+        .catch(() => null)
+      maps.set(script, map)
+    }
+    return map
   }
-  return frames
+  const frames = await Promise.all(
+    stack.split("\n").map(async (line): Promise<Frame[]> => {
+      const [, named, script, number, column] = FRAME.exec(line) ?? []
+      if (!script || !number || !column || own(script) === null) return []
+      const map = await mapped(script)
+      const at =
+        map &&
+        originalPositionFor(map, {
+          line: Number(number),
+          column: Number(column) - 1,
+        })
+      const [where, name, place] = at?.source
+        ? [at.source, "", at.line ?? undefined]
+        : [script, (named ?? "").replace(/^new /, ""), Number(number)]
+      const file = own(where)
+      return file === null ? [] : [{ file, function: name, line: place }]
+    })
+  )
+  return frames.flat()
 }
 
 /** The most a part of Banda sends in a minute, so a fault in a loop that

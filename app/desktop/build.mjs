@@ -15,7 +15,10 @@ const common = {
   platform: "node",
   target: "node22",
   external: ["electron"],
+  // Places only, not the source's text: main reads them as it keeps a
+  // Problem (ADR 0039, decision 9).
   sourcemap: true,
+  sourcesContent: false,
   logLevel: "warning",
   // Banda's sidebar.toml template ships as text (src/sidebar.ts).
   loader: { ".toml": "text" },
