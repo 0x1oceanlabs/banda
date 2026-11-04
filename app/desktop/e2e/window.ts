@@ -358,3 +358,30 @@ export async function setInFront(page: Page, front: boolean) {
     window.dispatchEvent(new Event(front ? "focus" : "blur"))
   }, front)
 }
+
+/** A new shell in the first Space, and its screen once it runs and its
+ * header says where it is: paths it prints start there. */
+export async function newTerminal(page: Page): Promise<Locator> {
+  await firstThread(page)
+  await expect(page.getByRole("region", { name: "New Thread" })).toBeVisible()
+  await page.keyboard.press("Alt+KeyN")
+  await page
+    .getByRole("region", { name: "New Pane" })
+    .getByRole("button", { name: "Terminal" })
+    .click()
+  const screen = page.getByRole("region", { name: "Terminal screen" })
+  await expect(screen).toHaveAttribute("data-state", "running")
+  await expect(
+    page.locator("section[data-tile]").filter({ has: screen }).locator("header")
+  ).toContainText("root/Work")
+  return screen
+}
+
+/** The text of the file at `path`; none while it is not there. */
+export function read(path: string): string | undefined {
+  try {
+    return readFileSync(path, "utf8")
+  } catch {
+    return undefined
+  }
+}

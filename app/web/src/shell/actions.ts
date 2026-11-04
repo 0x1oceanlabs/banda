@@ -547,6 +547,14 @@ export const ACTIONS: readonly Action<Shell>[] = [
     },
   },
   {
+    // The menu's Paste, as a terminal's: the focused field takes it.
+    id: "edit.paste",
+    section: "Banda",
+    title: "Paste",
+    unlisted: true,
+    run: () => window.banda?.edit.paste(),
+  },
+  {
     id: "space.add",
     section: "Banda",
     title: "Add Space",

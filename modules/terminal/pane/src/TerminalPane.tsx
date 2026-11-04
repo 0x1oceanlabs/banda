@@ -16,12 +16,17 @@ import {
 } from "@banda/contract/terminal"
 import { Surface } from "@banda/ghostty"
 import { Button } from "@banda/ui/components/button"
+import {
+  ContextMenu,
+  ContextMenuTrigger,
+} from "@banda/ui/components/context-menu"
 import { linkHint, outsideClick } from "@banda/ui/lib/links"
 import { problem as words } from "@banda/ui/lib/words"
 import { definePane, type PaneProps, PROGRAM_KEYS } from "@banda/ui/pane"
 import { RotateCcwIcon, TerminalIcon } from "lucide-react"
 import { Input } from "./input"
-import { type Target, targetOf } from "./links"
+import { outsideOf, type Target, targetOf } from "./links"
+import { type MenuAt, TerminalMenu } from "./TerminalMenu"
 import { onThemeChange, useFile } from "@banda/ui/lib/look"
 import { cursorOf, fontOf, themeOf } from "./theme"
 
@@ -135,6 +140,7 @@ function TerminalPane({
       titled={titled}
       followed={followed}
       files={run !== undefined}
+      paste={run && (() => run("edit.paste"))}
     />
   )
 }
@@ -156,6 +162,7 @@ function Screen({
   titled,
   followed,
   files,
+  paste,
 }: {
   engine: Engine
   space: SpaceId
@@ -168,6 +175,8 @@ function Screen({
   followed: (target: Target, outside: boolean) => void
   /** Whether a path is a link: there is a window to open its file. */
   files: boolean
+  /** Pastes into what has the focus; none where no window does. */
+  paste?: () => void
 }) {
   // The newest, so a title heard in a stream started earlier reaches the
   // Pane as it is now.
@@ -186,6 +195,9 @@ function Screen({
   const again = useRef<() => void>(() => {})
   const [now, setNow] = useState<Now>({ is: "starting" })
   const [problem, setProblem] = useState<string>()
+  const [menuAt, setMenuAt] = useState<MenuAt>({ link: null, selection: "" })
+  // Types to the program while it runs, as the menu's Clear does.
+  const typed = useRef<(data: string) => void>(() => {})
   // The newest `terminal.toml`, for a surface made, or a snapshot heard,
   // after it came.
   const writing = useFile(TERMINAL_FILE)
@@ -222,6 +234,9 @@ function Screen({
     const call = <M extends MethodOf<"call">>(method: M, params: Params<M>) =>
       engine.call(method, params, { space })
     const input = new Input(call, terminal, (error) => setProblem(words(error)))
+    typed.current = (data) => {
+      if (running) input.type(data)
+    }
     const told = (next: Now) => {
       running = next.is === "running"
       setNow(next)
@@ -293,9 +308,7 @@ function Screen({
         theme: themeOf(element),
         font: fontOf(element, writingNow.current),
         cursor: cursorOf(writingNow.current),
-        onData: (data) => {
-          if (running) input.type(data)
-        },
+        onData: (data) => typed.current(data),
         onResize: (cols, rows) => {
           // The screen redraws at every size as a column grows; the shell
           // hears the first size at once, and then only where it settles.
@@ -316,7 +329,14 @@ function Screen({
           if (target) heardLink(target, outsideClick(event))
         },
         linkTitle: (text) => hintOf(linked(text)),
-        onContextMenu: (event) => event.preventDefault(),
+        // The menu opens here, unless the program took the right click.
+        onContextMenu: (event) => {
+          const text = drawn?.linkTextAt(event.clientX, event.clientY)
+          setMenuAt({
+            link: text ? linked(text) : null,
+            selection: drawn?.getSelection() ?? "",
+          })
+        },
       }).catch((error: unknown) => {
         const why = error instanceof Error ? `: ${error.message}` : "."
         told({ is: "gone", why: `This window cannot draw a terminal${why}` })
@@ -364,14 +384,42 @@ function Screen({
 
   return (
     <div className="flex h-full min-h-0 flex-col">
-      <div
-        ref={mount}
-        role="region"
-        aria-label="Terminal screen"
-        data-state={now.is}
-        {...PROGRAM_KEYS}
-        className="relative min-h-0 flex-1 overflow-hidden [--app-scrollbar-width:8px]"
-      />
+      <ContextMenu
+        onOpenChange={(open, { reason }) => {
+          // A press elsewhere keeps the focus where it went.
+          if (!open && (reason === "item-press" || reason === "escape-key"))
+            surface.current?.focus()
+        }}
+      >
+        <ContextMenuTrigger
+          onContextMenu={(event) => {
+            if (event.defaultPrevented) event.preventBaseUIHandler()
+          }}
+          render={
+            <div
+              ref={mount}
+              role="region"
+              aria-label="Terminal screen"
+              data-state={now.is}
+              {...PROGRAM_KEYS}
+              className="relative min-h-0 flex-1 overflow-hidden [--app-scrollbar-width:8px]"
+            />
+          }
+        />
+        <TerminalMenu
+          at={menuAt}
+          follow={followed}
+          selectAll={() => surface.current?.selectAll()}
+          type={(data) => typed.current(data)}
+          paste={
+            paste &&
+            (() => {
+              surface.current?.focus()
+              paste()
+            })
+          }
+        />
+      </ContextMenu>
       <Status
         now={now}
         problem={problem}
@@ -431,7 +479,8 @@ export function endWords(ended: Ended, shell: boolean): string {
 /** What a link says of where a click takes it. */
 function hintOf(target: Target | null): string {
   if (!target) return ""
-  return "page" in target
-    ? linkHint(target.page)
-    : linkHint(target.file, "in its app")
+  return linkHint(
+    "page" in target ? target.page : target.file,
+    outsideOf(target)
+  )
 }

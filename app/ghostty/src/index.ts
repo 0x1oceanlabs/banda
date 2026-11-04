@@ -12,6 +12,8 @@ export {
   type GhosttyTerminalSurfaceOptions as SurfaceOptions,
   type GhosttyTerminalFont as Font,
 } from "./t3/surface"
+/** Whether `platform`, as `navigator.platform` names it, is Apple's. */
+export { isMacPlatform } from "./t3/lib/shared"
 export type {
   GhosttyTheme as Theme,
   GhosttyColor as Color,
