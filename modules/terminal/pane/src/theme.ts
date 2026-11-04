@@ -32,15 +32,19 @@ export function themeOf(element: HTMLElement): Theme {
 /** The terminal's font, as `terminal.toml` says (ADR 0047), and what it
  * leaves out as the look sets it (ADR 0007): `[font] mono`, at three
  * quarters of the root's size, so `[font] size = 14` writes the terminal
- * at 12px and grows it with the rest. */
-export function fontOf(element: HTMLElement, writing: Writing): Font {
+ * at 12px and grows it with the rest. A terminal's `zoom` scales it. */
+export function fontOf(
+  element: HTMLElement,
+  writing: Writing,
+  zoom: number
+): Font {
   const style = getComputedStyle(element)
   const family =
     writing.font ?? style.getPropertyValue("--font-family-mono").trim()
   const root = parseFloat(style.getPropertyValue("--text-root")) || 16
   return {
     ...(family && { family }),
-    size: writing.size ?? Math.round(root * 0.75 * 100) / 100,
+    size: Math.round((writing.size ?? root * 0.75) * zoom * 100) / 100,
     ligatures: writing.ligatures,
   }
 }

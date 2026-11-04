@@ -83,3 +83,33 @@ test("a terminal's right click copies, pastes, selects all, clears and acts on a
     page.getByRole("textbox", { name: "Terminal input" })
   ).toBeFocused()
 })
+
+test("Ctrl with + − 0 zooms a terminal, and the shell hears its new size", async () => {
+  window = await startWindow()
+  const { page, dir } = window
+  const space = join(dir, "root", "Work")
+  const screen = await newTerminal(page)
+  await screen.click()
+  // The columns the shell has, once its size settled: the badge is gone.
+  const badge = page.getByRole("status", { name: "Zoom" })
+  let asked = 0
+  const cols = async () => {
+    await expect(badge).toBeHidden()
+    const file = join(space, `cols-${++asked}.txt`)
+    await page.keyboard.type(`tput cols > ${file}`)
+    await page.keyboard.press("Enter")
+    await expect.poll(() => readFile(file)).toMatch(/^\d+\n$/)
+    return Number(readFile(file))
+  }
+  const before = await cols()
+  await page.keyboard.press("Control+Equal")
+  await page.keyboard.press("Control+Equal")
+  await expect(badge).toHaveText("125%")
+  await page.screenshot({ path: "test-results/terminal-zoom.png" })
+  expect(await cols()).toBeLessThan(before)
+  await page.keyboard.press("Control+Minus")
+  await expect(badge).toHaveText("110%")
+  await page.keyboard.press("Control+Digit0")
+  await expect(badge).toHaveText("100%")
+  expect(await cols()).toBe(before)
+})
