@@ -8,25 +8,14 @@
  */
 import { AGENTS_BRIDGE } from "@banda/agents-pane/desktop"
 import { BROWSER_BRIDGE, type BrowserHost } from "@banda/browser-pane/desktop"
+import { NOTIFY_BRIDGE } from "@banda/notifications-pane/desktop"
 import type { Address, SpaceId } from "@banda/contract"
 import type { Args } from "@banda/ui/module"
 import type { PaneState, Place } from "@banda/ui/pane"
 import { bridge, type HostOf, invoke, push, send } from "@banda/contract/bridge"
 import type { Listed, Look } from "@banda/contract/look"
 
-/** A system notification the page asks the desktop for (ADR 0011, decision 3). */
-export type Notice = {
-  /** One per thing: a new notice of it replaces the last. */
-  key: string
-  title: string
-  body?: string
-  /** The mark in the call's state, as a PNG data URL. */
-  icon?: string
-  /** The words of its button. */
-  answer: string
-  /** It stays until taken back, as one that waits for the Person does. */
-  lasts: boolean
-}
+export type { Notice } from "@banda/notifications-pane/desktop"
 
 /**
  * Where Banda's own update is (ADR 0041, decision 2), as main tells it:
@@ -151,20 +140,9 @@ export const BRIDGE = bridge({
     /** Calls `listener` with each route the menu is asked to open at. */
     listen: push<string>(),
   },
-  /** The desktop's notifications and its quiet. */
-  notify: {
-    /** Shows a notice; one of the same key goes first. */
-    show: send<[notice: Notice]>(),
-    /** Takes back the notice of `key`, if it still shows. */
-    withdraw: send<[key: string]>(),
-    /**
-     * Calls `listener` with a notice's key when the Person clicks it; the
-     * window is in front by then. Returns how to stop.
-     */
-    listen: push<string>(),
-    /** Whether the desktop is quiet now: its Do Not Disturb is on. */
-    quiet: invoke<[], boolean>(),
-  },
+  /** The desktop's notifications and its quiet: the notifications
+   * module's (ADR 0056). */
+  notify: NOTIFY_BRIDGE,
   /**
    * Panes in windows of their own (ADR 0025, decision 9). The window keeps
    * each in its place; main opens its own window on the page at

@@ -11,21 +11,23 @@ import { Toaster } from "@banda/ui/components/sonner"
 import { inFront, useInFront } from "@banda/ui/hooks/use-in-front"
 import { useMachine } from "@banda/ui/hooks/use-status"
 import { openSpaces, updateSpace } from "@banda/ui/lib/spaces"
-import { IN_PROGRAM, type Lists, type PaneState, QUIET } from "@banda/ui/pane"
+import {
+  callsOf,
+  IN_PROGRAM,
+  type Lists,
+  type PaneState,
+  QUIET,
+} from "@banda/ui/pane"
 import { DEFAULT_KEYS } from "@banda/contract/look"
-import type { Action, WindowApi } from "@banda/ui/module"
+import type { Action, Args, Thing, WindowApi } from "@banda/ui/module"
 import { actionFor, rebind } from "../actions/actions"
 import { Bar } from "../bar/Bar"
 import { useWidgets } from "../bar/Widgets"
 import { Watches } from "../bar/Watches"
-import { besideOf, isShowing, sightOf } from "../calls/sight"
-import { SUMMARY } from "../calls/system"
+import { besideOf, first, isShowing, sightOf } from "../calls/sight"
 import { WELL, wentWell } from "../safe/starts"
-import { problemLink } from "../problems/live"
-import { NOTICE, useProblemNews } from "../problems/news"
-import type { ProblemAnswers } from "../problems/problemToast"
+import { useProblemNews } from "../problems/news"
 import { lookingInto } from "../problems/look"
-import { first, type Heard, useCalls, type Where } from "../calls/useCalls"
 import { BandaMenu } from "../menu/BandaMenu"
 import {
   type At,
@@ -288,17 +290,15 @@ export function Shell({
     for (const drawn of waiting.current)
       if (drawn(drawing)) waiting.current.delete(drawn)
   }, [drawing])
-  // What calls the Person, told where they look as `[notify]` says
-  // (ADR 0011), with their `[sound]` (ADR 0009, decision 5).
-  const where: Where = useMemo(
-    () => ({
-      sight: (call) =>
-        sightOf(seenNow.current.state, call, inFront(), showsOf, columnsOf()),
-      desktop: window.banda?.notify,
-    }),
-    []
-  )
+  // Where the Person looks, which the notifications module asks to tell
+  // of what calls (ADR 0056, decision 1), and who hears it change.
+  const sightHeard = useRef(new Set<() => void>())
   const notify = useLookNotify()
+  const sound = useLookSound()
+  const lookNow = useRef({ notify, sound })
+  useEffect(() => {
+    lookNow.current = { notify, sound }
+  }, [notify, sound])
   const front = useInFront()
   useEffect(() => keepSidebar(sidebar), [sidebar])
   // A Pane an Agent opened is marked until the Person looks at it: has
@@ -402,43 +402,24 @@ export function Shell({
     },
     [engine, answeredAt]
   )
-  // Answered, the call is seen, and its toast and notification go.
-  const answerCall = useCallback(
-    (call: Heard) => change((w) => answering(w, call)),
+  // What calls the Person, for the Marks, the rings and Alt+U; the
+  // notifications module tells of it (ADR 0056, decision 1).
+  const calling = useMemo(() => callsOf(lists), [lists])
+  const goToCall = useCallback(
+    (thing: Thing & { pane: PaneState }) => change((w) => answering(w, thing)),
     [change]
   )
-  const { hear, leave, calling, seen } = useCalls(
-    useLookSound(),
-    notify,
-    where,
-    answerCall
-  )
-  const listening = useMemo(() => ({ hear, leave }), [hear, leave])
-  // What the Person looks at is seen: its toast and notification go.
-  useEffect(() => {
-    for (const call of calling)
-      if (sightOf(workspaces, call, front, showsOf, columnsOf()) === "looking")
-        seen(call.key)
-  }, [calling, workspaces, front, seen])
   const heard = useRef(calling)
   useEffect(() => {
     heard.current = calling
   }, [calling])
   const answer = useCallback(() => {
     const call = first(heard.current)
-    if (call) answerCall(call)
-  }, [answerCall])
-  // A click on a notice brings the window to the front and goes there;
-  // the notice of many shows the sidebar, which lists them all.
-  useEffect(
-    () =>
-      window.banda?.notify.listen((key) => {
-        if (key === SUMMARY) return showSidebar()
-        const call = heard.current.find((c) => c.key === key)
-        if (call) answerCall(call)
-      }),
-    [answerCall, showSidebar]
-  )
+    if (call) goToCall(call)
+  }, [goToCall])
+  useEffect(() => {
+    for (const listener of sightHeard.current) listener()
+  }, [workspaces, front])
   // `banda menu ROUTE` opens the menu there (ADR 0017, decision 7).
   const spacesNow = useRef(spaces)
   useEffect(() => {
@@ -614,15 +595,6 @@ export function Shell({
       change((w) => settingsAt(w, focused(w)?.space ?? home, link)),
     [change, home]
   )
-  // A click on a Problem's notice opens it in Settings → Problems.
-  useEffect(
-    () =>
-      window.banda?.notify.listen((key) => {
-        if (key.startsWith(NOTICE))
-          settings(problemLink(key.slice(NOTICE.length)))
-      }),
-    [settings]
-  )
   // A settings route opens the settings there; any other, the menu.
   const route = useCallback(
     (route: string) => {
@@ -677,7 +649,26 @@ export function Shell({
         listsHeard.current.add(listener)
         return () => listsHeard.current.delete(listener)
       },
+      sight: (thing) =>
+        thing
+          ? sightOf(
+              seenNow.current.state,
+              thing,
+              inFront(),
+              showsOf,
+              columnsOf()
+            )
+          : inFront()
+            ? "in-window"
+            : "away",
+      watchSight: (listener) => {
+        sightHeard.current.add(listener)
+        return () => sightHeard.current.delete(listener)
+      },
+      goTo: goToCall,
+      look: () => lookNow.current,
       toggleSidebar,
+      showSidebar,
       toggleOverview,
       drawer: () => toggleDrawer(parts),
       zoom: toggleZoom,
@@ -689,13 +680,19 @@ export function Shell({
       route,
       ownKeys,
       settings,
+      lookInto: (fingerprint) =>
+        void lookingInto(engine, fingerprint)
+          .then((thread) => runAction(parts, "thread.new", thread))
+          .catch(() => undefined),
       run: (action, args) => runAction(parts, action, args),
     }
     return parts
   }, [
     change,
     home,
+    goToCall,
     toggleSidebar,
+    showSidebar,
     toggleOverview,
     toggleDrawer,
     toggleZoom,
@@ -707,6 +704,7 @@ export function Shell({
     route,
     ownKeys,
     settings,
+    engine,
   ])
   // Each module that runs starts once, with the window as it is when it
   // asks (ADR 0022): the browser opens a Pane for an Agent's tab.
@@ -715,17 +713,11 @@ export function Shell({
     partsNow.current = parts
   }, [parts])
   // A new Problem of Banda's own tells too, silently (ADR 0039).
-  const problemAnswers: ProblemAnswers = useMemo(
-    () => ({
-      lookInto: (problem) =>
-        void lookingInto(engine, problem.fingerprint)
-          .then((thread) => partsNow.current.run("thread.new", thread))
-          .catch(() => undefined),
-      details: (problem) => settings(problemLink(problem.fingerprint)),
-    }),
-    [engine, settings]
+  const run = useCallback(
+    (action: string, args: Args) => partsNow.current.run(action, args),
+    []
   )
-  useProblemNews(engine, notify, inFront, where.desktop, problemAnswers)
+  useProblemNews(engine, notify, run)
   const running = known
     .filter((module) => runs(module, modules))
     .map((module) => module.id)
@@ -741,6 +733,10 @@ export function Shell({
       lists: () => partsNow.current.lists(),
       watchLists: (listener) => partsNow.current.watchLists(listener),
       run: (...how) => partsNow.current.run(...how),
+      sight: (thing) => partsNow.current.sight(thing),
+      watchSight: (listener) => partsNow.current.watchSight(listener),
+      goTo: (thing) => partsNow.current.goTo(thing),
+      look: () => partsNow.current.look(),
     }
     const stops = known
       .filter((module) => running.split(",").includes(module.id))
@@ -901,7 +897,6 @@ export function Shell({
         spaces={open}
         onChange={setAttention}
         onLists={setLists}
-        listening={listening}
       />
       <Bar
         status={status}

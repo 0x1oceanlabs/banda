@@ -819,22 +819,29 @@ modules/*/desktop  a module's part in Electron main
   report, so they never disagree, and the bar knows even while the sidebar
   is hidden. The window combines them (`app/web/src/bar`) and knows
   nothing of Threads.
-- **Calls** (ADR 0011). A row whose Mark is done, asking or failed calls
-  the Person. The window reads the calls from the Watches' reports and
-  compares each with the one before: what starts calling is news, what
-  stops is taken back, and a Watch's first report is what already was
-  (`app/web/src/calls`). It knows nothing of Threads: a Pane kind's
-  `shows` names the thing it shows, so the window knows when the Person
-  looks at it (its Pane has the focus and the window is in front), sees
-  it on screen, or is elsewhere.
+- **Calls** (ADR 0011, ADR 0056). A row whose Mark is done, asking or
+  failed calls the Person (`callsOf` in `app/ui/src/pane.ts`). The window
+  knows what calls, for the Marks, the rings and `Alt+U`, which goes to
+  the loudest first; and where the Person looks (`app/web/src/calls`). It
+  knows nothing of Threads: a Pane kind's `shows` names the thing it
+  shows, so the window knows when the Person looks at it (its Pane has
+  the focus and the window is in front), sees it on screen, or is
+  elsewhere.
+  - The `notifications` module tells of it (`modules/notifications/pane`),
+    from its `start`, asking the window only what it knows (`WindowApi`:
+    `lists`, `sight`, `goTo`, `look`). It compares each list with the one
+    before: what starts calling is news, what stops is taken back, and a
+    Space's first list is what already was.
   - It gathers the news for a tenth of a second and tells of each where
     the Person looks (`tell.ts`): nothing while they look at it; the sound
     when it is on screen; the sound and a toast when it is elsewhere in
-    the window (Sonner's, `callToast.tsx`, gone by itself after 5 to 12 s); the sound
+    the window (Sonner's, `toast.tsx`, gone by itself after 5 to 12 s); the sound
     and a system notification when the window is behind (`system.ts`).
-    `Alt+U` goes to what calls, the loudest first.
+  - Another part tells the Person in plain data, by running
+    `notifications.tell` with a `Told` (`told.ts`): a key, a kind, the
+    words and buttons that are actions by id. The Problems do (ADR 0039).
   - A system notification is the desktop's (`app/desktop/src/notices.ts`):
-    the page asks for it through `window.banda.notify`, with the mark
+    the module asks for it through `window.banda.notify`, its bridge, with the mark
     still in its state as its icon (`stillMark`, drawn to a PNG), and the
     desktop shows it silent, takes it back once the Person sees the
     Thread, and says when they click it; the window comes to the front and

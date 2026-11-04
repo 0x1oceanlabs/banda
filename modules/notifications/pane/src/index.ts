@@ -1,7 +1,13 @@
-/** The notifications module's window part: the bell on the bar, which
- * shows the last toasts again (ADR 0022, ADR 0048). */
+/** The notifications module's window part (ADR 0022, ADR 0056): it tells
+ * the Person of what calls, and its bell on the bar shows the last toasts
+ * again (ADR 0048). */
 import { defineModule } from "@banda/ui/module"
 import { BellWidget } from "./Bell"
+import { startTelling, type Teller } from "./teller"
+import { toldOf } from "./told"
+
+/** What tells, while the window runs the module. */
+let teller: Teller | null = null
 
 export const notifications = defineModule({
   id: "notifications",
@@ -13,4 +19,26 @@ export const notifications = defineModule({
       Widget: BellWidget,
     },
   ],
+  actions: [
+    {
+      // What another module tells the Person, in plain data (ADR 0056,
+      // decision 2): `Told`.
+      id: "notifications.tell",
+      title: "Tell the Person",
+      section: "Notifications",
+      unlisted: true,
+      run: (_, args) => {
+        const told = toldOf(args)
+        if (told) void teller?.told(told)
+      },
+    },
+  ],
+  start: (window) => {
+    const started = startTelling(window)
+    teller = started
+    return () => {
+      started.stop()
+      if (teller === started) teller = null
+    }
+  },
 })

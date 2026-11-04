@@ -1,9 +1,9 @@
 import { toast } from "@banda/ui/components/sonner"
 import { expect, test } from "vitest"
-import { LIFE, toastCall } from "./callToast"
-import type { Heard } from "./useCalls"
+import { LIFE, toastCall } from "./toast"
+import type { Call } from "@banda/ui/pane"
 
-const heard = (chime: Heard["chime"], detail?: string): Heard => ({
+const heard = (chime: Call["chime"], detail?: string): Call => ({
   about: "t1",
   chime,
   title: "slow hello",

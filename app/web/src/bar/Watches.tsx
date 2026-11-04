@@ -4,17 +4,11 @@ import type { Attention, Listed, Lists, Report, Watch } from "@banda/ui/pane"
 import { runs, watches } from "../registry"
 import { combine, folded } from "./attention"
 
-/** Where each Watch's list goes too, for the window to tell what calls. */
-export type Listening = {
-  hear: (source: string, space: SpaceId, listed: readonly Listed[]) => void
-  leave: (source: string) => void
-}
-
 /**
  * Draws every module's Watch for every Space, while the engine runs the
  * module, and says what they call the Person for together and what each
  * Space lists. It shows nothing: the bar and the sidebar show what it
- * says, and the window tells of what calls (ADR 0011).
+ * says, and the notifications module tells of what calls (ADR 0056).
  */
 export function Watches({
   engine,
@@ -22,14 +16,12 @@ export function Watches({
   spaces,
   onChange,
   onLists,
-  listening,
 }: {
   engine: Engine
   modules: readonly string[]
   spaces: SpaceSummary[]
   onChange: (attention: Attention) => void
   onLists: (lists: Lists) => void
-  listening: Listening
 }) {
   const [reports, setReports] = useState<Record<string, Heard>>({})
   const hear = useCallback((key: string, heard?: Heard) => {
@@ -72,7 +64,6 @@ export function Watches({
             engine={engine}
             space={space.id}
             hear={hear}
-            listening={listening}
           />
         )
       })
@@ -93,32 +84,20 @@ function One({
   engine,
   space,
   hear,
-  listening,
 }: {
   id: string
   watch: Watch
   engine: Engine
   space: SpaceId
   hear: (key: string, heard?: Heard) => void
-  listening: Listening
 }) {
-  const { hear: listen, leave } = listening
   const report = useCallback(
-    (report: Report) => {
-      hear(id, { ...report, space })
-      listen(id, space, report.listed)
-    },
-    [hear, listen, id, space]
+    (report: Report) => hear(id, { ...report, space }),
+    [hear, id, space]
   )
   // It says what it calls for itself, once drawn; leaving, it calls for
   // nothing.
-  useEffect(
-    () => () => {
-      hear(id)
-      leave(id)
-    },
-    [hear, leave, id]
-  )
+  useEffect(() => () => hear(id), [hear, id])
   const Watched = watch.Watch
   return <Watched engine={engine} space={space} report={report} />
 }

@@ -1,8 +1,8 @@
 import { expect, test } from "vitest"
 import { loudestOf, noticeOf, summaryOf } from "./system"
-import type { Heard } from "./useCalls"
+import type { Call } from "@banda/ui/pane"
 
-const heard = (about: string, chime: Heard["chime"], detail?: string) =>
+const heard = (about: string, chime: Call["chime"], detail?: string) =>
   ({
     about,
     chime,
@@ -12,7 +12,7 @@ const heard = (about: string, chime: Heard["chime"], detail?: string) =>
     key: `s:${about}`,
     space: "s",
     since: 1,
-  }) satisfies Heard
+  }) satisfies Call
 
 test("a notice names the Thread and says what it said; one that waits stays", () => {
   expect(noticeOf(heard("Tests", "asking", "Run on staging?"), true)).toEqual({

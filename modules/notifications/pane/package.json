@@ -4,15 +4,20 @@
   "private": true,
   "license": "Apache-2.0",
   "type": "module",
-  "description": "The notifications module's window part: the bell that shows the last toasts again.",
+  "description": "The notifications module's window part: it tells the Person of what calls, by toasts and the desktop's notifications, and the bell shows the last toasts again.",
   "exports": {
-    ".": "./src/index.ts"
+    ".": "./src/index.ts",
+    "./desktop": "./src/desktop.ts",
+    "./tell": "./src/tell.ts",
+    "./system": "./src/system.ts",
+    "./toast": "./src/toast.tsx"
   },
   "scripts": {
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
   "dependencies": {
+    "@banda/contract": "workspace:*",
     "@banda/ui": "workspace:*",
     "lucide-react": "^1.65.0",
     "react": "^19.3.1"

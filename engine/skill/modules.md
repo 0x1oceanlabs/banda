@@ -93,7 +93,7 @@ Its methods, `banda call git.<method>`: `status`, `diff`, `refs`, `commits`, `co
 
 ## Notifications (`notifications`)
 
-The bell on the bar, which shows the last toasts again.
+Tells you of what calls, by toasts and the desktop's notifications; the bell on the bar shows the last toasts again.
 
 Its widgets on the bar, which `[bar]` in look.toml places by id:
 

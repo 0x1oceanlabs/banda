@@ -65,6 +65,8 @@ export type Shell = WindowApi & {
   /** Changes the workspaces. */
   change: (how: (workspaces: Workspaces) => Step) => void
   toggleSidebar: () => void
+  /** Shows the sidebar, as a notice of many calls asks (ADR 0011). */
+  showSidebar: () => void
   toggleOverview: () => void
   /** Drops the drawer, or lifts it (ADR 0025, decision 8). */
   drawer: () => void
@@ -89,6 +91,8 @@ export type Shell = WindowApi & {
   ownKeys: () => void
   /** Opens the settings at `link`, a section and a row (ADR 0016). */
   settings: (link?: string) => void
+  /** Asks an Agent to look into a Problem, in a new Thread (ADR 0039). */
+  lookInto: (fingerprint: string) => void
 }
 
 const ARROWS: Record<Direction, string> = {
@@ -539,7 +543,19 @@ export const ACTIONS: readonly Action<Shell>[] = [
     section: "Banda",
     title: "Open the settings",
     keys: [{ code: "Comma", alt: true }],
-    run: (shell) => shell.settings(),
+    // A Problem's toast opens it there: its `link` (ADR 0039).
+    run: (shell, args) =>
+      shell.settings(typeof args?.link === "string" ? args.link : undefined),
+  },
+  {
+    id: "problems.look-into",
+    section: "Banda",
+    title: "Look into a Problem",
+    unlisted: true,
+    run: (shell, args) => {
+      if (typeof args?.fingerprint === "string")
+        shell.lookInto(args.fingerprint)
+    },
   },
   {
     id: "update.check",
@@ -571,6 +587,14 @@ export const ACTIONS: readonly Action<Shell>[] = [
     title: "Show or hide the sidebar",
     keys: [{ code: "KeyA", alt: true }],
     run: (shell) => shell.toggleSidebar(),
+  },
+  {
+    id: "sidebar.show",
+    section: "Threads",
+    title: "Show the sidebar",
+    // The notice of many calls shows it, which lists them all.
+    unlisted: true,
+    run: (shell) => shell.showSidebar(),
   },
   ...NUMBERS.map((n) => ({
     id: `workspace.go-${n}`,

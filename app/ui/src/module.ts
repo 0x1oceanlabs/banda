@@ -8,7 +8,19 @@ import type { ComponentType, ReactNode } from "react"
 import type { Engine, JsonValue, SpaceId, SpaceSummary } from "@banda/contract"
 import type { Details } from "./components/thread-details"
 import type { Key } from "./lib/keys"
+import type { Notify } from "@banda/contract/look"
 import type { Lists, PaneKind, PaneState, Watch } from "./pane"
+import type { SoundSettings } from "./sound/settings"
+
+/**
+ * Where the Person's eyes are, for a thing that calls (ADR 0011): on its
+ * Pane, with the window in front; on the window, its Pane on screen or
+ * not; or elsewhere.
+ */
+export type Sight = "looking" | "on-screen" | "in-window" | "away"
+
+/** A thing, as a Pane shows it and the lists name it. */
+export type Thing = { space: SpaceId; about: string }
 
 /** A Pane's args, and what an action is run with besides the window: the
  * Banda menu's words, a Space. Plain data, as `keys.toml` and the CLI will
@@ -51,6 +63,17 @@ export type WindowApi = {
   /** Runs an action by its id, a module's or the window's, as its key
    * would: how one module asks another for what it does. */
   run: (action: string, args?: Args) => void
+  /** Where the Person looks, for `thing` (ADR 0056, decision 1); for
+   * none, whether at the window or away. */
+  sight: (thing?: Thing) => Sight
+  /** Calls `listener` when where the Person looks may have changed: the
+   * workspaces, or the window in front or behind. Returns how to stop. */
+  watchSight: (listener: () => void) => () => void
+  /** Goes to `thing`: to the Pane that shows it, on any workspace, else
+   * opens `pane` for it. */
+  goTo: (thing: Thing & { pane: PaneState }) => void
+  /** How the look says to tell and to sound: `[notify]` and `[sound]`. */
+  look: () => { notify: Notify; sound: SoundSettings }
 }
 
 /** What `WindowApi.beside` finds: the thing's Space, and the Panes of
