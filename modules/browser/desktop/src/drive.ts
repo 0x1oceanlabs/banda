@@ -547,10 +547,17 @@ export class Drive extends Context.Service<
                   if (by.kind === "agent")
                     tell(page.id, { agent: by.id, step: opening(url) })
                   const dialog = dialogs.current(page.id)
+                  const address = page.getURL()
+                  const title = page.getTitle()
                   return {
                     tab: page.id,
-                    url: page.getURL(),
-                    title: page.getTitle(),
+                    url: address,
+                    // Electron names a fresh blank page by its URL; its
+                    // document title, which the tools report, is empty.
+                    title:
+                      address === "about:blank" && title === address
+                        ? ""
+                        : title,
                     loading: !dialog && page.isLoading(),
                     moved: false,
                     opened: [],
