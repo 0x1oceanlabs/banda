@@ -132,3 +132,78 @@ pub struct SignInWay {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub terminal: Option<Program>,
 }
+
+/// How much of a Harness account's usage limits is spent, as Banda last
+/// read it (ADR 0043, decision 1). It is a Harness entry's: a second
+/// account is a second entry.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "harnesses/")]
+pub struct Limits {
+    pub harness: String,
+    /// The Harness's name: `Claude Code`.
+    pub name: String,
+    /// The account's plan, as the Harness names it: `Max 20x`, `Plus`.
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub plan: Option<String>,
+    /// Each limit's window, the account's own first. None when the
+    /// account has no limits, as one signed in with an API key.
+    pub windows: Vec<LimitWindow>,
+    /// When they were read, in milliseconds since 1970: none before the
+    /// first read.
+    #[ts(optional, type = "number")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub read_at: Option<i64>,
+    /// Why there are no windows, in plain words: no one is signed in, or
+    /// an API key is, which has no limits.
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub note: Option<String>,
+    /// Why the last read failed, when it did: the windows are the read
+    /// before it.
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub failed: Option<LimitsFailed>,
+}
+
+/// A read of the limits that failed.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "harnesses/")]
+pub struct LimitsFailed {
+    /// When, in milliseconds since 1970.
+    #[ts(type = "number")]
+    pub at: i64,
+    pub why: String,
+}
+
+/// One window of a limit: what is spent of it, and when it starts again.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "harnesses/")]
+pub struct LimitWindow {
+    /// What names it among the account's windows: `five_hour`.
+    pub id: String,
+    pub kind: WindowKind,
+    /// What the Person reads: `Session`, `Weekly`, `Weekly · Fable`.
+    pub label: String,
+    /// The share spent, from 0 to 100. A window whose reset passed has
+    /// 0, till the next read.
+    pub used: f64,
+    /// When it starts again, in milliseconds since 1970.
+    #[ts(optional, type = "number")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub resets_at: Option<i64>,
+    /// How long it lasts, in milliseconds.
+    #[ts(optional, type = "number")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub lasts: Option<i64>,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export, export_to = "harnesses/")]
+pub enum WindowKind {
+    Session,
+    Weekly,
+    Monthly,
+    Other,
+}

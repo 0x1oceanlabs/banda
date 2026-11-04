@@ -345,6 +345,7 @@ fn an_agent_reaches_banda_through_banda_mcp() {
                 "show_visual",
                 "preview_visual",
                 "draft_issue",
+                "limits",
                 "browser_tabs",
                 "browser_snapshot",
                 "browser_open",
@@ -366,6 +367,10 @@ fn an_agent_reaches_banda_through_banda_mcp() {
     assert!(serde_json::from_str::<Value>(&listed).unwrap()["problems"].is_array());
     let (error, said) = mcp.call(91, "problem", json!({ "fingerprint": "0000" }));
     assert!(error, "{said}");
+    // And how much of the limits is left, before a long task (ADR 0043).
+    let (error, limits) = mcp.call(92, "limits", json!({}));
+    assert!(!error, "{limits}");
+    assert!(serde_json::from_str::<Value>(&limits).unwrap()["limits"].is_array());
 
     let (error, threads) = mcp.call(4, "threads", json!({}));
     assert!(!error, "{threads}");

@@ -82,7 +82,7 @@ pub async fn find(harness: &Harness) -> Result<(Harness, Option<CliView>), Strin
 }
 
 /// `program` itself when it is a path, or the first of that name on PATH.
-fn located(program: &str) -> Option<PathBuf> {
+pub(crate) fn located(program: &str) -> Option<PathBuf> {
     if program.contains('/') {
         return runnable(Path::new(program)).then(|| PathBuf::from(program));
     }

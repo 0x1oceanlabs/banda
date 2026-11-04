@@ -11,6 +11,7 @@ use serde::Deserialize;
 use std::collections::{BTreeMap, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 
 /// An agent program and how to start it. It speaks ACP on its stdio.
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -82,6 +83,7 @@ pub struct Harnesses(Arc<Mutex<List>>);
 #[derive(Debug, Default)]
 struct List {
     harnesses: Arc<[Harness]>,
+    limits: LimitsSettings,
     /// The file the list follows, and its text when last read: none when
     /// it was not there. The text, not its time and size, tells a change,
     /// as the look's files do: two quick saves of one length share both.
@@ -102,6 +104,81 @@ struct HarnessFile {
     #[serde(default)]
     #[schemars(with = "Vec<HarnessEntry>")]
     harness: Vec<toml::Spanned<HarnessEntry>>,
+    /// How Banda reads the usage limits of each Harness's account (ADR
+    /// 0043).
+    #[serde(default)]
+    limits: LimitsEntry,
+}
+
+/// The `[limits]` table. Every key is optional.
+#[derive(Default, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+struct LimitsEntry {
+    /// Whether Banda reads them: off, it reads no Harness's sign-in and
+    /// asks for no limits.
+    #[schemars(extend("default" = true))]
+    read: Option<bool>,
+    /// How often it reads them while a window is open, such as `"15m"` or
+    /// `"1h"`: 5 minutes or more.
+    #[schemars(extend("default" = "15m"))]
+    #[schemars(with = "Option<String>")]
+    every: Option<toml::Spanned<String>>,
+    /// The share spent, out of 100, from which the bar's ring warns.
+    #[schemars(extend("default" = 80), range(min = 1, max = 100))]
+    warn: Option<u8>,
+}
+
+/// How Banda reads the limits, every key of `[limits]` resolved.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct LimitsSettings {
+    pub read: bool,
+    pub every: Duration,
+    pub warn: u8,
+}
+
+impl Default for LimitsSettings {
+    fn default() -> Self {
+        Self {
+            read: true,
+            every: Duration::from_secs(15 * 60),
+            warn: 80,
+        }
+    }
+}
+
+/// The least `every`: Anthropic answers a closer read with 429.
+const LEAST_EVERY: Duration = Duration::from_secs(5 * 60);
+
+/// A time such as `"15m"`: a whole number of seconds, minutes or hours.
+fn every(text: &str) -> Option<Duration> {
+    let text = text.trim();
+    let (number, unit) = text.split_at(text.find(|c: char| !c.is_ascii_digit())?);
+    let seconds = match unit.trim() {
+        "s" => 1,
+        "m" => 60,
+        "h" => 60 * 60,
+        _ => return None,
+    };
+    let every = Duration::from_secs(number.parse::<u64>().ok()?.checked_mul(seconds)?);
+    (every >= LEAST_EVERY).then_some(every)
+}
+
+impl LimitsEntry {
+    fn limits(self, path: &Path, text: &str) -> Result<LimitsSettings, Problem> {
+        let base = LimitsSettings::default();
+        let every = match self.every {
+            None => base.every,
+            Some(said) => every(said.get_ref()).ok_or_else(|| {
+                let message = "`every` is a time such as \"15m\" or \"1h\", of 5 minutes or more";
+                Problem::at(path, text, Some(said.span()), message.to_owned())
+            })?,
+        };
+        Ok(LimitsSettings {
+            read: self.read.unwrap_or(base.read),
+            every,
+            warn: self.warn.unwrap_or(base.warn).clamp(1, 100),
+        })
+    }
 }
 
 /// One `[[harness]]` table. An entry with the ID of a Harness Banda
@@ -167,12 +244,18 @@ impl HarnessEntry {
 
 impl Harnesses {
     pub fn new(harnesses: Vec<Harness>) -> Self {
-        Self::with(harnesses, None)
+        let limits = LimitsSettings::default();
+        Self::with(Read { harnesses, limits }, None)
     }
 
-    fn with(harnesses: Vec<Harness>, file: Option<(PathBuf, Option<String>)>) -> Self {
+    fn with(read: Read, file: Option<(PathBuf, Option<String>)>) -> Self {
+        let Read { harnesses, limits } = read;
         let harnesses = harnesses.into();
-        Self(Arc::new(Mutex::new(List { harnesses, file })))
+        Self(Arc::new(Mutex::new(List {
+            harnesses,
+            limits,
+            file,
+        })))
     }
 
     /// The Harnesses Banda starts when a machine names none: the ACP
@@ -187,20 +270,29 @@ impl Harnesses {
     /// machine with no list gets the [`known`](Self::known) Harnesses.
     pub fn load(path: &Path) -> Result<Self, String> {
         let text = read(path)?;
-        let harnesses = listed(path, text.as_deref())?;
-        Ok(Self::with(harnesses, Some((path.to_owned(), text))))
+        let read = listed(path, text.as_deref())?;
+        Ok(Self::with(read, Some((path.to_owned(), text))))
     }
 
     /// The list as its file says now. A file that changed into one that
     /// does not read is logged, and the list before it stays.
     fn now(&self) -> Arc<[Harness]> {
+        self.followed().0
+    }
+
+    /// The list and `[limits]` as the file says now, in one read.
+    pub(crate) fn followed(&self) -> (Arc<[Harness]>, LimitsSettings) {
         let mut list = self.0.lock().unwrap();
-        let List { harnesses, file } = &mut *list;
+        let List {
+            harnesses,
+            limits,
+            file,
+        } = &mut *list;
         if let Some((path, was)) = file {
             match read(path) {
                 Ok(text) if text != *was => {
                     match listed(path, text.as_deref()) {
-                        Ok(read) => *harnesses = read.into(),
+                        Ok(read) => (*harnesses, *limits) = (read.harnesses.into(), read.limits),
                         Err(error) => tracing::warn!(%error, "the Harness list does not read"),
                     }
                     *was = text;
@@ -209,7 +301,7 @@ impl Harnesses {
                 Err(error) => tracing::warn!(%error, "the Harness list cannot be read"),
             }
         }
-        harnesses.clone()
+        (harnesses.clone(), *limits)
     }
 
     pub fn find(&self, id: &str) -> Option<Harness> {
@@ -267,16 +359,23 @@ fn known() -> Vec<Harness> {
     ]
 }
 
-fn parse(path: &Path, text: &str) -> Result<Vec<Harness>, Problem> {
+/// What a `harnesses.toml` says.
+struct Read {
+    harnesses: Vec<Harness>,
+    limits: LimitsSettings,
+}
+
+fn parse(path: &Path, text: &str) -> Result<Read, Problem> {
     let file = toml::from_str::<HarnessFile>(text).map_err(|e| Problem::toml(path, text, &e))?;
-    file.harness
-        .into_iter()
+    let harnesses = (file.harness.into_iter())
         .map(|entry| {
             let span = entry.span();
             let wrong = |message| Problem::at(path, text, Some(span), message);
             entry.into_inner().harness().map_err(wrong)
         })
-        .collect()
+        .collect::<Result<_, _>>()?;
+    let limits = file.limits.limits(path, text)?;
+    Ok(Read { harnesses, limits })
 }
 
 /// The file's text; none when it is not there.
@@ -288,11 +387,14 @@ fn read(path: &Path) -> Result<Option<String>, String> {
     }
 }
 
-/// The list `text` says, or the known one when there is no file.
-fn listed(path: &Path, text: Option<&str>) -> Result<Vec<Harness>, String> {
+/// What `text` says, or the known list when there is no file.
+fn listed(path: &Path, text: Option<&str>) -> Result<Read, String> {
     match text {
         Some(text) => parse(path, text).map_err(|problem| problem.to_string()),
-        None => Ok(known()),
+        None => Ok(Read {
+            harnesses: known(),
+            limits: LimitsSettings::default(),
+        }),
     }
 }
 
@@ -350,9 +452,34 @@ fn template() -> String {
 mod tests {
     use super::*;
 
+    fn listed_in(path: &Path, text: &str) -> Result<Vec<Harness>, Problem> {
+        parse(path, text).map(|read| read.harnesses)
+    }
+
+    #[test]
+    fn limits_read_from_their_table() {
+        let path = Path::new("h");
+        let read = |text: &str| parse(path, text).map(|read| read.limits);
+        assert_eq!(read("").unwrap(), LimitsSettings::default());
+        let set = read("[limits]\nread = false\nevery = \"1h\"\nwarn = 90\n").unwrap();
+        assert_eq!(
+            set,
+            LimitsSettings {
+                read: false,
+                every: Duration::from_secs(3600),
+                warn: 90
+            }
+        );
+        for wrong in ["\"1m\"", "\"15\"", "\"m\"", "\"15 days\""] {
+            let problem = read(&format!("[limits]\nevery = {wrong}\n")).unwrap_err();
+            assert_eq!(problem.line, Some(2), "{wrong}: {problem}");
+        }
+        assert!(read("[limits]\nnever = 1\n").is_err(), "an unknown key");
+    }
+
     #[test]
     fn a_harness_list_reads_from_text() {
-        let list = parse(
+        let list = listed_in(
             Path::new("harnesses.toml"),
             r#"
             [[harness]]
@@ -367,7 +494,7 @@ mod tests {
         let fake = list.find("fake").unwrap();
         assert_eq!(fake.args, ["--quiet"]);
         assert!(list.find("claude").is_none());
-        assert!(parse(Path::new("h"), "harness = 3").is_err());
+        assert!(listed_in(Path::new("h"), "harness = 3").is_err());
     }
 
     #[test]
@@ -395,7 +522,7 @@ mod tests {
 
     #[test]
     fn the_template_reads_as_the_known_harnesses() {
-        assert_eq!(parse(Path::new("h"), &template()).unwrap(), known());
+        assert_eq!(listed_in(Path::new("h"), &template()).unwrap(), known());
         assert!(
             !template().contains("@agentclientprotocol"),
             "no version is written down"
@@ -404,7 +531,7 @@ mod tests {
 
     #[test]
     fn a_known_id_takes_what_its_entry_leaves_out_from_banda() {
-        let list = parse(
+        let list = listed_in(
             Path::new("h"),
             "[[harness]]\nid = \"codex\"\nenabled = false\n",
         )
@@ -422,7 +549,7 @@ mod tests {
             "the file is the list"
         );
 
-        let own = parse(
+        let own = listed_in(
             Path::new("h"),
             "[[harness]]\nid = \"claude\"\ncommand = \"my-acp\"\n",
         )
@@ -434,7 +561,7 @@ mod tests {
             "Banda's arguments go with Banda's command"
         );
         let flag = "[[harness]]\nid = \"claude\"\ncommand = \"npx\"\nargs = [\"x\"]\n";
-        let flag = parse(Path::new("h"), flag).unwrap();
+        let flag = listed_in(Path::new("h"), flag).unwrap();
         assert!(
             flag[0].cli.is_some(),
             "Banda's command still runs the Person's CLI"
@@ -458,7 +585,7 @@ mod tests {
     fn a_new_id_needs_a_name_and_a_command_and_says_where() {
         let text =
             "[[harness]]\nid = \"claude\"\n\n[[harness]]\nid = \"gemini\"\nname = \"Gemini\"\n";
-        let problem = parse(Path::new("h"), text).unwrap_err();
+        let problem = listed_in(Path::new("h"), text).unwrap_err();
         assert!(
             problem.message.contains("needs a name and a command"),
             "{problem}"

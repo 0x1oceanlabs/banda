@@ -9,14 +9,21 @@
 //! the Harness's ID: every holder of that Harness's process lets go of it,
 //! this module first, and the command answers once every reaction has
 //! handled it.
+//!
+//! It reads how much of each account's limits is spent, too (ADR 0043):
+//! [`crate::limits`].
 
 use crate::acp::Process;
 use crate::hosts::{Activity, Held, Host, Hosts};
-use crate::model::{Account, HarnessView};
+use crate::limits::Reader;
+use crate::model::{Account, HarnessView, Limits};
 use crate::{FILE, Harness, Harnesses};
 use agent_client_protocol::Client;
 use agent_client_protocol::schema::v1 as acp;
-use banda_kernel::{Call, EventFilter, Module, Nothing, Refusal, Right, Scope};
+use banda_kernel::{
+    Call, Error, EventFilter, Module, ModuleSpace, Nothing, Refusal, Right, Scope, Tool,
+};
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::sync::Arc;
@@ -52,11 +59,13 @@ pub fn account_changed() -> EventFilter {
 pub struct HarnessesModule {
     harnesses: Harnesses,
     hosts: Arc<Hosts<Asker>>,
+    limits: Reader,
 }
 
 impl HarnessesModule {
     pub fn new(harnesses: Harnesses) -> Self {
         Self {
+            limits: Reader::new(harnesses.clone()),
             harnesses,
             hosts: Hosts::new(IDLE),
         }
@@ -75,6 +84,12 @@ banda_kernel::methods! {
         command sign_in(SignIn) -> (), Manage;
         /// Asks the Harness to sign out.
         command sign_out(OneHarness) -> (), Manage;
+        /// How much of each Harness account's usage limits is spent: a
+        /// window for its session and its week, each with the share spent
+        /// out of 100 and when it starts again, as last read. Before a long
+        /// task, look how much is left. `read` reads them anew, at most
+        /// once a minute; `limits_changed` says when that read is kept.
+        call limits(AskLimits) -> LimitsNow, Read, tool "limits";
     }
 }
 
@@ -82,6 +97,31 @@ banda_kernel::methods! {
 #[ts(export_to = "harnesses/")]
 struct OneHarness {
     harness: String,
+}
+
+/// What `limits` asks.
+#[derive(Deserialize, TS, JsonSchema)]
+#[ts(export_to = "harnesses/")]
+struct AskLimits {
+    /// Read them anew, as a popover opens: within a minute of the last
+    /// read, it is not read again.
+    #[serde(default)]
+    #[ts(as = "Option<bool>", optional)]
+    read: bool,
+}
+
+/// The limits as last read, at the machine's log's position `at`: a
+/// window asks again on a `limits_changed` after it.
+#[derive(Serialize, Deserialize, TS)]
+#[ts(export, export_to = "harnesses/")]
+pub struct LimitsNow {
+    #[ts(type = "number")]
+    pub at: i64,
+    /// Every Harness Banda reads the limits of; none while `[limits]
+    /// read` is off.
+    pub limits: Vec<Limits>,
+    /// The share spent from which the bar's ring warns: `[limits] warn`.
+    pub warn: u8,
 }
 
 #[derive(Deserialize, TS)]
@@ -112,7 +152,15 @@ impl Module for HarnessesModule {
     }
 
     fn migrations(&self) -> &'static [&'static str] {
-        &[]
+        &[crate::limits::TABLE]
+    }
+
+    fn tools(&self) -> Vec<Tool> {
+        Self::method_tools(self.name())
+    }
+
+    async fn opened(&self, space: ModuleSpace) -> Result<(), Error> {
+        self.limits.start(space).await
     }
 
     fn right(&self, method: &str) -> Option<Right> {
@@ -142,6 +190,19 @@ impl HarnessesModule {
             at,
             account: account.map_err(Refusal::conflict)?,
         })
+    }
+
+    async fn limits(
+        &self,
+        call: Call,
+        AskLimits { read }: AskLimits,
+    ) -> Result<LimitsNow, Refusal> {
+        let space = call.space();
+        // Read before the limits are: a read kept after it is a later event.
+        let at = space.at().await?;
+        let (limits, settings) = self.limits.now(space, read).await?;
+        let warn = settings.warn;
+        Ok(LimitsNow { at, limits, warn })
     }
 
     async fn sign_in(&self, call: Call, SignIn { harness, way }: SignIn) -> Result<(), Refusal> {

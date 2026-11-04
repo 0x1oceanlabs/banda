@@ -3025,6 +3025,9 @@ async fn threads_one_thread_send_show_visual_and_preview_visual_are_an_agents_to
         .call(agent, "spaces.tools", None, None, Value::Null)
         .await
         .unwrap();
+    // The machine's module `harnesses` comes first, with its own.
+    let limits = tools.as_array_mut().unwrap().remove(0);
+    assert_eq!(limits["method"], "harnesses.limits");
     // The last: an issue the Agent drafts, which only its Person sends.
     let draft = tools.as_array_mut().unwrap().pop().unwrap();
     assert_eq!(

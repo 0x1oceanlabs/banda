@@ -75,6 +75,9 @@ importers:
       '@banda/desktop-kit':
         specifier: workspace:*
         version: link:../desktop-kit
+      '@banda/harnesses-desktop':
+        specifier: workspace:*
+        version: link:../../modules/harnesses/desktop
       '@banda/sharing-desktop':
         specifier: workspace:*
         version: link:../../modules/sharing/desktop
@@ -522,6 +525,34 @@ importers:
         version: 8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)
       vitest:
         specifier: ^5
+        version: 5.0.5(@types/node@24.19.2)(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0))
+
+  modules/harnesses/desktop:
+    dependencies:
+      '@banda/contract':
+        specifier: workspace:*
+        version: link:../../../contract
+      '@banda/desktop-kit':
+        specifier: workspace:*
+        version: link:../../../app/desktop-kit
+      effect:
+        specifier: 4.1.1
+        version: 4.1.1
+    devDependencies:
+      '@banda/ui':
+        specifier: workspace:*
+        version: link:../../../app/ui
+      '@types/node':
+        specifier: ^24
+        version: 24.19.2
+      electron:
+        specifier: 45.1.0
+        version: 45.1.0(supports-color@7.2.0)
+      typescript:
+        specifier: ~6.0.2
+        version: 6.0.3
+      vitest:
+        specifier: ^5.0.5
         version: 5.0.5(@types/node@24.19.2)(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0))
 
   modules/notifications/pane:

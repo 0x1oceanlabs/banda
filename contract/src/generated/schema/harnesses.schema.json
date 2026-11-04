@@ -10,6 +10,10 @@
       "items": {
         "$ref": "#/$defs/HarnessEntry"
       }
+    },
+    "limits": {
+      "description": "How Banda reads the usage limits of each Harness's account (ADR\n0043).",
+      "$ref": "#/$defs/LimitsEntry"
     }
   },
   "$defs": {
@@ -78,6 +82,31 @@
         "program",
         "variable"
       ]
+    },
+    "LimitsEntry": {
+      "description": "The `[limits]` table. Every key is optional.",
+      "type": "object",
+      "properties": {
+        "read": {
+          "description": "Whether Banda reads them: off, it reads no Harness's sign-in and\nasks for no limits.",
+          "type": "boolean",
+          "default": true
+        },
+        "every": {
+          "description": "How often it reads them while a window is open, such as `\"15m\"` or\n`\"1h\"`: 5 minutes or more.",
+          "type": "string",
+          "default": "15m"
+        },
+        "warn": {
+          "description": "The share spent, out of 100, from which the bar's ring warns.",
+          "type": "integer",
+          "format": "uint8",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 80
+        }
+      },
+      "additionalProperties": false
     }
   }
 }

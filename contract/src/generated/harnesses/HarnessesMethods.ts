@@ -3,7 +3,9 @@ import type { CallMethod } from "../CallMethod";
 import type { CommandMethod } from "../CommandMethod";
 import type { Nothing } from "../Nothing";
 import type { Accounted } from "./Accounted";
+import type { AskLimits } from "./AskLimits";
 import type { HarnessView } from "./HarnessView";
+import type { LimitsNow } from "./LimitsNow";
 import type { OneHarness } from "./OneHarness";
 import type { SignIn } from "./SignIn";
 
@@ -25,4 +27,12 @@ sign_in: CommandMethod<SignIn, null>,
 /**
  * Asks the Harness to sign out.
  */
-sign_out: CommandMethod<OneHarness, null>, };
+sign_out: CommandMethod<OneHarness, null>, 
+/**
+ * How much of each Harness account's usage limits is spent: a
+ * window for its session and its week, each with the share spent
+ * out of 100 and when it starts again, as last read. Before a long
+ * task, look how much is left. `read` reads them anew, at most
+ * once a minute; `limits_changed` says when that read is kept.
+ */
+limits: CallMethod<AskLimits, LimitsNow>, };

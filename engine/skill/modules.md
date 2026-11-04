@@ -32,11 +32,15 @@ What an Agent in a Thread may call as a tool of `banda mcp`:
 
 ## Harnesses (`harnesses`)
 
-The agent programs this computer can start, and who is signed in to each.
+The agent programs this computer can start, who is signed in to each, and how much of its usage limits is spent.
 
 Its settings: `harnesses.toml`.
 
-Its methods, `banda call harnesses.<method>`: `list`, `account`, `sign_in`, `sign_out`.
+Its methods, `banda call harnesses.<method>`: `list`, `account`, `sign_in`, `sign_out`, `limits`.
+
+What an Agent in a Thread may call as a tool of `banda mcp`:
+
+- `limits`: How much of each Harness account's usage limits is spent: a window for its session and its week, each with the share spent out of 100 and when it starts again, as last read. Before a long task, look how much is left. `read` reads them anew, at most once a minute; `limits_changed` says when that read is kept.
 
 ## Terminal (`terminal`)
 
