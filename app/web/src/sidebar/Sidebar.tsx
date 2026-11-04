@@ -314,11 +314,11 @@ export function Sidebar({
         </div>
       </ScrollArea>
       {arranged.shelves.length > 0 && (
-        <div className="max-h-[45%] overflow-y-auto border-t px-1.5 py-1">
+        <div className="max-h-[45%] overflow-y-auto px-1.5 py-1">
           {arranged.shelves.map(drawn)}
         </div>
       )}
-      <div className="border-t px-1.5 py-1">
+      <div className="px-1.5 py-1">
         <Button
           variant="ghost"
           size="sm"
