@@ -533,7 +533,8 @@ export interface GhosttyTerminalSurfaceOptions {
   readonly canActivateLink?: (text: string) => boolean;
   /** Banda: the words a link under the pointer shows, as a tooltip. */
   readonly linkTitle?: (text: string) => string;
-  /** The host must prevent the default menu; native Paste cannot reach a canvas terminal. */
+  /** Banda: called only when the program does not take the right click, which
+   * then has its default prevented; the host's menu opens or not on that. */
   readonly onContextMenu?: (event: MouseEvent) => void;
 }
 
@@ -993,6 +994,11 @@ export class GhosttyTerminalSurface {
     const selection = this.getSelection();
     if (selection.length === 0) return;
     void this.pasteFromClipboard(() => Promise.resolve(selection));
+  }
+
+  /** Banda: the link at a point of the window, as a menu opened there asks. */
+  linkTextAt(clientX: number, clientY: number): string | null {
+    return this.linkAt(clientX, clientY)?.text ?? null;
   }
 
   hasSelection(): boolean {

@@ -335,6 +335,9 @@ async function ready(): Promise<void> {
     files: {
       outside: [text, ([path]) => Effect.sync(() => openFile(path))],
     },
+    edit: {
+      paste: [none, (_, event) => Effect.sync(() => event.sender.paste())],
+    },
     problems: {
       logs: [
         none,

@@ -34,3 +34,8 @@ function tidy(path: string): string {
   }
   return `/${steps.join("/")}`
 }
+
+/** Where a click with Ctrl takes `target`, in words. */
+export function outsideOf(target: Target): string {
+  return "page" in target ? "in external browser" : "in its app"
+}

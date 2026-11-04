@@ -1,5 +1,5 @@
 import { expect, test } from "vitest"
-import { targetOf } from "./links"
+import { outsideOf, targetOf } from "./links"
 
 const at = {
   program: "cargo test",
@@ -41,4 +41,9 @@ test("with no folder only a full path goes anywhere, and never a Windows one", (
   expect(targetOf("src/a.ts", undefined)).toBeNull()
   expect(targetOf("/tmp/a.log", undefined)).toEqual({ file: "/tmp/a.log" })
   expect(targetOf("C:\\Users\\a.txt", at)).toBeNull()
+})
+
+test("outside Banda, a page goes to the browser and a file to its app", () => {
+  expect(outsideOf({ page: "https://a.b/" })).toBe("in external browser")
+  expect(outsideOf({ file: "/a" })).toBe("in its app")
 })

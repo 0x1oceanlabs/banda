@@ -41,7 +41,8 @@ Import paths, so the files find each other here, and the tests import
   edges (`src/glyphs.ts`, Banda's), and each cell's edges, behind its
   background too, are on screen pixels (ADR 0047, decision 3).
 - the surface takes a `linkTitle`: a link under the pointer shows it as
-  the canvas's tooltip.
+  the canvas's tooltip;
+- `linkTextAt` names the link at a point, for the terminal's menu.
 
 T3's tests of its own terminal drawer are not brought: they test T3's
 transport, not the adapter.

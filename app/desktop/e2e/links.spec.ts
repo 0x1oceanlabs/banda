@@ -4,7 +4,7 @@ import type { AddressInfo } from "node:net"
 import { join } from "node:path"
 import { pathToFileURL } from "node:url"
 import { expect, test } from "@playwright/test"
-import { firstThread, startWindow, type Window } from "./window"
+import { firstThread, newTerminal, startWindow, type Window } from "./window"
 
 let window: Window
 let site: Server
@@ -93,20 +93,8 @@ test("a terminal's paths open in Banda's browser, and Ctrl+click opens them in t
   })
   const outside = () =>
     app.evaluate(() => (globalThis as { pathOpens?: string[] }).pathOpens)
-  await firstThread(page)
-  await expect(page.getByRole("region", { name: "New Thread" })).toBeVisible()
+  const screen = await newTerminal(page)
   writeFileSync(notes, "Notes\n")
-  await page.keyboard.press("Alt+KeyN")
-  await page
-    .getByRole("region", { name: "New Pane" })
-    .getByRole("button", { name: "Terminal" })
-    .click()
-  const screen = page.getByRole("region", { name: "Terminal screen" })
-  await expect(screen).toHaveAttribute("data-state", "running")
-  // Where the shell is: its header says it, and paths start there.
-  await expect(
-    page.locator("section[data-tile]").filter({ has: screen }).locator("header")
-  ).toContainText("root/Work")
   await screen.click()
   // The path, line and column as a compiler prints them, on the first row.
   await page.keyboard.type("clear; printf './notes.txt:3:1\\n'; : > printed")

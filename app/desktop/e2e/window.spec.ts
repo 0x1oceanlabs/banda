@@ -25,6 +25,7 @@ import {
   startWindow,
   wallpaper,
   type Window,
+  read,
 } from "./window"
 
 let window: Window
@@ -586,14 +587,6 @@ function terminalTile(page: Page): Locator {
   return page.locator("section[data-tile]").filter({
     has: page.getByRole("region", { name: "Terminal screen" }),
   })
-}
-
-function read(path: string): string | undefined {
-  try {
-    return readFileSync(path, "utf8")
-  } catch {
-    return undefined
-  }
 }
 
 function running(pid: number): boolean {

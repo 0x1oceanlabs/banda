@@ -123,6 +123,12 @@ export const BRIDGE = bridge({
     /** The themes there are. */
     themes: invoke<[], Listed[]>(),
   },
+  /** Editing in the page. */
+  edit: {
+    /** The focused field takes what the clipboard holds, as the system's
+     * paste does: the page never reads the clipboard itself. */
+    paste: send<[]>(),
+  },
   /** Files on the machine, as links name them. */
   files: {
     /** Opens the file at the full `path` in the app the system has for
