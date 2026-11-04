@@ -43,8 +43,8 @@ export type Carrying = {
   /** Scrolls, a frame's worth, what the pointer at `x`, `y` holds
    * against its edge: whether anything moved. */
   scroll: (x: number, y: number) => boolean
-  /** It is over the overview's dark backdrop: the hint is ringed. */
-  dark?: boolean
+  /** A contrasting ring keeps the hint visible over the overview. */
+  ringed?: boolean
 }
 
 /** How long, in milliseconds, a Pane held over a workspace's number goes
@@ -65,7 +65,7 @@ const GHOST_LOOK =
 const HINT_LOOK =
   "pointer-events-none fixed top-0 left-0 z-50 hidden rounded-full bg-focus"
 /** The hint on the overview's backdrop, where the focus colour may not show. */
-const DARK_HINT = "ring-1 ring-overview-foreground/70"
+const HINT_RING = "ring-1 ring-overview-foreground/70"
 
 /** A press that carries the Pane once it moves `THRESHOLD`. */
 type Press = {
@@ -149,7 +149,7 @@ export function useMoving(
           .querySelector(`[data-tile="${from.pane}"]`)
           ?.getAttribute("aria-label") ?? ""
       const hint = document.createElement("div")
-      hint.className = cn(HINT_LOOK, carrying.current.dark && DARK_HINT)
+      hint.className = cn(HINT_LOOK, carrying.current.ringed && HINT_RING)
       document.body.append(ghost, hint)
       carry = { ...from, ghost, hint, frame: requestAnimationFrame(edge) }
       window.addEventListener("keydown", onKey, true)

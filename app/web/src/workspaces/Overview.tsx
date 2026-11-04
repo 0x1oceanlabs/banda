@@ -95,8 +95,8 @@ type Screen = {
  * up or down, the others stepping aside; the empty one at the bottom
  * stays. `Esc` puts one carried back, or goes back.
  *
- * What shows is the workspaces themselves, zoomed out under it over a dark
- * backdrop, as niri's: each stands under its row, so a Pane's tile here
+ * What shows is the workspaces themselves, zoomed out over the desk's
+ * theme or glass (ADR 0052): each stands under its row, so a Pane's tile here
  * lies over the Pane, and those take no clicks or keys while it is open.
  */
 export function Overview({
@@ -321,7 +321,7 @@ export function Overview({
   useLayoutEffect(() => {
     carrying.current = {
       on: true,
-      dark: true,
+      ringed: true,
       frame,
       go: onGo,
       land: (hit, x, y, pane) => {
@@ -419,8 +419,8 @@ export function Overview({
       <p
         role="status"
         className={cn(
-          "sticky top-3 z-2 mx-auto mb-2 flex h-9 w-fit max-w-full items-center gap-2 rounded-lg border border-overview-foreground/15 bg-overview px-3 text-sm shadow-sm",
-          found ? "text-overview-foreground" : "text-overview-foreground/60"
+          "sticky top-3 z-2 mx-auto mb-2 flex h-9 w-fit max-w-full items-center gap-2 rounded-lg border border-overview-foreground/15 bg-popover px-3 text-sm shadow-sm",
+          found ? "text-popover-foreground" : "text-muted-foreground"
         )}
         onClick={(event) => event.stopPropagation()}
       >
@@ -583,7 +583,7 @@ function Row({
                   aria-current={entry.id === picked || undefined}
                   hidden={column.tabbed && !active}
                   // Clear: the Pane itself shows under it, zoomed out.
-                  className="group/over relative min-h-0 rounded-(--overview-radius) inset-ring-(--overview-frame) transition-[background-color,box-shadow] duration-150 hover:bg-overview-foreground/5 hover:inset-ring-1 aria-[current]:inset-ring-2 data-called:inset-ring-2 data-lifted:bg-overview/60 data-[dim]:bg-black/50 motion-reduce:transition-none"
+                  className="group/over relative min-h-0 rounded-(--overview-radius) inset-ring-(--overview-frame) transition-[background-color,box-shadow] duration-150 hover:bg-overview-foreground/5 hover:inset-ring-1 aria-[current]:inset-ring-2 data-called:inset-ring-2 data-lifted:bg-black/50 data-[dim]:bg-black/50 motion-reduce:transition-none"
                   style={
                     {
                       flex: column.tabbed
@@ -618,7 +618,7 @@ function Row({
                     tabIndex={-1}
                     aria-label={`Close ${title}`}
                     title="Close (Alt+W)"
-                    className="absolute top-1.5 right-1.5 z-1 rounded-md border border-overview-foreground/20 bg-overview text-overview-foreground opacity-0 shadow-sm transition-opacity duration-150 group-hover/over:opacity-100 hover:bg-overview hover:text-destructive motion-reduce:transition-none [@media(hover:none)]:opacity-100"
+                    className="absolute top-1.5 right-1.5 z-1 rounded-md border border-overview-foreground/20 bg-popover text-popover-foreground opacity-0 shadow-sm transition-opacity duration-150 group-hover/over:opacity-100 hover:bg-popover hover:text-destructive motion-reduce:transition-none [@media(hover:none)]:opacity-100"
                     onMouseDown={(event) => event.preventDefault()}
                     onClick={(event) => {
                       event.stopPropagation()
@@ -630,7 +630,7 @@ function Row({
                   {/* How its Thread is, at a size to read, and what it asks
                       when it calls. */}
                   {thread && (call || thread.mark !== "rest") && (
-                    <span className="pointer-events-none absolute top-1.5 left-1.5 z-1 flex max-w-[calc(100%-3rem)] items-center gap-1 rounded-md border border-overview-foreground/15 bg-overview px-1.5 py-0.5 text-xs text-overview-foreground shadow-sm">
+                    <span className="pointer-events-none absolute top-1.5 left-1.5 z-1 flex max-w-[calc(100%-3rem)] items-center gap-1 rounded-md border border-overview-foreground/15 bg-popover px-1.5 py-0.5 text-xs text-popover-foreground shadow-sm">
                       <ThreadMark listed={thread} className="size-3.5" />
                       {call && thread.calls && (
                         <span className="min-w-0 truncate">{thread.calls}</span>
