@@ -66,4 +66,5 @@ Every key, with its default:
 The bar widget `harnesses.limits` is a ring of the fullest account limit.
 A click shows every account's windows, resets, even pace, and the last read
 or its failure. It is on the right by default; `[limits]` in
-`harnesses.toml` controls reading, its interval, and the warning threshold.
+`harnesses.toml` controls reading, its interval, the warning threshold,
+and `look`: `icon`, `meter`, `number` or `providers`.

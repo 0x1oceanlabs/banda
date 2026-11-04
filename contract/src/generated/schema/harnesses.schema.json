@@ -102,15 +102,45 @@
           "default": "15m"
         },
         "warn": {
-          "description": "The share spent, out of 100, from which the bar's ring warns.",
+          "description": "The share spent, out of 100, from which the bar's widget warns.",
           "type": "integer",
           "format": "uint8",
           "minimum": 1,
           "maximum": 100,
           "default": 80
+        },
+        "look": {
+          "description": "How the bar's widget shows the room left.",
+          "default": "icon",
+          "$ref": "#/$defs/LimitsLook"
         }
       },
       "additionalProperties": false
+    },
+    "LimitsLook": {
+      "description": "How the bar's widget shows the room left: `[limits] look` (ADR 0055,\ndecision 2).",
+      "oneOf": [
+        {
+          "description": "A gauge.",
+          "type": "string",
+          "const": "icon"
+        },
+        {
+          "description": "A thin bar and the share.",
+          "type": "string",
+          "const": "meter"
+        },
+        {
+          "description": "The share alone.",
+          "type": "string",
+          "const": "number"
+        },
+        {
+          "description": "Each Harness's share: `Claude 74% · Codex 12%`.",
+          "type": "string",
+          "const": "providers"
+        }
+      ]
     },
     "UsageSettings": {
       "description": "Local journal collection. Turning it off preserves saved totals but reads no files.",

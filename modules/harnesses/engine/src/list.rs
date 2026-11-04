@@ -3,7 +3,7 @@
 //! how. What a Thread on one starts with is the agents module's own, in
 //! `agents.toml` (ADR 0040, decision 6).
 
-use crate::model::{HarnessView, Program};
+use crate::model::{HarnessView, LimitsLook, Program};
 use banda_kernel::{SPACE_VARIABLE, SpaceId};
 use banda_look::Problem;
 use schemars::JsonSchema;
@@ -142,9 +142,13 @@ struct LimitsEntry {
     #[schemars(extend("default" = "15m"))]
     #[schemars(with = "Option<String>")]
     every: Option<toml::Spanned<String>>,
-    /// The share spent, out of 100, from which the bar's ring warns.
+    /// The share spent, out of 100, from which the bar's widget warns.
     #[schemars(extend("default" = 80), range(min = 1, max = 100))]
     warn: Option<u8>,
+    /// How the bar's widget shows the room left.
+    #[schemars(extend("default" = "icon"))]
+    #[schemars(with = "Option<LimitsLook>")]
+    look: Option<toml::Spanned<String>>,
 }
 
 /// How Banda reads the limits, every key of `[limits]` resolved.
@@ -153,6 +157,7 @@ pub struct LimitsSettings {
     pub read: bool,
     pub every: Duration,
     pub warn: u8,
+    pub look: LimitsLook,
 }
 
 impl Default for LimitsSettings {
@@ -161,6 +166,7 @@ impl Default for LimitsSettings {
             read: true,
             every: Duration::from_secs(15 * 60),
             warn: 80,
+            look: LimitsLook::default(),
         }
     }
 }
@@ -192,10 +198,18 @@ impl LimitsEntry {
                 Problem::at(path, text, Some(said.span()), message.to_owned())
             })?,
         };
+        let look = match self.look {
+            None => base.look,
+            Some(said) => LimitsLook::named(said.get_ref()).ok_or_else(|| {
+                let message = "`look` is \"icon\", \"meter\", \"number\" or \"providers\"";
+                Problem::at(path, text, Some(said.span()), message.to_owned())
+            })?,
+        };
         Ok(LimitsSettings {
             read: self.read.unwrap_or(base.read),
             every,
             warn: self.warn.unwrap_or(base.warn).clamp(1, 100),
+            look,
         })
     }
 }
@@ -507,15 +521,19 @@ mod tests {
         let path = Path::new("h");
         let read = |text: &str| parse(path, text).map(|read| read.limits);
         assert_eq!(read("").unwrap(), LimitsSettings::default());
-        let set = read("[limits]\nread = false\nevery = \"1h\"\nwarn = 90\n").unwrap();
+        let set = read("[limits]\nread = false\nevery = \"1h\"\nwarn = 90\nlook = \"meter\"\n");
         assert_eq!(
-            set,
+            set.unwrap(),
             LimitsSettings {
                 read: false,
                 every: Duration::from_secs(3600),
-                warn: 90
+                warn: 90,
+                look: LimitsLook::Meter,
             }
         );
+        let problem = read("[limits]\nwarn = 90\nlook = \"ring\"\n").unwrap_err();
+        assert_eq!(problem.line, Some(3), "{problem}");
+        assert!(problem.message.contains("`look`"), "{problem}");
         for wrong in ["\"1m\"", "\"15\"", "\"m\"", "\"15 days\""] {
             let problem = read(&format!("[limits]\nevery = {wrong}\n")).unwrap_err();
             assert_eq!(problem.line, Some(2), "{wrong}: {problem}");

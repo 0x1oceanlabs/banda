@@ -2,7 +2,8 @@
  * Claude Code's usage limits (ADR 0043, decision 2). The engine part asks
  * this, with the folder Claude Code keeps its sign-in in; this reads the
  * access token there, or in the macOS Keychain, asks Anthropic once with
- * it, and answers what Anthropic said with the plan the sign-in names.
+ * it, and answers what Anthropic said with the plan the sign-in names,
+ * and the address it is signed in with (ADR 0055, decision 1).
  *
  * The token lives only in this one request: it is kept nowhere, written
  * in no log, sent nowhere but Anthropic's usage endpoint, never renewed,
@@ -25,6 +26,8 @@ export type Answer = {
   signed_in: boolean
   subscription?: string
   tier?: string
+  /** The address the account is signed in with: no credential. */
+  email?: string
   expired?: boolean
   status?: number
   body?: unknown
@@ -90,6 +93,28 @@ const login = async (
 const text = (value: unknown) =>
   typeof value === "string" && value !== "" ? value : undefined
 
+/**
+ * The address Claude Code is signed in with, `oauthAccount.emailAddress`
+ * in its `.claude.json`: in the folder, or beside it in the home for the
+ * default one. None when the file is not there or does not read.
+ */
+const emailIn = async (means: Means, folder: string, standard: boolean) => {
+  const file = standard
+    ? join(means.home, ".claude.json")
+    : join(folder, ".claude.json")
+  try {
+    const kept = await means.read(file)
+    if (kept === undefined) return undefined
+    const account = (JSON.parse(kept) as { oauthAccount?: unknown })
+      .oauthAccount
+    return typeof account === "object" && account !== null
+      ? text((account as { emailAddress?: unknown }).emailAddress)
+      : undefined
+  } catch {
+    return undefined
+  }
+}
+
 /** Reads the sign-in in `config`, else Claude Code's own folder, and asks. */
 export const usage = async (
   means: Means,
@@ -98,13 +123,17 @@ export const usage = async (
 ): Promise<Answer> => {
   const standardFolder = join(means.home, ".claude")
   const folder = config ?? means.configured ?? standardFolder
-  const found = await login(means, folder, folder === standardFolder)
+  const standard = folder === standardFolder
+  const email = await emailIn(means, folder, standard)
+  const found = await login(means, folder, standard)
   const token = text(found?.accessToken)
-  if (found === undefined || token === undefined) return { signed_in: false }
+  if (found === undefined || token === undefined)
+    return { signed_in: false, email }
   const plan = {
     signed_in: true,
     subscription: text(found.subscriptionType),
     tier: text(found.rateLimitTier),
+    email,
   }
   const expires = found.expiresAt
   if (typeof expires === "number" && expires <= means.now())

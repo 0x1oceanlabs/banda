@@ -11,7 +11,8 @@ use std::path::Path;
 use std::sync::Arc;
 use std::time::Duration;
 
-/// A `codex` that answers `initialize` and `account/rateLimits/read`.
+/// A `codex` that answers `initialize`, `account/rateLimits/read` and
+/// `account/read`.
 const CODEX: &str = r#"#!/usr/bin/env node
 const lines = require("readline").createInterface({ input: process.stdin })
 const say = (message) => process.stdout.write(JSON.stringify(message) + "\n")
@@ -22,6 +23,9 @@ lines.on("line", (line) => {
     say({ method: "account/updated", params: {} })
     const week = { usedPercent: 5, windowDurationMins: 10080, resetsAt: 4102444800 }
     say({ id, result: { rateLimitsByLimitId: { codex: { primary: week, planType: "pro" } } } })
+  }
+  if (method === "account/read") {
+    say({ id, result: { account: { type: "chatgpt", email: "p@example.com", planType: "pro" } } })
   }
 })
 "#;
@@ -108,6 +112,7 @@ async fn a_window_reads_each_harnesss_limits_and_a_failed_read_keeps_the_last() 
         .collect();
     assert_eq!(ids, ["claude", "codex"]);
     assert_eq!(before["warn"], 80);
+    assert_eq!(before["look"], "icon");
     assert_eq!(before["limits"][0]["name"], "Claude Code");
     assert!(before["limits"][0]["read_at"].is_null());
 
@@ -117,7 +122,8 @@ async fn a_window_reads_each_harnesss_limits_and_a_failed_read_keeps_the_last() 
     let started = banda_kernel::now_ms() - 1;
     limits(&kernel, owner, true).await;
     let usage = json!({
-        "signed_in": true, "subscription": "max", "tier": "default_claude_max_20x", "status": 200,
+        "signed_in": true, "subscription": "max", "tier": "default_claude_max_20x",
+        "email": "p@example.com", "status": 200,
         "body": {
             "five_hour": { "utilization": 12.5, "resets_at": "2099-01-01T00:00:00Z" },
             "seven_day": { "utilization": 74, "resets_at": "2000-01-01T00:00:00Z" },
@@ -127,6 +133,11 @@ async fn a_window_reads_each_harnesss_limits_and_a_failed_read_keeps_the_last() 
     let read = read_since(&kernel, owner, started).await;
     let (claude, codex) = (&read["limits"][0], &read["limits"][1]);
     assert_eq!(claude["plan"], "Max 20x");
+    assert_eq!(claude["email"], "p@example.com");
+    assert_eq!(
+        codex["email"], "p@example.com",
+        "another Harness's, not shared"
+    );
     assert_eq!(claude["windows"][0]["label"], "Session");
     assert_eq!(claude["windows"][0]["used"], 12.5);
     assert_eq!(
