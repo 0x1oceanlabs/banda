@@ -1,0 +1,801 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>First run mockup</title>
+    <style>
+      :root {
+        --background: #1a1b26;
+        --foreground: #c0caf5;
+        --muted-foreground: #7a819e;
+        --card: #20222f;
+        --popover: #24283b;
+        --secondary: #2f3347;
+        --border: #2f3347;
+        --primary: #7aa2f7;
+        --primary-foreground: #1a1b26;
+        --success: #9ece6a;
+        --warning: #e0af68;
+        --destructive: #f7768e;
+        --code-background: #16161e;
+        --radius: 10px;
+        --font-sans: Inter, system-ui, sans-serif;
+        --font-mono: "JetBrains Mono", ui-monospace, monospace;
+      }
+      body {
+        background: var(--background);
+        color: var(--foreground);
+        padding: 24px 16px;
+        max-width: 760px;
+        margin: 0 auto;
+      }
+
+      :root {
+        --ok: var(--success);
+        --warn: var(--warning);
+        --bad: var(--destructive);
+      }
+      * {
+        box-sizing: border-box;
+      }
+      body {
+        font-family: var(--font-sans);
+        font-size: 13px;
+      }
+      .sec {
+        margin: 0 0 28px;
+      }
+      .cap {
+        font-size: 11px;
+        letter-spacing: 0.06em;
+        text-transform: uppercase;
+        color: var(--muted-foreground);
+        margin: 0 0 4px;
+      }
+      .note {
+        font-size: 12.5px;
+        color: var(--muted-foreground);
+        margin: 0 0 10px;
+        line-height: 1.45;
+      }
+      .win {
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        overflow: hidden;
+        background: var(--background);
+      }
+      .bar {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        height: 28px;
+        padding: 0 10px;
+        border-bottom: 1px solid var(--border);
+        font-size: 11.5px;
+        color: var(--muted-foreground);
+      }
+      .bar .sp {
+        flex: 1;
+      }
+      .ws {
+        display: flex;
+        gap: 4px;
+      }
+      .ws b {
+        width: 16px;
+        height: 16px;
+        border-radius: 4px;
+        background: var(--secondary);
+        display: grid;
+        place-items: center;
+        font-size: 10px;
+        font-weight: 600;
+        color: var(--foreground);
+      }
+      .body {
+        display: flex;
+        min-height: 250px;
+      }
+      .side {
+        width: 120px;
+        border-right: 1px solid var(--border);
+        padding: 10px;
+        font-size: 11.5px;
+        color: var(--muted-foreground);
+      }
+      .side div {
+        padding: 3px 0;
+      }
+      .desk {
+        flex: 1;
+        display: flex;
+        gap: 6px;
+        padding: 6px;
+      }
+      .pane {
+        flex: 1;
+        border: 1px solid var(--border);
+        border-radius: 8px;
+        background: var(--card);
+        display: flex;
+        flex-direction: column;
+        min-width: 0;
+      }
+      .ph {
+        height: 26px;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 0 10px;
+        border-bottom: 1px solid var(--border);
+        font-size: 11.5px;
+        color: var(--muted-foreground);
+      }
+      .pb {
+        padding: 14px;
+        flex: 1;
+        display: flex;
+        flex-direction: column;
+      }
+      .center {
+        justify-content: center;
+        align-items: center;
+      }
+      .card {
+        width: 100%;
+        max-width: 400px;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 14px;
+        background: var(--background);
+      }
+      .card h3 {
+        margin: 0 0 2px;
+        font-size: 14px;
+      }
+      .card .s {
+        font-size: 12px;
+        color: var(--muted-foreground);
+        margin: 0 0 10px;
+      }
+      .row {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        padding: 9px 0;
+        border-top: 1px solid var(--border);
+      }
+      .row:first-of-type {
+        border-top: 0;
+      }
+      .lg {
+        width: 22px;
+        height: 22px;
+        border-radius: 6px;
+        background: var(--secondary);
+        display: grid;
+        place-items: center;
+        font-size: 11px;
+        font-weight: 700;
+        flex: none;
+      }
+      .g {
+        flex: 1;
+        min-width: 0;
+      }
+      .n {
+        font-size: 13px;
+        font-weight: 500;
+      }
+      .st {
+        font-size: 11.5px;
+        color: var(--muted-foreground);
+      }
+      .st.ok {
+        color: var(--ok);
+      }
+      .st.warn {
+        color: var(--warn);
+      }
+      .st.bad {
+        color: var(--bad);
+      }
+      .btn {
+        font-size: 11.5px;
+        border: 1px solid var(--border);
+        border-radius: 6px;
+        padding: 3px 9px;
+        background: var(--background);
+        white-space: nowrap;
+        color: var(--foreground);
+      }
+      .pri {
+        background: var(--primary);
+        color: var(--primary-foreground);
+        border-color: transparent;
+      }
+      .ghost {
+        border-color: transparent;
+        color: var(--muted-foreground);
+      }
+      .sub2 {
+        font-size: 11px;
+        color: var(--muted-foreground);
+        margin: -4px 0 6px 32px;
+      }
+      .foot {
+        font-size: 11.5px;
+        color: var(--muted-foreground);
+        margin-top: 10px;
+        text-align: center;
+      }
+      .term {
+        background: var(--code-background);
+        font-family: var(--font-mono);
+        font-size: 11px;
+        line-height: 1.55;
+        padding: 10px;
+        flex: 1;
+        border-radius: 0 0 8px 8px;
+        white-space: pre-wrap;
+        color: var(--foreground);
+      }
+      .dim {
+        color: var(--muted-foreground);
+      }
+      .okc {
+        color: var(--ok);
+      }
+      .spin {
+        display: inline-block;
+        width: 10px;
+        height: 10px;
+        border: 2px solid var(--muted-foreground);
+        border-top-color: transparent;
+        border-radius: 50%;
+        vertical-align: -1px;
+        margin-right: 4px;
+      }
+      .states {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 0;
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        background: var(--card);
+        padding: 4px 14px;
+      }
+      .states .row .tag {
+        font-size: 10.5px;
+        color: var(--muted-foreground);
+        width: 96px;
+        flex: none;
+      }
+      .comp {
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        padding: 10px 12px;
+        background: var(--background);
+        margin-top: auto;
+      }
+      .comp .ph2 {
+        color: var(--muted-foreground);
+      }
+      .comp .meta {
+        display: flex;
+        gap: 8px;
+        margin-top: 10px;
+        font-size: 11px;
+        color: var(--muted-foreground);
+        align-items: center;
+      }
+      .chips {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 6px;
+        margin: auto 0 10px;
+      }
+      .chip {
+        font-size: 11.5px;
+        border: 1px solid var(--border);
+        border-radius: 999px;
+        padding: 4px 10px;
+        color: var(--foreground);
+        background: var(--background);
+      }
+      .pop {
+        position: absolute;
+        right: 8px;
+        top: 32px;
+        width: 280px;
+        border: 1px solid var(--border);
+        border-radius: 10px;
+        background: var(--popover);
+        padding: 12px;
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
+      }
+      .pop h4 {
+        margin: 0 0 2px;
+        font-size: 13px;
+      }
+      .pop ul {
+        margin: 8px 0 10px;
+        padding-left: 16px;
+        font-size: 12px;
+        line-height: 1.5;
+      }
+      .ship {
+        display: grid;
+        grid-template-columns: 1fr 24px 1fr;
+        gap: 6px;
+        align-items: stretch;
+      }
+      .box {
+        border: 1px solid var(--border);
+        border-radius: var(--radius);
+        padding: 12px;
+        background: var(--card);
+      }
+      .box h5 {
+        margin: 0 0 6px;
+        font-size: 12.5px;
+      }
+      .box p {
+        margin: 0;
+        font-size: 12px;
+        color: var(--muted-foreground);
+        line-height: 1.5;
+      }
+      .box .in {
+        border: 1px dashed var(--border);
+        border-radius: 6px;
+        padding: 6px 8px;
+        margin-top: 6px;
+        font-size: 11.5px;
+      }
+      .arrow {
+        display: grid;
+        place-items: center;
+        color: var(--muted-foreground);
+      }
+      code {
+        font-family: var(--font-mono);
+        font-size: 11px;
+      }
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        font-size: 12px;
+      }
+      td,
+      th {
+        text-align: left;
+        padding: 6px 8px;
+        border-top: 1px solid var(--border);
+        vertical-align: top;
+      }
+      th {
+        font-weight: 500;
+        color: var(--muted-foreground);
+        border-top: 0;
+      }
+      .pill {
+        font-size: 10.5px;
+        border-radius: 999px;
+        padding: 1px 7px;
+        background: var(--secondary);
+      }
+      .pill.ok {
+        background: color-mix(in oklab, var(--success) 20%, transparent);
+        color: var(--success);
+      }
+    </style>
+  </head>
+  <body>
+    <!-- 1 -->
+    <div class="sec">
+      <p class="cap">1 · Первое окно</p>
+      <p class="note">
+        Сначала уже существующий вопрос «Help make Banda better?». Потом обычное
+        окно: на месте пустого New Thread стоит карточка. Banda проверяет
+        Harness'ы сама, на каждый не больше 5 с, через PATH из login shell (на
+        Linux тоже).
+      </p>
+      <div class="win">
+        <div class="bar">
+          <div class="ws"><b>1</b></div>
+          <span class="sp"></span><span>No Space</span><span class="sp"></span
+          ><span>⌂</span>
+        </div>
+        <div class="body">
+          <div class="side">
+            <div style="color: var(--foreground)">No Space</div>
+            <div>+ Add Space</div>
+          </div>
+          <div class="desk">
+            <div class="pane">
+              <div class="ph">✎ New Thread</div>
+              <div class="pb center">
+                <div class="card">
+                  <h3>Connect an Agent</h3>
+                  <p class="s">
+                    Banda works with Claude Code or Codex on this computer. One
+                    is enough.
+                  </p>
+                  <div class="row">
+                    <div class="lg">C</div>
+                    <div class="g">
+                      <div class="n">Claude Code</div>
+                      <div class="st">Not on this computer</div>
+                    </div>
+                    <span class="btn pri">Install</span>
+                  </div>
+                  <div class="row">
+                    <div class="lg">X</div>
+                    <div class="g">
+                      <div class="n">Codex</div>
+                      <div class="st">0.165.2 · not signed in</div>
+                    </div>
+                    <span class="btn pri">Sign in</span>
+                  </div>
+                  <div class="foot">
+                    Uses your own subscription. Banda never sees your password
+                    or token.
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 2 -->
+    <div class="sec">
+      <p class="cap">2 · Install: официальный установщик в terminal рядом</p>
+      <p class="note">
+        Нажал Install, и справа открывается обычный terminal Pane с уже
+        запущенной командой. Человек видит всё, что происходит, sudo не нужен.
+        Когда команда закончилась с кодом 0, Banda сама проверяет снова, и
+        строка переходит к Sign in. Если не хочется, чтобы Banda что-то
+        запускала, есть «Copy command».
+      </p>
+      <div class="win">
+        <div class="bar">
+          <div class="ws"><b>1</b></div>
+          <span class="sp"></span><span>No Space</span><span class="sp"></span
+          ><span>⌂</span>
+        </div>
+        <div class="body">
+          <div class="desk">
+            <div class="pane">
+              <div class="ph">✎ New Thread</div>
+              <div class="pb center">
+                <div class="card">
+                  <h3>Connect an Agent</h3>
+                  <p class="s">
+                    Banda works with Claude Code or Codex on this computer. One
+                    is enough.
+                  </p>
+                  <div class="row">
+                    <div class="lg">C</div>
+                    <div class="g">
+                      <div class="n">Claude Code</div>
+                      <div class="st">
+                        <span class="spin"></span>Installing, in the terminal →
+                      </div>
+                    </div>
+                    <span class="btn ghost">Copy command</span>
+                  </div>
+                  <div class="row">
+                    <div class="lg">X</div>
+                    <div class="g">
+                      <div class="n">Codex</div>
+                      <div class="st">0.165.2 · not signed in</div>
+                    </div>
+                    <span class="btn pri">Sign in</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="pane">
+              <div class="ph">⌘ bash · ~ · Install Claude Code</div>
+              <div class="term">
+                <span class="dim">$</span> curl -fsSL
+                https://claude.ai/install.sh | bash Downloading Claude Code
+                2.1.316…
+                <span class="dim">████████████████████░░░░ 82%</span>
+                <span class="dim">Banda checks again when this ends.</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 3 -->
+    <div class="sec">
+      <p class="cap">3 · Sign in: та же схема</p>
+      <p class="note">
+        В terminal запускается <code>claude auth login</code> или
+        <code>codex login</code>. Ссылку из вывода Banda выносит на кнопку.
+        Когда вход прошёл, terminal пишет «Signed in» и закрывается сам, а
+        строка становится зелёной. Нажимать «I signed in» не нужно, но кнопка
+        остаётся на случай, если Banda не поняла.
+      </p>
+      <div class="win">
+        <div class="body" style="min-height: 190px">
+          <div class="desk">
+            <div class="pane">
+              <div class="ph">✎ New Thread</div>
+              <div class="pb center">
+                <div class="card">
+                  <div class="row">
+                    <div class="lg">C</div>
+                    <div class="g">
+                      <div class="n">Claude Code</div>
+                      <div class="st">
+                        <span class="spin"></span>Waiting for the browser…
+                      </div>
+                    </div>
+                    <span class="btn pri">Open sign-in page</span>
+                  </div>
+                  <div class="row">
+                    <div class="lg">X</div>
+                    <div class="g">
+                      <div class="n">Codex</div>
+                      <div class="st ok">● Ready · roma@… · ChatGPT Plus</div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div class="pane">
+              <div class="ph">⌘ claude auth login</div>
+              <div class="term">
+                Opening https://claude.ai/oauth/authorize?…
+                <span class="dim"
+                  >If the browser didn't open, paste the code here:</span
+                >
+                <span class="dim">›</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 4 -->
+    <div class="sec">
+      <p class="cap">4 · Все состояния одной строки</p>
+      <p class="note">
+        Одна и та же строка показывается в карточке, в Settings → Harnesses и в
+        Thread, если вход слетел посреди работы. Кнопка всегда одна, главная.
+      </p>
+      <div class="states">
+        <div class="row">
+          <span class="tag">Checking</span>
+          <div class="lg">C</div>
+          <div class="g">
+            <div class="n">Claude Code</div>
+            <div class="st"><span class="spin"></span>Checking…</div>
+          </div>
+        </div>
+        <div class="row">
+          <span class="tag">Нет</span>
+          <div class="lg">C</div>
+          <div class="g">
+            <div class="n">Claude Code</div>
+            <div class="st">Not on this computer</div>
+          </div>
+          <span class="btn ghost">Copy command</span
+          ><span class="btn pri">Install</span>
+        </div>
+        <div class="row">
+          <span class="tag">Старый</span>
+          <div class="lg">C</div>
+          <div class="g">
+            <div class="n">Claude Code</div>
+            <div class="st warn">2.1.309 · Banda needs 2.1.312</div>
+          </div>
+          <span class="btn pri">Update</span>
+        </div>
+        <div class="row">
+          <span class="tag">Не вошёл</span>
+          <div class="lg">X</div>
+          <div class="g">
+            <div class="n">Codex</div>
+            <div class="st">0.165.2 · not signed in</div>
+          </div>
+          <span class="btn pri">Sign in</span>
+        </div>
+        <div class="row">
+          <span class="tag">API key</span>
+          <div class="lg">C</div>
+          <div class="g">
+            <div class="n">Claude Code</div>
+            <div class="st warn">Bills ANTHROPIC_API_KEY, not your plan</div>
+          </div>
+          <span class="btn">Why?</span>
+        </div>
+        <div class="row">
+          <span class="tag">Не понять</span>
+          <div class="lg">X</div>
+          <div class="g">
+            <div class="n">Codex</div>
+            <div class="st">Didn't answer in 5 s</div>
+          </div>
+          <span class="btn">Check again</span>
+        </div>
+        <div class="row">
+          <span class="tag">Сломалось</span>
+          <div class="lg">C</div>
+          <div class="g">
+            <div class="n">Claude Code</div>
+            <div class="st bad">Install stopped (code 1)</div>
+          </div>
+          <span class="btn">Show terminal</span
+          ><span class="btn pri">Try again</span>
+        </div>
+        <div class="row">
+          <span class="tag">Готов</span>
+          <div class="lg">C</div>
+          <div class="g">
+            <div class="n">Claude Code</div>
+            <div class="st ok">● Ready · roma@… · Max</div>
+          </div>
+        </div>
+      </div>
+      <p class="note" style="margin-top: 8px">
+        Update выбирает команду по тому, откуда стоит CLI: свой установщик →
+        <code>claude update</code>, mise → <code>mise up claude</code>, brew →
+        <code>brew upgrade</code>. Если источник непонятен, показываем только
+        «Copy command».
+      </p>
+    </div>
+
+    <!-- 5 -->
+    <div class="sec">
+      <p class="cap">
+        5 · Готово: карточка уходит, остаётся обычный New Thread
+      </p>
+      <p class="note">
+        Над полем ввода три стартовые подсказки, как в Claude desktop. Первая и
+        есть «спросить про Banda»: обычный Thread, у Agent уже есть
+        <code>banda skill</code>. Подсказки исчезают после первого Thread.
+      </p>
+      <div class="win">
+        <div class="body" style="min-height: 220px">
+          <div class="desk">
+            <div class="pane">
+              <div class="ph">✎ New Thread</div>
+              <div class="pb">
+                <div class="chips">
+                  <span class="chip">What can Banda do?</span
+                  ><span class="chip">Put a browser next to this Thread</span
+                  ><span class="chip">Make the window lighter</span>
+                </div>
+                <div class="comp">
+                  <div class="ph2">
+                    Ask anything, @ to add files, / for commands
+                  </div>
+                  <div class="meta">
+                    <span
+                      class="lg"
+                      style="width: 16px; height: 16px; font-size: 9px"
+                      >C</span
+                    >Claude Code · Sonnet<span style="flex: 1"></span>⏎
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 6 -->
+    <div class="sec">
+      <p class="cap">6 · What's new: в уже существующем виджете обновлений</p>
+      <p class="note">
+        Никаких окон, которые открываются сами. Когда обновление готово, в
+        popover на Bar появляется несколько строк из заголовков PR и ссылка на
+        полный список.
+      </p>
+      <div class="win" style="position: relative; height: 200px">
+        <div class="bar">
+          <div class="ws"><b>1</b><b>2</b></div>
+          <span class="sp"></span><span>banda</span><span class="sp"></span
+          ><span style="color: var(--primary)">↻</span>
+        </div>
+        <div class="pop">
+          <h4>Banda Dev 0.1.0-dev.198 is ready</h4>
+          <div class="st">Restart to use it</div>
+          <ul>
+            <li>Threads open web links in Banda</li>
+            <li>Mermaid and math in replies</li>
+            <li>A New terminal shortcut</li>
+          </ul>
+          <div style="display: flex; gap: 6px">
+            <span class="btn">All changes</span><span style="flex: 1"></span
+            ><span class="btn pri">Restart</span>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- 7 -->
+    <div class="sec">
+      <p class="cap">7 · Как поставляются Claude Code и Codex</p>
+      <p class="note">Адаптеры едут внутри Banda, а сами CLI ставит человек.</p>
+      <div class="ship">
+        <div class="box">
+          <h5>Внутри Banda (AppImage / .app)</h5>
+          <p>
+            Окно и движок, как сейчас, плюс два адаптера, каждый одним файлом:
+          </p>
+          <div class="in"><code>claude-agent-acp</code> 0.99.1 · 2.2 MB</div>
+          <div class="in"><code>codex-acp</code> 2.5.0 · 1.1 MB</div>
+          <p style="margin-top: 6px">
+            Движок запускает их на Node, которая уже есть в Electron
+            (<code>ELECTRON_RUN_AS_NODE</code>). Ни npx, ни Node на машине, ни
+            сети при первом Thread не нужно. Версии обновляются вместе с Banda.
+          </p>
+        </div>
+        <div class="arrow">→</div>
+        <div class="box">
+          <h5>У человека</h5>
+          <p>
+            Свой <code>claude</code> и свой <code>codex</code>, со своим входом
+            и своей подпиской. Обычно лежат в <code>~/.local/bin</code> после
+            официального установщика, иначе там, где их держит mise или brew.
+          </p>
+          <div class="in">
+            Адаптеру передаём путь: <code>CLAUDE_CODE_EXECUTABLE</code> /
+            <code>CODEX_PATH</code>
+          </div>
+          <p style="margin-top: 6px">
+            CLI обновляются сами, Banda только проверяет минимальную версию.
+          </p>
+        </div>
+      </div>
+      <table style="margin-top: 12px">
+        <tr>
+          <th></th>
+          <th>Сейчас</th>
+          <th>Предлагаю</th>
+        </tr>
+        <tr>
+          <td>Адаптеры</td>
+          <td><code>npx -y</code> при первом Thread, ≈800 MB</td>
+          <td>
+            Внутри Banda, 3.3 MB <span class="pill ok">+2% к 158 MB</span>
+          </td>
+        </tr>
+        <tr>
+          <td>Нужна Node на машине</td>
+          <td>Да, иначе Agent не стартует</td>
+          <td>Нет</td>
+        </tr>
+        <tr>
+          <td>Сеть при первом Thread</td>
+          <td>Да</td>
+          <td>Нет</td>
+        </tr>
+        <tr>
+          <td>CLI</td>
+          <td>Твои, найденные в PATH окна</td>
+          <td>Твои, найденные через login shell</td>
+        </tr>
+        <tr>
+          <td>Свой вариант</td>
+          <td><code>harnesses.toml</code></td>
+          <td>
+            <code>harnesses.toml</code> по-прежнему может задать свою команду
+          </td>
+        </tr>
+      </table>
+    </div>
+  </body>
+</html>
