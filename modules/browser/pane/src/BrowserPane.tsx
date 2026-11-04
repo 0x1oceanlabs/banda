@@ -524,10 +524,10 @@ function Driving({
 }
 
 /** Where Banda's glass over a page goes: a pill at its foot, or a card
- * across its top. */
+ * across its foot. */
 const PLACES = {
   foot: "bottom-3 left-1/2 max-w-[calc(100%-24px)] -translate-x-1/2 gap-2 rounded-full py-1 pr-1 whitespace-nowrap",
-  top: "inset-x-3 top-3 gap-2.5 rounded-lg py-2 pr-2 pl-3",
+  card: "inset-x-3 bottom-3 flex-wrap gap-2.5 rounded-lg py-2 pr-2 pl-3",
 }
 
 /** Banda's glass over a page, which says what a Thread does there or
@@ -670,9 +670,9 @@ function AskSite({
 
 /**
  * What Banda draws over a page a Thread handed to the Person (ADR 0029,
- * decisions 6 and 7, E): a card at its top, ringed as what waits for the
- * Person, that says what is theirs to do there, and hands the tab back
- * once they are done.
+ * decisions 6 and 7, E; ADR 0049): a card at its foot, ringed as what
+ * waits for the Person, that says what is theirs to do there, and hands
+ * the tab back once they are done.
  */
 function HandedOver({
   agent,
@@ -689,14 +689,14 @@ function HandedOver({
   return (
     <Pill
       label={`${title} handed this tab to you`}
-      at="top"
+      at="card"
       className="ring-attention/60"
     >
       <p className="min-w-0 flex-1 leading-snug">
         <b className="text-attention">Your turn.</b> {why}.{" "}
         <span className="opacity-70">
-          <ThreadLink title={title} onClick={() => onThread(agent)} /> waits,
-          and never sees what you type in a password field.
+          <ThreadLink title={title} onClick={() => onThread(agent)} /> waits
+          until you hand back the tab.
         </span>
       </p>
       <Button
