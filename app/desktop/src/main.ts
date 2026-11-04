@@ -103,7 +103,8 @@ const CSP = [
   "style-src 'self' 'unsafe-inline'",
   // An extension's button shows its icon from crx:// (the browser's
   // extensions, @banda/browser-desktop).
-  "img-src 'self' data: crx:",
+  "img-src 'self' data: crx: app://files",
+  "media-src 'self' app://files",
   "font-src 'self' data:",
   // The engine; and the page's own files, as Ghostty fetches its WebAssembly.
   "connect-src 'self' ws://127.0.0.1:*",

@@ -1,9 +1,19 @@
 import { code } from "@streamdown/code"
 import { cn } from "cn"
-import { Streamdown } from "streamdown"
+import { MarkdownImage } from "./markdown-media"
+import { Streamdown, defaultRehypePlugins } from "streamdown"
+import { localImages } from "../lib/markdown-media"
 
 /** Shiki highlights code in the theme's light and dark. */
 const plugins = { code }
+const components = { img: MarkdownImage }
+const rehypePlugins = [
+  defaultRehypePlugins.raw,
+  defaultRehypePlugins.sanitize,
+  localImages(),
+  defaultRehypePlugins.harden,
+  localImages(true),
+]
 
 /** Copy on code and tables, nothing to download, no diagrams' extras. */
 const controls = {
@@ -36,6 +46,8 @@ function Markdown({
       )}
       isAnimating={streaming}
       plugins={plugins}
+      components={components}
+      rehypePlugins={rehypePlugins}
       controls={controls}
       linkSafety={{ enabled: false }}
     >

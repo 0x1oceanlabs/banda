@@ -10,9 +10,9 @@ import { expect, test } from "vitest"
 
 const PANE = [
   // The look and the settings contract too: the module's own files come
-  // with the look, and it writes them (ADR 0016). The Harnesses' words,
+  // with the look, and it writes them (ADR 0016). The desktop bridge (ADR 0028), and the Harnesses' words,
   // which its Threads run on (ADR 0040).
-  /^@banda\/contract(\/agents|\/harnesses|\/look|\/settings)?$/,
+  /^@banda\/contract(\/agents|\/harnesses|\/look|\/settings|\/bridge)?$/,
   /^@banda\/ui\//,
   /^react$/,
   /^lucide-react$/,

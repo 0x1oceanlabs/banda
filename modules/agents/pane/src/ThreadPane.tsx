@@ -1,3 +1,4 @@
+import { ThreadMedia } from "./ThreadMedia"
 import { useMemo, useRef, useState } from "react"
 import type { Engine, SpaceId } from "@banda/contract"
 import type {
@@ -104,6 +105,14 @@ export const threadPane = definePane<ThreadArgs>({
 })
 
 function ThreadPane(props: PaneProps<ThreadArgs>) {
+  return (
+    <ThreadMedia space={props.space}>
+      <ThreadContent {...props} />
+    </ThreadMedia>
+  )
+}
+
+function ThreadContent(props: PaneProps<ThreadArgs>) {
   const { engine, space, args, focused, open, update, run } = props
   const { thread } = args
   const {

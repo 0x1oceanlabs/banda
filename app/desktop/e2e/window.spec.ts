@@ -4386,3 +4386,85 @@ test("Alt+Shift+PageUp and PageDown move the workspace on screen, never under th
   await on("1")
   await expect(launcher).toHaveAttribute("data-focused", "true")
 })
+
+test("markdown shows local images, video and audio, with an image preview and working playback", async () => {
+  window = await startWindow()
+  const { page, dir } = window
+  const { thread, composer } = await firstThread(page)
+  const folder = join(dir, "root", "Work")
+  copyFileSync(
+    resolve(import.meta.dirname, "shot.png"),
+    join(folder, "a picture.png")
+  )
+  copyFileSync(
+    resolve(import.meta.dirname, "media.webm"),
+    join(folder, "clip.webm")
+  )
+  copyFileSync(
+    resolve(import.meta.dirname, "media.wav"),
+    join(folder, "sound.wav")
+  )
+  const markdown = [
+    "![Sample picture](<./a picture.png>)",
+    `![A video](${join(folder, "clip.webm")})`,
+    "![A sound](sound.wav)",
+    "![Missing](./absent.png)",
+    "![Notes](./notes.txt)",
+  ].join("\n\n")
+  await composer.fill(markdown)
+  await composer.press("Enter")
+  const picture = thread.getByRole("button", { name: "Open Sample picture" })
+  await expect(picture).toBeVisible()
+  await expect
+    .poll(() =>
+      picture
+        .locator("img")
+        .evaluate((img: HTMLImageElement) => img.naturalWidth)
+    )
+    .toBeGreaterThan(0)
+  await expect(
+    thread.getByRole("link", { name: "Missing (unavailable)", exact: true })
+  ).toBeVisible()
+  await expect(
+    thread.getByRole("link", { name: "Notes", exact: true })
+  ).toBeVisible()
+  const video = thread.locator("video")
+  const audio = thread.locator("audio")
+  for (const player of [video, audio]) {
+    await expect(player).toHaveAttribute("controls", "")
+    await expect
+      .poll(() =>
+        player.evaluate((media: HTMLMediaElement) => media.readyState)
+      )
+      .toBeGreaterThanOrEqual(1)
+    expect(
+      await player.evaluate((media: HTMLMediaElement) => media.paused)
+    ).toBe(true)
+    await player.evaluate(async (media: HTMLMediaElement) => {
+      media.muted = true
+      await media.play()
+    })
+    await expect
+      .poll(() =>
+        player.evaluate((media: HTMLMediaElement) => media.currentTime)
+      )
+      .toBeGreaterThan(0)
+    await player.evaluate((media: HTMLMediaElement) => {
+      media.pause()
+      media.currentTime = 0.1
+    })
+    await expect
+      .poll(() =>
+        player.evaluate((media: HTMLMediaElement) => media.currentTime)
+      )
+      .toBeCloseTo(0.1)
+  }
+  await page.screenshot({ path: "test-results/19-markdown-media.png" })
+  await picture.click()
+  const preview = page.getByRole("dialog", { name: "Sample picture" })
+  await expect(
+    preview.getByRole("img", { name: "Sample picture" })
+  ).toBeVisible()
+  await page.keyboard.press("Escape")
+  await expect(preview).toBeHidden()
+})

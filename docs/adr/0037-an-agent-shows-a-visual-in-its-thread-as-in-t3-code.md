@@ -174,6 +174,9 @@ allow-forms allow-popups allow-downloads`. The frame says
      extension. An image opens larger on a click. A video gets the
      player. A sound gets a small play button with its progress. A file
      of any other kind becomes a link to it.
+   - A relative path is resolved against the Thread's Space folder; an
+     absolute path names a file on this machine. Spaces in a path are
+     supported through markdown's angle-bracket destination syntax.
    - The window serves such a file at `app://files/<token>`. The token is
      signed by main, lasts an hour, and names the file by its real path,
      its device and its inode. Every request checks them again. Only the
