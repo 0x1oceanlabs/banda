@@ -52,7 +52,7 @@ export function App({ engine }: { engine: Engine }) {
         home={home?.id ?? machine}
         onCreated={put}
       />
-      {projects.length > 0 && <AskToShare />}
+      {projects.length > 0 && <AskToShare engine={engine} />}
     </Previewers>
   )
 }

@@ -2,6 +2,7 @@
 import type { CallMethod } from "../CallMethod";
 import type { CommandMethod } from "../CommandMethod";
 import type { Nothing } from "../Nothing";
+import type { Examples } from "./Examples";
 import type { Shared } from "./Shared";
 
 export type SharingMethods = { 
@@ -14,4 +15,9 @@ state: CallMethod<Nothing, Shared>,
  * A new random ID, so that what goes from now on joins up with
  * nothing sent before. Only while something is shared.
  */
-new_id: CommandMethod<Nothing, Shared>, };
+new_id: CommandMethod<Nothing, Shared>, 
+/**
+ * An example of each event, exactly as this Banda would send it,
+ * for "See exactly what is sent".
+ */
+example: CallMethod<Nothing, Examples>, };

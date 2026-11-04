@@ -6,7 +6,8 @@
  * Sharing is where it changes. A Banda from before the question asks it
  * once too.
  */
-import { useId, useState } from "react"
+import { useCallback, useId, useState } from "react"
+import type { Engine } from "@banda/contract"
 import type { Look } from "@banda/contract/look"
 import { tomlOf } from "@banda/contract/settings"
 import { SHARING_FILE, type Shares } from "@banda/contract/sharing"
@@ -32,6 +33,7 @@ import {
   FieldLabel,
 } from "@banda/ui/components/field"
 import { useAct } from "@banda/ui/hooks/use-act"
+import { useRead } from "@banda/ui/hooks/use-read"
 import { useLook } from "@banda/ui/lib/look"
 
 const { name: FILE, before: NONE } = SHARING_FILE
@@ -41,17 +43,6 @@ function answered(look: Look): boolean {
   const keys = look.settings[FILE]
   return [keys?.problems, keys?.usage].some((k) => k?.from.layer === "file")
 }
-
-/** What goes, an example of each event, as the ADR declares them; step 4c
- * has the engine make it from the events themselves. */
-const EXAMPLE = `$exception  { "kind": "TypeError", "message": "Cannot read…",
-              "frames": [{ "file": "app/web/src/browser/Tabs.tsx", "line": 41 }],
-              "version": "0.2.0", "channel": "stable", "os": "linux" }
-day         { "day": "2026-11-03", "version": "0.2.0", "channel": "stable",
-              "os": "linux", "locale": "ru_UA", "country": "UA",
-              "threads": { "claude": 4 }, "turns": 31,
-              "panes": { "agents.thread": 6, "terminal.terminal": 3 },
-              "projects": 2, "workspaces": 3 }`
 
 const CHOICES: { key: keyof Shares; title: string; about: string }[] = [
   {
@@ -68,12 +59,15 @@ const CHOICES: { key: keyof Shares; title: string; about: string }[] = [
   },
 ]
 
-export function AskToShare() {
+export function AskToShare({ engine }: { engine: Engine }) {
   // Hidden till the look comes, so an answered Banda never shows it.
   const asked = useLook(answered, true)
   const [ticked, setTicked] = useState<Shares>(NONE)
   const { busy, problem, act } = useAct()
   const id = useId()
+  // What goes, as the engine makes each event: the same code sends them.
+  const read = useCallback(() => engine.call("sharing.example", {}), [engine])
+  const example = useRead(asked ? null : read)
   const settings = window.banda?.settings
   if (asked || !settings) return null
 
@@ -88,7 +82,10 @@ export function AskToShare() {
   return (
     // Closed without Continue, nothing is shared: that is the answer too.
     <Dialog open onOpenChange={(open) => !open && !busy && void answer(NONE)}>
-      <DialogContent showCloseButton={false} className="gap-4 sm:max-w-md">
+      <DialogContent
+        showCloseButton={false}
+        className="max-h-[calc(100svh-2rem)] gap-4 overflow-y-auto sm:max-w-md"
+      >
         <DialogHeader>
           <DialogTitle>Help make Banda better?</DialogTitle>
           <DialogDescription>
@@ -127,9 +124,22 @@ export function AskToShare() {
             exactly what is sent
           </CollapsibleTrigger>
           <CollapsibleContent className="flex flex-col gap-2">
-            <pre className="overflow-x-auto rounded-md bg-muted px-2.5 py-2 font-mono text-[11px] leading-relaxed text-muted-foreground">
-              {EXAMPLE}
-            </pre>
+            {example.state === "ready" ? (
+              (["exception", "day"] as const).map((event) => (
+                <pre
+                  key={event}
+                  className="max-h-36 overflow-auto rounded-md bg-muted px-2.5 py-2 font-mono text-[11px] leading-relaxed text-muted-foreground"
+                >
+                  {JSON.stringify(example.value[event], null, 2)}
+                </pre>
+              ))
+            ) : (
+              <p className="text-xs text-muted-foreground">
+                {example.state === "refused"
+                  ? example.refusal.message
+                  : "Reading the examples…"}
+              </p>
+            )}
             <p className="text-xs text-muted-foreground">
               To PostHog (US) with a random ID that is not you. No IP, no
               location, no profile.

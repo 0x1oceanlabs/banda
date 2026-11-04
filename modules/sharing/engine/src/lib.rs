@@ -14,6 +14,7 @@
 //! It sends two events: `$exception`, of each Problem, and `day`, the
 //! usage counts of each day (decision 6).
 
+pub mod events;
 mod exception;
 mod outbox;
 pub mod settings;
@@ -157,6 +158,9 @@ banda_kernel::methods! {
         /// A new random ID, so that what goes from now on joins up with
         /// nothing sent before. Only while something is shared.
         command new_id(Nothing) -> Shared, Decide;
+        /// An example of each event, exactly as this Banda would send it,
+        /// for "See exactly what is sent".
+        call example(Nothing) -> events::Examples, Read;
     }
 }
 
@@ -256,6 +260,11 @@ impl Module for Sharing {
 impl Sharing {
     async fn state(&self, call: Call, _: Nothing) -> Result<Shared, Refusal> {
         self.shared(&call, settings::read(&self.file), false).await
+    }
+
+    async fn example(&self, _: Call, _: Nothing) -> Result<events::Examples, Refusal> {
+        let banda = exception::Banda::this(self.channel);
+        Ok(events::examples(&banda, usage::locale().as_deref()))
     }
 
     async fn new_id(&self, call: Call, _: Nothing) -> Result<Shared, Refusal> {

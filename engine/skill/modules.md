@@ -246,7 +246,7 @@ The one part of Banda that sends anything anywhere (ADR 0039, decision 4): probl
 
 Its settings: `sharing.toml`.
 
-Its methods, `banda call sharing.<method>`: `state`, `new_id`.
+Its methods, `banda call sharing.<method>`: `state`, `new_id`, `example`.
 
 ## Window (`window`)
 

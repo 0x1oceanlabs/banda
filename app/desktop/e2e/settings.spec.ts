@@ -508,7 +508,10 @@ test("The first run asks to share once, nothing ticked, after the first Project;
     "Continue",
   ])
   await ask.getByRole("button", { name: /See exactly what is sent/ }).click()
-  await expect(ask).toContainText("$exception")
+  // The engine's own: the same code makes what goes.
+  await expect(ask).toContainText('"event": "$exception"')
+  await expect(ask).toContainText('"event": "day"')
+  await expect(ask).toContainText('"distinct_id": "<a random ID>"')
   await page.screenshot({ path: "test-results/sharing-ask.png" })
 
   // Nothing ticked is an answer too, though the file's template says it.
