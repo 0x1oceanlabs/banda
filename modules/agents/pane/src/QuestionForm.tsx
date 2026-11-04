@@ -1,4 +1,4 @@
-import { useId, useState } from "react"
+import { useId, useImperativeHandle, useState } from "react"
 import type {
   Choice,
   Field as FormField,
@@ -17,6 +17,7 @@ import {
   FieldSet,
 } from "@banda/ui/components/field"
 import { Input } from "@banda/ui/components/input"
+import { Kbd } from "@banda/ui/components/kbd"
 import { RadioGroup, RadioGroupItem } from "@banda/ui/components/radio-group"
 import {
   type Draft,
@@ -26,21 +27,26 @@ import {
   ready,
   type Values,
 } from "./form"
+import { answersOf } from "./asking"
 
 /** A Question that asks for a form, one field at a time as T3 Code asks
- * (ADR 0010, decision 5): Previous and Next, keys 1–9 pick a choice of the
- * field shown, and the last field shows the Harness's answers. The answer
- * that allows submits what was filled in; the others skip it. */
+ * (ADR 0010, decision 5): Previous, and Next or Submit, which Enter
+ * presses; keys 1–9 pick a choice of the field shown. The answer that
+ * says no, with Esc, skips the form; the main one submits what was filled
+ * in, and any other skips it. */
 export function QuestionForm({
   form,
   choices,
   answering,
   onAnswer,
+  enter,
 }: {
   form: FormField[]
   choices: Choice[]
   answering: boolean
   onAnswer: (choice: string, values?: Values) => void
+  /** Gets what Enter does from outside the form: whether it did. */
+  enter?: React.Ref<() => boolean>
 }) {
   const [draft, setDraft] = useState(() => draftOf(form))
   const [page, setPage] = useState(0)
@@ -50,19 +56,41 @@ export function QuestionForm({
   const pages = form.length
   const last = page >= pages - 1
   const field = form[page]
-  const pick = (event: React.KeyboardEvent) => {
-    const typing =
-      event.target instanceof HTMLInputElement && event.target.type !== "radio"
+  const { decline, main, others, kept } = answersOf(choices)
+  // Next, or on the last field the main answer once the form can go.
+  const onward = () => {
+    if (answering) return true
+    if (!last) setPage(page + 1)
+    else if (main && complete) onAnswer(main.id, filled(form, draft))
+    else return false
+    return true
+  }
+  useImperativeHandle(enter, () => onward)
+  const keys = (event: React.KeyboardEvent) => {
+    if (event.altKey || event.ctrlKey || event.metaKey) return
+    const target = event.target
+    const typing = target instanceof HTMLInputElement && target.type !== "radio"
+    if (event.key === "Enter" && !event.shiftKey) {
+      // Enter in a field or on a choice moves on, as in a form.
+      const onField =
+        (typing && target.type !== "checkbox") ||
+        (target instanceof Element && target.closest("[role=radio]"))
+      if (!onField || event.nativeEvent.isComposing) return
+      event.preventDefault()
+      event.stopPropagation()
+      onward()
+      return
+    }
     const choice =
       field?.input.kind === "choice" &&
       field.input.choices[Number(event.key) - 1]
-    if (typing || !choice || event.altKey || event.ctrlKey) return
+    if (typing || !choice) return
     event.preventDefault()
     set(field.id, choice.value)
     if (!last) setPage(page + 1)
   }
   return (
-    <div className="flex flex-col gap-3" onKeyDown={pick}>
+    <div className="flex flex-col gap-3" onKeyDown={keys}>
       <FieldGroup className="gap-4">
         {field && (
           <FormInput
@@ -75,8 +103,22 @@ export function QuestionForm({
         )}
       </FieldGroup>
       <div className="flex flex-wrap items-center gap-2">
+        {decline && (
+          <Button
+            size="sm"
+            variant="outline"
+            className="pr-1.5"
+            aria-keyshortcuts="Escape"
+            disabled={answering}
+            onClick={() => onAnswer(decline.id)}
+          >
+            {decline.name}
+            <KeyHint>Esc</KeyHint>
+          </Button>
+        )}
+        <span className="flex-1" />
         {pages > 1 && (
-          <span className="mr-auto text-xs text-muted-foreground tabular-nums">
+          <span className="text-xs text-muted-foreground tabular-nums">
             {page + 1} of {pages}
           </span>
         )}
@@ -84,19 +126,20 @@ export function QuestionForm({
           <Button
             size="sm"
             variant="ghost"
+            className="text-muted-foreground"
             disabled={answering}
             onClick={() => setPage(page - 1)}
           >
             Previous
           </Button>
         )}
-        {last ? (
-          choices.map((choice) => (
+        {last &&
+          [...others, ...kept].map((choice) => (
             <Button
               key={choice.id}
               size="sm"
-              variant={choice.allows ? "default" : "outline"}
-              disabled={answering || (choice.allows && !complete)}
+              variant="outline"
+              disabled={answering}
               onClick={() =>
                 choice.allows
                   ? onAnswer(choice.id, filled(form, draft))
@@ -105,14 +148,34 @@ export function QuestionForm({
             >
               {choice.name}
             </Button>
-          ))
-        ) : (
-          <Button size="sm" onClick={() => setPage(page + 1)}>
-            Next
+          ))}
+        {(!last || main) && (
+          <Button
+            size="sm"
+            className="pr-1.5"
+            aria-keyshortcuts="Enter"
+            disabled={answering || (last && !complete)}
+            onClick={onward}
+          >
+            {last ? main?.name : "Next"}
+            <KeyHint>⏎</KeyHint>
           </Button>
         )}
       </div>
     </div>
+  )
+}
+
+/** The key that gives an answer, on its button, as a quiet cap in the
+ * button's own colour. Its button says it in `aria-keyshortcuts`. */
+export function KeyHint({ children }: { children: React.ReactNode }) {
+  return (
+    <Kbd
+      aria-hidden
+      className="h-4 min-w-4 border-current/30 bg-transparent px-1 font-mono text-[10.5px] font-normal text-current opacity-70"
+    >
+      {children}
+    </Kbd>
   )
 }
 
@@ -192,8 +255,17 @@ function FormInput({
           >
             {input.choices.map((choice, at) => (
               <Field key={choice.value} orientation="horizontal">
-                <RadioGroupItem value={choice.value} id={`${id}-${at}`} />
+                <RadioGroupItem
+                  value={choice.value}
+                  id={`${id}-${at}`}
+                  aria-keyshortcuts={at < 9 ? String(at + 1) : undefined}
+                />
                 <Chosen id={`${id}-${at}`} {...choice} />
+                {at < 9 && (
+                  <span className="ml-auto flex text-muted-foreground">
+                    <KeyHint>{at + 1}</KeyHint>
+                  </span>
+                )}
               </Field>
             ))}
           </RadioGroup>

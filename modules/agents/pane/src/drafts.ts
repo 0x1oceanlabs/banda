@@ -119,3 +119,8 @@ export function useDraftImages(
   )
   return [thread === null ? unstarted : (all[thread] ?? NO_IMAGES), change]
 }
+
+/** Whether `thread`'s draft holds a message to send: text, or an image. */
+export function drafted(thread: string): boolean {
+  return read(thread).trim() !== "" || (images.read()[thread]?.length ?? 0) > 0
+}
