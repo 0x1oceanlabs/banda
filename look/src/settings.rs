@@ -252,7 +252,7 @@ pub struct Bar {
 /// Banda's widgets in each part of the bar, by id (ADR 0024, decision 4).
 pub const BAR_LEFT: &[&str] = &[];
 pub const BAR_CENTER: &[&str] = &["sidebar.counts"];
-pub const BAR_RIGHT: &[&str] = &["workspaces.aside", "terminal.ports"];
+pub const BAR_RIGHT: &[&str] = &["workspaces.aside", "terminal.ports", "notifications.recent"];
 
 pub(crate) fn owned(ids: &[&str]) -> Vec<String> {
     ids.iter().map(|&id| id.to_owned()).collect()

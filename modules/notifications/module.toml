@@ -1,0 +1,9 @@
+# The notifications module, as it declares itself (ADR 0022). Its widget
+# its code declares; it has no engine part: the toasts are the window's
+# (ADR 0048).
+id = "notifications"
+name = "Notifications"
+about = "The bell on the bar, which shows the last toasts again."
+version = "0.1.0"
+from-banda = true
+settings = []

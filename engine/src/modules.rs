@@ -69,6 +69,12 @@ const FILES: &[Files] = &[
         methods: Some(Git::method_list),
     },
     Files {
+        folder: "notifications",
+        toml: include_str!("../../modules/notifications/module.toml"),
+        window: Some(include_str!("../../modules/notifications/window.json")),
+        methods: None,
+    },
+    Files {
         folder: "workspaces",
         toml: include_str!("../../modules/workspaces/module.toml"),
         window: None,

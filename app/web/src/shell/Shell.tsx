@@ -139,10 +139,6 @@ const NOTHING_SEEN: Seen = {
 /** How long a change waits for its event before the next goes anyway. */
 const DRAWN_WITHIN = 2000
 
-/** Where the toasts stand: at the window's top right, below the bar
- * (ADR 0011, decision 2). */
-const UNDER_BAR = { top: "calc(var(--bar-height) + 0.5rem)", right: "0.5rem" }
-
 /** The workspaces `view` draws of what `seen` keeps; the view then keeps
  * where each ID it holds stands now. */
 function looking(seen: Seen, view: View): Seen {
@@ -948,7 +944,7 @@ export function Shell({
               onStart={(pane) => parts.open(pane)}
             />
           )}
-          <Toaster position="top-right" offset={UNDER_BAR} />
+          <Toaster />
           <BandaMenu
             opening={menu}
             onClose={closeMenu}

@@ -3309,6 +3309,65 @@ test("a Thread that finishes out of sight shows a toast, and it goes there", asy
   ).toBeHidden()
 })
 
+test("the bell shows the last toasts again, and Esc or a button closes them (ADR 0048)", async () => {
+  window = await startWindow()
+  const { page } = window
+  const bell = page
+    .getByRole("banner")
+    .getByRole("button", { name: "The last notifications" })
+  const last = page.getByRole("region", { name: "Shown again" })
+  const { composer } = await firstThread(page)
+  // Nothing yet.
+  await bell.click()
+  await expect(last).toContainText("Nothing since Banda started")
+  await page.keyboard.press("Escape")
+  await expect(last).toBeHidden()
+
+  await sendAndGoBelow(page, composer, "slow hello")
+  const calls = page.getByRole("region", { name: "Notifications" })
+  await expect(calls).toContainText("slow hello")
+  // Shown again, it shows once: in the bell's stack, not in the window's.
+  await bell.click()
+  const again = last.getByRole("listitem").filter({ hasText: "slow hello" })
+  await expect(again).toContainText("Done")
+  await expect(calls).toBeHidden()
+  await page.screenshot({ path: "test-results/23-bell.png" })
+  await bell.click()
+  await expect(last).toBeHidden()
+
+  await bell.click()
+  await again.getByRole("button", { name: "Open" }).click()
+  await expect(last).toBeHidden()
+  const thread = page.getByRole("region", { name: "slow hello" })
+  await expect(thread).toHaveAttribute("data-focused", "true")
+})
+
+test("the bell shows a call told on the desktop too, and a [bar] without it hides it (ADR 0048)", async () => {
+  window = await startWindow()
+  const { app, page } = window
+  const { thread, composer } = await firstThread(page)
+  await composer.fill("slow hello")
+  await composer.press("Enter")
+  await expect(thread).not.toHaveAccessibleName("New Thread")
+  await setInFront(page, false)
+  await expect.poll(async () => (await desktopOf(app)).shown.length).toBe(1)
+  await setInFront(page, true)
+  await page
+    .getByRole("banner")
+    .getByRole("button", { name: "The last notifications" })
+    .click()
+  await expect(page.getByRole("region", { name: "Shown again" })).toContainText(
+    "slow hello"
+  )
+  await window.close()
+
+  window = await startWindow({ look: '[bar]\nright = ["terminal.ports"]\n' })
+  await expect((await firstThread(window.page)).composer).toBeVisible()
+  await expect(
+    window.page.getByRole("button", { name: "The last notifications" })
+  ).toBeHidden()
+})
+
 test("a Thread that finishes on screen makes its sound, and no toast", async () => {
   window = await startWindow()
   const { page } = window

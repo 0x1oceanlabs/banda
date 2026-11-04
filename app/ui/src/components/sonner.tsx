@@ -1,8 +1,10 @@
-import type { CSSProperties } from "react"
+import type { ComponentProps, CSSProperties } from "react"
 import { Toaster as Sonner, type ToasterProps } from "sonner"
+import { toast } from "sonner"
 import { useDark } from "../hooks/use-dark"
 
-export { toast } from "sonner"
+export { toast }
+export type { ExternalToast, ToastT } from "sonner"
 
 /** Sonner's own key to reach the toasts, `Alt+T`, is off: the Person's
  * keys are keys.toml's. Its region's name then is only this. */
@@ -29,15 +31,36 @@ const OPTIONS: ToasterProps["toastOptions"] = {
   },
 }
 
+/** Where the toasts stand: at the window's top right, below the bar
+ * (ADR 0011, decision 2). */
+const UNDER_BAR = { top: "calc(var(--bar-height) + 0.5rem)", right: "0.5rem" }
+
+/** The toaster of what is told elsewhere: none shows it. */
+const AWAY = "away"
+
+/**
+ * Keeps a toast of what was told elsewhere, by a system notification,
+ * unseen (ADR 0048, decision 2): `show` makes it for a toaster none
+ * draws, and it is dismissed at once, but Sonner keeps it with the rest,
+ * so the bell shows it again.
+ */
+export function toastUnseen(
+  show: (options: { toasterId: string }) => string | number
+): void {
+  toast.dismiss(show({ toasterId: AWAY }))
+}
+
 /**
  * shadcn's toaster, Sonner, in Banda's tokens (ADR 0048): the card is a
- * popover's, light or dark as the look is.
+ * popover's, light or dark as the look is, below the bar.
  */
-export function Toaster(props: ToasterProps) {
+export function Toaster(props: ComponentProps<typeof Sonner>) {
   const dark = useDark()
   return (
     <Sonner
       theme={dark ? "dark" : "light"}
+      position="top-right"
+      offset={UNDER_BAR}
       hotkey={NO_KEY}
       customAriaLabel="Notifications"
       style={TOKENS}

@@ -1,5 +1,5 @@
 import type { Problem } from "@banda/contract/problems"
-import { toast } from "@banda/ui/components/sonner"
+import { type ExternalToast, toast } from "@banda/ui/components/sonner"
 import { LIFE, markOf } from "../calls/callToast"
 import { PLACES } from "./live"
 
@@ -22,11 +22,12 @@ const ID = "problems"
  */
 export function toastProblems(
   news: readonly Problem[],
-  answers: ProblemAnswers
-): void {
+  answers: ProblemAnswers,
+  options?: ExternalToast
+): string | number {
   const problem = news[0]!
   const more = news.length - 1
-  toast.error("Something broke in Banda", {
+  return toast.error("Something broke in Banda", {
     id: ID,
     duration: LIFE.failed,
     closeButton: true,
@@ -43,5 +44,6 @@ export function toastProblems(
     ),
     action: { label: "Look into it", onClick: () => answers.lookInto(problem) },
     cancel: { label: "Details", onClick: () => answers.details(problem) },
+    ...options,
   })
 }
