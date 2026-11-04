@@ -2,7 +2,9 @@
 //! hears the problems module's log from where it last heard: a Problem
 //! that is new, or that broke again on a new day or in a new version,
 //! which the problems module says once each, becomes `$exception` while
-//! `problems` is on. What waits goes as it is made, and every few minutes
+//! `problems` is on. As a day ends, while `usage` is on, the day before
+//! becomes `day`; it looks as it starts, as it hears, and every hour.
+//! What waits goes as it is made, and every few minutes
 //! while any waits, the oldest first, through Banda's window: the window's
 //! main posts it to PostHog with Chromium's network, so the engine holds
 //! no TLS of its own. With no window, or no network, it waits, and goes
@@ -15,8 +17,9 @@
 
 use crate::exception::{self, Banda};
 use crate::settings::{self, Shares};
-use crate::{Ids, KEPT_MS, Never};
-use banda_kernel::{Error, Event, EventFilter, Heard, ModuleSpace, Participant};
+use crate::usage::{self, DAY_MS};
+use crate::{Clock, Ids, KEPT_MS, Never};
+use banda_kernel::{Error, Event, EventFilter, Heard, ModuleSpace, Participant, Tx};
 use banda_problems::model::Problem;
 use rusqlite::{OptionalExtension, params};
 use serde_json::{Value, json};
@@ -26,6 +29,8 @@ use std::time::Duration;
 
 /// How often what waits is tried again.
 const AGAIN: Duration = Duration::from_secs(5 * 60);
+/// How often it looks whether a day ended, while nothing waits.
+const HOURLY: Duration = Duration::from_secs(60 * 60);
 /// How long the window may take to post one event.
 const POSTING: Duration = Duration::from_secs(30);
 
@@ -34,6 +39,7 @@ pub(crate) struct Courier {
     pub ids: Arc<Ids>,
     pub never: Option<Never>,
     pub channel: &'static str,
+    pub clock: Clock,
 }
 
 /// Starts hearing the problems module and sending what waits.
@@ -59,34 +65,97 @@ impl Courier {
         // What waited as Banda last ran goes first.
         let mut waiting = true;
         loop {
+            let Some(space) = heard.space() else { return };
+            match self.day(&space).await {
+                Ok(made) => waiting |= made,
+                Err(error) => tracing::warn!(%error, "the day's usage was not counted"),
+            }
             if waiting {
-                let Some(space) = heard.space() else { return };
                 waiting = self.send(&space).await.unwrap_or_else(|error| {
                     tracing::warn!(%error, "what sharing keeps was not sent");
                     true
                 });
             }
-            let next = if waiting {
-                match tokio::time::timeout(AGAIN, heard.next()).await {
-                    Ok(next) => next,
-                    Err(_) => continue,
-                }
-            } else {
-                heard.next().await
-            };
-            let event = match next {
-                Ok(Some(event)) => event,
-                Ok(None) => return,
-                Err(error) => {
+            let wait = if waiting { AGAIN } else { HOURLY };
+            let event = match tokio::time::timeout(wait, heard.next()).await {
+                Err(_) => continue,
+                Ok(Ok(Some(event))) => event,
+                Ok(Ok(None)) => return,
+                Ok(Err(error)) => {
                     tracing::warn!(%error, "sharing stops hearing the problems");
                     return;
                 }
             };
-            let Some(space) = heard.space() else { return };
             match self.make(&space, &event).await {
                 Ok(made) => waiting |= made,
                 Err(error) => tracing::warn!(%error, "a Problem's event was not made"),
             }
+        }
+    }
+
+    /// Keeps the day before as `day`, once, while usage is shared and was
+    /// shared all that day; says whether it made one. Usage turned on, or
+    /// the ID changed, it starts counting from the next whole day, so
+    /// nothing goes of a day before the Person said yes.
+    async fn day(&self, space: &ModuleSpace) -> Result<bool, Error> {
+        let shares = self.shares();
+        let id = match (self.never, shares.usage) {
+            (None, true) => self.ids.id(shares, false)?,
+            _ => None,
+        };
+        let now = (self.clock)();
+        let yesterday = usage::day_of(now) - 1;
+        let kept = space.read(usage_kept).await?;
+        let Some(id) = id else {
+            if kept.is_some() {
+                (space.write(|tx| Ok(tx.sql().execute("DELETE FROM sharing_usage", [])?))).await?;
+            }
+            return Ok(false);
+        };
+        let kept = kept.filter(|(kept, ..)| *kept == id);
+        let Some((_, since, last)) = kept else {
+            space
+                .write(move |tx| {
+                    tx.sql().execute(
+                        "INSERT INTO sharing_usage (one, id, since) VALUES (1, ?1, ?2)
+                         ON CONFLICT (one) DO UPDATE
+                         SET id = excluded.id, since = excluded.since, last = NULL",
+                        params![id, now],
+                    )?;
+                    Ok(())
+                })
+                .await?;
+            return Ok(false);
+        };
+        if since > yesterday * DAY_MS || last >= Some(yesterday) {
+            return Ok(false);
+        }
+        let counts = usage::count(space, yesterday).await?;
+        let made = counts.any().then(|| {
+            let banda = self.banda();
+            let locale = usage::locale();
+            let json = usage::day(yesterday, &counts, locale.as_deref(), &id, &banda);
+            (usage::about(yesterday, &counts), json.to_string())
+        });
+        let making = made.is_some();
+        space
+            .write(move |tx| {
+                if let Some((about, json)) = made {
+                    keep(tx, "day", &about, &json)?;
+                }
+                tx.sql()
+                    .execute("UPDATE sharing_usage SET last = ?1", [yesterday])?;
+                Ok(())
+            })
+            .await?;
+        Ok(making)
+    }
+
+    fn banda(&self) -> Banda {
+        Banda {
+            version: banda_kernel::version().to_owned(),
+            channel: self.channel,
+            os: std::env::consts::OS,
         }
     }
 
@@ -103,12 +172,7 @@ impl Courier {
             (None, true) => {
                 let problem: Problem = serde_json::from_value(event.payload.clone())?;
                 let id = self.ids.id(shares, false)?.unwrap_or_default();
-                let banda = Banda {
-                    version: banda_kernel::version().to_owned(),
-                    channel: self.channel,
-                    os: std::env::consts::OS,
-                };
-                let json = exception::exception(&problem, &id, &banda).to_string();
+                let json = exception::exception(&problem, &id, &self.banda()).to_string();
                 Some((exception::about(&problem), json))
             }
             _ => None,
@@ -117,11 +181,7 @@ impl Courier {
         space
             .write(move |tx| {
                 if let Some((about, json)) = made {
-                    tx.sql().execute(
-                        "INSERT INTO sharing_sent (event, about, json, made)
-                         VALUES ('$exception', ?1, ?2, ?3)",
-                        params![about, json, banda_kernel::now_ms()],
-                    )?;
+                    keep(tx, "$exception", &about, &json)?;
                 }
                 tx.sql().execute(
                     "INSERT INTO sharing_heard (one, at) VALUES (1, ?1)
@@ -190,4 +250,23 @@ fn heard_at(sql: &rusqlite::Connection) -> Result<Option<i64>, Error> {
         })
         .optional()?;
     Ok(at)
+}
+
+/// The ID usage is counted for, since when, and the last day it made.
+fn usage_kept(sql: &rusqlite::Connection) -> Result<Option<(String, i64, Option<i64>)>, Error> {
+    let kept = sql
+        .query_row("SELECT id, since, last FROM sharing_usage", [], |row| {
+            Ok((row.get(0)?, row.get(1)?, row.get(2)?))
+        })
+        .optional()?;
+    Ok(kept)
+}
+
+/// Keeps `event` to go, as made now.
+fn keep(tx: &Tx, event: &str, about: &str, json: &str) -> Result<(), Error> {
+    tx.sql().execute(
+        "INSERT INTO sharing_sent (event, about, json, made) VALUES (?1, ?2, ?3, ?4)",
+        params![event, about, json, banda_kernel::now_ms()],
+    )?;
+    Ok(())
 }

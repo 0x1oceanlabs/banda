@@ -25,7 +25,7 @@ pub struct Kernel {
     modules: Arc<[Arc<dyn Module>]>,
     /// The modules each Space runs: those of the Space's scope.
     in_spaces: Arc<[Arc<dyn Module>]>,
-    spaces: RwLock<BTreeMap<SpaceId, Entry>>,
+    spaces: Spaces,
     /// Held while a Space is added, so one folder never becomes two.
     adding: tokio::sync::Mutex<()>,
     /// This machine's scope (ADR 0025, decision 1): a store and a log like
@@ -38,9 +38,13 @@ pub struct Kernel {
     tools: Vec<Tool>,
 }
 
+/// Every Space the engine knows. The machine's own scope holds them too,
+/// so a module of the machine can count them (ADR 0040, decision 3).
+pub(crate) type Spaces = Arc<RwLock<BTreeMap<SpaceId, Entry>>>;
+
 /// A Space the engine knows: open, or waiting for its folder.
 #[derive(Clone)]
-enum Entry {
+pub(crate) enum Entry {
     Open(Arc<Space>),
     /// Its folder was gone as the engine started (ADR 0026, decision 6):
     /// listed, `missing`, but not open, until the Person locates it.
@@ -141,6 +145,7 @@ impl KernelBuilder {
         let boot = uuid::Uuid::now_v7().to_string();
         let passes = Arc::<Passes>::default();
         let window = Arc::<Window>::default();
+        let spaces = Spaces::default();
         let machine = if of_machine.is_empty() {
             None
         } else {
@@ -164,6 +169,7 @@ impl KernelBuilder {
                 passes: passes.clone(),
                 window: window.clone(),
                 machine: None,
+                spaces: Some(Arc::downgrade(&spaces)),
             };
             Some(Space::open(data, manifest, modules, engine, &boot).await?)
         };
@@ -175,7 +181,7 @@ impl KernelBuilder {
             tools: self.modules.iter().flat_map(|m| m.tools()).collect(),
             modules: self.modules.into(),
             in_spaces: in_spaces.into(),
-            spaces: RwLock::new(BTreeMap::new()),
+            spaces,
             adding: Default::default(),
             machine,
             passes,
@@ -623,6 +629,7 @@ impl Kernel {
             passes: self.passes.clone(),
             window: self.window.clone(),
             machine: self.machine.clone(),
+            spaces: None,
         };
         let modules = self.in_spaces.clone();
         Space::open(data, manifest, modules, engine, &self.boot).await

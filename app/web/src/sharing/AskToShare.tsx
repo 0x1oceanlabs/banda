@@ -47,8 +47,9 @@ function answered(look: Look): boolean {
 const EXAMPLE = `$exception  { "kind": "TypeError", "message": "Cannot read…",
               "frames": [{ "file": "app/web/src/browser/Tabs.tsx", "line": 41 }],
               "version": "0.2.0", "channel": "stable", "os": "linux" }
-day         { "version": "0.2.0", "channel": "stable", "os": "linux",
-              "locale": "ru_UA", "threads": { "claude": 4 }, "turns": 31,
+day         { "day": "2026-11-03", "version": "0.2.0", "channel": "stable",
+              "os": "linux", "locale": "ru_UA", "country": "UA",
+              "threads": { "claude": 4 }, "turns": 31,
               "panes": { "agents.thread": 6, "terminal.terminal": 3 },
               "spaces": 2, "workspaces": 3 }`
 

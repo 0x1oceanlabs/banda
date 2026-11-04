@@ -3,6 +3,7 @@
 //! that module's version of its shape.
 
 use crate::{EventId, Participant};
+use rusqlite::OptionalExtension;
 use rusqlite::{Connection, Row, params};
 use serde::{Deserialize, Serialize};
 use ts_rs::TS;
@@ -135,6 +136,57 @@ pub(crate) fn after(
         ],
         from_row,
     )?;
+    rows.collect()
+}
+
+/// The log's position as it stood at `at`, in ms since the epoch: its
+/// last event made before then, or 0.
+pub(crate) fn position_at(sql: &Connection, at: i64) -> rusqlite::Result<i64> {
+    sql.query_row(
+        "SELECT COALESCE(MAX(seq), 0) FROM kernel_events WHERE at < ?1",
+        [at],
+        |row| row.get(0),
+    )
+}
+
+/// The newest event before `before` in the log that matches `filter`.
+pub(crate) fn before(
+    sql: &Connection,
+    before: i64,
+    filter: &EventFilter,
+) -> rusqlite::Result<Option<Event>> {
+    let mut statement = sql.prepare_cached(&format!(
+        "SELECT {COLUMNS} FROM kernel_events
+         WHERE seq < ?1 AND (?2 IS NULL OR module = ?2) AND (?3 IS NULL OR subject = ?3)
+           AND (?4 IS NULL OR kind IN (SELECT value FROM json_each(?4)))
+         ORDER BY seq DESC LIMIT 1"
+    ))?;
+    let kinds = filter
+        .kinds
+        .as_ref()
+        .map(|kinds| serde_json::json!(kinds).to_string());
+    let params = params![before, filter.module, filter.subject, kinds];
+    statement.query_row(params, from_row).optional()
+}
+
+/// How many events of `tally`'s module and kind the log took in its span,
+/// by the text at `path` in their payload, or `""`.
+pub(crate) fn tally(
+    sql: &Connection,
+    tally: &crate::Tally,
+    path: &str,
+) -> rusqlite::Result<Vec<(String, u64)>> {
+    let mut statement = sql.prepare_cached(
+        "SELECT CASE WHEN json_type(payload, ?3) = 'text'
+                THEN json_extract(payload, ?3) ELSE '' END, COUNT(*)
+         FROM kernel_events
+         WHERE module = ?1 AND kind = ?2 AND at >= ?4 AND at < ?5
+         GROUP BY 1",
+    )?;
+    let params = params![tally.module, tally.kind, path, tally.from, tally.to];
+    let rows = statement.query_map(params, |row| {
+        Ok((row.get(0)?, row.get::<_, i64>(1)?.unsigned_abs()))
+    })?;
     rows.collect()
 }
 

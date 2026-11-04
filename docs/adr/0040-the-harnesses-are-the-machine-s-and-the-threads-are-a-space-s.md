@@ -52,6 +52,7 @@ Roma, 2026-11-03: the third. "Modular, beautiful and elegant, as in Unix."
    - The rule is the kernel's, for every module. A Space's `ModuleSpace` gives a handle to the machine's log that can only hear it: a module of a Space never writes there.
    - A module reacts to it as to its own Space's log, from `opened`, as git does (ADR 0034). The reaction starts at the log's head, not from its start, and ends as its Space closes. The machine's `reacted` counts it like any other.
    - A module of the machine still never hears a Space's log. The wall stays one way.
+   - One opening, added for ADR 0039's usage summary (step 5, Roma's call on 2026-11-04): the kernel tells a module of the machine how many Spaces there are, and how many events of one kind every Space's log took in a span of time, by the text of one plain field of their payload (`ModuleSpace::tally`). Only numbers cross: no Space, subject, author or word.
 
 4. **`agents` keeps a Space's work, and hears the machine.**
    - Its four methods `harnesses`, `account`, `sign_in` and `sign_out` go.

@@ -10,10 +10,14 @@
 //! for the Person to read in Settings → Sharing, and kept seven days
 //! (decision 8). A Banda run from a checkout, as in CI and the tests,
 //! never sends, nor one run with `BANDA_SHARING=0`.
+//!
+//! It sends two events: `$exception`, of each Problem, and `day`, the
+//! usage counts of each day (decision 6).
 
 mod exception;
 mod outbox;
 pub mod settings;
+pub mod usage;
 
 use banda_kernel::{Call, Error, Module, ModuleSpace, Nothing, Refusal, Right, Scope};
 use rusqlite::Row;
@@ -42,7 +46,12 @@ pub struct Sharing {
     never: Option<Never>,
     /// Which Banda it is: `stable`, `dev` or `local`.
     channel: &'static str,
+    /// The time now, in ms since the epoch: what tells a day has ended.
+    clock: Clock,
 }
+
+/// The time now, in ms since the epoch.
+pub type Clock = Arc<dyn Fn() -> i64 + Send + Sync>;
 
 /// Why a Banda never sends, whatever its file turns on.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
@@ -69,6 +78,7 @@ impl Sharing {
             }),
             never: None,
             channel: "local",
+            clock: Arc::new(banda_kernel::now_ms),
         }
     }
 
@@ -76,6 +86,14 @@ impl Sharing {
     pub fn never(self, why: Never) -> Self {
         Self {
             never: Some(why),
+            ..self
+        }
+    }
+
+    /// Tells the time by `clock`, as a test lets a day end.
+    pub fn clock(self, clock: impl Fn() -> i64 + Send + Sync + 'static) -> Self {
+        Self {
+            clock: Arc::new(clock),
             ..self
         }
     }
@@ -201,6 +219,14 @@ impl Module for Sharing {
                one INTEGER PRIMARY KEY CHECK (one = 1),
                at INTEGER NOT NULL
              )",
+            // While usage is shared: the ID it counts for, since when, and
+            // the last day, in days since the epoch, it counted.
+            "CREATE TABLE sharing_usage (
+               one INTEGER PRIMARY KEY CHECK (one = 1),
+               id TEXT NOT NULL,
+               since INTEGER NOT NULL,
+               last INTEGER
+             )",
         ]
     }
 
@@ -213,6 +239,7 @@ impl Module for Sharing {
             ids: self.ids.clone(),
             never: self.never,
             channel: self.channel,
+            clock: self.clock.clone(),
         };
         outbox::start(courier, space).await
     }

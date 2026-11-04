@@ -3,11 +3,12 @@
 //! something on, a new ID only for the Person, and none kept once all of
 //! it is off again.
 
-use banda_kernel::{CommandId, Kernel, Participant, PersonId};
+use banda_kernel::{CommandId, Kernel, Participant, PersonId, SpaceId};
 use banda_sharing::{Never, Sharing};
 use serde_json::{Value, json};
 use std::path::Path;
 use std::sync::Arc;
+use std::sync::atomic::{AtomicI64, Ordering};
 
 async fn open(root: &Path, owner: PersonId) -> Arc<Kernel> {
     let sharing = Sharing::new(root.join("config"), root.join("state"));
@@ -79,21 +80,35 @@ async fn an_id_is_made_as_sharing_turns_on_and_erased_as_it_turns_off() {
 
 /// A Banda that sends, with the problems module whose Problems it hears.
 async fn sending(root: &Path, owner: PersonId, never: Option<Never>) -> Arc<Kernel> {
-    let sharing = Sharing::new(root.join("config"), root.join("state")).channel("dev");
-    let sharing = match never {
-        Some(why) => sharing.never(why),
-        None => sharing,
-    };
-    Kernel::builder(root.join("spaces"), root.join("data"), owner)
+    banda(root, owner, never, None, Vec::new()).await
+}
+
+/// A Banda that sends, with the problems module, `says` beside it, and
+/// its days told by `clock` when there is one.
+async fn banda(
+    root: &Path,
+    owner: PersonId,
+    never: Option<Never>,
+    clock: Option<Arc<AtomicI64>>,
+    says: Vec<Says>,
+) -> Arc<Kernel> {
+    let mut sharing = Sharing::new(root.join("config"), root.join("state")).channel("dev");
+    if let Some(why) = never {
+        sharing = sharing.never(why);
+    }
+    if let Some(clock) = clock {
+        sharing = sharing.clock(move || clock.load(Ordering::SeqCst));
+    }
+    let mut kernel = Kernel::builder(root.join("spaces"), root.join("data"), owner)
         .machine(root.join("state/machine"))
         .module(banda_problems::Problems::new(
             root.join("state/problems"),
             root.join("state/logs"),
-        ))
-        .module(sharing)
-        .open()
-        .await
-        .unwrap()
+        ));
+    for one in says {
+        kernel = kernel.module(one);
+    }
+    kernel.module(sharing).open().await.unwrap()
 }
 
 async fn record(kernel: &Kernel, owner: PersonId, function: &str) {
@@ -192,5 +207,218 @@ async fn a_banda_that_never_sends_makes_nothing() {
     let kernel = sending(root.path(), owner, Some(Never::Run)).await;
     record(&kernel, owner, "Tabs").await;
     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    assert_eq!(state(&kernel, owner).await["sent"], json!([]));
+}
+
+/// Stands in for the agents of a Space and the workspaces of the machine:
+/// it says what they would, a Thread started and a Pane opened.
+struct Says {
+    name: &'static str,
+    scope: banda_kernel::Scope,
+}
+
+#[async_trait::async_trait]
+impl banda_kernel::Module for Says {
+    fn name(&self) -> &'static str {
+        self.name
+    }
+
+    fn scope(&self) -> banda_kernel::Scope {
+        self.scope
+    }
+
+    fn migrations(&self) -> &'static [&'static str] {
+        &[]
+    }
+
+    fn right(&self, _: &str) -> Option<banda_kernel::Right> {
+        Some(banda_kernel::Right::Write)
+    }
+
+    /// `say` emits `{ kind, payload }`.
+    async fn call(
+        &self,
+        call: banda_kernel::Call,
+        _: &str,
+        params: Value,
+    ) -> Result<Value, banda_kernel::Refusal> {
+        let author = call.participant();
+        call.command(move |tx| {
+            let kind = params["kind"].as_str().unwrap_or_default();
+            tx.emit(kind, 1, None, author, &params["payload"])?;
+            Ok(Value::Null)
+        })
+        .await
+    }
+}
+
+const DAY: i64 = 24 * 60 * 60 * 1000;
+
+/// A clock that starts `offset` ms from now, for a test to move.
+fn clock(offset: i64) -> Arc<AtomicI64> {
+    Arc::new(AtomicI64::new(banda_kernel::now_ms() + offset))
+}
+
+/// The agents of a Space, and the workspaces of the machine, as `Says`.
+fn agents() -> Says {
+    Says {
+        name: "agents",
+        scope: banda_kernel::Scope::Space,
+    }
+}
+
+fn workspaces() -> Says {
+    Says {
+        name: "workspaces",
+        scope: banda_kernel::Scope::Machine,
+    }
+}
+
+/// Has `module` say `kind` with `payload`, in `space` or the machine's.
+async fn say(
+    kernel: &Kernel,
+    owner: PersonId,
+    space: Option<SpaceId>,
+    module: &str,
+    kind: &str,
+    payload: Value,
+) {
+    let (method, command) = (format!("{module}.say"), Some(CommandId::new()));
+    let params = json!({ "kind": kind, "payload": payload });
+    let person = Participant::Person(owner);
+    kernel
+        .call(person, &method, space, command, params)
+        .await
+        .unwrap();
+}
+
+/// The workspaces after a Pane of `kind` opened in `space`.
+fn opened(kind: &str, space: &str) -> Value {
+    let id = uuid::Uuid::new_v4().to_string();
+    let pane = json!({ "id": id, "kind": kind, "space": space, "args": {} });
+    let column = json!({ "id": uuid::Uuid::new_v4(), "panes": [pane] });
+    json!({ "workspaces": [{ "id": uuid::Uuid::new_v4(), "columns": [column] }] })
+}
+
+#[tokio::test]
+async fn a_day_goes_once_it_ends_with_what_every_space_counted() {
+    let root = tempfile::tempdir().unwrap();
+    let owner = PersonId::new();
+    let person = Participant::Person(owner);
+    share(root.path(), "usage = true\n");
+    // Usage was on all of today: it turned on yesterday.
+    let now = clock(-DAY);
+    let says = vec![agents(), workspaces()];
+    let kernel = banda(root.path(), owner, None, Some(now.clone()), says).await;
+    let mut window = (kernel.stream(person, "window.requests", None, Value::Null))
+        .await
+        .unwrap();
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+
+    let mut spaces: Vec<SpaceId> = Vec::new();
+    for name in ["Work", "Home"] {
+        let params = json!({ "name": name });
+        let made = kernel.call(
+            person,
+            "spaces.create",
+            None,
+            Some(CommandId::new()),
+            params,
+        );
+        spaces.push(serde_json::from_value(made.await.unwrap()["id"].clone()).unwrap());
+    }
+    let started = |harness: &str| json!({ "title": "secret", "harness": harness });
+    say(
+        &kernel,
+        owner,
+        Some(spaces[0]),
+        "agents",
+        "thread.started",
+        started("claude"),
+    )
+    .await;
+    say(
+        &kernel,
+        owner,
+        Some(spaces[1]),
+        "agents",
+        "thread.started",
+        started("codex"),
+    )
+    .await;
+    say(
+        &kernel,
+        owner,
+        Some(spaces[1]),
+        "agents",
+        "turn.started",
+        json!({ "turn": "t" }),
+    )
+    .await;
+    let shown = opened("agents.thread", &spaces[0].to_string());
+    say(&kernel, owner, None, "workspaces", "opened", shown).await;
+
+    // A day later, today has ended: it goes as it is heard, once.
+    now.store(banda_kernel::now_ms() + DAY, Ordering::SeqCst);
+    record(&kernel, owner, "Tabs").await;
+    let asked = window.recv().await.unwrap();
+    let event = &asked["params"]["event"];
+    assert_eq!(event["event"], "day");
+    assert_eq!(event["distinct_id"], state(&kernel, owner).await["id"]);
+    let said = &event["properties"];
+    assert_eq!(said["threads"], json!({ "claude": 1, "codex": 1 }));
+    assert_eq!(said["turns"], 1);
+    assert_eq!(said["panes"], json!({ "agents.thread": 1 }));
+    assert_eq!(
+        (&said["spaces"], &said["workspaces"]),
+        (&json!(2), &json!(1))
+    );
+    assert!(!event.to_string().contains("secret"));
+    assert_eq!(kept(&kernel, owner, 1).await[0]["event"], "day");
+    let answer = json!({ "request": asked["id"], "ok": null });
+    kernel
+        .call(person, "window.answer", None, None, answer)
+        .await
+        .unwrap();
+    record(&kernel, owner, "Bar").await;
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    assert_eq!(
+        state(&kernel, owner).await["sent"]
+            .as_array()
+            .unwrap()
+            .len(),
+        1
+    );
+}
+
+#[tokio::test]
+async fn a_day_before_usage_turned_on_is_not_counted() {
+    let root = tempfile::tempdir().unwrap();
+    let owner = PersonId::new();
+    share(root.path(), "usage = true\n");
+    // Turned on now: today is not whole, so tomorrow sends nothing of it.
+    let now = clock(0);
+    let kernel = banda(
+        root.path(),
+        owner,
+        None,
+        Some(now.clone()),
+        vec![workspaces()],
+    )
+    .await;
+    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+    let space = SpaceId::new().to_string();
+    say(
+        &kernel,
+        owner,
+        None,
+        "workspaces",
+        "opened",
+        opened("terminal.terminal", &space),
+    )
+    .await;
+    now.store(banda_kernel::now_ms() + DAY, Ordering::SeqCst);
+    record(&kernel, owner, "Tabs").await;
+    tokio::time::sleep(std::time::Duration::from_millis(200)).await;
     assert_eq!(state(&kernel, owner).await["sent"], json!([]));
 }
