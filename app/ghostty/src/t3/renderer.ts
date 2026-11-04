@@ -130,6 +130,7 @@ export function renderGhosttySnapshot(options: {
   readonly metrics: GhosttyCellMetrics;
   readonly fontSize: number;
   readonly fontFamily: string;
+  readonly ligatures?: boolean;
   readonly padding: number;
   readonly forceFull: boolean;
   readonly cursorOn: boolean;
@@ -179,6 +180,8 @@ export function renderGhosttySnapshot(options: {
   }
 
   context.textBaseline = "alphabetic";
+  // Banda: with ligatures off, Chromium draws each letter on its own (ADR 0047).
+  context.textRendering = options.ligatures === false ? "optimizeSpeed" : "auto";
   for (const rowIndex of rowsToDraw) {
     const row = snapshot.rowData[rowIndex];
     if (!row) continue;

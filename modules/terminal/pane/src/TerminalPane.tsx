@@ -7,15 +7,21 @@ import {
   type Params,
   type SpaceId,
 } from "@banda/contract"
-import type { Ended, Piece, TerminalId, Title } from "@banda/contract/terminal"
+import {
+  type Ended,
+  type Piece,
+  TERMINAL_FILE,
+  type TerminalId,
+  type Title,
+} from "@banda/contract/terminal"
 import { Surface } from "@banda/ghostty"
 import { Button } from "@banda/ui/components/button"
 import { problem as words } from "@banda/ui/lib/words"
 import { definePane, type PaneProps, PROGRAM_KEYS } from "@banda/ui/pane"
 import { RotateCcwIcon, TerminalIcon } from "lucide-react"
 import { Input } from "./input"
-import { onThemeChange } from "@banda/ui/lib/look"
-import { fontOf, themeOf } from "./theme"
+import { onThemeChange, useFile } from "@banda/ui/lib/look"
+import { cursorOf, fontOf, themeOf } from "./theme"
 
 /** How long a size holds before the shell hears it, in ms. */
 const SETTLE = 120
@@ -143,6 +149,11 @@ function Screen({
   const again = useRef<() => void>(() => {})
   const [now, setNow] = useState<Now>({ is: "starting" })
   const [problem, setProblem] = useState<string>()
+  // The newest `terminal.toml`, for a surface made, or a snapshot heard,
+  // after it came.
+  const writing = useFile(TERMINAL_FILE)
+  const writingNow = useRef(writing)
+  const refont = useRef<() => void>(() => {})
 
   useEffect(() => {
     focusedNow.current = focused
@@ -242,7 +253,8 @@ function Screen({
     void (async () => {
       const made = await Surface.create(element, {
         theme: themeOf(element),
-        font: fontOf(element),
+        font: fontOf(element, writingNow.current),
+        cursor: cursorOf(writingNow.current),
         onData: (data) => {
           if (running) input.type(data)
         },
@@ -278,13 +290,16 @@ function Screen({
       if (shell) void start().then(follow, fail)
       else follow()
     })()
-    let font = JSON.stringify(fontOf(element))
-    const stopWatchingTheme = onThemeChange(() => {
-      drawn?.setTheme(themeOf(element))
-      const now = fontOf(element)
+    let font = JSON.stringify(fontOf(element, writingNow.current))
+    refont.current = () => {
+      const now = fontOf(element, writingNow.current)
       if (JSON.stringify(now) === font) return
       font = JSON.stringify(now)
       void drawn?.setFont(now)
+    }
+    const stopWatchingTheme = onThemeChange(() => {
+      drawn?.setTheme(themeOf(element))
+      refont.current()
     })
     return () => {
       left = true
@@ -295,6 +310,17 @@ function Screen({
       surface.current = null
     }
   }, [engine, space, terminal, shell])
+
+  // A change to `terminal.toml` reaches a screen already drawn: its font,
+  // and its cursor, over what a program asked for. A new look with the
+  // same file changes nothing.
+  useEffect(() => {
+    const was = writingNow.current
+    writingNow.current = writing
+    if (JSON.stringify(was) === JSON.stringify(writing)) return
+    refont.current()
+    surface.current?.setCursor(cursorOf(writing))
+  }, [writing])
 
   return (
     <div className="flex h-full min-h-0 flex-col">

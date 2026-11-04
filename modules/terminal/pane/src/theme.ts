@@ -1,4 +1,5 @@
-import type { Color, Theme } from "@banda/ghostty"
+import type { Color, Cursor, Font, Theme } from "@banda/ghostty"
+import type { Writing } from "@banda/contract/terminal"
 
 /**
  * The window's colours as Ghostty takes them, read from the CSS tokens
@@ -28,20 +29,25 @@ export function themeOf(element: HTMLElement): Theme {
   }
 }
 
-/** The terminal's font, as the look sets it (ADR 0007): `[font] mono`,
- * at three quarters of the root's size, so `[font] size = 14` writes the
- * terminal at 12px and grows it with the rest. */
-export function fontOf(element: HTMLElement): {
-  family?: string
-  size: number
-} {
+/** The terminal's font, as `terminal.toml` says (ADR 0047), and what it
+ * leaves out as the look sets it (ADR 0007): `[font] mono`, at three
+ * quarters of the root's size, so `[font] size = 14` writes the terminal
+ * at 12px and grows it with the rest. */
+export function fontOf(element: HTMLElement, writing: Writing): Font {
   const style = getComputedStyle(element)
-  const family = style.getPropertyValue("--font-family-mono").trim()
+  const family =
+    writing.font ?? style.getPropertyValue("--font-family-mono").trim()
   const root = parseFloat(style.getPropertyValue("--text-root")) || 16
   return {
     ...(family && { family }),
-    size: Math.round(root * 0.75 * 100) / 100,
+    size: writing.size ?? Math.round(root * 0.75 * 100) / 100,
+    ligatures: writing.ligatures,
   }
+}
+
+/** The cursor `terminal.toml` gives, which a program may ask to change. */
+export function cursorOf(writing: Writing): Cursor {
+  return { style: writing.cursor, blink: writing.blink }
 }
 
 let probe: CanvasRenderingContext2D | null = null

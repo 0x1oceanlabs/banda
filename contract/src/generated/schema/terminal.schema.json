@@ -1,0 +1,65 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "terminal.toml",
+  "description": "How Banda's terminal writes: its font, size and ligatures, and its\ncursor. Every key is optional.",
+  "type": "object",
+  "properties": {
+    "font": {
+      "description": "The font: a font's name, or a CSS list of them. Left out, the\nlook's mono font.",
+      "type": "string"
+    },
+    "size": {
+      "description": "The text's size, in pixels. Left out, three quarters of the look's\ntext size.",
+      "type": "number",
+      "format": "double",
+      "minimum": 6,
+      "maximum": 32
+    },
+    "ligatures": {
+      "description": "Whether -> => != and the like are drawn as one sign, as the font\ndraws them.",
+      "type": "boolean"
+    },
+    "cursor": {
+      "description": "The cursor, until a program asks for another.",
+      "$ref": "#/$defs/CursorSettings"
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "CursorSettings": {
+      "description": "The cursor, until a program asks for another.",
+      "type": "object",
+      "properties": {
+        "style": {
+          "description": "Its shape: the whole cell, a line before it, or a line under it.",
+          "$ref": "#/$defs/CursorStyle"
+        },
+        "blink": {
+          "description": "Whether it blinks.",
+          "type": "boolean"
+        }
+      },
+      "additionalProperties": false
+    },
+    "CursorStyle": {
+      "description": "The cursor's shape.",
+      "oneOf": [
+        {
+          "description": "The whole cell.",
+          "type": "string",
+          "const": "block"
+        },
+        {
+          "description": "A line before the cell.",
+          "type": "string",
+          "const": "bar"
+        },
+        {
+          "description": "A line under the cell.",
+          "type": "string",
+          "const": "underline"
+        }
+      ]
+    }
+  }
+}

@@ -5,4 +5,4 @@ name = "Terminal"
 about = "Programs the Person runs in a terminal: a shell, or a Harness's sign-in."
 version = "0.1.0"
 from-banda = true
-settings = []
+settings = ["terminal.toml"]
