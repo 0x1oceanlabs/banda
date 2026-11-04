@@ -4,13 +4,14 @@
 //! its plan and its notices; and what it uses and offers, between turns
 //! too. The turn's own state is the writer's (`writer.rs`).
 
+mod content;
 mod output;
 
 use crate::acp::{Answer, Running, Said, ToolChange};
 use crate::live::TurnRun;
 use crate::model::{
-    Body, Fact, Item, ItemId, Mode, Offer, PlanStep, Settings, ThreadId, ToolContent, ToolKind,
-    ToolStatus, TurnId, Usage,
+    Body, Fact, Item, ItemId, Mode, Offer, PlanStep, Settings, ThreadId, ToolKind, ToolStatus,
+    TurnId, Usage,
 };
 use crate::{emit, plain, questions, store};
 use banda_kernel::{AgentId, Error, ModuleSpace, Participant, Tx};
@@ -379,7 +380,7 @@ impl Transcript {
         title: String,
         tool: ToolKind,
         status: ToolStatus,
-        content: Vec<ToolContent>,
+        content: Vec<crate::acp::ToolPart>,
     ) -> Result<(), String> {
         let id = ItemId::new();
         let shown = Shown {
@@ -389,7 +390,7 @@ impl Transcript {
             printed: output::Printed::default(),
         };
         self.tools.insert(call, shown);
-        let content = output::bound(content);
+        let content = content::keep(&self.space, content).await?;
         let started = Fact::ToolStarted {
             item: id,
             turn: self.turn,
@@ -416,7 +417,10 @@ impl Transcript {
             content,
             exit,
         } = change;
-        let content = content.map(output::bound);
+        let content = match content {
+            Some(parts) => Some(content::keep(&self.space, parts).await?),
+            None => None,
+        };
         self.space
             .write(move |tx| {
                 if let Some((_, mut item)) = store::item(tx.sql(), id)?
@@ -435,6 +439,7 @@ impl Transcript {
                         *now = status;
                     }
                     if let Some(content) = &content {
+                        store::tool_images(tx.sql(), content, id, agent, tx.now())?;
                         shows.clone_from(content);
                     }
                     if exit.is_some() {
@@ -597,6 +602,9 @@ impl Transcript {
                     body,
                 };
                 store::put(tx.sql(), thread, &item, named.as_deref())?;
+                if let Body::Tool { content, .. } = &item.body {
+                    store::tool_images(tx.sql(), content, id, agent, tx.now())?;
+                }
                 store::touch_thread(tx.sql(), thread, tx.now())?;
                 emit(tx, agent, thread, &fact)
             })

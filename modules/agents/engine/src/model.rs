@@ -23,7 +23,7 @@ banda_kernel::id!(
     export_to = "agents/"
 );
 banda_kernel::id!(
-    /// An image a message carries.
+    /// An image a Thread item carries.
     ImageId,
     export_to = "agents/"
 );
@@ -33,7 +33,7 @@ banda_kernel::id!(
     export_to = "agents/"
 );
 
-/// An image a Person sends with a message. Its bytes are kept apart, in
+/// An image in a message or tool result. Its bytes are kept apart, in
 /// the Space's data, `spaces/<id>/images/`, and read with `agents.image`.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "agents/")]
@@ -495,6 +495,10 @@ pub enum QuestionState {
 #[serde(tag = "kind", rename_all = "snake_case")]
 #[ts(export, export_to = "agents/")]
 pub enum ToolContent {
+    /// The bytes are kept in the Space's images folder, as for messages.
+    Image {
+        image: Image,
+    },
     Text {
         text: String,
     },

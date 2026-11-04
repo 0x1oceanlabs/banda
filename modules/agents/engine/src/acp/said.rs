@@ -19,7 +19,7 @@ pub enum Said {
         title: String,
         tool: ToolKind,
         status: ToolStatus,
-        content: Vec<ToolContent>,
+        content: Vec<ToolPart>,
     },
     /// `output` follows what the command printed before.
     ToolChanged {
@@ -53,13 +53,21 @@ pub enum Said {
     Notice(String),
 }
 
+/// Tool content in flight. Image bytes stop here, before the Thread's
+/// stored words and facts: the transcript keeps them as files first.
+#[derive(Debug)]
+pub enum ToolPart {
+    Shown(ToolContent),
+    Image { mime: String, data: String },
+}
+
 /// What an update changes in a tool call: each field given replaces its
 /// own.
 #[derive(Debug, Default)]
 pub struct ToolChange {
     pub title: Option<String>,
     pub status: Option<ToolStatus>,
-    pub content: Option<Vec<ToolContent>>,
+    pub content: Option<Vec<ToolPart>>,
     /// How its command ended.
     pub exit: Option<Exit>,
 }
@@ -116,7 +124,7 @@ pub(super) fn said(update: acp::SessionUpdate) -> Option<Said> {
             title: call.title,
             tool: tool_kind(call.kind),
             status: tool_status(call.status),
-            content: tool_content(&call.content),
+            content: tool_content(Some(call.content), call.raw_output).unwrap_or_default(),
         }),
         acp::SessionUpdate::ToolCallUpdate(update) => {
             let terminal = |key: &str| update.meta.as_ref()?.get(key);
@@ -135,7 +143,7 @@ pub(super) fn said(update: acp::SessionUpdate) -> Option<Said> {
                 change: ToolChange {
                     title: update.fields.title,
                     status: update.fields.status.map(tool_status),
-                    content: update.fields.content.as_deref().map(tool_content),
+                    content: tool_content(update.fields.content, update.fields.raw_output),
                     exit,
                 },
                 output: terminal(OUTPUT_META)
@@ -164,25 +172,87 @@ pub(super) fn said(update: acp::SessionUpdate) -> Option<Said> {
     }
 }
 
+/// Prefer standard ACP content. Codex ACP 2.5 also carries MCP image
+/// results as rawOutput.result.content, with no display content field.
+fn tool_content(
+    content: Option<Vec<acp::ToolCallContent>>,
+    raw: Option<serde_json::Value>,
+) -> Option<Vec<ToolPart>> {
+    let shown = content.map(content_parts);
+    if shown.as_ref().is_some_and(|parts| !parts.is_empty()) {
+        return shown;
+    }
+    raw.and_then(mcp_images).or(shown)
+}
+
+#[derive(Deserialize)]
+#[serde(tag = "type", rename_all = "snake_case")]
+enum McpPart {
+    Text {
+        text: String,
+    },
+    Image {
+        data: String,
+        #[serde(rename = "mimeType")]
+        mime: String,
+    },
+    #[serde(other)]
+    Other,
+}
+
+/// Decode only a known MCP result envelope containing an image, never
+/// arbitrary JSON. Moving its fields avoids copying encoded payloads.
+fn mcp_images(mut raw: serde_json::Value) -> Option<Vec<ToolPart>> {
+    if let Some(result) = raw.get_mut("result") {
+        raw = result.take();
+    }
+    let serde_json::Value::Array(parts) = raw.get_mut("content")?.take() else {
+        return None;
+    };
+    let parts: Vec<_> = parts
+        .into_iter()
+        .filter_map(|part| match serde_json::from_value::<McpPart>(part).ok()? {
+            McpPart::Text { text } => Some(ToolPart::Shown(ToolContent::Text { text })),
+            McpPart::Image { data, mime } => Some(ToolPart::Image { mime, data }),
+            McpPart::Other => None,
+        })
+        .collect();
+    parts
+        .iter()
+        .any(|part| matches!(part, ToolPart::Image { .. }))
+        .then_some(parts)
+}
+
 /// What a tool call shows: its text, its diffs, and where its command's
 /// output goes, which comes apart, in [`OUTPUT_META`].
-fn tool_content(content: &[acp::ToolCallContent]) -> Vec<ToolContent> {
+fn content_parts(content: Vec<acp::ToolCallContent>) -> Vec<ToolPart> {
     content
-        .iter()
-        .filter_map(|shown| match shown {
-            acp::ToolCallContent::Content(acp::Content {
-                content: acp::ContentBlock::Text(text),
+        .into_iter()
+        .filter_map(|shown| {
+            if let acp::ToolCallContent::Content(acp::Content {
+                content: acp::ContentBlock::Image(image),
                 ..
-            }) => Some(ToolContent::Text {
-                text: text.text.clone(),
-            }),
-            acp::ToolCallContent::Diff(diff) => Some(ToolContent::Diff {
-                path: diff.path.display().to_string(),
-                old: diff.old_text.clone(),
-                new: diff.new_text.clone(),
-            }),
-            acp::ToolCallContent::Terminal(_) => Some(ToolContent::Terminal),
-            _ => None,
+            }) = shown
+            {
+                return Some(ToolPart::Image {
+                    mime: image.mime_type,
+                    data: image.data,
+                });
+            }
+            let shown = match shown {
+                acp::ToolCallContent::Content(acp::Content {
+                    content: acp::ContentBlock::Text(text),
+                    ..
+                }) => ToolContent::Text { text: text.text },
+                acp::ToolCallContent::Diff(diff) => ToolContent::Diff {
+                    path: diff.path.display().to_string(),
+                    old: diff.old_text,
+                    new: diff.new_text,
+                },
+                acp::ToolCallContent::Terminal(_) => ToolContent::Terminal,
+                _ => return None,
+            };
+            Some(ToolPart::Shown(shown))
         })
         .collect()
 }
@@ -230,5 +300,43 @@ fn tool_status(status: acp::ToolCallStatus) -> ToolStatus {
         acp::ToolCallStatus::Completed => ToolStatus::Done,
         acp::ToolCallStatus::Failed => ToolStatus::Failed,
         _ => ToolStatus::Pending,
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use serde_json::json;
+
+    #[test]
+    fn mcp_image_results_arrive_as_content_or_raw_output_without_duplicates() {
+        let raw = || {
+            json!({"result":{"content":[
+            {"type":"text","text":"before"},
+            {"type":"image","mimeType":"image/png","data":"AA=="},
+            {"type":"text","text":"after"}
+        ]},"error":null})
+        };
+        assert_eq!(
+            tool_content(Some(Vec::new()), Some(raw())).unwrap().len(),
+            3
+        );
+        let parts = tool_content(None, Some(raw())).unwrap();
+        assert!(
+            matches!(&parts[..], [ToolPart::Shown(ToolContent::Text {text: before}), ToolPart::Image {mime, data}, ToolPart::Shown(ToolContent::Text {text: after})] if before == "before" && after == "after" && mime == "image/png" && data == "AA==")
+        );
+        let direct = vec![acp::ToolCallContent::Content(acp::Content::new(
+            acp::ContentBlock::Image(acp::ImageContent::new("BB==", "image/png")),
+        ))];
+        let parts = tool_content(Some(direct), Some(raw())).unwrap();
+        assert!(matches!(&parts[..], [ToolPart::Image {data,..}] if data == "BB=="));
+        assert!(
+            tool_content(
+                None,
+                Some(json!({"content":[{"type":"text","text":"ordinary raw output"}]}))
+            )
+            .is_none()
+        );
+        assert!(tool_content(None, Some(json!({"other":{"content":[{"type":"image","mimeType":"image/png","data":"AA=="}]}}))).is_none());
     }
 }

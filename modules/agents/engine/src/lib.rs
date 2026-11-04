@@ -835,14 +835,7 @@ impl Agents {
         call: Call,
         Attach { mime, data, name }: Attach,
     ) -> Result<Image, Refusal> {
-        let bytes = decoded(&data, "image")?;
-        rules::message::may_attach(&mime, &bytes)?;
-        let image = Image {
-            id: ImageId::new(),
-            mime,
-            size: u32::try_from(bytes.len()).unwrap_or(u32::MAX),
-            name,
-        };
+        let (image, bytes) = images::prepare(mime, &data, name)?;
         let space = call.space();
         let images = Images::of(space.data());
         // The file first: a row never names bytes that are not

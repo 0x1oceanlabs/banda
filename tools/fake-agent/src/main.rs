@@ -1,6 +1,8 @@
 //! A scripted ACP agent. It speaks ACP v1 over stdio like a real Harness,
 //! and the words in a prompt choose what it does:
 //!
+//! - `tool images`: starts and updates a tool with text, valid images and
+//!   an invalid image; `update only` omits the initial call.
 //! - `ask`: starts a tool call and asks permission to run it. An allow runs
 //!   it, a reject skips it, and a cancel ends the turn.
 //! - `choose`: asks for a colour with a form, as Claude Code asks its own
@@ -92,20 +94,21 @@ use agent_client_protocol::schema::ProtocolVersion;
 use agent_client_protocol::schema::v1::{
     AgentAuthCapabilities, AgentCapabilities, AuthMethod, AuthMethodAgent, AuthMethodTerminal,
     AuthenticateRequest, AuthenticateResponse, AvailableCommand, AvailableCommandInput,
-    AvailableCommandsUpdate, CancelNotification, ConfigOptionUpdate, ContentBlock, ContentChunk,
-    Cost, CreateElicitationRequest, Diff, ElicitationAction, ElicitationContentValue,
+    AvailableCommandsUpdate, CancelNotification, ConfigOptionUpdate, Content, ContentBlock,
+    ContentChunk, Cost, CreateElicitationRequest, Diff, ElicitationAction, ElicitationContentValue,
     ElicitationFormMode, ElicitationSchema, ElicitationSessionScope, EnumOption,
-    ForkSessionRequest, ForkSessionResponse, Implementation, InitializeRequest, InitializeResponse,
-    LoadSessionRequest, LoadSessionResponse, LogoutCapabilities, LogoutRequest, LogoutResponse,
-    MessageId, NewSessionRequest, NewSessionResponse, Notice, NoticeSeverity, PermissionOption,
-    PermissionOptionKind, Plan, PlanEntry, PlanEntryPriority, PlanEntryStatus, PromptCapabilities,
-    PromptRequest, PromptResponse, RequestPermissionOutcome, RequestPermissionRequest,
-    ResumeSessionRequest, ResumeSessionResponse, SessionCapabilities, SessionConfigOption,
-    SessionConfigOptionCategory, SessionConfigOptionValue, SessionConfigSelectOption,
-    SessionForkCapabilities, SessionId, SessionNotification, SessionResumeCapabilities,
-    SessionUpdate, SetSessionConfigOptionRequest, SetSessionConfigOptionResponse, StopReason,
-    StringPropertySchema, Terminal, TextContent, ToolCall, ToolCallContent, ToolCallStatus,
-    ToolCallUpdate, ToolCallUpdateFields, ToolKind, UnstructuredCommandInput, UsageUpdate,
+    ForkSessionRequest, ForkSessionResponse, ImageContent, Implementation, InitializeRequest,
+    InitializeResponse, LoadSessionRequest, LoadSessionResponse, LogoutCapabilities, LogoutRequest,
+    LogoutResponse, MessageId, NewSessionRequest, NewSessionResponse, Notice, NoticeSeverity,
+    PermissionOption, PermissionOptionKind, Plan, PlanEntry, PlanEntryPriority, PlanEntryStatus,
+    PromptCapabilities, PromptRequest, PromptResponse, RequestPermissionOutcome,
+    RequestPermissionRequest, ResumeSessionRequest, ResumeSessionResponse, SessionCapabilities,
+    SessionConfigOption, SessionConfigOptionCategory, SessionConfigOptionValue,
+    SessionConfigSelectOption, SessionForkCapabilities, SessionId, SessionNotification,
+    SessionResumeCapabilities, SessionUpdate, SetSessionConfigOptionRequest,
+    SetSessionConfigOptionResponse, StopReason, StringPropertySchema, Terminal, TextContent,
+    ToolCall, ToolCallContent, ToolCallStatus, ToolCallUpdate, ToolCallUpdateFields, ToolKind,
+    UnstructuredCommandInput, UsageUpdate,
 };
 use agent_client_protocol::{Agent, Client, ConnectionTo, Error, Responder, Stdio};
 use serde::{Deserialize, Serialize};
@@ -720,6 +723,58 @@ async fn turn(
             &cx,
             &session,
             SessionUpdate::AgentMessageChunk(text(" and after.")),
+        )?;
+        return Ok(StopReason::EndTurn);
+    }
+    if words.contains("tool images") {
+        let image = || {
+            ToolCallContent::Content(Content::new(ContentBlock::Image(ImageContent::new(
+                "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",
+                "image/png",
+            ))))
+        };
+        if !words.contains("update only") {
+            let call = ToolCall::new("shot-1", "Screenshot result")
+                .kind(ToolKind::Fetch)
+                .status(ToolCallStatus::InProgress)
+                .content(vec![image()]);
+            say(&cx, &session, SessionUpdate::ToolCall(call))?;
+        }
+        let content = vec![
+            ToolCallContent::Content(Content::new(ContentBlock::Text(TextContent::new(
+                "Before the screenshot.",
+            )))),
+            image(),
+            ToolCallContent::Content(Content::new(ContentBlock::Image(ImageContent::new(
+                "bad-base64",
+                "image/png",
+            )))),
+            image(),
+            ToolCallContent::Content(Content::new(ContentBlock::Text(TextContent::new(
+                "After the screenshot.",
+            )))),
+        ];
+        let fields = ToolCallUpdateFields::new()
+            .title("Screenshot result")
+            .status(ToolCallStatus::Completed);
+        let fields = if words.contains("raw") {
+            let parts: Vec<_> = content
+                .into_iter()
+                .filter_map(|part| match part {
+                    ToolCallContent::Content(content) => Some(content.content),
+                    _ => None,
+                })
+                .collect();
+            fields.raw_output(json!({"result":{"content": parts}, "error":null}))
+        } else {
+            fields.content(content)
+        };
+        let update = ToolCallUpdate::new("shot-1", fields);
+        say(&cx, &session, SessionUpdate::ToolCallUpdate(update))?;
+        say(
+            &cx,
+            &session,
+            SessionUpdate::AgentMessageChunk(text("The screenshots are ready.")),
         )?;
         return Ok(StopReason::EndTurn);
     }

@@ -964,6 +964,16 @@ The plugin keeps Mermaid's strict security mode. KaTeX renders inline
 ship with the app. Both plugins use Streamdown's streaming parser and
 error handling, alongside the existing code and media renderers.
 
+Tool results keep their images as `ToolContent::Image` metadata. The ACP
+adapter passes image payloads only to the transcript, which validates
+and writes their bytes through the existing image store before committing
+the item and its fact. For Codex ACP, which sends MCP images in
+`rawOutput.result.content`, the adapter reads that known image envelope
+when standard display content is absent. Invalid images become text beside the other
+result parts. The tool line fetches images through the Thread's shared
+image reader only when expanded and opens the same preview as message
+images. Sweeps retain images still referenced by a fork after a rewind.
+
 ## Checks that hold the shape
 
 - **Architecture tests.** The kernel names no module, no module reads

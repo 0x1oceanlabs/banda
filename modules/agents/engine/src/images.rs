@@ -1,17 +1,39 @@
-//! The bytes of the images messages carry, as files in the Space's data:
+//! The bytes of images carried by messages and tools, in the Space's data:
 //! `spaces/<id>/images/<image ID>` (ADR 0026). The Space's SQLite keeps
-//! what each image is and which message carries it (`store`); the bytes
+//! what each image is and which item carries it (`store`); the bytes
 //! stay out of it (ADR 0002, decision 1).
 //!
 //! A file is written before its image's row commits, so a file may have
 //! no row: an attach that failed, or one repeated with the same command.
 //! The sweep lets such files go once they are a day old.
 
-use crate::model::ImageId;
+use crate::model::{Image, ImageId};
+use banda_kernel::Refusal;
 use std::collections::HashSet;
 use std::io;
 use std::path::{Path, PathBuf};
 use std::time::{Duration, SystemTime};
+
+/// Decode only bounded images, then check their type and file signature.
+/// Both message attachments and tool results use the same rules.
+pub fn prepare(
+    mime: String,
+    data: &str,
+    name: Option<String>,
+) -> Result<(Image, Vec<u8>), Refusal> {
+    if data.len() > crate::rules::message::LARGEST_IMAGE.div_ceil(3) * 4 {
+        return Err(Refusal::invalid("An image can be at most 10 MB."));
+    }
+    let bytes = crate::decoded(data, "image")?;
+    crate::rules::message::may_attach(&mime, &bytes)?;
+    let image = Image {
+        id: ImageId::new(),
+        mime,
+        size: bytes.len() as u32,
+        name,
+    };
+    Ok((image, bytes))
+}
 
 /// How long an image waits for the message it was added for.
 pub const UNSENT_LAST: Duration = Duration::from_secs(24 * 60 * 60);

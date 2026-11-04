@@ -744,6 +744,7 @@ function Entry({
       return (
         <ToolCall
           tool={body}
+          reader={reader}
           onOpenDiff={
             turn === undefined ? undefined : (path) => onOpenDiff(turn, path)
           }
