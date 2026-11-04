@@ -45,6 +45,7 @@
   --color-border: var(--border);
   --color-destructive: var(--destructive);
   --color-attention: var(--attention);
+  --color-warning: var(--warning);
   --color-focus: var(--focus);
   --color-focus-inactive: var(--focus-inactive);
   --color-added: var(--added);
@@ -93,6 +94,7 @@
   --destructive: oklch(0.577 0.245 27.325);
   /* What waits for the Person, such as a Question: Banda's one signal colour. */
   --attention: oklch(0.68 0.21 41);
+  --warning: oklch(0.65 0.16 70);
   --added: oklch(0.527 0.137 150.069);
   --removed: oklch(0.577 0.245 27.325);
   --border: oklch(0.922 0 0);
@@ -131,6 +133,7 @@
   --accent-foreground: oklch(0.985 0 0);
   --destructive: oklch(0.704 0.191 22.216);
   --attention: oklch(0.72 0.19 45);
+  --warning: oklch(0.8 0.15 80);
   --added: oklch(0.723 0.192 149.579);
   --removed: oklch(0.704 0.191 22.216);
   --border: oklch(1 0 0 / 10%);

@@ -1,0 +1,12 @@
+{
+  "panes": [],
+  "actions": [],
+  "sources": [],
+  "watches": 0,
+  "bar": [
+    {
+      "id": "harnesses.limits",
+      "about": "The fullest usage limit; click for each account's limits and resets."
+    }
+  ]
+}
