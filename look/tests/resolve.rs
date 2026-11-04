@@ -409,7 +409,10 @@ fn columns_and_fonts_come_through_the_layers() {
     let machine = Machine::new(false);
     let look = machine.look();
     assert_eq!(look.columns.presets, ["1/3", "1/2", "2/3", "1"]);
-    assert_eq!(look.vars["--font-family-mono"], "monospace");
+    assert_eq!(
+        look.vars["--font-family-mono"],
+        "\"JetBrains Mono Variable\", monospace"
+    );
     assert_eq!(
         look.vars["--font-family-sans"],
         "\"Inter Variable\", sans-serif"

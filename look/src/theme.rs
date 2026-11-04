@@ -25,8 +25,9 @@ pub struct Places {
     /// Omarchy's theme folders: the Person's first, then the system's.
     pub omarchy_themes: Vec<PathBuf>,
     /// fontconfig's folder of the Person's, `~/.config/fontconfig`, where
-    /// Omarchy sets the system's monospace font. `None`: generic names
-    /// stay generic.
+    /// Omarchy sets the system's monospace font. Linux's only: elsewhere a
+    /// fontconfig is one some program brought, not the system's (ADR
+    /// 0047). `None`: the system names no font.
     pub fontconfig: Option<PathBuf>,
     /// The desktop's names, lowercased, as `XDG_CURRENT_DESKTOP` lists
     /// them: which reader finds its wallpaper (ADR 0030).
@@ -99,7 +100,7 @@ impl Places {
             fontconfig: match var("BANDA_FONTCONFIG") {
                 Some(set) if set.as_os_str().is_empty() => None,
                 Some(set) => Some(set),
-                None => Some(config_home.join("fontconfig")),
+                None => cfg!(target_os = "linux").then(|| config_home.join("fontconfig")),
             },
             desktops: std::env::var("XDG_CURRENT_DESKTOP")
                 .unwrap_or_default()

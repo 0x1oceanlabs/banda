@@ -537,7 +537,7 @@
           "type": "string"
         },
         "mono": {
-          "description": "The terminal's and code's.",
+          "description": "The terminal's and code's. `monospace`, the default, is the\nsystem's on Linux and JetBrains Mono elsewhere.",
           "type": "string"
         },
         "size": {
