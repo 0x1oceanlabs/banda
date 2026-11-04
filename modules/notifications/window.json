@@ -2,6 +2,13 @@
   "panes": [],
   "actions": [
     {
+      "id": "notifications.go-to",
+      "title": "Go to what calls",
+      "section": "Notifications",
+      "keys": [],
+      "unlisted": true
+    },
+    {
       "id": "notifications.tell",
       "title": "Tell the Person",
       "section": "Notifications",

@@ -840,6 +840,9 @@ modules/*/desktop  a module's part in Electron main
   - Another part tells the Person in plain data, by running
     `notifications.tell` with a `Told` (`told.ts`): a key, a kind, the
     words and buttons that are actions by id. The Problems do (ADR 0039).
+    A call's toast is one too (`toldOfCall`), so every notice told is
+    data: the last five are kept in the window's storage (`recent.ts`),
+    and the bell on the bar shows them again, across a restart.
   - A system notification is the desktop's, through the module's desktop
     part (`modules/notifications/desktop/src/notices.ts`):
     the module asks for it through `window.banda.notifications`, its bridge, with the mark

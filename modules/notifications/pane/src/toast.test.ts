@@ -1,9 +1,10 @@
 import { toast } from "@banda/ui/components/sonner"
-import { expect, test } from "vitest"
-import { LIFE, toastCall } from "./toast"
 import type { Call } from "@banda/ui/pane"
+import { expect, test } from "vitest"
+import { GO_TO, toldOfCall } from "./system"
+import { LIFE, toastTold } from "./toast"
 
-const heard = (chime: Call["chime"], detail?: string): Call => ({
+const call = (chime: Call["chime"], detail?: string): Call => ({
   about: "t1",
   chime,
   title: "slow hello",
@@ -15,19 +16,35 @@ const heard = (chime: Call["chime"], detail?: string): Call => ({
 })
 
 test("a thing's new call replaces its toast, which lasts as long as the call is loud", () => {
-  toastCall(heard("done"), true, () => {})
-  toastCall(heard("asking", "May I?"), true, () => {})
+  toastTold(toldOfCall(call("done"), true), () => {})
+  toastTold(toldOfCall(call("asking", "May I?"), true), () => {})
   const shown = toast.getToasts().filter((one) => one.id === "s:t1")
   expect(shown).toHaveLength(1)
   expect(shown[0]).toMatchObject({
     title: "slow hello",
-    description: "Asks you · May I?",
     duration: LIFE.asking,
   })
 })
 
-test("with detail off, a toast only names the call", () => {
-  toastCall(heard("failed", "the tool broke"), false, () => {})
-  const [shown] = toast.getToasts().filter((one) => one.id === "s:t1")
-  expect(shown).toMatchObject({ description: "Failed" })
+test("a call's toast says what calls, unless detail is off, and goes there", () => {
+  expect(toldOfCall(call("asking", "May I?"), true)).toEqual({
+    key: "s:t1",
+    kind: "asking",
+    title: "slow hello",
+    body: "Asks you · May I?",
+    buttons: [
+      {
+        label: "Answer",
+        action: GO_TO,
+        args: {
+          space: "s",
+          about: "t1",
+          pane: { kind: "agents.thread", args: {} },
+        },
+      },
+    ],
+  })
+  expect(toldOfCall(call("failed", "the tool broke"), false).body).toBe(
+    "Failed"
+  )
 })

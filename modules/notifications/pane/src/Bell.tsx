@@ -1,17 +1,21 @@
 import { Button } from "@banda/ui/components/button"
 import { Toaster, type ToastT, toast } from "@banda/ui/components/sonner"
 import { TopLayer } from "@banda/ui/components/top-layer"
+import type { WidgetProps } from "@banda/ui/module"
 import { BellIcon } from "lucide-react"
 import { useCallback, useEffect, useRef, useState } from "react"
-import { LAST, RECENT, recentOf } from "./last"
+import { LAST, recentNow } from "./recent"
+import { toastTold } from "./toast"
 
 type Id = ToastT["id"]
 
-/** What the bell shows with nothing kept: the history lives while the
- * window does. */
+/** The toaster the bell shows the last notices again in. */
+const RECENT = "recent"
+
+/** What the bell shows with nothing kept. */
 const NOTHING = {
   id: "nothing",
-  title: "Nothing since Banda started",
+  title: "Nothing yet",
   description: "What still waits for you is in the sidebar.",
 } satisfies ToastT
 
@@ -21,7 +25,7 @@ const NOTHING = {
  * They stay till the bell is clicked again, `Esc`, a click elsewhere, or
  * one of their buttons is.
  */
-export function BellWidget() {
+export function BellWidget({ window: banda }: WidgetProps) {
   const [open, setOpen] = useState(false)
   const shown = useRef(new Set<Id>())
   const bell = useRef<HTMLButtonElement>(null)
@@ -37,21 +41,25 @@ export function BellWidget() {
     if (shown.current.size === 0) setOpen(false)
   }, [])
   const show = () => {
-    const last = recentOf(toast.getHistory())
+    const last = recentNow()
     // The window's toasts are among the last: they show once, here.
     toast.dismiss()
     // Each as it was, under an id of its own here, so Sonner keeps one
     // copy of it however often the bell shows it.
+    const here = {
+      toasterId: RECENT,
+      duration: Infinity,
+      onDismiss: (toast: ToastT) => gone(toast.id),
+    }
     shown.current = new Set(
-      (last.length > 0 ? last : [NOTHING]).map((kept) =>
-        toast(kept.title, {
-          ...kept,
-          id: `${RECENT}:${kept.id}`,
-          toasterId: RECENT,
-          duration: Infinity,
-          onDismiss: (toast) => gone(toast.id),
-        })
-      )
+      last.length > 0
+        ? last.map((told) =>
+            toastTold(told, (button) => banda.run(button.action, button.args), {
+              ...here,
+              id: `${RECENT}:${told.key}`,
+            })
+          )
+        : [toast(NOTHING.title, { ...NOTHING, ...here })]
     )
     setOpen(true)
   }

@@ -30,6 +30,8 @@ export type Told = {
   click?: number
   /** It plays no sound. */
   silent?: boolean
+  /** Its toast has a button that closes it. */
+  close?: boolean
 }
 
 const KINDS = new Set<string>(["done", "asking", "failed"])
@@ -40,7 +42,18 @@ const text = (value: JsonValue | undefined): value is string =>
 /** What `notifications.tell` was given, if it is a `Told`. */
 export function toldOf(args: Args | undefined): Told | null {
   if (!args) return null
-  const { key, kind, title, code, body, notice, buttons, click, silent } = args
+  const {
+    key,
+    kind,
+    title,
+    code,
+    body,
+    notice,
+    buttons,
+    click,
+    silent,
+    close,
+  } = args
   if (!text(key) || !text(kind) || !KINDS.has(kind) || !text(title)) return null
   if (!Array.isArray(buttons)) return null
   const said = buttons.flatMap((button): Button[] => {
@@ -62,6 +75,7 @@ export function toldOf(args: Args | undefined): Told | null {
     buttons: said.slice(0, 2),
     ...(typeof click === "number" ? { click } : {}),
     ...(silent === true ? { silent } : {}),
+    ...(close === true ? { close } : {}),
   }
 }
 
