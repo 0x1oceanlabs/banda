@@ -537,6 +537,16 @@ export const ACTIONS: readonly Action<Shell>[] = [
     run: (shell) => shell.menu("actions"),
   },
   {
+    // A file a Pane's link names, as a terminal's path with Ctrl.
+    id: "file.outside",
+    section: "Banda",
+    title: "Open a file in its app",
+    unlisted: true,
+    run: (_, args) => {
+      if (typeof args?.file === "string") window.banda?.files.outside(args.file)
+    },
+  },
+  {
     id: "space.add",
     section: "Banda",
     title: "Add Space",

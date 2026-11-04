@@ -1,0 +1,44 @@
+import { expect, test } from "vitest"
+import { targetOf } from "./links"
+
+const at = {
+  program: "cargo test",
+  folder: "~/code/banda",
+  path: "/home/roma/code/banda",
+  home: "/home/roma",
+}
+
+test("a page goes as it is", () => {
+  expect(targetOf("http://localhost:5173/", at)).toEqual({
+    page: "http://localhost:5173/",
+  })
+  expect(targetOf("HTTPS://example.com/a?b", undefined)).toEqual({
+    page: "HTTPS://example.com/a?b",
+  })
+})
+
+test("a path starts in the folder of what runs in front, its line left off", () => {
+  expect(targetOf("src/input.ts:42:7", at)).toEqual({
+    file: "/home/roma/code/banda/src/input.ts",
+  })
+  expect(targetOf("./a/../b.rs:3", at)).toEqual({
+    file: "/home/roma/code/banda/b.rs",
+  })
+  expect(targetOf("../other/x.md", at)).toEqual({
+    file: "/home/roma/code/other/x.md",
+  })
+  expect(targetOf("/etc/hosts", at)).toEqual({ file: "/etc/hosts" })
+})
+
+test("~ is the home folder, wherever what runs in front is", () => {
+  expect(targetOf("~/notes.md", at)).toEqual({ file: "/home/roma/notes.md" })
+  const etc = { ...at, folder: "/etc", path: "/etc" }
+  expect(targetOf("~/a/b", etc)).toEqual({ file: "/home/roma/a/b" })
+  expect(targetOf("~/a/b", { ...etc, home: null })).toBeNull()
+})
+
+test("with no folder only a full path goes anywhere, and never a Windows one", () => {
+  expect(targetOf("src/a.ts", undefined)).toBeNull()
+  expect(targetOf("/tmp/a.log", undefined)).toEqual({ file: "/tmp/a.log" })
+  expect(targetOf("C:\\Users\\a.txt", at)).toBeNull()
+})

@@ -531,6 +531,8 @@ export interface GhosttyTerminalSurfaceOptions {
   readonly beforeKey: (event: KeyboardEvent) => boolean;
   readonly onLinkActivate: (text: string, event: MouseEvent) => void;
   readonly canActivateLink?: (text: string) => boolean;
+  /** Banda: the words a link under the pointer shows, as a tooltip. */
+  readonly linkTitle?: (text: string) => string;
   /** The host must prevent the default menu; native Paste cannot reach a canvas terminal. */
   readonly onContextMenu?: (event: MouseEvent) => void;
 }
@@ -1615,6 +1617,8 @@ export class GhosttyTerminalSurface {
       previous?.range.end.y === link?.range.end.y;
     this.canvas.style.cursor = link ? "pointer" : "";
     if (unchanged) return;
+    // Banda: the link under the pointer says what a click does.
+    this.canvas.title = link ? (this.options.linkTitle?.(link.text) ?? "") : "";
     this.hoveredLink = link;
     this.forceFullRender = true;
     this.requestRender();

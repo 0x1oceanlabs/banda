@@ -40,6 +40,8 @@ Import paths, so the files find each other here, and the tests import
 - box-drawing, block and braille glyphs are drawn from the cell's own
   edges (`src/glyphs.ts`, Banda's), and each cell's edges, behind its
   background too, are on screen pixels (ADR 0047, decision 3).
+- the surface takes a `linkTitle`: a link under the pointer shows it as
+  the canvas's tooltip.
 
 T3's tests of its own terminal drawer are not brought: they test T3's
 transport, not the adapter.

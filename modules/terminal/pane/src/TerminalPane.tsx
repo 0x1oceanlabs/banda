@@ -16,10 +16,12 @@ import {
 } from "@banda/contract/terminal"
 import { Surface } from "@banda/ghostty"
 import { Button } from "@banda/ui/components/button"
+import { linkHint, outsideClick } from "@banda/ui/lib/links"
 import { problem as words } from "@banda/ui/lib/words"
 import { definePane, type PaneProps, PROGRAM_KEYS } from "@banda/ui/pane"
 import { RotateCcwIcon, TerminalIcon } from "lucide-react"
 import { Input } from "./input"
+import { type Target, targetOf } from "./links"
 import { onThemeChange, useFile } from "@banda/ui/lib/look"
 import { cursorOf, fontOf, themeOf } from "./theme"
 
@@ -98,6 +100,7 @@ function TerminalPane({
   update,
   close,
   label,
+  run,
 }: PaneProps<TerminalArgs>) {
   const [chosen] = useState(newId)
   useEffect(() => {
@@ -107,6 +110,17 @@ function TerminalPane({
   // changes too often to keep in the layout.
   const titled = (title: Title) =>
     label?.({ title: title.program, detail: title.folder })
+  // A link opens in Banda's browser, and with Ctrl outside it, as one in
+  // a Thread: a page in the system's browser, a file in its app. Where no
+  // window runs actions, a page opens outside and a path is no link.
+  const followed = (target: Target, outside: boolean) => {
+    if ("file" in target) {
+      const action = outside ? "file.outside" : "browser.open"
+      run?.(action, { file: target.file, space })
+    } else if (outside || !run) {
+      window.open(target.page, "_blank", "noopener")
+    } else run("browser.open", { address: target.page, space })
+  }
   if (args.terminal === null) return null
   return (
     <Screen
@@ -119,6 +133,8 @@ function TerminalPane({
       focused={focused}
       close={close}
       titled={titled}
+      followed={followed}
+      files={run !== undefined}
     />
   )
 }
@@ -138,6 +154,8 @@ function Screen({
   focused,
   close,
   titled,
+  followed,
+  files,
 }: {
   engine: Engine
   space: SpaceId
@@ -147,10 +165,21 @@ function Screen({
   focused: boolean
   close: () => void
   titled: (title: Title) => void
+  followed: (target: Target, outside: boolean) => void
+  /** Whether a path is a link: there is a window to open its file. */
+  files: boolean
 }) {
   // The newest, so a title heard in a stream started earlier reaches the
   // Pane as it is now.
   const heardTitle = useEffectEvent(titled)
+  const heardLink = useEffectEvent(followed)
+  // What runs in front, last heard: where the paths it prints start.
+  const front = useRef<Title>(undefined)
+  // Where a link goes, from where the program is now.
+  const linked = useEffectEvent((text: string) => {
+    const target = targetOf(text, front.current)
+    return target && ("page" in target || files) ? target : null
+  })
   const mount = useRef<HTMLDivElement>(null)
   const surface = useRef<Surface | null>(null)
   const focusedNow = useRef(focused)
@@ -226,6 +255,7 @@ function Screen({
           told({ is: "ended", ended: piece.ended })
           break
         case "titled":
+          front.current = piece.title
           heardTitle(piece.title)
           break
       }
@@ -280,10 +310,12 @@ function Screen({
         onSelectionChange: () => {},
         // The window's own keys, such as Alt+Arrows, stay the window's.
         beforeKey: (event) => !event.defaultPrevented,
-        canActivateLink: web,
-        onLinkActivate: (text) => {
-          if (web(text)) window.open(text, "_blank", "noopener")
+        canActivateLink: (text) => linked(text) !== null,
+        onLinkActivate: (text, event) => {
+          const target = linked(text)
+          if (target) heardLink(target, outsideClick(event))
         },
+        linkTitle: (text) => hintOf(linked(text)),
         onContextMenu: (event) => event.preventDefault(),
       }).catch((error: unknown) => {
         const why = error instanceof Error ? `: ${error.message}` : "."
@@ -396,6 +428,10 @@ export function endWords(ended: Ended, shell: boolean): string {
   return `${what} ended.`
 }
 
-function web(text: string): boolean {
-  return /^https?:\/\//i.test(text)
+/** What a link says of where a click takes it. */
+function hintOf(target: Target | null): string {
+  if (!target) return ""
+  return "page" in target
+    ? linkHint(target.page)
+    : linkHint(target.file, "in its app")
 }
