@@ -243,11 +243,28 @@ test("the bar's workspaces come and go on the look's motion, as numbers or dots"
   await page.keyboard.press("Alt+KeyN")
   const launcher = page.getByRole("region", { name: "New Pane" })
   await expect(launcher).toHaveAttribute("data-focused", "true")
+  // Every frame's width, from before it comes: one measure after it
+  // came is late on a busy runner, as the motion runs on.
+  await page.evaluate(() => {
+    const seen: number[] = []
+    Object.assign(window, { seen })
+    const sample = () => {
+      const cell = document.querySelector(
+        'nav[aria-label="Workspaces"] [aria-label="Workspace 2"]'
+      )
+      if (cell) seen.push(cell.getBoundingClientRect().width)
+      if (seen.length < 600) requestAnimationFrame(sample)
+    }
+    requestAnimationFrame(sample)
+  })
   await page.keyboard.press("Alt+Shift+Digit2")
   const two = numbers.getByRole("button", { name: "Workspace 2" })
   await expect(two).toHaveAttribute("aria-current", "true")
-  expect(await width(two)).toBeLessThan(20)
   await expect.poll(() => width(two)).toBe(26)
+  const seen = await page.evaluate(
+    () => (window as unknown as { seen: number[] }).seen
+  )
+  expect(Math.min(...seen)).toBeLessThan(20)
   const mark = numbers.locator(":scope > span[aria-hidden]")
   await expect
     .poll(async () => Math.round((await x(mark)) - (await x(two))))
