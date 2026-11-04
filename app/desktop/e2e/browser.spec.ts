@@ -1454,3 +1454,170 @@ test("page dialogs stay in their tab and the Person and Agent answer the same di
   await card.getByRole("button", { name: "OK", exact: true }).click()
   await expect(card).toHaveCount(0)
 })
+
+test("browser screenshots are MCP images with masked fields and live Agent settings", async () => {
+  const address = await serve({
+    "/": `<title>Canvas</title><style>body{margin:0}input{position:absolute;left:20px;top:20px;width:200px;height:36px}input[autocomplete]{top:80px}iframe{position:absolute;left:0;top:140px;width:260px;height:100px;border:0}canvas{position:absolute;left:20px;top:260px}</style>
+      <input type="password" value="secret-password"><input autocomplete="cc-number" value="4242424242424242">
+      <iframe src="/frame"></iframe><canvas width="200" height="60"></canvas>
+      <script>const ctx=document.querySelector('canvas').getContext('2d');ctx.fillStyle='#00ff00';ctx.fillRect(0,0,200,60)</script>`,
+    "/frame":
+      '<style>body{margin:0}input{width:200px;height:36px;margin:20px}</style><input autocomplete="cc-csc" value="123">',
+    "/dialog": '<title>Dialog</title><script>alert("Answer first")</script>',
+  })
+  window = await startWindow()
+  const { app, page, dir } = window
+  app.context().on("page", (entry) => entry.on("dialog", () => {}))
+  const { thread, composer } = await firstThread(page)
+  await composer.fill("hello")
+  await composer.press("Enter")
+  await expect(thread.getByText("You said: hello")).toBeVisible()
+  const opened = await agentSays(window, "browser_open", { url: address })
+  const tab = Number(/^Opened tab (\d+)\./.exec(opened)?.[1])
+  const shot = () => agentCalls(window, "browser_screenshot", { tab })
+  const disabled = await shot()
+  expect(disabled.isError).toBe(true)
+  expect(disabled.content).toHaveLength(1)
+  expect(disabled.content[0].text).toContain("screenshots are disabled")
+
+  await page.keyboard.press("Alt+Comma")
+  const settings = page.getByRole("region", { name: "Settings", exact: true })
+  await settings.getByRole("button", { name: "Browser", exact: true }).click()
+  const images = settings
+    .locator('[data-key="agents.screenshots"]')
+    .getByRole("switch")
+  await expect(images).not.toBeChecked()
+  await images.click()
+  await expect(images).toBeChecked()
+  const file = join(dir, "config/browser.toml")
+  await expect.poll(() => textOf(file)).toContain("screenshots = true")
+  await page.screenshot({ path: "test-results/browser-agent-settings.png" })
+  const hidden = await shot()
+  // A retained surface may still capture on some platforms. When none
+  // exists, refuse with a useful recovery instead of returning an image.
+  if (hidden.isError) {
+    expect(hidden.content).toHaveLength(1)
+    expect(hidden.content[0].text).toContain("Show this tab in a browser Pane")
+  }
+  await settings.getByRole("button", { name: "Close Settings" }).click()
+  let result = await shot()
+  await expect
+    .poll(async () => {
+      result = await shot()
+      return result.isError ? result.content[0].text : "image"
+    })
+    .toBe("image")
+  expect(result.content).toHaveLength(2)
+  const meta = JSON.parse(result.content[0].text)
+  expect(meta).toMatchObject({ tab, title: "Canvas", url: `${address}/` })
+  expect(meta.width).toBeGreaterThan(0)
+  expect(Math.max(meta.width, meta.height)).toBeLessThanOrEqual(1280)
+  expect(meta.pictures).toBeUndefined()
+  const image = result.content[1]!
+  if (image.type !== "image") throw new Error("MCP returned no image")
+  expect(image.mimeType).toBe("image/jpeg")
+  const bytes = Buffer.from(image.data, "base64")
+  expect(bytes.length).toBeLessThanOrEqual(1024 * 1024)
+  expect([...bytes.subarray(0, 3)]).toEqual([255, 216, 255])
+  // JPEG pixels prove capture and masking, including the child frame.
+  const samples = await app.evaluate(({ nativeImage }, data) => {
+    const image = nativeImage.createFromBuffer(Buffer.from(data, "base64"))
+    const size = image.getSize()
+    const bitmap = image.toBitmap()
+    const at = (x: number, y: number) => [
+      ...bitmap.subarray(
+        (y * size.width + x) * 4,
+        (y * size.width + x) * 4 + 3
+      ),
+    ]
+    return {
+      size,
+      password: at(100, 35),
+      card: at(100, 100),
+      frame: at(100, 190),
+      canvas: at(100, 265),
+    }
+  }, image.data)
+  expect(samples.size).toEqual({ width: meta.width, height: meta.height })
+  for (const pixel of [samples.password, samples.card, samples.frame])
+    expect(Math.max(...pixel)).toBeLessThan(20)
+  expect(samples.canvas[1]).toBeGreaterThan(220)
+
+  // A viewport taller than the bound is resized with its aspect intact.
+  await app.evaluate(({ BrowserWindow }) =>
+    BrowserWindow.getAllWindows()[0]!.setContentSize(1800, 1600)
+  )
+  await page.setViewportSize({ width: 1800, height: 1600 })
+  await expect
+    .poll(async () => {
+      const large = await shot()
+      expect(large.isError, large.content[0].text).toBeFalsy()
+      const meta = JSON.parse(large.content[0].text)
+      return Math.max(meta.width, meta.height)
+    })
+    .toBe(1280)
+
+  // Turning tools off also refuses calls in already established Threads.
+  await page.keyboard.press("Alt+Comma")
+  await settings.getByRole("button", { name: "Browser", exact: true }).click()
+  const enabled = settings
+    .locator('[data-key="agents.enabled"]')
+    .getByRole("switch")
+  await enabled.click()
+  await expect.poll(() => textOf(file)).toContain("enabled = false")
+  await expect
+    .poll(async () => (await agentCalls(window, "browser_tabs", {})).isError)
+    .toBe(true)
+  const blocked = await shot()
+  expect(blocked.isError).toBe(true)
+  expect(blocked.content).toHaveLength(1)
+  await enabled.click()
+  await expect.poll(() => textOf(file)).toContain("enabled = true")
+  await expect
+    .poll(
+      async () =>
+        (await agentCalls(window, "browser_tabs", {})).isError ?? false
+    )
+    .toBe(false)
+
+  await agentSays(window, "browser_handoff", { tab, why: "Check the image" })
+  const handed = await shot()
+  expect(handed.isError).toBe(true)
+  expect(handed.content[0].text).toContain("handed tab")
+  expect(handed.content).toHaveLength(1)
+  // The same site permissions gate image data.
+  writeFileSync(
+    file,
+    textOf(file) + '\n[agents.sites]\n"denied.localhost" = "deny"\n'
+  )
+  await expect(
+    settings.getByRole("radiogroup", { name: "denied.localhost for Agents" })
+  ).toHaveCount(1)
+  const deniedAddress = address.replace("127.0.0.1", "denied.localhost")
+  const deniedOpen = await agentSays(window, "browser_open", {
+    url: deniedAddress,
+  })
+  const deniedTab = Number(/^Opened tab (\d+)\./.exec(deniedOpen)?.[1])
+  const denied = await agentCalls(window, "browser_screenshot", {
+    tab: deniedTab,
+  })
+  expect(denied.isError).toBe(true)
+  expect(denied.content).toHaveLength(1)
+  expect(denied.content[0].text).toContain("lets no Agent")
+
+  await settings.getByRole("button", { name: "Close Settings" }).click()
+  const dialogOpen = await agentSays(window, "browser_open", {
+    url: `${address}/dialog`,
+  })
+  const dialogTab = Number(/^Opened tab (\d+)\./.exec(dialogOpen)?.[1])
+  const dialog = await agentCalls(window, "browser_screenshot", {
+    tab: dialogTab,
+  })
+  expect(dialog.isError).toBe(true)
+  expect(dialog.content).toHaveLength(1)
+  expect(dialog.content[0].text).toContain("open dialog")
+  await page
+    .getByRole("dialog", { name: /says/ })
+    .getByRole("button", { name: "OK", exact: true })
+    .click()
+})

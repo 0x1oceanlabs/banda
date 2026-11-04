@@ -61,6 +61,9 @@ export type SectionFile = {
   /** Its tables are the section's Body's or Foot's to draw, not rows:
    * `agents.toml`'s `start`, on each Harness's card. */
   drawn?: boolean
+  /** Individual keys drawn by the section's Body or Foot. Other keys
+   * still get their controls from the schema. */
+  drawnKeys?: string[]
 }
 
 export type Section = {
@@ -157,7 +160,12 @@ export const SECTIONS: Section[] = [
     icon: GlobeIcon,
     files: [
       { name: "browser.toml" },
-      { name: "browser.toml", tables: ["agents"], drawn: true },
+      {
+        name: "browser.toml",
+        tables: ["agents"],
+        title: "Agent tools",
+        drawnKeys: ["agents.sites"],
+      },
     ],
     about: aboutOf("browser.toml"),
     Foot: BrowserSites,
@@ -226,6 +234,7 @@ function rowsFor(file: SectionFile): Row[] {
     .filter((f) => f.name === file.name)
     .flatMap((f) => f.tables ?? [])
   return rowsOf(file.name).filter((row) => {
+    if (file.drawnKeys?.includes(row.key)) return false
     const table = row.key.split(".")[0]!
     return file.tables ? file.tables.includes(table) : !taken.includes(table)
   })

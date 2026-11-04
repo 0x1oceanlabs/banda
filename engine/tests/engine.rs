@@ -349,6 +349,7 @@ fn an_agent_reaches_banda_through_banda_mcp() {
                 "limits",
                 "browser_tabs",
                 "browser_snapshot",
+                "browser_screenshot",
                 "browser_open",
                 "browser_navigate",
                 "browser_act",

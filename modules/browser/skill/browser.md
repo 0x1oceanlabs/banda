@@ -32,6 +32,15 @@ there yet, it starts as this template:
   lists are fetched once a day and kept in `blocker.bin` in the window's
   folder.
 
+`[agents] enabled = false` refuses Agents' calls to Banda's browser tools,
+including in Threads already open. The Person's CDP endpoint keeps working.
+`[agents] screenshots = true` also lets `browser_screenshot {tab}` return
+the page's viewport as an MCP image: JPEG, at most 1280 × 1280 pixels and
+1 MiB. It masks password and card fields, including in frames; other visible
+page content is sent. Screenshots need the same site permission as a
+snapshot, and wait until a page dialog is answered. They are off by default.
+If a hidden tab cannot be captured, ask the Person to show it and retry.
+
 `banda settings check ~/.config/banda/browser.toml` names a wrong key or
 value and its line.
 

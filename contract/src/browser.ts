@@ -17,6 +17,7 @@ export type { OneTab } from "./generated/browser/OneTab"
 export type { Open } from "./generated/browser/Open"
 export type { ReadTab } from "./generated/browser/ReadTab"
 export type { SeenTab } from "./generated/browser/SeenTab"
+export type { Screenshot } from "./generated/browser/Screenshot"
 export type { Shown } from "./generated/browser/Shown"
 export type { SiteRule } from "./generated/browser/SiteRule"
 export type { WaitFor } from "./generated/browser/WaitFor"
@@ -30,6 +31,8 @@ export const DEFAULT_BROWSER: Browser = {
   pinned: [],
   blocker: true,
   sites: {},
+  tools: true,
+  screenshots: false,
 }
 
 /** The key of `site` in `browser.toml`: `agents.sites."github.com"`. */

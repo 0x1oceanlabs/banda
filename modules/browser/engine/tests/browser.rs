@@ -86,6 +86,7 @@ async fn with_no_window_the_tools_are_listed_and_refuse() {
         [
             "browser_tabs",
             "browser_snapshot",
+            "browser_screenshot",
             "browser_open",
             "browser_navigate",
             "browser_act",
@@ -389,4 +390,19 @@ async fn a_handed_tab_tells_the_agent_to_end_its_turn() {
     let why = json!({ "tab": 4, "why": " " });
     let refused = ask(&kernel, space, "browser.handoff", why).await.unwrap();
     assert!(refused.unwrap_err().message.contains("needs why"));
+}
+
+#[tokio::test]
+async fn a_screenshot_keeps_its_image_for_the_mcp_image_content_path() {
+    let root = tempfile::tempdir().unwrap();
+    let owner = PersonId::new();
+    let (kernel, space) = open(root.path(), owner).await;
+    let mut hear = window(&kernel, owner).await;
+    let asking = ask(&kernel, space, "browser.screenshot", json!({ "tab": 7 }));
+    let asked = hear.recv().await.unwrap();
+    assert_eq!(asked["method"], "browser.screenshot");
+    assert_eq!(asked["params"], json!({ "tab": 7 }));
+    let shot = json!({ "tab": 7, "url": "https://example.com/", "title": "Chart", "width": 640, "height": 480, "pictures": [{ "mime": "image/jpeg", "data": "/9j/" }] });
+    answer(&kernel, owner, &asked, shot.clone()).await;
+    assert_eq!(asking.await.unwrap().unwrap(), shot);
 }

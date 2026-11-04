@@ -44,6 +44,12 @@ pub enum SiteRule {
 #[derive(Debug, Default, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct AgentsSettings {
+    /// Whether Agents may use Banda's browser tools. Turning this off
+    /// refuses new calls, including from Threads already open.
+    pub enabled: Option<bool>,
+    /// Whether Agents may request images of pages. Off when left out.
+    /// Password and card fields are masked; other visible content is sent.
+    pub screenshots: Option<bool>,
     /// The sites Agents may use without asking, or never, by site, as
     /// github.com, which covers its subdomains. Your answers on a tab
     /// write them; localhost never asks.
@@ -90,6 +96,8 @@ pub struct Browser {
     pub blocker: bool,
     /// What the Person said of each site for every Agent, by site.
     pub sites: BTreeMap<String, SiteRule>,
+    pub tools: bool,
+    pub screenshots: bool,
 }
 
 impl OneFile for BrowserSettings {
@@ -104,6 +112,8 @@ impl OneFile for BrowserSettings {
             pinned: Some(Vec::new()),
             blocker: Some(true),
             agents: Some(AgentsSettings {
+                enabled: Some(true),
+                screenshots: Some(false),
                 sites: Some(BTreeMap::new()),
             }),
         }
@@ -115,11 +125,19 @@ impl OneFile for BrowserSettings {
             search: self.search.or(under.search),
             pinned: self.pinned.or(under.pinned),
             blocker: self.blocker.or(under.blocker),
-            agents: self.agents.or(under.agents),
+            agents: match (self.agents, under.agents) {
+                (Some(mine), Some(base)) => Some(AgentsSettings {
+                    enabled: mine.enabled.or(base.enabled),
+                    screenshots: mine.screenshots.or(base.screenshots),
+                    sites: mine.sites.or(base.sites),
+                }),
+                (mine, base) => mine.or(base),
+            },
         }
     }
 
     fn resolved(self) -> Browser {
+        let agents = self.agents.unwrap_or_default();
         Browser {
             tabs: self.tabs.unwrap_or_default(),
             search: self
@@ -127,10 +145,9 @@ impl OneFile for BrowserSettings {
                 .map_or_else(|| SEARCH.to_owned(), Spanned::into_inner),
             pinned: self.pinned.unwrap_or_default(),
             blocker: self.blocker.unwrap_or(true),
-            sites: self
-                .agents
-                .and_then(|agents| agents.sites)
-                .unwrap_or_default(),
+            sites: agents.sites.unwrap_or_default(),
+            tools: agents.enabled.unwrap_or(true),
+            screenshots: agents.screenshots.unwrap_or(false),
         }
     }
 
@@ -192,6 +209,30 @@ mod tests {
         );
         assert_eq!(watched, vec![folder.path().join("browser.toml")]);
         (browser, problems)
+    }
+
+    #[test]
+    fn agent_tools_and_screenshots_are_independent_and_keep_sites() {
+        let (defaults, problems) = resolved(None);
+        assert!(defaults.tools);
+        assert!(!defaults.screenshots);
+        assert!(problems.is_empty());
+        let (browser, problems) = resolved(Some(
+            "[agents]\nenabled = false\nscreenshots = true\n[agents.sites]\n\"example.com\" = \"allow\"\n",
+        ));
+        assert!(!browser.tools);
+        assert!(browser.screenshots);
+        assert_eq!(browser.sites.get("example.com"), Some(&SiteRule::Allow));
+        assert!(problems.is_empty());
+    }
+
+    #[test]
+    fn an_agents_table_keeps_defaults_for_keys_it_does_not_set() {
+        let mine: BrowserSettings = toml::from_str("[agents]\nscreenshots = true\n").unwrap();
+        let merged = mine.over(BrowserSettings::defaults()).agents.unwrap();
+        assert_eq!(merged.enabled, Some(true));
+        assert_eq!(merged.screenshots, Some(true));
+        assert_eq!(merged.sites, Some(BTreeMap::new()));
     }
 
     #[test]
