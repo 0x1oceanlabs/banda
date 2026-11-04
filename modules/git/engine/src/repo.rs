@@ -6,32 +6,57 @@ use crate::model::Commit;
 use crate::parse::{self, Porcelain};
 use crate::run::{Failure, Opts, Ran, Reason, git};
 use banda_kernel::Refusal;
+use std::collections::HashMap;
 use std::ffi::OsStr;
 use std::path::{Component, Path, PathBuf};
 
 /// The branches tried, after `origin/HEAD`'s, as the default.
 const DEFAULTS: [&str; 2] = ["main", "master"];
 
+/// The tree with nothing in it, in a repository of SHA-1 objects.
+const EMPTY_TREE: &str = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
+
 /// A repository, at its top folder: every git runs there, so every path
 /// is from the top.
+#[derive(Clone)]
 pub struct Repo {
     pub top: PathBuf,
+    /// Its objects are named by SHA-1, as all but a few are.
+    sha1: bool,
 }
 
-/// A base the branch is compared with: its name and its full ref.
+/// A ref found, as a base the branch is compared with: its name and its
+/// full ref.
+#[derive(Clone)]
 pub struct Found {
     pub name: String,
     pub full: String,
+}
+
+/// The repository's default branch: its name, and where it is compared
+/// with ([`Repo::default_branch`]).
+pub struct DefaultBranch {
+    pub name: String,
+    pub tip: Option<Found>,
 }
 
 impl Repo {
     /// The repository `folder` is in, or none when git knows no
     /// repository there.
     pub async fn find(folder: &Path) -> Result<Option<Repo>, Failure> {
-        let ran = git(folder, ["rev-parse", "--show-toplevel"], Opts::default()).await?;
+        // Its objects' format first: the top is the rest, whatever its name.
+        let ran = git(
+            folder,
+            ["rev-parse", "--show-object-format", "--show-toplevel"],
+            Opts::default(),
+        )
+        .await?;
         if ran.success {
+            let text = ran.text();
+            let (format, top) = text.split_once('\n').unwrap_or(("", &text));
             return Ok(Some(Repo {
-                top: PathBuf::from(ran.text()),
+                top: PathBuf::from(top),
+                sha1: format == "sha1",
             }));
         }
         match ran.reason() {
@@ -112,8 +137,11 @@ impl Repo {
     }
 
     /// The tree with nothing in it, which a first commit and a repository
-    /// with no commits are compared with.
+    /// with no commits are compared with: known for SHA-1, else asked.
     pub async fn empty_tree(&self) -> Result<String, Failure> {
+        if self.sha1 {
+            return Ok(EMPTY_TREE.to_owned());
+        }
         let opts = Opts {
             stdin: Some(Vec::new()),
             ..Opts::default()
@@ -189,134 +217,131 @@ impl Repo {
         Ok(ran.text().lines().map(str::to_owned).collect())
     }
 
-    /// Whether the ref `full` is here, as `refs/heads/main`.
-    pub async fn has_ref(&self, full: &str) -> Result<bool, Failure> {
-        self.yes(["show-ref", "--verify", "--quiet", full]).await
-    }
-
-    /// Whether the branch `name` is here, as `main`.
-    pub async fn has_branch(&self, name: &str) -> Result<bool, Failure> {
-        self.has_ref(&format!("refs/heads/{name}")).await
-    }
-
-    /// The default branch's name, as `main`, with the primary remote
-    /// known: that remote's `HEAD`, or `main`, or `master`, the first that
-    /// is here or on that remote. T3 Code never reads
-    /// `init.defaultBranch`, and nor does this.
-    pub async fn default_on(&self, remote: Option<&str>) -> Result<Option<String>, Failure> {
-        if let Some(name) = self.remote_head(remote).await? {
-            return Ok(Some(name));
+    /// The refs of `full` names that are here, each with the ref it names
+    /// when it is a symbolic one, as `origin/HEAD`: all asked at once. A
+    /// symbolic ref that names nothing is not there.
+    async fn refs_there(&self, full: &[&str]) -> Result<HashMap<String, String>, Failure> {
+        if full.is_empty() {
+            return Ok(HashMap::new());
         }
-        for name in DEFAULTS {
-            if self.default_tip(remote, name, None).await?.is_some() {
-                return Ok(Some(name.to_owned()));
-            }
-        }
-        Ok(None)
+        let mut args = vec!["for-each-ref", "--format=%(refname)%09%(symref)"];
+        args.extend(full);
+        let ran = self.run(args, Opts::default()).await?;
+        // A name is a pattern to git: only the refs named count. The
+        // text's end is trimmed, and with it the last ref's tab.
+        Ok(ran
+            .text()
+            .lines()
+            .map(|line| line.split_once('\t').unwrap_or((line, "")))
+            .filter(|(name, _)| full.contains(name))
+            .map(|(name, to)| (name.to_owned(), to.to_owned()))
+            .collect())
     }
 
-    /// The names the default branch may have, in the order tried: what
-    /// `remote`'s `HEAD` names, then `main`, then `master`.
-    async fn default_names(&self, remote: Option<&str>) -> Result<Vec<String>, Failure> {
-        let mut names: Vec<String> = Vec::new();
-        names.extend(self.remote_head(remote).await?);
-        for name in DEFAULTS {
-            if !names.iter().any(|n| n == name) {
-                names.push(name.to_owned());
-            }
-        }
-        Ok(names)
+    /// The first of `refs` that is here; none when none is.
+    pub async fn first_there(&self, refs: Vec<Found>) -> Result<Option<Found>, Failure> {
+        let full: Vec<&str> = refs.iter().map(|r| r.full.as_str()).collect();
+        let there = self.refs_there(&full).await?;
+        Ok(refs.into_iter().find(|r| there.contains_key(&r.full)))
     }
 
-    /// Where the default branch `name` is, the one rule for it: `remote`'s
-    /// copy first, else the branch here, but not when it is
-    /// `checked_out`, as a branch is no base of its own. None when neither
-    /// is there. [`Repo::base`] compares with it and the status counts
-    /// from it; [`Repo::default_on`] only asks whether it is there.
-    pub async fn default_tip(
+    /// The default branch, with the primary `remote` known, the one rule
+    /// for it: its name is what that remote's `HEAD` names, or `main`, or
+    /// `master`, the first that is here or on that remote; T3 Code never
+    /// reads `init.defaultBranch`, and nor does this. It is compared with
+    /// that remote's copy, or else the branch here, but not when it is
+    /// the `branch` checked out, which is no base of its own. Looked up
+    /// in one git, and one more when the remote's `HEAD` names another.
+    pub async fn default_branch(
         &self,
         remote: Option<&str>,
-        name: &str,
-        checked_out: Option<&str>,
-    ) -> Result<Option<Found>, Failure> {
-        let mut tips = Vec::new();
-        tips.extend(remote.map(|remote| Found {
-            name: format!("{remote}/{name}"),
-            full: format!("refs/remotes/{remote}/{name}"),
-        }));
-        if checked_out != Some(name) {
-            tips.push(Found {
+        branch: Option<&str>,
+    ) -> Result<Option<DefaultBranch>, Failure> {
+        let head = remote.map(|remote| format!("refs/remotes/{remote}/HEAD"));
+        let homes = |name: &str| {
+            let mut homes: Vec<Found> = Vec::new();
+            homes.extend(remote.map(|remote| Found {
+                name: format!("{remote}/{name}"),
+                full: format!("refs/remotes/{remote}/{name}"),
+            }));
+            homes.push(Found {
                 name: name.to_owned(),
                 full: format!("refs/heads/{name}"),
             });
-        }
-        if tips.is_empty() {
-            return Ok(None);
-        }
-        // Which of them are there, at once.
-        let mut args = vec!["for-each-ref", "--format=%(refname)"];
-        args.extend(tips.iter().map(|tip| tip.full.as_str()));
-        let there = self.run(args, Opts::default()).await?.text();
-        Ok(tips
-            .into_iter()
-            .find(|tip| there.lines().any(|line| line == tip.full)))
-    }
-
-    /// The branch `remote`'s `HEAD` names, as `main`.
-    async fn remote_head(&self, remote: Option<&str>) -> Result<Option<String>, Failure> {
-        let Some(remote) = remote else {
-            return Ok(None);
+            homes
         };
-        let head = format!("refs/remotes/{remote}/HEAD");
-        let to = self
-            .verified(["symbolic-ref", "--quiet", head.as_str()])
-            .await?;
-        let prefix = format!("refs/remotes/{remote}/");
-        Ok(to
-            .as_deref()
+        let mut asked: Vec<String> = head.iter().cloned().collect();
+        for name in DEFAULTS {
+            asked.extend(homes(name).into_iter().map(|home| home.full));
+        }
+        let names: Vec<&str> = asked.iter().map(String::as_str).collect();
+        let mut there = self.refs_there(&names).await?;
+        let prefix = format!("refs/remotes/{}/", remote.unwrap_or_default());
+        let named = (head.as_ref())
+            .and_then(|head| there.get(head))
             .and_then(|to| to.strip_prefix(&prefix))
-            .map(str::to_owned))
+            .map(str::to_owned);
+        let name = match named {
+            Some(name) => {
+                if !DEFAULTS.contains(&name.as_str()) {
+                    let full: Vec<String> = homes(&name).into_iter().map(|h| h.full).collect();
+                    let full: Vec<&str> = full.iter().map(String::as_str).collect();
+                    there = self.refs_there(&full).await?;
+                }
+                name
+            }
+            None => {
+                let here = |name: &str| homes(name).iter().any(|h| there.contains_key(&h.full));
+                match DEFAULTS.into_iter().find(|name| here(name)) {
+                    Some(name) => name.to_string(),
+                    None => return Ok(None),
+                }
+            }
+        };
+        let checked_out = branch == Some(name.as_str());
+        let tip = homes(&name)
+            .into_iter()
+            .filter(|home| !(checked_out && home.full.starts_with("refs/heads/")))
+            .find(|home| there.contains_key(&home.full));
+        Ok(Some(DefaultBranch { name, tip }))
     }
 
     /// The base a branch is compared with: `asked`, as a branch here, a
     /// remote's branch or any commit; or else ("Automatic") the default
-    /// branch where [`Repo::default_tip`] finds it, or the branch's
+    /// branch where [`Repo::default_branch`] finds it, or the branch's
     /// upstream when the default is the branch checked out. None when
     /// Automatic finds nothing.
     pub async fn base(&self, asked: Option<&str>) -> Result<Option<Found>, Refusal> {
         if let Some(asked) = asked {
             return Ok(Some(self.asked_base(asked).await?));
         }
-        let remote = self.primary_remote().await?;
-        let branch = self.branch().await?;
-        for name in self.default_names(remote.as_deref()).await? {
-            if branch.as_deref() == Some(name.as_str()) {
-                let upstream = format!("{name}@{{upstream}}");
-                let full = self
-                    .verified([
-                        "rev-parse",
-                        "--verify",
-                        "--quiet",
-                        "--symbolic-full-name",
-                        &upstream,
-                    ])
-                    .await?;
-                if let Some(full) = full {
-                    return Ok(Some(Found {
-                        name: short(&full),
-                        full,
-                    }));
-                }
-                continue;
-            }
-            let found = self
-                .default_tip(remote.as_deref(), &name, branch.as_deref())
+        let (remote, branch) = futures::join!(self.primary_remote(), self.branch());
+        let (remote, branch) = (remote?, branch?);
+        let Some(default) = self
+            .default_branch(remote.as_deref(), branch.as_deref())
+            .await?
+        else {
+            return Ok(None);
+        };
+        if branch.as_deref() == Some(default.name.as_str()) {
+            let upstream = format!("{}@{{upstream}}", default.name);
+            let full = self
+                .verified([
+                    "rev-parse",
+                    "--verify",
+                    "--quiet",
+                    "--symbolic-full-name",
+                    &upstream,
+                ])
                 .await?;
-            if found.is_some() {
-                return Ok(found);
+            if let Some(full) = full {
+                return Ok(Some(Found {
+                    name: short(&full),
+                    full,
+                }));
             }
         }
-        Ok(None)
+        Ok(default.tip)
     }
 
     async fn asked_base(&self, asked: &str) -> Result<Found, Refusal> {
@@ -329,21 +354,11 @@ impl Repo {
                 full: asked.to_owned(),
             });
         }
-        for full in [
-            format!("refs/heads/{asked}"),
-            format!("refs/remotes/{asked}"),
-        ] {
-            if self.has_ref(&full).await? {
-                return Ok(Found {
-                    name: asked.to_owned(),
-                    full,
-                });
-            }
-        }
-        Ok(Found {
+        let found = self.first_there(branch_refs(asked)).await?;
+        Ok(found.unwrap_or(Found {
             name: asked.to_owned(),
             full: asked.to_owned(),
-        })
+        }))
     }
 
     /// Where `HEAD` left `base`: their merge base. None when they share no
@@ -415,6 +430,17 @@ pub fn in_way<'a>(branches: &'a [String], name: &str) -> Option<&'a str> {
         .find(|b| *b == name || inside(b, name) || inside(name, b))
 }
 
+/// The refs `name` may be, the first first: a branch here, as `main`, or
+/// a remote's, as `origin/main`.
+pub fn branch_refs(name: &str) -> Vec<Found> {
+    ["heads", "remotes"]
+        .map(|kind| Found {
+            name: name.to_owned(),
+            full: format!("refs/{kind}/{name}"),
+        })
+        .into()
+}
+
 /// A ref's name without `refs/heads/` or `refs/remotes/`.
 fn short(full: &str) -> String {
     full.strip_prefix("refs/heads/")
@@ -444,12 +470,6 @@ pub fn chosen(files: &Option<Vec<String>>) -> Result<Option<Vec<&str>>, Refusal>
         Some(files) => Ok(Some(plain_paths(files)?)),
         None => Ok(None),
     }
-}
-
-/// Why a commit is not made of files with no changes: the button's
-/// commit and the prompt for its message say the same.
-pub fn nothing_to_commit() -> Refusal {
-    Refusal::conflict("Nothing to commit: those files have no changes.")
 }
 
 /// A folder of the engine's own, gone when it is dropped.

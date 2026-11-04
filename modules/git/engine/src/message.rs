@@ -6,9 +6,10 @@
 //! subjects for its style; `written` reads the Harness's reply into a
 //! message and, when asked, a new branch's name.
 
+use crate::act::nothing_to_commit;
 use crate::diff::diff;
 use crate::model::{DiffAsk, FileDiff, Message, PromptAsk, Prompted, Scope, WrittenAsk};
-use crate::repo::{Repo, chosen, in_way, nothing_to_commit};
+use crate::repo::{Repo, chosen, in_way};
 use banda_kernel::Refusal;
 use serde::Deserialize;
 
@@ -28,6 +29,7 @@ const PREFIX: &str = "feature/";
 /// The prompt for the commit that `ask` would make.
 pub async fn prompt(repo: &Repo, ask: PromptAsk) -> Result<Prompted, Refusal> {
     chosen(&ask.files)?;
+    let chose = ask.files.is_some();
     let asked = DiffAsk {
         scope: Scope::Uncommitted,
         ignore_whitespace: false,
@@ -40,7 +42,7 @@ pub async fn prompt(repo: &Repo, ask: PromptAsk) -> Result<Prompted, Refusal> {
     );
     let read = read?;
     if read.files.is_empty() {
-        return Err(nothing_to_commit());
+        return Err(nothing_to_commit(chose));
     }
     let files: Vec<String> = read.files.iter().map(listed).collect();
     // A repository with no commits has no subjects yet.

@@ -39,12 +39,12 @@ pub fn watch(space: ModuleSpace, repositories: Repositories) -> Stream {
             // reads.
             let at = space.at().await.ok();
             let found = Repo::find(&folder).await;
-            let top = match &found {
-                Ok(Some(repo)) => Some(repo.top.clone()),
+            let repo = match &found {
+                Ok(Some(repo)) => Some(repo.clone()),
                 _ => None,
             };
-            let writes = match &top {
-                Some(top) => repositories.of(top),
+            let writes = match &repo {
+                Some(repo) => repositories.of(&repo.top),
                 None => repositories.of_folder(&folder),
             };
             // Heard from now: a write that ends during the read counts.
@@ -72,9 +72,9 @@ pub fn watch(space: ModuleSpace, repositories: Repositories) -> Stream {
                 upstream: Some(_),
                 ..
             }) = &told
-                && let Some(top) = top
+                && let Some(repo) = repo
             {
-                fetch.start(Repo { top }, branch.clone(), &writes);
+                fetch.start(repo, branch.clone(), &writes);
             }
             tokio::select! {
                 () = tokio::time::sleep(AGAIN) => {}

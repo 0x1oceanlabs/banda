@@ -4,7 +4,7 @@
 
 use crate::model::Status;
 use crate::parse;
-use crate::repo::Repo;
+use crate::repo::{Found, Repo};
 use crate::run::{Failure, Opts};
 use banda_kernel::Refusal;
 use std::collections::HashMap;
@@ -54,15 +54,16 @@ async fn of(repo: Repo, at: i64) -> Result<Status, Failure> {
     );
     let remote = async {
         let remote = repo.primary_remote().await?;
-        let default = repo.default_on(remote.as_deref()).await?;
+        let default = repo
+            .default_branch(remote.as_deref(), said.branch.as_deref())
+            .await?;
         // A branch never pushed: how far it is past the default.
-        let ahead = match (&said.upstream, &said.head, &default) {
-            (None, Some(_), Some(default)) => {
-                ahead_of(&repo, remote.as_deref(), default, said.branch.as_deref()).await?
-            }
+        let tip = default.as_ref().and_then(|default| default.tip.as_ref());
+        let ahead = match (&said.upstream, &said.head, tip) {
+            (None, Some(_), Some(tip)) => ahead_of(&repo, tip).await?,
             _ => None,
         };
-        Ok::<_, Failure>((remote, default, ahead))
+        Ok::<_, Failure>((remote, default.map(|default| default.name), ahead))
     };
     let (counted, remote) = futures::join!(counted, remote);
     let (remote, default_branch, ahead_of_default) = remote?;
@@ -92,19 +93,8 @@ async fn of(repo: Repo, at: i64) -> Result<Status, Failure> {
     })
 }
 
-/// How many commits `HEAD` has that `default` does not, counted from
-/// where [`Repo::default_tip`] finds it. It is asked only of a branch
-/// with no upstream, so the default checked out counts from the remote's
-/// copy alone. None when it is nowhere.
-async fn ahead_of(
-    repo: &Repo,
-    remote: Option<&str>,
-    default: &str,
-    branch: Option<&str>,
-) -> Result<Option<u32>, Failure> {
-    let Some(tip) = repo.default_tip(remote, default, branch).await? else {
-        return Ok(None);
-    };
+/// How many commits `HEAD` has that the default branch's `tip` does not.
+async fn ahead_of(repo: &Repo, tip: &Found) -> Result<Option<u32>, Failure> {
     let range = format!("{}..HEAD", tip.full);
     let counted = repo
         .run(

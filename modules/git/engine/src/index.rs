@@ -139,7 +139,7 @@ pub async fn own_index(repo: &Repo) -> Result<(tempfile::TempDir, PathBuf), Refu
 /// holds. No index yet is an empty one, and `to` stays absent.
 fn copy_index(from: &Path, to: &Path) -> Result<(), Refusal> {
     let failed = |error: std::io::Error| {
-        tracing::warn!(%error, "a diff's index could not be copied");
+        tracing::warn!(%error, "an index of the engine's own could not be copied");
         Refusal::internal()
     };
     let Ok(about) = std::fs::metadata(from) else {
