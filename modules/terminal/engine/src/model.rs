@@ -109,6 +109,10 @@ pub struct Title {
     pub program: String,
     /// Its folder, with `~` for the home folder.
     pub folder: String,
+    /// Its folder in full: where the paths it prints start.
+    pub path: String,
+    /// The home folder, which `~` names; none where the system has none.
+    pub home: Option<String>,
 }
 
 /// A Space's servers, in the order they came (ADR 0044, decision 4).

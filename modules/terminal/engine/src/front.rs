@@ -57,6 +57,8 @@ impl Front {
         Some(Title {
             program: program_of(&words)?,
             folder: shown(&folder, self.home.as_deref()),
+            path: folder.display().to_string(),
+            home: self.home.as_ref().map(|home| home.display().to_string()),
         })
     }
 }

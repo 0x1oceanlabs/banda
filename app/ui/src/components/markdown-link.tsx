@@ -5,6 +5,7 @@ import {
   type MouseEvent,
   type ReactNode,
 } from "react"
+import { linkHint, outsideClick } from "../lib/links"
 
 /** The host supplies navigation; Markdown knows neither modules nor Electron. */
 type OpenLink = (url: string, external: boolean) => void
@@ -37,7 +38,7 @@ export function MarkdownLink({ href, children, title }: ComponentProps<"a">) {
   const follow = (event: MouseEvent<HTMLAnchorElement>) => {
     if (!open || !url || !href) return
     event.preventDefault()
-    open(href, event.ctrlKey)
+    open(href, outsideClick(event))
   }
   return (
     <a
@@ -46,11 +47,7 @@ export function MarkdownLink({ href, children, title }: ComponentProps<"a">) {
       rel="noopener noreferrer"
       data-streamdown="link"
       className="font-medium wrap-anywhere text-primary"
-      title={
-        url && open
-          ? `${href}\nClick to open in Banda · Ctrl+click to open in external browser`
-          : title
-      }
+      title={url && open && href ? linkHint(href) : title}
       onClick={follow}
       onContextMenu={(event) => {
         // macOS emits contextmenu instead of click for Ctrl+click.

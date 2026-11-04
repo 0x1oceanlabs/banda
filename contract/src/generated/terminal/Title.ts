@@ -13,4 +13,12 @@ program: string,
 /**
  * Its folder, with `~` for the home folder.
  */
-folder: string, };
+folder: string, 
+/**
+ * Its folder in full: where the paths it prints start.
+ */
+path: string, 
+/**
+ * The home folder, which `~` names; none where the system has none.
+ */
+home: string | null, };

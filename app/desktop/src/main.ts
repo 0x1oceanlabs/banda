@@ -55,6 +55,7 @@ import { modules } from "./modules"
 import { channel, stateFolder } from "./channel"
 import { listApp } from "./entry"
 import { startLog, watchProblems } from "./problems"
+import { openFile } from "./outside"
 import { roadLayer } from "./road"
 import { settingsLayer } from "./settings"
 import { updates } from "./update"
@@ -330,6 +331,9 @@ async function ready(): Promise<void> {
           ),
       ],
       themes: [none, () => Settings.use((settings) => settings.themes)],
+    },
+    files: {
+      outside: [text, ([path]) => Effect.sync(() => openFile(path))],
     },
     problems: {
       logs: [

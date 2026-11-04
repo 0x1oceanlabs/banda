@@ -123,6 +123,12 @@ export const BRIDGE = bridge({
     /** The themes there are. */
     themes: invoke<[], Listed[]>(),
   },
+  /** Files on the machine, as links name them. */
+  files: {
+    /** Opens the file at the full `path` in the app the system has for
+     * it; a program it only shows in its folder, so it never runs. */
+    outside: send<[path: string]>(),
+  },
   /** What broke in Banda (ADR 0039): the engine keeps it; the desktop
    * shows where its logs are. */
   problems: {
