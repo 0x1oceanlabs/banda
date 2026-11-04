@@ -521,6 +521,14 @@ html[data-sidebar="desk"] [data-sidebar-shown] {
   text-decoration-color: color-mix(in srgb, currentColor 35%, transparent);
   text-underline-offset: 3px;
 }
+/* A reply starts and ends flush with its row: the Thread's rhythm spaces
+   its rows, 20px apart. */
+[data-slot="markdown"] > :first-child {
+  margin-top: 0;
+}
+[data-slot="markdown"] > :last-child {
+  margin-bottom: 0;
+}
 
 /* One block for code, tables and diagrams, as for the chat's cards:
    Streamdown draws a bar and a box inside a box. The label sits in the

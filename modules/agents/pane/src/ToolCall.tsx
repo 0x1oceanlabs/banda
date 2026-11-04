@@ -4,7 +4,7 @@ import type {
   Output,
   ToolContent,
   ToolKind,
-  ToolStatus,
+  TurnState,
 } from "@banda/contract/agents"
 import {
   Console,
@@ -33,6 +33,7 @@ import {
   WrenchIcon,
   type LucideIcon,
 } from "lucide-react"
+import { type Outcome, outcome, said } from "./calls"
 import { type FileChange, fileChange, total } from "./changes"
 import { FileDiff } from "./FileDiff"
 import { ThreadImage, type ImageReader } from "./MessageImages"
@@ -42,19 +43,31 @@ import type { Tool } from "./thread"
 type Part =
   Exclude<ToolContent, { kind: "diff" }> | ({ kind: "diff" } & FileChange)
 
-/** A tool call in a Thread: its line, and, opened, what it changed in
- * files, its text and images, and what its command printed. */
+/**
+ * A tool call in a Thread: its line, in the past tense once it ended, "Ran
+ * pnpm test", with a tag when it failed, was stopped or waits for its
+ * Person (ADR 0058, decision 4). Opened, what it changed in files, its
+ * text and images, and what its command printed.
+ */
 export function ToolCall({
   tool,
   reader,
   onOpenDiff,
+  turn,
+  asks = false,
 }: {
   tool: Tool
   reader: ImageReader
   /** Opens a file this call changed in a Diff Pane. */
   onOpenDiff?: (path: string) => void
+  /** How its turn stands, if known. */
+  turn?: TurnState
+  /** A Question of its turn is open, and this call waits on it. */
+  asks?: boolean
 }) {
   const Icon = TOOL_ICONS[tool.tool]
+  const now = outcome(tool, turn, asks)
+  const { verb, subject } = said(tool, now)
   const shown = useMemo(
     () =>
       tool.content.map((part): Part => {
@@ -66,7 +79,7 @@ export function ToolCall({
   const counted = total(shown.filter((part) => part.kind === "diff"))
   // What its command prints shows where its terminal is, or else last.
   const terminal = shown.findIndex((part) => part.kind === "terminal")
-  const running = tool.status === "pending" || tool.status === "running"
+  const running = now === "running" || now === "waiting"
   const printed = (
     <Printed
       output={tool.output ?? { text: "", cut: false }}
@@ -74,12 +87,21 @@ export function ToolCall({
     />
   )
   const line = (
-    <TraceLine status={TOOL_STATUS[tool.status]}>
+    <TraceLine status={now === "running" ? "running" : undefined}>
       <TraceIcon>
         <Icon />
       </TraceIcon>
-      <TraceTitle>{tool.title}</TraceTitle>
-      <DiffCounts {...counted} />
+      <TraceTitle>
+        {verb}
+        {verb && subject && " "}
+        {subject && (
+          <span className={verb ? "text-foreground" : undefined}>
+            {subject}
+          </span>
+        )}
+      </TraceTitle>
+      {counted.added + counted.removed > 0 && <DiffCounts {...counted} />}
+      <Tag outcome={now} />
     </TraceLine>
   )
   if (shown.length === 0 && !tool.output) return <Trace>{line}</Trace>
@@ -87,7 +109,7 @@ export function ToolCall({
     <Trace>
       <TraceCollapsible>
         <TraceCollapsibleTrigger>{line}</TraceCollapsibleTrigger>
-        <TraceCollapsibleContent className="flex flex-col gap-2">
+        <TraceCollapsibleContent inset className="flex flex-col gap-2">
           {shown.map((part, at) => {
             switch (part.kind) {
               case "image":
@@ -108,12 +130,13 @@ export function ToolCall({
                 )
               case "text":
                 return (
-                  <p
+                  <pre
                     key={at}
-                    className="max-h-80 overflow-auto whitespace-pre-wrap"
+                    data-slot="tool-text"
+                    className="max-h-80 overflow-auto rounded-md border bg-block px-3 py-2 font-mono text-code wrap-break-word whitespace-pre-wrap"
                   >
                     {part.text}
-                  </p>
+                  </pre>
                 )
             }
           })}
@@ -132,8 +155,8 @@ function Printed({
   output: Output
   running: boolean
 }) {
-  const failed =
-    exit !== undefined && ((exit.code ?? 0) !== 0 || exit.signal !== undefined)
+  // A signal stopped it: that is no failure of its own.
+  const failed = exit?.code !== undefined && exit.code !== 0
   return (
     <Console>
       <ConsoleText
@@ -179,12 +202,18 @@ const TOOL_ICONS: Record<ToolKind, LucideIcon> = {
   other: WrenchIcon,
 }
 
-const TOOL_STATUS: Record<
-  ToolStatus,
-  "running" | "error" | "pending" | undefined
-> = {
-  pending: "pending",
-  running: "running",
-  done: undefined,
-  failed: "error",
+/** A small word after a call's line: it failed, was stopped, or waits
+ * for its Person. Failure is a tag, not a red line. */
+function Tag({ outcome }: { outcome: Outcome }) {
+  const [words, colour] =
+    outcome === "failed"
+      ? ["Failed", "text-destructive"]
+      : outcome === "stopped"
+        ? ["Stopped", "text-muted-foreground"]
+        : outcome === "waiting"
+          ? ["Waiting for you", "text-attention"]
+          : []
+  return words ? (
+    <span className={`shrink-0 text-meta ${colour}`}>{words}</span>
+  ) : null
 }

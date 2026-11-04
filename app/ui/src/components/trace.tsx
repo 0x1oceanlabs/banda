@@ -33,7 +33,7 @@ function TraceLine({
       data-slot="trace-line"
       data-status={status}
       className={cn(
-        "flex w-fit max-w-full min-w-0 items-center gap-2 text-sm text-muted-foreground transition-colors in-[a,button]:cursor-pointer in-[a:hover,button:hover]:text-foreground data-[status=error]:text-destructive data-[status=error]:in-[a:hover,button:hover]:text-destructive data-[status=pending]:opacity-60 data-[status=running]:*:data-[slot=trace-title]:shimmer",
+        "flex w-fit max-w-full min-w-0 items-center gap-2 text-sm text-muted-foreground transition-colors in-[a,button]:cursor-pointer in-[a:hover,button:hover]:text-foreground data-[status=error]:*:data-[slot=trace-icon]:text-destructive data-[status=pending]:opacity-60 data-[status=running]:*:data-[slot=trace-title]:shimmer",
         className
       )}
       {...props}
@@ -47,7 +47,7 @@ function TraceIcon({ className, ...props }: React.ComponentProps<"span">) {
       data-slot="trace-icon"
       aria-hidden="true"
       className={cn(
-        "flex size-4 shrink-0 items-center justify-center [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-4 [[data-slot=trace-title]~&]:-ml-1",
+        "flex size-4 shrink-0 items-center justify-center [&_svg]:pointer-events-none [&_svg:not([class*='size-'])]:size-[0.9375rem] [[data-slot=trace-title]~&]:-ml-1",
         className
       )}
       {...props}
@@ -112,7 +112,7 @@ function TraceCollapsibleTrigger({
     <CollapsibleTrigger
       data-slot="trace-collapsible-trigger"
       className={cn(
-        "group/trace-collapsible-trigger flex w-fit max-w-full min-w-0 cursor-pointer items-center gap-1 rounded-md text-left text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 has-[[data-status=error]]:text-destructive",
+        "group/trace-collapsible-trigger flex w-fit max-w-full min-w-0 cursor-pointer items-center gap-1 rounded-md text-left text-muted-foreground transition-colors outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50",
         className
       )}
       {...props}
@@ -125,21 +125,29 @@ function TraceCollapsibleTrigger({
   )
 }
 
+/**
+ * What a line opens to. A list of lines sits under one rule from the
+ * line's icon; `inset`, what one line holds, such as a call's output or a
+ * thought, sits under the line's words, with no rule of its own.
+ */
 function TraceCollapsibleContent({
   className,
   children,
+  inset = false,
   ...props
-}: React.ComponentProps<typeof CollapsibleContent>) {
+}: React.ComponentProps<typeof CollapsibleContent> & { inset?: boolean }) {
   return (
     <CollapsibleContent
       data-slot="trace-collapsible-content"
-      className="h-(--collapsible-panel-height) min-w-0 overflow-hidden transition-[height] duration-200 data-ending-style:h-0 data-starting-style:h-0"
+      className="h-(--collapsible-panel-height) min-w-0 overflow-hidden transition-[height] duration-200 data-ending-style:h-0 data-starting-style:h-0 motion-reduce:transition-none"
       {...props}
     >
       <div
         data-slot="trace-collapsible-content-inner"
+        data-inset={inset || undefined}
         className={cn(
-          "mt-2 mb-1 ml-[calc(--spacing(2)-1px)] min-w-0 border-l pr-1 pl-4 leading-relaxed wrap-break-word text-muted-foreground",
+          "mt-2 mb-1 min-w-0 text-sm wrap-break-word text-muted-foreground",
+          inset ? "ml-6" : "ml-[calc(--spacing(2)-1px)] border-l pr-1 pl-4",
           className
         )}
       >

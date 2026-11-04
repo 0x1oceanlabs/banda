@@ -223,7 +223,7 @@ export function Writer({
       size="xs"
       disabled={gone}
       className={cn(
-        "-mb-1.5 max-w-full text-muted-foreground",
+        "-mb-1.5 max-w-full font-normal text-muted-foreground",
         align === "end" ? "-mr-2 self-end" : "-ml-2 self-start"
       )}
       onClick={gone ? undefined : () => onOpen(thread)}
@@ -236,7 +236,7 @@ export function Writer({
         />
       )}
       {says}
-      <span className="truncate font-medium text-foreground">
+      <span className="truncate text-foreground">
         {gone ? "another Thread" : thread.title || "New Thread"}
       </span>
     </Button>
@@ -245,8 +245,11 @@ export function Writer({
 
 /**
  * Copy, the message's `actions` and the time, shown on hover or focus, and
- * always on a touch screen. `children` come first and stay in view: they
- * are the message's own controls, such as opening a clamped one.
+ * always on a touch screen. They take no room until shown (ADR 0058,
+ * decision 1): they show over the room under the message, which the
+ * Thread keeps for them. `children` come first and stay in view: they are
+ * the message's own controls, such as opening a clamped one, so with them
+ * the row takes its room.
  */
 function Meta({
   at,
@@ -261,16 +264,22 @@ function Meta({
   actions?: React.ReactNode
   children?: React.ReactNode
 }) {
+  const floats = !children
   return (
     <div
       data-slot="message-meta"
       className={cn(
-        "-mt-1.5 flex h-6 items-center gap-1 text-xs text-muted-foreground",
-        align === "end" ? "flex-row-reverse self-end" : "self-start"
+        "flex h-6 items-center gap-1 text-meta text-muted-foreground [&_button_svg:not([class*='size-'])]:size-3.5",
+        floats
+          ? "absolute top-full z-10 -mt-0.5 pointer-coarse:relative pointer-coarse:top-auto pointer-coarse:-mt-1.5"
+          : "-mt-1.5",
+        align === "end"
+          ? "end-0 flex-row-reverse self-end"
+          : "start-0 self-start"
       )}
     >
       {children}
-      <div className="flex items-center gap-1 opacity-0 transition-opacity group-focus-within/message:opacity-100 group-hover/message:opacity-100 pointer-coarse:opacity-100">
+      <div className="pointer-events-none flex items-center gap-1 opacity-0 transition-opacity group-focus-within/message:pointer-events-auto group-focus-within/message:opacity-100 group-hover/message:pointer-events-auto group-hover/message:opacity-100 pointer-coarse:pointer-events-auto pointer-coarse:opacity-100">
         {text && <CopyButton text={text} label="Copy the message" />}
         {actions}
         <time dateTime={new Date(at).toISOString()} title={fullDate(at)}>

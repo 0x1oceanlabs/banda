@@ -1,5 +1,6 @@
-import { useState } from "react"
-import type { Item, TurnView } from "@banda/contract/agents"
+import { Fragment, useState } from "react"
+import type { Item, TurnState, TurnView } from "@banda/contract/agents"
+import { DiffCounts } from "@banda/ui/components/diff"
 import { Spinner } from "@banda/ui/components/spinner"
 import {
   Trace,
@@ -13,61 +14,70 @@ import {
 import { useNow } from "@banda/ui/hooks/use-now"
 import { CircleCheckIcon, CircleSlashIcon, LayersIcon } from "lucide-react"
 import { duration } from "@banda/ui/lib/words"
-import { foldTitle, type Line, summary } from "./timeline"
+import {
+  type Did,
+  did,
+  type Doing,
+  foldTitle,
+  type Line,
+  workOf,
+} from "./timeline"
 
 /** How a line shows inside a line of work or a fold: as the Thread does. */
 type Render = (line: Line) => React.ReactNode
 
 /**
- * Tool calls and thoughts in a row, as one line that names what they did
- * (ADR 0010, decision 1). While they are the end of the turn that runs, the
- * line shows the latest of them instead. Opened, it lists them all, each
- * opening on its own.
+ * Tool calls and thoughts in a row, as one line that says what they did
+ * (ADR 0058, decision 4): "Ran 3 commands (1 failed), edited 2 files +38
+ * −9". Opened, it lists them under one rule, each opening on its own.
  */
 export function WorkLine({
   items,
-  live,
+  turn,
   found,
   render,
 }: {
   items: Item[]
-  live: boolean
+  /** How their turn stands, if known. */
+  turn?: TurnState
   /** It holds what the Person looks for, so it shows open. */
   found: boolean
   render: Render
 }) {
   const [open, setOpen] = useState(false)
-  const latest = items.at(-1)?.body
-  const title = !live
-    ? summary(items)
-    : latest?.kind === "tool"
-      ? latest.title
-      : "Thinking"
+  const done = did(items, turn)
   return (
     <Trace>
       <TraceCollapsible open={open || found} onOpenChange={setOpen}>
         <TraceCollapsibleTrigger>
-          <TraceLine status={live ? "running" : undefined}>
+          <TraceLine>
             <TraceIcon>
               <LayersIcon />
             </TraceIcon>
-            <TraceTitle>{title}</TraceTitle>
+            <TraceTitle>
+              {done.kinds.length > 0 ? (
+                <Kinds did={done} capital />
+              ) : turn === "running" ? (
+                "Working"
+              ) : (
+                "Worked"
+              )}
+            </TraceTitle>
+            <Counts did={done} />
           </TraceLine>
         </TraceCollapsibleTrigger>
         <TraceCollapsibleContent>
-          <div className="flex max-h-[min(18rem,50dvh)] flex-col gap-2 overflow-y-auto border-l py-1 pl-3">
-            {items.map((item) => (
-              <div key={item.id}>{render({ kind: "item", item })}</div>
-            ))}
-          </div>
+          <List lines={items.map((item) => ({ kind: "item", item }))}>
+            {render}
+          </List>
         </TraceCollapsibleContent>
       </TraceCollapsible>
     </Trace>
   )
 }
 
-/** What a turn that ended did before its last reply, folded behind how
- * long it took. */
+/** What a turn that ended did before its last reply, folded into one
+ * line: how long it took, what it did and how much it changed. */
 export function Fold({
   turn,
   lines,
@@ -82,6 +92,7 @@ export function Fold({
 }) {
   const [open, setOpen] = useState(false)
   const Icon = turn.state === "stopped" ? CircleSlashIcon : CircleCheckIcon
+  const done = did(workOf(lines), turn.state)
   return (
     <Trace>
       <TraceCollapsible open={open || found} onOpenChange={setOpen}>
@@ -90,24 +101,102 @@ export function Fold({
             <TraceIcon>
               <Icon />
             </TraceIcon>
-            <TraceTitle>{foldTitle(turn)}</TraceTitle>
+            <TraceTitle>
+              {foldTitle(turn)}
+              {done.kinds.length > 0 && (
+                <>
+                  {" · "}
+                  <Kinds did={done} />
+                </>
+              )}
+            </TraceTitle>
+            <Counts did={done} />
           </TraceLine>
         </TraceCollapsibleTrigger>
         <TraceCollapsibleContent>
-          <div className="flex flex-col gap-4 pt-2">
-            {lines.map((line) => (
-              <div key={key(line)}>{render(line)}</div>
-            ))}
-          </div>
+          <List lines={lines}>{render}</List>
         </TraceCollapsibleContent>
       </TraceCollapsible>
     </Trace>
   )
 }
 
-/** The turn that runs, and how long it has: "Working for 12s". */
-export function Working({ turn, name }: { turn: TurnView; name: string }) {
-  const now = useNow(1000, turn.started !== undefined)
+/** The lines a fold or a line of work opens to, one list: its calls and
+ * thoughts close together, what it wrote or asked with room around. */
+function List({
+  lines,
+  children: render,
+}: {
+  lines: Line[]
+  children: Render
+}) {
+  return (
+    <div className="flex flex-col gap-2 py-0.5">
+      {lines.map((line) => (
+        <div key={key(line)} className={room(line)}>
+          {render(line)}
+        </div>
+      ))}
+    </div>
+  )
+}
+
+/** The room a line of a list takes around it, beyond the list's own gap.
+ * A message keeps room under it for its actions, which show over it. */
+function room(line: Line): string | undefined {
+  if (line.kind !== "item") return "my-2"
+  switch (line.item.body.kind) {
+    case "tool":
+    case "thought":
+    case "notice":
+      return undefined
+    case "message":
+      return "mt-2 mb-4"
+    default:
+      return "my-2"
+  }
+}
+
+/** "ran 3 commands (1 failed), edited 2 files": what failed in the
+ * destructive colour. */
+function Kinds({ did: { kinds }, capital }: { did: Did; capital?: boolean }) {
+  return kinds.map(({ words, failed }, at) => (
+    <Fragment key={at}>
+      {at > 0 && ", "}
+      {capital && at === 0 ? words[0].toUpperCase() + words.slice(1) : words}
+      {failed > 0 && (
+        <>
+          {" "}
+          <span className="text-destructive">({failed} failed)</span>
+        </>
+      )}
+    </Fragment>
+  ))
+}
+
+/** The lines a run of work added and removed, if it changed any. */
+function Counts({ did: { added, removed } }: { did: Did }) {
+  return added + removed > 0 ? (
+    <DiffCounts added={added} removed={removed} />
+  ) : null
+}
+
+/**
+ * The turn that runs, at its live edge (ADR 0058, decision 5): how long it
+ * has worked, "Working for 45s", and what it does now: "· Running pnpm
+ * test · 11s", or "· Waiting for you".
+ */
+export function Working({
+  turn,
+  name,
+  doing,
+}: {
+  turn: TurnView
+  name: string
+  doing?: Doing
+}) {
+  const since = doing?.kind === "calling" ? doing.since : undefined
+  const now = useNow(1000, turn.started !== undefined || since !== undefined)
   const title =
     turn.started === undefined
       ? `${name} is working…`
@@ -116,9 +205,26 @@ export function Working({ turn, name }: { turn: TurnView; name: string }) {
     <Trace>
       <TraceLine status="running">
         <TraceIcon>
-          <Spinner />
+          <Spinner className="motion-reduce:animate-none" />
         </TraceIcon>
-        <TraceTitle className="tabular-nums">{title}</TraceTitle>
+        <TraceTitle className="shrink-0 tabular-nums">{title}</TraceTitle>
+        {doing && (
+          <span className="min-w-0 truncate text-muted-foreground/70 tabular-nums">
+            {"· "}
+            {doing.kind === "asking" ? (
+              <span className="text-attention">Waiting for you</span>
+            ) : doing.kind === "thinking" ? (
+              "Thinking"
+            ) : (
+              <>
+                {[doing.said.verb, doing.said.subject]
+                  .filter(Boolean)
+                  .join(" ")}
+                {` · ${duration(now - doing.since)}`}
+              </>
+            )}
+          </span>
+        )}
       </TraceLine>
     </Trace>
   )

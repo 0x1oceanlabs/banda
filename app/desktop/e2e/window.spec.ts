@@ -856,7 +856,8 @@ test("a tool call opens on what it changed and what it printed", async () => {
   await composer.press("Enter")
   await expect(thread.getByText("I edited notes.md.")).toBeVisible()
   await openWork(thread)
-  const edit = thread.getByRole("button", { name: /Edit notes\.md/ })
+  // In the past tense once done (ADR 0058, decision 4).
+  const edit = thread.getByRole("button", { name: /Edited notes\.md/ })
   await expect(edit).toHaveText(/\+2\s*−1/)
   await edit.click()
   const change = thread.locator("[data-slot=diff]")
@@ -888,7 +889,7 @@ test("a tool call opens on what it changed and what it printed", async () => {
   await composer.press("Enter")
   await expect(thread.getByText("The tests passed.")).toBeVisible()
   await openWork(thread)
-  await thread.getByRole("button", { name: /Run the tests/ }).click()
+  await thread.getByRole("button", { name: /Ran the tests/ }).click()
   const printed = thread.locator("[data-slot=console]")
   await expect(printed).toBeVisible()
   await expect(printed).toContainText("test two ... ok")
@@ -1333,7 +1334,7 @@ test("Ctrl+F finds in the Thread and opens what folds it, and the minimap goes t
     await composer.press("Enter")
     await expect(thread.getByText(`You said: ${word}`)).toBeVisible()
   }
-  const tool = thread.getByRole("button", { name: /Run the tests/ })
+  const tool = thread.getByRole("button", { name: /Ran the tests/ })
   await expect(tool).toBeHidden()
 
   // Ctrl+F opens the find bar; what it finds in a folded turn shows.

@@ -1,7 +1,7 @@
 import { cn } from "cn"
 
-/** A file change, line by line: a header, then its lines in a box that
- * scrolls both ways. */
+/** A file change, line by line: a header, then its lines in a small block
+ * that scrolls both ways. */
 function Diff({
   className,
   children,
@@ -11,7 +11,7 @@ function Diff({
     <figure
       data-slot="diff"
       className={cn(
-        "flex min-w-0 flex-col overflow-hidden rounded-md border bg-card text-xs text-card-foreground",
+        "flex min-w-0 flex-col overflow-hidden rounded-md border bg-block text-code text-foreground",
         className
       )}
       {...props}
@@ -29,7 +29,7 @@ function DiffHeader({
     <figcaption
       data-slot="diff-header"
       className={cn(
-        "flex min-w-0 items-center gap-2 border-b px-2 py-1 font-mono",
+        "flex min-w-0 items-center gap-2 border-b py-1 pr-1.5 pl-3 font-mono",
         className
       )}
       {...props}
@@ -56,10 +56,7 @@ function DiffLines({
   return (
     <pre
       data-slot="diff-lines"
-      className={cn(
-        "max-h-80 overflow-auto py-1 font-mono leading-5",
-        className
-      )}
+      className={cn("max-h-80 overflow-auto py-1 font-mono", className)}
       {...props}
     >
       <div className="w-max min-w-full">{children}</div>
@@ -81,7 +78,7 @@ function DiffLine({
       data-slot="diff-line"
       data-kind={kind}
       className={cn(
-        "px-2 data-[kind=added]:bg-added/10 data-[kind=added]:text-added data-[kind=removed]:bg-removed/10 data-[kind=removed]:text-removed",
+        "px-3 data-[kind=added]:bg-added/10 data-[kind=added]:text-added data-[kind=removed]:bg-removed/10 data-[kind=removed]:text-removed",
         className
       )}
       {...props}
@@ -97,7 +94,7 @@ function DiffGap({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       data-slot="diff-gap"
-      className={cn("px-2 text-muted-foreground select-none", className)}
+      className={cn("px-3 text-muted-foreground select-none", className)}
       {...props}
     />
   )
@@ -114,7 +111,7 @@ function DiffCounts({
     <span
       data-slot="diff-counts"
       className={cn(
-        "flex shrink-0 gap-1 font-mono text-xs tabular-nums",
+        "flex shrink-0 gap-1 font-mono text-code tabular-nums",
         className
       )}
       {...props}

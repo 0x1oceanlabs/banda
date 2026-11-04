@@ -27,7 +27,9 @@ export function FileDiff({
       <DiffHeader title={path}>
         <DiffPath path={path} />
         {old === undefined && (
-          <span className="shrink-0 text-muted-foreground">New file</span>
+          <span className="shrink-0 font-sans text-meta text-muted-foreground">
+            New file
+          </span>
         )}
         <DiffCounts added={added} removed={removed} className="ml-auto" />
         {onOpen && (
@@ -38,7 +40,7 @@ export function FileDiff({
             title="Open beside the Thread"
             onClick={onOpen}
           >
-            <SquareArrowOutUpRightIcon />
+            <SquareArrowOutUpRightIcon className="size-3.5" />
           </Button>
         )}
       </DiffHeader>

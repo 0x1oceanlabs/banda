@@ -3,7 +3,16 @@ import type { TurnView } from "@banda/contract/agents"
 import { expect, test } from "vitest"
 import { event, person } from "./testing"
 import { apply, EMPTY, NOTHING } from "./thread"
-import { foldTitle, type Line, summary, timeline } from "./timeline"
+import {
+  awaiting,
+  did,
+  didWords,
+  doing,
+  foldTitle,
+  type Line,
+  thoughtTimes,
+  timeline,
+} from "./timeline"
 
 function play(...events: Event[]) {
   return events.reduce(apply, EMPTY)
@@ -36,11 +45,11 @@ function shape(lines: Line[]): unknown[] {
       case "item":
         return line.item.id
       case "work":
-        return { work: line.items.map((item) => item.id), live: line.live }
+        return { work: line.items.map((item) => item.id) }
       case "fold":
         return { fold: shape(line.lines) }
       case "working":
-        return "working"
+        return line.doing ? `working, ${line.doing.kind}` : "working"
       case "ended":
         return `ended ${line.turn.state}`
       case "changes":
@@ -63,25 +72,22 @@ test("tool calls and thoughts in a row are one line of work", () => {
   )
   expect(shape(timeline(state))).toEqual([
     "m",
-    "working",
-    { work: ["t", "a", "b"], live: false },
+    { work: ["t", "a", "b"] },
     "r",
     // A single tool call shows itself.
     "c",
+    "working, calling",
   ])
 })
 
-test("the work at the end of the turn that runs is live", () => {
-  const state = play(
-    asked(),
-    event("turn.started", { turn: "u" }),
-    tool("a"),
-    tool("b")
-  )
+test("the turn that runs says so at its live edge, after what it did", () => {
+  const started = play(asked(), event("turn.started", { turn: "u" }))
+  expect(shape(timeline(started))).toEqual(["m", "working"])
+  const state = [tool("a"), tool("b")].reduce(apply, started)
   expect(shape(timeline(state))).toEqual([
     "m",
-    "working",
-    { work: ["a", "b"], live: true },
+    { work: ["a", "b"] },
+    "working, calling",
   ])
 })
 
@@ -96,9 +102,10 @@ test("a turn that ended folds its work, and its last reply stays", () => {
     reply("r2"),
     event("turn.ended", { turn: "u", state: "done" })
   )
+  // Opened, it is one list: its lines of work open into their calls.
   expect(shape(timeline(state))).toEqual([
     "m",
-    { fold: ["a", "r1", { work: ["b", "c"], live: false }] },
+    { fold: ["a", "r1", "b", "c"] },
     "r2",
   ])
 })
@@ -194,12 +201,12 @@ test("a turn with no work, or one that failed, does not fold", () => {
   )
   expect(shape(timeline(failed))).toEqual([
     "n",
-    { work: ["a", "b"], live: false },
+    { work: ["a", "b"] },
     "ended failed",
   ])
 })
 
-test("a stopped turn folds and still says it stopped", () => {
+test("a stopped turn says it stopped once: in its fold", () => {
   const state = play(
     asked(),
     event("turn.started", { turn: "u" }),
@@ -207,26 +214,156 @@ test("a stopped turn folds and still says it stopped", () => {
     tool("b"),
     event("turn.ended", { turn: "u", state: "stopped" })
   )
-  expect(shape(timeline(state))).toEqual([
-    "m",
-    { fold: [{ work: ["a", "b"], live: false }] },
-    "ended stopped",
-  ])
+  expect(shape(timeline(state))).toEqual(["m", { fold: ["a", "b"] }])
+  // With no work to fold, its own line says it.
+  const quiet = play(
+    asked("v", "n"),
+    event("turn.started", { turn: "v" }),
+    event("turn.ended", { turn: "v", state: "stopped" })
+  )
+  expect(shape(timeline(quiet))).toEqual(["n", "ended stopped"])
 })
 
-test("a line of work names its two largest kinds", () => {
+/** A tool call that ended: done, or with the exit `code` it gives. */
+const ran = (item: string, kind = "execute", code?: number, turn = "u") => [
+  tool(item, kind, turn),
+  event("tool.changed", {
+    item,
+    status: code ? "failed" : "done",
+    ...(code !== undefined && { exit: { code } }),
+  }),
+]
+
+const edited = (item: string, path: string, old: string | undefined) =>
+  event("tool.started", {
+    item,
+    turn: "u",
+    title: `Edit ${path}`,
+    tool: "edit",
+    status: "done",
+    content: [{ kind: "diff", path, old, new: "one\ntwo\n" }],
+  })
+
+test("work says every kind it acted by, what failed, and the lines it changed", () => {
   const state = play(
     asked(),
     event("turn.started", { turn: "u" }),
-    tool("a", "edit"),
-    tool("b"),
-    tool("c"),
-    tool("d", "read"),
-    tool("e", "execute")
+    event("thought.grew", { item: "t", turn: "u", text: "Hm" }),
+    ...ran("r", "read"),
+    ...ran("a"),
+    ...ran("b", "execute", 1),
+    edited("e1", "/a.ts", "one\n"),
+    edited("e2", "/a.ts", "one\n"),
+    edited("e3", "/b.ts", undefined),
+    ...ran("c")
   )
-  const items = state.items.filter((item) => item.body.kind === "tool")
-  expect(summary(items)).toBe("Ran 3 commands, edited a file and 1 more")
-  expect(summary(items.slice(0, 3))).toBe("Ran 2 commands and edited a file")
+  const done = did(state.items, "done")
+  // Reads and thoughts go unsaid beside what it changed; a file edited
+  // twice is one file.
+  expect(didWords(done)).toBe("ran 3 commands (1 failed), edited 2 files")
+  expect(done).toMatchObject({ added: 3, removed: 0 })
+})
+
+test("work that only looked says the two kinds it did most", () => {
+  const state = play(
+    asked(),
+    event("turn.started", { turn: "u" }),
+    ...ran("s", "search"),
+    ...ran("a", "read"),
+    ...ran("b", "read"),
+    ...ran("f", "fetch")
+  )
+  expect(didWords(did(state.items, "done"))).toBe("read 2 files, searched once")
+  const thought = play(
+    asked("v", "n"),
+    event("turn.started", { turn: "v" }),
+    event("thought.grew", { item: "t", turn: "v", text: "Hm" })
+  )
+  expect(didWords(did(thought.items))).toBe("thought")
+})
+
+test("work in the turn that runs counts what has ended; a stop is no failure", () => {
+  const state = play(
+    asked(),
+    event("turn.started", { turn: "u" }),
+    ...ran("a", "read"),
+    tool("b")
+  )
+  expect(didWords(did(state.items, "running"))).toBe("read a file")
+  // Its Person stopped it while the command ran.
+  const stopped = [
+    event("tool.changed", {
+      item: "b",
+      status: "failed",
+      exit: { signal: "SIGTERM" },
+    }),
+    event("turn.ended", { turn: "u", state: "stopped" }),
+  ].reduce(apply, state)
+  expect(didWords(did(stopped.items, "stopped"))).toBe("ran a command")
+})
+
+test("the live line says what the turn does now", () => {
+  const state = play(asked(), event("turn.started", { turn: "u" }), tool("a"))
+  const turn = state.turns[0]
+  expect(doing(state, turn)).toEqual({
+    kind: "calling",
+    said: { verb: "Running", subject: "Tool a" },
+    since: state.items.at(-1)!.at,
+  })
+  // A call that ended leaves it working, with nothing to name.
+  const ended = apply(
+    state,
+    event("tool.changed", { item: "a", status: "done" })
+  )
+  expect(doing(ended, turn)).toBeUndefined()
+  const thinking = apply(
+    ended,
+    event("thought.grew", { item: "t", turn: "u", text: "Hm" })
+  )
+  expect(doing(thinking, turn)).toEqual({ kind: "thinking" })
+})
+
+test("a call that waits for its Person's answer waits for you", () => {
+  const state = play(
+    asked(),
+    event("turn.started", { turn: "u" }),
+    event("tool.started", {
+      item: "a",
+      turn: "u",
+      title: "pnpm test",
+      tool: "execute",
+      status: "pending",
+      content: [],
+    }),
+    event("question.asked", {
+      item: "q",
+      turn: "u",
+      title: "Allow pnpm test?",
+      choices: [{ id: "yes", name: "Allow", allows: true, always: false }],
+    })
+  )
+  expect(doing(state, state.turns[0])).toEqual({ kind: "asking" })
+  expect([...awaiting(state)]).toEqual(["a"])
+  const answered = apply(
+    state,
+    event("question.answered", { item: "q", choice: "yes" })
+  )
+  expect([...awaiting(answered)]).toEqual([])
+})
+
+test("a thought took until the next thing its turn did, or until the turn ended", () => {
+  const state = play(
+    asked(),
+    event("turn.started", { turn: "u" }),
+    event("thought.grew", { item: "t1", turn: "u", text: "Hm" }),
+    tool("a"),
+    event("thought.grew", { item: "t2", turn: "u", text: "So" })
+  )
+  const at = (id: string) => state.items.find((item) => item.id === id)!.at
+  expect(thoughtTimes(state)).toEqual(new Map([["t1", at("a") - at("t1")]]))
+  const ended = apply(state, event("turn.ended", { turn: "u", state: "done" }))
+  const end = ended.turns[0].ended!
+  expect(thoughtTimes(ended).get("t2")).toBe(end - at("t2"))
 })
 
 test("a folded turn says how long it took, or that a Person stopped it", () => {
