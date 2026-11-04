@@ -36,7 +36,8 @@ do from the Harness's declared capabilities.
 **Limit**:
 How much of a Harness's subscription a window of time allows, such as
 Claude Code's week. Banda shows the share spent of each, and when it resets
-(ADR 0043).
+(ADR 0043). The bar shows the room left of the best account of each Harness
+(ADR 0055).
 _Avoid_: quota, rate limit.
 
 **Usage**:
