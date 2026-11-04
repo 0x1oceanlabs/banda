@@ -2,7 +2,8 @@
  * Git's rows in a Thread's details card (ADR 0034, decision 4), as T3
  * Code's: the branch with how far it is ahead and behind, and Changes
  * `+N −M`, which opens the Diff on them; one Initialize Git row instead
- * when the Space's folder is no repository. They follow `git.watch`.
+ * when the Space's folder is no repository, and why git will not read it
+ * when it is one git refuses. They follow `git.watch`.
  */
 import {
   type Details,
@@ -12,7 +13,7 @@ import {
 import { DiffCounts } from "@banda/ui/components/diff"
 import { useAct } from "@banda/ui/hooks/use-act"
 import { paneOf } from "@banda/ui/pane"
-import { FileDiffIcon, GitBranchPlusIcon } from "lucide-react"
+import { CircleAlertIcon, FileDiffIcon, GitBranchPlusIcon } from "lucide-react"
 import { BranchPicker, PICKER } from "./BranchPicker"
 import { diffPane } from "./DiffPane"
 import { GitButton } from "./GitButton"
@@ -31,6 +32,18 @@ function GitRows({
   const status = useGitStatus(engine, space)
   const init = useAct()
   if (!status) return null
+  // A repository git will not read, as another user's: why, and no
+  // Initialize Git, which would make another inside it.
+  if (status.problem)
+    return (
+      <div
+        role="alert"
+        className="flex items-start gap-2 px-2 py-1 text-xs text-muted-foreground"
+      >
+        <CircleAlertIcon className="mt-0.5 size-3.5 shrink-0" />
+        <span className="min-w-0 flex-1 break-words">{status.problem}</span>
+      </div>
+    )
   if (!status.repo)
     return (
       <>
