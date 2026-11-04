@@ -79,6 +79,7 @@ send problem reports and usage counts, both unticked; Settings → Sharing
 changes it, and shows each event exactly as it went. They go to PostHog
 (US) with a random ID, no IP and no location, and only from a released
 Banda: the code that sends is `modules/sharing`, and nothing else does.
+[docs/sharing.md](docs/sharing.md) lists every event and every field.
 Your Agents talk to their providers as they do in a terminal, and the
 browser loads the pages you or your Agents open.
 

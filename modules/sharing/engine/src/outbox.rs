@@ -155,11 +155,7 @@ impl Courier {
     }
 
     fn banda(&self) -> Banda {
-        Banda {
-            version: banda_kernel::version().to_owned(),
-            channel: self.channel,
-            os: std::env::consts::OS,
-        }
+        Banda::this(self.channel)
     }
 
     fn shares(&self) -> Shares {

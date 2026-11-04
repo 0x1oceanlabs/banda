@@ -20,6 +20,17 @@ pub struct Banda {
     pub os: &'static str,
 }
 
+impl Banda {
+    /// This Banda, of `channel`.
+    pub fn this(channel: &'static str) -> Self {
+        Self {
+            version: banda_kernel::version().to_owned(),
+            channel,
+            os: std::env::consts::OS,
+        }
+    }
+}
+
 /// `problem` as `$exception`, sent with the random `id`.
 pub fn exception(problem: &Problem, id: &str, banda: &Banda) -> Value {
     let frames: Vec<Value> = problem.frames.iter().map(frame).collect();

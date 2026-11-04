@@ -5,6 +5,7 @@
 import type { Shares } from "./generated/sharing/Shares"
 import type { ModuleFile } from "./look"
 
+export type { Examples } from "./generated/sharing/Examples"
 export type { Never } from "./generated/sharing/Never"
 export type { Sent } from "./generated/sharing/Sent"
 export type { Shared } from "./generated/sharing/Shared"
