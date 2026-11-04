@@ -1213,6 +1213,55 @@ test("a page that paints no background lies on white, as in a browser, unless it
   await expect.poll(canvas).toEqual([18, 18, 18])
 })
 
+test("a selected browser page keeps its brightness while the overview takes the keys", async () => {
+  const address = await serve({
+    "/": "<title>Steady page</title><p>Steady page</p>",
+  })
+  window = await startWindow({
+    look: '[tile]\ndim-inactive = 0.5\n[motion.overview]\neasing = { duration-ms = 600, curve = "linear" }\n',
+  })
+  const { page } = window
+  const { composer } = await firstThread(page)
+  await expect(composer).toBeFocused()
+  const bar = await openBrowser(page)
+  await bar.fill(address)
+  await bar.press("Enter")
+  const browser = page.getByRole("region", { name: "Steady page", exact: true })
+  await expect(browser).toHaveAttribute("data-focused", "true")
+  const id = await browser.getAttribute("data-tile")
+  const real = page.locator(`section[data-tile="${id}"]`)
+  const veil = page.locator("[data-held-by] > div").last()
+  await expect(veil).toHaveCSS("opacity", "0")
+  const steady = async () => {
+    const values = await veil.evaluate(
+      (element) =>
+        new Promise<number[]>((resolve) => {
+          const values: number[] = []
+          const start = performance.now()
+          const sample = () => {
+            values.push(Number(getComputedStyle(element).opacity))
+            if (performance.now() - start > 700) resolve(values)
+            else requestAnimationFrame(sample)
+          }
+          sample()
+        })
+    )
+    expect(values.length).toBeGreaterThan(5)
+    expect(Math.max(...values)).toBe(0)
+  }
+  await pressInPage(window.app, "O", ["alt"])
+  const overview = page.getByRole("dialog", { name: "Overview" })
+  await expect(overview).toBeFocused()
+  await expect(real).toHaveAttribute("data-focused", "false")
+  await steady()
+  await page.keyboard.press("Enter")
+  await steady()
+  await expect(real).toHaveAttribute("data-focused", "true")
+  await pressInPage(window.app, "Left", ["alt"])
+  await expect(composer).toBeFocused()
+  await expect(veil).toHaveCSS("opacity", "0.5")
+})
+
 test("on glass a terminal and a browser's page are as clear as any tile", async () => {
   const address = await serve({ "/": "<title>Alpha</title><p>Alpha</p>" })
   window = await startWindow({ look: GLASS })

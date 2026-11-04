@@ -122,6 +122,7 @@ function BrowserPane({
   space,
   args: kept,
   focused,
+  selected = focused,
   open,
   update,
   close,
@@ -216,6 +217,7 @@ function BrowserPane({
       tabs={tabs}
       settings={settings}
       focused={focused}
+      selected={selected}
       title={browserPane.title(args)}
       onOpen={(url) => update(withChanged(args, { ...tab, url }))}
       onStore={() => holder.open(WEB_STORE)}
@@ -257,6 +259,7 @@ function Browser({
   tabs,
   settings,
   focused,
+  selected,
   title,
   onOpen,
   onStore,
@@ -270,6 +273,7 @@ function Browser({
   tabs: TabsProps
   settings: Settings
   focused: boolean
+  selected: boolean
   title: string
   onOpen: (url: string) => void
   onStore: () => void
@@ -298,9 +302,9 @@ function Browser({
   useEffect(() => {
     const element = slot.current
     if (!page || !element) return
-    page.show(element, focused)
+    page.show(element, selected)
     return () => page.release(element)
-  }, [page, focused])
+  }, [page, selected])
 
   // The page the Person looks at is the extensions' active tab.
   const contents = page?.contents ?? null
@@ -1065,7 +1069,7 @@ function Address({
       onChange={(event) => setEditing(event.target.value)}
       onKeyDown={onKey}
       className={cn(
-        "mx-1 h-7 rounded-md bg-transparent px-2 text-sm text-muted-foreground outline-none group-data-[focused=true]/tile:text-foreground placeholder:text-muted-foreground/70 hover:bg-muted focus:bg-muted focus:text-foreground",
+        "mx-1 h-7 rounded-md bg-transparent px-2 text-sm text-muted-foreground outline-none group-data-[selected=true]/tile:text-foreground placeholder:text-muted-foreground/70 hover:bg-muted focus:bg-muted focus:text-foreground",
         className
       )}
     />

@@ -215,9 +215,12 @@ export function Overview({
     motion.current ??= new Moving(
       (value) => {
         progress.current = value
-        const opacity = String(Math.max(0, Math.min(1, value)))
-        element.style.opacity = opacity
-        if (backdrop) backdrop.style.opacity = opacity
+        const amount = Math.max(0, Math.min(1, value))
+        // The stationary hit tiles and controls appear near the resting
+        // view, so they do not look like a second set of moving windows.
+        const ui = Math.max(0, (amount - 0.8) / 0.2)
+        element.style.opacity = String(ui * ui * (3 - 2 * ui))
+        if (backdrop) backdrop.style.opacity = String(amount)
       },
       () => progress.current
     )
@@ -234,6 +237,12 @@ export function Overview({
   useLayoutEffect(() => {
     const element = root.current
     if (!element || !zoom) return
+    const focusClip = document.querySelector<HTMLElement>(
+      "[data-overview-focus-clip]"
+    )
+    const focusFrame = focusClip?.querySelector<HTMLElement>(
+      "[data-overview-focus]"
+    )
     const all = [...element.querySelectorAll<HTMLElement>("[data-row]")]
       .map((row) => {
         const id = row.dataset.row ?? ""
@@ -265,11 +274,33 @@ export function Overview({
       // past its normal size. Moving keeps its raw progress and velocity.
       const amount = Math.max(0, Math.min(1, progress.current))
       const scale = 1 + (zoom - 1) * amount
-      const read = all.map(({ row, strip }) => ({
+      // A move can reparent the Pane without changing its ID: read the
+      // current element, rather than keeping the old section in a cache.
+      const selected = document.querySelector<HTMLElement>(
+        '[data-stack] [data-column] section[data-tile][data-selected="true"]'
+      )
+      const owner = selected?.closest("[data-stack]")
+      const stroke = focusFrame
+        ? parseFloat(getComputedStyle(focusFrame).outlineWidth)
+        : 0
+      const read = all.map(({ row, strip, stack }) => ({
         box: row.getBoundingClientRect(),
         row: row.scrollLeft,
         strip: strip.scrollLeft,
+        pane: stack === owner ? selected?.getBoundingClientRect() : undefined,
+        stack: stack === owner ? stack.getBoundingClientRect() : undefined,
+        width: stack === owner ? stack.offsetWidth : 0,
+        height: stack === owner ? stack.offsetHeight : 0,
+        radius:
+          stack === owner && selected
+            ? parseFloat(getComputedStyle(selected).borderTopLeftRadius)
+            : 0,
+        border:
+          stack === owner && selected
+            ? parseFloat(getComputedStyle(selected).borderTopWidth)
+            : 0,
       }))
+      if (focusClip) focusClip.style.visibility = "hidden"
       all.forEach((one, i) => {
         const { box, row, strip } = read[i]
         // One carried by its number draws over the others, its Panes too.
@@ -287,15 +318,61 @@ export function Overview({
           one.y = y
           one.scale = scale
         }
+        let scrolled = strip
         if (!Number.isNaN(one.at) && row !== one.at) {
           // The Person scrolled the row: the Strip goes with it.
           scrollOf(one.strip).stop()
           one.strip.scrollLeft = row / zoom
+          scrolled = row / zoom
           one.at = row
         } else if (Number.isNaN(one.at) || Math.abs(strip * zoom - row) >= 1) {
           // The row as its Strip, as the browser rounds it.
           one.row.scrollLeft = strip * zoom
           one.at = one.row.scrollLeft
+        }
+        // One frame follows the actual Pane, outside the scaled screens
+        // and the fading overview UI. Fractional CSS outlines on a scaled
+        // element round to whole pixels and would pulse while zooming.
+        const { pane, stack, radius, border, width, height } = read[i]
+        if (
+          focusClip &&
+          focusFrame &&
+          pane &&
+          stack &&
+          pane.width &&
+          pane.height
+        ) {
+          const was = stack.width / width
+          const inset = from / zoom
+          const left =
+            ((pane.left - stack.left) / was - inset - (scrolled - strip)) *
+            scale
+          const top = ((pane.top - stack.top) / was) * scale
+          const paneWidth = (pane.width / was) * scale
+          const paneHeight = (pane.height / was) * scale
+          const clipWidth = (width - inset) * scale
+          const clipHeight = height * scale
+          // Tuck the frame in smoothly if a configured outer ring would
+          // leave the shrinking viewport. Keep the stroke itself steady.
+          const margin = Math.max(
+            0,
+            Math.min(
+              left,
+              top,
+              clipWidth - left - paneWidth,
+              clipHeight - top - paneHeight
+            ) - 0.5
+          )
+          const tuck = Math.max(0, stroke - border - margin)
+          focusClip.style.visibility = "visible"
+          focusClip.style.transform = `translate(${x + inset * scale}px, ${y}px)`
+          focusClip.style.width = `${clipWidth}px`
+          focusClip.style.height = `${clipHeight}px`
+          focusClip.style.borderRadius = `calc(var(--tile-radius) * ${scale})`
+          focusFrame.style.transform = `translate(${left + tuck}px, ${top + tuck}px)`
+          focusFrame.style.width = `${Math.max(0, paneWidth - 2 * tuck)}px`
+          focusFrame.style.height = `${Math.max(0, paneHeight - 2 * tuck)}px`
+          focusFrame.style.borderRadius = `${Math.max(0, radius * scale - tuck)}px`
         }
       })
       if (!open && progress.current === 0 && !origin.current?.moving) {
@@ -583,18 +660,19 @@ function Row({
                   aria-current={entry.id === picked || undefined}
                   hidden={column.tabbed && !active}
                   // Clear: the Pane itself shows under it, zoomed out.
-                  className="group/over relative min-h-0 rounded-(--overview-radius) inset-ring-(--overview-frame) transition-[background-color,box-shadow] duration-150 hover:bg-overview-foreground/5 hover:inset-ring-1 aria-[current]:inset-ring-2 data-called:inset-ring-2 data-lifted:bg-black/50 data-[dim]:bg-black/50 motion-reduce:transition-none"
+                  className={cn(
+                    "group/over relative min-h-0 rounded-(--overview-radius) inset-ring-(--overview-frame) transition-[background-color,box-shadow] duration-150 hover:bg-overview-foreground/5 data-lifted:bg-black/50 data-[dim]:bg-black/50 motion-reduce:transition-none",
+                    entry.id !== picked &&
+                      (call ? "inset-ring-2" : "hover:inset-ring-1")
+                  )}
                   style={
                     {
                       flex: column.tabbed
                         ? "1 1 0"
                         : heightAt(column.heights[e]),
-                      "--overview-frame":
-                        entry.id === picked
-                          ? "var(--focus)"
-                          : call
-                            ? "var(--attention)"
-                            : "color-mix(in oklab, var(--overview-foreground) 35%, transparent)",
+                      "--overview-frame": call
+                        ? "var(--attention)"
+                        : "color-mix(in oklab, var(--overview-foreground) 35%, transparent)",
                     } as CSSProperties
                   }
                   onClick={(event) => {

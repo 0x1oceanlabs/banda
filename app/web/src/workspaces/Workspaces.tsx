@@ -193,6 +193,7 @@ export function Workspaces({
             <Strip
               workspace={workspace}
               live={live}
+              selected={current && (overview || live)}
               engine={engine}
               modules={modules}
               spaceName={spaceName}
@@ -214,6 +215,18 @@ export function Workspaces({
         {...{ [PANE_LAYER]: "" }}
         className="pointer-events-none absolute inset-0 z-1"
       />
+      {overview && (
+        <div
+          data-overview-focus-clip=""
+          aria-hidden="true"
+          className="pointer-events-none invisible absolute top-0 left-0 z-2 overflow-clip"
+        >
+          <div
+            data-overview-focus=""
+            className="absolute top-0 left-0 outline-[length:calc(var(--tile-border)+var(--focus-ring))] outline-offset-[calc(-1*var(--tile-border))] outline-focus outline-solid"
+          />
+        </div>
+      )}
     </div>
   )
 }

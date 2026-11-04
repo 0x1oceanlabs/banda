@@ -68,8 +68,8 @@ type View = HTMLElement & {
   getWebContentsId(): number
 }
 
-/** Where a page shows: the Pane's slot, and whether its tile has the focus. */
-type Slot = { element: HTMLElement; focused: boolean }
+/** Where a page shows, and whether its tile looks selected. */
+type Slot = { element: HTMLElement; selected: boolean }
 
 /** Where the page goes on this frame: none while it waits out of sight. */
 type Place = {
@@ -132,12 +132,12 @@ export class Page {
   }
 
   /** Shows the page over `element`, until `release`. */
-  show(element: HTMLElement, focused: boolean): void {
+  show(element: HTMLElement, selected: boolean): void {
     if (this.slot?.element !== element) {
       this.clips = clipsOf(element, this.box.parentElement!)
       this.radius = cornerOf(element)
     }
-    this.slot = { element, focused }
+    this.slot = { element, selected }
     follow()
   }
 
@@ -228,7 +228,7 @@ export class Page {
       height,
       transform: `translate(${rect.left - layer.left}px, ${rect.top - layer.top}px) scale(${scale})`,
       clip: `inset(${(top - rect.top) / scale}px ${(rect.right - right) / scale}px ${(rect.bottom - bottom) / scale}px ${(left - rect.left) / scale}px round 0 0 ${r}px ${r}px)`,
-      dim: !slot.focused,
+      dim: !slot.selected,
     }
   }
 

@@ -104,7 +104,6 @@ test("the open overview follows the theme and keeps the desk's glass tinted once
   await expect
     .poll(async () => (await colour(tile, "backgroundColor")).alpha)
     .toBeGreaterThan(0.25)
-  await page.keyboard.press("Escape")
   await page.mouse.up()
   await expect(tile).not.toHaveAttribute("data-lifted")
   look(`mode = "dark"\n${GLASS}[motion]\noff = true\n`)
@@ -133,6 +132,144 @@ const scaleOf = (stack: Locator) =>
   stack.evaluate(
     (element) => new DOMMatrixReadOnly(getComputedStyle(element).transform).a
   )
+
+for (const ring of [0, 3]) {
+  test(`the selected Pane keeps one steady frame and its brightness through the overview zoom (ring ${ring})`, async () => {
+    window = await startWindow({
+      look: `[overview]\nzoom = ${ring ? 0.2 : 0.35}\n[tile]\ndim-inactive = 0.55\n[focus]\nring = ${ring}\nborder = "#3fa0e0"\n[motion.overview]\neasing = { duration-ms = 600, curve = "linear" }\n`,
+    })
+    const { page } = window
+    const { thread, composer } = await firstThread(page)
+    await expect(composer).toBeFocused()
+    const id = await thread.getAttribute("data-tile")
+    const real = page.locator(`section[data-tile="${id}"]`)
+    await page.keyboard.press("Alt+KeyN")
+    const launcher = page.getByRole("region", { name: "New Pane" })
+    await expect(launcher).toHaveAttribute("data-focused", "true")
+    const other = page.locator(
+      `section[data-tile="${await launcher.getAttribute("data-tile")}"]`
+    )
+    await page.keyboard.press("Alt+ArrowLeft")
+    await expect(composer).toBeFocused()
+    await expect
+      .poll(() =>
+        real.evaluate((element) => {
+          let opacity = 1
+          for (
+            let node: Element | null = element;
+            node;
+            node = node.parentElement
+          )
+            opacity *= Number(getComputedStyle(node).opacity)
+          return opacity
+        })
+      )
+      .toBe(1)
+    const sample = (pane: Locator) =>
+      pane.evaluate(
+        (element) =>
+          new Promise<
+            {
+              stroke: number
+              outline: string
+              dim: number
+              opacity: number
+              gap: number
+              visible: boolean
+              clipped: number
+            }[]
+          >((resolve) => {
+            const frames: {
+              stroke: number
+              outline: string
+              dim: number
+              opacity: number
+              gap: number
+              visible: boolean
+              clipped: number
+            }[] = []
+            const start = performance.now()
+            const read = () => {
+              const frame =
+                document.querySelector<HTMLElement>("[data-overview-focus]") ??
+                (element as HTMLElement)
+              const style = getComputedStyle(frame)
+              const scale =
+                frame.getBoundingClientRect().width / frame.offsetWidth
+              const box = frame.getBoundingClientRect()
+              const pane = element.getBoundingClientRect()
+              const clip =
+                frame === element
+                  ? null
+                  : frame.parentElement!.getBoundingClientRect()
+              const outset = Math.max(
+                0,
+                parseFloat(style.outlineWidth) + parseFloat(style.outlineOffset)
+              )
+              let opacity = 1
+              for (
+                let parent: HTMLElement | null = element as HTMLElement;
+                parent;
+                parent = parent.parentElement
+              )
+                opacity *= Number(getComputedStyle(parent).opacity)
+              frames.push({
+                stroke: parseFloat(style.outlineWidth) * scale,
+                outline: style.outlineStyle,
+                dim: Number(getComputedStyle(element, "::after").opacity),
+                opacity,
+                visible: style.visibility === "visible",
+                clipped: clip
+                  ? Math.max(
+                      0,
+                      clip.left - box.left + outset,
+                      box.right + outset - clip.right,
+                      clip.top - box.top + outset,
+                      box.bottom + outset - clip.bottom
+                    )
+                  : 0,
+                gap: Math.max(
+                  Math.abs(box.x - pane.x),
+                  Math.abs(box.y - pane.y),
+                  Math.abs(box.width - pane.width),
+                  Math.abs(box.height - pane.height)
+                ),
+              })
+              if (performance.now() - start > 700) resolve(frames)
+              else requestAnimationFrame(read)
+            }
+            read()
+          })
+      )
+    const steady = (frames: Awaited<ReturnType<typeof sample>>) => {
+      expect(frames.length).toBeGreaterThan(5)
+      expect(frames.every((f) => f.outline === "solid")).toBe(true)
+      expect(Math.min(...frames.map((f) => f.stroke))).toBeGreaterThan(
+        1.8 + ring
+      )
+      expect(Math.max(...frames.map((f) => f.stroke))).toBeLessThan(2.2 + ring)
+      expect(Math.max(...frames.map((f) => f.dim))).toBe(0)
+      expect(frames.every((f) => f.opacity === 1)).toBe(true)
+      expect(frames.every((f) => f.visible)).toBe(true)
+      expect(Math.max(...frames.map((f) => f.gap))).toBeLessThan(1 + 2 * ring)
+      expect(Math.max(...frames.map((f) => f.clipped))).toBeLessThan(0.1)
+    }
+    await page.keyboard.press("Alt+KeyO")
+    const overview = page.getByRole("dialog", { name: "Overview" })
+    await expect(overview).toBeFocused()
+    steady(await sample(real))
+    await expect(real).toHaveAttribute("data-focused", "false")
+    await page.keyboard.press("ArrowRight")
+    await expect(overview.locator("[aria-current][data-tile]")).toHaveAttribute(
+      "data-tile",
+      (await other.getAttribute("data-tile")) ?? ""
+    )
+    await page.keyboard.press("Enter")
+    steady(await sample(other))
+    await expect(other).toHaveAttribute("data-focused", "true")
+    await expect(page.locator("[data-overview-state]")).toHaveCount(0)
+  })
+}
 
 test("the overview zooms live workspaces, reverses halfway, and returns focus after closing", async () => {
   window = await startWindow({

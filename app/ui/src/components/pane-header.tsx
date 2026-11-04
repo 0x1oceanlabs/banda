@@ -76,7 +76,7 @@ function PaneHeader({
           size="icon-xs"
           aria-label={`Close ${title}`}
           title="Close (Alt+W)"
-          className="shrink-0 opacity-0 transition-opacity group-hover/tile:opacity-100 group-data-[focused=true]/tile:opacity-100 focus-visible:opacity-100"
+          className="shrink-0 opacity-0 transition-opacity group-hover/tile:opacity-100 group-data-[selected=true]/tile:opacity-100 focus-visible:opacity-100"
           onClick={onClose}
         >
           <XIcon />
