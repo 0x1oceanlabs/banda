@@ -23,8 +23,7 @@ export function ChangedFiles({
       icon={<FileDiffIcon />}
       title={`Edited ${files.length} ${files.length === 1 ? "file" : "files"}`}
       label="Changed files"
-      // DiffCounts sets its own size: the card's counts are in code's.
-      detail={<DiffCounts {...total(files)} className="text-code!" />}
+      detail={<DiffCounts {...total(files)} />}
       action={
         <Button
           size="sm"
@@ -52,11 +51,7 @@ export function ChangedFiles({
                   new
                 </span>
               )}
-              <DiffCounts
-                added={file.added}
-                removed={file.removed}
-                className="text-code!"
-              />
+              <DiffCounts added={file.added} removed={file.removed} />
             </button>
           </li>
         ))}
