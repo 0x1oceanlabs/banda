@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest"
-import { asked, viewOf, VIEW } from "./diff"
+import { asked, viewOf } from "./diff"
 import { CHANGES, changeOf, isTest, labelOf } from "./scope"
 
 describe("a scope", () => {
@@ -68,14 +68,21 @@ describe("a file", () => {
 })
 
 describe("the view", () => {
-  it("starts as T3 Code's: stacked, wrapped, whitespace ignored, the tree shown", () => {
-    expect(viewOf(undefined)).toEqual(VIEW)
-    expect(VIEW).toMatchObject({
+  it("of a Diff opened with none is T3 Code's: stacked, wrapped, whitespace ignored, the tree shown", () => {
+    expect(viewOf(undefined)).toEqual({
       layout: "stacked",
       wrap: true,
       ignoreWhitespace: true,
+      hideTests: false,
       tree: true,
     })
-    expect(viewOf({ layout: "split" }).layout).toBe("split")
+  })
+
+  it("kept in a Pane's args has its gaps filled, and keeps what it chose", () => {
+    expect(viewOf({ layout: "split", tree: false })).toEqual({
+      ...viewOf(undefined),
+      layout: "split",
+      tree: false,
+    })
   })
 })

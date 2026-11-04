@@ -1,4 +1,4 @@
-import type { Status } from "@banda/contract/git"
+import type { Changed, Status } from "@banda/contract/git"
 import { expect, test } from "vitest"
 import { askOf, asksFirst, menuOf, onDefault, quickOf } from "./quick"
 
@@ -16,10 +16,15 @@ const STATUS: Status = {
   added: 0,
   removed: 0,
 }
-const CHANGED = {
-  ...STATUS,
-  files: [{ path: "a.ts", change: "modified", staged: false }],
-} as unknown as Status
+/** A file changed in the work tree, not staged yet. */
+const changed = (path: string): Changed => ({
+  path,
+  status: "modified",
+  staged: false,
+  added: 1,
+  removed: 0,
+})
+const CHANGED: Status = { ...STATUS, files: [changed("a.ts")] }
 const NOW = { writes: true }
 const button = (status: Partial<Status>, now = NOW) =>
   quickOf({ ...STATUS, ...status }, now)
