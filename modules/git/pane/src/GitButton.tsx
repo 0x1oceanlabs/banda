@@ -71,6 +71,8 @@ export function GitButton({
     (hear) => hearRun(space, hear),
     () => runOf(space)
   )
+  // A Harness writes a commit's message: a new Thread's has none yet.
+  const writes = thread !== null
   const [asking, setAsking] = useState<Action | null>(null)
   const [committing, setCommitting] = useState(false)
   const go = (action: Action, feature = false) => {
@@ -100,7 +102,7 @@ export function GitButton({
       </div>
     )
 
-  const quick = quickOf(status, { writes: thread !== null })
+  const quick = quickOf(status, { writes })
   const Icon = ICONS[quick.icon]
   const ask = asking && askOf(asking, status.branch ?? "")
   return (
@@ -139,7 +141,7 @@ export function GitButton({
       {committing && (
         <CommitDialog
           status={status}
-          writes={thread !== null}
+          writes={writes}
           onClose={() => setCommitting(false)}
           onCommit={(commit) =>
             void run(engine, space, thread, "commit", commit)

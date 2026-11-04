@@ -21,6 +21,11 @@ const off = (label: string, hint: string, icon: Quick["icon"]): Quick => ({
   icon,
 })
 
+/** Why a commit cannot have its message written: the button's, the
+ * dialog's and the run's say the same. */
+export const NO_HARNESS =
+  "A new Thread has no Harness to write the message yet."
+
 const UP_TO_DATE = "Branch is up to date. No action needed."
 const DIVERGED = "Branch has diverged from upstream. Rebase or merge first."
 const NO_COMMITS = "No local commits to push."
@@ -47,12 +52,7 @@ export function quickOf(
   const behind = status.behind ?? 0
   const upstream = status.upstream !== undefined
   if (status.files.length > 0) {
-    if (!writes)
-      return off(
-        "Commit",
-        "The Thread's Harness writes the message once the Thread has started.",
-        "commit"
-      )
+    if (!writes) return off("Commit", NO_HARNESS, "commit")
     // Nowhere to push, or the push would be refused: commit alone.
     if (behind > 0 || (!upstream && !status.remote))
       return { label: "Commit", action: "commit", icon: "commit" }
