@@ -84,10 +84,17 @@ function fontForCell(cell: GhosttyCell, fontSize: number, fontFamily: string): s
   return `${style} ${weight} ${fontSize}px ${fontFamily}`;
 }
 
+/** `value` CSS pixels moved to the nearest edge of a screen pixel. */
+export function onDevicePixel(value: number, ratio: number): number {
+  return Math.round(value * ratio) / ratio;
+}
+
 export function measureGhosttyCell(
   context: CanvasRenderingContext2D,
   fontSize: number,
   fontFamily: string,
+  // Banda: screen pixels per CSS pixel; a row is whole ones tall (README).
+  ratio = globalThis.devicePixelRatio || 1,
 ): GhosttyCellMetrics {
   context.font = `normal 400 ${fontSize}px ${fontFamily}`;
   const widthMeasurement = context.measureText("M");
@@ -95,11 +102,13 @@ export function measureGhosttyCell(
   const ascent = verticalMeasurement.actualBoundingBoxAscent || fontSize;
   const descent = verticalMeasurement.actualBoundingBoxDescent;
   const glyphHeight = ascent + descent;
-  const height = Math.max(1, Math.round(fontSize * 1.35), Math.ceil(glyphHeight));
+  const height =
+    Math.max(1, Math.round(Math.max(Math.round(fontSize * 1.35), Math.ceil(glyphHeight)) * ratio)) /
+    ratio;
   return {
     width: Math.max(1, widthMeasurement.width),
     height,
-    baseline: Math.round((height - glyphHeight) / 2 + ascent),
+    baseline: onDevicePixel(Math.round((height - glyphHeight) / 2 + ascent), ratio),
   };
 }
 
@@ -175,7 +184,9 @@ export function renderGhosttySnapshot(options: {
     if (!row) continue;
     const top = originY + rowIndex * metrics.height;
 
-    context.clearRect(padding, top, snapshot.cols * metrics.width, metrics.height);
+    // Banda: the whole width, padding too, so no half pixel at either edge
+    // keeps what a cursor left there.
+    context.clearRect(0, top, context.canvas.width, metrics.height);
 
     let backgroundStart = 0;
     while (backgroundStart < row.cells.length) {

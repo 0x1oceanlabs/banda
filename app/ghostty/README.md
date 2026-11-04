@@ -23,10 +23,18 @@ embeds against `native/VERSION`.
 ## What changed
 
 Import paths, so the files find each other here, and the tests import
-`vitest` instead of T3's `vite-plus/test`. And one drawing change, marked
-`Banda:` in `src/t3/surface.ts` and `src/t3/renderer.ts`: the canvas has
-alpha, and the default background is left clear rather than filled, so the
-Pane's tile shows through it (ADR 0023). A newer pin keeps it by hand. T3's tests of its own terminal
-drawer are not brought: they test T3's transport, not the adapter.
+`vitest` instead of T3's `vite-plus/test`. And two drawing changes, marked
+`Banda:` in `src/t3/surface.ts` and `src/t3/renderer.ts`, that a newer pin
+keeps by hand:
+
+- the canvas has alpha, and the default background is left clear rather
+  than filled, so the Pane's tile shows through it (ADR 0023);
+- a row is whole screen pixels tall and starts on a screen pixel's edge, at
+  any scale, and a row's redraw clears its whole width: at a scale such as
+  1.6 a row shared half a pixel with the next, and a cursor that left a row
+  stayed there as a line (`src/pixels.test.ts`).
+
+T3's tests of its own terminal drawer are not brought: they test T3's
+transport, not the adapter.
 
 `src/index.ts` is Banda's: it names what the window uses.
