@@ -24,12 +24,16 @@ export default {
   // Main and its preload are bundled (build.mjs); the packages it leaves
   // out of the bundle come from node_modules.
   files: ["out/**"],
-  // Where main looks for them packed: resources/banda and resources/web/dist.
+  // Where main looks for them packed: resources/banda, resources/web/dist
+  // and resources/adapters.
   // Beside them, Banda's license and the notices of what it is built from
   // (scripts/licenses.mjs, ADR 0038).
   extraResources: [
     { from: "../../target/release/banda", to: "banda" },
     { from: "../web/dist", to: "web/dist" },
+    // The ACP adapters, bundled, that the engine runs on Electron's Node
+    // (ADR 0059).
+    { from: "../../modules/harnesses/desktop/adapters", to: "adapters" },
     { from: "../../LICENSE", to: "LICENSE" },
     { from: "../../NOTICE", to: "NOTICE" },
     {

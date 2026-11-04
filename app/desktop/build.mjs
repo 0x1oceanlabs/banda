@@ -2,6 +2,8 @@
 // preload cannot be a module) into out/.
 import { build } from "esbuild"
 import { CHANNELS } from "./src/channel.ts"
+// The ACP adapters the app carries, bundled as it is imported (ADR 0059).
+import "../../modules/harnesses/desktop/adapters.mjs"
 
 // A checkout is local; a name that is no channel stops the build, as it
 // stops the engine's (engine/build.rs).

@@ -87,9 +87,10 @@ impl Process {
     {
         // The entry as it starts, with its CLI's path when it runs one.
         let (harness, cli) = crate::cli::find(harness).await?;
-        let config = AcpAgentConfig::new(&harness.command)
-            .args(harness.args.iter().cloned())
-            .envs(harness.env.clone());
+        let start = harness.start();
+        let config = AcpAgentConfig::new(&start.program)
+            .args(start.args)
+            .envs(start.env);
         let recording = match &harness.record {
             Some(folder) => Some(Recording::start(folder, &harness.id)?),
             None => None,

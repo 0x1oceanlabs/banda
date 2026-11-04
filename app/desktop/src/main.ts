@@ -124,6 +124,15 @@ const engineBinary =
   (app.isPackaged
     ? join(process.resourcesPath, "banda")
     : resolve(here, "../../target/debug/banda"))
+// The ACP adapters the app carries, which the engine runs on this
+// Electron as Node (ADR 0059): a checkout's are built beside the
+// harnesses module's desktop part (adapters.mjs).
+const carried = {
+  BANDA_NODE: process.execPath,
+  BANDA_ADAPTERS: app.isPackaged
+    ? join(process.resourcesPath, "adapters")
+    : resolve(here, "../../modules/harnesses/desktop/adapters"),
+}
 
 // The window keeps its profile in the engine's state folder, so Banda,
 // Banda Dev, a checkout and a test never share one (ADR 0033).
@@ -162,7 +171,8 @@ const runtime = ManagedRuntime.make(
             shell: process.env.SHELL ?? userInfo().shell ?? undefined,
             own: process.env.PATH,
             term: process.env.TERM,
-          })
+          }),
+          carried
         ),
         lookLayer(engineBinary),
         settingsLayer(engineBinary),

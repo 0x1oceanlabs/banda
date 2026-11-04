@@ -53,6 +53,7 @@ fn harnesses_with(env: &[(&str, &str)]) -> Harnesses {
             .map(|(k, v)| (k.to_string(), v.to_string()))
             .collect(),
         cli: None,
+        carried: None,
         record: None,
     }])
 }
@@ -1258,6 +1259,7 @@ fn with_cli_since(program: &str, minimum: Option<&str>) -> Agents {
             variable: "FAKE_AGENT_CLI".to_owned(),
             minimum: minimum.map(str::to_owned),
         }),
+        carried: None,
         record: None,
     }]))
 }
@@ -2712,9 +2714,12 @@ async fn a_command_that_ends_after_its_turn_opens_no_turn() {
 /// Starts the real Claude Code and Codex adapters on the Person's own CLIs
 /// and asks what they run and who is signed in; no model is called. Run it
 /// by hand: `cargo test -p banda-agents --test agents real -- --ignored
-/// --nocapture`.
+/// --nocapture`. With `BANDA_NODE` (an Electron) and `BANDA_ADAPTERS`
+/// (`modules/harnesses/desktop/adapters`, from `pnpm --filter
+/// @banda/harnesses-desktop adapters`) set, these real runs go through the
+/// adapters the app carries, as Banda's do; without, `npx` fetches them.
 #[tokio::test]
-#[ignore = "starts the real adapters, which npx may download"]
+#[ignore = "starts the real adapters"]
 async fn the_real_harnesses_say_what_they_run_and_who_is_signed_in() {
     let known = Harnesses::known();
     let real = ["claude", "codex"].map(|id| known.find(id).unwrap().clone());
@@ -2727,6 +2732,7 @@ async fn the_real_harnesses_say_what_they_run_and_who_is_signed_in() {
         args: Vec::new(),
         env: Default::default(),
         cli: None,
+        carried: None,
         record: None,
     };
     let harnesses = Harnesses::new([vec![fake], real.to_vec()].concat());

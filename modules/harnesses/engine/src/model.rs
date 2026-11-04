@@ -26,17 +26,14 @@ pub struct HarnessView {
 
 impl HarnessView {
     pub(crate) fn of(harness: &crate::Harness) -> Self {
+        let start = harness.start();
         Self {
             id: harness.id.clone(),
             name: harness.name.clone(),
             short: (harness.short.clone()).unwrap_or_else(|| harness.name.clone()),
             enabled: harness.enabled,
-            command: [&harness.command]
-                .into_iter()
-                .chain(&harness.args)
-                .cloned()
-                .collect(),
-            env: harness.env.keys().cloned().collect(),
+            command: [start.program].into_iter().chain(start.args).collect(),
+            env: start.env.into_keys().collect(),
         }
     }
 }

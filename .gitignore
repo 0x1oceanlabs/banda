@@ -7,3 +7,5 @@ out/
 test-results/
 playwright-report/
 *.tsbuildinfo
+# The ACP adapters, bundled for the app to carry (ADR 0059).
+/modules/harnesses/desktop/adapters/
