@@ -52,13 +52,26 @@ export function BranchPicker({
   onOpened: () => void
 }) {
   const [own, setOwn] = useState(false)
+  // The branch whose context menu is open.
+  const [menu, setMenu] = useState<string | null>(null)
   const open = own || asked
   const setOpen = (open: boolean) => {
     setOwn(open)
     if (!open && asked) onOpened()
   }
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover
+      open={open}
+      onOpenChange={(open, details) => {
+        // Escape with a branch's context menu open closes the menu
+        // alone, whichever of them hears the key first.
+        if (!open && details.reason === "escape-key" && menu !== null) {
+          setMenu(null)
+          return details.cancel()
+        }
+        setOpen(open)
+      }}
+    >
       <PopoverTrigger
         render={
           <DetailsRow
@@ -76,7 +89,13 @@ export function BranchPicker({
         }
       />
       <PopoverContent align="start" className="w-72 gap-0 p-1">
-        <Branches engine={engine} space={space} onDone={() => setOpen(false)} />
+        <Branches
+          engine={engine}
+          space={space}
+          menu={menu}
+          onMenu={setMenu}
+          onDone={() => setOpen(false)}
+        />
       </PopoverContent>
     </Popover>
   )
@@ -92,10 +111,15 @@ const LISTED = 100
 function Branches({
   engine,
   space,
+  menu,
+  onMenu,
   onDone,
 }: {
   engine: Engine
   space: SpaceId
+  /** The branch whose context menu is open, by its key. */
+  menu: string | null
+  onMenu: (key: string | null) => void
   onDone: () => void
 }) {
   const [query, setQuery] = useState("")
@@ -202,8 +226,13 @@ function Branches({
               : ref.remote
                 ? "remote"
                 : undefined
+          const key = `${ref.remote}:${ref.name}`
           return (
-            <ContextMenu key={`${ref.remote}:${ref.name}`}>
+            <ContextMenu
+              key={key}
+              open={menu === key}
+              onOpenChange={(open) => onMenu(open ? key : null)}
+            >
               <ContextMenuTrigger
                 render={
                   <Suggestion
