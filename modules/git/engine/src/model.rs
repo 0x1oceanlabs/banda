@@ -14,6 +14,12 @@ pub struct Status {
     /// Whether the folder is in a git repository; the rest is empty when
     /// it is not.
     pub repo: bool,
+    /// Why git will not read the repository the folder is in, in plain
+    /// words, as when another user owns it; `repo` is false then, and no
+    /// other method works either.
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub problem: Option<String>,
     /// The branch checked out; none when `HEAD` is detached.
     #[ts(optional)]
     #[serde(default, skip_serializing_if = "Option::is_none")]

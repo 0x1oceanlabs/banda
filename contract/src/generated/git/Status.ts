@@ -16,6 +16,12 @@ at: number,
  */
 repo: boolean, 
 /**
+ * Why git will not read the repository the folder is in, in plain
+ * words, as when another user owns it; `repo` is false then, and no
+ * other method works either.
+ */
+problem?: string, 
+/**
  * The branch checked out; none when `HEAD` is detached.
  */
 branch?: string, 

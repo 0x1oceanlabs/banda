@@ -187,7 +187,16 @@ pub async fn diff(repo: &Repo, ask: DiffAsk, at: i64) -> Result<Diff, Refusal> {
             for ran in futures::future::join_all(patches).await {
                 let ran = ran?;
                 truncated |= ran.truncated;
-                patch.push_str(&String::from_utf8_lossy(&ran.stdout));
+                // A patch cut ends at its last whole line, so the next
+                // file's begins a line of its own.
+                let kept = match ran.truncated {
+                    true => whole_lines(&ran.stdout),
+                    false => &ran.stdout[..],
+                };
+                patch.push_str(&String::from_utf8_lossy(kept));
+                if !patch.is_empty() && !patch.ends_with('\n') {
+                    patch.push('\n');
+                }
             }
             (files, patch)
         }
@@ -231,10 +240,15 @@ fn whole_files(patch: &[u8]) -> &[u8] {
         .find(|&at| patch[at - 1] == b'\n' && starts(at));
     match last {
         Some(at) => &patch[..at],
-        None => match patch.iter().rposition(|b| *b == b'\n') {
-            Some(at) => &patch[..=at],
-            None => &[],
-        },
+        None => whole_lines(patch),
+    }
+}
+
+/// A cut patch up to its last whole line.
+fn whole_lines(patch: &[u8]) -> &[u8] {
+    match patch.iter().rposition(|b| *b == b'\n') {
+        Some(at) => &patch[..=at],
+        None => &[],
     }
 }
 
@@ -299,7 +313,11 @@ impl Scratch {
         ]
         .concat();
         let paths: Vec<&str> = untracked.iter().map(String::as_str).collect();
-        repo.run_on_paths(&args, &paths, Some(&index)).await?;
+        let opts = Opts {
+            index: Some(&index),
+            ..Opts::default()
+        };
+        repo.run_on_paths(&args, &paths, opts).await?;
         Ok(Scratch {
             _folder: Some(folder),
             index: Some(index),

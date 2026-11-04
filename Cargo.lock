@@ -371,6 +371,7 @@ dependencies = [
  "async-trait",
  "banda-kernel",
  "futures",
+ "rustix",
  "serde",
  "serde_json",
  "tempfile",

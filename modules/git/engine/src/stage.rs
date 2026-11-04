@@ -6,8 +6,9 @@
 //! scope), unstage the index against `HEAD` (Staged). A hunk is the lines
 //! the Diff drew: git diffs the file again with no context, takes every
 //! change in those lines and applies just those, so a hunk drawn with
-//! whitespace hidden takes its whitespace along. Nothing is changed when
-//! the file is no longer as the Diff drew it.
+//! whitespace hidden takes its whitespace along, and a hunk of a renamed
+//! file changes its lines alone, never the rename. Nothing is changed
+//! when the file is no longer as the Diff drew it.
 
 use crate::diff::{sides, untracked};
 use crate::model::{ChangeAsk, HunkAsk, Scope};
@@ -42,7 +43,7 @@ pub async fn change(repo: &Repo, act: Act, ask: ChangeAsk) -> Result<(), Refusal
 
 /// `args` on the files, given as they are.
 async fn on(repo: &Repo, args: &[&str], files: &[&str]) -> Result<(), Refusal> {
-    repo.run_on_paths(args, files, None).await?;
+    repo.run_on_paths(args, files, Opts::writes()).await?;
     Ok(())
 }
 
@@ -99,7 +100,7 @@ async fn lines(repo: &Repo, act: Act, files: &[&str], hunk: HunkAsk) -> Result<(
     }
     let opts = Opts {
         stdin: Some(picked.into_bytes()),
-        ..Opts::default()
+        ..Opts::writes()
     };
     let applied = git(&repo.top, apply, opts).await?;
     if applied.success {
@@ -121,7 +122,7 @@ fn pick(patch: &str, hunk: &HunkAsk) -> Option<String> {
     if header.matches("diff --git ").count() != 1 || !same_objects(header, hunk) {
         return None;
     }
-    let mut picked = header.to_owned();
+    let mut picked = lines_alone(header)?;
     let mut taken = false;
     // A change is in the hunk when some of its lines are, on a side.
     let within = |(start, lines): (u32, u32), (from, count): (u32, u32)| {
@@ -137,6 +138,49 @@ fn pick(patch: &str, hunk: &HunkAsk) -> Option<String> {
         }
     }
     taken.then_some(picked)
+}
+
+/// A file's patch header as one of its lines alone: a rename's or a
+/// copy's is made a change of the file where it is now, so the hunk
+/// applied, or applied in reverse, leaves the file where it is. None when
+/// git named no new side.
+fn lines_alone(header: &str) -> Option<String> {
+    const MOVES: [&str; 8] = [
+        "similarity index ",
+        "dissimilarity index ",
+        "rename from ",
+        "rename to ",
+        "copy from ",
+        "copy to ",
+        "old mode ",
+        "new mode ",
+    ];
+    let moved = header.lines().any(|line| {
+        ["rename from ", "copy from "]
+            .iter()
+            .any(|m| line.starts_with(m))
+    });
+    if !moved {
+        return Some(header.to_owned());
+    }
+    // Its name as git wrote it after `+++ `: `b/path`, or quoted.
+    let new = header.lines().find_map(|line| line.strip_prefix("+++ "))?;
+    let old = match new.strip_prefix("\"b/") {
+        Some(path) => format!("\"a/{path}"),
+        None => format!("a/{}", new.strip_prefix("b/")?),
+    };
+    let mut alone = String::new();
+    for line in header.lines() {
+        let line = match line {
+            line if line.starts_with("diff --git ") => format!("diff --git {old} {new}"),
+            line if line.starts_with("--- ") => format!("--- {old}"),
+            line if MOVES.iter().any(|m| line.starts_with(m)) => continue,
+            line => line.to_owned(),
+        };
+        alone.push_str(&line);
+        alone.push('\n');
+    }
+    Some(alone)
 }
 
 /// Whether the patch's `index` line names the objects the Diff drew.
@@ -210,6 +254,25 @@ mod tests {
         let second = pick(PATCH, &hunk((10, 3), (11, 4))).unwrap();
         assert!(second.contains("+new") && !second.contains("+two"));
         assert!(second.starts_with("diff --git a/f b/f\nindex "));
+    }
+
+    #[test]
+    fn a_hunk_of_a_renamed_file_leaves_it_where_it_is() {
+        let renamed = PATCH.replace(
+            "diff --git a/f b/f\nindex ",
+            "diff --git a/old b/f\nsimilarity index 80%\nrename from old\nrename to f\nindex ",
+        );
+        let renamed = renamed.replace("--- a/f\n", "--- a/old\n");
+        let picked = pick(&renamed, &hunk((1, 5), (1, 5))).unwrap();
+        assert!(picked.starts_with("diff --git a/f b/f\nindex "), "{picked}");
+        assert!(
+            picked.contains("\n--- a/f\n+++ b/f\n@@ -2 +2 @@\n"),
+            "{picked}"
+        );
+        assert!(
+            !picked.contains("rename") && !picked.contains("+new"),
+            "{picked}"
+        );
     }
 
     #[test]

@@ -8,9 +8,9 @@
 //! read, and never take the repository's locks, so they run beside the
 //! Person's own git and an Agent's; `watch` follows the status as it
 //! changes. `stage`, `unstage`, `revert`, `act` (the git button's commit,
-//! push and pull), `switch`, `branch` and `init` write, one at a time. A
-//! folder git does not know is no repository: `status` says so, `init`
-//! makes it one, and the rest refuse.
+//! push and pull), `switch`, `branch` and `init` write, one at a time in
+//! each repository. A folder git does not know is no repository: `status`
+//! says so, `init` makes it one, and the rest refuse.
 
 pub mod model;
 
@@ -33,20 +33,39 @@ use model::{
 };
 use repo::Repo;
 use serde_json::Value;
-use std::sync::Arc;
+use std::collections::HashMap;
+use std::path::{Path, PathBuf};
+use std::sync::{Arc, Mutex};
 
 #[derive(Default)]
 pub struct Git {
-    writing: Writes,
+    writing: Repositories,
 }
 
-/// Held while one of its commands writes, so two of them never race for
-/// the index's lock; `act` holds it till it ends. As it is let go, each
-/// `git.watch` reads the status again at once.
+/// Each repository's [`Writes`], by its top folder, or by the folder of a
+/// Space that is no repository yet: a hook that runs long in one keeps no
+/// other waiting. Every Space in a repository shares its own.
 #[derive(Clone, Default)]
-struct Writes {
+pub(crate) struct Repositories(Arc<Mutex<HashMap<PathBuf, Writes>>>);
+
+impl Repositories {
+    pub(crate) fn of(&self, top: &Path) -> Writes {
+        let mut known = self
+            .0
+            .lock()
+            .unwrap_or_else(|poisoned| poisoned.into_inner());
+        known.entry(top.to_owned()).or_default().clone()
+    }
+}
+
+/// Held while one of its commands writes in a repository, so two of them
+/// never race for its index's lock; `act` holds it till it ends. As it is
+/// let go, each `git.watch` of that repository reads the status again at
+/// once.
+#[derive(Clone, Default)]
+pub(crate) struct Writes {
     lock: Arc<tokio::sync::Mutex<()>>,
-    done: Arc<tokio::sync::Notify>,
+    pub(crate) done: Arc<tokio::sync::Notify>,
 }
 
 impl Writes {
@@ -55,6 +74,11 @@ impl Writes {
             _lock: self.lock.clone().lock_owned().await,
             done: self.done.clone(),
         }
+    }
+
+    /// Whether a command of Banda's writes in the repository now.
+    pub(crate) fn busy(&self) -> bool {
+        self.lock.try_lock().is_err()
     }
 }
 
@@ -197,20 +221,17 @@ impl Git {
 
     async fn change(&self, call: Call, act: stage::Act, ask: ChangeAsk) -> Result<(), Refusal> {
         let repo = Repo::open(&call.space().folder()).await?;
-        let _writing = self.writing.hold().await;
+        let _writing = self.writing.of(&repo.top).hold().await;
         stage::change(&repo, act, ask).await
     }
 
     async fn watch(&self, call: Call, _: Nothing) -> Result<Stream, Refusal> {
-        Ok(watch::watch(
-            call.space().clone(),
-            self.writing.done.clone(),
-        ))
+        Ok(watch::watch(call.space().clone(), self.writing.clone()))
     }
 
     async fn act(&self, call: Call, ask: ActAsk) -> Result<Stream, Refusal> {
         let repo = Repo::open(&call.space().folder()).await?;
-        let writing = self.writing.clone();
+        let writing = self.writing.of(&repo.top);
         let (say, heard) = tokio::sync::mpsc::channel(64);
         // It goes on when the window lets go: a commit is not left half
         // done.
@@ -225,13 +246,13 @@ impl Git {
 
     async fn switch(&self, call: Call, ask: SwitchAsk) -> Result<(), Refusal> {
         let repo = Repo::open(&call.space().folder()).await?;
-        let _writing = self.writing.hold().await;
+        let _writing = self.writing.of(&repo.top).hold().await;
         act::switch(&repo, &ask.name).await
     }
 
     async fn branch(&self, call: Call, ask: BranchAsk) -> Result<(), Refusal> {
         let repo = Repo::open(&call.space().folder()).await?;
-        let _writing = self.writing.hold().await;
+        let _writing = self.writing.of(&repo.top).hold().await;
         act::make_branch(&repo, &ask.name, ask.from.as_deref()).await
     }
 
@@ -244,7 +265,8 @@ impl Git {
     }
 
     async fn init(&self, call: Call, _: Nothing) -> Result<(), Refusal> {
-        let _writing = self.writing.hold().await;
-        act::init(&call.space().folder()).await
+        let folder = call.space().folder();
+        let _writing = self.writing.of(&folder).hold().await;
+        act::init(&folder).await
     }
 }

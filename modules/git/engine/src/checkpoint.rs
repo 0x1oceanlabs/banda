@@ -97,6 +97,11 @@ pub async fn capture(repo: &Repo, reference: &str) -> Result<(), Refusal> {
 
 /// Lets go of the checkpoints of `turns` of `thread`.
 async fn forget(repo: &Repo, thread: &str, turns: &[&str]) -> Result<(), Refusal> {
+    // A turn begun again after a restart is heard twice, and a ref
+    // deleted twice fails the whole batch.
+    let mut turns = turns.to_vec();
+    turns.sort_unstable();
+    turns.dedup();
     let mut deletes = String::new();
     for turn in turns {
         for side in [When::Before, When::After] {

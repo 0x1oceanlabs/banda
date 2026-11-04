@@ -248,6 +248,10 @@ impl World {
     }
 }
 
+/// Makes the git the engine runs take every repository for another
+/// user's, as git's own tests do; the git a test runs itself does not.
+const OTHER_OWNER: &str = "GIT_TEST_ASSUME_DIFFERENT_OWNER";
+
 /// Runs git in `folder`, and says what it printed.
 fn run_git(folder: &std::path::Path, args: &[&str]) -> String {
     let out = Command::new("git")
@@ -256,6 +260,7 @@ fn run_git(folder: &std::path::Path, args: &[&str]) -> String {
         .env_remove("GIT_DIR")
         .env_remove("GIT_INDEX_FILE")
         .env_remove("GIT_WORK_TREE")
+        .env_remove(OTHER_OWNER)
         .output()
         .unwrap();
     assert!(
@@ -790,9 +795,12 @@ async fn a_turn_is_the_work_tree_from_its_checkpoint_as_it_began_to_as_it_ended(
 /// hunk's lines and the file's objects, read from the patch as the Pane
 /// reads them.
 fn hunk_of(diff: &Diff, path: &str, n: usize) -> Value {
-    let start = diff
-        .patch
-        .find(&format!("diff --git a/{path} b/{path}\n"))
+    let start = (diff.patch.match_indices("diff --git "))
+        .map(|(at, _)| at)
+        .find(|at| {
+            let line = diff.patch[*at..].lines().next().unwrap();
+            line.ends_with(&format!(" b/{path}"))
+        })
         .unwrap_or_else(|| panic!("{path} in {}", diff.patch));
     let file = &diff.patch[start..];
     let file = match file[1..].find("\ndiff --git ") {
@@ -824,8 +832,14 @@ fn hunk_of(diff: &Diff, path: &str, n: usize) -> Value {
     let [old_start, old_lines, new_start, new_lines] = ranges[..] else {
         panic!("{header}")
     };
+    let mut files = vec![path.to_owned()];
+    files.extend(
+        file.lines()
+            .find_map(|line| line.strip_prefix("rename from "))
+            .map(str::to_owned),
+    );
     json!({
-        "files": [path],
+        "files": files,
         "hunk": {
             "old_start": old_start, "old_lines": old_lines,
             "new_start": new_start, "new_lines": new_lines,
@@ -1172,9 +1186,12 @@ async fn a_branch_behind_pulls_and_one_that_diverged_cannot_push() {
     let said = world
         .act(json!({ "action": "commit_push", "message": "Ours" }))
         .await;
+    let short = world.git(&["rev-parse", "--short", "HEAD"]);
     assert_eq!(
         failed(&said),
-        "The remote has commits this branch lacks: pull them first."
+        format!(
+            "Committed {short}, but the push failed. The remote has commits this branch lacks: pull them first."
+        )
     );
     world.git(&["fetch", "--quiet"]);
     let said = world.act(json!({ "action": "pull" })).await;
@@ -1352,4 +1369,358 @@ async fn a_reply_is_a_message_and_a_branch_no_branch_has() {
         .await
         .unwrap();
     assert_eq!(said, json!({ "message": "Fix the bar" }));
+}
+
+#[tokio::test]
+async fn a_hunk_of_a_staged_rename_unstages_from_where_it_is_now() {
+    let world = World::new().await;
+    world.write("ten.txt", TEN);
+    world.commit("ten");
+    world.git(&["mv", "ten.txt", "moved.txt"]);
+    world.write(
+        "moved.txt",
+        &TEN.replace("1\n", "one\n").replace("10\n", "ten\n"),
+    );
+    world.git(&["add", "moved.txt"]);
+
+    let staged = world.diff(json!({ "scope": { "kind": "staged" } })).await;
+    world
+        .call("git.unstage", hunk_of(&staged, "moved.txt", 1))
+        .await
+        .unwrap();
+    let staged = world.git(&["diff", "--cached", "-M", "--name-status"]);
+    assert!(
+        staged.starts_with("R") && staged.ends_with("\tten.txt\tmoved.txt"),
+        "{staged}"
+    );
+    let staged = world.git(&["show", ":moved.txt"]);
+    assert_eq!(format!("{staged}\n"), TEN.replace("1\n", "one\n"));
+    let unstaged = world.git(&["diff"]);
+    assert!(
+        unstaged.contains("+ten") && !unstaged.contains("+one"),
+        "{unstaged}"
+    );
+}
+
+#[tokio::test]
+async fn a_commit_during_a_conflict_waits_for_it_to_be_resolved() {
+    let world = World::committed().await;
+    world.git(&["checkout", "--quiet", "-b", "other"]);
+    world.write("a.txt", "theirs\n");
+    world.commit("theirs");
+    world.git(&["checkout", "--quiet", "main"]);
+    world.write("a.txt", "ours\n");
+    world.commit("ours");
+    let merged = Command::new("git")
+        .args(["merge", "--quiet", "other"])
+        .current_dir(&world.folder)
+        .output()
+        .unwrap();
+    assert!(!merged.status.success());
+    world.write("b.txt", "changed\n");
+    let head = world.git(&["rev-parse", "HEAD"]);
+
+    for ask in [
+        json!({ "action": "commit", "message": "Merge" }),
+        json!({ "action": "commit", "message": "Merge", "files": ["b.txt"] }),
+    ] {
+        let said = world.act(ask).await;
+        assert_eq!(failed(&said), "Resolve the conflicts first: a.txt.");
+    }
+    assert_eq!(world.git(&["rev-parse", "HEAD"]), head);
+    assert!(world.git(&["status", "--porcelain"]).contains("UU a.txt"));
+}
+
+#[tokio::test]
+async fn a_commit_of_a_chosen_rename_takes_its_old_path_away() {
+    let world = World::committed().await;
+    world.git(&["mv", "d.txt", "kept.txt"]);
+    world.write("a.txt", "changed\n");
+    let said = world
+        .call("git.prompt", json!({ "files": ["kept.txt"] }))
+        .await
+        .unwrap();
+    let prompt = said["prompt"].as_str().unwrap();
+    assert!(
+        prompt.contains("Files:\nd.txt → kept.txt (+0 −0)\n"),
+        "{prompt}"
+    );
+
+    let said = world
+        .act(json!({ "action": "commit", "message": "Keep d", "files": ["kept.txt"] }))
+        .await;
+    done(&said);
+    assert_eq!(
+        world.git(&["show", "-M", "--name-status", "--format=", "HEAD"]),
+        "R100\td.txt\tkept.txt"
+    );
+    assert_eq!(world.git(&["status", "--porcelain"]), " M a.txt");
+}
+
+#[tokio::test]
+async fn a_pull_that_would_lose_changes_says_so() {
+    let world = World::committed().await;
+    world.remote();
+    world.theirs("main", "a.txt");
+    world.git(&["fetch", "--quiet"]);
+    world.write("a.txt", "mine\n");
+    let said = world.act(json!({ "action": "pull" })).await;
+    assert_eq!(
+        failed(&said),
+        "This would lose changes in some files: commit or stash them first."
+    );
+}
+
+#[tokio::test]
+async fn a_pull_whose_upstream_is_gone_says_so() {
+    let world = World::committed().await;
+    world.remote();
+    world.git(&["checkout", "--quiet", "-b", "feature"]);
+    world.git(&["push", "--quiet", "-u", "origin", "feature"]);
+    world.git(&["push", "--quiet", "origin", "--delete", "feature"]);
+    let said = world.act(json!({ "action": "pull" })).await;
+    assert_eq!(
+        failed(&said),
+        "Its upstream origin/feature is gone from the remote."
+    );
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn a_push_the_remote_refuses_says_what_it_said() {
+    use std::os::unix::fs::PermissionsExt;
+    // A remote in a folder runs its hook as a child of this git, so the
+    // hook is heard by name too.
+    let world = World::committed().await;
+    let remote = world.remote();
+    let hook = remote.join("hooks/pre-receive");
+    std::fs::write(&hook, "#!/bin/sh\necho 'Protected branch' >&2\nexit 1\n").unwrap();
+    std::fs::set_permissions(&hook, std::fs::Permissions::from_mode(0o755)).unwrap();
+    world.write("a.txt", "changed\n");
+    let said = world
+        .act(json!({ "action": "commit_push", "message": "Change a" }))
+        .await;
+    let short = world.git(&["rev-parse", "--short", "HEAD"]);
+    assert_eq!(
+        failed(&said),
+        format!(
+            "Committed {short}, but the push failed. The pre-receive hook stopped it: Protected branch (pre-receive hook declined)"
+        )
+    );
+}
+
+#[tokio::test]
+async fn a_branch_in_the_way_of_a_name_takes_it() {
+    let world = World::committed().await;
+    world.git(&["branch", "fix"]);
+    let refused = world
+        .call("git.branch", json!({ "name": "fix/login" }))
+        .await
+        .unwrap_err();
+    assert_eq!(
+        refused.message,
+        "The branch fix is there, so git can make no branch fix/login: name it otherwise."
+    );
+    world.git(&["branch", "feature/search/box"]);
+    let reply = "{\"subject\": \"Add it\", \"branch\": \"feature/search\"}";
+    let said = world
+        .call("git.written", json!({ "reply": reply, "branch": true }))
+        .await
+        .unwrap();
+    assert_eq!(said["branch"], "feature/search-2");
+}
+
+#[tokio::test]
+async fn a_switch_says_where_a_branch_is_checked_out_and_prefers_its_own() {
+    let world = World::committed().await;
+    world.remote();
+    world.theirs("topic", "topic.txt");
+    world.git(&["fetch", "--quiet"]);
+    // A `topic` of its own, which follows nothing.
+    world.git(&["branch", "--no-track", "topic", "main"]);
+    world
+        .call("git.switch", json!({ "name": "origin/topic" }))
+        .await
+        .unwrap();
+    assert_eq!(world.status().await.branch.as_deref(), Some("topic"));
+    assert_eq!(
+        world.git(&["rev-parse", "HEAD"]),
+        world.git(&["rev-parse", "main"])
+    );
+
+    world.git(&["checkout", "--quiet", "main"]);
+    let elsewhere = world._root.path().join("elsewhere");
+    let path = elsewhere.to_str().unwrap();
+    world.git(&["worktree", "add", "--quiet", path, "topic"]);
+    let refused = world
+        .call("git.switch", json!({ "name": "topic" }))
+        .await
+        .unwrap_err();
+    let at = world.git(&["-C", path, "rev-parse", "--show-toplevel"]);
+    assert_eq!(
+        refused.message,
+        format!("topic is checked out in another worktree at {at}.")
+    );
+}
+
+#[tokio::test]
+async fn a_patch_of_a_file_asked_by_name_is_cut_at_a_whole_line() {
+    let world = World::committed().await;
+    let line = "x".repeat(99);
+    world.write("big.txt", &format!("{line}\n").repeat(12_000));
+    world.write("small.txt", "small\n");
+    world.commit("big");
+    let changed = format!("{}\n", "y".repeat(99)).repeat(12_000);
+    world.write("big.txt", &changed);
+    world.write("small.txt", "smaller\n");
+    let diff = world
+        .diff(json!({ "scope": { "kind": "uncommitted" }, "files": ["big.txt", "small.txt"] }))
+        .await;
+    assert!(diff.truncated);
+    assert!(
+        diff.patch
+            .contains("\ndiff --git a/small.txt b/small.txt\n"),
+        "the next file begins a line of its own"
+    );
+    for kept in diff.patch.lines() {
+        if let Some(said) = kept.strip_prefix('+').filter(|_| !kept.starts_with("+++")) {
+            assert!(said == "y".repeat(99) || said == "smaller", "{said}");
+        }
+    }
+    assert!(diff.patch.ends_with('\n'));
+}
+
+#[tokio::test]
+async fn a_turn_heard_begun_twice_is_let_go_once() {
+    let world = World::committed().await;
+    let (thread, turn) = (SpaceId::new().to_string(), SpaceId::new().to_string());
+    world.say("turn.started", &thread, &turn).await;
+    world.checkpoints(1).await;
+    // As after a restart: the turn begins again.
+    world.say("turn.started", &thread, &turn).await;
+    world.say("turn.ended", &thread, &turn).await;
+    world.checkpoints(2).await;
+    world.say("thread.rewound", &thread, &turn).await;
+    world.checkpoints(0).await;
+}
+
+#[cfg(unix)]
+#[tokio::test]
+async fn a_command_in_one_repository_keeps_none_in_another_waiting() {
+    use std::os::unix::fs::PermissionsExt;
+    let world = World::committed().await;
+    // A second Space of the same engine, with a repository of its own.
+    let second = (world.kernel)
+        .call(
+            Participant::Person(world.owner),
+            "spaces.create",
+            None,
+            Some(CommandId::new()),
+            json!({ "name": "Other" }),
+        )
+        .await
+        .unwrap();
+    let second: SpaceId = serde_json::from_value(second["id"].clone()).unwrap();
+    let other = world
+        .kernel
+        .space(second)
+        .await
+        .unwrap()
+        .folder()
+        .to_path_buf();
+    for args in [
+        &["-c", "init.defaultBranch=main", "init", "--quiet"][..],
+        &["config", "user.name", "Ann"],
+        &["config", "user.email", "ann@example.com"],
+    ] {
+        run_git(&other, args);
+    }
+    std::fs::write(other.join("a.txt"), "one\n").unwrap();
+    run_git(&other, &["add", "--all"]);
+    run_git(&other, &["commit", "--quiet", "-m", "first"]);
+    let hook = world.folder.join(".git/hooks/pre-commit");
+    std::fs::write(&hook, "#!/bin/sh\nsleep 5\n").unwrap();
+    std::fs::set_permissions(&hook, std::fs::Permissions::from_mode(0o755)).unwrap();
+    world.write("a.txt", "changed\n");
+    let person = Participant::Person(world.owner);
+    let mut slow = (world.kernel)
+        .stream(
+            person,
+            "git.act",
+            Some(world.space),
+            json!({ "action": "commit", "message": "Slow" }),
+        )
+        .await
+        .unwrap();
+    // The commit has begun, and its hook runs.
+    while let Some(piece) = slow.recv().await {
+        if piece["kind"] == "hook" {
+            break;
+        }
+    }
+
+    std::fs::write(other.join("a.txt"), "changed\n").unwrap();
+    let staged = (world.kernel).call(
+        person,
+        "git.stage",
+        Some(second),
+        None,
+        json!({ "files": ["a.txt"] }),
+    );
+    tokio::time::timeout(std::time::Duration::from_secs(2), staged)
+        .await
+        .expect("not kept waiting by the other repository's hook")
+        .unwrap();
+    assert_eq!(
+        run_git(&other, &["diff", "--cached", "--name-only"]),
+        "a.txt"
+    );
+}
+
+/// When `OTHER_OWNER` is not set, runs `test` again in a git of its own
+/// with it set, and says whether it passed; when it is, says none.
+fn as_another_owner(test: &str) -> Option<bool> {
+    if std::env::var_os(OTHER_OWNER).is_some() {
+        return None;
+    }
+    let ran = Command::new(std::env::current_exe().unwrap())
+        .args(["--exact", test, "--nocapture"])
+        .env(OTHER_OWNER, "1")
+        .output()
+        .unwrap();
+    let said = String::from_utf8_lossy(&ran.stdout);
+    assert!(
+        said.contains("1 passed"),
+        "{said}{}",
+        String::from_utf8_lossy(&ran.stderr)
+    );
+    Some(ran.status.success())
+}
+
+#[tokio::test]
+async fn a_repository_another_user_owns_says_why_git_will_not_read_it() {
+    if let Some(passed) =
+        as_another_owner("a_repository_another_user_owns_says_why_git_will_not_read_it")
+    {
+        assert!(passed);
+        return;
+    }
+    let world = World::committed().await;
+    let why = "Git does not trust this folder, as another user owns it: add it to git's safe.directory to use it here.";
+    let status = world.status().await;
+    assert!(!status.repo);
+    assert_eq!(status.problem.as_deref(), Some(why));
+    let person = Participant::Person(world.owner);
+    let mut heard = world
+        .kernel
+        .stream(person, "git.watch", Some(world.space), json!({}))
+        .await
+        .unwrap();
+    let watched: Status = serde_json::from_value(heard.recv().await.unwrap()).unwrap();
+    assert_eq!(watched.problem.as_deref(), Some(why));
+    let refused = world
+        .call("git.diff", json!({ "scope": { "kind": "uncommitted" } }))
+        .await
+        .unwrap_err();
+    assert_eq!(refused.message, why);
 }
