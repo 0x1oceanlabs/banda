@@ -22,6 +22,12 @@ const DONE_FOR = 10_000
 /** How often a hook's lines are shown at most, as it prints them. */
 const LINES_EVERY = 200
 
+/** What a run says when the connection broke under it: it is not asked
+ * again, as it may have run. */
+export const LOST = "The connection to the engine was lost; check the status."
+/** What a run says when its stream ended with neither ✓ nor an error. */
+export const UNSAID = "Git stopped without saying how it ended."
+
 const STEPS: Record<Step, string> = {
   branching: "Making the branch…",
   committing: "Committing…",
@@ -108,6 +114,7 @@ export async function run(
       ))
     }
     // A hook's lines come as fast as it prints them: the last one shows.
+    let ended = false
     let line: string | undefined
     let showing: ReturnType<typeof setTimeout> | undefined
     const showLine = () => {
@@ -135,6 +142,7 @@ export async function run(
             showing ??= setTimeout(showLine, LINES_EVERY)
             return
           case "done": {
+            ended = true
             clearTimeout(showing)
             const done: Run = { is: "done", ...piece.done }
             set(space, done)
@@ -146,13 +154,23 @@ export async function run(
             return
           }
           case "failed":
+            ended = true
             clearTimeout(showing)
             return set(space, { is: "failed", message: piece.message })
         }
       },
       (refusal) => {
-        if (refusal) set(space, { is: "failed", message: refusal.message })
-      }
+        clearTimeout(showing)
+        if (ended) return
+        const message = !refusal
+          ? UNSAID
+          : refusal.code === "may_have_run"
+            ? LOST
+            : refusal.message
+        set(space, { is: "failed", message })
+      },
+      // Heard again after a reconnect, it would commit or push again.
+      { once: true }
     )
   } catch (error) {
     set(space, { is: "failed", message: problem(error) })
