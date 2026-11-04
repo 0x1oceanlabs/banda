@@ -19,7 +19,7 @@ import {
 } from "@banda/ui/components/trace"
 import { useAct } from "@banda/ui/hooks/use-act"
 import { BugIcon, CheckIcon, XIcon } from "lucide-react"
-import { Card } from "./Card"
+import { Card, CardBody } from "./Card"
 import type { IssueBody } from "./thread"
 
 type Props = {
@@ -75,68 +75,70 @@ function Draft({ engine, space, item, issue }: Props) {
           : `Add this to issue #${comment_on} on GitHub?`
       }
       action={
-        <span className="font-mono text-xs font-normal text-muted-foreground">
+        <span className="font-mono text-xs text-muted-foreground">
           {fingerprint}
         </span>
       }
     >
-      {editing ? (
-        <div className="flex flex-col gap-2">
-          {comment_on === undefined && (
-            <Input
-              aria-label="Title"
-              value={title}
-              onChange={(event) => setTitle(event.target.value)}
+      <CardBody>
+        {editing ? (
+          <div className="flex flex-col gap-2">
+            {comment_on === undefined && (
+              <Input
+                aria-label="Title"
+                value={title}
+                onChange={(event) => setTitle(event.target.value)}
+              />
+            )}
+            <Textarea
+              aria-label="Body"
+              className="max-h-80 min-h-40 font-mono text-xs"
+              value={body}
+              onChange={(event) => setBody(event.target.value)}
             />
-          )}
-          <Textarea
-            aria-label="Body"
-            className="max-h-80 min-h-40 font-mono text-xs"
-            value={body}
-            onChange={(event) => setBody(event.target.value)}
-          />
-        </div>
-      ) : (
-        <div className="flex flex-col gap-1.5">
-          {comment_on === undefined && (
-            <span className="font-medium">{title}</span>
-          )}
-          <pre className="max-h-40 overflow-auto rounded-md bg-muted px-2.5 py-2 font-mono text-xs whitespace-pre-wrap text-muted-foreground">
-            {body}
-          </pre>
-        </div>
-      )}
-      <p className="text-xs text-muted-foreground">
-        What goes is exactly this text: no paths, no Pane's args, no Thread's
-        words. With gh signed in, Banda files it; else GitHub opens with it
-        filled in.
-      </p>
-      <div className="flex items-center gap-1.5">
-        <Button size="sm" disabled={busy} onClick={() => void send()}>
-          Send
-        </Button>
-        <Button
-          size="sm"
-          variant="secondary"
-          disabled={busy}
-          onClick={() => setEditing(!editing)}
-        >
-          {editing ? "Done" : "Edit"}
-        </Button>
-        <Button
-          size="sm"
-          variant="ghost"
-          disabled={busy}
-          onClick={() => void cancel()}
-        >
-          Cancel
-        </Button>
-      </div>
-      {problem && (
-        <p role="alert" className="text-xs text-destructive">
-          {problem}
+          </div>
+        ) : (
+          <div className="flex flex-col gap-1.5">
+            {comment_on === undefined && (
+              <span className="font-medium">{title}</span>
+            )}
+            <pre className="max-h-40 overflow-auto rounded-md bg-raised px-3 py-2 font-mono text-code whitespace-pre-wrap text-muted-foreground">
+              {body}
+            </pre>
+          </div>
+        )}
+        <p className="text-xs text-muted-foreground">
+          What goes is exactly this text: no paths, no Pane's args, no Thread's
+          words. With gh signed in, Banda files it; else GitHub opens with it
+          filled in.
         </p>
-      )}
+        <div className="flex items-center gap-2">
+          <Button size="sm" disabled={busy} onClick={() => void send()}>
+            Send
+          </Button>
+          <Button
+            size="sm"
+            variant="outline"
+            disabled={busy}
+            onClick={() => setEditing(!editing)}
+          >
+            {editing ? "Done" : "Edit"}
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            disabled={busy}
+            onClick={() => void cancel()}
+          >
+            Cancel
+          </Button>
+        </div>
+        {problem && (
+          <p role="alert" className="text-xs text-destructive">
+            {problem}
+          </p>
+        )}
+      </CardBody>
     </Card>
   )
 }

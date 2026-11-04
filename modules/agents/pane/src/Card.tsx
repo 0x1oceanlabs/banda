@@ -1,12 +1,17 @@
 import { cn } from "@banda/ui/lib/utils"
 
-/** A box in the Thread that waits on the Person, as T3 Code draws one: an
- * icon and what it is, `action` at the end of that line, then `children`.
- * It reads as `label`, or as its title. */
+/**
+ * A card in the Thread, one recipe for all (ADR 0058, decisions 1 and 3):
+ * a block with a line round it; a header of an icon, what it is, `detail`
+ * beside that and `action` at the end; then `children`, in a
+ * {@link CardBody} or as rows of their own. It reads as `label`, or as
+ * its title.
+ */
 export function Card({
   icon,
   title,
   label,
+  detail,
   action,
   className,
   children,
@@ -14,6 +19,8 @@ export function Card({
   icon: React.ReactNode
   title: string
   label?: string
+  /** Beside the title, such as how many lines changed. */
+  detail?: React.ReactNode
   action?: React.ReactNode
   className?: string
   children?: React.ReactNode
@@ -23,18 +30,50 @@ export function Card({
       role="group"
       aria-label={label ?? title}
       className={cn(
-        "flex flex-col gap-3 rounded-xl border bg-card p-3 text-sm",
+        "flex flex-col rounded-block border bg-block text-sm",
         className
       )}
     >
-      <div className="flex items-start gap-2 font-medium">
-        <span className="mt-0.5 shrink-0 text-muted-foreground [&_svg]:size-4">
+      <div className="flex min-h-10 items-center gap-2 px-3 py-1.5">
+        <span className="flex shrink-0 text-muted-foreground [&_svg]:size-3.75">
           {icon}
         </span>
-        <span className="min-w-0 flex-1 wrap-break-word">{title}</span>
-        {action}
+        <span className="min-w-0 font-[550] wrap-break-word">{title}</span>
+        {detail}
+        {action && (
+          <span className="ml-auto flex shrink-0 items-center">{action}</span>
+        )}
       </div>
       {children}
     </div>
+  )
+}
+
+/** What a card holds under its header, at the card's sides. */
+export function CardBody({ className, ...props }: React.ComponentProps<"div">) {
+  return (
+    <div
+      className={cn("flex min-w-0 flex-col gap-3 px-3 pb-3", className)}
+      {...props}
+    />
+  )
+}
+
+/**
+ * What docks on the composer, the same shape as it (ADR 0058, decisions 6
+ * and 8): a Question that waits for the Person, a plan ready to carry out.
+ */
+export function Docked({
+  label,
+  className,
+  ...props
+}: React.ComponentProps<"div"> & { label: string }) {
+  return (
+    <div
+      role="group"
+      aria-label={label}
+      className={cn("rounded-bubble border bg-block text-sm", className)}
+      {...props}
+    />
   )
 }

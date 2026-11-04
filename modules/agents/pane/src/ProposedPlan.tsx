@@ -1,15 +1,16 @@
 import { Button } from "@banda/ui/components/button"
 import { CopyButton } from "@banda/ui/components/copy-button"
 import { Markdown } from "@banda/ui/components/markdown"
+import { cn } from "@banda/ui/lib/utils"
 import { ListChecksIcon } from "lucide-react"
-import { Card } from "./Card"
+import { Card, CardBody, Docked } from "./Card"
 import { useClamp } from "./Messages"
 
 /**
  * The plan an Agent proposed in plan mode, as a card (ADR 0010, decision
  * 6): its words in markdown, Copy, and a long one clamped until opened.
- * `children` come after it: how a Harness that asks to carry it out is
- * answered.
+ * `children` come after it: what became of a plan a Harness asks to carry
+ * out.
  */
 export function ProposedPlan({
   text,
@@ -26,9 +27,22 @@ export function ProposedPlan({
       label="Proposed plan"
       action={<CopyButton text={text} label="Copy the plan" />}
     >
-      <Markdown className={clamp.className}>{text}</Markdown>
-      {clamp.toggle}
-      {children}
+      <CardBody>
+        <Markdown
+          // A plan starts with its heading at the card's top: the chat's
+          // headings keep their margin even first.
+          className={cn("[&>:first-child]:mt-0!", clamp.className)}
+        >
+          {text}
+        </Markdown>
+        {clamp.toggle && (
+          // Quiet, as the bubble's, its words on the text's edge.
+          <div className="-mt-1 -ml-2 flex text-muted-foreground">
+            {clamp.toggle}
+          </div>
+        )}
+        {children}
+      </CardBody>
     </Card>
   )
 }
@@ -48,19 +62,18 @@ export function PlanReady({
   onImplement: () => void
 }) {
   return (
-    <div
-      role="group"
-      aria-label="Plan ready"
-      className="flex items-center gap-2 rounded-xl border bg-card px-3 py-2 text-sm shadow-sm"
+    <Docked
+      label="Plan ready"
+      className="flex items-center gap-2 py-2 pr-2 pl-4"
     >
-      <ListChecksIcon className="size-4 shrink-0 text-muted-foreground" />
-      <span className="font-medium">Plan ready</span>
+      <ListChecksIcon className="size-3.75 shrink-0 text-muted-foreground" />
+      <span className="font-[550]">Plan ready</span>
       <span className="min-w-0 flex-1 truncate text-muted-foreground">
         {title}
       </span>
       <Button size="sm" disabled={busy} onClick={onImplement}>
         Implement
       </Button>
-    </div>
+    </Docked>
   )
 }
