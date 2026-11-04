@@ -513,9 +513,9 @@ banda_kernel::methods! {
         /// what changed: the
         /// address, a tab it opened, a dialog, a download. A password or a
         /// card's number, expiry or code is the Person's to fill, as are
-        /// signing up, accepting terms, and the last press to pay, send
-        /// money or post in public: hand those to your Person with
-        /// browser_handoff.
+        /// signing up, accepting terms, and the last press to pay, place
+        /// an order, send money or post in public: hand those to your
+        /// Person with browser_handoff.
         call act(Act) -> String, Write, tool "browser_act";
         /// Waits until a tab shows a text, an element by its ref, or an
         /// address with a part, for 15 s or the seconds given, 60 at most.
@@ -523,9 +523,10 @@ banda_kernel::methods! {
         call wait_for(WaitFor) -> String, Read, tool "browser_wait_for";
         /// Hands a tab to your Person for a step that is theirs: a
         /// password or a card to fill, signing up, accepting terms, the last
-        /// press to pay, send money or post in public. Say why, as "Sign in
-        /// to GitHub". The tab asks them, and you may not use it meanwhile:
-        /// end your turn, and their message says when they are done.
+        /// press to pay, place an order, send money or post in public. Say
+        /// why, as "Sign in to GitHub". The tab asks them, and you may not
+        /// use it meanwhile: end your turn, and their message says when
+        /// they are done.
         call handoff(Handoff) -> String, Write, tool "browser_handoff";
     }
 }

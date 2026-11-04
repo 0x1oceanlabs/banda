@@ -635,7 +635,7 @@ test("an Agent hands a tab to the Person, who hands it back, and its Thread carr
   const tab = Number(/^Opened tab (\d+)\./.exec(opened)?.[1])
 
   // The tab asks the Person at once, and its Thread's row with it.
-  const why = "Sign in to the site"
+  const why = "Place the order"
   expect(await agentSays(window, "browser_handoff", { tab, why })).toBe(
     `Handed tab ${tab} to your Person. End your turn now: their message says when they are done, and you carry on then.`
   )
@@ -643,6 +643,16 @@ test("an Agent hands a tab to the Person, who hands it back, and its Thread carr
     name: "hello handed this tab to you",
   })
   await expect(card).toContainText(`Your turn. ${why}.`)
+  await expect(card).toContainText("hello waits until you hand back the tab.")
+  // The card stays at the foot, clear of the window's top-right toast.
+  const bounds = await card.boundingBox()
+  expect(bounds!.y).toBeGreaterThan(
+    (await page.evaluate(() => innerHeight)) / 2
+  )
+  for (const toast of await page.locator("[data-sonner-toast]").all()) {
+    const notice = await toast.boundingBox()
+    if (notice) expect(bounds!.y).toBeGreaterThan(notice.y + notice.height)
+  }
   const row = page
     .getByRole("complementary", { name: "Sidebar" })
     .getByRole("button", { name: /hello/ })
@@ -955,6 +965,16 @@ test("an Agent acts in a tab by refs, hears what changed, and leaves the Person'
   const size = ref(tree, "combobox", "Size")
   expect(await act({ action: "select", ref: size, values: ["Large"] })).toBe(
     `Selected "Large" in ${size}.`
+  )
+  // An option the list does not have is refused at once, naming them all.
+  const none = await agentCalls(window, "browser_act", {
+    tab,
+    action: "select",
+    ref: size,
+    values: ["large"],
+  })
+  expect(none.content[0]!.text).toBe(
+    `Refused (invalid): ${size} has no option "large". Its options: "Small", "Large". Nothing was done.`
   )
   const greet = ref(tree, "button", "Greet")
   expect(await act({ action: "click", ref: greet })).toBe(`Clicked ${greet}.`)

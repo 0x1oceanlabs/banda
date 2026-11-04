@@ -124,6 +124,31 @@ const elementOf = async (page: Page, ref: string) => {
   return locator
 }
 
+/** Refuses `values` a list of `ref`, `list`, has no option for, by its
+ * value or label, naming the options it has: else Playwright waits for
+ * them till it times out, and says the list was not ready. */
+const chosen = async (list: Locator, ref: string, values: string[]) => {
+  const options = await list.evaluate((element) =>
+    element instanceof HTMLSelectElement
+      ? [...element.options].map((option) => [option.value, option.label])
+      : null
+  )
+  if (!options) return
+  const missing = values.filter((v) => !options.some((o) => o.includes(v)))
+  if (!missing.length) return
+  const named = options
+    .slice(0, LISTED)
+    .map(([value, label]) => `"${label || value}"`)
+  const more = options.length - named.length
+  throw new Refused({
+    code: "invalid",
+    message: `${ref} has no option ${missing.map((v) => `"${v}"`).join(", ")}. Its options: ${named.join(", ")}${more ? ` and ${more} more` : ""}.`,
+  })
+}
+
+/** How many of a list's options a refusal names. */
+const LISTED = 30
+
 /** How much of an element's name a step says. */
 const NAMED = 40
 
@@ -283,10 +308,11 @@ export async function act(
         }
         return keys.type(text)
       }
-      case "select":
-        return void (await (
-          await element()
-        ).selectOption(act.values ?? [], ready))
+      case "select": {
+        const list = await element()
+        await chosen(list, ref, act.values ?? [])
+        return void (await list.selectOption(act.values ?? [], ready))
+      }
       case "press": {
         const key = act.key ?? ""
         // A key that types a letter types it where the focus is.

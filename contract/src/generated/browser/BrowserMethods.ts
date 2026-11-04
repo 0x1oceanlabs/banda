@@ -47,9 +47,9 @@ navigate: CallMethod<Navigate, string>,
  * what changed: the
  * address, a tab it opened, a dialog, a download. A password or a
  * card's number, expiry or code is the Person's to fill, as are
- * signing up, accepting terms, and the last press to pay, send
- * money or post in public: hand those to your Person with
- * browser_handoff.
+ * signing up, accepting terms, and the last press to pay, place
+ * an order, send money or post in public: hand those to your
+ * Person with browser_handoff.
  */
 act: CallMethod<Act, string>, 
 /**
@@ -61,8 +61,9 @@ wait_for: CallMethod<WaitFor, string>,
 /**
  * Hands a tab to your Person for a step that is theirs: a
  * password or a card to fill, signing up, accepting terms, the last
- * press to pay, send money or post in public. Say why, as "Sign in
- * to GitHub". The tab asks them, and you may not use it meanwhile:
- * end your turn, and their message says when they are done.
+ * press to pay, place an order, send money or post in public. Say
+ * why, as "Sign in to GitHub". The tab asks them, and you may not
+ * use it meanwhile: end your turn, and their message says when
+ * they are done.
  */
 handoff: CallMethod<Handoff, string>, };
