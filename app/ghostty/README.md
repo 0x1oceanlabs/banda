@@ -8,7 +8,7 @@ to WebAssembly, vendored as it is, so a newer pin is a copy.
 
 | What | From | Licence |
 |---|---|---|
-| `src/t3/*.ts`, `src/t3/vendor/*.wasm` | T3 Code, `apps/web/src/terminal/ghostty/` at commit `15fe2832727893cbdd2214383f9f971474849695` (2026-10-31), github.com/pingdotgg/t3code | MIT, `LICENSE-T3` |
+| `src/t3/*.ts`, `src/t3/vendor/*.wasm` | T3 Code, `apps/web/src/terminal/ghostty/` at commit `87f3d93deae017e8a3b0fbf03878e47f089442bc` (2026-11-04), github.com/pingdotgg/t3code | MIT, `LICENSE-T3` |
 | `src/t3/lib/terminal-links.ts`, `src/t3/lib/observeResize.ts` | the same commit, `apps/web/src/terminal-links.ts`, `apps/web/src/lib/observeResize.ts` | MIT, `LICENSE-T3` |
 | `src/t3/lib/shared.ts` | the same commit, cut unchanged from `packages/shared/src/keybindings.ts`, `apps/web/src/lib/selectionActions.ts` and `apps/web/src/appearanceFonts.ts` | MIT, `LICENSE-T3` |
 | `src/t3/fonts/` | Symbols Nerd Font Mono, as T3 vendors it | MIT, `src/t3/fonts/LICENSE` |
