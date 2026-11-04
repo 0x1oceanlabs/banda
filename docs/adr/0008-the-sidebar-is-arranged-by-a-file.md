@@ -63,6 +63,8 @@ Roma liked A, B and C, and asked for one thing instead of three: "unify everythi
      - The Person settles a Thread from its row's menu (a right click: "Settle thread"), or with `Alt+S` on the Thread they look at; the same un-settles it. A Thread at work, or one that asks, is not settled.
      - A Thread with nothing new for three days settles by itself, unless it asks the Person or they un-settled it since.
      - Anything new in it, a message, a turn that ends, brings it back to the list. Seeing it moves nothing.
+     - A Thread the Person settles is put away: every Pane that shows it closes, on any workspace and in a window of its own, and the next Pane takes the focus. One that settles by itself after three days stays open, and bringing a Thread back opens nothing; its row opens it as any row does.
+       - _Changed on 2026-11-04, once Roma had used it._ Settling moved only the row, and its Pane stayed open. Roma: "when I settle a Thread, let its Pane close too".
    - **`attention`** sorts what waits for the Person first (it asks, it failed, or it finished unseen), then the rest, and the latest change first inside each. It is what ADR 0005 named the attention order.
    - **`group.by = "space"`** makes each Space a section, its rows in `sort.by`'s order; `folded` may name Spaces too.
    - **A row is one, two or three lines** (_decided_: "how many lines one Thread gets, 1, 2 or 3, and how to show the info"). With room, the mark heads the first line by the Space's name and the title stands alone on its own line; the other lines add context:

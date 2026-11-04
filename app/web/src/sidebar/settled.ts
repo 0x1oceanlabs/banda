@@ -69,13 +69,17 @@ export function settle(id: string, settled: boolean) {
 }
 
 /**
- * Settles the row of `space` that is `thing`, as Alt+S on the Pane that
- * shows it asks, or brings it back if it is settled now.
+ * What Alt+S makes the row of `space` that is `thing`: settled, or back
+ * if it is settled now. Nothing when it can be neither, as a Thread at
+ * work.
  */
-export function toggleSettled(lists: Lists, space: SpaceId, thing: string) {
+export function toggled(
+  lists: Lists,
+  space: SpaceId,
+  thing: string
+): boolean | undefined {
   const listed = lists[space]?.find((row) => row.id === thing)
-  if (!listed) return
-  if (isSettled(listed, says.read()[listed.id], Date.now()))
-    settle(listed.id, false)
-  else if (settles(listed)) settle(listed.id, true)
+  if (!listed) return undefined
+  if (isSettled(listed, says.read()[listed.id], Date.now())) return false
+  return settles(listed) ? true : undefined
 }

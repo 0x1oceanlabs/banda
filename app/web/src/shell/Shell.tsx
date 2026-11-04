@@ -57,7 +57,7 @@ import {
 } from "../registry"
 import { Sidebar } from "../sidebar/Sidebar"
 import { pickPreset } from "../sidebar/settings"
-import { toggleSettled } from "../sidebar/settled"
+import { settle as keepSettled, toggled } from "../sidebar/settled"
 import { useNarrow } from "./narrow"
 import type { Arranged } from "@banda/contract/workspaces"
 import {
@@ -105,6 +105,7 @@ import {
   answering,
   bringing,
   closing,
+  closingShown,
   opening,
   runAction,
   settingsAt,
@@ -451,11 +452,32 @@ export function Shell({
     listsNow.current = lists
     for (const listener of listsHeard.current) listener()
   }, [lists])
+  // The Person settles a Thread, from its row's menu, the Banda menu or
+  // Alt+S, or brings it back. Settled, it is put away: every Pane that
+  // shows it closes, on any workspace (ADR 0008, decision 4).
+  const settleThread = useCallback(
+    (space: SpaceId, thing: string, settled: boolean) => {
+      keepSettled(thing, settled)
+      if (!settled) return
+      const shown = { space, about: thing }
+      for (const entry of entries(seenNow.current.state))
+        if (isShowing(entry, shown, showsOf))
+          change((w) => closingShown(w, shown))
+    },
+    [change]
+  )
+  const toggleSettled = useCallback(
+    (space: SpaceId, thing: string) => {
+      const settled = toggled(listsNow.current, space, thing)
+      if (settled !== undefined) settleThread(space, thing, settled)
+    },
+    [settleThread]
+  )
   const settle = useCallback(() => {
     const entry = focused(seenNow.current.state)
     const thing = entry && showsOf(entry.pane)
-    if (entry && thing) toggleSettled(listsNow.current, entry.space, thing)
-  }, [])
+    if (entry && thing) toggleSettled(entry.space, thing)
+  }, [toggleSettled])
   const toggleOverview = useCallback(
     () => setOverview((was) => (was === "open" ? "closing" : "open")),
     []
@@ -808,14 +830,14 @@ export function Shell({
         case "ask":
           return newThreadIn(row.space ?? here, row.words || undefined)
         case "settle":
-          return toggleSettled(listsNow.current, row.space, row.listed.id)
+          return toggleSettled(row.space, row.listed.id)
         case "preset":
           return pickPreset(row.name)
         case "found":
           return row.row.run(parts)
       }
     },
-    [change, openPane, newThreadIn, parts, here]
+    [change, openPane, newThreadIn, parts, here, toggleSettled]
   )
 
   const frame: Frame = useMemo(
@@ -922,6 +944,7 @@ export function Shell({
             onOpen={openPane}
             onNewThread={newThreadIn}
             onNoSpace={() => machine && startThread(machine)}
+            onSettle={settleThread}
             onAddSpace={() => parts.run("space.add")}
             onPin={(space, pinned) =>
               updateSpace(engine, { space, pinned }).catch((error: unknown) =>

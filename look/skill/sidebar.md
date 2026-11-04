@@ -25,8 +25,9 @@ Where a Thread stands, as the sidebar sees it:
   heading.
 - `working`: its Agent is at work.
 - `settled`: put away, as an archive. The Person settles a Thread from its
-  row's menu (a right click) or with Alt+S; one with nothing new for three
-  days settles by itself, unless it asks. Anything new brings it back.
+  row's menu (a right click) or with Alt+S, and the Panes that show it
+  close; one with nothing new for three days settles by itself, unless it
+  asks, and its Panes stay. Anything new brings it back.
 
 A state named in neither `states` nor `bottom` goes to the last section,
 so no Thread is ever hidden.
