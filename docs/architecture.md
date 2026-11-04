@@ -591,6 +591,20 @@ If Chat is removed, Agents still works through its own Thread.
   checked against its entry's `minimum` at each read: a Thread stops
   warning once the Person updated it and checked again.
 
+- **Usage comes from local journals** (ADR 0043). `harnesses.usage`
+  returns tokens and estimated USD API cost for a half-open interval of up
+  to 90 days, defaulting to 24 hours, with UTC-day, Harness and model rows.
+  `read: true` first scans Claude Code and Codex journals; an open window
+  also causes a scan every minute. `[usage] read = false` stops reading;
+  previously counted totals remain available. Offsets and parser state
+  are committed with counters, and records older than 92 days are pruned.
+  Repeated records and entries sharing a folder count once. The store
+  retains counters and session identifiers, never conversation text.
+  `harnesses.usage_changed` tells a window to ask again. This method is
+  not an Agent tool: it describes all local sessions, including those
+  outside Banda. Price data ships with the engine; collection makes no
+  provider request.
+
 ### terminal
 
 - **A Terminal is a program on a PTY** in the engine, run as the Person:

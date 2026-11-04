@@ -17,6 +17,7 @@ use crate::acp::Process;
 use crate::hosts::{Activity, Held, Host, Hosts};
 use crate::limits::Reader;
 use crate::model::{Account, HarnessView, Limits};
+use crate::usage::UsageNow;
 use crate::{FILE, Harness, Harnesses};
 use agent_client_protocol::Client;
 use agent_client_protocol::schema::v1 as acp;
@@ -60,12 +61,14 @@ pub struct HarnessesModule {
     harnesses: Harnesses,
     hosts: Arc<Hosts<Asker>>,
     limits: Reader,
+    usage: crate::usage::Reader,
 }
 
 impl HarnessesModule {
     pub fn new(harnesses: Harnesses) -> Self {
         Self {
             limits: Reader::new(harnesses.clone()),
+            usage: crate::usage::Reader::new(harnesses.clone()),
             harnesses,
             hosts: Hosts::new(IDLE),
         }
@@ -90,6 +93,10 @@ banda_kernel::methods! {
         /// task, look how much is left. `read` reads them anew, at most
         /// once a minute; `limits_changed` says when that read is kept.
         call limits(AskLimits) -> LimitsNow, Read, tool "limits";
+        /// Local journal token usage and USD API estimates, including
+        /// sessions outside Banda. UTC daily rows for a bounded interval;
+        /// unpriced requests are explicit. `read` collects new records.
+        call usage(AskUsage) -> UsageNow, Read;
     }
 }
 
@@ -105,6 +112,21 @@ struct OneHarness {
 struct AskLimits {
     /// Read them anew, as a popover opens: within a minute of the last
     /// read, it is not read again.
+    #[serde(default)]
+    #[ts(as = "Option<bool>", optional)]
+    read: bool,
+}
+
+/// A half-open interval of at most 90 days. Defaults to the past 24 hours.
+#[derive(Deserialize, TS)]
+#[ts(export_to = "harnesses/")]
+struct AskUsage {
+    #[serde(default)]
+    #[ts(optional, type = "number")]
+    since: Option<i64>,
+    #[serde(default)]
+    #[ts(optional, type = "number")]
+    until: Option<i64>,
     #[serde(default)]
     #[ts(as = "Option<bool>", optional)]
     read: bool,
@@ -152,7 +174,7 @@ impl Module for HarnessesModule {
     }
 
     fn migrations(&self) -> &'static [&'static str] {
-        &[crate::limits::TABLE]
+        &[crate::limits::TABLE, crate::usage::TABLES]
     }
 
     fn tools(&self) -> Vec<Tool> {
@@ -160,7 +182,8 @@ impl Module for HarnessesModule {
     }
 
     async fn opened(&self, space: ModuleSpace) -> Result<(), Error> {
-        self.limits.start(space).await
+        self.limits.start(space.clone()).await?;
+        self.usage.start(space).await
     }
 
     fn right(&self, method: &str) -> Option<Right> {
@@ -203,6 +226,29 @@ impl HarnessesModule {
         let (limits, settings) = self.limits.now(space, read).await?;
         let warn = settings.warn;
         Ok(LimitsNow { at, limits, warn })
+    }
+
+    async fn usage(&self, call: Call, args: AskUsage) -> Result<UsageNow, Refusal> {
+        const DAY: i64 = 86_400_000;
+        let now = banda_kernel::now_ms();
+        let until = args.until.unwrap_or(now);
+        let since = args.since.unwrap_or(until.saturating_sub(DAY));
+        if since < now - 92 * DAY
+            || until > now
+            || since >= until
+            || until.saturating_sub(since) > 90 * DAY
+        {
+            return Err(Refusal::invalid(
+                "Usage needs an interval of at most 90 days within the last 92 days.",
+            ));
+        }
+        if args.read {
+            self.usage.scan(call.space()).await?;
+        }
+        self.usage
+            .now(call.space(), since, until)
+            .await
+            .map_err(Into::into)
     }
 
     async fn sign_in(&self, call: Call, SignIn { harness, way }: SignIn) -> Result<(), Refusal> {

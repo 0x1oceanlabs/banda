@@ -32,7 +32,7 @@ fn list(root: &Path) -> Harnesses {
     std::fs::set_permissions(&codex, std::os::unix::fs::PermissionsExt::from_mode(0o755)).unwrap();
     let path = root.join("harnesses.toml");
     let text = format!(
-        "[[harness]]\nid = \"claude\"\ncommand = \"acp\"\nenv = {{ CLAUDE_CONFIG_DIR = \"/work/claude\" }}\n\n\
+        "[usage]\nread = false\n\n[[harness]]\nid = \"claude\"\ncommand = \"acp\"\nenv = {{ CLAUDE_CONFIG_DIR = \"/work/claude\" }}\n\n\
          [[harness]]\nid = \"codex\"\ncommand = \"acp\"\n\
          cli = {{ program = {:?}, variable = \"CODEX_PATH\" }}\n\n\
          [[harness]]\nid = \"fake\"\nname = \"Fake\"\ncommand = \"acp\"\n",

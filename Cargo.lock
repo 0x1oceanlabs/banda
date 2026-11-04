@@ -387,6 +387,7 @@ dependencies = [
  "async-trait",
  "banda-kernel",
  "banda-look",
+ "dirs",
  "rusqlite",
  "schemars 1.2.3",
  "serde",

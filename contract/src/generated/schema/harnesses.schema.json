@@ -14,6 +14,10 @@
     "limits": {
       "description": "How Banda reads the usage limits of each Harness's account (ADR\n0043).",
       "$ref": "#/$defs/LimitsEntry"
+    },
+    "usage": {
+      "description": "Whether local session journals are counted (ADR 0043).",
+      "$ref": "#/$defs/UsageSettings"
     }
   },
   "$defs": {
@@ -104,6 +108,18 @@
           "minimum": 1,
           "maximum": 100,
           "default": 80
+        }
+      },
+      "additionalProperties": false
+    },
+    "UsageSettings": {
+      "description": "Local journal collection. Turning it off preserves saved totals but reads no files.",
+      "type": "object",
+      "properties": {
+        "read": {
+          "description": "Read Claude Code and Codex session journals on this computer.",
+          "type": "boolean",
+          "default": true
         }
       },
       "additionalProperties": false
