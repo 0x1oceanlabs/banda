@@ -84,11 +84,18 @@ export function statusOf(engine: Engine, space: SpaceId): Status | null {
 }
 
 /** The Space's status as `git.watch` says it; none until it first does,
- * or when the engine refuses it. */
-export function useGitStatus(engine: Engine, space: SpaceId): Status | null {
+ * when the engine refuses it, or while it is not `heard`, when nothing
+ * watches it for this. */
+export function useGitStatus(
+  engine: Engine,
+  space: SpaceId,
+  heard = true
+): Status | null {
   const subscribe = useCallback(
-    (hear: () => void) => hearStatus(engine, space, hear),
-    [engine, space]
+    (hear: () => void) => (heard ? hearStatus(engine, space, hear) : () => {}),
+    [engine, space, heard]
   )
-  return useSyncExternalStore(subscribe, () => statusOf(engine, space))
+  return useSyncExternalStore(subscribe, () =>
+    heard ? statusOf(engine, space) : null
+  )
 }

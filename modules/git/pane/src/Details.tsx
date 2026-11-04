@@ -13,13 +13,14 @@ import {
 import { DiffCounts } from "@banda/ui/components/diff"
 import { useAct } from "@banda/ui/hooks/use-act"
 import { paneOf } from "@banda/ui/pane"
-import { CircleAlertIcon, FileDiffIcon, GitBranchPlusIcon } from "lucide-react"
+import { FileDiffIcon, GitBranchPlusIcon } from "lucide-react"
 import { BranchPicker, PICKER } from "./BranchPicker"
 import { diffPane } from "./DiffPane"
 import { GitButton } from "./GitButton"
 import { VIEW } from "./diff"
 import { CHANGES } from "./scope"
 import { useGitStatus } from "./status"
+import { GitAlert } from "./GitAlert"
 
 function GitRows({
   engine,
@@ -36,13 +37,9 @@ function GitRows({
   // Initialize Git, which would make another inside it.
   if (status.problem)
     return (
-      <div
-        role="alert"
-        className="flex items-start gap-2 px-2 py-1 text-xs text-muted-foreground"
-      >
-        <CircleAlertIcon className="mt-0.5 size-3.5 shrink-0" />
-        <span className="min-w-0 flex-1 break-words">{status.problem}</span>
-      </div>
+      <GitAlert quiet className="px-2 py-1">
+        {status.problem}
+      </GitAlert>
     )
   if (!status.repo)
     return (
@@ -57,9 +54,7 @@ function GitRows({
           {init.busy ? "Initializing…" : "Initialize Git"}
         </DetailsRow>
         {init.problem && (
-          <p role="alert" className="px-2 pb-1 text-xs text-destructive">
-            {init.problem}
-          </p>
+          <GitAlert className="px-2 pb-1">{init.problem}</GitAlert>
         )}
       </>
     )

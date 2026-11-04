@@ -188,15 +188,23 @@ export function find(state: Workspaces, id: string): Spot | undefined {
   return undefined
 }
 
-/** Two entries show the same Pane when their Space, kind and args are. */
+/** What makes a Pane that one Pane, as its kind names it
+ * (`PaneKind.identity`): its args whole, by default. */
+export type Identity = (pane: PaneState) => PaneState
+
+const WHOLE: Identity = (pane) => pane
+
+/** Two entries show the same Pane when their Space, kind and args are,
+ * the args as `identity` takes them. */
 export function samePane(
   a: { space: SpaceId; pane: PaneState },
-  b: { space: SpaceId; pane: PaneState }
+  b: { space: SpaceId; pane: PaneState },
+  identity: Identity = WHOLE
 ): boolean {
   return (
     a.space === b.space &&
     a.pane.kind === b.pane.kind &&
-    canonical(a.pane.args) === canonical(b.pane.args)
+    canonical(identity(a.pane).args) === canonical(identity(b.pane).args)
   )
 }
 
@@ -213,15 +221,11 @@ function canonical(value: JsonValue | undefined): string {
 export function left(
   before: Workspaces,
   after: Workspaces,
-  identity: (pane: PaneState) => PaneState = (pane) => pane
+  identity: Identity = WHOLE
 ): Entry[] {
-  const as = (entry: Entry) => ({
-    space: entry.space,
-    pane: identity(entry.pane),
-  })
-  const stays = entries(after).map(as)
+  const stays = entries(after)
   return entries(before).filter(
-    (entry) => !stays.some((other) => samePane(as(entry), other))
+    (entry) => !stays.some((other) => samePane(entry, other, identity))
   )
 }
 
@@ -261,17 +265,20 @@ export type Opening = {
   /** A new tile even when one shows the same Pane: New Thread, New Pane,
    * as a browser's new window. */
   again?: true
-  /** What makes a Pane the one shown, as its kind says (`identity`):
-   * one so shown gets the focus, though its args differ, as the Space's
-   * one Diff on another scope. Its args whole, when left out. */
-  identity?: (pane: PaneState) => PaneState
+  /** What makes a Pane the one shown, as its kind says: one so shown
+   * shows these args and gets the focus, as the Space's one Diff takes
+   * another scope. Its args whole, when left out. */
+  identity?: Identity
+  /** One so shown keeps its own args: it only gets the focus. */
+  keep?: true
 }
 
 /**
  * Shows a Pane of a Space and focuses it.
  *
  * - An entry already showing the same Pane gets the focus instead, on
- *   whichever workspace it is, unless it opens `again` or `here`.
+ *   whichever workspace it is, unless it opens `again` or `here`; one
+ *   the same by its `identity` shows these args first, unless `keep`.
  * - `here` replaces the opener's Pane; `below` adds it under the opener,
  *   in the same column; `right` adds a column right of the opener's.
  * - Left out, the Pane takes the place of the one of its kind that the
@@ -296,18 +303,18 @@ function placed(
   opening: Opening
 ): Workspaces {
   const place = opening.place
-  const as = opening.identity ?? ((pane: PaneState) => pane)
+  const wanted = { space, pane }
   const showing =
     !opening.again &&
     place !== "here" &&
-    entries(state).find((entry) =>
-      samePane(
-        { space: entry.space, pane: as(entry.pane) },
-        { space, pane: as(pane) }
-      )
-    )
-  if (showing)
-    return opening.focus === false ? state : focusEntry(state, showing.id)
+    entries(state).find((entry) => samePane(entry, wanted, opening.identity))
+  if (showing) {
+    const next =
+      opening.keep || samePane(showing, wanted)
+        ? state
+        : showingNow(state, showing.id, pane)
+    return opening.focus === false ? next : focusEntry(next, showing.id)
+  }
 
   const from = (opening.from && find(state, opening.from)) || focusedSpot(state)
   const w = from?.workspace ?? state.current
@@ -354,6 +361,26 @@ function placed(
   return focusEntry(setWorkspace(state, w, { ...workspace, columns }), entry.id)
 }
 
+/** The entry `id` showing `pane` now, where it is. */
+function showingNow(
+  state: Workspaces,
+  id: string,
+  pane: PaneState
+): Workspaces {
+  const spot = find(state, id)
+  if (!spot) return state
+  const workspace = state.list[spot.workspace]
+  const column = workspace.columns[spot.column]
+  const entry = column.entries[spot.entry]
+  return setWorkspace(state, spot.workspace, {
+    ...workspace,
+    columns: replace(workspace.columns, spot.column, {
+      ...column,
+      entries: replace(column.entries, spot.entry, { ...entry, pane }),
+    }),
+  })
+}
+
 function focusedSpot(state: Workspaces): Spot | undefined {
   const entry = focused(state)
   return entry && find(state, entry.id)
@@ -388,7 +415,7 @@ export function bring(
 ): Workspaces {
   const away = entries(state).find(
     (entry) =>
-      samePane(entry, { space, pane }) &&
+      samePane(entry, { space, pane }, opening.identity) &&
       find(state, entry.id)?.workspace !== state.current
   )
   return away

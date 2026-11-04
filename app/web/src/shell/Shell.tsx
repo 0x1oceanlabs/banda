@@ -627,7 +627,9 @@ export function Shell({
               ...how,
               ...(at?.from ? { from: at.from } : {}),
               place: "right",
-              ...(again ? { again } : { identity: identityOf }),
+              // Not again: the one shown, as its kind names it, keeps
+              // what it shows.
+              ...(again ? { again } : { keep: true }),
             }
           )
         }),
@@ -934,7 +936,10 @@ export function Shell({
             home={home}
             isCurrent={(space, pane) => {
               const entry = focused(workspaces)
-              return entry !== undefined && samePane(entry, { space, pane })
+              return (
+                entry !== undefined &&
+                samePane(entry, { space, pane }, identityOf)
+              )
             }}
             onOpen={openPane}
             onNewThread={newThreadIn}
