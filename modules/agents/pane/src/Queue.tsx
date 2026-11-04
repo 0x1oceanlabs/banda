@@ -9,13 +9,7 @@ import {
   TraceLine,
   TraceTitle,
 } from "@banda/ui/components/trace"
-import {
-  CornerDownRightIcon,
-  PauseIcon,
-  PencilIcon,
-  PlayIcon,
-  XIcon,
-} from "lucide-react"
+import { PauseIcon, PlayIcon } from "lucide-react"
 import { type ImageReader, MessageImages } from "./MessageImages"
 import type { ItemId, ListedThread } from "@banda/contract/agents"
 import { type Waiting, writerOf } from "./thread"
@@ -36,9 +30,10 @@ export type QueueActions = {
 }
 
 /**
- * The messages that wait for their turn, after the Thread, each dashed:
- * one can be sent now while the Agent works, changed, or taken back. A
- * queue a stop or a restart held says so, and Continue lets it go on.
+ * The messages that wait for their turn, after the Thread, each the
+ * Person's bubble dashed, with quiet words under it (ADR 0058, decision
+ * 8): one can be sent now while the Agent works, changed, or taken back.
+ * A queue a stop or a restart held says so, and Continue lets it go on.
  */
 export function Queue({
   waiting,
@@ -80,7 +75,8 @@ export function Queue({
           <div className="pl-6">
             <Button
               variant="outline"
-              size="xs"
+              size="sm"
+              className="text-xs"
               disabled={busy}
               onClick={actions.onContinue}
             >
@@ -159,45 +155,39 @@ function WaitingMessage({
           />
         ) : (
           body.text && (
-            <Bubble variant="outline" align="end">
-              <BubbleContent className="border-dashed whitespace-pre-wrap text-muted-foreground">
+            // The colour on the bubble, not its content, whose prose size
+            // a colour given to it would take the place of.
+            <Bubble
+              variant="outline"
+              align="end"
+              className="text-muted-foreground"
+            >
+              <BubbleContent className="border-dashed whitespace-pre-wrap">
                 {body.text}
               </BubbleContent>
             </Bubble>
           )
         )}
         {!open && (
-          <div className="flex justify-end gap-1">
+          // Quiet, as a sent message's own actions are: meta words, muted
+          // until pointed at.
+          <div className="-mt-1.5 flex justify-end gap-3 text-xs text-muted-foreground">
+            <span>Queued</span>
             {steerable && (
-              <Button
-                variant="ghost"
-                size="xs"
+              <Action
                 disabled={busy}
                 title={`Send it now: ${name} reads it as it works.`}
                 onClick={() => onSendNow(waiting)}
               >
-                <CornerDownRightIcon data-icon="inline-start" />
                 Send now
-              </Button>
+              </Action>
             )}
-            <Button
-              variant="ghost"
-              size="xs"
-              disabled={busy}
-              onClick={() => onEditing(waiting.item.id)}
-            >
-              <PencilIcon data-icon="inline-start" />
+            <Action disabled={busy} onClick={() => onEditing(waiting.item.id)}>
               Edit
-            </Button>
-            <Button
-              variant="ghost"
-              size="xs"
-              disabled={busy}
-              onClick={() => onRemove(waiting)}
-            >
-              <XIcon data-icon="inline-start" />
+            </Action>
+            <Action disabled={busy} onClick={() => onRemove(waiting)}>
               Remove
-            </Button>
+            </Action>
           </div>
         )}
       </MessageContent>
@@ -205,8 +195,22 @@ function WaitingMessage({
   )
 }
 
+/** One of a waiting message's actions: a word, the foreground's colour
+ * when pointed at or focused. */
+function Action(props: React.ComponentProps<"button">) {
+  return (
+    <button
+      type="button"
+      className="rounded-sm transition-colors outline-none hover:text-foreground focus-visible:text-foreground focus-visible:ring-2 focus-visible:ring-ring/50 disabled:pointer-events-none disabled:opacity-50"
+      {...props}
+    />
+  )
+}
+
 /** A waiting message, open to change: Enter or Save keeps it, Escape or
- * Cancel leaves it as it was. */
+ * Cancel leaves it as it was. It is the bubble it was, as tall as its
+ * text, in the composer's values: the bubble's corner, a block's fill
+ * and line, prose. */
 function EditWaiting({
   text,
   busy,
@@ -231,7 +235,7 @@ function EditWaiting({
         value={editing}
         autoFocus
         aria-label="Waiting message"
-        className="min-h-16"
+        className="min-h-0 rounded-(--bubble-radius) border-border bg-block px-3.5 text-(length:--prose-size) leading-(--prose-leading) focus-visible:border-foreground/15 focus-visible:ring-0 md:text-(length:--prose-size) dark:bg-block"
         onChange={(event) => setEditing(event.target.value)}
         onKeyDown={(event) => {
           if (event.key === "Escape") {
@@ -250,10 +254,16 @@ function EditWaiting({
         }}
       />
       <div className="flex justify-end gap-1">
-        <Button type="button" variant="ghost" size="xs" onClick={onCancel}>
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          className="text-xs"
+          onClick={onCancel}
+        >
           Cancel
         </Button>
-        <Button type="submit" size="xs" disabled={busy}>
+        <Button type="submit" size="sm" className="text-xs" disabled={busy}>
           Save
         </Button>
       </div>

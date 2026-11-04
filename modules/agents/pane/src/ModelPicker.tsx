@@ -7,7 +7,7 @@ import type {
 } from "@banda/contract/agents"
 import { Button } from "@banda/ui/components/button"
 import { HarnessLogo } from "@banda/ui/components/harness-logo"
-import { LevelSlider, levelTone } from "@banda/ui/components/level-slider"
+import { LevelSlider } from "@banda/ui/components/level-slider"
 import {
   Popover,
   PopoverContent,
@@ -30,11 +30,13 @@ import {
   type Picked,
 } from "./picker"
 import { choose, chosen } from "./thread"
+import { FOOTER_CONTROL } from "./Composer"
 
 /**
  * The model a Thread runs on and how hard it thinks, as one quiet trigger
  * beside the send button, as Codex has it: the Harness's logo, the model,
- * the effort. It opens on a slider of effort levels, with Fast mode and a
+ * the effort lighter beside it, in words rather than colours (ADR 0058,
+ * decision 8). It opens on a slider of effort levels, with Fast mode and a
  * way back to the Harness's defaults beside the model's name, which opens
  * the list of models. A new Thread's list holds every Harness's models,
  * each under its logo: choosing one chooses the Harness too.
@@ -86,11 +88,7 @@ export function ModelPicker({
   const named = (
     <>
       {what && <span className="truncate">{what}</span>}
-      {level && (
-        <span className={cn("shrink-0", levelTone(at, levels.length - 1))}>
-          {level.name}
-        </span>
-      )}
+      {level && <span className="shrink-0 opacity-70">{level.name}</span>}
     </>
   )
   const label = [what, level?.name].filter(Boolean).join(", ")
@@ -144,7 +142,7 @@ export function ModelPicker({
           <Button
             variant="ghost"
             size="sm"
-            className="min-w-0 font-normal text-foreground/75"
+            className={cn("min-w-0", FOOTER_CONTROL)}
             aria-label={`Model: ${label}`}
           />
         }
@@ -152,7 +150,12 @@ export function ModelPicker({
         {logo}
         {named}
       </PopoverTrigger>
-      <PopoverContent side="top" align="end" className="w-72 gap-0 p-1">
+      {/* It floats as the chat's popups do (ADR 0058): a block's corner. */}
+      <PopoverContent
+        side="top"
+        align="end"
+        className="w-72 gap-0 rounded-(--block-radius) p-1"
+      >
         {shown === "levels" && effort ? (
           <>
             <div className="relative flex h-9 items-center justify-center px-9">
@@ -233,7 +236,7 @@ function FastToggle({
       size="icon-sm"
       className={cn(
         "absolute left-0",
-        on ? "text-(--ansi-4)" : "text-muted-foreground"
+        on ? "text-foreground" : "text-muted-foreground"
       )}
       aria-label={option.name}
       aria-pressed={on}
@@ -364,15 +367,12 @@ function Row({
       type="button"
       role="option"
       aria-selected={on}
-      className={cn(
-        "flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left outline-none hover:bg-accent focus-visible:bg-accent",
-        on && "bg-accent/60"
-      )}
+      className="flex w-full items-center gap-2.5 rounded-md px-2.5 py-1.5 text-left outline-none hover:bg-accent focus-visible:bg-accent"
       onClick={onClick}
     >
       {logo}
       <span className="flex min-w-0 flex-1 flex-col">
-        <span className="truncate">{name}</span>
+        <span className="truncate font-medium">{name}</span>
         {about && (
           <span className="truncate text-xs text-muted-foreground">
             {about}

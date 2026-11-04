@@ -130,7 +130,9 @@ function countStore() {
 /**
  * Find in the Thread, on top of it as T3 Code's: the words, how many
  * show and which is the one found now, Previous and Next. Enter goes on,
- * Shift+Enter back, Escape closes it.
+ * Shift+Enter back, Escape closes it. It floats as the chat's popups do
+ * (ADR 0058): a block's corner, the popover's fill, a hairline ring and
+ * one shadow, with no field's frame inside it.
  */
 export function FindBar({
   field,
@@ -150,9 +152,9 @@ export function FindBar({
   return (
     <div
       data-find-skip
-      className="absolute top-2 right-4 z-10 w-72 max-w-[calc(100%-2rem)] rounded-lg bg-popover shadow-md"
+      className="absolute top-2 right-4 z-10 w-72 max-w-[calc(100%-2rem)] rounded-block bg-popover text-popover-foreground shadow-md ring-1 ring-foreground/10"
     >
-      <InputGroup>
+      <InputGroup className="h-9 border-transparent bg-transparent has-[[data-slot=input-group-control]:focus-visible]:border-transparent has-[[data-slot=input-group-control]:focus-visible]:ring-0 dark:bg-transparent">
         <InputGroupInput
           ref={field}
           value={query}
@@ -173,7 +175,10 @@ export function FindBar({
           }}
         />
         <InputGroupAddon align="inline-end" className="gap-0.5">
-          <span aria-live="polite" className="px-1 text-xs tabular-nums">
+          <span
+            aria-live="polite"
+            className="px-1 text-xs font-normal tabular-nums"
+          >
             {!query
               ? ""
               : count === 0

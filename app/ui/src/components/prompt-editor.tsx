@@ -248,26 +248,31 @@ function PromptEditor({
     [editor]
   )
 
+  // The text is prose, as the Thread's: sized by its Pane, not the window
+  // (ADR 0058, decision 2). The placeholder sits where the text starts,
+  // whatever the padding its owner gives.
   return (
     <div
       data-slot="prompt-editor"
       className={cn(
-        "relative w-full min-w-0 overflow-y-auto px-2.5 py-2 text-base md:text-sm",
+        "relative w-full min-w-0 overflow-y-auto px-2.5 py-2 text-prose",
         className
       )}
     >
-      {value === "" && placeholder && (
-        <span
-          aria-hidden
-          className="pointer-events-none absolute inset-x-2.5 top-2 truncate text-muted-foreground"
-        >
-          {placeholder}
-        </span>
-      )}
-      <EditorContent
-        editor={editor}
-        className="[&_.ProseMirror]:min-h-6 [&_.ProseMirror]:wrap-break-word [&_.ProseMirror]:whitespace-pre-wrap [&_.ProseMirror]:outline-none"
-      />
+      <div className="relative">
+        {value === "" && placeholder && (
+          <span
+            aria-hidden
+            className="pointer-events-none absolute inset-x-0 top-0 truncate text-muted-foreground"
+          >
+            {placeholder}
+          </span>
+        )}
+        <EditorContent
+          editor={editor}
+          className="[&_.ProseMirror]:wrap-break-word [&_.ProseMirror]:whitespace-pre-wrap [&_.ProseMirror]:outline-none"
+        />
+      </div>
     </div>
   )
 }
