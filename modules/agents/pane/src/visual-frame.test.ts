@@ -78,6 +78,30 @@ test("a page's height is taken within bounds, and only web links", () => {
   expect(heard({ method: "tools/call", params: {} })).toBeNull()
 })
 
+test("a page passes the window Esc and Ctrl or ⌘ with + − 0, and no other key", () => {
+  const key = (params: object) => heard({ method: "banda/key", params })
+  const none = {
+    ctrlKey: false,
+    metaKey: false,
+    shiftKey: false,
+    altKey: false,
+  }
+  expect(key({ code: "Escape" })).toEqual({
+    kind: "key",
+    key: { code: "Escape", key: "Escape", ...none },
+  })
+  expect(key({ code: "Equal", metaKey: true, shiftKey: true })).toEqual({
+    kind: "key",
+    key: { code: "Equal", key: "+", ...none, metaKey: true, shiftKey: true },
+  })
+  expect(key({ code: "Digit0", ctrlKey: true })?.kind).toBe("key")
+  // Not the window's other keys, nor these held otherwise.
+  expect(key({ code: "KeyD", altKey: true })).toBeNull()
+  expect(key({ code: "Equal" })).toBeNull()
+  expect(key({ code: "Escape", ctrlKey: true })).toBeNull()
+  expect(key({ code: "Minus", ctrlKey: "yes" })).toBeNull()
+})
+
 test("main's look for a page comes from the look's scheme asked, its vars and its fonts", () => {
   const look = {
     schemes: {

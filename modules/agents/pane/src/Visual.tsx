@@ -101,14 +101,23 @@ export function VisualFrame({
       const own = frame.current
       if (!own || event.source !== own.contentWindow) return
       const said = heard(event.data)
-      if (said?.kind === "size") setFits(said.height)
-      // A link opens only as its Person clicked it in the page.
-      else if (
-        said?.kind === "link" &&
-        document.activeElement === own &&
-        navigator.userActivation.isActive
-      )
-        window.open(said.url, "_blank", "noopener")
+      if (!said) return
+      if (said.kind === "size") return setFits(said.height)
+      // Keys still work after the click's transient activation expires.
+      if (document.activeElement !== own) return
+      if (said.kind === "link") {
+        if (navigator.userActivation.isActive)
+          window.open(said.url, "_blank", "noopener")
+      }
+      // A key the page left goes on from its frame, as one pressed on it.
+      else
+        own.dispatchEvent(
+          new KeyboardEvent("keydown", {
+            ...said.key,
+            bubbles: true,
+            cancelable: true,
+          })
+        )
     }
     window.addEventListener("message", listen)
     return () => window.removeEventListener("message", listen)

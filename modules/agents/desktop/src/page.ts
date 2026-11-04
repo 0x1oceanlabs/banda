@@ -3,10 +3,10 @@
  * the Agent's HTML with Banda's base sheet and a small script put first in
  * its head, so the page can override both. The script gives the page its
  * first look from the address's fragment, takes the look again when the
- * Thread posts it, says the page's height, and hands web links to the
- * window. Nothing of the Agent's page is taken out.
+ * Thread posts it, says the page's height, hands web links to the window,
+ * and passes it the keys the page leaves it. Nothing of the Agent's page is taken out.
  */
-import { LOOK_KEY, SAID } from "@banda/agents-pane/visual"
+import { LOOK_KEY, PASSED, SAID } from "@banda/agents-pane/visual"
 
 /** Banda's sheet under the page's: no ground of its own, so the page sits
  * on the Thread; the look's text and font; an 8px gutter for focus rings
@@ -72,6 +72,15 @@ const BRIDGE = `(() => {
     event.preventDefault()
     say("${SAID.link}", { url: url.href })
   }, true)
+  const PASSED = ${JSON.stringify(PASSED)}
+  addEventListener("keydown", (event) => {
+    if (!event.isTrusted || event.defaultPrevented || !PASSED.includes(event.code)) return
+    const ctrl = event.ctrlKey || event.metaKey
+    if ((event.code === "Escape") === ctrl) return
+    if (ctrl) event.preventDefault()
+    const { code, ctrlKey, metaKey, shiftKey, altKey } = event
+    say("${SAID.key}", { code, ctrlKey, metaKey, shiftKey, altKey })
+  })
 })()`
 
 const PUT = `<meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"><style id="banda-base">${BASE}</style><script>${BRIDGE}</script>`

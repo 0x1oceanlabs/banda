@@ -1844,6 +1844,12 @@ test("a Visual opens over the window, zoomed, or as a Pane of its own beside its
   expect(zoomed.laid).toBeCloseTo(wide / 1.25, -1)
   expect(zoomed.drawn).toBeCloseTo(wide, -1)
   await page.screenshot({ path: "test-results/18p-visual-preview.png" })
+  // In its page too, the keys are the preview's.
+  await big.contentFrame().locator(".box").click()
+  // Transient user activation expires after five seconds.
+  await page.waitForTimeout(5_100)
+  await page.keyboard.press("Control+Minus")
+  await expect(over.getByText("110 %")).toBeVisible()
   await page.keyboard.press("Escape")
   await expect(over).toBeHidden()
 
