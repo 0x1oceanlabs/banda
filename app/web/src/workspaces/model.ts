@@ -261,6 +261,10 @@ export type Opening = {
   /** A new tile even when one shows the same Pane: New Thread, New Pane,
    * as a browser's new window. */
   again?: true
+  /** What makes a Pane the one shown, as its kind says (`identity`):
+   * one so shown gets the focus, though its args differ, as the Space's
+   * one Diff on another scope. Its args whole, when left out. */
+  identity?: (pane: PaneState) => PaneState
 }
 
 /**
@@ -292,10 +296,16 @@ function placed(
   opening: Opening
 ): Workspaces {
   const place = opening.place
+  const as = opening.identity ?? ((pane: PaneState) => pane)
   const showing =
     !opening.again &&
     place !== "here" &&
-    entries(state).find((entry) => samePane(entry, { space, pane }))
+    entries(state).find((entry) =>
+      samePane(
+        { space: entry.space, pane: as(entry.pane) },
+        { space, pane: as(pane) }
+      )
+    )
   if (showing)
     return opening.focus === false ? state : focusEntry(state, showing.id)
 

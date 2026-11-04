@@ -627,7 +627,7 @@ export function Shell({
               ...how,
               ...(at?.from ? { from: at.from } : {}),
               place: "right",
-              ...(again && { again }),
+              ...(again ? { again } : { identity: identityOf }),
             }
           )
         }),
