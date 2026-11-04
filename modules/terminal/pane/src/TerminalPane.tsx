@@ -67,11 +67,19 @@ function listed(
   return [{ ...done, space }]
 }
 
+/** A new shell in the focused Space, from a key or the Pane launcher. */
+export const NEW_TERMINAL: TerminalArgs = {
+  terminal: null,
+  title: "Terminal",
+  shell: true,
+  done: null,
+}
+
 export const terminalPane = definePane<TerminalArgs>({
   kind: "terminal.terminal",
   title: (args) => args.title,
   icon: TerminalIcon,
-  start: { terminal: null, title: "Terminal", shell: true, done: null },
+  start: NEW_TERMINAL,
   letter: "T",
   closed: ({ engine, space, args }) => {
     if (args.terminal === null) return

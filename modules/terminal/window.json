@@ -2,7 +2,16 @@
   "panes": [
     "terminal.terminal"
   ],
-  "actions": [],
+  "actions": [
+    {
+      "id": "terminal.new",
+      "title": "New terminal",
+      "section": "Panes",
+      "keys": [
+        "Ctrl+Alt+Return"
+      ]
+    }
+  ],
   "sources": [],
   "watches": 0,
   "bar": [

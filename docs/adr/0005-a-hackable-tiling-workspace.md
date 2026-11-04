@@ -107,6 +107,7 @@ The evidence is in two notes: [tiling managers](../research/2026-11-01-tiling-ma
    | `Alt+[`, `Alt+]` | take the Pane into the column on that side; one sharing its column goes out to its own there, as niri's `Mod+[` and `Mod+]` |
    | `Alt+Return` | a new Thread, in the default Space |
    | `Alt+Shift+Return` | a new browser, as Omarchy's `Super+Shift+Return` |
+   | `Ctrl+Alt+Return` | a new terminal in the focused Space; `terminal.new` in `keys.toml` |
    | `Alt+N`, then a letter | open or focus a kind: `T` terminal, `B` browser, `H` Harnesses; with `Shift`, open another |
    | `Alt+O` | the overview of every window, and back |
    | `Alt+PageUp`, `Alt+PageDown` | the workspace above or below |
