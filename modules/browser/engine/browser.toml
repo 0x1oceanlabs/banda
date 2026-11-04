@@ -20,6 +20,13 @@ tabs = "top"
 # EasyPrivacy and uBlock Origin's lists.
 # blocker = true
 
+# Banda's browser tools for Agents. The CDP endpoint for your own
+# programs is separate. Screenshots include visible page content, with
+# password and card fields masked.
+# [agents]
+# enabled = true
+# screenshots = false
+
 # The sites Agents may use without asking, "allow", or never, "deny", by
 # site: github.com covers its subdomains. Your answers on a tab write
 # them; localhost never asks.

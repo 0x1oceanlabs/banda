@@ -186,7 +186,16 @@ export async function agentCalls(
   window: Window,
   name: string,
   args: object
-): Promise<{ isError?: boolean; content: { text: string }[] }> {
+): Promise<{
+  isError?: boolean
+  content: [
+    { type: "text"; text: string },
+    ...(
+      | { type: "text"; text: string }
+      | { type: "image"; data: string; mimeType: string }
+    )[],
+  ]
+}> {
   const [server] = JSON.parse(
     readFileSync(join(window.dir, "mcp.json"), "utf8")
   ) as {

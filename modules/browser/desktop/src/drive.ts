@@ -13,6 +13,7 @@ import type {
   Handoff,
   Navigate,
   ReadTab,
+  Screenshot,
   SeenTab,
   Shown,
   SiteRule,
@@ -27,6 +28,7 @@ import type { Event, InputEvent, WebContents } from "electron"
 import { setTimeout as sleep } from "node:timers/promises"
 import type { Browser, Frame, Page } from "playwright-core"
 import { Dialogs } from "./dialogs"
+import { capture } from "./capture"
 import { Cdp, messageOf } from "./cdp"
 import {
   act,
@@ -214,6 +216,8 @@ export class Drive extends Context.Service<
     // drives the tab.
     /** The tab's tree with its refs, address, title and new errors. */
     snapshot(tab: number, by: Participant): Effect.Effect<ReadTab, Refused>
+    access(by: Participant, screenshot?: boolean): Effect.Effect<void, Refused>
+    screenshot(tab: number, by: Participant): Effect.Effect<Screenshot, Refused>
     /** A new tab, at `url` or blank, once it loaded: beside the Thread
      * of `by` (`Tabs.create`). */
     open(
@@ -259,6 +263,27 @@ export class Drive extends Context.Service<
       const settings = yield* Settings
       // What Playwright's callbacks run stops with the layer.
       const run = yield* FiberSet.makeRuntime()
+      const access = (by: Participant, screenshot = false) =>
+        Effect.flatMap(look.current, (now) => {
+          const settings = now && fileOf(now.files, BROWSER_FILE)
+          if (by.kind === "agent" && settings?.tools === false)
+            return Effect.fail(
+              new Refused({
+                code: "forbidden",
+                message:
+                  "Banda's browser tools are disabled in Settings → Browser.",
+              })
+            )
+          if (screenshot && !settings?.screenshots)
+            return Effect.fail(
+              new Refused({
+                code: "forbidden",
+                message:
+                  "Page screenshots are disabled. The Person can enable agents.screenshots in Settings → Browser.",
+              })
+            )
+          return Effect.void
+        })
       /** The tabs a Thread drives, from its first call until its turn
        * ends or the Person stops it (ADR 0029, decision 4), by the ID of
        * its Agent. */
@@ -468,6 +493,92 @@ export class Drive extends Context.Service<
           )
         )
       return {
+        access,
+        screenshot: (tab, by) =>
+          Effect.gen(function* () {
+            yield* access(by, true)
+            yield* waiting(tab, by)
+            yield* gated(tab, by)
+            // Connecting Playwright can itself wait on a load-time dialog.
+            if (dialogs.current(tab))
+              return yield* new Refused({
+                code: "conflict",
+                message:
+                  "The page has an open dialog. Answer it before taking a screenshot.",
+              })
+            const shot = yield* inTab(
+              tab,
+              by,
+              "Taking a screenshot",
+              async (held): Promise<Screenshot> => {
+                if (dialogs.current(tab))
+                  throw new Refused({
+                    code: "conflict",
+                    message:
+                      "The page has an open dialog. Answer it before taking a screenshot.",
+                  })
+                const url = held.page.url()
+                const next = dialogs.watch(tab)
+                let navigated = false
+                const moved = () => {
+                  navigated = true
+                }
+                held.page.on("framenavigated", moved)
+                let image: Awaited<ReturnType<typeof capture>>
+                try {
+                  const taking = capture(held.page).catch((error: unknown) => {
+                    if (
+                      timedOut(error) ||
+                      messageOf(error).includes("Unable to capture screenshot")
+                    )
+                      throw new Refused({
+                        code: "conflict",
+                        message:
+                          "The viewport could not be captured. Show this tab in a browser Pane and try again.",
+                      })
+                    throw error
+                  })
+                  taking.catch(() => {})
+                  image = await Promise.race([
+                    taking,
+                    next.opened.then(() => {
+                      throw new Refused({
+                        code: "conflict",
+                        message:
+                          "The page opened a dialog during capture. Answer it and try again.",
+                      })
+                    }),
+                  ])
+                } finally {
+                  held.page.off("framenavigated", moved)
+                  next.stop()
+                }
+                if (navigated || held.page.url() !== url)
+                  throw new Refused({
+                    code: "conflict",
+                    message:
+                      "The page navigated during capture. Take a new snapshot and try again.",
+                  })
+                return {
+                  tab,
+                  url,
+                  title: contentsOf(tab)?.getTitle() ?? "",
+                  ...image,
+                }
+              }
+            )
+            // Revocation or a handoff while capturing must return no image.
+            yield* access(by, true)
+            yield* waiting(tab, by)
+            yield* gated(tab, by)
+            if (contentsOf(tab)?.getURL() !== shot.url)
+              return yield* new Refused({
+                code: "conflict",
+                message:
+                  "The page navigated during capture. Take a new snapshot and try again.",
+              })
+            return shot
+          }),
         snapshot: (tab, by) =>
           Effect.suspend((): Effect.Effect<ReadTab, Refused> => {
             const dialog = dialogs.current(tab)

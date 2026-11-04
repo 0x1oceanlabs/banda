@@ -21,4 +21,4 @@ blocker: boolean,
 /**
  * What the Person said of each site for every Agent, by site.
  */
-sites: { [key in string]: SiteRule }, };
+sites: { [key in string]: SiteRule }, tools: boolean, screenshots: boolean, };

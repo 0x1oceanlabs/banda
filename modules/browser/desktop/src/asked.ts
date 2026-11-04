@@ -20,7 +20,7 @@ import { Tabs } from "./tabs"
 /** Who asks: the Agent of a Thread, as a rule. */
 const byOf = (request: WindowRequest) => request.by
 
-export const browserAsked: Asked<Tabs | Cdp | Drive> = {
+const handlers: Asked<Tabs | Cdp | Drive> = {
   /** Every tab, the Person's too (decision 1); its ID is its page's, for
    * as long as Banda runs. */
   tabs: () =>
@@ -34,6 +34,10 @@ export const browserAsked: Asked<Tabs | Cdp | Drive> = {
   snapshot: (request) =>
     Drive.use((drive) =>
       drive.snapshot((request.params as OneTab).tab, byOf(request))
+    ),
+  screenshot: (request) =>
+    Drive.use((drive) =>
+      drive.screenshot((request.params as OneTab).tab, byOf(request))
     ),
   /** A new tab, for `browser_open`, beside the asking Agent's Thread
    * (decision 4). */
@@ -62,3 +66,15 @@ export const browserAsked: Asked<Tabs | Cdp | Drive> = {
       Effect.as(drive.handoff(request.params as Handoff, byOf(request)), null)
     ),
 }
+
+/** Lists stay stable in an MCP session. The setting is enforced on each
+ * request, so switching tools off also stops existing sessions. */
+export const browserAsked: Asked<Tabs | Cdp | Drive> = Object.fromEntries(
+  Object.entries(handlers).map(([name, answer]) => [
+    name,
+    (request: WindowRequest) =>
+      Drive.use((drive) =>
+        Effect.andThen(drive.access(byOf(request)), answer(request))
+      ),
+  ])
+)

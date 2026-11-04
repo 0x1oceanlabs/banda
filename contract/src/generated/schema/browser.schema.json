@@ -49,6 +49,14 @@
       "description": "What Agents may do in the browser.",
       "type": "object",
       "properties": {
+        "enabled": {
+          "description": "Whether Agents may use Banda's browser tools. Turning this off\nrefuses new calls, including from Threads already open.",
+          "type": "boolean"
+        },
+        "screenshots": {
+          "description": "Whether Agents may request images of pages. Off when left out.\nPassword and card fields are masked; other visible content is sent.",
+          "type": "boolean"
+        },
         "sites": {
           "description": "The sites Agents may use without asking, or never, by site, as\ngithub.com, which covers its subdomains. Your answers on a tab\nwrite them; localhost never asks.",
           "type": "object",
