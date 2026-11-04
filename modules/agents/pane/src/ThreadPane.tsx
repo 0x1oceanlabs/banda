@@ -208,6 +208,7 @@ function ThreadPane(props: PaneProps<ThreadArgs>) {
           space={space}
           thread={thread}
           open={open}
+          focused={focused}
           wide={wide}
           shown={detailsShown}
           onShown={setDetailsShown}

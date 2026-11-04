@@ -612,7 +612,7 @@ export function Shell({
     const parts: Parts = {
       change,
       home,
-      open: (pane, space, { beside, ...how } = {}) =>
+      open: (pane, space, { beside, again = true, ...how } = {}) =>
         change((w) => {
           const at = beside
             ? besideOf(w, listsNow.current, beside, showsOf)
@@ -625,10 +625,14 @@ export function Shell({
               ...how,
               ...(at?.from ? { from: at.from } : {}),
               place: "right",
-              again: true,
+              ...(again && { again }),
             }
           )
         }),
+      focused: () => {
+        const entry = focused(seenNow.current.state)
+        return entry ? { space: entry.space, pane: entry.pane } : null
+      },
       beside: (agent) => {
         const at = besideOf(
           seenNow.current.state,
@@ -690,6 +694,7 @@ export function Shell({
         return partsNow.current.home
       },
       open: (...how) => partsNow.current.open(...how),
+      focused: () => partsNow.current.focused(),
       beside: (agent) => partsNow.current.beside(agent),
       lists: () => partsNow.current.lists(),
       watchLists: (listener) => partsNow.current.watchLists(listener),

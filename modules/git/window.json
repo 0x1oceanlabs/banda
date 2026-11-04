@@ -2,7 +2,24 @@
   "panes": [
     "git.diff"
   ],
-  "actions": [],
+  "actions": [
+    {
+      "id": "git.diff",
+      "title": "Show the Diff, or hide it",
+      "section": "Git",
+      "keys": [
+        "Alt+D"
+      ]
+    },
+    {
+      "id": "git.branch",
+      "title": "Switch branch",
+      "section": "Git",
+      "keys": [
+        "Alt+Shift+G"
+      ]
+    }
+  ],
   "sources": [],
   "watches": 0
 }

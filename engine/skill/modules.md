@@ -70,6 +70,11 @@ What an Agent in a Thread may call as a tool of `banda mcp`:
 
 The Space's folder as git sees it: its branch, its changes, and the diff against a base, the last commit or the index; it stages, unstages and reverts them, commits, pushes and pulls, and switches and makes branches.
 
+Its actions, which `keys.toml` binds by id:
+
+- Show the Diff, or hide it (`git.diff`), Alt+D
+- Switch branch (`git.branch`), Alt+Shift+G
+
 Its methods, `banda call git.<method>`: `status`, `diff`, `refs`, `commits`, `contents`, `stage`, `unstage`, `revert`, `watch`, `act`, `switch`, `branch`, `init`, `prompt`, `written`.
 
 ## Workspaces (`workspaces`)

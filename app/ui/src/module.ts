@@ -31,13 +31,16 @@ export type WindowApi = {
    * the same Pane. With `focus: false` the focus stays where it is, as
    * for a tab an Agent opened. With `beside`, an Agent's ID, it shows
    * right of the Pane of the thing that Agent works in, where a
-   * workspace shows one (`beside`).
+   * workspace shows one (`beside`). With `again: false` a Pane already
+   * shown gets the focus instead, as a Pane's own `open`.
    */
   open: (
     pane: PaneState,
     space?: SpaceId,
-    how?: { focus?: boolean; beside?: string }
+    how?: { focus?: boolean; beside?: string; again?: false }
   ) => void
+  /** The focused Pane and its Space; none while no Pane has the focus. */
+  focused: () => { space: SpaceId; pane: PaneState } | null
   /** Where the thing `agent` works in is, as a Thread its Agent's (ADR
    * 0029, decision 4); none when no module lists one. */
   beside: (agent: string) => Beside | null

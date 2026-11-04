@@ -417,3 +417,68 @@ test("the branch picker makes and switches branches, and ▾ commits chosen file
     "Change a\nFirst\n"
   )
 })
+
+test("Alt+D shows the Diff beside the Thread and hides it, and Alt+Shift+G opens the branch picker, as T3 Code's Mod+D and Mod+Shift+G", async () => {
+  window = await startWindow()
+  const { page, dir } = window
+  const thread = await firstThread(page)
+  await expect(thread.composer).toBeVisible()
+  const folder = join(dir, "root", "Work")
+  git(folder, "init", "-q", "-b", "main")
+  writeFileSync(join(folder, "app.ts"), "export const a = 1\n")
+  git(folder, "add", "-A")
+  git(folder, "commit", "-qm", "First")
+  writeFileSync(join(folder, "app.ts"), "export const a = 2\n")
+
+  // The narrow Thread's card is closed: the key opens it, and the picker
+  // in it, the search ready for the words.
+  await thread.composer.click()
+  await page.keyboard.press("Alt+Shift+KeyG")
+  const search = page.getByRole("textbox", { name: "Search branches" })
+  await expect(search).toBeFocused()
+  await expect(
+    page.getByRole("listbox").getByRole("option", { name: /^main/ })
+  ).toBeVisible()
+  await page.keyboard.press("Escape")
+  await expect(search).toBeHidden()
+
+  // Alt+D: the Space's Diff on its changes, beside the Thread; on the
+  // Diff, Alt+D hides it.
+  await page.keyboard.press("Escape")
+  await thread.composer.click()
+  await page.keyboard.press("Alt+KeyD")
+  const diff = page.getByRole("region", { name: "Diff" })
+  await expect(diff.getByRole("button", { name: "Scope" })).toHaveText(
+    "Changes"
+  )
+  await expect(diff.getByText("app.ts").first()).toBeVisible()
+  await page.keyboard.press("Alt+KeyD")
+  await expect(diff).toBeHidden()
+
+  // A wide Thread's card hidden by the Person shows again for the key.
+  await page.setViewportSize({ width: 1900, height: 900 })
+  const pane = page.getByRole("region", { name: "New Thread" })
+  const aside = pane.getByRole("complementary", { name: "Thread details" })
+  await expect(aside).toBeVisible()
+  await thread.composer.click()
+  await page.keyboard.press("Control+Shift+KeyB")
+  await expect(aside).toBeHidden()
+  await page.keyboard.press("Alt+Shift+KeyG")
+  await expect(aside).toBeVisible()
+  await expect(search).toBeFocused()
+  await page.keyboard.press("Escape")
+  await expect(search).toBeHidden()
+  // Hidden and shown again, the card opens no picker of itself.
+  await thread.composer.click()
+  await page.keyboard.press("Control+Shift+KeyB")
+  await page.keyboard.press("Control+Shift+KeyB")
+  await expect(aside).toBeVisible()
+  await expect(search).toBeHidden()
+
+  // Both are in the Banda menu, as any action.
+  await page.keyboard.press("Alt+Space")
+  await page.keyboard.type("switch branch")
+  await expect(
+    page.getByRole("option", { name: /Switch branch/ })
+  ).toBeVisible()
+})

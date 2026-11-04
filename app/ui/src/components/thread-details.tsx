@@ -22,6 +22,10 @@ export type DetailsProps = {
   thread: string | null
   /** Opens a Pane beside the Thread, as the Thread's own links do. */
   open: (pane: PaneState, place?: Place) => void
+  /** The part of a row a key asked the card to open, as Alt+Shift+G
+   * the branch picker (`askDetails`), until the row says it is `opened`. */
+  opening: string | null
+  opened: () => void
 }
 
 /** A module's rows in the card: drawn in a section of its own, gone
@@ -33,6 +37,21 @@ export type Details = {
 }
 
 const Given = createContext<readonly Details[]>([])
+
+const hearing = new Set<(id: string) => void>()
+
+/** Asks the focused Thread's card to show, and to open the part `id` of
+ * its rows, as Alt+Shift+G the branch picker. */
+export function askDetails(id: string) {
+  for (const hear of hearing) hear(id)
+}
+
+/** Calls `listener` with each ask; returns how to stop. The focused
+ * Thread's card hears them. */
+export function hearAsks(listener: (id: string) => void): () => void {
+  hearing.add(listener)
+  return () => hearing.delete(listener)
+}
 
 /** Hands the Panes drawn inside it the rows of the modules that run. */
 export function DetailsRows({

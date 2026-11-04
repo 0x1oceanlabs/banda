@@ -184,8 +184,15 @@ the rest are our defaults, as T3 Code does, and stay Roma's to change.
      message is written by the Thread's own Harness, in a short run of its
      own that the Thread does not show; a setting for another model comes
      later, as T3 Code's "Source control writer".
-   - The same actions are in the Banda menu (ADR 0017), under Git: Diff,
-     Commit, Push, Switch branch. They act in the focused Space.
+   - Outside the card, as T3 Code: two keys, no git rows of the Banda
+     menu's own (T3 Code's palette has none). Alt+D, as its Mod+D, shows
+     the focused Pane's Space's Diff on Changes beside it, the one shown
+     if there is, and on the Diff hides it. Alt+Shift+G, as its
+     Mod+Shift+G, opens the branch picker of the focused Thread's card,
+     the card shown first. As every action, both are in the Banda menu
+     and its key sheet, under Git. _Changed_ on 2026-11-04 from Diff,
+     Commit, Push and Switch branch rows in the menu: Roma's call, as T3
+     Code.
 
    A module then needs a way to add rows to another module's Pane; it
    comes with this decision, and `pulls` uses it for the PR rows: a
@@ -278,7 +285,7 @@ Each a PR, tried in the window, with `/simplify` before it:
 4. **Thread details and the main button**, in four PRs: (a) the git
    commands and `git.watch`; (b) the message a Harness writes; (c) the
    card, the way a module adds rows to it, the branch, the main button
-   and its dialogs; (d) the Banda menu's Git actions.
+   and its dialogs; (d) Alt+D and Alt+Shift+G, as T3 Code's keys.
 5. **Files.** `files.tree`, `files.file`, paths in replies as links,
    `agents.files` moved.
 6. **A pull request.** `pulls` on `gh`, `pulls.pull`, Create PR from
