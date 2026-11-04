@@ -53,7 +53,7 @@ function Markdown({
     <Streamdown
       data-slot="markdown"
       className={cn(
-        "min-w-0 text-sm leading-relaxed wrap-break-word *:first:mt-0 *:last:mb-0",
+        "min-w-0 space-y-3 text-prose wrap-break-word *:first:mt-0 *:last:mb-0",
         className
       )}
       isAnimating={streaming}
