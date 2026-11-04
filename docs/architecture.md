@@ -947,6 +947,13 @@ identity again through the opened file. Byte ranges let players seek
 without reading the whole file. Nothing plays automatically. Images
 open larger on a click; a missing or unsupported file stays a link.
 
+Mermaid code fences render as SVG through `@streamdown/mermaid`, with
+copy, zoom and fullscreen controls and the look's light or dark scheme.
+The plugin keeps Mermaid's strict security mode. KaTeX renders inline
+`$…$` and block `$$…$$` math through `@streamdown/math`; its CSS and fonts
+ship with the app. Both plugins use Streamdown's streaming parser and
+error handling, alongside the existing code and media renderers.
+
 ## Checks that hold the shape
 
 - **Architecture tests.** The kernel names no module, no module reads

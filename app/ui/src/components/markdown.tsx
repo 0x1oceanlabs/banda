@@ -1,11 +1,19 @@
 import { code } from "@streamdown/code"
+import { createMathPlugin } from "@streamdown/math"
+import { mermaid } from "@streamdown/mermaid"
 import { cn } from "cn"
-import { MarkdownImage } from "./markdown-media"
 import { Streamdown, defaultRehypePlugins } from "streamdown"
+import { useDark } from "../hooks/use-dark"
 import { localImages } from "../lib/markdown-media"
+import { MarkdownImage } from "./markdown-media"
 
-/** Shiki highlights code in the theme's light and dark. */
-const plugins = { code }
+/** Single-dollar math matches what Agents write; KaTeX leaves code alone. */
+const math = createMathPlugin({ singleDollarTextMath: true })
+const plugins = { code, math, mermaid }
+const diagrams = {
+  light: { config: { theme: "default" as const } },
+  dark: { config: { theme: "dark" as const } },
+}
 const components = { img: MarkdownImage }
 const rehypePlugins = [
   defaultRehypePlugins.raw,
@@ -15,11 +23,11 @@ const rehypePlugins = [
   localImages(true),
 ]
 
-/** Copy on code and tables, nothing to download, no diagrams' extras. */
+/** Copy on code, tables and diagrams; diagrams can open fullscreen. */
 const controls = {
   code: { copy: true, download: false },
   table: { copy: true, download: false, fullscreen: false },
-  mermaid: false,
+  mermaid: { copy: true, download: false, fullscreen: true },
 } as const
 
 /**
@@ -37,6 +45,7 @@ function Markdown({
   streaming?: boolean
   className?: string
 }) {
+  const dark = useDark()
   return (
     <Streamdown
       data-slot="markdown"
@@ -46,6 +55,7 @@ function Markdown({
       )}
       isAnimating={streaming}
       plugins={plugins}
+      mermaid={dark ? diagrams.dark : diagrams.light}
       components={components}
       rehypePlugins={rehypePlugins}
       controls={controls}

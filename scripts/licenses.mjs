@@ -10,6 +10,7 @@
 // build tools are not shipped and are not read. Electron and Chromium bring
 // their own notices: electron-builder packs LICENSE.electron.txt and
 // LICENSES.chromium.html beside the app.
+import { createHash } from "node:crypto"
 import { execFileSync } from "node:child_process"
 import { readdirSync, readFileSync, writeFileSync } from "node:fs"
 import { dirname, join } from "node:path"
@@ -147,6 +148,16 @@ function npm() {
   return [...listed, ...dev]
 }
 
+// khroma 2.1.0, used by Mermaid, ships its MIT text but no manifest
+// license field. Verify that exact text before supplying its metadata:
+// https://github.com/fabiospampinato/khroma/blob/v2.1.0/license
+const VERIFIED_TEXT = {
+  "khroma@2.1.0": {
+    license: "MIT",
+    sha256: "66b333b0f66759a0b710459e03f7029abe17f4358114a128d2c972e642961b49",
+  },
+}
+
 const LICENSE_FILE = /^(licen[cs]e|copying|notice|unlicense)([.-].*)?$/i
 const shipped = [...crates(), ...npm()]
   .map(({ name, version, license, dir }) => ({
@@ -158,6 +169,16 @@ const shipped = [...crates(), ...npm()]
       .map((file) => join(dir, file)),
   }))
   .concat(VENDORED)
+  .map((p) => {
+    const verified = VERIFIED_TEXT[`${p.name}@${p.version}`]
+    if (p.license !== "Unknown" || !verified) return p
+    const matches = p.files.some(
+      (file) =>
+        createHash("sha256").update(readFileSync(file)).digest("hex") ===
+        verified.sha256
+    )
+    return matches ? { ...p, license: verified.license } : p
+  })
   .sort(
     (a, b) => a.name.localeCompare(b.name) || a.version.localeCompare(b.version)
   )

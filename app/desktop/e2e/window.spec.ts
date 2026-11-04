@@ -4473,3 +4473,77 @@ test("markdown shows local images, video and audio, with an image preview and wo
   await page.keyboard.press("Escape")
   await expect(preview).toBeHidden()
 })
+
+test("markdown renders Mermaid and math in the look's light and dark, keeping code and escaped currency as text", async () => {
+  window = await startWindow({ look: 'mode = "light"\n' })
+  const { page } = window
+  const { thread, composer } = await firstThread(page)
+  await composer.fill(
+    String.raw`Inline $E = mc^2$.
+
+$$
+\frac{1}{2} + \sqrt{4} = 2.5
+$$
+
+Price: \$10.
+
+Code: \`$x$\`.
+
+\`\`\`mermaid
+flowchart LR
+  A[Request] --> B[Check] --> C[Thread]
+\`\`\`
+`.replaceAll("\\`", "`")
+  )
+  await composer.press("Enter")
+  const markdown = thread.locator('[data-slot="markdown"]')
+  await expect(markdown.locator(".katex")).toHaveCount(2)
+  await expect(markdown.locator(".katex-display")).toHaveCount(1)
+  await expect(markdown.locator("annotation").first()).toHaveText("E = mc^2")
+  await expect(
+    markdown.locator("code").filter({ hasText: "$x$" })
+  ).toBeVisible()
+  await expect(
+    markdown.getByText("Price: $10.", { exact: false })
+  ).toBeVisible()
+  const diagram = markdown
+    .getByRole("img", { name: "Mermaid chart" })
+    .locator("svg")
+  await expect(diagram).toBeVisible()
+  await expect(diagram).toContainText("Request")
+  await expect(diagram).toContainText("Check")
+  const light = await diagram
+    .locator(".node rect")
+    .first()
+    .evaluate((rect) => getComputedStyle(rect).fill)
+  await page.screenshot({ path: "test-results/20-diagrams-light.png" })
+  writeFileSync(join(window.dir, "config/look.toml"), 'mode = "dark"\n')
+  await expect(page.locator("html")).toHaveClass(/dark/)
+  await expect
+    .poll(() =>
+      diagram
+        .locator(".node rect")
+        .first()
+        .evaluate((rect) => getComputedStyle(rect).fill)
+    )
+    .not.toBe(light)
+  await expect(markdown.locator(".katex")).toHaveCount(2)
+  await page.screenshot({ path: "test-results/20-diagrams-dark.png" })
+  expect(
+    await markdown
+      .locator(".katex")
+      .first()
+      .evaluate((el) => getComputedStyle(el).fontFamily)
+  ).toContain("KaTeX_Main")
+  await markdown.getByRole("button", { name: "View fullscreen" }).click()
+  const full = page.getByRole("dialog", { name: "View fullscreen" })
+  await expect(full.getByRole("img", { name: "Mermaid chart" })).toBeVisible()
+  await page.keyboard.press("Escape")
+  await expect(full).toBeHidden()
+
+  // An invalid diagram remains a readable error; the Thread stays usable.
+  await composer.fill("Broken diagram:\n\n```mermaid\nnotARealDiagram\n```")
+  await composer.press("Enter")
+  await expect(thread.getByText(/Mermaid Error:/)).toBeVisible()
+  await expect(composer).toBeEditable()
+})
