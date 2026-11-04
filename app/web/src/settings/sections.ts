@@ -30,6 +30,7 @@ import {
   PanelLeftIcon,
   SettingsIcon,
   Share2Icon,
+  TerminalIcon,
 } from "lucide-react"
 import { Agents } from "./Agents"
 import { BrowserSites } from "./BrowserSites"
@@ -160,6 +161,13 @@ export const SECTIONS: Section[] = [
     ],
     about: aboutOf("browser.toml"),
     Foot: BrowserSites,
+  },
+  {
+    id: "terminal",
+    title: "Terminal",
+    icon: TerminalIcon,
+    files: [{ name: "terminal.toml" }],
+    about: aboutOf("terminal.toml"),
   },
   {
     id: "keys",

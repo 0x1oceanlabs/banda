@@ -15,11 +15,12 @@ pub use write::{rename, reset, set};
 
 /// Each module's settings files, by its ID, as its crate describes them
 /// (ADR 0016, decision 3): what its `module.toml` says it owns.
-pub const MODULES: [(&str, &[SettingsFile]); 4] = [
+pub const MODULES: [(&str, &[SettingsFile]); 5] = [
     ("agents", &banda_agents::SETTINGS),
     ("harnesses", &banda_harnesses::SETTINGS),
     ("browser", &banda_browser::SETTINGS),
     ("sharing", &banda_sharing::SETTINGS),
+    ("terminal", &banda_terminal::SETTINGS),
 ];
 
 /// Every settings file: the look's, which it reads itself, then the
@@ -240,6 +241,9 @@ mod every_key {
         "look.toml:drawer.harness",
         // None: the file's own keys, with no preset under them.
         "sidebar.toml:preset",
+        // None: the look's `[font]` mono, and three quarters of its size.
+        "terminal.toml:font",
+        "terminal.toml:size",
         // Each line says nothing unless the Person or a preset fills it.
         "sidebar.toml:row.line1",
         "sidebar.toml:row.line2",

@@ -1,0 +1,25 @@
+#:schema ./schemas/terminal.schema.json
+# How Banda's terminal writes (ADR 0047). Every key is optional: what you
+# leave out is Banda's default, written below. Check a change with:
+# banda settings check
+
+# The font: a font's name, or a CSS list of them. Left out, the look's
+# [font] mono: on Linux the system's monospace, on macOS and Windows
+# JetBrains Mono, which Banda ships. Missing icons come from Symbols Nerd
+# Font.
+# font = "JetBrains Mono Variable"
+
+# The text's size, in pixels. Left out, three quarters of the look's
+# [font] size: 12 at 14.
+# size = 12
+
+# Whether -> => != and the like are drawn as one sign, as the font draws
+# them; each still takes its cells.
+# ligatures = true
+
+[cursor]
+# "block", "bar" or "underline", until a program asks for another.
+# style = "block"
+
+# Whether it blinks, until a program says.
+# blink = true

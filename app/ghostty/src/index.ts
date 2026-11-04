@@ -12,4 +12,8 @@ export {
   type GhosttyTerminalSurfaceOptions as SurfaceOptions,
   type GhosttyTerminalFont as Font,
 } from "./t3/surface"
-export type { GhosttyTheme as Theme, GhosttyColor as Color } from "./t3/core"
+export type {
+  GhosttyTheme as Theme,
+  GhosttyColor as Color,
+  GhosttyCursor as Cursor,
+} from "./t3/core"

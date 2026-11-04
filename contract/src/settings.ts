@@ -9,6 +9,7 @@ import harnesses from "./generated/schema/harnesses.schema.json"
 import look from "./generated/schema/look.schema.json"
 import sharing from "./generated/schema/sharing.schema.json"
 import sidebar from "./generated/schema/sidebar.schema.json"
+import terminal from "./generated/schema/terminal.schema.json"
 import type { JsonValue } from "./generated/serde_json/JsonValue"
 
 export type { From } from "./generated/look/From"
@@ -40,6 +41,7 @@ export const SCHEMAS: { [file: string]: Schema } = {
   "agents.toml": agents as Schema,
   "harnesses.toml": harnesses as Schema,
   "sharing.toml": sharing as Schema,
+  "terminal.toml": terminal as Schema,
 }
 
 /** One value a key may take, and what it means. */

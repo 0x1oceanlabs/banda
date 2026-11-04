@@ -8,6 +8,7 @@
 //! programs through its Harness, under its Thread's mode.
 
 pub mod model;
+pub mod settings;
 
 mod front;
 mod history;
@@ -24,6 +25,11 @@ use std::collections::hash_map::Entry;
 use std::sync::{Arc, Mutex};
 use terminal::Terminal;
 use ts_rs::TS;
+
+/// The module's settings file in `~/.config/banda` (ADR 0016): how the
+/// terminal writes, which the look resolves for the window (ADR 0047).
+pub const SETTINGS: [banda_look::SettingsFile; 1] =
+    [banda_look::SettingsFile::of::<settings::TerminalSettings>()];
 
 /// The most a window types at once.
 const AT_ONCE: usize = 64 * 1024;

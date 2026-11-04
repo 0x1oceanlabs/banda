@@ -192,7 +192,17 @@ export function ghosttyCellText(codepointView: DataView, graphemeLength: number)
   return text;
 }
 
+/** Banda: the cursor a terminal starts with and comes back to (ADR 0047). */
+export interface GhosttyCursor {
+  readonly style: "block" | "bar" | "underline";
+  readonly blink: boolean;
+}
+
+// GhosttyTerminalCursorStyle, in terminal.h.
+const GHOSTTY_CURSOR_STYLES = { bar: 0, block: 1, underline: 2 } as const;
+
 export class GhosttyTerminalCore {
+  private cursor: GhosttyCursor = { style: "block", blink: true };
   private readonly runtime: GhosttyRuntime;
   private terminalSlot = 0;
   private terminal = 0;
@@ -263,7 +273,7 @@ export class GhosttyTerminalCore {
     this.runtime.free(options, optionsSize);
     this.assertSuccess("ghostty_terminal_new", terminalResult);
     this.terminal = this.runtime.readPointer(this.terminalSlot);
-    this.applyDefaultCursorBlink();
+    this.applyDefaultCursor();
     this.ptyWriter = onPtyData;
     this.ptyWriterId = this.runtime.attachPtyWriter(this.terminal, onPtyData);
 
@@ -363,7 +373,7 @@ export class GhosttyTerminalCore {
     this.ensureActive();
     this.runtime.call("ghostty_terminal_reset", this.terminal);
     // RIS restores the built-in steady cursor; reapply the embedder default before replay.
-    this.applyDefaultCursorBlink();
+    this.applyDefaultCursor();
     this.rows = [];
     if (data.length === 0) return;
     const writer = this.ptyWriter;
@@ -395,12 +405,25 @@ export class GhosttyTerminalCore {
     );
   }
 
-  // Option 23 sets blink on startup and DECSCUSR reset; explicit DECSCUSR or DEC mode 12 still wins.
-  private applyDefaultCursorBlink(): void {
+  /** Banda: the cursor a reset and DECSCUSR 0 come back to, as `terminal.toml` says (ADR 0047). */
+  setDefaultCursor(cursor: GhosttyCursor): void {
+    this.ensureActive();
+    this.cursor = cursor;
+    this.applyDefaultCursor();
+  }
+
+  // Options 22 and 23 set the style and blink DECSCUSR 0 restores; explicit DECSCUSR or DEC
+  // mode 12 still wins. Banda: the style too, and both taken at once by DECSCUSR 0.
+  private applyDefaultCursor(): void {
+    const style = this.runtime.alloc(4);
+    this.runtime.bytes(style, 4).set([GHOSTTY_CURSOR_STYLES[this.cursor.style], 0, 0, 0]);
+    this.runtime.call("ghostty_terminal_set", this.terminal, 22, style);
+    this.runtime.free(style, 4);
     const blink = this.runtime.alloc(1);
-    this.runtime.bytes(blink, 1)[0] = 1;
+    this.runtime.bytes(blink, 1)[0] = this.cursor.blink ? 1 : 0;
     this.runtime.call("ghostty_terminal_set", this.terminal, 23, blink);
     this.runtime.free(blink, 1);
+    this.write("\x1b[0 q");
   }
 
   setTheme(theme: GhosttyTheme): void {

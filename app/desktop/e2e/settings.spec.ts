@@ -375,3 +375,48 @@ test("The first run asks to share once, nothing ticked, after the first Space; C
   expect(text).toMatch(/^problems = true$/m)
   expect(text).toMatch(/^usage = false$/m)
 })
+
+test("Terminal: terminal.toml's rows write the file, and a terminal open follows it (ADR 0047)", async () => {
+  window = await startWindow({
+    files: { "config/terminal.toml": '[cursor]\nstyle = "bar"\n' },
+  })
+  const { page, dir } = window
+  const file = join(dir, "config/terminal.toml")
+  await page.getByLabel("Name").fill("Work")
+  await page.getByRole("button", { name: "Create Space" }).click()
+  await expect(page.getByRole("region", { name: "New Thread" })).toBeVisible()
+  await page.keyboard.press("Alt+KeyN")
+  await page
+    .getByRole("region", { name: "New Pane" })
+    .getByRole("button", { name: "Terminal" })
+    .click()
+  const screen = page.getByRole("region", { name: "Terminal screen" })
+  await expect(screen).toHaveAttribute("data-state", "running")
+  await screen.click()
+  await page.keyboard.type("echo 'a -> b => c != d'")
+  await page.keyboard.press("Enter")
+
+  const settings = await openSettings(page)
+  await settings
+    .getByRole("navigation", { name: "Settings sections" })
+    .getByRole("button", { name: /Terminal/ })
+    .click()
+  const ligatures = settings
+    .locator('[data-key="ligatures"]')
+    .getByRole("switch")
+  await expect(ligatures).toHaveAttribute("aria-checked", "true")
+  await expect(settings.locator('[data-key="cursor.style"]')).toContainText(
+    "bar"
+  )
+  await page.screenshot({ path: "test-results/settings-terminal.png" })
+
+  await ligatures.click()
+  await expect
+    .poll(() => readFileSync(file, "utf8"))
+    .toMatch(/^ligatures = false$/m)
+  await expect(ligatures).toHaveAttribute("aria-checked", "false")
+  // The terminal stays running as its file changes under it.
+  await expect(screen).toHaveAttribute("data-state", "running")
+  await screen.click()
+  await page.screenshot({ path: "test-results/terminal-toml.png" })
+})

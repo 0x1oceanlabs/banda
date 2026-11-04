@@ -7,6 +7,7 @@ import {
   type GhosttyCell,
   type GhosttyScrollbar,
   type GhosttySnapshot,
+  type GhosttyCursor,
   type GhosttyTheme,
 } from "./core";
 import {
@@ -49,6 +50,8 @@ const TERMINAL_FONT_LOAD_VARIANTS = [
 export interface GhosttyTerminalFont {
   readonly family?: string;
   readonly size?: number;
+  /** Banda: whether -> => != are drawn as the font joins them; on unless false. */
+  readonly ligatures?: boolean;
 }
 
 let symbolsFontLoad: Promise<void> | null = null;
@@ -518,6 +521,8 @@ export interface GhosttySelectionPosition {
 export interface GhosttyTerminalSurfaceOptions {
   readonly theme: GhosttyTheme;
   readonly font?: GhosttyTerminalFont;
+  /** Banda: the cursor it starts with and comes back to; a blinking block if none. */
+  readonly cursor?: GhosttyCursor;
   /** Read after font and WASM loading. */
   readonly visible?: boolean;
   readonly onData: (data: string) => void;
@@ -551,6 +556,7 @@ export class GhosttyTerminalSurface {
   private fontFamily: string;
   private requestedFontFamily: string | undefined;
   private fontSize: number;
+  private ligatures: boolean;
   private fontEpoch = 0;
   private pendingFontEpoch: number | null = null;
   private readonly stopObservingResize: () => void;
@@ -659,6 +665,7 @@ export class GhosttyTerminalSurface {
     this.fontFamily = fontFamily;
     this.requestedFontFamily = options.font?.family;
     this.fontSize = terminalFontSize(options.font?.size);
+    this.ligatures = options.font?.ligatures ?? true;
     this.installEvents();
     this.watchDevicePixelRatio();
     this.reducedMotionMedia?.addEventListener("change", this.onReducedMotionChange);
@@ -717,6 +724,7 @@ export class GhosttyTerminalSurface {
       options.theme,
       options.onData,
     );
+    if (options.cursor) core.setDefaultCursor(options.cursor);
     const surface = new GhosttyTerminalSurface(
       mount,
       canvas,
@@ -791,6 +799,14 @@ export class GhosttyTerminalSurface {
     return Math.ceil(rows * this.metrics.height + CONTENT_PADDING * 2);
   }
 
+  /** Banda: the cursor it comes back to, and has now, until a program asks for another. */
+  setCursor(cursor: GhosttyCursor): void {
+    if (this.disposed) return;
+    this.core.setDefaultCursor(cursor);
+    this.cursorOn = true;
+    this.requestRender();
+  }
+
   async setFont(font: GhosttyTerminalFont): Promise<void> {
     if (this.disposed) return;
     const fontSize = terminalFontSize(font.size);
@@ -803,6 +819,7 @@ export class GhosttyTerminalSurface {
     this.fontFamily = fontFamily;
     this.requestedFontFamily = font.family;
     this.fontSize = fontSize;
+    this.ligatures = font.ligatures ?? true;
     this.applyFontMetrics();
   }
 
@@ -2004,6 +2021,7 @@ export class GhosttyTerminalSurface {
       metrics: this.metrics,
       fontSize: this.fontSize,
       fontFamily: this.fontFamily,
+      ligatures: this.ligatures,
       padding: CONTENT_PADDING,
       originY: this.originY,
       forceFull: this.forceFullRender,
