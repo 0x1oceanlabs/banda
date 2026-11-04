@@ -1,18 +1,18 @@
 import type { Engine } from "@banda/contract"
 import { Spinner } from "@banda/ui/components/spinner"
 import { useSpaces } from "@banda/ui/hooks/use-spaces"
-import { useModules, useStatus } from "@banda/ui/hooks/use-status"
+import { useMachine, useModules, useStatus } from "@banda/ui/hooks/use-status"
 import { shownSpaces } from "@banda/ui/lib/spaces"
 import { Shell } from "./shell/Shell"
 import { AskToShare } from "./sharing/AskToShare"
-import { FirstSpace } from "./Spaces"
 
 /**
- * The page: the engine's Spaces, then the window over them; a first Space
- * to make when there is none.
+ * The page: the engine's Spaces, then the window. With no Space, a new
+ * Thread is held on the machine until its first message or attachment.
  */
 export function App({ engine }: { engine: Engine }) {
   const status = useStatus(engine)
+  const machine = useMachine(engine)
   const modules = useModules(engine)
   // A Space added here shows at once, as the engine answered it.
   const { listed, put } = useSpaces(engine)
@@ -31,17 +31,14 @@ export function App({ engine }: { engine: Engine }) {
       </p>
     )
   }
-  const spaces = shownSpaces(listed.value)
+  const spaces = [
+    ...shownSpaces(listed.value),
+    ...listed.value.filter((s) => s.scratch && !s.archived),
+  ]
   // The first Space is home until Banda makes a default one (ADR 0006);
   // one whose folder is missing opens nothing.
-  const home = spaces.find((space) => !space.missing)
-  if (!home) {
-    return (
-      <div className="h-svh bg-muted/40">
-        <FirstSpace engine={engine} onCreated={put} />
-      </div>
-    )
-  }
+  const home = spaces.find((space) => !space.missing && !space.scratch)
+  if (!machine) return <Spinner />
   return (
     <>
       <Shell
@@ -49,7 +46,7 @@ export function App({ engine }: { engine: Engine }) {
         status={status}
         modules={modules}
         spaces={spaces}
-        home={home.id}
+        home={home?.id ?? machine}
         onCreated={put}
       />
       <AskToShare />

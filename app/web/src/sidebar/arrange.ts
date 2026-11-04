@@ -81,6 +81,34 @@ export function arrange(
   toggled: ReadonlySet<string> = new Set(),
   settled: (listed: Listed) => boolean = () => false
 ): Arranged {
+  const scratch = spaces.filter((space) => space.scratch && !space.archived)
+  if (scratch.length > 0) {
+    const arranged = arrange(
+      lists,
+      spaces.filter((space) => !space.scratch),
+      settings,
+      only,
+      toggled,
+      settled
+    )
+    const rows: Row[] = scratch
+      .flatMap((space) =>
+        (lists[space.id] ?? []).map((listed) => ({
+          space,
+          listed,
+          state: stateOf(listed, settled),
+        }))
+      )
+      .sort(order(settings.sort.by))
+    arranged.sections.push({
+      key: "no-space",
+      label: "No Space",
+      rows,
+      folded: toggled.has("no-space"),
+      ...rollup(rows),
+    })
+    return arranged
+  }
   const all: Row[] = spaces.flatMap((space) =>
     (lists[space.id] ?? []).map((listed) => ({
       space,

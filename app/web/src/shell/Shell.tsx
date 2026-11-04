@@ -856,7 +856,8 @@ export function Shell({
     [lists]
   )
   const spaceName = useCallback(
-    (id: SpaceId) => spaces.find((space) => space.id === id)?.name ?? "Space",
+    (id: SpaceId) =>
+      spaces.find((space) => space.id === id)?.name || "No Space",
     [spaces]
   )
 
@@ -909,6 +910,7 @@ export function Shell({
             }}
             onOpen={openPane}
             onNewThread={newThreadIn}
+            onNoSpace={() => machine && startThread(machine)}
             onAddSpace={() => parts.run("space.add")}
             onPin={(space, pinned) =>
               updateSpace(engine, { space, pinned }).catch((error: unknown) =>
@@ -958,7 +960,7 @@ export function Shell({
             modules={modules}
             space={here}
             lists={lists}
-            spaces={spaces}
+            spaces={spaces.filter((space) => !space.scratch)}
             actions={keyed.actions}
             binds={inForce.binds}
           />

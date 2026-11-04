@@ -4,8 +4,8 @@
  * sends to it — a message, Implement, an answer, stop, retry and the
  * queue's. The Thread Pane lays these out; it decides none of them.
  */
-import { useCallback, useEffect, useMemo, useState } from "react"
-import type { Engine, SpaceId } from "@banda/contract"
+import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import { newId, type Engine, type SpaceId } from "@banda/contract"
 import type {
   Defaults,
   Image,
@@ -15,6 +15,8 @@ import type {
   ThreadId,
   TurnView,
 } from "@banda/contract/agents"
+import { useMachine } from "@banda/ui/hooks/use-status"
+import { spacesChanged } from "@banda/ui/lib/spaces"
 import { useAct } from "@banda/ui/hooks/use-act"
 import { useInFront } from "@banda/ui/hooks/use-in-front"
 import { READ_AGAIN, type Source, useLive } from "@banda/ui/hooks/use-live"
@@ -33,6 +35,7 @@ import {
   asked,
   declineOnce,
   NO_OFFER,
+  DEFAULT_SETTINGS,
   proposedPlan,
   sent,
   steerable,
@@ -54,6 +57,10 @@ export type ThreadArgs = {
   ask?: string
   /** The Person hid the Thread's details card (ADR 0034, decision 4). */
   details?: false
+  /** The folder created by the draft’s first message or attachment. */
+  scratch?: SpaceId
+  /** Kept with the draft so creation can be replayed after a reload. */
+  scratchCommand?: string
 }
 
 /** A Thread not yet started, on this computer's first Harness. */
@@ -72,6 +79,40 @@ export function useThreadSession({
   update,
 }: PaneProps<ThreadArgs>) {
   const { thread } = args
+  const machine = useMachine(engine)
+  const unplaced = space === machine && !args.scratch
+  const creation = useRef(args.scratchCommand ?? newId())
+  useEffect(() => {
+    if (unplaced && !args.scratchCommand)
+      update({ ...args, scratchCommand: creation.current })
+  }, [unplaced, args, update])
+  const pending = useRef<Promise<SpaceId> | null>(null)
+  const ensureSpace = (): Promise<SpaceId> => {
+    if (!unplaced) return Promise.resolve(space)
+    if (!pending.current)
+      pending.current = engine
+        .command(
+          "spaces.create",
+          { scratch: true },
+          undefined,
+          creation.current
+        )
+        .then((made) => {
+          update({
+            ...args,
+            ask: undefined,
+            scratchCommand: creation.current,
+            scratch: made.id,
+          })
+          spacesChanged()
+          return made.id
+        })
+        .catch((error: unknown) => {
+          pending.current = null
+          throw error
+        })
+    return pending.current
+  }
   const live = useThread(engine, space, thread)
   const state = live.state === "ready" ? live.view : undefined
   const sending = useAct()
@@ -113,11 +154,14 @@ export function useThreadSession({
   const everyDefaults = useHarnessDefaults(
     engine,
     space,
-    thread === null ? offered : null
+    thread === null && machine && !unplaced ? offered : null
   )
   const defaults = everyDefaults?.[harness]
   const [drafts, setDrafts] = useState<Record<string, Settings>>({})
-  const draftOf = (id: string) => drafts[id] ?? everyDefaults?.[id]?.settings
+  const draftOf = (id: string) =>
+    drafts[id] ??
+    everyDefaults?.[id]?.settings ??
+    (unplaced ? DEFAULT_SETTINGS : undefined)
   const settings = thread === null ? draftOf(harness) : state?.settings
   const offer: Offer =
     (thread === null ? defaults?.offer : state?.offer) ?? NO_OFFER
@@ -140,25 +184,30 @@ export function useThreadSession({
 
   const images = useAttachments({
     thread,
-    attach: (image: Attaching) => engine.command("agents.attach", image, space),
+    attach: async (image: Attaching) =>
+      engine.command("agents.attach", image, await ensureSpace()),
     reader,
     closed: offer.no_images ? `${name} does not take images.` : undefined,
   })
   // A file dropped or pasted, kept in the Space for the message to name.
   const keep = (file: File) =>
     acting.act(async () => {
+      const target = await ensureSpace()
       const data = base64Of(await dataUrl(file))
       const kept = await engine.command(
         "agents.keep",
         { name: file.name, data },
-        space
+        target
       )
       return kept.path
     })
   // The files `@` names come from the Space's folder.
   const findFiles = useCallback(
-    (query: string) => engine.call("agents.files", { query }, { space }),
-    [engine, space]
+    (query: string) =>
+      unplaced
+        ? Promise.resolve([])
+        : engine.call("agents.files", { query }, { space }),
+    [engine, space, unplaced]
   )
 
   // The waiting message open to edit, from its Edit or ↑ in the composer.
@@ -189,8 +238,10 @@ export function useThreadSession({
   ) => {
     const no = asking && declineOnce(asking.body)
     if (no && text && (await answer(asking.id, no)) === undefined) return false
-    const sent = await sending.act(() =>
-      engine.command(
+    let target = space
+    const sent = await sending.act(async () => {
+      target = await ensureSpace()
+      return engine.command(
         "agents.send",
         // A new Thread starts as its composer shows; an existing one runs
         // with its own settings, which the bar changes as it goes.
@@ -198,21 +249,30 @@ export function useThreadSession({
           ...(thread === null ? { harness } : { thread }),
           text,
           images: images.map(({ id }) => id),
-          settings: thread === null ? (settings ?? null) : (next ?? null),
+          settings:
+            thread === null
+              ? unplaced
+                ? (drafts[harness] ?? null)
+                : (settings ?? null)
+              : (next ?? null),
           steer,
         },
-        space
+        target
       )
-    )
-    if (sent && thread === null)
-      update({ thread: sent.thread, harness, title: args.title })
+    })
+    if (sent && thread === null) {
+      const next = { thread: sent.thread, harness, title: args.title }
+      if (target !== space || args.scratch)
+        open({ kind: "agents.thread", args: next }, "here", target)
+      else update(next)
+    }
     return sent !== undefined
   }
   // Words from the Banda menu start the Thread as the Pane opens, with its
   // Harness's settings (ADR 0017, decision 6). They leave the Pane's args
   // first, so they go once.
   useEffect(() => {
-    if (thread !== null || !args.ask || !defaults) return
+    if (thread !== null || !args.ask || (!defaults && !unplaced)) return
     const { ask, ...rest } = args
     update(rest)
     void go(ask, [], false)
@@ -290,10 +350,11 @@ export function useThreadSession({
     /** A new Thread's Harnesses, each with what it would start with, for
      * the model picker to choose one by its model; none once it started. */
     starts:
-      thread === null && everyDefaults
+      thread === null && (everyDefaults || unplaced)
         ? offered.flatMap(({ id, name }) => {
             const settings = draftOf(id)
-            const offer = everyDefaults[id]?.offer
+            const offer =
+              everyDefaults?.[id]?.offer ?? (unplaced ? NO_OFFER : undefined)
             return settings && offer ? [{ id, name, settings, offer }] : []
           })
         : undefined,

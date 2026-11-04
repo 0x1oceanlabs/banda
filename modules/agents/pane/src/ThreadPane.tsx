@@ -88,6 +88,7 @@ import { ModelPicker } from "./ModelPicker"
 import { pickedOf } from "./picker"
 import { ModeMenu } from "./ThreadSettings"
 import { SignIn, Warning } from "./SignIn"
+import { useMachine } from "@banda/ui/hooks/use-status"
 import { NewThreadBar } from "./NewThread"
 import { NEW_THREAD, type ThreadArgs, useThreadSession } from "./session"
 
@@ -105,6 +106,7 @@ export const threadPane = definePane<ThreadArgs>({
 })
 
 function ThreadPane(props: PaneProps<ThreadArgs>) {
+  props = { ...props, space: props.args.scratch ?? props.space }
   return (
     <ThreadMedia space={props.space}>
       <ThreadContent {...props} />
@@ -114,6 +116,8 @@ function ThreadPane(props: PaneProps<ThreadArgs>) {
 
 function ThreadContent(props: PaneProps<ThreadArgs>) {
   const { engine, space, args, focused, open, update, run } = props
+  const machine = useMachine(engine)
+  const unplaced = space === machine
   const { thread } = args
   const {
     live,
@@ -212,16 +216,18 @@ function ThreadContent(props: PaneProps<ThreadArgs>) {
           area={area}
           onQuote={(quote) => composer.current?.quote(quote)}
         />
-        <ThreadDetails
-          engine={engine}
-          space={space}
-          thread={thread}
-          open={open}
-          focused={focused}
-          wide={wide}
-          shown={detailsShown}
-          onShown={setDetailsShown}
-        />
+        {!unplaced && (
+          <ThreadDetails
+            engine={engine}
+            space={space}
+            thread={thread}
+            open={open}
+            focused={focused}
+            wide={wide}
+            shown={detailsShown}
+            onShown={setDetailsShown}
+          />
+        )}
         {find && (
           <FindBar
             field={findField}
@@ -344,12 +350,14 @@ function ThreadContent(props: PaneProps<ThreadArgs>) {
         >
           {settings && (
             <>
-              <ModeMenu
-                settings={settings}
-                options={picked.rest}
-                disabled={acting}
-                onChange={configure}
-              />
+              {!unplaced && (
+                <ModeMenu
+                  settings={settings}
+                  options={picked.rest}
+                  disabled={acting}
+                  onChange={configure}
+                />
+              )}
               <ModelPicker
                 harness={harness}
                 name={name}
@@ -371,7 +379,11 @@ function ThreadContent(props: PaneProps<ThreadArgs>) {
             space={space}
             disabled={sending}
             onSpace={(other) =>
-              open(paneOf(threadPane, { ...args, harness }), "here", other)
+              open(
+                paneOf(threadPane, { ...args, scratch: undefined, harness }),
+                "here",
+                other
+              )
             }
             onAddSpace={run && (() => run("space.add"))}
           />
@@ -838,8 +850,11 @@ function useWriters(
 ): Listing {
   // Who writes stays as a rewind leaves it: no need to read the list again.
   const source = useMemo(
-    () => ({ ...threadsSource(engine, space), apply: applyThreads }),
-    [engine, space]
+    () =>
+      thread === null
+        ? null
+        : { ...threadsSource(engine, space), apply: applyThreads },
+    [engine, space, thread]
   )
   const live = useLive(engine, space, source)
   const threads = live.state === "ready" ? live.view.threads : undefined

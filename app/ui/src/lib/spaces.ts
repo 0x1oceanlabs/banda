@@ -10,7 +10,7 @@ import type {
  * them alike. */
 export function shownSpaces(spaces: readonly SpaceSummary[]): SpaceSummary[] {
   return spaces
-    .filter((space) => !space.archived)
+    .filter((space) => !space.archived && !space.scratch)
     .toSorted((a, b) => Number(b.pinned) - Number(a.pinned))
 }
 
@@ -34,7 +34,8 @@ export function sameSpaces(
         one.folder === b[n].folder &&
         one.pinned === b[n].pinned &&
         one.archived === b[n].archived &&
-        one.missing === b[n].missing
+        one.missing === b[n].missing &&
+        one.scratch === b[n].scratch
     )
   )
 }

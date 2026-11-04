@@ -2,6 +2,7 @@
  * with its model, in the model picker (ADR 0031, decision 6). */
 import { useMemo } from "react"
 import type { Engine, SpaceId, SpaceSummary } from "@banda/contract"
+import { useMachine } from "@banda/ui/hooks/use-status"
 import { useSpaces } from "@banda/ui/hooks/use-spaces"
 import { openSpaces, shownSpaces } from "@banda/ui/lib/spaces"
 import { FolderIcon, FolderPlusIcon } from "lucide-react"
@@ -26,18 +27,26 @@ export function NewThreadBar({
   onAddSpace?: () => void
 }) {
   const spaces = useShownSpaces(engine)
+  const machine = useMachine(engine)
   return (
     <div className="flex min-w-0 items-center gap-0.5 px-1 text-muted-foreground">
-      {spaces.length > 0 && (
+      {machine && (
         <Pick
           what="Space"
           icon={<FolderIcon data-icon="inline-start" />}
-          value={space}
-          choices={spaces.map((space) => ({
-            id: space.id,
-            name: space.name,
-            about: space.folder,
-          }))}
+          value={spaces.some((s) => s.id === space) ? space : machine}
+          choices={[
+            {
+              id: machine,
+              name: "No Space",
+              about: "A new Thread with its own folder",
+            },
+            ...spaces.map((space) => ({
+              id: space.id,
+              name: space.name,
+              about: space.folder,
+            })),
+          ]}
           disabled={disabled}
           onChange={(id) => onSpace(id as SpaceId)}
           more={

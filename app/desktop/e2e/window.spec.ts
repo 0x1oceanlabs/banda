@@ -3,6 +3,7 @@ import {
   existsSync,
   mkdirSync,
   readFileSync,
+  readdirSync,
   writeFileSync,
 } from "node:fs"
 import { join, resolve } from "node:path"
@@ -52,7 +53,7 @@ test("a Person makes a Space, starts a Thread in it, and works with it", async (
     ])
   ).toEqual(["Banda Local", join(window.dir, "state", "window")])
 
-  await expect(page.getByText("Create your first Space")).toBeVisible()
+  await expect(page.getByRole("region", { name: "New Thread" })).toBeVisible()
   await page.screenshot({ path: "test-results/0-welcome.png" })
   const { thread, composer } = await firstThread(page)
   await expect(page.getByRole("region", { name: "New Thread" })).toBeVisible()
@@ -108,8 +109,7 @@ test("a Person makes a Space, starts a Thread in it, and works with it", async (
 test("a workspace opens Panes side by side, moves the focus by keys, and comes back as it was", async () => {
   window = await startWindow()
   const { page } = window
-  await page.getByLabel("Name").fill("Work")
-  await page.getByRole("button", { name: "Create Space" }).click()
+  await firstThread(page)
   const draft = page.getByRole("region", { name: "New Thread" })
   await expect(draft).toBeVisible()
 
@@ -132,8 +132,7 @@ test("a workspace opens Panes side by side, moves the focus by keys, and comes b
 test("New Pane and New Thread open a new tile at each press, as a browser's new window", async () => {
   window = await startWindow()
   const { page } = window
-  await page.getByLabel("Name").fill("Work")
-  await page.getByRole("button", { name: "Create Space" }).click()
+  await firstThread(page)
   const drafts = page.getByRole("region", { name: "New Thread" })
   const launchers = page.getByRole("region", { name: "New Pane" })
   await expect(drafts).toHaveCount(1)
@@ -170,8 +169,7 @@ test("New Pane and New Thread open a new tile at each press, as a browser's new 
 test("a Pane moves to another workspace, and the overview shows them all", async () => {
   window = await startWindow()
   const { page } = window
-  await page.getByLabel("Name").fill("Work")
-  await page.getByRole("button", { name: "Create Space" }).click()
+  await firstThread(page)
   const draft = page.getByRole("region", { name: "New Thread" })
   await expect(draft).toBeVisible()
   const numbers = page.getByRole("navigation", { name: "Workspaces" })
@@ -458,8 +456,7 @@ test("a Person signs in in a terminal below the turn, and it goes again", async 
 test("a Person works in a terminal in the Space, and closing it stops the shell", async () => {
   window = await startWindow()
   const { page, dir } = window
-  await page.getByLabel("Name").fill("Work")
-  await page.getByRole("button", { name: "Create Space" }).click()
+  await firstThread(page)
   await expect(page.getByRole("region", { name: "New Thread" })).toBeVisible()
   await page.keyboard.press("Alt+KeyN")
   await page
@@ -525,8 +522,7 @@ test("a Person works in a terminal in the Space, and closing it stops the shell"
 test("a server started in a terminal shows on the bar, opens in a browser Pane and stops", async () => {
   window = await startWindow()
   const { page, dir } = window
-  await page.getByLabel("Name").fill("Work")
-  await page.getByRole("button", { name: "Create Space" }).click()
+  await firstThread(page)
   await expect(page.getByRole("region", { name: "New Thread" })).toBeVisible()
   await page.keyboard.press("Alt+KeyN")
   await page
@@ -4546,4 +4542,36 @@ flowchart LR
   await composer.press("Enter")
   await expect(thread.getByText(/Mermaid Error:/)).toBeVisible()
   await expect(composer).toBeEditable()
+})
+
+test("No Space creates a folder only on the first message", async () => {
+  window = await startWindow()
+  const { page, dir } = window
+  const composer = page.getByRole("textbox", { name: "Message to Fake AI" })
+  await expect(composer).toBeVisible()
+  expect(existsSync(join(dir, "root", "scratch"))).toBe(false)
+  await composer.fill("scratch hello")
+  await composer.press("Enter")
+  await expect(page.getByText("You said: scratch hello")).toBeVisible()
+  await expect(
+    page.getByRole("group", { name: "No Space", exact: true })
+  ).toContainText("scratch hello")
+  expect(existsSync(join(dir, "root", "scratch"))).toBe(true)
+})
+
+test("No Space keeps its first attachment and message in one folder", async () => {
+  window = await startWindow()
+  const { page, dir } = window
+  const composer = page.getByRole("textbox", { name: "Message to Fake AI" })
+  await expect(composer).toBeVisible()
+  const shot = await page.screenshot()
+  await page
+    .locator('input[type="file"]')
+    .setInputFiles({ name: "shot.png", mimeType: "image/png", buffer: shot })
+  await expect.poll(() => existsSync(join(dir, "root", "scratch"))).toBe(true)
+  await composer.fill("image from scratch")
+  await composer.press("Enter")
+  await openWork(page.getByRole("region", { name: "image from scratch" }))
+  await expect(page.getByText("I see 1 image: image/png.")).toBeVisible()
+  expect(readdirSync(join(dir, "root", "scratch"))).toHaveLength(1)
 })
