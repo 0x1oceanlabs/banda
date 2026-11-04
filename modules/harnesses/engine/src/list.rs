@@ -32,6 +32,10 @@ pub struct Harness {
     pub env: BTreeMap<String, String>,
     /// The Person's own CLI the program runs, when it runs one.
     pub cli: Option<Cli>,
+    /// The file of the adapter Banda carries, which starts in place of
+    /// `command` and `args` when the window said where its adapters are
+    /// (ADR 0059): only Banda's own entries have one.
+    pub carried: Option<String>,
     /// A folder where each start of the program writes what Banda and
     /// the Harness say to each other, one ACP frame per line, for tests to
     /// replay. Only a test sets it, never a Harness list: a recording holds
@@ -58,11 +62,32 @@ impl Harness {
     /// The entry's own program with `args` after its arguments and `env`
     /// over its environment, as a Harness's sign-in in a terminal runs.
     pub fn program(&self, args: &[String], env: &HashMap<String, String>) -> Program {
+        let start = self.start();
         Program {
-            program: self.command.clone(),
-            args: self.args.iter().chain(args).cloned().collect(),
-            env: self.env.clone().into_iter().chain(env.clone()).collect(),
+            program: start.program,
+            args: start.args.into_iter().chain(args.iter().cloned()).collect(),
+            env: start.env.into_iter().chain(env.clone()).collect(),
         }
+    }
+
+    /// How its process starts: the adapter Banda carries, on the window's
+    /// Electron as Node, when it has one and the window said where (ADR
+    /// 0059); else its `command` and `args`.
+    pub fn start(&self) -> Program {
+        self.start_with(carried())
+    }
+
+    fn start_with(&self, carried: Option<&Carried>) -> Program {
+        let mut env = self.env.clone();
+        let (program, args) = match (&self.carried, carried) {
+            (Some(file), Some(Carried { node, adapters })) => {
+                env.insert("ELECTRON_RUN_AS_NODE".to_owned(), "1".to_owned());
+                let file = adapters.join(file).display().to_string();
+                (node.display().to_string(), vec![file])
+            }
+            _ => (self.command.clone(), self.args.clone()),
+        };
+        Program { program, args, env }
     }
 
     /// The entry as its process for `space` starts: it, and every program
@@ -246,13 +271,28 @@ impl HarnessEntry {
     /// The entry over Banda's own Harness of its ID, if Banda has one.
     /// Banda's arguments and CLI go with Banda's command: an entry that
     /// names another command says its own.
-    fn harness(self) -> Result<Harness, String> {
+    fn harness(mut self) -> Result<Harness, String> {
+        let (command, args) = (self.command.as_deref(), self.args.as_deref());
+        if ADAPTERS
+            .iter()
+            .any(|a| a.id == self.id && a.was(command, args))
+        {
+            (self.command, self.args) = (None, None);
+        }
         let mut base = known().into_iter().find(|known| known.id == self.id);
         if let (Some(base), Some(command)) = (&mut base, &self.command)
             && *command != base.command
         {
             base.args.clear();
             base.cli = None;
+            base.carried = None;
+        }
+        // The carried adapter starts only for Banda's own start: an entry
+        // that names its own arguments runs them.
+        if let Some(base) = &mut base
+            && self.args.as_ref().is_some_and(|args| *args != base.args)
+        {
+            base.carried = None;
         }
         // Banda's short name goes with Banda's name.
         let short = match &self.name {
@@ -269,8 +309,8 @@ impl HarnessEntry {
                 self.id
             ));
         };
-        let base = base.map(|b| (b.args, b.env, b.cli));
-        let (args, env, cli) = base.unwrap_or_default();
+        let base = base.map(|b| (b.args, b.env, b.cli, b.carried));
+        let (args, env, cli, carried) = base.unwrap_or_default();
         Ok(Harness {
             id: self.id,
             name,
@@ -280,6 +320,7 @@ impl HarnessEntry {
             args: self.args.unwrap_or(args),
             env: self.env.unwrap_or(env),
             cli: self.cli.or(cli),
+            carried,
             record: None,
         })
     }
@@ -386,42 +427,111 @@ impl Harnesses {
     }
 }
 
+/// An ACP adapter Banda carries (ADR 0059): the Harness it is, its npm
+/// package and version (`modules/harnesses/desktop/package.json` pins the
+/// same), and the Person's CLI it runs.
+struct Adapter {
+    id: &'static str,
+    name: &'static str,
+    short: &'static str,
+    package: &'static str,
+    version: &'static str,
+    cli: (&'static str, &'static str, &'static str),
+}
+
+const ADAPTERS: [Adapter; 2] = [
+    Adapter {
+        id: "claude",
+        name: "Claude Code",
+        short: "Claude",
+        package: "@agentclientprotocol/claude-agent-acp",
+        version: "0.99.1",
+        // The adapter's Agent SDK 0.3.312 was built for Claude Code
+        // 2.1.312 (its `claudeCodeVersion`).
+        cli: ("claude", "CLAUDE_CODE_EXECUTABLE", "2.1.312"),
+    },
+    Adapter {
+        id: "codex",
+        name: "Codex",
+        short: "Codex",
+        package: "@agentclientprotocol/codex-acp",
+        version: "2.5.0",
+        // The adapter depends on `@openai/codex` ^0.165.0.
+        cli: ("codex", "CODEX_PATH", "0.165.0"),
+    },
+];
+
+/// Where the window says the adapters it carries are, and the Node that
+/// runs them: its own Electron (ADR 0059, decision 1). An engine started
+/// without the window, as a test's, has neither.
+struct Carried {
+    node: PathBuf,
+    adapters: PathBuf,
+}
+
+fn carried() -> Option<&'static Carried> {
+    static CARRIED: std::sync::OnceLock<Option<Carried>> = std::sync::OnceLock::new();
+    CARRIED
+        .get_or_init(|| {
+            Some(Carried {
+                node: std::env::var_os("BANDA_NODE")?.into(),
+                adapters: std::env::var_os("BANDA_ADAPTERS")?.into(),
+            })
+        })
+        .as_ref()
+}
+
+/// Each adapter as Banda starts it: from npm, as `npx` downloads it,
+/// without the vendors' CLIs it never runs; or the copy the app carries,
+/// when the window says where (`Harness::start`).
 fn known() -> Vec<Harness> {
-    let npx = |id: &str,
-               (name, short): (&str, &str),
-               package: &str,
-               (program, variable, minimum): (&str, &str, &str)| Harness {
-        id: id.to_owned(),
-        name: name.to_owned(),
-        short: Some(short.to_owned()),
-        command: "npx".to_owned(),
-        args: vec!["-y".to_owned(), package.to_owned()],
-        enabled: true,
-        env: BTreeMap::new(),
-        cli: Some(Cli {
-            program: program.to_owned(),
-            variable: variable.to_owned(),
-            minimum: Some(minimum.to_owned()),
-        }),
-        record: None,
-    };
-    vec![
-        npx(
-            "claude",
-            ("Claude Code", "Claude"),
-            "@agentclientprotocol/claude-agent-acp@0.99.1",
-            // The adapter's Agent SDK 0.3.312 was built for Claude Code
-            // 2.1.312 (its `claudeCodeVersion`).
-            ("claude", "CLAUDE_CODE_EXECUTABLE", "2.1.312"),
-        ),
-        npx(
-            "codex",
-            ("Codex", "Codex"),
-            "@agentclientprotocol/codex-acp@2.5.0",
-            // The adapter depends on `@openai/codex` ^0.165.0.
-            ("codex", "CODEX_PATH", "0.165.0"),
-        ),
-    ]
+    ADAPTERS
+        .iter()
+        .map(|adapter| {
+            let (program, variable, minimum) = adapter.cli;
+            Harness {
+                id: adapter.id.to_owned(),
+                name: adapter.name.to_owned(),
+                short: Some(adapter.short.to_owned()),
+                command: "npx".to_owned(),
+                args: vec!["-y".to_owned(), adapter.npm()],
+                enabled: true,
+                env: BTreeMap::from([("npm_config_omit".to_owned(), "optional".to_owned())]),
+                cli: Some(Cli {
+                    program: program.to_owned(),
+                    variable: variable.to_owned(),
+                    minimum: Some(minimum.to_owned()),
+                }),
+                carried: Some(adapter.file()),
+                record: None,
+            }
+        })
+        .collect()
+}
+
+impl Adapter {
+    /// What `npx` names it by.
+    fn npm(&self) -> String {
+        format!("{}@{}", self.package, self.version)
+    }
+
+    /// The file the app carries it as: its package's name, bundled
+    /// (`modules/harnesses/desktop/adapters.mjs`).
+    fn file(&self) -> String {
+        let name = self.package.rsplit('/').next().unwrap_or(self.package);
+        format!("{name}.mjs")
+    }
+
+    /// Whether `command` and `args` are how Banda started this adapter
+    /// before it carried it, `npx -y <package>@<any version>`: a file that
+    /// wrote that down moves to the carried one (ADR 0059, decision 9).
+    fn was(&self, command: Option<&str>, args: Option<&[String]>) -> bool {
+        let at = format!("{}@", self.package);
+        matches!(
+            (command, args),
+            (Some("npx"), Some([yes, package])) if yes == "-y" && package.starts_with(&at)
+        )
+    }
 }
 
 /// What a `harnesses.toml` says.
@@ -648,6 +758,52 @@ mod tests {
             flag[0].cli.is_some(),
             "Banda's command still runs the Person's CLI"
         );
+    }
+
+    #[test]
+    fn a_carried_adapter_runs_on_the_windows_electron() {
+        let carried = Carried {
+            node: "/app/banda".into(),
+            adapters: "/app/resources/adapters".into(),
+        };
+        let claude = known().remove(0);
+        let start = claude.start_with(Some(&carried));
+        assert_eq!(start.program, "/app/banda");
+        assert_eq!(start.args, ["/app/resources/adapters/claude-agent-acp.mjs"]);
+        assert_eq!(start.env["ELECTRON_RUN_AS_NODE"], "1");
+        let npx = claude.start_with(None);
+        assert_eq!(
+            (npx.program.as_str(), npx.args.as_slice()),
+            ("npx", ["-y".to_owned(), ADAPTERS[0].npm()].as_slice())
+        );
+        assert_eq!(npx.env["npm_config_omit"], "optional", "no vendor's CLI");
+    }
+
+    #[test]
+    fn a_file_with_the_old_npx_start_moves_to_banda_s() {
+        let old = "[[harness]]\nid = \"claude\"\ncommand = \"npx\"\n\
+                   args = [\"-y\", \"@agentclientprotocol/claude-agent-acp@0.31.0\"]\n";
+        let claude = known().remove(0);
+        assert_eq!(listed_in(Path::new("h"), old).unwrap(), vec![claude]);
+        let pinned = "[[harness]]\nid = \"claude\"\ncommand = \"npx\"\n\
+                      args = [\"-y\", \"my-fork@1\"]\n";
+        let pinned = listed_in(Path::new("h"), pinned).unwrap().remove(0);
+        assert_eq!(pinned.args, ["-y", "my-fork@1"]);
+        assert_eq!(pinned.carried, None, "its own arguments run");
+        let own = "[[harness]]\nid = \"claude\"\ncommand = \"my-acp\"\n";
+        assert_eq!(listed_in(Path::new("h"), own).unwrap()[0].carried, None);
+    }
+
+    #[test]
+    fn the_carried_versions_are_the_desktop_packages() {
+        let package = include_str!("../../desktop/package.json");
+        for adapter in &ADAPTERS {
+            let pin = format!("\"{}\": \"{}\"", adapter.package, adapter.version);
+            assert!(
+                package.contains(&pin),
+                "{pin} in harnesses' desktop package"
+            );
+        }
     }
 
     #[test]

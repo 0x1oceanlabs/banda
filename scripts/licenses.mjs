@@ -156,7 +156,22 @@ const VERIFIED_TEXT = {
     license: "MIT",
     sha256: "66b333b0f66759a0b710459e03f7029abe17f4358114a128d2c972e642961b49",
   },
+  // The Claude Agent SDK, under the Claude Code adapter, is under
+  // Anthropic's own terms, not a license above: Roma decided Banda carries
+  // it (ADR 0059), as T3 Code does. Each version's text is checked again.
+  "@anthropic-ai/claude-agent-sdk@0.3.312": {
+    license: "LicenseRef-Anthropic",
+    sha256: "8ce94b9478bb9868f9641f818e06cd722fbe55d4c22e2d2ed11971b20146173a",
+    decided: true,
+  },
 }
+
+/** Whether one of `files` is exactly the text `sha256` names. */
+const carries = (files, sha256) =>
+  files.some(
+    (file) =>
+      createHash("sha256").update(readFileSync(file)).digest("hex") === sha256
+  )
 
 const LICENSE_FILE = /^(licen[cs]e|copying|notice|unlicense)([.-].*)?$/i
 const shipped = [...crates(), ...npm()]
@@ -172,18 +187,14 @@ const shipped = [...crates(), ...npm()]
   .map((p) => {
     const verified = VERIFIED_TEXT[`${p.name}@${p.version}`]
     if (p.license !== "Unknown" || !verified) return p
-    const matches = p.files.some(
-      (file) =>
-        createHash("sha256").update(readFileSync(file)).digest("hex") ===
-        verified.sha256
-    )
-    return matches ? { ...p, license: verified.license } : p
+    const { license, decided } = verified
+    return carries(p.files, verified.sha256) ? { ...p, license, decided } : p
   })
   .sort(
     (a, b) => a.name.localeCompare(b.name) || a.version.localeCompare(b.version)
   )
 
-const refused = shipped.filter((p) => !allowed(p.license ?? ""))
+const refused = shipped.filter((p) => !p.decided && !allowed(p.license ?? ""))
 if (refused.length) {
   for (const p of refused) {
     console.error(`${p.name} ${p.version}: ${p.license ?? "no license"}`)

@@ -9,3 +9,10 @@ allowBuilds:
   # electron-builder's Windows installer; Banda isn't built for Windows (ADR 0033).
   electron-winstaller: false
   esbuild: true
+
+# The vendors' CLIs the ACP adapters carry for when no CLI is named: Banda
+# always names the Person's own (ADR 0059), so neither is ever run, and
+# together they weigh about 800 MB.
+ignoredOptionalDependencies:
+  - "@anthropic-ai/claude-agent-sdk-*"
+  - "@openai/codex-*"

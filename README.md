@@ -67,8 +67,9 @@ and from Banda Local, which runs from a checkout.
   signed in, and recent: Banda says so if it is too old. It runs as it
   would in your terminal, so its account, its plan and its settings are
   yours.
-- **Node.js with `npx`**: Banda talks to each Harness through its Agent
-  Client Protocol adapter, which `npx` fetches the first time.
+
+Nothing else: Banda carries the Agent Client Protocol adapter it talks to
+each Harness through, and runs it on its own Node.
 
 ## What it sends
 
