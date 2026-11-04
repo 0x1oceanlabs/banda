@@ -21,6 +21,9 @@ const sha256 = createHash("sha256").update(readFileSync(zip)).digest("hex")
 // The zip as electron-builder names it (artifactName), with the version
 // left to the cask, so `brew` reads one version.
 const file = basename(zip).replace(version, "#{version}")
+// electron-builder names the bundle in the zip by the executable
+// (`banda-dev.app`); it goes into Applications by the app's name.
+const bundle = `${channel.folder}.app`
 const app = `${channel.name}.app`
 // brew's audit wants no article first.
 const desc = DESCRIPTION.replace(/^an? (.)/i, (_, first) => first.toUpperCase())
@@ -39,7 +42,7 @@ cask "${channel.folder}" do
 
   depends_on arch: :arm64
 
-  app "${app}"
+  app "${bundle}", target: "${app}"
 
   # Signed ad hoc, not notarized: without its quarantine Gatekeeper lets it open.
   postflight do
