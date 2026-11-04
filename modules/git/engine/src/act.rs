@@ -292,7 +292,7 @@ async fn pull(repo: &Repo, branch: &str, tell: &Teller) -> Result<Done, Refusal>
 /// along, or git refuses.
 pub async fn switch(repo: &Repo, name: &str) -> Result<(), Refusal> {
     ref_name(name)?;
-    let to = if repo.has_ref(&format!("refs/heads/{name}")).await? {
+    let to = if repo.has_branch(name).await? {
         vec![name.to_owned()]
     } else if repo.has_ref(&format!("refs/remotes/{name}")).await? {
         let ran = repo

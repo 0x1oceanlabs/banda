@@ -38,10 +38,7 @@ pub async fn read(found: Result<Option<Repo>, Failure>, at: i64) -> Result<Statu
 /// The status of `repo`, read after the Space's event `at`.
 async fn of(repo: Repo, at: i64) -> Result<Status, Failure> {
     let said = repo.porcelain().await?;
-    let against = match &said.head {
-        Some(head) => head.clone(),
-        None => repo.empty_tree().await?,
-    };
+    let against = repo.head_or_empty(said.head.as_deref()).await?;
     // Plumbing, as T3 Code: a porcelain diff writes the index even with
     // GIT_OPTIONAL_LOCKS=0.
     let counted = repo.run(
@@ -95,34 +92,20 @@ async fn of(repo: Repo, at: i64) -> Result<Status, Failure> {
     })
 }
 
-/// How many commits `HEAD` has that `default` does not: the remote's copy
-/// of it, else the one here unless it is the branch checked out, as
-/// `Repo::base` finds it but for that. None when neither is there.
+/// How many commits `HEAD` has that `default` does not, counted from
+/// where [`Repo::default_tip`] finds it. It is asked only of a branch
+/// with no upstream, so the default checked out counts from the remote's
+/// copy alone. None when it is nowhere.
 async fn ahead_of(
     repo: &Repo,
     remote: Option<&str>,
     default: &str,
     branch: Option<&str>,
 ) -> Result<Option<u32>, Failure> {
-    let mut tips = Vec::new();
-    tips.extend(remote.map(|remote| format!("refs/remotes/{remote}/{default}")));
-    if branch != Some(default) {
-        tips.push(format!("refs/heads/{default}"));
-    }
-    if tips.is_empty() {
-        return Ok(None);
-    }
-    // Which of them are there, at once.
-    let mut args = vec!["for-each-ref", "--format=%(refname)"];
-    args.extend(tips.iter().map(String::as_str));
-    let there = repo.run(args, Opts::default()).await?.text();
-    let Some(tip) = tips
-        .iter()
-        .find(|tip| there.lines().any(|line| line == *tip))
-    else {
+    let Some(tip) = repo.default_tip(remote, default, branch).await? else {
         return Ok(None);
     };
-    let range = format!("{tip}..HEAD");
+    let range = format!("{}..HEAD", tip.full);
     let counted = repo
         .run(
             ["rev-list", "--count", range.as_str(), "--"],
