@@ -86,6 +86,7 @@ export function Sidebar({
    */
   onOpen: (space: SpaceId, pane: PaneState) => void
   onNewThread: (space: SpaceId) => void
+  onNoSpace: () => void
   /** Opens "Add Space" in the Banda menu (ADR 0026). */
   onAddSpace: () => void
   /** Pins the Space, so it comes first, or unpins it (ADR 0026). */
@@ -106,6 +107,7 @@ export function Sidebar({
   const onSettings = done(props.onSettings)
   const onOpen = done(props.onOpen)
   const onNewThread = done(props.onNewThread)
+  const onNoSpace = done(props.onNoSpace)
   const onAddSpace = done(props.onAddSpace)
   const onSpaceSettings = done(props.onSpaceSettings)
   const onLocate = done(props.onLocate)
@@ -163,6 +165,7 @@ export function Sidebar({
       onMore={() => setMore((set) => flip(set, section.key))}
       onOpen={onOpen}
       onSettle={(row) => settle(row.listed.id, row.state !== "settled")}
+      onNoSpace={onNoSpace}
       onNewThread={onNewThread}
       withMenu={withMenu}
     />
@@ -288,8 +291,22 @@ export function Sidebar({
               No Threads yet
             </p>
           ) : (
-            arranged.sections.map(drawn)
+            arranged.sections
+              .filter((section) => section.key !== "no-space")
+              .map(drawn)
           )}
+          {arranged.sections
+            .filter((section) => section.key === "no-space")
+            .map(drawn)}
+          {!arranged.sections.some((section) => section.key === "no-space") &&
+            drawn({
+              key: "no-space",
+              label: "No Space",
+              rows: [],
+              folded: toggled.has("no-space"),
+              mark: "rest",
+              waiting: 0,
+            })}
         </div>
       </ScrollArea>
       {arranged.shelves.length > 0 && (
@@ -323,6 +340,7 @@ function SectionView({
   onMore,
   onOpen,
   onSettle,
+  onNoSpace,
   onNewThread,
   withMenu,
 }: {
@@ -335,6 +353,7 @@ function SectionView({
   onOpen: (space: SpaceId, pane: PaneState) => void
   /** Settles the row, or brings it back. */
   onSettle: (row: Arranged) => void
+  onNoSpace: () => void
   onNewThread: (space: SpaceId) => void
   withMenu: WithMenu
 }) {
@@ -366,6 +385,17 @@ function SectionView({
           {section.rows.length}
         </span>
       </button>
+      {section.key === "no-space" && (
+        <Button
+          variant="ghost"
+          size="icon-xs"
+          aria-label="New Thread in No Space"
+          title="New Thread"
+          onClick={onNoSpace}
+        >
+          <SquarePenIcon />
+        </Button>
+      )}
       {space && settings.spaces.newThread && (
         <NewThreadIn space={space} onNewThread={onNewThread} />
       )}
@@ -382,7 +412,7 @@ function SectionView({
                 <Row
                   row={row}
                   settings={settings}
-                  inSpace={space !== undefined}
+                  inSpace={space !== undefined || row.space.scratch}
                   current={isCurrent(row.space.id, row.listed.pane)}
                   onOpen={() => onOpen(row.space.id, row.listed.pane)}
                 />

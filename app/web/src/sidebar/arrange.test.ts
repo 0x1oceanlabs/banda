@@ -182,3 +182,25 @@ test("folded comes from the settings, and the Person's toggle turns it over", ()
     of("inbox", keys).shelves.find((s) => s.key === "working")?.folded
   ).toBe(true)
 })
+
+test("scratch Threads form one group after regular Spaces in every preset", () => {
+  const scratch = { ...space("scratch", "", "/scratch"), scratch: true }
+  for (const by of ["space", "state", "none"] as const) {
+    const result = arrange(
+      { ...lists, scratch: [listed("loose", "rest", 7)] },
+      [...spaces, scratch],
+      over(DEFAULT_SIDEBAR, { group: { by }, spaces: { list: true } })
+    )
+    expect(result.spaces?.some((line) => line.space.scratch)).toBe(false)
+    expect(result.sections.at(-1)?.label).toBe("No Space")
+    expect(result.sections.at(-1)?.rows.map((row) => row.listed.id)).toEqual([
+      "loose",
+    ])
+    expect(
+      result.sections
+        .slice(0, -1)
+        .flatMap((s) => s.rows)
+        .some((r) => r.space.scratch)
+    ).toBe(false)
+  }
+})
