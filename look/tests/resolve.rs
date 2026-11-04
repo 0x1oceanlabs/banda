@@ -444,7 +444,12 @@ fn the_bar_s_widgets_stand_where_look_toml_lists_them() {
     assert_eq!(bar.center, ["sidebar.counts"]);
     assert_eq!(
         bar.right,
-        ["workspaces.aside", "terminal.ports", "notifications.recent"]
+        [
+            "workspaces.aside",
+            "terminal.ports",
+            "harnesses.limits",
+            "notifications.recent"
+        ]
     );
 
     // A list replaces Banda's for its part, and [] empties it.

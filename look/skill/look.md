@@ -62,3 +62,8 @@ Every key, with its default:
 - `banda look check` checks every file the look reads.
 - `banda look` prints the look it resolves now, as JSON: the CSS
   variables, the layers it came from, and any problems.
+
+The bar widget `harnesses.limits` is a ring of the fullest account limit.
+A click shows every account's windows, resets, even pace, and the last read
+or its failure. It is on the right by default; `[limits]` in
+`harnesses.toml` controls reading, its interval, and the warning threshold.

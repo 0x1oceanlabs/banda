@@ -44,6 +44,7 @@ pub fn derive(palette: &Palette) -> BTreeMap<String, String> {
     put("accent-foreground", &foreground);
     put("destructive", &get("red"));
     put("attention", &get("orange"));
+    put("warning", &get("yellow"));
     put("added", &get("green"));
     put("removed", &get("red"));
     put("border", &line);
