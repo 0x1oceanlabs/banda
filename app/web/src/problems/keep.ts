@@ -4,7 +4,13 @@
  * module. It sends nothing anywhere; the engine keeps it on this computer.
  */
 import type { Engine } from "@banda/contract"
-import { fromRoot, keeper, type Own, recordOf } from "@banda/contract/problems"
+import {
+  fromRoot,
+  keeper,
+  type MapOf,
+  type Own,
+  recordOf,
+} from "@banda/contract/problems"
 
 /** What the browser says that is not a fault: a ResizeObserver whose
  * callback changed sizes again. */
@@ -27,14 +33,22 @@ export function watchProblems(engine: Engine): void {
 /** Keeps `thrown` as a Problem of the page. */
 export function keepProblem(thrown: unknown): void {
   const message = thrown instanceof Error ? thrown.message : String(thrown)
-  if (keep && !NOT_FAULT.test(message)) keep(recordOf(thrown, "page", own))
+  if (keep && !NOT_FAULT.test(message))
+    void recordOf(thrown, "page", own, mapOf).then(keep)
 }
+
+/** A built script's map, beside it; none from the dev server. */
+const mapOf: MapOf = (script) =>
+  fetch(`${script}.map`).then((response) =>
+    response.ok ? response.json() : null
+  )
 
 /**
  * A script of this page's, as the repository names it: from the dev
- * server, `/src/…` (app/web's) or `/@fs/<repository>/…`; built, the
- * bundle's name without its hash, until the source maps (ADR 0039,
- * decision 4). A library's or another origin's is none.
+ * server, `/src/…` (app/web's) or `/@fs/<repository>/…`, and as a built
+ * script's map names its sources, `/src/…` or `/modules/…`; a built
+ * script with no map, the bundle's name without its hash. A library's or
+ * another origin's is none.
  */
 export const own: Own = (script) => {
   let url: URL

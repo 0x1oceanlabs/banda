@@ -102,7 +102,7 @@ Roma, 2026-11-03:
 
 8. **What is sent is kept on the machine first.** "Sent by Banda" shows each event's exact JSON, written before it goes. An event that cannot go waits, and is dropped after seven days.
 
-9. **The frames can be read.** The release workflow uploads the page's source maps to PostHog, and the engine is built with line tables (`debug = "line-tables-only"`), so a Rust backtrace names its files and lines by itself.
+9. **The frames can be read.** Each part names Banda's files and lines by itself, with nothing uploaded: the engine is built with line tables (`debug = "line-tables-only"`), so a Rust backtrace names them; the page carries its source maps, places only and no source text, and reads a built frame through them as it keeps a Problem; main's stacks are read through its own map. So the Problem names its files on this computer too, for the Person, an Agent and an issue, not only in PostHog. (Amended in step 4, as Roma chose on 2026-11-04: at first the release workflow was to upload the page's maps to PostHog.)
 
 ## Consequences
 
