@@ -22,6 +22,7 @@ import {
   pushed,
   type Rect,
   standing,
+  swallowClick,
 } from "./moving"
 import type { Frame } from "./PaneFrame"
 import { THRESHOLD } from "./sizing"
@@ -219,8 +220,7 @@ export function useMoving(
       delete html.dataset.drag
       window.removeEventListener("keydown", onKey, true)
       // The click the release makes is the carry's, not what it ends on.
-      window.addEventListener("click", swallow, true)
-      setTimeout(() => window.removeEventListener("click", swallow, true))
+      swallowClick()
       if (!keep || !place) return
       const plan: Plan = {
         command: { method: "workspaces.move_pane", params: { pane, place } },
@@ -267,11 +267,6 @@ export function useMoving(
       element.removeEventListener("lostpointercapture", onCancel)
     }
   }, [root, carrying])
-}
-
-function swallow(event: Event) {
-  event.stopPropagation()
-  event.preventDefault()
 }
 
 /** A Strip's `land` and `scroll`, for workspace `id`'s: beside its Panes,

@@ -298,6 +298,12 @@ On the list, Roma decided:
    _Changed_ 2026-11-03: a middle click on a Pane closes it, as on a
    tab, and so does the cross that shows as the mouse is over it; the
    wheel sideways scrolls a workspace, and its Strip with it.
+   _Changed_ 2026-11-04: a workspace's number carries it up or down, its
+   Panes along, as niri's overview drags a workspace: the ones it passes
+   step aside, and on the drop the engine moves it
+   (`workspaces.move_workspace`). The empty one at the bottom has no
+   handle and none lands under it; `Esc` puts one carried back, and a
+   click on a number goes to its workspace.
 
 8. **The drawer** (ADR 0005, decision 7) is on `` Alt+` ``, as a terminal
    that drops down is; `Alt+S` settles a Thread now (ADR 0008). A Thread
