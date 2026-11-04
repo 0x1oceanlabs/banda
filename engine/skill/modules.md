@@ -44,6 +44,10 @@ Programs the Person runs in a terminal: a shell, or a Harness's sign-in.
 
 Its settings: `terminal.toml`.
 
+Its widgets on the bar, which `[bar]` in look.toml places by id:
+
+- `terminal.ports`: The servers started in Banda: the first one's port and how many more; a click lists them.
+
 Its methods, `banda call terminal.<method>`: `open`, `write`, `resize`, `close`, `watch`, `ports`, `stop_server`.
 
 ## Browser (`browser`)
@@ -82,6 +86,10 @@ Its methods, `banda call git.<method>`: `status`, `diff`, `refs`, `commits`, `co
 ## Notifications (`notifications`)
 
 The bell on the bar, which shows the last toasts again.
+
+Its widgets on the bar, which `[bar]` in look.toml places by id:
+
+- `notifications.recent`: A click shows the last toasts again.
 
 ## Workspaces (`workspaces`)
 

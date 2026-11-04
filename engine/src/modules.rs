@@ -121,8 +121,8 @@ pub struct Offer {
     manifest: Manifest,
     /// Its engine part's methods; none when it has no engine part.
     engine: Option<Vec<Method>>,
-    /// Its window part: its Panes, actions, sources and Watches; none when
-    /// the window draws it itself, as the workspaces.
+    /// Its window part: its Panes, actions, sources, Watches and widgets;
+    /// none when the window draws it itself, as the workspaces.
     window: Option<Window>,
 }
 
@@ -134,6 +134,15 @@ struct Window {
     actions: Vec<Action>,
     sources: Vec<Value>,
     watches: usize,
+    /// Its widgets on the bar, which the look's `[bar]` places by id.
+    bar: Vec<Widget>,
+}
+
+#[derive(Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+struct Widget {
+    id: String,
+    about: String,
 }
 
 #[derive(Serialize, Deserialize)]
@@ -231,6 +240,13 @@ fn topic(offers: &[Offer]) -> String {
                     format!(", {}", action.keys.join(" or "))
                 };
                 writeln!(text, "- {} (`{}`){keys}", action.title, action.id).unwrap();
+            }
+        }
+        let widgets: Vec<&Widget> = offer.window.iter().flat_map(|w| &w.bar).collect();
+        if !widgets.is_empty() {
+            text.push_str("\nIts widgets on the bar, which `[bar]` in look.toml places by id:\n\n");
+            for widget in widgets {
+                writeln!(text, "- `{}`: {}", widget.id, widget.about).unwrap();
             }
         }
         let Some(methods) = &offer.engine else {

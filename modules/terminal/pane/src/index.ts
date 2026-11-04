@@ -11,5 +11,12 @@ export const terminal = defineModule({
   id: "terminal",
   engine: true,
   panes: [terminalPane],
-  bar: [{ id: "terminal.ports", Widget: ServersWidget }],
+  bar: [
+    {
+      id: "terminal.ports",
+      about:
+        "The servers started in Banda: the first one's port and how many more; a click lists them.",
+      Widget: ServersWidget,
+    },
+  ],
 })

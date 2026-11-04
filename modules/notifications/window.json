@@ -2,5 +2,11 @@
   "panes": [],
   "actions": [],
   "sources": [],
-  "watches": 0
+  "watches": 0,
+  "bar": [
+    {
+      "id": "notifications.recent",
+      "about": "A click shows the last toasts again."
+    }
+  ]
 }

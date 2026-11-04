@@ -6,5 +6,11 @@ import { BellWidget } from "./Bell"
 export const notifications = defineModule({
   id: "notifications",
   engine: false,
-  bar: [{ id: "notifications.recent", Widget: BellWidget }],
+  bar: [
+    {
+      id: "notifications.recent",
+      about: "A click shows the last toasts again.",
+      Widget: BellWidget,
+    },
+  ],
 })
