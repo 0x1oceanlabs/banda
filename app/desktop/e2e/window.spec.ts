@@ -617,7 +617,8 @@ test("a Person chooses the model and the mode under the message box", async () =
   const effort = page.getByRole("slider", { name: "Effort" })
   await expect(effort).toHaveAttribute("aria-valuetext", "Medium")
   await page.getByRole("button", { name: "Models" }).click()
-  await page.getByRole("option", { name: "Smart" }).click()
+  // A row is named by its model alone: the logo beside it only decorates.
+  await page.getByRole("option", { name: "Smart", exact: true }).click()
   await expect(model("Smart, Medium")).toBeVisible()
   await model("Smart, Medium").click()
   await effort.focus()
