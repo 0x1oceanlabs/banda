@@ -183,7 +183,9 @@ function brewUpdates(
     now = { ...known, ...next }
     tell(now)
   }
-  const command = `brew upgrade --cask ${channel.folder}`
+  // `brew upgrade` alone reads the tap as it was at the last `brew update`,
+  // which may be a day old: one line that works as it is copied.
+  const command = `brew update && brew upgrade --cask ${channel.folder}`
   let asked = false
   let looked: number | undefined
   autoUpdater.autoDownload = false

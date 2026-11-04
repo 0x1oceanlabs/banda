@@ -44,10 +44,11 @@ cask "${channel.folder}" do
 
   app "${bundle}", target: "${app}"
 
-  # Signed ad hoc, not notarized: without its quarantine Gatekeeper lets it open.
-  postflight do
-    system_command "/usr/bin/xattr",
-                   args: ["-dr", "com.apple.quarantine", "#{appdir}/${app}"]
+  # Signed ad hoc, not notarized: without its quarantine Gatekeeper lets it
+  # open. Homebrew's own steps, as its Ruby postflight is deprecated.
+  postflight_steps do
+    run "/usr/bin/xattr",
+        args: ["-dr", "com.apple.quarantine", "{{appdir}}/${app}"]
   end
 
   zap trash: [
