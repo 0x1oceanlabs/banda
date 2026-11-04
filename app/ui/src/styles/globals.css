@@ -43,6 +43,11 @@
   --color-chart-3: var(--chart-3);
   --color-chart-2: var(--chart-2);
   --color-chart-1: var(--chart-1);
+  --color-account-1: var(--account-1);
+  --color-account-2: var(--account-2);
+  --color-account-3: var(--account-3);
+  --color-account-4: var(--account-4);
+  --color-account-5: var(--account-5);
   --color-ring: var(--ring);
   --color-input: var(--input);
   --color-border: var(--border);
@@ -120,6 +125,14 @@
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
+  /* Each Harness account's colour, in the order of harnesses.toml (ADR
+     0055, decision 4): a categorical palette checked for colour-blind
+     reading. A sixth account takes the first again. */
+  --account-1: #2a78d6;
+  --account-2: #6250d6;
+  --account-3: #1baf7a;
+  --account-4: #e87ba4;
+  --account-5: #eda100;
   --radius: 0.625rem;
   --sidebar: oklch(0.985 0 0);
   --sidebar-foreground: oklch(0.145 0 0);
@@ -159,6 +172,11 @@
   --chart-3: oklch(0.439 0 0);
   --chart-4: oklch(0.371 0 0);
   --chart-5: oklch(0.269 0 0);
+  --account-1: #3987e5;
+  --account-2: #9085e9;
+  --account-3: #1baf7a;
+  --account-4: #d55181;
+  --account-5: #c98500;
   --sidebar: oklch(0.205 0 0);
   --sidebar-foreground: oklch(0.985 0 0);
   --sidebar-primary: oklch(0.488 0.243 264.376);

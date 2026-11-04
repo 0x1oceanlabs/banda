@@ -33,6 +33,23 @@ export function elapsedOf(
   )
 }
 
+/** How a window is spent against even spending, as the Usage Pane says
+ * it; none without both ends of the window. */
+export function paceOf(
+  window: LimitWindow,
+  now: number
+): { words: string; tone: string } | undefined {
+  const used = usedOf(window, now)
+  if (used >= 100) return { words: "Out", tone: "text-destructive" }
+  const elapsed = elapsedOf(window, now)
+  if (elapsed === undefined) return undefined
+  if (used - elapsed > 5)
+    return { words: "Ahead of pace", tone: "text-warning" }
+  if (elapsed - used > 5)
+    return { words: "Under pace", tone: "text-muted-foreground" }
+  return { words: "On pace", tone: "text-muted-foreground" }
+}
+
 export function remaining(at: number, now: number): string {
   const minutes = Math.max(1, Math.ceil((at - now) / MINUTE))
   if (minutes >= DAY / MINUTE)

@@ -4,7 +4,7 @@
   "private": true,
   "license": "Apache-2.0",
   "type": "module",
-  "description": "The Harness limits ring and popover.",
+  "description": "The Harness limits widget and popover, and the Usage Pane.",
   "exports": {
     ".": "./src/index.ts"
   },
@@ -13,9 +13,11 @@
     "test": "vitest run"
   },
   "dependencies": {
+    "@banda/contract": "workspace:*",
     "@banda/ui": "workspace:*",
+    "lucide-react": "^1.65.0",
     "react": "^19.3.1",
-    "@banda/contract": "workspace:*"
+    "recharts": "^3.10.1"
   },
   "devDependencies": {
     "@types/node": "^24",
