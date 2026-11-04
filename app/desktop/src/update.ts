@@ -174,7 +174,7 @@ export function updates(tell: (now: Update) => void): Updates {
  * out is `out`, with the brew command that installs it. "Update now" is
  * a look the Person asked for.
  */
-function brewUpdates(
+export function brewUpdates(
   known: { name: string; have: string; always: boolean },
   tell: (now: Update) => void
 ): Updates {
@@ -188,6 +188,7 @@ function brewUpdates(
   const command = `brew update && brew upgrade --cask ${channel.folder}`
   let asked = false
   let looked: number | undefined
+  let retry: ReturnType<typeof setTimeout> | undefined
   autoUpdater.autoDownload = false
   autoUpdater.autoInstallOnAppQuit = false
   autoUpdater.fullChangelog = true
@@ -206,17 +207,31 @@ function brewUpdates(
     asked = false
     if (now.state !== "out") set({ state: "none", looked })
   })
-  autoUpdater.on("error", (error: Error) => {
+  autoUpdater.on("error", (error: Error & { code?: string }) => {
     console.warn("Banda could not look for its update:", error.message)
+    // Linux publishes first; the Mac's files arrive a few minutes later.
+    // Keep looking soon, even when this was a background check.
+    const publishing = error.code === "ERR_UPDATER_CHANNEL_FILE_NOT_FOUND"
+    if (publishing && retry === undefined)
+      retry = setTimeout(() => look(false), FIRST_LOOK)
     if (!asked) return
     asked = false
     looked = Date.now()
-    set({ state: "none", looked, missed: firstLine(error.message) })
+    if (now.state !== "out")
+      set({
+        state: "none",
+        looked,
+        missed: publishing
+          ? "The macOS release is still publishing; checking again in a minute"
+          : firstLine(error.message),
+      })
   })
   const look = (byPerson: boolean) => {
+    clearTimeout(retry)
+    retry = undefined
     if (byPerson && known.always) {
       asked = true
-      set({ state: "looking" })
+      if (now.state !== "out") set({ state: "looking" })
     }
     // The same error comes as an "error" event.
     autoUpdater.checkForUpdates().catch(() => {})
