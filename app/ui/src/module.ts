@@ -73,6 +73,8 @@ export type WindowApi = {
   /** Goes to `thing`: to the Pane that shows it, on any workspace, else
    * opens `pane` for it. */
   goTo: (thing: Thing & { pane: PaneState }) => void
+  /** The Spaces open in the window. */
+  spaces: () => readonly SpaceSummary[]
   /** How the look says to tell and to sound: `[notify]` and `[sound]`. */
   look: () => { notify: Notify; sound: SoundSettings }
 }

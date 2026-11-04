@@ -8,7 +8,8 @@ import type { Button, Told } from "./told"
 export const LIFE: Record<Chime, number> = {
   done: 5000,
   failed: 8000,
-  asking: 12000,
+  // What asks stays until it is answered or seen (ADR 0056, decision 3).
+  asking: Infinity,
 }
 
 /** Sonner's kind of each call's toast, which colours its edge. */
@@ -31,10 +32,15 @@ export function toastTold(
   options?: ExternalToast
 ): string | number {
   const [main, other] = told.buttons
-  return KIND[told.kind](told.title, {
-    id: told.key,
+  const id = options?.id ?? told.key
+  if (main) clicks.set(String(id), () => run(main))
+  else clicks.delete(String(id))
+  return KIND[told.kind](titleOf(told), {
+    id,
+    testId: String(id),
     duration: LIFE[told.kind],
     closeButton: told.close === true,
+    className: main ? "cursor-pointer" : "",
     classNames: { description: "line-clamp-2" },
     icon: markOf(told.kind),
     description: (
@@ -53,4 +59,39 @@ export function toastTold(
       : {}),
     ...options,
   })
+}
+
+/** Its title, with its Space after it, dimmer. */
+function titleOf(told: Told) {
+  if (!told.space) return told.title
+  return (
+    <>
+      {told.title}{" "}
+      <span className="font-normal text-muted-foreground">· {told.space}</span>
+    </>
+  )
+}
+
+/** What a click on each toast does, by its id: its first button's. */
+const clicks = new Map<string, () => void>()
+
+/**
+ * A click anywhere on a toast does what its first button does, and the
+ * toast goes (ADR 0056, decision 3); a click on a button is the button's,
+ * and a swipe is Sonner's. Returns how to stop.
+ */
+export function clickToasts(): () => void {
+  const click = (event: MouseEvent) => {
+    const at = event.target instanceof Element ? event.target : null
+    const card = at?.closest<HTMLElement>("[data-sonner-toast]")
+    if (!card || at?.closest("button, a")) return
+    if (card.dataset.swiped === "true") return
+    const id = card.dataset.testid
+    const run = id ? clicks.get(id) : undefined
+    if (!id || !run) return
+    run()
+    toast.dismiss(id)
+  }
+  document.addEventListener("click", click)
+  return () => document.removeEventListener("click", click)
 }

@@ -3463,6 +3463,20 @@ test("a Thread that finishes out of sight shows a toast, and it goes there", asy
   ).toBeHidden()
 })
 
+test("a click anywhere on a toast does what its button does (ADR 0056)", async () => {
+  window = await startWindow()
+  const { page } = window
+  const { composer } = await firstThread(page)
+  await sendAndGoBelow(page, composer, "slow hello")
+
+  const calls = page.getByRole("region", { name: "Notifications" })
+  const toast = calls.getByRole("listitem").filter({ hasText: "slow hello" })
+  await toast.getByText("Done").click()
+  const thread = page.getByRole("region", { name: "slow hello" })
+  await expect(thread).toHaveAttribute("data-focused", "true")
+  await expect(toast).toBeHidden()
+})
+
 test("the bell shows the last toasts again, and Esc or a button closes them (ADR 0048)", async () => {
   window = await startWindow()
   const { page } = window

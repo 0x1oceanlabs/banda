@@ -23,7 +23,7 @@ import {
   toldOfCall,
 } from "./system"
 import { newsOf, placeOf, tell } from "./tell"
-import { toastTold } from "./toast"
+import { clickToasts, toastTold } from "./toast"
 import { type Button, clicked, type Told } from "./told"
 
 /** What tells: what calls, from the lists, and what a module tells. */
@@ -94,6 +94,12 @@ export function startTelling(
       lasts: told.kind === "asking",
     })
   }
+  // The Space a call is of, by name, when the window has more than one.
+  const spaceNameOf = (call: Call) => {
+    const spaces = window.spaces()
+    if (spaces.length < 2) return undefined
+    return spaces.find((space) => space.id === call.space)?.name || undefined
+  }
   const answer = (thing: Thing & { pane: PaneState }) => {
     window.goTo(thing)
     withdraw([`${thing.space}:${thing.about}`])
@@ -110,7 +116,7 @@ export function startTelling(
     for (const call of news.values()) {
       const telling = tell(call.chime, window.sight(call), notify, quiet)
       if (telling.sound) chimes.push(call.chime)
-      const told = toldOfCall(call, notify.detail)
+      const told = toldOfCall(call, notify.detail, spaceNameOf(call))
       if (telling.toast || telling.system) keep(told)
       if (telling.toast) {
         toasted.add(call.key)
@@ -131,7 +137,7 @@ export function startTelling(
       noticed.add(call.key)
       const icon = await iconOf(call.chime)
       desktop.show({
-        ...noticeOf(call, notify.detail),
+        ...noticeOf(call, notify.detail, spaceNameOf(call)),
         ...(icon ? { icon } : {}),
       })
     }
@@ -162,6 +168,7 @@ export function startTelling(
 
   heard(window.lists())
   const stops = [
+    clickToasts(),
     window.watchLists(() => heard(window.lists())),
     window.watchSight(seen),
     // A click on a notice brings the window to the front and goes there;

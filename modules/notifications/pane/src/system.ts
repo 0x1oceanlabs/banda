@@ -27,12 +27,13 @@ const ANSWER: Record<Chime, string> = {
   failed: "Open",
 }
 
-/** A notice of one call. One that waits for the Person stays. */
-export function noticeOf(call: Call, detail: boolean): Notice {
+/** A notice of one call, `space` the name of its Space when the window
+ * has more than one. One that waits for the Person stays. */
+export function noticeOf(call: Call, detail: boolean, space?: string): Notice {
   const said = MARK_WORDS[call.chime]
   return {
     key: call.key,
-    title: call.title,
+    title: space ? `${call.title} · ${space}` : call.title,
     body: detail && call.detail ? `${said} · ${call.detail}` : said,
     answer: ANSWER[call.chime],
     lasts: call.chime !== "done",
@@ -46,13 +47,18 @@ export const GO_TO = "notifications.go-to"
  * A call as a toast tells it (ADR 0056, decision 2), in the words of its
  * system notification, with a button that goes there.
  */
-export function toldOfCall(call: Call, detail: boolean): Told {
-  const { key, title, body, answer } = noticeOf(call, detail)
-  const { space, about, pane } = call
+export function toldOfCall(
+  call: Call,
+  detail: boolean,
+  spaceName?: string
+): Told {
+  const { key, body, answer } = noticeOf(call, detail)
+  const { space, about, pane, title } = call
   return {
     key,
     kind: call.chime,
     title,
+    ...(spaceName ? { space: spaceName } : {}),
     ...(body ? { body } : {}),
     buttons: [{ label: answer, action: GO_TO, args: { space, about, pane } }],
   }
