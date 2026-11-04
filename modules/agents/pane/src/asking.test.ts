@@ -63,8 +63,18 @@ test("a permission says in words what it allows, the command apart", () => {
   })
   expect(wordsOf(question({ title: "Edit `a.ts`" }), "edit", "Codex")).toEqual({
     words: "Allow Codex to edit a file?",
-    detail: "Edit a.ts",
+    detail: "a.ts",
   })
+  // A title in words around the command keeps only the command apart.
+  expect(
+    wordsOf(
+      question({
+        title: "Allow Claude Code to run `pnpm test --filter look`?",
+      }),
+      "execute",
+      "Claude Code"
+    ).detail
+  ).toBe("pnpm test --filter look")
 })
 
 test("a Question about no known tool, a form or a plan asks in its words", () => {

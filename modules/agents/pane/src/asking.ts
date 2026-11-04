@@ -14,6 +14,13 @@ export function plain(title: string): string {
   return title.replace(/`+/g, "").trim()
 }
 
+/** The command or path a title names in code marks, else the title: a
+ * permission's title may say it in words around it, "Allow Claude Code to
+ * run `pnpm test`?". */
+export function named(title: string): string {
+  return title.match(/`+([^`]+)`+/)?.[1]?.trim() || plain(title)
+}
+
 /** What a tool call does, as a permission asks for it. */
 const ALLOWS: Partial<Record<ToolKind, string>> = {
   execute: "run a command",
@@ -37,7 +44,7 @@ export function wordsOf(
   const does = about && ALLOWS[about]
   if (!does || question.form || question.plan !== undefined)
     return { words: title }
-  return { words: `Allow ${name} to ${does}?`, detail: title }
+  return { words: `Allow ${name} to ${does}?`, detail: named(question.title) }
 }
 
 /** The kind of tool call Question `asked` asks about: the call of its turn
@@ -106,10 +113,11 @@ export function foldedOf(question: QuestionBody): Folded {
       kind: "chose",
       text: `You chose: ${chosen ? plain(chosen.name) : answer}`,
     }
-  if (!chosen.allows) return { kind: "declined", text: `Declined: ${title}` }
+  const what = named(question.title)
+  if (!chosen.allows) return { kind: "declined", text: `Declined: ${what}` }
   return {
     kind: "allowed",
-    text: `${chosen.always ? "Always allowed" : "Allowed"}: ${title}`,
+    text: `${chosen.always ? "Always allowed" : "Allowed"}: ${what}`,
   }
 }
 
