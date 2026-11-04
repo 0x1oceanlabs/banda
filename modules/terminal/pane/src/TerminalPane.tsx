@@ -29,9 +29,13 @@ import { outsideOf, type Target, targetOf } from "./links"
 import { type MenuAt, TerminalMenu } from "./TerminalMenu"
 import { onThemeChange, useFile } from "@banda/ui/lib/look"
 import { cursorOf, fontOf, themeOf } from "./theme"
+import { zoomAfter } from "@banda/ui/lib/zoom"
+import { keepZoom, zoomOf } from "./zoom"
 
 /** How long a size holds before the shell hears it, in ms. */
 const SETTLE = 120
+/** How long a new zoom shows, in ms. */
+const SHOWN = 1000
 
 /**
  * A terminal: the Person's shell in the Space's folder, or a program
@@ -198,6 +202,13 @@ function Screen({
   const [menuAt, setMenuAt] = useState<MenuAt>({ link: null, selection: "" })
   // Types to the program while it runs, as the menu's Clear does.
   const typed = useRef<(data: string) => void>(() => {})
+  // The zoom shown for a moment after a key changed it.
+  const [zoomShown, setZoomShown] = useState<{ zoom: number } | null>(null)
+  useEffect(() => {
+    if (!zoomShown) return
+    const unshow = setTimeout(() => setZoomShown(null), SHOWN)
+    return () => clearTimeout(unshow)
+  }, [zoomShown])
   // The newest `terminal.toml`, for a surface made, or a snapshot heard,
   // after it came.
   const writing = useFile(TERMINAL_FILE)
@@ -303,10 +314,11 @@ function Screen({
     }
     let sized = false
     let settling: ReturnType<typeof setTimeout> | undefined
+    const fontNow = () => fontOf(element, writingNow.current, zoomOf(terminal))
     void (async () => {
       const made = await Surface.create(element, {
         theme: themeOf(element),
-        font: fontOf(element, writingNow.current),
+        font: fontNow(),
         cursor: cursorOf(writingNow.current),
         onData: (data) => typed.current(data),
         onResize: (cols, rows) => {
@@ -321,8 +333,20 @@ function Screen({
           settling = setTimeout(() => input.resize({ cols, rows }), SETTLE)
         },
         onSelectionChange: () => {},
-        // The window's own keys, such as Alt+Arrows, stay the window's.
-        beforeKey: (event) => !event.defaultPrevented,
+        // The window's own keys, such as Alt+Arrows, stay the window's;
+        // Ctrl with + − 0 zooms the terminal.
+        beforeKey: (event) => {
+          if (event.defaultPrevented) return false
+          const next = zoomAfter(event, zoomOf(terminal))
+          if (next === null) return true
+          event.preventDefault()
+          if (next !== zoomOf(terminal)) {
+            keepZoom(terminal, next)
+            refont.current()
+          }
+          setZoomShown({ zoom: next })
+          return false
+        },
         canActivateLink: (text) => linked(text) !== null,
         onLinkActivate: (text, event) => {
           const target = linked(text)
@@ -350,9 +374,9 @@ function Screen({
       if (shell) void start().then(follow, fail)
       else follow()
     })()
-    let font = JSON.stringify(fontOf(element, writingNow.current))
+    let font = JSON.stringify(fontNow())
     refont.current = () => {
-      const now = fontOf(element, writingNow.current)
+      const now = fontNow()
       if (JSON.stringify(now) === font) return
       font = JSON.stringify(now)
       void drawn?.setFont(now)
@@ -383,7 +407,7 @@ function Screen({
   }, [writing])
 
   return (
-    <div className="flex h-full min-h-0 flex-col">
+    <div className="relative flex h-full min-h-0 flex-col">
       <ContextMenu
         onOpenChange={(open, { reason }) => {
           // A press elsewhere keeps the focus where it went.
@@ -420,6 +444,15 @@ function Screen({
           }
         />
       </ContextMenu>
+      {zoomShown !== null && (
+        <div
+          role="status"
+          aria-label="Zoom"
+          className="pointer-events-none absolute top-2 right-3 rounded-full border bg-popover px-2.5 py-1 text-xs text-popover-foreground shadow-sm"
+        >
+          {Math.round(zoomShown.zoom * 100)}%
+        </div>
+      )}
       <Status
         now={now}
         problem={problem}

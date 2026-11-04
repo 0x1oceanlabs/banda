@@ -24,7 +24,8 @@ import {
   DialogTitle,
 } from "@banda/ui/components/dialog"
 import { Kbd } from "@banda/ui/components/kbd"
-import { type Key, matches } from "@banda/ui/lib/keys"
+import { matches } from "@banda/ui/lib/keys"
+import { ZOOM_KEYS } from "@banda/ui/lib/zoom"
 import { onThemeChange } from "@banda/ui/lib/look"
 import {
   heard,
@@ -197,15 +198,6 @@ export function Visual({
 
 /** Where 100 % is in {@link ZOOMS}. */
 const ACTUAL = ZOOMS.indexOf(1)
-
-/** Ctrl or ⌘ with + − 0, as the browser Pane's zoom; keys in the page
- * stay the page's. `by` 0 goes back to 100 %. */
-const ZOOM_KEYS: readonly (Key & { by: number })[] = [
-  { code: "Equal", ctrl: true, by: 1 },
-  { code: "Equal", ctrl: true, shift: true, by: 1 },
-  { code: "Minus", ctrl: true, by: -1 },
-  { code: "Digit0", ctrl: true, by: 0 },
-]
 
 /** A Visual over the window, as wide as the window lets it be, zoomed from
  * 50 to 200 %; `Esc` closes it, as T3 Code's full screen. */
