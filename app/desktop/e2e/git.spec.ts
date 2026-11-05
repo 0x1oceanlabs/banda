@@ -1,5 +1,5 @@
 import { execFileSync } from "node:child_process"
-import { writeFileSync } from "node:fs"
+import { chmodSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import { expect, test } from "@playwright/test"
 import { firstThread, setInFront, startWindow, type Window } from "./window"
@@ -68,6 +68,11 @@ test("the Diff shows a Space's changes by scope, as T3 Code's, and reads again a
   await expect(diff.getByRole("button", { name: "Base" })).toHaveText("vs main")
   // Its header sums them: how many files, lines added and removed.
   await expect(diff.locator("header")).toContainText("3 files·+3−1")
+  // A Pane this narrow has no tree, till the Person shows it.
+  const tree = diff.getByRole("button", { name: "Show file tree" })
+  await expect(tree).toHaveAttribute("aria-pressed", "false")
+  await expect(diff.getByRole("button", { name: "Refresh" })).toBeVisible()
+  await tree.click()
   const files = diff.getByRole("tree")
   // A file's header in the view, by its path.
   const header = (path: string) => diff.getByText(path, { exact: true })
@@ -143,6 +148,7 @@ test("a turn's Diff is all the turn changed, its shell's work too, from git's ch
   await expect(diff.getByRole("button", { name: "Scope" })).toHaveText(
     "edit on disk"
   )
+  await diff.getByRole("button", { name: "Show file tree" }).click()
   const files = diff.getByRole("tree")
   for (const path of ["notes.md", "made.txt"])
     await expect(files.getByRole("treeitem", { name: path })).toBeVisible()
@@ -279,13 +285,16 @@ test("a Thread's details card shows the branch and its changes, as T3 Code's, an
     join(folder, "app.ts"),
     "export const a = 2\nexport const b = 3\n"
   )
+  writeFileSync(join(folder, "new.ts"), "export const c = 4\n")
 
   // Ctrl+Shift+B opens it too; it follows the folder as it changes.
+  // Changes is what a commit would take, the new file and its line too.
   await thread.composer.click()
   await page.keyboard.press("Control+Shift+KeyB")
   await expect(card.getByText("main", { exact: true })).toBeVisible()
   const changes = card.getByRole("button", { name: /Changes/ })
-  await expect(changes).toContainText("+2−1")
+  await expect(changes).toContainText("Changes · 2 files")
+  await expect(changes).toContainText("+3−1")
   await page.screenshot({ path: "test-results/git-details-changes.png" })
 
   // A new Thread's changes are none of its making: Commit… asks first,
@@ -325,8 +334,14 @@ test("a Thread's details card shows the branch and its changes, as T3 Code's, an
   await aside.getByRole("button", { name: /Changes/ }).click()
   const diff = page.getByRole("region", { name: "Diff" })
   await expect(diff.getByRole("button", { name: "Scope" })).toHaveText(
-    "Changes"
+    "Uncommitted"
   )
+  await expect(diff.locator("header")).toContainText("2 files·+3−1")
+
+  // Nothing uncommitted, no row.
+  git(folder, "add", "-A")
+  git(folder, "commit", "-qm", "Second")
+  await expect(aside.getByRole("button", { name: /Changes/ })).toHaveCount(0)
 })
 
 test("the git button commits every change with the message the Thread's Harness wrote, and pushes, asking first on main", async () => {
@@ -387,6 +402,59 @@ test("the git button commits every change with the message the Thread's Harness 
   await expect(card.getByRole("button", { name: "Commit" })).toBeDisabled()
   // The Thread never showed the message's run.
   await expect(thread.getByText("You write concise")).toBeHidden()
+  // It shows what the card did, which its Agent reads with its next
+  // message.
+  const notice = thread.getByText(
+    /^Made the branch feature\/change-app, and committed 1 file on it: “Change the app” \(\w+\), and pushed it to origin\/feature\/change-app\.$/
+  )
+  await expect(notice).toBeVisible()
+  await page.keyboard.press("Escape")
+  await expect(card).toBeHidden()
+  await page.screenshot({ path: "test-results/git-notice.png" })
+  await composer.fill("what now")
+  await composer.press("Enter")
+  await expect(
+    thread.getByText(/You said: Since your last turn, your Person did this/)
+  ).toBeVisible()
+})
+
+test("a commit that ends with the card out of sight says so in a toast", async () => {
+  window = await startWindow()
+  const { page, dir } = window
+  const thread = await firstThread(page)
+  await expect(thread.composer).toBeVisible()
+  const folder = join(dir, "root", "Work")
+  git(folder, "init", "-q", "-b", "main")
+  git(folder, "config", "user.name", "Roma")
+  git(folder, "config", "user.email", "roma@banda.so")
+  writeFileSync(join(folder, "a.ts"), "export const a = 1\n")
+  git(folder, "add", "-A")
+  git(folder, "commit", "-qm", "First")
+  writeFileSync(join(folder, "a.ts"), "export const a = 2\n")
+  // A hook that takes a while, so the card is closed before it ends.
+  const hook = join(folder, ".git", "hooks", "pre-commit")
+  writeFileSync(hook, "#!/bin/sh\nsleep 2\n")
+  chmodSync(hook, 0o755)
+
+  await thread.composer.click()
+  await page.keyboard.press("Control+Shift+KeyB")
+  const card = page.getByRole("dialog", { name: "Thread details" })
+  await card.getByRole("button", { name: "More git actions" }).click()
+  await page.getByRole("menuitem", { name: "Commit…" }).click()
+  const dialog = page.getByRole("dialog", { name: "Commit changes" })
+  await dialog.getByRole("textbox", { name: "Message" }).fill("Change a")
+  await dialog.getByRole("button", { name: "Commit", exact: true }).click()
+  await expect(card).toContainText("Running pre-commit…")
+  await page.keyboard.press("Escape")
+  await expect(card).toBeHidden()
+
+  const toast = page
+    .getByRole("region", { name: "Notifications" })
+    .getByRole("listitem")
+    .filter({ hasText: "Change a" })
+  await expect(toast).toContainText(/Committed \w+/)
+  await page.screenshot({ path: "test-results/git-toast.png" })
+  expect(git(folder, "log", "-1", "--format=%s")).toBe("Change a\n")
 })
 
 test("Stop while the Thread's Harness writes the message stops it, and nothing is committed", async () => {
@@ -496,6 +564,9 @@ test("the branch picker makes and switches branches, and ▾ commits chosen file
   await search.press("Enter")
   await expect(card.getByRole("button", { name: /^other/ })).toBeVisible()
   expect(git(folder, "branch", "--show-current")).toBe("other\n")
+  await expect(
+    thread.getByText("Switched to the branch other; the changes went along.")
+  ).toBeVisible()
   // Words no branch has make one of the name they make, the choice Enter
   // takes when nothing is listed, and switch to it, the changes along.
   await card.getByRole("button", { name: /^other/ }).click()

@@ -85,4 +85,11 @@ describe("the view", () => {
       tree: false,
     })
   })
+
+  it("in a narrow Pane has no tree, till the Person shows it", () => {
+    expect(viewOf(undefined, false).tree).toBe(false)
+    expect(viewOf({ wrap: false }, false).tree).toBe(false)
+    expect(viewOf({ tree: true }, false).tree).toBe(true)
+    expect(viewOf({ tree: false }, true).tree).toBe(false)
+  })
 })

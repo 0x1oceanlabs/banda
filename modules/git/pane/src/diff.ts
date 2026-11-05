@@ -38,16 +38,22 @@ export type View = {
   tree: boolean
 }
 
-/** T3 Code's defaults: stacked, wrapped, whitespace ignored. */
-const VIEW: View = {
+/** T3 Code's defaults: stacked, wrapped, whitespace ignored; the tree
+ * as wide a Pane has room for it. */
+const VIEW: Omit<View, "tree"> = {
   layout: "stacked",
   wrap: true,
   ignoreWhitespace: true,
   hideTests: false,
-  tree: true,
 }
 
-/** `view` read from args a Pane kept, its gaps filled from {@link VIEW}. */
-export function viewOf(kept: Partial<View> | undefined): View {
-  return { ...VIEW, ...kept }
+/** How wide a Diff shows its tree unless the Person chose: as wide as a
+ * Thread holds its details card beside the messages. Narrower, as at half
+ * a screen, the tree would take the room the lines need. */
+export const TREE_WIDE = 1352
+
+/** `view` read from args a Pane kept, its gaps filled from {@link VIEW};
+ * the tree, unless it was chosen, shown when the Pane is `wide`. */
+export function viewOf(kept: Partial<View> | undefined, wide = true): View {
+  return { ...VIEW, tree: wide, ...kept }
 }
