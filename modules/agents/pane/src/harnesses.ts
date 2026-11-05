@@ -50,6 +50,12 @@ export function useAccount(
   return useMachineLive(engine, source, round)
 }
 
+/** What a sentence calls a Harness, `Claude` for Claude Code, or its ID
+ * when this computer does not know it. */
+export function harnessShort(harnesses: HarnessView[], id: string): string {
+  return harnesses.find((harness) => harness.id === id)?.short ?? id
+}
+
 /** A Harness's name, or its ID when this computer does not know it. */
 export function harnessName(harnesses: HarnessView[], id: string): string {
   return harnesses.find((harness) => harness.id === id)?.name ?? id

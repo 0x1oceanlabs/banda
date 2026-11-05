@@ -24,14 +24,14 @@ import type { Commit } from "./chain"
 import { NO_WRITER, onDefault } from "./quick"
 
 /** The dialog's title: the branch it commits to. */
-export function commitTitle(status: Status): string {
+function commitTitle(status: Status): string {
   return status.branch
     ? `Commit to ${status.branch}`
     : "Commit on a detached HEAD"
 }
 
 /** Its button, by how many files are taken. */
-export function commitLabel(taken: number): string {
+function commitLabel(taken: number): string {
   return `Commit ${taken} ${taken === 1 ? "file" : "files"}`
 }
 
@@ -101,9 +101,6 @@ export function CommitDialog({
                 <label className="flex cursor-pointer items-center gap-2 px-2 py-1.5">
                   <Checkbox
                     aria-label={`Commit ${file.path}`}
-                    // Left out, an empty box plainly outlined; focused, a
-                    // ring apart from it, never read as a fill.
-                    className="transition-none not-data-checked:border-muted-foreground/60 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-popover"
                     checked={takes}
                     onCheckedChange={(take) => toggle(file.path, take)}
                   />

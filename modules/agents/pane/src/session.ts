@@ -24,7 +24,7 @@ import type { PaneProps } from "@banda/ui/pane"
 import { type Attaching, useAttachments } from "./Attachments"
 import type { Values } from "./form"
 import type { HarnessView } from "@banda/contract/harnesses"
-import { harnessName, useHarnesses } from "./harnesses"
+import { harnessName, harnessShort, useHarnesses } from "./harnesses"
 import { useThread } from "./live-thread"
 import { settledTurn } from "./marks"
 import { useImageReader } from "./MessageImages"
@@ -126,6 +126,7 @@ export function useThreadSession({
       ? args.harness || offered[0]?.id || ""
       : (state?.harness ?? args.harness)
   const name = harnessName(harnesses, harness) || "the Agent"
+  const short = harnessShort(harnesses, harness) || name
 
   // The header follows the Thread: its title, once the first message gives
   // it one, and its Harness come back with the Pane.
@@ -337,6 +338,8 @@ export function useThreadSession({
     harness,
     /** The Harness's name, as the Thread speaks of its Agent. */
     name,
+    /** What a sentence calls it: `Claude`. */
+    short,
     reader,
     /** Whether a message is on its way. */
     sending: sending.busy,

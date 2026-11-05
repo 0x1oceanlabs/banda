@@ -47,7 +47,8 @@ test("the Harness writes the message, then git.act commits with it", async () =>
   expect(write).toMatchObject({
     method: "agents.write",
     params: { thread: "t1", prompt: "Write it" },
-    once: false,
+    // A reconnect never runs the writer again.
+    once: true,
   })
   const said = write!.onPiece as (piece: unknown) => void
   said({ kind: "reply", text: '{"subject": "Add the card"}' })

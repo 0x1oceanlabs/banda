@@ -149,7 +149,8 @@ the rest are our defaults, as T3 Code does, and stay Roma's to change.
      session of its own, planning, refused whatever it asks, that the
      Thread does not show; a new Thread's, on the Harness it starts on.
      It is a stream that says the reply once; let go, it cancels the
-     run and closes its session, so Stop stops it. `git.written` reads
+     run and closes its session, so Stop stops it. A stream only because
+     the kernel cannot cancel a call yet. `git.written` reads
      the reply into a subject of at most 72 characters, a body with no
      line saying who wrote it (`Co-Authored-By: …`, `Generated with …`:
      Roma's call of 2026-11-05; the prompt says so too) and a branch no

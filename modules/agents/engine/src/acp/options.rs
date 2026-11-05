@@ -308,19 +308,50 @@ fn harness_option(option: &acp::SessionConfigOption) -> Option<HarnessOption> {
     })
 }
 
-/// An effort level by the words Codex has for it, the same from each
-/// Harness: Claude Code says "Xhigh".
+/// The effort levels from the least, by the words Codex has for them,
+/// each with its name, the same from each Harness: Claude Code says
+/// "Xhigh".
+const LEVELS: [(&str, &str); 7] = [
+    ("none", "None"),
+    ("minimal", "Minimal"),
+    ("low", "Low"),
+    ("medium", "Medium"),
+    ("high", "High"),
+    ("xhigh", "Extra high"),
+    ("max", "Max"),
+];
+/// No thinking at all: not a level a short run is lowered to, as some
+/// models take none.
+const NO_THINKING: &str = "none";
+
+/// An effort level's name, the same from each Harness.
 fn level_name(value: &str) -> Option<&'static str> {
-    Some(match value {
-        "none" => "None",
-        "minimal" => "Minimal",
-        "low" => "Low",
-        "medium" => "Medium",
-        "high" => "High",
-        "xhigh" => "Extra high",
-        "max" => "Max",
-        _ => return None,
-    })
+    LEVELS
+        .iter()
+        .find(|(v, _)| *v == value)
+        .map(|(_, name)| *name)
+}
+
+/// The effort option among `options`, by its id and name, and the least
+/// level it offers, but for `none`; none when it has no effort, offers
+/// no level Banda knows, or is at the least already.
+pub(super) fn least_effort(
+    options: &[acp::SessionConfigOption],
+) -> Option<(String, String, String)> {
+    let effort = (options.iter())
+        .find(|o| o.category == Some(acp::SessionConfigOptionCategory::ThoughtLevel))?;
+    let offers = values(effort);
+    let (least, _) = (LEVELS.iter())
+        .filter(|(level, _)| *level != NO_THINKING)
+        .find(|(level, _)| offers.contains(level))?;
+    match current(effort) {
+        Some(OptionValue::Choice(now)) if now == *least => None,
+        _ => Some((
+            effort.id.0.to_string(),
+            effort.name.clone(),
+            least.to_string(),
+        )),
+    }
 }
 
 /// The value `option` should have for a session to run as `wanted`, if it
@@ -483,6 +514,30 @@ mod tests {
         assert_eq!(names, ["default", "Low", "Extra high", "Max"]);
         let model = select("model", "xhigh", &["xhigh"]).category(Category::Model);
         assert_eq!(harness_option(&model).unwrap().choices[0].name, "xhigh");
+    }
+
+    #[test]
+    fn a_short_run_takes_the_least_effort_the_harness_offers() {
+        use acp::SessionConfigOptionCategory as Category;
+        let effort = |now: &str, values: &[&str]| {
+            vec![
+                select("model", "opus", &["opus", "sonnet"]).category(Category::Model),
+                select("effort", now, values).category(Category::ThoughtLevel),
+            ]
+        };
+        // Claude Code's, with its own "default".
+        let claude = effort("xhigh", &["default", "xhigh", "low", "max"]);
+        assert_eq!(
+            least_effort(&claude),
+            Some(("effort".into(), "effort".into(), "low".into()))
+        );
+        // Codex's: no thinking at all is no level for it.
+        let codex = effort("high", &["none", "high", "minimal", "low"]);
+        assert_eq!(least_effort(&codex).unwrap().2, "minimal");
+        // At the least already, with no effort, or none Banda knows: as it is.
+        assert_eq!(least_effort(&effort("low", &["low", "high"])), None);
+        assert_eq!(least_effort(&claude[..1]), None);
+        assert_eq!(least_effort(&effort("fast", &["fast", "deep"])), None);
     }
 
     #[test]

@@ -142,6 +142,7 @@ function ThreadContent(props: PaneProps<ThreadArgs>) {
     turn,
     harness,
     name,
+    short,
     reader,
     sending,
     acting,
@@ -276,7 +277,7 @@ function ThreadContent(props: PaneProps<ThreadArgs>) {
               engine={engine}
               space={space}
               thread={thread}
-              harness={harness ? { id: harness, name } : null}
+              harness={harness ? { id: harness, name: short } : null}
               open={open}
               focused={focused}
               wide={wide}

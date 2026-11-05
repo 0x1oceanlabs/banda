@@ -47,7 +47,6 @@ import {
   menuOf,
   type Quick,
   quickOf,
-  shortName,
 } from "./quick"
 import { GitAlert } from "./GitAlert"
 
@@ -77,11 +76,10 @@ export function GitButton({
   )
   // The Thread's Harness writes a commit's message; a new Thread's, the
   // one it starts on.
-  const writer: Writer | null =
-    harness &&
-    (thread !== null
-      ? { name: shortName(harness), thread }
-      : { name: shortName(harness), harness: harness.id })
+  const writer: Writer | null = harness && {
+    name: harness.name,
+    ...(thread !== null ? { thread } : { harness: harness.id }),
+  }
   const [asking, setAsking] = useState<Action | null>(null)
   const [committing, setCommitting] = useState(false)
   const go = (action: Action, feature = false) => {
@@ -98,7 +96,7 @@ export function GitButton({
         <DetailsRow
           icon={<Spinner />}
           // Who writes the message is said whole, on two lines if need be.
-          className="h-auto min-h-8 py-1.5 [&>.flex-1]:whitespace-normal"
+          wrap
           end={
             <>
               <Elapsed since={now.since} />

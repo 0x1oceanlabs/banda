@@ -4,27 +4,25 @@
 //! folder, on the Thread's model at the least effort the Harness offers
 //! for it, planning and asking before it changes anything; whatever it
 //! asks is refused, and nobody sees it. Only its reply comes back, and
-//! the session is closed. Stopped, its turn is cancelled and the session
-//! closed all the same. The Thread's own session is not touched.
+//! the session is closed. Stopped, it stops at once, its turn cancelled
+//! and its session closed all the same. The Thread's own session is not
+//! touched.
 
 use crate::acp::{Answer, Connection, Prompt, Said, Session};
-use crate::model::{Mode, Offer, OptionValue, Settings, TurnState};
+use crate::model::{Mode, Settings, TurnState};
 use crate::questions::refuse_once;
 use crate::rules::Ending;
 use banda_kernel::Refusal;
 use std::future::Future;
 use std::path::Path;
+use std::pin::Pin;
 use std::sync::Arc;
 use std::time::Duration;
+use tokio::task::JoinHandle;
 
 /// How long it may take, and how long a stop may take after it.
 const TIME: Duration = Duration::from_secs(120);
 const STOPPING: Duration = Duration::from_secs(5);
-
-/// Effort levels from the least, by the words Claude Code and Codex
-/// have for them. `none`, no thinking at all, is left out: the least is
-/// enough for a short reply, and some models take no `none`.
-const LEVELS: [&str; 6] = ["minimal", "low", "medium", "high", "xhigh", "max"];
 
 /// What the Harness replies to `prompt`, with the Thread's `settings`,
 /// unless `stopped` comes first.
@@ -35,12 +33,26 @@ pub async fn write(
     prompt: String,
     stopped: impl Future<Output = ()>,
 ) -> Result<String, Refusal> {
+    tokio::pin!(stopped);
     let name = connection.process().name().to_owned();
-    let session = connection
-        .aside(folder)
-        .await
-        .map_err(|ending| refused(ending, &name, "could not start"))?;
-    let ran = run(&session, settings, prompt, &name, stopped).await;
+    let mut opening = tokio::spawn({
+        let (connection, folder) = (connection.clone(), folder.to_owned());
+        async move { connection.aside(&folder).await }
+    });
+    let opened = tokio::select! {
+        opened = &mut opening => opened.map_err(|_| Refusal::internal())?,
+        () = &mut stopped => {
+            // It goes on opening, to be closed once it has.
+            tokio::spawn(async move {
+                if let Ok(Ok(session)) = opening.await {
+                    session.close().await;
+                }
+            });
+            return Err(halted());
+        }
+    };
+    let session = opened.map_err(|ending| refused(ending, &name, "could not start"))?;
+    let ran = run(&session, settings, prompt, &name, stopped.as_mut()).await;
     session.close().await;
     ran
 }
@@ -50,25 +62,21 @@ async fn run(
     settings: &Settings,
     prompt: String,
     name: &str,
-    stopped: impl Future<Output = ()>,
+    mut stopped: Pin<&mut impl Future<Output = ()>>,
 ) -> Result<String, Refusal> {
-    tokio::pin!(stopped);
-    let mut wanted = Settings {
+    let wanted = Settings {
         mode: Mode::Supervised,
         plan: true,
         options: settings.options.clone(),
     };
-    session.settle(&wanted).await;
     // The model set first, as the levels it offers may be its own.
-    if let Some((effort, least)) = least_effort(&session.running().offer) {
-        wanted.options.insert(effort, OptionValue::Choice(least));
+    let settled = async {
         session.settle(&wanted).await;
-    }
-    // Stopped already: no prompt goes.
+        session.least_effort().await;
+    };
     tokio::select! {
-        biased;
+        () = settled => {}
         () = &mut stopped => return Err(halted()),
-        () = std::future::ready(()) => {}
     }
     let prompt = Prompt {
         text: prompt,
@@ -95,20 +103,13 @@ async fn run(
         }
         reply
     };
-    let heard = tokio::select! {
-        heard = tokio::time::timeout(TIME, heard) => heard.map_err(|_| {
-            Refusal::conflict(format!("{name} did not answer within two minutes."))
-        }),
-        () = &mut stopped => Err(halted()),
-    };
-    let reply = match heard {
-        Ok(reply) => reply,
-        Err(refusal) => {
-            // Stopped, and given a moment to stop before it is closed.
-            let _ = session.cancel();
-            let _ = tokio::time::timeout(STOPPING, &mut done).await;
-            return Err(refusal);
+    let reply = tokio::select! {
+        reply = heard => reply,
+        () = tokio::time::sleep(TIME) => {
+            let late = format!("{name} did not answer within two minutes.");
+            return Err(cancel(session, &mut done, Refusal::conflict(late)).await);
         }
+        () = &mut stopped => return Err(cancel(session, &mut done, halted()).await),
     };
     let ending = done.await.map_err(|_| Refusal::internal())?;
     if ending.state != TurnState::Done {
@@ -120,15 +121,12 @@ async fn run(
     }
 }
 
-/// The effort option `offer` has, and the least level it offers; none
-/// when it has no such option or no level Banda knows.
-fn least_effort(offer: &Offer) -> Option<(String, String)> {
-    let effort = (offer.options.iter())
-        .find(|option| option.category.as_deref() == Some("thought_level"))?;
-    let least = (effort.choices.iter())
-        .filter_map(|choice| Some((LEVELS.iter().position(|l| *l == choice.value)?, choice)))
-        .min_by_key(|(rank, _)| *rank)?;
-    Some((effort.id.clone(), least.1.value.clone()))
+/// Cancels the turn and gives it a moment to stop, before its session is
+/// closed; then says `why` it was.
+async fn cancel(session: &Session, done: &mut JoinHandle<Ending>, why: Refusal) -> Refusal {
+    let _ = session.cancel();
+    let _ = tokio::time::timeout(STOPPING, done).await;
+    why
 }
 
 /// What a run stopped by its caller says, which nobody hears.
@@ -139,63 +137,4 @@ fn halted() -> Refusal {
 /// Why it ended, or that `name` `did` so.
 fn refused(ending: Ending, name: &str, did: &str) -> Refusal {
     Refusal::conflict(ending.reason.unwrap_or_else(|| format!("{name} {did}.")))
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::model::{HarnessOption, OptionChoice};
-
-    fn option(id: &str, category: &str, values: &[&str]) -> HarnessOption {
-        HarnessOption {
-            id: id.to_owned(),
-            name: id.to_owned(),
-            description: None,
-            value: OptionValue::Choice(values[0].to_owned()),
-            choices: (values.iter())
-                .map(|value| OptionChoice {
-                    value: (*value).to_owned(),
-                    name: (*value).to_owned(),
-                    description: None,
-                })
-                .collect(),
-            category: Some(category.to_owned()),
-        }
-    }
-
-    fn offer(options: Vec<HarnessOption>) -> Offer {
-        Offer {
-            options,
-            ..Offer::default()
-        }
-    }
-
-    #[test]
-    fn the_least_effort_is_the_lowest_level_the_harness_offers() {
-        // Claude Code's, with its own "default".
-        let claude = option(
-            "effort",
-            "thought_level",
-            &["default", "xhigh", "low", "max"],
-        );
-        let model = option("model", "model", &["opus", "sonnet"]);
-        assert_eq!(
-            least_effort(&offer(vec![model.clone(), claude])),
-            Some(("effort".into(), "low".into()))
-        );
-        // Codex's.
-        let codex = option(
-            "reasoning_effort",
-            "thought_level",
-            &["none", "high", "minimal", "low"],
-        );
-        assert_eq!(
-            least_effort(&offer(vec![codex])),
-            Some(("reasoning_effort".into(), "minimal".into()))
-        );
-        // No effort, or no level Banda knows: the options stay.
-        assert_eq!(least_effort(&offer(vec![model])), None);
-        let odd = option("effort", "thought_level", &["fast", "deep"]);
-        assert_eq!(least_effort(&offer(vec![odd])), None);
-    }
 }

@@ -44,6 +44,7 @@ fn harnesses_with(env: &[(&str, &str)]) -> Harnesses {
     Harnesses::new(vec![Harness {
         id: "fake".into(),
         name: "Fake".into(),
+        short: None,
         command: fake_agent().display().to_string(),
         enabled: true,
         args: Vec::new(),
@@ -1159,6 +1160,7 @@ fn with_cli_since(program: &str, minimum: Option<&str>) -> Agents {
     Agents::new(Harnesses::new(vec![Harness {
         id: "fake".into(),
         name: "Fake".into(),
+        short: None,
         command: fake_agent().display().to_string(),
         enabled: true,
         args: Vec::new(),
@@ -2631,6 +2633,7 @@ async fn the_real_harnesses_say_what_they_run_and_who_is_signed_in() {
     let fake = Harness {
         id: "fake".into(),
         name: "Fake".into(),
+        short: None,
         command: fake_agent().display().to_string(),
         enabled: true,
         args: Vec::new(),

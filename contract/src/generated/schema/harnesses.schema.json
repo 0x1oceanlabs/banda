@@ -33,6 +33,10 @@
           "description": "What the Person reads: `Claude Code`.",
           "type": "string"
         },
+        "short": {
+          "description": "What a sentence calls it, when shorter than its name: `Claude`.",
+          "type": "string"
+        },
         "command": {
           "description": "The program that speaks ACP: its name on PATH, or its path.",
           "type": "string"

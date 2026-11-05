@@ -27,6 +27,7 @@ import {
 const view = (id: string, name: string, command: string[]): HarnessView => ({
   id,
   name,
+  short: name,
   enabled: true,
   command,
   env: [],

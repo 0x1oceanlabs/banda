@@ -200,20 +200,8 @@ impl Session {
                 value,
             );
             tried.push(id);
-            let asked = connection.process.cx().send_request(set).block_task();
-            match timeout(OPENING, asked).await {
-                Ok(Ok(answer)) => {
-                    learn(&connection.learned, session, answer.config_options);
-                }
-                Ok(Err(error)) => refused.push(format!(
-                    "{} did not take the setting {name}: {}",
-                    connection.process.name(),
-                    error.message
-                )),
-                Err(_) => refused.push(format!(
-                    "{} did not answer when Banda set {name}.",
-                    connection.process.name()
-                )),
+            if let Err(why) = self.set(set, &name).await {
+                refused.push(why);
             }
         };
         let running = connection.runs(&known);
@@ -231,6 +219,49 @@ impl Session {
             ));
         }
         (running, refused)
+    }
+
+    /// Sets one option, named `name`, and learns what the session runs
+    /// with then; or says in plain words why it did not.
+    async fn set(&self, set: acp::SetSessionConfigOptionRequest, name: &str) -> Result<(), String> {
+        let connection = &*self.connection;
+        let asked = connection.process.cx().send_request(set).block_task();
+        match timeout(OPENING, asked).await {
+            Ok(Ok(answer)) => {
+                learn(&connection.learned, &self.id, answer.config_options);
+                Ok(())
+            }
+            Ok(Err(error)) => Err(format!(
+                "{} did not take the setting {name}: {}",
+                connection.process.name(),
+                error.message
+            )),
+            Err(_) => Err(format!(
+                "{} did not answer when Banda set {name}.",
+                connection.process.name()
+            )),
+        }
+    }
+
+    /// Lowers the session's effort to the least it offers, for a short
+    /// run that needs little thinking; a session with no effort, or at
+    /// the least already, stays as it is.
+    pub async fn least_effort(&self) {
+        let known = (self.connection.learned.lock().unwrap())
+            .get(&self.id)
+            .map(|known| known.options.clone())
+            .unwrap_or_default();
+        let Some((id, name, least)) = least_effort(&known) else {
+            return;
+        };
+        let set = acp::SetSessionConfigOptionRequest::new(
+            self.id.clone(),
+            acp::SessionConfigId::new(id.as_str()),
+            acp::SessionConfigOptionValue::value_id(least),
+        );
+        if let Err(why) = self.set(set, &name).await {
+            tracing::info!(%why, "a short run keeps its effort");
+        }
     }
 
     /// Sends a prompt: its text, then its images. What the Harness says

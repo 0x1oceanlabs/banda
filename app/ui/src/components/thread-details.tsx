@@ -21,7 +21,7 @@ export type DetailsProps = {
   /** The Thread the card is in; none while a new one is written. */
   thread: string | null
   /** The Harness the Thread runs on, or a new one starts on: its id, and
-   * its name as the Thread says it; none when no Harness is on. */
+   * what a sentence calls it (`Claude`); none when no Harness is on. */
   harness: { id: string; name: string } | null
   /** Opens a Pane beside the Thread, as the Thread's own links do. */
   open: (pane: PaneState, place?: Place) => void
@@ -84,6 +84,7 @@ export const ROW_HOVER = "hover:bg-black/[3.5%] dark:hover:bg-white/8"
 export function DetailsRow({
   icon,
   end,
+  wrap = false,
   className,
   children,
   ...props
@@ -91,6 +92,8 @@ export function DetailsRow({
   icon?: ReactNode
   /** After the words, at the row's end. */
   end?: ReactNode
+  /** Its words go on to a second line rather than be cut short. */
+  wrap?: boolean
 }) {
   const inner = (
     <>
@@ -99,12 +102,21 @@ export function DetailsRow({
           {icon}
         </span>
       )}
-      <span className="min-w-0 flex-1 truncate text-left">{children}</span>
+      <span
+        className={cn(
+          "min-w-0 flex-1 text-left",
+          wrap ? "whitespace-normal" : "truncate"
+        )}
+      >
+        {children}
+      </span>
       {end && <span className="flex shrink-0 items-center gap-1.5">{end}</span>}
     </>
   )
-  const look =
-    "flex h-8 w-full min-w-0 items-center gap-2 rounded-lg px-2 text-[13px] font-medium text-foreground/80"
+  const look = cn(
+    "flex w-full min-w-0 items-center gap-2 rounded-lg px-2 text-[13px] font-medium text-foreground/80",
+    wrap ? "min-h-8 py-1.5" : "h-8"
+  )
   if (!props.onClick) return <div className={cn(look, className)}>{inner}</div>
   return (
     <button
