@@ -19,6 +19,7 @@
     "@banda/browser-desktop": "workspace:*",
     "@banda/harnesses-desktop": "workspace:*",
     "@banda/sharing-desktop": "workspace:*",
+    "@banda/notifications-desktop": "workspace:*",
     "@banda/browser-pane": "workspace:*",
     "@banda/contract": "workspace:*",
     "@banda/desktop-kit": "workspace:*",
@@ -33,7 +34,6 @@
     "vitest": "^5.0.5"
   },
   "dependencies": {
-    "@banda/notifications-desktop": "workspace:*",
     "@effect/platform-node": "4.1.1",
     "@ghostery/adblocker-electron": "2.20.3",
     "effect": "4.1.1",
