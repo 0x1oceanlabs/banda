@@ -53,6 +53,9 @@ pub struct Settings {
     /// The overview on Alt+O (ADR 0025, decision 7).
     #[serde(default)]
     pub overview: Overview,
+    /// How a Group of columns shows (ADR 0065).
+    #[serde(default)]
+    pub groups: Groups,
     #[serde(default)]
     pub motion: MotionSettings,
     #[serde(default)]
@@ -288,6 +291,27 @@ pub struct Overview {
     pub zoom: Option<f64>,
 }
 
+/// How a Group of columns shows (ADR 0065).
+#[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
+#[serde(deny_unknown_fields, rename_all = "kebab-case")]
+pub struct Groups {
+    /// `"plate"`, a plate behind its columns, or `"halo"`, a glow round
+    /// them; either in the colour of its Agent's state.
+    pub look: Option<GroupLook>,
+}
+
+/// How a Group of columns shows: what stands behind its columns.
+#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "lowercase")]
+#[ts(export, export_to = "look/")]
+pub enum GroupLook {
+    /// A plate, a little of the colour mixed into the desk, with a fine
+    /// line round it.
+    Plate,
+    /// A soft glow of the colour, with no line.
+    Halo,
+}
+
 /// How the bar shows the workspaces.
 #[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq, JsonSchema, TS)]
 #[serde(rename_all = "lowercase")]
@@ -443,6 +467,9 @@ impl Settings {
             overview: Overview {
                 zoom: self.overview.zoom.or(under.overview.zoom),
             },
+            groups: Groups {
+                look: self.groups.look.or(under.groups.look),
+            },
             motion: self.motion.over(under.motion),
             columns: self.columns.over(under.columns),
             font: self.font.over(under.font),
@@ -501,6 +528,9 @@ impl Settings {
                 harness: None,
             },
             overview: Overview { zoom: Some(0.35) },
+            groups: Groups {
+                look: Some(GroupLook::Plate),
+            },
             motion: MotionSettings::defaults(),
             columns: ColumnsSettings::defaults(),
             font: FontSettings::defaults(),

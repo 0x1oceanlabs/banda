@@ -4,6 +4,7 @@ import type { CommandMethod } from "../CommandMethod";
 import type { Nothing } from "../Nothing";
 import type { Arranged } from "./Arranged";
 import type { Done } from "./Done";
+import type { Fill } from "./Fill";
 import type { Height } from "./Height";
 import type { Maximize } from "./Maximize";
 import type { MoveColumn } from "./MoveColumn";
@@ -15,6 +16,7 @@ import type { OnePane } from "./OnePane";
 import type { Open } from "./Open";
 import type { OpenPane } from "./OpenPane";
 import type { Opened } from "./Opened";
+import type { Regroup } from "./Regroup";
 import type { SeenWorkspace } from "./SeenWorkspace";
 import type { ShowAs } from "./ShowAs";
 import type { Size } from "./Size";
@@ -75,6 +77,23 @@ maximize: CommandMethod<Maximize, Done>,
  * Shows a column's Panes one above another or as a Deck.
  */
 display: CommandMethod<ShowAs, Done>, 
+/**
+ * Starts a Group of a column alone, for others to join (ADR 0065).
+ */
+group: CommandMethod<OneColumn, Done>, 
+/**
+ * A column in a Group leaves it that way; one in none joins the
+ * Group beside it that way.
+ */
+regroup: CommandMethod<Regroup, Done>, 
+/**
+ * Moves the Group a column is in, its columns all, to a workspace.
+ */
+move_group: CommandMethod<MoveColumn, Done>, 
+/**
+ * Whether a column's Group takes the whole screen.
+ */
+fill: CommandMethod<Fill, Done>, 
 /**
  * Lets every empty workspace go but the one the Person looks at
  * and the last.

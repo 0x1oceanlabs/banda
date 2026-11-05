@@ -24,6 +24,7 @@ import {
   clamp,
   type Column,
   current,
+  runOf,
   type Entry,
   entries,
   find,
@@ -89,13 +90,16 @@ export function resolve(
       if (column.width !== undefined) next.width = column.width
       if (column.full) next.full = true
       if (column.display !== undefined) next.display = column.display
+      if (column.group !== undefined) next.group = column.group
       return same(was.columns.get(column.id), next)
     })
-    return same(was.workspaces.get(workspace.id), {
+    const next: Workspace = {
       id: workspace.id,
       columns,
       focus: held(aimed.focus[workspace.id], columns, "before"),
-    })
+    }
+    if (workspace.filled !== undefined) next.filled = workspace.filled
+    return same(was.workspaces.get(workspace.id), next)
   })
   const shows = held(aimed.current, list, "stay")
   const unchanged =
@@ -286,7 +290,9 @@ export function keptOf(state: Workspaces): Kept[] {
       ...(column.width !== undefined && { width: column.width }),
       full: column.full === true,
       ...(column.display !== undefined && { display: column.display }),
+      ...(column.group !== undefined && { group: column.group }),
     })),
+    ...(workspace.filled !== undefined && { filled: workspace.filled }),
   }))
 }
 
@@ -390,17 +396,37 @@ export function moved(
   }
 }
 
-/** Moves a column to where `next` has it. */
+/** Moves a column to where `next` has it; in a Group, the whole Group,
+ * to where `next` has its first column (ADR 0065). */
 export function columnMoved(
   next: Workspaces,
   column: string
 ): Plan | undefined {
   const at = columnOf(next, column)
   if (!at) return undefined
+  if (at.column.group === undefined) {
+    return columnTo(column, at.workspace.id, at.index)
+  }
+  const { start } = runOf(at.workspace.columns, at.index)
+  return {
+    command: {
+      method: "workspaces.move_group",
+      params: { column, workspace: at.workspace.id, index: start },
+    },
+  }
+}
+
+/** Moves a column alone to `index` of a workspace, counted as if it had
+ * left its place. */
+export function columnTo(
+  column: string,
+  workspace: string,
+  index: number
+): Plan {
   return {
     command: {
       method: "workspaces.move_column",
-      params: { column, workspace: at.workspace.id, index: at.index },
+      params: { column, workspace, index },
     },
   }
 }
