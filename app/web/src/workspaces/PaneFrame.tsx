@@ -159,7 +159,7 @@ export function PaneFrame({
   const take = () => {
     if (!focused) frame.focus(entry.id)
   }
-  // Banda's end of the capsule (ADR 0066): the Pane menu, or in a window
+  // Banda's buttons at the header's end (ADR 0066): the Pane menu, or in a window
   // of its own, where nothing tiles, the way back.
   const popOut = frame.popOut
   const placed = !alone && frame.stand !== undefined

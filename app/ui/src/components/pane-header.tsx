@@ -18,7 +18,7 @@ import {
 
 /**
  * What the window gives every Pane's header, its own or the frame's (ADR
- * 0066): Banda's buttons at the capsule's end, and the Pane menu's rows
+ * 0066): Banda's buttons at the header's end, and the Pane menu's rows
  * for a right click.
  */
 type Tile = {
@@ -46,7 +46,7 @@ function HeaderSlot({ children }: { children: ReactNode }) {
   return <Slot value={slot}>{children}</Slot>
 }
 
-/** A Pane's buttons, drawn in its tile's capsule before the window's own;
+/** A Pane's buttons, drawn at its tile's header's end before the window's own;
  * nowhere when the tile draws no header. */
 function InHeader({ children }: { children: ReactNode }) {
   const element = useContext(Slot)?.element
@@ -63,10 +63,10 @@ const onControl = (event: MouseEvent) =>
 
 /**
  * A tile's header: one row as tall as every Pane's, with what the Pane puts
- * in it, then the capsule at its right end. The capsule holds every button
- * there in one quiet plate: the Pane's own, a line, then the window's and
- * close (ADR 0066, decision 2). It shows on every Pane, faint until the
- * Pane has the focus or the pointer.
+ * in it, then its buttons at its right end: the Pane's own, a line, then
+ * the window's and close (ADR 0066, decision 2, as amended). They show on
+ * every Pane, on no plate, faint until the Pane has the focus or the
+ * pointer.
  *
  * The frame draws it for most Panes; a Pane that draws its own (`header:
  * false`) draws it with this. The mouse carries the Pane by it
@@ -113,8 +113,8 @@ function PaneHeader({
       {Icon && <Icon className="size-4 shrink-0 text-muted-foreground" />}
       {children}
       <div
-        data-slot="pane-capsule"
-        className="ml-auto flex shrink-0 items-center gap-px rounded-lg bg-foreground/3 p-px text-muted-foreground/70 ring-1 ring-transparent transition-colors group-hover/tile:bg-foreground/6 group-hover/tile:text-muted-foreground group-hover/tile:ring-foreground/8 group-data-[selected=true]/tile:bg-foreground/6 group-data-[selected=true]/tile:text-muted-foreground group-data-[selected=true]/tile:ring-foreground/8"
+        data-slot="pane-buttons"
+        className="ml-auto flex shrink-0 items-center gap-px text-muted-foreground/70 transition-colors group-hover/tile:text-muted-foreground group-data-[selected=true]/tile:text-muted-foreground"
       >
         <span
           ref={slot?.set}

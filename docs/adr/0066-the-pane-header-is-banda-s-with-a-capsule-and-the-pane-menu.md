@@ -48,6 +48,13 @@ the brand workspace) and chose:
    has no focus, clearer with the focus or under the pointer; nothing in
    it appears or moves. The App's buttons come first and Banda's always
    end it, in the same place on every Pane.
+
+   *Amended 2026-11-05, after the step 1 trial (Roma's call):* no plate.
+   It drew the eye to the header's end more than the buttons it held.
+   The buttons stay: always shown, faint without the focus, with the
+   line between the App's and Banda's. "The capsule" below names these
+   buttons at the header's end.
+
 3. **The Pane menu** opens from the capsule's button (a layout icon), or
    where the pointer is on a right click on the header. Each row runs an
    action that a key runs (ADR 0005, decision 2), and shows that key as
@@ -102,7 +109,7 @@ the brand workspace) and chose:
 - ADR 0031, decision 8: a Thread's header keeps no line; its details
   button is the capsule's first.
 - ADR 0065: the menu names the Deck, and shows whichever key runs it.
-- `GLOSSARY.md`: the Pane menu, the capsule.
+- `GLOSSARY.md`: the Pane menu.
 - Steps, one PR each:
   1. The capsule, the Pane menu with its preview, the header's double,
      middle and right clicks, `column.width` and `pane.height`, the
