@@ -143,6 +143,7 @@ export async function run(
   const writes = commits && !own
   if (writes && writer === null)
     return set(space, { is: "failed", message: NO_WRITER })
+  const thread = writer && "thread" in writer ? writer.thread : null
   const writing = writes ? writer : null
   const step = (label: string, stops?: true) =>
     set(space, {
@@ -151,11 +152,10 @@ export async function run(
       since: Date.now(),
       ...(stops && { stops }),
     })
-  // How it ended, which the Thread's Agent and an unseen card hear too.
-  const thread = writer && "thread" in writer ? writer.thread : null
+  // How it ended, which a Person with no card in sight hears too.
   const end = (how: Ended) => {
     set(space, how)
-    afterRun(engine, space, thread, how)
+    afterRun(space, how)
   }
   // Stopped while the message is written, the run ends here quietly.
   const stopper = new AbortController()
@@ -206,7 +206,8 @@ export async function run(
     engine.stream(
       space,
       "git.act",
-      { action, message, files, branch },
+      // The Thread's Agent hears what each step changed (`git.acted`).
+      { action, message, files, branch, ...(thread && { thread }) },
       (piece) => {
         switch (piece.kind) {
           case "step":

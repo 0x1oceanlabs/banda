@@ -22,6 +22,7 @@ import { DiffCounts, DiffPath } from "@banda/ui/components/diff"
 import { Textarea } from "@banda/ui/components/textarea"
 import type { Commit } from "./chain"
 import { NO_WRITER, onDefault } from "./quick"
+import { filesOf } from "./status"
 
 /** The dialog's title: the branch it commits to. */
 function commitTitle(status: Status): string {
@@ -32,7 +33,7 @@ function commitTitle(status: Status): string {
 
 /** Its button, by how many files are taken. */
 function commitLabel(taken: number): string {
-  return `Commit ${taken} ${taken === 1 ? "file" : "files"}`
+  return `Commit ${filesOf(taken)}`
 }
 
 /** Drawn while it is open, so each opening starts with every file taken

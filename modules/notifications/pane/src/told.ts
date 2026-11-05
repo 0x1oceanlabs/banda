@@ -19,6 +19,11 @@ export type Told = {
   title: string
   /** The Space it is of, by name, when the window has more than one. */
   space?: string
+  /** The Space it is of, by its ID: the window names it, as `space`. */
+  in?: string
+  /** The thing of that Space it tells of, as a Thread: while it is on
+   * screen, nothing is told. */
+  about?: string
   /** A line in code type, before the words. */
   code?: string
   /** What it says. */
@@ -49,6 +54,8 @@ export function toldOf(args: Args | undefined): Told | null {
     kind,
     title,
     space,
+    in: of,
+    about,
     code,
     body,
     notice,
@@ -73,6 +80,8 @@ export function toldOf(args: Args | undefined): Told | null {
     kind: kind as Chime,
     title,
     ...(text(space) ? { space } : {}),
+    ...(text(of) ? { in: of } : {}),
+    ...(text(about) ? { about } : {}),
     ...(text(code) ? { code } : {}),
     ...(text(body) ? { body } : {}),
     ...(text(notice) ? { notice } : {}),

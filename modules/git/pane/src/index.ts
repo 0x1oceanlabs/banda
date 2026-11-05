@@ -3,7 +3,7 @@
 import { type Action, defineModule } from "@banda/ui/module"
 import { askDetails } from "@banda/ui/components/thread-details"
 import { PICKER } from "./BranchPicker"
-import { changesDiff, gitDetails } from "./Details"
+import { diffOn, gitDetails } from "./Details"
 import { diffPane } from "./DiffPane"
 import { keepWindow } from "./ended"
 
@@ -17,7 +17,7 @@ const toggleDiff: Action = {
   run: (window) => {
     const at = window.focused()
     if (at?.pane.kind === diffPane.kind) return window.run("pane.close")
-    window.open(changesDiff(), at?.space, { again: false })
+    window.open(diffOn(), at?.space, { again: false })
   },
 }
 

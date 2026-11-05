@@ -15,20 +15,17 @@ import {
   PopoverTrigger,
 } from "@banda/ui/components/popover"
 import {
+  DETAILS_CARD as CARD,
+  DETAILS_GAP as GAP,
+  DETAILS_WIDE,
   type DetailsProps,
   hearAsks,
+  showDetails,
   useDetails,
 } from "@banda/ui/components/thread-details"
+import { useWiderThan } from "@banda/ui/hooks/use-wider-than"
 import type { Key } from "@banda/ui/lib/keys"
 import { SquareMenuIcon } from "lucide-react"
-
-/** How wide the card is, and the room it keeps from the Pane's edge. */
-const CARD = 280
-const GAP = 12
-/** The messages' column, `max-w-3xl`. */
-const MESSAGES = 768
-/** How wide a Thread holds the card beside its centred messages. */
-const WIDE = MESSAGES + 2 * (CARD + GAP)
 
 /** The card's key, Ctrl+Shift+B (⌘⇧B on a Mac), as T3 Code's. */
 export const DETAILS_KEY: Key = { code: "KeyB", ctrl: true, shift: true }
@@ -36,17 +33,7 @@ export const DETAILS_KEY: Key = { code: "KeyB", ctrl: true, shift: true }
 /** Whether `pane` is wide enough to hold the card beside the messages,
  * kept current. */
 export function useWide(pane: RefObject<HTMLElement | null>): boolean {
-  const [wide, setWide] = useState(false)
-  useEffect(() => {
-    const own = pane.current
-    if (!own) return
-    const seen = new ResizeObserver(([entry]) =>
-      setWide((entry?.contentRect.width ?? 0) >= WIDE)
-    )
-    seen.observe(own)
-    return () => seen.disconnect()
-  }, [pane])
-  return wide
+  return useWiderThan(pane, DETAILS_WIDE)
 }
 
 /** The card and its button: at the top right when `wide`, else in a
@@ -80,6 +67,12 @@ export function ThreadDetails({
     onShown(true)
   })
   useEffect(() => (focused ? hearAsks(asked) : undefined), [focused])
+  // Shown, its rows' Space knows the card says what they do.
+  const { space, thread } = given
+  useEffect(
+    () => (shown ? showDetails(space, thread) : undefined),
+    [shown, space, thread]
+  )
   if (details.length === 0) return null
   const props: DetailsProps = {
     ...given,

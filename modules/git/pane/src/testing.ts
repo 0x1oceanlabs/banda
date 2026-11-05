@@ -1,6 +1,6 @@
 /** A fake engine for the git Pane's tests: each stream asked is kept,
  * for the test to say its pieces and end it by hand; each call is kept
- * too, answered by `answers` by its method, and each command run. */
+ * too, answered by `answers` by its method. */
 import type { Engine, Refusal } from "@banda/contract"
 
 export type Heard = {
@@ -14,23 +14,14 @@ export type Heard = {
 
 export type Called = { method: string; params: unknown }
 
-/** A command run, with its params and Space. */
-export type Ran = { method: string; params: unknown; space: string }
-
 export function fakeEngine(answers: Record<string, unknown> = {}): {
   engine: Engine
   streams: Heard[]
   calls: Called[]
-  commands: Ran[]
 } {
   const streams: Heard[] = []
   const calls: Called[] = []
-  const commands: Ran[] = []
   const fake = {
-    command: (method: string, params: unknown, space: string) => {
-      commands.push({ method, params, space })
-      return Promise.resolve(null)
-    },
     call: (method: string, params: unknown) => {
       calls.push({ method, params })
       return Promise.resolve(answers[method])
@@ -55,5 +46,5 @@ export function fakeEngine(answers: Record<string, unknown> = {}): {
       return () => (heard.stopped = true)
     },
   }
-  return { engine: fake as unknown as Engine, streams, calls, commands }
+  return { engine: fake as unknown as Engine, streams, calls }
 }
