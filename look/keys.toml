@@ -11,6 +11,12 @@
 # as Alt+F to a shell. Ctrl+Alt+Shift+K is no file's: it brings the
 # window's own keys back until this file changes.
 
+# The mod is held for every Banda key and the mouse's moves: Alt, or one
+# or two of Alt, Ctrl and Super (⌘ on a Mac), as Ctrl+Alt where your
+# desktop holds Alt. Banda's other keys hold Shift or one more with it,
+# and every menu writes them as they are pressed.
+# mod = "Ctrl+Alt"
+
 [binds]
 # "Alt+M" = "column.maximize"
 # "Alt+F" = "none"

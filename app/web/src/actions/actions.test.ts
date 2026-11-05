@@ -1,3 +1,4 @@
+import { DEFAULT_KEYS } from "@banda/contract/look"
 import { expect, test } from "vitest"
 import { ACTIONS } from "../shell/actions"
 import { keyText, matches } from "@banda/ui/lib/keys"
@@ -54,6 +55,7 @@ test("keys.toml binds a key to an action, frees one, and names a wrong one", () 
     line,
   })
   const { actions, problems } = rebind(ACTIONS, {
+    ...DEFAULT_KEYS,
     file: "/c/keys.toml",
     binds: [
       bind("Alt+M", "KeyM", "column.maximize"),
@@ -86,6 +88,7 @@ test("keys.toml binds a key to an action, frees one, and names a wrong one", () 
 
 test("a bind to an action's old id runs it, and says its name now", () => {
   const { actions, problems } = rebind(ACTIONS, {
+    ...DEFAULT_KEYS,
     file: "/c/keys.toml",
     binds: [
       {
@@ -124,6 +127,7 @@ test("New terminal has its own key, and keys.toml can replace or free it", () =>
   expect(actionFor(ACTIONS, enter)?.id).toBe("terminal.new")
 
   const { actions, problems } = rebind(ACTIONS, {
+    ...DEFAULT_KEYS,
     file: "/c/keys.toml",
     binds: [
       {

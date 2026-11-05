@@ -34,6 +34,13 @@ pub const RESET: &str = "Ctrl+Alt+Shift+K";
 #[derive(Debug, Default, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields)]
 pub struct KeysSettings {
+    /// The keys held for every Banda key and the mouse's moves: Alt, or one
+    /// or two of Alt, Ctrl and Super, as "Ctrl+Alt" where the desktop holds
+    /// Alt. Super is ⌘ on a Mac. Banda's other keys hold Shift or one key
+    /// more with it (ADR 0068).
+    #[serde(rename = "mod")]
+    #[schemars(with = "Option<String>")]
+    pub held: Option<Spanned<String>>,
     /// Keys, such as "Alt+Shift+R", each with the id of the action it runs,
     /// as the key sheet lists them, or "none" to free the key for the
     /// Pane. A key is Alt, Ctrl and Shift, any of them, then a letter, a
@@ -43,6 +50,24 @@ pub struct KeysSettings {
     /// besides.
     #[schemars(with = "Option<BTreeMap<String, String>>")]
     pub binds: Option<BTreeMap<Spanned<String>, Spanned<String>>>,
+}
+
+impl KeysSettings {
+    /// Banda's own: Alt is the mod, and no key is bound.
+    fn defaults() -> KeysSettings {
+        KeysSettings {
+            held: Some(Spanned::new(0..0, Mod::default().text())),
+            binds: None,
+        }
+    }
+
+    /// These settings, and `under`'s where these say nothing.
+    fn over(self, under: KeysSettings) -> KeysSettings {
+        KeysSettings {
+            held: self.held.or(under.held),
+            binds: self.binds.or(under.binds),
+        }
+    }
 }
 
 /// One key the Person bound: where, as a `KeyboardEvent.code` and its
@@ -64,12 +89,78 @@ pub struct Bind {
     pub line: u32,
 }
 
+/// The mod (ADR 0068, decision 1): the keys held for every Banda key, one
+/// or two of Alt, Ctrl and Super. Super is ⌘ on a Mac.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, TS)]
+#[ts(export, export_to = "look/")]
+pub struct Mod {
+    pub alt: bool,
+    pub ctrl: bool,
+    // `super` is a word of Rust's own.
+    #[serde(rename = "super")]
+    pub sup: bool,
+}
+
+/// Banda's own mod: Alt, on every system.
+impl Default for Mod {
+    fn default() -> Self {
+        Mod {
+            alt: true,
+            ctrl: false,
+            sup: false,
+        }
+    }
+}
+
+impl Mod {
+    /// The mod as `keys.toml` writes it: `Ctrl+Alt+Super`, in that order.
+    pub fn text(self) -> String {
+        [
+            self.ctrl.then_some("Ctrl"),
+            self.alt.then_some("Alt"),
+            self.sup.then_some("Super"),
+        ]
+        .into_iter()
+        .flatten()
+        .collect::<Vec<_>>()
+        .join("+")
+    }
+}
+
+/// A key held with another, as `keys.toml` names it.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Held {
+    Alt,
+    Ctrl,
+    Shift,
+    Super,
+}
+
+/// The held key a word names, in any case: `ctrl`, `Control`, `cmd`.
+fn held(word: &str) -> Option<Held> {
+    match word.trim().to_lowercase().as_str() {
+        "alt" | "option" => Some(Held::Alt),
+        "ctrl" | "control" => Some(Held::Ctrl),
+        "shift" => Some(Held::Shift),
+        "super" | "cmd" | "command" | "meta" | "win" | "mod4" => Some(Held::Super),
+        _ => None,
+    }
+}
+
 /// The keys the Person bound, every one written right.
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, TS)]
+#[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, TS)]
 #[ts(export, export_to = "look/")]
 pub struct Keys {
     /// The file they come from, for the window to name.
     pub file: String,
+    /// The mod in force: the file's, or Alt.
+    #[serde(rename = "mod")]
+    pub held: Mod,
+    /// Its line in the file, for a problem the window finds there, as two
+    /// actions on one key; none when the file does not set it.
+    #[ts(optional)]
+    #[serde(rename = "modLine", skip_serializing_if = "Option::is_none")]
+    pub mod_line: Option<u32>,
     pub binds: Vec<Bind>,
 }
 
@@ -164,16 +255,16 @@ fn chord(text: &str) -> Result<Bind, String> {
     let (mods, name) = text.rsplit_once('+').unwrap_or(("", text));
     let (mut alt, mut shift, mut ctrl) = (false, false, false);
     for one in mods.split('+').filter(|m| !m.trim().is_empty()) {
-        match one.trim().to_lowercase().as_str() {
-            "alt" => alt = true,
-            "shift" => shift = true,
-            "ctrl" | "control" => ctrl = true,
-            "super" | "mod4" | "meta" | "win" | "cmd" => {
+        match held(one) {
+            Some(Held::Alt) => alt = true,
+            Some(Held::Shift) => shift = true,
+            Some(Held::Ctrl) => ctrl = true,
+            Some(Held::Super) => {
                 return Err(
                     "Super is the desktop's: Banda's keys hold Alt, Ctrl and Shift".to_owned(),
                 );
             }
-            other => return Err(format!("{other:?} is not Alt, Ctrl or Shift")),
+            None => return Err(format!("{:?} is not Alt, Ctrl or Shift", one.trim())),
         }
     }
     let (code, name) =
@@ -204,13 +295,58 @@ fn chord(text: &str) -> Result<Bind, String> {
     })
 }
 
+/// The mod as written, one or two of Alt, Ctrl and Super; or why it
+/// cannot be one (ADR 0068, decision 1). On a Mac, Super is ⌘.
+pub fn mod_of(text: &str, mac: bool) -> Result<Mod, String> {
+    let (mut alt, mut ctrl, mut sup) = (false, false, false);
+    for one in text.split('+') {
+        match held(one) {
+            Some(Held::Alt) => alt = true,
+            Some(Held::Ctrl) => ctrl = true,
+            Some(Held::Super) => sup = true,
+            Some(Held::Shift) => {
+                return Err(
+                    "Shift is Banda's second level: the mod is Alt, Ctrl or Super".to_owned(),
+                );
+            }
+            None if one.trim().is_empty() => {
+                return Err("one or two of Alt, Ctrl and Super, as \"Ctrl+Alt\"".to_owned());
+            }
+            None => return Err(format!("{:?} is not Alt, Ctrl or Super", one.trim())),
+        }
+    }
+    match (alt, ctrl, sup) {
+        (true, true, true) => Err("all three leave no key for Banda's third level: one or two".to_owned()),
+        (false, true, false) => Err(
+            "Ctrl alone holds the terminal's and the fields' keys, as Ctrl+C and Ctrl+W: add Alt or Super".to_owned(),
+        ),
+        (false, false, true) if mac => Err("⌘ alone holds copy, paste, close and quit: add ⌃ or ⌥".to_owned()),
+        _ => Ok(Mod { alt, ctrl, sup }),
+    }
+}
+
 /// Reads a `keys.toml`, as [`crate::read`] reads a file.
 pub fn read_keys(
     path: &Path,
     text: &str,
     problems: &mut Vec<Problem>,
-) -> Option<(KeysSettings, Vec<Bind>)> {
-    let settings: KeysSettings = crate::read(path, text, problems)?;
+) -> Option<(KeysSettings, Keys)> {
+    let mut settings: KeysSettings = crate::read(path, text, problems)?;
+    let mut keys = Keys {
+        file: path.display().to_string(),
+        ..Keys::default()
+    };
+    // A mod written wrong is named and taken out, so Alt holds.
+    if let Some(written) = settings.held.take() {
+        match mod_of(written.get_ref(), cfg!(target_os = "macos")) {
+            Ok(held) => {
+                keys.held = held;
+                keys.mod_line = Some(crate::line_at(text, written.span().start));
+                settings.held = Some(written);
+            }
+            Err(message) => problems.push(Problem::at(path, text, Some(written.span()), message)),
+        }
+    }
     let mut lines: Vec<_> = settings.binds.iter().flatten().collect();
     lines.sort_by_key(|(key, _)| key.span().start);
     let mut binds: Vec<Bind> = Vec::new();
@@ -244,7 +380,8 @@ pub fn read_keys(
             ..bind
         });
     }
-    Some((settings, binds))
+    keys.binds = binds;
+    Some((settings, keys))
 }
 
 /// The Person's keys on this machine; `keys.toml` is watched.
@@ -258,19 +395,19 @@ pub fn resolve(
     let mine_file = std::fs::read_to_string(&file)
         .ok()
         .map(|text| (file.clone(), text));
-    let (mine, binds) = mine_file
+    let (mine, keys) = mine_file
         .as_ref()
         .and_then(|(path, text)| read_keys(path, text, problems))
         .unwrap_or_default();
-    let defaults = KeysSettings::default();
+    let defaults = KeysSettings::defaults();
     let layers = [
         Layer::new("defaults", &defaults, None),
         Layer::new("file", &mine, mine_file.as_ref()),
     ];
-    let keyed = keyed::keyed(&mine, &layers);
+    let keyed = keyed::keyed(&mine.over(defaults), &layers);
     let keys = Keys {
         file: file.display().to_string(),
-        binds,
+        ..keys
     };
     (keys, keyed)
 }
@@ -281,8 +418,8 @@ mod tests {
 
     fn read(text: &str) -> (Vec<Bind>, Vec<Problem>) {
         let mut problems = Vec::new();
-        let (_, binds) = read_keys(Path::new("keys.toml"), text, &mut problems).unwrap_or_default();
-        (binds, problems)
+        let (_, keys) = read_keys(Path::new("keys.toml"), text, &mut problems).unwrap_or_default();
+        (keys.binds, problems)
     }
 
     #[test]
@@ -336,6 +473,44 @@ mod tests {
         let lines: Vec<_> = problems.iter().map(|p| p.line).collect();
         assert_eq!(lines, [Some(4), Some(5)]);
         assert!(problems[1].message.contains("line 2"));
+    }
+
+    #[test]
+    fn the_mod_is_one_or_two_of_alt_ctrl_and_super() {
+        let held = |alt, ctrl, sup| Mod { alt, ctrl, sup };
+        let ok = |text: &str| mod_of(text, false).unwrap();
+        assert_eq!(ok("Alt"), Mod::default());
+        assert_eq!(ok("ctrl+alt"), held(true, true, false));
+        assert_eq!(ok("Alt+Super"), held(true, false, true));
+        assert_eq!(ok("Cmd+Option"), held(true, false, true));
+        assert_eq!(ok("Super"), held(false, false, true));
+        let no = |text: &str, mac: bool| mod_of(text, mac).unwrap_err();
+        assert!(no("Shift+Alt", false).contains("second level"));
+        assert!(no("Ctrl+Alt+Super", false).contains("all three"));
+        assert!(no("Ctrl", false).contains("Ctrl alone"));
+        assert!(no("Super", true).contains("⌘ alone"));
+        assert!(no("Hyper", false).contains("Hyper"));
+        assert!(no("", false).contains("one or two"));
+    }
+
+    #[test]
+    fn a_file_sets_the_mod_at_its_line_or_names_what_is_wrong() {
+        let read = |text: &str| {
+            let mut problems = Vec::new();
+            let (_, keys) = read_keys(Path::new("keys.toml"), text, &mut problems).unwrap();
+            (keys.held, keys.mod_line, problems)
+        };
+        let (held, line, problems) = read("# Alt is the desktop's\nmod = \"Ctrl+Alt\"\n");
+        assert_eq!(
+            (held.alt, held.ctrl, held.sup, line),
+            (true, true, false, Some(2))
+        );
+        assert!(problems.is_empty(), "{problems:?}");
+        assert_eq!(read("[binds]\n").0, Mod::default());
+        let (held, line, problems) = read("mod = \"Shift\"\n");
+        assert_eq!((held, line), (Mod::default(), None));
+        assert_eq!(problems.len(), 1);
+        assert_eq!(problems[0].line, Some(1));
     }
 
     #[test]
