@@ -74,10 +74,10 @@ import { Edge } from "../sidebar/Edge"
 import { Sidebar } from "../sidebar/Sidebar"
 import { pickPreset } from "../sidebar/settings"
 import {
-  settle as keepSettled,
+  archive as keepArchived,
   toggled,
-  useIsSettled,
-} from "../sidebar/settled"
+  useIsArchived,
+} from "../sidebar/archived"
 import { useNarrow } from "./narrow"
 import type { Arranged } from "@banda/contract/workspaces"
 import {
@@ -499,13 +499,13 @@ export function Shell({
   useEffect(() => {
     spacesNow.current = spaces
   }, [spaces])
-  // The Person settles a Thread, from its row's menu, the Banda menu or
-  // Alt+S, or brings it back. Settled, it is put away: every Pane that
-  // shows it closes, on any workspace (ADR 0008, decision 4).
-  const settleThread = useCallback(
-    (space: SpaceId, thing: string, settled: boolean) => {
-      keepSettled(thing, settled)
-      if (!settled) return
+  // The Person archives a Thread, from its row's menu, the Banda menu or
+  // Alt+S, or brings it back. Archived, it is put away: every Pane that
+  // shows it closes, on any workspace (ADR 0008, decision 4; ADR 0069).
+  const archiveThread = useCallback(
+    (space: SpaceId, thing: string, archived: boolean) => {
+      keepArchived(thing, archived)
+      if (!archived) return
       const shown = { space, about: thing }
       for (const entry of entries(seenNow.current.state))
         if (isShowing(entry, shown, showsOf))
@@ -513,18 +513,18 @@ export function Shell({
     },
     [change]
   )
-  const toggleSettled = useCallback(
+  const toggleArchived = useCallback(
     (space: SpaceId, thing: string) => {
-      const settled = toggled(listsNow.current, space, thing)
-      if (settled !== undefined) settleThread(space, thing, settled)
+      const archived = toggled(listsNow.current, space, thing)
+      if (archived !== undefined) archiveThread(space, thing, archived)
     },
-    [settleThread]
+    [archiveThread]
   )
-  const settle = useCallback(() => {
+  const archive = useCallback(() => {
     const entry = focused(seenNow.current.state)
     const thing = entry && showsOf(entry.pane)
-    if (entry && thing) toggleSettled(entry.space, thing)
-  }, [toggleSettled])
+    if (entry && thing) toggleArchived(entry.space, thing)
+  }, [toggleArchived])
   const toggleOverview = useCallback(
     () => setOverview((was) => (was === "open" ? "closing" : "open")),
     []
@@ -748,7 +748,7 @@ export function Shell({
       popOut: togglePopOut,
       center: toCenter,
       answer,
-      settle,
+      archive,
       menu: toggleMenu,
       route,
       ownKeys,
@@ -775,7 +775,7 @@ export function Shell({
     togglePopOut,
     toCenter,
     answer,
-    settle,
+    archive,
     toggleMenu,
     route,
     ownKeys,
@@ -950,15 +950,15 @@ export function Shell({
           return row.action.run(parts)
         case "ask":
           return newThreadIn(row.space ?? here, row.words || undefined)
-        case "settle":
-          return toggleSettled(row.space, row.listed.id)
+        case "archive":
+          return toggleArchived(row.space, row.listed.id)
         case "preset":
           return pickPreset(row.name)
         case "found":
           return row.row.run(parts)
       }
     },
-    [change, openPane, newThreadIn, parts, here, toggleSettled]
+    [change, openPane, newThreadIn, parts, here, toggleArchived]
   )
 
   const frame: Frame = useMemo(
@@ -1034,7 +1034,7 @@ export function Shell({
 
   // The bar's workspaces: a Space's by its name, with a dot while one of
   // its Threads calls (ADR 0065, decision 9).
-  const settled = useIsSettled()
+  const archived = useIsArchived()
   const barWorkspaces = useMemo(
     () =>
       inBar(workspaces).map((w) =>
@@ -1043,12 +1043,12 @@ export function Shell({
               ...w,
               owner: spaces.find((space) => space.id === w.space),
               calls: (lists[w.space] ?? []).some(
-                (row) => waits(row.mark) && !settled(row)
+                (row) => waits(row.mark) && !archived(row)
               ),
             }
           : w
       ),
-    [workspaces, lists, spaces, settled]
+    [workspaces, lists, spaces, archived]
   )
 
   return (
@@ -1109,7 +1109,7 @@ export function Shell({
             onOpen={pickPane}
             onNewThread={newThreadIn}
             onNoSpace={() => machine && startThread(machine)}
-            onSettle={settleThread}
+            onArchive={archiveThread}
             onAddSpace={() => parts.run("space.add")}
             onPin={(space, pinned) =>
               updateSpace(engine, { space, pinned }).catch((error: unknown) =>

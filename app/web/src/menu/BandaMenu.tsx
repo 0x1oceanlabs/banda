@@ -41,7 +41,7 @@ import { runs, sources as allSources } from "../registry"
 import type { Shell } from "../shell/actions"
 import { ThreadMark } from "../sidebar/Row"
 import { PRESET_WORDS } from "../sidebar/settings"
-import { useIsSettled } from "../sidebar/settled"
+import { useIsArchived } from "../sidebar/archived"
 import {
   type Act,
   actsOf,
@@ -258,7 +258,7 @@ function Menu({
   onAdded: (space: SpaceSummary) => void
 }) {
   const { preset, presets } = useLookSidebar()
-  const settled = useIsSettled()
+  const archived = useIsArchived()
   const uses = useOpened()
   const [now] = useState(Date.now)
   const { at } = opening
@@ -290,7 +290,7 @@ function Menu({
       spaces,
       actions,
       presets: { names: presets.map((one) => one.name), current: preset },
-      settled,
+      archived,
       found,
       weight: (id) => weightOf(uses[id], now),
       browsed,
@@ -301,7 +301,7 @@ function Menu({
       actions,
       presets,
       preset,
-      settled,
+      archived,
       found,
       uses,
       now,
@@ -804,7 +804,7 @@ function RowView({
       )
     }
     case "ask":
-    case "settle":
+    case "archive":
     case "bind":
     case "free":
       return null

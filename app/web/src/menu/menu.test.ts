@@ -53,7 +53,7 @@ const sources: Sources = {
   spaces,
   actions,
   presets: { names: ["inbox", "spaces", "places"], current: "inbox" },
-  settled: (listed) => listed.id === "t3",
+  archived: (listed) => listed.id === "t3",
   found: [],
   weight: () => 0,
 }
@@ -107,8 +107,8 @@ function nameOf(row: Choice): string {
         .join(" ")
     case "preset":
       return row.current ? `${row.name} ✓` : row.name
-    case "settle":
-      return `settle ${row.listed.id}`
+    case "archive":
+      return `archive ${row.listed.id}`
     case "found":
       return row.row.title
     case "family":
@@ -333,14 +333,14 @@ describe("its branches and acts", () => {
     ])
   })
 
-  test("Tab on a Thread opens it, beside, or settles it", () => {
+  test("Tab on a Thread opens it, beside, or archives it", () => {
     const [t3, t2] = menuOf({ words: "", at: "root", sources })[0].rows
     expect(actsOf(t2, sources).map((act) => act.title)).toEqual([
       "Open",
       "Open beside",
-      "Settle thread",
+      "Archive thread",
     ])
-    expect(actsOf(t3, sources).at(-1)?.title).toBe("Un-settle thread")
+    expect(actsOf(t3, sources).at(-1)?.title).toBe("Unarchive thread")
   })
 
   test("Tab on New Thread lists what its source says: each Harness", () => {

@@ -37,7 +37,7 @@ test("each count takes its marks, the loudest shows, and a count of none is left
   expect(tally(calm, ["asking", "done", "working"], none)).toHaveLength(1)
 })
 
-test("waiting takes what asks and what is done, and settled Threads are not counted", () => {
+test("waiting takes what asks and what is done, and archived Threads are not counted", () => {
   const counts = tally(lists, ["waiting"], (l) => l.id === "old")
   expect(counts[0].things.map((t) => t.listed.id).sort()).toEqual([
     "ask",

@@ -33,17 +33,17 @@ const TAKES: Record<Count, (mark: MarkState) => boolean> = {
 }
 
 /**
- * The counts in `counts`' order, each of what is not `settled`; a count of
+ * The counts in `counts`' order, each of what is not `archived`; a count of
  * none is left out.
  */
 export function tally(
   lists: Lists,
   counts: readonly Count[],
-  settled: (listed: Listed) => boolean
+  archived: (listed: Listed) => boolean
 ): Tally[] {
   const all = Object.entries(lists).flatMap(([space, listed]) =>
     listed
-      .filter((one) => !settled(one))
+      .filter((one) => !archived(one))
       .map((one) => ({ space: space as SpaceId, listed: one }))
   )
   return counts.flatMap((count) => {

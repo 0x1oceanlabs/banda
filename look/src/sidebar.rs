@@ -21,13 +21,15 @@ use ts_rs::TS;
 #[serde(rename_all = "lowercase")]
 #[ts(export, export_to = "sidebar/")]
 pub enum State {
-    /// Neither at work nor settled: it asks, it failed, it finished, or the
-    /// Person has it in hand.
+    /// Neither at work nor archived: it asks, it failed, it finished, or
+    /// the Person has it in hand.
     Active,
     /// Its Agent is at work.
     Working,
-    /// Put away by the Person, or by three days with nothing new.
-    Settled,
+    /// Put away by the Person, until something new happens in it
+    /// (ADR 0069). Its name was `settled`, which still reads as it.
+    #[serde(alias = "settled")]
+    Archived,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize, TS, JsonSchema)]
@@ -384,8 +386,8 @@ impl SidebarSettings {
             group: GroupSettings {
                 by: Some(GroupBy::State),
                 states: Some(vec![State::Active]),
-                bottom: Some(vec![State::Working, State::Settled]),
-                folded: Some(vec!["settled".to_owned()]),
+                bottom: Some(vec![State::Working, State::Archived]),
+                folded: Some(vec!["archived".to_owned()]),
                 limit: Some(10),
                 empty: Some(Empty::Hide),
             },
@@ -430,7 +432,16 @@ impl SidebarSettings {
                 by: all.group.by.unwrap_or(GroupBy::State),
                 states: all.group.states.unwrap_or_default(),
                 bottom: all.group.bottom.unwrap_or_default(),
-                folded: all.group.folded.unwrap_or_default(),
+                // `settled` is the archive's name before ADR 0069.
+                folded: (all.group.folded.unwrap_or_default().into_iter())
+                    .map(|name| {
+                        if name == "settled" {
+                            "archived".into()
+                        } else {
+                            name
+                        }
+                    })
+                    .collect(),
                 limit: all.group.limit.unwrap_or(10),
                 empty: all.group.empty.unwrap_or(Empty::Hide),
             },
@@ -646,8 +657,8 @@ mod tests {
         assert!(problems.is_empty(), "{problems:?}");
         assert_eq!(sidebar.preset, "inbox");
         assert_eq!(sidebar.group.states, vec![State::Active]);
-        assert_eq!(sidebar.group.bottom, vec![State::Working, State::Settled]);
-        assert_eq!(sidebar.group.folded, ["settled"]);
+        assert_eq!(sidebar.group.bottom, vec![State::Working, State::Archived]);
+        assert_eq!(sidebar.group.folded, ["archived"]);
         assert_eq!(sidebar.row.lines, 3);
         assert_eq!(sidebar.bar.show, BarShow::Closed);
         assert_eq!(
@@ -671,6 +682,20 @@ mod tests {
         assert_eq!(sidebar.preset, "spaces");
         assert_eq!(sidebar.group.by, GroupBy::Space, "from the preset");
         assert_eq!(sidebar.row.lines, 2, "the Person's key");
+    }
+
+    #[test]
+    fn settled_reads_as_archived() {
+        let dir = tempfile::tempdir().unwrap();
+        std::fs::write(
+            dir.path().join("sidebar.toml"),
+            "[group]\nstates = [\"active\", \"settled\"]\nbottom = []\nfolded = [\"settled\", \"banda\"]\n",
+        )
+        .unwrap();
+        let (sidebar, problems) = resolved(dir.path());
+        assert!(problems.is_empty(), "{problems:?}");
+        assert_eq!(sidebar.group.states, [State::Active, State::Archived]);
+        assert_eq!(sidebar.group.folded, ["archived", "banda"]);
     }
 
     #[test]

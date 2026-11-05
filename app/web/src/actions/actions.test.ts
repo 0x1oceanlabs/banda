@@ -90,6 +90,33 @@ test("keys.toml binds a key to an action, frees one, and names a wrong one", () 
   )
 })
 
+test("a bind to an action's old id runs it, and says its name now", () => {
+  const { actions, problems } = rebind(ACTIONS, {
+    file: "/c/keys.toml",
+    binds: [
+      {
+        code: "KeyY",
+        alt: true,
+        shift: false,
+        ctrl: false,
+        action: "sidebar.settle",
+        text: "Alt+Y",
+        line: 2,
+      },
+    ],
+  })
+  expect(actionFor(actions, press("KeyY", { altKey: true }))?.id).toBe(
+    "sidebar.archive"
+  )
+  expect(problems).toEqual([
+    {
+      path: "/c/keys.toml",
+      line: 2,
+      message: "Alt+Y: sidebar.settle is called sidebar.archive now",
+    },
+  ])
+})
+
 test("a plain letter is never the window's: it belongs to the Pane", () => {
   expect(actionFor(ACTIONS, press("KeyW"))).toBeUndefined()
   expect(actionFor(ACTIONS, press("KeyW", { ctrlKey: true }))).toBeUndefined()
