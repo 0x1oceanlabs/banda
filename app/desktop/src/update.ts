@@ -14,8 +14,14 @@
  * the new version once it is down (ADR 0045).
  */
 import { spawn } from "node:child_process"
-import { accessSync, constants } from "node:fs"
-import { dirname } from "node:path"
+import {
+  accessSync,
+  constants,
+  readFileSync,
+  rmSync,
+  writeFileSync,
+} from "node:fs"
+import { dirname, join } from "node:path"
 import type { Note, Update } from "@banda/web/host"
 import { app } from "electron"
 import { autoUpdater, type UpdateInfo } from "electron-updater"
@@ -38,6 +44,11 @@ export type Updates = {
   readonly later: () => void
   /** Installs the version that is ready and starts it; nothing if none is. */
   readonly restart: () => void
+  /** Restarts into the version that is ready once no Thread works; the
+   * window asks for the restart (ADR 0072, decision 3). */
+  readonly wait: () => void
+  /** The Person saw that Banda updated: `none` again. */
+  readonly seen: () => void
 }
 
 /** Starts looking for Banda's update; `tell` hears each change. */
@@ -63,8 +74,14 @@ export function updates(tell: (now: Update) => void): Updates {
       now: nothing,
       later: nothing,
       restart: nothing,
+      wait: nothing,
+      seen: nothing,
     }
   }
+  // The Banda this one restarted from left what it was (ADR 0072,
+  // decision 4).
+  const left = leftBehind(have)
+  if (left) now = { ...known, state: "updated", ...left }
   const set = (next: DistributiveOmit<Update, keyof typeof known>) => {
     now = { ...known, ...next }
     tell(now)
@@ -98,10 +115,18 @@ export function updates(tell: (now: Update) => void): Updates {
         restarts,
       })
   })
-  autoUpdater.on("download-progress", ({ percent }: { percent: number }) => {
-    if (now.state === "downloading")
-      set({ ...now, share: Math.min(1, percent / 100) })
-  })
+  autoUpdater.on(
+    "download-progress",
+    (progress: { percent: number; transferred?: number; total?: number }) => {
+      if (now.state === "downloading")
+        set({
+          ...now,
+          share: Math.min(1, progress.percent / 100),
+          down: progress.transferred,
+          size: progress.total,
+        })
+    }
+  )
   autoUpdater.on("update-downloaded", (info: UpdateInfo) => {
     asked = false
     const unwritable = cannotWrite(image)
@@ -109,8 +134,14 @@ export function updates(tell: (now: Update) => void): Updates {
       fail(`${unwritable}, so ${info.version} cannot install`)
       return
     }
-    set({ state: "ready", version: info.version, notes: notesOf(info, have) })
-    if (restarts) restart()
+    // "Update now" restarts once no Thread works, as "Restart when idle"
+    // does: the window asks for it (ADR 0072, decision 3).
+    set({
+      state: "ready",
+      version: info.version,
+      notes: notesOf(info, have),
+      waits: restarts,
+    })
   })
   // Installed, the new AppImage took its own name when the old one's holds
   // a version, as Banda's do: the launcher's entry names it now, as the new
@@ -122,7 +153,7 @@ export function updates(tell: (now: Update) => void): Updates {
   })
   autoUpdater.on("update-not-available", () => {
     looked = Date.now()
-    if (now.state !== "ready" && now.state !== "failed") rest()
+    if (now.state === "looking" || now.state === "none") rest()
   })
   autoUpdater.on("error", (error: Error) => {
     console.warn("Banda could not update itself:", error.message)
@@ -146,6 +177,7 @@ export function updates(tell: (now: Update) => void): Updates {
   }
   const restart = () => {
     if (now.state !== "ready") return
+    leave({ from: have, to: now.version, notes: now.notes })
     // Installed by the time it returns; the app quits right after.
     autoUpdater.quitAndInstall(true, false)
     startAfter(installed)
@@ -164,8 +196,63 @@ export function updates(tell: (now: Update) => void): Updates {
     later() {
       restarts = false
       if (now.state === "downloading") set({ ...now, restarts })
+      if (now.state === "ready") set({ ...now, waits: false })
     },
     restart,
+    wait() {
+      if (now.state === "ready") set({ ...now, waits: true })
+    },
+    seen() {
+      if (now.state === "updated") set({ state: "none", looked })
+    },
+  }
+}
+
+/** What a Banda that restarts into a new version leaves for it (ADR 0072,
+ * decision 4). */
+type Left = { from: string; to: string; notes: Note[] }
+
+/** Where it leaves it: the app's folder of data, the same for both. */
+const leftAt = () => join(app.getPath("userData"), "update.json")
+
+/** Leaves `left` for the Banda that starts next. */
+function leave(left: Left) {
+  try {
+    writeFileSync(leftAt(), JSON.stringify(left))
+  } catch (error) {
+    console.warn("Banda could not say what it updated from:", error)
+  }
+}
+
+/** What the Banda this one restarted from left, when it restarted into
+ * `have`; the file goes either way. */
+function leftBehind(have: string): Omit<Left, "to"> | undefined {
+  const at = leftAt()
+  let text: string
+  try {
+    text = readFileSync(at, "utf8")
+  } catch {
+    return undefined
+  }
+  rmSync(at, { force: true })
+  return arrivedAt(text, have)
+}
+
+/** What `text`, as `leave` wrote it, says Banda updated from, when it
+ * restarted into `have`. */
+export function arrivedAt(
+  text: string,
+  have: string
+): Omit<Left, "to"> | undefined {
+  try {
+    const left = JSON.parse(text) as Partial<Left>
+    if (left.to !== have || typeof left.from !== "string") return undefined
+    return {
+      from: left.from,
+      notes: Array.isArray(left.notes) ? left.notes : [],
+    }
+  } catch {
+    return undefined
   }
 }
 
@@ -245,6 +332,8 @@ export function brewUpdates(
     now: () => look(true),
     later: nothing,
     restart: nothing,
+    wait: nothing,
+    seen: nothing,
   }
 }
 

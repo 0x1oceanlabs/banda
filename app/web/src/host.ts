@@ -20,7 +20,7 @@ export type { Notice } from "@banda/notifications-pane/desktop"
 /**
  * Where Banda's own update is (ADR 0041, decision 2), as main tells it:
  * nothing to say, a look the Person asked for, a version downloading, one
- * ready to install on quit, one out that the Person installs with
+ * ready to install on quit (or once the Threads stop), one out that the Person installs with
  * `command` (on macOS, through brew: ADR 0033, decision 6), or one that
  * cannot install until the Person mends something. `name` is the app's, `Banda Dev`, and `have` the
  * version that runs. `always` keeps the widget on the bar with nothing to
@@ -40,10 +40,28 @@ export type Update = { name: string; have: string; always: boolean } & (
       version: string
       share: number
       notes: Note[]
-      /** Banda restarts into it once it is down (`update.now`). */
+      /** Banda restarts into it once it is down (`update.now`), and
+       * once no Thread works (ADR 0072, decision 3). */
       restarts: boolean
+      /** Bytes down, and of how many, when electron-updater says. */
+      down?: number
+      size?: number
     }
-  | { state: "ready"; version: string; notes: Note[] }
+  | {
+      state: "ready"
+      version: string
+      notes: Note[]
+      /** Banda waits for the Threads to stop, then restarts into it
+       * (ADR 0072, decision 3); the window asks for the restart. */
+      waits: boolean
+    }
+  | {
+      /** The first moments of a Banda that restarted into a new version
+       * (ADR 0072, decision 4), until the window says it was seen. */
+      state: "updated"
+      from: string
+      notes: Note[]
+    }
   | { state: "out"; version: string; notes: Note[]; command: string }
   | { state: "failed"; reason: string }
 )
@@ -204,6 +222,11 @@ export const BRIDGE = bridge({
     /** Installs the version that is ready and starts it; nothing if none
      * is. */
     restart: send<[]>(),
+    /** Restarts into the version that is ready once no Thread works: the
+     * window asks for the restart then (ADR 0072, decision 3). */
+    wait: send<[]>(),
+    /** The Person saw that Banda updated: the update is `none` again. */
+    seen: send<[]>(),
   },
   /** The system's folder picker, which "Add Space" opens (ADR 0026). */
   folder: {

@@ -381,6 +381,8 @@ async function ready(): Promise<void> {
       restart: [none, () => Effect.sync(update.restart)],
       now: [none, () => Effect.sync(update.now)],
       later: [none, () => Effect.sync(update.later)],
+      wait: [none, () => Effect.sync(update.wait)],
+      seen: [none, () => Effect.sync(update.seen)],
     },
     // Panes in windows of their own (ADR 0025, decision 9): the window
     // pops them out; what they ask goes to it.

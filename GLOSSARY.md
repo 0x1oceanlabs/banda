@@ -297,8 +297,9 @@ the mouse moves one there and writes it (ADR 0064).
 
 **Update**:
 A newer Banda of the same channel, which Banda downloads by itself and
-installs when it quits. The bar shows one that downloads or is ready
-(ADR 0041).
+installs when it quits. The bar shows one that downloads or is ready,
+and names it once it is ready. While Threads work, Banda restarts into it
+once they stop, and the new Banda says it updated (ADR 0041, ADR 0072).
 
 **Mark**:
 Banda's sign: three tiles, the top one an Agent with eyes. Its shape and
