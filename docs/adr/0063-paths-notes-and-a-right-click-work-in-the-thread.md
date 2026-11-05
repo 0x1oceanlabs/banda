@@ -164,6 +164,12 @@ rest are our defaults, and they stay his to change.
   in a toast when the file has gone.
 - When Files lands, "Open in Banda" moves from the browser's tab to
   `files.file` inside `file.open`, and nothing else changes.
+- Copy reads the selected page back into Markdown and HTML
+  (`@banda/ui/lib/markdown-copy`, with hast-util-to-mdast). What the page
+  draws but the Agent did not write, such as a link's host or a file's
+  name, cannot be selected and is not copied. What the page shows in its
+  own way keeps what was written on its outer element: a local image its
+  path, a link to a file its address, a diagram its source.
 - The Markdown drops rehype-harden. Streamdown lets every prefix and
   scheme through it, so it only blocked a path to a file; the sanitizer
   still keeps a link's and an image's schemes to the web's.

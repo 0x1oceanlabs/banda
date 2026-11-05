@@ -73,3 +73,8 @@ export const isMac =
 
 /** How a menu writes the key held for a shortcut: ⌘ on a Mac. */
 export const MOD = isMac ? "⌘" : "Ctrl+"
+
+/** A field: it takes keys of its own, and keeps the system's own menu
+ * and copy. */
+export const FIELDS =
+  "input,textarea,select,[contenteditable=true],[contenteditable=plaintext-only],[role=textbox],[role=combobox],[role=spinbutton]"

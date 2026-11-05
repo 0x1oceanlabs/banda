@@ -33,22 +33,40 @@ export function webLink(href: string | undefined): URL | null {
   }
 }
 
+/** What marks a note's citation and its way back. */
+type NoteMarks = {
+  "data-footnote-ref"?: boolean
+  "data-footnote-backref"?: boolean
+}
+
 export function MarkdownLink({
   href,
   children,
   title,
   id,
-}: ComponentProps<"a">) {
+  "data-footnote-ref": note,
+  "data-footnote-backref": back,
+}: ComponentProps<"a"> & NoteMarks) {
   const open = useContext(Opener)
   if (href?.startsWith("#"))
     return (
-      <PlaceLink href={href} id={id}>
+      <PlaceLink
+        href={href}
+        id={id}
+        data-footnote-ref={note}
+        data-footnote-backref={back}
+      >
         {children}
       </PlaceLink>
     )
   const url = webLink(href)
   const file = !url && href ? linkPath(href) : null
-  if (file) return <MarkdownFileLink at={file}>{children}</MarkdownFileLink>
+  if (file)
+    return (
+      <MarkdownFileLink at={file} href={href!}>
+        {children}
+      </MarkdownFileLink>
+    )
   const bare = typeof children === "string" && children === href
   const follow = (event: MouseEvent<HTMLAnchorElement>) => {
     if (!open || !url || !href) return
@@ -79,7 +97,7 @@ export function MarkdownLink({
         {children}
       </span>
       {url && !bare && (
-        <span className="ml-1 text-xs font-normal text-muted-foreground">
+        <span className="ml-1 text-xs font-normal text-muted-foreground select-none">
           ({url.host})
         </span>
       )}
@@ -89,7 +107,7 @@ export function MarkdownLink({
 
 /**
  * A link to a place in its own reply, as a footnote's citation and its way
- * back (ADR 0063, decision 1). It scrolls the Thread there and lights the
+ * back (ADR 0063, decision 1), which keep their marks for Copy. It scrolls the Thread there and lights the
  * place once; it never opens a window, nor scrolls what holds the Thread.
  * A citation tells its note when hovered or focused.
  */
@@ -97,13 +115,15 @@ function PlaceLink({
   href,
   id,
   children,
-}: {
+  ...marks
+}: NoteMarks & {
   href: string
   id?: string
   children: ReactNode
 }) {
   return (
     <a
+      {...marks}
       href={href}
       id={id}
       data-place=""

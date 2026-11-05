@@ -10,9 +10,14 @@ import {
 } from "@banda/ui/components/dropdown-menu"
 import { type FileAt, fileAtOf } from "@banda/ui/components/markdown-file"
 import { webLink } from "@banda/ui/components/markdown-link"
-import { copyText as copy } from "@banda/ui/lib/clipboard"
+import {
+  type Copied,
+  copyRich,
+  copyText as copy,
+} from "@banda/ui/lib/clipboard"
 import { lineText } from "@banda/ui/lib/file-links"
-import { MOD } from "@banda/ui/lib/keys"
+import { FIELDS, MOD } from "@banda/ui/lib/keys"
+import { rangeMarkdown } from "@banda/ui/lib/markdown-copy"
 import {
   AtSignIcon,
   CopyIcon,
@@ -60,7 +65,13 @@ export function useMessageMenu(menu: MessageMenu) {
 
 /** What was under the pointer as the menu opened. */
 export type MenuAt =
-  | { kind: "selection"; text: string }
+  | {
+      kind: "selection"
+      text: string
+      /** What Copy puts on the clipboard: a reply's Markdown and HTML,
+       * read once Copy is chosen. */
+      copy: () => Copied
+    }
   | { kind: "path"; file: FileAt }
   | { kind: "link"; address: string }
   | {
@@ -84,11 +95,17 @@ export function menuAt(
   point: { x: number; y: number }
 ): MenuAt | null {
   // A field keeps the system's own.
-  if (target.closest("input, textarea, [contenteditable='true']")) return null
+  if (target.closest(FIELDS)) return null
   const selection = target.ownerDocument.getSelection()
   const text = selection?.isCollapsed ? "" : (selection?.toString() ?? "")
-  if (text.trim() && thread.contains(selection!.anchorNode))
-    return { kind: "selection", text }
+  if (text.trim() && thread.contains(selection!.anchorNode)) {
+    const range = selection!.getRangeAt(0).cloneRange()
+    return {
+      kind: "selection",
+      text,
+      copy: () => rangeMarkdown(range, thread) ?? { text },
+    }
+  }
   const path = target.closest("a[data-file]")
   const file = path && fileAtOf(path)
   if (file) return { kind: "path", file }
@@ -155,7 +172,7 @@ function Items({ at, acts }: { at: MenuAt; acts: ThreadActs }) {
       const phrase = words.length <= PHRASE
       return (
         <>
-          <DropdownMenuItem onClick={() => copy(at.text)}>
+          <DropdownMenuItem onClick={() => copyRich(at.copy())}>
             <CopyIcon />
             Copy
             <DropdownMenuShortcut>{MOD}C</DropdownMenuShortcut>

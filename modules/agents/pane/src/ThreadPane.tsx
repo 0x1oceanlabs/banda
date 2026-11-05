@@ -43,6 +43,7 @@ import {
 } from "@banda/ui/components/trace"
 import { useLive } from "@banda/ui/hooks/use-live"
 import { matches } from "@banda/ui/lib/keys"
+import { copyAsMarkdown } from "@banda/ui/lib/markdown-copy"
 import { clock, duration } from "@banda/ui/lib/words"
 import { definePane, paneOf, type PaneProps } from "@banda/ui/pane"
 import {
@@ -271,6 +272,8 @@ function ThreadContent(props: PaneProps<ThreadArgs>) {
             else event.preventBaseUIHandler()
           }}
           render={<div ref={area} className="relative min-h-0 flex-1" />}
+          // A reply copies as Markdown and HTML (ADR 0063, decision 4).
+          onCopy={copyAsMarkdown}
         >
           <QuoteSelection
             area={area}
