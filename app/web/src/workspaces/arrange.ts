@@ -340,10 +340,14 @@ function placeIn(spot: Spot): Place {
 
 /**
  * The Pane `next` shows that `before` did not, as a command to open it
- * where `next` has it; none when it was shown already, and only the view
- * changes.
+ * where `next` has it, or in the Group of the Pane `group` (ADR 0065);
+ * none when it was shown already, and only the view changes.
  */
-export function opened(before: Workspaces, next: Workspaces): Plan | undefined {
+export function opened(
+  before: Workspaces,
+  next: Workspaces,
+  group?: string
+): Plan | undefined {
   const known = new Set(entries(before).map((entry) => entry.id))
   const entry = entries(next).find((other) => !known.has(other.id))
   const spot = entry && spotOf(next, entry.id)
@@ -371,7 +375,7 @@ export function opened(before: Workspaces, next: Workspaces): Plan | undefined {
       params: {
         ...shows,
         again: true,
-        place: placeIn(spot),
+        place: group ? { to: "group", pane: group } : placeIn(spot),
         ...(width !== undefined && { width }),
       },
     },

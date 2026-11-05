@@ -294,14 +294,18 @@ export function useThreadSession({
   // Diff already open, or beside the Thread (ADR 0034).
   const openDiff = (turn: string, path?: string) => {
     if (thread === null) return
-    // Its title comes from the engine, which names the turn.
-    open({
-      kind: "git.diff",
-      args: {
-        scope: { kind: "turn", thread, turn, title: "" },
-        file: path ?? null,
+    // Its title comes from the engine, which names the turn. It goes into
+    // the Thread's Group (ADR 0065, decision 7).
+    open(
+      {
+        kind: "git.diff",
+        args: {
+          scope: { kind: "turn", thread, turn, title: "" },
+          file: path ?? null,
+        },
       },
-    })
+      "group"
+    )
   }
   const stop = (turn: TurnView) =>
     void acting.act(() =>

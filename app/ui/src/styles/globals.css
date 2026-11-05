@@ -114,6 +114,8 @@
   --destructive: oklch(0.577 0.245 27.325);
   /* What waits for the Person, such as a Question: Banda's one signal colour. */
   --attention: oklch(0.68 0.21 41);
+  /* An Agent at work, as its Group's plate shows it (ADR 0065). */
+  --working: oklch(0.6 0.15 255);
   --warning: oklch(0.65 0.16 70);
   --added: oklch(0.527 0.137 150.069);
   --removed: oklch(0.577 0.245 27.325);
@@ -161,6 +163,7 @@
   --accent-foreground: oklch(0.985 0 0);
   --destructive: oklch(0.704 0.191 22.216);
   --attention: oklch(0.72 0.19 45);
+  --working: oklch(0.72 0.13 255);
   --warning: oklch(0.8 0.15 80);
   --added: oklch(0.723 0.192 149.579);
   --removed: oklch(0.704 0.191 22.216);
@@ -456,6 +459,43 @@ html[data-glass] [data-group-plate="plate"] {
 /* A solid desk keeps a faint line, so a Group's edge is not lost. */
 html:not([data-glass]) [data-group-plate="halo"] {
   --group-line: color-mix(in oklab, var(--group-color) 14%, transparent);
+}
+/*
+ * The colour is its Agent's state (ADR 0065, decision 6), as the sidebar
+ * marks it: at work a slow breath, a call brightens twice and stays, done
+ * stays green until the Person opens the Thread. No Agent: the text's.
+ */
+[data-group-plate][data-state="working"] {
+  --group-color: var(--working);
+  animation: group-breath 2.4s ease-in-out infinite;
+}
+[data-group-plate][data-state="asking"] {
+  --group-color: var(--attention);
+  animation: group-call 0.7s ease-in-out 2;
+}
+[data-group-plate][data-state="done"] {
+  --group-color: var(--added);
+}
+[data-group-plate][data-state="failed"] {
+  --group-color: var(--destructive);
+}
+[data-group-plate][data-state] {
+  --group-fill: 9%;
+}
+@keyframes group-breath {
+  50% {
+    opacity: 0.55;
+  }
+}
+@keyframes group-call {
+  50% {
+    filter: brightness(1.6);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-group-plate] {
+    animation: none !important;
+  }
 }
 /* What a Pane keeps in the window's layer takes the pointer, as the layer
    itself does not. While the mouse drags a size or a Pane, or Alt is held

@@ -116,8 +116,9 @@ for any Panes, and an Agent's Panes are simply its Group.
      shows by the spacing alone.
    - **The colour is the Agent's state**, the same colours the Inbox
      and the bar use:
-     - working: blue. On the plate a soft light runs along the top
-       edge; the halo breathes slowly.
+     - working: blue, breathing slowly (_changed_ in step 3: a light
+       running along the plate's top edge ran apart in each column's
+       piece).
      - waiting for the Person: amber. It brightens twice, then stays.
      - done: green, until the Person opens the Thread, as an unread
        mark.

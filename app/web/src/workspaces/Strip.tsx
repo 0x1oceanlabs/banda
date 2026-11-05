@@ -24,6 +24,7 @@ import {
   scrollOf,
   widthAt,
 } from "./layout"
+import { groupState } from "./groups"
 import { type Frame, PaneFrame } from "./PaneFrame"
 import { Tabs } from "./Tabs"
 import { pixels, scrollsSideways, SWIPE_END, Swipe, type Way } from "./swipe"
@@ -102,6 +103,26 @@ export function Strip({
   const groups = useLookGroups()
   const columns = drawnColumns(workspace, look)
   const focusedGroup = workspace.columns[workspace.focus]?.group
+  // Each Group's Agent, by the Thread in it: its state and its name.
+  const agents = new Map<string, Listed>()
+  for (const { group, entries } of columns) {
+    if (group === undefined || agents.has(group)) continue
+    for (const entry of entries) {
+      const thread = listed(entry)
+      if (thread?.agent === undefined) continue
+      agents.set(group, thread)
+      break
+    }
+  }
+  // A Group's pieces breathe as one, however late each came.
+  useLayoutEffect(() => {
+    const plates = scroller.current?.querySelectorAll("[data-group-plate]")
+    for (const plate of plates ?? []) {
+      for (const animation of plate.getAnimations?.() ?? []) {
+        animation.startTime = 0
+      }
+    }
+  })
   // The zoomed Pane, the focused one, covers the workspace; the rest
   // hide under it, their pages too.
   const zooms = live && zoomed !== undefined
@@ -321,6 +342,7 @@ export function Strip({
               <div
                 aria-hidden
                 data-group-plate={groups.look}
+                data-state={groupState(agents.get(group)?.mark)}
                 data-first={ends.first ? "" : undefined}
                 data-last={ends.last ? "" : undefined}
                 data-focused={lit ? "" : undefined}
@@ -329,6 +351,7 @@ export function Strip({
             {group !== undefined && ends.first && groups.handle && !zooms && (
               <GroupHandle
                 group={group}
+                name={agents.get(group)?.title}
                 pane={column.entries[0]?.id}
                 panes={columns
                   .slice(c, runOf(columns, c).end)
@@ -382,15 +405,18 @@ export function Strip({
  */
 function GroupHandle({
   group,
+  name,
   pane,
   panes,
 }: {
   group: string
   /** Its first Pane, which the carrying names it by. */
+  /** Its Agent's Thread's title; left out, a Group with no Agent. */
+  name?: string
   pane: string | undefined
   panes: number
 }) {
-  const label = `Group · ${panes} ${panes === 1 ? "Pane" : "Panes"}`
+  const label = `${name ?? "Group"} · ${panes} ${panes === 1 ? "Pane" : "Panes"}`
   return (
     <div
       data-group-handle={group}

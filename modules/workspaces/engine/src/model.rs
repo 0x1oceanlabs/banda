@@ -183,6 +183,11 @@ pub enum Place {
     /// one dropped between two in the overview. Never under the empty one
     /// at the bottom.
     Workspace { index: usize },
+    /// In the Group of a Pane, as what a Thread opens goes (ADR 0065,
+    /// decision 7): its column starts a Group if it is in none, and the
+    /// Panes go last into the Group's column right of it, or into a new
+    /// one there, shown as a Deck.
+    Group { pane: PaneId },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS, JsonSchema)]
@@ -384,6 +389,23 @@ fn put(
             let mut workspace = blank();
             workspace.columns.push(column);
             list.insert(above_empty(list, index), workspace);
+        }
+        Place::Group { pane } => {
+            let at = spot(list, pane)?;
+            let columns = &mut list[at.workspace].columns;
+            let group = *columns[at.column].group.get_or_insert_with(GroupId::new);
+            let next = at.column + 1;
+            match columns.get_mut(next).filter(|c| c.group == Some(group)) {
+                Some(deck) => deck.panes.extend(column.panes),
+                None => columns.insert(
+                    next,
+                    Column {
+                        group: Some(group),
+                        display: Some(Display::Deck),
+                        ..column
+                    },
+                ),
+            }
         }
     }
     Ok(())
@@ -1366,6 +1388,35 @@ mod tests {
         };
         move_pane(&mut list, lone, &between, Some(false)).unwrap();
         assert_eq!(grouping(&list)[0], [1, 1, 1, 0]);
+    }
+
+    #[test]
+    fn what_a_thread_opens_goes_into_its_group_as_a_deck() {
+        let mut list = start();
+        let work = SpaceId::new();
+        let thread = opened(&mut list, shown(work, "agents.thread", 1), None);
+        opened(&mut list, shown(work, "a.a", 2), None);
+        let group = Place::Group { pane: thread };
+        let diff = opened(&mut list, shown(work, "git.diff", 3), Some(group.clone()));
+        // The Thread's column starts a Group, and a Deck right of it.
+        assert_eq!(layout(&list)[0], [vec![1], vec![3], vec![2]]);
+        assert_eq!(grouping(&list)[0], [1, 1, 0]);
+        assert_eq!(list[0].columns[1].display, Some(Display::Deck));
+        // The next goes into that Deck; one shown already stays; and a
+        // Pane moved there joins it too.
+        opened(
+            &mut list,
+            shown(work, "browser.browser", 4),
+            Some(group.clone()),
+        );
+        assert_eq!(layout(&list)[0], [vec![1], vec![3, 4], vec![2]]);
+        assert_eq!(
+            opened(&mut list, shown(work, "git.diff", 3), Some(group.clone())),
+            diff
+        );
+        let lone = list[0].columns[2].panes[0].id;
+        move_pane(&mut list, lone, &group, None).unwrap();
+        assert_eq!(layout(&list)[0], [vec![1], vec![3, 4, 2]]);
     }
 
     #[test]
