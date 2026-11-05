@@ -122,6 +122,7 @@ The evidence is in two notes: [tiling managers](../research/2026-11-01-tiling-ma
    | `Alt+Space` | the Banda menu: every action, each with its key, and every Thread, Space, file and setting (ADR 0017) |
    | `Alt+K` | the Banda menu at its Actions: the key sheet; picking a row runs it |
 
+   - _Changed on 2026-11-05, by ADR 0068._ Alt is the mod until the Person picks another, one or two of Alt, Ctrl and Super, in `keys.toml`'s `mod`; the keys below move with it. The mod on a Mac stays ⌥, not Cmd, as ⌘ alone holds copy and paste.
    - _Changed on 2026-11-05, by ADR 0065._ `Alt+T` shows the column as a Deck; `Alt+G` starts a Group, `Alt+Shift+[` and `]` take a column in or out of one, and `Alt+M` widens a Group to the screen.
    - _Changed on 2026-11-01, by ADR 0017._ The palette is the Banda menu, "our Raycast" as Roma put it, and the key sheet is that menu opened at its Actions, so there is one list of keys.
    - _Changed on 2026-11-02, by ADR 0025._ niri's keys for heights (`Alt+Shift+R`, `Alt+Ctrl+R`, `Alt+Ctrl+↑↓`), `Alt+Ctrl+F`, `Alt+C`, `Alt+Home` and `Alt+End`; the zoom is `Alt+Shift+F`, niri's fullscreen, not `Alt+Z`; `Alt+V` goes with the Split; the drawer is `` Alt+` ``. The mouse works the workspaces as niri's does.
