@@ -399,9 +399,9 @@ function WorkspaceList({
       {workspaces.map((w) => {
         const here = w.index === current
         const number = String(w.index + 1)
-        const name = w.bottom
-          ? "New workspace"
-          : `${w.owner ? `${w.owner.name}, workspace` : "Workspace"} ${number}`
+        const name = w.bottom ? "New workspace" : `Workspace ${number}`
+        // A Space's says whose it is when the pointer rests on it.
+        const whose = w.owner ? `${w.owner.name}: ` : ""
         const dot = here
           ? "bg-foreground"
           : w.empty
@@ -416,10 +416,10 @@ function WorkspaceList({
             aria-label={name}
             title={
               here
-                ? "Overview (Alt+O)"
+                ? `${whose}Overview (Alt+O)`
                 : w.bottom
                   ? name
-                  : `${name} (Alt+${number})`
+                  : `${whose}${name} (Alt+${number})`
             }
             className="relative flex h-6 shrink-0 items-center justify-center overflow-hidden rounded-md text-xs text-muted-foreground tabular-nums outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 aria-[current]:font-medium aria-[current]:text-foreground"
             onClick={() => onPick(w.index)}
