@@ -11,6 +11,7 @@
     "./browser": "./src/browser.ts",
     "./terminal": "./src/terminal.ts",
     "./git": "./src/git.ts",
+    "./files": "./src/files.ts",
     "./harnesses": "./src/harnesses.ts",
     "./problems": "./src/problems.ts",
     "./sharing": "./src/sharing.ts",

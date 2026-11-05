@@ -10,6 +10,7 @@ publish.workspace = true
 [dependencies]
 async-trait.workspace = true
 dirs.workspace = true
+notify-debouncer-full.workspace = true
 axum.workspace = true
 futures.workspace = true
 getrandom.workspace = true

@@ -1,7 +1,7 @@
 //! The files in a Project's folder, for `@` in the composer (ADR 0010,
 //! decision 9): the ones git keeps or would, in a folder git knows, or
 //! else what a walk finds. Banda's own data is not in the folder
-//! (ADR 0026).
+//! (ADR 0026). `files.find` replaces it (ADR 0073, decision 11).
 
 use std::collections::HashMap;
 use std::path::{Path, PathBuf};

@@ -6,6 +6,7 @@ use crate::Failure;
 use crate::places::{HOST, Places, Running, channel, from_checkout};
 use banda_agents::{Agents, Pipe};
 use banda_browser::Browser;
+use banda_files::Files;
 use banda_git::Git;
 use banda_harnesses::{Harnesses, HarnessesModule};
 use banda_kernel::api::{self, OwnerSecret};
@@ -66,6 +67,7 @@ pub async fn serve(places: Places, port: u16, with_parent: bool) -> Result<(), F
         .module(Terminals::new())
         .module(Browser::new())
         .module(Git::new())
+        .module(Files::new())
         .module(Workspaces::new())
         .module(problems(&places))
         .module(sharing(&places))

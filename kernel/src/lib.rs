@@ -16,6 +16,9 @@
 //!   ([`ModuleProject::pass`]).
 //! - The window's road lets a module ask the window and await its answer
 //!   ([`Call::ask_window`]).
+//! - [`Reach`] is the path guard: where a path a call names is, and
+//!   whether its caller may reach it. [`ModuleProject::watch`] watches
+//!   folders (ADR 0073, decision 14).
 //! - [`api`] serves all of it over WebSocket.
 
 pub mod access;
@@ -30,7 +33,9 @@ mod old;
 mod outbox;
 mod passes;
 mod project;
+mod reach;
 mod store;
+mod watching;
 mod window;
 
 pub use access::{Caller, Right};
@@ -43,9 +48,11 @@ pub use module::{Call, Module, Scope, Stream, Wall};
 pub use outbox::{Effect, OnRestart, Outcome, Settled};
 pub use passes::secret;
 pub use project::{Committed, Heard, ModuleProject, Project, Tally};
+pub use reach::Reach;
 /// For `methods!` and `id!`, which name it from a module's crate.
 pub use schemars;
 pub use store::Tx;
+pub use watching::{Changed, Watch};
 pub use window::{WindowAnswer, WindowRequest};
 
 /// The variable that names its Project in the environment of what Banda
