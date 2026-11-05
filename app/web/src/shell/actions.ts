@@ -555,6 +555,25 @@ export const ACTIONS: readonly Action<Shell>[] = [
     run: () => window.banda?.edit.paste(),
   },
   {
+    // The composer menu's "Paste as plain text".
+    id: "edit.paste-plain",
+    section: "Banda",
+    title: "Paste as plain text",
+    unlisted: true,
+    run: () => window.banda?.edit.pastePlain(),
+  },
+  {
+    // A Thread menu's "Copy image": the image at a point of the page.
+    id: "edit.copy-image",
+    section: "Banda",
+    title: "Copy image",
+    unlisted: true,
+    run: (_, args) => {
+      if (typeof args?.x === "number" && typeof args.y === "number")
+        window.banda?.edit.copyImageAt(args.x, args.y)
+    },
+  },
+  {
     id: "space.add",
     section: "Banda",
     title: "Add Space",

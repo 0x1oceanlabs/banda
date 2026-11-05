@@ -1,5 +1,9 @@
-import { isMacPlatform } from "@banda/ghostty"
-import { ContextMenuContent } from "@banda/ui/components/context-menu"
+import {
+  ContextMenuContent,
+  useAfterMenu,
+} from "@banda/ui/components/context-menu"
+import { copyText as copy } from "@banda/ui/lib/clipboard"
+import { isMac as mac } from "@banda/ui/lib/keys"
 import {
   DropdownMenuItem,
   DropdownMenuSeparator,
@@ -30,11 +34,12 @@ export function TerminalMenu({
   /** Pastes what the clipboard holds; none where no window does. */
   paste?: () => void
 }) {
-  const mac = isMacPlatform(navigator.platform)
   const { link } = at
+  // Pasting waits for the screen to have its focus back.
+  const later = useAfterMenu()
   return (
-    // The screen takes the focus back itself, as soon as the menu closes.
-    <ContextMenuContent aria-label="Terminal" finalFocus={false}>
+    // The menu gives the screen its focus back as it closes (ContextMenu).
+    <ContextMenuContent aria-label="Terminal">
       {link && (
         <>
           <DropdownMenuItem onClick={() => follow(link, false)}>
@@ -60,7 +65,10 @@ export function TerminalMenu({
           {mac ? "⌘C" : "Ctrl+Shift+C"}
         </DropdownMenuShortcut>
       </DropdownMenuItem>
-      <DropdownMenuItem disabled={!paste} onClick={paste}>
+      <DropdownMenuItem
+        disabled={!paste}
+        onClick={paste && (() => later(paste))}
+      >
         Paste
         <DropdownMenuShortcut>
           {mac ? "⌘V" : "Ctrl+Shift+V"}
@@ -75,8 +83,4 @@ export function TerminalMenu({
       </DropdownMenuItem>
     </ContextMenuContent>
   )
-}
-
-function copy(text: string): void {
-  if (text) void navigator.clipboard.writeText(text)
 }

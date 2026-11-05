@@ -39,6 +39,12 @@ export function useFile<T>(file: ModuleFile<T>): T {
   return useLook((look) => fileOf(look.files, file), file.before)
 }
 
+/** {@link useFile} outside a component: the file as the look resolves it
+ * now, its `before` till the first look comes. */
+export function fileNow<T>(file: ModuleFile<T>): T {
+  return look ? fileOf(look.files, file) : file.before
+}
+
 /** Calls `onChange` when the window turns light or dark, or its look
  * sets new colours on the root (ADR 0007): after they are painted, so a
  * reader of the root's style reads the new ones. */
