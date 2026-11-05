@@ -223,6 +223,16 @@ export function deltaOf(now: number, before: number): number | undefined {
   return before > 0 ? (now - before) / before : undefined
 }
 
+/** A change as words: a share while under double, else how many times
+ * as much, as `×118` rather than `+11700%`. */
+export function changeWords(delta: number): string {
+  if (delta < 1) {
+    return `${delta >= 0 ? "+" : "−"}${Math.round(Math.abs(delta) * 100)}%`
+  }
+  const times = delta + 1
+  return `×${times < 10 ? times.toFixed(1).replace(/\.0$/, "") : Math.round(times).toLocaleString("en")}`
+}
+
 /** A period of the Cost and Tokens tabs. */
 export type Period = "24h" | "7d" | "30d" | "90d"
 

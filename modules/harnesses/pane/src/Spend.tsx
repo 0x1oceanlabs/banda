@@ -31,6 +31,7 @@ import {
   colourOf,
   count,
   daysOf,
+  changeWords,
   deltaOf,
   dollars,
   hitRate,
@@ -117,8 +118,7 @@ export function Spend({
         </div>
         {delta !== undefined && (
           <div className="ml-auto pb-[5px] text-[12.5px] text-muted-foreground tabular-nums">
-            {delta >= 0 ? "+" : "−"}
-            {Math.round(Math.abs(delta) * 100)}% vs {PREVIOUS[period]}
+            {changeWords(delta)} vs {PREVIOUS[period]}
           </div>
         )}
       </div>

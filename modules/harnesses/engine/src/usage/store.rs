@@ -6,6 +6,12 @@ use banda_kernel::{Error, ModuleSpace, Participant};
 use rusqlite::{Connection, OptionalExtension};
 use std::collections::{BTreeMap, HashSet};
 
+/// Codex's journals read again: its prompts were not counted before.
+pub(crate) const REREAD_CODEX: &str = "
+DELETE FROM harnesses_usage_records WHERE source LIKE 'codex:%';
+DELETE FROM harnesses_usage_files WHERE source LIKE 'codex:%';
+";
+
 pub(crate) const TABLES: &str = "
 CREATE TABLE harnesses_usage_files (
  source TEXT NOT NULL, path TEXT NOT NULL, cursor TEXT NOT NULL,

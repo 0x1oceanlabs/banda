@@ -14,7 +14,7 @@ use std::collections::HashSet;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::time::Duration;
-pub(crate) use store::TABLES;
+pub(crate) use store::{REREAD_CODEX, TABLES};
 
 const DAY: i64 = 86_400_000;
 const KEEP: i64 = 92 * DAY;

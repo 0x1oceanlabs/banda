@@ -96,6 +96,9 @@ pub(super) struct Codex {
     model: Option<String>,
     totals: Option<Tokens>,
     session: String,
+    /// The turn under way already counted its prompt, or was an Agent's.
+    #[serde(default)]
+    prompted: bool,
 }
 
 impl Codex {
@@ -107,7 +110,22 @@ impl Codex {
             self.model = value["payload"]["model"].as_str().map(str::to_owned);
             return None;
         }
-        if value["type"] == "event_msg" && value["payload"]["type"] == "user_message" {
+        // Codex starts a turn for each prompt: a Person's has no parent
+        // turn, an Agent it spawned has one. Older Codex also wrote a
+        // `user_message` in the same turn, and Codex before turns only that.
+        let started = value["type"] == "event_msg" && value["payload"]["type"] == "task_started";
+        let said = value["type"] == "event_msg" && value["payload"]["type"] == "user_message";
+        if said && std::mem::take(&mut self.prompted) {
+            return None;
+        }
+        if started {
+            self.prompted = true;
+            let parent = &value["payload"]["turn_attribution"]["parent_turn_id"];
+            if !parent.is_null() {
+                return None;
+            }
+        }
+        if started || said {
             return Some(Record {
                 key: format!("prompt:{offset}"),
                 timestamp: value["timestamp"].as_str()?.to_owned(),
@@ -226,5 +244,43 @@ mod tests {
             }
         );
         assert_eq!(reader.read(&count(10, 0, 2), 4).unwrap().tokens.input, 10);
+    }
+
+    fn event(kind: &str, payload: Value) -> Value {
+        let mut payload = payload;
+        payload["type"] = json!(kind);
+        json!({"type":"event_msg","timestamp":"2026-11-04T01:00:00Z","payload":payload})
+    }
+
+    #[test]
+    fn codex_counts_a_prompt_per_turn_a_person_started() {
+        let prompts = |lines: &[Value]| {
+            let mut reader = Codex::default();
+            lines
+                .iter()
+                .enumerate()
+                .filter_map(|(at, line)| reader.read(line, at as u64))
+                .filter(|record| record.prompt)
+                .count()
+        };
+        let person = || {
+            event(
+                "task_started",
+                json!({"turn_attribution":{"parent_turn_id":null}}),
+            )
+        };
+        let agent = || {
+            event(
+                "task_started",
+                json!({"turn_attribution":{"parent_turn_id":"t"}}),
+            )
+        };
+        let said = || event("user_message", json!({"message":"hi"}));
+        // Codex now: turns alone, an Agent's not counted.
+        assert_eq!(prompts(&[person(), agent(), person()]), 2);
+        // Older Codex: a turn and its message are one prompt.
+        assert_eq!(prompts(&[person(), said(), person(), said()]), 2);
+        // Before turns: the message alone.
+        assert_eq!(prompts(&[said(), said()]), 2);
     }
 }
