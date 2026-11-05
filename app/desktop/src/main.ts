@@ -55,7 +55,7 @@ import { modules } from "./modules"
 import { channel, stateFolder } from "./channel"
 import { listApp } from "./entry"
 import { startLog, watchProblems } from "./problems"
-import { openFile } from "./outside"
+import { exists, openFile, showFile } from "./outside"
 import { roadLayer } from "./road"
 import { settingsLayer } from "./settings"
 import { updates } from "./update"
@@ -334,6 +334,8 @@ async function ready(): Promise<void> {
     },
     files: {
       outside: [text, ([path]) => Effect.sync(() => openFile(path))],
+      show: [text, ([path]) => Effect.sync(() => showFile(path))],
+      exists: [text, ([path]) => Effect.sync(() => exists(path))],
     },
     edit: {
       paste: [none, (_, event) => Effect.sync(() => event.sender.paste())],

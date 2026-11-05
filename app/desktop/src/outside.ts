@@ -16,6 +16,18 @@ export function openFile(path: string): void {
   else void shell.openPath(path)
 }
 
+/** Whether a file or a folder is at the full `path`. */
+export function exists(path: string): boolean {
+  return isAbsolute(path) && !!statSync(path, { throwIfNoEntry: false })
+}
+
+/** Shows the file at the full `path` in its folder; nothing for any
+ * other. */
+export function showFile(path: string): void {
+  if (isAbsolute(path) && statSync(path, { throwIfNoEntry: false }))
+    shell.showItemInFolder(path)
+}
+
 /** Whether opening the file could run it: a program, or a macOS app. */
 export function runs(
   found: Pick<Stats, "isDirectory" | "mode">,

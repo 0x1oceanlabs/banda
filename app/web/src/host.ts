@@ -140,6 +140,11 @@ export const BRIDGE = bridge({
     /** Opens the file at the full `path` in the app the system has for
      * it; a program it only shows in its folder, so it never runs. */
     outside: send<[path: string]>(),
+    /** Shows the file at the full `path` in its folder, in the system's
+     * file manager (ADR 0063, decision 3). */
+    show: send<[path: string]>(),
+    /** Whether a file, or a folder, is at the full `path`. */
+    exists: invoke<[path: string], boolean>(),
   },
   /** What broke in Banda (ADR 0039): the engine keeps it; the desktop
    * shows where its logs are. */

@@ -39,9 +39,7 @@ export function useAddressOf(): (typed: string) => string {
 }
 
 /** The page of the file at the absolute `path`. */
-export function fileAddress(path: string): string {
-  return `file://${path.split("/").map(encodeURIComponent).join("/")}`
-}
+export { fileUrl as fileAddress } from "@banda/ui/lib/file-links"
 
 /** Whether what the Person typed reads as an address, not words. */
 export function isAddress(typed: string): boolean {

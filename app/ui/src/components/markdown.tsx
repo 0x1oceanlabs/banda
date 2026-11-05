@@ -4,23 +4,39 @@ import { mermaid } from "@streamdown/mermaid"
 import { cn } from "../lib/utils"
 import { useId, useMemo } from "react"
 
-import { Streamdown, defaultRehypePlugins } from "streamdown"
+import {
+  Streamdown,
+  defaultRehypePlugins,
+  defaultRemarkPlugins,
+  type StreamdownProps,
+} from "streamdown"
 import { useDiagramLook } from "../lib/diagram-look"
-import { localImages } from "../lib/markdown-media"
+import { fileUrls, proseFiles, TEXT_PATH } from "../lib/markdown-paths"
+import { MarkdownCode, MarkdownTextPath, Written } from "./markdown-file"
 import { MarkdownImage } from "./markdown-media"
 import { MarkdownLink } from "./markdown-link"
 
 /** Single-dollar math matches what Agents write; KaTeX leaves code alone. */
 const math = createMathPlugin({ singleDollarTextMath: true })
 const plugins = { code, math, mermaid }
-const components = { img: MarkdownImage, a: MarkdownLink }
+// A path in plain text is marked with a tag of Banda's own (ADR 0063,
+// decision 2).
+const components = {
+  img: MarkdownImage,
+  a: MarkdownLink,
+  inlineCode: MarkdownCode,
+  [TEXT_PATH]: MarkdownTextPath,
+} as StreamdownProps["components"]
 
+const remarkPlugins = [...Object.values(defaultRemarkPlugins), fileUrls]
+
+// The sanitizer keeps a link's and an image's schemes to the web's; it
+// is all rehype-harden did, as Streamdown lets every prefix and scheme
+// through, but harden also blocked a path to a local file (ADR 0063).
 const rehypePlugins = [
   defaultRehypePlugins.raw,
   defaultRehypePlugins.sanitize,
-  localImages(),
-  defaultRehypePlugins.harden,
-  localImages(true),
+  proseFiles,
 ]
 
 /** Copy on code, tables and diagrams; diagrams can open fullscreen, where
@@ -36,7 +52,8 @@ const controls = {
  * Markdown as an Agent writes it, such as a reply or a thought (ADR 0010,
  * decision 2). While `streaming`, unfinished markdown closes as it comes
  * and Copy waits for the end. The host supplies web-link navigation
- * through MarkdownLinks (ADR 0051).
+ * through MarkdownLinks (ADR 0051), and its files through MarkdownFiles
+ * (ADR 0063): a path is looked at once the Markdown is written.
  */
 function Markdown({
   children,
@@ -61,23 +78,26 @@ function Markdown({
     [scope]
   )
   return (
-    <Streamdown
-      data-slot="markdown"
-      className={cn(
-        "min-w-0 space-y-3 text-prose wrap-break-word *:first:mt-0 *:last:mb-0",
-        className
-      )}
-      isAnimating={streaming}
-      plugins={plugins}
-      mermaid={mermaid}
-      components={components}
-      rehypePlugins={rehypePlugins}
-      remarkRehypeOptions={notes}
-      controls={controls}
-      linkSafety={{ enabled: false }}
-    >
-      {children}
-    </Streamdown>
+    <Written value={!streaming}>
+      <Streamdown
+        data-slot="markdown"
+        className={cn(
+          "min-w-0 space-y-3 text-prose wrap-break-word *:first:mt-0 *:last:mb-0",
+          className
+        )}
+        isAnimating={streaming}
+        plugins={plugins}
+        mermaid={mermaid}
+        components={components}
+        rehypePlugins={rehypePlugins}
+        remarkRehypeOptions={notes}
+        controls={controls}
+        linkSafety={{ enabled: false }}
+        remarkPlugins={remarkPlugins}
+      >
+        {children}
+      </Streamdown>
+    </Written>
   )
 }
 

@@ -8,12 +8,16 @@ import {
   DropdownMenuSeparator,
   DropdownMenuShortcut,
 } from "@banda/ui/components/dropdown-menu"
+import { type FileAt, fileAtOf } from "@banda/ui/components/markdown-file"
 import { webLink } from "@banda/ui/components/markdown-link"
 import { copyText as copy } from "@banda/ui/lib/clipboard"
+import { lineText } from "@banda/ui/lib/file-links"
 import { MOD } from "@banda/ui/lib/keys"
 import {
+  AtSignIcon,
   CopyIcon,
   ExternalLinkIcon,
+  FolderOpenIcon,
   GitForkIcon,
   GlobeIcon,
   ImageIcon,
@@ -57,6 +61,7 @@ export function useMessageMenu(menu: MessageMenu) {
 /** What was under the pointer as the menu opened. */
 export type MenuAt =
   | { kind: "selection"; text: string }
+  | { kind: "path"; file: FileAt }
   | { kind: "link"; address: string }
   | {
       kind: "image"
@@ -70,7 +75,8 @@ export type MenuAt =
 /**
  * What a right click at `target` in the Thread shows; none where it has
  * nothing to offer (ADR 0063, decision 3). The first that is there wins:
- * the text selected in the Thread, a web link, an image, a message.
+ * the text selected in the Thread, a path, a web link, an image, a
+ * message.
  */
 export function menuAt(
   target: Element,
@@ -83,6 +89,9 @@ export function menuAt(
   const text = selection?.isCollapsed ? "" : (selection?.toString() ?? "")
   if (text.trim() && thread.contains(selection!.anchorNode))
     return { kind: "selection", text }
+  const path = target.closest("a[data-file]")
+  const file = path && fileAtOf(path)
+  if (file) return { kind: "path", file }
   const link = target.closest<HTMLAnchorElement>("a[href]")
   if (link && webLink(link.getAttribute("href") ?? undefined))
     return { kind: "link", address: link.href }
@@ -107,6 +116,14 @@ export type ThreadActs = {
   /** Searches the web in Banda's browser; none where no window does. */
   search?: (words: string) => void
   open: (address: string, outside: boolean) => void
+  /** Opens a file a path names, in Banda or in its app; shows it in its
+   * folder; none where no window looks at files. */
+  file?: {
+    open: (at: FileAt, outside: boolean) => void
+    show: (at: FileAt) => void
+  }
+  /** Names a file in the message, as `@` does. */
+  point: (path: string) => void
   /** Copies the image at a point of the page; none where no window does. */
   copyImage?: (x: number, y: number) => void
 }
@@ -162,6 +179,55 @@ function Items({ at, acts }: { at: MenuAt; acts: ThreadActs }) {
               )}
             </>
           )}
+        </>
+      )
+    }
+    case "path": {
+      const { file } = at
+      const line = lineText(file)
+      return (
+        <>
+          {acts.file && (
+            <>
+              <DropdownMenuItem
+                onClick={item(() => acts.file!.open(file, false))}
+              >
+                <PanelRightIcon />
+                Open in Banda
+              </DropdownMenuItem>
+              <DropdownMenuItem
+                onClick={item(() => acts.file!.open(file, true))}
+              >
+                <ExternalLinkIcon />
+                Open in its app
+                <DropdownMenuShortcut>{MOD}click</DropdownMenuShortcut>
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={item(() => acts.file!.show(file))}>
+                <FolderOpenIcon />
+                Show in folder
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+            </>
+          )}
+          <DropdownMenuItem onClick={() => copy(file.file)}>
+            <CopyIcon />
+            Copy full path
+          </DropdownMenuItem>
+          {file.relative !== file.file && (
+            <DropdownMenuItem onClick={() => copy(`${file.relative}${line}`)}>
+              <CopyIcon />
+              Copy relative path
+            </DropdownMenuItem>
+          )}
+          <DropdownMenuSeparator />
+          <DropdownMenuItem
+            onClick={item(() =>
+              acts.point(file.inside ? file.relative : file.file)
+            )}
+          >
+            <AtSignIcon />
+            Add to message
+          </DropdownMenuItem>
         </>
       )
     }

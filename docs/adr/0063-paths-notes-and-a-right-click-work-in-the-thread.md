@@ -156,7 +156,14 @@ rest are our defaults, and they stay his to change.
   Thread supplies the opener and the path check through context, as it
   supplies the web opener (ADR 0051) and local media.
 - The agents module's desktop part answers a `paths` call beside `media`.
-  The engine is unchanged.
+  The engine is unchanged, so the folders a Thread's tools worked in come
+  from its diffs and the full paths in its tools' titles.
 - The window gains `edit.paste-plain` beside `edit.paste`.
+- A Pane's link to a file opens it through one action, `file.open`, as
+  `file.outside` opens it outside; a terminal's path does too. Each says
+  in a toast when the file has gone.
 - When Files lands, "Open in Banda" moves from the browser's tab to
-  `files.file`, and nothing else changes.
+  `files.file` inside `file.open`, and nothing else changes.
+- The Markdown drops rehype-harden. Streamdown lets every prefix and
+  scheme through it, so it only blocked a path to a file; the sanitizer
+  still keeps a link's and an image's schemes to the web's.

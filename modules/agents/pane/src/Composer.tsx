@@ -158,6 +158,7 @@ export function Composer({
     // A line apart from what is written after it, which would else run on
     // in it.
     quote: (quote) => field.current?.putLines(`${quoted(quote)}\n\n`),
+    point: (path) => field.current?.point(path, "caret"),
     putBack: (back, carried) => {
       images.putBack(carried)
       field.current?.add(text && back ? `\n${back}` : back)
@@ -466,6 +467,8 @@ export type ComposerHandle = {
   take: (files: File[]) => void
   /** Quotes `text` in the message, on lines of its own. */
   quote: (text: string) => void
+  /** Names the file at `path` in the message, as `@` does, at the caret. */
+  point: (path: string) => void
   /** Puts a message back, after what is written, the caret at its end:
    * its text, and the images it carried (ADR 0027, decision 1). */
   putBack: (text: string, images: Image[]) => void

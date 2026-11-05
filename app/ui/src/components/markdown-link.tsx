@@ -5,7 +5,9 @@ import {
   type MouseEvent,
   type ReactNode,
 } from "react"
+import { linkPath } from "../lib/file-links"
 import { linkHint, outsideClick } from "../lib/links"
+import { MarkdownFileLink } from "./markdown-file"
 
 /** The host supplies navigation; Markdown knows neither modules nor Electron. */
 type OpenLink = (url: string, external: boolean) => void
@@ -45,6 +47,8 @@ export function MarkdownLink({
       </PlaceLink>
     )
   const url = webLink(href)
+  const file = !url && href ? linkPath(href) : null
+  if (file) return <MarkdownFileLink at={file}>{children}</MarkdownFileLink>
   const bare = typeof children === "string" && children === href
   const follow = (event: MouseEvent<HTMLAnchorElement>) => {
     if (!open || !url || !href) return
