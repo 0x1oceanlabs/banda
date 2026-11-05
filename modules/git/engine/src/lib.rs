@@ -18,6 +18,7 @@ mod act;
 mod checkpoint;
 mod diff;
 mod index;
+mod lines;
 mod message;
 mod parse;
 mod refs;

@@ -3,7 +3,7 @@
 //! checkpoint is made through.
 
 use crate::repo::{Repo, scratch};
-use crate::run::Opts;
+use crate::run::{Failure, Opts};
 use banda_kernel::Refusal;
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
@@ -86,7 +86,7 @@ impl Scratch {
 }
 
 /// The files git does not track and does not ignore.
-pub async fn untracked(repo: &Repo) -> Result<Vec<String>, Refusal> {
+pub async fn untracked(repo: &Repo) -> Result<Vec<String>, Failure> {
     let listed = repo
         .run(
             ["ls-files", "--others", "--exclude-standard", "-z", "--"],
