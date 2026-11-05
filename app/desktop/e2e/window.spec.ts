@@ -4027,7 +4027,7 @@ test("[notify] in look.toml chooses where a call is told: always the desktop, ne
   await expect(page.getByRole("region", { name: "Notifications" })).toBeHidden()
 })
 
-test("a Thread settles from its row's menu, as in T3 Code, its Pane closes, and Alt+S brings it back", async () => {
+test("a Thread is archived from its row's menu, its Pane closes, and Alt+S brings it back", async () => {
   window = await startWindow()
   const { page } = window
   const { thread, composer } = await firstThread(page)
@@ -4040,21 +4040,21 @@ test("a Thread settles from its row's menu, as in T3 Code, its Pane closes, and 
   await expect(row).toBeVisible()
 
   await row.click({ button: "right" })
-  await page.getByRole("menuitem", { name: /Settle thread/ }).click()
-  // On the Settled shelf, folded, with its count; its Pane is put away.
-  const shelf = sidebar.getByRole("group", { name: "Settled" })
-  const header = shelf.getByRole("button", { name: /Settled/ })
+  await page.getByRole("menuitem", { name: /Archive thread/ }).click()
+  // On the Archive shelf, folded, with its count; its Pane is put away.
+  const shelf = sidebar.getByRole("group", { name: "Archive" })
+  const header = shelf.getByRole("button", { name: /Archive/ })
   await expect(header).toHaveAttribute("aria-expanded", "false")
   await expect(header).toContainText("1")
   await expect(row).toBeHidden()
   await expect(thread).toBeHidden()
   await header.click()
-  const settled = shelf.getByRole("button", { name: /hello/ })
-  await expect(settled).toBeVisible()
-  await page.screenshot({ path: "test-results/25-settled.png" })
+  const archived = shelf.getByRole("button", { name: /hello/ })
+  await expect(archived).toBeVisible()
+  await page.screenshot({ path: "test-results/25-archived.png" })
 
-  // Its row opens it again, settled still; Alt+S on it brings it back.
-  await settled.click()
+  // Its row opens it again, archived still; Alt+S on it brings it back.
+  await archived.click()
   await expect(thread).toBeVisible()
   await expect(shelf).toBeVisible()
   await page.keyboard.press("Alt+S")
@@ -4062,7 +4062,7 @@ test("a Thread settles from its row's menu, as in T3 Code, its Pane closes, and 
   await expect(shelf).toBeHidden()
   await expect(thread).toBeVisible()
 
-  // Alt+S settles the Thread in the focused Pane, and closes it.
+  // Alt+S archives the Thread in the focused Pane, and closes it.
   await page.keyboard.press("Alt+S")
   await expect(thread).toBeHidden()
   await expect(shelf).toBeVisible()
@@ -4141,7 +4141,7 @@ test("the Banda menu goes into a Space and the sidebar's view, and Tab shows wha
     menu.getByRole("group", { name: "Recent Threads" })
   ).toBeVisible()
 
-  // Tab on a Thread shows its acts; Settle thread puts it away.
+  // Tab on a Thread shows its acts; Archive thread puts it away.
   await search.fill("hello")
   await search.press("Tab")
   const acts = menu.getByRole("listbox", { name: "Actions" })
@@ -4158,7 +4158,7 @@ test("the Banda menu goes into a Space and the sidebar's view, and Tab shows wha
   await search.press("Enter")
   await expect(menu).toBeHidden()
   const sidebar = page.getByRole("complementary", { name: "Sidebar" })
-  await expect(sidebar.getByRole("group", { name: "Settled" })).toBeVisible()
+  await expect(sidebar.getByRole("group", { name: "Archive" })).toBeVisible()
   await expect(thread).toBeHidden()
 
   // The sidebar's view: its presets, one picked writes the file.

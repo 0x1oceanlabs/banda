@@ -95,7 +95,7 @@
       "description": "A Thread's mark as the sidebar sees it.",
       "oneOf": [
         {
-          "description": "Neither at work nor settled: it asks, it failed, it finished, or the\nPerson has it in hand.",
+          "description": "Neither at work nor archived: it asks, it failed, it finished, or\nthe Person has it in hand.",
           "type": "string",
           "const": "active"
         },
@@ -105,9 +105,9 @@
           "const": "working"
         },
         {
-          "description": "Put away by the Person, or by three days with nothing new.",
+          "description": "Put away by the Person, until something new happens in it\n(ADR 0069). Its name was `settled`, which still reads as it.",
           "type": "string",
-          "const": "settled"
+          "const": "archived"
         }
       ]
     },

@@ -11,8 +11,8 @@ preset = "inbox"
 # [group]
 # by = "state"                       # "state", "space" or "none"
 # states = ["active"]                # the sections, in this order
-# bottom = ["working", "settled"]    # shelves at the bottom, with their counts
-# folded = ["settled"]               # sections, shelves or Spaces folded at first
+# bottom = ["working", "archived"]   # shelves at the bottom, with their counts
+# folded = ["archived"]              # sections, shelves or Spaces folded at first
 # limit = 10                         # rows before "Show more"; 0 shows all
 # empty = "hide"                     # an empty section: "hide" or "show"
 

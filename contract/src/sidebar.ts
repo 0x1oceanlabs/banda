@@ -37,8 +37,8 @@ export const DEFAULT_SIDEBAR: Sidebar = {
   group: {
     by: "state",
     states: ["active"],
-    bottom: ["working", "settled"],
-    folded: ["settled"],
+    bottom: ["working", "archived"],
+    folded: ["archived"],
     limit: 10,
     empty: "hide",
   },

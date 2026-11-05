@@ -87,7 +87,7 @@ function Piece({
   const { listed, space } = row
   // Nothing waits in it and nothing works: it steps back.
   const quiet =
-    row.state === "settled" || (row.state === "active" && !waits(listed.mark))
+    row.state === "archived" || (row.state === "active" && !waits(listed.mark))
   switch (part) {
     case "~":
       return <span className="ml-auto" />

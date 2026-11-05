@@ -14,7 +14,7 @@ import type { Listed, Lists } from "@banda/ui/pane"
 import type { Action, MenuRow } from "@banda/ui/module"
 import { keyName } from "../actions/actions"
 import type { Shell } from "../shell/actions"
-import { settles } from "../sidebar/settled"
+import { archivable } from "../sidebar/archived"
 
 /** Where the menu opens: its root, or its Actions, as the key sheet. */
 export type At = "root" | "actions"
@@ -55,8 +55,8 @@ export type Choice =
   | { kind: "found"; id: string; row: MenuRow }
   /** Arranges the sidebar by a preset (ADR 0008). */
   | { kind: "preset"; id: string; name: string; current: boolean }
-  /** Settles a Thread, or brings it back. */
-  | { kind: "settle"; id: string; space: SpaceId; listed: Listed }
+  /** Archives a Thread, or brings it back (ADR 0069). */
+  | { kind: "archive"; id: string; space: SpaceId; listed: Listed }
   /** A branch: the ways to add a Space (ADR 0026). */
   | { kind: "add"; id: string }
   /** A branch: one way to add a Space; the field takes its name or path. */
@@ -258,8 +258,8 @@ export type Sources = {
   actions: readonly Action<Shell>[]
   /** The sidebar's presets, and the one in force. */
   presets: { names: readonly string[]; current: string }
-  /** Whether a Thread is settled now. */
-  settled: (listed: Listed) => boolean
+  /** Whether a Thread is archived now. */
+  archived: (listed: Listed) => boolean
   /** What the modules' sources found for the words, in the modules'
    * order, each under its source's heading. */
   found: readonly Found[]
@@ -485,20 +485,20 @@ const BESIDE: Key = { code: "Enter", shift: true }
 
 /** What can be done with `row`, the first as `Enter` does it. */
 export function actsOf(row: Choice, sources: Sources): Act[] {
-  const { settled } = sources
+  const { archived } = sources
   switch (row.kind) {
     case "thread": {
       const acts: Act[] = [
         { title: "Open", key: OPEN, row },
         { title: "Open beside", key: BESIDE, row: { ...row, beside: true } },
       ]
-      const now = settled(row.listed)
-      if (now || settles(row.listed))
+      const now = archived(row.listed)
+      if (now || archivable(row.listed))
         acts.push({
-          title: now ? "Un-settle thread" : "Settle thread",
+          title: now ? "Unarchive thread" : "Archive thread",
           row: {
-            kind: "settle",
-            id: `settle:${row.listed.id}`,
+            kind: "archive",
+            id: `archive:${row.listed.id}`,
             space: row.space,
             listed: row.listed,
           },

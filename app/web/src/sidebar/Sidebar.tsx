@@ -52,7 +52,7 @@ import { useLookSidebar } from "../look"
 import { Row } from "./Row"
 import { pickPreset, PRESET_WORDS, type Settings } from "./settings"
 import { type Held, held, hold, rowKey } from "./hold"
-import { settles, useIsSettled } from "./settled"
+import { archivable, useIsArchived } from "./archived"
 import { ThemeMenu } from "./ThemeMenu"
 
 /**
@@ -98,10 +98,10 @@ export function Sidebar({
   onNewThread: (space: SpaceId) => void
   onNoSpace: () => void
   /**
-   * Settles a row's Thread, which closes the Panes that show it, or
-   * brings it back (ADR 0008, decision 4).
+   * Archives a row's Thread, which closes the Panes that show it, or
+   * brings it back (ADR 0008, decision 4; ADR 0069).
    */
-  onSettle: (space: SpaceId, thing: string, settled: boolean) => void
+  onArchive: (space: SpaceId, thing: string, archived: boolean) => void
   /** Opens "Add Space" in the Banda menu (ADR 0026). */
   onAddSpace: () => void
   /** Pins the Space, so it comes first, or unpins it (ADR 0026). */
@@ -142,12 +142,11 @@ export function Sidebar({
     setToggled(new Set())
     setMore(new Set())
   }
-  // The Person's settled Threads (ADR 0008): what they said, or three
-  // quiet days.
-  const settled = useIsSettled()
+  // The Threads the Person archived (ADR 0069).
+  const archived = useIsArchived()
   const fresh = useMemo(
-    () => arrange(lists, spaces, settings, only, toggled, settled),
-    [lists, spaces, settings, only, toggled, settled]
+    () => arrange(lists, spaces, settings, only, toggled, archived),
+    [lists, spaces, settings, only, toggled, archived]
   )
   // Under the pointer, the rows hold still; what would move or come
   // waits as updates, taken in by the pill or as the pointer leaves
@@ -190,8 +189,8 @@ export function Sidebar({
       onToggle={() => setToggled((set) => flip(set, section.key))}
       onMore={() => setMore((set) => flip(set, section.key))}
       onOpen={onOpen}
-      onSettle={(row) =>
-        props.onSettle(row.space.id, row.listed.id, row.state !== "settled")
+      onArchive={(row) =>
+        props.onArchive(row.space.id, row.listed.id, row.state !== "archived")
       }
       onNoSpace={onNoSpace}
       onMakeSpace={setMaking}
@@ -389,7 +388,7 @@ function SectionView({
   onToggle,
   onMore,
   onOpen,
-  onSettle,
+  onArchive,
   onMakeSpace,
   onNoSpace,
   onNewThread,
@@ -402,8 +401,8 @@ function SectionView({
   onToggle: () => void
   onMore: () => void
   onOpen: (space: SpaceId, pane: PaneState) => void
-  /** Settles the row, or brings it back. */
-  onSettle: (row: Arranged) => void
+  /** Archives the row, or brings it back. */
+  onArchive: (row: Arranged) => void
   onMakeSpace: (space: SpaceSummary) => void
   onNoSpace: () => void
   onNewThread: (space: SpaceId) => void
@@ -476,12 +475,12 @@ function SectionView({
                   </DropdownMenuItem>
                 )}
                 <DropdownMenuItem
-                  disabled={row.state !== "settled" && !settles(row.listed)}
-                  onClick={() => onSettle(row)}
+                  disabled={row.state !== "archived" && !archivable(row.listed)}
+                  onClick={() => onArchive(row)}
                 >
-                  {row.state === "settled"
-                    ? "Un-settle thread"
-                    : "Settle thread"}
+                  {row.state === "archived"
+                    ? "Unarchive thread"
+                    : "Archive thread"}
                   <DropdownMenuShortcut>Alt+S</DropdownMenuShortcut>
                 </DropdownMenuItem>
               </ContextMenuContent>

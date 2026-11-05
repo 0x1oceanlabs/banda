@@ -89,8 +89,8 @@ export type Shell = WindowApi & {
   center: () => void
   /** Goes to what calls the Person first (ADR 0011, decision 5). */
   answer: () => void
-  /** Settles what the Person looks at, or brings it back (ADR 0008). */
-  settle: () => void
+  /** Archives what the Person looks at, or brings it back (ADR 0069). */
+  archive: () => void
   /** Opens the Banda menu, or closes it when it is open (ADR 0017). */
   menu: (at: At) => void
   /** Opens the Banda menu at a route, or the settings at theirs, as
@@ -286,7 +286,7 @@ export function closing(pane: string): Plan {
 
 /**
  * Closes a Pane that shows the thing, on any workspace, as a Thread the
- * Person settles leaves them (ADR 0008, decision 4); nothing when none
+ * Person archives leaves them (ADR 0008, decision 4); nothing when none
  * shows it.
  */
 export function closingShown(
@@ -620,11 +620,11 @@ export const ACTIONS: readonly Action<Shell>[] = [
     run: (shell) => shell.answer(),
   },
   {
-    id: "sidebar.settle",
+    id: "sidebar.archive",
     section: "Threads",
-    title: "Settle the Thread you look at, or bring it back",
+    title: "Archive the Thread you look at, or bring it back",
     keys: [{ code: "KeyS", alt: true }],
-    run: (shell) => shell.settle(),
+    run: (shell) => shell.archive(),
   },
   {
     id: "menu.open",

@@ -1,9 +1,9 @@
 # Banda's "places" preset, as Herdr's: the Spaces listed above, a click
 # shows only one's Threads; below, every Thread by what needs you, the
-# settled ones folded. Two lines a row.
+# archived ones folded. Two lines a row.
 
 [group]
-states = ["active", "working", "settled"]
+states = ["active", "working", "archived"]
 bottom = []
 
 [spaces]

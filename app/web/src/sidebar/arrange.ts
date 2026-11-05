@@ -49,18 +49,18 @@ export type Arranged = {
 export const STATE_WORDS: Record<State, string> = {
   active: "",
   working: "Working",
-  settled: "Settled",
+  archived: "Archive",
 }
 
-/** Where a row stands: at work, settled as the Person's marks say, or active. */
-function stateOf(listed: Listed, settled: (listed: Listed) => boolean): State {
+/** Where a row stands: at work, archived as the Person's marks say, or active. */
+function stateOf(listed: Listed, archived: (listed: Listed) => boolean): State {
   if (works(listed.mark)) return "working"
-  return settled(listed) ? "settled" : "active"
+  return archived(listed) ? "archived" : "active"
 }
 
-/** The attention order: what waits first, then work, the rest, the settled. */
+/** The attention order: what waits first, then work, the rest, the archived. */
 function rank(row: Row): number {
-  if (row.state === "settled") return 3
+  if (row.state === "archived") return 3
   if (row.state === "working") return 1
   return waits(row.listed.mark) ? 0 : 2
 }
@@ -71,7 +71,7 @@ function rank(row: Row): number {
  * Spaces asks
  * @param toggled the sections the Person folded or opened, against what
  * the settings start with
- * @param settled whether the Person's marks have a row settled now
+ * @param archived whether the Person's marks have a row archived now
  */
 export function arrange(
   lists: Readonly<Record<SpaceId, readonly Listed[]>>,
@@ -79,14 +79,14 @@ export function arrange(
   settings: Settings,
   only?: SpaceId,
   toggled: ReadonlySet<string> = new Set(),
-  settled: (listed: Listed) => boolean = () => false
+  archived: (listed: Listed) => boolean = () => false
 ): Arranged {
   const named = spaces.filter((space) => !space.scratch)
   const all: Row[] = spaces.flatMap((space) =>
     (lists[space.id] ?? []).map((listed) => ({
       space,
       listed,
-      state: stateOf(listed, settled),
+      state: stateOf(listed, archived),
     }))
   )
   const rows = all
@@ -201,7 +201,7 @@ function rollup(rows: readonly Row[]): { mark: MarkState; waiting: number } {
   return {
     mark: loudest(rows.map((row) => row.listed.mark)),
     waiting: rows.filter(
-      (row) => row.state !== "settled" && waits(row.listed.mark)
+      (row) => row.state !== "archived" && waits(row.listed.mark)
     ).length,
   }
 }

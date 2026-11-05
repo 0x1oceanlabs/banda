@@ -8,7 +8,7 @@ const thread = (id: string): PaneState => ({
   args: { thread: id },
 })
 
-test("a settled Thread's Pane closes, and only its own", () => {
+test("an archived Thread's Pane closes, and only its own", () => {
   const right = { place: "right" } as const
   let state = start()
   state = open(state, "space-a", thread("t1"), right)

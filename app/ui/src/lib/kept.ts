@@ -1,6 +1,6 @@
 /**
  * A record this window keeps for its Person in its storage, by key: the
- * Person's own marks, as "seen" and "settled" (ADR 0005, decision 8).
+ * Person's own marks, as "seen" and "archived" (ADR 0005, decision 8).
  * Every part of the window, and every other window on the same storage,
  * hears a change at once. A window whose storage fails keeps it until it
  * closes.

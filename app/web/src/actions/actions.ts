@@ -22,26 +22,43 @@ export function actionFor<Context>(
 }
 
 /**
+ * Actions by the id they had before, which a bind may still name, for one
+ * stable release: it runs the action, and says what it is called now.
+ */
+const RENAMED: Readonly<Record<string, string>> = {
+  // ADR 0069: Settled is the archive.
+  "sidebar.settle": "sidebar.archive",
+}
+
+/**
  * The actions with the Person's keys (`keys.toml`, ADR 0005, decision
  * 11): a key they bind leaves the action that had it and runs theirs, or
  * runs nothing when they free it. A bind to no action is named, at its
- * line, as the look's problems are.
+ * line, as the look's problems are, and so is one to an action's old id.
  */
 export function rebind<Context>(
   actions: readonly Action<Context>[],
   keys: Keys
 ): { actions: Action<Context>[]; problems: Problem[] } {
   const known = new Set(actions.map((action) => action.id))
-  const binds = keys.binds.filter(
-    (bind) => !bind.action || known.has(bind.action)
-  )
-  const problems = keys.binds
-    .filter((bind) => !binds.includes(bind))
-    .map((bind) => ({
+  const binds: Keys["binds"] = []
+  const problems: Problem[] = []
+  const say = (bind: Keys["binds"][number], message: string) =>
+    problems.push({
       path: keys.file,
       line: bind.line,
-      message: `${bind.text}: Banda has no action ${bind.action}; Alt+K lists them`,
-    }))
+      message: `${bind.text}: ${message}`,
+    })
+  for (const bind of keys.binds) {
+    const action = bind.action && (RENAMED[bind.action] ?? bind.action)
+    if (action && !known.has(action)) {
+      say(bind, `Banda has no action ${action}; Alt+K lists them`)
+      continue
+    }
+    if (action !== bind.action)
+      say(bind, `${bind.action} is called ${action} now`)
+    binds.push({ ...bind, action })
+  }
   if (binds.length === 0) return { actions: [...actions], problems }
   return {
     actions: actions.map((action) => ({

@@ -76,13 +76,13 @@ const of = (
   keys?: Keys,
   only?: string,
   toggled?: Set<string>,
-  settled: readonly string[] = []
+  archived: readonly string[] = []
 ) =>
   arrange(lists, spaces, resolve(preset, keys), only, toggled, (listed) =>
-    settled.includes(listed.id)
+    archived.includes(listed.id)
   )
 
-test("inbox: one list, what waits first; the working and the settled on shelves", () => {
+test("inbox: one list, what waits first; the working and the archived on shelves", () => {
   const inbox = of("inbox")
   expect(ids(inbox)).toEqual([
     ["active", ["letters", "migration", "form", "logo"]],
@@ -91,19 +91,19 @@ test("inbox: one list, what waits first; the working and the settled on shelves"
   expect(ids(inbox, "shelves")).toEqual([["working", ["headers", "release"]]])
   expect(inbox.spaces).toBeUndefined()
 
-  const settled = of("inbox", {}, undefined, undefined, ["logo", "letters"])
-  expect(ids(settled)).toEqual([["active", ["migration", "form"]]])
-  expect(ids(settled, "shelves")).toEqual([
+  const archived = of("inbox", {}, undefined, undefined, ["logo", "letters"])
+  expect(ids(archived)).toEqual([["active", ["migration", "form"]]])
+  expect(ids(archived, "shelves")).toEqual([
     ["working", ["headers", "release"]],
-    ["settled", ["letters", "logo"]],
+    ["archived", ["letters", "logo"]],
   ])
-  expect(settled.shelves.map((s) => [s.label, s.folded])).toEqual([
+  expect(archived.shelves.map((s) => [s.label, s.folded])).toEqual([
     ["Working", false],
-    ["Settled", true],
+    ["Archive", true],
   ])
 })
 
-test("a Thread at work is never settled", () => {
+test("a Thread at work is never archived", () => {
   const working = of("inbox", {}, undefined, undefined, ["headers"])
   expect(ids(working, "shelves")).toEqual([["working", ["headers", "release"]]])
 })
@@ -120,10 +120,10 @@ test("spaces: each Space a section, what waits first, with its roll-up", () => {
     waiting: 2,
   })
   expect(bySpace.shelves).toEqual([])
-  // A settled Thread goes last, and waits for no one.
-  const settled = of("spaces", {}, undefined, undefined, ["letters"])
-  expect(ids(settled)[0]).toEqual(["s2", ["migration", "release", "letters"]])
-  expect(settled.sections[0]?.waiting).toBe(1)
+  // A archived Thread goes last, and waits for no one.
+  const archived = of("spaces", {}, undefined, undefined, ["letters"])
+  expect(ids(archived)[0]).toEqual(["s2", ["migration", "release", "letters"]])
+  expect(archived.sections[0]?.waiting).toBe(1)
 })
 
 test("places: the Spaces listed above, and a click on one shows its rows", () => {
@@ -135,7 +135,7 @@ test("places: the Spaces listed above, and a click on one shows its rows", () =>
     ["Landing", "asking", 1, 3],
     ["Quiet", "rest", 0, 0],
   ])
-  expect(places.sections.find((s) => s.key === "settled")?.folded).toBe(true)
+  expect(places.sections.find((s) => s.key === "archived")?.folded).toBe(true)
   expect(ids(of("places", {}, "s1"))).toEqual([
     ["active", ["form", "logo"]],
     ["working", ["headers"]],
@@ -166,7 +166,7 @@ test("empty sections hide unless the settings show them", () => {
     resolve("inbox", { group: { empty: "show" } })
   )
   expect(shown.sections.map((s) => s.key)).toEqual(["active"])
-  expect(shown.shelves.map((s) => s.key)).toEqual(["working", "settled"])
+  expect(shown.shelves.map((s) => s.key)).toEqual(["working", "archived"])
 })
 
 test("folded comes from the settings, and the Person's toggle turns it over", () => {
@@ -196,7 +196,7 @@ test("scratch Threads follow grouping, sorting, shelves and filtering like other
   }
   for (const by of ["space", "state", "none"] as const) {
     const settings = over(resolve("inbox"), {
-      group: { by, bottom: ["settled"] },
+      group: { by, bottom: ["archived"] },
       spaces: { list: true },
     })
     const result = arrange(
@@ -222,7 +222,7 @@ test("scratch Threads follow grouping, sorting, shelves and filtering like other
       if (by === "state")
         expect(
           result.shelves
-            .find((s) => s.key === "settled")
+            .find((s) => s.key === "archived")
             ?.rows.map((r) => r.listed.id)
         ).toContain("old")
       if (by === "none")
