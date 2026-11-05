@@ -35,18 +35,21 @@ pub struct Walks(Mutex<HashMap<PathBuf, (Instant, Arc<Walked>)>>);
 impl Walks {
     /// The files under `dir`, walked at most [`FRESH`] ago.
     pub fn of(&self, dir: &Path) -> Arc<Walked> {
-        let held = |walks: &Self| {
-            let mut kept = walks.0.lock().unwrap_or_else(|p| p.into_inner());
+        {
+            let mut kept = self.kept();
             kept.retain(|_, (when, _)| when.elapsed() < FRESH);
-            kept.get(dir).map(|(_, walked)| walked.clone())
-        };
-        if let Some(walked) = held(self) {
-            return walked;
+            if let Some((_, walked)) = kept.get(dir) {
+                return walked.clone();
+            }
         }
+        // Walked unlocked: a search under another folder waits for none.
         let walked = Arc::new(walk(dir, WALKED));
-        let mut kept = self.0.lock().unwrap_or_else(|p| p.into_inner());
-        kept.insert(dir.to_path_buf(), (Instant::now(), walked.clone()));
+        (self.kept()).insert(dir.to_path_buf(), (Instant::now(), walked.clone()));
         walked
+    }
+
+    fn kept(&self) -> std::sync::MutexGuard<'_, HashMap<PathBuf, (Instant, Arc<Walked>)>> {
+        self.0.lock().unwrap_or_else(|p| p.into_inner())
     }
 }
 
@@ -68,11 +71,7 @@ fn walk(dir: &Path, most: usize) -> Walked {
         }
         if let Ok(relative) = entry.path().strip_prefix(dir) {
             let path = relative.to_string_lossy();
-            paths.push(if std::path::MAIN_SEPARATOR == '/' {
-                path.into_owned()
-            } else {
-                path.replace(std::path::MAIN_SEPARATOR, "/")
-            });
+            paths.push(path.replace(std::path::MAIN_SEPARATOR, "/"));
         }
     }
     Walked { paths, cut: false }
@@ -86,19 +85,14 @@ pub fn matching(walked: &Walked, query: &str, limit: usize) -> Vec<String> {
     let pattern = Pattern::parse(query, CaseMatching::Smart, Normalization::Smart);
     let mut buffer = Vec::new();
     let mut found: Vec<(u8, std::cmp::Reverse<u32>, usize, &str)> = Vec::new();
+    let mut score = |text: &str| pattern.score(Utf32Str::new(text, &mut buffer), &mut matcher);
     for path in &walked.paths {
         let name = path.rsplit('/').next().unwrap_or(path);
-        let score = |text: &str, matcher: &mut Matcher, buffer: &mut Vec<char>| {
-            pattern.score(Utf32Str::new(text, buffer), matcher)
-        };
-        let ranked = match score(name, &mut matcher, &mut buffer) {
-            Some(score) => (0, score),
-            None => match score(path, &mut matcher, &mut buffer) {
-                Some(score) => (1, score),
-                None => continue,
-            },
-        };
-        found.push((ranked.0, std::cmp::Reverse(ranked.1), path.len(), path));
+        let ranked =
+            (score(name).map(|score| (0, score))).or_else(|| score(path).map(|score| (1, score)));
+        if let Some((tier, score)) = ranked {
+            found.push((tier, std::cmp::Reverse(score), path.len(), path));
+        }
     }
     if found.len() > limit {
         found.select_nth_unstable(limit);

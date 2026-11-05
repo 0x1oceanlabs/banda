@@ -75,7 +75,7 @@ impl Module for Files {
 }
 
 /// A path as a caller reads it.
-fn shown(path: &Path) -> String {
+pub(crate) fn shown(path: &Path) -> String {
     path.to_string_lossy().into_owned()
 }
 
@@ -183,14 +183,10 @@ impl Files {
         let watched = named(watch.watched());
         let limited = named(watch.limited());
         tokio::spawn(async move {
-            let mut first = vec![Watched::Watching { dirs: watched }];
-            if !limited.is_empty() {
-                first.push(Watched::Limit { dirs: limited });
-            }
-            for piece in first {
-                if !send(&say, &piece).await {
-                    return;
-                }
+            if !send(&say, &Watched::Watching { dirs: watched }).await
+                || (!limited.is_empty() && !send(&say, &Watched::Limit { dirs: limited }).await)
+            {
+                return;
             }
             loop {
                 let changed = tokio::select! {

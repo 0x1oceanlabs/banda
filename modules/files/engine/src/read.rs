@@ -4,6 +4,7 @@
 
 use crate::list::modified;
 use crate::model::{Kind, Stat, Text};
+use crate::shown;
 use sha2::{Digest, Sha256};
 use std::io::Read;
 use std::path::Path;
@@ -20,7 +21,7 @@ pub fn stat(path: &Path) -> Option<Stat> {
     let meta = std::fs::metadata(path).ok()?;
     let folder = meta.is_dir();
     Some(Stat {
-        path: path.to_string_lossy().into_owned(),
+        path: shown(path),
         kind: if folder { Kind::Folder } else { Kind::File },
         size: (!folder).then_some(meta.len()),
         modified: modified(&meta),
@@ -40,10 +41,9 @@ fn mime(path: &Path) -> String {
     if let Some(kind) = infer::get(&head) {
         return kind.mime_type().to_owned();
     }
-    if binary(&head, true) {
-        "application/octet-stream".to_owned()
-    } else {
-        "text/plain".to_owned()
+    match text_len(&head, true) {
+        Some(_) => "text/plain".to_owned(),
+        None => "application/octet-stream".to_owned(),
     }
 }
 
@@ -56,16 +56,17 @@ fn head(path: &Path) -> std::io::Result<Vec<u8>> {
     Ok(head)
 }
 
-/// Whether bytes are no text: a NUL in the first [`HEAD`], or not UTF-8.
-/// `cut` says the bytes may end inside a character, which is no fault.
-fn binary(bytes: &[u8], cut: bool) -> bool {
+/// How many of `bytes` are text; none when they are binary: a NUL in
+/// the first [`HEAD`], or not UTF-8. `cut` says they may end inside a
+/// character, which is no fault: the text stops before it.
+fn text_len(bytes: &[u8], cut: bool) -> Option<usize> {
     if bytes[..bytes.len().min(HEAD)].contains(&0) {
-        return true;
+        return None;
     }
     match std::str::from_utf8(bytes) {
-        Ok(_) => false,
-        // Only the end is cut short: the rest reads.
-        Err(error) => !(cut && error.error_len().is_none()),
+        Ok(_) => Some(bytes.len()),
+        Err(error) if cut && error.error_len().is_none() => Some(error.valid_up_to()),
+        Err(_) => None,
     }
 }
 
@@ -85,25 +86,16 @@ pub fn read(path: &Path, upto: u64) -> std::io::Result<Text> {
     (&mut file).take(upto + 1).read_to_end(&mut bytes)?;
     let read = bytes.len() as u64;
     let truncated = read > upto;
-    let mut hash = None;
-    if truncated {
-        bytes.truncate(upto as usize);
-    } else {
-        hash = Some(hex(&Sha256::digest(&bytes)));
-    }
-    let binary = binary(&bytes, truncated);
-    let text = (!binary).then(|| {
-        let whole = match std::str::from_utf8(&bytes) {
-            Ok(_) => bytes.len(),
-            Err(error) => error.valid_up_to(),
-        };
-        bytes.truncate(whole);
+    let hash = (!truncated).then(|| format!("{:x}", Sha256::digest(&bytes)));
+    bytes.truncate(upto as usize);
+    let text = text_len(&bytes, truncated).map(|len| {
+        bytes.truncate(len);
         String::from_utf8(bytes).unwrap_or_default()
     });
     Ok(Text {
-        path: path.to_string_lossy().into_owned(),
+        path: shown(path),
+        binary: text.is_none(),
         text,
-        binary,
         truncated,
         // Read whole, it is what was read; else what the system says,
         // which a file growing meanwhile may have passed.
@@ -113,14 +105,6 @@ pub fn read(path: &Path, upto: u64) -> std::io::Result<Text> {
             read
         },
         hash,
-    })
-}
-
-fn hex(bytes: &[u8]) -> String {
-    use std::fmt::Write;
-    bytes.iter().fold(String::new(), |mut hex, byte| {
-        let _ = write!(hex, "{byte:02x}");
-        hex
     })
 }
 

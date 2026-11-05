@@ -143,6 +143,7 @@ impl Watcher {
 
     fn watch(&self, dirs: impl IntoIterator<Item = PathBuf>) -> Watch {
         let mut system = held(&self.system);
+        let mut hearers = held(&self.hearers);
         let (say, heard) = mpsc::unbounded_channel();
         let mut limited = Vec::new();
         let mut watched = HashSet::new();
@@ -150,7 +151,7 @@ impl Watcher {
             if watched.contains(&dir) || !dir.is_dir() {
                 continue;
             }
-            let count = held(&self.hearers).counts.get(&dir).copied().unwrap_or(0);
+            let count = hearers.counts.get(&dir).copied().unwrap_or(0);
             if count == 0 {
                 match system.watch(&dir, RecursiveMode::NonRecursive) {
                     Ok(()) => {}
@@ -164,10 +165,9 @@ impl Watcher {
                     }
                 }
             }
-            held(&self.hearers).counts.insert(dir.clone(), count + 1);
+            hearers.counts.insert(dir.clone(), count + 1);
             watched.insert(dir);
         }
-        let mut hearers = held(&self.hearers);
         hearers.next += 1;
         let id = hearers.next;
         let hearer = Hearer {

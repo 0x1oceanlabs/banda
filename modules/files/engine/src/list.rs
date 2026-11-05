@@ -18,10 +18,11 @@ pub fn read(dir: &Path) -> std::io::Result<Vec<Entry>> {
     for found in std::fs::read_dir(dir)? {
         let Ok(found) = found else { continue };
         let name = found.file_name().to_string_lossy().into_owned();
-        let Ok(own) = found.path().symlink_metadata() else {
+        // Its own, a link's not followed.
+        let Ok(own) = found.metadata() else {
             continue;
         };
-        let link = own.file_type().is_symlink();
+        let link = own.is_symlink();
         // A link's size and time are what it leads to, when it leads
         // somewhere.
         let meta = if link {
@@ -29,19 +30,18 @@ pub fn read(dir: &Path) -> std::io::Result<Vec<Entry>> {
         } else {
             Some(own)
         };
-        let to_folder = link && meta.as_ref().is_some_and(Metadata::is_dir);
-        let kind = match &meta {
-            _ if link => Kind::Link,
-            Some(meta) if meta.is_dir() => Kind::Folder,
-            _ => Kind::File,
+        let folder = meta.as_ref().is_some_and(Metadata::is_dir);
+        let kind = match (link, folder) {
+            (true, _) => Kind::Link,
+            (false, true) => Kind::Folder,
+            (false, false) => Kind::File,
         };
-        let size = meta.as_ref().filter(|m| !m.is_dir()).map(Metadata::len);
         entries.push(Entry {
             hidden: name.starts_with('.'),
             name,
             kind,
-            to_folder,
-            size,
+            to_folder: link && folder,
+            size: meta.as_ref().filter(|_| !folder).map(Metadata::len),
             modified: meta.as_ref().and_then(modified),
             ignored: false,
         });
@@ -103,18 +103,16 @@ pub fn natural(a: &str, b: &str) -> Ordering {
 /// Marks the entries of `dir` that git ignores. Nothing is marked outside a
 /// work tree, or when git is not there; `.git` itself is not asked about.
 pub async fn mark_ignored(dir: &Path, entries: &mut [Entry]) {
-    let asked: Vec<usize> = (0..entries.len())
-        .filter(|&at| entries[at].name != ".git")
-        .collect();
-    for chunk in asked.chunks(CHUNK) {
-        let names: Vec<&str> = chunk.iter().map(|&at| entries[at].name.as_str()).collect();
+    for chunk in entries.chunks_mut(CHUNK) {
+        let names: Vec<&str> = (chunk.iter())
+            .map(|entry| entry.name.as_str())
+            .filter(|name| *name != ".git")
+            .collect();
         let Some(ignored) = check_ignore(dir, &names).await else {
             return;
         };
-        for &at in chunk {
-            if ignored.contains(entries[at].name.as_str()) {
-                entries[at].ignored = true;
-            }
+        for entry in chunk {
+            entry.ignored = ignored.contains(&entry.name);
         }
     }
 }
