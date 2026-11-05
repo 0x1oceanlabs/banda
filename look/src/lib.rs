@@ -178,7 +178,6 @@ pub struct Overview {
 #[derive(Clone, Debug, PartialEq, Serialize, TS)]
 #[ts(export, export_to = "look/")]
 pub struct Groups {
-    pub look: settings::GroupLook,
     /// A handle on its top edge under the pointer, that carries it.
     pub handle: bool,
 }
@@ -756,7 +755,6 @@ pub fn resolve(
                 zoom: all.overview.zoom.unwrap_or(0.35),
             },
             groups: Groups {
-                look: all.groups.look.unwrap_or(settings::GroupLook::Plate),
                 handle: all.groups.handle.unwrap_or(true),
             },
             sources,

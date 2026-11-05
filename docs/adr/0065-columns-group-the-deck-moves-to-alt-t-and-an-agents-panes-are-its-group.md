@@ -100,6 +100,11 @@ for any Panes, and an Agent's Panes are simply its Group.
    its Agent's state.**
    - Two looks, as `[groups] look = "plate" | "halo"` in `look.toml`.
      Roma chose both on 2026-11-05 (mockup `group-looks-2.html`).
+   - _Changed on 2026-11-06._ The halo is dropped, and the plate is a
+     Group's one look; a `look` in `[groups]` is still read, and let go.
+     The Strip clips what passes its edge, and with only `gap-outer`
+     round a Group there the halo's blur was cut off, so it read as a
+     coloured focus ring.
    - **Plate** (the default): one rounded rectangle behind the Group's
      tiles, the same margin on every side. Its radius is the tile's
      radius plus that margin, the same shape as the overview's plate

@@ -241,9 +241,9 @@ _Avoid_: tabs, tabbed column (a Tab is a browser page's).
 
 **Group**:
 Columns side by side on one workspace, held together, so they move and
-look as one: a plate or a halo behind them, in the colour of their
-Agent's state (ADR 0065). `Alt+G` starts one; an Agent's Thread and the
-Panes it opens are its Group. It lays out only, and gives no access.
+look as one: a plate behind them, in the colour of their Agent's state
+(ADR 0065). `Alt+G` starts one; an Agent's Thread and the Panes it opens
+are its Group. It lays out only, and gives no access.
 
 **Zoom**:
 One Pane over the whole window, with no gaps and no sidebar, until the

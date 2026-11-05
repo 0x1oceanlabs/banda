@@ -82,9 +82,8 @@
 # [overview]
 # zoom = 0.35                        # how far out, at most: 0.5 is half their size
 
-# Columns held together, on Alt+G: how they show.
+# Columns held together on a plate, on Alt+G.
 # [groups]
-# look = "plate"                     # "plate" behind them, or "halo", a glow round them
 # handle = true                      # a handle on the top edge under the pointer, that carries them
 
 # [motion]

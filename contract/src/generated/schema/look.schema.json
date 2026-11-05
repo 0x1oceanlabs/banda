@@ -362,31 +362,12 @@
       "description": "How a Group of columns shows (ADR 0065).",
       "type": "object",
       "properties": {
-        "look": {
-          "description": "`\"plate\"`, a plate behind its columns, or `\"halo\"`, a glow round\nthem; either in the colour of its Agent's state.",
-          "$ref": "#/$defs/GroupLook"
-        },
         "handle": {
           "description": "A handle on its top edge under the pointer, with its name, that\ncarries the whole Group.",
           "type": "boolean"
         }
       },
       "additionalProperties": false
-    },
-    "GroupLook": {
-      "description": "How a Group of columns shows: what stands behind its columns.",
-      "oneOf": [
-        {
-          "description": "A plate, a little of the colour mixed into the desk, with a fine\nline round it.",
-          "type": "string",
-          "const": "plate"
-        },
-        {
-          "description": "A soft glow of the colour, with no line.",
-          "type": "string",
-          "const": "halo"
-        }
-      ]
     },
     "MotionSettings": {
       "description": "`[motion]` in a `look.toml` or a theme's `banda.toml`.",

@@ -349,7 +349,7 @@ export function Strip({
             {group !== undefined && !zooms && (
               <div
                 aria-hidden
-                data-group-plate={groups.look}
+                data-group-plate=""
                 data-state={groupState(agents.get(group)?.mark)}
                 data-first={ends.first ? "" : undefined}
                 data-last={ends.last ? "" : undefined}
