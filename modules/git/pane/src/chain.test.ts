@@ -26,7 +26,7 @@ test("a stream that ends unsaid fails the run, and one that said stays", async (
   expect(runOf("said")).toMatchObject({ is: "done", title: "Pushed" })
 })
 
-const WRITER = { name: "Claude Code", thread: "t1" }
+const WRITER = { name: "Claude", thread: "t1" }
 const ANSWERS = {
   "git.prompt": { prompt: "Write it" },
   "git.written": { message: "Add the card" },
@@ -39,7 +39,7 @@ test("the Harness writes the message, then git.act commits with it", async () =>
   const running = run(engine, "writes", WRITER, "commit")
   expect(runOf("writes")).toMatchObject({
     is: "running",
-    label: "Claude Code is writing the message…",
+    label: "Claude is writing the message…",
     stops: true,
   })
   await settled()

@@ -524,7 +524,26 @@ test("the branch picker makes and switches branches, and ▾ commits chosen file
     name: "Message (optional) — Fake AI writes it",
   })
   await message.fill("Change a")
-  await page.screenshot({ path: "test-results/git-commit-dialog.png" })
+  // A file left out is an empty box; one focused by the keys has a ring
+  // apart from it, in the light and the dark.
+  await page.keyboard.press("Shift+Tab")
+  await expect(
+    dialog.getByRole("checkbox", { name: "Commit b.ts" })
+  ).toBeFocused()
+  const shot = { animations: "disabled" } as const
+  await page.screenshot({ ...shot, path: "test-results/git-commit-dialog.png" })
+  await dialog.screenshot({
+    ...shot,
+    path: "test-results/git-commit-dialog-light.png",
+  })
+  writeFileSync(join(dir, "config/look.toml"), 'mode = "dark"\n')
+  await expect(page.locator("html")).toHaveClass(/dark/)
+  await dialog.screenshot({
+    ...shot,
+    path: "test-results/git-commit-dialog-dark.png",
+  })
+  writeFileSync(join(dir, "config/look.toml"), "")
+  await expect(page.locator("html")).not.toHaveClass(/dark/)
   // None taken, nothing to commit.
   await dialog.getByRole("checkbox", { name: "Commit a.ts" }).click()
   await expect(

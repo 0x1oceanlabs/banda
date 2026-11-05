@@ -101,6 +101,9 @@ export function CommitDialog({
                 <label className="flex cursor-pointer items-center gap-2 px-2 py-1.5">
                   <Checkbox
                     aria-label={`Commit ${file.path}`}
+                    // Left out, an empty box plainly outlined; focused, a
+                    // ring apart from it, never read as a fill.
+                    className="transition-none not-data-checked:border-muted-foreground/60 focus-visible:ring-2 focus-visible:ring-offset-2 focus-visible:ring-offset-popover"
                     checked={takes}
                     onCheckedChange={(take) => toggle(file.path, take)}
                   />
