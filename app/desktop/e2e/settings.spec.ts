@@ -308,6 +308,45 @@ test("Keys: the lines of keys.toml, a key changed and taken out, and the reset c
     .toBe('[binds]\n# mine\n"Alt+Q" = "pane.close"\n')
 })
 
+test("Keys: the main key moves Banda's keys, and the Person's lines with it (ADR 0068)", async () => {
+  window = await startWindow({
+    files: {
+      "config/keys.toml":
+        '[binds]\n"Alt+M" = "column.maximize"\n"Alt+F" = "none"\n',
+    },
+  })
+  const { page, dir } = window
+  const file = join(dir, "config/keys.toml")
+  const { composer } = await firstThread(page)
+  await expect(composer).toBeVisible()
+  const settings = await openSettings(page)
+  await settings
+    .getByRole("navigation", { name: "Settings sections" })
+    .getByRole("button", { name: /Keys/ })
+    .click()
+
+  // Ctrl+Alt is written, and the lines that held Alt are shown to move:
+  // Alt+M to Ctrl+Alt+M, and Alt+F's none goes.
+  await settings.getByRole("radio", { name: /^Ctrl\+Alt/ }).click()
+  await expect
+    .poll(() => readFileSync(file, "utf8"))
+    .toMatch(/^mod = "Ctrl\+Alt"\n/)
+  await expect(settings).toContainText("2 of your keys hold Alt")
+  await settings.getByRole("button", { name: "Move", exact: true }).click()
+  await expect
+    .poll(() => readFileSync(file, "utf8"))
+    .toBe('mod = "Ctrl+Alt"\n[binds]\n"Ctrl+Alt+M" = "column.maximize"\n')
+
+  // Banda's keys read with it, and a mod that cannot be one is refused.
+  await expect(settings).toContainText("Ctrl+Alt+Return")
+  await settings.getByRole("radio", { name: /^Your own/ }).click()
+  await settings.getByRole("button", { name: "Super", exact: true }).click()
+  await expect(settings).toContainText("all three leave no key")
+  await expect
+    .poll(() => readFileSync(file, "utf8"))
+    .toMatch(/^mod = "Ctrl\+Alt"\n/)
+})
+
 test("New terminal: Ctrl+Alt+Enter opens a shell, and its keys can be assigned, changed and freed", async () => {
   window = await startWindow()
   const { page, dir } = window

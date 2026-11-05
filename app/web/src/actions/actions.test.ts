@@ -3,7 +3,7 @@ import { expect, test } from "vitest"
 import { ACTIONS } from "../shell/actions"
 import { keyText, matches } from "@banda/ui/lib/keys"
 import type { Mod } from "@banda/contract/look"
-import { actionFor, rebind, RESET_KEY } from "./actions"
+import { actionFor, movesOf, rebind, RESET_KEY } from "./actions"
 
 /** Banda's actions with its own keys, Alt the mod. */
 const BANDA = rebind(ACTIONS, DEFAULT_KEYS).actions
@@ -227,6 +227,68 @@ test("two actions on one key with the mod are named at its line", () => {
       path: "/c/keys.toml",
       line: 3,
       message: "Ctrl+Alt+X is “One” and “Two” with this mod; “One” keeps it",
+    },
+  ])
+})
+
+test("a new mod moves the lines that held the old one, at their level", () => {
+  const line = (
+    text: string,
+    code: string,
+    held: Partial<Mod>,
+    action?: string
+  ) => ({
+    code,
+    alt: false,
+    ctrl: false,
+    super: false,
+    shift: false,
+    ...held,
+    action,
+    text,
+    line: 2,
+  })
+  const alt: Mod = { alt: true, ctrl: false, super: false }
+  const ctrlAlt: Mod = { alt: true, ctrl: true, super: false }
+  const moves = movesOf(
+    [
+      line("Alt+M", "KeyM", { alt: true }, "column.maximize"),
+      line("Ctrl+Alt+T", "KeyT", { alt: true, ctrl: true }, "terminal.new"),
+      line("Alt+F", "KeyF", { alt: true }),
+      line("Ctrl+J", "KeyJ", { ctrl: true }, "pane.close"),
+    ],
+    alt,
+    ctrlAlt
+  )
+  expect(moves.map(({ bind, to }) => [bind.text, to && keyText(to)])).toEqual([
+    ["Alt+M", "Ctrl+Alt+M"],
+    ["Ctrl+Alt+T", "Ctrl+Alt+Super+T"],
+    ["Alt+F", undefined],
+  ])
+})
+
+test("a none of a mod not in force frees nothing, and is named", () => {
+  const { problems } = rebind(ACTIONS, {
+    ...DEFAULT_KEYS,
+    file: "/c/keys.toml",
+    mod: { alt: true, ctrl: true, super: false },
+    binds: [
+      {
+        code: "KeyF",
+        alt: true,
+        shift: false,
+        ctrl: false,
+        super: false,
+        text: "Alt+F",
+        line: 4,
+      },
+    ],
+  })
+  expect(problems).toEqual([
+    {
+      path: "/c/keys.toml",
+      line: 4,
+      message: "Alt+F: no Banda key is here with this mod, so it frees nothing",
     },
   ])
 })
