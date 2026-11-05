@@ -29,6 +29,7 @@ function fakeTab(id: number) {
   const throttled: boolean[] = []
   /** How it was reloaded, each time. */
   const reloaded: string[] = []
+  const captured: number[] = []
   const sessions = new Set<string>()
   let attached = false
   let made = 0
@@ -70,6 +71,8 @@ function fakeTab(id: number) {
         sessions.delete(String(params.sessionId))
         return {}
       }
+      if (method === "Page.captureScreenshot")
+        return { data: Buffer.from("chromium capture").toString("base64") }
       if (method === "Runtime.evaluate" && sessionId && sessions.has(sessionId))
         return { result: { value: `${params.expression} in ${sessionId}` } }
       throw new Error(`'${method}' wasn't found`)
@@ -79,6 +82,11 @@ function fakeTab(id: number) {
     id,
     getURL: () => `https://example.com/${id}`,
     getTitle: () => `Tab ${id}`,
+    executeJavaScriptInIsolatedWorld: async () => undefined,
+    capturePage: async () => {
+      captured.push(id)
+      return { toPNG: () => Buffer.from("native viewport") }
+    },
     isDestroyed: () => false,
     setBackgroundThrottling: (allowed: boolean) => throttled.push(allowed),
     reload: () => reloaded.push("reload"),
@@ -92,6 +100,7 @@ function fakeTab(id: number) {
     debuggee,
     throttled,
     reloaded,
+    captured,
   }
 }
 
@@ -327,3 +336,54 @@ it.live("a method the browser does not have is refused, as Chrome does", () => {
     client.socket.close()
   }).pipe(Effect.provide(layer))
 })
+
+it.live(
+  "only Banda's viewport PNG uses native capture; other CDP screenshots stay Chromium's",
+  () => {
+    const one = fakeTab(1)
+    const { layer } = endpointOver([one.page])
+    return Effect.gen(function* () {
+      const cdp = yield* Cdp
+      const { webSocketDebuggerUrl } = yield* versionOf(cdp.endpoint)
+      const internal = yield* Effect.promise(() => connect(cdp.tab(1)!))
+      const external = yield* Effect.promise(() =>
+        connect(webSocketDebuggerUrl)
+      )
+      const attach = (client: typeof internal) =>
+        Effect.promise(async () => {
+          const answer = await client.send("Target.attachToTarget", {
+            targetId: "T1",
+            flatten: true,
+          })
+          return (answer.result as { sessionId: string }).sessionId
+        })
+      const mine = yield* attach(internal)
+      const theirs = yield* attach(external)
+      const image = (
+        client: typeof internal,
+        session: string,
+        params: object
+      ) =>
+        Effect.promise(() =>
+          client.send("Page.captureScreenshot", params, session)
+        )
+      expect(
+        (yield* image(internal, mine, {
+          format: "png",
+          captureBeyondViewport: false,
+        })).result
+      ).toEqual({ data: Buffer.from("native viewport").toString("base64") })
+      for (const [client, session, params] of [
+        [internal, mine, { format: "png", captureBeyondViewport: true }],
+        [internal, mine, { format: "jpeg" }],
+        [external, theirs, { format: "png", captureBeyondViewport: false }],
+      ] as const)
+        expect((yield* image(client, session, params)).result).toEqual({
+          data: Buffer.from("chromium capture").toString("base64"),
+        })
+      expect(one.captured).toEqual([1])
+      internal.socket.close()
+      external.socket.close()
+    }).pipe(Effect.provide(layer))
+  }
+)

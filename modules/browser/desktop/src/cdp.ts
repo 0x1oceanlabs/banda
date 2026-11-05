@@ -61,6 +61,8 @@ type Page = Pick<
   | "id"
   | "getURL"
   | "getTitle"
+  | "capturePage"
+  | "executeJavaScriptInIsolatedWorld"
   | "isDestroyed"
   | "setBackgroundThrottling"
   | "reload"
@@ -613,6 +615,39 @@ export class Cdp extends Context.Service<
               if (params.ignoreCache) route.page.reloadIgnoringCache()
               else route.page.reload()
               answer({})
+              return Effect.void
+            }
+            // Banda's viewport image already has Playwright's masks applied.
+            // Electron's native capture keeps the whole visible guest at its
+            // current zoom; Chromium's CDP clip mixes CSS and native pixels
+            // when a webview is zoomed. Other clients and full-page captures
+            // keep the protocol's normal behavior.
+            if (
+              client.only &&
+              method === "Page.captureScreenshot" &&
+              params.format === "png" &&
+              params.captureBeyondViewport !== true
+            ) {
+              // A native copy may otherwise return the previous compositor
+              // frame, before Playwright's masks were painted.
+              // The page's scripts may replace Promise or animation-frame
+              // globals; the fixed paint barrier runs in our isolated world
+              // (0 is the page, 999 is Electron's preload world).
+              route.page
+                .executeJavaScriptInIsolatedWorld(1001, [
+                  {
+                    code: "new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve(undefined))))",
+                  },
+                ])
+                .then(() => route.page.capturePage())
+                .then(
+                  (image) => answer({ data: image.toPNG().toString("base64") }),
+                  (error: unknown) =>
+                    refuse(
+                      -32000,
+                      `Unable to capture screenshot: ${messageOf(error)}`
+                    )
+                )
               return Effect.void
             }
             route.page.debugger

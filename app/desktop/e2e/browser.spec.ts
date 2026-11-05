@@ -1455,6 +1455,107 @@ test("page dialogs stay in their tab and the Person and Agent answer the same di
   await expect(card).toHaveCount(0)
 })
 
+for (const dpr of [1, 2])
+  test(`viewport screenshots retain corners and masks at native zoom and DPR ${dpr}`, async () => {
+    const address = await serve({
+      "/": `<title>Zoom corners</title><style>body{margin:0;height:2400px}.corner{position:fixed;width:80px;height:80px;z-index:2}.tl{top:0;left:0;background:red}.tr{top:0;right:0;background:blue}.bl{bottom:0;left:0;background:yellow}.br{bottom:0;right:0;background:lime}input{position:fixed;left:120px;top:100px;width:160px;height:40px}</style><i class="corner tl"></i><i class="corner tr"></i><i class="corner bl"></i><i class="corner br"></i><input type="password" value="synthetic-secret"><script>window.requestAnimationFrame=()=>{throw new Error('page-owned global')}</script>`,
+    })
+    window = await startWindow({
+      deviceScaleFactor: dpr,
+      files: { "config/browser.toml": "[agents]\nscreenshots = true\n" },
+    })
+    const { app, page } = window
+    const host = await app.context().newCDPSession(page)
+    await host.send("Emulation.clearDeviceMetricsOverride")
+    await host.detach()
+    const { thread, composer } = await firstThread(page)
+    await composer.fill("hello")
+    await composer.press("Enter")
+    await expect(thread.getByText("You said: hello")).toBeVisible()
+    const opened = await agentSays(window, "browser_open", { url: address })
+    const tab = Number(/^Opened tab (\d+)\./.exec(opened)?.[1])
+    await expect(
+      page.getByRole("region", { name: "Zoom corners", exact: true })
+    ).toBeVisible()
+    const view = await page
+      .locator("[data-held-by] webview")
+      .evaluate((view) => ({
+        width: view.clientWidth,
+        height: view.clientHeight,
+      }))
+    await expect
+      .poll(() =>
+        app.evaluate(
+          ({ webContents }, tab) =>
+            webContents.fromId(tab)!.executeJavaScript("innerWidth"),
+          tab
+        )
+      )
+      .toBe(view.width)
+    for (const zoom of [1, 1.25, 0.8]) {
+      for (const scroll of [0, 120]) {
+        const at = await app.evaluate(
+          async ({ webContents }, { tab, zoom, scroll }) => {
+            const target = webContents.fromId(tab)!
+            target.setZoomFactor(zoom)
+            return target.executeJavaScriptInIsolatedWorld(1001, [
+              {
+                code: `new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(() => { scrollTo(0,${scroll}); const r=document.querySelector('input').getBoundingClientRect(); resolve({width:innerWidth,height:innerHeight,x:r.x+r.width/2,y:r.y+r.height/2}) })))`,
+              },
+            ])
+          },
+          { tab, zoom, scroll }
+        )
+        const result = await agentCalls(window, "browser_screenshot", { tab })
+        expect(result.isError, result.content[0].text).toBeFalsy()
+        const meta = JSON.parse(result.content[0].text)
+        const image = result.content[1]!
+        if (image.type !== "image") throw new Error("No image returned")
+        const pixels = await app.evaluate(
+          ({ nativeImage }, { data, at }) => {
+            const image = nativeImage.createFromBuffer(
+              Buffer.from(data, "base64")
+            )
+            const { width, height } = image.getSize()
+            const pixels = image.toBitmap()
+            const rgb = (x: number, y: number) =>
+              [
+                ...pixels.subarray(
+                  (Math.floor(y) * width + Math.floor(x)) * 4,
+                  (Math.floor(y) * width + Math.floor(x)) * 4 + 3
+                ),
+              ].reverse()
+            return {
+              width,
+              height,
+              tl: rgb(20, 20),
+              tr: rgb(width - 40, 20),
+              bl: rgb(20, height - 25),
+              br: rgb(width - 40, height - 25),
+              mask: rgb((at.x * width) / at.width, (at.y * height) / at.height),
+            }
+          },
+          { data: image.data, at }
+        )
+        const scale = Math.min(
+          1,
+          1280 / Math.max(view.width * dpr, view.height * dpr)
+        )
+        expect(meta.width).toBeCloseTo(view.width * dpr * scale, 0)
+        expect(meta.height).toBeCloseTo(view.height * dpr * scale, 0)
+        expect(pixels.tl[0]).toBeGreaterThan(220)
+        expect(pixels.tr[2]).toBeGreaterThan(220)
+        expect(pixels.bl[0]).toBeGreaterThan(220)
+        expect(pixels.bl[1]).toBeGreaterThan(220)
+        expect(pixels.br[1]).toBeGreaterThan(220)
+        expect(
+          Math.max(...pixels.mask),
+          JSON.stringify({ zoom, scroll, at, meta, pixels })
+        ).toBeLessThan(20)
+      }
+    }
+  })
+
 test("browser screenshots are MCP images with masked fields and live Agent settings", async () => {
   const address = await serve({
     "/": `<title>Canvas</title><style>body{margin:0}input{position:absolute;left:20px;top:20px;width:200px;height:36px}input[autocomplete]{top:80px}iframe{position:absolute;left:0;top:140px;width:260px;height:100px;border:0}canvas{position:absolute;left:20px;top:260px}</style>
@@ -1467,6 +1568,11 @@ test("browser screenshots are MCP images with masked fields and live Agent setti
   })
   window = await startWindow()
   const { app, page, dir } = window
+  // startWindow's host viewport emulation propagates to webviews without
+  // resizing their native surfaces. Capture the native viewport instead.
+  const hostSession = await app.context().newCDPSession(page)
+  await hostSession.send("Emulation.clearDeviceMetricsOverride")
+  await hostSession.detach()
   app.context().on("page", (entry) => entry.on("dialog", () => {}))
   const { thread, composer } = await firstThread(page)
   await composer.fill("hello")
@@ -1510,6 +1616,13 @@ test("browser screenshots are MCP images with masked fields and live Agent setti
   expect(result.content).toHaveLength(2)
   const meta = JSON.parse(result.content[0].text)
   expect(meta).toMatchObject({ tab, title: "Canvas", url: `${address}/` })
+  const viewport = await page
+    .locator("[data-held-by] webview")
+    .evaluate((view) => ({
+      width: view.clientWidth,
+      height: view.clientHeight,
+    }))
+  expect(meta).toMatchObject(viewport)
   expect(meta.width).toBeGreaterThan(0)
   expect(Math.max(meta.width, meta.height)).toBeLessThanOrEqual(1280)
   expect(meta.pictures).toBeUndefined()
@@ -1543,19 +1656,28 @@ test("browser screenshots are MCP images with masked fields and live Agent setti
     expect(Math.max(...pixel)).toBeLessThan(20)
   expect(samples.canvas[1]).toBeGreaterThan(220)
 
-  // A viewport taller than the bound is resized with its aspect intact.
+  // A resize follows the actual native viewport; zoom/HiDPI cases above
+  // exercise bounding when physical pixels exceed the image limit.
   await app.evaluate(({ BrowserWindow }) =>
     BrowserWindow.getAllWindows()[0]!.setContentSize(1800, 1600)
   )
-  await page.setViewportSize({ width: 1800, height: 1600 })
   await expect
     .poll(async () => {
       const large = await shot()
       expect(large.isError, large.content[0].text).toBeFalsy()
       const meta = JSON.parse(large.content[0].text)
-      return Math.max(meta.width, meta.height)
+      const view = await page
+        .locator("[data-held-by] webview")
+        .evaluate((view) => ({
+          width: view.clientWidth,
+          height: view.clientHeight,
+        }))
+      return (
+        Math.max(meta.width, meta.height) ===
+        Math.min(1280, Math.max(view.width, view.height))
+      )
     })
-    .toBe(1280)
+    .toBe(true)
 
   // Turning tools off also refuses calls in already established Threads.
   await page.keyboard.press("Alt+Comma")
