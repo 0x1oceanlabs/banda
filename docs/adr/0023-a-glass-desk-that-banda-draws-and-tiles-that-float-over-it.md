@@ -64,10 +64,12 @@ The first build made the glass Hyprland's. Roma, seeing that its blur is Hyprlan
    - `desk.blur` frosts the sidebar's panel too: the tiles that go under it blur as the wallpaper does.
    - `tile.opacity` works only with glass on. Without glass, a translucent tile would only change its colour.
    - Roma, seeing the tiles at 0.85: "the windows are too transparent". The default is 0.95: the glass shows at their edges and under the tint, and the text sits on an almost solid tile.
+     - _Changed on 2026-11-06, by ADR 0075._ The tiles and menus are solid over glass (`[tile] opacity = 1`), as a Mac's windows are; the desk, the bar and the sidebar's panel are the glass.
    - Shadows are keys too, and glass casts them only. Roma: "the panels can do without, keep it on the sidebar only by default". The tiles stand out by their density and hairline. The panel, which floats over the tiles, keeps a shadow to show it is on top.
    - The Strip clips what goes past its edge, so a tile's shadow shows only as far as the outer gap.
    - The panel sidebar sits between the two: its opacity is halfway between the desk's and the tiles'. That way the order holds: the desk is the clearest, the panel is frosted, and the tiles are the densest.
    - Over glass the tiles float, so the air between them is Banda's `[gaps]`, 12 pixels by default. Hyprland's `gaps_in` is for windows that touch the screen; Banda takes it only on a solid desk.
+     - _Changed on 2026-11-06, by ADR 0075._ The glass changes the background, never the shape: the gaps are the theme's, and Hyprland's are taken, glass or not, only under the `omarchy` theme.
 
 4. **The sidebar floats over the Strip** (_built_). Roma, seeing tiles cut off at the sidebar's edge: "the sidebar must be on top".
    - The Strip runs the whole width of the window, under the sidebar. Its columns start past the sidebar, and their widths and scrolls count only the room that shows beside it.

@@ -82,6 +82,7 @@ ADR 0005 promised a theme file (decision 11) and "one look, and honest motion" (
    - `look.toml` still wins key by key. `hyprland = false` turns it off.
    - And its dimming: when `decoration:dim_inactive` is on, `dim_strength` becomes `tile.dim-inactive`, so the tiles without the focus darken as the windows do. Off, it leaves the setting to the layers under it.
    - Only these: Hyprland's colours come through the Omarchy theme, and its gaps around the screen (`gaps_out`) belong to the desktop, not to the tiles in Banda's window.
+   - _Changed on 2026-11-06, by ADR 0075._ Hyprland's settings are a layer only under the `omarchy` theme; the `banda` and `macos` themes keep their own shape under Hyprland too.
 
 9. **Motion, as niri says it.**
    - `[motion]`: `off`, `slowdown` (2 is twice as slow).
