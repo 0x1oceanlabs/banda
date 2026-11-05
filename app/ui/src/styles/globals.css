@@ -374,10 +374,18 @@ html[data-glass] [data-held-by] {
  * them, in its colour. Each column draws its piece, across the gap on its
  * right to the next column, so the pieces meet with no seam and move with
  * their columns; the Group's ends stand `--group-pad` out, which the
- * Strip leaves free (`places` counts it as half a gap too).
+ * Strip leaves free (`padded` counts it as half a gap too).
  */
-:root {
+/* Declared on the column, so a row of the overview, which scales its own
+   --gap-inner, scales it too. */
+[data-column] {
   --group-pad: calc(var(--gap-inner) / 2);
+}
+[data-column][data-pad-left] {
+  margin-left: var(--group-pad);
+}
+[data-column][data-pad-right] {
+  margin-right: var(--group-pad);
 }
 [data-group-plate] {
   /* No Agent's state: a tint of the text, barely there. */

@@ -37,6 +37,8 @@ import {
   type Entry,
   find,
   focused,
+  groupAttributes,
+  padded,
   share,
   type Workspaces,
 } from "./model"
@@ -207,16 +209,23 @@ export function Overview({
   const fitted = useMemo(() => {
     if (!screen) return undefined
     const widths = workspaces.list.map((workspace) => {
-      const columns = drawnColumns(workspace, look).map((column) =>
+      const drawn = drawnColumns(workspace, look)
+      const columns = drawn.map((column) =>
         Math.max(
           (share(column.width) ?? 0.5) * (screen.inner + screen.gap) -
             screen.gap,
           Math.min(screen.inner, column.min * screen.rem)
         )
       )
+      // A Group's ends stand out half a gap, as the Strip draws them.
+      const pads = drawn.reduce((sum, { ends }) => {
+        const { left, right } = padded(ends)
+        return sum + (+left + +right) * (screen.gap / 2)
+      }, 0)
       const across =
         columns.reduce((sum, width) => sum + width, 0) +
-        screen.gap * Math.max(0, columns.length - 1)
+        screen.gap * Math.max(0, columns.length - 1) +
+        pads
       // A workspace is never narrower than its screen.
       const whole = Math.max(across, screen.inner) + 2 * screen.outer
       return { columns, whole: columns.length ? whole : 0 }
@@ -507,14 +516,16 @@ export function Overview({
       ringed: true,
       frame,
       go: onGo,
-      land: (hit, x, y, pane) => {
+      land: (hit, x, y, pane, group) => {
         const between = hit.closest<HTMLElement>("[data-between]")
         if (!between) {
           const row = hit.closest<HTMLElement>("[data-row]")
           return row?.dataset.row
-            ? landIn(row, row.dataset.row, x, y, pane)
+            ? landIn(row, row.dataset.row, x, y, pane, group)
             : {}
         }
+        // A Group goes to a workspace there is, not a new one.
+        if (group !== undefined) return {}
         const index = Number(between.dataset.between)
         if (stays(workspaces, pane, index)) return {}
         const { left, right, top, bottom } = between.getBoundingClientRect()
@@ -730,6 +741,7 @@ function Row({
           <div
             key={column.id}
             data-column={column.id}
+            {...groupAttributes(column.group, column.ends)}
             className="flex h-full shrink-0 flex-col gap-(--gap-inner)"
             style={{ width: (fit.columns[c] ?? 0) * scale }}
           >

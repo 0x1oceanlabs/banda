@@ -3176,6 +3176,65 @@ test("Alt+G starts a Group, Alt+Shift+[ takes a column in, and the Group moves w
   await expect(plates).toHaveCount(1)
 })
 
+test("a Group's handle carries it, and a Pane dropped inside its end joins it", async () => {
+  // A third each, so the three fit in view.
+  window = await startWindow({
+    look: '[columns]\nmin = 10\ndefault = "1/3"\n',
+  })
+  const { page } = window
+  const { thread, composer } = await firstThread(page)
+  await expect(composer).toBeFocused()
+  const launcher = page.getByRole("region", { name: "New Pane" })
+  await page.keyboard.press("Alt+KeyN")
+  await expect(launcher).toHaveCount(1)
+  await page.keyboard.press("Alt+KeyN")
+  await expect(launcher).toHaveCount(2)
+  await expect(launcher.nth(1)).toHaveAttribute("data-focused", "true")
+  await page.keyboard.press("KeyT")
+  const terminal = terminalTile(page)
+  await expect(terminal).toHaveAttribute("data-focused", "true")
+  const x = async (tile: Locator) => (await tile.boundingBox())!.x
+  // The Thread and the launcher, a Group; the terminal beside it.
+  await page.keyboard.press("Alt+Home")
+  await page.keyboard.press("Alt+KeyG")
+  await page.keyboard.press("Alt+ArrowRight")
+  await page.keyboard.press("Alt+Shift+BracketLeft")
+  const plates = page.locator("[data-group-plate]")
+  await expect(plates).toHaveCount(2)
+  await settled(thread, launcher, terminal)
+
+  // Under the pointer, the handle shows; dragged, the Group goes whole.
+  const handle = page.locator("[data-group-handle]")
+  const middle = await within(thread, 0.5, 0.5)
+  await page.mouse.move(middle.x, middle.y)
+  await expect(handle).toHaveAttribute("data-hover", "")
+  await expect(handle).toHaveAccessibleName("Group · 2 Panes")
+  const grip = (await handle.boundingBox())!
+  await page.mouse.move(grip.x + 8, grip.y + grip.height / 2)
+  await page.mouse.down()
+  // Past the terminal's middle.
+  const past = await within(terminal, 0.7, 0.5)
+  await page.mouse.move(past.x, past.y, { steps: 10 })
+  await page.mouse.up()
+  await expect
+    .poll(async () => (await x(terminal)) < (await x(thread)))
+    .toBe(true)
+  await expect
+    .poll(async () => (await x(thread)) < (await x(launcher)))
+    .toBe(true)
+  await settled(thread, launcher, terminal)
+  await page.screenshot({ path: "test-results/group-handle.png" })
+
+  // The terminal, dropped just inside the Group's left end, joins it.
+  const from = await headerOf(terminal)
+  await page.mouse.move(from.x, from.y)
+  await page.mouse.down()
+  const edge = (await thread.boundingBox())!
+  await page.mouse.move(edge.x - 2, edge.y + edge.height / 2, { steps: 10 })
+  await page.mouse.up()
+  await expect(plates).toHaveCount(3)
+})
+
 test("a tab in a Deck's bar carries its Pane", async () => {
   window = await startWindow()
   const { page } = window

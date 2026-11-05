@@ -175,6 +175,26 @@ function filledAt(workspace: Workspace, c: number): boolean {
  * those ends stand out half a gap, for its plate (ADR 0065). */
 export type Ends = { first: boolean; last: boolean; pad: boolean }
 
+/** Which of a column's sides stand out half a gap, `--group-pad`, for
+ * its Group's plate: every measure of the columns counts these. */
+export function padded(ends: Ends | undefined): {
+  left: boolean
+  right: boolean
+} {
+  return { left: !!ends?.pad && ends.first, right: !!ends?.pad && ends.last }
+}
+
+/** The attributes a column draws its Group by: its plate's margins come
+ * from them in CSS, with `--group-pad` (globals.css). */
+export function groupAttributes(group: string | undefined, ends: Ends) {
+  const { left, right } = padded(ends)
+  return {
+    "data-group": group,
+    "data-pad-left": left ? "" : undefined,
+    "data-pad-right": right ? "" : undefined,
+  }
+}
+
 /** Where the column at `c` stands in its Group; a Group that fills the
  * screen stands out into the Strip's own padding instead of the gaps. */
 export function groupEnds(workspace: Workspace, c: number): Ends {

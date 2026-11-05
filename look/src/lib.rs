@@ -179,6 +179,8 @@ pub struct Overview {
 #[ts(export, export_to = "look/")]
 pub struct Groups {
     pub look: settings::GroupLook,
+    /// A handle on its top edge under the pointer, that carries it.
+    pub handle: bool,
 }
 
 /// A picture Banda's glass is made of (ADR 0030).
@@ -741,6 +743,7 @@ pub fn resolve(
             },
             groups: Groups {
                 look: all.groups.look.unwrap_or(settings::GroupLook::Plate),
+                handle: all.groups.handle.unwrap_or(true),
             },
             sources,
             problems,

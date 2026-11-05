@@ -70,7 +70,7 @@ export const DEFAULT_DRAWER: Drawer = { height: 0.6 }
 export const DEFAULT_OVERVIEW: Overview = { zoom: 0.35 }
 
 /** How a Group shows, as `banda look` gives it with no files (ADR 0065). */
-export const DEFAULT_GROUPS: Groups = { look: "plate" }
+export const DEFAULT_GROUPS: Groups = { look: "plate", handle: true }
 
 /** Banda's own columns, niri's: what `banda look` gives with no files. */
 export const DEFAULT_COLUMNS: Columns = {

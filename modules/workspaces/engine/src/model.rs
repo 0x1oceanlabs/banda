@@ -320,7 +320,7 @@ pub fn open(
                 index: usize::MAX,
             }
         });
-        put(list, new_column(pane, width), &place)?;
+        put(list, new_column(pane, width), &place, None)?;
     }
     normalize(list);
     Ok(id)
@@ -339,13 +339,21 @@ fn new_column(pane: Pane, width: Option<String>) -> Column {
 
 /// Puts a column at `place`: as it is when the place is a column's own,
 /// or its Panes into another column.
-fn put(list: &mut Arrangement, column: Column, place: &Place) -> Result<(), Refusal> {
+/// `grouped`, beside a Pane at a Group's end, says whether a column of its
+/// own goes inside that Pane's Group or out of it, as the mouse let it go
+/// (ADR 0065, decision 5).
+fn put(
+    list: &mut Arrangement,
+    column: Column,
+    place: &Place,
+    grouped: Option<bool>,
+) -> Result<(), Refusal> {
     match *place {
         Place::Column { workspace, index } => {
             let w = workspace_at(list, workspace)?;
             let at = index.min(list[w].columns.len());
             list[w].columns.insert(at, column);
-            settle(list, w, at);
+            settle(list, w, at, None);
         }
         Place::Stack {
             column: into,
@@ -365,8 +373,10 @@ fn put(list: &mut Arrangement, column: Column, place: &Place) -> Result<(), Refu
                 }
                 Side::Left | Side::Right => {
                     let index = at.column + usize::from(side == Side::Right);
+                    let by = columns[at.column].group;
                     columns.insert(index, column);
-                    settle(list, at.workspace, index);
+                    let into = grouped.map(|inside| by.filter(|_| inside));
+                    settle(list, at.workspace, index, into);
                 }
             }
         }
@@ -409,7 +419,12 @@ pub fn args_of(list: &Arrangement, pane: PaneId) -> Option<&Value> {
 /// Alone in its column, it takes the column along to a place of a column's
 /// own, with its width and display; in its column's stack, it changes
 /// places there.
-pub fn move_pane(list: &mut Arrangement, pane: PaneId, place: &Place) -> Result<(), Refusal> {
+pub fn move_pane(
+    list: &mut Arrangement,
+    pane: PaneId,
+    place: &Place,
+    grouped: Option<bool>,
+) -> Result<(), Refusal> {
     if matches!(*place, Place::Beside { pane: other, .. } if other == pane) {
         return Err(Refusal::invalid("A Pane moves beside another, not itself."));
     }
@@ -446,9 +461,16 @@ pub fn move_pane(list: &mut Arrangement, pane: PaneId, place: &Place) -> Result<
             ..new_column(moving, None)
         }
     };
-    put(list, column, place)?;
+    put(list, column, place, grouped)?;
     normalize(list);
     Ok(())
+}
+
+/// Whether the column at `c` stands with one Group's columns on both
+/// sides of it. (`inside` asks it of the gap before a column.)
+fn flanked(columns: &[Column], c: usize) -> bool {
+    let left = c.checked_sub(1).and_then(|i| columns[i].group);
+    left.is_some() && columns.get(c + 1).and_then(|o| o.group) == left
 }
 
 /// Moves a column to a workspace, `index` from the left, counted as if it
@@ -461,7 +483,7 @@ pub fn move_column(
 ) -> Result<(), Refusal> {
     let (w, c) = column_at(list, column)?;
     let moving = list[w].columns.remove(c);
-    put(list, moving, &Place::Column { workspace, index })?;
+    put(list, moving, &Place::Column { workspace, index }, None)?;
     normalize(list);
     Ok(())
 }
@@ -565,14 +587,19 @@ fn run(columns: &[Column], c: usize) -> std::ops::Range<usize> {
 }
 
 /// A column just put at `at` of workspace `w` joins the Group whose
-/// columns stand on both sides of it, as one put inside a Group does; and
-/// it leaves its own when that Group's other columns stand elsewhere.
-fn settle(list: &mut Arrangement, w: usize, at: usize) {
+/// columns stand on both sides of it, as one put inside a Group does;
+/// else it goes `into` the Group the mouse said, or none; else it leaves
+/// its own when that Group's other columns stand elsewhere.
+fn settle(list: &mut Arrangement, w: usize, at: usize, into: Option<Option<GroupId>>) {
     let columns = &list[w].columns;
     let left = at.checked_sub(1).and_then(|i| columns[i].group);
     let right = columns.get(at + 1).and_then(|other| other.group);
-    if left.is_some() && left == right {
+    if flanked(columns, at) {
         list[w].columns[at].group = left;
+        return;
+    }
+    if let Some(group) = into {
+        list[w].columns[at].group = group;
         return;
     }
     let Some(own) = columns[at].group else {
@@ -876,7 +903,7 @@ mod tests {
         assert_eq!(height_of(&list, one), None);
 
         // Moved to a column of its own, it leaves its height behind.
-        move_pane(&mut list, three, &beside(one, Side::Right).unwrap()).unwrap();
+        move_pane(&mut list, three, &beside(one, Side::Right).unwrap(), None).unwrap();
         assert_eq!(height_of(&list, three), None);
         let column = list[0].columns[0].id;
         even(&mut list, column).unwrap();
@@ -1066,7 +1093,7 @@ mod tests {
         let first = list[0].columns[0].id;
         size(&mut list, first, Some("1/3".into())).unwrap();
         // Alone: the column goes along, with its width.
-        move_pane(&mut list, one, &beside(three, Side::Right).unwrap()).unwrap();
+        move_pane(&mut list, one, &beside(three, Side::Right).unwrap(), None).unwrap();
         assert_eq!(layout(&list), [vec![vec![2, 3], vec![1]], vec![]]);
         assert_eq!(list[0].columns[1].id, first);
         assert_eq!(list[0].columns[1].width.as_deref(), Some("1/3"));
@@ -1079,15 +1106,16 @@ mod tests {
                 workspace,
                 index: 0,
             },
+            None,
         )
         .unwrap();
         assert_eq!(layout(&list), [vec![vec![3], vec![2], vec![1]], vec![]]);
         // Into a column's stack, at an index.
         let column = list[0].columns[1].id;
-        move_pane(&mut list, one, &Place::Stack { column, index: 0 }).unwrap();
+        move_pane(&mut list, one, &Place::Stack { column, index: 0 }, None).unwrap();
         assert_eq!(layout(&list), [vec![vec![3], vec![1, 2]], vec![]]);
         // Down its own stack: counted as if it had left.
-        move_pane(&mut list, one, &Place::Stack { column, index: 1 }).unwrap();
+        move_pane(&mut list, one, &Place::Stack { column, index: 1 }, None).unwrap();
         assert_eq!(layout(&list), [vec![vec![3], vec![2, 1]], vec![]]);
         // Alone, into its own column: it stays.
         let alone = list[0].columns[0].id;
@@ -1098,10 +1126,11 @@ mod tests {
                 column: alone,
                 index: 5,
             },
+            None,
         )
         .unwrap();
         assert_eq!(layout(&list), [vec![vec![3], vec![2, 1]], vec![]]);
-        assert!(move_pane(&mut list, one, &beside(one, Side::Right).unwrap()).is_err());
+        assert!(move_pane(&mut list, one, &beside(one, Side::Right).unwrap(), None).is_err());
     }
 
     #[test]
@@ -1114,7 +1143,7 @@ mod tests {
             workspace: list[1].id,
             index: usize::MAX,
         };
-        move_pane(&mut list, one, &bottom).unwrap();
+        move_pane(&mut list, one, &bottom, None).unwrap();
         assert_eq!(layout(&list), [vec![vec![2]], vec![vec![1]], vec![]]);
     }
 
@@ -1128,17 +1157,17 @@ mod tests {
         let first = list[0].columns[0].id;
         size(&mut list, first, Some("1/3".into())).unwrap();
         // Alone: its column goes along, with its width.
-        move_pane(&mut list, one, &Place::Workspace { index: 0 }).unwrap();
+        move_pane(&mut list, one, &Place::Workspace { index: 0 }, None).unwrap();
         assert_eq!(layout(&list), [vec![vec![1]], vec![vec![2, 3]], vec![]]);
         assert_eq!(list[0].columns[0].width.as_deref(), Some("1/3"));
         // From a stack, between two.
-        move_pane(&mut list, three, &Place::Workspace { index: 1 }).unwrap();
+        move_pane(&mut list, three, &Place::Workspace { index: 1 }, None).unwrap();
         assert_eq!(
             layout(&list),
             [vec![vec![1]], vec![vec![3]], vec![vec![2]], vec![]]
         );
         // Past the last: over the empty one at the bottom, which stays.
-        move_pane(&mut list, one, &Place::Workspace { index: 9 }).unwrap();
+        move_pane(&mut list, one, &Place::Workspace { index: 9 }, None).unwrap();
         assert_eq!(
             layout(&list),
             [EMPTY, vec![vec![3]], vec![vec![2]], vec![vec![1]], vec![]]
@@ -1300,6 +1329,7 @@ mod tests {
                 workspace: here,
                 index: 2,
             },
+            None,
         )
         .unwrap();
         assert_eq!(grouping(&list)[0], [1, 1, 1, 1, 0, 0]);
@@ -1309,6 +1339,33 @@ mod tests {
         group(&mut list, c[0]).unwrap();
         move_column(&mut list, c[0], here, 1).unwrap();
         assert_eq!(grouping(&list)[0], [0, 1]);
+    }
+
+    #[test]
+    fn at_a_groups_end_the_mouse_says_inside_it_or_out() {
+        let (mut list, c) = row(4);
+        group(&mut list, c[0]).unwrap();
+        regroup(&mut list, c[1], Toward::Left).unwrap();
+        let pane = |list: &Arrangement, n: usize| list[0].columns[n].panes[0].id;
+        let (last, lone) = (pane(&list, 1), pane(&list, 3));
+        let right = Place::Beside {
+            pane: last,
+            side: Side::Right,
+        };
+        move_pane(&mut list, lone, &right, None).unwrap();
+        assert_eq!(grouping(&list)[0], [1, 1, 0, 0]);
+        move_pane(&mut list, lone, &right, Some(true)).unwrap();
+        assert_eq!(grouping(&list)[0], [1, 1, 1, 0]);
+        move_pane(&mut list, lone, &right, Some(false)).unwrap();
+        assert_eq!(grouping(&list)[0], [1, 1, 0, 0]);
+        // Between two of its columns, it is in the Group whatever it says.
+        let first = pane(&list, 0);
+        let between = Place::Beside {
+            pane: first,
+            side: Side::Right,
+        };
+        move_pane(&mut list, lone, &between, Some(false)).unwrap();
+        assert_eq!(grouping(&list)[0], [1, 1, 1, 0]);
     }
 
     #[test]

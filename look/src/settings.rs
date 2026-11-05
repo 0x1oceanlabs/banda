@@ -298,6 +298,9 @@ pub struct Groups {
     /// `"plate"`, a plate behind its columns, or `"halo"`, a glow round
     /// them; either in the colour of its Agent's state.
     pub look: Option<GroupLook>,
+    /// A handle on its top edge under the pointer, with its name, that
+    /// carries the whole Group.
+    pub handle: Option<bool>,
 }
 
 /// How a Group of columns shows: what stands behind its columns.
@@ -469,6 +472,7 @@ impl Settings {
             },
             groups: Groups {
                 look: self.groups.look.or(under.groups.look),
+                handle: self.groups.handle.or(under.groups.handle),
             },
             motion: self.motion.over(under.motion),
             columns: self.columns.over(under.columns),
@@ -530,6 +534,7 @@ impl Settings {
             overview: Overview { zoom: Some(0.35) },
             groups: Groups {
                 look: Some(GroupLook::Plate),
+                handle: Some(true),
             },
             motion: MotionSettings::defaults(),
             columns: ColumnsSettings::defaults(),

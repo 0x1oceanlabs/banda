@@ -1,11 +1,18 @@
 import { cn } from "@banda/ui/lib/utils"
+import { GripHorizontalIcon } from "lucide-react"
 import { Component, useEffect, useLayoutEffect, useRef } from "react"
 import type { Engine, SpaceId } from "@banda/contract"
 import type { Listed, PaneState } from "@banda/ui/pane"
 import { columnsOf, moveOf, useLookColumns, useLookGroups } from "../look"
 import { Choices } from "../registry"
 import type { Chime } from "@banda/ui/sound"
-import { type Entry, share, type Workspace } from "./model"
+import {
+  type Entry,
+  groupAttributes,
+  runOf,
+  share,
+  type Workspace,
+} from "./model"
 import {
   ColumnMotion,
   columnIn,
@@ -248,6 +255,19 @@ export function Strip({
     }
   }, [])
 
+  // A Group's handle shows while the pointer is over any of its columns.
+  const hovered = useRef<string | undefined>(undefined)
+  const hover = (group: string | undefined) => {
+    const strip = scroller.current
+    if (!strip || group === hovered.current) return
+    hovered.current = group
+    for (const handle of strip.querySelectorAll<HTMLElement>(
+      "[data-group-handle]"
+    )) {
+      handle.toggleAttribute("data-hover", handle.dataset.groupHandle === group)
+    }
+  }
+
   const spaces = new Set(
     workspace.columns.flatMap((column) => column.entries.map((e) => e.space))
   )
@@ -256,6 +276,11 @@ export function Strip({
     <div
       ref={scroller}
       data-strip={workspace.id}
+      onPointerOver={(event) => {
+        const target = event.target instanceof Element ? event.target : null
+        hover(target?.closest<HTMLElement>("[data-column]")?.dataset.group)
+      }}
+      onPointerLeave={() => hover(undefined)}
       className="relative flex h-full gap-(--gap-inner) overflow-hidden p-(--gap-outer) pl-[calc(var(--gap-outer)+var(--sidebar-inset))]"
     >
       <Before read={() => motion.current.before(scroller.current)} />
@@ -279,6 +304,7 @@ export function Strip({
             key={column.id}
             data-column={column.id}
             data-entry={column.entries[column.active]?.id}
+            {...groupAttributes(group, ends)}
             // A group bar sits nearer its tile than tiles to each other.
             className={cn(
               "relative flex h-full shrink-0 flex-col",
@@ -289,9 +315,6 @@ export function Strip({
               // included; never so narrow its Panes cannot be read.
               width: widthAt(share(column.width) ?? 0.5),
               minWidth: minWidthOf(column.min),
-              // A Group's ends stand out, for its plate (ADR 0065).
-              marginLeft: ends.pad && ends.first ? PAD : undefined,
-              marginRight: ends.pad && ends.last ? PAD : undefined,
             }}
           >
             {group !== undefined && !zooms && (
@@ -301,6 +324,15 @@ export function Strip({
                 data-first={ends.first ? "" : undefined}
                 data-last={ends.last ? "" : undefined}
                 data-focused={lit ? "" : undefined}
+              />
+            )}
+            {group !== undefined && ends.first && groups.handle && !zooms && (
+              <GroupHandle
+                group={group}
+                pane={column.entries[0]?.id}
+                panes={columns
+                  .slice(c, runOf(columns, c).end)
+                  .reduce((sum, one) => sum + one.entries.length, 0)}
               />
             )}
             {bar && (
@@ -343,8 +375,36 @@ export function Strip({
   )
 }
 
-/** How far a Group's ends stand out: half a gap, as `places` counts. */
-const PAD = "var(--group-pad)"
+/**
+ * A Group's handle (ADR 0065, decision 6): on its top edge, it shows
+ * under the pointer, says the Group's name and its number of Panes, and
+ * carries the whole Group when dragged (`useMoving`).
+ */
+function GroupHandle({
+  group,
+  pane,
+  panes,
+}: {
+  group: string
+  /** Its first Pane, which the carrying names it by. */
+  pane: string | undefined
+  panes: number
+}) {
+  const label = `Group · ${panes} ${panes === 1 ? "Pane" : "Panes"}`
+  return (
+    <div
+      data-group-handle={group}
+      data-pane={pane}
+      role="button"
+      aria-label={label}
+      title="Drag to move the Group"
+      className="absolute top-[calc(-1*var(--group-pad)-0.375rem)] left-3 z-10 flex h-3 cursor-grab items-center gap-1 rounded-full bg-popover px-1.5 text-[0.625rem] leading-3 text-muted-foreground opacity-0 shadow-sm ring-1 ring-border transition-opacity duration-150 select-none data-hover:opacity-100 data-lifted:opacity-100 motion-reduce:transition-none"
+    >
+      <GripHorizontalIcon aria-hidden className="size-2.5" />
+      {label}
+    </div>
+  )
+}
 
 /** Calls `read` just before React changes the page, as it is still:
  * what `getSnapshotBeforeUpdate` is for, and only a class has it. */

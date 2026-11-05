@@ -365,6 +365,10 @@
         "look": {
           "description": "`\"plate\"`, a plate behind its columns, or `\"halo\"`, a glow round\nthem; either in the colour of its Agent's state.",
           "$ref": "#/$defs/GroupLook"
+        },
+        "handle": {
+          "description": "A handle on its top edge under the pointer, with its name, that\ncarries the whole Group.",
+          "type": "boolean"
         }
       },
       "additionalProperties": false
