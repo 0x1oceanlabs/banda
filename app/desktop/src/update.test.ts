@@ -1,5 +1,5 @@
 import { expect, it } from "vitest"
-import { firstLine, needsPerson, notesOf } from "./update"
+import { arrivedAt, firstLine, needsPerson, notesOf } from "./update"
 
 const info = (releaseNotes: unknown) =>
   ({ version: "0.1.0-dev.66", releaseNotes }) as Parameters<typeof notesOf>[0]
@@ -49,4 +49,20 @@ it("shows only what the Person has to mend", () => {
 
 it("keeps an error's first line, without its headers", () => {
   expect(firstLine("HttpError: 404 \nHeaders: {…}")).toBe("HttpError: 404")
+})
+
+it("says Banda updated only when it restarted into the version left (ADR 0072)", () => {
+  const notes = [{ version: "0.1.0-dev.104", text: "the hook" }]
+  const left = JSON.stringify({
+    from: "0.1.0-dev.97",
+    to: "0.1.0-dev.104",
+    notes,
+  })
+  expect(arrivedAt(left, "0.1.0-dev.104")).toEqual({
+    from: "0.1.0-dev.97",
+    notes,
+  })
+  // The install did not take, or an older file stayed behind.
+  expect(arrivedAt(left, "0.1.0-dev.97")).toBeUndefined()
+  expect(arrivedAt("{", "0.1.0-dev.104")).toBeUndefined()
 })
