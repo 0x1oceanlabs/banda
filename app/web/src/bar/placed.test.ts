@@ -22,7 +22,7 @@ describe("the bar's widgets", () => {
       })
     )
     expect(parts).toEqual({
-      left: [],
+      left: ["workspaces.list"],
       center: ["sidebar.counts"],
       right: ["git.branch", "harnesses.limits"],
     })
@@ -66,5 +66,20 @@ describe("the bar's widgets", () => {
         message: 'bar.right names "git.brnch", and no module has that widget',
       },
     ])
+  })
+
+  it("keep the workspaces, first on the left when no part lists them", () => {
+    const listed = placed(
+      { ...DEFAULT_BAR, left: [], center: ["workspaces.list"], right: [] },
+      known({})
+    )
+    expect(listed.parts.center).toEqual(["workspaces.list"])
+    expect(listed.parts.left).toEqual([])
+    const unlisted = placed(
+      { ...DEFAULT_BAR, left: ["harnesses.limits"], right: [] },
+      known({ "harnesses.limits": "shown", "sidebar.counts": "shown" })
+    )
+    expect(unlisted.parts.left).toEqual(["workspaces.list", "harnesses.limits"])
+    expect(unlisted.problems).toEqual([])
   })
 })

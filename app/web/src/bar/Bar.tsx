@@ -10,13 +10,23 @@ import { Spinner } from "@banda/ui/components/spinner"
 import { cn } from "@banda/ui/lib/utils"
 import { type Attention, QUIET } from "@banda/ui/pane"
 import { PlusIcon, TriangleAlertIcon } from "lucide-react"
-import { type ReactNode, useEffect, useLayoutEffect, useRef } from "react"
+import {
+  type RefObject,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react"
 import type { Problem, Workspaces } from "@banda/contract/look"
 import { useLookBar, useLookProblems } from "../look"
 import type { InBar } from "../workspaces/model"
 import { BarMotion } from "./motion"
-import type { Part } from "./placed"
+import { type Layout, moved, same, written } from "./arrange"
+import { PARTS, type Part, WORKSPACES } from "./placed"
 import { UpdateWidget } from "./Update"
+import type { Drawn } from "./Widgets"
 
 /**
  * The bar across the window's top (ADR 0005, decision 9): the sidebar's
@@ -24,9 +34,10 @@ import { UpdateWidget } from "./Update"
  * the work, with how many things wait for the Person when more than one
  * does; then the workspaces, as numbers or dots, and the empty one at the
  * bottom as a `+`. A click on another goes there; on the current one,
- * opens the overview. The widgets stand after them, in the middle, centred
- * on the window whatever the sides hold, and on the right before the
- * engine's connection, as the look's `[bar]` lists them (ADR 0024).
+ * opens the overview. The widgets, the workspaces among them, stand on the
+ * left, in the middle, centred on the window whatever the sides hold, and
+ * on the right before the engine's connection, as the look's `[bar]` lists
+ * them (ADR 0024). With Alt held, the mouse moves one (ADR 0064).
  */
 export function Bar({
   status,
@@ -38,6 +49,8 @@ export function Bar({
   onPick,
   problems,
   widgets,
+  listed,
+  onArrange,
   working = 0,
 }: {
   status: Status
@@ -52,8 +65,13 @@ export function Bar({
   onPick: (index: number) => void
   /** What the window finds wrong in the files besides, as in keys.toml. */
   problems: readonly Problem[]
-  /** The widgets of each part, drawn. */
-  widgets?: Partial<Record<Part, ReactNode>>
+  /** The widgets of each part, drawn; the workspaces first on the left
+   * when left out. */
+  widgets?: Partial<Record<Part, readonly Drawn[]>>
+  /** `[bar]`'s lists, which a widget moved with Alt rewrites. */
+  listed?: Layout
+  /** Writes `[bar]`'s lists once a widget moved with Alt. */
+  onArrange?: (bar: Layout) => void
   /** How many Threads work now, which a restart into an update stops. */
   working?: number
 }) {
@@ -62,11 +80,69 @@ export function Bar({
   const words =
     (mark === "rest" ? "" : ` · ${MARK_WORDS[mark]}`) +
     (waiting > 1 ? ` · ${waiting} wait for you` : "")
+  const nodes = useMemo(
+    () =>
+      new Map(
+        PARTS.flatMap((part) =>
+          (widgets?.[part] ?? []).map((one) => [one.id, one.node] as const)
+        )
+      ),
+    [widgets]
+  )
+  const shown = useMemo(
+    () =>
+      widgets
+        ? layoutOf(widgets)
+        : { left: [WORKSPACES], center: [], right: [] },
+    [widgets]
+  )
+  const header = useRef<HTMLElement>(null)
+  const write = useCallback(
+    (after: Layout) => onArrange?.(written(listed ?? shown, shown, after)),
+    [onArrange, listed, shown]
+  )
+  const { layout, dragging, over } = useArranging(header, shown, write)
+  const zone = (part: Part) =>
+    cn(
+      "flex items-center rounded-lg",
+      dragging &&
+        "min-h-7 min-w-10 bg-foreground/[0.03] ring-1 ring-foreground/15",
+      over === part && "bg-foreground/[0.06] ring-ring"
+    )
+  const draw = (part: Part) =>
+    layout[part].map((id) => (
+      <div
+        key={id}
+        data-widget={id}
+        className={cn(
+          "flex items-center",
+          dragging === id &&
+            "relative z-10 cursor-grabbing rounded-md bg-popover shadow-lg ring-1 ring-ring/60"
+        )}
+      >
+        {id === WORKSPACES ? (
+          <WorkspaceList
+            workspaces={workspaces}
+            current={current}
+            onPick={onPick}
+          />
+        ) : (
+          nodes.get(id)
+        )}
+      </div>
+    ))
   return (
     // Where Banda draws the window's title bar, as on macOS (ADR 0030),
     // the bar is it: the system's window buttons sit at its start, and its
     // empty space moves the window, as a title bar's does.
-    <header className="relative flex h-(--bar-height) shrink-0 items-center gap-1 border-b border-(--bar-rule) px-1.5 frame:ps-[calc(var(--frame-inset)+--spacing(1.5))] frame:[-webkit-app-region:drag] frame:*:[-webkit-app-region:no-drag]">
+    <header
+      ref={header}
+      className={cn(
+        "relative flex h-(--bar-height) shrink-0 items-center gap-1 border-b border-(--bar-rule) px-1.5 frame:ps-[calc(var(--frame-inset)+--spacing(1.5))] frame:[-webkit-app-region:drag] frame:*:[-webkit-app-region:no-drag]",
+        dragging && "cursor-grabbing select-none"
+      )}
+    >
+      {/* The Mark stays at the left edge, as the Apple menu does. */}
       <Button
         variant="ghost"
         size="icon-sm"
@@ -86,23 +162,177 @@ export function Bar({
           </span>
         )}
       </Button>
-      <WorkspaceList
-        workspaces={workspaces}
-        current={current}
-        onPick={onPick}
-      />
-      <div className="flex items-center">{widgets?.left}</div>
-      <div className="absolute top-1/2 left-1/2 flex -translate-1/2 items-center">
-        {widgets?.center}
+      <div data-part="left" className={zone("left")}>
+        {draw("left")}
+      </div>
+      <div
+        data-part="center"
+        className={cn(
+          "absolute top-1/2 left-1/2 -translate-1/2",
+          zone("center")
+        )}
+      >
+        {draw("center")}
       </div>
       <div className="ml-auto flex items-center">
-        {widgets?.right}
+        <div data-part="right" className={zone("right")}>
+          {draw("right")}
+        </div>
         <UpdateWidget working={working} />
         <LookProblems more={problems} />
         <Connection status={status} />
       </div>
     </header>
   )
+}
+
+/** Each part's ids, as drawn. */
+function layoutOf(widgets: Partial<Record<Part, readonly Drawn[]>>): Layout {
+  const ids = (part: Part) => (widgets[part] ?? []).map((one) => one.id)
+  return { left: ids("left"), center: ids("center"), right: ids("right") }
+}
+
+/** A widget picked up with Alt: where it would go, and where the pointer
+ * holds it. */
+type Drag = {
+  id: string
+  part: Part
+  index: number
+  /** Released here, it goes back. */
+  away: boolean
+  /** Where the pointer took it, from its corner. */
+  grab: { x: number; y: number }
+  at: { x: number; y: number }
+}
+
+/**
+ * Moving a widget with Alt (ADR 0064): a press with Alt picks it up, it
+ * follows the pointer while the others make room, and a release writes
+ * where it stands; `Escape`, or a release away from the bar, puts it back.
+ * What it wrote stands until the look reads it back.
+ */
+function useArranging(
+  header: RefObject<HTMLElement | null>,
+  shown: Layout,
+  write: (after: Layout) => void
+) {
+  const [drag, setDrag] = useState<Drag | null>(null)
+  const [pending, setPending] = useState<Layout | null>(null)
+  const base = pending && !same(pending, shown) ? pending : shown
+  // What it wrote stands a while, until the look reads the file back.
+  useEffect(() => {
+    if (!pending) return
+    const late = setTimeout(() => setPending(null), 3000)
+    return () => clearTimeout(late)
+  }, [pending])
+  const layout = drag ? moved(base, drag.id, drag.part, drag.index) : base
+  // The widget held follows the pointer from the place it would take.
+  useLayoutEffect(() => {
+    const bar = header.current
+    if (!bar || !drag) return
+    const held = bar.querySelector<HTMLElement>(
+      `[data-widget="${CSS.escape(drag.id)}"]`
+    )
+    if (!held) return
+    held.style.transform = ""
+    const place = held.getBoundingClientRect()
+    const x = drag.at.x - drag.grab.x - place.left
+    const y = drag.at.y - drag.grab.y - place.top
+    held.style.transform = `translate(${x}px, ${y}px)`
+    return () => {
+      held.style.transform = ""
+    }
+  })
+  useEffect(() => {
+    const bar = header.current
+    if (!bar) return
+    const target = (id: string, x: number, y: number) => {
+      const box = bar.getBoundingClientRect()
+      const share = (x - box.left) / box.width
+      const part: Part =
+        share < 1 / 3 ? "left" : share > 2 / 3 ? "right" : "center"
+      const others = base[part].filter((one) => one !== id)
+      let index = others.length
+      for (const [i, other] of others.entries()) {
+        const at = bar
+          .querySelector(`[data-widget="${CSS.escape(other)}"]`)
+          ?.getBoundingClientRect()
+        if (!at || at.width === 0) continue
+        if (x < at.left + at.width / 2) {
+          index = i
+          break
+        }
+      }
+      return { part, index, away: y > box.bottom + 48 }
+    }
+    const down = (event: PointerEvent) => {
+      if (!event.altKey || event.button !== 0) return
+      const held = (event.target as Element).closest<HTMLElement>(
+        "[data-widget]"
+      )
+      const id = held?.dataset.widget
+      const part = id && PARTS.find((one) => base[one].includes(id))
+      if (!held || !id || !part) return
+      event.preventDefault()
+      event.stopPropagation()
+      bar.setPointerCapture(event.pointerId)
+      const box = held.getBoundingClientRect()
+      setDrag({
+        id,
+        part,
+        index: base[part].indexOf(id),
+        away: false,
+        grab: { x: event.clientX - box.left, y: event.clientY - box.top },
+        at: { x: event.clientX, y: event.clientY },
+      })
+    }
+    const move = (event: PointerEvent) => {
+      if (!drag) return
+      const at = { x: event.clientX, y: event.clientY }
+      setDrag({ ...drag, ...target(drag.id, at.x, at.y), at })
+    }
+    const up = () => {
+      if (!drag) return
+      setDrag(null)
+      const after = moved(base, drag.id, drag.part, drag.index)
+      if (drag.away || same(after, base)) return
+      setPending(after)
+      write(after)
+    }
+    const cancel = () => setDrag(null)
+    // With Alt, a widget is held, not clicked.
+    const click = (event: MouseEvent) => {
+      if (!event.altKey) return
+      if (!(event.target as Element).closest("[data-widget]")) return
+      event.preventDefault()
+      event.stopPropagation()
+    }
+    const key = (event: KeyboardEvent) => {
+      if (!drag || event.key !== "Escape") return
+      event.preventDefault()
+      event.stopPropagation()
+      setDrag(null)
+    }
+    bar.addEventListener("pointerdown", down, { capture: true })
+    bar.addEventListener("pointermove", move)
+    bar.addEventListener("pointerup", up)
+    bar.addEventListener("pointercancel", cancel)
+    bar.addEventListener("click", click, { capture: true })
+    window.addEventListener("keydown", key, { capture: true })
+    return () => {
+      bar.removeEventListener("pointerdown", down, { capture: true })
+      bar.removeEventListener("pointermove", move)
+      bar.removeEventListener("pointerup", up)
+      bar.removeEventListener("pointercancel", cancel)
+      bar.removeEventListener("click", click, { capture: true })
+      window.removeEventListener("keydown", key, { capture: true })
+    }
+  }, [header, base, drag, write])
+  return {
+    layout,
+    dragging: drag?.id,
+    over: drag && !drag.away ? drag.part : undefined,
+  }
 }
 
 /** How wide a workspace is drawn in the bar, in rem: a number, the

@@ -3663,6 +3663,57 @@ test("the bar's widgets stand where look.toml's [bar] lists them, and an id it h
   await page.screenshot({ path: "test-results/25-bar-widgets.png" })
 })
 
+test("with Alt held, the mouse moves a widget along the bar, the workspaces too, and writes [bar] (ADR 0064)", async () => {
+  window = await startWindow()
+  const { page, dir } = window
+  const file = join(dir, "config/look.toml")
+  const written = () => (existsSync(file) ? readFileSync(file, "utf8") : "")
+  await firstThread(page)
+  const bar = page.getByRole("banner")
+  const mark = bar.getByRole("button", { name: /^Sidebar/ })
+  await mark.click()
+  const calm = bar.getByRole("img", {
+    name: "Nothing waits for you, nothing works",
+  })
+  await expect(calm).toBeVisible()
+  const width = page.viewportSize()!.width
+  const drag = async (what: Locator, x: number) => {
+    const box = (await what.boundingBox())!
+    const y = box.y + box.height / 2
+    await page.keyboard.down("Alt")
+    await page.mouse.move(box.x + box.width / 2, y)
+    await page.mouse.down()
+    await page.mouse.move(x, y, { steps: 12 })
+    await page.mouse.up()
+    await page.keyboard.up("Alt")
+  }
+  // The counts go from the middle to the right's end.
+  await drag(calm, width - 6)
+  await expect.poll(written).toMatch(/^center = \[\]$/m)
+  await expect.poll(written).toMatch(/^right = \[.*"sidebar\.counts"\]$/m)
+  await expect
+    .poll(async () => (await calm.boundingBox())!.x)
+    .toBeGreaterThan(width * 0.75)
+  // The workspaces go to the middle; the Mark stays at the left edge.
+  const workspaces = bar.getByRole("navigation", { name: "Workspaces" })
+  await drag(workspaces, width / 2)
+  await expect.poll(written).toMatch(/^center = \["workspaces\.list"\]$/m)
+  await expect.poll(written).toMatch(/^left = \[\]$/m)
+  await expect
+    .poll(async () => {
+      const box = (await workspaces.boundingBox())!
+      return Math.abs(box.x + box.width / 2 - width / 2)
+    })
+    .toBeLessThan(40)
+  expect((await mark.boundingBox())!.x).toBeLessThan(40)
+  // Without Alt, a click is a click: the Mark shows the sidebar again.
+  await mark.click()
+  await expect(
+    page.getByRole("complementary", { name: "Sidebar" })
+  ).toBeVisible()
+  await page.screenshot({ path: "test-results/26-bar-arranged.png" })
+})
+
 test("a Thread that finishes behind another window sends a system notification, and its click goes there", async () => {
   window = await startWindow()
   const { app, page } = window
