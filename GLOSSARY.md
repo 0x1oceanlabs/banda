@@ -193,6 +193,13 @@ the Electron app.
 One tile in the window that shows a module's view, such as a Thread or a
 browser page. A Pane reaches the engine only through the API.
 
+**Mod**:
+The keys held for every Banda key and the mouse's moves: Alt, unless the
+Person picks another in `keys.toml`'s `mod`, as Ctrl+Alt where the desktop
+holds Alt. With Shift, or with one key more, it makes Banda's other keys.
+Banda writes keys as they are pressed, never "Mod" (ADR 0068).
+_Avoid_: main key, except as Settings' label for it.
+
 **Pane menu**:
 What the Person can do to a Pane and its column with the mouse, each row
 with its key: widths and heights, full width, zoom, the Deck, another
