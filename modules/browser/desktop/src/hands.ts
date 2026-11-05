@@ -70,26 +70,51 @@ const fieldOf = (element: Element): Field => ({
 export const secrets = async (page: Page): Promise<string[]> => {
   // `fieldOf` and each value, at once: a function given to the page
   // cannot call another.
-  const inputs = await page.locator("input").evaluateAll((inputs) =>
-    inputs.map((input) => ({
-      type: input.getAttribute("type"),
-      autocomplete: input.getAttribute("autocomplete"),
-      value: (input as HTMLInputElement).value,
-    }))
-  )
-  return inputs
-    .filter((input) => input.value && isSecret(input))
-    .map((input) => input.value)
+  const inputs = (
+    await Promise.all(
+      page.frames().map((frame) =>
+        frame
+          .locator("input, textarea, [contenteditable][autocomplete]")
+          .evaluateAll((inputs) =>
+            inputs.map((input) => ({
+              type: input.getAttribute("type"),
+              autocomplete: input.getAttribute("autocomplete"),
+              value:
+                (input as HTMLInputElement).value ?? input.textContent ?? "",
+            }))
+          )
+      )
+    )
+  ).flat()
+  return [
+    ...new Set(
+      inputs
+        .filter((input) => input.value && isSecret(input))
+        .map((input) => input.value)
+    ),
+  ].sort((a, b) => b.length - a.length)
 }
 
-/** `tree` with what its textboxes' lines say of `values` hidden. */
+/** The value of an accessibility-tree line, after its role, name and
+ * metadata. Masking a value must not change a role or a ref that happens
+ * to contain the same characters, as a CVV of "2" and ref=e2. */
+const VALUE =
+  /^(\s*-\s+[\w/-]+(?:\s+"(?:[^"\\]|\\.)*")?(?:\s+\[[^\]]+\])*:\s*)(.*)$/
+
+/** `tree` with secret field values hidden, for every role and frame. */
 export const hidden = (tree: string, values: string[]) =>
   tree
     .split("\n")
     .map((line) =>
-      /^\s*- textbox\b/.test(line)
-        ? values.reduce((line, value) => line.replaceAll(value, "••••"), line)
-        : line
+      line.replace(
+        VALUE,
+        (_, prefix: string, value: string) =>
+          prefix +
+          values.reduce(
+            (text, secret) => text.replaceAll(secret, "••••"),
+            value
+          )
+      )
     )
     .join("\n")
 
@@ -97,13 +122,22 @@ const secretOf = async (locator: Locator) =>
   isSecret(await locator.evaluate(fieldOf))
 
 const focusedIsSecret = async (page: Page) => {
-  const focused = await page.evaluateHandle(
-    () => document.activeElement ?? document.body
-  )
-  try {
-    return isSecret(await focused.evaluate(fieldOf))
-  } finally {
-    await focused.dispose()
+  let frame = page.mainFrame()
+  for (;;) {
+    const focused = await frame.evaluateHandle(() => {
+      let element = document.activeElement
+      while (element?.shadowRoot?.activeElement)
+        element = element.shadowRoot.activeElement
+      return element ?? document.body
+    })
+    try {
+      if (isSecret(await focused.evaluate(fieldOf))) return true
+      const child = await focused.asElement()?.contentFrame()
+      if (!child) return false
+      frame = child
+    } finally {
+      await focused.dispose()
+    }
   }
 }
 
@@ -319,11 +353,10 @@ export async function act(
       }
       case "press": {
         const key = act.key ?? ""
-        // A key that types a letter types it where the focus is.
-        const types = [...key].length === 1
-        if (act.ref) await (await element(types)).focus(ready)
-        else if (types && (await focusedIsSecret(page)))
-          throw theirs("The focused field")
+        // A key or shortcut may edit a field (Shift+A, paste, Delete,
+        // numeric steppers). Secret fields belong to the Person.
+        if (act.ref) await (await element(true)).focus(ready)
+        else if (await focusedIsSecret(page)) throw theirs("The focused field")
         return keys.press(key)
       }
       case "hover":

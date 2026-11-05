@@ -1,5 +1,23 @@
 import { expect, test } from "vitest"
-import { ruleAt, siteAt, stepOf } from "./hands"
+import { hidden, ruleAt, siteAt, stepOf } from "./hands"
+
+test("secret values are hidden across roles without changing refs, names or metadata", () => {
+  const tree = `- textbox "CVV" [ref=e2]: "2"
+- spinbutton "Card: number" [ref=e12]: "246813579"
+- iframe [ref=e3]:
+  - textbox "Frame card" [ref=f1e2]: "112233445"
+- textbox "Notes" [ref=e4]: "text"
+- heading "2" [ref=e5] [level=2]
+- textbox "Bracketed" [ref=e6]: "[ref=e2]"`
+  expect(hidden(tree, ["246813579", "112233445", "text", "2"]))
+    .toBe(`- textbox "CVV" [ref=e2]: "••••"
+- spinbutton "Card: number" [ref=e12]: "••••"
+- iframe [ref=e3]:
+  - textbox "Frame card" [ref=f1e2]: "••••"
+- textbox "Notes" [ref=e4]: "••••"
+- heading "2" [ref=e5] [level=2]
+- textbox "Bracketed" [ref=e6]: "[ref=e••••]"`)
+})
 
 const tree = `- generic [ref=e1]:
   - button "Greet" [ref=e2]
