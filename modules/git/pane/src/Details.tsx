@@ -1,10 +1,13 @@
 /**
  * Git's rows in a Thread's details card (ADR 0034, decision 4), as T3
- * Code's: the branch with how far it is ahead and behind, and Changes
- * `+N −M`, which opens the Diff on them; one Initialize Git row instead
- * when the Space's folder is no repository, and why git will not read it
- * when it is one git refuses. They follow `git.watch`.
+ * Code's: the branch with how far it is ahead and behind, the git button,
+ * and Changes `· N files +N −M`, what a commit would take, new files too,
+ * which opens the Diff on Uncommitted; none when nothing is uncommitted.
+ * One Initialize Git row instead when the Space's folder is no
+ * repository, and why git will not read it when it is one git refuses.
+ * They follow `git.watch`.
  */
+import { useEffect } from "react"
 import {
   type Details,
   type DetailsProps,
@@ -16,9 +19,10 @@ import { paneOf } from "@banda/ui/pane"
 import { FileDiffIcon, GitBranchPlusIcon } from "lucide-react"
 import { BranchPicker, PICKER } from "./BranchPicker"
 import { diffPane } from "./DiffPane"
+import { cardShown } from "./ended"
 import { GitButton } from "./GitButton"
 import { CHANGES } from "./scope"
-import { useGitStatus } from "./status"
+import { filesOf, useGitStatus } from "./status"
 import { GitAlert } from "./GitAlert"
 
 function GitRows({
@@ -32,6 +36,8 @@ function GitRows({
 }: DetailsProps) {
   const status = useGitStatus(engine, space)
   const init = useAct()
+  // Drawn, the card shows how a run of its Space ends: no toast tells it.
+  useEffect(() => cardShown(space, thread), [space, thread])
   if (!status) return null
   // A repository git will not read, as another user's: why, and no
   // Initialize Git, which would make another inside it.
@@ -63,6 +69,7 @@ function GitRows({
       <BranchPicker
         engine={engine}
         space={space}
+        thread={thread}
         status={status}
         asked={opening === PICKER}
         onOpened={opened}
@@ -77,19 +84,27 @@ function GitRows({
       {status.files.length > 0 && (
         <DetailsRow
           icon={<FileDiffIcon />}
-          title="Open the Diff on these changes"
+          title="Open the Diff on what is not committed yet"
           end={<DiffCounts added={status.added} removed={status.removed} />}
-          onClick={() => open(changesDiff())}
+          onClick={() => open(uncommittedDiff())}
         >
           Changes
+          <span className="text-muted-foreground">
+            {" · "}
+            {filesOf(status.changed)}
+          </span>
         </DetailsRow>
       )}
     </>
   )
 }
 
-/** The Diff on the Space's changes: the Changes row's, and Alt+D's. */
+/** The Diff on the branch's changes: Alt+D's. */
 export const changesDiff = () =>
   paneOf(diffPane, { scope: CHANGES, file: null })
+
+/** The Diff on what a commit would take: the Changes row's. */
+export const uncommittedDiff = () =>
+  paneOf(diffPane, { scope: { kind: "uncommitted" }, file: null })
 
 export const gitDetails: Details = { id: "git.branch", Rows: GitRows }

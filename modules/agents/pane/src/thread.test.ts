@@ -261,6 +261,30 @@ test("a notice joins the Thread as its own line", () => {
   ])
 })
 
+test("a notice posted for the Agent between turns is a line of no turn, which changes no turn", () => {
+  const state = play(
+    event(
+      "message.posted",
+      { item: "m", turn: "u", text: "go" },
+      { author: person }
+    ),
+    event("turn.started", { turn: "u" }),
+    event("turn.ended", { turn: "u", state: "done" }),
+    event(
+      "notice.posted",
+      { item: "n", text: "Committed 1 file on main." },
+      { author: person }
+    )
+  )
+  const notice = state.items.at(-1)!
+  expect([notice.turn, notice.body]).toEqual([
+    undefined,
+    { kind: "notice", text: "Committed 1 file on main." },
+  ])
+  expect(rows(state).at(-1)).toEqual({ kind: "item", item: notice })
+  expect(state.turns.map((turn) => turn.can.fork)).toEqual([true])
+})
+
 test("an event already in the view, or one this window does not know, changes nothing", () => {
   const state = play(
     event(

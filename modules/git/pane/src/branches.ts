@@ -24,6 +24,19 @@ export function branchName(words: string): string {
   return name.slice(0, LONGEST).replace(/[/-]+$/, "")
 }
 
+/** What a Thread's Agent reads of a switch from its card to `ref`: a
+ * remote's is checked out through a branch here that follows it. */
+export function switchedOf(ref: Ref): string {
+  return ref.remote
+    ? `Switched to the branch ${shortOf(ref)}, which follows ${ref.name}; the changes went along.`
+    : `Switched to the branch ${ref.name}; the changes went along.`
+}
+
+/** What a Thread's Agent reads of a branch `name` made from its card. */
+export function madeOf(name: string): string {
+  return `Made the branch ${name} and switched to it; the changes went along.`
+}
+
 /** A remote's branch as here's would be named: `origin/x` is `x`. */
 export function shortOf(ref: Ref): string {
   return ref.remote ? ref.name.slice(ref.name.indexOf("/") + 1) : ref.name

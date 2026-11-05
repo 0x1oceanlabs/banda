@@ -429,6 +429,11 @@ If Chat is removed, Agents still works through its own Thread.
     `harnesses.toml` says only how the Harnesses start (ADR 0040).
 - **The Harness's notices**, such as warnings, join the Thread as lines of
   their own.
+- **A notice for the Agent** comes from the Person's window
+  (`agents.notice`), as git's card posts one after a commit from it: a
+  line of the Thread between turns, kept as unsent, which the next turn's
+  prompt takes before its message once, for any Harness. It starts no
+  turn; a slash command leaves it for the message after.
 - **A Thread has settings: a mode, Plan, and the Harness's options.** The
   modes are Supervised, Auto-accept edits, Auto and Full access, the
   default. Only a Person changes them, under the message box

@@ -91,7 +91,9 @@ the rest are our defaults, as T3 Code does, and stay Roma's to change.
      default branch) or a ref picked from a list with search.
    - Its toolbar, as T3 Code's: refresh, expand or collapse all files,
      stacked or split, wrap lines, hide whitespace changes, show or hide
-     the file tree.
+     the file tree. The tree is off in a Pane narrower than 1352 px, as at
+     half a screen, until the Person shows it; their choice stays with
+     the Pane (2026-11-05).
    - **Turn comes from checkpoints, as T3 Code's** (_decided_). Before and
      after each turn the git engine snapshots the Space's work tree as a
      commit made through a temporary index (`add -A`, `write-tree`,
@@ -131,7 +133,9 @@ the rest are our defaults, as T3 Code does, and stay Roma's to change.
      words are read into a short reason, not shown raw, as they can hold
      credentials.
    - Reads: `git.status` (branch, upstream, ahead and behind, the changed
-     files with `+N −M`), `git.diff { scope }`, `git.refs`, `git.commits`.
+     files with `+N −M`, an untracked file's lines as added, as the Diff
+     shows them; one is read again only when it changed),
+     `git.diff { scope }`, `git.refs`, `git.commits`.
    - Commands: `git.act { action, message?, files?, branch? }`, a stream
      that commits, pushes or pulls, each step after the one before
      succeeded, as T3 Code's stacked action: it says each step, each hook
@@ -175,9 +179,11 @@ the rest are our defaults, as T3 Code does, and stay Roma's to change.
      hover. Its progress is in the button: the step ("Claude is
      writing the message…", with Stop, which ends the run with nothing
      committed and no error), a hook's last line, a timer, then ✓ for
-     ten seconds; only an error is a toast, and it stays. Until a module
-     can show a toast, the error stays in the card, above the button,
-     till it is closed. A run
+     ten seconds; an error stays in the card, above the button, till it
+     is closed. A commit, push or pull that ends with no card of its
+     Space in sight (hidden, in a closed popover, or its Thread off
+     screen) is a toast too, through `notifications.tell`: how it went,
+     or why it failed (2026-11-05). A run
      is the Space's, not a card's: a card shown again finds it where it
      is, and as a command of git's ends, `git.watch` reads the status
      again at once.
@@ -196,7 +202,17 @@ the rest are our defaults, as T3 Code does, and stay Roma's to change.
      the change (2026-11-05, Roma's words for T3 Code's Abort and "Check
      out feature branch & continue"); commits made already have no change
      to name one for, so their Push asks only Cancel or "Push to main".
-   - **Changes `+N −M`** opens `git.diff` on Changes.
+   - **Changes `· N files +N −M`**: what a commit would take, new files
+     and their lines too, and it opens `git.diff` on Uncommitted; none
+     when nothing is uncommitted. _Changed_ on 2026-11-05 from the
+     branch's Changes, which left new files out of its count.
+   - **The Agent hears what the card did.** A commit, push or pull from
+     the button, a switch or a new branch from the picker, is a notice in
+     the card's Thread (`agents.notice`): a quiet line there, which the
+     Agent reads before its next message, as `Committed 2 files on main:
+     “Add multiply” (a1b2c3d), and pushed it to origin/main.` It starts
+     no turn (2026-11-05: an Agent took a commit from the card for
+     someone else's).
    - Roma's calls of 2026-11-03: the card is open when a Thread starts,
      as T3 Code's, and the header's button and its key hide it; an empty
      message is written by the Thread's own Harness, in a short run of its

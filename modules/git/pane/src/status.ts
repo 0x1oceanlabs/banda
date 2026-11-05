@@ -99,3 +99,8 @@ export function useGitStatus(
     heard ? statusOf(engine, space) : null
   )
 }
+
+/** How many files, in words: `1 file`, `2 files`. */
+export function filesOf(count: number): string {
+  return count === 1 ? "1 file" : `${count} files`
+}
