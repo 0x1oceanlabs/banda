@@ -27,7 +27,7 @@ const pkgver = version.replaceAll("-", "_")
 const desc = DESCRIPTION.replace(/^an? (.)/i, (_, first) => first.toUpperCase())
 const file = `${app}-${version}-x86_64.AppImage`
 const url = `https://github.com/0x1oceanlabs/banda/releases/download/v${version}/${file}`
-// What Electron's Chromium loads; git for the Spaces' changes.
+// What Electron's Chromium loads; git for the Projects' changes.
 const depends = ["alsa-lib", "git", "gtk3", "libxss", "nss"]
 const optdepends = ["npm: npx, which starts the Harnesses' ACP adapters"]
 

@@ -91,8 +91,8 @@ mod tests {
             "text": "# Problem 7f3a91c0de12\n",
         }))
         .unwrap();
-        let space = "01a19cce-59ae-71ca-98ff-62c04d57d3df";
-        let pane = |kind: &str, args: Value| json!({ "id": "01a19d18-1bf4-7259-aa2f-4dd6e8fadf0d", "space": space, "kind": kind, "args": args });
+        let project = "01a19cce-59ae-71ca-98ff-62c04d57d3df";
+        let pane = |kind: &str, args: Value| json!({ "id": "01a19d18-1bf4-7259-aa2f-4dd6e8fadf0d", "project": project, "kind": kind, "args": args });
         let workspaces: Arrangement = serde_json::from_value(json!([
             { "id": "01a19cce-59f6-7e98-9259-00f0078ee133", "columns": [
                 { "id": "01a19d18-1bf4-7259-aa2f-4dd7408c298e",

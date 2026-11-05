@@ -3,7 +3,7 @@
  * 10): the modules' own and the window's (ADR 0022, decision 3). The keys,
  * the Banda menu, its key sheet and `keys.toml` read the same list.
  */
-import type { SpaceId } from "@banda/contract"
+import type { ProjectId } from "@banda/contract"
 import { toast } from "@banda/ui/components/sonner"
 import type { Action, Args, WindowApi } from "@banda/ui/module"
 import { type PaneState, paneOf, type Place } from "@banda/ui/pane"
@@ -184,30 +184,30 @@ function moving(w: Workspaces, how: (w: Workspaces) => Workspaces): Step {
   return moved(next, entry.id)
 }
 
-/** Shows a Pane of a Space and focuses it, as `how` says; a new column
+/** Shows a Pane of a Project and focuses it, as `how` says; a new column
  * takes its width. A Pane is the one shown as its kind names it, so a
- * Space has one Diff. */
+ * Project has one Diff. */
 export function opening(
   workspaces: Workspaces,
-  space: SpaceId,
+  project: ProjectId,
   pane: PaneState,
   how: Omit<Opening, "width"> = {}
 ): Step {
-  const next = open(workspaces, space, pane, {
+  const next = open(workspaces, project, pane, {
     identity: identityOf,
     ...how,
     width: widthOf(pane),
   })
-  // In a Group: the Group of the Pane it opens from; on a Space's
-  // workspace: its Space's (ADR 0065).
+  // In a Group: the Group of the Pane it opens from; on a Project's
+  // workspace: its Project's (ADR 0065).
   const from = how.from ?? focused(workspaces)?.id
   const plan = opened(
     workspaces,
     next,
     how.place === "group" && from
       ? { to: "group", pane: from }
-      : how.place === "space"
-        ? { to: "space", space }
+      : how.place === "project"
+        ? { to: "project", project }
         : undefined
   )
   if (!plan) return next
@@ -218,17 +218,17 @@ export function opening(
  * another workspace shows moves here. */
 export function bringing(
   workspaces: Workspaces,
-  space: SpaceId,
+  project: ProjectId,
   pane: PaneState
 ): Step {
-  const next = bring(workspaces, space, pane, {
+  const next = bring(workspaces, project, pane, {
     place: "right",
     width: widthOf(pane),
     identity: identityOf,
   })
   const away = entries(workspaces).find(
     (entry) =>
-      samePane(entry, { space, pane }, identityOf) &&
+      samePane(entry, { project, pane }, identityOf) &&
       !current(workspaces).columns.some((c) => c.entries.includes(entry))
   )
   // The one that moved here shows anew in `next`, under another ID.
@@ -244,29 +244,29 @@ export function bringing(
  */
 export function answering(
   workspaces: Workspaces,
-  thing: { space: SpaceId; about: string; pane: PaneState },
+  thing: { project: ProjectId; about: string; pane: PaneState },
   place: Place = "right"
 ): Step {
   const entry = showing(workspaces, thing, showsOf)
   return entry
     ? focusEntry(workspaces, entry.id)
-    : opening(workspaces, thing.space, thing.pane, { place })
+    : opening(workspaces, thing.project, thing.pane, { place })
 }
 
 /**
- * Opens the settings Pane at `link` in `space`, or goes to the one a
+ * Opens the settings Pane at `link` in `project`, or goes to the one a
  * workspace shows, there when a link is given: one at a time.
  */
 export function settingsAt(
   workspaces: Workspaces,
-  space: SpaceId,
+  project: ProjectId,
   link = ""
 ): Step {
   const pane = paneOf(settingsPane, { link })
   const shown = entries(workspaces).find(
     (entry) => entry.pane.kind === settingsPane.kind
   )
-  if (!shown) return opening(workspaces, space, pane, { place: "right" })
+  if (!shown) return opening(workspaces, project, pane, { place: "right" })
   if (!link || link === shown.pane.args.link) {
     return focusEntry(workspaces, shown.id)
   }
@@ -291,7 +291,7 @@ export function closing(pane: string): Plan {
  */
 export function closingShown(
   workspaces: Workspaces,
-  thing: { space: SpaceId; about: string }
+  thing: { project: ProjectId; about: string }
 ): Plan | undefined {
   const entry = showing(workspaces, thing, showsOf)
   return entry && closing(entry.id)
@@ -651,7 +651,7 @@ export const ACTIONS: readonly Action<Shell>[] = [
     unlisted: true,
     run: (shell, args) =>
       present(args, (file) =>
-        shell.run("browser.open", { file, space: args?.space ?? null })
+        shell.run("browser.open", { file, project: args?.project ?? null })
       ),
   },
   {
@@ -699,12 +699,12 @@ export const ACTIONS: readonly Action<Shell>[] = [
     },
   },
   {
-    id: "space.add",
+    id: "project.add",
     section: "Banda",
     title: "Add Project",
-    // The menu lists "Add Space" as its own branch; this opens it there.
+    // The menu lists "Add Project" as its own branch; this opens it there.
     unlisted: true,
-    run: (shell) => shell.route("space.add"),
+    run: (shell) => shell.route("project.add"),
   },
   {
     id: "settings.open",

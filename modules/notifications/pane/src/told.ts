@@ -17,11 +17,11 @@ export type Told = {
   /** Its kind, which colours its edge and picks its Mark. */
   kind: Chime
   title: string
-  /** The Space it is of, by name, when the window has more than one. */
-  space?: string
-  /** The Space it is of, by its ID: the window names it, as `space`. */
+  /** The Project it is of, by name, when the window has more than one. */
+  project?: string
+  /** The Project it is of, by its ID: the window names it, as `project`. */
   in?: string
-  /** The thing of that Space it tells of, as a Thread: while it is on
+  /** The thing of that Project it tells of, as a Thread: while it is on
    * screen, nothing is told. */
   about?: string
   /** A line in code type, before the words. */
@@ -53,7 +53,7 @@ export function toldOf(args: Args | undefined): Told | null {
     key,
     kind,
     title,
-    space,
+    project,
     in: of,
     about,
     code,
@@ -79,7 +79,7 @@ export function toldOf(args: Args | undefined): Told | null {
     key,
     kind: kind as Chime,
     title,
-    ...(text(space) ? { space } : {}),
+    ...(text(project) ? { project } : {}),
     ...(text(of) ? { in: of } : {}),
     ...(text(about) ? { about } : {}),
     ...(text(code) ? { code } : {}),

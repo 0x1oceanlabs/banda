@@ -1,4 +1,4 @@
-/** The path field of "Add Space" (ADR 0026): what the engine says of a
+/** The path field of "Add Project" (ADR 0026): what the engine says of a
  * path as it is typed. */
 import { useEffect, useState } from "react"
 import type { Engine } from "@banda/contract"
@@ -38,7 +38,7 @@ export function useBrowsed(
   useEffect(() => {
     if (!typed) return
     let stale = false
-    engine.call("spaces.browse", { partial: typed }).then(
+    engine.call("projects.browse", { partial: typed }).then(
       (browsed) => !stale && setSaid({ ...browsed, partial: typed }),
       () => {}
     )

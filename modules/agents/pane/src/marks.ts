@@ -40,7 +40,7 @@ export function needsPerson(mark: MarkState): boolean {
   return mark === "asking" || mark === "failed"
 }
 
-/** What a Space's Threads call their Person for, all together. */
+/** What a Project's Threads call their Person for, all together. */
 export function attentionOf(
   threads: readonly ListedThread[],
   seen: Seen

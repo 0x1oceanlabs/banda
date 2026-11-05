@@ -7,7 +7,7 @@ import type { FileDiff } from "./FileDiff";
  */
 export type Diff = { 
 /**
- * The Space's event position as this was read: a Pane follows the
+ * The Project's event position as this was read: a Pane follows the
  * events after it, and reads this again after a turn ends.
  */
 at: number, 

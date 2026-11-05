@@ -1,12 +1,12 @@
-import type { SpaceId } from "@banda/contract"
+import type { ProjectId } from "@banda/contract"
 import type { Listed } from "@banda/ui/pane"
 import { expect, test } from "vitest"
 import type { Arranged, Row, Section } from "./arrange"
 import { held, hold } from "./hold"
 
-const space = { id: "s" as SpaceId, name: "S" } as Row["space"]
+const project = { id: "s" as ProjectId, name: "S" } as Row["project"]
 const row = (id: string, title = id): Row => ({
-  space,
+  project,
   listed: { id, title, mark: "rest", changed: 0 } as Listed,
   state: "active",
 })

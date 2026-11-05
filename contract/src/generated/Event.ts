@@ -4,7 +4,7 @@ import type { Participant } from "./Participant";
 
 export type Event = { 
 /**
- * Its place in the Space's log, from 1. A later event has a larger one.
+ * Its place in the Project's log, from 1. A later event has a larger one.
  */
 seq: number, id: EventId, 
 /**

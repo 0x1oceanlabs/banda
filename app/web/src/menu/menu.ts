@@ -1,13 +1,13 @@
 /**
  * What the Banda menu lists (ADR 0017): empty, the Recent Threads and the
- * Actions run most; typed into, the Threads, Spaces, what the modules'
+ * Actions run most; typed into, the Threads, Projects, what the modules'
  * sources find (ADR 0022, decision 4) and the Actions that fit the words,
  * then the sources' rows with no heading, as New Thread with them. A
- * Space and the sidebar's view are branches the menu goes into, as
+ * Project and the sidebar's view are branches the menu goes into, as
  * Omarchy's menu does, and `Tab` shows what can be done with a row. Plain
  * data, so the window only draws it. It knows no module.
  */
-import type { Browsed, SpaceId, SpaceSummary } from "@banda/contract"
+import type { Browsed, ProjectId, ProjectSummary } from "@banda/contract"
 import { waits } from "@banda/ui/components/banda-mark"
 import { type Key, keyLabel, keyText } from "@banda/ui/lib/keys"
 import type { Listed, Lists } from "@banda/ui/pane"
@@ -24,12 +24,12 @@ export type Choice =
   | {
       kind: "thread"
       id: string
-      space: SpaceId
+      project: ProjectId
       listed: Listed
       beside?: true
     }
-  /** A branch: the Space's Threads, and a new one there. */
-  | { kind: "space"; id: string; space: SpaceSummary }
+  /** A branch: the Project's Threads, and a new one there. */
+  | { kind: "project"; id: string; project: ProjectSummary }
   /** A branch: the sidebar's presets. */
   | { kind: "views"; id: string }
   | { kind: "action"; id: string; action: Action<Shell> }
@@ -44,42 +44,42 @@ export type Choice =
   | { kind: "bind"; id: string; action: Action<Shell> }
   /** Frees one of the action's keys, in `keys.toml`. */
   | { kind: "free"; id: string; action: Action<Shell>; key: Key }
-  /** A new Thread: with `words`, in `space` where given; the menu's own
-   * Alt+Enter, and a Space's Tab. */
-  | { kind: "ask"; id: string; words: string; space?: SpaceId }
+  /** A new Thread: with `words`, in `project` where given; the menu's own
+   * Alt+Enter, and a Project's Tab. */
+  | { kind: "ask"; id: string; words: string; project?: ProjectId }
   /** What a module's source found; choosing it runs it. */
   | { kind: "found"; id: string; row: MenuRow }
   /** Arranges the sidebar by a preset (ADR 0008). */
   | { kind: "preset"; id: string; name: string; current: boolean }
   /** Archives a Thread, or brings it back (ADR 0069). */
-  | { kind: "archive"; id: string; space: SpaceId; listed: Listed }
-  /** A branch: the ways to add a Space (ADR 0026). */
+  | { kind: "archive"; id: string; project: ProjectId; listed: Listed }
+  /** A branch: the ways to add a Project (ADR 0026). */
   | { kind: "add"; id: string }
-  /** A branch: one way to add a Space; the field takes its name or path. */
+  /** A branch: one way to add a Project; the field takes its name or path. */
   | { kind: "source"; id: string; source: Source }
-  /** Adds a Space: a new one by its name, or a folder on disk. */
+  /** Adds a Project: a new one by its name, or a folder on disk. */
   | { kind: "adding"; id: string; how: Adding }
   /** A folder the path field lists, or the one above (`up`): choosing it
    * types `path`, as the Person typed the path, to go on in. */
   | { kind: "folder"; id: string; name: string; path: string; up?: true }
-  /** A branch: the path field that finds a missing Space's folder. */
-  | { kind: "locate"; id: string; space: SpaceSummary }
+  /** A branch: the path field that finds a missing Project's folder. */
+  | { kind: "locate"; id: string; project: ProjectSummary }
 
-/** How a Space is added: a new folder by its name, or a folder on disk,
- * made first when it does not exist; or where a missing Space's folder
+/** How a Project is added: a new folder by its name, or a folder on disk,
+ * made first when it does not exist; or where a missing Project's folder
  * is now (ADR 0026, decision 6). */
 export type Adding =
   | { name: string }
   | { folder: string; create: boolean }
-  | { locate: SpaceId; folder: string }
+  | { locate: ProjectId; folder: string }
 
-/** The ways to add a Space, as T3 Code's "Add project" lists them, in
+/** The ways to add a Project, as T3 Code's "Add project" lists them, in
  * their order. */
 export const SOURCE_ORDER = ["new", "folder"] as const
 export type Source = (typeof SOURCE_ORDER)[number]
 
 const BRANCHES = [
-  "space",
+  "project",
   "views",
   "family",
   "add",
@@ -95,7 +95,7 @@ export function isBranch(row: Choice): row is Branch {
   return (BRANCHES as readonly string[]).includes(row.kind)
 }
 
-/** A row the menu runs itself: a key to change, a Space to add, a folder
+/** A row the menu runs itself: a key to change, a Project to add, a folder
  * to type. */
 export type Own = Extract<Choice, { kind: (typeof OWN)[number] }>
 
@@ -106,14 +106,14 @@ export function isOwn(row: Choice): row is Own {
 /** A branch's name, as its chip in the field shows it. */
 export function branchName(branch: Branch): string {
   switch (branch.kind) {
-    case "space":
-      return branch.space.name
+    case "project":
+      return branch.project.name
     case "family":
       return branch.title
     case "views":
       return VIEWS
     case "add":
-      return ADD_SPACE
+      return ADD_PROJECT
     case "source":
       return SOURCES[branch.source].title
     case "locate":
@@ -122,21 +122,21 @@ export function branchName(branch: Branch): string {
 }
 
 const VIEWS = "Sidebar view"
-const ADD_SPACE = "Add Project"
+const ADD_PROJECT = "Add Project"
 /** T3 Code's words for finding a missing folder. */
 export const LOCATE = "Locate folder"
 
-/** Each way to add a Space: its row's words. */
+/** Each way to add a Project: its row's words. */
 export const SOURCES: Record<Source, { title: string; about: string }> = {
   new: { title: "New Project", about: "Start a new Project from a name" },
   folder: { title: "Local folder", about: "Browse a folder on disk" },
 }
 
-/** "Add Space", as the branch the menu goes into. */
-const ADD_BRANCH: Branch = { kind: "add", id: "space.add" }
+/** "Add Project", as the branch the menu goes into. */
+const ADD_BRANCH: Branch = { kind: "add", id: "project.add" }
 
 function sourceBranch(source: Source): Branch {
-  return { kind: "source", id: `space.add.${source}`, source }
+  return { kind: "source", id: `project.add.${source}`, source }
 }
 
 /** Whether the field is a path, as in "Local folder" and "Locate
@@ -153,12 +153,12 @@ export function isPathField(inside: Branch | undefined): boolean {
 export function wordsIn(path: readonly Branch[]): string {
   const inside = path.at(-1)
   if (inside?.kind === "locate")
-    return inside.space.folder.replace(/[^/]*$/, "")
+    return inside.project.folder.replace(/[^/]*$/, "")
   return isPathField(inside) ? "~/" : ""
 }
 
 /** What a folder in a path field does: added, made first when `create`,
- * or found as the missing Space's, which only a folder that is there
+ * or found as the missing Project's, which only a folder that is there
  * can be. */
 export function pathAdding(
   inside: Branch | undefined,
@@ -166,27 +166,27 @@ export function pathAdding(
   create = false
 ): Adding | undefined {
   if (inside?.kind !== "locate") return { folder, create }
-  return create ? undefined : { locate: inside.space.id, folder }
+  return create ? undefined : { locate: inside.project.id, folder }
 }
 
 /** The sidebar's view, as the branch the menu goes into. */
 const VIEWS_BRANCH: Branch = { kind: "views", id: "views" }
 
-/** A Space, as the branch the menu goes into: one whose folder is
+/** A Project, as the branch the menu goes into: one whose folder is
  * missing goes to find it. */
-function spaceBranch(space: SpaceSummary): Branch {
-  return space.missing
-    ? locateBranch(space)
-    : { kind: "space", id: `space:${space.id}`, space }
+function projectBranch(project: ProjectSummary): Branch {
+  return project.missing
+    ? locateBranch(project)
+    : { kind: "project", id: `project:${project.id}`, project }
 }
 
-function locateBranch(space: SpaceSummary): Branch {
-  return { kind: "locate", id: locateRoute(space.id), space }
+function locateBranch(project: ProjectSummary): Branch {
+  return { kind: "locate", id: locateRoute(project.id), project }
 }
 
-/** The route of "Locate folder" for a missing Space. */
-export function locateRoute(space: SpaceId): string {
-  return `space.locate.${space}`
+/** The route of "Locate folder" for a missing Project. */
+export function locateRoute(project: ProjectId): string {
+  return `project.locate.${project}`
 }
 
 /** Where the menu opens: at its root or its Actions, inside the
@@ -211,33 +211,35 @@ export function settingsLinkOf(route: string): string | undefined {
 /**
  * Where `banda menu ROUTE` opens the menu (ADR 0017, decision 7): an
  * empty route at its root, `actions` at its Actions, `views` in the
- * sidebar's view, `space.add` in "Add Space" (`space.add.new`,
- * `space.add.folder` at one of its ways, ADR 0026), `space.locate.<id>`
- * at "Locate folder" for a missing Space, `space.<name>` (or its ID) in
- * a Space. Any other words open it with them typed in. A
+ * sidebar's view, `project.add` in "Add Project" (`project.add.new`,
+ * `project.add.folder` at one of its ways, ADR 0026), `project.locate.<id>`
+ * at "Locate folder" for a missing Project, `project.<name>` (or its ID) in
+ * a Project. Any other words open it with them typed in. A
  * settings route opens the settings Pane instead (`settingsLinkOf`).
+ * Before ADR 0069 the routes said `space.`, which is read as `project.`
+ * for one stable release (grace).
  */
 export function openingOf(
   route: string,
-  spaces: readonly SpaceSummary[]
+  projects: readonly ProjectSummary[]
 ): Opening {
-  const words = route.trim()
+  const words = route.trim().replace(/^space\./, "project.")
   if (words === "actions") return openingAt("actions")
   if (words === "views") return openingAt("root", [VIEWS_BRANCH])
-  const adding = /^space\.add(?:\.(new|folder))?$/.exec(words)
+  const adding = /^project\.add(?:\.(new|folder))?$/.exec(words)
   if (adding) {
     const way = adding[1] as Source | undefined
     const path = way ? [ADD_BRANCH, sourceBranch(way)] : [ADD_BRANCH]
     return openingAt("root", path, wordsIn(path))
   }
-  // A Space by its name or ID; one whose folder is missing, at
+  // A Project by its name or ID; one whose folder is missing, at
   // "Locate folder".
-  const named = /^space\.(?:locate\.)?(.+)$/.exec(words)?.[1].toLowerCase()
-  const space = spaces.find(
+  const named = /^project\.(?:locate\.)?(.+)$/.exec(words)?.[1].toLowerCase()
+  const project = projects.find(
     (one) => one.id === named || one.name.toLowerCase() === named
   )
-  if (!space) return openingAt("root", [], words)
-  const path = [spaceBranch(space)]
+  if (!project) return openingAt("root", [], words)
+  const path = [projectBranch(project)]
   return openingAt("root", path, wordsIn(path))
 }
 
@@ -250,7 +252,7 @@ export type Group = {
 /** What the menu lists besides the words typed. */
 export type Sources = {
   lists: Lists
-  spaces: readonly SpaceSummary[]
+  projects: readonly ProjectSummary[]
   actions: readonly Action<Shell>[]
   /** The sidebar's presets, and the one in force. */
   presets: { names: readonly string[]; current: string }
@@ -287,7 +289,7 @@ export const ROOT_ACTIONS = [
 const SECTIONS = ["Threads", "Panes", "Columns", "Workspaces", "Banda"]
 
 /** How many rows of each group a search shows. */
-const SHOWN = { threads: 8, spaces: 5, actions: 8, recent: 6 }
+const SHOWN = { threads: 8, projects: 5, actions: 8, recent: 6 }
 
 /**
  * The menu's rows for `words`: opened `at` its root or its Actions, or
@@ -304,7 +306,7 @@ export function menuOf({
   inside?: Branch
   sources: Sources
 }): Group[] {
-  const { lists, spaces, presets, found, weight } = sources
+  const { lists, projects, presets, found, weight } = sources
   const query = words.trim()
   const byWeight = (row: Choice) => weight(row.id)
   // The actions, and the branches among them, as one list.
@@ -333,11 +335,11 @@ export function menuOf({
       : isBranch(row)
         ? [branchName(row)]
         : []
-  const threadsOf = (space: string, listed: readonly Listed[]) =>
+  const threadsOf = (project: string, listed: readonly Listed[]) =>
     listed.map((one) => ({
       kind: "thread" as const,
-      id: `thread:${space}:${one.id}`,
-      space: space as SpaceId,
+      id: `thread:${project}:${one.id}`,
+      project: project as ProjectId,
       listed: one,
     }))
   const fitting = <Row extends Choice>(
@@ -360,8 +362,8 @@ export function menuOf({
         ),
       },
     ])
-  if (inside?.kind === "space") {
-    const here = inside.space.id
+  if (inside?.kind === "project") {
+    const here = inside.project.id
     // Its new Thread first, as its sources find it, then its Threads.
     return nonEmpty([
       last,
@@ -425,8 +427,8 @@ export function menuOf({
     return nonEmpty([...sections].map(([label, rows]) => ({ label, rows })))
   }
 
-  const threads = Object.entries(lists).flatMap(([space, listed]) =>
-    threadsOf(space, listed)
+  const threads = Object.entries(lists).flatMap(([project, listed]) =>
+    threadsOf(project, listed)
   )
   if (!query) {
     // The actions run most, then the ones T3 Code's palette offers.
@@ -459,9 +461,9 @@ export function menuOf({
     },
     {
       label: "Projects",
-      rows: fitting(spaces.map(spaceBranch), (row) =>
-        "space" in row ? [row.space.name] : []
-      ).slice(0, SHOWN.spaces),
+      rows: fitting(projects.map(projectBranch), (row) =>
+        "project" in row ? [row.project.name] : []
+      ).slice(0, SHOWN.projects),
     },
     ...sourced,
     {
@@ -495,22 +497,22 @@ export function actsOf(row: Choice, sources: Sources): Act[] {
           row: {
             kind: "archive",
             id: `archive:${row.listed.id}`,
-            space: row.space,
+            project: row.project,
             listed: row.listed,
           },
         })
       return acts
     }
-    case "space":
+    case "project":
       return [
         { title: "Open", key: OPEN, row },
         {
           title: "New Thread here",
           row: {
             kind: "ask",
-            id: `ask:${row.space.id}`,
+            id: `ask:${row.project.id}`,
             words: "",
-            space: row.space.id,
+            project: row.project.id,
           },
         },
       ]
@@ -547,8 +549,8 @@ export function actsOf(row: Choice, sources: Sources): Act[] {
   }
 }
 
-/** The rows of one way to add a Space, or of "Locate folder", for what
- * is typed: the Space to add or locate first, then for a path the folder
+/** The rows of one way to add a Project, or of "Locate folder", for what
+ * is typed: the Project to add or locate first, then for a path the folder
  * above and the folders that fit. */
 function addRows(
   inside: Extract<Branch, { kind: "source" | "locate" }>,

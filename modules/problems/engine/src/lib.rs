@@ -2,7 +2,7 @@
 //! (ADR 0039, decision 1).
 //!
 //! It is the machine's, as the workspaces are: a Problem is Banda's, not a
-//! Space's. A part of Banda that broke says so with `record`: the window's
+//! Project's. A part of Banda that broke says so with `record`: the window's
 //! page and main through the API, the engine's panics through a file the
 //! panic hook writes ([`catch_panics`]). One fault is one Problem, by its
 //! fingerprint, however often it broke; a new one is said in an event, so
@@ -20,7 +20,7 @@ mod panics;
 mod report;
 
 use banda_kernel::{
-    Call, Error, Module, ModuleSpace, Nothing, Participant, Refusal, Right, Scope, Tool, Tx,
+    Call, Error, Module, ModuleProject, Nothing, Participant, Refusal, Right, Scope, Tool, Tx,
 };
 use issue::{Issue, Sent};
 use model::{Fingerprint, Log, Problem, Record, Recorded, Report, word};
@@ -144,13 +144,13 @@ impl Module for Problems {
 
     /// The panics of the engine's last run, then each as the hook keeps
     /// it, while the engine runs on.
-    async fn opened(&self, space: ModuleSpace) -> Result<(), Error> {
-        take_panics(&space, &self.panics).await?;
+    async fn opened(&self, project: ModuleProject) -> Result<(), Error> {
+        take_panics(&project, &self.panics).await?;
         let folder = self.panics.clone();
         tokio::spawn(async move {
             loop {
                 panics::PANICKED.notified().await;
-                if let Err(error) = take_panics(&space, &folder).await {
+                if let Err(error) = take_panics(&project, &folder).await {
                     tracing::warn!(%error, "the engine's panics were not kept");
                 }
             }
@@ -169,13 +169,13 @@ impl Module for Problems {
 
 impl Problems {
     async fn list(&self, call: Call, _: Nothing) -> Result<Listed, Refusal> {
-        let (at, problems) = call.space().view(all).await?;
+        let (at, problems) = call.project().view(all).await?;
         Ok(Listed { at, problems })
     }
 
     async fn problem(&self, call: Call, one: Fingerprint) -> Result<Report, Refusal> {
         let start = one.fingerprint;
-        let problems = call.space().read(all).await?;
+        let problems = call.project().read(all).await?;
         let mut found = problems
             .into_iter()
             .filter(|problem| problem.fingerprint.starts_with(&start));
@@ -208,7 +208,7 @@ impl Problems {
     async fn send_issue(&self, call: Call, issue: Issue) -> Result<Sent, Refusal> {
         issue::may_send(&issue)?;
         let fingerprint = issue.problem.fingerprint.clone();
-        let problems = call.space().read(all).await?;
+        let problems = call.project().read(all).await?;
         if !problems.iter().any(|one| one.fingerprint == fingerprint) {
             return Err(Refusal::not_found(format!(
                 "No Problem has the fingerprint \"{fingerprint}\"."
@@ -223,15 +223,15 @@ impl Problems {
     }
 }
 
-async fn take_panics(space: &ModuleSpace, folder: &Path) -> Result<(), Error> {
+async fn take_panics(project: &ModuleProject, folder: &Path) -> Result<(), Error> {
     let panics = panics::take(folder);
     if panics.is_empty() {
         return Ok(());
     }
     // The kernel has no Participant of its own: the engine's panics are
     // the owner's, who runs it.
-    let owner = Participant::Person(space.owner());
-    space
+    let owner = Participant::Person(project.owner());
+    project
         .write(move |tx| {
             for record in panics {
                 keep(tx, record, owner)?;

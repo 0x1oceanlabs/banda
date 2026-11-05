@@ -7,7 +7,7 @@ import type { TurnFile } from "./TurnFile";
  */
 export type TurnChanges = { 
 /**
- * Where the Space's log stood: the Pane follows its events after.
+ * Where the Project's log stood: the Pane follows its events after.
  */
 at: number, 
 /**

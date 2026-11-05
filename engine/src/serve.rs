@@ -1,5 +1,5 @@
 //! `banda serve`: the one engine of this machine (ADR 0001, decision 1).
-//! It opens the Spaces under the root with their modules and serves the API
+//! It opens the Projects under the root with their modules and serves the API
 //! on this machine only.
 
 use crate::Failure;

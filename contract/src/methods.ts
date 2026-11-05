@@ -4,7 +4,7 @@
  * or a stream. `Engine.call`, `.command` and `.stream` take only these.
  */
 import type { CommandId } from "./generated/CommandId"
-import type { SpacesMethods } from "./generated/SpacesMethods"
+import type { ProjectsMethods } from "./generated/ProjectsMethods"
 import type { WindowMethods } from "./generated/WindowMethods"
 import type { AgentsMethods } from "./generated/agents/AgentsMethods"
 import type { BrowserMethods } from "./generated/browser/BrowserMethods"
@@ -20,7 +20,7 @@ type Prefixed<P extends string, M> = {
   [K in keyof M & string as `${P}.${K}`]: M[K]
 }
 
-export type Methods = Prefixed<"spaces", SpacesMethods> &
+export type Methods = Prefixed<"projects", ProjectsMethods> &
   Prefixed<"window", WindowMethods> &
   Prefixed<"agents", AgentsMethods> &
   Prefixed<"harnesses", HarnessesMethods> &

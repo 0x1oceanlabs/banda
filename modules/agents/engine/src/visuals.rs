@@ -1,7 +1,7 @@
 //! The pages an Agent shows its Person in its Thread (ADR 0037): each one
-//! a file in the Space's data, `spaces/<id>/visuals/<visual ID>.html`,
+//! a file in the Project's data, `projects/<id>/visuals/<visual ID>.html`,
 //! named by its Thread item, `Body::Visual`. The window serves it at
-//! `app://visuals/<space>/<visual>`, in a frame kept apart from Banda.
+//! `app://visuals/<project>/<visual>`, in a frame kept apart from Banda.
 //!
 //! The file is written before its item commits; a show the engine refuses
 //! after takes its file back. A fork's items name the same files. A file
@@ -34,7 +34,7 @@ pub struct Visuals {
 }
 
 impl Visuals {
-    /// The Visuals of the Space whose data is in `data`.
+    /// The Visuals of the Project whose data is in `data`.
     pub fn of(data: &Path) -> Self {
         Visuals {
             folder: data.join("visuals"),

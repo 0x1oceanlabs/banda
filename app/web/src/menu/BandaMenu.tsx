@@ -6,9 +6,9 @@ import {
   useRef,
   useState,
 } from "react"
-import type { Engine, SpaceId, SpaceSummary } from "@banda/contract"
+import type { Engine, ProjectId, ProjectSummary } from "@banda/contract"
 import type { Bind } from "@banda/contract/look"
-import { SpaceBadge } from "@banda/ui/components/space-badge"
+import { ProjectBadge } from "@banda/ui/components/project-badge"
 import { MARK_WORDS, waits } from "@banda/ui/components/banda-mark"
 import { Dialog, DialogContent, DialogTitle } from "@banda/ui/components/dialog"
 import { Kbd, KbdGroup } from "@banda/ui/components/kbd"
@@ -93,9 +93,9 @@ export function BandaMenu({
   onAdded,
   engine,
   modules,
-  space,
+  project,
   lists,
-  spaces,
+  projects,
   actions,
   binds,
 }: {
@@ -104,15 +104,15 @@ export function BandaMenu({
   onClose: () => void
   /** Runs a chosen row, once the menu has closed. */
   onChoose: (row: Exclude<Choice, Branch | Own>) => void
-  /** Hears a Space the menu added, once it has closed (ADR 0026). */
-  onAdded: (space: SpaceSummary) => void
+  /** Hears a Project the menu added, once it has closed (ADR 0026). */
+  onAdded: (project: ProjectSummary) => void
   engine: Engine
   /** The modules the engine runs: the sources of the others find nothing. */
   modules: readonly string[]
-  /** The focused Space, where the sources look. */
-  space: SpaceId
+  /** The focused Project, where the sources look. */
+  project: ProjectId
   lists: Lists
-  spaces: readonly SpaceSummary[]
+  projects: readonly ProjectSummary[]
   actions: readonly Action<Shell>[]
   /** The Person's keys in force, from keys.toml. */
   binds: readonly Bind[]
@@ -137,14 +137,14 @@ export function BandaMenu({
     [running, rows]
   )
   const here: Here = useMemo(() => {
-    const at = looking.entered ?? space
+    const at = looking.entered ?? project
     return {
       engine,
-      space: at,
-      folder: spaces.find((one) => one.id === at)?.folder,
+      project: at,
+      folder: projects.find((one) => one.id === at)?.folder,
       entered: looking.entered !== undefined,
     }
-  }, [engine, space, spaces, looking.entered])
+  }, [engine, project, projects, looking.entered])
   const hear = useCallback((id: string, heard?: readonly MenuRow[]) => {
     setRows((rows) => {
       if (rows[id] === heard) return rows
@@ -187,7 +187,7 @@ export function BandaMenu({
               engine={engine}
               opening={opening}
               lists={lists}
-              spaces={spaces}
+              projects={projects}
               actions={actions}
               binds={binds}
               found={found}
@@ -197,9 +197,9 @@ export function BandaMenu({
                 onClose()
                 onChoose(row)
               }}
-              onAdded={(space) => {
+              onAdded={(project) => {
                 onClose()
-                onAdded(space)
+                onAdded(project)
               }}
             />
           )}
@@ -230,9 +230,9 @@ function Finder({
   return <Find words={words} here={here} found={found} />
 }
 
-/** What the menu looks for: the words typed at its root, or the Space it
+/** What the menu looks for: the words typed at its root, or the Project it
  * went into. */
-type Looking = { words: string; entered?: SpaceId }
+type Looking = { words: string; entered?: ProjectId }
 
 const NOWHERE: Looking = { words: "" }
 
@@ -241,7 +241,7 @@ function Menu({
   engine,
   opening,
   lists,
-  spaces,
+  projects,
   actions,
   binds,
   found,
@@ -253,7 +253,7 @@ function Menu({
   engine: Engine
   opening: Opening
   lists: Lists
-  spaces: readonly SpaceSummary[]
+  projects: readonly ProjectSummary[]
   actions: readonly Action<Shell>[]
   /** The Person's keys in force, from keys.toml. */
   binds: readonly Bind[]
@@ -262,7 +262,7 @@ function Menu({
   onLooking: (looking: Looking) => void
   escapeRef: React.RefObject<() => boolean>
   onChoose: (row: Exclude<Choice, Branch | Own>) => void
-  onAdded: (space: SpaceSummary) => void
+  onAdded: (project: ProjectSummary) => void
 }) {
   // New Thread's key in force starts one with the words.
   const ask = useKeyOf()("thread.new")
@@ -274,9 +274,9 @@ function Menu({
   const [words, setWords] = useState(opening.words)
   const [path, setPath] = useState<Branch[]>(opening.path)
   const query = words.trim()
-  // The sources look for the words at the root, and in a Space gone into.
+  // The sources look for the words at the root, and in a Project gone into.
   const inside = path.at(-1)
-  const entered = inside?.kind === "space" ? inside.space.id : undefined
+  const entered = inside?.kind === "project" ? inside.project.id : undefined
   const atRoot = at === "root" && path.length === 0
   // Before the paint, so no row is drawn for the words before.
   useLayoutEffect(
@@ -296,7 +296,7 @@ function Menu({
   const sources: Sources = useMemo(
     () => ({
       lists,
-      spaces,
+      projects,
       actions,
       presets: { names: presets.map((one) => one.name), current: preset },
       archived,
@@ -306,7 +306,7 @@ function Menu({
     }),
     [
       lists,
-      spaces,
+      projects,
       actions,
       presets,
       preset,
@@ -364,23 +364,23 @@ function Menu({
     setNote(undefined)
     writing(writeBind(key, action))
   }
-  // A Space added here opens its new Thread, as the menu closes; what the
+  // A Project added here opens its new Thread, as the menu closes; what the
   // engine refused shows, and the field stays as it was.
   const { busy: adding, problem, act } = useAct()
   const add = async (how: Adding) => {
     if (adding) return
     setNote(undefined)
-    const space = await act(() =>
+    const project = await act(() =>
       "name" in how
-        ? engine.command("spaces.create", { name: how.name })
+        ? engine.command("projects.create", { name: how.name })
         : "locate" in how
-          ? engine.command("spaces.locate", {
-              space: how.locate,
+          ? engine.command("projects.locate", {
+              project: how.locate,
               folder: how.folder,
             })
-          : engine.command("spaces.add", how)
+          : engine.command("projects.add", how)
     )
-    if (space) onAdded(space)
+    if (project) onAdded(project)
   }
   // The system's folder picker: the folder picked is added at once, as
   // T3 Code does; the field takes the keys back when it is cancelled.
@@ -410,7 +410,7 @@ function Menu({
     }
   }
   // A branch opens in the menu, and the menu does its own rows; any other
-  // row runs. Each counts for the order next time, but a folder or a Space
+  // row runs. Each counts for the order next time, but a folder or a Project
   // to add, which are the Person's own.
   const choose = (row: Choice) => {
     if (isBranch(row)) restart([...path, row])
@@ -481,7 +481,7 @@ function Menu({
           kind: "ask",
           id: "ask",
           words: query,
-          ...(inside?.kind === "space" && { space: inside.space.id }),
+          ...(inside?.kind === "project" && { project: inside.project.id }),
         })
       return
     }
@@ -670,41 +670,41 @@ function RowView({
   sources: Sources
   /** The Person's keys, which a row outlines. */
   binds: readonly Bind[]
-  /** The branch the menu is in: a Space's rows leave out its name. */
+  /** The branch the menu is in: a Project's rows leave out its name. */
   inside?: Branch
 }) {
   switch (row.kind) {
     case "thread": {
       const { listed } = row
-      const space =
-        inside?.kind === "space"
+      const project =
+        inside?.kind === "project"
           ? undefined
-          : sources.spaces.find((one) => one.id === row.space)
+          : sources.projects.find((one) => one.id === row.project)
       return (
         <>
           <ThreadMark listed={listed} />
           <span className="min-w-0 flex-1 truncate">{listed.title}</span>
           <Detail>
-            {[space?.name, waits(listed.mark) && MARK_WORDS[listed.mark]]
+            {[project?.name, waits(listed.mark) && MARK_WORDS[listed.mark]]
               .filter(Boolean)
               .join(" · ")}
           </Detail>
         </>
       )
     }
-    case "space":
+    case "project":
       return (
         <>
-          <SpaceBadge space={row.space} />
-          <span className="min-w-0 flex-1 truncate">{row.space.name}</span>
+          <ProjectBadge project={row.project} />
+          <span className="min-w-0 flex-1 truncate">{row.project.name}</span>
           <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground" />
         </>
       )
     case "locate":
       return (
         <>
-          <SpaceBadge space={row.space} />
-          <span className="min-w-0 flex-1 truncate">{row.space.name}</span>
+          <ProjectBadge project={row.project} />
+          <span className="min-w-0 flex-1 truncate">{row.project.name}</span>
           <Detail>Folder missing · {LOCATE}</Detail>
           <ChevronRightIcon className="size-4 shrink-0 text-muted-foreground" />
         </>

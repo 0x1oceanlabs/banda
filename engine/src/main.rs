@@ -2,10 +2,10 @@
 //!
 //! - `banda serve` runs this machine's engine.
 //! - `banda call <method>` calls one API method and prints `{"ok": …}`.
-//! - `banda follow --space <id>` prints the Space's events, one JSON
+//! - `banda follow --project <id>` prints the Project's events, one JSON
 //!   object per line.
-//! - `banda space add <path>` adds a folder as a Space (ADR 0026) and
-//!   prints it, as `banda call spaces.add` does.
+//! - `banda project add <path>` adds a folder as a Project (ADR 0026) and
+//!   prints it, as `banda call projects.add` does.
 //! - `banda look` prints the window's look, resolved from Omarchy's
 //!   theme, Hyprland and `~/.config/banda/look.toml`, with the sidebar's
 //!   arrangement from `sidebar.toml` and the browser's from
@@ -14,7 +14,7 @@
 //! - `banda skill` prints the Banda skill, what an Agent needs to know to
 //!   work in Banda and change it; `banda skill <topic>` prints a topic.
 //! - `banda menu [route]` opens the Banda menu in the window, at a route
-//!   such as `actions` or `space.<name>` (ADR 0017).
+//!   such as `actions` or `project.<name>` (ADR 0017).
 //! - `banda modules` prints what each module offers, one JSON object per
 //!   line; `--unstable` lists the paths not in the contract yet (ADR 0022).
 //! - `banda problems` prints what broke in Banda, one JSON object per
@@ -35,7 +35,7 @@ mod places;
 mod problems;
 mod serve;
 
-use banda_kernel::{CommandId, EventFilter, Refusal, SpaceId};
+use banda_kernel::{CommandId, EventFilter, ProjectId, Refusal};
 use clap::{Parser, Subcommand};
 use client::Client;
 use places::Places;
@@ -70,10 +70,11 @@ enum Command {
     },
     /// Calls one API method and prints its answer as JSON.
     Call {
-        /// For example spaces.list or agents.send.
+        /// For example projects.list or agents.send.
         method: String,
-        #[arg(long)]
-        space: Option<SpaceId>,
+        // `--space` before ADR 0069 (grace).
+        #[arg(long, alias = "space")]
+        project: Option<ProjectId>,
         /// The method's parameters, as a JSON object.
         #[arg(long, default_value = "{}")]
         params: String,
@@ -82,14 +83,17 @@ enum Command {
         command: Option<CommandId>,
     },
     /// Adds a Project, as the window's "Add Project" does.
-    Space {
+    // `banda space` before ADR 0069 (grace).
+    #[command(alias = "space")]
+    Project {
         #[command(subcommand)]
-        what: SpaceCommand,
+        what: ProjectCommand,
     },
     /// Prints a Project's events, one JSON object per line.
     Follow {
-        #[arg(long)]
-        space: SpaceId,
+        // `--space` before ADR 0069 (grace).
+        #[arg(long, alias = "space")]
+        project: ProjectId,
         /// Starts after this position in the Project's log.
         #[arg(long, default_value_t = 0)]
         after: i64,
@@ -122,7 +126,7 @@ enum Command {
     },
     /// Opens the Banda menu in Banda's window, as Alt+Space does: at its
     /// root, or at ROUTE: `actions` (the key sheet), `views` (the
-    /// sidebar's view), `space.add` ("Add Project"), `space.<name>` (a
+    /// sidebar's view), `project.add` ("Add Project"), `project.<name>` (a
     /// Project's Threads), or
     /// `settings.<section>.<row>` (the settings Pane there). Other
     /// words open it with them typed in.
@@ -181,7 +185,7 @@ enum ProblemsCommand {
 }
 
 #[derive(Subcommand)]
-enum SpaceCommand {
+enum ProjectCommand {
     /// Adds a folder as a Project and prints it. A folder that already is
     /// one prints that Project, back from the archive if it was there.
     Add {
@@ -410,17 +414,24 @@ async fn run(command: Command, places: Places) -> Result<(), Failure> {
         Command::Serve { port, with_parent } => serve::serve(places, port, with_parent).await,
         Command::Call {
             method,
-            space,
+            project,
             params,
             command,
         } => {
             let params: Value = serde_json::from_str(&params).map_err(|error| {
                 Failure::Refused(Refusal::invalid(format!("--params is not JSON: {error}")))
             })?;
-            print_call(&places, &method, space, command.unwrap_or_default(), params).await
+            print_call(
+                &places,
+                &method,
+                project,
+                command.unwrap_or_default(),
+                params,
+            )
+            .await
         }
-        Command::Space {
-            what: SpaceCommand::Add { path, name, create },
+        Command::Project {
+            what: ProjectCommand::Add { path, name, create },
         } => {
             // `~` stays for the engine to read; a relative path is from here.
             let folder = match path.starts_with("~") {
@@ -432,7 +443,7 @@ async fn run(command: Command, places: Places) -> Result<(), Failure> {
                 "name": name,
                 "create": create,
             });
-            print_call(&places, "spaces.add", None, CommandId::new(), params).await
+            print_call(&places, "projects.add", None, CommandId::new(), params).await
         }
         Command::Problems { what: None } => problems::list(&places).await,
         Command::Problems {
@@ -448,7 +459,7 @@ async fn run(command: Command, places: Places) -> Result<(), Failure> {
         Command::Browser { .. } => unreachable!("the browser is the window's, not the engine's"),
         Command::Mcp => unreachable!("banda mcp finds the engine by its variables"),
         Command::Follow {
-            space,
+            project,
             after,
             module,
             subject,
@@ -462,7 +473,7 @@ async fn run(command: Command, places: Places) -> Result<(), Failure> {
             };
             Client::connect(&places)
                 .await?
-                .follow(space, after, filter, |event| println!("{}", json!(event)))
+                .follow(project, after, filter, |event| println!("{}", json!(event)))
                 .await
         }
     }
@@ -472,13 +483,13 @@ async fn run(command: Command, places: Places) -> Result<(), Failure> {
 async fn print_call(
     places: &Places,
     method: &str,
-    space: Option<SpaceId>,
+    project: Option<ProjectId>,
     command: CommandId,
     params: Value,
 ) -> Result<(), Failure> {
     let answer = Client::connect(places)
         .await?
-        .call(method, space, command, params)
+        .call(method, project, command, params)
         .await?;
     println!("{}", json!({ "ok": answer }));
     Ok(())

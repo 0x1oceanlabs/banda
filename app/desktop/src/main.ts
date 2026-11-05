@@ -3,7 +3,7 @@
  * from `app://banda` and hands the page the engine's address. It also
  * runs `banda look --follow` and hands the page each look (ADR 0007),
  * writes the preset the page picks into `sidebar.toml` (ADR 0008), and
- * opens the system's folder picker for "Add Space" (ADR 0026), and a
+ * opens the system's folder picker for "Add Project" (ADR 0026), and a
  * Pane in a window of its own, the same page at `#pane/<id>` (ADR 0025,
  * decision 9); nothing else crosses from Node to the page (docs/architecture.md,
  * "Processes"). The modules' parts in main run here too, as the
@@ -65,7 +65,7 @@ import { ensure } from "./sidebar"
 const PoppedAsk = Schema.Union([
   Schema.Struct({
     open: Schema.Struct({
-      space: Schema.String,
+      project: Schema.String,
       pane: Schema.Struct({
         kind: Schema.String,
         args: Schema.Record(Schema.String, Schema.MutableJson),
@@ -407,7 +407,7 @@ async function ready(): Promise<void> {
           }),
       ],
     },
-    // "Add Space"'s folder picker (ADR 0026).
+    // "Add Project"'s folder picker (ADR 0026).
     folder: {
       pick: [
         Schema.Tuple([Schema.NullOr(Schema.String)]),

@@ -1,21 +1,21 @@
 import type { Engine } from "@banda/contract"
 import { Spinner } from "@banda/ui/components/spinner"
-import { useSpaces } from "@banda/ui/hooks/use-spaces"
+import { useProjects } from "@banda/ui/hooks/use-projects"
 import { useMachine, useModules, useStatus } from "@banda/ui/hooks/use-status"
-import { shownSpaces } from "@banda/ui/lib/spaces"
+import { shownProjects } from "@banda/ui/lib/projects"
 import { Shell } from "./shell/Shell"
 import { AskToShare } from "./sharing/AskToShare"
 
 /**
- * The page: the engine's Spaces, then the window. With no Space, a new
+ * The page: the engine's Projects, then the window. With no Project, a new
  * Thread is held on the machine until its first message or attachment.
  */
 export function App({ engine }: { engine: Engine }) {
   const status = useStatus(engine)
   const machine = useMachine(engine)
   const modules = useModules(engine)
-  // A Space added here shows at once, as the engine answered it.
-  const { listed, put } = useSpaces(engine)
+  // A Project added here shows at once, as the engine answered it.
+  const { listed, put } = useProjects(engine)
 
   if (listed.state === "loading") {
     return (
@@ -31,13 +31,13 @@ export function App({ engine }: { engine: Engine }) {
       </p>
     )
   }
-  const spaces = [
-    ...shownSpaces(listed.value),
+  const projects = [
+    ...shownProjects(listed.value),
     ...listed.value.filter((s) => s.scratch && !s.archived),
   ]
-  // The first Space is home until Banda makes a default one (ADR 0006);
+  // The first Project is home until Banda makes a default one (ADR 0006);
   // one whose folder is missing opens nothing.
-  const home = spaces.find((space) => !space.missing && !space.scratch)
+  const home = projects.find((project) => !project.missing && !project.scratch)
   if (!machine) return <Spinner />
   return (
     <>
@@ -45,11 +45,11 @@ export function App({ engine }: { engine: Engine }) {
         engine={engine}
         status={status}
         modules={modules}
-        spaces={spaces}
+        projects={projects}
         home={home?.id ?? machine}
         onCreated={put}
       />
-      {spaces.length > 0 && <AskToShare />}
+      {projects.length > 0 && <AskToShare />}
     </>
   )
 }

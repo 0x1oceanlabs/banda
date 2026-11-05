@@ -1,7 +1,7 @@
 /**
  * The Harnesses this computer can start, and who is signed in to each, as
  * the Panes show them: the machine's module `harnesses` (ADR 0040), which
- * names no Space.
+ * names no Project.
  */
 import { useCallback, useMemo } from "react"
 import type { Engine } from "@banda/contract"

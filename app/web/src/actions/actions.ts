@@ -34,8 +34,9 @@ export function actionFor<Context>(
  * stable release: it runs the action, and says what it is called now.
  */
 const RENAMED: Readonly<Record<string, string>> = {
-  // ADR 0069: Settled is the archive.
+  // ADR 0069 (grace): Settled is the archive, and a Space is a Project.
   "sidebar.settle": "sidebar.archive",
+  "space.add": "project.add",
 }
 
 /**

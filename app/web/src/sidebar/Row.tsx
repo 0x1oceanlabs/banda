@@ -5,7 +5,7 @@ import {
   waits,
 } from "@banda/ui/components/banda-mark"
 import { HarnessLogo } from "@banda/ui/components/harness-logo"
-import { SpaceBadge } from "@banda/ui/components/space-badge"
+import { ProjectBadge } from "@banda/ui/components/project-badge"
 import { ago } from "@banda/ui/lib/words"
 import { cn } from "@banda/ui/lib/utils"
 import { useNow } from "@banda/ui/hooks/use-now"
@@ -19,33 +19,33 @@ import type { Part, Settings } from "./settings"
  * density; the other lines add context.
  */
 export const LAYOUTS: Readonly<Record<number, Part[][]>> = {
-  1: [["mark", "title", "~", "space", "status"]],
+  1: [["mark", "title", "~", "project", "status"]],
   2: [
-    ["mark", "space", "~", "status"],
+    ["mark", "project", "~", "status"],
     ["title", "~", "harness"],
   ],
-  3: [["mark", "space", "~", "status"], ["title"], ["note", "~", "harness"]],
+  3: [["mark", "project", "~", "status"], ["title"], ["note", "~", "harness"]],
 }
 
 /** One row of the sidebar, its parts laid out as the settings say. */
 export function Row({
   row,
   settings,
-  inSpace,
+  inProject,
   current,
   onOpen,
 }: {
   row: Arranged
   settings: Settings
-  /** It sits under its Space's header, which already names the Space. */
-  inSpace: boolean
+  /** It sits under its Project's header, which already names the Project. */
+  inProject: boolean
   current: boolean
   onOpen: () => void
 }) {
   const { lines, hide, layout } = settings.row
   const parts = (layout ?? LAYOUTS[lines] ?? LAYOUTS[3]).map((line) =>
     line.filter(
-      (part) => !hide.includes(part) && !(part === "space" && inSpace)
+      (part) => !hide.includes(part) && !(part === "project" && inProject)
     )
   )
   const one = parts.length === 1
@@ -84,7 +84,7 @@ function Piece({
   row: Arranged
   wide: boolean
 }) {
-  const { listed, space } = row
+  const { listed, project } = row
   // Nothing waits in it and nothing works: it steps back.
   const quiet =
     row.state === "archived" || (row.state === "active" && !waits(listed.mark))
@@ -106,15 +106,15 @@ function Piece({
           {listed.title}
         </span>
       )
-    case "space":
-      // The mark stands where the Space's badge was: a row with room names
-      // the Space; a row of one line shows its badge.
+    case "project":
+      // The mark stands where the Project's badge was: a row with room names
+      // the Project; a row of one line shows its badge.
       return wide ? (
         <span className="min-w-0 truncate text-xs text-muted-foreground">
-          {space.name}
+          {project.name}
         </span>
       ) : (
-        <SpaceBadge space={space} />
+        <ProjectBadge project={project} />
       )
     case "harness": {
       // Claude's or Codex's logo, as T3 Code shows them; another Harness

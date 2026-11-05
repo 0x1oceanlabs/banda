@@ -4,10 +4,13 @@ use crate::acp::ToolPart;
 use crate::images::{self, Images};
 use crate::model::{Image, ToolContent};
 use crate::{plain, rules};
-use banda_kernel::{ModuleSpace, Refusal};
+use banda_kernel::{ModuleProject, Refusal};
 
-pub async fn keep(space: &ModuleSpace, parts: Vec<ToolPart>) -> Result<Vec<ToolContent>, String> {
-    let files = Images::of(space.data());
+pub async fn keep(
+    project: &ModuleProject,
+    parts: Vec<ToolPart>,
+) -> Result<Vec<ToolContent>, String> {
+    let files = Images::of(project.data());
     let mut carried: Vec<Image> = Vec::new();
     let mut content = Vec::with_capacity(parts.len());
     for part in parts {

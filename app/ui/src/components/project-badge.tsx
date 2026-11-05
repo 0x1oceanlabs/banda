@@ -1,12 +1,12 @@
-/** A Space's badge: its initials on its own hue, as the sidebar, the
- * Banda menu and the bar's lists show a Space. */
-import type { SpaceSummary } from "@banda/contract"
+/** A Project's badge: its initials on its own hue, as the sidebar, the
+ * Banda menu and the bar's lists show a Project. */
+import type { ProjectSummary } from "@banda/contract"
 
-/** Six hues, as Herdr's Spaces have; a Space keeps one by its id. */
+/** Six hues, as Herdr's Projects have; a Project keeps one by its id. */
 const HUES = [350, 25, 85, 160, 210, 280]
 
-export function SpaceBadge({ space }: { space: SpaceSummary }) {
-  const hue = HUES[hash(space.id) % HUES.length]
+export function ProjectBadge({ project }: { project: ProjectSummary }) {
+  const hue = HUES[hash(project.id) % HUES.length]
   const colour = `oklch(0.6 0.15 ${hue})`
   return (
     <span
@@ -17,7 +17,7 @@ export function SpaceBadge({ space }: { space: SpaceSummary }) {
         backgroundColor: `color-mix(in oklab, ${colour} 16%, transparent)`,
       }}
     >
-      {initials(space.name)}
+      {initials(project.name)}
     </span>
   )
 }

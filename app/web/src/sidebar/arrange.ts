@@ -1,9 +1,9 @@
 /**
- * The sidebar's one rule (ADR 0008): every Space's list, the Spaces and
+ * The sidebar's one rule (ADR 0008): every Project's list, the Projects and
  * the settings in; the sections and their rows out. The sidebar only draws
  * what it returns. Pure, so plain tests cover every preset and key.
  */
-import type { SpaceId, SpaceSummary } from "@banda/contract"
+import type { ProjectId, ProjectSummary } from "@banda/contract"
 import {
   loudest,
   type MarkState,
@@ -13,16 +13,16 @@ import {
 import type { Listed } from "@banda/ui/pane"
 import type { Settings, State } from "./settings"
 
-/** One row: what a module listed, the Space it is in, where it stands. */
-export type Row = { space: SpaceSummary; listed: Listed; state: State }
+/** One row: what a module listed, the Project it is in, where it stands. */
+export type Row = { project: ProjectSummary; listed: Listed; state: State }
 
 export type Section = {
-  /** A state, or a Space's id. */
+  /** A state, or a Project's id. */
   key: string
-  /** The state's words, or the Space's name. */
+  /** The state's words, or the Project's name. */
   label: string
-  /** The Space a section of `group.by = "space"` holds. */
-  space?: SpaceSummary
+  /** The Project a section of `group.by = "project"` holds. */
+  project?: ProjectSummary
   rows: Row[]
   folded: boolean
   /** The loudest mark of its rows, and how many need the Person. */
@@ -30,17 +30,17 @@ export type Section = {
   waiting: number
 }
 
-/** One line of the list of Spaces. */
-export type SpaceLine = {
-  space: SpaceSummary
+/** One line of the list of Projects. */
+export type ProjectLine = {
+  project: ProjectSummary
   mark: MarkState
   waiting: number
   count: number
 }
 
 export type Arranged = {
-  /** The list of Spaces, when the settings ask for it. */
-  spaces?: SpaceLine[]
+  /** The list of Projects, when the settings ask for it. */
+  projects?: ProjectLine[]
   sections: Section[]
   shelves: Section[]
 }
@@ -66,31 +66,31 @@ function rank(row: Row): number {
 }
 
 /**
- * @param lists what each Space lists
- * @param only shows only this Space's rows, as a click in the list of
- * Spaces asks
+ * @param lists what each Project lists
+ * @param only shows only this Project's rows, as a click in the list of
+ * Projects asks
  * @param toggled the sections the Person folded or opened, against what
  * the settings start with
  * @param archived whether the Person's marks have a row archived now
  */
 export function arrange(
-  lists: Readonly<Record<SpaceId, readonly Listed[]>>,
-  spaces: readonly SpaceSummary[],
+  lists: Readonly<Record<ProjectId, readonly Listed[]>>,
+  projects: readonly ProjectSummary[],
   settings: Settings,
-  only?: SpaceId,
+  only?: ProjectId,
   toggled: ReadonlySet<string> = new Set(),
   archived: (listed: Listed) => boolean = () => false
 ): Arranged {
-  const named = spaces.filter((space) => !space.scratch)
-  const all: Row[] = spaces.flatMap((space) =>
-    (lists[space.id] ?? []).map((listed) => ({
-      space,
+  const named = projects.filter((project) => !project.scratch)
+  const all: Row[] = projects.flatMap((project) =>
+    (lists[project.id] ?? []).map((listed) => ({
+      project,
       listed,
       state: stateOf(listed, archived),
     }))
   )
   const rows = all
-    .filter((row) => only === undefined || row.space.id === only)
+    .filter((row) => only === undefined || row.project.id === only)
     .sort(order(settings.sort.by))
   const folds = (key: string, name = key) =>
     (settings.group.folded.includes(name) ||
@@ -99,12 +99,12 @@ export function arrange(
     key: string,
     label: string,
     held: Row[],
-    space?: SpaceSummary,
+    project?: ProjectSummary,
     name?: string
   ): Section => ({
     key,
     label,
-    ...(space ? { space } : {}),
+    ...(project ? { project } : {}),
     rows: held,
     folded: folds(key, name),
     ...rollup(held),
@@ -114,30 +114,30 @@ export function arrange(
       ? sections
       : sections.filter((section) => section.rows.length > 0)
 
-  const listed = settings.spaces.list
-    ? { spaces: spaceLines(all, named, settings) }
+  const listed = settings.projects.list
+    ? { projects: projectLines(all, named, settings) }
     : {}
 
   switch (settings.group.by) {
-    case "space":
+    case "project":
       return {
         ...listed,
         sections: kept([
-          ...orderSpaces(all, named, settings).map((space) =>
+          ...orderProjects(all, named, settings).map((project) =>
             section(
-              space.id,
-              space.name,
-              rows.filter((row) => row.space.id === space.id),
-              space,
-              space.name
+              project.id,
+              project.name,
+              rows.filter((row) => row.project.id === project.id),
+              project,
+              project.name
             )
           ),
-          ...(rows.some((row) => row.space.scratch)
+          ...(rows.some((row) => row.project.scratch)
             ? [
                 section(
-                  "no-space",
+                  "no-project",
                   "No Project",
-                  rows.filter((row) => row.space.scratch)
+                  rows.filter((row) => row.project.scratch)
                 ),
               ]
             : []),
@@ -206,33 +206,33 @@ function rollup(rows: readonly Row[]): { mark: MarkState; waiting: number } {
   }
 }
 
-/** The Spaces in the settings' order; one with nothing listed goes last. */
-function orderSpaces(
+/** The Projects in the settings' order; one with nothing listed goes last. */
+function orderProjects(
   rows: readonly Row[],
-  spaces: readonly SpaceSummary[],
+  projects: readonly ProjectSummary[],
   settings: Settings
-): SpaceSummary[] {
-  const changed = (space: SpaceSummary) =>
+): ProjectSummary[] {
+  const changed = (project: ProjectSummary) =>
     Math.max(
       -Infinity,
       ...rows
-        .filter((row) => row.space.id === space.id)
+        .filter((row) => row.project.id === project.id)
         .map((row) => row.listed.changed)
     )
-  return [...spaces].sort((a, b) =>
-    settings.spaces.order === "name"
+  return [...projects].sort((a, b) =>
+    settings.projects.order === "name"
       ? a.name.localeCompare(b.name)
       : changed(b) - changed(a) || a.name.localeCompare(b.name)
   )
 }
 
-function spaceLines(
+function projectLines(
   rows: readonly Row[],
-  spaces: readonly SpaceSummary[],
+  projects: readonly ProjectSummary[],
   settings: Settings
-): SpaceLine[] {
-  return orderSpaces(rows, spaces, settings).map((space) => {
-    const held = rows.filter((row) => row.space.id === space.id)
-    return { space, count: held.length, ...rollup(held) }
+): ProjectLine[] {
+  return orderProjects(rows, projects, settings).map((project) => {
+    const held = rows.filter((row) => row.project.id === project.id)
+    return { project, count: held.length, ...rollup(held) }
   })
 }

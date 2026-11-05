@@ -20,7 +20,7 @@ const files = folder
   : []
 
 /** The state without its place in the log: the engine's view stands where
- * the whole Space's log stood, the Pane's where its Thread's last fact did. */
+ * the whole Project's log stood, the Pane's where its Thread's last fact did. */
 function placeless(state: ThreadState): ThreadState {
   return { ...state, at: 0 }
 }

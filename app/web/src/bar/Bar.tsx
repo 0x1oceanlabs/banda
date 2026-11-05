@@ -22,12 +22,12 @@ import {
 import type { Problem, Workspaces } from "@banda/contract/look"
 import { useLookBar, useLookProblems } from "../look"
 import type { InBar } from "../workspaces/model"
-import type { SpaceSummary } from "@banda/contract"
-import { SpaceBadge } from "@banda/ui/components/space-badge"
+import type { ProjectSummary } from "@banda/contract"
+import { ProjectBadge } from "@banda/ui/components/project-badge"
 
-/** A workspace as the bar shows it: a Space's by its badge, with a dot
- * while one of that Space's Threads calls (ADR 0065, decision 9). */
-export type BarWorkspace = InBar & { owner?: SpaceSummary; calls?: boolean }
+/** A workspace as the bar shows it: a Project's by its badge, with a dot
+ * while one of that Project's Threads calls (ADR 0065, decision 9). */
+export type BarWorkspace = InBar & { owner?: ProjectSummary; calls?: boolean }
 import { type MapColumn, WorkspaceMap } from "./Map"
 import { BarMotion } from "./motion"
 import { type Layout, moved, same, written } from "./arrange"
@@ -404,7 +404,7 @@ function WorkspaceList({
         const here = w.index === current
         const number = String(w.index + 1)
         const name = w.bottom ? "New workspace" : `Workspace ${number}`
-        // A Space's says whose it is when the pointer rests on it.
+        // A Project's says whose it is when the pointer rests on it.
         const whose = w.owner ? `${w.owner.name}: ` : ""
         const dot = here
           ? "bg-foreground"
@@ -445,9 +445,9 @@ function WorkspaceList({
                   w.empty && "border border-dashed border-muted-foreground/50"
                 )}
               >
-                {/* A Space's workspace shows its Space, with a dot while
+                {/* A Project's workspace shows its Project, with a dot while
                     one of its Threads calls (ADR 0065, decision 9). */}
-                {w.owner ? <SpaceBadge space={w.owner} /> : number}
+                {w.owner ? <ProjectBadge project={w.owner} /> : number}
                 {w.calls && (
                   <span
                     aria-hidden

@@ -42,7 +42,7 @@ import { filesOf } from "./status"
 import { GitAlert } from "./GitAlert"
 
 /**
- * What changed in the Space's folder, as T3 Code's Diff shows it (ADR
+ * What changed in the Project's folder, as T3 Code's Diff shows it (ADR
  * 0034, decision 2): one Pane, its scope chosen from a menu in its header,
  * files drawn by `@pierre/diffs` beside a tree of them. It reads again as
  * an Agent's turn ends, as the folder's status changes, as the window
@@ -68,12 +68,18 @@ export const diffPane = definePane<DiffArgs>({
   letter: "D",
   start: { scope: CHANGES, file: null },
   header: false,
-  // One Diff per Space: another scope is the same Pane.
+  // One Diff per Project: another scope is the same Pane.
   identity: () => "diff",
   Pane: DiffPane,
 })
 
-function DiffPane({ engine, space, args, update, close }: PaneProps<DiffArgs>) {
+function DiffPane({
+  engine,
+  project,
+  args,
+  update,
+  close,
+}: PaneProps<DiffArgs>) {
   const scope = args.scope
   // As wide as a Thread holds its card beside the messages, the tree has
   // room beside the lines; narrower, as at half a screen, it would take
@@ -88,7 +94,7 @@ function DiffPane({ engine, space, args, update, close }: PaneProps<DiffArgs>) {
   const thread = scope.kind === "turn" ? scope.thread : (args.thread ?? null)
   const { live, diff, question, words, again, fresh } = useDiffRead(
     engine,
-    space,
+    project,
     scope,
     view.ignoreWhitespace
   )
@@ -96,7 +102,7 @@ function DiffPane({ engine, space, args, update, close }: PaneProps<DiffArgs>) {
   // Git's files load and expand from git. A turn's files drawn from its
   // tool calls come whole, so git is never asked for them.
   const ask = diff ? question : null
-  const files = useFiles(engine, space, ask, words, diff)
+  const files = useFiles(engine, project, ask, words, diff)
   // The files shown: tests and mocks left out when they are hidden.
   const visible = useMemo(
     () =>
@@ -152,7 +158,7 @@ function DiffPane({ engine, space, args, update, close }: PaneProps<DiffArgs>) {
   const wanted = args.file ?? null
   const showWanted = useEffectEvent(() => {
     if (wanted === null) return
-    // A Thread names a file in the Space's folder from the root, as its
+    // A Thread names a file in the Project's folder from the root, as its
     // tool calls did; the Diff names it from the folder.
     const path = [...files.byPath.keys()].find(
       (each) => each === wanted || wanted.endsWith(`/${each}`)
@@ -177,7 +183,7 @@ function DiffPane({ engine, space, args, update, close }: PaneProps<DiffArgs>) {
     if (busy) return
     const shown = diff
     void acting
-      .act(() => engine.call(`git.${what}`, ask, { space }))
+      .act(() => engine.call(`git.${what}`, ask, { project }))
       .then(() => {
         setBefore(shown)
         fresh()
@@ -196,7 +202,7 @@ function DiffPane({ engine, space, args, update, close }: PaneProps<DiffArgs>) {
       <PaneHeader title="Diff" icon={diffPane.icon} onClose={close}>
         <ScopeMenu
           engine={engine}
-          space={space}
+          project={project}
           scope={scope}
           thread={thread}
           onChange={(next) => update({ ...args, scope: next, thread })}
@@ -204,7 +210,7 @@ function DiffPane({ engine, space, args, update, close }: PaneProps<DiffArgs>) {
         {scope.kind === "changes" && diff?.base && (
           <BaseMenu
             engine={engine}
-            space={space}
+            project={project}
             base={scope.base}
             found={diff.base.name}
             onChange={(base) =>

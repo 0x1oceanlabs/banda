@@ -3,15 +3,15 @@
 
 use banda_browser::{Browser, Dialog, ReadTab, SeenTab, Shown};
 use banda_kernel::{
-    AgentId, Caller, Code, Kernel, Participant, PersonId, Refusal, SpaceId, Stream,
+    AgentId, Caller, Code, Kernel, Participant, PersonId, ProjectId, Refusal, Stream,
 };
 use serde::Serialize;
 use serde_json::{Value, json};
 use std::sync::Arc;
 use tokio::task::JoinHandle;
 
-async fn open(root: &std::path::Path, owner: PersonId) -> (Arc<Kernel>, SpaceId) {
-    let kernel = Kernel::builder(root.join("spaces"), root.join("data"), owner)
+async fn open(root: &std::path::Path, owner: PersonId) -> (Arc<Kernel>, ProjectId) {
+    let kernel = Kernel::builder(root.join("projects"), root.join("data"), owner)
         .module(Browser::new())
         .open()
         .await
@@ -19,20 +19,20 @@ async fn open(root: &std::path::Path, owner: PersonId) -> (Arc<Kernel>, SpaceId)
     let person = Participant::Person(owner);
     let made = kernel.call(
         person,
-        "spaces.create",
+        "projects.create",
         None,
         Some(banda_kernel::CommandId::new()),
         json!({ "name": "Work" }),
     );
-    let space = serde_json::from_value(made.await.unwrap()["id"].clone()).unwrap();
-    (kernel, space)
+    let project = serde_json::from_value(made.await.unwrap()["id"].clone()).unwrap();
+    (kernel, project)
 }
 
-/// An Agent whose pass is for `space`.
-fn agent(space: SpaceId) -> Caller {
+/// An Agent whose pass is for `project`.
+fn agent(project: ProjectId) -> Caller {
     Caller {
         participant: Participant::Agent(AgentId::new()),
-        only: Some(space),
+        only: Some(project),
     }
 }
 
@@ -40,12 +40,12 @@ fn agent(space: SpaceId) -> Caller {
 /// An Agent calls `method`, and waits for the window's answer.
 fn ask(
     kernel: &Arc<Kernel>,
-    space: SpaceId,
+    project: ProjectId,
     method: &'static str,
     params: Value,
 ) -> JoinHandle<Result<Value, Refusal>> {
     let kernel = kernel.clone();
-    tokio::spawn(async move { (kernel.call(agent(space), method, None, None, params)).await })
+    tokio::spawn(async move { (kernel.call(agent(project), method, None, None, params)).await })
 }
 
 /// The window answers `asked` with `ok`.
@@ -70,10 +70,10 @@ async fn window(kernel: &Kernel, owner: PersonId) -> Stream {
 async fn with_no_window_the_tools_are_listed_and_refuse() {
     let root = tempfile::tempdir().unwrap();
     let owner = PersonId::new();
-    let (kernel, space) = open(root.path(), owner).await;
+    let (kernel, project) = open(root.path(), owner).await;
     let tools = kernel.call(
         Participant::Person(owner),
-        "spaces.tools",
+        "projects.tools",
         None,
         None,
         Value::Null,
@@ -94,7 +94,7 @@ async fn with_no_window_the_tools_are_listed_and_refuse() {
             "browser_handoff"
         ]
     );
-    let refused = kernel.call(agent(space), "browser.tabs", None, None, Value::Null);
+    let refused = kernel.call(agent(project), "browser.tabs", None, None, Value::Null);
     let refused = refused.await.unwrap_err();
     assert_eq!(refused.code, Code::Conflict);
     assert_eq!(refused.message, "Banda's window is not open.");
@@ -104,12 +104,12 @@ async fn with_no_window_the_tools_are_listed_and_refuse() {
 async fn an_agent_sees_the_tabs_the_window_lists() {
     let root = tempfile::tempdir().unwrap();
     let owner = PersonId::new();
-    let (kernel, space) = open(root.path(), owner).await;
+    let (kernel, project) = open(root.path(), owner).await;
     let mut hear = window(&kernel, owner).await;
-    let asking = ask(&kernel, space, "browser.tabs", Value::Null);
+    let asking = ask(&kernel, project, "browser.tabs", Value::Null);
     let asked = hear.recv().await.unwrap();
     assert_eq!(asked["method"], "browser.tabs");
-    assert_eq!(asked["space"], json!(space));
+    assert_eq!(asked["project"], json!(project));
     assert_eq!(asked["by"]["kind"], "agent");
     let tab = SeenTab {
         id: 7,
@@ -125,9 +125,9 @@ async fn an_agent_sees_the_tabs_the_window_lists() {
 async fn a_window_that_answers_amiss_is_refused_not_passed_on() {
     let root = tempfile::tempdir().unwrap();
     let owner = PersonId::new();
-    let (kernel, space) = open(root.path(), owner).await;
+    let (kernel, project) = open(root.path(), owner).await;
     let mut hear = window(&kernel, owner).await;
-    let asking = ask(&kernel, space, "browser.tabs", Value::Null);
+    let asking = ask(&kernel, project, "browser.tabs", Value::Null);
     let asked = hear.recv().await.unwrap();
     answer(&kernel, owner, &asked, json!([{ "id": "seven" }])).await;
     assert_eq!(asking.await.unwrap().unwrap_err().code, Code::Invalid);
@@ -138,9 +138,9 @@ async fn a_window_that_answers_amiss_is_refused_not_passed_on() {
 async fn told(method: &'static str, params: Value, answered: impl Serialize) -> (Value, String) {
     let root = tempfile::tempdir().unwrap();
     let owner = PersonId::new();
-    let (kernel, space) = open(root.path(), owner).await;
+    let (kernel, project) = open(root.path(), owner).await;
     let mut hear = window(&kernel, owner).await;
-    let asking = ask(&kernel, space, method, params);
+    let asking = ask(&kernel, project, method, params);
     let asked = hear.recv().await.unwrap();
     assert_eq!(asked["method"], method);
     answer(&kernel, owner, &asked, json!(answered)).await;
@@ -242,7 +242,7 @@ async fn a_navigated_tab_says_how_it_went() {
 async fn only_the_web_s_addresses_are_asked_for() {
     let root = tempfile::tempdir().unwrap();
     let owner = PersonId::new();
-    let (kernel, space) = open(root.path(), owner).await;
+    let (kernel, project) = open(root.path(), owner).await;
     // A window holds the road, and hears none of these.
     let _hear = window(&kernel, owner).await;
     for (method, params) in [
@@ -254,7 +254,7 @@ async fn only_the_web_s_addresses_are_asked_for() {
         ),
         ("browser.navigate", json!({ "tab": 9, "to": "about:blank" })),
     ] {
-        let refused = ask(&kernel, space, method, params).await.unwrap();
+        let refused = ask(&kernel, project, method, params).await.unwrap();
         let refused = refused.unwrap_err();
         assert_eq!(refused.code, Code::Invalid, "{refused:?}");
         assert!(refused.message.contains("http:// or https://"));
@@ -302,7 +302,7 @@ async fn an_action_answers_in_a_line_and_says_what_changed() {
 async fn an_action_without_what_it_needs_is_not_asked_for() {
     let root = tempfile::tempdir().unwrap();
     let owner = PersonId::new();
-    let (kernel, space) = open(root.path(), owner).await;
+    let (kernel, project) = open(root.path(), owner).await;
     let _hear = window(&kernel, owner).await;
     for (params, said) in [
         (
@@ -329,13 +329,15 @@ async fn an_action_without_what_it_needs_is_not_asked_for() {
     ] {
         let mut params = params;
         params["tab"] = json!(9);
-        let refused = ask(&kernel, space, "browser.act", params).await.unwrap();
+        let refused = ask(&kernel, project, "browser.act", params).await.unwrap();
         let refused = refused.unwrap_err();
         assert_eq!(refused.code, Code::Invalid);
         assert!(refused.message.contains(said), "{}", refused.message);
     }
     let wait = json!({ "tab": 9, "text": "Done", "url": "done" });
-    let refused = ask(&kernel, space, "browser.wait_for", wait).await.unwrap();
+    let refused = ask(&kernel, project, "browser.wait_for", wait)
+        .await
+        .unwrap();
     assert!(
         refused
             .unwrap_err()
@@ -385,10 +387,10 @@ async fn a_handed_tab_tells_the_agent_to_end_its_turn() {
 
     let root = tempfile::tempdir().unwrap();
     let owner = PersonId::new();
-    let (kernel, space) = open(root.path(), owner).await;
+    let (kernel, project) = open(root.path(), owner).await;
     let _hear = window(&kernel, owner).await;
     let why = json!({ "tab": 4, "why": " " });
-    let refused = ask(&kernel, space, "browser.handoff", why).await.unwrap();
+    let refused = ask(&kernel, project, "browser.handoff", why).await.unwrap();
     assert!(refused.unwrap_err().message.contains("needs why"));
 }
 
@@ -396,9 +398,9 @@ async fn a_handed_tab_tells_the_agent_to_end_its_turn() {
 async fn a_screenshot_keeps_its_image_for_the_mcp_image_content_path() {
     let root = tempfile::tempdir().unwrap();
     let owner = PersonId::new();
-    let (kernel, space) = open(root.path(), owner).await;
+    let (kernel, project) = open(root.path(), owner).await;
     let mut hear = window(&kernel, owner).await;
-    let asking = ask(&kernel, space, "browser.screenshot", json!({ "tab": 7 }));
+    let asking = ask(&kernel, project, "browser.screenshot", json!({ "tab": 7 }));
     let asked = hear.recv().await.unwrap();
     assert_eq!(asked["method"], "browser.screenshot");
     assert_eq!(asked["params"], json!({ "tab": 7 }));

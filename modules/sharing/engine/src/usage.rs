@@ -1,8 +1,8 @@
 //! The usage summary `day` (ADR 0039, decision 6): once a day, the day
 //! before, counted from the events Banda already keeps, from a list. The
-//! Threads started by Harness and the Turns come from every Space's log,
+//! Threads started by Harness and the Turns come from every Project's log,
 //! as numbers only, through the kernel's tally; the Panes opened by kind
-//! and the workspaces from this machine's own log; how many Spaces there
+//! and the workspaces from this machine's own log; how many Projects there
 //! are from the kernel. Nothing else is read, and no code to count
 //! anything is spread through Banda.
 //!
@@ -12,7 +12,7 @@
 //! makes no event.
 
 use crate::exception::{Banda, TOKEN};
-use banda_kernel::{Error, Event, EventFilter, ModuleSpace, Tally};
+use banda_kernel::{Error, Event, EventFilter, ModuleProject, Tally};
 use banda_workspaces::model::{Arrangement, PaneId, panes};
 use serde::Deserialize;
 use serde_json::{Value, json};
@@ -29,8 +29,8 @@ pub struct Counts {
     pub turns: u64,
     /// The Panes opened, by kind, as `agents.thread`.
     pub panes: BTreeMap<String, u64>,
-    /// How many Spaces and workspaces there are.
-    pub spaces: u64,
+    /// How many Projects and workspaces there are.
+    pub projects: u64,
     pub workspaces: u64,
 }
 
@@ -74,7 +74,7 @@ fn locale_of(said: &str) -> Option<String> {
 }
 
 /// Counts the day `day`, in days since the epoch.
-pub(crate) async fn count(space: &ModuleSpace, day: i64) -> Result<Counts, Error> {
+pub(crate) async fn count(project: &ModuleProject, day: i64) -> Result<Counts, Error> {
     let (from, to) = (day * DAY_MS, (day + 1) * DAY_MS);
     let tally = |kind: &str, by: Option<&str>| Tally {
         module: "agents".to_owned(),
@@ -83,24 +83,24 @@ pub(crate) async fn count(space: &ModuleSpace, day: i64) -> Result<Counts, Error
         from,
         to,
     };
-    let mut threads = space
+    let mut threads = project
         .tally(tally("thread.started", Some("harness")))
         .await?
         .unwrap_or_default();
     if let Some(none) = threads.remove("") {
         *threads.entry("unknown".to_owned()).or_default() += none;
     }
-    let turns = space
+    let turns = project
         .tally(tally("turn.started", None))
         .await?
         .unwrap_or_default();
-    let spaces = space.spaces().await.unwrap_or_default() as u64;
-    let (panes, workspaces) = arranged(space, from, to).await?;
+    let projects = project.projects().await.unwrap_or_default() as u64;
+    let (panes, workspaces) = arranged(project, from, to).await?;
     Ok(Counts {
         threads,
         turns: turns.values().sum(),
         panes,
-        spaces,
+        projects,
         workspaces,
     })
 }
@@ -116,7 +116,7 @@ pub(crate) struct Whole {
 /// says the whole arrangement after it, but a Pane's args, so a Pane
 /// opened is one an `opened` arrangement has that the one before did not.
 async fn arranged(
-    space: &ModuleSpace,
+    project: &ModuleProject,
     from: i64,
     to: i64,
 ) -> Result<(BTreeMap<String, u64>, u64), Error> {
@@ -125,10 +125,13 @@ async fn arranged(
         ..EventFilter::default()
     };
     let whole = |event: &Event| serde_json::from_value::<Whole>(event.payload.clone()).ok();
-    let (start, end) = (space.position_at(from).await?, space.position_at(to).await?);
+    let (start, end) = (
+        project.position_at(from).await?,
+        project.position_at(to).await?,
+    );
     let mut before = None;
     let mut at = start + 1;
-    while let Some(event) = space.event_before(at, filter.clone()).await? {
+    while let Some(event) = project.event_before(at, filter.clone()).await? {
         if let Some(found) = whole(&event) {
             before = Some(found);
             break;
@@ -136,7 +139,7 @@ async fn arranged(
         at = event.seq;
     }
     let span = usize::try_from(end - start).unwrap_or_default();
-    let events = space.events_after(start, filter, span).await?;
+    let events = project.events_after(start, filter, span).await?;
     let changes: Vec<(String, Whole)> = (events.iter())
         .filter_map(|event| Some((event.kind.clone(), whole(event)?)))
         .collect();
@@ -198,7 +201,7 @@ pub fn day(day: i64, counts: &Counts, locale: Option<&str>, id: &str, banda: &Ba
             "threads": counts.threads,
             "turns": counts.turns,
             "panes": counts.panes,
-            "spaces": counts.spaces,
+            "projects": counts.projects,
             "workspaces": counts.workspaces,
         },
     })
@@ -243,8 +246,8 @@ mod tests {
             .iter()
             .map(|(id, kind)| {
                 let id = format!("00000000-0000-4000-8000-00000000000{id}");
-                let space = UUID;
-                json!({ "id": id, "kind": kind, "space": space, "args": {} })
+                let project = UUID;
+                json!({ "id": id, "kind": kind, "project": project, "args": {} })
             })
             .collect();
         let whole = json!({ "workspaces": [
@@ -301,7 +304,7 @@ mod tests {
             threads: [("claude".to_owned(), 4)].into(),
             turns: 31,
             panes: [("agents.thread".to_owned(), 6)].into(),
-            spaces: 2,
+            projects: 2,
             workspaces: 3,
         };
         let day_ = day_of(1_793_750_400_000) - 1;
@@ -315,7 +318,7 @@ mod tests {
                 "$process_person_profile": false, "$geoip_disable": true,
                 "day": "2026-11-03", "version": "0.2.0", "channel": "stable", "os": "linux",
                 "locale": "ru_UA", "country": "UA", "threads": { "claude": 4 }, "turns": 31,
-                "panes": { "agents.thread": 6 }, "spaces": 2, "workspaces": 3,
+                "panes": { "agents.thread": 6 }, "projects": 2, "workspaces": 3,
             })
         );
         assert_eq!(

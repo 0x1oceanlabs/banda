@@ -19,7 +19,7 @@ use crate::exception::{self, Banda};
 use crate::settings::{self, Shares};
 use crate::usage::{self, DAY_MS};
 use crate::{Clock, Ids, KEPT_MS, Never};
-use banda_kernel::{Error, Event, EventFilter, Heard, ModuleSpace, Participant, Tx};
+use banda_kernel::{Error, Event, EventFilter, Heard, ModuleProject, Participant, Tx};
 use banda_problems::model::Problem;
 use rusqlite::{OptionalExtension, params};
 use serde_json::{Value, json};
@@ -43,35 +43,37 @@ pub(crate) struct Courier {
 }
 
 /// Starts hearing the problems module and sending what waits.
-pub(crate) async fn start(courier: Courier, space: ModuleSpace) -> Result<(), Error> {
-    let after = match space.read(heard_at).await? {
+pub(crate) async fn start(courier: Courier, project: ModuleProject) -> Result<(), Error> {
+    let after = match project.read(heard_at).await? {
         Some(at) => at,
-        None => space.at().await?,
+        None => project.at().await?,
     };
     let filter = EventFilter {
         module: Some("problems".to_owned()),
         subject: None,
         kinds: Some(vec!["recorded".to_owned(), "again".to_owned()]),
     };
-    tokio::spawn(courier.run(space.react(after, filter)));
+    tokio::spawn(courier.run(project.react(after, filter)));
     Ok(())
 }
 
 impl Courier {
     /// Sends what waits, then hears each Problem, till the machine's
-    /// Space closes; while something waits, it tries again every few
+    /// Project closes; while something waits, it tries again every few
     /// minutes.
     async fn run(self, mut heard: Heard) {
         // What waited as Banda last ran goes first.
         let mut waiting = true;
         loop {
-            let Some(space) = heard.space() else { return };
-            match self.day(&space).await {
+            let Some(project) = heard.project() else {
+                return;
+            };
+            match self.day(&project).await {
                 Ok(made) => waiting |= made,
                 Err(error) => tracing::warn!(%error, "the day's usage was not counted"),
             }
             if waiting {
-                waiting = self.send(&space).await.unwrap_or_else(|error| {
+                waiting = self.send(&project).await.unwrap_or_else(|error| {
                     tracing::warn!(%error, "what sharing keeps was not sent");
                     true
                 });
@@ -86,7 +88,7 @@ impl Courier {
                     return;
                 }
             };
-            match self.make(&space, &event).await {
+            match self.make(&project, &event).await {
                 Ok(made) => waiting |= made,
                 Err(error) => tracing::warn!(%error, "a Problem's event was not made"),
             }
@@ -97,7 +99,7 @@ impl Courier {
     /// shared all that day; says whether it made one. Usage turned on, or
     /// the ID changed, it starts counting from the next whole day, so
     /// nothing goes of a day before the Person said yes.
-    async fn day(&self, space: &ModuleSpace) -> Result<bool, Error> {
+    async fn day(&self, project: &ModuleProject) -> Result<bool, Error> {
         let shares = self.shares();
         let id = match (self.never, shares.usage) {
             (None, true) => self.ids.id(shares, false)?,
@@ -105,16 +107,17 @@ impl Courier {
         };
         let now = (self.clock)();
         let yesterday = usage::day_of(now) - 1;
-        let kept = space.read(usage_kept).await?;
+        let kept = project.read(usage_kept).await?;
         let Some(id) = id else {
             if kept.is_some() {
-                (space.write(|tx| Ok(tx.sql().execute("DELETE FROM sharing_usage", [])?))).await?;
+                (project.write(|tx| Ok(tx.sql().execute("DELETE FROM sharing_usage", [])?)))
+                    .await?;
             }
             return Ok(false);
         };
         let kept = kept.filter(|(kept, ..)| *kept == id);
         let Some((_, since, last)) = kept else {
-            space
+            project
                 .write(move |tx| {
                     tx.sql().execute(
                         "INSERT INTO sharing_usage (one, id, since) VALUES (1, ?1, ?2)
@@ -130,7 +133,7 @@ impl Courier {
         if since > yesterday * DAY_MS || last >= Some(yesterday) {
             return Ok(false);
         }
-        let counts = usage::count(space, yesterday).await?;
+        let counts = usage::count(project, yesterday).await?;
         let made = counts.any().then(|| {
             let banda = self.banda();
             let locale = usage::locale();
@@ -138,7 +141,7 @@ impl Courier {
             (usage::about(yesterday, &counts), json.to_string())
         });
         let making = made.is_some();
-        space
+        project
             .write(move |tx| {
                 if let Some((about, json)) = made {
                     keep(tx, "day", &about, &json)?;
@@ -165,7 +168,7 @@ impl Courier {
 
     /// Keeps `event`'s Problem as `$exception`, while problems are shared,
     /// and that it was heard; says whether it made one.
-    async fn make(&self, space: &ModuleSpace, event: &Event) -> Result<bool, Error> {
+    async fn make(&self, project: &ModuleProject, event: &Event) -> Result<bool, Error> {
         let seq = event.seq;
         let shares = self.shares();
         let made = match (self.never, shares.problems) {
@@ -178,7 +181,7 @@ impl Courier {
             _ => None,
         };
         let making = made.is_some();
-        space
+        project
             .write(move |tx| {
                 if let Some((about, json)) = made {
                     keep(tx, "$exception", &about, &json)?;
@@ -196,14 +199,14 @@ impl Courier {
 
     /// Drops what is too old, or no longer to go, then posts the rest,
     /// the oldest first, till one does not go; says whether any waits.
-    async fn send(&self, space: &ModuleSpace) -> Result<bool, Error> {
+    async fn send(&self, project: &ModuleProject) -> Result<bool, Error> {
         if self.never.is_some() {
             return Ok(false);
         }
         let shares = self.shares();
         let id = self.ids.id(shares, false)?;
         let since = banda_kernel::now_ms() - KEPT_MS;
-        let waiting: Vec<(i64, String)> = space
+        let waiting: Vec<(i64, String)> = project
             .write(move |tx| {
                 tx.sql().execute(
                     "DELETE FROM sharing_sent WHERE made < ?1 OR (sent IS NULL AND (
@@ -219,16 +222,16 @@ impl Courier {
                 Ok(rows.collect::<Result<_, _>>()?)
             })
             .await?;
-        let owner = Participant::Person(space.owner());
+        let owner = Participant::Person(project.owner());
         for (row, json) in waiting {
             let event: Value = serde_json::from_str(&json)?;
             let asked = json!({ "event": event });
-            if let Err(refusal) = space.ask_window(owner, "post", asked, POSTING).await {
+            if let Err(refusal) = project.ask_window(owner, "post", asked, POSTING).await {
                 tracing::debug!(%refusal, "an event waits to be sent");
                 return Ok(true);
             }
             let now = banda_kernel::now_ms();
-            space
+            project
                 .write(move |tx| {
                     tx.sql().execute(
                         "UPDATE sharing_sent SET sent = ?1 WHERE id = ?2",

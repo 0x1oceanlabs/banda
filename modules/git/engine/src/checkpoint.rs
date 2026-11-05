@@ -1,4 +1,4 @@
-//! Checkpoints: the Space's work tree as each turn of an Agent's began and
+//! Checkpoints: the Project's work tree as each turn of an Agent's began and
 //! as it ended, kept as commits, so the Diff's Turn shows all the turn
 //! changed, the shell's work too (ADR 0034, decision 2). As T3 Code's
 //! (`docs/research/2026-11-02-t3-code-git-backend.md`, section 5): made
@@ -9,7 +9,7 @@
 use crate::index::{INDEX, UNTRACKED, own_index, untracked};
 use crate::repo::Repo;
 use crate::run::Opts;
-use banda_kernel::{Event, EventFilter, Heard, ModuleSpace, Refusal};
+use banda_kernel::{Event, EventFilter, Heard, ModuleProject, Refusal};
 
 /// Where every checkpoint is kept.
 const ROOT: &str = "refs/banda/checkpoints";
@@ -117,7 +117,7 @@ async fn forget(repo: &Repo, thread: &str, turns: &[&str]) -> Result<(), Refusal
 }
 
 /// Makes or lets go of checkpoints as the agents module's facts are
-/// heard, one at a time, until the Space is gone.
+/// heard, one at a time, until the Project is gone.
 pub async fn follow(mut heard: Heard) {
     loop {
         let event = match heard.next().await {
@@ -128,19 +128,21 @@ pub async fn follow(mut heard: Heard) {
                 return;
             }
         };
-        let Some(space) = heard.space() else { return };
-        if let Err(refusal) = on(&space, &event).await {
+        let Some(project) = heard.project() else {
+            return;
+        };
+        if let Err(refusal) = on(&project, &event).await {
             tracing::warn!(kind = %event.kind, ?refusal, "a checkpoint was not kept");
         }
     }
 }
 
 /// What one fact does to the checkpoints of its Thread.
-async fn on(space: &ModuleSpace, event: &Event) -> Result<(), Refusal> {
+async fn on(project: &ModuleProject, event: &Event) -> Result<(), Refusal> {
     let (Some(thread), Some(turn)) = (&event.subject, event.payload["turn"].as_str()) else {
         return Ok(());
     };
-    let Some(repo) = Repo::find(&space.folder()).await? else {
+    let Some(repo) = Repo::find(&project.folder()).await? else {
         return Ok(());
     };
     match event.kind.as_str() {
@@ -166,7 +168,7 @@ async fn on(space: &ModuleSpace, event: &Event) -> Result<(), Refusal> {
                 subject: Some(thread.clone()),
                 kinds: Some(vec![STARTED.into()]),
             };
-            let started = space.events_after(0, filter, usize::MAX).await?;
+            let started = project.events_after(0, filter, usize::MAX).await?;
             let turns: Vec<&str> = started
                 .iter()
                 .filter_map(|each| each.payload["turn"].as_str())

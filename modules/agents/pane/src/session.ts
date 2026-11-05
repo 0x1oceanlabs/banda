@@ -5,7 +5,7 @@
  * queue's. The Thread Pane lays these out; it decides none of them.
  */
 import { useCallback, useEffect, useMemo, useRef, useState } from "react"
-import { newId, type Engine, type SpaceId } from "@banda/contract"
+import { newId, type Engine, type ProjectId } from "@banda/contract"
 import type {
   Defaults,
   Image,
@@ -16,7 +16,7 @@ import type {
   TurnView,
 } from "@banda/contract/agents"
 import { useMachine } from "@banda/ui/hooks/use-status"
-import { spacesChanged } from "@banda/ui/lib/spaces"
+import { projectsChanged } from "@banda/ui/lib/projects"
 import { keepZoom, zoomOf } from "@banda/ui/lib/zoom"
 import { useAct } from "@banda/ui/hooks/use-act"
 import { useInFront } from "@banda/ui/hooks/use-in-front"
@@ -45,7 +45,7 @@ import {
 } from "./thread"
 
 /**
- * One Thread: a session with a Harness in a Space (ADR 0006). Without
+ * One Thread: a session with a Harness in a Project (ADR 0006). Without
  * `thread`, the next message starts one on `harness`, or on this computer's
  * first Harness when it names none. `title` keeps the header's words while
  * the Thread loads.
@@ -59,7 +59,7 @@ export type ThreadArgs = {
   /** The Person hid the Thread's details card (ADR 0034, decision 4). */
   details?: false
   /** The folder created by the draft’s first message or attachment. */
-  scratch?: SpaceId
+  scratch?: ProjectId
   /** Kept with the draft so creation can be replayed after a reload. */
   scratchCommand?: string
 }
@@ -77,7 +77,7 @@ const IMPLEMENT = "Implement the plan."
 /** The Thread a Pane with `args` shows, and what its Person may do there. */
 export function useThreadSession({
   engine,
-  space,
+  project,
   args,
   focused,
   open,
@@ -85,19 +85,19 @@ export function useThreadSession({
 }: PaneProps<ThreadArgs>) {
   const { thread } = args
   const machine = useMachine(engine)
-  const unplaced = space === machine && !args.scratch
+  const unplaced = project === machine && !args.scratch
   const creation = useRef(args.scratchCommand ?? newId())
   useEffect(() => {
     if (unplaced && !args.scratchCommand)
       update({ ...args, scratchCommand: creation.current })
   }, [unplaced, args, update])
-  const pending = useRef<Promise<SpaceId> | null>(null)
-  const ensureSpace = (): Promise<SpaceId> => {
-    if (!unplaced) return Promise.resolve(space)
+  const pending = useRef<Promise<ProjectId> | null>(null)
+  const ensureProject = (): Promise<ProjectId> => {
+    if (!unplaced) return Promise.resolve(project)
     if (!pending.current)
       pending.current = engine
         .command(
-          "spaces.create",
+          "projects.create",
           { scratch: true },
           undefined,
           creation.current
@@ -109,7 +109,7 @@ export function useThreadSession({
             scratchCommand: creation.current,
             scratch: made.id,
           })
-          spacesChanged()
+          projectsChanged()
           return made.id
         })
         .catch((error: unknown) => {
@@ -118,11 +118,11 @@ export function useThreadSession({
         })
     return pending.current
   }
-  const live = useThread(engine, space, thread)
+  const live = useThread(engine, project, thread)
   const state = live.state === "ready" ? live.view : undefined
   const sending = useAct()
   const acting = useAct()
-  const reader = useImageReader(engine, space)
+  const reader = useImageReader(engine, project)
   const harnesses = useHarnesses(engine)
   // A new Thread starts on a Harness that is on.
   const offered = useMemo(() => harnesses.filter((h) => h.enabled), [harnesses])
@@ -159,7 +159,7 @@ export function useThreadSession({
   // picker chooses the Harness with the model (ADR 0031, decision 6).
   const everyDefaults = useHarnessDefaults(
     engine,
-    space,
+    project,
     thread === null && machine && !unplaced ? offered : null
   )
   const defaults = everyDefaults?.[harness]
@@ -181,7 +181,7 @@ export function useThreadSession({
         await engine.command(
           "agents.configure",
           { thread, settings: next },
-          space
+          project
         )
         return true
       })) === true
@@ -191,14 +191,14 @@ export function useThreadSession({
   const images = useAttachments({
     thread,
     attach: async (image: Attaching) =>
-      engine.command("agents.attach", image, await ensureSpace()),
+      engine.command("agents.attach", image, await ensureProject()),
     reader,
     closed: offer.no_images ? `${name} does not take images.` : undefined,
   })
-  // A file dropped or pasted, kept in the Space for the message to name.
+  // A file dropped or pasted, kept in the Project for the message to name.
   const keep = (file: File) =>
     acting.act(async () => {
-      const target = await ensureSpace()
+      const target = await ensureProject()
       const data = base64Of(await dataUrl(file))
       const kept = await engine.command(
         "agents.keep",
@@ -207,13 +207,13 @@ export function useThreadSession({
       )
       return kept.path
     })
-  // The files `@` names come from the Space's folder.
+  // The files `@` names come from the Project's folder.
   const findFiles = useCallback(
     (query: string) =>
       unplaced
         ? Promise.resolve([])
-        : engine.call("agents.files", { query }, { space }),
-    [engine, space, unplaced]
+        : engine.call("agents.files", { query }, { project }),
+    [engine, project, unplaced]
   )
 
   // The waiting message open to edit, from its Edit or ↑ in the composer.
@@ -232,7 +232,7 @@ export function useThreadSession({
       engine.command(
         "agents.answer",
         { item, choice, ...(values && { values }) },
-        space
+        project
       )
     )
   /** Sends `text`; an existing Thread changes to `next` first, if given. */
@@ -244,9 +244,9 @@ export function useThreadSession({
   ) => {
     const no = asking && declineOnce(asking.body)
     if (no && text && (await answer(asking.id, no)) === undefined) return false
-    let target = space
+    let target = project
     const sent = await sending.act(async () => {
-      target = await ensureSpace()
+      target = await ensureProject()
       return engine.command(
         "agents.send",
         // A new Thread starts as its composer shows; an existing one runs
@@ -271,7 +271,7 @@ export function useThreadSession({
       keepZoom(zoomKey(sent.thread), zoomOf(zoomKey(null)))
       keepZoom(zoomKey(null), 1)
       const next = { thread: sent.thread, harness, title: args.title }
-      if (target !== space || args.scratch)
+      if (target !== project || args.scratch)
         open({ kind: "agents.thread", args: next }, "here", target)
       else update(next)
     }
@@ -309,35 +309,37 @@ export function useThreadSession({
   }
   const stop = (turn: TurnView) =>
     void acting.act(() =>
-      engine.command("agents.stop", { turn: turn.id }, space)
+      engine.command("agents.stop", { turn: turn.id }, project)
     )
   const retry = (turn: TurnView) =>
     void acting.act(() =>
-      engine.command("agents.retry", { turn: turn.id }, space)
+      engine.command("agents.retry", { turn: turn.id }, project)
     )
   // The fork opens here, as a Thread picked in the sidebar does.
   const fork = (turn: TurnView) =>
     void acting
-      .act(() => engine.command("agents.fork", { turn: turn.id }, space))
+      .act(() => engine.command("agents.fork", { turn: turn.id }, project))
       .then((forked) => forked && update({ ...forked, harness }))
   const queue: QueueActions = {
     onSendNow: ({ turn }) =>
       void acting.act(() =>
-        engine.command("agents.steer", { turn: turn.id }, space)
+        engine.command("agents.steer", { turn: turn.id }, project)
       ),
     onEdit: async ({ turn }, text) =>
       (await acting.act(() =>
-        engine.command("agents.edit", { turn: turn.id, text }, space)
+        engine.command("agents.edit", { turn: turn.id, text }, project)
       )) !== undefined,
     onRemove: ({ turn }) =>
       void acting.act(() =>
-        engine.command("agents.withdraw", { turn: turn.id }, space)
+        engine.command("agents.withdraw", { turn: turn.id }, project)
       ),
     editing,
     onEditing: setEditing,
     onContinue: () => {
       if (thread === null) return
-      void acting.act(() => engine.command("agents.resume", { thread }, space))
+      void acting.act(() =>
+        engine.command("agents.resume", { thread }, project)
+      )
     },
   }
 
@@ -404,7 +406,7 @@ export function useThreadSession({
      * whether it went. */
     rewind: async (turn: TurnView) =>
       (await acting.act(() =>
-        engine.command("agents.rewind", { turn: turn.id }, space)
+        engine.command("agents.rewind", { turn: turn.id }, project)
       )) !== undefined,
     queue,
     /** Opens the last waiting message to edit, from ↑ in the composer. */
@@ -421,7 +423,7 @@ const OFFERED = { module: "agents", kinds: ["thread.offered"] }
  */
 function useHarnessDefaults(
   engine: Engine,
-  space: SpaceId,
+  project: ProjectId,
   offered: HarnessView[] | null
 ): Record<string, Defaults> | undefined {
   type Every = { at: number; each: Record<string, Defaults> }
@@ -433,7 +435,7 @@ function useHarnessDefaults(
           read: async () => {
             const each = await Promise.all(
               harnesses.map((harness) =>
-                engine.call("agents.defaults", { harness }, { space })
+                engine.call("agents.defaults", { harness }, { project })
               )
             )
             return {
@@ -447,7 +449,7 @@ function useHarnessDefaults(
           filter: OFFERED,
           apply: () => READ_AGAIN,
         }
-  }, [engine, space, offered])
-  const live = useLive(engine, space, source)
+  }, [engine, project, offered])
+  const live = useLive(engine, project, source)
   return live.state === "ready" ? live.view.each : undefined
 }

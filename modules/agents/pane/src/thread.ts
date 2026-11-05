@@ -20,7 +20,7 @@ import {
 import { settledTurn } from "./marks"
 
 export type ThreadState = {
-  /** The last position in the Space's log this state includes. */
+  /** The last position in the Project's log this state includes. */
   at: number
   /** The start of its first message. */
   title: string
@@ -519,7 +519,7 @@ export function declineOnce(question: QuestionBody): string | undefined {
 /** An item that is a message. */
 export type Said = Item & { body: Extract<Body, { kind: "message" }> }
 
-/** The Space's other Threads by their Agents' IDs, and this Thread's own
+/** The Project's other Threads by their Agents' IDs, and this Thread's own
  * Agent once the Thread list has said it. */
 export type Listing = {
   threads: ReadonlyMap<string, ListedThread>
@@ -542,7 +542,7 @@ export function writerOf(
   return self !== undefined && author.id !== self ? "gone" : undefined
 }
 
-/** The Thread `id` of the Space: that Thread, or `"gone"` when the list no
+/** The Thread `id` of the Project: that Thread, or `"gone"` when the list no
  * longer has it; nothing before the list has come. */
 export function threadOf(
   { threads, self }: Listing,

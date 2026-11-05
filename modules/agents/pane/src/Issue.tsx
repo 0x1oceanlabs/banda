@@ -6,7 +6,7 @@
  * browser, and the agents module keeps the answer; both need `Decide`.
  */
 import { useState } from "react"
-import type { Engine, SpaceId } from "@banda/contract"
+import type { Engine, ProjectId } from "@banda/contract"
 import type { ItemId } from "@banda/contract/agents"
 import { Button } from "@banda/ui/components/button"
 import { Input } from "@banda/ui/components/input"
@@ -24,7 +24,7 @@ import type { IssueBody } from "./thread"
 
 type Props = {
   engine: Engine
-  space: SpaceId
+  project: ProjectId
   item: ItemId
   issue: IssueBody
 }
@@ -37,7 +37,7 @@ export function Issue(props: Props) {
   )
 }
 
-function Draft({ engine, space, item, issue }: Props) {
+function Draft({ engine, project, item, issue }: Props) {
   const { busy, problem, act } = useAct()
   const [editing, setEditing] = useState(false)
   const [title, setTitle] = useState(issue.title)
@@ -60,11 +60,15 @@ function Draft({ engine, space, item, issue }: Props) {
       }
       const state = sent.filed ? "sent" : "opened"
       const answer = { item, state, title, body, url: sent.url } as const
-      await engine.command("agents.answer_issue", answer, space)
+      await engine.command("agents.answer_issue", answer, project)
     })
   const cancel = () =>
     act(() =>
-      engine.command("agents.answer_issue", { item, state: "cancelled" }, space)
+      engine.command(
+        "agents.answer_issue",
+        { item, state: "cancelled" },
+        project
+      )
     )
   return (
     <Card

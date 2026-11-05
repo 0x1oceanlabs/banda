@@ -2,7 +2,7 @@
  * The Usage Pane `harnesses.usage` (ADR 0043, decision 6; ADR 0055,
  * decisions 4 and 5): each account's limits, and the cost and tokens in
  * the Harnesses' own journals on this machine, by day, account and model.
- * It is the machine's, as the module is: every Space shows the same.
+ * It is the machine's, as the module is: every Project shows the same.
  */
 import type {
   HarnessView,
@@ -59,7 +59,7 @@ export const usagePane = definePane<UsageArgs>({
   icon: GaugeIcon,
   start: START,
   header: false,
-  // One Usage per Space: another tab or period is the same Pane.
+  // One Usage per Project: another tab or period is the same Pane.
   identity: () => "usage",
   Pane: UsagePane,
 })

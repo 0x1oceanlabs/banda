@@ -32,7 +32,7 @@ import {
   type Workspaces,
 } from "./model"
 
-const A = "space-a"
+const A = "project-a"
 
 function pane(kind: string, args: Record<string, string> = {}): PaneState {
   return { kind, args } as PaneState
@@ -163,7 +163,7 @@ describe("plans", () => {
     expect(opened(before, next)?.command).toEqual({
       method: "workspaces.open",
       params: {
-        space: A,
+        project: A,
         kind: "a.four",
         args: {},
         again: true,

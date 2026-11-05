@@ -5,7 +5,7 @@ import {
   type MethodOf,
   newId,
   type Params,
-  type SpaceId,
+  type ProjectId,
 } from "@banda/contract"
 import {
   type Ended,
@@ -37,7 +37,7 @@ import { zoomOf } from "@banda/ui/lib/zoom"
 const SETTLE = 120
 
 /**
- * A terminal: the Person's shell in the Space's folder, or a program
+ * A terminal: the Person's shell in the Project's folder, or a program
  * another Pane started with `terminal.open`, such as a Harness's sign-in.
  * That Pane opens this one as `{kind: "terminal.terminal", args:
  * {terminal, title, shell: false, done}}`. The engine runs the program;
@@ -60,24 +60,24 @@ export type TerminalArgs = {
 
 /**
  * A command the Pane sends once its program ended with code 0, and where
- * it runs: in `space`, or with none, on the machine (ADR 0040, decision
+ * it runs: in `project`, or with none, on the machine (ADR 0040, decision
  * 5). It is how the Pane that opened it hears that it ended well, as a
  * sign-in's does. Its ID keeps it once only, whichever window sends it,
  * after any reload.
  */
-export type Done = CommandCall & { space?: SpaceId }
+export type Done = CommandCall & { project?: ProjectId }
 
 /** `done` as a list: a Pane kept from before the list has one call, sent
- * in its Space. That shape goes once no window keeps such a Pane. */
+ * in its Project. That shape goes once no window keeps such a Pane. */
 function listed(
   done: Done[] | CommandCall | null,
-  space: SpaceId
+  project: ProjectId
 ): Done[] | null {
   if (done === null || Array.isArray(done)) return done
-  return [{ ...done, space }]
+  return [{ ...done, project }]
 }
 
-/** A new shell in the focused Space, from a key or the Pane launcher. */
+/** A new shell in the focused Project, from a key or the Pane launcher. */
 export const NEW_TERMINAL: TerminalArgs = {
   terminal: null,
   title: "Terminal",
@@ -91,10 +91,10 @@ export const terminalPane = definePane<TerminalArgs>({
   icon: TerminalIcon,
   start: NEW_TERMINAL,
   letter: "T",
-  closed: ({ engine, space, args }) => {
+  closed: ({ engine, project, args }) => {
     if (args.terminal === null) return
     engine
-      .call("terminal.close", { terminal: args.terminal }, { space })
+      .call("terminal.close", { terminal: args.terminal }, { project })
       .catch(() => undefined)
   },
   Pane: TerminalPane,
@@ -102,7 +102,7 @@ export const terminalPane = definePane<TerminalArgs>({
 
 function TerminalPane({
   engine,
-  space,
+  project,
   args,
   focused,
   update,
@@ -124,20 +124,20 @@ function TerminalPane({
   const followed = (target: Target, outside: boolean) => {
     if ("file" in target) {
       const action = outside ? "file.outside" : "file.open"
-      run?.(action, { file: target.file, space })
+      run?.(action, { file: target.file, project })
     } else if (outside || !run) {
       window.open(target.page, "_blank", "noopener")
-    } else run("browser.open", { address: target.page, space })
+    } else run("browser.open", { address: target.page, project })
   }
   if (args.terminal === null) return null
   return (
     <Screen
       key={args.terminal}
       engine={engine}
-      space={space}
+      project={project}
       terminal={args.terminal}
       shell={args.shell}
-      done={listed(args.done, space)}
+      done={listed(args.done, project)}
       focused={focused}
       close={close}
       titled={titled}
@@ -156,7 +156,7 @@ type Now =
 
 function Screen({
   engine,
-  space,
+  project,
   terminal,
   shell,
   done,
@@ -168,7 +168,7 @@ function Screen({
   paste,
 }: {
   engine: Engine
-  space: SpaceId
+  project: ProjectId
   terminal: TerminalId
   shell: boolean
   done: Done[] | null
@@ -223,10 +223,10 @@ function Screen({
     if (now.is !== "ended" || now.ended.code !== 0) return
     sent.current = true
     const run = async () => {
-      for (const call of done) await engine.run(call, call.space)
+      for (const call of done) await engine.run(call, call.project)
     }
     run().then(close, (error: unknown) => setProblem(words(error)))
-  }, [done, now, engine, space, close])
+  }, [done, now, engine, project, close])
 
   useEffect(() => {
     const element = mount.current
@@ -239,7 +239,7 @@ function Screen({
     // once, not over and over.
     let followed = false
     const call = <M extends MethodOf<"call">>(method: M, params: Params<M>) =>
-      engine.call(method, params, { space })
+      engine.call(method, params, { project })
     const input = new Input(call, terminal, (error) => setProblem(words(error)))
     typed.current = (data) => {
       if (running) input.type(data)
@@ -284,7 +284,7 @@ function Screen({
     }
     const follow = () => {
       stop = engine.stream(
-        space,
+        project,
         "terminal.watch",
         { terminal },
         hear,
@@ -384,7 +384,7 @@ function Screen({
       drawn?.dispose()
       surface.current = null
     }
-  }, [engine, space, terminal, shell, press])
+  }, [engine, project, terminal, shell, press])
 
   // A change to `terminal.toml` reaches a screen already drawn: its font,
   // and its cursor, over what a program asked for. A new look with the

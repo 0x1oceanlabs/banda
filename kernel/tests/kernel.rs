@@ -4,8 +4,8 @@
 use banda_kernel::api::Identity;
 use banda_kernel::{
     AgentId, Call, Caller, Code, CommandId, Effect, Error, EventFilter, Kernel, Module,
-    ModuleSpace, OnRestart, Outcome, Participant, PersonId, Refusal, Right, Scope, Settled,
-    SpaceId, SpaceSummary, Stream, Tx, decode,
+    ModuleProject, OnRestart, Outcome, Participant, PersonId, ProjectId, ProjectSummary, Refusal,
+    Right, Scope, Settled, Stream, Tx, decode,
 };
 use futures::{SinkExt, StreamExt};
 use serde::Deserialize;
@@ -26,8 +26,8 @@ struct Notes {
     script: Arc<Mutex<VecDeque<Outcome>>>,
     /// Whether the next run of `publish` panics.
     panics: Arc<AtomicBool>,
-    /// The Spaces it was told were removed.
-    closed: Arc<Mutex<Vec<SpaceId>>>,
+    /// The Projects it was told were removed.
+    closed: Arc<Mutex<Vec<ProjectId>>>,
 }
 
 #[derive(Deserialize)]
@@ -45,8 +45,8 @@ impl Module for Notes {
         &["CREATE TABLE notes_items (id INTEGER PRIMARY KEY, text TEXT NOT NULL)"]
     }
 
-    async fn closing(&self, space: ModuleSpace) {
-        self.closed.lock().unwrap().push(space.id());
+    async fn closing(&self, project: ModuleProject) {
+        self.closed.lock().unwrap().push(project.id());
     }
 
     fn right(&self, method: &str) -> Option<Right> {
@@ -98,18 +98,18 @@ impl Module for Notes {
                 })
                 .await
             }
-            // The pass of the Agent `agent` in this Space, as the agents
+            // The pass of the Agent `agent` in this Project, as the agents
             // module asks for one when it opens a session.
             "pass" => {
                 let agent: AgentId = decode(params["agent"].clone())?;
-                Ok(json!(call.space().pass(agent)?))
+                Ok(json!(call.project().pass(agent)?))
             }
             // Asks the window to show what it is given, as the browser asks
             // it for a page.
             "show" => (call.ask_window("show", &params, Duration::from_secs(5))).await,
             "list" => {
                 let (at, items) = call
-                    .space()
+                    .project()
                     .view(|sql| {
                         let mut statement =
                             sql.prepare("SELECT text FROM notes_items ORDER BY id")?;
@@ -129,7 +129,7 @@ impl Module for Notes {
         }
     }
 
-    async fn run(&self, _space: ModuleSpace, effect: Effect) -> Outcome {
+    async fn run(&self, _project: ModuleProject, effect: Effect) -> Outcome {
         assert!(
             !self.panics.swap(false, Ordering::SeqCst),
             "a scripted panic"
@@ -214,7 +214,7 @@ impl Module for Desk {
                 .await;
         }
         let (_, kinds) = call
-            .space()
+            .project()
             .view(|sql| {
                 let mut statement = sql.prepare("SELECT kind FROM desk_panes ORDER BY id")?;
                 let kinds = statement.query_map([], |row| row.get::<_, String>(0))?;
@@ -225,11 +225,11 @@ impl Module for Desk {
     }
 }
 
-/// A module that keeps each Space it opens in, to react to the log as a
-/// test says: a Space's, or, as `listens`, the machine's.
+/// A module that keeps each Project it opens in, to react to the log as a
+/// test says: a Project's, or, as `listens`, the machine's.
 #[derive(Clone, Default)]
 struct Hears {
-    spaces: Arc<Mutex<Vec<ModuleSpace>>>,
+    projects: Arc<Mutex<Vec<ModuleProject>>>,
     machine: bool,
 }
 
@@ -243,7 +243,7 @@ impl Module for Hears {
         if self.machine {
             Scope::Machine
         } else {
-            Scope::Space
+            Scope::Project
         }
     }
 
@@ -255,8 +255,8 @@ impl Module for Hears {
         None
     }
 
-    async fn opened(&self, space: ModuleSpace) -> Result<(), Error> {
-        self.spaces.lock().unwrap().push(space);
+    async fn opened(&self, project: ModuleProject) -> Result<(), Error> {
+        self.projects.lock().unwrap().push(project);
         Ok(())
     }
 
@@ -273,16 +273,16 @@ async fn open(root: &Path, owner: PersonId, notes: &Notes) -> Arc<Kernel> {
         .unwrap()
 }
 
-async fn create_space(
+async fn create_project(
     kernel: &Kernel,
     participant: Participant,
     command: CommandId,
     name: &str,
-) -> Result<SpaceSummary, Refusal> {
+) -> Result<ProjectSummary, Refusal> {
     let created = kernel
         .call(
             participant,
-            "spaces.create",
+            "projects.create",
             None,
             Some(command),
             json!({ "name": name }),
@@ -291,8 +291,8 @@ async fn create_space(
     Ok(serde_json::from_value(created).unwrap())
 }
 
-async fn create(kernel: &Kernel, owner: PersonId, name: &str) -> SpaceSummary {
-    create_space(kernel, Participant::Person(owner), CommandId::new(), name)
+async fn create(kernel: &Kernel, owner: PersonId, name: &str) -> ProjectSummary {
+    create_project(kernel, Participant::Person(owner), CommandId::new(), name)
         .await
         .unwrap()
 }
@@ -300,28 +300,28 @@ async fn create(kernel: &Kernel, owner: PersonId, name: &str) -> SpaceSummary {
 async fn add(
     kernel: &Kernel,
     participant: Participant,
-    space: &SpaceSummary,
+    project: &ProjectSummary,
     text: &str,
 ) -> Result<Value, Refusal> {
     kernel
         .call(
             participant,
             "notes.add",
-            Some(space.id),
+            Some(project.id),
             Some(CommandId::new()),
             json!({ "text": text }),
         )
         .await
 }
 
-/// Calls one of the kernel's own Space methods as the owner, a new command.
-async fn spaces(
+/// Calls one of the kernel's own Project methods as the owner, a new command.
+async fn projects(
     kernel: &Kernel,
     owner: PersonId,
     method: &str,
     params: Value,
 ) -> Result<Value, Refusal> {
-    let method = format!("spaces.{method}");
+    let method = format!("projects.{method}");
     let command = Some(CommandId::new());
     kernel
         .call(Participant::Person(owner), &method, None, command, params)
@@ -332,17 +332,17 @@ async fn add_folder(
     kernel: &Kernel,
     owner: PersonId,
     params: Value,
-) -> Result<SpaceSummary, Refusal> {
-    let added = spaces(kernel, owner, "add", params).await?;
+) -> Result<ProjectSummary, Refusal> {
+    let added = projects(kernel, owner, "add", params).await?;
     Ok(serde_json::from_value(added).unwrap())
 }
 
-/// Opens the kernel again once the one before let go of its Spaces: an
-/// effect still running holds a Space a moment longer.
+/// Opens the kernel again once the one before let go of its Projects: an
+/// effect still running holds a Project a moment longer.
 async fn reopen(root: &Path, owner: PersonId, notes: &Notes, count: usize) -> Arc<Kernel> {
     for _ in 0..500 {
         let again = open(root, owner, notes).await;
-        if again.spaces().await.len() == count {
+        if again.projects().await.len() == count {
             return again;
         }
         drop(again);
@@ -362,9 +362,9 @@ async fn eventually<F: Future<Output = bool>>(mut check: impl FnMut() -> F) {
     panic!("the condition never held");
 }
 
-async fn kinds(kernel: &Kernel, space: &SpaceSummary) -> Vec<String> {
-    let space = kernel.space(space.id).await.unwrap();
-    let events = space
+async fn kinds(kernel: &Kernel, project: &ProjectSummary) -> Vec<String> {
+    let project = kernel.project(project.id).await.unwrap();
+    let events = project
         .events_after(0, Default::default(), 100)
         .await
         .unwrap();
@@ -372,9 +372,9 @@ async fn kinds(kernel: &Kernel, space: &SpaceSummary) -> Vec<String> {
 }
 
 /// How the effect its module settled was lost, as the `lost` event says.
-async fn lost_how(kernel: &Kernel, space: &SpaceSummary) -> Value {
-    let space = kernel.space(space.id).await.unwrap();
-    let events = space
+async fn lost_how(kernel: &Kernel, project: &ProjectSummary) -> Value {
+    let project = kernel.project(project.id).await.unwrap();
+    let events = project
         .events_after(0, Default::default(), 100)
         .await
         .unwrap();
@@ -383,51 +383,54 @@ async fn lost_how(kernel: &Kernel, space: &SpaceSummary) -> Value {
 }
 
 #[tokio::test]
-async fn a_space_is_a_folder_and_opens_again_after_a_restart() {
+async fn a_project_is_a_folder_and_opens_again_after_a_restart() {
     let root = tempfile::tempdir().unwrap();
     let owner = PersonId::new();
     let notes = Notes::default();
     let kernel = open(root.path(), owner, &notes).await;
     let person = Participant::Person(owner);
     let command = CommandId::new();
-    let space = create_space(&kernel, person, command, "Research")
+    let project = create_project(&kernel, person, command, "Research")
         .await
         .unwrap();
-    let data = root.path().join(".data/spaces").join(space.id.to_string());
-    assert!(data.join("space.json").is_file());
+    let data = root
+        .path()
+        .join(".data/projects")
+        .join(project.id.to_string());
+    assert!(data.join("project.json").is_file());
     assert!(!root.path().join("Research/.banda").exists());
-    add(&kernel, person, &space, "first").await.unwrap();
+    add(&kernel, person, &project, "first").await.unwrap();
 
-    let again = create_space(&kernel, person, command, "Research").await;
+    let again = create_project(&kernel, person, command, "Research").await;
     assert_eq!(
         again,
-        Ok(space.clone()),
+        Ok(project.clone()),
         "the same command gets the same Project"
     );
-    let twin = create_space(&kernel, person, CommandId::new(), "Research").await;
+    let twin = create_project(&kernel, person, CommandId::new(), "Research").await;
     assert_eq!(twin.unwrap_err().code, Code::Conflict);
     for bad in ["", ".hidden", "a/b", "..", &"x".repeat(65)] {
-        let refused = create_space(&kernel, person, CommandId::new(), bad).await;
+        let refused = create_project(&kernel, person, CommandId::new(), bad).await;
         assert_eq!(refused.unwrap_err().code, Code::Invalid, "{bad:?}");
     }
 
     let second = open(root.path(), owner, &notes).await;
     assert!(
-        second.spaces().await.is_empty(),
+        second.projects().await.is_empty(),
         "a Project opens in one engine at a time"
     );
     drop(second);
     drop(kernel);
 
-    // An effect still running holds the Space a moment longer; a real
+    // An effect still running holds the Project a moment longer; a real
     // restart ends the process, and the lock with it.
     let again = reopen(root.path(), owner, &notes, 1).await;
-    assert_eq!(again.spaces().await, vec![space.clone()]);
+    assert_eq!(again.projects().await, vec![project.clone()]);
     let listed = again
         .call(
             Participant::Person(owner),
             "notes.list",
-            Some(space.id),
+            Some(project.id),
             None,
             Value::Null,
         )
@@ -437,12 +440,27 @@ async fn a_space_is_a_folder_and_opens_again_after_a_restart() {
 }
 
 #[tokio::test]
+async fn the_kernel_s_methods_answer_by_their_names_before_adr_0069() {
+    let root = tempfile::tempdir().unwrap();
+    let owner = PersonId::new();
+    let kernel = open(root.path(), owner, &Notes::default()).await;
+    let project = create(&kernel, owner, "Work").await;
+    let person = Participant::Person(owner);
+
+    let listed = kernel
+        .call(person, "spaces.list", None, None, json!({}))
+        .await
+        .unwrap();
+    assert_eq!(listed[0]["id"], json!(project.id));
+}
+
+#[tokio::test]
 async fn a_command_runs_once_and_its_effect_runs_after_commit() {
     let root = tempfile::tempdir().unwrap();
     let owner = PersonId::new();
     let notes = Notes::default();
     let kernel = open(root.path(), owner, &notes).await;
-    let space = create(&kernel, owner, "Work").await;
+    let project = create(&kernel, owner, "Work").await;
     let person = Participant::Person(owner);
 
     let command = CommandId::new();
@@ -450,7 +468,7 @@ async fn a_command_runs_once_and_its_effect_runs_after_commit() {
         kernel.call(
             person,
             "notes.add",
-            Some(space.id),
+            Some(project.id),
             Some(command),
             json!({ "text": "once" }),
         )
@@ -463,7 +481,7 @@ async fn a_command_runs_once_and_its_effect_runs_after_commit() {
         .call(
             person,
             "notes.add",
-            Some(space.id),
+            Some(project.id),
             None,
             json!({ "text": "x" }),
         )
@@ -476,7 +494,7 @@ async fn a_command_runs_once_and_its_effect_runs_after_commit() {
 
     eventually(|| async { notes.published.lock().unwrap().len() == 1 }).await;
     let listed = kernel
-        .call(person, "notes.list", Some(space.id), None, Value::Null)
+        .call(person, "notes.list", Some(project.id), None, Value::Null)
         .await
         .unwrap();
     assert_eq!(listed["items"], json!(["once"]));
@@ -492,18 +510,24 @@ async fn a_read_keeps_no_receipt_so_its_id_stays_free() {
     let owner = PersonId::new();
     let notes = Notes::default();
     let kernel = open(root.path(), owner, &notes).await;
-    let space = create(&kernel, owner, "Work").await;
+    let project = create(&kernel, owner, "Work").await;
     let person = Participant::Person(owner);
     let id = CommandId::new();
     kernel
-        .call(person, "notes.list", Some(space.id), Some(id), Value::Null)
+        .call(
+            person,
+            "notes.list",
+            Some(project.id),
+            Some(id),
+            Value::Null,
+        )
         .await
         .unwrap();
     kernel
         .call(
             person,
             "notes.add",
-            Some(space.id),
+            Some(project.id),
             Some(id),
             json!({ "text": "later" }),
         )
@@ -522,11 +546,11 @@ async fn effects_with_one_key_run_in_order_even_across_a_retry() {
         .unwrap()
         .push_back(Outcome::Retry("not yet".into()));
     let kernel = open(root.path(), owner, &notes).await;
-    let space = create(&kernel, owner, "Work").await;
+    let project = create(&kernel, owner, "Work").await;
     let person = Participant::Person(owner);
 
-    add(&kernel, person, &space, "a").await.unwrap();
-    add(&kernel, person, &space, "b").await.unwrap();
+    add(&kernel, person, &project, "a").await.unwrap();
+    add(&kernel, person, &project, "b").await.unwrap();
     eventually(|| async { notes.published.lock().unwrap().len() == 2 }).await;
     assert_eq!(*notes.published.lock().unwrap(), vec!["a", "b"]);
 }
@@ -542,13 +566,16 @@ async fn an_effect_that_fails_is_settled_by_its_module() {
         .unwrap()
         .push_back(Outcome::Fail("the feed is gone".into()));
     let kernel = open(root.path(), owner, &notes).await;
-    let space = create(&kernel, owner, "Work").await;
+    let project = create(&kernel, owner, "Work").await;
 
-    add(&kernel, Participant::Person(owner), &space, "a")
+    add(&kernel, Participant::Person(owner), &project, "a")
         .await
         .unwrap();
-    eventually(|| async { kinds(&kernel, &space).await == ["added", "lost"] }).await;
-    assert_eq!(lost_how(&kernel, &space).await, "failed: the feed is gone");
+    eventually(|| async { kinds(&kernel, &project).await == ["added", "lost"] }).await;
+    assert_eq!(
+        lost_how(&kernel, &project).await,
+        "failed: the feed is gone"
+    );
 }
 
 /// A disk that failed a write once, as SQLite says it.
@@ -586,13 +613,13 @@ async fn an_end_whose_write_fails_once_is_written_and_its_key_goes_on() {
         .unwrap()
         .push_back(noted_after(1, person));
     let kernel = open(root.path(), owner, &notes).await;
-    let space = create(&kernel, owner, "Work").await;
+    let project = create(&kernel, owner, "Work").await;
 
-    add(&kernel, person, &space, "a").await.unwrap();
-    add(&kernel, person, &space, "b").await.unwrap();
+    add(&kernel, person, &project, "a").await.unwrap();
+    add(&kernel, person, &project, "b").await.unwrap();
     // The next effect of the feed waited for the first one's end.
     eventually(|| async { *notes.published.lock().unwrap() == ["b"] }).await;
-    let mut kinds = kinds(&kernel, &space).await;
+    let mut kinds = kinds(&kernel, &project).await;
     kinds.sort();
     assert_eq!(kinds, ["added", "added", "noted"]);
 }
@@ -609,12 +636,12 @@ async fn an_end_whose_write_keeps_failing_is_settled_as_failed() {
         .unwrap()
         .push_back(noted_after(usize::MAX, person));
     let kernel = open(root.path(), owner, &notes).await;
-    let space = create(&kernel, owner, "Work").await;
+    let project = create(&kernel, owner, "Work").await;
 
-    add(&kernel, person, &space, "a").await.unwrap();
-    eventually(|| async { kinds(&kernel, &space).await == ["added", "lost"] }).await;
+    add(&kernel, person, &project, "a").await.unwrap();
+    eventually(|| async { kinds(&kernel, &project).await == ["added", "lost"] }).await;
     assert_eq!(
-        lost_how(&kernel, &space).await,
+        lost_how(&kernel, &project).await,
         "failed: Banda could not write how it ended."
     );
 }
@@ -627,13 +654,13 @@ async fn an_effect_that_panics_is_settled_as_failed() {
     let notes = Notes::default();
     notes.panics.store(true, Ordering::SeqCst);
     let kernel = open(root.path(), owner, &notes).await;
-    let space = create(&kernel, owner, "Work").await;
+    let project = create(&kernel, owner, "Work").await;
 
-    add(&kernel, person, &space, "a").await.unwrap();
-    add(&kernel, person, &space, "b").await.unwrap();
+    add(&kernel, person, &project, "a").await.unwrap();
+    add(&kernel, person, &project, "b").await.unwrap();
     eventually(|| async { *notes.published.lock().unwrap() == ["b"] }).await;
     assert_eq!(
-        lost_how(&kernel, &space).await,
+        lost_how(&kernel, &project).await,
         "failed: The engine broke off while it ran this."
     );
 }
@@ -644,7 +671,7 @@ async fn a_restart_replays_or_abandons_what_it_cut_short() {
     let owner = PersonId::new();
     let notes = Notes::default();
     let kernel = open(root.path(), owner, &notes).await;
-    let space = create(&kernel, owner, "Work").await;
+    let project = create(&kernel, owner, "Work").await;
     drop(kernel);
     tokio::time::sleep(Duration::from_millis(50)).await;
 
@@ -652,7 +679,7 @@ async fn a_restart_replays_or_abandons_what_it_cut_short() {
     let author = serde_json::to_string(&Participant::Person(owner)).unwrap();
     let database = rusqlite::Connection::open(
         root.path()
-            .join(format!(".data/spaces/{}/space.sqlite3", space.id)),
+            .join(format!(".data/projects/{}/project.sqlite3", project.id)),
     )
     .unwrap();
     for (kind, key, text, attempts) in [
@@ -677,8 +704,8 @@ async fn a_restart_replays_or_abandons_what_it_cut_short() {
 
     let kernel = open(root.path(), owner, &notes).await;
     eventually(|| async { *notes.published.lock().unwrap() == ["replayed"] }).await;
-    let space = kernel.space(space.id).await.unwrap();
-    let lost: Vec<Value> = space
+    let project = kernel.project(project.id).await.unwrap();
+    let lost: Vec<Value> = project
         .events_after(0, Default::default(), 10)
         .await
         .unwrap()
@@ -695,34 +722,40 @@ async fn a_restart_replays_or_abandons_what_it_cut_short() {
 }
 
 #[tokio::test]
-async fn an_agent_works_in_the_space_but_may_not_manage_it() {
+async fn an_agent_works_in_the_project_but_may_not_manage_it() {
     let root = tempfile::tempdir().unwrap();
     let owner = PersonId::new();
     let notes = Notes::default();
     let kernel = open(root.path(), owner, &notes).await;
-    let space = create(&kernel, owner, "Work").await;
+    let project = create(&kernel, owner, "Work").await;
     let agent = Participant::Agent(AgentId::new());
 
-    add(&kernel, agent, &space, "by an agent").await.unwrap();
+    add(&kernel, agent, &project, "by an agent").await.unwrap();
     let purge = kernel
         .call(
             agent,
             "notes.purge",
-            Some(space.id),
+            Some(project.id),
             Some(CommandId::new()),
             Value::Null,
         )
         .await;
     assert_eq!(purge.unwrap_err().code, Code::Forbidden);
-    let create = create_space(&kernel, agent, CommandId::new(), "Mine").await;
+    let create = create_project(&kernel, agent, CommandId::new(), "Mine").await;
     assert_eq!(create.unwrap_err().code, Code::Forbidden);
-    let stranger = add(&kernel, Participant::Person(PersonId::new()), &space, "no").await;
+    let stranger = add(
+        &kernel,
+        Participant::Person(PersonId::new()),
+        &project,
+        "no",
+    )
+    .await;
     assert_eq!(stranger.unwrap_err().code, Code::Forbidden);
     let unknown = kernel
         .call(
             Participant::Person(owner),
             "nobody.add",
-            Some(space.id),
+            Some(project.id),
             None,
             Value::Null,
         )
@@ -785,8 +818,8 @@ async fn the_api_refuses_strangers_and_follows_events_without_gaps() {
     let owner = PersonId::new();
     let notes = Notes::default();
     let kernel = open(root.path(), owner, &notes).await;
-    let space = create(&kernel, owner, "Work").await;
-    add(&kernel, Participant::Person(owner), &space, "before")
+    let project = create(&kernel, owner, "Work").await;
+    add(&kernel, Participant::Person(owner), &project, "before")
         .await
         .unwrap();
 
@@ -819,20 +852,20 @@ async fn the_api_refuses_strangers_and_follows_events_without_gaps() {
         json!({ "type": "hello", "protocol": 1, "token": "stranger" }),
     )
     .await;
-    let peek = json!({ "type": "subscribe", "id": 1, "space": space.id, "after": 0 });
+    let peek = json!({ "type": "subscribe", "id": 1, "project": project.id, "after": 0 });
     stranger
         .send(Message::text(peek.to_string()))
         .await
         .unwrap();
     assert_eq!(next(&mut stranger).await["error"]["code"], "forbidden");
 
-    let list = json!({ "type": "call", "id": 1, "method": "notes.list", "space": space.id });
+    let list = json!({ "type": "call", "id": 1, "method": "notes.list", "project": project.id });
     socket.send(Message::text(list.to_string())).await.unwrap();
     let view = next(&mut socket).await;
     assert_eq!(view["ok"]["items"], json!(["before"]));
     let at = view["ok"]["at"].as_i64().unwrap();
 
-    let follow = json!({ "type": "subscribe", "id": 2, "space": space.id, "after": at, "filter": { "module": "notes" } });
+    let follow = json!({ "type": "subscribe", "id": 2, "project": project.id, "after": at, "filter": { "module": "notes" } });
     socket
         .send(Message::text(follow.to_string()))
         .await
@@ -841,7 +874,7 @@ async fn the_api_refuses_strangers_and_follows_events_without_gaps() {
 
     let command = CommandId::new();
     let send = json!({
-        "type": "call", "id": 3, "method": "notes.add", "space": space.id,
+        "type": "call", "id": 3, "method": "notes.add", "project": project.id,
         "command": command, "params": { "text": "after" }
     });
     socket.send(Message::text(send.to_string())).await.unwrap();
@@ -869,10 +902,10 @@ async fn a_stream_says_its_pieces_then_that_it_ended() {
     let owner = PersonId::new();
     let notes = Notes::default();
     let kernel = open(root.path(), owner, &notes).await;
-    let space = create(&kernel, owner, "Work").await;
+    let project = create(&kernel, owner, "Work").await;
     let address = serve(&kernel, owner).await;
 
-    let count = |id: u64| json!({ "type": "stream", "id": id, "space": space.id, "method": "notes.count", "params": { "to": 3 } });
+    let count = |id: u64| json!({ "type": "stream", "id": id, "project": project.id, "method": "notes.count", "params": { "to": 3 } });
     let (mut stranger, _) = connect(
         address,
         json!({ "type": "hello", "protocol": 1, "token": "stranger" }),
@@ -904,7 +937,7 @@ async fn a_stream_says_its_pieces_then_that_it_ended() {
     assert_eq!(ended, json!({ "type": "ended", "stream": 7 }));
 
     let unknown =
-        json!({ "type": "stream", "id": 8, "space": space.id, "method": "notes.nothing" });
+        json!({ "type": "stream", "id": 8, "project": project.id, "method": "notes.nothing" });
     socket
         .send(Message::text(unknown.to_string()))
         .await
@@ -918,11 +951,13 @@ async fn a_subscription_replays_a_long_log_a_page_at_a_time() {
     let owner = PersonId::new();
     let notes = Notes::default();
     let kernel = open(root.path(), owner, &notes).await;
-    let space = create(&kernel, owner, "Work").await;
+    let project = create(&kernel, owner, "Work").await;
     let person = Participant::Person(owner);
     const MANY: usize = 1200;
     for n in 0..MANY {
-        add(&kernel, person, &space, &n.to_string()).await.unwrap();
+        add(&kernel, person, &project, &n.to_string())
+            .await
+            .unwrap();
     }
 
     let address = serve(&kernel, owner).await;
@@ -931,7 +966,7 @@ async fn a_subscription_replays_a_long_log_a_page_at_a_time() {
         json!({ "type": "hello", "protocol": 1, "token": "secret" }),
     )
     .await;
-    let follow = json!({ "type": "subscribe", "id": 1, "space": space.id, "after": 0, "filter": { "module": "notes" } });
+    let follow = json!({ "type": "subscribe", "id": 1, "project": project.id, "after": 0, "filter": { "module": "notes" } });
     socket
         .send(Message::text(follow.to_string()))
         .await
@@ -946,12 +981,12 @@ async fn a_subscription_replays_a_long_log_a_page_at_a_time() {
         assert!(now > seq, "in order, none twice");
         seq = now;
     }
-    add(&kernel, person, &space, "live").await.unwrap();
+    add(&kernel, person, &project, "live").await.unwrap();
     assert_eq!(next(&mut socket).await["event"]["payload"]["text"], "live");
 }
 
 #[tokio::test]
-async fn a_pass_connects_as_its_agent_and_only_in_its_space() {
+async fn a_pass_connects_as_its_agent_and_only_in_its_project() {
     let root = tempfile::tempdir().unwrap();
     let owner = PersonId::new();
     let notes = Notes::default();
@@ -980,12 +1015,12 @@ async fn a_pass_connects_as_its_agent_and_only_in_its_space() {
         next(&mut socket).await
     };
     let add = json!({
-        "type": "call", "id": 1, "method": "notes.add", "space": work.id,
+        "type": "call", "id": 1, "method": "notes.add", "project": work.id,
         "command": CommandId::new(), "params": { "text": "by its agent" }
     });
     assert!(ask(add).await["ok"]["seq"].is_number());
-    let space = kernel.space(work.id).await.unwrap();
-    let added = space
+    let project = kernel.project(work.id).await.unwrap();
+    let added = project
         .events_after(0, Default::default(), 100)
         .await
         .unwrap();
@@ -993,21 +1028,21 @@ async fn a_pass_connects_as_its_agent_and_only_in_its_space() {
 
     let wall = "An Agent works only in its own Project.";
     let elsewhere = [
-        json!({ "type": "call", "id": 2, "method": "notes.list", "space": other.id }),
-        json!({ "type": "subscribe", "id": 3, "space": other.id, "after": 0 }),
-        json!({ "type": "stream", "id": 4, "space": other.id, "method": "notes.count" }),
+        json!({ "type": "call", "id": 2, "method": "notes.list", "project": other.id }),
+        json!({ "type": "subscribe", "id": 3, "project": other.id, "after": 0 }),
+        json!({ "type": "stream", "id": 4, "project": other.id, "method": "notes.count" }),
     ];
     for frame in elsewhere {
         let refused = ask(frame.clone()).await;
         assert_eq!(refused["error"]["code"], "forbidden", "{frame}");
         assert_eq!(refused["error"]["message"], wall, "{frame}");
     }
-    // A call that names no Space is in its own.
+    // A call that names no Project is in its own.
     let list = ask(json!({ "type": "call", "id": 5, "method": "notes.list" })).await;
     assert_eq!(list["ok"]["items"], json!(["by its agent"]));
-    let mine = ask(json!({ "type": "call", "id": 6, "method": "spaces.list" })).await;
+    let mine = ask(json!({ "type": "call", "id": 6, "method": "projects.list" })).await;
     assert_eq!(mine["ok"], json!([work]), "it sees only its own Project");
-    let purge = json!({ "type": "call", "id": 7, "method": "notes.purge", "space": work.id, "command": CommandId::new() });
+    let purge = json!({ "type": "call", "id": 7, "method": "notes.purge", "project": work.id, "command": CommandId::new() });
     assert_eq!(
         ask(purge).await["error"]["code"],
         "forbidden",
@@ -1067,7 +1102,7 @@ async fn a_module_asks_the_window_and_only_the_owners_window_answers() {
     assert_eq!(piece["type"], "piece");
     let asked = &piece["data"];
     assert_eq!(asked["method"], "notes.show");
-    assert_eq!(asked["space"], json!(work.id));
+    assert_eq!(asked["project"], json!(work.id));
     assert_eq!(asked["by"], json!(Participant::Agent(agent)));
     assert_eq!(asked["params"], json!({ "text": "hi" }));
     say(&mut window, answer(2, &asked["id"])).await;
@@ -1078,7 +1113,7 @@ async fn a_module_asks_the_window_and_only_the_owners_window_answers() {
 }
 
 #[tokio::test]
-async fn a_module_of_the_machine_names_no_space_and_keeps_its_own_log() {
+async fn a_module_of_the_machine_names_no_project_and_keeps_its_own_log() {
     let dir = tempfile::tempdir().unwrap();
     let owner = PersonId::new();
     let person = Participant::Person(owner);
@@ -1093,7 +1128,7 @@ async fn a_module_of_the_machine_names_no_space_and_keeps_its_own_log() {
     let machine = kernel.machine().unwrap();
     let work = create(&kernel, owner, "Work").await;
 
-    // Its methods name no Space, and a command runs once.
+    // Its methods name no Project, and a command runs once.
     let command = Some(CommandId::new());
     let terminal = json!({ "kind": "terminal" });
     for _ in 0..2 {
@@ -1103,27 +1138,27 @@ async fn a_module_of_the_machine_names_no_space_and_keeps_its_own_log() {
     let list = kernel.call(person, "desk.list", None, None, Value::Null);
     assert_eq!(list.await.unwrap(), json!(["terminal"]));
 
-    // It is no Space: a Space's ID is refused to it, and its ID to a
-    // Space's module, and the Spaces' list leaves it out.
+    // It is no Project: a Project's ID is refused to it, and its ID to a
+    // Project's module, and the Projects' list leaves it out.
     let in_work = kernel.call(person, "desk.list", Some(work.id), None, Value::Null);
     assert_eq!(in_work.await.unwrap_err().code, Code::Invalid);
     let notes = kernel.call(person, "notes.list", Some(machine), None, Value::Null);
     assert_eq!(notes.await.unwrap_err().code, Code::NotFound);
     assert!(
         kernel
-            .spaces()
+            .projects()
             .await
             .iter()
-            .all(|space| space.id != machine)
+            .all(|project| project.id != machine)
     );
 
-    // Its log is followed as a Space's is.
+    // Its log is followed as a Project's is.
     let log = kernel.follow(person, machine).await.unwrap();
     let events = log.events_after(0, Default::default(), 100).await.unwrap();
     let kinds: Vec<_> = events.iter().map(|e| e.kind.as_str()).collect();
     assert_eq!(kinds, ["opened"]);
 
-    // An Agent's pass is for its Space: the machine is past its wall.
+    // An Agent's pass is for its Project: the machine is past its wall.
     let agent = Caller {
         participant: Participant::Agent(AgentId::new()),
         only: Some(work.id),
@@ -1141,7 +1176,7 @@ async fn a_module_of_the_machine_names_no_space_and_keeps_its_own_log() {
 }
 
 #[tokio::test]
-async fn a_module_of_a_space_hears_the_machine_until_its_space_closes() {
+async fn a_module_of_a_project_hears_the_machine_until_its_project_closes() {
     let dir = tempfile::tempdir().unwrap();
     let owner = PersonId::new();
     let person = Participant::Person(owner);
@@ -1159,8 +1194,8 @@ async fn a_module_of_a_space_hears_the_machine_until_its_space_closes() {
         .await
         .unwrap();
     let work = create(&kernel, owner, "Work").await;
-    let module = hears.spaces.lock().unwrap()[0].clone();
-    let machine = listens.spaces.lock().unwrap()[0].clone();
+    let module = hears.projects.lock().unwrap()[0].clone();
+    let machine = listens.projects.lock().unwrap()[0].clone();
     let open_pane = |kind: &str| {
         let params = json!({ "kind": kind });
         kernel.call(person, "desk.open", None, Some(CommandId::new()), params)
@@ -1174,7 +1209,10 @@ async fn a_module_of_a_space_hears_the_machine_until_its_space_closes() {
         ..EventFilter::default()
     };
     let mut heard = module.react_to_machine(filter).await.unwrap().unwrap();
-    assert!(heard.space().is_none(), "it never writes the machine's log");
+    assert!(
+        heard.project().is_none(),
+        "it never writes the machine's log"
+    );
     open_pane("terminal").await.unwrap();
     assert!(!machine.reacted(short).await, "the machine waits for it");
     let event = heard.next().await.unwrap().unwrap();
@@ -1182,13 +1220,13 @@ async fn a_module_of_a_space_hears_the_machine_until_its_space_closes() {
     let next = tokio::spawn(async move { heard.next().await });
     assert!(machine.reacted(Duration::from_secs(5)).await);
 
-    // Its Space removed and closed, it hears no more.
+    // Its Project removed and closed, it hears no more.
     drop(module);
-    hears.spaces.lock().unwrap().clear();
-    let remove = json!({ "space": work.id });
+    hears.projects.lock().unwrap().clear();
+    let remove = json!({ "project": work.id });
     let removed = kernel.call(
         person,
-        "spaces.remove",
+        "projects.remove",
         None,
         Some(CommandId::new()),
         remove,
@@ -1204,10 +1242,10 @@ async fn a_module_of_a_space_hears_the_machine_until_its_space_closes() {
     assert!(own.unwrap().is_none());
 }
 
-/// A module of the machine counts what every Space's log took, only as
+/// A module of the machine counts what every Project's log took, only as
 /// numbers: what the usage summary is made of (ADR 0039, step 5).
 #[tokio::test]
-async fn a_module_of_the_machine_counts_every_spaces_events() {
+async fn a_module_of_the_machine_counts_every_projects_events() {
     let dir = tempfile::tempdir().unwrap();
     let owner = PersonId::new();
     let person = Participant::Person(owner);
@@ -1224,15 +1262,15 @@ async fn a_module_of_the_machine_counts_every_spaces_events() {
         .open()
         .await
         .unwrap();
-    let machine = listens.spaces.lock().unwrap()[0].clone();
-    assert_eq!(machine.spaces().await, Some(0));
+    let machine = listens.projects.lock().unwrap()[0].clone();
+    assert_eq!(machine.projects().await, Some(0));
     let (work, home) = (
         create(&kernel, owner, "Work").await,
         create(&kernel, owner, "Home").await,
     );
     let from = banda_kernel::now_ms();
-    for (space, text) in [(&work, "a"), (&work, "b"), (&home, "a")] {
-        add(&kernel, person, space, text).await.unwrap();
+    for (project, text) in [(&work, "a"), (&work, "b"), (&home, "a")] {
+        add(&kernel, person, project, text).await.unwrap();
     }
     let to = banda_kernel::now_ms() + 1;
     let tally = |by: Option<&str>, from, to| banda_kernel::Tally {
@@ -1243,7 +1281,7 @@ async fn a_module_of_the_machine_counts_every_spaces_events() {
         to,
     };
 
-    assert_eq!(machine.spaces().await, Some(2));
+    assert_eq!(machine.projects().await, Some(2));
     let all = machine.tally(tally(None, from, to)).await.unwrap().unwrap();
     assert_eq!(all, [("".to_owned(), 3)].into());
     let by = machine
@@ -1262,9 +1300,9 @@ async fn a_module_of_the_machine_counts_every_spaces_events() {
     // By a plain field only.
     assert!(machine.tally(tally(Some("$.x"), from, to)).await.is_err());
 
-    // A module of a Space counts nothing beyond its wall.
-    let module = hears.spaces.lock().unwrap()[0].clone();
-    assert_eq!(module.spaces().await, None);
+    // A module of a Project counts nothing beyond its wall.
+    let module = hears.projects.lock().unwrap()[0].clone();
+    assert_eq!(module.projects().await, None);
     assert!(module.tally(tally(None, from, to)).await.unwrap().is_none());
 }
 
@@ -1279,7 +1317,7 @@ async fn a_module_of_the_machine_needs_the_machines_folder() {
 }
 
 #[tokio::test]
-async fn any_folder_is_added_as_a_space_and_one_folder_is_one_space() {
+async fn any_folder_is_added_as_a_project_and_one_folder_is_one_project() {
     let root = tempfile::tempdir().unwrap();
     let elsewhere = tempfile::tempdir().unwrap();
     let (owner, notes) = (PersonId::new(), Notes::default());
@@ -1331,7 +1369,7 @@ async fn any_folder_is_added_as_a_space_and_one_folder_is_one_space() {
 
     drop(kernel);
     let again = reopen(root.path(), owner, &notes, 2).await;
-    let mut listed = again.spaces().await;
+    let mut listed = again.projects().await;
     listed.sort_by(|a, b| a.name.cmp(&b.name));
     assert_eq!(
         listed,
@@ -1341,21 +1379,21 @@ async fn any_folder_is_added_as_a_space_and_one_folder_is_one_space() {
 }
 
 #[tokio::test]
-async fn a_space_is_renamed_pinned_and_archived_and_added_back() {
+async fn a_project_is_renamed_pinned_and_archived_and_added_back() {
     let root = tempfile::tempdir().unwrap();
     let (owner, notes) = (PersonId::new(), Notes::default());
     let kernel = open(root.path(), owner, &notes).await;
-    let space = create(&kernel, owner, "Work").await;
+    let project = create(&kernel, owner, "Work").await;
 
-    let changed = spaces(
+    let changed = projects(
         &kernel,
         owner,
         "update",
-        json!({ "space": space.id, "name": "Day job", "pinned": true }),
+        json!({ "project": project.id, "name": "Day job", "pinned": true }),
     )
     .await
     .unwrap();
-    let changed: SpaceSummary = serde_json::from_value(changed).unwrap();
+    let changed: ProjectSummary = serde_json::from_value(changed).unwrap();
     assert_eq!(
         (changed.name.as_str(), changed.pinned, changed.archived),
         ("Day job", true, false)
@@ -1364,11 +1402,11 @@ async fn a_space_is_renamed_pinned_and_archived_and_added_back() {
         root.path().join("Work").is_dir(),
         "a new name moves no folder"
     );
-    let archived = spaces(
+    let archived = projects(
         &kernel,
         owner,
         "update",
-        json!({ "space": space.id, "archived": true }),
+        json!({ "project": project.id, "archived": true }),
     )
     .await
     .unwrap();
@@ -1379,27 +1417,27 @@ async fn a_space_is_renamed_pinned_and_archived_and_added_back() {
         "what is not named stays"
     );
     for bad in ["", &"x".repeat(65)] {
-        let refused = spaces(
+        let refused = projects(
             &kernel,
             owner,
             "update",
-            json!({ "space": space.id, "name": bad }),
+            json!({ "project": project.id, "name": bad }),
         )
         .await;
         assert_eq!(refused.unwrap_err().code, Code::Invalid, "{bad:?}");
     }
-    let nowhere = spaces(
+    let nowhere = projects(
         &kernel,
         owner,
         "update",
-        json!({ "space": SpaceId::new(), "pinned": true }),
+        json!({ "project": ProjectId::new(), "pinned": true }),
     )
     .await;
     assert_eq!(nowhere.unwrap_err().code, Code::NotFound);
 
     drop(kernel);
     let kernel = reopen(root.path(), owner, &notes, 1).await;
-    let kept = &kernel.spaces().await[0];
+    let kept = &kernel.projects().await[0];
     assert_eq!(
         (kept.name.as_str(), kept.pinned, kept.archived),
         ("Day job", true, true)
@@ -1413,25 +1451,25 @@ async fn a_space_is_renamed_pinned_and_archived_and_added_back() {
     .unwrap();
     assert_eq!(
         (back.id, back.archived),
-        (space.id, false),
+        (project.id, false),
         "adding it again brings it back"
     );
 }
 
-/// Makes a scratch Space, for a Thread in No Space, under `command`.
+/// Makes a scratch Project, for a Thread in No Project, under `command`.
 async fn create_scratch(
     kernel: &Kernel,
     owner: PersonId,
     command: CommandId,
-) -> Result<SpaceSummary, Refusal> {
+) -> Result<ProjectSummary, Refusal> {
     let params = json!({ "scratch": true });
     let person = Participant::Person(owner);
-    let made = (kernel.call(person, "spaces.create", None, Some(command), params)).await?;
+    let made = (kernel.call(person, "projects.create", None, Some(command), params)).await?;
     Ok(serde_json::from_value(made).unwrap())
 }
 
 #[tokio::test]
-async fn a_scratch_space_is_a_new_folder_with_no_name() {
+async fn a_scratch_project_is_a_new_folder_with_no_name() {
     let root = tempfile::tempdir().unwrap();
     let (owner, notes) = (PersonId::new(), Notes::default());
     let kernel = open(root.path(), owner, &notes).await;
@@ -1454,13 +1492,13 @@ async fn a_scratch_space_is_a_new_folder_with_no_name() {
         .unwrap();
 
     for bad in [json!({ "scratch": true, "name": "Work" }), json!({})] {
-        let refused = spaces(&kernel, owner, "create", bad.clone()).await;
+        let refused = projects(&kernel, owner, "create", bad.clone()).await;
         assert_eq!(refused.unwrap_err().code, Code::Invalid, "{bad}");
     }
 }
 
 #[tokio::test]
-async fn a_scratch_space_becomes_a_space_once_named_and_stays_one() {
+async fn a_scratch_project_becomes_a_project_once_named_and_stays_one() {
     let root = tempfile::tempdir().unwrap();
     let (owner, notes) = (PersonId::new(), Notes::default());
     let kernel = open(root.path(), owner, &notes).await;
@@ -1470,60 +1508,60 @@ async fn a_scratch_space_becomes_a_space_once_named_and_stays_one() {
     let kept = create_scratch(&kernel, owner, CommandId::new())
         .await
         .unwrap();
-    let update = |params| spaces(&kernel, owner, "update", params);
+    let update = |params| projects(&kernel, owner, "update", params);
     for (bad, why) in [
         (
-            json!({ "space": made.id, "scratch": false }),
+            json!({ "project": made.id, "scratch": false }),
             "it needs a name",
         ),
         (
-            json!({ "space": made.id, "name": "Expenses" }),
+            json!({ "project": made.id, "name": "Expenses" }),
             "no name in No Project",
         ),
     ] {
         assert_eq!(update(bad).await.unwrap_err().code, Code::Invalid, "{why}");
     }
-    let space = update(json!({ "space": made.id, "scratch": false, "name": "Expenses" }))
+    let project = update(json!({ "project": made.id, "scratch": false, "name": "Expenses" }))
         .await
         .unwrap();
-    let space: SpaceSummary = serde_json::from_value(space).unwrap();
+    let project: ProjectSummary = serde_json::from_value(project).unwrap();
     assert_eq!(
-        (space.scratch, space.name.as_str(), &space.folder),
+        (project.scratch, project.name.as_str(), &project.folder),
         (false, "Expenses", &made.folder),
         "it stays where it is"
     );
-    let back = update(json!({ "space": made.id, "scratch": true })).await;
+    let back = update(json!({ "project": made.id, "scratch": true })).await;
     assert_eq!(back.unwrap_err().code, Code::Invalid, "no way back");
 
     drop(kernel);
     let kernel = reopen(root.path(), owner, &notes, 2).await;
-    let spaces = kernel.spaces().await;
-    let scratch = |id| spaces.iter().find(|s| s.id == id).unwrap().scratch;
+    let projects = kernel.projects().await;
+    let scratch = |id| projects.iter().find(|s| s.id == id).unwrap().scratch;
     assert_eq!(
         (scratch(made.id), scratch(kept.id)),
         (false, true),
-        "space.json keeps it"
+        "project.json keeps it"
     );
 }
 
 #[tokio::test]
-async fn a_removed_space_loses_its_threads_but_keeps_its_files() {
+async fn a_removed_project_loses_its_threads_but_keeps_its_files() {
     let root = tempfile::tempdir().unwrap();
     let (owner, notes) = (PersonId::new(), Notes::default());
     let kernel = open(root.path(), owner, &notes).await;
     let person = Participant::Person(owner);
-    let space = create(&kernel, owner, "Work").await;
-    add(&kernel, person, &space, "a Thread's message")
+    let project = create(&kernel, owner, "Work").await;
+    add(&kernel, person, &project, "a Thread's message")
         .await
         .unwrap();
     std::fs::write(root.path().join("Work/notes.md"), "mine").unwrap();
 
-    let remove = || spaces(&kernel, owner, "remove", json!({ "space": space.id }));
+    let remove = || projects(&kernel, owner, "remove", json!({ "project": project.id }));
     remove().await.unwrap();
-    assert!(kernel.spaces().await.is_empty());
+    assert!(kernel.projects().await.is_empty());
     assert_eq!(
         *notes.closed.lock().unwrap(),
-        vec![space.id],
+        vec![project.id],
         "its modules stop what they run there"
     );
     assert_eq!(
@@ -1531,8 +1569,8 @@ async fn a_removed_space_loses_its_threads_but_keeps_its_files() {
         Ok(Value::Null),
         "gone already is what was asked"
     );
-    let spaces_data = root.path().join(".data/spaces");
-    eventually(|| async { std::fs::read_dir(&spaces_data).unwrap().count() == 0 }).await;
+    let projects_data = root.path().join(".data/projects");
+    eventually(|| async { std::fs::read_dir(&projects_data).unwrap().count() == 0 }).await;
     assert_eq!(
         std::fs::read_to_string(root.path().join("Work/notes.md")).unwrap(),
         "mine"
@@ -1545,7 +1583,7 @@ async fn a_removed_space_loses_its_threads_but_keeps_its_files() {
     )
     .await
     .unwrap();
-    assert_ne!(again.id, space.id, "added again, it is a new Project");
+    assert_ne!(again.id, project.id, "added again, it is a new Project");
     let listed = kernel
         .call(person, "notes.list", Some(again.id), None, Value::Null)
         .await
@@ -1554,13 +1592,13 @@ async fn a_removed_space_loses_its_threads_but_keeps_its_files() {
 }
 
 #[tokio::test]
-async fn a_space_whose_folder_went_waits_to_be_located_where_it_is_now() {
+async fn a_project_whose_folder_went_waits_to_be_located_where_it_is_now() {
     let root = tempfile::tempdir().unwrap();
     let (owner, notes) = (PersonId::new(), Notes::default());
     let person = Participant::Person(owner);
     let kernel = open(root.path(), owner, &notes).await;
-    let space = create(&kernel, owner, "Work").await;
-    add(&kernel, person, &space, "kept").await.unwrap();
+    let project = create(&kernel, owner, "Work").await;
+    add(&kernel, person, &project, "kept").await.unwrap();
     let other = create(&kernel, owner, "Other").await;
     drop(kernel);
     std::fs::rename(root.path().join("Work"), root.path().join("Moved")).unwrap();
@@ -1568,18 +1606,18 @@ async fn a_space_whose_folder_went_waits_to_be_located_where_it_is_now() {
     // Still listed, missing, and nothing of it opens; but the Person still
     // names, pins or archives it.
     let kernel = reopen(root.path(), owner, &notes, 2).await;
-    let listed = kernel.spaces().await;
-    let missing = listed.iter().find(|s| s.id == space.id).unwrap();
+    let listed = kernel.projects().await;
+    let missing = listed.iter().find(|s| s.id == project.id).unwrap();
     assert!(missing.missing);
     assert!(!listed.iter().find(|s| s.id == other.id).unwrap().missing);
-    let refused = add(&kernel, person, &space, "more").await.unwrap_err();
+    let refused = add(&kernel, person, &project, "more").await.unwrap_err();
     assert_eq!(refused.code, Code::NotFound);
     assert!(refused.message.contains("locate it first"), "{refused:?}");
-    let pinned = spaces(
+    let pinned = projects(
         &kernel,
         owner,
         "update",
-        json!({ "space": space.id, "pinned": true }),
+        json!({ "project": project.id, "pinned": true }),
     )
     .await
     .unwrap();
@@ -1588,23 +1626,23 @@ async fn a_space_whose_folder_went_waits_to_be_located_where_it_is_now() {
         (json!(true), json!(true))
     );
 
-    // A folder that is not there, or that already is a Space, is refused;
-    // a Space that is not missing has nothing to locate.
-    let locate = |space: SpaceId, folder: &str| {
+    // A folder that is not there, or that already is a Project, is refused;
+    // a Project that is not missing has nothing to locate.
+    let locate = |project: ProjectId, folder: &str| {
         let folder = root.path().join(folder);
-        spaces(
+        projects(
             &kernel,
             owner,
             "locate",
-            json!({ "space": space, "folder": folder }),
+            json!({ "project": project, "folder": folder }),
         )
     };
     assert_eq!(
-        locate(space.id, "Nowhere").await.unwrap_err().code,
+        locate(project.id, "Nowhere").await.unwrap_err().code,
         Code::NotFound
     );
     assert_eq!(
-        locate(space.id, "Other").await.unwrap_err().code,
+        locate(project.id, "Other").await.unwrap_err().code,
         Code::Conflict
     );
     assert_eq!(
@@ -1613,14 +1651,14 @@ async fn a_space_whose_folder_went_waits_to_be_located_where_it_is_now() {
     );
 
     // Located, it opens there with its Threads, and stays there.
-    let located: SpaceSummary =
-        serde_json::from_value(locate(space.id, "Moved").await.unwrap()).unwrap();
+    let located: ProjectSummary =
+        serde_json::from_value(locate(project.id, "Moved").await.unwrap()).unwrap();
     assert!(!located.missing && located.pinned);
     let moved = std::fs::canonicalize(root.path().join("Moved")).unwrap();
     assert_eq!(located.folder, moved.display().to_string());
     let notes_of = |kernel: Arc<Kernel>| async move {
         let listed = kernel
-            .call(person, "notes.list", Some(space.id), None, Value::Null)
+            .call(person, "notes.list", Some(project.id), None, Value::Null)
             .await
             .unwrap();
         listed["items"].to_string()
@@ -1628,58 +1666,58 @@ async fn a_space_whose_folder_went_waits_to_be_located_where_it_is_now() {
     assert!(notes_of(kernel.clone()).await.contains("kept"));
     drop(kernel);
     let kernel = reopen(root.path(), owner, &notes, 2).await;
-    assert!(kernel.spaces().await.iter().all(|s| !s.missing));
+    assert!(kernel.projects().await.iter().all(|s| !s.missing));
     assert!(notes_of(kernel.clone()).await.contains("kept"));
 }
 
 #[tokio::test]
-async fn a_missing_folder_added_back_opens_its_space_again() {
+async fn a_missing_folder_added_back_opens_its_project_again() {
     let root = tempfile::tempdir().unwrap();
     let (owner, notes) = (PersonId::new(), Notes::default());
     let kernel = open(root.path(), owner, &notes).await;
-    let space = create(&kernel, owner, "Work").await;
+    let project = create(&kernel, owner, "Work").await;
     drop(kernel);
     let folder = root.path().join("Work");
     std::fs::rename(&folder, root.path().join("Away")).unwrap();
     let kernel = reopen(root.path(), owner, &notes, 1).await;
-    assert!(kernel.spaces().await[0].missing);
+    assert!(kernel.projects().await[0].missing);
     std::fs::rename(root.path().join("Away"), &folder).unwrap();
     let again = add_folder(&kernel, owner, json!({ "folder": folder }))
         .await
         .unwrap();
-    assert_eq!(again.id, space.id, "the Project it was, not a new one");
+    assert_eq!(again.id, project.id, "the Project it was, not a new one");
     assert!(!again.missing);
 }
 
 #[tokio::test]
-async fn a_missing_space_is_removed_with_its_data() {
+async fn a_missing_project_is_removed_with_its_data() {
     let root = tempfile::tempdir().unwrap();
     let (owner, notes) = (PersonId::new(), Notes::default());
     let kernel = open(root.path(), owner, &notes).await;
-    let space = create(&kernel, owner, "Work").await;
+    let project = create(&kernel, owner, "Work").await;
     drop(kernel);
     std::fs::remove_dir(root.path().join("Work")).unwrap();
     let kernel = reopen(root.path(), owner, &notes, 1).await;
-    spaces(&kernel, owner, "remove", json!({ "space": space.id }))
+    projects(&kernel, owner, "remove", json!({ "project": project.id }))
         .await
         .unwrap();
-    assert!(kernel.spaces().await.is_empty());
-    let spaces_data = root.path().join(".data/spaces");
-    eventually(|| async { std::fs::read_dir(&spaces_data).unwrap().count() == 0 }).await;
+    assert!(kernel.projects().await.is_empty());
+    let projects_data = root.path().join(".data/projects");
+    eventually(|| async { std::fs::read_dir(&projects_data).unwrap().count() == 0 }).await;
 }
 
 #[tokio::test]
-async fn a_removed_space_left_half_deleted_is_cleared_on_start() {
+async fn a_removed_project_left_half_deleted_is_cleared_on_start() {
     let root = tempfile::tempdir().unwrap();
     let (owner, notes) = (PersonId::new(), Notes::default());
     let gone = root
         .path()
-        .join(".data/spaces")
-        .join(format!("{}.gone", SpaceId::new()));
+        .join(".data/projects")
+        .join(format!("{}.gone", ProjectId::new()));
     std::fs::create_dir_all(&gone).unwrap();
-    std::fs::write(gone.join("space.sqlite3"), "").unwrap();
+    std::fs::write(gone.join("project.sqlite3"), "").unwrap();
     let kernel = open(root.path(), owner, &notes).await;
-    assert!(kernel.spaces().await.is_empty());
+    assert!(kernel.projects().await.is_empty());
     assert!(!gone.exists());
 }
 
@@ -1695,7 +1733,8 @@ async fn the_owner_browses_the_folders_as_a_path_is_typed() {
     std::fs::write(place.path().join("almanac"), "a file").unwrap();
     std::os::unix::fs::symlink(place.path().join("beta"), place.path().join("also")).unwrap();
     let base = place.path().display().to_string();
-    let browse = |partial: String| spaces(&kernel, owner, "browse", json!({ "partial": partial }));
+    let browse =
+        |partial: String| projects(&kernel, owner, "browse", json!({ "partial": partial }));
     let names = |browsed: Value| -> Vec<String> {
         (browsed["entries"].as_array().unwrap().iter())
             .map(|entry| entry["name"].as_str().unwrap().to_owned())
@@ -1732,13 +1771,13 @@ async fn the_owner_browses_the_folders_as_a_path_is_typed() {
 
     let agent = Participant::Agent(AgentId::new());
     for (method, params) in [
-        ("spaces.browse", json!({ "partial": format!("{base}/") })),
-        ("spaces.add", json!({ "folder": base })),
+        ("projects.browse", json!({ "partial": format!("{base}/") })),
+        ("projects.add", json!({ "folder": base })),
         (
-            "spaces.update",
-            json!({ "space": SpaceId::new(), "pinned": true }),
+            "projects.update",
+            json!({ "project": ProjectId::new(), "pinned": true }),
         ),
-        ("spaces.remove", json!({ "space": SpaceId::new() })),
+        ("projects.remove", json!({ "project": ProjectId::new() })),
     ] {
         let refused = kernel
             .call(agent, method, None, Some(CommandId::new()), params)
@@ -1758,8 +1797,8 @@ async fn an_effect_waits_until_the_modules_reacting_to_the_log_have_reacted() {
         .open()
         .await
         .unwrap();
-    let space = create(&kernel, owner, "Work").await;
-    let module = hears.spaces.lock().unwrap()[0].clone();
+    let project = create(&kernel, owner, "Work").await;
+    let module = hears.projects.lock().unwrap()[0].clone();
     let short = Duration::from_millis(50);
     // Nothing reacts: nothing to wait for.
     assert!(module.reacted(short).await);
@@ -1770,7 +1809,7 @@ async fn an_effect_waits_until_the_modules_reacting_to_the_log_have_reacted() {
     };
     let mut heard = module.react(module.at().await.unwrap(), filter);
     let person = Participant::Person(owner);
-    add(&kernel, person, &space, "one").await.unwrap();
+    add(&kernel, person, &project, "one").await.unwrap();
     assert!(!module.reacted(short).await, "it has not heard the note");
     let event = heard.next().await.unwrap().unwrap();
     assert_eq!(event.kind, "added");
@@ -1781,25 +1820,25 @@ async fn an_effect_waits_until_the_modules_reacting_to_the_log_have_reacted() {
     // Gone, it reacts no more.
     next.abort();
     let _ = next.await;
-    add(&kernel, person, &space, "two").await.unwrap();
+    add(&kernel, person, &project, "two").await.unwrap();
     assert!(module.reacted(short).await);
 }
 
 #[tokio::test]
-async fn promotion_moves_files_and_keeps_the_open_space_and_log() {
+async fn promotion_moves_files_and_keeps_the_open_project_and_log() {
     let root = tempfile::tempdir().unwrap();
     let (owner, notes) = (PersonId::new(), Notes::default());
     let kernel = open(root.path(), owner, &notes).await;
     let made = create_scratch(&kernel, owner, CommandId::new())
         .await
         .unwrap();
-    let held = kernel.space(made.id).await.unwrap();
+    let held = kernel.project(made.id).await.unwrap();
     std::fs::write(held.folder().join("work.txt"), "keep me").unwrap();
     let destination = root.path().join("Promoted");
     let params =
-        json!({"space": made.id, "scratch": false, "name": "Promoted", "folder": destination});
-    let promoted: SpaceSummary = serde_json::from_value(
-        spaces(&kernel, owner, "update", params.clone())
+        json!({"project": made.id, "scratch": false, "name": "Promoted", "folder": destination});
+    let promoted: ProjectSummary = serde_json::from_value(
+        projects(&kernel, owner, "update", params.clone())
             .await
             .unwrap(),
     )
@@ -1812,13 +1851,13 @@ async fn promotion_moves_files_and_keeps_the_open_space_and_log() {
         std::fs::read_to_string(destination.join("work.txt")).unwrap(),
         "keep me"
     );
-    let again: SpaceSummary =
-        serde_json::from_value(spaces(&kernel, owner, "update", params).await.unwrap()).unwrap();
+    let again: ProjectSummary =
+        serde_json::from_value(projects(&kernel, owner, "update", params).await.unwrap()).unwrap();
     assert_eq!(again, promoted);
     drop(held);
     drop(kernel);
     let kernel = reopen(root.path(), owner, &notes, 1).await;
-    assert_eq!(kernel.spaces().await[0], promoted);
+    assert_eq!(kernel.projects().await[0], promoted);
 }
 
 #[tokio::test]
@@ -1831,16 +1870,16 @@ async fn promotion_never_overwrites_a_destination_or_promotes_after_a_failed_mov
         .unwrap();
     let destination = root.path().join("Taken");
     std::fs::create_dir(&destination).unwrap();
-    let refused = spaces(
+    let refused = projects(
         &kernel,
         owner,
         "update",
-        json!({"space": made.id, "scratch": false, "name": "Taken", "folder": destination}),
+        json!({"project": made.id, "scratch": false, "name": "Taken", "folder": destination}),
     )
     .await
     .unwrap_err();
     assert_eq!(refused.code, Code::Conflict);
-    assert_eq!(kernel.spaces().await[0], made);
+    assert_eq!(kernel.projects().await[0], made);
     assert!(Path::new(&made.folder).is_dir());
     assert!(destination.is_dir());
 }
@@ -1853,23 +1892,24 @@ async fn a_restart_finishes_a_journaled_folder_move() {
     let made = create_scratch(&kernel, owner, CommandId::new())
         .await
         .unwrap();
-    let space = kernel.space(made.id).await.unwrap();
+    let project = kernel.project(made.id).await.unwrap();
     let destination = root.path().join("Recovered");
     let mut next: Value =
-        serde_json::from_slice(&std::fs::read(space.data().join("space.json")).unwrap()).unwrap();
+        serde_json::from_slice(&std::fs::read(project.data().join("project.json")).unwrap())
+            .unwrap();
     next["folder"] = json!(destination);
     next["name"] = json!("Recovered");
     next["scratch"] = json!(false);
     std::fs::write(
-        space.data().join("move.json"),
+        project.data().join("move.json"),
         serde_json::to_vec(&next).unwrap(),
     )
     .unwrap();
     std::fs::rename(&made.folder, &destination).unwrap();
-    drop(space);
+    drop(project);
     drop(kernel);
     let kernel = reopen(root.path(), owner, &notes, 1).await;
-    let recovered = &kernel.spaces().await[0];
+    let recovered = &kernel.projects().await[0];
     assert_eq!(recovered.name, "Recovered");
     assert!(!recovered.scratch && !recovered.missing);
     assert_eq!(recovered.folder, destination.to_str().unwrap());

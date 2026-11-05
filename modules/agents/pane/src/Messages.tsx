@@ -217,7 +217,7 @@ export function AgentMessage({
   )
 }
 
-/** The Space's other Threads by their Agents' IDs, and how one opens: what
+/** The Project's other Threads by their Agents' IDs, and how one opens: what
  * a {@link Writer} needs. */
 export type Writers = {
   writers: Listing

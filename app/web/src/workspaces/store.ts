@@ -5,7 +5,7 @@
  * (ADR 0025, decisions 1 and 2): the arrangement the window kept before
  * moves over once.
  */
-import { type Engine, Refused, type SpaceId } from "@banda/contract"
+import { type Engine, Refused, type ProjectId } from "@banda/contract"
 import type { PaneState } from "@banda/ui/pane"
 import { keptOf, NO_VIEW, type View, viewOf } from "./arrange"
 import { type Entry, focused, open, parse, start, type Width } from "./model"
@@ -26,12 +26,12 @@ const DRAWER = "banda.drawer"
  */
 export async function moveOver(
   engine: Engine,
-  space: SpaceId,
+  project: ProjectId,
   first: { pane: PaneState; width?: Width } | undefined
 ): Promise<View | undefined> {
   const kept =
     parse(parsed(read(WORKSPACES))) ??
-    (first && open(start(), space, first.pane, { width: first.width }))
+    (first && open(start(), project, first.pane, { width: first.width }))
   if (!kept) return undefined
   const taken = await engine
     .command("workspaces.take", { workspaces: keptOf(kept) })
@@ -101,7 +101,7 @@ export function keepLooked(ids: ReadonlySet<string>): void {
 export function loadDrawer(): Entry | undefined {
   const entry = parsed(read(DRAWER)) as Partial<Entry> | null
   return typeof entry?.id === "string" &&
-    typeof entry.space === "string" &&
+    typeof entry.project === "string" &&
     typeof entry.pane?.kind === "string"
     ? (entry as Entry)
     : undefined

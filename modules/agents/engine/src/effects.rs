@@ -37,7 +37,7 @@ use crate::rules::{self, Ending, Event};
 use crate::transcript::{Transcript, notice, offered, used};
 use crate::{emit, plain, store, writer};
 use banda_harnesses::Harnesses;
-use banda_kernel::{Effect, Error, ModuleSpace, Outcome, Participant, Settled, Tx};
+use banda_kernel::{Effect, Error, ModuleProject, Outcome, Participant, Settled, Tx};
 use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use std::time::Duration;
@@ -105,12 +105,16 @@ pub fn requeue(tx: &mut Tx<'_>, item: ItemId) -> Result<(), Error> {
 }
 
 /// Writes lines from Banda into the turn.
-async fn notices(space: &ModuleSpace, turn: &store::Turn, texts: Vec<String>) -> Result<(), Error> {
+async fn notices(
+    project: &ModuleProject,
+    turn: &store::Turn,
+    texts: Vec<String>,
+) -> Result<(), Error> {
     if texts.is_empty() {
         return Ok(());
     }
     let (thread, id, agent) = (turn.thread, turn.id, Participant::Agent(turn.agent));
-    space
+    project
         .write(move |tx| {
             for text in texts {
                 notice(tx, agent, thread, Some(id), text)?;
@@ -145,11 +149,11 @@ pub fn settle(tx: &mut Tx<'_>, effect: &Effect, settled: &Settled) -> Result<(),
 }
 
 /// Asks the Harness to stop a running turn.
-pub async fn stop(live: &Live, space: ModuleSpace, effect: &Effect) -> Outcome {
+pub async fn stop(live: &Live, project: ModuleProject, effect: &Effect) -> Outcome {
     let Ok(stop) = serde_json::from_value::<TurnEffect>(effect.payload.clone()) else {
         return Outcome::Fail("The stop could not be read.".to_owned());
     };
-    let state = space
+    let state = project
         .read(move |sql| Ok(store::turn(sql, stop.turn)?.map(|t| t.state)))
         .await;
     match state {
@@ -169,7 +173,7 @@ const REACTED: Duration = Duration::from_secs(5);
 pub async fn start(
     live: &Arc<Live>,
     harnesses: &Harnesses,
-    space: ModuleSpace,
+    project: ModuleProject,
     effect: &Effect,
 ) -> Outcome {
     let Ok(start) = serde_json::from_value::<TurnEffect>(effect.payload.clone()) else {
@@ -178,10 +182,10 @@ pub async fn start(
     // Memory holds the turn from now, a stop that comes while it starts
     // too, and lets go of it however this ends.
     let run = live.open(start.turn);
-    if let Err(error) = after_questions(live, &space, start.turn).await {
+    if let Err(error) = after_questions(live, &project, start.turn).await {
         return Outcome::Retry(error.to_string());
     }
-    let begun = space
+    let begun = project
         .write(move |tx| {
             let Some(turn) = store::turn(tx.sql(), start.turn)? else {
                 return Ok(None);
@@ -220,11 +224,11 @@ pub async fn start(
     };
     // What reacts to the turn's start, as git keeping the work tree as it
     // began, does so before the Harness changes anything.
-    if !space.reacted(REACTED).await {
+    if !project.reacted(REACTED).await {
         tracing::warn!(turn = %turn.id, "a turn started before all reacted to it");
     }
     // Memory lets go of the turn before its end is written.
-    let ending = match work(live, run, harnesses, &space, &turn, message, settings).await {
+    let ending = match work(live, run, harnesses, &project, &turn, message, settings).await {
         Ok(ending) | Err(ending) => ending,
     };
     // Written as the outbox records the turn's end, and tried again with
@@ -244,8 +248,8 @@ pub struct Message {
 /// Waits while the Agent asks a Person in a turn of its own in the Thread
 /// of `turn`: the Harness takes a prompt into what it does, and the
 /// Question would go unanswered.
-async fn after_questions(live: &Live, space: &ModuleSpace, turn: TurnId) -> Result<(), Error> {
-    let own = space
+async fn after_questions(live: &Live, project: &ModuleProject, turn: TurnId) -> Result<(), Error> {
+    let own = project
         .read(move |sql| {
             let Some(turn) = store::turn(sql, turn)? else {
                 return Ok(None);
@@ -304,7 +308,7 @@ impl Whose {
 /// what Banda tells the Person it left out; why nothing of it can go, if
 /// nothing can.
 async fn prompt_of(
-    space: &ModuleSpace,
+    project: &ModuleProject,
     harness: &str,
     running: &Running,
     Whose { thread, item, from }: Whose,
@@ -312,7 +316,7 @@ async fn prompt_of(
 ) -> Result<(Prompt, Vec<String>), String> {
     // Another Thread's Agent wrote it: the Harness reads which.
     if let Some((from, answers)) = from {
-        let title = space
+        let title = project
             .read(move |sql| Ok(store::thread(sql, from)?.map(|t| t.title)))
             .await
             .map_err(plain)?;
@@ -328,8 +332,8 @@ async fn prompt_of(
     );
     // What the Person did meanwhile, as a commit from the Thread's card,
     // goes before it.
-    if !runs_command(space, thread, running, &prompt).await? {
-        let notices = space
+    if !runs_command(project, thread, running, &prompt).await? {
+        let notices = project
             .write(move |tx| store::notices_of(tx.sql(), thread, item, true))
             .await
             .map_err(plain)?;
@@ -340,7 +344,7 @@ async fn prompt_of(
         refused.push(rules::message::without_images(harness, &prompt.text)?);
         return Ok((prompt, refused));
     }
-    let files = Images::of(space.data());
+    let files = Images::of(project.data());
     for image in images {
         match files.read(image.id).await {
             Ok(bytes) => prompt.images.push(PromptImage {
@@ -360,7 +364,7 @@ async fn prompt_of(
 /// with, or `/` and a slash command the session offers, or the Thread
 /// does while the session has said none.
 async fn runs_command(
-    space: &ModuleSpace,
+    project: &ModuleProject,
     thread: ThreadId,
     running: &Running,
     prompt: &Prompt,
@@ -379,7 +383,7 @@ async fn runs_command(
     let runs = |commands: &[SlashCommand]| commands.iter().any(|c| c.name == name);
     Ok(match &running.commands {
         Some(said) => runs(&said.slash_commands),
-        None => space
+        None => project
             .read(move |sql| Ok(store::offer(sql, thread)?.slash_commands))
             .await
             .map(|offered| runs(&offered))
@@ -407,11 +411,11 @@ fn as_skill(prompt: Prompt, running: &Running) -> Prompt {
 /// it leaves it to a turn of its own: one that ended or never began, one
 /// whose Harness says no turn runs, and one whose Harness cannot take a
 /// message while it works, which stops for it, as in T3 Code.
-pub async fn steer(live: &Live, space: ModuleSpace, effect: &Effect) -> Outcome {
+pub async fn steer(live: &Live, project: ModuleProject, effect: &Effect) -> Outcome {
     let Ok(SteerEffect { item, turn }) = serde_json::from_value(effect.payload.clone()) else {
         return Outcome::Fail("The message could not be read.".to_owned());
     };
-    let found = space
+    let found = project
         .read(move |sql| {
             let Some(turn) = store::turn(sql, turn)? else {
                 return Ok(None);
@@ -426,12 +430,12 @@ pub async fn steer(live: &Live, space: ModuleSpace, effect: &Effect) -> Outcome 
     };
     // Written as the outbox records the effect's end, and tried again with it.
     let requeued = || Outcome::done_writing(move |tx| requeue(tx, item));
-    let Some(session) = begun(live, &space, &turn).await else {
+    let Some(session) = begun(live, &project, &turn).await else {
         return requeued();
     };
     // A turn that is stopping takes nothing more.
     let id = turn.id;
-    let takes = space
+    let takes = project
         .read(move |sql| match store::turn(sql, id)? {
             Some(now) => writer::takes(sql, &now, Event::Steer),
             None => Ok(false),
@@ -448,7 +452,7 @@ pub async fn steer(live: &Live, space: ModuleSpace, effect: &Effect) -> Outcome 
             session.name()
         );
         let (thread, agent) = (turn.thread, Participant::Agent(turn.agent));
-        let gave_way = space
+        let gave_way = project
             .write(move |tx| {
                 let Some(now) = store::turn(tx.sql(), id)? else {
                     return Ok(());
@@ -470,11 +474,11 @@ pub async fn steer(live: &Live, space: ModuleSpace, effect: &Effect) -> Outcome 
         item,
         from: None,
     };
-    let Ok((prompt, refused)) = prompt_of(&space, session.name(), &running, whose, message).await
+    let Ok((prompt, refused)) = prompt_of(&project, session.name(), &running, whose, message).await
     else {
         return requeued();
     };
-    if let Err(error) = notices(&space, &turn, refused).await {
+    if let Err(error) = notices(&project, &turn, refused).await {
         return Outcome::Retry(error.to_string());
     }
     // Marked first: what the Agent says of the message reads after it.
@@ -492,14 +496,14 @@ pub async fn steer(live: &Live, space: ModuleSpace, effect: &Effect) -> Outcome 
 /// The session of a turn that runs, once its prompt reached it, which
 /// takes a while for a Harness that starts; `None` when the turn ended
 /// first, or never began.
-async fn begun(live: &Live, space: &ModuleSpace, turn: &store::Turn) -> Option<Session> {
+async fn begun(live: &Live, project: &ModuleProject, turn: &store::Turn) -> Option<Session> {
     // Following the Thread's turn endings before it reads, so an end
     // between the two is not missed.
-    let mut ended = space.committed(turn.thread, &[writer::ENDED]);
+    let mut ended = project.committed(turn.thread, &[writer::ENDED]);
     let id = turn.id;
     let ended = async {
         loop {
-            let state = space
+            let state = project
                 .read(move |sql| Ok(store::turn(sql, id)?.map(|turn| turn.state)))
                 .await;
             if !matches!(state, Ok(Some(TurnState::Running))) {
@@ -520,14 +524,14 @@ async fn work(
     live: &Arc<Live>,
     run: TurnRun,
     harnesses: &Harnesses,
-    space: &ModuleSpace,
+    project: &ModuleProject,
     turn: &store::Turn,
     message: Message,
     settings: Settings,
 ) -> Result<Ending, Ending> {
     let unplanned = |reason: String| Ending::failed(reason, None);
     let thread = turn.thread;
-    let harness_id = space
+    let harness_id = project
         .read(move |sql| store::thread(sql, thread))
         .await
         .map_err(|e| unplanned(plain(e)))?
@@ -541,20 +545,20 @@ async fn work(
     // The Agent has no name of its own: its Harness's is the one to show.
     let name = harness.name.clone();
     let connection = live
-        .connection(space.id(), &harness)
+        .connection(project.id(), &harness)
         .await
         .map_err(|reason| Ending::failed(reason, Some(Failure::HarnessStopped)))?;
-    let earlier = space
+    let earlier = project
         .read(move |sql| store::evidence(sql, thread))
         .await
         .map_err(|e| unplanned(plain(e)))?;
     // A session that opens reaches Banda with a pass of its own (ADR 0019).
-    let banda = || live.banda(space, turn.agent);
+    let banda = || live.banda(project, turn.agent);
     let (session, opened) = connection
         .session(
             thread,
-            &space.folder(),
-            &[kept::folder(space.data())],
+            &project.folder(),
+            &[kept::folder(project.data())],
             earlier.as_ref(),
             banda,
         )
@@ -566,7 +570,7 @@ async fn work(
              so it starts afresh and does not remember what was said before.",
             harness.name
         );
-        space
+        project
             .write(move |tx| {
                 store::set_evidence(tx.sql(), thread, &evidence)?;
                 if lost {
@@ -578,14 +582,14 @@ async fn work(
             .map_err(|e| unplanned(plain(e)))?;
     }
     let (running, mut refused) = session.settle(&settings).await;
-    let (prompt, left_out) = prompt_of(space, &harness.name, &running, Whose::of(turn), message)
+    let (prompt, left_out) = prompt_of(project, &harness.name, &running, Whose::of(turn), message)
         .await
         .map_err(unplanned)?;
     refused.extend(left_out);
     let (id, agent, now) = (turn.id, Participant::Agent(turn.agent), running.clone());
     // What the Agent used, as it last said, between turns too.
     let usage = session.usage();
-    space
+    project
         .write(move |tx| {
             offered(tx, agent, thread, &now)?;
             if let Some(usage) = usage {
@@ -603,14 +607,20 @@ async fn work(
     // What the session says once the turn ends is the Agent's own.
     let listener = between::Listener {
         live: live.clone(),
-        space: space.clone(),
+        project: project.clone(),
         thread,
         agent: turn.agent,
         name,
         harness: harness.name.clone(),
     };
     listener.hear(&session);
-    let transcript = Transcript::new(space.clone(), turn, harness.name.clone(), settings, running);
+    let transcript = Transcript::new(
+        project.clone(),
+        turn,
+        harness.name.clone(),
+        settings,
+        running,
+    );
     let ended = async {
         done.await
             .unwrap_or_else(|_| unplanned("The turn's task ended.".to_owned()))
@@ -620,7 +630,7 @@ async fn work(
     // Claude Code's slash commands just after its session opened.
     // The turn ended as it did, whether or not this is written.
     let now = session.running();
-    if let Err(error) = space
+    if let Err(error) = project
         .write(move |tx| offered(tx, agent, thread, &now))
         .await
     {

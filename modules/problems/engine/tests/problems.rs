@@ -9,7 +9,7 @@ use std::path::Path;
 use std::sync::Arc;
 
 async fn open(root: &Path, owner: PersonId) -> Arc<Kernel> {
-    Kernel::builder(root.join("spaces"), root.join("data"), owner)
+    Kernel::builder(root.join("projects"), root.join("data"), owner)
         .machine(root.join("state/machine"))
         .module(Problems::new(
             root.join("state/problems"),
@@ -145,18 +145,22 @@ async fn only_the_person_sends_an_issue_about_a_problem_that_is_kept() {
     .unwrap();
     std::fs::set_permissions(&gh, std::fs::Permissions::from_mode(0o755)).unwrap();
     let owner = PersonId::new();
-    let kernel = Kernel::builder(root.path().join("spaces"), root.path().join("data"), owner)
-        .machine(root.path().join("state/machine"))
-        .module(
-            Problems::new(
-                root.path().join("state/problems"),
-                root.path().join("state/logs"),
-            )
-            .gh(gh),
+    let kernel = Kernel::builder(
+        root.path().join("projects"),
+        root.path().join("data"),
+        owner,
+    )
+    .machine(root.path().join("state/machine"))
+    .module(
+        Problems::new(
+            root.path().join("state/problems"),
+            root.path().join("state/logs"),
         )
-        .open()
-        .await
-        .unwrap();
+        .gh(gh),
+    )
+    .open()
+    .await
+    .unwrap();
     let fingerprint = record(&kernel, owner, "broke", 1).await["fingerprint"].clone();
     let send = |who, fingerprint: &Value| {
         let issue =
@@ -202,7 +206,7 @@ async fn a_problem_that_breaks_again_on_another_day_says_so_once() {
     // The same day: it only counts.
     record(&kernel, owner, "reading 'tabs'", 83).await;
     // As if it last broke yesterday.
-    let db = rusqlite::Connection::open(root.path().join("state/machine/space.sqlite3")).unwrap();
+    let db = rusqlite::Connection::open(root.path().join("state/machine/project.sqlite3")).unwrap();
     let day = 24 * 60 * 60 * 1000;
     db.execute("UPDATE problems_kept SET last = last - ?1", [day])
         .unwrap();

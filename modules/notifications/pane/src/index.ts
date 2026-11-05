@@ -1,7 +1,7 @@
 /** The notifications module's window part (ADR 0022, ADR 0056): it tells
  * the Person of what calls, and its bell on the bar shows the last toasts
  * again (ADR 0048). */
-import type { SpaceId } from "@banda/contract"
+import type { ProjectId } from "@banda/contract"
 import { defineModule } from "@banda/ui/module"
 import { BellWidget } from "./Bell"
 import { startTelling, type Teller } from "./teller"
@@ -29,8 +29,8 @@ export const notifications = defineModule({
       section: "Notifications",
       unlisted: true,
       run: (_, args) => {
-        const { space, about, pane } = args ?? {}
-        if (typeof space !== "string" || typeof about !== "string") return
+        const { project, about, pane } = args ?? {}
+        if (typeof project !== "string" || typeof about !== "string") return
         if (!pane || typeof pane !== "object" || Array.isArray(pane)) return
         if (typeof pane.kind !== "string") return
         const paneArgs = pane.args
@@ -41,7 +41,7 @@ export const notifications = defineModule({
         )
           return
         teller?.goTo({
-          space: space as SpaceId,
+          project: project as ProjectId,
           about,
           pane: { kind: pane.kind, args: paneArgs },
         })

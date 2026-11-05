@@ -1,6 +1,6 @@
 /**
  * The Pane contract. A Pane is one tile of a workspace: the window places,
- * sizes and focuses it; the Pane shows one thing of one Space and reaches
+ * sizes and focuses it; the Pane shows one thing of one Project and reaches
  * the engine only through the API (docs/architecture.md, "Modules").
  *
  * A module offers its Panes as {@link PaneKind}s, and the window's registry
@@ -9,7 +9,7 @@
  */
 import type { ComponentType } from "react"
 import type { LucideIcon } from "lucide-react"
-import type { Engine, JsonValue, SpaceId } from "@banda/contract"
+import type { Engine, JsonValue, ProjectId } from "@banda/contract"
 import type { MarkState } from "./components/banda-mark"
 import type { Chime } from "./sound/families"
 
@@ -69,11 +69,11 @@ export type PaneState = { kind: string; args: { [key: string]: JsonValue } }
  * Where a Pane opens, from the Pane that opens it: in a new column to its
  * right, below it in its column, in its own place, or in its Group, in
  * the Deck right of it, as what a Thread opens goes; or last on its
- * Space's workspace, as an Agent's Thread does (ADR 0065). Left out, the
+ * Project's workspace, as an Agent's Thread does (ADR 0065). Left out, the
  * window shows the Pane where its workspace shows one of its kind, or to
  * the right.
  */
-export type Place = "right" | "below" | "here" | "group" | "space"
+export type Place = "right" | "below" | "here" | "group" | "project"
 
 /**
  * What a Pane draws. A part of it that keeps its own Esc, as a list of
@@ -86,17 +86,17 @@ export type Label = { title: string; detail: string | null }
 
 export type PaneProps<A> = {
   engine: Engine
-  space: SpaceId
+  project: ProjectId
   args: A
   /** Whether this tile has the focus: keys go to it. */
   focused: boolean
   /** Looks selected while the overview owns the keys; defaults to focused. */
   selected?: boolean
   /**
-   * Opens a Pane of this Pane's Space, or of `space` when it is given; a
+   * Opens a Pane of this Pane's Project, or of `project` when it is given; a
    * Pane already shown gets the focus instead, unless it opens `here`.
    */
-  open: (pane: PaneState, place?: Place, space?: SpaceId) => void
+  open: (pane: PaneState, place?: Place, project?: ProjectId) => void
   /** Keeps new args for this Pane. */
   update: (args: A) => void
   /** Closes this Pane, as one that finished its job does. */
@@ -109,8 +109,8 @@ export type PaneProps<A> = {
    * dialog of the settings.
    */
   label?: (label: Label | null) => void
-  /** Runs an action by its id, as `WindowApi.run` does: "Add Space" from
-   * a Space picker. None where no window runs actions, as in a dialog of
+  /** Runs an action by its id, as `WindowApi.run` does: "Add Project" from
+   * a Project picker. None where no window runs actions, as in a dialog of
    * the settings. */
   run?: (action: string, args?: { [key: string]: JsonValue }) => void
 }
@@ -131,7 +131,7 @@ export type PaneKind<A extends { [key: string]: JsonValue }> = {
   letter?: string
   /** A list that sits beside other Panes: it opens a third of the screen wide. */
   narrow?: boolean
-  /** Whether it opens last on its Space's workspace, as an Agent's Thread
+  /** Whether it opens last on its Project's workspace, as an Agent's Thread
    * does where `agents.toml` says so (ADR 0065, decision 9). */
   home?: () => boolean
   /**
@@ -150,7 +150,7 @@ export type PaneKind<A extends { [key: string]: JsonValue }> = {
   shows?: (args: A) => string | null
   /**
    * What makes it this one Pane where its args also hold what changes as
-   * it is used, as a Diff's scope: one Diff per Space. Args that change
+   * it is used, as a Diff's scope: one Diff per Project. Args that change
    * but keep it are the same Pane, which has not left (`closed`). All its
    * args, by default.
    */
@@ -161,7 +161,7 @@ export type PaneKind<A extends { [key: string]: JsonValue }> = {
    * program in a terminal stops then. A Pane drawn again, as when it moves
    * to another column or workspace, has not left.
    */
-  closed?: (left: { engine: Engine; space: SpaceId; args: A }) => void
+  closed?: (left: { engine: Engine; project: ProjectId; args: A }) => void
   Pane: ComponentType<PaneProps<A>>
 }
 
@@ -181,9 +181,9 @@ export function paneOf<A extends { [key: string]: JsonValue }>(
 }
 
 /**
- * What a module's work in one Space calls its Person for: the loudest
+ * What a module's work in one Project calls its Person for: the loudest
  * state, as Banda's mark shows it, and how many things wait for the Person
- * to act. The bar shows the loudest of every Space's.
+ * to act. The bar shows the loudest of every Project's.
  */
 export type Attention = { mark: MarkState; waiting: number }
 
@@ -191,7 +191,7 @@ export type Attention = { mark: MarkState; waiting: number }
 export const QUIET: Attention = { mark: "rest", waiting: 0 }
 
 /**
- * One thing a module lists in the sidebar for a Space: a Thread, for the
+ * One thing a module lists in the sidebar for a Project: a Thread, for the
  * agents module (ADR 0008). The module says what each one is; the window
  * arranges them as the Person's sidebar settings say. One whose mark is
  * `done`, `asking` or `failed` calls its Person: the window tells them
@@ -228,17 +228,17 @@ export type Listed = {
   pane: PaneState
 }
 
-/** What every module lists for each Space, for the sidebar. */
-export type Lists = Readonly<Record<SpaceId, readonly Listed[]>>
+/** What every module lists for each Project, for the sidebar. */
+export type Lists = Readonly<Record<ProjectId, readonly Listed[]>>
 
 /**
  * One thing that calls its Person now, as the lists say it (ADR 0011):
- * of a Space, by a key that stays the thing's.
+ * of a Project, by a key that stays the thing's.
  */
 export type Call = {
-  /** `space:about`, one per thing. */
+  /** `project:about`, one per thing. */
   key: string
-  space: SpaceId
+  project: ProjectId
   /** The thing, as its Pane names it (`PaneKind.shows`). */
   about: string
   chime: Chime
@@ -260,15 +260,15 @@ const CHIMES: Partial<Record<MarkState, Chime>> = {
 
 /** The things in the lists that call their Person now. */
 export function callsOf(lists: Lists): Call[] {
-  return Object.entries(lists).flatMap(([space, listed]) =>
+  return Object.entries(lists).flatMap(([project, listed]) =>
     (listed ?? []).flatMap((thing): Call[] => {
       const chime = CHIMES[thing.mark]
       if (!chime) return []
       const detail = thing.calls ?? thing.said
       return [
         {
-          key: `${space}:${thing.id}`,
-          space: space as SpaceId,
+          key: `${project}:${thing.id}`,
+          project: project as ProjectId,
           about: thing.id,
           chime,
           title: thing.title,
@@ -281,27 +281,27 @@ export function callsOf(lists: Lists): Call[] {
   )
 }
 
-/** The thing `agent` works in, as a Thread its Agent's, and its Space;
+/** The thing `agent` works in, as a Thread its Agent's, and its Project;
  * none when no module lists one. */
 export function listedOf(
   lists: Lists,
   agent: string
-): { space: SpaceId; listed: Listed } | null {
-  for (const [space, listed] of Object.entries(lists)) {
+): { project: ProjectId; listed: Listed } | null {
+  for (const [project, listed] of Object.entries(lists)) {
     const found = listed.find((each) => each.agent === agent)
-    if (found) return { space: space as SpaceId, listed: found }
+    if (found) return { project: project as ProjectId, listed: found }
   }
   return null
 }
 
-/** What a Watch says about one Space: what calls the Person, and its list. */
+/** What a Watch says about one Project: what calls the Person, and its list. */
 export type Report = Attention & { listed: readonly Listed[] }
 
 export type WatchProps = {
   engine: Engine
-  space: SpaceId
+  project: ProjectId
   /**
-   * Says what the Space calls for now and lists; called on each change,
+   * Says what the Project calls for now and lists; called on each change,
    * first once the module has read its list. What calls in the first
    * report already was, and is no news (ADR 0011, decision 6).
    */
@@ -309,9 +309,9 @@ export type WatchProps = {
 }
 
 /**
- * How a module tells the window what its work in a Space calls the Person
+ * How a module tells the window what its work in a Project calls the Person
  * for and what the sidebar lists, while none of its Panes may show. The
- * window draws one per Space for as long as the engine runs the module; it
+ * window draws one per Project for as long as the engine runs the module; it
  * draws nothing itself.
  */
 export type Watch = {

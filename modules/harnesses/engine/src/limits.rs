@@ -16,7 +16,7 @@ mod codex;
 
 use crate::model::{LimitWindow, Limits, LimitsFailed, WindowKind};
 use crate::{Harness, Harnesses, LimitsSettings, account_changed};
-use banda_kernel::{Error, ModuleSpace, Participant};
+use banda_kernel::{Error, ModuleProject, Participant};
 use rusqlite::{Connection, OptionalExtension};
 use std::collections::HashMap;
 use std::sync::{Arc, Mutex};
@@ -141,10 +141,10 @@ impl Reader {
     }
 
     /// Reads each Harness as it is due, and again after its account
-    /// changed, till the machine's Space closes.
-    pub async fn start(&self, space: ModuleSpace) -> Result<(), Error> {
-        // It holds the Space only as it reads: the reaction lets it go.
-        let mut changed = space.react(space.at().await?, account_changed());
+    /// changed, till the machine's Project closes.
+    pub async fn start(&self, project: ModuleProject) -> Result<(), Error> {
+        // It holds the Project only as it reads: the reaction lets it go.
+        let mut changed = project.react(project.at().await?, account_changed());
         let reader = self.clone();
         tokio::spawn(async move {
             let mut look = tokio::time::interval(LOOK);
@@ -153,17 +153,17 @@ impl Reader {
                     heard = changed.next() => {
                         let Ok(Some(event)) = heard else { break };
                         let found = event.subject.and_then(|id| reader.harnesses.find(&id));
-                        if let (Some(harness), Some(space)) = (found, changed.space()) {
+                        if let (Some(harness), Some(project)) = (found, changed.project()) {
                             // A reaction answers at once: the read runs on its own.
-                            reader.read(&space, harness, Duration::ZERO);
+                            reader.read(&project, harness, Duration::ZERO);
                         }
                     }
                     _ = look.tick() => {
-                        let Some(space) = changed.space() else { break };
-                        if space.window_open() {
+                        let Some(project) = changed.project() else { break };
+                        if project.window_open() {
                             let (harnesses, settings) = reader.limited();
                             for harness in harnesses {
-                                reader.read(&space, harness, settings.every);
+                                reader.read(&project, harness, settings.every);
                             }
                         }
                     }
@@ -189,17 +189,17 @@ impl Reader {
     /// anew, and says so once kept. With `[limits]` as it read them.
     pub async fn now(
         &self,
-        space: &ModuleSpace,
+        project: &ModuleProject,
         again: bool,
     ) -> Result<(Vec<Limits>, LimitsSettings), Error> {
         let (harnesses, settings) = self.limited();
         if again {
             for harness in &harnesses {
-                self.read(space, harness.clone(), ASKED);
+                self.read(project, harness.clone(), ASKED);
             }
         }
         let ids: Vec<String> = harnesses.iter().map(|h| h.id.clone()).collect();
-        let mut kept = space.read(move |tx| kept_all(tx, &ids)).await?;
+        let mut kept = project.read(move |tx| kept_all(tx, &ids)).await?;
         let now = banda_kernel::now_ms();
         for (limits, harness) in kept.iter_mut().zip(&harnesses) {
             limits.name.clone_from(&harness.name);
@@ -217,11 +217,11 @@ impl Reader {
     /// Reads `harness` on its own, unless it was within `since`, it is
     /// being read, or it asked Banda to wait; Claude Code's only with a
     /// window open, as the window's main asks for them.
-    fn read(&self, space: &ModuleSpace, harness: Harness, since: Duration) {
+    fn read(&self, project: &ModuleProject, harness: Harness, since: Duration) {
         let Some(kind) = Kind::of(&harness) else {
             return;
         };
-        if kind == Kind::Claude && !space.window_open() {
+        if kind == Kind::Claude && !project.window_open() {
             return;
         }
         {
@@ -234,14 +234,14 @@ impl Reader {
             }
             (tried.reading, tried.at) = (true, Some(now));
         }
-        let (reader, space) = (self.clone(), space.clone());
+        let (reader, project) = (self.clone(), project.clone());
         tokio::spawn(async move {
             let read = match kind {
-                Kind::Claude => claude::read(&space, &harness).await,
+                Kind::Claude => claude::read(&project, &harness).await,
                 Kind::Codex => codex::read(&harness).await,
             };
             let wait = read.as_ref().err().and_then(|failure| failure.wait);
-            if let Err(error) = keep(&space, &harness.id, read).await {
+            if let Err(error) = keep(&project, &harness.id, read).await {
                 tracing::warn!(%error, harness = harness.id, "the limits read were not kept");
             }
             let mut tried = reader.tried.lock().unwrap();
@@ -254,10 +254,14 @@ impl Reader {
 
 /// Keeps a read of Harness `id`'s limits, over the one before when it
 /// failed, and says so.
-async fn keep(space: &ModuleSpace, id: &str, read: Result<Found, Failure>) -> Result<(), Error> {
+async fn keep(
+    project: &ModuleProject,
+    id: &str,
+    read: Result<Found, Failure>,
+) -> Result<(), Error> {
     let id = id.to_owned();
-    let owner = Participant::Person(space.owner());
-    space
+    let owner = Participant::Person(project.owner());
+    project
         .write(move |tx| {
             let now = banda_kernel::now_ms();
             let before = kept(tx.sql(), &id)?.unwrap_or_else(|| unread(&id));

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
 import type { Engine } from "@banda/contract"
 import { useModules } from "@banda/ui/hooks/use-status"
-import { useSpaces } from "@banda/ui/hooks/use-spaces"
+import { useProjects } from "@banda/ui/hooks/use-projects"
 import type { PaneState } from "@banda/ui/pane"
 import { actionFor, keysInForce, rebind } from "../actions/actions"
 import type { Host } from "../host"
@@ -32,7 +32,7 @@ export function Popped({
   pane: string
 }) {
   const modules = useModules(engine)
-  const { listed: spaces } = useSpaces(engine)
+  const { listed: projects } = useProjects(engine)
   const live = useArranged(engine)
   const kept = live.state === "ready" ? live.view : undefined
   // Its args as it asked for them, drawn until the engine's event is.
@@ -44,7 +44,7 @@ export function Popped({
   const [entry, setEntry] = useState<Entry>()
   const now: Entry | undefined = found && {
     id: pane,
-    space: found.space,
+    project: found.project,
     pane: { kind: found.kind, args: args as PaneState["args"] },
   }
   if (now ? !entry || !samePane(entry, now) : entry) setEntry(now)
@@ -67,9 +67,9 @@ export function Popped({
   const frame: Frame = useMemo(
     () => ({
       focus: () => undefined,
-      open: (space, opened, from, place) =>
+      open: (project, opened, from, place) =>
         host.popped.ask({
-          open: { space, pane: opened, from, ...(place && { place }) },
+          open: { project, pane: opened, from, ...(place && { place }) },
         }),
       update: (_entry, { args }: PaneState) => {
         setAsked({ args, until: Infinity })
@@ -115,9 +115,9 @@ export function Popped({
     return () => window.removeEventListener("keydown", onKey, { capture: true })
   }, [keyed, close, back])
 
-  const spaceName =
-    (spaces.state === "ready" &&
-      spaces.value.find((space) => space.id === entry?.space)?.name) ||
+  const projectName =
+    (projects.state === "ready" &&
+      projects.value.find((project) => project.id === entry?.project)?.name) ||
     "Project"
   return (
     <KeysInForce.Provider value={inForce}>
@@ -130,7 +130,7 @@ export function Popped({
             focused
             marked={false}
             listed={undefined}
-            spaceName={spaceName}
+            projectName={projectName}
             mixed={false}
             frame={frame}
             alone

@@ -121,7 +121,7 @@ function titleOf(tab: Tab): string {
 
 function BrowserPane({
   engine,
-  space,
+  project,
   args: kept,
   focused,
   selected = focused,
@@ -158,7 +158,7 @@ function BrowserPane({
     const change = (next: BrowserArgs | null) =>
       next ? now.current.update(next) : now.current.close()
     return {
-      space,
+      project,
       open: (url, from, background = false) => {
         const tab = { ...blankTab(newId()), url }
         if (background) pageOf(tab.id, url)
@@ -231,7 +231,7 @@ function BrowserPane({
       onTabKey={(key) => change(afterTabKey(args, key, newId()))}
       onThread={(agent) => {
         const thread = threadOf(agent)
-        if (thread) open(thread.listed.pane, undefined, thread.space)
+        if (thread) open(thread.listed.pane, undefined, thread.project)
       }}
       onHandBack={(contents, agent, why) =>
         void handBack(engine, contents, agent, why)

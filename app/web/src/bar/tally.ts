@@ -1,9 +1,9 @@
 /**
  * What the bar's middle counts (ADR 0035): who waits for the Person and
- * who works, over every Space's list, as `[bar] counts` in `sidebar.toml`
+ * who works, over every Project's list, as `[bar] counts` in `sidebar.toml`
  * says. Pure, so plain tests cover it.
  */
-import type { SpaceId } from "@banda/contract"
+import type { ProjectId } from "@banda/contract"
 import type { Count } from "@banda/contract/sidebar"
 import {
   callOrder,
@@ -14,8 +14,8 @@ import {
 } from "@banda/ui/components/banda-mark"
 import type { Listed, Lists } from "@banda/ui/pane"
 
-/** A Thread counted, with the Space it is in. */
-export type Counted = { space: SpaceId; listed: Listed }
+/** A Thread counted, with the Project it is in. */
+export type Counted = { project: ProjectId; listed: Listed }
 
 /** One count: the loudest mark of what it counts, and what that is. */
 export type Tally = {
@@ -41,10 +41,10 @@ export function tally(
   counts: readonly Count[],
   archived: (listed: Listed) => boolean
 ): Tally[] {
-  const all = Object.entries(lists).flatMap(([space, listed]) =>
+  const all = Object.entries(lists).flatMap(([project, listed]) =>
     listed
       .filter((one) => !archived(one))
-      .map((one) => ({ space: space as SpaceId, listed: one }))
+      .map((one) => ({ project: project as ProjectId, listed: one }))
   )
   return counts.flatMap((count) => {
     const things = all.filter(({ listed }) => TAKES[count](listed.mark))

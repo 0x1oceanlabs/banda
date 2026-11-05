@@ -19,7 +19,7 @@ mod outbox;
 pub mod settings;
 pub mod usage;
 
-use banda_kernel::{Call, Error, Module, ModuleSpace, Nothing, Refusal, Right, Scope};
+use banda_kernel::{Call, Error, Module, ModuleProject, Nothing, Refusal, Right, Scope};
 use rusqlite::Row;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -106,7 +106,7 @@ impl Sharing {
     async fn shared(&self, call: &Call, shares: Shares, anew: bool) -> Result<Shared, Refusal> {
         let id = self.ids.id(shares, anew)?;
         let since = banda_kernel::now_ms() - KEPT_MS;
-        let sent = call.space().read(move |sql| kept(sql, since)).await?;
+        let sent = call.project().read(move |sql| kept(sql, since)).await?;
         Ok(Shared {
             shares,
             id,
@@ -233,7 +233,7 @@ impl Module for Sharing {
     /// From where it last heard, it makes an event of each Problem as the
     /// problems module says it, and sends what waits: at once, and again
     /// every few minutes, through Banda's window.
-    async fn opened(&self, space: ModuleSpace) -> Result<(), Error> {
+    async fn opened(&self, project: ModuleProject) -> Result<(), Error> {
         let courier = outbox::Courier {
             file: self.file.clone(),
             ids: self.ids.clone(),
@@ -241,7 +241,7 @@ impl Module for Sharing {
             channel: self.channel,
             clock: self.clock.clone(),
         };
-        outbox::start(courier, space).await
+        outbox::start(courier, project).await
     }
 
     fn right(&self, method: &str) -> Option<Right> {

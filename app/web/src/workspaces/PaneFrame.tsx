@@ -6,7 +6,7 @@ import {
   useMemo,
   useRef,
 } from "react"
-import type { Engine, SpaceId } from "@banda/contract"
+import type { Engine, ProjectId } from "@banda/contract"
 import { Button } from "@banda/ui/components/button"
 import {
   DropdownMenu,
@@ -51,7 +51,12 @@ import { useKeyLabel } from "@banda/ui/hooks/use-key-of"
 export type Frame = {
   /** Done once the tile has the focus, where the window waits for it. */
   focus: (entry: string) => void | Promise<void>
-  open: (space: SpaceId, pane: PaneState, from: string, place?: Place) => void
+  open: (
+    project: ProjectId,
+    pane: PaneState,
+    from: string,
+    place?: Place
+  ) => void
   update: (entry: string, pane: PaneState) => void
   close: (entry: string) => void
   /** Runs an action by its id, as a key would. */
@@ -81,10 +86,10 @@ export function AgentMark({ className = "" }: { className?: string }) {
 }
 
 /**
- * One tile: a header with the Pane's icon and title, and its Space when the
- * workspace mixes Spaces, unless the Pane draws its own; under it, the Pane
+ * One tile: a header with the Pane's icon and title, and its Project when the
+ * workspace mixes Projects, unless the Pane draws its own; under it, the Pane
  * itself. A Pane that shows a listed thing, as a Thread, has its mark in the
- * icon's place and its Space before the title (ADR 0031). A Deck's
+ * icon's place and its Project before the title (ADR 0031). A Deck's
  * bar of names sits over its tile, outside it (`Tabs`).
  */
 export function PaneFrame({
@@ -97,7 +102,7 @@ export function PaneFrame({
   zoomed = false,
   height,
   listed,
-  spaceName,
+  projectName,
   mixed,
   frame,
   actions,
@@ -120,8 +125,8 @@ export function PaneFrame({
   height?: number
   /** The listed thing it shows, if it shows one. */
   listed: Listed | undefined
-  spaceName: string
-  /** The workspace mixes Spaces, so each header names its Space. */
+  projectName: string
+  /** The workspace mixes Projects, so each header names its Project. */
   mixed: boolean
   frame: Frame
   /** Buttons of its own in the header, beside the close button. */
@@ -262,7 +267,7 @@ export function PaneFrame({
                       }
                     />
                     <span className="shrink-0 text-muted-foreground">
-                      {spaceName}
+                      {projectName}
                     </span>
                   </>
                 )}
@@ -276,7 +281,7 @@ export function PaneFrame({
                 )}
                 {mixed && !listed && (
                   <span className="shrink-0 truncate rounded-sm bg-muted px-1.5 text-xs text-muted-foreground">
-                    {spaceName}
+                    {projectName}
                   </span>
                 )}
                 {zoomed && (
@@ -307,12 +312,17 @@ export function PaneFrame({
                 <Broken close={close}>
                   <shown.Pane
                     engine={engine}
-                    space={entry.space}
+                    project={entry.project}
                     args={entry.pane.args}
                     focused={focused}
                     selected={selected}
-                    open={(pane, place, space) =>
-                      frame.open(space ?? entry.space, pane, entry.id, place)
+                    open={(pane, place, project) =>
+                      frame.open(
+                        project ?? entry.project,
+                        pane,
+                        entry.id,
+                        place
+                      )
                     }
                     update={(args) =>
                       frame.update(entry.id, { kind: entry.pane.kind, args })

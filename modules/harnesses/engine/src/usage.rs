@@ -8,7 +8,7 @@ mod store;
 
 use crate::limits::Kind;
 use crate::{Harness, Harnesses};
-use banda_kernel::{Error, ModuleSpace};
+use banda_kernel::{Error, ModuleProject};
 pub use model::{UsageNow, UsageRead, UsageRow, UsageTokens, UsageTotal};
 use std::collections::HashSet;
 use std::path::PathBuf;
@@ -78,10 +78,10 @@ impl Reader {
         }
     }
 
-    pub async fn start(&self, space: ModuleSpace) -> Result<(), Error> {
-        // The reaction keeps only a weak Space, so closing the machine
+    pub async fn start(&self, project: ModuleProject) -> Result<(), Error> {
+        // The reaction keeps only a weak Project, so closing the machine
         // releases its database even while the timer is idle.
-        let mut lifetime = space.react(space.at().await?, crate::account_changed());
+        let mut lifetime = project.react(project.at().await?, crate::account_changed());
         let reader = self.clone();
         tokio::spawn(async move {
             let mut timer = tokio::time::interval(Duration::from_secs(60));
@@ -89,8 +89,8 @@ impl Reader {
                 tokio::select! {
                     event=lifetime.next()=>{if !matches!(event,Ok(Some(_))) {break;}}
                     _=timer.tick()=>{
-                        let Some(space)=lifetime.space() else {break;};
-                        if space.window_open() && let Err(error)=reader.scan(&space).await {
+                        let Some(project)=lifetime.project() else {break;};
+                        if project.window_open() && let Err(error)=reader.scan(&project).await {
                             tracing::warn!(%error,"usage journals could not be counted");
                         }
                     }
@@ -100,14 +100,14 @@ impl Reader {
         Ok(())
     }
 
-    pub async fn scan(&self, space: &ModuleSpace) -> Result<(), Error> {
+    pub async fn scan(&self, project: &ModuleProject) -> Result<(), Error> {
         let _guard = self.scanning.lock().await;
         let (harnesses, settings) = self.harnesses.usage();
         if !settings.read {
             return Ok(());
         }
         let cutoff = banda_kernel::now_ms() - KEEP;
-        store::prune(space, cutoff).await?;
+        store::prune(project, cutoff).await?;
         for source in sources(&harnesses) {
             let root = source.root.clone();
             let found = tokio::task::spawn_blocking(move || files::discover(&root))
@@ -116,13 +116,17 @@ impl Reader {
             let paths = match found {
                 Ok(paths) => paths,
                 Err(error) if error.kind() == std::io::ErrorKind::NotFound => {
-                    store::read_done(space, source.id, vec!["No session journals found.".into()])
-                        .await?;
+                    store::read_done(
+                        project,
+                        source.id,
+                        vec!["No session journals found.".into()],
+                    )
+                    .await?;
                     continue;
                 }
                 Err(error) => {
                     store::read_done(
-                        space,
+                        project,
                         source.id,
                         vec![format!("Cannot list session journals: {}", error.kind())],
                     )
@@ -136,7 +140,7 @@ impl Reader {
                     return Ok(());
                 }
                 let name = path.to_string_lossy().into_owned();
-                let cursor = store::cursor(space, source.id.clone(), name.clone()).await?;
+                let cursor = store::cursor(project, source.id.clone(), name.clone()).await?;
                 let previous = cursor.clone();
                 let kind = source.kind;
                 let read = tokio::task::spawn_blocking(move || files::read(&path, kind, cursor))
@@ -154,7 +158,7 @@ impl Reader {
                             problems.push("Some journal data remains for the next read.".into());
                         }
                         if batch.cursor != previous {
-                            store::keep(space, source.id.clone(), name, batch, cutoff).await?;
+                            store::keep(project, source.id.clone(), name, batch, cutoff).await?;
                         }
                     }
                     Err(error) => problems.push(format!(
@@ -166,20 +170,20 @@ impl Reader {
             problems.sort();
             problems.dedup();
             problems.truncate(20);
-            store::read_done(space, source.id, problems).await?;
+            store::read_done(project, source.id, problems).await?;
         }
         Ok(())
     }
 
     pub async fn now(
         &self,
-        space: &ModuleSpace,
+        project: &ModuleProject,
         since: i64,
         until: i64,
     ) -> Result<UsageNow, Error> {
         let (harnesses, settings) = self.harnesses.usage();
         let sources = sources(&harnesses);
-        let (at, (total, rows, reads)) = space
+        let (at, (total, rows, reads)) = project
             .view(move |sql| store::view(sql, &sources, since, until))
             .await?;
         Ok(UsageNow {

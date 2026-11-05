@@ -26,12 +26,12 @@ export const agentsDesktop: DesktopModule<
   answers: {
     media: [
       Schema.Tuple([Schema.String, Schema.String]),
-      ([space, path]) =>
+      ([project, path]) =>
         Effect.gen(function* () {
           // Refuse network, home-relative and URI paths before resolving.
           if (!path || /^(?:~|[a-z][a-z0-9+.-]*:|[/\\]{2})/i.test(path))
             return null
-          const folder = yield* folderOf(space)
+          const folder = yield* folderOf(project)
           if (!folder) return null
           return yield* Files.use((files) => files.issue(resolve(folder, path)))
         }),
@@ -42,9 +42,9 @@ export const agentsDesktop: DesktopModule<
         Schema.Array(Schema.String),
         Schema.Array(Schema.String),
       ]),
-      ([space, paths, worked]) =>
+      ([project, paths, worked]) =>
         Effect.gen(function* () {
-          const folder = yield* folderOf(space)
+          const folder = yield* folderOf(project)
           return yield* Effect.promise(() =>
             findFiles(folder, paths, worked, homedir())
           )
@@ -59,11 +59,13 @@ export const agentsDesktop: DesktopModule<
   opened: () => Effect.void,
 }
 
-/** The folder of the Space, as the engine has it; none for one it does
+/** The folder of the Project, as the engine has it; none for one it does
  * not know. */
-const folderOf = (space: string) =>
+const folderOf = (project: string) =>
   Effect.gen(function* () {
     const client = yield* Engine.use((engine) => engine.client)
-    const spaces = yield* Effect.promise(() => client.call("spaces.list", {}))
-    return spaces.find((one) => one.id === space)?.folder ?? null
+    const projects = yield* Effect.promise(() =>
+      client.call("projects.list", {})
+    )
+    return projects.find((one) => one.id === project)?.folder ?? null
   })

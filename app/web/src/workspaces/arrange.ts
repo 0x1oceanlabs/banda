@@ -72,7 +72,7 @@ export function resolve(
       const panes = column.panes.map((pane) => {
         const next: Entry = {
           id: pane.id,
-          space: pane.space,
+          project: pane.project,
           pane: { kind: pane.kind, args: pane.args as PaneState["args"] },
         }
         if (pane.by !== undefined) next.by = pane.by
@@ -99,7 +99,7 @@ export function resolve(
       focus: held(aimed.focus[workspace.id], columns, "before"),
     }
     if (workspace.filled !== undefined) next.filled = workspace.filled
-    if (workspace.space !== undefined) next.space = workspace.space
+    if (workspace.project !== undefined) next.project = workspace.project
     return same(was.workspaces.get(workspace.id), next)
   })
   const shows = held(aimed.current, list, "stay")
@@ -282,7 +282,7 @@ export function keptOf(state: Workspaces): Kept[] {
       id: column.id,
       panes: column.entries.map((entry) => ({
         id: entry.id,
-        space: entry.space,
+        project: entry.project,
         kind: entry.pane.kind,
         args: entry.pane.args,
         ...(entry.by !== undefined && { by: entry.by }),
@@ -294,7 +294,7 @@ export function keptOf(state: Workspaces): Kept[] {
       ...(column.group !== undefined && { group: column.group }),
     })),
     ...(workspace.filled !== undefined && { filled: workspace.filled }),
-    ...(workspace.space !== undefined && { space: workspace.space }),
+    ...(workspace.project !== undefined && { project: workspace.project }),
   }))
 }
 
@@ -343,7 +343,7 @@ function placeIn(spot: Spot): Place {
 /**
  * The Pane `next` shows that `before` did not, as a command to open it
  * where `next` has it, or at `place`, as the engine names one the window
- * only foresees: a Group's, a Space's workspace (ADR 0065); none when it
+ * only foresees: a Group's, a Project's workspace (ADR 0065); none when it
  * was shown already, and only the view changes.
  */
 export function opened(
@@ -356,7 +356,7 @@ export function opened(
   const spot = entry && spotOf(next, entry.id)
   if (!entry || !spot) return undefined
   const shows = {
-    space: entry.space,
+    project: entry.project,
     kind: entry.pane.kind,
     args: entry.pane.args,
   }
@@ -538,7 +538,7 @@ export function tidied(state: Workspaces): Command | undefined {
   }
 }
 
-/** Runs a command on this machine's workspaces, in no Space. */
+/** Runs a command on this machine's workspaces, in no Project. */
 export function send(engine: Engine, command: Command): Promise<unknown> {
   const { method, params } = command
   return engine.command(method, params as never)

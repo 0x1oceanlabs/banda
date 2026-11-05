@@ -1,10 +1,10 @@
 //! The servers started in Banda, through the kernel, as the bar's widget
-//! hears them (ADR 0044): a terminal's and an Agent's show in their Space
+//! hears them (ADR 0044): a terminal's and an Agent's show in their Project
 //! only, a Harness's own and the engine's do not, and a server stops.
 
 mod common;
 
-use banda_kernel::{Code, SPACE_VARIABLE, Stream};
+use banda_kernel::{Code, PROJECT_VARIABLE, Stream};
 use banda_terminal::model::{Server, Servers, StartedBy, TerminalId};
 use common::{World, until};
 use serde_json::json;
@@ -43,7 +43,7 @@ const JOB: &str = "const job = require('child_process').spawn(
   process.execPath, ['-e', process.argv[1]], { detached: true, stdio: 'inherit' })
 job.on('exit', (code, signal) => process.exit(signal ? 1 : code))";
 
-/// Starts [`LISTENS`] as a Harness's process for `world`'s Space, which
+/// Starts [`LISTENS`] as a Harness's process for `world`'s Project, which
 /// the test's process stands for: through [`JOB`] when `job`, as an
 /// Agent's tool runs it. Answers it and the port it listens on.
 async fn as_a_harness(world: &World, job: bool) -> (tokio::process::Child, u16) {
@@ -53,7 +53,7 @@ async fn as_a_harness(world: &World, job: bool) -> (tokio::process::Child, u16) 
         false => command.args(["-e", LISTENS]),
     };
     let mut started = command
-        .env(SPACE_VARIABLE, world.space.to_string())
+        .env(PROJECT_VARIABLE, world.project.to_string())
         .stdout(Stdio::piped())
         .kill_on_drop(true)
         .spawn()
@@ -64,10 +64,10 @@ async fn as_a_harness(world: &World, job: bool) -> (tokio::process::Child, u16) 
 }
 
 #[tokio::test]
-async fn a_terminal_s_server_shows_in_its_space_only_and_stops() {
+async fn a_terminal_s_server_shows_in_its_project_only_and_stops() {
     let world = World::new().await;
-    let other = world.another_space().await;
-    let mut ports = world.ports(world.space).await;
+    let other = world.another_project().await;
+    let mut ports = world.ports(world.project).await;
     let terminal = TerminalId::new();
     let open = json!({ "terminal": terminal, "program": "node", "args": ["-e", LISTENS] });
     world.call("terminal.open", open).await.unwrap();
@@ -100,9 +100,9 @@ async fn a_terminal_s_server_shows_in_its_space_only_and_stops() {
 }
 
 #[tokio::test]
-async fn an_agent_s_server_is_known_by_its_space_and_a_harness_s_or_the_engine_s_is_not() {
+async fn an_agent_s_server_is_known_by_its_project_and_a_harness_s_or_the_engine_s_is_not() {
     let world = World::new().await;
-    let mut ports = world.ports(world.space).await;
+    let mut ports = world.ports(world.project).await;
     // A socket the engine holds, and leaves open to what it starts, as
     // the window's process leaves one to the engine.
     let leaked = std::net::TcpListener::bind("127.0.0.1:0").unwrap();

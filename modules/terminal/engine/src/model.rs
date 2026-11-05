@@ -38,7 +38,7 @@ impl Size {
 
 /// What `terminal.open` starts: a program with its arguments, never a
 /// shell line, or the Person's shell when it names none. It runs in the
-/// Space's folder, with the engine's environment and `env` on top.
+/// Project's folder, with the engine's environment and `env` on top.
 #[derive(Clone, Debug, Deserialize, Serialize, TS)]
 #[ts(export, export_to = "terminal/")]
 pub struct Open {
@@ -115,7 +115,7 @@ pub struct Title {
     pub home: Option<String>,
 }
 
-/// A Space's servers, in the order they came (ADR 0044, decision 4).
+/// A Project's servers, in the order they came (ADR 0044, decision 4).
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "terminal/")]
 pub struct Servers {

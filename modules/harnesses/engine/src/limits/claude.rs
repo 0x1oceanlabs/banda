@@ -8,7 +8,7 @@
 use super::{Failure, Found, WAIT, instant, window};
 use crate::Harness;
 use crate::model::{LimitWindow, WindowKind};
-use banda_kernel::{ModuleSpace, Participant};
+use banda_kernel::{ModuleProject, Participant};
 use serde::Deserialize;
 use serde_json::{Value, json};
 use std::time::Duration;
@@ -37,12 +37,14 @@ struct Answer {
     body: Option<Value>,
 }
 
-pub(super) async fn read(space: &ModuleSpace, harness: &Harness) -> Result<Found, Failure> {
+pub(super) async fn read(project: &ModuleProject, harness: &Harness) -> Result<Found, Failure> {
     // The entry's own configuration folder, else Claude Code's default.
     let config = harness.env.get("CLAUDE_CONFIG_DIR");
-    let owner = Participant::Person(space.owner());
+    let owner = Participant::Person(project.owner());
     let asked = json!({ "config": config });
-    let answer = space.ask_window(owner, "claude_usage", asked, ASKING).await;
+    let answer = project
+        .ask_window(owner, "claude_usage", asked, ASKING)
+        .await;
     let answer = answer.map_err(|refusal| {
         Failure::new(format!(
             "Banda could not ask Anthropic: {}",

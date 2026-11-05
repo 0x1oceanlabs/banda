@@ -14,8 +14,8 @@ import { type Look, shown } from "@banda/contract/look"
  * Banda's page. */
 export const VISUALS = "visuals"
 
-export const visualAddress = (space: string, visual: string): string =>
-  `app://${VISUALS}/${space}/${visual}`
+export const visualAddress = (project: string, visual: string): string =>
+  `app://${VISUALS}/${project}/${visual}`
 
 /** What a Visual's page may do: run its scripts and forms, and nothing
  * of its origin's, as both its frame and its response say. */

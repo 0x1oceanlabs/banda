@@ -5,7 +5,7 @@
   "type": "object",
   "properties": {
     "preset": {
-      "description": "Banda's inbox, spaces or places, or one of yours in sidebars/.",
+      "description": "Banda's inbox, projects or places, or one of yours in sidebars/.",
       "type": "string"
     },
     "group": {
@@ -16,9 +16,9 @@
       "description": "Their order in a section.",
       "$ref": "#/$defs/SortSettings"
     },
-    "spaces": {
-      "description": "The Spaces above the Threads.",
-      "$ref": "#/$defs/SpacesSettings"
+    "projects": {
+      "description": "The Projects above the Threads. `[spaces]` before ADR 0069 (grace).",
+      "$ref": "#/$defs/ProjectsSettings"
     },
     "row": {
       "description": "What a Thread's row shows.",
@@ -35,7 +35,7 @@
       "type": "object",
       "properties": {
         "by": {
-          "description": "What makes a section: a Thread's state, its Space, or nothing.",
+          "description": "What makes a section: a Thread's state, its Project, or nothing.",
           "$ref": "#/$defs/GroupBy"
         },
         "states": {
@@ -53,7 +53,7 @@
           }
         },
         "folded": {
-          "description": "Sections, shelves or Spaces (by name) that start folded.",
+          "description": "Sections, shelves or Projects (by name) that start folded.",
           "type": "array",
           "items": {
             "type": "string"
@@ -80,9 +80,9 @@
           "const": "state"
         },
         {
-          "description": "Each Space a section of its own.",
+          "description": "Each Project a section of its own. `space` before ADR 0069 (grace).",
           "type": "string",
-          "const": "space"
+          "const": "project"
         },
         {
           "description": "One list.",
@@ -105,7 +105,7 @@
           "const": "working"
         },
         {
-          "description": "Put away by the Person, until something new happens in it\n(ADR 0069). Its name was `settled`, which still reads as it.",
+          "description": "Put away by the Person, until something new happens in it\n(ADR 0069). Its name was `settled`, which still reads as it.\n`settled` before ADR 0069 (grace).",
           "type": "string",
           "const": "archived"
         }
@@ -154,32 +154,32 @@
         }
       ]
     },
-    "SpacesSettings": {
+    "ProjectsSettings": {
       "type": "object",
       "properties": {
         "list": {
-          "description": "A list of Spaces above the Threads.",
+          "description": "A list of Projects above the Threads.",
           "type": "boolean"
         },
         "order": {
           "description": "The order of that list.",
-          "$ref": "#/$defs/SpaceOrder"
+          "$ref": "#/$defs/ProjectOrder"
         },
         "rollup": {
-          "description": "A Space shows its loudest mark and how many need you.",
+          "description": "A Project shows its loudest mark and how many need you.",
           "type": "boolean"
         },
         "new-thread": {
-          "description": "Each Space offers a new Thread in it.",
+          "description": "Each Project offers a new Thread in it.",
           "type": "boolean"
         }
       },
       "additionalProperties": false
     },
-    "SpaceOrder": {
+    "ProjectOrder": {
       "oneOf": [
         {
-          "description": "The Space with the latest change first.",
+          "description": "The Project with the latest change first.",
           "type": "string",
           "const": "changed"
         },
@@ -245,9 +245,9 @@
           "const": "title"
         },
         {
-          "description": "Its Space.",
+          "description": "Its Project. `space` before ADR 0069 (grace).",
           "type": "string",
-          "const": "space"
+          "const": "project"
         },
         {
           "description": "Its Harness.",

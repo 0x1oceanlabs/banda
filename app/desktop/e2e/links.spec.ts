@@ -82,8 +82,8 @@ test("Thread web links open in Banda, Ctrl+click externally, including a popped 
 test("a terminal's paths open in Banda's browser, and Ctrl+click opens them in their app", async () => {
   window = await startWindow()
   const { app, page, dir } = window
-  const space = join(dir, "root", "Work")
-  const notes = join(space, "notes.txt")
+  const project = join(dir, "root", "Work")
+  const notes = join(project, "notes.txt")
   await app.evaluate(({ shell }) => {
     const opened: string[] = []
     ;(globalThis as { pathOpens?: string[] }).pathOpens = opened
@@ -100,7 +100,7 @@ test("a terminal's paths open in Banda's browser, and Ctrl+click opens them in t
   // The path, line and column as a compiler prints them, on the first row.
   await page.keyboard.type("clear; printf './notes.txt:3:1\\n'; : > printed")
   await page.keyboard.press("Enter")
-  await expect.poll(() => existsSync(join(space, "printed"))).toBe(true)
+  await expect.poll(() => existsSync(join(project, "printed"))).toBe(true)
   const canvas = screen.locator("canvas").first()
   const box = (await canvas.boundingBox())!
   const on = { x: box.x + 24, y: box.y + 8 }

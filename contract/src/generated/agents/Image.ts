@@ -3,7 +3,7 @@ import type { ImageId } from "./ImageId";
 
 /**
  * An image in a message or tool result. Its bytes are kept apart, in
- * the Space's data, `spaces/<id>/images/`, and read with `agents.image`.
+ * the Project's data, `projects/<id>/images/`, and read with `agents.image`.
  */
 export type Image = { id: ImageId, 
 /**

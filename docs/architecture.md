@@ -69,7 +69,7 @@ banda call/follow   the CLI: the same API, for people, scripts and Agents
   `BANDA_ENGINE`, where the API listens. It is a pipe: MCP on stdio, one
   JSON-RPC message per line, written on `serde_json`, and the engine's API
   on the other side. Its calls name no Project, so they run in the pass's.
-  Its tools are `spaces.tools`, read once as it connects: the module
+  Its tools are `projects.tools`, read once as it connects: the module
   methods marked `tool` in their `methods!` tables. It adds `skill`,
   which it answers itself from the Banda skill. Its
   `instructions` are the skill's brief (`modules/skill/BRIEF.md`), under
@@ -78,7 +78,7 @@ banda call/follow   the CLI: the same API, for people, scripts and Agents
   tool result marked `isError`, with the refusal and that nothing was
   done; only an engine that does not answer is a JSON-RPC error.
 - **The CLI prints JSON.** `banda call <method>` prints `{"ok": …}`, as
-  `banda space add <path>` does with the Project it added.
+  `banda project add <path>` does with the Project it added.
   `banda follow` prints events, one per line. When the engine refuses
   the call, the hello or the follow, the CLI prints
   `{"error": {"code", "message"}}` and exits 1. When no engine answers,
@@ -90,22 +90,22 @@ banda call/follow   the CLI: the same API, for people, scripts and Agents
 The kernel holds only what every module needs, and it names no module.
 
 - **Project.** A folder on disk (a new one goes in `~/Banda/<name>/`) and
-  its data in the engine's data folder, `~/.local/share/banda/spaces/<id>/`
+  its data in the engine's data folder, `~/.local/share/banda/projects/<id>/`
   (ADR 0026; Banda Dev's is `banda-dev`, a checkout's `banda-local`, ADR
-  0033): `space.json`, which names the folder, the Project's SQLite with
+  0033): `project.json`, which names the folder, the Project's SQLite with
   the modules' migrations and the event log, and the modules' files. The
   folder holds the work alone. One engine at a time opens a Project: it holds
-  a lock on `spaces/<id>/space.lock` while the Project is open. Projects from
+  a lock on `projects/<id>/project.lock` while the Project is open. Projects from
   before ADR 0026 move their `.banda/` there the first time an engine
-  starts. The kernel's own methods manage them: `spaces.create` makes a
-  new folder, `spaces.add` adds any folder (resolved, so one folder is one
-  Project), `spaces.browse` lists folders as a path is typed,
-  `spaces.update` renames, pins or archives, and `spaces.remove` forgets
+  starts. The kernel's own methods manage them: `projects.create` makes a
+  new folder, `projects.add` adds any folder (resolved, so one folder is one
+  Project), `projects.browse` lists folders as a path is typed,
+  `projects.update` renames, pins or archives, and `projects.remove` forgets
   a Project: its modules stop what runs there (`Module::closing`), its data
   becomes `<id>.gone` and is deleted, and its folder is not touched. A
-  Thread in No Project has a Project of its own, `scratch` in `space.json`
-  (ADR 0046): `spaces.create { scratch: true }` makes it, with no name, in
-  a new folder `~/Banda/scratch/<date>-<id8>/`, and `spaces.update
+  Thread in No Project has a Project of its own, `scratch` in `project.json`
+  (ADR 0046): `projects.create { scratch: true }` makes it, with no name, in
+  a new folder `~/Banda/scratch/<date>-<id8>/`, and `projects.update
   { scratch: false, name }` makes a Project of it.
 - **Event log.** Append-only, with typed events, one per Project. Windows and
   the CLI subscribe to it. A subscription sends only what its view needs.
@@ -122,14 +122,14 @@ The kernel holds only what every module needs, and it names no module.
   kernel checks it where it finds the Project, before the access decision
   (`access::within`), for the API and for callers in the engine alike. A
   call that names no Project runs in the pass's; any other Project is
-  refused. `spaces.list` shows it only its own.
+  refused. `projects.list` shows it only its own.
 - **This machine** (ADR 0025, decision 1). A module whose data holds
   every Project's, as the workspaces do, is the machine's
   (`Module::scope`). The kernel keeps one more store like a Project's for
   those modules, in the engine's state folder (`machine/`), with its own
   receipts, event log and outbox; a Project's modules never open there, nor
   the machine's in a Project. Their methods name no Project. The machine is
-  no Project in `spaces.list`; `welcome` names its ID, which a window
+  no Project in `projects.list`; `welcome` names its ID, which a window
   follows and streams by. An Agent's pass stops at it, but for the
   methods marked `tool` (ADR 0032): the kernel hands each call the pass's
   wall (`Call::wall`: its Project, and whether that Project's `sees_others`
@@ -141,7 +141,7 @@ The kernel holds only what every module needs, and it names no module.
 - **Identity.** A port: it says which Participant a connection's token names.
   On one computer, whoever holds the engine's secret is the owner. Later it
   is OIDC, or our accounts.
-- **Passes.** A module asks its `ModuleSpace` for a new pass of an Agent
+- **Passes.** A module asks its `ModuleProject` for a new pass of an Agent
   (`pass(agent)`), 32 random bytes in hex; the agents module asks as a
   session opens. The kernel keeps passes in memory, so they end with the
   engine. A `hello` with a pass connects as that Agent, in that Project.
@@ -176,7 +176,7 @@ command (with its ID)
   → access decision (one exhaustive map: method → right)
   → module operation: rules decide, store writes
   → one transaction: receipt · events · view tables · outbox rows
-  → publish: one ordered lane per Space
+  → publish: one ordered lane per Project
   → outbox worker: side effects in order per target, claimed by this boot, retried
   → how one ended: one transaction with what its module writes of it, tried until it commits
 ```
@@ -213,8 +213,8 @@ command (with its ID)
 | The engine's state folder | the owner's ID; while the engine runs, its port and per-run secret |
 | The window's storage | the view of the workspaces: the one on screen, each one's focused column and each column's shown Pane; whether the sidebar shows; which finished turn of each Thread the Person has seen; which Panes an Agent opened the Person has looked at |
 | `machine/` SQLite, in the engine's state | this machine's, in no Project: the workspaces, their columns, each Pane with its Project and the widths (ADR 0025) |
-| `spaces/<id>/` SQLite, in the engine's data | Threads, Questions and answers, the Agents' queue, Databases' records, receipts, events, outbox |
-| `spaces/<id>/images/` and `files/` | the bytes of the images messages carry, one file per image, the SQLite saying what each is and which message carries it; the files a message keeps (a dropped file, a long paste), which each Thread's session gets as an extra root |
+| `projects/<id>/` SQLite, in the engine's data | Threads, Questions and answers, the Agents' queue, Databases' records, receipts, events, outbox |
+| `projects/<id>/images/` and `files/` | the bytes of the images messages carry, one file per image, the SQLite saying what each is and which message carries it; the files a message keeps (a dropped file, a long paste), which each Thread's session gets as an extra root |
 
 Events are facts with a version, and the log is never rewritten. Each module
 keeps its own ledger of migrations. Our IDs are UUIDv7. A Harness's IDs are
@@ -301,7 +301,7 @@ If Chat is removed, Agents still works through its own Thread.
   such as its model (`agents.defaults`). Defaults a Person sets per Harness
   entry (ADR 0006, decision 3) are not built yet.
   - Projects from before ADR 0006 kept their Agents in
-    `.banda/agents/<name>.toml`, now `spaces/<id>/agents/` (ADR 0026). Opening the module reads those files
+    `.banda/agents/<name>.toml`, now `projects/<id>/agents/` (ADR 0026). Opening the module reads those files
     once to learn each older Thread's Harness, and leaves them as they are.
     Older Threads keep the Agent ID they had, so one old Agent's Threads
     still share it.
@@ -472,9 +472,9 @@ If Chat is removed, Agents still works through its own Thread.
   up to 4 MB for one command's output, text or diff, which only a runaway
   command reaches; a diff past it says so instead.
 - **A Visual is a page the Agent shows** (ADR 0037): `show_visual` keeps
-  its HTML in the Project's data, `spaces/<id>/visuals/`, and the Agent's
+  its HTML in the Project's data, `projects/<id>/visuals/`, and the Agent's
   turn that runs gets an item, `visual.shown`, which no fold hides. The
-  window serves it at `app://visuals/<space>/<visual>`, an origin of its
+  window serves it at `app://visuals/<project>/<visual>`, an origin of its
   own, sandboxed by its response and its frame (`modules/agents/desktop`),
   and the frame passes it the look's colours as T3 Code's variables.
 - **An Agent's plan** for its turn is one entry whose steps follow the
@@ -537,7 +537,7 @@ If Chat is removed, Agents still works through its own Thread.
   prompt going out, a Question's answer) is told by `Live` when that
   changes, and what waits for a turn to be written as ended follows the
   module's committed `turn.ended` facts about the Thread (the kernel's
-  `ModuleSpace::committed`). A turn keeps who opened it
+  `ModuleProject::committed`). A turn keeps who opened it
   (`agents_turns.opener`): a Person's message, a retry, a message its turn
   could not take, the Agent by itself, or another Thread's Agent that
   asked or answered (`from_thread` names that Thread); "by itself" is read
@@ -585,7 +585,7 @@ If Chat is removed, Agents still works through its own Thread.
 - **A sign-in or sign-out writes `harnesses.account_changed`**, its
   subject the Harness's ID and nothing else. Every holder of that
   Harness's process lets go of it: this module, and each Project's agents
-  module, which hears the machine's log (`ModuleSpace::react_to_machine`)
+  module, which hears the machine's log (`ModuleProject::react_to_machine`)
   and lets go of its own hosts of it without waiting. A host that was
   starting then is let go the next time it is asked for (`hosts.rs`
   marks it stale). The command answers once every reaction handled
@@ -801,7 +801,7 @@ modules/*/desktop  a module's part in Electron main
   at all; sorted by need, by change or by title; shelves at the bottom;
   a list of Projects above; rows of one, two or three lines. `arrange.ts` is
   the one pure rule. `banda look` resolves the keys from `sidebar.toml`
-  (`look/src/sidebar.rs`; Banda's presets `inbox`, `spaces` and `places`
+  (`look/src/sidebar.rs`; Banda's presets `inbox`, `projects` and `places`
   are files in `look/sidebars/`), and the view menu writes the preset
   into the file, keeping the Person's other keys and comments. The sidebar
   knows nothing of Threads: each module's Watch reports a `Listed` per
@@ -938,7 +938,7 @@ modules/*/desktop  a module's part in Electron main
 
 ```
 banda/
-  kernel/             Rust: Space, event log, access, registry, API
+  kernel/             Rust: Project, event log, access, registry, API
   modules/
     agents/engine/    Rust: Threads, turns, Questions, the ACP adapter
     agents/pane/      React: the Thread, the settings' Agents, each Thread as the sidebar lists it

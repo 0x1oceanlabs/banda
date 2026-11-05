@@ -17,11 +17,11 @@ test.afterEach(async () => {
 test("a terminal's right click copies, pastes, selects all, clears and acts on a link", async () => {
   window = await startWindow()
   const { app, page, dir } = window
-  const space = join(dir, "root", "Work")
-  const read = (name: string) => readFile(join(space, name))
+  const project = join(dir, "root", "Work")
+  const read = (name: string) => readFile(join(project, name))
   const clipboard = () => app.evaluate(({ clipboard }) => clipboard.readText())
   const screen = await newTerminal(page)
-  writeFileSync(join(space, "notes.txt"), "Notes\n")
+  writeFileSync(join(project, "notes.txt"), "Notes\n")
   await screen.click()
   // The path on the first row, then the prompt.
   await page.keyboard.type("clear; printf './notes.txt\\n'; : > printed")
@@ -42,7 +42,7 @@ test("a terminal's right click copies, pastes, selects all, clears and acts on a
   await page.screenshot({ path: "test-results/terminal-menu.png" })
   await item("Copy path").click()
   await expect(menu).toBeHidden()
-  await expect.poll(clipboard).toBe(join(space, "notes.txt"))
+  await expect.poll(clipboard).toBe(join(project, "notes.txt"))
 
   // Away from it: no link; Select all then Copy takes the screen's text.
   const below = { x: box.width / 2, y: box.height - 20 }
@@ -87,7 +87,7 @@ test("a terminal's right click copies, pastes, selects all, clears and acts on a
 test("Ctrl with + − 0 zooms a terminal, and the shell hears its new size", async () => {
   window = await startWindow()
   const { page, dir } = window
-  const space = join(dir, "root", "Work")
+  const project = join(dir, "root", "Work")
   const screen = await newTerminal(page)
   await screen.click()
   // The columns the shell has, once its size settled: the badge is gone.
@@ -95,7 +95,7 @@ test("Ctrl with + − 0 zooms a terminal, and the shell hears its new size", asy
   let asked = 0
   const cols = async () => {
     await expect(badge).toBeHidden()
-    const file = join(space, `cols-${++asked}.txt`)
+    const file = join(project, `cols-${++asked}.txt`)
     await page.keyboard.type(`tput cols > ${file}`)
     await page.keyboard.press("Enter")
     await expect.poll(() => readFile(file)).toMatch(/^\d+\n$/)

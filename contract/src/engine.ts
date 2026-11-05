@@ -4,7 +4,7 @@ import type { EngineFrame } from "./generated/EngineFrame"
 import type { Event } from "./generated/Event"
 import type { EventFilter } from "./generated/EventFilter"
 import type { Refusal } from "./generated/Refusal"
-import type { SpaceId } from "./generated/SpaceId"
+import type { ProjectId } from "./generated/ProjectId"
 import type { JsonValue } from "./generated/serde_json/JsonValue"
 import { newId } from "./ids"
 import type { Answer, CommandCall, MethodOf, Params } from "./methods"
@@ -21,9 +21,9 @@ export type Status =
       state: "open"
       engine: string
       modules: string[]
-      /** The ID this machine's modules are followed by, as a Space's
+      /** The ID this machine's modules are followed by, as a Project's
        * (ADR 0025, decision 1); none when no module is the machine's. */
-      machine?: SpaceId
+      machine?: ProjectId
     }
   /** The connection broke; the client tries again after `retryIn` ms. */
   | { state: "lost"; retryIn: number }
@@ -58,7 +58,7 @@ type Pending = {
 }
 
 type Following = {
-  space: SpaceId
+  project: ProjectId
   last: number
   filter: EventFilter
   onEvent: (event: Event) => void
@@ -66,7 +66,7 @@ type Following = {
 }
 
 type Hearing = {
-  space: SpaceId | undefined
+  project: ProjectId | undefined
   method: string
   params: JsonValue
   onPiece: (piece: unknown) => void
@@ -125,7 +125,7 @@ export class Engine {
   call<M extends MethodOf<"call">>(
     method: M,
     params: Params<M>,
-    options: { space?: SpaceId } = {}
+    options: { project?: ProjectId } = {}
   ): Promise<Answer<M>> {
     return this.#call(method, params, options)
   }
@@ -133,7 +133,7 @@ export class Engine {
   async #call<T>(
     method: string,
     params: unknown,
-    options: { space?: SpaceId; command?: CommandId }
+    options: { project?: ProjectId; command?: CommandId }
   ): Promise<T> {
     await this.#opened()
     const id = this.#nextId++
@@ -144,7 +144,7 @@ export class Engine {
       type: "call",
       id,
       method,
-      space: options.space,
+      project: options.project,
       command: options.command,
       params: params as JsonValue,
     })
@@ -160,12 +160,12 @@ export class Engine {
   async command<M extends MethodOf<"command">>(
     method: M,
     params: Params<M>,
-    space?: SpaceId,
+    project?: ProjectId,
     command: CommandId = newId()
   ): Promise<Answer<M>> {
     for (let attempt = 1; ; attempt++) {
       try {
-        return await this.#call<Answer<M>>(method, params, { space, command })
+        return await this.#call<Answer<M>>(method, params, { project, command })
       } catch (error) {
         if (!(error instanceof Lost) || attempt === ATTEMPTS) throw error
       }
@@ -173,25 +173,30 @@ export class Engine {
   }
 
   /** Runs a command made elsewhere, as a Pane's args carry one. */
-  run(call: CommandCall, space?: SpaceId): Promise<unknown> {
+  run(call: CommandCall, project?: ProjectId): Promise<unknown> {
     // TypeScript cannot tell that a union's method and params belong together.
-    return this.command(call.method, call.params as never, space, call.command)
+    return this.command(
+      call.method,
+      call.params as never,
+      project,
+      call.command
+    )
   }
 
   /**
-   * Follows a Space's events after `after`. `onEnd` hears when the engine
+   * Follows a Project's events after `after`. `onEnd` hears when the engine
    * ends the subscription: with a refusal, or without one when the Pane
    * should read its view again. Returns how to stop.
    */
   follow(
-    space: SpaceId,
+    project: ProjectId,
     after: number,
     filter: EventFilter,
     onEvent: (event: Event) => void,
     onEnd: (refusal?: Refusal) => void
   ): () => void {
     const id = this.#nextId++
-    const following = { space, last: after, filter, onEvent, onEnd }
+    const following = { project, last: after, filter, onEvent, onEnd }
     this.#following.set(id, following)
     if (this.#status.state === "open") this.#subscribe(id, following)
     return () => {
@@ -209,14 +214,14 @@ export class Engine {
    * Hears a module's stream, such as a terminal's output: what it says now
    * and keeps nowhere. After a reconnect the engine says it again from its
    * start. `onEnd` hears when the module ends it, or refuses it. Returns how
-   * to stop. A stream of this machine's, `window.requests`, has no Space.
+   * to stop. A stream of this machine's, `window.requests`, has no Project.
    *
    * A stream that does something, as a commit, is heard `once`: asked
    * again it would do it again. When the connection breaks after it was
    * asked, it ends with `may_have_run` instead, and the caller checks.
    */
   stream<M extends MethodOf<"stream">>(
-    space: SpaceId | undefined,
+    project: ProjectId | undefined,
     method: M,
     params: Params<M>,
     onPiece: (piece: Answer<M>) => void,
@@ -225,7 +230,7 @@ export class Engine {
   ): () => void {
     const id = this.#nextId++
     const hearing: Hearing = {
-      space,
+      project,
       method,
       params: params as JsonValue,
       onPiece: onPiece as (piece: unknown) => void,
@@ -303,7 +308,7 @@ export class Engine {
     this.#send({
       type: "subscribe",
       id,
-      space: following.space,
+      project: following.project,
       after: following.last,
       filter: following.filter,
     })
@@ -314,7 +319,7 @@ export class Engine {
     this.#send({
       type: "stream",
       id,
-      space: hearing.space,
+      project: hearing.project,
       method: hearing.method,
       params: hearing.params,
     })

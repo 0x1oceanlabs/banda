@@ -7,7 +7,7 @@ import { diffOn, gitDetails } from "./Details"
 import { diffPane } from "./DiffPane"
 import { keepWindow } from "./ended"
 
-/** T3 Code's Mod+D: the focused Pane's Space's Diff beside it, the one
+/** T3 Code's Mod+D: the focused Pane's Project's Diff beside it, the one
  * shown if there is; on the Diff, it closes. */
 const toggleDiff: Action = {
   id: "git.diff",
@@ -17,7 +17,7 @@ const toggleDiff: Action = {
   run: (window) => {
     const at = window.focused()
     if (at?.pane.kind === diffPane.kind) return window.run("pane.close")
-    window.open(diffOn(), at?.space, { again: false })
+    window.open(diffOn(), at?.project, { again: false })
   },
 }
 

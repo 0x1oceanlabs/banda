@@ -3,26 +3,26 @@
  * Person's default Harness, asked to read the Problem and follow the
  * Banda skill's `problems` topic. Nothing starts by itself: it costs the
  * Person's model. When the engine runs from a checkout of Banda's source
- * and a Space is that checkout, the Thread opens there, where the topic
- * has the Agent fix it; else in the window's home Space.
+ * and a Project is that checkout, the Thread opens there, where the topic
+ * has the Agent fix it; else in the window's home Project.
  */
-import type { Engine, SpaceId, SpaceSummary } from "@banda/contract"
-import { openSpaces } from "@banda/ui/lib/spaces"
+import type { Engine, ProjectId, ProjectSummary } from "@banda/contract"
+import { openProjects } from "@banda/ui/lib/projects"
 
-/** What `thread.new` is given to look into a Problem: its Space, none
+/** What `thread.new` is given to look into a Problem: its Project, none
  * for the window's home one, and what it asks. */
-export type LookInto = { space?: SpaceId; ask: string }
+export type LookInto = { project?: ProjectId; ask: string }
 
 /** How a Thread looks into Problem `fingerprint`, which the engine says
  * runs from `checkout`, if it does. */
 export function lookInto(
   fingerprint: string,
   checkout: string | null,
-  spaces: readonly SpaceSummary[]
+  projects: readonly ProjectSummary[]
 ): LookInto {
   const ask = `Look into Banda's Problem ${fingerprint}: read it with the \`problem\` tool, and follow the Banda skill's \`problems\` topic.`
-  const space = openSpaces(spaces).find((one) => one.folder === checkout)
-  return space ? { space: space.id, ask } : { ask }
+  const project = openProjects(projects).find((one) => one.folder === checkout)
+  return project ? { project: project.id, ask } : { ask }
 }
 
 /** Reads what it takes to look into Problem `fingerprint`, as it is
@@ -31,9 +31,9 @@ export async function lookingInto(
   engine: Engine,
   fingerprint: string
 ): Promise<LookInto> {
-  const [report, spaces] = await Promise.all([
+  const [report, projects] = await Promise.all([
     engine.call("problems.problem", { fingerprint }),
-    engine.call("spaces.list", {}),
+    engine.call("projects.list", {}),
   ])
-  return lookInto(fingerprint, report.checkout, spaces)
+  return lookInto(fingerprint, report.checkout, projects)
 }

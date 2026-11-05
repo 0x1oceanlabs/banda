@@ -79,8 +79,8 @@ macro_rules! id {
 }
 
 id!(
-    /// A Space: one body of work and its folder.
-    SpaceId
+    /// A Project: one body of work and its folder.
+    ProjectId
 );
 id!(
     /// A Person: a human Participant.
@@ -91,7 +91,7 @@ id!(
     AgentId
 );
 id!(
-    /// One event in a Space's log.
+    /// One event in a Project's log.
     EventId
 );
 id!(
@@ -100,7 +100,7 @@ id!(
     CommandId
 );
 
-/// Anyone who acts in a Space: a Person or an Agent.
+/// Anyone who acts in a Project: a Person or an Agent.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Serialize, Deserialize, TS)]
 #[serde(tag = "kind", content = "id", rename_all = "snake_case")]
 #[ts(export)]

@@ -45,7 +45,7 @@ fn setup(root: &Path, read: bool) {
     std::fs::write(root.join("harnesses.toml"), text).unwrap();
 }
 async fn open(root: &Path, owner: PersonId) -> Arc<Kernel> {
-    Kernel::builder(root.join("spaces"), root.join("data"), owner)
+    Kernel::builder(root.join("projects"), root.join("data"), owner)
         .machine(root.join("machine"))
         .module(HarnessesModule::new(
             Harnesses::load(&root.join("harnesses.toml")).unwrap(),

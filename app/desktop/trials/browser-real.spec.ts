@@ -190,12 +190,12 @@ test(`real ${harness} exercises Banda's browser`, async () => {
   )
   // Do not emulate the host viewport: Electron inherits those metrics in
   // guests and produces tiled screenshots. Native bounds are sufficient.
-  const cli = async (method: string, params?: unknown, space?: string) => {
+  const cli = async (method: string, params?: unknown, project?: string) => {
     const args = [
       "call",
       method,
       ...(params ? ["--params", JSON.stringify(params)] : []),
-      ...(space ? ["--space", space] : []),
+      ...(project ? ["--project", project] : []),
     ]
     const result = await run(join(repository, "target/debug/banda"), args, {
       env,
@@ -205,7 +205,7 @@ test(`real ${harness} exercises Banda's browser`, async () => {
     return JSON.parse(result.stdout).ok
   }
   let threadId: string | undefined
-  let spaceId: string | undefined
+  let projectId: string | undefined
   let view: ThreadView | undefined
   let phase:
     "initial" | "main" | "tools" | "restored" | "stop" | "stopped" | "finish" =
@@ -215,12 +215,12 @@ test(`real ${harness} exercises Banda's browser`, async () => {
   let handoffs = 0
   let screenshotSettings = false
   const send = async (text: string) => {
-    if (!spaceId || !threadId) throw new Error("No Thread yet")
+    if (!projectId || !threadId) throw new Error("No Thread yet")
     note(`Person message: ${text.slice(0, 120)}`)
-    await cli("agents.send", { thread: threadId, text }, spaceId)
+    await cli("agents.send", { thread: threadId, text }, projectId)
   }
   try {
-    // Open a normal Space and Thread in the real UI, with the sole real Harness.
+    // Open a normal Project and Thread in the real UI, with the sole real Harness.
     await page
       .getByRole("region", { name: "New Thread" })
       .getByRole("button", { name: "Close New Thread", exact: true })
@@ -241,15 +241,15 @@ test(`real ${harness} exercises Banda's browser`, async () => {
     let tick = 0
     while (Date.now() < deadline) {
       tick++
-      if (!spaceId) {
-        const spaces = await cli("spaces.list")
-        const entries = Array.isArray(spaces) ? spaces : spaces.spaces
-        spaceId = entries?.find(
+      if (!projectId) {
+        const projects = await cli("projects.list")
+        const entries = Array.isArray(projects) ? projects : projects.projects
+        projectId = entries?.find(
           (item: { name?: string }) => item.name === `Browser trial ${harness}`
         )?.id
       }
-      if (spaceId && !threadId) {
-        const listed = await cli("agents.threads", undefined, spaceId)
+      if (projectId && !threadId) {
+        const listed = await cli("agents.threads", undefined, projectId)
         threadId = listed.threads?.[0]?.id
       }
       const allow = thread.getByRole("button", { name: /^(Allow|Always)/ })
@@ -302,11 +302,11 @@ test(`real ${harness} exercises Banda's browser`, async () => {
           .getByRole("button", { name: "Done — hand back", exact: true })
           .click()
       }
-      if (spaceId && threadId) {
+      if (projectId && threadId) {
         view = (await cli(
           "agents.thread",
           { thread: threadId },
-          spaceId
+          projectId
         )) as ThreadView
         writeFileSync(
           join(artifacts, "thread.json"),
@@ -542,10 +542,18 @@ test(`real ${harness} exercises Banda's browser`, async () => {
         2
       )
     )
-    if (view && spaceId && threadId && view.turns.at(-1)?.state === "running") {
-      await cli("agents.stop", { turn: view.turns.at(-1)!.id }, spaceId).catch(
-        (error: unknown) =>
-          note(`Could not stop own trial turn: ${String(error)}`)
+    if (
+      view &&
+      projectId &&
+      threadId &&
+      view.turns.at(-1)?.state === "running"
+    ) {
+      await cli(
+        "agents.stop",
+        { turn: view.turns.at(-1)!.id },
+        projectId
+      ).catch((error: unknown) =>
+        note(`Could not stop own trial turn: ${String(error)}`)
       )
     }
     await app.close()

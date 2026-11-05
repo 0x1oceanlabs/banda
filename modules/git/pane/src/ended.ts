@@ -1,10 +1,10 @@
 /**
  * How a run of the git button ended, told to the Person when no card of
- * its Space is in sight (`notifications.tell`): a card in sight says it
+ * its Project is in sight (`notifications.tell`): a card in sight says it
  * itself. What each step changed its Thread's Agent hears from the
  * engine (`git.acted`).
  */
-import type { SpaceId } from "@banda/contract"
+import type { ProjectId } from "@banda/contract"
 import { detailsShown } from "@banda/ui/components/thread-details"
 import type { Args, WindowApi } from "@banda/ui/module"
 
@@ -25,14 +25,14 @@ export type Ended =
   | { is: "done"; title: string; detail?: string }
   | { is: "failed"; message: string }
 
-/** The toast of a run that ended in `space`, as `notifications.tell`
- * takes it: one per Space, the next replacing it; a failure sounds and
+/** The toast of a run that ended in `project`, as `notifications.tell`
+ * takes it: one per Project, the next replacing it; a failure sounds and
  * says why. Of the Thread `about`, whose card is drawn, it tells nothing
  * while that Thread is on screen. */
-export function toldOf(space: SpaceId, ended: Ended, about?: string): Args {
+export function toldOf(project: ProjectId, ended: Ended, about?: string): Args {
   const base = {
-    key: `git.${space}`,
-    in: space,
+    key: `git.${project}`,
+    in: project,
     ...(about ? { about } : {}),
     buttons: [],
   }
@@ -53,11 +53,11 @@ export function toldOf(space: SpaceId, ended: Ended, about?: string): Args {
       }
 }
 
-/** Tells the Person how a run in `space` ended, unless a card of it in
+/** Tells the Person how a run in `project` ended, unless a card of it in
  * sight says so: a new Thread's drawn, or a Thread's on screen. */
-export function afterRun(space: SpaceId, run: Ended): void {
+export function afterRun(project: ProjectId, run: Ended): void {
   if (!kept) return
-  const shown = detailsShown(space)
+  const shown = detailsShown(project)
   if (shown.includes(null)) return
-  kept.run("notifications.tell", toldOf(space, run, shown[0] ?? undefined))
+  kept.run("notifications.tell", toldOf(project, run, shown[0] ?? undefined))
 }

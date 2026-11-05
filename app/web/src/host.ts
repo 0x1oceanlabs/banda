@@ -9,7 +9,7 @@
 import { AGENTS_BRIDGE } from "@banda/agents-pane/desktop"
 import { BROWSER_BRIDGE, type BrowserHost } from "@banda/browser-pane/desktop"
 import { NOTIFY_BRIDGE } from "@banda/notifications-pane/desktop"
-import type { Address, SpaceId } from "@banda/contract"
+import type { Address, ProjectId } from "@banda/contract"
 import type { Args } from "@banda/ui/module"
 import type { PaneState, Place } from "@banda/ui/pane"
 import { bridge, type HostOf, invoke, push, send } from "@banda/contract/bridge"
@@ -86,7 +86,9 @@ export function poppedOf(hash: string): string | undefined {
  * run an action.
  */
 export type PoppedAsk =
-  | { open: { space: SpaceId; pane: PaneState; from: string; place?: Place } }
+  | {
+      open: { project: ProjectId; pane: PaneState; from: string; place?: Place }
+    }
   | { run: { action: string; args?: Args } }
 
 /**
@@ -228,7 +230,7 @@ export const BRIDGE = bridge({
     /** The Person saw that Banda updated: the update is `none` again. */
     seen: send<[]>(),
   },
-  /** The system's folder picker, which "Add Space" opens (ADR 0026). */
+  /** The system's folder picker, which "Add Project" opens (ADR 0026). */
   folder: {
     /** The folder the Person picks, the picker opened at `at`, a whole
      * path, or at home; none if they cancel. */

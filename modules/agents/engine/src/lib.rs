@@ -1,11 +1,11 @@
 //! The agents module: a Person works with Agents in Threads. A Thread is
-//! one session with a Harness in a Space, and the Agent at work in it is
+//! one session with a Harness in a Project, and the Agent at work in it is
 //! its own, with no name or settings (ADR 0006).
 //!
 //! - The **Harness list** is a text file of the machine, the module
 //!   `harnesses`'s (`banda-harnesses`), and `agents.toml` says how
 //!   messages are sent ([`sending`]): the module's [`SETTINGS`]. A
-//!   Space's hosts of a Harness are let go as the machine says its
+//!   Project's hosts of a Harness are let go as the machine says its
 //!   account changed.
 //! - **Threads, turns and Questions** are this module's tables and facts
 //!   ([`model`]). A message queues a turn, or goes into the turn that runs
@@ -13,7 +13,7 @@
 //!   Threads run side by side. A waiting message can be changed, taken
 //!   back or sent now, and a stop or a restart holds the queue until a
 //!   Person lets it go (ADR 0003, decision 8).
-//! - **Harnesses** are reached through ACP, one process per Space and
+//! - **Harnesses** are reached through ACP, one process per Project and
 //!   Harness entry (`hosts.rs`). ACP's words stop in `acp.rs` and `acp/`.
 //! - **An Agent reaches Banda** through `banda mcp`, which every session
 //!   gets with the Agent's pass ([`Pipe`]). Its tools are the methods
@@ -52,8 +52,8 @@ use banda_harnesses::hosts::IDLE;
 use banda_harnesses::model::Program;
 use banda_harnesses::{Harness, Harnesses};
 use banda_kernel::{
-    AgentId, Call, Effect, Error, Module, ModuleSpace, Nothing, OnRestart, Outcome, Participant,
-    Picture, Refusal, Right, Settled, SpaceId, Tool, Tx,
+    AgentId, Call, Effect, Error, Module, ModuleProject, Nothing, OnRestart, Outcome, Participant,
+    Picture, ProjectId, Refusal, Right, Settled, Tool, Tx,
 };
 use banda_look::OneFile as _;
 use base64::Engine as _;
@@ -108,10 +108,10 @@ pub struct Pipe {
 }
 
 impl Pipe {
-    /// `banda mcp` as a session of `agent`'s in `space` starts it, with a
+    /// `banda mcp` as a session of `agent`'s in `project` starts it, with a
     /// new pass; `None`, said in the log, if there is no pass.
-    fn program(&self, space: &ModuleSpace, agent: AgentId) -> Option<Program> {
-        let pass = space
+    fn program(&self, project: &ModuleProject, agent: AgentId) -> Option<Program> {
+        let pass = project
             .pass(agent)
             .inspect_err(|error| tracing::warn!(%error, "a session goes without Banda"))
             .ok()?;
@@ -209,10 +209,10 @@ impl Agents {
         self.harnesses.get(id).map_err(Refusal::invalid)
     }
 
-    /// Harness entry `id`'s process in `space`, started if need be.
-    async fn running(&self, space: SpaceId, id: &str) -> Result<Arc<Connection>, Refusal> {
+    /// Harness entry `id`'s process in `project`, started if need be.
+    async fn running(&self, project: ProjectId, id: &str) -> Result<Arc<Connection>, Refusal> {
         let harness = self.harness(id)?;
-        let connection = self.live.connection(space, &harness).await;
+        let connection = self.live.connection(project, &harness).await;
         connection.map_err(Refusal::conflict)
     }
 }
@@ -438,7 +438,7 @@ struct Keep {
     data: String,
 }
 
-/// Where a file kept for a message is: its path in the Space, which the
+/// Where a file kept for a message is: its path in the Project, which the
 /// message writes as `@path`.
 #[derive(Clone, Debug, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "agents/")]
@@ -446,7 +446,7 @@ pub struct Kept {
     pub path: String,
 }
 
-/// What `agents.files` asks: the files in the Space's folder that hold
+/// What `agents.files` asks: the files in the Project's folder that hold
 /// these words.
 #[derive(Deserialize, TS)]
 #[ts(export_to = "agents/")]
@@ -581,7 +581,7 @@ struct Configure {
 }
 
 /// What `agents.defaults` answers: what a new Thread on a Harness starts
-/// with, and what the Harness last offered in this Space. `at` is where the Space's log stood,
+/// with, and what the Harness last offered in this Project. `at` is where the Project's log stood,
 /// so a window hears when a Thread learns more of what the Harness offers.
 #[derive(Clone, Debug, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "agents/")]
@@ -649,7 +649,7 @@ fn emit(
 /// The handlers of the module's methods, one each (ADR 0014).
 impl Agents {
     async fn threads(&self, call: Call, _: Nothing) -> Result<ThreadList, Refusal> {
-        let (at, threads) = call.space().view(store::threads).await?;
+        let (at, threads) = call.project().view(store::threads).await?;
         Ok(ThreadList { at, threads })
     }
 
@@ -659,7 +659,7 @@ impl Agents {
         OneThread { thread }: OneThread,
     ) -> Result<ThreadView, Refusal> {
         let (at, found) = call
-            .space()
+            .project()
             .view(move |sql| {
                 let Some(summary) = store::thread(sql, thread)? else {
                     return Ok(None);
@@ -691,7 +691,7 @@ impl Agents {
         ChangesAsk { thread, turn }: ChangesAsk,
     ) -> Result<TurnChanges, Refusal> {
         let (at, found) = call
-            .space()
+            .project()
             .view(move |sql| {
                 if store::thread(sql, thread)?.is_none() {
                     return Ok(None);
@@ -703,8 +703,8 @@ impl Agents {
             .await?;
         let (turns, mut files) =
             found.ok_or_else(|| Refusal::not_found("There is no such Thread."))?;
-        // A file in the Space's folder is named from there, as git names it.
-        let folder = call.space().folder();
+        // A file in the Project's folder is named from there, as git names it.
+        let folder = call.project().folder();
         for file in &mut files {
             if let Ok(inside) = std::path::Path::new(&file.path).strip_prefix(&folder) {
                 file.path = inside.to_string_lossy().replace('\\', "/");
@@ -725,7 +725,7 @@ impl Agents {
         let (harness, settings) = match self.target(thread, harness)? {
             Target::Thread(thread) => {
                 let found = call
-                    .space()
+                    .project()
                     .read(move |sql| {
                         let Some(summary) = store::thread(sql, thread)? else {
                             return Ok(None);
@@ -739,7 +739,7 @@ impl Agents {
             Target::New(harness, start) => {
                 let on = harness.clone();
                 let (settings, _) = call
-                    .space()
+                    .project()
                     .read(move |sql| fresh(sql, &on, &start))
                     .await?;
                 (harness, settings)
@@ -748,8 +748,8 @@ impl Agents {
         if harness.is_empty() {
             return Err(Refusal::conflict("This Thread's Harness is gone."));
         }
-        let connection = self.running(call.space().id(), &harness).await?;
-        let folder = call.space().folder();
+        let connection = self.running(call.project().id(), &harness).await?;
+        let folder = call.project().folder();
         let (say, heard) = tokio::sync::mpsc::channel(1);
         // Let go, the stream stops the run: its turn and its session.
         tokio::spawn(async move {
@@ -773,7 +773,7 @@ impl Agents {
         let start = self.new_start(&harness)?;
         // What the composer shows is what the new Thread gets.
         let (at, (settings, offer)) = call
-            .space()
+            .project()
             .view(move |sql| fresh(sql, &harness, &start))
             .await?;
         Ok(Defaults {
@@ -890,8 +890,8 @@ impl Agents {
         Attach { mime, data, name }: Attach,
     ) -> Result<Image, Refusal> {
         let (image, bytes) = images::prepare(mime, &data, name)?;
-        let space = call.space();
-        let images = Images::of(space.data());
+        let project = call.project();
+        let images = Images::of(project.data());
         // The file first: a row never names bytes that are not
         // there. A file left without a row goes with the sweep.
         images.keep(image.id, bytes).await.map_err(Error::from)?;
@@ -902,25 +902,27 @@ impl Agents {
                 Ok(image)
             })
             .await;
-        tokio::spawn(sweep(space.clone(), images));
+        tokio::spawn(sweep(project.clone(), images));
         kept
     }
 
     async fn keep(&self, call: Call, Keep { name, data }: Keep) -> Result<Kept, Refusal> {
         let bytes = decoded(&data, "file")?;
         let name = rules::message::kept_name(&name, &bytes)?;
-        let path = kept::keep(call.space().data(), name, bytes)
+        let path = kept::keep(call.project().data(), name, bytes)
             .await
             .map_err(Error::from)?;
         Ok(Kept { path })
     }
 
     async fn image(&self, call: Call, OneImage { image }: OneImage) -> Result<ImageData, Refusal> {
-        let space = call.space();
-        let kind = space.read(move |sql| store::image_kind(sql, image)).await?;
+        let project = call.project();
+        let kind = project
+            .read(move |sql| store::image_kind(sql, image))
+            .await?;
         let gone = || Refusal::not_found("There is no such image.");
         let mime = kind.ok_or_else(gone)?;
-        let bytes = Images::of(space.data())
+        let bytes = Images::of(project.data())
             .read(image)
             .await
             .map_err(|_| gone())?;
@@ -991,8 +993,8 @@ impl Agents {
             .inspect_err(|refusal| tracing::debug!(%refusal.message, "no heights for a Visual"))
             .unwrap_or_default();
         let visual = VisualId::new();
-        let space = call.space();
-        let visuals = Visuals::of(space.data());
+        let project = call.project();
+        let visuals = Visuals::of(project.data());
         // The file first: an item never names a page that is not there.
         visuals.keep(visual, html).await.map_err(Error::from)?;
         let shown = call
@@ -1001,7 +1003,7 @@ impl Agents {
         if shown.is_err() {
             visuals.forget(visual).await;
         }
-        tokio::spawn(sweep_visuals(space.clone(), visuals));
+        tokio::spawn(sweep_visuals(project.clone(), visuals));
         shown.map(|()| SHOWN.to_owned())
     }
 
@@ -1035,7 +1037,7 @@ impl Agents {
         call: Call,
         OneVisual { visual }: OneVisual,
     ) -> Result<VisualPage, Refusal> {
-        let html = Visuals::of(call.space().data())
+        let html = Visuals::of(call.project().data())
             .read(visual)
             .await
             .map_err(|_| Refusal::not_found("There is no such Visual."))?;
@@ -1047,7 +1049,7 @@ impl Agents {
         call: Call,
         FileQuery { query }: FileQuery,
     ) -> Result<Vec<String>, Refusal> {
-        let folder = call.space().folder().to_path_buf();
+        let folder = call.project().folder().to_path_buf();
         let listings = self.listings.clone();
         tokio::task::spawn_blocking(move || files::matching(&listings.of(&folder), &query))
             .await
@@ -1086,39 +1088,39 @@ impl Module for Agents {
         self.dispatch_stream(call, method, params).await
     }
 
-    async fn run(&self, space: ModuleSpace, effect: Effect) -> Outcome {
+    async fn run(&self, project: ModuleProject, effect: Effect) -> Outcome {
         match effect.kind.as_str() {
-            effects::START => effects::start(&self.live, &self.harnesses, space, &effect).await,
-            effects::STOP => effects::stop(&self.live, space, &effect).await,
+            effects::START => effects::start(&self.live, &self.harnesses, project, &effect).await,
+            effects::STOP => effects::stop(&self.live, project, &effect).await,
             questions::REPLY => questions::reply(&self.live, &effect),
-            effects::STEER => effects::steer(&self.live, space, &effect).await,
+            effects::STEER => effects::steer(&self.live, project, &effect).await,
             other => Outcome::Fail(format!("agents runs no effect of kind {other}")),
         }
     }
 
-    /// From now on, a Space lets go of its hosts of a Harness whose
+    /// From now on, a Project lets go of its hosts of a Harness whose
     /// account changed (ADR 0040, decision 4).
-    async fn opened(&self, space: ModuleSpace) -> Result<(), Error> {
-        let agents = old_agents::read(space.data());
-        space
+    async fn opened(&self, project: ModuleProject) -> Result<(), Error> {
+        let agents = old_agents::read(project.data());
+        project
             .write(move |tx| {
                 store::fill_harnesses(tx.sql(), &agents)?;
                 between::cut_short(tx)
             })
             .await?;
         // What git did from a Thread's card, its Agent reads next.
-        let heard = space.react(space.at().await?, notices::heard());
+        let heard = project.react(project.at().await?, notices::heard());
         tokio::spawn(notices::follow(heard));
         let filter = banda_harnesses::account_changed();
-        if let Some(heard) = space.react_to_machine(filter).await? {
+        if let Some(heard) = project.react_to_machine(filter).await? {
             let live = self.live.clone();
-            tokio::spawn(live.let_go_as_accounts_change(space.id(), heard));
+            tokio::spawn(live.let_go_as_accounts_change(project.id(), heard));
         }
         Ok(())
     }
 
-    async fn can_move(&self, space: ModuleSpace) -> Result<(), Refusal> {
-        let (_, busy) = space.view(|sql| {
+    async fn can_move(&self, project: ModuleProject) -> Result<(), Refusal> {
+        let (_, busy) = project.view(|sql| {
             Ok(sql.query_row("SELECT EXISTS(SELECT 1 FROM agents_turns WHERE state IN ('running', 'queued'))", [], |row| row.get::<_, bool>(0))?)
         }).await?;
         if busy {
@@ -1129,12 +1131,12 @@ impl Module for Agents {
         Ok(())
     }
 
-    async fn moved(&self, space: ModuleSpace) {
-        self.live.close(space.id()).await;
+    async fn moved(&self, project: ModuleProject) {
+        self.live.close(project.id()).await;
     }
 
-    async fn closing(&self, space: ModuleSpace) {
-        self.live.close(space.id()).await;
+    async fn closing(&self, project: ModuleProject) {
+        self.live.close(project.id()).await;
     }
 
     /// Every effect of this module dies with the Harness's process.
@@ -1234,8 +1236,8 @@ fn agent_item(
 }
 
 /// Lets go of the pages a day old that no item names, as after a rewind.
-async fn sweep_visuals(space: ModuleSpace, visuals: Visuals) {
-    let named = space.read(store::visual_ids).await;
+async fn sweep_visuals(project: ModuleProject, visuals: Visuals) {
+    let named = project.read(store::visual_ids).await;
     let swept = match named {
         Ok(named) => visuals.sweep(named).await.map_err(Error::from),
         Err(error) => Err(error),
@@ -1247,8 +1249,8 @@ async fn sweep_visuals(space: ModuleSpace, visuals: Visuals) {
 
 /// Lets go of the images no message took within a day: their rows, then
 /// their files. A file whose row went first is swept the next time.
-async fn sweep(space: ModuleSpace, images: Images) {
-    let found = space
+async fn sweep(project: ModuleProject, images: Images) {
+    let found = project
         .write(|tx| {
             let last = images::UNSENT_LAST.as_millis() as i64;
             let gone = store::drop_unsent_images(tx.sql(), tx.now() - last)?;
@@ -1278,7 +1280,7 @@ enum Target {
 }
 
 /// What a new Thread on `harness` starts with, as the composer shows it:
-/// the Harness's own values for what it last offered in this Space, under
+/// the Harness's own values for what it last offered in this Project, under
 /// its entry's `start`; and that offer.
 fn fresh(
     sql: &rusqlite::Connection,

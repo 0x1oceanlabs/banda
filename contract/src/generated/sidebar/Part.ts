@@ -3,4 +3,4 @@
 /**
  * A part of a row; `~` pushes the rest of its line to the right.
  */
-export type Part = "mark" | "title" | "space" | "harness" | "status" | "note" | "~";
+export type Part = "mark" | "title" | "project" | "harness" | "status" | "note" | "~";

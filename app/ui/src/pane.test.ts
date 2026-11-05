@@ -26,5 +26,5 @@ test("what asks, failed or finished unseen calls, with what it said", () => {
     ["t3", "done", "fix the tests"],
     ["t5", "failed", undefined],
   ])
-  expect(calls[0]).toMatchObject({ key: "s:t2", space: "s", since: 1 })
+  expect(calls[0]).toMatchObject({ key: "s:t2", project: "s", since: 1 })
 })

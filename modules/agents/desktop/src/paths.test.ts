@@ -5,17 +5,17 @@ import { afterEach, beforeEach, expect, it } from "vitest"
 import { basesOf, findFiles } from "./paths"
 
 let dir: string
-let space: string
+let project: string
 let worktree: string
 let home: string
 beforeEach(async () => {
   dir = await mkdtemp(join(tmpdir(), "banda-paths-"))
-  space = join(dir, "code", "banda")
+  project = join(dir, "code", "banda")
   worktree = join(dir, "code", "worktrees", "paths")
   home = join(dir, "home")
-  for (const folder of [join(space, "src"), join(worktree, "src"), home])
+  for (const folder of [join(project, "src"), join(worktree, "src"), home])
     await mkdir(folder, { recursive: true })
-  await writeFile(join(space, "src", "a.ts"), "")
+  await writeFile(join(project, "src", "a.ts"), "")
   await writeFile(join(worktree, "src", "new.ts"), "")
   // A worktree's `.git` is a file.
   await writeFile(join(worktree, ".git"), "gitdir: elsewhere\n")
@@ -28,13 +28,13 @@ afterEach(async () => {
 it("a path starts at the Thread's folder, then where its tools worked", async () => {
   const worked = [join(worktree, "src", "new.ts")]
   const found = await findFiles(
-    space,
+    project,
     ["src/a.ts", "src/new.ts", "src/gone.ts", "src", "~/notes.md"],
     worked,
     home
   )
   expect(found).toEqual([
-    { file: join(space, "src", "a.ts"), relative: "src/a.ts", inside: true },
+    { file: join(project, "src", "a.ts"), relative: "src/a.ts", inside: true },
     {
       file: join(worktree, "src", "new.ts"),
       relative: "src/new.ts",
@@ -53,13 +53,13 @@ it("a path starts at the Thread's folder, then where its tools worked", async ()
 
 it("a full path is that file, from the Thread's folder if it is in it", async () => {
   const [inside, outside] = await findFiles(
-    space,
-    [join(space, "src", "a.ts"), join(worktree, "src", "new.ts")],
+    project,
+    [join(project, "src", "a.ts"), join(worktree, "src", "new.ts")],
     [],
     home
   )
   expect(inside).toEqual({
-    file: join(space, "src", "a.ts"),
+    file: join(project, "src", "a.ts"),
     relative: "src/a.ts",
     inside: true,
   })

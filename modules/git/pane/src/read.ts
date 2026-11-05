@@ -6,7 +6,7 @@
  * same as the last keeps its view, so nothing is drawn again.
  */
 import { useMemo, useRef, useState } from "react"
-import { Refused, type Engine, type SpaceId } from "@banda/contract"
+import { Refused, type Engine, type ProjectId } from "@banda/contract"
 import type {
   ChangedTurn,
   ChangesAsk,
@@ -57,7 +57,7 @@ function noCheckpoint(error: unknown): boolean {
   return code === "not_found" || code === "conflict"
 }
 
-/** A file `agents.changes` names from the root, not from the Space's
+/** A file `agents.changes` names from the root, not from the Project's
  * folder: outside it, where git's checkpoints never look. */
 function outside(path: string): boolean {
   return /^(\/|[A-Za-z]:[\\/])/.test(path)
@@ -66,7 +66,7 @@ function outside(path: string): boolean {
 /** A turn's changes as the Pane draws a diff: what git's checkpoints
  * `kept`, and the files they could not keep from its tool calls, each
  * diffed from its texts, whole. With no checkpoint every file is from its
- * tool calls; with one, those outside the Space's folder, as an Agent's
+ * tool calls; with one, those outside the Project's folder, as an Agent's
  * edits in a worktree beside it. */
 export function turnRead(kept: Diff | null, changes: TurnChanges): Drawn {
   const unkept = kept
@@ -90,14 +90,14 @@ export function turnRead(kept: Diff | null, changes: TurnChanges): Drawn {
 }
 
 /**
- * The Diff of `scope` in `space`, read again as it should be: `question`
+ * The Diff of `scope` in `project`, read again as it should be: `question`
  * and its `words` are what `git.diff` is asked; `again` reads again,
  * keeping what it shows until the answer, and `fresh` too, its answer a
  * new view though it says the same, as after a stage or a revert.
  */
 export function useDiffRead(
   engine: Engine,
-  space: SpaceId,
+  project: ProjectId,
   scope: Scope,
   ignoreWhitespace: boolean
 ) {
@@ -111,7 +111,7 @@ export function useDiffRead(
   // it: a commit, a pull or a switch from the card or a terminal, a file
   // written. A turn's or a commit's changes stay what they were.
   const follows = front && scope.kind !== "turn" && scope.kind !== "commit"
-  const status = useGitStatus(engine, space, follows)
+  const status = useGitStatus(engine, project, follows)
   const seen = useMemo(() => {
     if (!status) return null
     if (scope.kind === "staged")
@@ -132,7 +132,7 @@ export function useDiffRead(
   // A read the same as the last keeps its view, so nothing is drawn again.
   const last = useRef<Drawn>(undefined)
   const source = useMemo<Source<Drawn>>(() => {
-    const diff = () => engine.call("git.diff", question, { space })
+    const diff = () => engine.call("git.diff", question, { project })
     const turn = question.scope.kind === "turn" ? question.scope : null
     if (!turn)
       return {
@@ -157,7 +157,7 @@ export function useDiffRead(
             if (!noCheckpoint(error)) throw error
             return null
           }),
-          engine.call("agents.changes", asked, { space }),
+          engine.call("agents.changes", asked, { project }),
         ])
         return turnRead(kept, changes)
       },
@@ -168,8 +168,8 @@ export function useDiffRead(
       },
       apply: () => READ_AGAIN,
     }
-  }, [engine, space, question])
-  const live = useLive(engine, space, source, round)
+  }, [engine, project, question])
+  const live = useLive(engine, project, source, round)
   const diff = live.state === "ready" ? live.view : undefined
   const fresh = () => {
     last.current = undefined

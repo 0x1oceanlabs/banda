@@ -2,9 +2,9 @@
 import type { BarCounts } from "./BarCounts";
 import type { Group } from "./Group";
 import type { Preset } from "./Preset";
+import type { Projects } from "./Projects";
 import type { Row } from "./Row";
 import type { Sort } from "./Sort";
-import type { Spaces } from "./Spaces";
 
 /**
  * The arrangement the window draws, every key resolved.
@@ -22,4 +22,4 @@ preset: string,
 /**
  * Every preset there is: Banda's, then the Person's.
  */
-presets: Array<Preset>, group: Group, sort: Sort, spaces: Spaces, row: Row, bar: BarCounts, };
+presets: Array<Preset>, group: Group, sort: Sort, projects: Projects, row: Row, bar: BarCounts, };

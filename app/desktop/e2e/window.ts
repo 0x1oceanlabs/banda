@@ -234,7 +234,7 @@ export async function agentCalls(
 }
 
 /**
- * Makes the first Space, "Work", which opens a new Thread on the fake
+ * Makes the first Project, "Work", which opens a new Thread on the fake
  * agent. The Thread is found by its message box, so it stays found once
  * its first message gives it a title.
  */
@@ -370,7 +370,7 @@ export async function setInFront(page: Page, front: boolean) {
   }, front)
 }
 
-/** A new shell in the first Space, and its screen once it runs and its
+/** A new shell in the first Project, and its screen once it runs and its
  * header says where it is: paths it prints start there. */
 export async function newTerminal(page: Page): Promise<Locator> {
   await firstThread(page)

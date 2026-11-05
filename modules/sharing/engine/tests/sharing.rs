@@ -3,7 +3,7 @@
 //! something on, a new ID only for the Person, and none kept once all of
 //! it is off again.
 
-use banda_kernel::{CommandId, Kernel, Participant, PersonId, SpaceId};
+use banda_kernel::{CommandId, Kernel, Participant, PersonId, ProjectId};
 use banda_sharing::{Never, Sharing};
 use serde_json::{Value, json};
 use std::path::Path;
@@ -12,7 +12,7 @@ use std::sync::atomic::{AtomicI64, Ordering};
 
 async fn open(root: &Path, owner: PersonId) -> Arc<Kernel> {
     let sharing = Sharing::new(root.join("config"), root.join("state"));
-    Kernel::builder(root.join("spaces"), root.join("data"), owner)
+    Kernel::builder(root.join("projects"), root.join("data"), owner)
         .machine(root.join("state/machine"))
         .module(sharing.never(Never::Checkout))
         .open()
@@ -99,7 +99,7 @@ async fn banda(
     if let Some(clock) = clock {
         sharing = sharing.clock(move || clock.load(Ordering::SeqCst));
     }
-    let mut kernel = Kernel::builder(root.join("spaces"), root.join("data"), owner)
+    let mut kernel = Kernel::builder(root.join("projects"), root.join("data"), owner)
         .machine(root.join("state/machine"))
         .module(banda_problems::Problems::new(
             root.join("state/problems"),
@@ -210,7 +210,7 @@ async fn a_banda_that_never_sends_makes_nothing() {
     assert_eq!(state(&kernel, owner).await["sent"], json!([]));
 }
 
-/// Stands in for the agents of a Space and the workspaces of the machine:
+/// Stands in for the agents of a Project and the workspaces of the machine:
 /// it says what they would, a Thread started and a Pane opened.
 struct Says {
     name: &'static str,
@@ -259,11 +259,11 @@ fn clock(offset: i64) -> Arc<AtomicI64> {
     Arc::new(AtomicI64::new(banda_kernel::now_ms() + offset))
 }
 
-/// The agents of a Space, and the workspaces of the machine, as `Says`.
+/// The agents of a Project, and the workspaces of the machine, as `Says`.
 fn agents() -> Says {
     Says {
         name: "agents",
-        scope: banda_kernel::Scope::Space,
+        scope: banda_kernel::Scope::Project,
     }
 }
 
@@ -274,11 +274,11 @@ fn workspaces() -> Says {
     }
 }
 
-/// Has `module` say `kind` with `payload`, in `space` or the machine's.
+/// Has `module` say `kind` with `payload`, in `project` or the machine's.
 async fn say(
     kernel: &Kernel,
     owner: PersonId,
-    space: Option<SpaceId>,
+    project: Option<ProjectId>,
     module: &str,
     kind: &str,
     payload: Value,
@@ -287,21 +287,21 @@ async fn say(
     let params = json!({ "kind": kind, "payload": payload });
     let person = Participant::Person(owner);
     kernel
-        .call(person, &method, space, command, params)
+        .call(person, &method, project, command, params)
         .await
         .unwrap();
 }
 
-/// The workspaces after a Pane of `kind` opened in `space`.
-fn opened(kind: &str, space: &str) -> Value {
+/// The workspaces after a Pane of `kind` opened in `project`.
+fn opened(kind: &str, project: &str) -> Value {
     let id = uuid::Uuid::new_v4().to_string();
-    let pane = json!({ "id": id, "kind": kind, "space": space, "args": {} });
+    let pane = json!({ "id": id, "kind": kind, "project": project, "args": {} });
     let column = json!({ "id": uuid::Uuid::new_v4(), "panes": [pane] });
     json!({ "workspaces": [{ "id": uuid::Uuid::new_v4(), "columns": [column] }] })
 }
 
 #[tokio::test]
-async fn a_day_goes_once_it_ends_with_what_every_space_counted() {
+async fn a_day_goes_once_it_ends_with_what_every_project_counted() {
     let root = tempfile::tempdir().unwrap();
     let owner = PersonId::new();
     let person = Participant::Person(owner);
@@ -315,23 +315,23 @@ async fn a_day_goes_once_it_ends_with_what_every_space_counted() {
         .unwrap();
     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
 
-    let mut spaces: Vec<SpaceId> = Vec::new();
+    let mut projects: Vec<ProjectId> = Vec::new();
     for name in ["Work", "Home"] {
         let params = json!({ "name": name });
         let made = kernel.call(
             person,
-            "spaces.create",
+            "projects.create",
             None,
             Some(CommandId::new()),
             params,
         );
-        spaces.push(serde_json::from_value(made.await.unwrap()["id"].clone()).unwrap());
+        projects.push(serde_json::from_value(made.await.unwrap()["id"].clone()).unwrap());
     }
     let started = |harness: &str| json!({ "title": "secret", "harness": harness });
     say(
         &kernel,
         owner,
-        Some(spaces[0]),
+        Some(projects[0]),
         "agents",
         "thread.started",
         started("claude"),
@@ -340,7 +340,7 @@ async fn a_day_goes_once_it_ends_with_what_every_space_counted() {
     say(
         &kernel,
         owner,
-        Some(spaces[1]),
+        Some(projects[1]),
         "agents",
         "thread.started",
         started("codex"),
@@ -349,13 +349,13 @@ async fn a_day_goes_once_it_ends_with_what_every_space_counted() {
     say(
         &kernel,
         owner,
-        Some(spaces[1]),
+        Some(projects[1]),
         "agents",
         "turn.started",
         json!({ "turn": "t" }),
     )
     .await;
-    let shown = opened("agents.thread", &spaces[0].to_string());
+    let shown = opened("agents.thread", &projects[0].to_string());
     say(&kernel, owner, None, "workspaces", "opened", shown).await;
 
     // A day later, today has ended: it goes as it is heard, once.
@@ -370,7 +370,7 @@ async fn a_day_goes_once_it_ends_with_what_every_space_counted() {
     assert_eq!(said["turns"], 1);
     assert_eq!(said["panes"], json!({ "agents.thread": 1 }));
     assert_eq!(
-        (&said["spaces"], &said["workspaces"]),
+        (&said["projects"], &said["workspaces"]),
         (&json!(2), &json!(1))
     );
     assert!(!event.to_string().contains("secret"));
@@ -407,14 +407,14 @@ async fn a_day_before_usage_turned_on_is_not_counted() {
     )
     .await;
     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-    let space = SpaceId::new().to_string();
+    let project = ProjectId::new().to_string();
     say(
         &kernel,
         owner,
         None,
         "workspaces",
         "opened",
-        opened("terminal.terminal", &space),
+        opened("terminal.terminal", &project),
     )
     .await;
     now.store(banda_kernel::now_ms() + DAY, Ordering::SeqCst);

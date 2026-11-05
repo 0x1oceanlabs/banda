@@ -3,8 +3,8 @@
 //!
 //! | Place | Default | Holds |
 //! |---|---|---|
-//! | root | `~/Banda` | where a new Space's folder goes |
-//! | data | `~/.local/share/banda` | each Space's data, in `spaces/<id>/` (ADR 0026) |
+//! | root | `~/Banda` | where a new Project's folder goes |
+//! | data | `~/.local/share/banda` | each Project's data, in `projects/<id>/` (ADR 0026) |
 //! | state | `~/.local/state/banda` | the owner's ID, the lock, `engine.json`, this machine's scope (`machine/`), the window's profile (`window/`), the logs (`logs/`), the engine's last panics (`problems/`) |
 //! | config | `~/.config/banda` | `harnesses.toml`, `agents.toml` and the look's files |
 //!
@@ -103,7 +103,7 @@ impl Places {
     }
 
     /// This machine's scope: the store and log of its modules, as the
-    /// workspaces (ADR 0025, decision 1). It is laid out as a Space's data
+    /// workspaces (ADR 0025, decision 1). It is laid out as a Project's data
     /// is (ADR 0026): the manifest, the store and the lock.
     pub fn machine(&self) -> PathBuf {
         self.state.join("machine")
@@ -136,7 +136,7 @@ impl Places {
         self.state.join("engine.lock")
     }
 
-    /// The Person who owns this machine's Spaces, made on first use.
+    /// The Person who owns this machine's Projects, made on first use.
     pub fn owner(&self) -> std::io::Result<PersonId> {
         let path = self.state.join(OWNER);
         match std::fs::read(&path) {

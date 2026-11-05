@@ -11,7 +11,7 @@ use crate::model::Status;
 use crate::repo::Repo;
 use crate::run::{Opts, Pool};
 use crate::{Repositories, Writes, status};
-use banda_kernel::{ModuleSpace, Stream};
+use banda_kernel::{ModuleProject, Stream};
 use std::ffi::OsStr;
 use std::time::Duration;
 use tokio::sync::mpsc;
@@ -25,19 +25,19 @@ const AGAIN: Duration = Duration::from_secs(3);
 const FETCH: Duration = Duration::from_secs(30);
 const FETCH_AT_MOST: Duration = Duration::from_secs(15 * 60);
 
-/// Follows the status of `space`'s folder until the window lets go,
+/// Follows the status of `project`'s folder until the window lets go,
 /// reading it again at once when a git command of Banda's has written in
 /// its repository.
-pub fn watch(space: ModuleSpace, repositories: Repositories) -> Stream {
+pub fn watch(project: ModuleProject, repositories: Repositories) -> Stream {
     let (say, heard) = mpsc::channel(1);
     tokio::spawn(async move {
         let mut told: Option<Status> = None;
         let mut fetch = Fetch::new();
         loop {
-            let folder = space.folder();
+            let folder = project.folder();
             // Read before git is: an event after it may change what git
             // reads.
-            let at = space.at().await.ok();
+            let at = project.at().await.ok();
             let found = Repo::find(&folder).await;
             let repo = match &found {
                 Ok(Some(repo)) => Some(repo.clone()),

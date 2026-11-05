@@ -7,8 +7,8 @@ use banda_git::model::{
     Change, Changed, Commit, Contents, Diff, Done, Progress, Ref, Status, Step,
 };
 use banda_kernel::{
-    Call, Code, CommandId, EventFilter, Kernel, Module, Participant, PersonId, Refusal, Right,
-    SpaceId,
+    Call, Code, CommandId, EventFilter, Kernel, Module, Participant, PersonId, ProjectId, Refusal,
+    Right,
 };
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
@@ -50,13 +50,13 @@ impl Module for Agents {
 struct World {
     kernel: Arc<Kernel>,
     owner: PersonId,
-    space: SpaceId,
+    project: ProjectId,
     folder: PathBuf,
     _root: tempfile::TempDir,
 }
 
 impl World {
-    /// A Space whose folder is no repository yet.
+    /// A Project whose folder is no repository yet.
     async fn bare() -> World {
         let root = tempfile::tempdir().unwrap();
         let owner = PersonId::new();
@@ -66,57 +66,62 @@ impl World {
             .open()
             .await
             .unwrap();
-        let space = kernel
+        let project = kernel
             .call(
                 Participant::Person(owner),
-                "spaces.create",
+                "projects.create",
                 None,
                 Some(CommandId::new()),
                 json!({ "name": "Work" }),
             )
             .await
             .unwrap();
-        let space: SpaceId = serde_json::from_value(space["id"].clone()).unwrap();
-        let folder = kernel.space(space).await.unwrap().folder().to_path_buf();
+        let project: ProjectId = serde_json::from_value(project["id"].clone()).unwrap();
+        let folder = kernel
+            .project(project)
+            .await
+            .unwrap()
+            .folder()
+            .to_path_buf();
         World {
             kernel,
             owner,
-            space,
+            project,
             folder,
             _root: root,
         }
     }
 
-    /// A Space whose folder is a repository with no commits, on `main`.
+    /// A Project whose folder is a repository with no commits, on `main`.
     async fn new() -> World {
         let world = World::bare().await;
         repository(&world.folder);
         world
     }
 
-    /// Another Space of the same engine, named `name`, whose folder is a
+    /// Another Project of the same engine, named `name`, whose folder is a
     /// repository with no commits, on `main`.
-    async fn space(&self, name: &str) -> (SpaceId, PathBuf) {
+    async fn project(&self, name: &str) -> (ProjectId, PathBuf) {
         let made = (self.kernel)
             .call(
                 Participant::Person(self.owner),
-                "spaces.create",
+                "projects.create",
                 None,
                 Some(CommandId::new()),
                 json!({ "name": name }),
             )
             .await
             .unwrap();
-        let space: SpaceId = serde_json::from_value(made["id"].clone()).unwrap();
+        let project: ProjectId = serde_json::from_value(made["id"].clone()).unwrap();
         let folder = self
             .kernel
-            .space(space)
+            .project(project)
             .await
             .unwrap()
             .folder()
             .to_path_buf();
         repository(&folder);
-        (space, folder)
+        (project, folder)
     }
 
     /// Makes `.git/hooks/<name>` run `script`.
@@ -138,7 +143,7 @@ impl World {
     async fn call(&self, method: &str, params: Value) -> Result<Value, Refusal> {
         let person = Participant::Person(self.owner);
         self.kernel
-            .call(person, method, Some(self.space), None, params)
+            .call(person, method, Some(self.project), None, params)
             .await
     }
 
@@ -150,7 +155,7 @@ impl World {
             .call(
                 person,
                 "agents.say",
-                Some(self.space),
+                Some(self.project),
                 Some(CommandId::new()),
                 fact,
             )
@@ -184,7 +189,7 @@ impl World {
         self.ask("git.diff", ask).await
     }
 
-    /// Runs git in the Space's folder, as the Person would, and says what
+    /// Runs git in the Project's folder, as the Person would, and says what
     /// it printed.
     fn git(&self, args: &[&str]) -> String {
         run_git(&self.folder, args)
@@ -195,7 +200,7 @@ impl World {
         let person = Participant::Person(self.owner);
         let mut heard = self
             .kernel
-            .stream(person, method, Some(self.space), params)
+            .stream(person, method, Some(self.project), params)
             .await
             .unwrap();
         let mut pieces = Vec::new();
@@ -213,13 +218,13 @@ impl World {
     /// What git told the Thread `thread`'s Agent it did, in its facts
     /// `git.acted`, the first first.
     async fn acted(&self, thread: &str) -> Vec<String> {
-        let space = self.kernel.space(self.space).await.unwrap();
+        let project = self.kernel.project(self.project).await.unwrap();
         let filter = EventFilter {
             module: Some("git".into()),
             subject: Some(thread.into()),
             kinds: Some(vec!["git.acted".into()]),
         };
-        let events = space.events_after(0, filter, usize::MAX).await.unwrap();
+        let events = project.events_after(0, filter, usize::MAX).await.unwrap();
         events
             .into_iter()
             .map(|e| e.payload["notice"].as_str().unwrap().to_owned())
@@ -235,7 +240,7 @@ impl World {
             .collect()
     }
 
-    /// A bare repository beside the Space's folder, as its `origin`, with
+    /// A bare repository beside the Project's folder, as its `origin`, with
     /// `main` pushed and followed.
     fn remote(&self) -> PathBuf {
         let remote = self._root.path().join("remote.git");
@@ -869,7 +874,7 @@ async fn reading_never_takes_or_writes_the_index() {
 #[tokio::test]
 async fn a_turn_is_the_work_tree_from_its_checkpoint_as_it_began_to_as_it_ended() {
     let world = World::committed().await;
-    let (thread, first, second) = (SpaceId::new(), SpaceId::new(), SpaceId::new());
+    let (thread, first, second) = (ProjectId::new(), ProjectId::new(), ProjectId::new());
     let (thread, first, second) = (thread.to_string(), first.to_string(), second.to_string());
     let turn = |turn: &str| json!({ "scope": { "kind": "turn", "thread": thread, "turn": turn } });
     // Before it began: no checkpoint, so no Turn from git.
@@ -1490,7 +1495,7 @@ async fn the_watch_says_the_status_and_then_what_changed() {
     let person = Participant::Person(world.owner);
     let mut heard = world
         .kernel
-        .stream(person, "git.watch", Some(world.space), json!({}))
+        .stream(person, "git.watch", Some(world.project), json!({}))
         .await
         .unwrap();
     let first: Status = serde_json::from_value(heard.recv().await.unwrap()).unwrap();
@@ -1513,7 +1518,7 @@ async fn the_status_is_read_again_at_once_when_a_command_of_banda_wrote() {
     let person = Participant::Person(world.owner);
     let mut heard = world
         .kernel
-        .stream(person, "git.watch", Some(world.space), json!({}))
+        .stream(person, "git.watch", Some(world.project), json!({}))
         .await
         .unwrap();
     let first: Status = serde_json::from_value(heard.recv().await.unwrap()).unwrap();
@@ -1809,7 +1814,7 @@ async fn a_patch_of_a_file_asked_by_name_is_cut_at_a_whole_line() {
 #[tokio::test]
 async fn a_turn_heard_begun_twice_is_let_go_once() {
     let world = World::committed().await;
-    let (thread, turn) = (SpaceId::new().to_string(), SpaceId::new().to_string());
+    let (thread, turn) = (ProjectId::new().to_string(), ProjectId::new().to_string());
     world.say("turn.started", &thread, &turn).await;
     world.checkpoints(1).await;
     // As after a restart: the turn begins again.
@@ -1824,7 +1829,7 @@ async fn a_turn_heard_begun_twice_is_let_go_once() {
 #[tokio::test]
 async fn a_command_in_one_repository_keeps_none_in_another_waiting() {
     let world = World::committed().await;
-    let (second, other) = world.space("Other").await;
+    let (second, other) = world.project("Other").await;
     std::fs::write(other.join("a.txt"), "one\n").unwrap();
     run_git(&other, &["add", "--all"]);
     run_git(&other, &["commit", "--quiet", "-m", "first"]);
@@ -1835,7 +1840,7 @@ async fn a_command_in_one_repository_keeps_none_in_another_waiting() {
         .stream(
             person,
             "git.act",
-            Some(world.space),
+            Some(world.project),
             json!({ "action": "commit", "message": "Slow" }),
         )
         .await
@@ -1899,7 +1904,7 @@ async fn a_repository_another_user_owns_says_why_git_will_not_read_it() {
     let person = Participant::Person(world.owner);
     let mut heard = world
         .kernel
-        .stream(person, "git.watch", Some(world.space), json!({}))
+        .stream(person, "git.watch", Some(world.project), json!({}))
         .await
         .unwrap();
     let watched: Status = serde_json::from_value(heard.recv().await.unwrap()).unwrap();

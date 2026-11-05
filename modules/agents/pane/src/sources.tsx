@@ -1,6 +1,6 @@
 /**
  * What the Banda menu finds of the agents module (ADR 0022, decision 4):
- * a new Thread with the words typed, and the focused Space's files that
+ * a new Thread with the words typed, and the focused Project's files that
  * fit them, as `@` finds them. Its Threads are the sidebar's lists, which
  * the window finds itself.
  */
@@ -10,7 +10,7 @@ import type { Key } from "@banda/ui/lib/keys"
 import { nameAndFolder } from "@banda/ui/lib/paths"
 import type { FindProps, MenuRow, Source } from "@banda/ui/module"
 import { FileIcon, SquarePenIcon } from "lucide-react"
-import { useSpaceFiles } from "./FileMenu"
+import { useProjectFiles } from "./FileMenu"
 import { useHarnesses } from "./harnesses"
 
 const OPEN: Key = { code: "Enter" }
@@ -19,10 +19,10 @@ const OPEN: Key = { code: "Enter" }
 const SHOWN = 6
 
 /** New Thread with the words, on the first Harness or, by `Tab`, on any;
- * in a Space gone into, a new Thread there. */
+ * in a Project gone into, a new Thread there. */
 export const askSource: Source = { id: "agents.ask", label: "", Find: FindAsk }
 
-/** The focused Space's files that fit the words; one opens in a browser. */
+/** The focused Project's files that fit the words; one opens in a browser. */
 export const filesSource: Source = {
   id: "agents.files",
   label: "Files",
@@ -30,7 +30,7 @@ export const filesSource: Source = {
 }
 
 function FindAsk({ words, here, found }: FindProps) {
-  const { engine, space, entered } = here
+  const { engine, project, entered } = here
   const all = useHarnesses(engine)
   const rows = useMemo((): MenuRow[] => {
     if (!entered && !words) return []
@@ -38,13 +38,13 @@ function FindAsk({ words, here, found }: FindProps) {
     const harnesses = all.filter((harness) => harness.enabled)
     const first = harnesses[0]
     const start = (harness?: string) => ({
-      space,
+      project,
       ...(words && { ask: words }),
       ...(harness && { harness }),
     })
     return [
       {
-        id: entered ? `agents.ask.${space}` : "agents.ask",
+        id: entered ? `agents.ask.${project}` : "agents.ask",
         title: words ? `New Thread: “${words}”` : "New Thread here",
         icon: (
           <HarnessLogo
@@ -62,15 +62,15 @@ function FindAsk({ words, here, found }: FindProps) {
         })),
       },
     ]
-  }, [all, entered, words, space])
+  }, [all, entered, words, project])
   useLayoutEffect(() => found(rows), [found, rows])
   return null
 }
 
 function FindFiles({ words, here, found }: FindProps) {
-  const { engine, space, folder, entered } = here
+  const { engine, project, folder, entered } = here
   const look = !entered && words !== "" && folder !== undefined
-  const files = useSpaceFiles(engine, space, look ? words : undefined)
+  const files = useProjectFiles(engine, project, look ? words : undefined)
   const paths = look ? files?.paths : undefined
   const rows = useMemo(
     (): MenuRow[] =>
@@ -78,9 +78,9 @@ function FindFiles({ words, here, found }: FindProps) {
         const full = `${(folder ?? "").replace(/\/$/, "")}/${path}`
         const { name, folder: inside } = nameAndFolder(path)
         const open: MenuRow["run"] = (window) =>
-          window.run("browser.open", { file: full, space })
+          window.run("browser.open", { file: full, project })
         return {
-          id: `agents.file.${space}.${path}`,
+          id: `agents.file.${project}.${path}`,
           title: name,
           detail: inside,
           icon: <FileIcon className="size-4 shrink-0 text-muted-foreground" />,
@@ -97,7 +97,7 @@ function FindFiles({ words, here, found }: FindProps) {
           ],
         }
       }),
-    [paths, folder, space]
+    [paths, folder, project]
   )
   useLayoutEffect(() => found(rows), [found, rows])
   return null

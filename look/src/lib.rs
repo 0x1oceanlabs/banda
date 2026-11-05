@@ -7,7 +7,7 @@
 //! Omarchy palette, and [`tokens::derive`] turns them into shadcn/ui's
 //! tokens.
 //!
-//! It is the window's machine's, not a Space's, so it is no module of the
+//! It is the window's machine's, not a Project's, so it is no module of the
 //! engine: `banda look` prints it, and `banda look --follow` prints it
 //! again on every change. The window runs that and applies what it reads.
 //! The sidebar's `sidebar.toml` (ADR 0008) is this machine's too, so it
@@ -324,6 +324,20 @@ impl Problem {
             key: Some(key.to_owned()),
             ..Problem::whole(path, message)
         }
+    }
+}
+
+/// Tells `problems`, at each place, where `text` still says a name of
+/// `renamed`: the file reads it as the new one for one stable release
+/// (ADR 0069 grace).
+pub(crate) fn say_renamed(
+    path: &Path,
+    text: &str,
+    renamed: &[keyed::Renamed],
+    problems: &mut Vec<Problem>,
+) {
+    for (start, key, message) in keyed::renamed(text, renamed) {
+        problems.push(Problem::placed(path, text, Some(start), Some(key), message));
     }
 }
 

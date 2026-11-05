@@ -8,7 +8,7 @@ import {
   ContextMenuTrigger,
 } from "@banda/ui/components/context-menu"
 import { useMemo, useRef, useState } from "react"
-import type { Engine, SpaceId } from "@banda/contract"
+import type { Engine, ProjectId } from "@banda/contract"
 import type {
   Failure,
   Item,
@@ -121,34 +121,34 @@ export const threadPane = definePane<ThreadArgs>({
   start: NEW_THREAD,
   // A Thread starts with its Harness.
   letter: "H",
-  // On its Space's workspace, with the Space's other Agents (ADR 0065).
-  home: () => fileNow(AGENTS_FILE).workspaces === "space",
+  // On its Project's workspace, with the Project's other Agents (ADR 0065).
+  home: () => fileNow(AGENTS_FILE).workspaces === "project",
   Pane: ThreadPane,
 })
 
 function ThreadPane(props: PaneProps<ThreadArgs>) {
-  const space = props.args.scratch ?? props.space
+  const project = props.args.scratch ?? props.project
   return (
-    <ThreadMedia space={space}>
-      <MarkdownLinks open={linkOpener(props.run, space)}>
-        <ThreadContent {...props} space={space} />
+    <ThreadMedia project={project}>
+      <MarkdownLinks open={linkOpener(props.run, project)}>
+        <ThreadContent {...props} project={project} />
       </MarkdownLinks>
     </ThreadMedia>
   )
 }
 
 /** Opens a web link in Banda's browser, or outside it (ADR 0051). */
-function linkOpener(run: PaneProps<ThreadArgs>["run"], space: SpaceId) {
+function linkOpener(run: PaneProps<ThreadArgs>["run"], project: ProjectId) {
   return (address: string, outside: boolean) => {
     if (outside) window.open(address, "_blank", "noopener,noreferrer")
-    else run?.("browser.open", { address, space })
+    else run?.("browser.open", { address, project })
   }
 }
 
 function ThreadContent(props: PaneProps<ThreadArgs>) {
-  const { engine, space, args, focused, open, update, run } = props
+  const { engine, project, args, focused, open, update, run } = props
   const machine = useMachine(engine)
-  const unplaced = space === machine
+  const unplaced = project === machine
   const { thread } = args
   const {
     live,
@@ -195,7 +195,7 @@ function ThreadContent(props: PaneProps<ThreadArgs>) {
   // What a right click found, for the Thread's menu (ADR 0063, decision 3).
   const [menu, setMenu] = useState<MenuAt | null>(null)
   // Where the paths in its replies lead (ADR 0063, decision 2).
-  const files = useThreadFiles(space, state?.items, run)
+  const files = useThreadFiles(project, state?.items, run)
   const root = useRef<HTMLDivElement>(null)
   const composer = useRef<ComposerHandle>(null)
   const findField = useRef<HTMLInputElement>(null)
@@ -206,7 +206,7 @@ function ThreadContent(props: PaneProps<ThreadArgs>) {
   // Whether the composer held a message as a key went down: by the time
   // the key reaches the Pane, Enter may have sent it.
   const written = useRef(false)
-  const writers = useWriters(engine, space, thread)
+  const writers = useWriters(engine, project, thread)
   const found = useFound(area, find?.query ?? "", find?.at ?? 0, state)
   // The details card: kept open on a wide Thread until hidden, popped
   // open for a moment on a narrow one.
@@ -302,7 +302,7 @@ function ThreadContent(props: PaneProps<ThreadArgs>) {
           {!unplaced && (
             <ThreadDetails
               engine={engine}
-              space={space}
+              project={project}
               thread={thread}
               harness={harness ? { id: harness, name: short } : null}
               open={open}
@@ -341,7 +341,7 @@ function ThreadContent(props: PaneProps<ThreadArgs>) {
                 // Each Thread scrolls on its own, from where it was left.
                 key={thread}
                 engine={engine}
-                space={space}
+                project={project}
                 thread={thread}
                 forYou={Boolean(asking || planned)}
                 finding={find?.query ?? ""}
@@ -370,7 +370,7 @@ function ThreadContent(props: PaneProps<ThreadArgs>) {
                 signIn={(turn) => (
                   <SignIn
                     engine={engine}
-                    space={space}
+                    project={project}
                     harness={harness}
                     turn={turn.id}
                     open={open}
@@ -391,8 +391,8 @@ function ThreadContent(props: PaneProps<ThreadArgs>) {
               setFind({ query: words, at: 0 })
               findField.current?.select()
             },
-            search: run && ((words) => run("browser.open", { words, space })),
-            open: linkOpener(run, space),
+            search: run && ((words) => run("browser.open", { words, project })),
+            open: linkOpener(run, project),
             copyImage: run && ((x, y) => run("edit.copy-image", { x, y })),
             file: files ?? undefined,
             point: (path) => composer.current?.point(path),
@@ -488,21 +488,21 @@ function ThreadContent(props: PaneProps<ThreadArgs>) {
             </>
           )}
         </Composer>
-        {/* A new Thread's Space, bare under the card; its Harness is chosen
+        {/* A new Thread's Project, bare under the card; its Harness is chosen
           with the model. */}
         {thread === null && (
           <NewThreadBar
             engine={engine}
-            space={space}
+            project={project}
             disabled={sending}
-            onSpace={(other) =>
+            onProject={(other) =>
               open(
                 paneOf(threadPane, { ...args, scratch: undefined, harness }),
                 "here",
                 other
               )
             }
-            onAddSpace={run && (() => run("space.add"))}
+            onAddProject={run && (() => run("project.add"))}
           />
         )}
       </div>
@@ -549,7 +549,7 @@ type Answering = {
 
 function Transcript({
   engine,
-  space,
+  project,
   thread,
   forYou,
   finding,
@@ -570,7 +570,7 @@ function Transcript({
 }: Answering &
   Writers & {
     engine: Engine
-    space: SpaceId
+    project: ProjectId
     thread: string
     /** The Thread waits for its Person: a Question, or a plan. */
     forYou: boolean
@@ -621,7 +621,7 @@ function Transcript({
         return (
           <Entry
             engine={engine}
-            space={space}
+            project={project}
             item={line.item}
             onFork={forkAt(line.item)}
             onEdit={editAt(line.item)}
@@ -798,7 +798,7 @@ type OpenVisual = (visual: VisualArgs) => void
 
 function Entry({
   engine,
-  space,
+  project,
   item,
   turn,
   asks,
@@ -813,7 +813,7 @@ function Entry({
   onEdit,
 }: Answering & {
   engine: Engine
-  space: SpaceId
+  project: ProjectId
   item: Item
   /** How its turn stands, if it has one. */
   turn?: TurnView["state"]
@@ -921,12 +921,18 @@ function Entry({
         </Trace>
       )
     case "issue":
-      return <Issue engine={engine} space={space} item={item.id} issue={body} />
+      return (
+        <Issue engine={engine} project={project} item={item.id} issue={body} />
+      )
     case "visual": {
       const { visual, title, height, heights } = body
       const args = { visual, title, height, heights }
       return (
-        <Visual space={space} visual={args} onOpen={() => onOpenVisual(args)} />
+        <Visual
+          project={project}
+          visual={args}
+          onOpen={() => onOpenVisual(args)}
+        />
       )
     }
   }
@@ -1001,12 +1007,12 @@ function adviceFor(failure: Failure): string | undefined {
   }
 }
 
-/** The Space's other Threads by their Agents' IDs, as the sidebar follows
+/** The Project's other Threads by their Agents' IDs, as the sidebar follows
  * them, so a message from one names it as it is now; and this Thread's own
  * Agent, so a message from one the list no longer has still says so. */
 function useWriters(
   engine: Engine,
-  space: SpaceId,
+  project: ProjectId,
   thread: string | null
 ): Listing {
   // Who writes stays as a rewind leaves it: no need to read the list again.
@@ -1014,10 +1020,10 @@ function useWriters(
     () =>
       thread === null
         ? null
-        : { ...threadsSource(engine, space), apply: applyThreads },
-    [engine, space, thread]
+        : { ...threadsSource(engine, project), apply: applyThreads },
+    [engine, project, thread]
   )
-  const live = useLive(engine, space, source)
+  const live = useLive(engine, project, source)
   const threads = live.state === "ready" ? live.view.threads : undefined
   return useMemo(() => {
     const listing: { threads: Map<string, ListedThread>; self?: string } = {

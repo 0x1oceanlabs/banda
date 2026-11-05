@@ -9,8 +9,8 @@
 //! (`agents_turns.stopping`), which the rules read; memory only keeps
 //! whether its Harness was told.
 //!
-//! The Harness processes are one per Space and Harness entry: every Thread
-//! on that Harness in that Space is a session in the one process. A host
+//! The Harness processes are one per Project and Harness entry: every Thread
+//! on that Harness in that Project is a session in the one process. A host
 //! with nothing to do is let go, and its Threads resume their sessions
 //! when it starts again. After a sign-in every host of that Harness entry
 //! is let go, so each reads the account again when it starts.
@@ -21,7 +21,7 @@ use crate::model::{ItemId, TurnId, Values};
 use banda_harnesses::Harness;
 use banda_harnesses::hosts::Hosts;
 use banda_harnesses::model::Program;
-use banda_kernel::{AgentId, Heard, ModuleSpace, SpaceId};
+use banda_kernel::{AgentId, Heard, ModuleProject, ProjectId};
 use std::collections::{HashMap, HashSet};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
@@ -89,10 +89,10 @@ impl Live {
         }
     }
 
-    /// `banda mcp` as a session of `agent`'s in `space` starts it, with a
+    /// `banda mcp` as a session of `agent`'s in `project` starts it, with a
     /// new pass (ADR 0019).
-    pub fn banda(&self, space: &ModuleSpace, agent: AgentId) -> Option<Program> {
-        self.pipe.as_ref()?.program(space, agent)
+    pub fn banda(&self, project: &ModuleProject, agent: AgentId) -> Option<Program> {
+        self.pipe.as_ref()?.program(project, agent)
     }
 
     /// How long a turn the Agent went on with by itself waits for more.
@@ -100,26 +100,29 @@ impl Live {
         self.quiet
     }
 
-    /// The process of `harness` for `space`, started if it is not running.
+    /// The process of `harness` for `project`, started if it is not running.
     pub async fn connection(
         &self,
-        space: SpaceId,
+        project: ProjectId,
         harness: &Harness,
     ) -> Result<Arc<Connection>, String> {
-        let connection = self.hosts.get(space, &harness.in_space(space)).await?;
+        let connection = self
+            .hosts
+            .get(project, &harness.in_project(project))
+            .await?;
         connection.touch();
         Ok(connection)
     }
 
-    /// Lets go of `space`'s process of each Harness whose account changed,
-    /// as the machine says, until the Space closes (ADR 0040, decision 4).
-    pub async fn let_go_as_accounts_change(self: Arc<Self>, space: SpaceId, mut heard: Heard) {
+    /// Lets go of `project`'s process of each Harness whose account changed,
+    /// as the machine says, until the Project closes (ADR 0040, decision 4).
+    pub async fn let_go_as_accounts_change(self: Arc<Self>, project: ProjectId, mut heard: Heard) {
         loop {
             match heard.next().await {
                 Ok(Some(event)) => {
                     // It starts again on its next turn.
                     if let Some(harness) = &event.subject {
-                        self.hosts.let_go(space, harness);
+                        self.hosts.let_go(project, harness);
                     }
                 }
                 Ok(None) => return,
@@ -131,10 +134,10 @@ impl Live {
         }
     }
 
-    /// Stops every turn that runs on a Harness of `space`, as the Space is
+    /// Stops every turn that runs on a Harness of `project`, as the Project is
     /// removed, and lets go of its Harnesses.
-    pub async fn close(&self, space: SpaceId) {
-        let hosts = self.hosts.forget(space).await;
+    pub async fn close(&self, project: ProjectId) {
+        let hosts = self.hosts.forget(project).await;
         let turns: Vec<TurnId> = (self.turns.lock().unwrap().running.iter())
             .filter(|(_, session)| hosts.iter().any(|host| session.runs_in(host)))
             .map(|(turn, _)| *turn)

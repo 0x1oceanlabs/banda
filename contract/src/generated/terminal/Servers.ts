@@ -2,6 +2,6 @@
 import type { Server } from "./Server";
 
 /**
- * A Space's servers, in the order they came (ADR 0044, decision 4).
+ * A Project's servers, in the order they came (ADR 0044, decision 4).
  */
 export type Servers = { servers: Array<Server>, };

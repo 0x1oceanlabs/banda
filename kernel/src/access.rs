@@ -4,17 +4,17 @@
 //! [`Module::right`](crate::Module::right) (ADR 0002, decision 9). The
 //! kernel asks here before it runs any of them.
 
-use crate::{Participant, PersonId, Refusal, SpaceId};
+use crate::{Participant, PersonId, ProjectId, Refusal};
 
 /// What a method needs.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, serde::Serialize)]
 #[serde(rename_all = "lowercase")]
 pub enum Right {
-    /// See the Space's work.
+    /// See the Project's work.
     Read,
-    /// Change the Space's work: send, answer, edit.
+    /// Change the Project's work: send, answer, edit.
     Write,
-    /// Change the Space itself: its Agents, its settings, who is in it.
+    /// Change the Project itself: its Agents, its settings, who is in it.
     Manage,
     /// Decide what an Agent asked a Person to decide. An Agent never
     /// answers in a Person's place (ADR 0002, decision 9).
@@ -26,7 +26,7 @@ pub enum Right {
 }
 
 /// On one computer the owner may do everything, and Agents may read and
-/// write the Space's work but neither manage it nor decide for a Person.
+/// write the Project's work but neither manage it nor decide for a Person.
 /// Members and roles arrive here when teams do.
 pub fn decide(participant: &Participant, right: Right, owner: PersonId) -> Result<(), Refusal> {
     match (participant, right) {
@@ -47,12 +47,12 @@ pub fn decide(participant: &Participant, right: Right, owner: PersonId) -> Resul
     }
 }
 
-/// Who calls: a Participant, and the one Space a pass keeps them in. The
+/// Who calls: a Participant, and the one Project a pass keeps them in. The
 /// owner's secret keeps them in none.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Caller {
     pub participant: Participant,
-    pub only: Option<SpaceId>,
+    pub only: Option<ProjectId>,
 }
 
 impl From<Participant> for Caller {
@@ -64,14 +64,14 @@ impl From<Participant> for Caller {
     }
 }
 
-/// The Space wall (ADR 0019, decision 2): a caller with a pass works only
-/// in the Space of its pass, `only`; one with `None` works anywhere.
-/// `space` is the one a call, a subscription or a stream is for. The
-/// kernel gives a walled call for no Space its own Space first; a Space
+/// The Project wall (ADR 0019, decision 2): a caller with a pass works only
+/// in the Project of its pass, `only`; one with `None` works anywhere.
+/// `project` is the one a call, a subscription or a stream is for. The
+/// kernel gives a walled call for no Project its own Project first; a Project
 /// that is still `None` is refused, since it would reach past the wall.
-pub fn within(only: Option<SpaceId>, space: Option<SpaceId>) -> Result<(), Refusal> {
+pub fn within(only: Option<ProjectId>, project: Option<ProjectId>) -> Result<(), Refusal> {
     match only {
-        Some(only) if space != Some(only) => Err(Refusal::forbidden(
+        Some(only) if project != Some(only) => Err(Refusal::forbidden(
             "An Agent works only in its own Project.",
         )),
         _ => Ok(()),
@@ -106,7 +106,7 @@ mod tests {
     }
 
     #[test]
-    fn an_agent_works_in_the_space_but_neither_manages_nor_decides() {
+    fn an_agent_works_in_the_project_but_neither_manages_nor_decides() {
         let owner = PersonId::new();
         let agent = Participant::Agent(AgentId::new());
         assert_eq!(decide(&agent, Right::Read, owner), Ok(()));
@@ -120,11 +120,11 @@ mod tests {
     }
 
     #[test]
-    fn an_agent_works_only_in_the_space_of_its_pass() {
-        let (own, other) = (SpaceId::new(), SpaceId::new());
+    fn an_agent_works_only_in_the_project_of_its_pass() {
+        let (own, other) = (ProjectId::new(), ProjectId::new());
         assert_eq!(within(Some(own), Some(own)), Ok(()));
-        for space in [Some(other), None] {
-            let refusal = within(Some(own), space).unwrap_err();
+        for project in [Some(other), None] {
+            let refusal = within(Some(own), project).unwrap_err();
             assert_eq!(refusal.code, Code::Forbidden);
             assert_eq!(refusal.message, "An Agent works only in its own Project.");
         }
@@ -132,7 +132,7 @@ mod tests {
 
     #[test]
     fn the_owner_has_no_wall() {
-        assert_eq!(within(None, Some(SpaceId::new())), Ok(()));
+        assert_eq!(within(None, Some(ProjectId::new())), Ok(()));
         assert_eq!(within(None, None), Ok(()));
     }
 }

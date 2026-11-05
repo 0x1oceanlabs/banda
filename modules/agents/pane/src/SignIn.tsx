@@ -3,7 +3,7 @@ import {
   type CommandCall,
   type Engine,
   newId,
-  type SpaceId,
+  type ProjectId,
 } from "@banda/contract"
 import type { TurnId } from "@banda/contract/agents"
 import type { Program, SignInWay } from "@banda/contract/harnesses"
@@ -31,19 +31,19 @@ export type Open = PaneProps<unknown>["open"]
  * `harnesses` says. One it does by itself, as Codex does in the browser,
  * signs in at a click; one in a terminal runs in a terminal Pane, and its
  * program ending well says it worked. Then `turn` goes again: a sign-in
- * on the machine, a retry in the Space (ADR 0040, decision 5). Banda
+ * on the machine, a retry in the Project (ADR 0040, decision 5). Banda
  * holds none of the account's credentials.
  */
 export function SignIn({
   engine,
-  space,
+  project,
   harness,
   turn,
   open,
   onSignedIn,
 }: {
   engine: Engine
-  space: SpaceId
+  project: ProjectId
   harness: string
   turn: TurnId
   open: Open
@@ -62,7 +62,7 @@ export function SignIn({
   return (
     <Ways
       engine={engine}
-      space={space}
+      project={project}
       harness={harness}
       ways={found.value.account.ways}
       turn={turn}
@@ -75,11 +75,11 @@ export function SignIn({
 /**
  * The ways a Harness offers to sign in, each with what it takes; `turn`
  * is the one that needed it, when a Thread asks. A way in a terminal runs
- * in one in `space`; with no Space, its line shows, to run by hand.
+ * in one in `project`; with no Project, its line shows, to run by hand.
  */
 export function Ways({
   engine,
-  space,
+  project,
   harness,
   ways,
   turn,
@@ -87,7 +87,7 @@ export function Ways({
   onSignedIn,
 }: {
   engine: Engine
-  space?: SpaceId
+  project?: ProjectId
   harness: string
   ways: SignInWay[]
   turn?: TurnId
@@ -96,8 +96,10 @@ export function Ways({
   onSignedIn?: () => void
 }) {
   const signing = useAct()
-  // The Space a terminal runs in, where one can.
-  const terminalIn = useModules(engine).includes("terminal") ? space : undefined
+  // The Project a terminal runs in, where one can.
+  const terminalIn = useModules(engine).includes("terminal")
+    ? project
+    : undefined
   const signIn = async (way: SignInWay) => {
     const done = await signing.act(() =>
       engine.command("harnesses.sign_in", { harness, way: way.id })
@@ -120,7 +122,7 @@ export function Ways({
             way={way}
             program={way.terminal}
             turn={turn}
-            space={terminalIn}
+            project={terminalIn}
             open={open}
             busy={signing.busy}
             onSignIn={() => void signIn(way)}
@@ -166,7 +168,7 @@ function Way({
  * A way in a terminal. It runs in a terminal Pane below, which the
  * terminal module draws and the window keeps: once its program ended with
  * code 0, that Pane sends the sign-in on the machine, then the `turn`
- * that needed it again in its Space, and closes. So the sign-in lands
+ * that needed it again in its Project, and closes. So the sign-in lands
  * even after a reload, or with this card gone. The line stays to run by hand, where no terminal
  * runs here or the Person would rather.
  */
@@ -176,7 +178,7 @@ function TerminalWay({
   way,
   program,
   turn,
-  space,
+  project,
   open,
   busy,
   onSignIn,
@@ -186,22 +188,22 @@ function TerminalWay({
   way: SignInWay
   program: Program
   turn: TurnId | undefined
-  /** The Space a terminal runs in, if one can. */
-  space: SpaceId | undefined
+  /** The Project a terminal runs in, if one can. */
+  project: ProjectId | undefined
   open: Open
   busy: boolean
   onSignIn: () => void
 }) {
   const starting = useAct()
   const start = async () => {
-    if (!space) return
+    if (!project) return
     const terminal = newId()
     const opened = await starting.act(() =>
-      engine.call("terminal.open", { terminal, ...program }, { space })
+      engine.call("terminal.open", { terminal, ...program }, { project })
     )
     if (opened === undefined) return
     const signIn = { harness, way: way.id }
-    const done: (CommandCall & { space?: SpaceId })[] = [
+    const done: (CommandCall & { project?: ProjectId })[] = [
       { method: "harnesses.sign_in", params: signIn, command: newId() },
     ]
     if (turn)
@@ -209,7 +211,7 @@ function TerminalWay({
         method: "agents.retry",
         params: { turn },
         command: newId(),
-        space,
+        project,
       })
     const title = `Sign in: ${way.name}`
     open(
@@ -224,7 +226,7 @@ function TerminalWay({
   const what = `${way.name}${way.description ? ` (${way.description.trim()})` : ""}`
   return (
     <div className="flex flex-col gap-1.5">
-      {space ? (
+      {project ? (
         <>
           <div className="flex flex-wrap items-center gap-2">
             <Button

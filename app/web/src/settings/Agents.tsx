@@ -1,17 +1,17 @@
 /**
  * The Agents section (ADR 0016, decision 7): the agents module draws it;
- * this gives it the engine, a Space where there is one, the files through
+ * this gives it the engine, a Project where there is one, the files through
  * `banda settings`, and a place for the Pane a sign-in opens, a terminal,
  * over the window. The Harnesses are the machine's (ADR 0040): they show
- * before any Space.
+ * before any Project.
  */
 import { useState } from "react"
 import { AgentsSettings, type SettingsFile } from "@banda/agents-pane/settings"
 import type { Engine } from "@banda/contract"
 import { Dialog, DialogContent, DialogTitle } from "@banda/ui/components/dialog"
 import { Spinner } from "@banda/ui/components/spinner"
-import { useSpaces } from "@banda/ui/hooks/use-spaces"
-import { shownSpaces } from "@banda/ui/lib/spaces"
+import { useProjects } from "@banda/ui/hooks/use-projects"
+import { shownProjects } from "@banda/ui/lib/projects"
 import type { PaneState } from "@banda/ui/pane"
 import { terminal } from "@banda/terminal-pane"
 
@@ -32,22 +32,22 @@ const harnesses = written("harnesses.toml")
 const agents = written("agents.toml")
 
 export function Agents({ engine, lit }: { engine: Engine; lit?: string }) {
-  // Any Space offers what a new Thread starts with, and runs a terminal:
+  // Any Project offers what a new Thread starts with, and runs a terminal:
   // the first, as the window's home, once there is one.
-  const { listed } = useSpaces(engine)
+  const { listed } = useProjects(engine)
   const [pane, setPane] = useState<PaneState>()
   const close = () => setPane(undefined)
   if (listed.state === "loading") return <Spinner />
-  const space =
+  const project =
     listed.state === "ready"
-      ? shownSpaces(listed.value).find((s) => !s.missing)?.id
+      ? shownProjects(listed.value).find((s) => !s.missing)?.id
       : undefined
   const kind = pane && kinds.find((k) => k.kind === pane.kind)
   return (
     <>
       <AgentsSettings
         engine={engine}
-        space={space}
+        project={project}
         open={setPane}
         harnesses={harnesses}
         agents={agents}
@@ -58,13 +58,13 @@ export function Agents({ engine, lit }: { engine: Engine; lit?: string }) {
         onOpenChange={(open) => !open && close()}
       >
         <DialogContent className="flex h-[70vh] flex-col sm:max-w-3xl">
-          {pane && kind && space && (
+          {pane && kind && project && (
             <>
               <DialogTitle>{kind.title(pane.args)}</DialogTitle>
               <div className="min-h-0 flex-1">
                 <kind.Pane
                   engine={engine}
-                  space={space}
+                  project={project}
                   args={pane.args}
                   focused
                   open={setPane}

@@ -14,7 +14,7 @@ export const webSource: Source = {
 
 function FindWeb({ words, here, found }: FindProps) {
   const addressOf = useAddressOf()
-  const { entered, space } = here
+  const { entered, project } = here
   const rows = useMemo(
     (): MenuRow[] =>
       entered || !words
@@ -31,11 +31,11 @@ function FindWeb({ words, here, found }: FindProps) {
               run: (window) =>
                 window.run("browser.open", {
                   address: addressOf(words),
-                  space,
+                  project,
                 }),
             },
           ],
-    [entered, words, space, addressOf]
+    [entered, words, project, addressOf]
   )
   useLayoutEffect(() => found(rows), [found, rows])
   return null

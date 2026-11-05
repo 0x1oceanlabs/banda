@@ -1,25 +1,25 @@
 import { useCallback, useEffect, useMemo, useState } from "react"
-import type { Engine, SpaceId, SpaceSummary } from "@banda/contract"
+import type { Engine, ProjectId, ProjectSummary } from "@banda/contract"
 import type { Attention, Listed, Lists, Report, Watch } from "@banda/ui/pane"
 import { runs, watches } from "../registry"
 import { combine, folded } from "./attention"
 
 /**
- * Draws every module's Watch for every Space, while the engine runs the
+ * Draws every module's Watch for every Project, while the engine runs the
  * module, and says what they call the Person for together and what each
- * Space lists. It shows nothing: the bar and the sidebar show what it
+ * Project lists. It shows nothing: the bar and the sidebar show what it
  * says, and the notifications module tells of what calls (ADR 0056).
  */
 export function Watches({
   engine,
   modules,
-  spaces,
+  projects,
   onChange,
   onLists,
 }: {
   engine: Engine
   modules: readonly string[]
-  spaces: SpaceSummary[]
+  projects: ProjectSummary[]
   onChange: (attention: Attention) => void
   onLists: (lists: Lists) => void
 }) {
@@ -42,11 +42,11 @@ export function Watches({
   )
   useEffect(() => onChange({ mark, waiting }), [onChange, mark, waiting])
   const lists = useMemo(() => {
-    const lists: Record<SpaceId, readonly Listed[]> = {}
-    for (const { space, listed } of Object.values(reports)) {
-      lists[space] = [...(lists[space] ?? []), ...listed]
+    const lists: Record<ProjectId, readonly Listed[]> = {}
+    for (const { project, listed } of Object.values(reports)) {
+      lists[project] = [...(lists[project] ?? []), ...listed]
     }
-    for (const space in lists) lists[space] = folded(lists[space]!)
+    for (const project in lists) lists[project] = folded(lists[project]!)
     return lists
   }, [reports])
   useEffect(() => onLists(lists), [onLists, lists])
@@ -54,15 +54,15 @@ export function Watches({
   return watches
     .filter(({ module }) => runs(module, modules))
     .flatMap(({ watch, module }) =>
-      spaces.map((space) => {
-        const key = `${module.id}:${space.id}`
+      projects.map((project) => {
+        const key = `${module.id}:${project.id}`
         return (
           <One
             key={key}
             id={key}
             watch={watch}
             engine={engine}
-            space={space.id}
+            project={project.id}
             hear={hear}
           />
         )
@@ -70,34 +70,34 @@ export function Watches({
     )
 }
 
-/** What one Watch said about one Space. */
-type Heard = Report & { space: SpaceId }
+/** What one Watch said about one Project. */
+type Heard = Report & { project: ProjectId }
 
 function same(a: Heard, b: Heard): boolean {
   return a.mark === b.mark && a.waiting === b.waiting && a.listed === b.listed
 }
 
-/** One Watch on one Space; what it said goes with it. */
+/** One Watch on one Project; what it said goes with it. */
 function One({
   id,
   watch,
   engine,
-  space,
+  project,
   hear,
 }: {
   id: string
   watch: Watch
   engine: Engine
-  space: SpaceId
+  project: ProjectId
   hear: (key: string, heard?: Heard) => void
 }) {
   const report = useCallback(
-    (report: Report) => hear(id, { ...report, space }),
-    [hear, id, space]
+    (report: Report) => hear(id, { ...report, project }),
+    [hear, id, project]
   )
   // It says what it calls for itself, once drawn; leaving, it calls for
   // nothing.
   useEffect(() => () => hear(id), [hear, id])
   const Watched = watch.Watch
-  return <Watched engine={engine} space={space} report={report} />
+  return <Watched engine={engine} project={project} report={report} />
 }

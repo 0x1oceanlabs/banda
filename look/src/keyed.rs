@@ -191,6 +191,102 @@ fn entry_in(table: &dyn TableLike, offset: usize) -> Option<(String, Range<usize
     })
 }
 
+/// A name a file may still say from before a rename, and its name now: it
+/// reads as the new one, and the file is told where (ADR 0069 grace).
+pub struct Renamed {
+    /// For a key, the dotted key of the table that holds it (`""` at the
+    /// top); for a value, the dotted key it is at (`group.by`), or of the
+    /// array it is in (`row.hide`).
+    pub at: &'static str,
+    pub was: &'static str,
+    pub now: &'static str,
+    /// The name of a key or a table, rather than a string value.
+    pub key: bool,
+}
+
+impl Renamed {
+    pub const fn key(at: &'static str, was: &'static str, now: &'static str) -> Renamed {
+        Renamed {
+            at,
+            was,
+            now,
+            key: true,
+        }
+    }
+
+    pub const fn value(at: &'static str, was: &'static str, now: &'static str) -> Renamed {
+        Renamed {
+            at,
+            was,
+            now,
+            key: false,
+        }
+    }
+}
+
+/// Each place `text` still says a name of `renamed`: where it starts, the
+/// dotted key it is at, and what it is called now.
+pub fn renamed(text: &str, renamed: &[Renamed]) -> Vec<(usize, String, String)> {
+    let Ok(document) = toml_edit::Document::parse(text) else {
+        return Vec::new();
+    };
+    let mut said = Vec::new();
+    for name in renamed {
+        let Some(table) = table_at(document.as_table(), name.at, name.key) else {
+            continue;
+        };
+        if name.key {
+            if let Some((key, _)) = table.get_key_value(name.was)
+                && let Some(span) = key.span()
+            {
+                let dotted = [name.at, name.was]
+                    .join(".")
+                    .trim_start_matches('.')
+                    .to_owned();
+                said.push((
+                    span.start,
+                    dotted,
+                    format!("{} is called {} now", name.was, name.now),
+                ));
+            }
+            continue;
+        }
+        let last = name.at.rsplit('.').next().unwrap_or(name.at);
+        let Some(item) = table.get(last) else {
+            continue;
+        };
+        let values: Vec<&toml_edit::Value> = match item.as_value() {
+            Some(toml_edit::Value::Array(list)) => list.iter().collect(),
+            Some(value) => vec![value],
+            None => Vec::new(),
+        };
+        for value in values {
+            if value.as_str() == Some(name.was)
+                && let Some(span) = value.span()
+            {
+                let message = format!("\"{}\" is called \"{}\" now", name.was, name.now);
+                said.push((span.start, name.at.to_owned(), message));
+            }
+        }
+    }
+    said.sort();
+    said
+}
+
+/// The table `at` names: itself for a key, the one that holds it for a
+/// value.
+fn table_at<'a>(top: &'a toml_edit::Table, at: &str, key: bool) -> Option<&'a dyn TableLike> {
+    let mut parts: Vec<&str> = at.split('.').filter(|part| !part.is_empty()).collect();
+    if !key {
+        parts.pop();
+    }
+    let mut table: &dyn TableLike = top;
+    for part in parts {
+        table = table.get(part)?.as_table_like()?;
+    }
+    Some(table)
+}
+
 /// Settings as values; nothing when they cannot be written.
 fn values(settings: &impl Serialize) -> Value {
     serde_json::to_value(settings).unwrap_or(Value::Object(Map::new()))

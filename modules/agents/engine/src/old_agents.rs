@@ -1,6 +1,6 @@
-//! Before ADR 0006 a Space had one file per Agent,
+//! Before ADR 0006 a Project had one file per Agent,
 //! `.banda/agents/<name>.toml`, naming the Agent's Harness; since ADR 0026
-//! they are in the Space's data, `spaces/<id>/agents/`. Only
+//! they are in the Project's data, `projects/<id>/agents/`. Only
 //! [`read`] reads them still, so the Threads from then learn their
 //! Harness; nothing writes them, and nothing removes them.
 
@@ -16,8 +16,8 @@ struct AgentFile {
     harness: String,
 }
 
-/// Each old Agent of a Space and its Harness. What cannot be read, a file
-/// or the whole folder, is logged and skipped: the Space opens anyway, and
+/// Each old Agent of a Project and its Harness. What cannot be read, a file
+/// or the whole folder, is logged and skipped: the Project opens anyway, and
 /// only the Threads it names miss their Harness.
 pub fn read(data: &Path) -> Vec<(AgentId, String)> {
     let folder = data.join("agents");

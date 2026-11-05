@@ -3,7 +3,7 @@
 //! and each change said in one event.
 
 use banda_kernel::{
-    AgentId, Caller, Code, CommandId, Kernel, Participant, PersonId, Refusal, SpaceId,
+    AgentId, Caller, Code, CommandId, Kernel, Participant, PersonId, ProjectId, Refusal,
 };
 use banda_workspaces::Workspaces;
 use banda_workspaces::model::{ColumnId, PaneId, WorkspaceId};
@@ -18,7 +18,7 @@ struct Machine {
 
 impl Machine {
     async fn open(root: &Path, owner: PersonId) -> Machine {
-        let kernel = Kernel::builder(root.join("spaces"), root.join("data"), owner)
+        let kernel = Kernel::builder(root.join("projects"), root.join("data"), owner)
             .machine(root.join("state/machine"))
             .module(Workspaces::new())
             .open()
@@ -35,17 +35,17 @@ impl Machine {
             .await
     }
 
-    /// A command by an Agent whose pass is for `space`.
+    /// A command by an Agent whose pass is for `project`.
     async fn agent(
         &self,
         agent: AgentId,
-        space: SpaceId,
+        project: ProjectId,
         method: &str,
         params: Value,
     ) -> Result<Value, Refusal> {
         let caller = Caller {
             participant: Participant::Agent(agent),
-            only: Some(space),
+            only: Some(project),
         };
         let command = Some(CommandId::new());
         self.kernel
@@ -53,8 +53,8 @@ impl Machine {
             .await
     }
 
-    async fn space(&self, name: &str) -> SpaceId {
-        let made = self.command("spaces.create", json!({ "name": name }));
+    async fn project(&self, name: &str) -> ProjectId {
+        let made = self.command("projects.create", json!({ "name": name }));
         serde_json::from_value(made.await.unwrap()["id"].clone()).unwrap()
     }
 
@@ -80,7 +80,7 @@ async fn the_arrangement_is_kept_said_in_events_and_survives_a_restart() {
     let root = tempfile::tempdir().unwrap();
     let owner = PersonId::new();
     let machine = Machine::open(root.path(), owner).await;
-    let space = SpaceId::new();
+    let project = ProjectId::new();
 
     // It starts as one empty workspace, whose ID holds from the first read.
     let first = machine.list().await;
@@ -88,7 +88,7 @@ async fn the_arrangement_is_kept_said_in_events_and_survives_a_restart() {
     assert_eq!(machine.list().await["workspaces"], first["workspaces"]);
     let bottom = first["workspaces"][0]["id"].clone();
 
-    let pane = json!({ "space": space, "kind": "browser.browser", "args": { "url": "a" } });
+    let pane = json!({ "project": project, "kind": "browser.browser", "args": { "url": "a" } });
     let opened = machine
         .command("workspaces.open", pane.clone())
         .await
@@ -149,7 +149,7 @@ async fn a_windows_arrangement_is_taken_once() {
     let window = json!({ "workspaces": [{
         "id": workspace,
         "columns": [{ "id": ColumnId::new(), "width": "1/2", "panes": [
-            { "id": PaneId::new(), "space": SpaceId::new(), "kind": "agents.threads", "args": {} }
+            { "id": PaneId::new(), "project": ProjectId::new(), "kind": "agents.threads", "args": {} }
         ] }]
     }] });
     machine
@@ -170,12 +170,11 @@ async fn a_windows_arrangement_is_taken_once() {
 }
 
 #[tokio::test]
-async fn an_agent_arranges_its_own_spaces_panes_and_sees_the_others_when_let() {
+async fn an_agent_arranges_its_own_projects_panes_and_sees_the_others_when_let() {
     let root = tempfile::tempdir().unwrap();
     let machine = Machine::open(root.path(), PersonId::new()).await;
-    let (work, home) = (machine.space("Work").await, machine.space("Home").await);
-    let page =
-        |space, url| json!({ "space": space, "kind": "browser.browser", "args": { "url": url } });
+    let (work, home) = (machine.project("Work").await, machine.project("Home").await);
+    let page = |project, url| json!({ "project": project, "kind": "browser.browser", "args": { "url": url } });
     let theirs = machine
         .command("workspaces.open", page(home, "secret"))
         .await
@@ -187,7 +186,7 @@ async fn an_agent_arranges_its_own_spaces_panes_and_sees_the_others_when_let() {
     let agent = AgentId::new();
     let as_agent = |method: &'static str, params| machine.agent(agent, work, method, params);
 
-    // Behind the wall, it sees its own Space's Panes only, with their args.
+    // Behind the wall, it sees its own Project's Panes only, with their args.
     let seen = as_agent("workspaces.panes", json!({})).await.unwrap();
     let panes = |seen: &Value| -> Vec<Value> {
         let workspaces = seen.as_array().unwrap().iter();
@@ -200,7 +199,7 @@ async fn an_agent_arranges_its_own_spaces_panes_and_sees_the_others_when_let() {
     assert_eq!(only.len(), 1);
     assert_eq!(only[0]["args"]["url"], "mine");
     assert_eq!(only[0]["yours"], false);
-    // Nothing beside another Space's Pane while the wall stands.
+    // Nothing beside another Project's Pane while the wall stands.
     let beside = |pane: &Value| json!({ "pane": pane, "side": "right" });
     let thread = json!({ "thread": "t" });
     let hidden = as_agent(
@@ -231,9 +230,9 @@ async fn an_agent_arranges_its_own_spaces_panes_and_sees_the_others_when_let() {
     );
     assert_eq!(by_person.await.unwrap_err().code, Code::Invalid);
 
-    // The Person lets the Space see the others: their outline, no args.
-    let let_see = json!({ "space": work, "sees_others": true });
-    machine.command("spaces.update", let_see).await.unwrap();
+    // The Person lets the Project see the others: their outline, no args.
+    let let_see = json!({ "project": work, "sees_others": true });
+    machine.command("projects.update", let_see).await.unwrap();
     let all = panes(&as_agent("workspaces.panes", json!({})).await.unwrap());
     let home_pane = all.iter().find(|p| p["id"] == theirs["pane"]).unwrap();
     assert_eq!(home_pane["kind"], "browser.browser");
@@ -242,7 +241,7 @@ async fn an_agent_arranges_its_own_spaces_panes_and_sees_the_others_when_let() {
         "no Project is told another's args"
     );
 
-    // It opens its Thread beside the other Space's Pane, in its own Space.
+    // It opens its Thread beside the other Project's Pane, in its own Project.
     let opened = as_agent(
         "workspaces.open_pane",
         json!({ "kind": "agents.thread", "args": thread, "beside": beside(&theirs["pane"]) }),
@@ -259,7 +258,7 @@ async fn an_agent_arranges_its_own_spaces_panes_and_sees_the_others_when_let() {
     let mine = panes(&as_agent("workspaces.panes", json!({})).await.unwrap());
     let mine = mine.iter().find(|p| p["id"] == opened["pane"]).unwrap();
     assert_eq!(
-        (mine["space"].clone(), mine["yours"].clone()),
+        (mine["project"].clone(), mine["yours"].clone()),
         (json!(work), json!(true))
     );
 
@@ -296,9 +295,8 @@ async fn the_workspaces_set_aside_stay_and_come_back_after_the_ones_there_are() 
     let root = tempfile::tempdir().unwrap();
     let owner = PersonId::new();
     let machine = Machine::open(root.path(), owner).await;
-    let space = SpaceId::new();
-    let open =
-        |url: &str| json!({ "space": space, "kind": "browser.browser", "args": { "url": url } });
+    let project = ProjectId::new();
+    let open = |url: &str| json!({ "project": project, "kind": "browser.browser", "args": { "url": url } });
 
     // Nothing to set aside: nothing changes or is said.
     let nothing = machine

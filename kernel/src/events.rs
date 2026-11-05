@@ -1,4 +1,4 @@
-//! A Space's event log: facts, appended and never rewritten (ADR 0002,
+//! A Project's event log: facts, appended and never rewritten (ADR 0002,
 //! decision 6). Each event belongs to the module that emitted it and carries
 //! that module's version of its shape.
 
@@ -11,7 +11,7 @@ use ts_rs::TS;
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 #[ts(export)]
 pub struct Event {
-    /// Its place in the Space's log, from 1. A later event has a larger one.
+    /// Its place in the Project's log, from 1. A later event has a larger one.
     #[ts(type = "number")]
     pub seq: i64,
     pub id: EventId,

@@ -30,7 +30,7 @@ const STOPPING: Duration = Duration::from_secs(2);
 /// How long the pipes are read on after git ended: a child it left, as a
 /// hook's, may hold them open.
 const LEFT_OPEN: Duration = Duration::from_secs(1);
-/// How many gits of [`Pool::Shared`] run at once, in every Space
+/// How many gits of [`Pool::Shared`] run at once, in every Project
 /// together.
 static RUNNING: Semaphore = Semaphore::const_new(8);
 /// The most of stdout a git keeps unless asked otherwise: 16 MiB, as T3

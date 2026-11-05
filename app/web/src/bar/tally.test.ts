@@ -1,5 +1,5 @@
 import { expect, test } from "vitest"
-import type { SpaceId } from "@banda/contract"
+import type { ProjectId } from "@banda/contract"
 import type { MarkState } from "@banda/ui/components/banda-mark"
 import type { Listed } from "@banda/ui/pane"
 import { inOrder, tally } from "./tally"
@@ -13,12 +13,12 @@ const one = (id: string, mark: MarkState, changed = 0): Listed => ({
 })
 
 const lists = {
-  ["a" as SpaceId]: [
+  ["a" as ProjectId]: [
     one("run", "running", 5),
     one("ask", "asking", 3),
     one("old", "done", 1),
   ],
-  ["b" as SpaceId]: [
+  ["b" as ProjectId]: [
     one("new", "done", 4),
     one("broke", "failed", 6),
     one("quiet", "rest"),
@@ -33,7 +33,7 @@ test("each count takes its marks, the loudest shows, and a count of none is left
     ["done", "done", 2],
     ["working", "running", 1],
   ])
-  const calm = { ["a" as SpaceId]: [one("run", "running")] }
+  const calm = { ["a" as ProjectId]: [one("run", "running")] }
   expect(tally(calm, ["asking", "done", "working"], none)).toHaveLength(1)
 })
 
@@ -56,5 +56,5 @@ test("the list puts the loudest first, then who waited longest, and the work aft
     "old",
     "new",
   ])
-  expect(working.map((t) => [t.space, t.listed.id])).toEqual([["a", "run"]])
+  expect(working.map((t) => [t.project, t.listed.id])).toEqual([["a", "run"]])
 })

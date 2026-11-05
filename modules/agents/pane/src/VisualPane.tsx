@@ -10,9 +10,9 @@ export const visualPane = definePane<VisualArgs>({
   icon: ChartLineIcon,
   // One Pane per Visual.
   identity: (args) => args.visual,
-  Pane: ({ space, args }) => (
+  Pane: ({ project, args }) => (
     <div className="h-full overflow-auto px-6 py-4">
-      <VisualFrame space={space} {...args} />
+      <VisualFrame project={project} {...args} />
     </div>
   ),
 })

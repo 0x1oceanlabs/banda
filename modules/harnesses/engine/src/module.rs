@@ -1,6 +1,6 @@
 //! The module `harnesses` (ADR 0040, decisions 1 and 2): the Harnesses
 //! this computer can start, and who is signed in to each. It is the
-//! machine's, so its methods name no Space, and a Person signs in before
+//! machine's, so its methods name no Project, and a Person signs in before
 //! there is one.
 //!
 //! It asks through a Harness process of its own, with no session, in a
@@ -22,7 +22,7 @@ use crate::{FILE, Harness, Harnesses};
 use agent_client_protocol::Client;
 use agent_client_protocol::schema::v1 as acp;
 use banda_kernel::{
-    Call, Error, EventFilter, Module, ModuleSpace, Nothing, Refusal, Right, Scope, Tool,
+    Call, Error, EventFilter, Module, ModuleProject, Nothing, Refusal, Right, Scope, Tool,
 };
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -187,9 +187,9 @@ impl Module for HarnessesModule {
         Self::method_tools(self.name())
     }
 
-    async fn opened(&self, space: ModuleSpace) -> Result<(), Error> {
-        self.limits.start(space.clone()).await?;
-        self.usage.start(space).await
+    async fn opened(&self, project: ModuleProject) -> Result<(), Error> {
+        self.limits.start(project.clone()).await?;
+        self.usage.start(project).await
     }
 
     fn right(&self, method: &str) -> Option<Right> {
@@ -212,7 +212,7 @@ impl HarnessesModule {
         OneHarness { harness }: OneHarness,
     ) -> Result<Accounted, Refusal> {
         // Read before the Harness is: a change after it is a later event.
-        let at = call.space().at().await?;
+        let at = call.project().at().await?;
         let (harness, asker, _asking) = self.asker(&call, &harness).await?;
         let account = asker.process.account(&harness).await;
         Ok(Accounted {
@@ -226,10 +226,10 @@ impl HarnessesModule {
         call: Call,
         AskLimits { read }: AskLimits,
     ) -> Result<LimitsNow, Refusal> {
-        let space = call.space();
+        let project = call.project();
         // Read before the limits are: a read kept after it is a later event.
-        let at = space.at().await?;
-        let (limits, settings) = self.limits.now(space, read).await?;
+        let at = project.at().await?;
+        let (limits, settings) = self.limits.now(project, read).await?;
         let (warn, look) = (settings.warn, settings.look);
         Ok(LimitsNow {
             at,
@@ -254,10 +254,10 @@ impl HarnessesModule {
             ));
         }
         if args.read {
-            self.usage.scan(call.space()).await?;
+            self.usage.scan(call.project()).await?;
         }
         self.usage
-            .now(call.space(), since, until)
+            .now(call.project(), since, until)
             .await
             .map_err(Into::into)
     }
@@ -288,7 +288,7 @@ impl HarnessesModule {
     /// be, held busy while the guard lives.
     async fn asker(&self, call: &Call, id: &str) -> Result<(Harness, Arc<Asker>, Held), Refusal> {
         let harness = self.harnesses.get(id).map_err(Refusal::invalid)?;
-        let asker = self.hosts.get(call.space().id(), &harness).await;
+        let asker = self.hosts.get(call.project().id(), &harness).await;
         let asker = asker.map_err(Refusal::conflict)?;
         let held = asker.activity.hold();
         Ok((harness, asker, held))
@@ -300,7 +300,7 @@ impl HarnessesModule {
     /// the Harness's process has heard it. The receipt keeps the answer,
     /// and the kernel answers the same command, sent again, from it.
     async fn changed(&self, call: &Call, harness: &str) -> Result<(), Refusal> {
-        self.hosts.let_go(call.space().id(), harness);
+        self.hosts.let_go(call.project().id(), harness);
         let (author, subject) = (call.participant(), harness.to_owned());
         call.command(move |tx| {
             tx.emit(
@@ -313,7 +313,7 @@ impl HarnessesModule {
             .map(|_| ())
         })
         .await?;
-        if !call.space().reacted(REACTED).await {
+        if !call.project().reacted(REACTED).await {
             tracing::warn!(harness, "an account changed before all heard it");
         }
         Ok(())

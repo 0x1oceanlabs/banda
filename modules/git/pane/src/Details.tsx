@@ -3,7 +3,7 @@
  * Code's: the branch with how far it is ahead and behind, the git button,
  * and Changes `· N files +N −M`, what a commit would take, new files too,
  * which opens the Diff on Uncommitted; none when nothing is uncommitted.
- * One Initialize Git row instead when the Space's folder is no
+ * One Initialize Git row instead when the Project's folder is no
  * repository, and why git will not read it when it is one git refuses.
  * They follow `git.watch`.
  */
@@ -25,14 +25,14 @@ import { GitAlert } from "./GitAlert"
 
 function GitRows({
   engine,
-  space,
+  project,
   thread,
   harness,
   open,
   opening,
   opened,
 }: DetailsProps) {
-  const status = useGitStatus(engine, space)
+  const status = useGitStatus(engine, project)
   const init = useAct()
   if (!status) return null
   // A repository git will not read, as another user's: why, and no
@@ -50,7 +50,7 @@ function GitRows({
           icon={<GitBranchPlusIcon />}
           disabled={init.busy}
           onClick={() =>
-            void init.act(() => engine.call("git.init", {}, { space }))
+            void init.act(() => engine.call("git.init", {}, { project }))
           }
         >
           {init.busy ? "Initializing…" : "Initialize Git"}
@@ -64,7 +64,7 @@ function GitRows({
     <>
       <BranchPicker
         engine={engine}
-        space={space}
+        project={project}
         thread={thread}
         status={status}
         asked={opening === PICKER}
@@ -72,7 +72,7 @@ function GitRows({
       />
       <GitButton
         engine={engine}
-        space={space}
+        project={project}
         thread={thread}
         harness={harness}
         status={status}

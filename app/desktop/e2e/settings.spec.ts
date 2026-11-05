@@ -229,10 +229,10 @@ test("General, the sidebar's presets, and hearing a sound", async () => {
     "aria-checked",
     "true"
   )
-  await preset.getByRole("radio", { name: "spaces" }).click()
+  await preset.getByRole("radio", { name: "projects" }).click()
   await expect
     .poll(() => textOf(join(dir, "config/sidebar.toml")))
-    .toContain('preset = "spaces"')
+    .toContain('preset = "projects"')
   // Each key says what it does.
   await expect(settings.locator('[data-key="group.by"]')).toContainText(
     "What makes a section"
@@ -316,7 +316,7 @@ test("New terminal: Ctrl+Alt+Enter opens a shell, and its keys can be assigned, 
   await expect(composer).toBeFocused()
   const screens = page.getByRole("region", { name: "Terminal screen" })
 
-  // The default key opens a working shell in the focused Space. Another
+  // The default key opens a working shell in the focused Project. Another
   // press from the terminal opens another shell, rather than typing in it.
   await page.keyboard.press("Control+Alt+Enter")
   await expect(screens).toHaveCount(1)

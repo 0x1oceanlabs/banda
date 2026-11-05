@@ -1,8 +1,8 @@
-# Banda's "spaces" preset: each Space a section, its Threads by what needs
+# Banda's "projects" preset: each Project a section, its Threads by what needs
 # you, one line a row.
 
 [group]
-by = "space"
+by = "project"
 states = ["active", "working", "archived"]
 bottom = []
 

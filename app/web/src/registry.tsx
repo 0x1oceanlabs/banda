@@ -118,10 +118,10 @@ export function showsOf(pane: PaneState): string | null {
 }
 
 /** Where a Pane opens from the sidebar, a call or a module: last on its
- * Space's workspace when its kind says so (`PaneKind.home`), else right
+ * Project's workspace when its kind says so (`PaneKind.home`), else right
  * of the Pane in front. */
-export function homeOf(pane: PaneState): "space" | "right" {
-  return told(() => kindOf(pane.kind)?.home?.(), false) ? "space" : "right"
+export function homeOf(pane: PaneState): "project" | "right" {
+  return told(() => kindOf(pane.kind)?.home?.(), false) ? "project" : "right"
 }
 
 /** A Pane as what makes it that one Pane (`PaneKind.identity`). */
@@ -194,7 +194,7 @@ export function closedOf(engine: Engine, entry: Entry): void {
     () =>
       kindOf(entry.pane.kind)?.closed?.({
         engine,
-        space: entry.space,
+        project: entry.project,
         args: entry.pane.args,
       }),
     undefined

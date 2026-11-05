@@ -4,7 +4,7 @@ import type { Settings } from "./Settings";
 
 /**
  * What `agents.defaults` answers: what a new Thread on a Harness starts
- * with, and what the Harness last offered in this Space. `at` is where the Space's log stood,
+ * with, and what the Harness last offered in this Project. `at` is where the Project's log stood,
  * so a window hears when a Thread learns more of what the Harness offers.
  */
 export type Defaults = { at: number, settings: Settings, offer: Offer, };

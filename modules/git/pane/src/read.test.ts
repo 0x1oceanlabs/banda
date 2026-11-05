@@ -4,7 +4,7 @@ import { pathOf } from "@banda/ui/components/code-diff"
 import { expect, test } from "vitest"
 import { turnRead } from "./read"
 
-/** A checkpoint's diff: `inside.ts` changed in the Space's folder. */
+/** A checkpoint's diff: `inside.ts` changed in the Project's folder. */
 const KEPT: Diff = {
   at: 7,
   files: [{ path: "inside.ts", added: 1, removed: 1, binary: false }],
@@ -19,7 +19,7 @@ index 1111111..2222222 100644
   truncated: false,
 }
 
-/** What the turn's tool calls changed: one file in the Space's folder,
+/** What the turn's tool calls changed: one file in the Project's folder,
  * named from there, and two outside it, in a worktree and in a state
  * folder, named from the root. */
 const CHANGES: TurnChanges = {

@@ -1,4 +1,4 @@
-import type { SpaceId } from "@banda/contract"
+import type { ProjectId } from "@banda/contract"
 import type { Problem } from "@banda/contract/look"
 import type { Aside } from "@banda/contract/workspaces"
 import type { WidgetProps } from "@banda/ui/module"
@@ -26,7 +26,7 @@ export type OwnProps = WidgetProps & {
    * sidebar is hidden (ADR 0065, decision 9). */
   current?: Listed
   /** Opens a Pane as a row of the sidebar does. */
-  onOpen: (space: SpaceId, pane: PaneState) => void
+  onOpen: (project: ProjectId, pane: PaneState) => void
   /** The workspaces set aside, while they are (ADR 0039, decision 2). */
   aside: Aside | null
 }

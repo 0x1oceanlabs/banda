@@ -38,7 +38,7 @@ fn it_tells_the_window_the_route_in_one_line_and_hears_ok() {
         heard
     });
 
-    let out = menu(state.path(), &["space.My Work"]);
+    let out = menu(state.path(), &["project.My Work"]);
     assert!(
         out.status.success(),
         "{}",
@@ -53,6 +53,6 @@ fn it_tells_the_window_the_route_in_one_line_and_hears_ok() {
 
     assert_eq!(
         window.join().unwrap(),
-        ["{\"menu\":\"space.My Work\"}\n", "{\"menu\":\"\"}\n"]
+        ["{\"menu\":\"project.My Work\"}\n", "{\"menu\":\"\"}\n"]
     );
 }

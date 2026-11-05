@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react"
-import type { Engine, SpaceId } from "@banda/contract"
+import type { Engine, ProjectId } from "@banda/contract"
 import type { Image, ImageId } from "@banda/contract/agents"
 import { DialogTrigger } from "@banda/ui/components/dialog"
 import { Spinner } from "@banda/ui/components/spinner"
@@ -25,7 +25,10 @@ export type ImageReader = {
   forget: (image: ImageId) => void
 }
 
-export function useImageReader(engine: Engine, space: SpaceId): ImageReader {
+export function useImageReader(
+  engine: Engine,
+  project: ProjectId
+): ImageReader {
   return useMemo(() => {
     const urls = new Map<ImageId, Promise<string>>()
     const ready = new Map<ImageId, string>()
@@ -33,7 +36,7 @@ export function useImageReader(engine: Engine, space: SpaceId): ImageReader {
       read: (image) => {
         let url = urls.get(image)
         if (!url) {
-          url = engine.call("agents.image", { image }, { space }).then(urlOf)
+          url = engine.call("agents.image", { image }, { project }).then(urlOf)
           url.then(
             (read) => ready.set(image, read),
             // A read that failed goes again the next time.
@@ -53,7 +56,7 @@ export function useImageReader(engine: Engine, space: SpaceId): ImageReader {
         ready.delete(image)
       },
     }
-  }, [engine, space])
+  }, [engine, project])
 }
 
 /** The images a message carries, above its text: a press shows one

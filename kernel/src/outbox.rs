@@ -2,7 +2,7 @@
 //! 0002, decision 3).
 //!
 //! A module queues an effect in the same transaction as the change that
-//! needs it. Each Space has one worker. It runs a module's effects with the
+//! needs it. Each Project has one worker. It runs a module's effects with the
 //! same key one at a time, in the order they were queued, and effects with
 //! different keys side by side. An effect claimed under an earlier boot of
 //! the engine was cut short by a restart: its module says whether it runs
@@ -17,7 +17,7 @@
 
 use crate::events::json_column;
 use crate::module::Module;
-use crate::space::Space;
+use crate::project::Project;
 use crate::store::KERNEL;
 use crate::{Error, Tx, now_ms};
 use futures::FutureExt;
@@ -121,22 +121,22 @@ fn find<'m>(modules: &'m [Arc<dyn Module>], name: &str) -> Option<&'m Arc<dyn Mo
     modules.iter().find(|m| m.name() == name)
 }
 
-/// Settles the effects an earlier boot claimed. Runs once, while the Space
+/// Settles the effects an earlier boot claimed. Runs once, while the Project
 /// opens, before its worker starts.
-pub(crate) async fn recover(space: &Arc<Space>, boot: &str) -> Result<(), Error> {
+pub(crate) async fn recover(project: &Arc<Project>, boot: &str) -> Result<(), Error> {
     let boot = boot.to_owned();
-    let cut_short = space
+    let cut_short = project
         .store()
         .read(move |sql| running_before(sql, &boot))
         .await?;
     for (module_name, effect) in cut_short {
-        let Some(module) = find(space.modules(), &module_name).cloned() else {
+        let Some(module) = find(project.modules(), &module_name).cloned() else {
             tracing::warn!(module = %module_name, id = effect.id, "an effect of a module this engine lacks stays as it is");
             continue;
         };
         let replay = module.on_restart(&effect.kind) == OnRestart::Replay;
         let name = module.name();
-        space
+        project
             .store()
             .write(name, move |tx| {
                 if !replay {
@@ -160,15 +160,17 @@ pub(crate) async fn recover(space: &Arc<Space>, boot: &str) -> Result<(), Error>
     Ok(())
 }
 
-/// The Space's worker: claims what is ready, runs it, records how it ended,
+/// The Project's worker: claims what is ready, runs it, records how it ended,
 /// and sleeps until a commit queues more or a retry is due. It ends when the
-/// Space is closed.
-pub(crate) async fn work(space: Weak<Space>, boot: String) {
-    let Some(signal) = space.upgrade().map(|s| s.store().outbox_signal()) else {
+/// Project is closed.
+pub(crate) async fn work(project: Weak<Project>, boot: String) {
+    let Some(signal) = project.upgrade().map(|s| s.store().outbox_signal()) else {
         return;
     };
     loop {
-        let Some(open) = space.upgrade() else { return };
+        let Some(open) = project.upgrade() else {
+            return;
+        };
         let wait = start_ready(&open, &boot).await.unwrap_or_else(|error| {
             tracing::error!(%error, "the outbox could not claim its effects");
             READ_AGAIN
@@ -182,30 +184,30 @@ pub(crate) async fn work(space: Weak<Space>, boot: String) {
 }
 
 /// Starts what is ready, and answers how long until the next effect is due.
-async fn start_ready(space: &Arc<Space>, boot: &str) -> Result<Duration, Error> {
+async fn start_ready(project: &Arc<Project>, boot: &str) -> Result<Duration, Error> {
     let boot = boot.to_owned();
-    let claimed = space
+    let claimed = project
         .store()
         .write(KERNEL, move |tx| claim(tx, &boot))
         .await?;
     for (module_name, effect) in claimed {
-        start(space, module_name, effect);
+        start(project, module_name, effect);
     }
-    Ok(match space.store().read(next_due).await? {
+    Ok(match project.store().read(next_due).await? {
         Some(at) => Duration::from_millis(u64::try_from((at - now_ms()).max(0)).unwrap_or(0)),
         None => Duration::from_secs(3600),
     })
 }
 
-fn start(space: &Arc<Space>, module_name: String, effect: Effect) {
-    let space = space.clone();
+fn start(project: &Arc<Project>, module_name: String, effect: Effect) {
+    let project = project.clone();
     tokio::spawn(async move {
-        let Some(module) = find(space.modules(), &module_name).cloned() else {
+        let Some(module) = find(project.modules(), &module_name).cloned() else {
             tracing::error!(module = %module_name, "a claimed effect has no module");
             return;
         };
         // A run that panics ends as failed, not running forever.
-        let run = module.run(space.module(module.name()), effect.clone());
+        let run = module.run(project.module(module.name()), effect.clone());
         let outcome = AssertUnwindSafe(run)
             .catch_unwind()
             .await
@@ -213,16 +215,16 @@ fn start(space: &Arc<Space>, module_name: String, effect: Effect) {
                 tracing::error!(kind = %effect.kind, "an effect panicked");
                 Outcome::Fail("The engine broke off while it ran this.".to_owned())
             });
-        let weak = Arc::downgrade(&space);
-        drop(space);
+        let weak = Arc::downgrade(&project);
+        drop(project);
         record(weak, module, effect, outcome).await;
     });
 }
 
 /// Records how a run of `effect` ended, trying again with a wait until it
-/// commits or the Space closes. A module whose own writing keeps failing has
+/// commits or the Project closes. A module whose own writing keeps failing has
 /// its effect settled as failed instead, which it writes too.
-async fn record(space: Weak<Space>, module: Arc<dyn Module>, effect: Effect, outcome: Outcome) {
+async fn record(project: Weak<Project>, module: Arc<dyn Module>, effect: Effect, outcome: Outcome) {
     let effect = Arc::new(effect);
     let mut outcome = Arc::new(outcome);
     let mut tries = 0;
@@ -231,7 +233,9 @@ async fn record(space: Weak<Space>, module: Arc<dyn Module>, effect: Effect, out
             let reason = "Banda could not write how it ended.".to_owned();
             outcome = Arc::new(Outcome::Fail(reason));
         }
-        let Some(open) = space.upgrade() else { return };
+        let Some(open) = project.upgrade() else {
+            return;
+        };
         let written = {
             let module = module.clone();
             let effect = effect.clone();

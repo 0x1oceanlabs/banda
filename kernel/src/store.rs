@@ -1,4 +1,4 @@
-//! A Space's SQLite, with one writer (ADR 0002, decisions 2 and 4).
+//! A Project's SQLite, with one writer (ADR 0002, decisions 2 and 4).
 //!
 //! The writer is one thread that owns the only writing connection. Every
 //! change is a job that runs in one transaction. A change's events go out
@@ -71,7 +71,7 @@ CREATE INDEX kernel_outbox_by_key ON kernel_outbox (module, key, state, id);
 
 type Job = Box<dyn FnOnce(&mut Connection) + Send>;
 
-/// One open Space database.
+/// One open Project database.
 pub(crate) struct Store {
     jobs: mpsc::Sender<Job>,
     reader: Arc<Mutex<Connection>>,
@@ -460,7 +460,7 @@ mod tests {
 
     fn store(dir: &tempfile::TempDir) -> Store {
         Store::open(
-            &dir.path().join("space.sqlite3"),
+            &dir.path().join("project.sqlite3"),
             &[("notes", &["CREATE TABLE notes_items (text TEXT NOT NULL)"])],
         )
         .unwrap()
@@ -678,7 +678,7 @@ mod tests {
     #[tokio::test]
     async fn steps_run_once_and_a_newer_database_is_not_opened() {
         let dir = tempfile::tempdir().unwrap();
-        let path = dir.path().join("space.sqlite3");
+        let path = dir.path().join("project.sqlite3");
         drop(
             Store::open(
                 &path,

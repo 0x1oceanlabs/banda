@@ -67,11 +67,11 @@ export function ThreadDetails({
     onShown(true)
   })
   useEffect(() => (focused ? hearAsks(asked) : undefined), [focused])
-  // Shown, its rows' Space knows the card says what they do.
-  const { space, thread } = given
+  // Shown, its rows' Project knows the card says what they do.
+  const { project, thread } = given
   useEffect(
-    () => (shown ? showDetails(space, thread) : undefined),
-    [shown, space, thread]
+    () => (shown ? showDetails(project, thread) : undefined),
+    [shown, project, thread]
   )
   if (details.length === 0) return null
   const props: DetailsProps = {

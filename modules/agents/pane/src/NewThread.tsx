@@ -1,32 +1,32 @@
-/** Where a new Thread starts: its Space (ADR 0006). Its Harness is chosen
+/** Where a new Thread starts: its Project (ADR 0006). Its Harness is chosen
  * with its model, in the model picker (ADR 0031, decision 6). */
 import { useMemo } from "react"
-import type { Engine, SpaceId, SpaceSummary } from "@banda/contract"
+import type { Engine, ProjectId, ProjectSummary } from "@banda/contract"
 import { useMachine } from "@banda/ui/hooks/use-status"
-import { useSpaces } from "@banda/ui/hooks/use-spaces"
-import { openSpaces, shownSpaces } from "@banda/ui/lib/spaces"
+import { useProjects } from "@banda/ui/hooks/use-projects"
+import { openProjects, shownProjects } from "@banda/ui/lib/projects"
 import { FolderIcon, FolderPlusIcon } from "lucide-react"
 import { Pick } from "./ThreadSettings"
 
 /**
- * The Space of a Thread not yet started. A Person changes it until the
+ * The Project of a Thread not yet started. A Person changes it until the
  * first message; after it, it is the Thread's for good.
  */
 export function NewThreadBar({
   engine,
-  space,
+  project,
   disabled,
-  onSpace,
-  onAddSpace,
+  onProject,
+  onAddProject,
 }: {
   engine: Engine
-  space: SpaceId
+  project: ProjectId
   disabled: boolean
-  onSpace: (space: SpaceId) => void
-  /** Opens "Add Space" in the Banda menu (ADR 0026), from the Space list. */
-  onAddSpace?: () => void
+  onProject: (project: ProjectId) => void
+  /** Opens "Add Project" in the Banda menu (ADR 0026), from the Project list. */
+  onAddProject?: () => void
 }) {
-  const spaces = useShownSpaces(engine)
+  const projects = useShownProjects(engine)
   const machine = useMachine(engine)
   return (
     // In meta words, its icon in line with the composer's text above it.
@@ -35,26 +35,26 @@ export function NewThreadBar({
         <Pick
           what="Project"
           icon={<FolderIcon data-icon="inline-start" />}
-          value={spaces.some((s) => s.id === space) ? space : machine}
+          value={projects.some((s) => s.id === project) ? project : machine}
           choices={[
             {
               id: machine,
               name: "No Project",
               about: "A new Thread with its own folder",
             },
-            ...spaces.map((space) => ({
-              id: space.id,
-              name: space.name,
-              about: space.folder,
+            ...projects.map((project) => ({
+              id: project.id,
+              name: project.name,
+              about: project.folder,
             })),
           ]}
           disabled={disabled}
-          onChange={(id) => onSpace(id as SpaceId)}
+          onChange={(id) => onProject(id as ProjectId)}
           more={
-            onAddSpace && {
+            onAddProject && {
               title: "Add Project",
               icon: <FolderPlusIcon />,
-              run: onAddSpace,
+              run: onAddProject,
             }
           }
         />
@@ -63,15 +63,17 @@ export function NewThreadBar({
   )
 }
 
-function useShownSpaces(engine: Engine): SpaceSummary[] {
-  const { listed } = useSpaces(engine)
+function useShownProjects(engine: Engine): ProjectSummary[] {
+  const { listed } = useProjects(engine)
   // As the window lists them: pinned first, archived ones not at all;
   // nor one whose folder is missing, where no Thread starts.
   return useMemo(
     () =>
-      listed.state === "ready" ? openSpaces(shownSpaces(listed.value)) : NONE,
+      listed.state === "ready"
+        ? openProjects(shownProjects(listed.value))
+        : NONE,
     [listed]
   )
 }
 
-const NONE: SpaceSummary[] = []
+const NONE: ProjectSummary[] = []

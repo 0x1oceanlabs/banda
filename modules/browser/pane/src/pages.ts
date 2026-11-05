@@ -10,7 +10,7 @@
  * until its Pane comes back, or leaves every workspace.
  */
 import type { Dialog } from "@banda/contract/browser"
-import type { SpaceId } from "@banda/contract"
+import type { ProjectId } from "@banda/contract"
 import { afterMoves } from "@banda/ui/lib/frames"
 import { HELD_BY, paneLayer } from "@banda/ui/pane"
 import { type BrowserNews, type Driver, PARTITION, type Wait } from "./desktop"
@@ -437,8 +437,8 @@ export function pageAt(id: string): Page | undefined {
 /** What a browser Pane does with its tabs when a page, an extension or
  * an Agent asks. */
 export type Holder = {
-  /** The Space of its Pane. */
-  space: SpaceId
+  /** The Project of its Pane. */
+  project: ProjectId
   /** Opens a tab at `url`, beside the tab `from` when a page of its tabs
    * opened it, and behind it when in the `background`; the tab's ID. */
   open: (url: string, from?: string, background?: boolean) => string
@@ -476,11 +476,12 @@ export function toFront(holder: Holder): void {
   fronts = [...fronts.filter((h) => h !== holder && holding.has(h)), holder]
 }
 
-/** The browser Pane of `space`, or of any Space, the Person was in last,
+/** The browser Pane of `project`, or of any Project, the Person was in last,
  * else the last that holds a tab; none without one. */
-export function frontHolder(space?: SpaceId): Holder | undefined {
+export function frontHolder(project?: ProjectId): Holder | undefined {
   const holding = new Set(held.values())
-  const fits = (h: Holder) => holding.has(h) && (!space || h.space === space)
+  const fits = (h: Holder) =>
+    holding.has(h) && (!project || h.project === project)
   return fronts.findLast(fits) ?? [...holding].findLast(fits)
 }
 

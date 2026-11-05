@@ -1,9 +1,9 @@
 //! What every test of the terminal module shares: a kernel with the
-//! module, a Space, and what its terminals say.
+//! module, a Project, and what its terminals say.
 // Each test file uses some of these.
 #![allow(dead_code)]
 
-use banda_kernel::{CommandId, Kernel, Participant, PersonId, SpaceId, Stream};
+use banda_kernel::{CommandId, Kernel, Participant, PersonId, ProjectId, Stream};
 use banda_terminal::Terminals;
 use banda_terminal::model::{Piece, TerminalId};
 use serde_json::{Value, json};
@@ -13,7 +13,7 @@ use std::time::Duration;
 pub struct World {
     pub kernel: Arc<Kernel>,
     pub owner: PersonId,
-    pub space: SpaceId,
+    pub project: ProjectId,
     _root: tempfile::TempDir,
 }
 
@@ -26,55 +26,55 @@ impl World {
             .open()
             .await
             .unwrap();
-        let space = kernel
+        let project = kernel
             .call(
                 Participant::Person(owner),
-                "spaces.create",
+                "projects.create",
                 None,
                 Some(CommandId::new()),
                 json!({ "name": "Work" }),
             )
             .await
             .unwrap();
-        let space = serde_json::from_value(space["id"].clone()).unwrap();
+        let project = serde_json::from_value(project["id"].clone()).unwrap();
         World {
             kernel,
             owner,
-            space,
+            project,
             _root: root,
         }
     }
 
     pub async fn call(&self, method: &str, params: Value) -> Result<Value, banda_kernel::Refusal> {
-        self.call_in(self.space, method, params).await
+        self.call_in(self.project, method, params).await
     }
 
     pub async fn call_in(
         &self,
-        space: SpaceId,
+        project: ProjectId,
         method: &str,
         params: Value,
     ) -> Result<Value, banda_kernel::Refusal> {
         let person = Participant::Person(self.owner);
         self.kernel
-            .call(person, method, Some(space), None, params)
+            .call(person, method, Some(project), None, params)
             .await
     }
 
-    pub async fn another_space(&self) -> SpaceId {
+    pub async fn another_project(&self) -> ProjectId {
         let person = Participant::Person(self.owner);
-        let space = self
+        let project = self
             .kernel
             .call(
                 person,
-                "spaces.create",
+                "projects.create",
                 None,
                 Some(CommandId::new()),
                 json!({ "name": "Other" }),
             )
             .await
             .unwrap();
-        serde_json::from_value(space["id"].clone()).unwrap()
+        serde_json::from_value(project["id"].clone()).unwrap()
     }
 
     /// Opens a terminal running `sh -c script`.
@@ -96,11 +96,11 @@ impl World {
         self.call("terminal.open", open).await
     }
 
-    /// `space`'s servers, as the bar's widget hears them (ADR 0044).
-    pub async fn ports(&self, space: SpaceId) -> Stream {
+    /// `project`'s servers, as the bar's widget hears them (ADR 0044).
+    pub async fn ports(&self, project: ProjectId) -> Stream {
         let person = Participant::Person(self.owner);
         (self.kernel)
-            .stream(person, "terminal.ports", Some(space), json!({}))
+            .stream(person, "terminal.ports", Some(project), json!({}))
             .await
             .unwrap()
     }
@@ -111,7 +111,7 @@ impl World {
             .stream(
                 person,
                 "terminal.watch",
-                Some(self.space),
+                Some(self.project),
                 json!({ "terminal": terminal }),
             )
             .await

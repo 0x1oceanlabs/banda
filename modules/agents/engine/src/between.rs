@@ -25,7 +25,7 @@ use crate::model::{
 use crate::rules::{Ending, Event};
 use crate::transcript::{self, Transcript};
 use crate::{emit, plain, store, writer};
-use banda_kernel::{AgentId, Error, ModuleSpace, Participant, Tx};
+use banda_kernel::{AgentId, Error, ModuleProject, Participant, Tx};
 use std::collections::HashSet;
 use std::sync::Arc;
 use std::time::Duration;
@@ -42,7 +42,7 @@ const ENDING: Duration = Duration::from_secs(10);
 /// Who hears a Thread's session between its turns.
 pub struct Listener {
     pub live: Arc<Live>,
-    pub space: ModuleSpace,
+    pub project: ModuleProject,
     pub thread: ThreadId,
     pub agent: AgentId,
     /// The Agent's name and its Harness's, for plain words.
@@ -72,12 +72,12 @@ impl Listener {
             let (thread, agent) = (self.thread, Participant::Agent(self.agent));
             let written = match said {
                 Said::Used { usage, .. } => self
-                    .space
+                    .project
                     .write(move |tx| transcript::used(tx, agent, thread, usage))
                     .await
                     .map_err(plain),
                 Said::Runs(now) => self
-                    .space
+                    .project
                     .write(move |tx| transcript::offered(tx, agent, thread, &now))
                     .await
                     .map_err(plain),
@@ -109,7 +109,7 @@ impl Listener {
         let run = self.live.open(turn.id);
         run.begin(session.clone());
         let transcript = Transcript::new(
-            self.space.clone(),
+            self.project.clone(),
             &turn,
             self.harness.clone(),
             settings,
@@ -155,7 +155,7 @@ impl Listener {
         // if a Person asked, however the Harness ended it: the rules read
         // that from the turn.
         drop(run);
-        self.space
+        self.project
             .write(move |tx| {
                 // Unless it ended already, as one a turn the outbox
                 // started took over.
@@ -177,11 +177,11 @@ impl Listener {
         let given_up = Instant::now() + ENDING;
         // Following the Thread's turn endings before the first try, so the
         // end is not missed between the two.
-        let mut ended = self.space.committed(thread, &[writer::ENDED]);
+        let mut ended = self.project.committed(thread, &[writer::ENDED]);
         loop {
             let text = format!("{} went on by itself.", self.name);
             let opening = self
-                .space
+                .project
                 .write(move |tx| open(tx, thread, agent, text))
                 .await;
             // Refused: another turn runs in the Thread, and nothing was

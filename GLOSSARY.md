@@ -288,7 +288,7 @@ One page of the Banda skill, written beside the code it describes, in its
 part's `skill/` folder.
 
 **Preset**:
-A named arrangement of the sidebar: `inbox`, `spaces` or `places`, or a file
+A named arrangement of the sidebar: `inbox`, `projects` or `places`, or a file
 of the Person's own in `~/.config/banda/sidebars/`. It sets how Threads are
 grouped and sorted and what a row shows; the Person's keys in
 `sidebar.toml` win over it.

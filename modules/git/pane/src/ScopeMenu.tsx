@@ -4,7 +4,7 @@
  * against, each list read as its menu opens.
  */
 import { useCallback, useMemo, useState, type ReactNode } from "react"
-import type { Engine, SpaceId } from "@banda/contract"
+import type { Engine, ProjectId } from "@banda/contract"
 import { Button } from "@banda/ui/components/button"
 import {
   DropdownMenu,
@@ -55,13 +55,13 @@ function Listed<T>({
  * as it opens. */
 export function ScopeMenu({
   engine,
-  space,
+  project,
   scope,
   thread,
   onChange,
 }: {
   engine: Engine
-  space: SpaceId
+  project: ProjectId
   scope: Scope
   /** The Thread whose turns it offers; none offers none. */
   thread: string | null
@@ -73,8 +73,8 @@ export function ScopeMenu({
     open,
     useCallback(
       () =>
-        engine.call("git.commits", base === null ? {} : { base }, { space }),
-      [engine, space, base]
+        engine.call("git.commits", base === null ? {} : { base }, { project }),
+      [engine, project, base]
     )
   )
   const turns = useReadWhen(
@@ -83,8 +83,9 @@ export function ScopeMenu({
       async () =>
         thread === null
           ? []
-          : (await engine.call("agents.changes", { thread }, { space })).turns,
-      [engine, space, thread]
+          : (await engine.call("agents.changes", { thread }, { project }))
+              .turns,
+      [engine, project, thread]
     )
   )
   const value =
@@ -240,13 +241,13 @@ function Choice({
  * the branch left it, or a branch chosen, read as the menu opens. */
 export function BaseMenu({
   engine,
-  space,
+  project,
   base,
   found,
   onChange,
 }: {
   engine: Engine
-  space: SpaceId
+  project: ProjectId
   base: string | null
   found: string
   onChange: (base: string | null) => void
@@ -254,7 +255,10 @@ export function BaseMenu({
   const [open, setOpen] = useState(false)
   const branches = useReadWhen(
     open,
-    useCallback(() => engine.call("git.refs", {}, { space }), [engine, space])
+    useCallback(
+      () => engine.call("git.refs", {}, { project }),
+      [engine, project]
+    )
   )
   return (
     <DropdownMenu onOpenChange={setOpen}>

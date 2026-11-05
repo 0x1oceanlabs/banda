@@ -48,7 +48,7 @@ export function AsidePill({ engine, aside }: { engine: Engine; aside: Aside }) {
 }
 
 /**
- * The workspaces set aside, in Settings → Spaces too, while there are
+ * The workspaces set aside, in Settings → Projects too, while there are
  * some: what is aside, and Bring them back.
  */
 export function AsideRow({ engine }: { engine: Engine }) {

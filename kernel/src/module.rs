@@ -1,8 +1,8 @@
 use crate::access::Right;
 use crate::methods::Tool;
 use crate::outbox::{Effect, OnRestart, Outcome, Settled};
-use crate::space::ModuleSpace;
-use crate::{CommandId, Error, Participant, Refusal, SpaceId, Tx};
+use crate::project::ModuleProject;
+use crate::{CommandId, Error, Participant, ProjectId, Refusal, Tx};
 use serde::Serialize;
 use serde::de::DeserializeOwned;
 use serde_json::Value;
@@ -19,10 +19,10 @@ pub type Stream = mpsc::Receiver<Value>;
 /// decision 1).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Scope {
-    /// In each Space: its methods name one.
-    Space,
+    /// In each Project: its methods name one.
+    Project,
     /// Once for this machine, as the workspaces are, holding every
-    /// Space's Panes: its methods name no Space.
+    /// Project's Panes: its methods name no Project.
     Machine,
 }
 
@@ -37,9 +37,9 @@ pub trait Module: Send + Sync + 'static {
     /// Lowercase letters: the prefix of its methods, events and tables.
     fn name(&self) -> &'static str;
 
-    /// Where its data lives: each Space's, or this machine's.
+    /// Where its data lives: each Project's, or this machine's.
     fn scope(&self) -> Scope {
-        Scope::Space
+        Scope::Project
     }
 
     /// Its own ledger of migrations. Each step runs once, in order, and a
@@ -60,27 +60,27 @@ pub trait Module: Send + Sync + 'static {
         Vec::new()
     }
 
-    /// Runs once a Space opens, after the outbox settled what a restart cut
+    /// Runs once a Project opens, after the outbox settled what a restart cut
     /// short and before any effect runs: a module can pick up its work here,
     /// and finds it as the last boot left it.
-    async fn opened(&self, _space: ModuleSpace) -> Result<(), Error> {
+    async fn opened(&self, _project: ModuleProject) -> Result<(), Error> {
         Ok(())
     }
 
-    /// Runs as the Space is removed (ADR 0026): a module stops what it
-    /// runs there, its turns and its programs, before the Space's data
+    /// Runs as the Project is removed (ADR 0026): a module stops what it
+    /// runs there, its turns and its programs, before the Project's data
     /// goes.
-    async fn closing(&self, _space: ModuleSpace) {}
+    async fn closing(&self, _project: ModuleProject) {}
 
-    /// Refuses a folder move while this module still has work in the Space.
+    /// Refuses a folder move while this module still has work in the Project.
     /// The kernel excludes new calls while checking every module and moving.
-    async fn can_move(&self, _space: ModuleSpace) -> Result<(), Refusal> {
+    async fn can_move(&self, _project: ModuleProject) -> Result<(), Refusal> {
         Ok(())
     }
 
     /// The folder changed. Let go of idle processes whose working directory
-    /// was the old folder; future work reads the Space's new folder.
-    async fn moved(&self, _space: ModuleSpace) {}
+    /// was the old folder; future work reads the Project's new folder.
+    async fn moved(&self, _project: ModuleProject) {}
 
     /// One of its methods, already allowed. `method` comes without the
     /// module's prefix.
@@ -97,7 +97,7 @@ pub trait Module: Send + Sync + 'static {
 
     /// Runs one of its side effects from the outbox. A run holds its key
     /// until it ends, so a module bounds how long its own runs take.
-    async fn run(&self, _space: ModuleSpace, effect: Effect) -> Outcome {
+    async fn run(&self, _project: ModuleProject, effect: Effect) -> Outcome {
         Outcome::Fail(format!(
             "{} runs no effect of kind {}",
             self.name(),
@@ -118,20 +118,20 @@ pub trait Module: Send + Sync + 'static {
 }
 
 /// The wall a pass keeps an Agent behind (ADR 0019, decision 2): the one
-/// Space it works in, and whether its Person lets that Space's Agents see
-/// the other Spaces' Panes (ADR 0032). A module of this machine answers a
+/// Project it works in, and whether its Person lets that Project's Agents see
+/// the other Projects' Panes (ADR 0032). A module of this machine answers a
 /// walled call with what it may see.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct Wall {
-    pub space: SpaceId,
+    pub project: ProjectId,
     pub sees_others: bool,
 }
 
-/// One allowed call to a module's method: who makes it, in which Space, and
+/// One allowed call to a module's method: who makes it, in which Project, and
 /// the command ID that makes it run once.
 pub struct Call {
     participant: Participant,
-    space: ModuleSpace,
+    project: ModuleProject,
     method: String,
     command: Option<CommandId>,
     wall: Option<Wall>,
@@ -140,14 +140,14 @@ pub struct Call {
 impl Call {
     pub(crate) fn new(
         participant: Participant,
-        space: ModuleSpace,
+        project: ModuleProject,
         method: String,
         command: Option<CommandId>,
         wall: Option<Wall>,
     ) -> Self {
         Self {
             participant,
-            space,
+            project,
             method,
             command,
             wall,
@@ -163,12 +163,12 @@ impl Call {
         self.wall
     }
 
-    pub fn space(&self) -> &ModuleSpace {
-        &self.space
+    pub fn project(&self) -> &ModuleProject {
+        &self.project
     }
 
     /// Asks the window `what`, under this module's name, for this call's
-    /// caller in its Space, and waits for the answer at most `within`
+    /// caller in its Project, and waits for the answer at most `within`
     /// (ADR 0029, decision 2). With no window, or none that answers in
     /// time, it is refused, and the refusal says whether it may have run;
     /// an answer that is not a `T` is refused too.
@@ -179,7 +179,7 @@ impl Call {
         within: Duration,
     ) -> Result<T, Refusal> {
         let params = serde_json::to_value(params).map_err(|_| Refusal::internal())?;
-        let answer = (self.space)
+        let answer = (self.project)
             .ask_window(self.participant, what, params, within)
             .await?;
         serde_json::from_value(answer)
@@ -210,7 +210,7 @@ impl Call {
     {
         let command = self.command_id()?;
         let kept = self
-            .space
+            .project
             .command(command, &self.method, self.participant, move |tx| {
                 Ok(serde_json::to_value(change(tx)?)?)
             })

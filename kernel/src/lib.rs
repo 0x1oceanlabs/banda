@@ -1,19 +1,19 @@
 //! The kernel: what every module needs, and nothing that names a module
 //! (ADR 0001, decision 3; `docs/architecture.md`).
 //!
-//! - [`Kernel`] keeps the Spaces of this machine and routes each call to
+//! - [`Kernel`] keeps the Projects of this machine and routes each call to
 //!   the module that owns it.
-//! - [`Space`] is a folder with its own SQLite. One writer thread commits
+//! - [`Project`] is a folder with its own SQLite. One writer thread commits
 //!   every change, and events are published only after commit (ADR 0002).
 //! - A [`Module`] owns its words, its tables and its events. It reaches its
-//!   Space only through a [`ModuleSpace`], which can emit only that module's
+//!   Project only through a [`ModuleProject`], which can emit only that module's
 //!   events.
 //! - The outbox runs side effects after commit, in order per target, and
 //!   settles what a restart cut short.
 //! - [`access::decide`] is the one place that says whether a Participant may
-//!   do something, and [`access::within`] keeps an Agent in its Space.
-//! - A pass names an Agent's session in its Space, for `banda mcp`
-//!   ([`ModuleSpace::pass`]).
+//!   do something, and [`access::within`] keeps an Agent in its Project.
+//! - A pass names an Agent's session in its Project, for `banda mcp`
+//!   ([`ModuleProject::pass`]).
 //! - The window's road lets a module ask the window and await its answer
 //!   ([`Call::ask_window`]).
 //! - [`api`] serves all of it over WebSocket.
@@ -29,30 +29,50 @@ mod module;
 mod old;
 mod outbox;
 mod passes;
-mod space;
+mod project;
 mod store;
 mod window;
 
 pub use access::{Caller, Right};
 pub use error::{Code, Error, Refusal};
 pub use events::{Event, EventFilter};
-pub use ids::{AgentId, CommandId, EventId, Participant, PersonId, SpaceId};
-pub use kernel::{Kernel, KernelBuilder, SpaceSummary, decode};
+pub use ids::{AgentId, CommandId, EventId, Participant, PersonId, ProjectId};
+pub use kernel::{Kernel, KernelBuilder, ProjectSummary, decode};
 pub use methods::{Method, Nothing, Picture, Tool};
 pub use module::{Call, Module, Scope, Stream, Wall};
 pub use outbox::{Effect, OnRestart, Outcome, Settled};
 pub use passes::secret;
+pub use project::{Committed, Heard, ModuleProject, Project, Tally};
 /// For `methods!` and `id!`, which name it from a module's crate.
 pub use schemars;
-pub use space::{Committed, Heard, ModuleSpace, Space, Tally};
 pub use store::Tx;
 pub use window::{WindowAnswer, WindowRequest};
 
-/// The variable that names its Space in the environment of what Banda
+/// The variable that names its Project in the environment of what Banda
 /// starts in one, a terminal's program or a Harness's process, which all
 /// they start inherits: so the servers started in Banda are known by it
 /// (ADR 0044, decision 2).
-pub const SPACE_VARIABLE: &str = "BANDA_SPACE";
+pub const PROJECT_VARIABLE: &str = "BANDA_PROJECT";
+
+/// `PROJECT_VARIABLE` by its name before ADR 0069, set beside it for one
+/// stable release, for what an Agent or a Person wrote to read it
+/// (ADR 0069 grace).
+const SPACE_VARIABLE: &str = "BANDA_SPACE";
+
+/// The variables that name `project` in the environment of what Banda
+/// starts in it (ADR 0044, decision 2).
+pub fn project_env(project: ProjectId) -> [(&'static str, String); 2] {
+    [PROJECT_VARIABLE, SPACE_VARIABLE].map(|key| (key, project.to_string()))
+}
+
+/// The Project an environment variable names, when it is one of
+/// `project_env`'s.
+pub fn project_in_env(key: &str, value: &str) -> Option<ProjectId> {
+    [PROJECT_VARIABLE, SPACE_VARIABLE]
+        .contains(&key)
+        .then(|| value.parse().ok())
+        .flatten()
+}
 
 /// The version of the API's wire protocol. A window that speaks another
 /// version is refused before anything else (ADR 0002, decision 8).
@@ -73,7 +93,7 @@ pub fn set_version(version: &'static str) {
 }
 
 /// A name that works as one file or folder name: 1 to 64 characters, with
-/// no slashes and no leading dot. Returns it without surrounding spaces.
+/// no slashes and no leading dot. Returns it without surrounding projects.
 pub fn plain_name(name: &str) -> Option<&str> {
     let name = name.trim();
     let plain = !name.is_empty()
