@@ -1,7 +1,7 @@
 import { expect, test } from "vitest"
 import { ACTIONS } from "../shell/actions"
-import { matches } from "@banda/ui/lib/keys"
-import { actionFor, keyName, rebind, RESET_KEY } from "./actions"
+import { keyText, matches } from "@banda/ui/lib/keys"
+import { actionFor, rebind, RESET_KEY } from "./actions"
 
 const press = (code: string, mods: Partial<KeyboardEvent> = {}) => ({
   code,
@@ -28,20 +28,13 @@ test("⌘ counts as Ctrl", () => {
   ).toBe(true)
 })
 
-test("a key reads as a Person writes it", () => {
-  expect(keyName({ code: "Digit3", alt: true, shift: true })).toBe(
-    "Alt+Shift+3"
-  )
-  expect(keyName({ code: "Enter", alt: true })).toBe("Alt+Return")
-})
-
 test("every action, a module's or the window's, has its own id and key", () => {
   const ids = ACTIONS.map((action) => action.id)
   expect(new Set(ids).size).toBe(ids.length)
-  const keys = ACTIONS.flatMap((action) => (action.keys ?? []).map(keyName))
+  const keys = ACTIONS.flatMap((action) => (action.keys ?? []).map(keyText))
   expect(new Set(keys).size).toBe(keys.length)
   // The reset chord is its own action's, as look/src/keys.rs names it.
-  expect(keyName(RESET_KEY)).toBe("Ctrl+Alt+Shift+K")
+  expect(keyText(RESET_KEY)).toBe("Ctrl+Alt+Shift+K")
   expect(
     actionFor(
       ACTIONS,
@@ -81,7 +74,8 @@ test("keys.toml binds a key to an action, frees one, and names a wrong one", () 
     {
       path: "/c/keys.toml",
       line: 5,
-      message: "Alt+J: Banda has no action column.nothing; Alt+K lists them",
+      message:
+        "Alt+J: Banda has no action column.nothing; the key sheet lists them",
     },
   ])
   // Nothing else changed.

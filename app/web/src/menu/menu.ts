@@ -9,18 +9,14 @@
  */
 import type { Browsed, SpaceId, SpaceSummary } from "@banda/contract"
 import { waits } from "@banda/ui/components/banda-mark"
-import type { Key } from "@banda/ui/lib/keys"
+import { type Key, keyLabel, keyText } from "@banda/ui/lib/keys"
 import type { Listed, Lists } from "@banda/ui/pane"
 import type { Action, MenuRow } from "@banda/ui/module"
-import { keyName } from "../actions/actions"
 import type { Shell } from "../shell/actions"
 import { archivable } from "../sidebar/archived"
 
 /** Where the menu opens: its root, or its Actions, as the key sheet. */
 export type At = "root" | "actions"
-
-/** The key that opens the menu, as the sidebar's field shows it. */
-export const MENU_KEY: Key = { code: "Space", alt: true }
 
 /** One row, and what choosing it does. */
 export type Choice =
@@ -537,10 +533,10 @@ export function actsOf(row: Choice, sources: Sources): Act[] {
           },
         },
         ...(row.action.keys ?? []).map((key) => ({
-          title: `Free ${keyName(key)}`,
+          title: `Free ${keyLabel(key)}`,
           row: {
             kind: "free" as const,
-            id: `free:${keyName(key)}`,
+            id: `free:${keyText(key)}`,
             action: row.action,
             key,
           },

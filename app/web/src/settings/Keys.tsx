@@ -13,9 +13,9 @@ import { Button } from "@banda/ui/components/button"
 import { Card } from "@banda/ui/components/card"
 import { Kbd } from "@banda/ui/components/kbd"
 import { useWrite } from "@banda/ui/hooks/use-write"
-import { keyToBind } from "@banda/ui/lib/keys"
+import { keyLabel, keyText, keyToBind } from "@banda/ui/lib/keys"
 import { KeyboardIcon } from "lucide-react"
-import { bindPath, KEYS_FILE, keyName, RESET_KEY } from "../actions/actions"
+import { bindPath, KEYS_FILE, RESET_KEY } from "../actions/actions"
 import { useLookKeys } from "../look"
 import { RowFrame } from "./SettingRow"
 
@@ -58,7 +58,7 @@ export function Keys({ lit }: { lit?: string }) {
         )}
       </Card>
       <p className="px-1 text-xs text-muted-foreground">
-        <Kbd>{keyName(RESET_KEY)}</Kbd> brings the window's own keys back until
+        <Kbd>{keyLabel(RESET_KEY)}</Kbd> brings the window's own keys back until
         keys.toml changes, and opens this page. No file binds it.
       </p>
     </div>
@@ -93,8 +93,8 @@ function Line({
       if (!pressed) return
       ask(false)
       if ("refused" in pressed) return write(Promise.resolve([pressed.refused]))
-      if (keyName(pressed.key) === bind.text) return
-      write(settings.rename(KEYS_FILE, bindPath(bind), keyName(pressed.key)))
+      if (keyText(pressed.key) === bind.text) return
+      write(settings.rename(KEYS_FILE, bindPath(bind), keyText(pressed.key)))
     }
     window.addEventListener("keydown", onKey, { capture: true })
     return () => window.removeEventListener("keydown", onKey, { capture: true })
@@ -136,7 +136,7 @@ function Line({
         {asking ? (
           <span className="text-muted-foreground">Press a key…</span>
         ) : (
-          <Kbd>{bind.text}</Kbd>
+          <Kbd>{keyLabel(bind)}</Kbd>
         )}
       </Button>
     </RowFrame>

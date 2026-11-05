@@ -46,6 +46,7 @@ import { lying, nudge, pushed } from "./moving"
 import type { Frame } from "./PaneFrame"
 import { STEP_ASIDE, useReorder } from "./reorder"
 import { type Carrying, landIn, useMoving } from "./useMoving"
+import { useKeyLabel } from "@banda/ui/hooks/use-key-of"
 
 /** Where a Pane lands before the overview is drawn: nowhere. */
 const ASIDE = { land: () => ({}), scroll: () => false }
@@ -706,6 +707,7 @@ function Row({
   onClosePane: (entry: string) => void
   onGo: () => void
 }) {
+  const closeTitle = useKeyLabel()("pane.close", "Close")
   const said = useSaid()
   const empty = workspace.columns.length === 0
   const scale = empty ? zoom : fit.zoom
@@ -797,7 +799,7 @@ function Row({
                     size="icon-xs"
                     tabIndex={-1}
                     aria-label={`Close ${title}`}
-                    title="Close (Alt+W)"
+                    title={closeTitle}
                     className="absolute top-1.5 right-1.5 z-1 rounded-md border border-overview-foreground/20 bg-popover text-popover-foreground opacity-0 shadow-sm transition-opacity duration-150 group-hover/over:opacity-100 hover:bg-popover hover:text-destructive motion-reduce:transition-none [@media(hover:none)]:opacity-100"
                     onMouseDown={(event) => event.preventDefault()}
                     onClick={(event) => {
@@ -868,6 +870,10 @@ function WorkspaceLabel({
   | "onPointerCancel"
   | "onLostPointerCapture"
 >) {
+  const keyFor = useKeyLabel()
+  const moves = [keyFor("workspace.move-up"), keyFor("workspace.move-down")]
+    .filter(Boolean)
+    .join(", ")
   const look = cn(
     "group/number shrink-0 self-start rounded-md pt-0.5 pb-1 text-center text-sm font-medium tabular-nums transition-colors duration-150 select-none motion-reduce:transition-none",
     current
@@ -888,7 +894,7 @@ function WorkspaceLabel({
       // The focus stays with the overview, which takes the keys.
       tabIndex={-1}
       aria-label={`Move workspace ${number}`}
-      title="Drag to move (Alt+Shift+PageUp/PageDown)"
+      title={moves ? `Drag to move (${moves})` : "Drag to move"}
       className={cn(
         look,
         "cursor-grab group-data-lifted/place:cursor-grabbing group-data-lifted/place:bg-overview-foreground/15 hover:bg-overview-foreground/10 active:cursor-grabbing"

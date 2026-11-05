@@ -89,9 +89,9 @@ pub struct Look {
     pub columns: columns::Columns,
     /// The bar, besides its height.
     pub bar: Bar,
-    /// The drawer on Alt+` (ADR 0025, decision 8).
+    /// The drawer, a quick Thread over the workspace (ADR 0025, decision 8).
     pub drawer: Drawer,
-    /// The overview on Alt+O (ADR 0025, decision 7).
+    /// The overview of every workspace (ADR 0025, decision 7).
     pub overview: Overview,
     /// How a Group of columns shows (ADR 0065).
     pub groups: Groups,
@@ -153,7 +153,7 @@ pub struct Bar {
     pub right: Vec<String>,
 }
 
-/// The drawer on Alt+` (ADR 0025, decision 8).
+/// The drawer, a quick Thread over the workspace (ADR 0025, decision 8).
 #[derive(Clone, Debug, PartialEq, Serialize, TS)]
 #[ts(export, export_to = "look/")]
 pub struct Drawer {
@@ -166,7 +166,7 @@ pub struct Drawer {
     pub harness: Option<String>,
 }
 
-/// The overview on Alt+O (ADR 0025, decision 7).
+/// The overview of every workspace (ADR 0025, decision 7).
 #[derive(Clone, Debug, PartialEq, Serialize, TS)]
 #[ts(export, export_to = "look/")]
 pub struct Overview {

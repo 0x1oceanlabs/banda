@@ -19,7 +19,15 @@ import {
 } from "@banda/ui/components/suggestions"
 import { useAct } from "@banda/ui/hooks/use-act"
 import { useWrite } from "@banda/ui/hooks/use-write"
-import { type Key, keyToBind, matches, sameKey } from "@banda/ui/lib/keys"
+import {
+  type Key,
+  keyCaps,
+  keyLabel,
+  keyText,
+  keyToBind,
+  matches,
+  sameKey,
+} from "@banda/ui/lib/keys"
 import type { Action, Here, MenuRow, Source } from "@banda/ui/module"
 import {
   CheckIcon,
@@ -34,7 +42,7 @@ import {
   PlusIcon,
   SearchIcon,
 } from "lucide-react"
-import { KEYS_FILE, keyName, writeBind } from "../actions/actions"
+import { KEYS_FILE, writeBind } from "../actions/actions"
 import type { Lists } from "@banda/ui/pane"
 import { useLookSidebar } from "../look"
 import { runs, sources as allSources } from "../registry"
@@ -390,7 +398,7 @@ function Menu({
         return write(
           row.key,
           "none",
-          `${keyName(row.key)} goes to the Pane now`
+          `${keyLabel(row.key)} goes to the Pane now`
         )
       case "folder":
         setWords(row.path)
@@ -425,7 +433,7 @@ function Menu({
     write(
       key,
       action.id,
-      `${keyName(key)} runs “${action.title}” now` +
+      `${keyLabel(key)} runs “${action.title}” now` +
         (had ? `, not “${had.title}”` : "")
     )
   }
@@ -726,7 +734,7 @@ function RowView({
           <span className="min-w-0 flex-1 truncate">{row.action.title}</span>
           {row.action.keys?.map((key) => (
             <Keys
-              key={keyName(key)}
+              key={keyText(key)}
               keyOf={key}
               bind={binds.find((bind) => sameKey(bind, key))}
             />
@@ -839,11 +847,9 @@ function Detail({ children }: { children: React.ReactNode }) {
 function Keys({ keyOf, bind }: { keyOf: Key; bind?: Bind }) {
   return (
     <KbdGroup title={bind && `${KEYS_FILE}, line ${bind.line}`}>
-      {keyName(keyOf)
-        .split("+")
-        .map((part) => (
-          <Cap key={part} part={part} mine={!!bind} />
-        ))}
+      {keyCaps(keyOf).map((part) => (
+        <Cap key={part} part={part} mine={!!bind} />
+      ))}
     </KbdGroup>
   )
 }
@@ -857,9 +863,8 @@ function FamilyKeys({ actions }: { actions: readonly Action<Shell>[] }) {
   const first = keys[0]
   if (!first || keys.some((key) => !sameKey(key, { ...first, code: key.code })))
     return null
-  const parts = keyName(first).split("+")
-  const mods = parts.slice(0, -1)
-  const names = keys.map((key) => keyName({ code: key.code }))
+  const mods = keyCaps(first).slice(0, -1)
+  const names = keys.map((key) => keyCaps({ code: key.code }).join(""))
   const run =
     names.every((name, n) => name === String(Number(names[0]) + n)) &&
     names.length > 2

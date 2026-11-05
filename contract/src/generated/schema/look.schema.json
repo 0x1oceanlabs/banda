@@ -54,11 +54,11 @@
       "$ref": "#/$defs/Bar"
     },
     "drawer": {
-      "description": "The drawer on Alt+` (ADR 0025, decision 8).",
+      "description": "The drawer, a quick Thread over the workspace (ADR 0025, decision 8).",
       "$ref": "#/$defs/Drawer"
     },
     "overview": {
-      "description": "The overview on Alt+O (ADR 0025, decision 7).",
+      "description": "The overview of every workspace (ADR 0025, decision 7).",
       "$ref": "#/$defs/Overview"
     },
     "groups": {
@@ -487,14 +487,14 @@
       "type": "object",
       "properties": {
         "presets": {
-          "description": "What Alt+Ctrl+Left and Right step through.",
+          "description": "What the keys that widen and narrow a column step through.",
           "type": "array",
           "items": {
             "type": "string"
           }
         },
         "heights": {
-          "description": "What Alt+Shift+R and Alt+Ctrl+Up and Down step a Pane's height\nthrough, as shares of its column.",
+          "description": "What the keys of a Pane's height step it through, as shares of its\ncolumn.",
           "type": "array",
           "items": {
             "type": "string"

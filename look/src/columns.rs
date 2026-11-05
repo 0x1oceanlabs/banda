@@ -19,11 +19,11 @@ use ts_rs::TS;
 #[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct ColumnsSettings {
-    /// What Alt+Ctrl+Left and Right step through.
+    /// What the keys that widen and narrow a column step through.
     #[schemars(with = "Option<Vec<String>>")]
     pub presets: Option<Vec<Spanned<String>>>,
-    /// What Alt+Shift+R and Alt+Ctrl+Up and Down step a Pane's height
-    /// through, as shares of its column.
+    /// What the keys of a Pane's height step it through, as shares of its
+    /// column.
     #[schemars(with = "Option<Vec<String>>")]
     pub heights: Option<Vec<Spanned<String>>>,
     /// A new column's width, where its Pane does not ask for its own.

@@ -24,7 +24,6 @@ import {
   TileHeader,
 } from "@banda/ui/components/pane-header"
 import { DetailsRows } from "@banda/ui/components/thread-details"
-import type { Key } from "@banda/ui/lib/keys"
 import { type Listed, type PaneState, type Place, within } from "@banda/ui/pane"
 import type { Args } from "@banda/ui/module"
 import {
@@ -46,6 +45,7 @@ import { ThreadMark } from "../sidebar/Row"
 import type { Plan } from "./arrange"
 import type { Entry } from "./model"
 import { type MenuFrame, PaneMenu, type Stand } from "./PaneMenu"
+import { useKeyLabel } from "@banda/ui/hooks/use-key-of"
 
 /** What a framed Pane asks of the workspaces. */
 export type Frame = {
@@ -62,8 +62,6 @@ export type Frame = {
   /** Opens the Pane in a window of its own, or brings that window to the
    * front (ADR 0025, decision 9); none where a Pane cannot pop out. */
   popOut?: (entry: string) => void
-  /** The key that runs an action now, as keys.toml binds it. */
-  keyOf?: (action: string) => Key | undefined
   /** Where a Pane stands on its workspace, for the Pane menu (ADR 0066);
    * none where Panes stand on no workspace, as the drawer's. */
   stand?: (entry: string) => Stand | undefined
@@ -136,6 +134,7 @@ export function PaneFrame({
    * frame's `popOut` brings it back. */
   alone?: boolean
 }) {
+  const keyFor = useKeyLabel()
   const kind = kindOf(entry.pane.kind)
   const shown = kind && kindRuns(entry.pane.kind, modules) ? kind : undefined
   const element = useRef<HTMLElement>(null)
@@ -169,7 +168,6 @@ export function PaneFrame({
         void Promise.resolve(frame.focus(entry.id)).then(() =>
           frame.run(action, args)
         ),
-      keyOf: frame.keyOf,
       popOut: popOut !== undefined,
     }),
     [frame, entry.id, popOut]
@@ -284,7 +282,7 @@ export function PaneFrame({
                 {zoomed && (
                   <button
                     type="button"
-                    title="Back in its column (Alt+Shift+F)"
+                    title={keyFor("pane.zoom", "Back in its column")}
                     className="flex shrink-0 items-center gap-1 rounded-sm bg-muted px-1.5 text-xs text-muted-foreground hover:text-foreground"
                     onClick={() => frame.run("pane.zoom")}
                   >

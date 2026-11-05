@@ -15,6 +15,7 @@ import {
   ContextMenuContent,
   ContextMenuTrigger,
 } from "./context-menu"
+import { useKeyLabel } from "../hooks/use-key-of"
 
 /**
  * What the window gives every Pane's header, its own or the frame's (ADR
@@ -88,6 +89,7 @@ function PaneHeader({
   className?: string
   children: ReactNode
 }) {
+  const keyFor = useKeyLabel()
   const tile = useContext(TileHeader)
   const slot = useContext(Slot)
   const header = (
@@ -130,7 +132,7 @@ function PaneHeader({
           variant="ghost"
           size="icon-xs"
           aria-label={`Close ${title}`}
-          title="Close (Alt+W)"
+          title={keyFor("pane.close", "Close")}
           className="shrink-0"
           onClick={onClose}
         >

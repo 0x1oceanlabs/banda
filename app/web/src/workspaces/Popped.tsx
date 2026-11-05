@@ -3,7 +3,7 @@ import type { Engine } from "@banda/contract"
 import { useModules } from "@banda/ui/hooks/use-status"
 import { useSpaces } from "@banda/ui/hooks/use-spaces"
 import type { PaneState } from "@banda/ui/pane"
-import { actionFor, rebind } from "../actions/actions"
+import { actionFor, keysOf, rebind } from "../actions/actions"
 import type { Host } from "../host"
 import { useLookKeys } from "../look"
 import { labelOf } from "../registry"
@@ -13,6 +13,7 @@ import { send } from "./arrange"
 import { useArranged } from "./useArranged"
 import { type Entry, samePane } from "./model"
 import { type Frame, PaneFrame } from "./PaneFrame"
+import { ActionKeys } from "@banda/ui/hooks/use-key-of"
 
 /**
  * A Pane in a window of its own (ADR 0025, decision 9). The window keeps
@@ -95,6 +96,7 @@ export function Popped({
   // Of the window's keys, this window takes the two that are its Pane's.
   const keys = useLookKeys()
   const keyed = useMemo(() => rebind(ACTIONS, keys), [keys])
+  const inForce = useMemo(() => keysOf(keyed.actions), [keyed])
   useEffect(() => {
     const own: Record<string, () => void> = {
       "pane.close": close,
@@ -118,28 +120,30 @@ export function Popped({
       spaces.value.find((space) => space.id === entry?.space)?.name) ||
     "Space"
   return (
-    <div className="flex h-svh bg-desk text-foreground">
-      {entry ? (
-        <PaneFrame
-          entry={entry}
-          engine={engine}
-          modules={modules}
-          focused
-          marked={false}
-          listed={undefined}
-          spaceName={spaceName}
-          mixed={false}
-          frame={frame}
-          alone
-        />
-      ) : (
-        <p className="m-auto text-sm text-muted-foreground">
-          {live.state === "ready"
-            ? "This Pane was closed."
-            : "Banda's engine is starting…"}
-        </p>
-      )}
-    </div>
+    <ActionKeys.Provider value={inForce}>
+      <div className="flex h-svh bg-desk text-foreground">
+        {entry ? (
+          <PaneFrame
+            entry={entry}
+            engine={engine}
+            modules={modules}
+            focused
+            marked={false}
+            listed={undefined}
+            spaceName={spaceName}
+            mixed={false}
+            frame={frame}
+            alone
+          />
+        ) : (
+          <p className="m-auto text-sm text-muted-foreground">
+            {live.state === "ready"
+              ? "This Pane was closed."
+              : "Banda's engine is starting…"}
+          </p>
+        )}
+      </div>
+    </ActionKeys.Provider>
   )
 }
 

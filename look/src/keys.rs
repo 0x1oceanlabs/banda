@@ -35,11 +35,12 @@ pub const RESET: &str = "Ctrl+Alt+Shift+K";
 #[serde(deny_unknown_fields)]
 pub struct KeysSettings {
     /// Keys, such as "Alt+Shift+R", each with the id of the action it runs,
-    /// as Alt+K lists them, or "none" to free the key for the Pane. A key
-    /// is Alt, Ctrl and Shift, any of them, then a letter, a digit, F1 to
-    /// F24, Left, Right, Up, Down, Return, Space, Tab, Escape, Backspace,
-    /// Delete, Insert, Home, End, PageUp, PageDown or one of [ ] , . / ; '
-    /// - = ` \. An action keeps the window's own keys besides.
+    /// as the key sheet lists them, or "none" to free the key for the
+    /// Pane. A key is Alt, Ctrl and Shift, any of them, then a letter, a
+    /// digit, F1 to F24, Left, Right, Up, Down, Return, Space, Tab, Escape,
+    /// Backspace, Delete, Insert, Home, End, PageUp, PageDown or one of
+    /// [ ] , . / ; ' - = ` \. An action keeps the window's own keys
+    /// besides.
     #[schemars(with = "Option<BTreeMap<String, String>>")]
     pub binds: Option<BTreeMap<Spanned<String>, Spanned<String>>>,
 }
