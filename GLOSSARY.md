@@ -17,6 +17,13 @@ in a small Project of its own under `~/Banda/scratch/` (ADR 0046).
 _Avoid_: space (its name before ADR 0069; the ADRs before it say Space),
 workspace (that is a screen of Panes).
 
+**Sign**:
+What stands for a Project beside its name, or alone where there is no
+room: a picture found in its folder or picked, an emoji, an icon or one
+or two letters, on a quiet tile (ADR 0070). No Project's is a dashed
+empty tile.
+_Avoid_: badge, icon (a Pane's is its App's).
+
 **Participant**:
 Anyone who acts in a Project: a Person or an Agent. Every record names its
 author, who is always one of the two.
