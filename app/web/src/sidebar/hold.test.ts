@@ -22,9 +22,9 @@ const was = held(list(row("a"), row("b"), row("c")))
 // c called and comes to the top; d is new; a says something new.
 const next = list(row("c"), row("d"), row("a", "a, again"), row("b"))
 
-test("under the pointer the rows stay put, and say what they say now", () => {
+test("under the pointer the rows stay put, say what they say now, and a new one comes last", () => {
   const { arranged } = hold(next, was)
-  expect(ids(arranged)).toEqual(["a", "b", "c"])
+  expect(ids(arranged)).toEqual(["a", "b", "c", "d"])
   expect(arranged.sections[0].rows[0].listed.title).toBe("a, again")
 })
 
