@@ -42,6 +42,30 @@ itself. An agent takes one: reads what changed in the release notes, makes
 reason. A major waits unopened on the Dependency Dashboard issue: tick its
 box to get the PR.
 
+## See what you changed
+
+A change that shows in the window, you try in the window before its PR:
+start a trial of your worktree and drive it yourself over CDP.
+
+```sh
+scripts/try.sh --hidden --detach   # builds, starts, waits for a good start
+scripts/drive.mjs shot             # a picture: read the PNG it prints
+scripts/drive.mjs snapshot         # what the page shows, by roles and names
+scripts/drive.mjs click 'role=button[name="Settings"]'
+scripts/drive.mjs press Alt+Space
+scripts/try.sh --stop
+```
+
+The trial is your worktree's alone: its Spaces, settings and logs in
+`~/.local/state/banda-trial/<slug>`, with the fake agent for its Harness.
+`state/logs/window.log` has main's console and the page's warnings and
+errors, `engine.log` the engine's. `--detach` comes back once the start
+went well, or says what the window shows instead. `--hidden` keeps the
+window, its notices and its sounds off Roma's screen; without it, the window
+opens there to be clicked through, and is driven the same way.
+`scripts/drive.mjs --help` has the rest: `--tab` for the browser's tabs,
+`drag`, `fill`, `wait`, `eval`, `size`.
+
 ## Effect in the window's main process
 
 Electron main is written in Effect 4: `app/desktop/src` (not the

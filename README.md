@@ -134,6 +134,11 @@ the trial's Spaces, `--no-build` starts what was built last, `--list` and
 `--forget` look after the trials. Set `CARGO_TARGET_DIR` to one folder
 for every tree and only Banda's own crates build again.
 
+A trial's window serves CDP, and `scripts/drive.mjs` drives it: takes its
+picture, reads what it shows, clicks, types and presses keys. That is how
+an Agent tries what it changed ([`AGENTS.md`](AGENTS.md), "See what you
+changed").
+
 ### Pack it
 
 ```sh
