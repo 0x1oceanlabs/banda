@@ -8,7 +8,12 @@ import { useLookBar, useLookSettings } from "../look"
 import { runs, widgets } from "../registry"
 import { AsidePill } from "../safe/AsidePill"
 import { Counts } from "./Counts"
-import { type Known, PARTS, type Part, placed } from "./placed"
+import type { Layout } from "./arrange"
+import { type Known, PARTS, type Part, placed, WORKSPACES } from "./placed"
+
+/** A widget the bar draws, by its id. The workspaces' is the bar's own,
+ * so it has no node. */
+export type Drawn = { id: string; node: ReactNode }
 
 /** What the window's own widgets are given besides a module's, as the
  * window's own actions are (`Action<Context>`). */
@@ -35,12 +40,13 @@ const OWN: Readonly<Record<string, ComponentType<OwnProps>>> = {
  * The widgets of each part of the bar, drawn, as the look's `[bar]` lists
  * them, and a Problem for each id the window has no widget for. A
  * module's widget shows only while the engine runs its module (ADR 0022,
- * decision 5).
+ * decision 5). With them, `[bar]`'s lists, for a widget moved with Alt to
+ * write (ADR 0064).
  */
 export function useWidgets(
   running: readonly string[],
   props: OwnProps
-): { parts: Record<Part, ReactNode>; problems: Problem[] } {
+): { parts: Record<Part, Drawn[]>; listed: Layout; problems: Problem[] } {
   const bar = useLookBar()
   const settings = useLookSettings()["look.toml"]
   const { parts, problems } = useMemo(() => {
@@ -52,15 +58,20 @@ export function useWidgets(
     }
     return placed(bar, known, settings)
   }, [bar, running, settings])
-  const drawn = {} as Record<Part, ReactNode>
+  const drawn = {} as Record<Part, Drawn[]>
   for (const part of PARTS) {
     drawn[part] = parts[part].map((id) => {
+      if (id === WORKSPACES) return { id, node: null }
       // A module's widget takes what it knows of the window's own props.
       const Widget = Object.hasOwn(OWN, id)
         ? OWN[id]!
         : widgets.get(id)!.widget.Widget
-      return <Widget key={id} {...props} />
+      return { id, node: <Widget {...props} /> }
     })
   }
-  return { parts: drawn, problems }
+  const listed = useMemo(
+    () => ({ left: bar.left, center: bar.center, right: bar.right }),
+    [bar]
+  )
+  return { parts: drawn, listed, problems }
 }

@@ -22,7 +22,10 @@ import { DEFAULT_KEYS } from "@banda/contract/look"
 import type { Action, Args, Thing, WindowApi } from "@banda/ui/module"
 import { actionFor, rebind } from "../actions/actions"
 import { Bar } from "../bar/Bar"
+import { tomlOf } from "@banda/contract/settings"
 import { useWidgets } from "../bar/Widgets"
+import type { Layout } from "../bar/arrange"
+import { PARTS } from "../bar/placed"
 import { Watches } from "../bar/Watches"
 import { besideOf, first, isShowing, sightOf } from "../calls/sight"
 import { WELL, wentWell } from "../safe/starts"
@@ -826,6 +829,33 @@ export function Shell({
     onOpen: openPane,
     aside: (ready && live.view.aside) || null,
   })
+  // A widget moved with Alt writes the parts of `[bar]` it changed, one
+  // after another, as they are one file (ADR 0064).
+  const arrangeBar = useCallback(
+    (after: Layout) => {
+      const changed = PARTS.filter(
+        (part) =>
+          after[part].length !== bar.listed[part].length ||
+          after[part].some((id, i) => bar.listed[part][i] !== id)
+      )
+      void changed.reduce(
+        (before, part) =>
+          before.then(() =>
+            parts
+              .writeSetting(
+                "look.toml",
+                `bar.${part}`,
+                tomlOf([...after[part]])
+              )
+              .then((wrong) => {
+                if (wrong.length > 0) console.warn(...wrong)
+              })
+          ),
+        Promise.resolve()
+      )
+    },
+    [bar.listed, parts]
+  )
   const choose = useCallback(
     (row: Exclude<Choice, Branch | Own>) => {
       switch (row.kind) {
@@ -919,6 +949,8 @@ export function Shell({
         onSidebar={toggleSidebar}
         problems={[...keyed.problems, ...bar.problems]}
         widgets={bar.parts}
+        listed={bar.listed}
+        onArrange={arrangeBar}
         working={
           Object.values(lists)
             .flat()

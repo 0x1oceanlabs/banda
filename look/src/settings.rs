@@ -239,7 +239,8 @@ pub struct Bar {
     /// How the bar shows the workspaces: `"numbers"`, or `"dots"` with the
     /// one shown drawn long, as GNOME's.
     pub workspaces: Option<Workspaces>,
-    /// The widgets after the workspaces, by id, in order (ADR 0024).
+    /// The widgets on the bar's left, after the Mark, by id, in order: the
+    /// workspaces, `"workspaces.list"` (ADR 0024, ADR 0064).
     pub left: Option<Vec<String>>,
     /// The widgets in the bar's middle, by id, in order: the sidebar's
     /// counts, `"sidebar.counts"`.
@@ -250,7 +251,7 @@ pub struct Bar {
 }
 
 /// Banda's widgets in each part of the bar, by id (ADR 0024, decision 4).
-pub const BAR_LEFT: &[&str] = &[];
+pub const BAR_LEFT: &[&str] = &["workspaces.list"];
 pub const BAR_CENTER: &[&str] = &["sidebar.counts"];
 pub const BAR_RIGHT: &[&str] = &[
     "workspaces.aside",

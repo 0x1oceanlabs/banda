@@ -69,7 +69,7 @@
 # [bar]
 # height = 36
 # workspaces = "numbers"             # "numbers", or "dots" with the one shown drawn long
-# left = []                          # widgets after the workspaces, by id, in order
+# left = ["workspaces.list"]         # widgets after the Mark, by id, in order; Alt and drag moves one
 # center = ["sidebar.counts"]        # widgets in the middle; [] leaves it empty
 # right = ["workspaces.aside", "terminal.ports", "harnesses.limits", "notifications.recent"]  # widgets on the right, before the connection
 

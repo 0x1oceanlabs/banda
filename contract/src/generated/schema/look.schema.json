@@ -291,7 +291,7 @@
           "$ref": "#/$defs/Workspaces"
         },
         "left": {
-          "description": "The widgets after the workspaces, by id, in order (ADR 0024).",
+          "description": "The widgets on the bar's left, after the Mark, by id, in order: the\nworkspaces, `\"workspaces.list\"` (ADR 0024, ADR 0064).",
           "type": "array",
           "items": {
             "type": "string"

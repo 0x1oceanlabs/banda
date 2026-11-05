@@ -440,7 +440,7 @@ fn columns_and_fonts_come_through_the_layers() {
 fn the_bar_s_widgets_stand_where_look_toml_lists_them() {
     let machine = Machine::new(false);
     let bar = machine.look().bar;
-    assert!(bar.left.is_empty());
+    assert_eq!(bar.left, ["workspaces.list"]);
     assert_eq!(bar.center, ["sidebar.counts"]);
     assert_eq!(
         bar.right,

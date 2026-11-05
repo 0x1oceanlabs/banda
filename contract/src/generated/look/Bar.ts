@@ -7,6 +7,6 @@ import type { Workspaces } from "./Workspaces";
 export type Bar = { workspaces: Workspaces, 
 /**
  * The widgets of each part, by id, in order (ADR 0024, decision 4):
- * after the workspaces, in the middle, and on the right.
+ * on the left after the Mark, in the middle, and on the right (ADR 0064).
  */
 left: Array<string>, center: Array<string>, right: Array<string>, };

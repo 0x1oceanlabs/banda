@@ -243,14 +243,15 @@ as a Person's `group.bottom` asks; none of Banda's presets has one.
 
 **Bar**:
 The line across the window's top: the Mark, which is the sidebar's button,
-the numbers of the workspaces and a `+` for a new one on its left; widgets on its right
-(ADR 0024).
+at its left edge, then widgets on its left, in its middle and on its right,
+the workspaces' numbers and their `+` among them (ADR 0024, ADR 0064).
 
 **Widget**:
 A module's item on the bar, or the window's own: an icon, maybe a
 number, that shows only while it has something to say. A click runs one
-of its module's actions. The look's `[bar]` says which widgets stand after
-the workspaces, in the middle and on the right, and in what order.
+of its module's actions. The look's `[bar]` says which widgets stand on
+the left, in the middle and on the right, and in what order; with Alt held,
+the mouse moves one there and writes it (ADR 0064).
 
 **Update**:
 A newer Banda of the same channel, which Banda downloads by itself and
