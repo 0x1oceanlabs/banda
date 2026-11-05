@@ -81,16 +81,16 @@ enum Command {
         #[arg(long)]
         command: Option<CommandId>,
     },
-    /// Adds a Space, as the window's "Add Space" does.
+    /// Adds a Project, as the window's "Add Project" does.
     Space {
         #[command(subcommand)]
         what: SpaceCommand,
     },
-    /// Prints a Space's events, one JSON object per line.
+    /// Prints a Project's events, one JSON object per line.
     Follow {
         #[arg(long)]
         space: SpaceId,
-        /// Starts after this position in the Space's log.
+        /// Starts after this position in the Project's log.
         #[arg(long, default_value_t = 0)]
         after: i64,
         #[arg(long)]
@@ -122,8 +122,8 @@ enum Command {
     },
     /// Opens the Banda menu in Banda's window, as Alt+Space does: at its
     /// root, or at ROUTE: `actions` (the key sheet), `views` (the
-    /// sidebar's view), `space.add` ("Add Space"), `space.<name>` (a
-    /// Space's Threads), or
+    /// sidebar's view), `space.add` ("Add Project"), `space.<name>` (a
+    /// Project's Threads), or
     /// `settings.<section>.<row>` (the settings Pane there). Other
     /// words open it with them typed in.
     Menu { route: Option<String> },
@@ -182,12 +182,12 @@ enum ProblemsCommand {
 
 #[derive(Subcommand)]
 enum SpaceCommand {
-    /// Adds a folder as a Space and prints it. A folder that already is
-    /// one prints that Space, back from the archive if it was there.
+    /// Adds a folder as a Project and prints it. A folder that already is
+    /// one prints that Project, back from the archive if it was there.
     Add {
         /// The folder: absolute, from ~, or from where this runs.
         path: PathBuf,
-        /// The Space's name; the folder's name when none is given.
+        /// The Project's name; the folder's name when none is given.
         #[arg(long)]
         name: Option<String>,
         /// Makes the folder first when it does not exist.

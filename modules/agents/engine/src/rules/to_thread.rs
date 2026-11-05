@@ -51,7 +51,7 @@ pub fn from_agent(answers: bool, from: ThreadId, title: &str, text: &str) -> Str
         ),
     };
     format!(
-        "The Agent of Thread \"{title}\" ({from}), another Agent of this Space, {does}; \
+        "The Agent of Thread \"{title}\" ({from}), another Agent of this Project, {does}; \
          this is not your Person's word.{then}\n\n{text}"
     )
 }
@@ -120,7 +120,7 @@ mod tests {
         assert_eq!(
             from_agent(false, from, "Plan", "Count the files."),
             format!(
-                "The Agent of Thread \"Plan\" ({from}), another Agent of this Space, writes \
+                "The Agent of Thread \"Plan\" ({from}), another Agent of this Project, writes \
                  to you; this is not your Person's word. Your last reply goes back to it when \
                  your turn ends.\n\nCount the files."
             )
@@ -128,7 +128,7 @@ mod tests {
         assert_eq!(
             from_agent(true, from, "Plan", "3 files."),
             format!(
-                "The Agent of Thread \"Plan\" ({from}), another Agent of this Space, answers \
+                "The Agent of Thread \"Plan\" ({from}), another Agent of this Project, answers \
                  what you wrote to it; this is not your Person's word.\n\n3 files."
             )
         );

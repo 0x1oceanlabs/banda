@@ -28,7 +28,7 @@ function git(folder: string, ...args: string[]): string {
   })
 }
 
-test("the Diff shows a Space's changes by scope, as T3 Code's, and reads again as the window comes back", async () => {
+test("the Diff shows a Project's changes by scope, as T3 Code's, and reads again as the window comes back", async () => {
   window = await startWindow()
   const { page, dir } = window
   await expect((await firstThread(page)).composer).toBeVisible()
@@ -208,7 +208,7 @@ test("a turn's Diff is all the turn changed, its shell's work too, from git's ch
   await expect(files.getByRole("treeitem", { name: "later.md" })).toHaveCount(0)
 })
 
-test("a turn's Diff shows what it changed outside the Space's folder, from its tool calls", async () => {
+test("a turn's Diff shows what it changed outside the Project's folder, from its tool calls", async () => {
   window = await startWindow()
   const { page, dir } = window
   const { thread, composer } = await firstThread(page)

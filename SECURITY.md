@@ -16,8 +16,8 @@ with your name, unless you would rather it were not.
 ## What counts
 
 - Banda letting an Agent, a web page or another program do what its Person
-  did not allow: outside its Space, past a permission, into another
-  Space's data.
+  did not allow: outside its Project, past a permission, into another
+  Project's data.
 - The engine's API or the window reachable by another user or another
   machine.
 - A release that is not what this repository built.

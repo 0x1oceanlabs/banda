@@ -219,11 +219,11 @@ impl Agents {
 
 banda_kernel::methods! {
     Agents(Call) as "AgentsMethods" in "agents/" {
-        /// The Threads of this Space, the latest first: each one's ID, title
+        /// The Threads of this Project, the latest first: each one's ID, title
         /// and Harness, what it was last asked, how its latest turn stands,
         /// and the Questions it waits on.
         call threads(Nothing) -> ThreadList, Read, tool "threads";
-        /// One Thread of this Space as its Person reads it: its messages and
+        /// One Thread of this Project as its Person reads it: its messages and
         /// replies, its turns and what each may do now, and its settings.
         call thread(OneThread) -> ThreadView, Read, tool "read";
         /// What a new Thread on a Harness starts with.
@@ -239,7 +239,7 @@ banda_kernel::methods! {
         /// asks it for a commit's message. It says one piece, the reply or
         /// why there is none; let go before, it stops the run.
         stream write(WriteAsk) -> Written, Write;
-        /// Writes into a Thread of this Space, or starts a new Thread on a
+        /// Writes into a Thread of this Project, or starts a new Thread on a
         /// Harness. Its Agent reads that the message is from your Thread's
         /// Agent, not its Person; when the turn it asks for ends, its last
         /// reply comes back to your Thread by itself. A message waits its
@@ -277,10 +277,10 @@ banda_kernel::methods! {
         command attach(Attach) -> Image, Write;
         /// An image's bytes.
         call image(OneImage) -> ImageData, Read;
-        /// A file a message points at, kept in the Space: one dropped on
+        /// A file a message points at, kept in the Project: one dropped on
         /// the Thread, or a long text pasted.
         command keep(Keep) -> Kept, Write;
-        /// The files in the Space's folder, for `@` in the composer.
+        /// The files in the Project's folder, for `@` in the composer.
         call files(FileQuery) -> Vec<String>, Read;
         /// Shows your Person a finished HTML page in your Thread, above
         /// your reply: a mockup, a chart, a diagram, how a feature works,
@@ -1123,7 +1123,7 @@ impl Module for Agents {
         }).await?;
         if busy {
             return Err(Refusal::conflict(
-                "A Turn is running or queued in this Space. Stop it before moving the folder.",
+                "A Turn is running or queued in this Project. Stop it before moving the folder.",
             ));
         }
         Ok(())

@@ -84,7 +84,7 @@ switch: CallMethod<SwitchAsk, null>,
  */
 branch: CallMethod<BranchAsk, null>, 
 /**
- * Makes the Space's folder a git repository.
+ * Makes the Project's folder a git repository.
  */
 init: CallMethod<Nothing, null>, 
 /**

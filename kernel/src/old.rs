@@ -23,12 +23,12 @@ pub(crate) fn move_out(root: &Path, spaces: &Path) {
             continue;
         }
         match move_one(&folder, spaces) {
-            Ok(true) => tracing::info!(folder = %folder.display(), "a Space's data moved out"),
+            Ok(true) => tracing::info!(folder = %folder.display(), "a Project's data moved out"),
             Ok(false) => {}
             Err(error) => tracing::error!(
                 folder = %folder.display(),
                 %error,
-                "a Space's data did not move out; it stays in .banda/"
+                "a Project's data did not move out; it stays in .banda/"
             ),
         }
     }
@@ -42,7 +42,7 @@ fn move_one(folder: &Path, spaces: &Path) -> Result<bool, Error> {
     if data.exists() {
         tracing::warn!(
             folder = %folder.display(),
-            "this Space's data is already out of its folder; .banda/ stays"
+            "this Project's data is already out of its folder; .banda/ stays"
         );
         return Ok(false);
     }

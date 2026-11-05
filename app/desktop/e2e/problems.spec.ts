@@ -131,7 +131,7 @@ test("a new Problem tells once, silently, and opens in Settings → Problems (AD
   ).toHaveAttribute("aria-expanded", "true")
 })
 
-test("Look into it asks an Agent in a new Thread, in the Space of Banda's checkout (ADR 0039)", async () => {
+test("Look into it asks an Agent in a new Thread, in the Project of Banda's checkout (ADR 0039)", async () => {
   window = await startWindow()
   const { page } = window
   await expect((await firstThread(page)).composer).toBeVisible()

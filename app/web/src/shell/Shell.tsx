@@ -1029,7 +1029,7 @@ export function Shell({
   )
   const spaceName = useCallback(
     (id: SpaceId) =>
-      spaces.find((space) => space.id === id)?.name || "No Space",
+      spaces.find((space) => space.id === id)?.name || "No Project",
     [spaces]
   )
 
@@ -1115,7 +1115,7 @@ export function Shell({
               onAddSpace={() => parts.run("space.add")}
               onPin={(space, pinned) =>
                 updateSpace(engine, { space, pinned }).catch((error: unknown) =>
-                  console.error("banda: the Space was not pinned", error)
+                  console.error("banda: the Project was not pinned", error)
                 )
               }
               onSpaceSettings={(space) => settings(`spaces/${space}`)}

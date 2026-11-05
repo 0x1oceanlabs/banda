@@ -23,6 +23,6 @@ export function pickPreset(name: string): void {
 
 export const PRESET_WORDS: Readonly<Record<string, string>> = {
   inbox: "What needs you first",
-  spaces: "Threads under their Spaces",
-  places: "Spaces above, Threads by need",
+  spaces: "Threads under their Projects",
+  places: "Projects above, Threads by need",
 }

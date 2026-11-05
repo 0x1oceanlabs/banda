@@ -388,7 +388,7 @@ test("tabs open, show and close as Chrome's, on top or on the left", async () =>
   await expect(tab("Alpha")).toHaveAttribute("aria-selected", "true")
 })
 
-test("the Banda menu opens an address, and a file of the focused Space, in a browser", async () => {
+test("the Banda menu opens an address, and a file of the focused Project, in a browser", async () => {
   const address = await serve({ "/": "<title>Alpha</title>" })
   window = await startWindow()
   const { app, page, dir } = window

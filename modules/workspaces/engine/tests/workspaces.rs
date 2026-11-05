@@ -239,7 +239,7 @@ async fn an_agent_arranges_its_own_spaces_panes_and_sees_the_others_when_let() {
     assert_eq!(home_pane["kind"], "browser.browser");
     assert!(
         home_pane.get("args").is_none(),
-        "no Space is told another's args"
+        "no Project is told another's args"
     );
 
     // It opens its Thread beside the other Space's Pane, in its own Space.

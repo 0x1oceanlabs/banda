@@ -11,7 +11,7 @@ const STATUS = { at: 1, repo: true, files: [], added: 0, removed: 0 }
 beforeEach(() => vi.useFakeTimers())
 afterEach(() => vi.useRealTimers())
 
-test("every hearer of a Space shares one watch, kept a while after the last", () => {
+test("every hearer of a Project shares one watch, kept a while after the last", () => {
   const { engine: one, streams } = fakeEngine()
   const [a, b] = [vi.fn(), vi.fn()]
   const stopA = hearStatus(one, "s", a)
@@ -41,7 +41,7 @@ test("a watch the engine ended is asked again for those still hearing", () => {
   expect(heard).toHaveBeenCalledTimes(3)
 })
 
-test("a refused watch waits for the next hearer, and a lingering one stays its Space's", () => {
+test("a refused watch waits for the next hearer, and a lingering one stays its Project's", () => {
   const { engine: one, streams } = fakeEngine()
   const stop = hearStatus(one, "s", () => {})
   streams[0]!.onEnd({ code: "forbidden", message: "No." })

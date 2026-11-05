@@ -122,13 +122,13 @@ export function branchName(branch: Branch): string {
 }
 
 const VIEWS = "Sidebar view"
-const ADD_SPACE = "Add Space"
+const ADD_SPACE = "Add Project"
 /** T3 Code's words for finding a missing folder. */
 export const LOCATE = "Locate folder"
 
 /** Each way to add a Space: its row's words. */
 export const SOURCES: Record<Source, { title: string; about: string }> = {
-  new: { title: "New Space", about: "Start a new Space from a name" },
+  new: { title: "New Project", about: "Start a new Project from a name" },
   folder: { title: "Local folder", about: "Browse a folder on disk" },
 }
 
@@ -458,7 +458,7 @@ export function menuOf({
       rows: fitting(threads, threadTexts).slice(0, SHOWN.threads),
     },
     {
-      label: "Spaces",
+      label: "Projects",
       rows: fitting(spaces.map(spaceBranch), (row) =>
         "space" in row ? [row.space.name] : []
       ).slice(0, SHOWN.spaces),

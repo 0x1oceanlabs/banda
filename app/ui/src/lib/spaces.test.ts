@@ -13,7 +13,7 @@ const space: SpaceSummary = {
   missing: false,
 }
 
-test("pickers omit scratch and archived Spaces while keeping pinned Spaces first", () => {
+test("pickers omit scratch and archived Projects while keeping pinned Projects first", () => {
   const pinned = { ...space, id: "pin", pinned: true }
   expect(
     shownSpaces([
@@ -25,6 +25,6 @@ test("pickers omit scratch and archived Spaces while keeping pinned Spaces first
   ).toEqual([pinned, space])
 })
 
-test("promotion changes a Space list even if no other field changes", () => {
+test("promotion changes a Project list even if no other field changes", () => {
   expect(sameSpaces([{ ...space, scratch: true }], [space])).toBe(false)
 })

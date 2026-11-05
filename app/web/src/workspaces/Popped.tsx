@@ -118,7 +118,7 @@ export function Popped({
   const spaceName =
     (spaces.state === "ready" &&
       spaces.value.find((space) => space.id === entry?.space)?.name) ||
-    "Space"
+    "Project"
   return (
     <ActionKeys.Provider value={inForce}>
       <div className="flex h-svh bg-desk text-foreground">

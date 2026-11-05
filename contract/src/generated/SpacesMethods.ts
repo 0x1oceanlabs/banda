@@ -14,37 +14,37 @@ import type { UpdateSpace } from "./UpdateSpace";
 
 export type SpacesMethods = { 
 /**
- * This computer's Spaces.
+ * This computer's Projects.
  */
 list: CallMethod<Nothing, Array<SpaceSummary>>, 
 /**
- * Makes a Space: a new folder under the root, by its name. A
- * scratch one, for a Thread in No Space, takes no name: its folder
+ * Makes a Project: a new folder under the root, by its name. A
+ * scratch one, for a Thread in No Project, takes no name: its folder
  * is new under `scratch/`.
  */
 create: CommandMethod<CreateSpace, SpaceSummary>, 
 /**
- * Adds a folder as a Space. A folder that already is one answers
- * that Space, back from the archive if it was there.
+ * Adds a folder as a Project. A folder that already is one answers
+ * that Project, back from the archive if it was there.
  */
 add: CommandMethod<AddSpace, SpaceSummary>, 
 /**
  * The folders that match a path as it is typed, for the field
- * that picks a Space's folder. Only the owner browses.
+ * that picks a Project's folder. Only the owner browses.
  */
 browse: CallMethod<Browse, Browsed>, 
 /**
- * Renames, pins or archives a Space, lets its Agents see the
- * other Spaces' Panes, or makes a Space of a scratch one, named.
+ * Renames, pins or archives a Project, lets its Agents see the
+ * other Projects' Panes, or makes a Project of a scratch one, named.
  */
 update: CommandMethod<UpdateSpace, SpaceSummary>, 
 /**
- * Names the folder a missing Space's work is in now, and opens
- * the Space there.
+ * Names the folder a missing Project's work is in now, and opens
+ * the Project there.
  */
 locate: CommandMethod<LocateSpace, SpaceSummary>, 
 /**
- * Forgets a Space and deletes its Threads; its folder and the
+ * Forgets a Project and deletes its Threads; its folder and the
  * files in it stay as they are.
  */
 remove: CommandMethod<OneSpace, null>, 

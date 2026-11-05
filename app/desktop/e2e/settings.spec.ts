@@ -452,7 +452,7 @@ test("Sharing: nothing on and no ID, then an ID as a switch turns on, and a Band
   await expect(settings).toContainText("None while nothing is shared")
 })
 
-test("The first run asks to share once, nothing ticked, after the first Space; Continue writes the answer, nothing too (ADR 0039)", async () => {
+test("The first run asks to share once, nothing ticked, after the first Project; Continue writes the answer, nothing too (ADR 0039)", async () => {
   window = await startWindow({ asked: false })
   const { page, dir } = window
   const file = join(dir, "config/sharing.toml")

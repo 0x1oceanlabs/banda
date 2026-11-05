@@ -32,7 +32,7 @@ const CHANGES: TurnChanges = {
   ],
 }
 
-test("a turn git kept shows its files outside the Space's folder too, from its tool calls", () => {
+test("a turn git kept shows its files outside the Project's folder too, from its tool calls", () => {
   const read = turnRead(KEPT, CHANGES)
   expect(read.at).toBe(7)
   expect(read.patch).toBe(KEPT.patch)
@@ -70,7 +70,7 @@ test("a turn git kept no checkpoint of is all its tool calls changed", () => {
   expect(read.drawn).toHaveLength(3)
 })
 
-test("a turn whose files are all in the Space's folder is git's", () => {
+test("a turn whose files are all in the Project's folder is git's", () => {
   const read = turnRead(KEPT, { ...CHANGES, files: CHANGES.files.slice(0, 1) })
   expect(read.files).toEqual(KEPT.files)
   expect(read.drawn).toEqual([])

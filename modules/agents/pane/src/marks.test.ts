@@ -45,7 +45,7 @@ test("a turn the Person saw end settles; a Question still asks", () => {
   ).toBe("asking")
 })
 
-test("a Space calls with its loudest Thread, and counts who waits", () => {
+test("a Project calls with its loudest Thread, and counts who waits", () => {
   const threads = [
     ended("running"),
     { ...ended("failed"), id: "t2" },

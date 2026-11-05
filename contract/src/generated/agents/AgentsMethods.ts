@@ -37,13 +37,13 @@ import type { Written } from "./Written";
 
 export type AgentsMethods = { 
 /**
- * The Threads of this Space, the latest first: each one's ID, title
+ * The Threads of this Project, the latest first: each one's ID, title
  * and Harness, what it was last asked, how its latest turn stands,
  * and the Questions it waits on.
  */
 threads: CallMethod<Nothing, ThreadList>, 
 /**
- * One Thread of this Space as its Person reads it: its messages and
+ * One Thread of this Project as its Person reads it: its messages and
  * replies, its turns and what each may do now, and its settings.
  */
 thread: CallMethod<OneThread, ThreadView>, 
@@ -67,7 +67,7 @@ changes: CallMethod<ChangesAsk, TurnChanges>,
  */
 write: StreamMethod<WriteAsk, Written>, 
 /**
- * Writes into a Thread of this Space, or starts a new Thread on a
+ * Writes into a Thread of this Project, or starts a new Thread on a
  * Harness. Its Agent reads that the message is from your Thread's
  * Agent, not its Person; when the turn it asks for ends, its last
  * reply comes back to your Thread by itself. A message waits its
@@ -131,12 +131,12 @@ attach: CommandMethod<Attach, Image>,
  */
 image: CallMethod<OneImage, ImageData>, 
 /**
- * A file a message points at, kept in the Space: one dropped on
+ * A file a message points at, kept in the Project: one dropped on
  * the Thread, or a long text pasted.
  */
 keep: CommandMethod<Keep, Kept>, 
 /**
- * The files in the Space's folder, for `@` in the composer.
+ * The files in the Project's folder, for `@` in the composer.
  */
 files: CallMethod<FileQuery, Array<string>>, 
 /**

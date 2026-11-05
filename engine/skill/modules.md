@@ -23,9 +23,9 @@ Its methods, `banda call agents.<method>`: `threads`, `thread`, `defaults`, `cha
 
 What an Agent in a Thread may call as a tool of `banda mcp`:
 
-- `threads`: The Threads of this Space, the latest first: each one's ID, title and Harness, what it was last asked, how its latest turn stands, and the Questions it waits on.
-- `read`: One Thread of this Space as its Person reads it: its messages and replies, its turns and what each may do now, and its settings.
-- `send`: Writes into a Thread of this Space, or starts a new Thread on a Harness. Its Agent reads that the message is from your Thread's Agent, not its Person; when the turn it asks for ends, its last reply comes back to your Thread by itself. A message waits its turn in a Thread that works; a Person's with `steer` joins the turn that runs.
+- `threads`: The Threads of this Project, the latest first: each one's ID, title and Harness, what it was last asked, how its latest turn stands, and the Questions it waits on.
+- `read`: One Thread of this Project as its Person reads it: its messages and replies, its turns and what each may do now, and its settings.
+- `send`: Writes into a Thread of this Project, or starts a new Thread on a Harness. Its Agent reads that the message is from your Thread's Agent, not its Person; when the turn it asks for ends, its last reply comes back to your Thread by itself. A message waits its turn in a Thread that works; a Person's with `steer` joins the turn that runs.
 - `show_visual`: Shows your Person a finished HTML page in your Thread, above your reply: a mockup, a chart, a diagram, how a feature works, an animation, a sound. Don't announce or describe it after; say only what it doesn't. The frame is your reply's width, on the Thread's own background, and fits the page's height up to 20000px. Leave html, body and the outer element with no background colour, no outer card, border, banner title or side padding; Banda adds an 8px gutter for focus rings and shadows. A box that needs its own background gets 16px padding and var(--radius) corners. Give charts fixed pixel heights and let the content set the height: no vh units and no height:100% on html or body, as the frame grows to fit the page. Use the window's colours as CSS variables on :root, not fixed colours: --background, --foreground, --muted, --card, --popover, --secondary, --border, --input, --ring, --primary, --accent, --destructive, --warning, --success, --info, --code-background (most have a matching -foreground; accent, destructive and warning also have -surface), --chart-1 to --chart-6, --radius, --font-sans, --font-mono. Banda's sheet sets the text colour and font. Inline <style> and <script>; web addresses load as they are. A local image goes in by its absolute path, in src, srcset, poster or CSS url(): PNG, JPEG, GIF, WebP or SVG, up to 10 MiB each and 25 MiB a page. Sound plays once your Person clicks in the page.
 - `preview_visual`: Lays out an HTML page as show_visual would show it, and answers its picture, its height and what its console said: errors and warnings. Check every Visual with it before show_visual, fix what it shows, and pass show_visual its height. It shows your Person nothing and keeps nothing. The page's rules are show_visual's.
 - `draft_issue`: Drafts an issue about a Problem of Banda's for your Person to send to Banda on GitHub, as the Banda skill's `problems` topic says: they see it as a card with Send, Edit and Cancel, and only they send it. `comment_on` an issue that has the fingerprint already, rather than open another.
@@ -84,7 +84,7 @@ What an Agent in a Thread may call as a tool of `banda mcp`:
 
 ## Git (`git`)
 
-The Space's folder as git sees it: its branch, its changes, and the diff against a base, the last commit or the index; it stages, unstages and reverts them, commits, pushes and pulls, and switches and makes branches.
+The Project's folder as git sees it: its branch, its changes, and the diff against a base, the last commit or the index; it stages, unstages and reverts them, commits, pushes and pulls, and switches and makes branches.
 
 Its actions, which `keys.toml` binds by id:
 
@@ -109,8 +109,8 @@ Its methods, `banda call workspaces.<method>`: `list`, `open`, `close`, `update`
 
 What an Agent in a Thread may call as a tool of `banda mcp`:
 
-- `panes`: The Panes on the workspaces, from the top down and from the left: your Space's with their args, and, when your Person lets you see the other Spaces, theirs without. `yours` marks the ones you opened, which alone you move and close.
-- `open_pane`: Opens a Pane of your Space for your Person to see: a Thread (`agents.thread`, args `{"thread": "<id>"}`), the Diff (`git.diff`, args `{"scope": {"kind": "changes"}}`, or `uncommitted`, `staged`, or `{"kind": "commit", "sha": "<sha>"}`), or a browser at a web address (`browser.browser`, args `{"url": "https://…"}`). Beside a Pane `panes` lists, or, left out, beside your Space's Panes. It takes no focus; the Person sees a mark on it until they look.
+- `panes`: The Panes on the workspaces, from the top down and from the left: your Project's with their args, and, when your Person lets you see the other Projects, theirs without. `yours` marks the ones you opened, which alone you move and close.
+- `open_pane`: Opens a Pane of your Project for your Person to see: a Thread (`agents.thread`, args `{"thread": "<id>"}`), the Diff (`git.diff`, args `{"scope": {"kind": "changes"}}`, or `uncommitted`, `staged`, or `{"kind": "commit", "sha": "<sha>"}`), or a browser at a web address (`browser.browser`, args `{"url": "https://…"}`). Beside a Pane `panes` lists, or, left out, beside your Project's Panes. It takes no focus; the Person sees a mark on it until they look.
 - `move_pane`: Moves a Pane you opened beside another that `panes` lists.
 - `close_pane`: Closes a Pane you opened.
 

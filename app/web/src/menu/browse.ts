@@ -6,7 +6,7 @@ import { useAct } from "@banda/ui/hooks/use-act"
 import type { Browsing } from "./menu"
 
 /** The path field's words before it is typed into (ADR 0026). */
-export const PATH_PLACEHOLDER = "Enter Space path (e.g. ~/code/my-app)"
+export const PATH_PLACEHOLDER = "Enter Project path (e.g. ~/code/my-app)"
 
 /** The button that opens the system's folder picker, in T3 Code's words. */
 export const PICK_FOLDER = "Open in Files"

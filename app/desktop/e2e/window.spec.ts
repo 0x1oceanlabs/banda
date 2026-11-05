@@ -42,7 +42,7 @@ test.afterEach(async () => {
   await window?.close()
 })
 
-test("a Person makes a Space, starts a Thread in it, and works with it", async () => {
+test("a Person makes a Project, starts a Thread in it, and works with it", async () => {
   window = await startWindow()
   const { page } = window
   // A checkout is Banda Local (ADR 0033); its profile stays beside the
@@ -60,7 +60,7 @@ test("a Person makes a Space, starts a Thread in it, and works with it", async (
   await expect(page.getByRole("region", { name: "New Thread" })).toBeVisible()
   await expect(composer).toBeFocused()
   await expect(
-    thread.getByRole("button", { name: "Space: Work" })
+    thread.getByRole("button", { name: "Project: Work" })
   ).toBeVisible()
   await page.screenshot({ path: "test-results/1-first-space.png" })
   await composer.fill("hello")
@@ -68,7 +68,7 @@ test("a Person makes a Space, starts a Thread in it, and works with it", async (
   await expect(thread.getByText("You said: hello")).toBeVisible()
   await expect(page.getByRole("region", { name: "hello" })).toBeVisible()
   // Once started, the Thread's Space is its own.
-  await expect(thread.getByRole("button", { name: /^Space:/ })).toBeHidden()
+  await expect(thread.getByRole("button", { name: /^Project:/ })).toBeHidden()
   const sidebar = page.getByRole("complementary", { name: "Sidebar" })
   await expect(sidebar.getByRole("button", { name: /hello/ })).toBeVisible()
 
@@ -496,7 +496,7 @@ test("a Person signs in in a terminal below the turn, and it goes again", async 
   await expect(terminal).toBeHidden()
 })
 
-test("a Person works in a terminal in the Space, and closing it stops the shell", async () => {
+test("a Person works in a terminal in the Project, and closing it stops the shell", async () => {
   window = await startWindow()
   const { page, dir } = window
   await firstThread(page)
@@ -1397,7 +1397,7 @@ test("Ctrl+F finds in the Thread and opens what folds it, and the minimap goes t
   ).toBeInViewport()
 })
 
-test("@ names a file in the Space's folder, picked from a list", async () => {
+test("@ names a file in the Project's folder, picked from a list", async () => {
   window = await startWindow()
   const { page, dir } = window
   const { thread, composer } = await firstThread(page)
@@ -2116,7 +2116,7 @@ test("the sidebar is arranged by sidebar.toml, and its view menu writes the file
   await page.getByRole("menuitemradio", { name: /^places/ }).click()
   await expect(view).toHaveAccessibleName("View: places")
   expect(readFileSync(file, "utf8")).toBe('# mine\npreset = "places"\n')
-  await expect(sidebar.getByRole("group", { name: "Spaces" })).toBeVisible()
+  await expect(sidebar.getByRole("group", { name: "Projects" })).toBeVisible()
   await page.screenshot({ path: "test-results/23-sidebar-places.png" })
 
   // A wrong key is named by its line, and the last good arrangement stays.
@@ -3284,7 +3284,7 @@ test("a Thread picked in the sidebar comes to the Strip's left, beside it", asyn
     .toBeLessThan(3)
 })
 
-test("a Space's Agents open in a row on its workspace, from wherever the Person is", async () => {
+test("a Project's Agents open in a row on its workspace, from wherever the Person is", async () => {
   window = await startWindow()
   const { page } = window
   const { thread, composer } = await firstThread(page)
@@ -4113,7 +4113,7 @@ test("Alt+Space opens the Banda menu: it finds a Thread, and Alt+Enter starts on
   await expect(menu).toBeHidden()
 })
 
-test("the Banda menu goes into a Space and the sidebar's view, and Tab shows what a row can do", async () => {
+test("the Banda menu goes into a Project and the sidebar's view, and Tab shows what a row can do", async () => {
   window = await startWindow()
   const { page } = window
   const { thread, composer } = await firstThread(page)
@@ -4211,7 +4211,7 @@ test("banda menu opens the Banda menu at a route, from outside the window", asyn
   ).toBeVisible()
 })
 
-test("Add Space adds a folder on disk from the Banda menu, and one banda space add made shows as the window comes back", async () => {
+test("Add Project adds a folder on disk from the Banda menu, and one banda space add made shows as the window comes back", async () => {
   window = await startWindow()
   const { page, dir, banda } = window
   await firstThread(page)
@@ -4224,8 +4224,8 @@ test("Add Space adds a folder on disk from the Banda menu, and one banda space a
 
   // The sidebar's folder button opens "Add Space"; "Local folder" starts
   // the path at ~ and lists the folders that fit what is typed.
-  await sidebar.getByRole("button", { name: "Add Space" }).click()
-  await expect(menu.getByRole("option", { name: /New Space/ })).toBeVisible()
+  await sidebar.getByRole("button", { name: "Add Project" }).click()
+  await expect(menu.getByRole("option", { name: /New Project/ })).toBeVisible()
   await search.fill("local")
   await search.press("Enter")
   await expect(search).toHaveValue("~/")
@@ -4240,7 +4240,7 @@ test("Add Space adds a folder on disk from the Banda menu, and one banda space a
   // Enter adds it, and its new Thread opens.
   await search.press("Enter")
   await expect(menu).toBeHidden()
-  await expect(page.getByRole("button", { name: "Space: app" })).toBeVisible()
+  await expect(page.getByRole("button", { name: "Project: app" })).toBeVisible()
 
   // A Space added from a terminal shows once the window comes back to
   // the front.
@@ -4249,7 +4249,9 @@ test("Add Space adds a folder on disk from the Banda menu, and one banda space a
   await setInFront(page, true)
   await page.keyboard.press("Alt+Space")
   await search.fill("cli")
-  await expect(menu.getByRole("group", { name: "Spaces" })).toContainText("cli")
+  await expect(menu.getByRole("group", { name: "Projects" })).toContainText(
+    "cli"
+  )
 })
 
 test("Open in Files adds the folder picked in the system's picker, opened where the path points", async () => {
@@ -4273,7 +4275,7 @@ test("Open in Files adds the folder picked in the system's picker, opened where 
 
   await page
     .getByRole("complementary", { name: "Sidebar" })
-    .getByRole("button", { name: "Add Space" })
+    .getByRole("button", { name: "Add Project" })
     .click()
   await search.fill("local")
   await search.press("Enter")
@@ -4283,14 +4285,14 @@ test("Open in Files adds the folder picked in the system's picker, opened where 
   await menu.getByRole("button", { name: "Open in Files" }).click()
   await expect(menu).toBeHidden()
   await expect(
-    page.getByRole("button", { name: "Space: picked" })
+    page.getByRole("button", { name: "Project: picked" })
   ).toBeVisible()
   expect(
     await app.evaluate(() => (globalThis as { pickedAt?: string }).pickedAt)
   ).toBe(work)
 })
 
-test("a Space is pinned, named, archived and removed from its row's menu and the settings, as in T3 Code", async () => {
+test("a Project is pinned, named, archived and removed from its row's menu and the settings, as in T3 Code", async () => {
   window = await startWindow()
   const { page, dir, app, banda } = window
   const { thread, composer } = await firstThread(page)
@@ -4306,7 +4308,7 @@ test("a Space is pinned, named, archived and removed from its row's menu and the
   const sidebar = page.getByRole("complementary", { name: "Sidebar" })
   await sidebar.getByRole("button", { name: /^View: / }).click()
   await page.getByRole("menuitemradio", { name: /^places/ }).click()
-  const spaces = sidebar.getByRole("group", { name: "Spaces" })
+  const spaces = sidebar.getByRole("group", { name: "Projects" })
   const header = spaces.getByRole("button", { name: /^Work/ })
 
   // The row's menu: Copy path, and Pin Space, which turns to Unpin.
@@ -4317,24 +4319,26 @@ test("a Space is pinned, named, archived and removed from its row's menu and the
     .poll(() => app.evaluate(({ clipboard }) => clipboard.readText()))
     .toMatch(/\/Work$/)
   await header.click({ button: "right" })
-  await page.getByRole("menuitem", { name: "Pin Space" }).click()
+  await page.getByRole("menuitem", { name: "Pin Project" }).click()
   await header.click({ button: "right" })
   await expect(
-    page.getByRole("menuitem", { name: "Unpin Space" })
+    page.getByRole("menuitem", { name: "Unpin Project" })
   ).toBeVisible()
 
   // Space settings opens the settings at the Space, pinned.
-  await page.getByRole("menuitem", { name: "Space settings" }).click()
+  await page.getByRole("menuitem", { name: "Project settings" }).click()
   const settings = page.getByRole("main").filter({ hasText: "Settings" })
-  await expect(settings.getByRole("heading", { name: "Spaces" })).toBeVisible()
+  await expect(
+    settings.getByRole("heading", { name: "Projects" })
+  ).toBeVisible()
   const picker = settings.getByRole("combobox", { name: "Space" })
   await expect(picker).toContainText("Work")
   await expect(
-    settings.getByRole("switch", { name: "Pin Space" })
+    settings.getByRole("switch", { name: "Pin Project" })
   ).toBeChecked()
 
   // A new name shows in the sidebar.
-  const name = settings.getByRole("textbox", { name: "Space name" })
+  const name = settings.getByRole("textbox", { name: "Project name" })
   await name.fill("Home")
   await name.press("Enter")
   await expect(spaces.getByRole("button", { name: /^Home/ })).toBeVisible()
@@ -4350,14 +4354,14 @@ test("a Space is pinned, named, archived and removed from its row's menu and the
   await page.screenshot({ path: "test-results/33-space-settings.png" })
 
   // Remove asks first, then the Space goes and its folder stays.
-  await settings.getByRole("button", { name: "Remove Space" }).click()
+  await settings.getByRole("button", { name: "Remove Project" }).click()
   const ask = page.getByRole("dialog", {
-    name: 'Remove Space "lab" and delete its 0 Threads?',
+    name: 'Remove Project "lab" and delete its 0 Threads?',
   })
   await expect(ask).toContainText(lab)
   await expect(ask).toContainText("This action cannot be undone.")
   await page.screenshot({ path: "test-results/34-remove-space.png" })
-  await ask.getByRole("button", { name: "Remove Space" }).click()
+  await ask.getByRole("button", { name: "Remove Project" }).click()
   await expect(ask).toBeHidden()
   await expect(picker).toContainText("Home")
   await picker.click()
@@ -4366,7 +4370,7 @@ test("a Space is pinned, named, archived and removed from its row's menu and the
   expect(existsSync(lab)).toBe(true)
 })
 
-test("a Space whose folder is gone shows as missing, and Locate folder opens it where its work is now", async () => {
+test("a Project whose folder is gone shows as missing, and Locate folder opens it where its work is now", async () => {
   // A Space from before, whose folder is no longer there.
   const id = "01a192e5-5e2b-76a7-931a-79a494cb1801"
   const manifest = {
@@ -4389,7 +4393,7 @@ test("a Space whose folder is gone shows as missing, and Locate folder opens it 
   await sidebar.getByRole("button", { name: /^View: / }).click()
   await page.getByRole("menuitemradio", { name: /^places/ }).click()
   const old = sidebar
-    .getByRole("group", { name: "Spaces" })
+    .getByRole("group", { name: "Projects" })
     .getByRole("button", { name: /^old/ })
   await expect(old).toContainText("Missing")
 
@@ -4404,7 +4408,7 @@ test("a Space whose folder is gone shows as missing, and Locate folder opens it 
   await search.press("Enter")
   await expect(menu).toBeHidden()
   await expect(old).not.toContainText("Missing")
-  await expect(page.getByRole("button", { name: "Space: old" })).toBeVisible()
+  await expect(page.getByRole("button", { name: "Project: old" })).toBeVisible()
 })
 
 test("text selected in a reply is quoted in the composer, a line apart from what is written after it", async () => {
@@ -4654,7 +4658,9 @@ test("the sidebar's edge drags its width, which the Strip follows and the window
     .poll(() => readFileSync(join(window.dir, "config/look.toml"), "utf8"))
     .toContain('mode = "dark"')
   await expect(sidebar.getByRole("button", { name: /^View: / })).toBeVisible()
-  await expect(sidebar.getByRole("button", { name: "Add Space" })).toBeVisible()
+  await expect(
+    sidebar.getByRole("button", { name: "Add Project" })
+  ).toBeVisible()
   await page.screenshot({ path: "test-results/8a-sidebar-foot.png" })
 })
 
@@ -5072,7 +5078,7 @@ flowchart LR
   await expect(composer).toBeEditable()
 })
 
-test("No Space creates a folder only on the first message", async () => {
+test("No Project creates a folder only on the first message", async () => {
   window = await startWindow()
   const { page, dir } = window
   const composer = page.getByRole("textbox", { name: "Message to Fake AI" })
@@ -5086,25 +5092,25 @@ test("No Space creates a folder only on the first message", async () => {
   ).toContainText("scratch hello")
   expect(existsSync(join(dir, "root", "scratch"))).toBe(true)
   await expect(
-    page.getByRole("group", { name: "No Space", exact: true })
+    page.getByRole("group", { name: "No Project", exact: true })
   ).toHaveCount(0)
   const view = page.getByRole("button", { name: /^View: / })
   await view.click()
   await page.getByRole("menuitemradio", { name: /^spaces/ }).click()
   await expect(
-    page.getByRole("group", { name: "No Space", exact: true })
+    page.getByRole("group", { name: "No Project", exact: true })
   ).toContainText("scratch hello")
   await view.click()
   await page.getByRole("menuitemradio", { name: /^places/ }).click()
   await expect(
-    page.getByRole("group", { name: "No Space", exact: true })
+    page.getByRole("group", { name: "No Project", exact: true })
   ).toHaveCount(0)
   await expect(
     page.getByRole("complementary", { name: "Sidebar" })
   ).toContainText("scratch hello")
 })
 
-test("No Space keeps its first attachment and message in one folder", async () => {
+test("No Project keeps its first attachment and message in one folder", async () => {
   window = await startWindow()
   const { page, dir } = window
   const composer = page.getByRole("textbox", { name: "Message to Fake AI" })
@@ -5121,7 +5127,7 @@ test("No Space keeps its first attachment and message in one folder", async () =
   expect(readdirSync(join(dir, "root", "scratch"))).toHaveLength(1)
 })
 
-test("a No Space Thread becomes a Space and keeps working after its folder moves", async () => {
+test("a No Project Thread becomes a Project and keeps working after its folder moves", async () => {
   window = await startWindow()
   const { page, dir } = window
   const composer = page.getByRole("textbox", { name: "Message to Fake AI" })
@@ -5138,12 +5144,14 @@ test("a No Space Thread becomes a Space and keeps working after its folder moves
     .getByRole("complementary", { name: "Sidebar" })
     .getByRole("button", { name: /promote this/ })
     .click({ button: "right" })
-  await page.getByRole("menuitem", { name: "Make a Space from it…" }).click()
+  await page.getByRole("menuitem", { name: "Make a Project from it…" }).click()
   const dialog = page.getByRole("dialog", {
-    name: "Make a Space from this Thread",
+    name: "Make a Project from this Thread",
   })
   await dialog.getByLabel("Name", { exact: true }).fill("Promoted")
-  await dialog.getByRole("button", { name: "Make Space", exact: true }).click()
+  await dialog
+    .getByRole("button", { name: "Make Project", exact: true })
+    .click()
   await expect(dialog).toBeHidden()
   expect(existsSync(original)).toBe(false)
   expect(readFileSync(join(dir, "root", "Promoted", "notes.txt"), "utf8")).toBe(
@@ -5170,19 +5178,21 @@ test("promotion can keep the folder where it is", async () => {
     .getByRole("complementary", { name: "Sidebar" })
     .getByRole("button", { name: /keep here/ })
     .click({ button: "right" })
-  await page.getByRole("menuitem", { name: "Make a Space from it…" }).click()
+  await page.getByRole("menuitem", { name: "Make a Project from it…" }).click()
   const dialog = page.getByRole("dialog", {
-    name: "Make a Space from this Thread",
+    name: "Make a Project from this Thread",
   })
   await dialog.getByLabel("Name", { exact: true }).fill("Kept")
   await dialog.getByRole("radio", { name: /Keep it where it is/ }).check()
-  await dialog.getByRole("button", { name: "Make Space", exact: true }).click()
+  await dialog
+    .getByRole("button", { name: "Make Project", exact: true })
+    .click()
   await expect(dialog).toBeHidden()
   expect(existsSync(original)).toBe(true)
   expect(existsSync(join(dir, "root", "Kept"))).toBe(false)
 })
 
-test("moving a No Space folder waits for its Turn and terminals", async () => {
+test("moving a No Project folder waits for its Turn and terminals", async () => {
   window = await startWindow()
   const { page, dir } = window
   const composer = page.getByRole("textbox", { name: "Message to Fake AI" })
@@ -5198,14 +5208,16 @@ test("moving a No Space folder waits for its Turn and terminals", async () => {
     .getByRole("complementary", { name: "Sidebar" })
     .getByRole("button", { name: /please ask first/ })
   const dialog = page.getByRole("dialog", {
-    name: "Make a Space from this Thread",
+    name: "Make a Project from this Thread",
   })
   const openPromotion = async () => {
     await row.click({ button: "right" })
-    await page.getByRole("menuitem", { name: "Make a Space from it…" }).click()
+    await page
+      .getByRole("menuitem", { name: "Make a Project from it…" })
+      .click()
     await dialog.getByLabel("Name", { exact: true }).fill("Later")
     await dialog
-      .getByRole("button", { name: "Make Space", exact: true })
+      .getByRole("button", { name: "Make Project", exact: true })
       .click()
   }
   await openPromotion()

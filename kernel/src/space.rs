@@ -217,7 +217,7 @@ impl Space {
     pub(crate) fn name_of(name: &str) -> Result<&str, Refusal> {
         let name = name.trim();
         if name.is_empty() || name.chars().count() > 64 || name.contains(char::is_control) {
-            return Err(Refusal::invalid("A Space's name is 1 to 64 characters."));
+            return Err(Refusal::invalid("A Project's name is 1 to 64 characters."));
         }
         Ok(name)
     }
@@ -226,7 +226,7 @@ impl Space {
     pub(crate) fn plain_name(name: &str) -> Result<&str, Refusal> {
         crate::plain_name(name).ok_or_else(|| {
             Refusal::invalid(
-                "A Space's name is 1 to 64 characters, with no slashes and no leading dot.",
+                "A Project's name is 1 to 64 characters, with no slashes and no leading dot.",
             )
         })
     }
@@ -250,7 +250,7 @@ impl Space {
         let folder = manifest.folder.clone();
         if !folder.is_dir() {
             return Err(Refusal::not_found(format!(
-                "The Space's folder {} is not there.",
+                "The Project's folder {} is not there.",
                 folder.display()
             ))
             .into());
@@ -453,7 +453,7 @@ pub(crate) fn locked(path: &Path) -> Result<File, Error> {
     match lock.try_lock() {
         Ok(()) => Ok(lock),
         Err(TryLockError::WouldBlock) => {
-            Err(Refusal::conflict("This Space is open in another Banda.").into())
+            Err(Refusal::conflict("This Project is open in another Banda.").into())
         }
         Err(TryLockError::Error(error)) => Err(error.into()),
     }
@@ -467,7 +467,7 @@ impl Drop for Space {
             let delete = move || {
                 if let Err(error) = std::fs::remove_dir_all(&data) {
                     let data = data.display();
-                    tracing::warn!(%data, %error, "a removed Space's data was not deleted");
+                    tracing::warn!(%data, %error, "a removed Project's data was not deleted");
                 }
             };
             match tokio::runtime::Handle::try_current() {
