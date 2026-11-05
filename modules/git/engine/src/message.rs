@@ -88,7 +88,8 @@ fn words(
     said.push_str(&format!(
         ".\nRules:\n\
          - subject must be imperative, <= {SUBJECT} chars, and no trailing period\n\
-         - body can be empty string or short bullet points\n",
+         - body can be empty string or short bullet points\n\
+         - no trailers: no Co-Authored-By line, no \"Generated with\" line, nothing naming who wrote it\n",
     ));
     if new_branch {
         said.push_str("- branch must be a short semantic git branch fragment for this change\n");
@@ -138,7 +139,7 @@ struct Reply {
 pub async fn written(repo: &Repo, ask: WrittenAsk) -> Result<Message, Refusal> {
     let reply = read(&ask.reply);
     let subject = subject(&reply.subject);
-    let body = reply.body.trim();
+    let body = untrailed(&reply.body);
     let message = match body.is_empty() {
         true => subject.clone(),
         false => format!("{subject}\n\n{body}"),
@@ -164,6 +165,20 @@ fn read(reply: &str) -> Reply {
         subject: reply.to_owned(),
         ..Reply::default()
     })
+}
+
+/// `body` without the lines that say who wrote it, as a Harness may add
+/// though told not to (`Co-Authored-By: Claude …`, `🤖 Generated with
+/// …`): the Person's commits carry no such trailer.
+fn untrailed(body: &str) -> String {
+    let says_who = |line: &str| {
+        let words = line
+            .trim_start_matches(|c: char| !c.is_alphanumeric())
+            .to_lowercase();
+        words.starts_with("co-authored-by:") || words.starts_with("generated with")
+    };
+    let kept: Vec<&str> = body.lines().filter(|line| !says_who(line)).collect();
+    kept.join("\n").trim().to_owned()
 }
 
 /// A subject's first line, with no trailing period, at most 72
@@ -242,6 +257,22 @@ mod tests {
         assert_eq!(subject(&read("Fix it\nmore").subject), "Fix it");
         assert_eq!(subject(""), NO_SUBJECT);
         assert_eq!(subject(&"a".repeat(100)).len(), SUBJECT);
+    }
+
+    #[test]
+    fn a_body_keeps_no_line_that_says_who_wrote_it() {
+        let body = "- Add the card\n\nCo-Authored-By: Claude Opus <noreply@anthropic.com>\n\
+                    co-authored-by: Codex <codex@openai.com>\n\
+                    🤖 Generated with [Claude Code](https://claude.com/claude-code)\n";
+        assert_eq!(untrailed(body), "- Add the card");
+        assert_eq!(untrailed("Co-Authored-By: Claude"), "");
+        // Words that only mention it stay.
+        assert_eq!(
+            untrailed("- Explain what generated with means"),
+            "- Explain what generated with means"
+        );
+        let said = words("a.txt (+1 −0)", "", Some("main"), "", false);
+        assert!(said.contains("no Co-Authored-By line"), "{said}");
     }
 
     #[test]
