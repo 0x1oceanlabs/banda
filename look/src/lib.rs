@@ -625,15 +625,13 @@ pub fn resolve(
     };
     let glass =
         wanted && (material == Material::System || wallpaper.is_some() || wallpaper_dark.is_some());
-    if mine.hyprland.unwrap_or(true)
+    // Hyprland's settings are the omarchy theme's shape (ADR 0075, decision
+    // 3), and the glass changes the background, never the shape: Hyprland's
+    // gaps hold, glass or not.
+    if mine.hyprland.or(layers.hyprland) == Some(true)
         && let Some(found) = windows()
     {
-        let mut found = found.layer();
-        // Over a glass desk the tiles float, and the air between them is
-        // Banda's: Hyprland's gaps are for windows that touch the screen.
-        if glass {
-            found.gaps = settings::Gaps::default();
-        }
+        let found = found.layer();
         keyed_layers.push(keyed::Layer::new("hyprland", &found, None));
         layers = found.over(layers);
         sources.push(Source {

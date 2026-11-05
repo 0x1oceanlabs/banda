@@ -18,7 +18,7 @@
       "minimum": 0
     },
     "hyprland": {
-      "description": "Whether to take Hyprland's rounding, border and gaps.",
+      "description": "Whether to take Hyprland's rounding, border and gaps, glass or not.\nThe `omarchy` theme does, whose shape they are.",
       "type": "boolean"
     },
     "colors": {

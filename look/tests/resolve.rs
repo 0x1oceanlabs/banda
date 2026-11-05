@@ -202,17 +202,38 @@ fn under_hyprland_the_tiles_look_like_its_windows() {
 }
 
 #[test]
+fn under_hyprland_another_theme_keeps_its_own_shape() {
+    // Hyprland's settings are the omarchy theme's shape only (ADR 0075,
+    // decision 3).
+    let machine = Machine::new(true);
+    machine.look_toml("theme = \"banda\"\n");
+    let look = machine.under_hyprland();
+    assert_eq!(look.vars["--gap-inner"], "12px");
+    assert_eq!(look.vars["--tile-border"], "2px");
+    assert!(!look.sources.iter().any(|s| s.layer == "hyprland"));
+
+    // A pair takes the shape of the theme shown: Banda's in the dark.
+    machine.look_toml("theme = { light = \"omarchy\", dark = \"banda-dark\" }\nmode = \"dark\"\n");
+    assert_eq!(machine.under_hyprland().vars["--gap-inner"], "12px");
+
+    // Asked for, it is taken under any theme.
+    machine.look_toml("theme = \"banda\"\nhyprland = true\n");
+    assert_eq!(machine.under_hyprland().vars["--gap-inner"], "5px");
+}
+
+#[test]
 fn the_desk_is_banda_glass_made_of_the_wallpaper() {
     let machine = Machine::new(true);
-    // No wallpaper Banda knows of: the desk is solid, and the tiles keep
-    // Hyprland's gaps.
+    // No wallpaper Banda knows of: the desk is solid. The theme is
+    // Omarchy's, so the tiles keep Hyprland's gaps.
     let solid = machine.under_hyprland();
     assert!(!solid.desk.glass);
     assert_eq!(picture_of(&solid), None);
     assert_eq!(solid.vars["--gap-inner"], "5px");
 
     // Omarchy's background: Banda's glass is made of it, the same
-    // everywhere, and the tiles float in Banda's own gaps.
+    // everywhere. The glass changes the background, never the gaps (ADR
+    // 0075, decision 3).
     let picture = machine.background("1-mountains.jpg");
     let glass = machine.under_hyprland();
     assert!(glass.desk.glass);
@@ -220,7 +241,7 @@ fn the_desk_is_banda_glass_made_of_the_wallpaper() {
     assert_eq!(picture_of(&glass), Some(picture.display().to_string()));
     assert_eq!(glass.desk.wallpaper.as_ref().unwrap().from, "Omarchy");
     assert_eq!(glass.desk.sidebar, SidebarStyle::Panel);
-    assert_eq!(glass.vars["--gap-inner"], "12px");
+    assert_eq!(glass.vars["--gap-inner"], "5px");
     assert_eq!(glass.vars["--desk-blur"], "40px");
     assert_eq!(glass.vars["--desk-saturation"], "1.4");
     assert_eq!(glass.vars["--desk-grain"], "0.04");
@@ -665,7 +686,7 @@ fn the_template_says_the_defaults() {
 
 #[test]
 fn each_key_says_where_its_value_comes_from() {
-    let machine = Machine::new(false);
+    let machine = Machine::new(true);
     machine.look_toml("# mine\nradius = 4\n\n[tile]\nborder = 3\n");
     let look = machine.under_hyprland();
     let keys = &look.settings["look.toml"];
