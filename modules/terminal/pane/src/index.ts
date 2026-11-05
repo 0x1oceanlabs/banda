@@ -1,5 +1,6 @@
-/** The terminal module's window part: its Pane, its action, and its widget of the
+/** The terminal module's window part: its Pane, its actions, and its widget of the
  * servers started in Banda (ADR 0022, ADR 0044). */
+import type { ProjectId } from "@banda/contract"
 import { defineModule, zoomActions } from "@banda/ui/module"
 import { paneOf } from "@banda/ui/pane"
 import { ServersWidget } from "./Servers"
@@ -20,6 +21,25 @@ export const terminal = defineModule({
       section: "Panes",
       keys: [{ code: "Enter", mod: true, more: true }],
       run: (window) => window.open(paneOf(terminalPane, NEW_TERMINAL)),
+    },
+    {
+      // A shell's `line`, typed into a new shell of `project` beside what
+      // asked: a reply's Run (ADR 0063, decision 6). The Person pressed
+      // it; nothing else hands a shell a line. It declares no `args`, so
+      // no line of keys.toml, the Person's or an Agent's, can carry one
+      // (ADR 0071, decision 3).
+      id: "terminal.run",
+      title: "Run in a terminal",
+      section: "Panes",
+      unlisted: true,
+      run: (window, args = {}) => {
+        const { line, project } = args
+        if (typeof line !== "string" || !line.trim()) return
+        window.open(
+          paneOf(terminalPane, { ...NEW_TERMINAL, typed: line }),
+          typeof project === "string" ? (project as ProjectId) : undefined
+        )
+      },
     },
     // Its own zoom, Ctrl with + − 0, as Ghostty's and kitty's.
     ...zoomActions(TERMINAL, "terminal", "the terminal", "Terminal"),

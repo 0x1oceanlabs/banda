@@ -179,3 +179,9 @@ rest are our defaults, and they stay his to change.
   them, and wrap in the same column. A Thread not yet made has one size
   for all, which the Thread takes once made. Its thoughts, tool output and
   Visuals keep their size, as its work lines do.
+- A reply's code block is Streamdown's own `CodeBlock`, drawn by Banda's
+  `MarkdownBlock` with Run, Wrap lines and Copy in its actions; the
+  Thread's menu presses those same buttons. Run is the terminal module's
+  unlisted `terminal.run` action: a new terminal Pane starts the Person's
+  shell and types the line into it once, so the engine still never hands
+  a line to a shell itself.

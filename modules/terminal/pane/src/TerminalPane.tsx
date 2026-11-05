@@ -58,6 +58,9 @@ export type TerminalArgs = {
    * only once the one before went through, as `a && b` does; then the
    * Pane closes. */
   done: Done[] | null
+  /** A line typed into the shell once it runs, and then forgotten, so a
+   * reload never types it again: a reply's Run (ADR 0063, decision 6). */
+  typed?: string | null
 }
 
 /**
@@ -90,6 +93,9 @@ export const NEW_TERMINAL: TerminalArgs = {
 export const terminalPane = definePane<TerminalArgs>({
   kind: "terminal.terminal",
   title: (args) => args.title,
+  // A line typed once is not what the Pane is: forgetting it keeps the
+  // Pane, and its program.
+  identity: (args) => ({ ...args, typed: null }),
   icon: TerminalIcon,
   start: NEW_TERMINAL,
   letter: "T",
@@ -146,6 +152,8 @@ function TerminalPane({
       followed={followed}
       files={run !== undefined}
       paste={run && (() => run("edit.paste"))}
+      line={args.typed ?? null}
+      lineTyped={() => update({ ...args, typed: null })}
     />
   )
 }
@@ -168,6 +176,8 @@ function Screen({
   followed,
   files,
   paste,
+  line,
+  lineTyped,
 }: {
   engine: Engine
   project: ProjectId
@@ -182,6 +192,9 @@ function Screen({
   files: boolean
   /** Pastes into what has the focus; none where no window does. */
   paste?: () => void
+  /** A line to type once the program runs; `lineTyped` once it is. */
+  line: string | null
+  lineTyped: () => void
 }) {
   // The newest, so a title heard in a stream started earlier reaches the
   // Pane as it is now.
@@ -217,6 +230,16 @@ function Screen({
     focusedNow.current = focused
     if (focused) surface.current?.focus()
   }, [focused])
+
+  // Once only, and forgotten then: the Pane's args keep it till typed.
+  const forget = useEffectEvent(lineTyped)
+  const lineSent = useRef(false)
+  useEffect(() => {
+    if (!line || lineSent.current || now.is !== "running") return
+    lineSent.current = true
+    typed.current(`${line}\r`)
+    forget()
+  }, [line, now])
 
   // Once only in this Pane; the command's ID keeps it once everywhere.
   const sent = useRef(false)
