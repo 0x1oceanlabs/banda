@@ -76,11 +76,13 @@ impl Repositories {
 /// Held while one of its commands writes in a repository, so two of them
 /// never race for its index's lock; `act` holds it till it ends. As it is
 /// let go, each `git.watch` of that repository reads the status again at
-/// once.
+/// once. Its status's untracked files as last counted go with it, so no
+/// read of the status counts one again that did not change.
 #[derive(Clone, Default)]
 pub(crate) struct Writes {
     lock: Arc<tokio::sync::Mutex<()>>,
     pub(crate) done: Arc<tokio::sync::Notify>,
+    pub(crate) counted: Arc<Mutex<lines::Counted>>,
 }
 
 impl Writes {
@@ -145,6 +147,8 @@ banda_kernel::methods! {
         /// Commits every change or the files asked, pushes, or pulls, each
         /// step after the one before succeeded, saying each and each hook
         /// as it goes, then how it ended. It runs the repository's hooks.
+        /// Asked from a Thread's card, it says what each step changed in
+        /// its fact `git.acted` about the Thread.
         stream act(ActAsk) -> Progress, Write;
         /// Switches to a branch here, or to a remote's through a branch
         /// that follows it; the changes go along, or git refuses.
@@ -199,7 +203,8 @@ impl Git {
         // Read before git is: an event after it may change what git reads,
         // and a Pane following it reads again.
         let at = call.space().at().await?;
-        Ok(status::status(&call.space().folder(), at).await?)
+        let found = Repo::find(&call.space().folder()).await;
+        Ok(status::read(found, at, &self.writing).await?)
     }
 
     async fn diff(&self, call: Call, ask: DiffAsk) -> Result<Diff, Refusal> {
@@ -248,10 +253,11 @@ impl Git {
         let repo = Repo::open(&call.space().folder()).await?;
         let writing = self.writing.of(&repo.top);
         let (say, heard) = tokio::sync::mpsc::channel(64);
+        let card = act::Card::of(call.space(), call.participant(), ask.thread.clone());
         // It goes on when the window lets go: a commit is not left half
         // done.
         tokio::spawn(async move {
-            let tell = act::Teller(say);
+            let tell = act::Teller { say, card };
             let _writing = writing.hold().await;
             let ended = act::act(&repo, ask, &tell).await;
             tell.ended(ended).await;
@@ -262,13 +268,21 @@ impl Git {
     async fn switch(&self, call: Call, ask: SwitchAsk) -> Result<(), Refusal> {
         let repo = Repo::open(&call.space().folder()).await?;
         let _writing = self.writing.of(&repo.top).hold().await;
-        act::switch(&repo, &ask.name).await
+        let switched = act::switch(&repo, &ask.name).await?;
+        if let Some(card) = act::Card::of(call.space(), call.participant(), ask.thread) {
+            card.acted(switched).await;
+        }
+        Ok(())
     }
 
     async fn branch(&self, call: Call, ask: BranchAsk) -> Result<(), Refusal> {
         let repo = Repo::open(&call.space().folder()).await?;
         let _writing = self.writing.of(&repo.top).hold().await;
-        act::make_branch(&repo, &ask.name, ask.from.as_deref()).await
+        let made = act::make_branch(&repo, &ask.name, ask.from.as_deref()).await?;
+        if let Some(card) = act::Card::of(call.space(), call.participant(), ask.thread) {
+            card.acted(made).await;
+        }
+        Ok(())
     }
 
     async fn prompt(&self, call: Call, ask: PromptAsk) -> Result<Prompted, Refusal> {

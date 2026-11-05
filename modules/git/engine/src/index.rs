@@ -34,34 +34,12 @@ impl Scratch {
     /// The scratch index with the untracked files; `head` says whether
     /// the repository has a commit yet.
     pub async fn with_untracked(repo: &Repo, head: bool) -> Result<Scratch, Refusal> {
-        let mut untracked = untracked(repo).await?;
-        if untracked.len() > UNTRACKED {
+        let Some(untracked) = added(repo, untracked(repo).await?, head).await? else {
             return Ok(Scratch {
                 left_out: true,
                 ..Scratch::none()
             });
-        }
-        if head && !untracked.is_empty() {
-            // A file whose removal is staged is untracked too: it stays
-            // removed, not added again.
-            let removed = repo
-                .run(
-                    [
-                        "diff",
-                        "--cached",
-                        "--name-only",
-                        "--diff-filter=D",
-                        "-z",
-                        "HEAD",
-                        "--",
-                    ],
-                    Opts::default(),
-                )
-                .await?;
-            let removed = String::from_utf8_lossy(&removed.stdout);
-            let removed: HashSet<&str> = removed.split('\0').collect();
-            untracked.retain(|path| !removed.contains(path.as_str()));
-        }
+        };
         if untracked.is_empty() {
             return Ok(Scratch::none());
         }
@@ -83,6 +61,40 @@ impl Scratch {
             left_out: false,
         })
     }
+}
+
+/// The ones of `untracked` a diff of the work tree takes in as added, and
+/// the status counts the lines of: none past [`UNTRACKED`]; and not one
+/// whose removal is staged, which stays removed. `head` says whether the
+/// repository has a commit yet.
+pub async fn added(
+    repo: &Repo,
+    mut untracked: Vec<String>,
+    head: bool,
+) -> Result<Option<Vec<String>>, Failure> {
+    if untracked.len() > UNTRACKED {
+        return Ok(None);
+    }
+    if head && !untracked.is_empty() {
+        let removed = repo
+            .run(
+                [
+                    "diff",
+                    "--cached",
+                    "--name-only",
+                    "--diff-filter=D",
+                    "-z",
+                    "HEAD",
+                    "--",
+                ],
+                Opts::default(),
+            )
+            .await?;
+        let removed = String::from_utf8_lossy(&removed.stdout);
+        let removed: HashSet<&str> = removed.split('\0').collect();
+        untracked.retain(|path| !removed.contains(path.as_str()));
+    }
+    Ok(Some(untracked))
 }
 
 /// The files git does not track and does not ignore.

@@ -8,4 +8,8 @@ export type SwitchAsk = {
 /**
  * As `main`, or `origin/main`.
  */
-name: string, };
+name: string, 
+/**
+ * The Thread whose card asks, whose Agent hears of it (`git.acted`).
+ */
+thread?: string, };

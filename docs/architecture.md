@@ -429,11 +429,15 @@ If Chat is removed, Agents still works through its own Thread.
     `harnesses.toml` says only how the Harnesses start (ADR 0040).
 - **The Harness's notices**, such as warnings, join the Thread as lines of
   their own.
-- **A notice for the Agent** comes from the Person's window
-  (`agents.notice`), as git's card posts one after a commit from it: a
-  line of the Thread between turns, kept as unsent, which the next turn's
-  prompt takes before its message once, for any Harness. It starts no
-  turn; a slash command leaves it for the message after.
+- **A notice for the Agent** says what another module did for the
+  Person, as git's fact `git.acted` after a commit from the Thread's card
+  (`notices.rs` hears it): a line of the Thread between turns, which the
+  next message to reach the Harness, a turn's or one sent into it, takes
+  before it (`agents_notices.taken_by`); every turn of that message sends
+  it again, for any Harness. It starts no turn; a slash command the
+  Harness runs leaves it for the message after. One prompt step
+  (`effects::prompt_of`) puts who wrote a message, its skills as
+  commands and its notices together.
 - **A Thread has settings: a mode, Plan, and the Harness's options.** The
   modes are Supervised, Auto-accept edits, Auto and Full access, the
   default. Only a Person changes them, under the message box
@@ -844,7 +848,10 @@ modules/*/desktop  a module's part in Electron main
     and a system notification when the window is behind (`system.ts`).
   - Another part tells the Person in plain data, by running
     `notifications.tell` with a `Told` (`told.ts`): a key, a kind, the
-    words and buttons that are actions by id. The Problems do (ADR 0039).
+    words and buttons that are actions by id, and the Space and thing it
+    is of, which name the Space and tell nothing while the thing is on
+    screen. The Problems do (ADR 0039), and git when a run ends with no
+    card of its Space in sight.
     A call's toast is one too (`toldOfCall`), so every notice told is
     data: the last five are kept in the window's storage (`recent.ts`),
     and the bell on the bar shows them again, across a restart.

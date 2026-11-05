@@ -7,10 +7,10 @@
 //! push or a pull as long too. What a hook or a remote says comes as it
 //! comes, its credentials taken out, and a failure says its last line.
 
-use crate::model::{ActAsk, Action, Change, Changed, Commit, Done, Progress, Step};
+use crate::model::{ActAsk, Acted, Action, Change, Changed, Commit, Done, Progress, Step};
 use crate::repo::{Repo, branch_refs, chosen, in_way, scratch};
 use crate::run::{Failure, Opts, Ran, Reason, git};
-use banda_kernel::Refusal;
+use banda_kernel::{ModuleSpace, Participant, Refusal};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::fs::File;
@@ -22,14 +22,62 @@ use tokio::sync::mpsc;
 /// How often the trace is read for the hook that began.
 const TRACED: Duration = Duration::from_millis(100);
 
-/// Says how `git.act` goes, to a window that may have gone: what it
-/// does is done all the same.
-pub struct Teller(pub mpsc::Sender<Value>);
+/// The Thread whose card asked for a git action: as each step is done,
+/// git says what changed in its fact `git.acted`, which the agents module
+/// puts before the Agent's next message.
+pub struct Card {
+    pub space: ModuleSpace,
+    pub by: Participant,
+    pub thread: String,
+}
+
+impl Card {
+    /// The card of `thread`, when one asked.
+    pub fn of(space: &ModuleSpace, by: Participant, thread: Option<String>) -> Option<Card> {
+        Some(Card {
+            space: space.clone(),
+            by,
+            thread: thread?,
+        })
+    }
+
+    /// Says `notice`, what a step changed; what was done stays done when
+    /// it cannot.
+    pub async fn acted(&self, notice: String) {
+        let acted = Acted {
+            thread: self.thread.clone(),
+            notice,
+        };
+        let by = self.by;
+        let told = self.space.write(move |tx| {
+            tx.emit("git.acted", 1, Some(&acted.thread), by, &acted)?;
+            Ok(())
+        });
+        if let Err(error) = told.await {
+            tracing::warn!(%error, "the Thread's Agent was not told what git did");
+        }
+    }
+}
+
+/// Says how `git.act` goes, to a window that may have gone, and what each
+/// step changed to the Thread whose card asked: what it does is done all
+/// the same.
+pub struct Teller {
+    pub say: mpsc::Sender<Value>,
+    pub card: Option<Card>,
+}
 
 impl Teller {
     async fn say(&self, progress: Progress) {
         if let Ok(piece) = serde_json::to_value(progress) {
-            let _ = self.0.send(piece).await;
+            let _ = self.say.send(piece).await;
+        }
+    }
+
+    /// Says what a step changed to the card's Thread, if a card asked.
+    async fn acted(&self, notice: String) {
+        if let Some(card) = &self.card {
+            card.acted(notice).await
         }
     }
 
@@ -40,7 +88,7 @@ impl Teller {
     /// A line, unless the window is behind: the next one says more.
     fn line(&self, line: String) {
         if let Ok(piece) = serde_json::to_value(Progress::Line { line }) {
-            let _ = self.0.try_send(piece);
+            let _ = self.say.try_send(piece);
         }
     }
 
@@ -71,14 +119,9 @@ pub async fn act(repo: &Repo, ask: ActAsk, tell: &Teller) -> Result<Done, Refusa
             Action::Push => {
                 tell.step(Step::Pushing).await;
                 let pushed = push(repo, &branch, tell).await?;
-                let Pushed { to, head } = &pushed;
-                Ok(Done {
-                    notice: Some(format!(
-                        "Pushed {branch} to {to}, up to {} “{}”.",
-                        head.short, head.subject
-                    )),
-                    ..pushed.done()
-                })
+                tell.acted(pushed.notice(&branch)).await;
+                let title = format!("Pushed {} to {}", pushed.head.short, pushed.to);
+                Ok(done(title, &pushed.head))
             }
             _ => {
                 tell.step(Step::Pulling).await;
@@ -122,31 +165,32 @@ pub async fn act(repo: &Repo, ask: ActAsk, tell: &Teller) -> Result<Done, Refusa
     }
     tell.step(Step::Committing).await;
     let committed = commit(repo, message, files.as_deref(), tell).await?;
-    let notice = committed.notice(branch.as_deref(), made);
+    // Told now: a push that fails leaves the commit made.
+    tell.acted(committed.notice(branch.as_deref(), made)).await;
+    let title = format!("Committed {}", committed.head.short);
     let Some(branch) = branch.filter(|_| ask.action == Action::CommitPush) else {
-        return Ok(Done {
-            notice: Some(format!("{notice}.")),
-            ..committed.done()
-        });
+        return Ok(done(title, &committed.head));
     };
     tell.step(Step::Pushing).await;
     // The commit stays made: what failed is the push alone.
     let pushed = push(repo, &branch, tell).await.map_err(|mut refusal| {
-        refusal.message = format!(
-            "{}, but the push failed. {}",
-            committed.done().title,
-            refusal.message
-        );
+        refusal.message = format!("{title}, but the push failed. {}", refusal.message);
         refusal
     })?;
-    Ok(Done {
-        title: format!(
-            "Committed and pushed {} to {}",
-            pushed.head.short, pushed.to
-        ),
-        notice: Some(format!("{notice}, and pushed it to {}.", pushed.to)),
-        ..pushed.done()
-    })
+    tell.acted(pushed.notice(&branch)).await;
+    let title = format!(
+        "Committed and pushed {} to {}",
+        pushed.head.short, pushed.to
+    );
+    Ok(done(title, &pushed.head))
+}
+
+/// How a run that ended at `head` says it, its subject under `title`.
+fn done(title: String, head: &Commit) -> Done {
+    Done {
+        title,
+        detail: Some(head.subject.clone()),
+    }
 }
 
 /// A commit made: it, and how many files it took.
@@ -156,16 +200,8 @@ struct Committed {
 }
 
 impl Committed {
-    fn done(&self) -> Done {
-        Done {
-            title: format!("Committed {}", self.head.short),
-            detail: Some(self.head.subject.clone()),
-            notice: None,
-        }
-    }
-
-    /// What a Thread's Agent reads of it, as `Committed 2 files on main:
-    /// “Add multiply” (a1b2c3d)`, for the end of a sentence.
+    /// What a Thread's Agent reads of it: `Committed 2 files on main:
+    /// “Add multiply” (a1b2c3d).`
     fn notice(&self, branch: Option<&str>, made: bool) -> String {
         let Committed { head, files } = self;
         let files = match files {
@@ -175,10 +211,10 @@ impl Committed {
         let what = format!("“{}” ({})", head.subject, head.short);
         match (branch, made) {
             (Some(branch), true) => {
-                format!("Made the branch {branch}, and committed {files} on it: {what}")
+                format!("Made the branch {branch}, and committed {files} on it: {what}.")
             }
-            (Some(branch), false) => format!("Committed {files} on {branch}: {what}"),
-            (None, _) => format!("Committed {files} on a detached HEAD: {what}"),
+            (Some(branch), false) => format!("Committed {files} on {branch}: {what}."),
+            (None, _) => format!("Committed {files} on a detached HEAD: {what}."),
         }
     }
 }
@@ -190,12 +226,13 @@ struct Pushed {
 }
 
 impl Pushed {
-    fn done(&self) -> Done {
-        Done {
-            title: format!("Pushed {} to {}", self.head.short, self.to),
-            detail: Some(self.head.subject.clone()),
-            notice: None,
-        }
+    /// What a Thread's Agent reads of a push of `branch`.
+    fn notice(&self, branch: &str) -> String {
+        let Pushed { to, head } = self;
+        format!(
+            "Pushed {branch} to {to}, up to {} “{}”.",
+            head.short, head.subject
+        )
     }
 }
 
@@ -356,28 +393,28 @@ async fn pull(repo: &Repo, branch: &str, tell: &Teller) -> Result<Done, Refusal>
     let before = repo.head().await?;
     let args = ["pull", "--quiet", "--ff-only", "--no-rebase"];
     traced(repo, &args, None, "Git could not pull", tell).await?;
-    if repo.head().await? == before {
+    let head = repo.said_head().await?;
+    if before.as_deref() == Some(head.sha.as_str()) {
         return Ok(Done {
             title: "Already up to date".to_owned(),
             detail: Some(format!("{branch} has all of {upstream}.")),
-            notice: None,
         });
     }
-    let head = repo.said_head().await?;
+    tell.acted(format!(
+        "Pulled {upstream} into {branch}, which is now at {} “{}”.",
+        head.short, head.subject
+    ))
+    .await;
     Ok(Done {
         title: "Pulled".to_owned(),
         detail: Some(format!("Updated {branch} from {upstream}.")),
-        notice: Some(format!(
-            "Pulled {upstream} into {branch}, which is now at {} “{}”.",
-            head.short, head.subject
-        )),
     })
 }
 
 /// Switches to `name`: a branch here, or a remote's, which the branch
 /// here that follows it checks out, or a new one made to. The changes go
-/// along, or git refuses.
-pub async fn switch(repo: &Repo, name: &str) -> Result<(), Refusal> {
+/// along, or git refuses. Says what changed, for a Thread's Agent.
+pub async fn switch(repo: &Repo, name: &str) -> Result<String, Refusal> {
     ref_name(name)?;
     let Some(found) = repo.first_there(branch_refs(name)).await? else {
         return Err(Failure(Reason::BadRef).into());
@@ -415,13 +452,30 @@ pub async fn switch(repo: &Repo, name: &str) -> Result<(), Refusal> {
             None => vec!["--track".to_owned(), name.to_owned()],
         }
     };
+    let along = changes_along(repo).await?;
     // `--` after it, so a ref gone stale is no path, whose checkout would
     // throw the Person's changes away (T3 Code).
     let mut args = vec!["checkout", "--quiet"];
     args.extend(to.iter().map(String::as_str));
     args.push("--");
     repo.run(args, Opts::writes()).await?;
-    Ok(())
+    let now = repo.branch().await?.unwrap_or_else(|| name.to_owned());
+    Ok(match to.first().map(String::as_str) {
+        Some("--track") => {
+            format!("Made the branch {now}, which follows {name}, and switched to it{along}.")
+        }
+        _ if now != name => format!("Switched to the branch {now}, which follows {name}{along}."),
+        _ => format!("Switched to the branch {now}{along}."),
+    })
+}
+
+/// How a sentence of a switch ends when the changes not committed went
+/// along: they are in the branch switched to now.
+async fn changes_along(repo: &Repo) -> Result<&'static str, Failure> {
+    Ok(match repo.porcelain().await?.files.is_empty() {
+        true => "",
+        false => "; the changes not committed went along",
+    })
 }
 
 /// The name a remote's branch has here, as `checkout --track` names it:
@@ -438,7 +492,9 @@ async fn tracked_name(repo: &Repo, name: &str) -> Result<Option<String>, Failure
 
 /// Makes the branch `name` at `from`, or at `HEAD` with the changes
 /// taken along, and switches to it.
-pub async fn make_branch(repo: &Repo, name: &str, from: Option<&str>) -> Result<(), Refusal> {
+/// Makes the branch `name` from `from`, or `HEAD`, and switches to it;
+/// says what changed, for a Thread's Agent.
+pub async fn make_branch(repo: &Repo, name: &str, from: Option<&str>) -> Result<String, Refusal> {
     ref_name(name)?;
     if !repo.yes(["check-ref-format", "--branch", name]).await? {
         return Err(Refusal::invalid("Git takes no branch of that name."));
@@ -455,6 +511,7 @@ pub async fn make_branch(repo: &Repo, name: &str, from: Option<&str>) -> Result<
         }
         None => {}
     }
+    let along = changes_along(repo).await?;
     let mut args = vec!["checkout", "--quiet", "-b", name];
     if let Some(from) = from {
         ref_name(from)?;
@@ -462,7 +519,10 @@ pub async fn make_branch(repo: &Repo, name: &str, from: Option<&str>) -> Result<
     }
     args.push("--");
     repo.run(args, Opts::writes()).await?;
-    Ok(())
+    let from = from.map(|from| format!(" from {from}")).unwrap_or_default();
+    Ok(format!(
+        "Made the branch {name}{from} and switched to it{along}."
+    ))
 }
 
 /// Makes `folder` a repository.

@@ -65,11 +65,6 @@ ahead_of_default?: number,
  */
 files: Array<Changed>, 
 /**
- * How many files changed, each file of an untracked folder counted:
- * what a commit of every change takes, as Uncommitted shows it.
- */
-changed: number, 
-/**
  * The lines added in all of them, an untracked file's too.
  */
 added: number, 

@@ -6,8 +6,8 @@ import type { Change } from "./Change";
  */
 export type Changed = { 
 /**
- * From the repository's top, with `/` between names. An untracked
- * folder git has not looked into ends with `/`.
+ * From the repository's top, with `/` between names; each untracked
+ * file of its own. A repository inside it ends with `/`.
  */
 path: string, 
 /**
@@ -20,9 +20,9 @@ old_path?: string, status: Change,
  */
 staged?: boolean, 
 /**
- * Lines added: an untracked file's every line, an untracked folder's
- * those of its files; 0 for a binary file, and for an untracked one
- * past 1 MiB or when there are more than 5000 of them.
+ * Lines added: an untracked file's every line; 0 for a binary file,
+ * and for an untracked one past 1 MiB or when there are more than
+ * 5000 of them.
  */
 added: number, 
 /**

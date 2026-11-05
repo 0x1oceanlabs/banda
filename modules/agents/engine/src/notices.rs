@@ -1,68 +1,66 @@
-//! A notice another part of Banda posts in a Thread for its Agent
-//! (`agents.notice`), as git's card does after a commit the Person made
-//! from it: a quiet line the Thread shows at once, which the Agent reads
-//! before the message of its next turn, so a commit it did not make is no
-//! surprise. It starts no turn.
+//! Notices for a Thread's Agent of what another module did for its
+//! Person, as git's after a commit from the Thread's card: a quiet line
+//! the Thread shows at once, which the Agent reads before the next
+//! message it gets, so a commit it did not make is no surprise. It starts
+//! no turn. Git says them as its facts `git.acted`, which this hears.
 
-use crate::model::{Body, Fact, Item, ItemId, ThreadId};
-use crate::{emit, store};
-use banda_kernel::{Error, Participant, Refusal, Tx};
-use serde::Deserialize;
-use ts_rs::TS;
+use crate::model::ThreadId;
+use crate::notes::one_line;
+use crate::{store, transcript};
+use banda_kernel::{Error, EventFilter, Heard, Participant, Tx};
 
 /// How long a notice may be, in characters.
 pub const NOTICE: usize = 500;
 
-/// What `agents.notice` is asked.
-#[derive(Deserialize, TS)]
-#[ts(export, export_to = "agents/")]
-pub struct PostNotice {
-    pub thread: ThreadId,
-    /// One line: what the Person did, as `Committed 2 files on main: “Add
-    /// multiply” (a1b2c3d).`
-    pub text: String,
+/// What the module hears from git: a step its card asked for was done.
+pub fn heard() -> EventFilter {
+    EventFilter {
+        module: Some("git".into()),
+        subject: None,
+        kinds: Some(vec!["git.acted".into()]),
+    }
 }
 
-/// Posts the notice in its Thread, for its Agent's next prompt.
-pub fn post(
-    tx: &mut Tx<'_>,
-    by: Participant,
-    PostNotice { thread, text }: PostNotice,
-) -> Result<(), Error> {
-    if !matches!(by, Participant::Person(_)) {
-        return Err(Refusal::forbidden("Only a Person posts a notice for an Agent.").into());
+/// Posts each notice git tells of in its Thread, one at a time, until the
+/// Space is gone.
+pub async fn follow(mut heard: Heard) {
+    loop {
+        let event = match heard.next().await {
+            Ok(Some(event)) => event,
+            Ok(None) => return,
+            Err(error) => {
+                tracing::warn!(%error, "the Threads stopped hearing git");
+                return;
+            }
+        };
+        let Some(space) = heard.space() else { return };
+        let thread = event.payload["thread"]
+            .as_str()
+            .and_then(|t| t.parse().ok());
+        let text = event.payload["notice"].as_str().map(str::to_owned);
+        let (Some(thread), Some(text)) = (thread, text) else {
+            continue;
+        };
+        let by = event.author;
+        if let Err(error) = space.write(move |tx| post(tx, by, thread, &text)).await {
+            tracing::warn!(%error, "a notice for the Agent was not posted");
+        }
     }
-    let text = text.trim();
-    if text.is_empty() || text.contains('\n') {
-        return Err(Refusal::invalid("A notice is one line of text.").into());
-    }
-    if text.chars().count() > NOTICE {
-        return Err(Refusal::invalid(format!("A notice is at most {NOTICE} characters.")).into());
-    }
-    store::thread(tx.sql(), thread)?
-        .ok_or_else(|| Refusal::not_found("There is no such Thread."))?;
-    let item = Item {
-        id: ItemId::new(),
-        turn: None,
-        author: by,
-        at: tx.now(),
-        body: Body::Notice {
-            text: text.to_owned(),
-        },
-    };
-    store::insert_item(tx.sql(), thread, &item)?;
-    store::set_unsent(tx.sql(), item.id)?;
-    let posted = Fact::NoticePosted {
-        item: item.id,
-        turn: None,
-        text: text.to_owned(),
-    };
-    emit(tx, by, thread, &posted)
 }
 
-/// What the Harness reads for `text` with the `notices` its Agent has not
-/// read yet before it, so it knows what changed meanwhile and that it
-/// asks nothing.
+/// Posts `text` in `thread`, for its Agent's next prompt; nothing in a
+/// Thread that is not there.
+pub fn post(tx: &mut Tx<'_>, by: Participant, thread: ThreadId, text: &str) -> Result<(), Error> {
+    let text = one_line(text, NOTICE, "notice")?;
+    if store::thread(tx.sql(), thread)?.is_none() {
+        return Ok(());
+    }
+    let item = transcript::notice(tx, by, thread, None, text.to_owned())?;
+    store::keep_notice(tx.sql(), thread, item)
+}
+
+/// What the Harness reads for `text` with the `notices` its message takes
+/// before it, so it knows what changed meanwhile and that it asks nothing.
 pub fn before(notices: &[String], text: &str) -> String {
     if notices.is_empty() {
         return text.to_owned();
@@ -73,12 +71,6 @@ pub fn before(notices: &[String], text: &str) -> String {
          it is no request:\n{}\n\n{text}",
         lines.join("\n")
     )
-}
-
-/// Whether a turn's message takes the notices along: a slash command goes
-/// as it is, for the Harness to run, and they wait for the next.
-pub fn takes(text: &str) -> bool {
-    !text.starts_with('/')
 }
 
 #[cfg(test)]
@@ -94,7 +86,5 @@ mod tests {
         );
         assert!(said.starts_with("Since your last turn, your Person did this in Banda"));
         assert!(said.ends_with(":\n- Committed 1 file on main: “A” (abc1234).\n\ngo on"));
-        assert!(!takes("/compact"));
-        assert!(takes("compact"));
     }
 }

@@ -7,7 +7,8 @@ use banda_git::model::{
     Change, Changed, Commit, Contents, Diff, Done, Progress, Ref, Status, Step,
 };
 use banda_kernel::{
-    Call, Code, CommandId, Kernel, Module, Participant, PersonId, Refusal, Right, SpaceId,
+    Call, Code, CommandId, EventFilter, Kernel, Module, Participant, PersonId, Refusal, Right,
+    SpaceId,
 };
 use serde::de::DeserializeOwned;
 use serde_json::{Value, json};
@@ -209,6 +210,22 @@ impl World {
         pieces
     }
 
+    /// What git told the Thread `thread`'s Agent it did, in its facts
+    /// `git.acted`, the first first.
+    async fn acted(&self, thread: &str) -> Vec<String> {
+        let space = self.kernel.space(self.space).await.unwrap();
+        let filter = EventFilter {
+            module: Some("git".into()),
+            subject: Some(thread.into()),
+            kinds: Some(vec!["git.acted".into()]),
+        };
+        let events = space.events_after(0, filter, usize::MAX).await.unwrap();
+        events
+            .into_iter()
+            .map(|e| e.payload["notice"].as_str().unwrap().to_owned())
+            .collect()
+    }
+
     /// What `git.act` said as it went.
     async fn act(&self, ask: Value) -> Vec<Progress> {
         let pieces = self.stream("git.act", ask, 60).await;
@@ -401,7 +418,7 @@ async fn a_dirty_repository_says_each_change_with_its_lines() {
         (staged.status, staged.staged, staged.added),
         (Change::Added, Some(true), 3)
     );
-    assert_eq!((status.files.len(), status.changed), (5, 5));
+    assert_eq!(status.files.len(), 5);
     assert_eq!((status.added, status.removed), (6, 2));
 }
 
@@ -414,12 +431,12 @@ async fn untracked_files_count_with_their_lines_as_uncommitted_shows_them() {
     std::fs::write(world.folder.join("logo.png"), b"\x89PNG\0\0\0").unwrap();
 
     let status = world.status().await;
-    // git lists the folder as one; its files count each.
-    let folder = file(&status.files, "new/");
-    assert_eq!((folder.status, folder.added), (Change::Untracked, 3));
+    // Each file of a new folder is one of its own.
+    let one = file(&status.files, "new/one.txt");
+    assert_eq!((one.status, one.added), (Change::Untracked, 2));
+    assert_eq!(file(&status.files, "new/deep/two.txt").added, 1);
     assert_eq!(file(&status.files, "logo.png").added, 0);
-    assert_eq!(status.files.len(), 3);
-    assert_eq!(status.changed, 4);
+    assert_eq!(status.files.len(), 4);
     assert_eq!((status.added, status.removed), (4, 1));
     // As many as the Diff of what is not committed has.
     let diff = world
@@ -1180,7 +1197,7 @@ async fn the_button_commits_every_change_and_pushes_it() {
     world.write("a.txt", "one\nTWO\nthree\n");
     world.write("new.txt", "new\n");
     let said = world
-        .act(json!({ "action": "commit_push", "message": "Add new\n\nWith a body." }))
+        .act(json!({ "action": "commit_push", "message": "Add new\n\nWith a body.", "thread": "t1" }))
         .await;
 
     let steps: Vec<&Progress> = said
@@ -1204,10 +1221,15 @@ async fn the_button_commits_every_change_and_pushes_it() {
         &Done {
             title: format!("Committed and pushed {short} to origin/main"),
             detail: Some("Add new".to_owned()),
-            notice: Some(format!(
-                "Committed 2 files on main: “Add new” ({short}), and pushed it to origin/main."
-            )),
         }
+    );
+    // The card's Thread hears each step as it is done.
+    assert_eq!(
+        world.acted("t1").await,
+        [
+            format!("Committed 2 files on main: “Add new” ({short})."),
+            format!("Pushed main to origin/main, up to {short} “Add new”."),
+        ]
     );
     assert_eq!(
         world.git(&["log", "-1", "--format=%B"]),
@@ -1227,7 +1249,7 @@ async fn a_new_branch_is_pushed_under_its_own_name_and_followed() {
     world.remote();
     world.write("a.txt", "changed\n");
     let said = world
-        .act(json!({ "action": "commit_push", "message": "Change a", "branch": "feature/a" }))
+        .act(json!({ "action": "commit_push", "message": "Change a", "branch": "feature/a", "thread": "t1" }))
         .await;
 
     assert_eq!(
@@ -1237,10 +1259,10 @@ async fn a_new_branch_is_pushed_under_its_own_name_and_followed() {
         }
     );
     assert!(done(&said).title.ends_with(" to origin/feature/a"));
-    let notice = done(&said).notice.as_deref().unwrap();
+    let acted = world.acted("t1").await;
     assert!(
-        notice.starts_with("Made the branch feature/a, and committed 1 file on it: “Change a”"),
-        "{notice}"
+        acted[0].starts_with("Made the branch feature/a, and committed 1 file on it: “Change a”"),
+        "{acted:?}"
     );
     let status = world.status().await;
     assert_eq!(status.branch.as_deref(), Some("feature/a"));
@@ -1258,14 +1280,14 @@ async fn a_commit_of_chosen_files_takes_them_alone() {
     world.write("b.txt", "changed\n");
     world.git(&["add", "b.txt"]);
     let said = world
-        .act(json!({ "action": "commit", "message": "Change a", "files": ["a.txt"] }))
+        .act(json!({ "action": "commit", "message": "Change a", "files": ["a.txt"], "thread": "t1" }))
         .await;
 
     let short = world.git(&["rev-parse", "--short", "HEAD"]);
     assert_eq!(done(&said).title, format!("Committed {short}"));
     assert_eq!(
-        done(&said).notice.as_deref(),
-        Some(format!("Committed 1 file on main: “Change a” ({short}).").as_str())
+        world.acted("t1").await,
+        [format!("Committed 1 file on main: “Change a” ({short}).")]
     );
     assert_eq!(
         world.git(&["show", "--name-only", "--format=", "HEAD"]),
@@ -1348,25 +1370,27 @@ async fn a_branch_behind_pulls_and_one_that_diverged_cannot_push() {
     world.git(&["fetch", "--quiet"]);
     assert_eq!(world.status().await.behind, Some(1));
 
-    let said = world.act(json!({ "action": "pull" })).await;
+    let said = world.act(json!({ "action": "pull", "thread": "t1" })).await;
     assert_eq!(done(&said).title, "Pulled");
     assert_eq!(
         world.git(&["rev-parse", "HEAD"]),
         world.git(&["rev-parse", "origin/main"])
     );
     let short = world.git(&["rev-parse", "--short", "HEAD"]);
-    assert_eq!(
-        done(&said).notice.as_deref(),
-        Some(format!("Pulled origin/main into main, which is now at {short} “theirs”.").as_str())
-    );
-    let said = world.act(json!({ "action": "pull" })).await;
+    let pulled = format!("Pulled origin/main into main, which is now at {short} “theirs”.");
+    assert_eq!(world.acted("t1").await, [pulled.clone()]);
+    let said = world.act(json!({ "action": "pull", "thread": "t1" })).await;
     assert_eq!(done(&said).title, "Already up to date");
-    assert_eq!(done(&said).notice, None, "nothing changed to tell of");
+    assert_eq!(
+        world.acted("t1").await.len(),
+        1,
+        "nothing changed to tell of"
+    );
 
     world.theirs("main", "more.txt");
     world.write("a.txt", "ours\n");
     let said = world
-        .act(json!({ "action": "commit_push", "message": "Ours" }))
+        .act(json!({ "action": "commit_push", "message": "Ours", "thread": "t1" }))
         .await;
     let short = world.git(&["rev-parse", "--short", "HEAD"]);
     assert_eq!(
@@ -1374,6 +1398,14 @@ async fn a_branch_behind_pulls_and_one_that_diverged_cannot_push() {
         format!(
             "Committed {short}, but the push failed. The remote has commits this branch lacks: pull them first."
         )
+    );
+    // The commit stays made, and its Thread heard of it.
+    assert_eq!(
+        world.acted("t1").await,
+        [
+            pulled,
+            format!("Committed 1 file on main: “Ours” ({short}).")
+        ]
     );
     world.git(&["fetch", "--quiet"]);
     let said = world.act(json!({ "action": "pull" })).await;
@@ -1390,11 +1422,13 @@ async fn branches_are_made_and_switched_to_a_remote_one_through_its_own() {
     world.theirs("topic", "topic.txt");
     world.git(&["fetch", "--quiet"]);
 
+    world.write("a.txt", "mine\n");
     world
-        .call("git.branch", json!({ "name": "feature" }))
+        .call("git.branch", json!({ "name": "feature", "thread": "t1" }))
         .await
         .unwrap();
     assert_eq!(world.status().await.branch.as_deref(), Some("feature"));
+    world.git(&["checkout", "--quiet", "--", "a.txt"]);
     let refused = world
         .call("git.branch", json!({ "name": "main" }))
         .await
@@ -1406,22 +1440,24 @@ async fn branches_are_made_and_switched_to_a_remote_one_through_its_own() {
         .unwrap_err();
     assert_eq!(refused.code, Code::Invalid);
 
-    world
-        .call("git.switch", json!({ "name": "origin/topic" }))
-        .await
-        .unwrap();
+    let switch = |name: &str| world.call("git.switch", json!({ "name": name, "thread": "t1" }));
+    switch("origin/topic").await.unwrap();
     let status = world.status().await;
     assert_eq!(status.branch.as_deref(), Some("topic"));
     assert_eq!(status.upstream.as_deref(), Some("origin/topic"));
-    world
-        .call("git.switch", json!({ "name": "main" }))
-        .await
-        .unwrap();
-    world
-        .call("git.switch", json!({ "name": "origin/topic" }))
-        .await
-        .unwrap();
+    switch("main").await.unwrap();
+    switch("origin/topic").await.unwrap();
     assert_eq!(world.status().await.branch.as_deref(), Some("topic"));
+    // The card's Thread hears where the work is now.
+    assert_eq!(
+        world.acted("t1").await,
+        [
+            "Made the branch feature and switched to it; the changes not committed went along.",
+            "Made the branch topic, which follows origin/topic, and switched to it.",
+            "Switched to the branch main.",
+            "Switched to the branch topic, which follows origin/topic.",
+        ]
+    );
 
     world.write("topic.txt", "mine\n");
     let refused = world

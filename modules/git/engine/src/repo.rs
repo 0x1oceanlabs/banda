@@ -194,12 +194,19 @@ impl Repo {
     }
 
     /// The branch, its upstream and what changed, as
-    /// `status --porcelain=2 --branch` says them. Ahead and behind read
-    /// only the refs git has already fetched.
+    /// `status --porcelain=2 --branch` says them, each untracked file of
+    /// its own, as a diff takes them in. Ahead and behind read only the
+    /// refs git has already fetched.
     pub async fn porcelain(&self) -> Result<Porcelain, Failure> {
         let said = self
             .run(
-                ["status", "--porcelain=2", "--branch", "-z"],
+                [
+                    "status",
+                    "--porcelain=2",
+                    "--branch",
+                    "--untracked-files=all",
+                    "-z",
+                ],
                 Opts::default(),
             )
             .await?;

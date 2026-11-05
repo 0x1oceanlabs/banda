@@ -11,11 +11,4 @@ title: string,
 /**
  * As the commit's subject.
  */
-detail?: string, 
-/**
- * What changed, in a sentence for the Thread whose card ran it, so
- * its Agent knows (`agents.notice`): `Committed 2 files on main:
- * “Add multiply” (a1b2c3d), and pushed it to origin/main.` None when
- * nothing changed, as a pull already up to date.
- */
-notice?: string, };
+detail?: string, };
