@@ -151,6 +151,12 @@ ALTER TABLE agents_turns ADD COLUMN stopping INTEGER NOT NULL DEFAULT 0;
 -- What the turn's Agent tells its Person when it ends (ADR 0057).
 ALTER TABLE agents_turns ADD COLUMN note TEXT;
 "#,
+    r#"
+-- A notice another part of Banda posted for the Thread's Agent
+-- (agents.notice), which goes before its next prompt: 1 until a turn's
+-- prompt took it.
+ALTER TABLE agents_items ADD COLUMN unsent INTEGER NOT NULL DEFAULT 0;
+"#,
 ];
 
 fn json<T: Serialize>(value: &T) -> Result<String, Error> {
@@ -798,6 +804,37 @@ pub fn insert_item(sql: &Connection, thread: ThreadId, item: &Item) -> Result<()
 }
 
 const ITEM: &str = "SELECT id, turn, author, at, body, thread FROM agents_items";
+
+/// Marks a notice as one the Thread's Agent is still to read.
+pub fn set_unsent(sql: &Connection, item: ItemId) -> Result<(), Error> {
+    sql.execute(
+        "UPDATE agents_items SET unsent = 1 WHERE id = ?1",
+        params![item],
+    )?;
+    Ok(())
+}
+
+/// The notices of `thread` its Agent is still to read, in the order they
+/// came, now marked read.
+pub fn take_unsent(sql: &Connection, thread: ThreadId) -> Result<Vec<String>, Error> {
+    let mut statement = sql.prepare(&format!(
+        "{ITEM} WHERE thread = ?1 AND unsent = 1 ORDER BY rowid"
+    ))?;
+    let items = statement
+        .query_map(params![thread], read_item)?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    sql.execute(
+        "UPDATE agents_items SET unsent = 0 WHERE thread = ?1 AND unsent = 1",
+        params![thread],
+    )?;
+    Ok(items
+        .into_iter()
+        .filter_map(|item| match item.body {
+            Body::Notice { text } => Some(text),
+            _ => None,
+        })
+        .collect())
+}
 
 fn read_item(row: &Row<'_>) -> rusqlite::Result<Item> {
     Ok(Item {

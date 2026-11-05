@@ -287,7 +287,7 @@ fn open(
     store::insert_item(tx.sql(), thread, &item)?;
     let posted = Fact::NoticePosted {
         item: item.id,
-        turn: turn.id,
+        turn: Some(turn.id),
         text,
     };
     emit(tx, by, thread, &posted)?;

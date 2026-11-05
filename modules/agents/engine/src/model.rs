@@ -986,10 +986,14 @@ pub enum Fact {
     /// It can no longer be answered.
     #[serde(rename = "question.closed")]
     QuestionClosed { item: ItemId },
+    /// A line from Banda, in a turn; or between turns, as a notice another
+    /// part of Banda posts for the Agent (`agents.notice`).
     #[serde(rename = "notice.posted")]
     NoticePosted {
         item: ItemId,
-        turn: TurnId,
+        #[ts(optional)]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        turn: Option<TurnId>,
         text: String,
     },
     /// The Agent showed its Person a Visual (ADR 0037).
