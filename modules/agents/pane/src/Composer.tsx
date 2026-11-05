@@ -29,7 +29,12 @@ import {
   ListPlusIcon,
   SquareIcon,
 } from "lucide-react"
+import {
+  ContextMenu,
+  ContextMenuTrigger,
+} from "@banda/ui/components/context-menu"
 import { AttachmentList, type Attachments } from "./Attachments"
+import { ComposerMenu } from "./ComposerMenu"
 import { useDraft } from "./drafts"
 import { keyFor, steers, useEnterKey } from "./enter-key"
 import { recall } from "./history"
@@ -72,6 +77,7 @@ export function Composer({
   onEditLast,
   onSend,
   onStop,
+  paste,
   children,
   ref,
 }: {
@@ -120,6 +126,9 @@ export function Composer({
    * resolves whether it went. */
   onSend: (text: string, images: Image[], steer: boolean) => Promise<boolean>
   onStop: (turn: TurnView) => void
+  /** Pastes what the clipboard holds into the focused field, or its text
+   * alone; none where no window does. */
+  paste?: (plain: boolean) => void
   /** What the Thread runs with, beside the send button. */
   children?: React.ReactNode
   ref?: React.Ref<ComposerHandle>
@@ -163,8 +172,11 @@ export function Composer({
     const data = event.clipboardData
     if (!data) return false
     const pasted = data.getData("text/plain")
+    // It holds for this paste alone.
+    const asIs = asText.current
+    asText.current = false
     if (data.files.length > 0) void take([...data.files], at)
-    else if (!asText.current && long(pasted)) {
+    else if (!asIs && long(pasted)) {
       const name = `pasted-text-${(text.match(PASTED)?.length ?? 0) + 1}.txt`
       const file = new File([pasted], name, { type: "text/plain" })
       void take([file], at)
@@ -309,53 +321,74 @@ export function Composer({
             <AttachmentList images={images} />
           </div>
         )}
-        <PromptEditor
-          ref={field}
-          value={text}
-          placeholder={placeholder ?? says(name, steering, skills.length > 0)}
-          skills={skillNames}
-          attributes={{
-            "aria-label": `Message to ${name}`,
-            ...Object.assign({}, ...menus.map((menu) => menu.field)),
-          }}
-          className="max-h-48 px-3.5 pt-3 pb-1.5"
-          onTyping={setTyping}
-          onChange={(value) => {
-            setText(value)
-            setBack(0)
-          }}
-          onPaste={(event) => takePaste(event, "caret")}
-          onKeyDown={(event) => {
-            if (menus.some((menu) => menu.onKeyDown(event))) return
-            if (event.key === "Tab" && event.shiftKey && plan !== undefined) {
-              event.preventDefault()
-              onPlanMode(!plan)
-              return
+        <ContextMenu>
+          <ContextMenuTrigger render={<div className="contents" />}>
+            <PromptEditor
+              ref={field}
+              value={text}
+              placeholder={
+                placeholder ?? says(name, steering, skills.length > 0)
+              }
+              skills={skillNames}
+              attributes={{
+                "aria-label": `Message to ${name}`,
+                ...Object.assign({}, ...menus.map((menu) => menu.field)),
+              }}
+              className="max-h-48 px-3.5 pt-3 pb-1.5"
+              onTyping={setTyping}
+              onChange={(value) => {
+                setText(value)
+                setBack(0)
+              }}
+              onPaste={(event) => takePaste(event, "caret")}
+              onKeyDown={(event) => {
+                if (menus.some((menu) => menu.onKeyDown(event))) return
+                if (
+                  event.key === "Tab" &&
+                  event.shiftKey &&
+                  plan !== undefined
+                ) {
+                  event.preventDefault()
+                  onPlanMode(!plan)
+                  return
+                }
+                const up = event.key === "ArrowUp"
+                if (plain(event) && (up || event.key === "ArrowDown")) {
+                  // Within a message of more lines, the caret moves first.
+                  if (!(field.current?.atEdge(up) ?? true)) return
+                  const waits = onEditLast !== undefined
+                  const step = recall(history(), back, text, up, waits)
+                  if (!step) return
+                  event.preventDefault()
+                  if (step === "edit") return onEditLast?.()
+                  setText(step.text)
+                  setBack(step.back)
+                  return
+                }
+                if (
+                  event.key === "Enter" &&
+                  !event.shiftKey &&
+                  !event.isComposing
+                ) {
+                  event.preventDefault()
+                  // Ctrl (⌘ on a Mac) does the other thing.
+                  void send(steers(enter, event.ctrlKey || event.metaKey))
+                }
+              }}
+            />
+          </ContextMenuTrigger>
+          <ComposerMenu
+            field={field}
+            paste={
+              paste &&
+              ((plain) => {
+                // As Ctrl+Shift+V: long text stays text, not a file.
+                asText.current = plain
+                paste(plain)
+              })
             }
-            const up = event.key === "ArrowUp"
-            if (plain(event) && (up || event.key === "ArrowDown")) {
-              // Within a message of more lines, the caret moves first.
-              if (!(field.current?.atEdge(up) ?? true)) return
-              const waits = onEditLast !== undefined
-              const step = recall(history(), back, text, up, waits)
-              if (!step) return
-              event.preventDefault()
-              if (step === "edit") return onEditLast?.()
-              setText(step.text)
-              setBack(step.back)
-              return
-            }
-            if (
-              event.key === "Enter" &&
-              !event.shiftKey &&
-              !event.isComposing
-            ) {
-              event.preventDefault()
-              // Ctrl (⌘ on a Mac) does the other thing.
-              void send(steers(enter, event.ctrlKey || event.metaKey))
-            }
-          }}
-        />
+          />
+        </ContextMenu>
         {/* One row: + on the left, what is on beside it; what the Thread
             runs with and the button on the right (ADR 0031), every one
             28px (ADR 0058, decision 8). */}

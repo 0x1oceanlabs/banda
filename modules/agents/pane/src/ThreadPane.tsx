@@ -1,5 +1,9 @@
 import { ThreadMedia } from "./ThreadMedia"
 import { MarkdownLinks } from "@banda/ui/components/markdown-link"
+import {
+  ContextMenu,
+  ContextMenuTrigger,
+} from "@banda/ui/components/context-menu"
 import { useMemo, useRef, useState } from "react"
 import type { Engine, SpaceId } from "@banda/contract"
 import type {
@@ -67,6 +71,7 @@ import { Composer, type ComposerHandle } from "./Composer"
 import type { ImageReader } from "./MessageImages"
 import { AgentMessage, PersonMessage, Writer, type Writers } from "./Messages"
 import { QuoteSelection } from "./Quote"
+import { type MenuAt, menuAt, ThreadMenu } from "./ThreadMenu"
 import { type AnswerKeys, pressOf, Question, QuestionDrawer } from "./Questions"
 import { aboutOf, keyAnswer } from "./asking"
 import { drafted } from "./drafts"
@@ -111,16 +116,19 @@ function ThreadPane(props: PaneProps<ThreadArgs>) {
   const space = props.args.scratch ?? props.space
   return (
     <ThreadMedia space={space}>
-      <MarkdownLinks
-        open={(address, external) => {
-          if (external) window.open(address, "_blank", "noopener,noreferrer")
-          else props.run?.("browser.open", { address, space })
-        }}
-      >
+      <MarkdownLinks open={linkOpener(props.run, space)}>
         <ThreadContent {...props} space={space} />
       </MarkdownLinks>
     </ThreadMedia>
   )
+}
+
+/** Opens a web link in Banda's browser, or outside it (ADR 0051). */
+function linkOpener(run: PaneProps<ThreadArgs>["run"], space: SpaceId) {
+  return (address: string, outside: boolean) => {
+    if (outside) window.open(address, "_blank", "noopener,noreferrer")
+    else run?.("browser.open", { address, space })
+  }
 }
 
 function ThreadContent(props: PaneProps<ThreadArgs>) {
@@ -169,6 +177,8 @@ function ThreadContent(props: PaneProps<ThreadArgs>) {
   // What the Person looks for in the Thread, while the find bar is open.
   const [find, setFind] = useState<{ query: string; at: number }>()
   const area = useRef<HTMLDivElement>(null)
+  // What a right click found, for the Thread's menu (ADR 0063, decision 3).
+  const [menu, setMenu] = useState<MenuAt | null>(null)
   const root = useRef<HTMLDivElement>(null)
   const composer = useRef<ComposerHandle>(null)
   const findField = useRef<HTMLInputElement>(null)
@@ -241,88 +251,118 @@ function ThreadContent(props: PaneProps<ThreadArgs>) {
         composer.current?.take([...event.dataTransfer.files])
       }}
     >
-      <div ref={area} className="relative min-h-0 flex-1">
-        <QuoteSelection
-          area={area}
-          onQuote={(quote) => composer.current?.quote(quote)}
+      <ContextMenu
+        onOpenChangeComplete={(open) => {
+          if (!open) setMenu(null)
+        }}
+      >
+        <ContextMenuTrigger
+          onContextMenu={(event) => {
+            const at = menuAt(event.target as Element, event.currentTarget, {
+              x: event.clientX,
+              y: event.clientY,
+            })
+            if (at && !event.defaultPrevented) setMenu(at)
+            else event.preventBaseUIHandler()
+          }}
+          render={<div ref={area} className="relative min-h-0 flex-1" />}
+        >
+          <QuoteSelection
+            area={area}
+            onQuote={(quote) => composer.current?.quote(quote)}
+          />
+          {!unplaced && (
+            <ThreadDetails
+              engine={engine}
+              space={space}
+              thread={thread}
+              open={open}
+              focused={focused}
+              wide={wide}
+              shown={detailsShown}
+              onShown={setDetailsShown}
+            />
+          )}
+          {find && (
+            <FindBar
+              field={findField}
+              query={find.query}
+              found={found}
+              onQuery={(query) => setFind({ ...find, query, at: 0 })}
+              onStep={(by) => setFind({ ...find, at: found.current + by })}
+              onClose={() => setFind(undefined)}
+            />
+          )}
+          {thread === null ? (
+            <Start harness={harness} name={name} />
+          ) : live.state === "loading" ? (
+            <Centered>
+              <Spinner />
+            </Centered>
+          ) : live.state === "refused" ? (
+            <Centered>
+              <p className="text-sm text-muted-foreground">
+                {live.refusal.message}
+              </p>
+            </Centered>
+          ) : (
+            <Transcript
+              // Each Thread scrolls on its own, from where it was left.
+              key={thread}
+              engine={engine}
+              space={space}
+              thread={thread}
+              forYou={Boolean(asking || planned)}
+              finding={find?.query ?? ""}
+              state={live.view}
+              waits={waits}
+              name={name}
+              reader={reader}
+              answering={acting}
+              onRetry={retry}
+              onFork={fork}
+              onRewind={(turn, message) =>
+                void rewind(turn).then((back) => {
+                  if (back && message.body.kind === "message")
+                    composer.current?.putBack(
+                      message.body.text,
+                      message.body.images
+                    )
+                })
+              }
+              onOpenDiff={openDiff}
+              onOpenVisual={(visual) => open(paneOf(visualPane, visual))}
+              writers={writers}
+              onOpenThread={(other) => open(threadPaneOf(other), "right")}
+              signIn={(turn) => (
+                <SignIn
+                  engine={engine}
+                  space={space}
+                  harness={harness}
+                  turn={turn.id}
+                  open={open}
+                  onSignedIn={() => retry(turn)}
+                />
+              )}
+              queue={queue}
+            />
+          )}
+        </ContextMenuTrigger>
+        <ThreadMenu
+          at={menu}
+          acts={{
+            quote: (text) => composer.current?.quote(text),
+            find: (words) => {
+              // A bar not yet open takes the focus itself.
+              setFind({ query: words, at: 0 })
+              findField.current?.select()
+            },
+            search: run && ((words) => run("browser.open", { words, space })),
+            open: linkOpener(run, space),
+            copyImage: run && ((x, y) => run("edit.copy-image", { x, y })),
+          }}
         />
-        {!unplaced && (
-          <ThreadDetails
-            engine={engine}
-            space={space}
-            thread={thread}
-            open={open}
-            focused={focused}
-            wide={wide}
-            shown={detailsShown}
-            onShown={setDetailsShown}
-          />
-        )}
-        {find && (
-          <FindBar
-            field={findField}
-            query={find.query}
-            found={found}
-            onQuery={(query) => setFind({ ...find, query, at: 0 })}
-            onStep={(by) => setFind({ ...find, at: found.current + by })}
-            onClose={() => setFind(undefined)}
-          />
-        )}
-        {thread === null ? (
-          <Start harness={harness} name={name} />
-        ) : live.state === "loading" ? (
-          <Centered>
-            <Spinner />
-          </Centered>
-        ) : live.state === "refused" ? (
-          <Centered>
-            <p className="text-sm text-muted-foreground">
-              {live.refusal.message}
-            </p>
-          </Centered>
-        ) : (
-          <Transcript
-            // Each Thread scrolls on its own, from where it was left.
-            key={thread}
-            engine={engine}
-            space={space}
-            thread={thread}
-            forYou={Boolean(asking || planned)}
-            finding={find?.query ?? ""}
-            state={live.view}
-            waits={waits}
-            name={name}
-            reader={reader}
-            answering={acting}
-            onRetry={retry}
-            onFork={fork}
-            onRewind={(turn, message) =>
-              void rewind(turn).then((back) => {
-                if (back && message.body.kind === "message")
-                  composer.current?.putBack(
-                    message.body.text,
-                    message.body.images
-                  )
-              })
-            }
-            onOpenDiff={openDiff}
-            onOpenVisual={(visual) => open(paneOf(visualPane, visual))}
-            writers={writers}
-            onOpenThread={(other) => open(threadPaneOf(other), "right")}
-            signIn={(turn) => (
-              <SignIn
-                engine={engine}
-                space={space}
-                harness={harness}
-                turn={turn.id}
-                open={open}
-                onSignedIn={() => retry(turn)}
-              />
-            )}
-            queue={queue}
-          />
-        )}
-      </div>
+      </ContextMenu>
       <div
         ref={dock}
         data-chat
@@ -385,6 +425,9 @@ function ThreadContent(props: PaneProps<ThreadArgs>) {
           keep={keep}
           onSend={send}
           onStop={stop}
+          paste={
+            run && ((plain) => run(plain ? "edit.paste-plain" : "edit.paste"))
+          }
         >
           {settings && (
             <>

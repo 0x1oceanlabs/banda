@@ -128,6 +128,12 @@ export const BRIDGE = bridge({
     /** The focused field takes what the clipboard holds, as the system's
      * paste does: the page never reads the clipboard itself. */
     paste: send<[]>(),
+    /** As `paste`, the clipboard's text alone, as the system's "paste
+     * and match style" does (ADR 0063, decision 3). */
+    pastePlain: send<[]>(),
+    /** Copies the image at a point of the page, as the system's menu
+     * does: a Thread's "Copy image" (ADR 0063, decision 3). */
+    copyImageAt: send<[x: number, y: number]>(),
   },
   /** Files on the machine, as links name them. */
   files: {

@@ -20,6 +20,7 @@ import { cn } from "@banda/ui/lib/utils"
 import { clock, fullDate } from "@banda/ui/lib/words"
 import { type ImageReader, MessageImages } from "./MessageImages"
 import { clamped } from "./messageText"
+import { useMessageMenu } from "./ThreadMenu"
 import type { Listing } from "./thread"
 
 /**
@@ -43,8 +44,15 @@ export function PersonMessage({
   onEdit?: (() => void) | null
 }) {
   const clamp = useClamp(text, "max-h-44", "Show full message")
+  // The pencil and the Thread's menu ask the same question.
+  const [asking, setAsking] = useState(false)
+  const menu = useMessageMenu({
+    kind: "message",
+    text,
+    edit: onEdit && (() => setAsking(true)),
+  })
   return (
-    <Message align="end">
+    <Message align="end" ref={menu}>
       <MessageContent>
         <MessageImages images={images} reader={reader} />
         {text && (
@@ -60,7 +68,15 @@ export function PersonMessage({
           at={at}
           text={text}
           align="end"
-          actions={onEdit !== undefined && <EditFromHere onEdit={onEdit} />}
+          actions={
+            onEdit !== undefined && (
+              <EditFromHere
+                onEdit={onEdit}
+                asking={asking}
+                onAsking={setAsking}
+              />
+            )
+          }
         >
           {clamp.toggle}
         </Meta>
@@ -70,8 +86,15 @@ export function PersonMessage({
 }
 
 /** The pencil of a Person's message, which asks first, as T3 Code's. */
-function EditFromHere({ onEdit }: { onEdit: (() => void) | null }) {
-  const [asking, setAsking] = useState(false)
+function EditFromHere({
+  onEdit,
+  asking,
+  onAsking: setAsking,
+}: {
+  onEdit: (() => void) | null
+  asking: boolean
+  onAsking: (asking: boolean) => void
+}) {
   return (
     <>
       <Button
@@ -155,11 +178,12 @@ export function AgentMessage({
    * from this response" (ADR 0027, decision 3); null while it cannot. */
   onFork?: (() => void) | null
 }) {
+  const menu = useMessageMenu({ kind: "reply", text, fork: onFork })
   return (
     <Message>
       <MessageContent>
         {from}
-        <div data-quotable>
+        <div data-quotable ref={menu}>
           <Markdown streaming={live}>{text}</Markdown>
         </div>
         {!live && (

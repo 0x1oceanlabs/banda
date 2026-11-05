@@ -337,6 +337,17 @@ async function ready(): Promise<void> {
     },
     edit: {
       paste: [none, (_, event) => Effect.sync(() => event.sender.paste())],
+      pastePlain: [
+        none,
+        (_, event) => Effect.sync(() => event.sender.pasteAndMatchStyle()),
+      ],
+      copyImageAt: [
+        Schema.Tuple([Schema.Number, Schema.Number]),
+        ([x, y], event) =>
+          Effect.sync(() =>
+            event.sender.copyImageAt(Math.round(x), Math.round(y))
+          ),
+      ],
     },
     problems: {
       logs: [

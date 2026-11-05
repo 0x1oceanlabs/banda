@@ -4,7 +4,7 @@
 import type { SpaceId } from "@banda/contract"
 import { defineModule } from "@banda/ui/module"
 import { paneOf, type PaneState } from "@banda/ui/pane"
-import { fileAddress } from "./address"
+import { fileAddress, searchNow } from "./address"
 import { browserPane } from "./BrowserPane"
 import { frontHolder, holderOf, openWith } from "./pages"
 import { webSource } from "./sources"
@@ -25,20 +25,23 @@ export const browser = defineModule({
       run: (window) => window.open(paneOf(browserPane, NEW_BROWSER)),
     },
     {
-      // A page, or a file by its absolute path: the Banda menu's words as
-      // a page, and the agents module's files there.
+      // A page, or a file by its absolute path, or `words` to search the
+      // web for: the Banda menu's words as a page, the agents module's
+      // files there, and a Thread's "Search the web".
       id: "browser.open",
       title: "Open in a browser",
       section: "Panes",
       unlisted: true,
       run: (window, args = {}) => {
-        const { address, file, space } = args
+        const { address, file, words, space } = args
         const url =
           typeof file === "string"
             ? fileAddress(file)
-            : typeof address === "string"
-              ? address
-              : ""
+            : typeof words === "string"
+              ? searchNow(words)
+              : typeof address === "string"
+                ? address
+                : ""
         window.open(
           paneOf(browserPane, browserAt(url)),
           typeof space === "string" ? (space as SpaceId) : undefined

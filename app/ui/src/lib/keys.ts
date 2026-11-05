@@ -65,3 +65,11 @@ export function keyToBind(
     },
   }
 }
+
+/** Whether the window runs on a Mac, where ⌘ does what Ctrl does. */
+export const isMac =
+  typeof navigator !== "undefined" &&
+  /Mac|iPhone|iPad|iPod/.test(navigator.platform)
+
+/** How a menu writes the key held for a shortcut: ⌘ on a Mac. */
+export const MOD = isMac ? "⌘" : "Ctrl+"

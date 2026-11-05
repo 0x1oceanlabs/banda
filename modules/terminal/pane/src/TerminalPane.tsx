@@ -408,13 +408,7 @@ function Screen({
 
   return (
     <div className="relative flex h-full min-h-0 flex-col">
-      <ContextMenu
-        onOpenChange={(open, { reason }) => {
-          // A press elsewhere keeps the focus where it went.
-          if (!open && (reason === "item-press" || reason === "escape-key"))
-            surface.current?.focus()
-        }}
-      >
+      <ContextMenu>
         <ContextMenuTrigger
           onContextMenu={(event) => {
             if (event.defaultPrevented) event.preventBaseUIHandler()

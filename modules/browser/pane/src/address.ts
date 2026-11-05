@@ -6,7 +6,7 @@
 
 import { useCallback } from "react"
 import { BROWSER_FILE, DEFAULT_BROWSER } from "@banda/contract/browser"
-import { useFile } from "@banda/ui/lib/look"
+import { fileNow, useFile } from "@banda/ui/lib/look"
 import { siteOf } from "./desktop"
 
 export { siteOf }
@@ -23,6 +23,13 @@ export function addressOf(
 ): string {
   const text = typed.trim()
   return pageAddress(text) ?? search.replace("%s", encodeURIComponent(text))
+}
+
+/** The search for `words` that `browser.toml` names now, even words that
+ * read as an address: a Thread's "Search the web" (ADR 0063, decision 3). */
+export function searchNow(words: string): string {
+  const { search } = fileNow(BROWSER_FILE)
+  return search.replace("%s", encodeURIComponent(words.trim()))
 }
 
 /** {@link addressOf} with the search `browser.toml` names now. */

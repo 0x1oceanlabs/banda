@@ -60,7 +60,14 @@ export type PromptEditorHandle = {
    * of it if it is empty; the caret goes to their end, and takes the
    * focus. */
   putLines(text: string): void
+  /** What an editing menu may do now (ADR 0063, decision 3). */
+  can(): { undo: boolean; redo: boolean; selected: boolean }
+  /** Does it, as its key does, with the focus back in the text. */
+  edit(act: EditAct): void
 }
+
+/** What an editing menu does to the text itself; the window pastes. */
+export type EditAct = "undo" | "redo" | "cut" | "copy" | "selectAll"
 
 type PromptEditorProps = {
   /** The text, a line a paragraph, a chip as what it writes, a style as
@@ -209,6 +216,19 @@ function PromptEditor({
     () => ({
       // At once, as a textarea does; tiptap's own focus waits a frame.
       focus: () => editor.view.focus(),
+      can: () => ({
+        undo: editor.can().undo(),
+        redo: editor.can().redo(),
+        selected: !editor.state.selection.empty,
+      }),
+      edit(act) {
+        editor.view.focus()
+        if (act === "undo") editor.commands.undo()
+        else if (act === "redo") editor.commands.redo()
+        else if (act === "selectAll") editor.commands.selectAll()
+        // The editor's own copy and cut, as the keys: chips copy as text.
+        else document.execCommand(act)
+      },
       complete(put) {
         const { state, view } = editor
         const typing = placeOf(state)
