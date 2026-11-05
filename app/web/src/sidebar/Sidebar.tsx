@@ -33,6 +33,7 @@ import {
   FolderPlusIcon,
   FolderSearchIcon,
   ListFilterIcon,
+  PanelLeftCloseIcon,
   PinIcon,
   PinOffIcon,
   SearchIcon,
@@ -62,6 +63,7 @@ import { settles, useIsSettled } from "./settled"
 export function Sidebar({
   over,
   onDismiss,
+  hiding,
   ...props
 }: {
   /**
@@ -82,6 +84,10 @@ export function Sidebar({
   onMenu: () => void
   /** Opens the settings, as Alt+, does (ADR 0016). */
   onSettings: () => void
+  /** Hides the sidebar, as Alt+A does. */
+  onHide: () => void
+  /** Its edge is dragged past the narrowest: letting go hides it. */
+  hiding?: boolean
   /**
    * Opens a Pane a row stands for: where a workspace shows it, or in a new
    * column of the current one.
@@ -113,6 +119,7 @@ export function Sidebar({
     }
   const onMenu = done(props.onMenu)
   const onSettings = done(props.onSettings)
+  const onHide = done(props.onHide)
   const onOpen = done(props.onOpen)
   const onNewThread = done(props.onNewThread)
   const onNoSpace = done(props.onNoSpace)
@@ -197,7 +204,9 @@ export function Sidebar({
           onDismiss?.()
       }}
       className={cn(
-        "absolute inset-y-(--gap-outer) left-(--gap-outer) z-20 flex w-(--sidebar-width) flex-col overflow-hidden rounded-tile border bg-panel shadow-(--panel-shadow)",
+        "absolute inset-y-(--gap-outer) left-(--gap-outer) z-20 flex w-(--sidebar-width) max-w-[calc(100%-2*var(--gap-outer))] flex-col overflow-hidden rounded-tile border bg-panel shadow-(--panel-shadow) *:transition-opacity",
+        // Its panel stays, over the Strip; what is in it dims.
+        hiding && "*:opacity-40",
         !over &&
           "sidebar-desk:inset-y-0 sidebar-desk:left-0 sidebar-desk:rounded-none sidebar-desk:border-0 sidebar-desk:bg-desk sidebar-desk:shadow-none"
       )}
@@ -282,7 +291,9 @@ export function Sidebar({
           <SquarePenIcon />
         </Button>
       </div>
-      <ScrollArea className="min-h-0 flex-1">
+      {/* Where more Threads are below, the list fades out at its foot
+          instead of a line. */}
+      <ScrollArea className="min-h-0 flex-1 data-overflow-y-end:mask-b-from-[calc(100%-1.5rem)]">
         <div className="flex flex-col gap-1 px-1.5 pb-2">
           {arranged.spaces && (
             <SpacesList
@@ -307,20 +318,30 @@ export function Sidebar({
         </div>
       </ScrollArea>
       {arranged.shelves.length > 0 && (
-        <div className="max-h-[45%] overflow-y-auto border-t px-1.5 py-1">
+        <div className="max-h-[45%] overflow-y-auto px-1.5 py-1">
           {arranged.shelves.map(drawn)}
         </div>
       )}
-      <div className="border-t px-1.5 py-1">
+      <div className="flex items-center justify-between px-1.5 pt-0.5 pb-1.5">
         <Button
           variant="ghost"
-          size="sm"
-          className="w-full justify-start text-muted-foreground"
+          size="icon-sm"
+          className="text-muted-foreground"
+          aria-label="Settings"
           title="Settings (Alt+,)"
           onClick={onSettings}
         >
           <SettingsIcon />
-          Settings
+        </Button>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          className="text-muted-foreground"
+          aria-label="Hide sidebar"
+          title="Hide sidebar (Alt+A)"
+          onClick={onHide}
+        >
+          <PanelLeftCloseIcon />
         </Button>
       </div>
       {making && (

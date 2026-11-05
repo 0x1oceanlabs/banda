@@ -4306,6 +4306,62 @@ test("a narrow window hides the sidebar, and Alt+A shows it over the Strip", asy
   await expect.poll(left).toBeGreaterThan(200)
 })
 
+test("the sidebar's edge drags its width, which the Strip follows and the window keeps", async () => {
+  window = await startWindow()
+  const { page } = window
+  const { thread, composer } = await firstThread(page)
+  await composer.fill("hello")
+  await composer.press("Enter")
+  await expect(thread.getByText("You said: hello")).toBeVisible()
+  const sidebar = page.getByRole("complementary", { name: "Sidebar" })
+  const edge = page.getByRole("separator", { name: "Sidebar width" })
+  const width = async () => (await sidebar.boundingBox())?.width ?? 0
+  const left = async () => (await thread.boundingBox())?.x ?? 0
+  const drag = async (by: number, keep = true) => {
+    const box = await edge.boundingBox()
+    if (!box) throw new Error("no edge")
+    const x = box.x + box.width / 2
+    const y = box.y + box.height / 2
+    await page.mouse.move(x, y)
+    await page.mouse.down()
+    await page.mouse.move(x + by, y, { steps: 8 })
+    if (!keep) await page.keyboard.press("Escape")
+    await page.mouse.up()
+  }
+  await expect.poll(width).toBe(256)
+  const before = await left()
+
+  // 100 pixels wider: the sidebar is, and the Strip starts past it.
+  await drag(100)
+  await expect.poll(width).toBe(356)
+  await expect.poll(left).toBe(before + 100)
+  await page.screenshot({ path: "test-results/8a-sidebar-wider.png" })
+  // Esc while dragging puts it back as it was.
+  await drag(-60, false)
+  await expect.poll(width).toBe(356)
+  // The window keeps it.
+  await page.reload()
+  await expect.poll(width).toBe(356)
+
+  // Dragged past the narrowest, letting go hides it; Alt+A brings it
+  // back as wide as it was.
+  await drag(-300)
+  await expect(sidebar).toBeHidden()
+  await page.keyboard.press("Alt+A")
+  await expect.poll(width).toBe(356)
+
+  // A double-click puts 16rem back, and the keys size it a rem a time.
+  await edge.dblclick()
+  await expect.poll(width).toBe(256)
+  await edge.focus()
+  await page.keyboard.press("ArrowRight")
+  await expect.poll(width).toBe(272)
+
+  // Its gear and its button to hide it, with no words beside them.
+  await sidebar.getByRole("button", { name: "Hide sidebar" }).click()
+  await expect(sidebar).toBeHidden()
+})
+
 test("Alt+` drops the drawer: a Thread over the workspace that stays as it was, and its pin makes it a column", async () => {
   window = await startWindow()
   const { page } = window

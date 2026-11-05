@@ -1,4 +1,11 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from "react"
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react"
 import {
   type Engine,
   newId,
@@ -57,6 +64,7 @@ import {
   startable,
   widthOf,
 } from "../registry"
+import { Edge } from "../sidebar/Edge"
 import { Sidebar } from "../sidebar/Sidebar"
 import { pickPreset } from "../sidebar/settings"
 import { settle as keepSettled, toggled } from "../sidebar/settled"
@@ -94,10 +102,12 @@ import {
   keepDrawer,
   keepLooked,
   keepSidebar,
+  keepSidebarWidth,
   keepView,
   loadDrawer,
   loadLooked,
   loadSidebar,
+  loadSidebarWidth,
   loadView,
   moveOver,
 } from "../workspaces/store"
@@ -265,10 +275,23 @@ export function Shell({
     if (command) send(engine, command).catch(refused)
   }, [engine, workspaces, ready])
   const [sidebar, setSidebar] = useState(loadSidebar)
+  // How wide the Person dragged it, which the page's every part that
+  // starts past it reads.
+  const [sidebarWidth, setSidebarWidth] = useState(loadSidebarWidth)
+  useLayoutEffect(() => {
+    document.documentElement.style.setProperty(
+      "--sidebar-width",
+      `${sidebarWidth}rem`
+    )
+  }, [sidebarWidth])
+  useEffect(() => keepSidebarWidth(sidebarWidth), [sidebarWidth])
+  // Its edge dragged past the narrowest: letting go hides it.
+  const [hiding, setHiding] = useState(false)
   // A narrow window hides the sidebar, and shows it over the Strip only
   // when asked; what the Person chose for a wide one is kept (ADR 0025,
   // decision 10).
-  const narrow = useNarrow(useLookColumns().min)
+  const columnMin = useLookColumns().min
+  const narrow = useNarrow(columnMin, sidebarWidth)
   const [over, setOver] = useState(false)
   if (over && !narrow) setOver(false)
   const setShown = narrow ? setOver : setSidebar
@@ -277,6 +300,7 @@ export function Shell({
     [setShown]
   )
   const showSidebar = useCallback(() => setShown(true), [setShown])
+  const hideSidebar = useCallback(() => setShown(false), [setShown])
   const [overviewState, setOverview] = useState<"closed" | "open" | "closing">(
     "closed"
   )
@@ -941,6 +965,8 @@ export function Shell({
             onDismiss={narrow ? hideOver : undefined}
             onMenu={() => setMenu(openingAt("root"))}
             onSettings={() => settings()}
+            onHide={hideSidebar}
+            hiding={hiding}
             spaces={spaces}
             lists={lists}
             home={home}
@@ -963,6 +989,15 @@ export function Shell({
             }
             onSpaceSettings={(space) => settings(`spaces/${space}`)}
             onLocate={(space) => route(locateRoute(space))}
+          />
+        )}
+        {sidebarShown && !narrow && (
+          <Edge
+            width={sidebarWidth}
+            columnMin={columnMin}
+            onWidth={setSidebarWidth}
+            onHide={hideSidebar}
+            onHiding={setHiding}
           />
         )}
         <main
