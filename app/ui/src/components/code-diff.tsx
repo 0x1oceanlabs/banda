@@ -303,7 +303,9 @@ export function CodeDiff({
         items={items}
         className={cn(
           "[--diff-number:35%] [--diff-row:50%] dark:[--diff-number:60%] dark:[--diff-row:70%]",
-          "outline-none",
+          // The view scrolls itself: it reads its own scroll to draw only
+          // the rows in sight, and sets no overflow of its own.
+          "overflow-auto outline-none",
           className
         )}
         {...(prefix
