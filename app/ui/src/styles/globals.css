@@ -699,7 +699,7 @@ html:not([data-glass]) [data-group-plate="halo"] {
   pointer-events: auto;
 }
 html[data-drag] [data-held-by],
-html[data-alt] [data-held-by] {
+html[data-mod] [data-held-by] {
   pointer-events: none;
 }
 html[data-drag],

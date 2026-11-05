@@ -1,15 +1,23 @@
 /**
- * The keys of a page (ADR 0013, decision 5). Banda's left Alt binds work in
- * a page as in a terminal, and the browser's own keys are Chrome's, with
- * Ctrl. Electron's main process takes these from the page before it hears
+ * The keys of a page (ADR 0013, decision 5). Banda's keys, held with the
+ * mod, work in a page as in a terminal, and the browser's own keys are
+ * Chrome's, with Ctrl. Electron's main process takes these from the page before it hears
  * them and hands them to the window, where Banda's actions and the browser
  * Pane run them; every other key stays the page's.
  */
 
-import { isAlt, type Key, matches, type Pressed } from "@banda/ui/lib/keys"
+import {
+  holdsAlone,
+  isModKey,
+  type Key,
+  matches,
+  type Mod,
+  type Pressed,
+  withMore,
+} from "@banda/ui/lib/keys"
 import type { TabKey } from "./tabs"
 
-export { isAlt, type Pressed }
+export { isModKey, type Mod, type Pressed }
 
 /** What the browser Pane does on one of its keys. */
 export type Does =
@@ -61,12 +69,18 @@ export function browserKey(key: Pressed): Does | undefined {
 const MODIFIER = /^(Alt|Control|Shift|Meta|OS)(Left|Right)$/
 
 /**
- * Whether the window takes a key from the page: one held with Alt, which
- * is Banda's, or one of the browser's. Alt alone stays the page's.
+ * Whether the window takes a key from the page: one held with the mod,
+ * or with the mod and one key more, which are Banda's (ADR 0068); or one
+ * of the browser's. The mod's keys alone stay the page's.
  */
-export function taken(key: Pressed): boolean {
+export function taken(key: Pressed, mod: Mod): boolean {
   if (MODIFIER.test(key.code)) return false
-  return key.altKey || browserKey(key) !== undefined
+  const more = withMore(mod)
+  return (
+    holdsAlone(key, mod) ||
+    (more !== undefined && holdsAlone(key, more)) ||
+    browserKey(key) !== undefined
+  )
 }
 
 /** Whether `does` is a key of the tabs, not of the page. */

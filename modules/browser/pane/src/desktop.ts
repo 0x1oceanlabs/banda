@@ -6,9 +6,9 @@
 import { type HostOf, invoke, push, send } from "@banda/contract/bridge"
 import type { Dialog, Tabs } from "@banda/contract/browser"
 
-import type { Pressed } from "./keys"
+import type { Mod, Pressed } from "./keys"
 
-export { isAlt, type Pressed, taken } from "./keys"
+export { isModKey, type Pressed, taken } from "./keys"
 
 /** What the row shows of a page's address: its site, without `www.`. */
 export function siteOf(address: string): string {
@@ -168,9 +168,12 @@ export const BROWSER_BRIDGE = {
      * in the window; or closes it when it shows. */
     popup: send<[extension: string, url: string, under: Box]>(),
   },
+  /** The mod in force, as the window holds it (ADR 0068): main gives
+   * the window a page's keys held with it. */
+  mod: send<[mod: Mod]>(),
   /** A key main took from a browser page: the preload presses it in the
-   * window, so Banda's actions and the Pane hear it as their own; Alt let
-   * go is `up`. */
+   * window, so Banda's actions and the Pane hear it as their own; a key
+   * of the mod let go is `up`. */
   key: push<Pressed & { up?: true }>(),
 }
 

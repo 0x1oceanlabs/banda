@@ -1,6 +1,12 @@
 import { DEFAULT_KEYS, type Mod } from "@banda/contract/look"
-import { createContext, useContext } from "react"
-import { type Key, keyLabel } from "../lib/keys"
+import {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+} from "react"
+import { holdsAlone, type Key, keyLabel, type Pressed } from "../lib/keys"
 
 /**
  * The keys in force (ADR 0068): the mod, and by the id of the action each
@@ -20,6 +26,20 @@ export const KeysInForce = createContext<KeysInForce>({
 /** The mod in force: what the mouse holds to move and size Panes. */
 export function useMod(): Mod {
   return useContext(KeysInForce).mod
+}
+
+/** Whether a press holds the mod in force alone, as the mouse's moves
+ * do (`holdsAlone`): one function for a listener set up once, which reads
+ * the mod as the keys change. */
+export function useHoldsMod(): (
+  event: Pick<Pressed, "altKey" | "ctrlKey" | "metaKey">
+) => boolean {
+  const mod = useMod()
+  const ref = useRef(mod)
+  useEffect(() => {
+    ref.current = mod
+  }, [mod])
+  return useCallback((event) => holdsAlone(event, ref.current), [])
 }
 
 /** The key in force that runs an action, by the action's id. */

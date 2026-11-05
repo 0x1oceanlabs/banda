@@ -25,7 +25,7 @@ import {
   type PaneState,
   QUIET,
 } from "@banda/ui/pane"
-import { DEFAULT_KEYS } from "@banda/contract/look"
+import { DEFAULT_KEYS, type Mod } from "@banda/contract/look"
 import type { Action, Args, Thing, WindowApi } from "@banda/ui/module"
 import { actionFor, keysInForce, rebind } from "../actions/actions"
 import { Bar } from "../bar/Bar"
@@ -141,6 +141,7 @@ import {
   type Step,
 } from "./actions"
 import { KeysInForce } from "@banda/ui/hooks/use-key-of"
+import { holdsAlone, withMore } from "@banda/ui/lib/keys"
 
 type Change = (workspaces: State) => Step
 
@@ -191,25 +192,28 @@ function refused(error: unknown): void {
  * the actions that change them.
  */
 /**
- * Ctrl added to a key the window takes hands that key to a program
- * (ADR 0005, decision 10): Ctrl+Alt+W reaches a shell as Alt+W. The
- * program reads the press without Ctrl, as if Banda took nothing, so it
- * comes in whatever form the program asked its terminal for.
+ * One key more added to a key the window takes hands that key to a
+ * program (ADR 0005, decision 10; ADR 0068, decision 3): with Alt the
+ * mod, Ctrl+Alt+W reaches a shell as Alt+W. The program reads the press
+ * without the key more, as if Banda took nothing, so it comes in whatever
+ * form the program asked its terminal for.
  */
 function handOn(
   event: KeyboardEvent,
   target: Element | null,
-  actions: readonly Action<Parts>[]
+  actions: readonly Action<Parts>[],
+  mod: Mod,
+  handing: Mod | undefined
 ): void {
-  if (!event.ctrlKey || !event.altKey || event.metaKey) return
+  if (!handing || !holdsAlone(event, handing)) return
   if (!target?.closest(IN_PROGRAM)) return
   const plain = {
     key: event.key,
     code: event.code,
-    altKey: true,
+    altKey: mod.alt,
     shiftKey: event.shiftKey,
-    ctrlKey: false,
-    metaKey: false,
+    ctrlKey: mod.ctrl,
+    metaKey: mod.super,
   }
   if (!actionFor(actions, plain)) return
   event.preventDefault()
@@ -828,8 +832,11 @@ export function Shell({
     return () => stops.forEach((stop) => stop())
   }, [running])
   // The keys run the actions, before any Pane hears them. A dialog keeps
-  // its keys, as the Banda menu its Alt+Enter, but for the menu's own.
+  // its keys, as the Banda menu its New Thread key, but for the menu's own.
   useEffect(() => {
+    // One key more and a key Banda takes hand that key to a program.
+    const { mod } = inForce
+    const handing = withMore(mod)
     const onKey = (event: KeyboardEvent) => {
       // A press the window handed on is the program's.
       if (HANDED.has(event)) return
@@ -837,7 +844,7 @@ export function Shell({
       // A field that takes a key to bind takes every key.
       if (target?.closest("[data-takes-keys]")) return
       const action = actionFor(keyed.actions, event)
-      if (!action) return handOn(event, target, keyed.actions)
+      if (!action) return handOn(event, target, keyed.actions, mod, handing)
       // A dialog that takes the window's keys, as the overview, has only
       // the plain ones of its own.
       const inDialog =
@@ -856,7 +863,7 @@ export function Shell({
     }
     window.addEventListener("keydown", onKey, { capture: true })
     return () => window.removeEventListener("keydown", onKey, { capture: true })
-  }, [parts, keyed])
+  }, [parts, keyed, inForce])
   // A row of the sidebar or the menu opens its Pane, where a workspace
   // shows it or in a new column; a Space gets a new Thread.
   const openPane = useCallback(
@@ -918,7 +925,7 @@ export function Shell({
     onOpen: pickPane,
     aside: (ready && live.view.aside) || null,
   })
-  // A widget moved with Alt writes the parts of `[bar]` it changed, one
+  // A widget moved with the mod writes the parts of `[bar]` it changed, one
   // after another, as they are one file (ADR 0064).
   const arrangeBar = useCallback(
     (after: Layout) => {

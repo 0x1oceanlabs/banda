@@ -243,10 +243,10 @@ test("with Alt held in a browser's page, the mouse moves its Pane from the page"
   const alt = (type: "keyDown" | "keyUp") =>
     pressInPage(app, "Alt", ["alt"], [type])
   await alt("keyDown")
-  await expect(page.locator("html[data-alt]")).toHaveCount(1)
+  await expect(page.locator("html[data-mod]")).toHaveCount(1)
   await expect.poll(pointer).toBe("none")
   await alt("keyUp")
-  await expect(page.locator("html[data-alt]")).toHaveCount(0)
+  await expect(page.locator("html[data-mod]")).toHaveCount(0)
   await expect.poll(pointer).toBe("auto")
 
   // Alt and the left button on the page carry its Pane: to the Thread's

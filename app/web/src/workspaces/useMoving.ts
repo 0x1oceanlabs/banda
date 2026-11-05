@@ -1,7 +1,7 @@
 import { cn } from "@banda/ui/lib/utils"
 /**
  * The mouse moves Panes, as niri's (ADR 0025, decision 6): a Pane's header
- * or its tab, dragged, carries it, and so does `Alt` and the left button
+ * or its tab, dragged, carries it, and so do the mod and the left button
  * from anywhere on it. The insert hint shows where it lands, beside
  * another Pane, and letting go moves it there with the same command the
  * keys send. Near the Strip's edge the Strip scrolls under it; over a
@@ -27,6 +27,7 @@ import {
 } from "./moving"
 import type { Frame } from "./PaneFrame"
 import { THRESHOLD } from "./sizing"
+import { useHoldsMod } from "@banda/ui/hooks/use-key-of"
 
 /** Where a carried Pane lands, and the hint that shows it; none where
  * it would stay. At a Group's end, inside the Group or out of it. */
@@ -108,6 +109,7 @@ export function useMoving(
   root: RefObject<HTMLDivElement | null>,
   carrying: RefObject<Carrying>
 ) {
+  const holdsMod = useHoldsMod()
   useEffect(() => {
     const element = root.current
     if (!element) return
@@ -117,7 +119,11 @@ export function useMoving(
 
     const onDown = (event: PointerEvent) => {
       if (!carrying.current.on || press) return
-      if (event.button !== 0 || event.ctrlKey || event.metaKey) return
+      // The mod and the left button carry a Pane; a tab is carried with
+      // no Ctrl or Super, which are the Pane's.
+      const held = holdsMod(event)
+      if (event.button !== 0 || (!held && (event.ctrlKey || event.metaKey)))
+        return
       if (event.shiftKey || !(event.target instanceof Element)) return
       const target = event.target
       const at = {
@@ -143,7 +149,7 @@ export function useMoving(
         press = { ...at, pane: tab.dataset.pane, lifted: tab }
       } else if (!tile?.dataset.tile) {
         return
-      } else if (event.altKey) {
+      } else if (held) {
         // The Pane's from anywhere on it: nothing in it hears the press.
         event.preventDefault()
         event.stopPropagation()
@@ -287,7 +293,7 @@ export function useMoving(
     }
     const onUp = (event: PointerEvent) => {
       if (press?.pointer !== event.pointerId) return
-      // `Alt` and a click, moving nothing: the Pane takes the focus, as a
+      // The mod and a click, moving nothing: the Pane takes the focus, as a
       // click on it would.
       if (!carry && element.hasPointerCapture(event.pointerId)) {
         carrying.current.frame.focus(press.pane)

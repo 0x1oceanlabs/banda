@@ -88,6 +88,7 @@ import {
   withoutTab,
   withTab,
 } from "./tabs"
+import { useMod } from "@banda/ui/hooks/use-key-of"
 
 export const browserPane = definePane<KeptArgs>({
   kind: "browser.browser",
@@ -128,6 +129,11 @@ function BrowserPane({
   update,
   close,
 }: PaneProps<KeptArgs>) {
+  // Main gives the window a page's keys held with the mod in force.
+  const { alt, ctrl, super: sup } = useMod()
+  useEffect(() => {
+    browserHost()?.mod({ alt, ctrl, super: sup })
+  }, [alt, ctrl, sup])
   const settings = useFile(BROWSER_FILE)
   // Any page's change draws the tabs again: their titles, icons, loads.
   const version = useSyncExternalStore(watchPages, pagesVersion)

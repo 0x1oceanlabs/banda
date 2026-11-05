@@ -34,7 +34,7 @@ import { type Layout, moved, same, written } from "./arrange"
 import { PARTS, type Part, WORKSPACES } from "./placed"
 import { UpdateWidget } from "./Update"
 import type { Drawn } from "./Widgets"
-import { useKeyLabel } from "@banda/ui/hooks/use-key-of"
+import { useKeyLabel, useHoldsMod } from "@banda/ui/hooks/use-key-of"
 
 /**
  * The bar across the window's top (ADR 0005, decision 9): the sidebar's
@@ -45,7 +45,7 @@ import { useKeyLabel } from "@banda/ui/hooks/use-key-of"
  * opens the overview. The widgets, the workspaces among them, stand on the
  * left, in the middle, centred on the window whatever the sides hold, and
  * on the right before the engine's connection, as the look's `[bar]` lists
- * them (ADR 0024). With Alt held, the mouse moves one (ADR 0064).
+ * them (ADR 0024). With the mod held, the mouse moves one (ADR 0064).
  */
 export function Bar({
   status,
@@ -79,9 +79,9 @@ export function Bar({
   /** The widgets of each part, drawn; the workspaces first on the left
    * when left out. */
   widgets?: Partial<Record<Part, readonly Drawn[]>>
-  /** `[bar]`'s lists, which a widget moved with Alt rewrites. */
+  /** `[bar]`'s lists, which a widget moved with the mod rewrites. */
   listed?: Layout
-  /** Writes `[bar]`'s lists once a widget moved with Alt. */
+  /** Writes `[bar]`'s lists once a widget moved with the mod. */
   onArrange?: (bar: Layout) => void
   /** How many Threads work now, which a restart into an update stops. */
   working?: number
@@ -207,7 +207,7 @@ function layoutOf(widgets: Partial<Record<Part, readonly Drawn[]>>): Layout {
   return { left: ids("left"), center: ids("center"), right: ids("right") }
 }
 
-/** A widget picked up with Alt: where it would go, and where the pointer
+/** A widget picked up with the mod: where it would go, and where the pointer
  * holds it. */
 type Drag = {
   id: string
@@ -221,7 +221,7 @@ type Drag = {
 }
 
 /**
- * Moving a widget with Alt (ADR 0064): a press with Alt picks it up, it
+ * Moving a widget with the mod (ADR 0064): a press with the mod picks it up, it
  * follows the pointer while the others make room, and a release writes
  * where it stands; `Escape`, or a release away from the bar, puts it back.
  * What it wrote stands until the look reads it back.
@@ -231,6 +231,7 @@ function useArranging(
   shown: Layout,
   write: (after: Layout) => void
 ) {
+  const holdsMod = useHoldsMod()
   const [drag, setDrag] = useState<Drag | null>(null)
   const [pending, setPending] = useState<Layout | null>(null)
   const base = pending && !same(pending, shown) ? pending : shown
@@ -281,7 +282,7 @@ function useArranging(
       return { part, index, away: y > box.bottom + 48 }
     }
     const down = (event: PointerEvent) => {
-      if (!event.altKey || event.button !== 0) return
+      if (!holdsMod(event) || event.button !== 0) return
       const held = (event.target as Element).closest<HTMLElement>(
         "[data-widget]"
       )
@@ -315,9 +316,9 @@ function useArranging(
       write(after)
     }
     const cancel = () => setDrag(null)
-    // With Alt, a widget is held, not clicked.
+    // With the mod, a widget is held, not clicked.
     const click = (event: MouseEvent) => {
-      if (!event.altKey) return
+      if (!holdsMod(event)) return
       if (!(event.target as Element).closest("[data-widget]")) return
       event.preventDefault()
       event.stopPropagation()

@@ -562,6 +562,45 @@ test("a Person works in a terminal in the Project, and closing it stops the shel
   await expect.poll(() => running(shell)).toBe(false)
 })
 
+test("with Ctrl+Alt the mod, Banda's keys hold it and Alt keys are the shell's (ADR 0068)", async () => {
+  window = await startWindow({
+    files: { "config/keys.toml": 'mod = "Ctrl+Alt"\n' },
+  })
+  const { page, dir } = window
+  await firstThread(page)
+  await expect(page.getByRole("region", { name: "New Thread" })).toBeVisible()
+  await page.keyboard.press("Control+Alt+KeyN")
+  await page
+    .getByRole("region", { name: "New Pane" })
+    .getByRole("button", { name: "Terminal" })
+    .click()
+  const terminal = terminalTile(page)
+  const screen = terminal.getByRole("region", { name: "Terminal screen" })
+  await expect(screen).toHaveAttribute("data-state", "running")
+  await screen.click()
+
+  // Alt+R is the shell's now, Escape and r, as the program asked for it.
+  const space = join(dir, "root", "Work")
+  await page.keyboard.type(
+    `: > reading; IFS= read -r x; printf '%s' "$x" > alt.txt`
+  )
+  await page.keyboard.press("Enter")
+  await expect.poll(() => read(join(space, "reading"))).toBe("")
+  await page.keyboard.press("Alt+KeyR")
+  await page.keyboard.press("Enter")
+  await expect.poll(() => read(join(space, "alt.txt"))).toBe("\x1br")
+
+  // Ctrl+Alt+R gives the terminal's column its next width, and the Pane's
+  // close button names Ctrl+Alt+W.
+  const width = async () => (await terminal.boundingBox())!.width
+  const before = await width()
+  await page.keyboard.press("Control+Alt+KeyR")
+  await expect.poll(width).not.toBe(before)
+  await expect(
+    terminal.locator('header button[title^="Close"]')
+  ).toHaveAttribute("title", "Close (Ctrl+Alt+W)")
+})
+
 test("a server started in a terminal shows on the bar, opens in a browser Pane and stops", async () => {
   window = await startWindow()
   const { page, dir } = window

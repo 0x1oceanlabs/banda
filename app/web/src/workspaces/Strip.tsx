@@ -33,8 +33,9 @@ import { Tabs } from "./Tabs"
 import { pixels, scrollsSideways, SWIPE_END, Swipe, type Way } from "./swipe"
 import { THRESHOLD } from "./sizing"
 import { useSizing } from "./useSizing"
+import { useHoldsMod } from "@banda/ui/hooks/use-key-of"
 
-/** How far, in pixels, `Alt` and the middle button go up or down to step
+/** How far, in pixels, the mod and the middle button go up or down to step
  * to the next workspace. */
 const VIEW_STEP = 48
 
@@ -43,13 +44,13 @@ const VIEW_STEP = 48
  * the screen's width, scrolling sideways. The focused column always comes
  * fully into view, by the least scroll that shows it.
  *
- * A sideways swipe moves the Strip with the fingers, Alt held or not; where
+ * A sideways swipe moves the Strip with the fingers, the mod held or not; where
  * it ends, the column most in view takes the focus and comes fully into
- * view. Over what scrolls sideways by itself, a swipe without Alt is that
+ * view. Over what scrolls sideways by itself, a swipe without the mod is that
  * Pane's. A swipe up or down is the Pane's under the pointer: the Strip
  * never moves by itself.
  *
- * `Alt` and the middle button drag the view, as niri's `Mod` and the
+ * the mod and the middle button drag the view, as niri's `Mod` and the
  * middle button: sideways the Strip follows the pointer, and lands as a
  * swipe does; up or down, the workspaces step once.
  */
@@ -96,11 +97,12 @@ export function Strip({
   /** The listed thing a Pane shows, as its module lists it. */
   listed: (entry: Entry) => Listed | undefined
   frame: Frame
-  /** `Alt` and the middle button dragged up or down step once. */
+  /** The mod and the middle button dragged up or down step once. */
   onStep: (by: 1 | -1) => void
   /** Opens a first Pane on this empty workspace. */
   onStart: (pane: PaneState) => void
 }) {
+  const holdsMod = useHoldsMod()
   const scroller = useRef<HTMLDivElement>(null)
   const focus = workspace.columns[workspace.focus]?.id
   const look = useLookColumns()
@@ -190,12 +192,13 @@ export function Strip({
     let ending: ReturnType<typeof setTimeout> | undefined
     const onWheel = (event: WheelEvent) => {
       const { x, y } = pixels(event)
+      const held = holdsMod(event)
       if (swipe.add(x, y, event.timeStamp)) {
         mine =
-          event.altKey ||
+          held ||
           (!event.defaultPrevented && !scrollsSideways(event.target, strip))
       }
-      if (event.altKey) event.preventDefault()
+      if (held) event.preventDefault()
       if (!mine || swipe.way !== "sideways") return
       // The fingers take the Strip from wherever the spring has it.
       scrollOf(strip).stop()
@@ -227,7 +230,7 @@ export function Strip({
       | { pointer: number; x: number; y: number; scroll: number; way?: Way }
       | undefined
     const onDown = (event: PointerEvent) => {
-      if (event.button !== 1 || !event.altKey || event.ctrlKey) return
+      if (event.button !== 1 || !holdsMod(event)) return
       if (!now.current.on || drag) return
       event.preventDefault()
       event.stopPropagation()
