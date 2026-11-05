@@ -1,19 +1,16 @@
 /**
  * The list holds still under the pointer (ADR 0065, decision 8): while
- * the Person's pointer is over it, its rows stay where they were drawn,
- * with what they say now, and what would move or come counts as updates
- * the Person takes in at once. Pure, so plain tests cover it.
+ * the Person's pointer is over it, each section's rows stay in the order
+ * they were drawn in, saying what they say now; a row new to a section
+ * comes last in it, so nothing above moves. What came, or would come up
+ * as a call does, counts as updates the Person takes in at once. Pure, so
+ * plain tests cover it.
  */
 import type { Arranged, Row, Section } from "./arrange"
 
-/** The list as it was drawn when the pointer came: each section, and its
- * rows by key, in their order. */
-export type Held = {
-  sections: readonly HeldSection[]
-  shelves: readonly HeldSection[]
-}
-
-type HeldSection = { section: Section; rows: readonly string[] }
+/** The list as it was drawn when the pointer came: each section's rows,
+ * by key, in their order. */
+export type Held = ReadonlyMap<string, ReadonlyMap<string, number>>
 
 /** A row's key: its Space's and its own. */
 export function rowKey(row: Row): string {
@@ -22,55 +19,46 @@ export function rowKey(row: Row): string {
 
 /** What `arranged` draws now, held as it stands. */
 export function held(arranged: Arranged): Held {
-  const keep = (section: Section): HeldSection => ({
-    section,
-    rows: section.rows.map(rowKey),
-  })
-  return {
-    sections: arranged.sections.map(keep),
-    shelves: arranged.shelves.map(keep),
-  }
+  const all = [...arranged.sections, ...arranged.shelves]
+  return new Map(
+    all.map((section) => [
+      section.key,
+      new Map(section.rows.map((row, i) => [rowKey(row), i])),
+    ])
+  )
 }
 
 /**
- * `next`, as `was` drew it: each held row where it was, saying what it
- * says now, and the rows gone left out; and how many rows would come, or
- * come up, as a call does, which wait until the Person takes them in.
+ * `next`, as `was` drew it: the sections as they are now, each one's held
+ * rows in their held order, and its new ones last; and how many rows came,
+ * or would come up, which wait until the Person takes them in.
  */
 export function hold(
   next: Arranged,
   was: Held | undefined
 ): { arranged: Arranged; updates: number } {
   if (!was) return { arranged: next, updates: 0 }
-  const now = new Map<string, Row>()
-  const at = new Map<string, { section: string; i: number }>()
-  for (const section of [...next.sections, ...next.shelves]) {
+  let updates = 0
+  const draw = (section: Section): Section => {
+    const order = was.get(section.key) ?? new Map<string, number>()
+    const at = (row: Row) => order.get(rowKey(row))
+    const kept = section.rows
+      .filter((row) => at(row) !== undefined)
+      .sort((a, b) => at(a)! - at(b)!)
+    const came = section.rows.filter((row) => at(row) === undefined)
+    updates += came.length
+    // One that would stand higher than it is drawn came up, as a call.
     section.rows.forEach((row, i) => {
-      now.set(rowKey(row), row)
-      at.set(rowKey(row), { section: section.key, i })
+      if (i < kept.indexOf(row)) updates++
     })
+    return { ...section, rows: [...kept, ...came] }
   }
-  const shown = new Set<string>()
-  const draw =
-    (fresh: readonly Section[]) =>
-    ({ section, rows }: HeldSection): Section => {
-      const kept = rows.flatMap((key) => {
-        const row = now.get(key)
-        if (row) shown.add(key)
-        return row ? [row] : []
-      })
-      const same = fresh.find((one) => one.key === section.key)
-      return { ...(same ?? section), rows: kept }
-    }
-  const sections = was.sections.map(draw(next.sections))
-  const shelves = was.shelves.map(draw(next.shelves))
-  // What is new, and what would stand higher or in another section.
-  let updates = [...now.keys()].filter((key) => !shown.has(key)).length
-  for (const section of [...sections, ...shelves]) {
-    section.rows.forEach((row, i) => {
-      const there = at.get(rowKey(row))
-      if (there && (there.section !== section.key || there.i < i)) updates++
-    })
+  return {
+    arranged: {
+      ...next,
+      sections: next.sections.map(draw),
+      shelves: next.shelves.map(draw),
+    },
+    updates,
   }
-  return { arranged: { ...next, sections, shelves }, updates }
 }
