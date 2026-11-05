@@ -3235,6 +3235,51 @@ test("a Group's handle carries it, and a Pane dropped inside its end joins it", 
   await expect(plates).toHaveCount(3)
 })
 
+test("a Thread picked in the sidebar comes to the Strip's left, beside it", async () => {
+  // A third each, so four columns are wider than the screen.
+  window = await startWindow({
+    look: '[columns]\nmin = 10\ndefault = "1/3"\n',
+  })
+  const { page } = window
+  const { thread, composer } = await firstThread(page)
+  await composer.fill("hello")
+  await composer.press("Enter")
+  await expect(thread.getByText("You said: hello")).toBeVisible()
+  const launcher = page.getByRole("region", { name: "New Pane" })
+  await page.keyboard.press("Alt+KeyN")
+  await expect(launcher).toHaveCount(1)
+  await page.keyboard.press("Alt+KeyN")
+  await expect(launcher).toHaveCount(2)
+  await page.keyboard.press("KeyT")
+  const terminal = terminalTile(page)
+  await expect(terminal).toHaveAttribute("data-focused", "true")
+  await page.keyboard.press("Alt+KeyN")
+  await expect(launcher).toHaveCount(2)
+  // The Thread second: a New Pane, it, the terminal and another.
+  await page.keyboard.press("Alt+Home")
+  await page.keyboard.press("Alt+Shift+ArrowRight")
+  await page.keyboard.press("Alt+Home")
+  await expect(launcher.first()).toHaveAttribute("data-focused", "true")
+  await settled(thread, terminal)
+  const strip = page.locator("[data-strip]").first()
+  const left = () =>
+    strip.evaluate(
+      (e) =>
+        e.getBoundingClientRect().left +
+        parseFloat(getComputedStyle(e).paddingLeft)
+    )
+  const x = async () => (await thread.boundingBox())!.x
+  expect((await x()) - (await left())).toBeGreaterThan(50)
+
+  // Picked, it comes to the left, though it was in view already.
+  const sidebar = page.getByRole("complementary", { name: "Sidebar" })
+  await sidebar.getByRole("button", { name: /hello/ }).click()
+  await expect(thread).toHaveAttribute("data-focused", "true")
+  await expect
+    .poll(async () => Math.abs((await x()) - (await left())))
+    .toBeLessThan(3)
+})
+
 test("a tab in a Deck's bar carries its Pane", async () => {
   window = await startWindow()
   const { page } = window

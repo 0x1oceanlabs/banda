@@ -84,7 +84,7 @@ import {
   viewOf,
   withAsked,
 } from "../workspaces/arrange"
-import { floorOf } from "../workspaces/layout"
+import { floorOf, type Reveal } from "../workspaces/layout"
 import { useArranged } from "../workspaces/useArranged"
 import {
   current,
@@ -389,7 +389,8 @@ export function Shell({
     if (at !== null) answered.current = Math.max(answered.current, at)
     return answered.current
   }, [])
-  const change = useCallback(
+  // A change, and once drawn, the Pane it focuses; none if refused.
+  const changing = useCallback(
     (how: Change) => {
       const run = async () => {
         const was = seenNow.current.state
@@ -398,7 +399,8 @@ export function Shell({
         if (!("command" in next)) {
           // The view alone: drawn as `next` at once.
           seenNow.current = looking(seenNow.current, viewOf(next))
-          return setView(() => viewOf(next))
+          setView(() => viewOf(next))
+          return focused(next)?.id
         }
         const answer = (await send(engine, next.command)) as {
           at: number | null
@@ -412,11 +414,18 @@ export function Shell({
           (seen) =>
             seen.at >= after && (!want || focused(seen.state)?.id === want)
         )
+        return want
       }
-      changes.current = changes.current.then(run).catch(refused)
-      return changes.current
+      // What it focuses, once drawn; none for a change refused.
+      const done = changes.current.then(run).catch(refused)
+      changes.current = done.then(() => undefined)
+      return done
     },
     [engine, setView, drawnWhen, answeredAt]
+  )
+  const change = useCallback(
+    (how: Change) => changing(how).then(() => undefined),
+    [changing]
   )
   // A Pane's new args are drawn at once, and kept until their event is.
   const update = useCallback(
@@ -443,9 +452,16 @@ export function Shell({
   // What calls the Person, for the Marks, the rings and Alt+U; the
   // notifications module tells of it (ADR 0056, decision 1).
   const calling = useMemo(() => callsOf(lists), [lists])
+  // Alt+C's column to the middle, and a Thread picked, from the Inbox,
+  // the bar or a call, to the left (ADR 0065, decision 8): once each.
+  const [reveal, setReveal] = useState<Reveal>()
+  const picked = useCallback((entry: string | void) => {
+    if (entry) setReveal({ entry, how: "left" })
+  }, [])
   const goToCall = useCallback(
-    (thing: Thing & { pane: PaneState }) => change((w) => answering(w, thing)),
-    [change]
+    (thing: Thing & { pane: PaneState }) =>
+      void changing((w) => answering(w, thing)).then(picked),
+    [changing, picked]
   )
   const heard = useRef(calling)
   useEffect(() => {
@@ -556,8 +572,10 @@ export function Shell({
   const sidebarShown = (narrow ? over : sidebar) && !zoomed
   const hideOver = useCallback(() => setOver(false), [])
   // Each Alt+C brings the focused column to the middle, once.
-  const [center, setCenter] = useState(0)
-  const toCenter = useCallback(() => setCenter((n) => n + 1), [])
+  const toCenter = useCallback(() => {
+    const entry = focused(seenNow.current.state)?.id
+    if (entry) setReveal({ entry, how: "middle" })
+  }, [])
   const toggleZoom = useCallback(
     () =>
       setZoom((was) =>
@@ -827,6 +845,13 @@ export function Shell({
       change((w) => opening(w, space, pane, { place: "right" })),
     [change]
   )
+  const pickPane = useCallback(
+    (space: SpaceId, pane: PaneState) =>
+      void changing((w) => opening(w, space, pane, { place: "right" })).then(
+        picked
+      ),
+    [changing, picked]
+  )
   // Pinned, the drawer's Thread is a column of the workspace on screen.
   const pinDrawer = useCallback(() => {
     const entry = drawerNow.current
@@ -858,7 +883,7 @@ export function Shell({
     window: parts,
     lists,
     sidebarShown,
-    onOpen: openPane,
+    onOpen: pickPane,
     aside: (ready && live.view.aside) || null,
   })
   // A widget moved with Alt writes the parts of `[bar]` it changed, one
@@ -1044,7 +1069,7 @@ export function Shell({
                 samePane(entry, { space, pane }, identityOf)
               )
             }}
-            onOpen={openPane}
+            onOpen={pickPane}
             onNewThread={newThreadIn}
             onNoSpace={() => machine && startThread(machine)}
             onSettle={settleThread}
@@ -1084,7 +1109,7 @@ export function Shell({
               marked={marked}
               away={away}
               zoomed={zoomed}
-              center={center}
+              reveal={reveal}
               listed={listed}
               frame={frame}
               onStep={(by) => change((w) => step(w, by))}
