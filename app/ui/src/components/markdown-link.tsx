@@ -31,8 +31,19 @@ export function webLink(href: string | undefined): URL | null {
   }
 }
 
-export function MarkdownLink({ href, children, title }: ComponentProps<"a">) {
+export function MarkdownLink({
+  href,
+  children,
+  title,
+  id,
+}: ComponentProps<"a">) {
   const open = useContext(Opener)
+  if (href?.startsWith("#"))
+    return (
+      <PlaceLink href={href} id={id}>
+        {children}
+      </PlaceLink>
+    )
   const url = webLink(href)
   const bare = typeof children === "string" && children === href
   const follow = (event: MouseEvent<HTMLAnchorElement>) => {
@@ -70,4 +81,74 @@ export function MarkdownLink({ href, children, title }: ComponentProps<"a">) {
       )}
     </a>
   )
+}
+
+/**
+ * A link to a place in its own reply, as a footnote's citation and its way
+ * back (ADR 0063, decision 1). It scrolls the Thread there and lights the
+ * place once; it never opens a window, nor scrolls what holds the Thread.
+ * A citation tells its note when hovered or focused.
+ */
+function PlaceLink({
+  href,
+  id,
+  children,
+}: {
+  href: string
+  id?: string
+  children: ReactNode
+}) {
+  return (
+    <a
+      href={href}
+      id={id}
+      data-place=""
+      className="font-medium text-primary"
+      onPointerEnter={tell}
+      onFocus={tell}
+      onClick={go}
+    >
+      {children}
+    </a>
+  )
+}
+
+/** Each reply's ids are its own (`Markdown`), so the place is the
+ * document's one of that id. */
+const placeOf = (link: HTMLAnchorElement) =>
+  link.ownerDocument.getElementById(link.getAttribute("href")!.slice(1))
+
+/** A citation's title is its note's words, without the way back. */
+function tell({ currentTarget: link }: { currentTarget: HTMLAnchorElement }) {
+  if (link.title || link.closest("section[data-footnotes]")) return
+  const note = placeOf(link)?.cloneNode(true) as HTMLElement | undefined
+  if (!note) return
+  for (const back of note.querySelectorAll("a[data-place]")) back.remove()
+  link.title = (note.textContent ?? "").replace(/\s+/g, " ").trim()
+}
+
+const still =
+  typeof matchMedia === "function"
+    ? matchMedia("(prefers-reduced-motion: reduce)")
+    : undefined
+const LIT = {
+  backgroundColor: "color-mix(in oklab, var(--primary) 18%, transparent)",
+  color: "var(--foreground)",
+}
+
+/** Scrolls the Thread so the place is in its middle, and lights it once. */
+function go(event: MouseEvent<HTMLAnchorElement>) {
+  event.preventDefault()
+  const place = placeOf(event.currentTarget)
+  if (!place) return
+  place.scrollIntoView({
+    block: "center",
+    // Chromium's: only the Thread scrolls, never the Strip around it.
+    container: "nearest",
+    behavior: still?.matches ? "auto" : "smooth",
+  } as ScrollIntoViewOptions)
+  place.animate([LIT, { ...LIT, offset: 0.4 }, {}], {
+    duration: 1200,
+    easing: "ease-out",
+  })
 }

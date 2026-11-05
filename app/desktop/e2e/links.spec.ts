@@ -3,7 +3,7 @@ import { createServer, type Server } from "node:http"
 import type { AddressInfo } from "node:net"
 import { join } from "node:path"
 import { pathToFileURL } from "node:url"
-import { expect, test } from "@playwright/test"
+import { expect, type Locator, test } from "@playwright/test"
 import { firstThread, newTerminal, startWindow, type Window } from "./window"
 
 let window: Window
@@ -129,4 +129,49 @@ test("a terminal's paths open in Banda's browser, and Ctrl+click opens them in t
     )
     .toEqual([pathToFileURL(notes).href])
   expect(await outside()).toEqual([notes])
+})
+
+test("a reply's note is a click away and back, in its own reply, and says its words on hover", async () => {
+  window = await startWindow()
+  const { app, page } = window
+  const { thread, composer } = await firstThread(page)
+  const replies = thread.locator("[data-quotable]")
+  const filler = Array.from({ length: 40 }, (_, n) => `Filler line ${n}.`)
+  for (const [n, [name, more]] of (
+    [
+      ["first", []],
+      ["second", filler],
+    ] as const
+  ).entries()) {
+    await composer.fill(
+      [
+        `The ${name} reply cites a note[^one].`,
+        ...more,
+        `[^one]: The ${name} reply's note.`,
+      ].join("\n\n")
+    )
+    await composer.press("Enter")
+    await expect(replies).toHaveCount(n + 1)
+  }
+  const [first, second] = [replies.nth(0), replies.nth(1)]
+  const lit = (place: Locator) =>
+    place.evaluate((element) => element.getAnimations().length > 0)
+  const citation = second.locator("sup a")
+  const note = second.locator("section[data-footnotes] li")
+  await expect(second.getByRole("heading", { name: "Notes" })).toBeVisible()
+  await citation.scrollIntoViewIfNeeded()
+  await expect(note).not.toBeInViewport()
+
+  await citation.hover()
+  await expect(citation).toHaveAttribute("title", "The second reply's note.")
+  await citation.click()
+  await expect(note).toBeInViewport()
+  expect(await lit(note)).toBe(true)
+  expect(await lit(first.locator("section[data-footnotes] li"))).toBe(false)
+  await page.screenshot({ path: "test-results/thread-notes.png" })
+
+  await note.getByRole("link").click()
+  await expect(citation).toBeInViewport()
+  expect(app.windows()).toHaveLength(1)
+  expect(page.url()).toContain("app://banda")
 })

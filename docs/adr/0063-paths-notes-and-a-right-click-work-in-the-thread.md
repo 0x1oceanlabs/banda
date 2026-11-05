@@ -44,10 +44,10 @@ rest are our defaults, and they stay his to change.
      to its target in the same reply, centres it, and lights it once
      (1 s, `--primary` at 14%). The note's ↩ goes back to where it was
      cited.
-   - Each reply's ids are its own, prefixed with its message's id.
+   - Each reply's ids are its own, so two replies' notes never mix.
    - Hovering or focusing a citation shows its note in a tooltip.
-   - The notes sit under a rule, with the label "Notes", at the meta size
-     (ADR 0058, decision 1).
+   - The notes sit under a rule, at the meta size (ADR 0058, decision 1),
+     under the label "Notes".
 
 2. **A path in a reply is a link to its file.** (_decided_: shown as the
    Agent wrote it, and in plain text too, but only to a file that

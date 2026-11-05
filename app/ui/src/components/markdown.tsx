@@ -2,7 +2,7 @@ import { code } from "@streamdown/code"
 import { createMathPlugin } from "@streamdown/math"
 import { mermaid } from "@streamdown/mermaid"
 import { cn } from "../lib/utils"
-import { useMemo } from "react"
+import { useId, useMemo } from "react"
 
 import { Streamdown, defaultRehypePlugins } from "streamdown"
 import { useDiagramLook } from "../lib/diagram-look"
@@ -49,6 +49,17 @@ function Markdown({
 }) {
   const diagram = useDiagramLook()
   const mermaid = useMemo(() => ({ config: diagram }), [diagram])
+  // A reply's notes have ids of their own, so two replies' never mix
+  // (ADR 0063, decision 1), and show their label.
+  const scope = useId()
+  const notes = useMemo(
+    () => ({
+      clobberPrefix: `${scope}-`,
+      footnoteLabel: "Notes",
+      footnoteLabelProperties: {},
+    }),
+    [scope]
+  )
   return (
     <Streamdown
       data-slot="markdown"
@@ -61,6 +72,7 @@ function Markdown({
       mermaid={mermaid}
       components={components}
       rehypePlugins={rehypePlugins}
+      remarkRehypeOptions={notes}
       controls={controls}
       linkSafety={{ enabled: false }}
     >

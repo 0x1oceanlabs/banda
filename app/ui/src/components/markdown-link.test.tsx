@@ -48,3 +48,25 @@ test("only absolute HTTP(S) links enter web navigation", () => {
     'href="javascript:'
   )
 })
+
+test("a reply's notes are its own, under their label, and never open a window (ADR 0063)", () => {
+  const note = "A claim[^one].\n\n[^one]: The note."
+  const html = renderToStaticMarkup(
+    <>
+      <Markdown>{note}</Markdown>
+      <Markdown>{note}</Markdown>
+    </>
+  )
+  const scopes = [...html.matchAll(/href="#(\S+?)fn-one"/g)].map(
+    ([, scope]) => {
+      expect(html).toContain(`id="${scope}fnref-one"`)
+      expect(html).toContain(`id="${scope}fn-one"`)
+      expect(html).toContain(`href="#${scope}fnref-one"`)
+      return scope
+    }
+  )
+  expect(new Set(scopes).size).toBe(2)
+  expect(html.match(/<h2[^>]*>Notes<\/h2>/g)).toHaveLength(2)
+  expect(html).not.toContain("sr-only")
+  expect(html).not.toMatch(/href="#[^"]*"[^>]*target=/)
+})
