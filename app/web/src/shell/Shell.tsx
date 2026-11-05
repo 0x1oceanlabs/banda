@@ -1032,7 +1032,7 @@ export function Shell({
             onDismiss={narrow ? hideOver : undefined}
             onMenu={() => setMenu(openingAt("root"))}
             onSettings={() => settings()}
-            onHide={hideSidebar}
+            onKeys={() => setMenu(openingAt("actions"))}
             hiding={hiding}
             spaces={spaces}
             lists={lists}

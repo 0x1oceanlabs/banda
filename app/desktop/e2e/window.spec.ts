@@ -4543,9 +4543,25 @@ test("the sidebar's edge drags its width, which the Strip follows and the window
   await page.keyboard.press("ArrowRight")
   await expect.poll(width).toBe(272)
 
-  // Its gear and its button to hide it, with no words beside them.
-  await sidebar.getByRole("button", { name: "Hide sidebar" }).click()
-  await expect(sidebar).toBeHidden()
+  // Its foot, icons with no words beside them: the gear, the key sheet,
+  // the theme, the view and Add Space.
+  await sidebar
+    .getByRole("button", { name: "Every action and its key" })
+    .click()
+  const menu = page.getByRole("dialog", { name: "Banda menu" })
+  await expect(menu.getByRole("group", { name: "Banda" })).toBeVisible()
+  await page.keyboard.press("Escape")
+  await expect(menu).toBeHidden()
+  await expect(page.locator("html")).not.toHaveClass(/dark/)
+  await sidebar.getByRole("button", { name: /^Theme/ }).click()
+  await page.getByRole("menuitemradio", { name: "Dark" }).click()
+  await expect(page.locator("html")).toHaveClass(/dark/)
+  await expect
+    .poll(() => readFileSync(join(window.dir, "config/look.toml"), "utf8"))
+    .toContain('mode = "dark"')
+  await expect(sidebar.getByRole("button", { name: /^View: / })).toBeVisible()
+  await expect(sidebar.getByRole("button", { name: "Add Space" })).toBeVisible()
+  await page.screenshot({ path: "test-results/8a-sidebar-foot.png" })
 })
 
 test("Alt+` drops the drawer: a Thread over the workspace that stays as it was, and its pin makes it a column", async () => {
