@@ -171,11 +171,12 @@ the rest are our defaults, as T3 Code does, and stay Roma's to change.
      runs the whole chain at once, every file, the message written for it;
      in a new Thread, whose changes are none of its making, it is
      `Commit…` and opens the dialog first. Disabled, it says why on
-     hover. Its progress is in the button: the step ("Claude Code is
+     hover. Its progress is in the button: the step ("Claude is
      writing the message…", with Stop, which ends the run with nothing
      committed and no error), a hook's last line, a timer, then ✓ for
-     ten seconds; only an error is a toast, and it stays. Until a module can show a toast, the
-     error stays in the card, above the button, till it is closed. A run
+     ten seconds; only an error is a toast, and it stays. Until a module
+     can show a toast, the error stays in the card, above the button,
+     till it is closed. A run
      is the Space's, not a card's: a card shown again finds it where it
      is, and as a command of git's ends, `git.watch` reads the status
      again at once.

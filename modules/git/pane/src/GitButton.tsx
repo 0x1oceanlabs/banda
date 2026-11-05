@@ -47,6 +47,7 @@ import {
   menuOf,
   type Quick,
   quickOf,
+  shortName,
 } from "./quick"
 import { GitAlert } from "./GitAlert"
 
@@ -79,8 +80,8 @@ export function GitButton({
   const writer: Writer | null =
     harness &&
     (thread !== null
-      ? { name: harness.name, thread }
-      : { name: harness.name, harness: harness.id })
+      ? { name: shortName(harness), thread }
+      : { name: shortName(harness), harness: harness.id })
   const [asking, setAsking] = useState<Action | null>(null)
   const [committing, setCommitting] = useState(false)
   const go = (action: Action, feature = false) => {

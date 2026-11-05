@@ -32,6 +32,19 @@ const UP_TO_DATE = "Branch is up to date. No action needed."
 const DIVERGED = "Branch has diverged from upstream. Rebase or merge first."
 const NO_COMMITS = "No local commits to push."
 
+/** The Harnesses Banda knows by the short names Roma's words give them,
+ * "Claude writes it", by their ids (`harnesses.toml`), as their logos
+ * are; another Harness goes by its name. */
+const SHORT: Readonly<Record<string, string>> = {
+  claude: "Claude",
+  codex: "Codex",
+}
+
+/** What the card calls `harness` when it writes a message. */
+export function shortName(harness: { id: string; name: string }): string {
+  return SHORT[harness.id] ?? harness.name
+}
+
 /** Whether `status`'s branch is the repository's default. */
 export function onDefault(status: Status): boolean {
   return status.branch !== undefined && status.branch === status.default_branch
