@@ -395,14 +395,39 @@ async fn a_dirty_repository_says_each_change_with_its_lines() {
         (Change::Deleted, Some(false), 1)
     );
     let new = file(&status.files, "new.txt");
-    assert_eq!((new.status, new.added), (Change::Untracked, 0));
+    assert_eq!((new.status, new.added), (Change::Untracked, 1));
     let staged = file(&status.files, "staged.txt");
     assert_eq!(
         (staged.status, staged.staged, staged.added),
         (Change::Added, Some(true), 3)
     );
-    assert_eq!(status.files.len(), 5);
-    assert_eq!((status.added, status.removed), (5, 2));
+    assert_eq!((status.files.len(), status.changed), (5, 5));
+    assert_eq!((status.added, status.removed), (6, 2));
+}
+
+#[tokio::test]
+async fn untracked_files_count_with_their_lines_as_uncommitted_shows_them() {
+    let world = World::committed().await;
+    world.write("a.txt", "one\nTWO\nthree\n");
+    world.write("new/one.txt", "1\n2\n");
+    world.write("new/deep/two.txt", "no newline at its end");
+    std::fs::write(world.folder.join("logo.png"), b"\x89PNG\0\0\0").unwrap();
+
+    let status = world.status().await;
+    // git lists the folder as one; its files count each.
+    let folder = file(&status.files, "new/");
+    assert_eq!((folder.status, folder.added), (Change::Untracked, 3));
+    assert_eq!(file(&status.files, "logo.png").added, 0);
+    assert_eq!(status.files.len(), 3);
+    assert_eq!(status.changed, 4);
+    assert_eq!((status.added, status.removed), (4, 1));
+    // As many as the Diff of what is not committed has.
+    let diff = world
+        .diff(json!({ "scope": { "kind": "uncommitted" } }))
+        .await;
+    assert_eq!(diff.files.len(), 4);
+    let lines: u32 = diff.files.iter().map(|f| f.added).sum();
+    assert_eq!(lines, status.added);
 }
 
 #[tokio::test]
@@ -1177,8 +1202,11 @@ async fn the_button_commits_every_change_and_pushes_it() {
     assert_eq!(
         done(&said),
         &Done {
-            title: format!("Pushed {short} to origin/main"),
+            title: format!("Committed and pushed {short} to origin/main"),
             detail: Some("Add new".to_owned()),
+            notice: Some(format!(
+                "Committed 2 files on main: “Add new” ({short}), and pushed it to origin/main."
+            )),
         }
     );
     assert_eq!(
@@ -1209,6 +1237,11 @@ async fn a_new_branch_is_pushed_under_its_own_name_and_followed() {
         }
     );
     assert!(done(&said).title.ends_with(" to origin/feature/a"));
+    let notice = done(&said).notice.as_deref().unwrap();
+    assert!(
+        notice.starts_with("Made the branch feature/a, and committed 1 file on it: “Change a”"),
+        "{notice}"
+    );
     let status = world.status().await;
     assert_eq!(status.branch.as_deref(), Some("feature/a"));
     assert_eq!(status.upstream.as_deref(), Some("origin/feature/a"));
@@ -1230,6 +1263,10 @@ async fn a_commit_of_chosen_files_takes_them_alone() {
 
     let short = world.git(&["rev-parse", "--short", "HEAD"]);
     assert_eq!(done(&said).title, format!("Committed {short}"));
+    assert_eq!(
+        done(&said).notice.as_deref(),
+        Some(format!("Committed 1 file on main: “Change a” ({short}).").as_str())
+    );
     assert_eq!(
         world.git(&["show", "--name-only", "--format=", "HEAD"]),
         "a.txt"
@@ -1317,8 +1354,14 @@ async fn a_branch_behind_pulls_and_one_that_diverged_cannot_push() {
         world.git(&["rev-parse", "HEAD"]),
         world.git(&["rev-parse", "origin/main"])
     );
+    let short = world.git(&["rev-parse", "--short", "HEAD"]);
+    assert_eq!(
+        done(&said).notice.as_deref(),
+        Some(format!("Pulled origin/main into main, which is now at {short} “theirs”.").as_str())
+    );
     let said = world.act(json!({ "action": "pull" })).await;
     assert_eq!(done(&said).title, "Already up to date");
+    assert_eq!(done(&said).notice, None, "nothing changed to tell of");
 
     world.theirs("main", "more.txt");
     world.write("a.txt", "ours\n");

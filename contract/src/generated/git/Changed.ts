@@ -20,7 +20,9 @@ old_path?: string, status: Change,
  */
 staged?: boolean, 
 /**
- * Lines added; 0 for an untracked or a binary file.
+ * Lines added: an untracked file's every line, an untracked folder's
+ * those of its files; 0 for a binary file, and for an untracked one
+ * past 1 MiB or when there are more than 5000 of them.
  */
 added: number, 
 /**

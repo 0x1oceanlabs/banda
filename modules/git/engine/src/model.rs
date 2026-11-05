@@ -62,7 +62,10 @@ pub struct Status {
     /// What changed against `HEAD`, in the index and the work tree, by
     /// path.
     pub files: Vec<Changed>,
-    /// The lines added in all of them.
+    /// How many files changed, each file of an untracked folder counted:
+    /// what a commit of every change takes, as Uncommitted shows it.
+    pub changed: u32,
+    /// The lines added in all of them, an untracked file's too.
     pub added: u32,
     /// The lines removed in all of them.
     pub removed: u32,
@@ -85,7 +88,9 @@ pub struct Changed {
     #[ts(optional)]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub staged: Option<bool>,
-    /// Lines added; 0 for an untracked or a binary file.
+    /// Lines added: an untracked file's every line, an untracked folder's
+    /// those of its files; 0 for a binary file, and for an untracked one
+    /// past 1 MiB or when there are more than 5000 of them.
     pub added: u32,
     /// Lines removed.
     pub removed: u32,
@@ -391,12 +396,19 @@ pub enum Step {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "git/")]
 pub struct Done {
-    /// As `Pushed a1b2c3d to origin/main`.
+    /// As `Committed and pushed a1b2c3d to origin/main`.
     pub title: String,
     /// As the commit's subject.
     #[ts(optional)]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub detail: Option<String>,
+    /// What changed, in a sentence for the Thread whose card ran it, so
+    /// its Agent knows (`agents.notice`): `Committed 2 files on main:
+    /// “Add multiply” (a1b2c3d), and pushed it to origin/main.` None when
+    /// nothing changed, as a pull already up to date.
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub notice: Option<String>,
 }
 
 /// What `git.switch` is asked: a branch here, or a remote's, which a

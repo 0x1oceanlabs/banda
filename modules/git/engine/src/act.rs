@@ -7,7 +7,7 @@
 //! push or a pull as long too. What a hook or a remote says comes as it
 //! comes, its credentials taken out, and a failure says its last line.
 
-use crate::model::{ActAsk, Action, Change, Changed, Done, Progress, Step};
+use crate::model::{ActAsk, Action, Change, Changed, Commit, Done, Progress, Step};
 use crate::repo::{Repo, branch_refs, chosen, in_way, scratch};
 use crate::run::{Failure, Opts, Ran, Reason, git};
 use banda_kernel::Refusal;
@@ -70,7 +70,15 @@ pub async fn act(repo: &Repo, ask: ActAsk, tell: &Teller) -> Result<Done, Refusa
         return match ask.action {
             Action::Push => {
                 tell.step(Step::Pushing).await;
-                push(repo, &branch, tell).await
+                let pushed = push(repo, &branch, tell).await?;
+                let Pushed { to, head } = &pushed;
+                Ok(Done {
+                    notice: Some(format!(
+                        "Pushed {branch} to {to}, up to {} “{}”.",
+                        head.short, head.subject
+                    )),
+                    ..pushed.done()
+                })
             }
             _ => {
                 tell.step(Step::Pulling).await;
@@ -103,6 +111,7 @@ pub async fn act(repo: &Repo, ask: ActAsk, tell: &Teller) -> Result<Done, Refusa
     // A rename chosen takes where it was too, so its old path goes.
     let files = files.map(|files| with_old_paths(files, &said.files));
     let mut branch = said.branch;
+    let made = ask.branch.is_some();
     if let Some(name) = ask.branch {
         tell.step(Step::Branching).await;
         make_branch(repo, &name, None).await?;
@@ -113,19 +122,80 @@ pub async fn act(repo: &Repo, ask: ActAsk, tell: &Teller) -> Result<Done, Refusa
     }
     tell.step(Step::Committing).await;
     let committed = commit(repo, message, files.as_deref(), tell).await?;
-    match branch {
-        Some(branch) if ask.action == Action::CommitPush => {
-            tell.step(Step::Pushing).await;
-            // The commit stays made: what failed is the push alone.
-            push(repo, &branch, tell).await.map_err(|mut refusal| {
-                refusal.message = format!(
-                    "{}, but the push failed. {}",
-                    committed.title, refusal.message
-                );
-                refusal
-            })
+    let notice = committed.notice(branch.as_deref(), made);
+    let Some(branch) = branch.filter(|_| ask.action == Action::CommitPush) else {
+        return Ok(Done {
+            notice: Some(format!("{notice}.")),
+            ..committed.done()
+        });
+    };
+    tell.step(Step::Pushing).await;
+    // The commit stays made: what failed is the push alone.
+    let pushed = push(repo, &branch, tell).await.map_err(|mut refusal| {
+        refusal.message = format!(
+            "{}, but the push failed. {}",
+            committed.done().title,
+            refusal.message
+        );
+        refusal
+    })?;
+    Ok(Done {
+        title: format!(
+            "Committed and pushed {} to {}",
+            pushed.head.short, pushed.to
+        ),
+        notice: Some(format!("{notice}, and pushed it to {}.", pushed.to)),
+        ..pushed.done()
+    })
+}
+
+/// A commit made: it, and how many files it took.
+struct Committed {
+    head: Commit,
+    files: usize,
+}
+
+impl Committed {
+    fn done(&self) -> Done {
+        Done {
+            title: format!("Committed {}", self.head.short),
+            detail: Some(self.head.subject.clone()),
+            notice: None,
         }
-        _ => Ok(committed),
+    }
+
+    /// What a Thread's Agent reads of it, as `Committed 2 files on main:
+    /// “Add multiply” (a1b2c3d)`, for the end of a sentence.
+    fn notice(&self, branch: Option<&str>, made: bool) -> String {
+        let Committed { head, files } = self;
+        let files = match files {
+            1 => "1 file".to_owned(),
+            n => format!("{n} files"),
+        };
+        let what = format!("“{}” ({})", head.subject, head.short);
+        match (branch, made) {
+            (Some(branch), true) => {
+                format!("Made the branch {branch}, and committed {files} on it: {what}")
+            }
+            (Some(branch), false) => format!("Committed {files} on {branch}: {what}"),
+            (None, _) => format!("Committed {files} on a detached HEAD: {what}"),
+        }
+    }
+}
+
+/// A push made: where to, as `origin/main`, and the commit it took there.
+struct Pushed {
+    to: String,
+    head: Commit,
+}
+
+impl Pushed {
+    fn done(&self) -> Done {
+        Done {
+            title: format!("Pushed {} to {}", self.head.short, self.to),
+            detail: Some(self.head.subject.clone()),
+            notice: None,
+        }
     }
 }
 
@@ -178,7 +248,7 @@ async fn commit(
     message: &str,
     files: Option<&[&str]>,
     tell: &Teller,
-) -> Result<Done, Refusal> {
+) -> Result<Committed, Refusal> {
     match files {
         // Every change, as T3 Code's button commits: what `.gitignore`
         // leaves out stays out.
@@ -201,23 +271,28 @@ async fn commit(
                 .await?;
         }
     }
-    if repo.yes(["diff", "--cached", "--quiet", "--"]).await? {
+    let staged = repo
+        .run(
+            ["diff", "--cached", "--name-only", "-z", "-M", "--"],
+            Opts::default(),
+        )
+        .await?;
+    let taken = staged.stdout.split(|b| *b == 0).filter(|p| !p.is_empty());
+    let files = taken.count();
+    if files == 0 {
         return Err(nothing_to_commit(true));
     }
     let stdin = Some(message.as_bytes().to_vec());
     let args = ["commit", "--quiet", "--file=-"];
     traced(repo, &args, stdin, "Git could not commit", tell).await?;
     let head = repo.said_head().await?;
-    Ok(Done {
-        title: format!("Committed {}", head.short),
-        detail: Some(head.subject),
-    })
+    Ok(Committed { head, files })
 }
 
 /// Pushes `branch` to the remote it follows, or else the primary one,
 /// under its own name, and makes that its upstream when it has none or
 /// another: a branch made from `origin/main` is not pushed to `main`.
-async fn push(repo: &Repo, branch: &str, tell: &Teller) -> Result<Done, Refusal> {
+async fn push(repo: &Repo, branch: &str, tell: &Teller) -> Result<Pushed, Refusal> {
     let own = format!("refs/heads/{branch}");
     let merge = repo.config(&format!("branch.{branch}.merge")).await?;
     let follows = merge.as_deref() == Some(own.as_str());
@@ -254,9 +329,9 @@ async fn push(repo: &Repo, branch: &str, tell: &Teller) -> Result<Done, Refusal>
         }
     }
     let head = repo.said_head().await?;
-    Ok(Done {
-        title: format!("Pushed {} to {remote}/{branch}", head.short),
-        detail: Some(head.subject),
+    Ok(Pushed {
+        to: format!("{remote}/{branch}"),
+        head,
     })
 }
 
@@ -281,15 +356,21 @@ async fn pull(repo: &Repo, branch: &str, tell: &Teller) -> Result<Done, Refusal>
     let before = repo.head().await?;
     let args = ["pull", "--quiet", "--ff-only", "--no-rebase"];
     traced(repo, &args, None, "Git could not pull", tell).await?;
-    Ok(match repo.head().await? == before {
-        true => Done {
+    if repo.head().await? == before {
+        return Ok(Done {
             title: "Already up to date".to_owned(),
             detail: Some(format!("{branch} has all of {upstream}.")),
-        },
-        false => Done {
-            title: "Pulled".to_owned(),
-            detail: Some(format!("Updated {branch} from {upstream}.")),
-        },
+            notice: None,
+        });
+    }
+    let head = repo.said_head().await?;
+    Ok(Done {
+        title: "Pulled".to_owned(),
+        detail: Some(format!("Updated {branch} from {upstream}.")),
+        notice: Some(format!(
+            "Pulled {upstream} into {branch}, which is now at {} “{}”.",
+            head.short, head.subject
+        )),
     })
 }
 

@@ -7,6 +7,7 @@
 //! writes in the repository, and none keeps one waiting: git locks each
 //! remote branch it updates itself.
 
+use crate::lines::Counted;
 use crate::model::Status;
 use crate::repo::Repo;
 use crate::run::{Opts, Pool};
@@ -33,6 +34,9 @@ pub fn watch(space: ModuleSpace, repositories: Repositories) -> Stream {
     tokio::spawn(async move {
         let mut told: Option<Status> = None;
         let mut fetch = Fetch::new();
+        // Its untracked files as last counted: one unchanged is not read
+        // again.
+        let mut counted = Counted::default();
         loop {
             let folder = space.folder();
             // Read before git is: an event after it may change what git
@@ -51,7 +55,7 @@ pub fn watch(space: ModuleSpace, repositories: Repositories) -> Stream {
             let wrote = writes.done.notified();
             tokio::pin!(wrote);
             wrote.as_mut().enable();
-            let read = async { status::read(found, at?).await.ok() };
+            let read = async { status::read(found, at?, &mut counted).await.ok() };
             if let Some(mut status) = read.await {
                 // The same but for its position is no change.
                 let at = status.at;
