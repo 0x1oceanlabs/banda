@@ -1378,7 +1378,7 @@ async fn a_branch_behind_pulls_and_one_that_diverged_cannot_push() {
     );
     let short = world.git(&["rev-parse", "--short", "HEAD"]);
     let pulled = format!("Pulled origin/main into main, which is now at {short} “theirs”.");
-    assert_eq!(world.acted("t1").await, [pulled.clone()]);
+    assert_eq!(world.acted("t1").await, std::slice::from_ref(&pulled));
     let said = world.act(json!({ "action": "pull", "thread": "t1" })).await;
     assert_eq!(done(&said).title, "Already up to date");
     assert_eq!(
