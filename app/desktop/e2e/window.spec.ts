@@ -897,7 +897,8 @@ test("a tool call opens on what it changed and what it printed", async () => {
   // Under the reply, the turn's changed files; one opens the Diff beside
   // the Thread, on that turn and open at that file (ADR 0034).
   const changed = thread.getByRole("region", { name: "Changed files" })
-  await expect(changed).toContainText("1 file changed")
+  // A card with a verb (ADR 0058, decision 7).
+  await expect(changed).toContainText("Edited 1 file")
   await changed.getByRole("button", { name: /notes\.md/ }).click()
   const diff = page.getByRole("region", { name: "Diff" })
   const scope = diff.getByRole("button", { name: "Scope" })
@@ -938,7 +939,7 @@ test("an Agent's plan shows its steps, and the context how full it is", async ()
   await composer.press("Enter")
   await expect(thread.getByText("All three steps are done.")).toBeVisible()
   const plan = thread.getByRole("region", { name: "Plan" })
-  await expect(plan.getByText("3 of 3 done")).toBeVisible()
+  await expect(plan.getByText("3 of 3", { exact: true })).toBeVisible()
   await expect(plan.getByRole("listitem")).toHaveText([
     /Read the notes/,
     /Fix the typo/,
