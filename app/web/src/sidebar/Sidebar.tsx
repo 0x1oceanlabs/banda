@@ -32,8 +32,8 @@ import {
   FileCogIcon,
   FolderPlusIcon,
   FolderSearchIcon,
+  KeyboardIcon,
   ListFilterIcon,
-  PanelLeftCloseIcon,
   PinIcon,
   PinOffIcon,
   SearchIcon,
@@ -53,6 +53,7 @@ import { Row } from "./Row"
 import { pickPreset, PRESET_WORDS, type Settings } from "./settings"
 import { type Held, held, hold, rowKey } from "./hold"
 import { settles, useIsSettled } from "./settled"
+import { ThemeMenu } from "./ThemeMenu"
 
 /**
  * The sidebar, docked at the window's left edge (ADR 0005, decision 8):
@@ -85,8 +86,8 @@ export function Sidebar({
   onMenu: () => void
   /** Opens the settings, as Alt+, does (ADR 0016). */
   onSettings: () => void
-  /** Hides the sidebar, as Alt+A does. */
-  onHide: () => void
+  /** Lists every action and its key, as Alt+K does. */
+  onKeys: () => void
   /** Its edge is dragged past the narrowest: letting go hides it. */
   hiding?: boolean
   /**
@@ -120,7 +121,7 @@ export function Sidebar({
     }
   const onMenu = done(props.onMenu)
   const onSettings = done(props.onSettings)
-  const onHide = done(props.onHide)
+  const onKeys = done(props.onKeys)
   const onOpen = done(props.onOpen)
   const onNewThread = done(props.onNewThread)
   const onNoSpace = done(props.onNoSpace)
@@ -235,63 +236,6 @@ export function Sidebar({
             {keyName(MENU_KEY).replaceAll("+", " ")}
           </Kbd>
         </button>
-        <DropdownMenu>
-          <DropdownMenuTrigger
-            render={
-              <Button
-                variant="ghost"
-                size="icon-sm"
-                aria-label={`View: ${preset}`}
-                title={`View: ${preset}`}
-                className="text-muted-foreground"
-              >
-                <ListFilterIcon />
-              </Button>
-            }
-          />
-          <DropdownMenuContent align="start" className="w-auto min-w-60">
-            <DropdownMenuGroup>
-              <DropdownMenuLabel>How the sidebar is arranged</DropdownMenuLabel>
-              <DropdownMenuRadioGroup
-                value={preset}
-                onValueChange={(next: string) => pickPreset(next)}
-              >
-                {presets.map(({ name, origin }) => (
-                  <DropdownMenuRadioItem
-                    key={name}
-                    value={name}
-                    disabled={!host}
-                    closeOnClick
-                  >
-                    <span className="flex flex-col">
-                      <span className="capitalize">{name}</span>
-                      <span className="text-xs text-muted-foreground">
-                        {origin === "yours"
-                          ? "Your own preset"
-                          : PRESET_WORDS[name]}
-                      </span>
-                    </span>
-                  </DropdownMenuRadioItem>
-                ))}
-              </DropdownMenuRadioGroup>
-            </DropdownMenuGroup>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem disabled={!host} onClick={edit}>
-              <FileCogIcon />
-              Edit sidebar.toml
-            </DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
-        <Button
-          variant="ghost"
-          size="icon-sm"
-          className="text-muted-foreground"
-          aria-label="Add Space"
-          title="Add Space"
-          onClick={onAddSpace}
-        >
-          <FolderPlusIcon />
-        </Button>
         <Button
           variant="ghost"
           size="icon-sm"
@@ -343,7 +287,9 @@ export function Sidebar({
           {arranged.shelves.map(drawn)}
         </div>
       )}
-      <div className="flex items-center justify-between px-1.5 pt-0.5 pb-1.5">
+      {/* Its foot: Banda's settings and keys, its theme, and how the
+          sidebar arranges, with "Add Space" beside it. */}
+      <div className="flex items-center gap-0.5 px-1.5 pt-0.5 pb-1.5">
         <Button
           variant="ghost"
           size="icon-sm"
@@ -358,11 +304,69 @@ export function Sidebar({
           variant="ghost"
           size="icon-sm"
           className="text-muted-foreground"
-          aria-label="Hide sidebar"
-          title="Hide sidebar (Alt+A)"
-          onClick={onHide}
+          aria-label="Every action and its key"
+          title="Every action and its key (Alt+K)"
+          onClick={onKeys}
         >
-          <PanelLeftCloseIcon />
+          <KeyboardIcon />
+        </Button>
+        <ThemeMenu />
+        <DropdownMenu>
+          <DropdownMenuTrigger
+            render={
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                aria-label={`View: ${preset}`}
+                title={`View: ${preset}`}
+                className="text-muted-foreground"
+              >
+                <ListFilterIcon />
+              </Button>
+            }
+          />
+          <DropdownMenuContent side="top" className="w-auto min-w-60">
+            <DropdownMenuGroup>
+              <DropdownMenuLabel>How the sidebar is arranged</DropdownMenuLabel>
+              <DropdownMenuRadioGroup
+                value={preset}
+                onValueChange={(next: string) => pickPreset(next)}
+              >
+                {presets.map(({ name, origin }) => (
+                  <DropdownMenuRadioItem
+                    key={name}
+                    value={name}
+                    disabled={!host}
+                    closeOnClick
+                  >
+                    <span className="flex flex-col">
+                      <span className="capitalize">{name}</span>
+                      <span className="text-xs text-muted-foreground">
+                        {origin === "yours"
+                          ? "Your own preset"
+                          : PRESET_WORDS[name]}
+                      </span>
+                    </span>
+                  </DropdownMenuRadioItem>
+                ))}
+              </DropdownMenuRadioGroup>
+            </DropdownMenuGroup>
+            <DropdownMenuSeparator />
+            <DropdownMenuItem disabled={!host} onClick={edit}>
+              <FileCogIcon />
+              Edit sidebar.toml
+            </DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenu>
+        <Button
+          variant="ghost"
+          size="icon-sm"
+          className="text-muted-foreground"
+          aria-label="Add Space"
+          title="Add Space"
+          onClick={onAddSpace}
+        >
+          <FolderPlusIcon />
         </Button>
       </div>
       {making && (

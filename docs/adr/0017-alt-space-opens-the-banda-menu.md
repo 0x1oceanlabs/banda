@@ -48,7 +48,7 @@ Roma, on 2026-11-01, looking at the sidebar's header:
    - Esc or a click outside closes it.
    - It always opens empty, at its root.
 
-3. **The sidebar's header opens it** (_decided_).
+3. **The sidebar's header opens it** (_decided_; _changed on 2026-11-05 by ADR 0067_: the view menu and the new Space moved to the sidebar's foot, and the header keeps the field and a new Thread).
    - On the left is a field that reads "Search" with `Alt Space` beside it. It is a button: a click opens the same menu. There is one search, and it works the same from everywhere.
    - Then come three icons:
      - the view menu's filter icon alone, with the preset's name only in its tooltip ("just an icon", _decided_);

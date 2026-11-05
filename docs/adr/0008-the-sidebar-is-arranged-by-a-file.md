@@ -94,7 +94,7 @@ Roma liked A, B and C, and asked for one thing instead of three: "unify everythi
    - In `places`, a click on a Space in the list shows only its Threads, and a second click shows all again, as Herdr's active Space does.
 
 6. **Switching is one click, and it writes the file; the file is the whole interface** (_decided_: "the Person sets it up as they like"; and, asked whether it needs MCP tools, a CLI or only the file: "the config file, then").
-   - The sidebar's header has a view menu, behind a filter icon, with every preset it can find, the Person's own too, and "Edit sidebar.toml" (_decided_). That opens the file in the Person's editor, from Banda's template when it is not there yet: the preset, and every other key with its default, commented out.
+   - The sidebar's header has a view menu, behind a filter icon, with every preset it can find, the Person's own too, and "Edit sidebar.toml" (_decided_; _changed on 2026-11-05 by ADR 0067_: it is in the sidebar's foot). That opens the file in the Person's editor, from Banda's template when it is not there yet: the preset, and every other key with its default, commented out.
    - Picking a preset writes `preset = "…"` into the file and keeps the Person's other keys and comments. A file that is a link stays one.
    - An Agent changes it the same way: it edits the file with its own tools, and `banda look check` tells it whether the file is right. No MCP tool and no CLI command sets a key; they would only repeat the file. The Banda skill's reference (ADR 0005, decision 14) will describe the keys when there is one.
 
@@ -111,7 +111,7 @@ Roma liked A, B and C, and asked for one thing instead of three: "unify everythi
 **Consequences.**
 
 - The engine's Thread list grows what a row needs and the list lacks today: the latest message's first line, why the latest turn failed, and when the running turn began.
-- **The design every preset shares**, after T3 Code's: a header with the view menu, a new Space and a new Thread (search comes later, _decided_; _changed on 2026-11-01 by ADR 0017_: the header opens with the Banda menu's "Search" field, and the view menu is its filter icon alone, the preset named only in its tooltip); the current Thread raised as a card; the shelves at the bottom with their counts; the settings at the foot.
+- **The design every preset shares**, after T3 Code's: a header with the view menu, a new Space and a new Thread (search comes later, _decided_; _changed on 2026-11-01 by ADR 0017_: the header opens with the Banda menu's "Search" field, and the view menu is its filter icon alone, the preset named only in its tooltip; _changed on 2026-11-05 by ADR 0067_: the view menu and the new Space are in the foot, beside the settings); the current Thread raised as a card; the shelves at the bottom with their counts; the settings at the foot.
 - The sidebar stops drawing one `agents.threads` Pane per Space. It reads the Threads of every Space itself and arranges them, so it can sort across Spaces. The agents module still owns Threads and publishes what happens in them (ADR 0005, decision 8).
 - The bar's waiting dot and the workspace marks take the same states, so the sidebar and the bar never disagree.
 - Words for `GLOSSARY.md`, once built: preset, section, shelf.
