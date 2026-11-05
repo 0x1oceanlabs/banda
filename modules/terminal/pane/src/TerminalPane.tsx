@@ -124,7 +124,7 @@ function TerminalPane({
   // window runs actions, a page opens outside and a path is no link.
   const followed = (target: Target, outside: boolean) => {
     if ("file" in target) {
-      const action = outside ? "file.outside" : "browser.open"
+      const action = outside ? "file.outside" : "file.open"
       run?.(action, { file: target.file, space })
     } else if (outside || !run) {
       window.open(target.page, "_blank", "noopener")

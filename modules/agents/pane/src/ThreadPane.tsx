@@ -1,4 +1,5 @@
 import { ThreadMedia } from "./ThreadMedia"
+import { MarkdownFiles } from "@banda/ui/components/markdown-file"
 import { MarkdownLinks } from "@banda/ui/components/markdown-link"
 import {
   ContextMenu,
@@ -72,6 +73,7 @@ import type { ImageReader } from "./MessageImages"
 import { AgentMessage, PersonMessage, Writer, type Writers } from "./Messages"
 import { QuoteSelection } from "./Quote"
 import { type MenuAt, menuAt, ThreadMenu } from "./ThreadMenu"
+import { useThreadFiles } from "./ThreadFiles"
 import { type AnswerKeys, pressOf, Question, QuestionDrawer } from "./Questions"
 import { aboutOf, keyAnswer } from "./asking"
 import { drafted } from "./drafts"
@@ -180,6 +182,8 @@ function ThreadContent(props: PaneProps<ThreadArgs>) {
   const area = useRef<HTMLDivElement>(null)
   // What a right click found, for the Thread's menu (ADR 0063, decision 3).
   const [menu, setMenu] = useState<MenuAt | null>(null)
+  // Where the paths in its replies lead (ADR 0063, decision 2).
+  const files = useThreadFiles(space, state?.items, run)
   const root = useRef<HTMLDivElement>(null)
   const composer = useRef<ComposerHandle>(null)
   const findField = useRef<HTMLInputElement>(null)
@@ -308,46 +312,49 @@ function ThreadContent(props: PaneProps<ThreadArgs>) {
               </p>
             </Centered>
           ) : (
-            <Transcript
-              // Each Thread scrolls on its own, from where it was left.
-              key={thread}
-              engine={engine}
-              space={space}
-              thread={thread}
-              forYou={Boolean(asking || planned)}
-              finding={find?.query ?? ""}
-              state={live.view}
-              waits={waits}
-              name={name}
-              reader={reader}
-              answering={acting}
-              onRetry={retry}
-              onFork={fork}
-              onRewind={(turn, message) =>
-                void rewind(turn).then((back) => {
-                  if (back && message.body.kind === "message")
-                    composer.current?.putBack(
-                      message.body.text,
-                      message.body.images
-                    )
-                })
-              }
-              onOpenDiff={openDiff}
-              onOpenVisual={(visual) => open(paneOf(visualPane, visual))}
-              writers={writers}
-              onOpenThread={(other) => open(threadPaneOf(other), "right")}
-              signIn={(turn) => (
-                <SignIn
-                  engine={engine}
-                  space={space}
-                  harness={harness}
-                  turn={turn.id}
-                  open={open}
-                  onSignedIn={() => retry(turn)}
-                />
-              )}
-              queue={queue}
-            />
+            // A Thread's own: another's tools worked elsewhere.
+            <MarkdownFiles key={thread} host={files}>
+              <Transcript
+                // Each Thread scrolls on its own, from where it was left.
+                key={thread}
+                engine={engine}
+                space={space}
+                thread={thread}
+                forYou={Boolean(asking || planned)}
+                finding={find?.query ?? ""}
+                state={live.view}
+                waits={waits}
+                name={name}
+                reader={reader}
+                answering={acting}
+                onRetry={retry}
+                onFork={fork}
+                onRewind={(turn, message) =>
+                  void rewind(turn).then((back) => {
+                    if (back && message.body.kind === "message")
+                      composer.current?.putBack(
+                        message.body.text,
+                        message.body.images
+                      )
+                  })
+                }
+                onOpenDiff={openDiff}
+                onOpenVisual={(visual) => open(paneOf(visualPane, visual))}
+                writers={writers}
+                onOpenThread={(other) => open(threadPaneOf(other), "right")}
+                signIn={(turn) => (
+                  <SignIn
+                    engine={engine}
+                    space={space}
+                    harness={harness}
+                    turn={turn.id}
+                    open={open}
+                    onSignedIn={() => retry(turn)}
+                  />
+                )}
+                queue={queue}
+              />
+            </MarkdownFiles>
           )}
         </ContextMenuTrigger>
         <ThreadMenu
@@ -362,6 +369,8 @@ function ThreadContent(props: PaneProps<ThreadArgs>) {
             search: run && ((words) => run("browser.open", { words, space })),
             open: linkOpener(run, space),
             copyImage: run && ((x, y) => run("edit.copy-image", { x, y })),
+            file: files ?? undefined,
+            point: (path) => composer.current?.point(path),
           }}
         />
       </ContextMenu>

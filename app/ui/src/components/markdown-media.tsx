@@ -1,4 +1,4 @@
-import { localMedia } from "../lib/markdown-media"
+import { localPath } from "../lib/file-links"
 import { createContext, useContext, useEffect, useState } from "react"
 import { DialogTrigger } from "./dialog"
 import { ImagePreview } from "./image-preview"
@@ -43,7 +43,7 @@ export function MarkdownImage({
   const path = typeof src === "string" ? src : ""
   const kind = kindOf(path)
   const [loaded, setLoaded] = useState<{ path: string; url: string | null }>()
-  const local = localMedia(path)
+  const local = localPath(path)
   useEffect(() => {
     if (!resolve || !local || !kind) return
     let current = true

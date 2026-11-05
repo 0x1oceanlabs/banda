@@ -539,6 +539,41 @@ html[data-sidebar="desk"] [data-sidebar-shown] {
   text-decoration-color: color-mix(in srgb, currentColor 35%, transparent);
   text-underline-offset: 3px;
 }
+/* A path in a reply links to its file (ADR 0063, decision 2, look A): in
+   code a chip with the file's icon, its folder dimmed, its name bright and
+   a thin primary line under it; in text an underline. */
+[data-slot="markdown"] a[data-file] {
+  cursor: pointer;
+}
+a[data-file][data-kind="code"] {
+  color: inherit;
+  text-decoration: none;
+}
+a[data-file][data-kind="code"] > [data-streamdown="inline-code"] {
+  box-shadow: inset 0 -1px 0
+    color-mix(in oklab, var(--primary) 55%, transparent);
+  transition: background-color 120ms;
+}
+a[data-file][data-kind="code"]:hover > [data-streamdown="inline-code"] {
+  background: color-mix(in oklab, var(--primary) 16%, transparent);
+}
+a[data-file] [data-streamdown="inline-code"] > svg {
+  display: inline;
+  width: 0.95em;
+  height: 0.95em;
+  margin-right: 0.25em;
+  vertical-align: -0.125em;
+  opacity: 0.7;
+}
+a[data-file] [data-folder] {
+  color: var(--muted-foreground);
+}
+a[data-file][data-kind="text"] {
+  color: inherit;
+  text-decoration: underline;
+  text-decoration-color: color-mix(in oklab, var(--primary) 60%, transparent);
+  text-underline-offset: 3px;
+}
 /* A reply's notes (ADR 0063, decision 1): a citation is a small tag, and
    the notes sit under a rule at the meta size, under their label. */
 [data-streamdown="superscript"] > a[data-place] {

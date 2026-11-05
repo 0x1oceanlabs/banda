@@ -4,6 +4,7 @@
  * the Banda menu, its key sheet and `keys.toml` read the same list.
  */
 import type { SpaceId } from "@banda/contract"
+import { toast } from "@banda/ui/components/sonner"
 import type { Action, Args, WindowApi } from "@banda/ui/module"
 import { type PaneState, paneOf } from "@banda/ui/pane"
 import { RESET_KEY } from "../actions/actions"
@@ -266,6 +267,19 @@ export function closingShown(
 }
 
 /** Every action: the modules' (`modules.ts`), then the window's own. */
+/**
+ * Does `then` with the file `args` name, if it is there still; a toast
+ * says when it has gone since its link was drawn (ADR 0063, decision 2).
+ */
+function present(args: Args | undefined, then: (file: string) => void) {
+  const file = args?.file
+  if (typeof file !== "string") return
+  void window.banda?.files.exists(file).then((there) => {
+    if (there) then(file)
+    else toast.warning(`No such file: ${file}`)
+  })
+}
+
 export const ACTIONS: readonly Action<Shell>[] = [
   ...modules.flatMap((module) => module.actions),
   ...DIRECTIONS.map((direction) => ({
@@ -537,14 +551,33 @@ export const ACTIONS: readonly Action<Shell>[] = [
     run: (shell) => shell.menu("actions"),
   },
   {
+    // A file a Pane's link names, as a terminal's path or a reply's
+    // (ADR 0063): in a browser's tab, until Files shows it.
+    id: "file.open",
+    section: "Banda",
+    title: "Open a file in Banda",
+    unlisted: true,
+    run: (shell, args) =>
+      present(args, (file) =>
+        shell.run("browser.open", { file, space: args?.space ?? null })
+      ),
+  },
+  {
     // A file a Pane's link names, as a terminal's path with Ctrl.
     id: "file.outside",
     section: "Banda",
     title: "Open a file in its app",
     unlisted: true,
-    run: (_, args) => {
-      if (typeof args?.file === "string") window.banda?.files.outside(args.file)
-    },
+    run: (_, args) =>
+      present(args, (file) => window.banda?.files.outside(file)),
+  },
+  {
+    // A Thread menu's "Show in folder", for a path in a reply.
+    id: "file.folder",
+    section: "Banda",
+    title: "Show a file in its folder",
+    unlisted: true,
+    run: (_, args) => present(args, (file) => window.banda?.files.show(file)),
   },
   {
     // The menu's Paste, as a terminal's: the focused field takes it.

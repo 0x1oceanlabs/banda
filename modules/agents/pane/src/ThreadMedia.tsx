@@ -1,6 +1,6 @@
 import { useCallback } from "react"
 import { MarkdownMedia } from "@banda/ui/components/markdown-media"
-import type { AgentsHost } from "./desktop"
+import { agentsHost } from "./desktop"
 
 /** Resolves paths in this Thread's Space through Banda's own bridge. */
 export function ThreadMedia({
@@ -12,8 +12,6 @@ export function ThreadMedia({
 }) {
   const resolve = useCallback(
     (path: string) => {
-      const host = (window as unknown as { banda?: { agents: AgentsHost } })
-        .banda
       // Markdown escapes spaces and Unicode in destinations once.
       let decoded: string
       try {
@@ -21,7 +19,7 @@ export function ThreadMedia({
       } catch {
         return Promise.resolve(null)
       }
-      return host?.agents.media(space, decoded) ?? Promise.resolve(null)
+      return agentsHost()?.media(space, decoded) ?? Promise.resolve(null)
     },
     [space]
   )
