@@ -11,6 +11,7 @@
  */
 import type { Dialog } from "@banda/contract/browser"
 import type { SpaceId } from "@banda/contract"
+import { afterMoves } from "@banda/ui/lib/frames"
 import { HELD_BY, paneLayer } from "@banda/ui/pane"
 import { type BrowserNews, type Driver, PARTITION, type Wait } from "./desktop"
 import { browserHost, hearNews } from "./host"
@@ -408,9 +409,9 @@ function follow(): void {
     const all = [...pages.values()]
     const places = all.map((page) => page.measure())
     all.forEach((page, i) => page.draw(places[i]))
-    frame = all.some((page) => page.shown) ? requestAnimationFrame(step) : 0
+    frame = all.some((page) => page.shown) ? afterMoves(step) : 0
   }
-  frame = requestAnimationFrame(step)
+  frame = afterMoves(step)
 }
 
 /**
