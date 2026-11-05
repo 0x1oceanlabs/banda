@@ -20,7 +20,7 @@ use banda_kernel::{
     AgentId, Call, Error, Module, ModuleSpace, Nothing, Refusal, Right, Scope, Tool, Tx, Wall,
 };
 use banda_look::columns::Display;
-use model::{Arrangement, ColumnId, PaneId, Place, Shown, Side, Sight, WorkspaceId};
+use model::{Arrangement, ColumnId, PaneId, Place, Shown, Side, Sight, Toward, WorkspaceId};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
 use serde_json::Value;
@@ -68,6 +68,15 @@ banda_kernel::methods! {
         command maximize(Maximize) -> Done, Write;
         /// Shows a column's Panes one above another or as a Deck.
         command display(ShowAs) -> Done, Write;
+        /// Starts a Group of a column alone, for others to join (ADR 0065).
+        command group(OneColumn) -> Done, Write;
+        /// A column in a Group leaves it that way; one in none joins the
+        /// Group beside it that way.
+        command regroup(Regroup) -> Done, Write;
+        /// Moves the Group a column is in, its columns all, to a workspace.
+        command move_group(MoveColumn) -> Done, Write;
+        /// Whether a column's Group takes the whole screen.
+        command fill(Fill) -> Done, Write;
         /// Lets every empty workspace go but the one the Person looks at
         /// and the last.
         command tidy(Tidy) -> Done, Write;
@@ -381,6 +390,20 @@ pub struct ShowAs {
 
 #[derive(Deserialize, TS)]
 #[ts(export_to = "workspaces/")]
+pub struct Regroup {
+    pub column: ColumnId,
+    pub toward: Toward,
+}
+
+#[derive(Deserialize, TS)]
+#[ts(export_to = "workspaces/")]
+pub struct Fill {
+    pub column: ColumnId,
+    pub fill: bool,
+}
+
+#[derive(Deserialize, TS)]
+#[ts(export_to = "workspaces/")]
 pub struct Tidy {
     /// The workspace the Person looks at, which stays even empty.
     #[serde(default)]
@@ -585,6 +608,42 @@ impl Workspaces {
         let ShowAs { column, display } = show;
         done(&call, "displayed", column, Say::Whole, move |list, _| {
             Ok(model::display(list, column, display)?)
+        })
+        .await
+    }
+
+    async fn group(&self, call: Call, one: OneColumn) -> Result<Done, Refusal> {
+        let column = one.column;
+        done(&call, "grouped", column, Say::Whole, move |list, _| {
+            Ok(model::group(list, column)?)
+        })
+        .await
+    }
+
+    async fn regroup(&self, call: Call, regroup: Regroup) -> Result<Done, Refusal> {
+        let Regroup { column, toward } = regroup;
+        done(&call, "regrouped", column, Say::Whole, move |list, _| {
+            Ok(model::regroup(list, column, toward)?)
+        })
+        .await
+    }
+
+    async fn move_group(&self, call: Call, moving: MoveColumn) -> Result<Done, Refusal> {
+        let MoveColumn {
+            column,
+            workspace,
+            index,
+        } = moving;
+        done(&call, "moved", column, Say::Whole, move |list, _| {
+            Ok(model::move_group(list, column, workspace, index)?)
+        })
+        .await
+    }
+
+    async fn fill(&self, call: Call, fill: Fill) -> Result<Done, Refusal> {
+        let Fill { column, fill } = fill;
+        done(&call, "filled", column, Say::Whole, move |list, _| {
+            Ok(model::fill(list, column, fill)?)
         })
         .await
     }

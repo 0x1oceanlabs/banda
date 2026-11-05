@@ -3100,6 +3100,82 @@ test("Alt+[ takes a Pane into a column, Alt+T shows it as a Deck", async () => {
   await expect(columns).toHaveCount(2)
 })
 
+test("Alt+G starts a Group, Alt+Shift+[ takes a column in, and the Group moves whole", async () => {
+  window = await startWindow({ look: "[columns]\nmin = 10\n" })
+  const { page } = window
+  const { thread, composer } = await firstThread(page)
+  await expect(composer).toBeFocused()
+  const launcher = page.getByRole("region", { name: "New Pane" })
+  const terminal = terminalTile(page)
+  const x = async (tile: Locator) => (await tile.boundingBox())!.x
+  await page.keyboard.press("Alt+KeyN")
+  await expect(launcher.locator("kbd", { hasText: "T" })).toBeVisible()
+  await page.keyboard.press("KeyT")
+  await expect(terminal).toHaveAttribute("data-focused", "true")
+  await page.keyboard.press("Alt+KeyN")
+  await expect(launcher).toHaveAttribute("data-focused", "true")
+  const plates = page.locator("[data-group-plate]")
+
+  // A Group of the Thread alone, then the terminal joins it.
+  await page.keyboard.press("Alt+Home")
+  await page.keyboard.press("Alt+KeyG")
+  await expect(plates).toHaveCount(1)
+  await expect(plates.first()).toHaveAttribute("data-group-plate", "plate")
+  await page.keyboard.press("Alt+ArrowRight")
+  await expect(terminal).toHaveAttribute("data-focused", "true")
+  await page.keyboard.press("Alt+Shift+BracketLeft")
+  await expect(plates).toHaveCount(2)
+  await expect(plates.first()).toHaveAttribute("data-first", "")
+  await expect(plates.last()).toHaveAttribute("data-last", "")
+  await page.screenshot({ path: "test-results/group.png" })
+
+  // The launcher passes the Group whole; the Group moves back whole.
+  await page.keyboard.press("Alt+End")
+  await page.keyboard.press("Alt+Shift+ArrowLeft")
+  await expect
+    .poll(async () => (await x(launcher)) < (await x(thread)))
+    .toBe(true)
+  await expect
+    .poll(async () => (await x(thread)) < (await x(terminal)))
+    .toBe(true)
+  await page.keyboard.press("Alt+End")
+  await expect(terminal).toHaveAttribute("data-focused", "true")
+  await page.keyboard.press("Alt+Shift+ArrowLeft")
+  await expect
+    .poll(async () => (await x(thread)) < (await x(launcher)))
+    .toBe(true)
+  await expect
+    .poll(async () => (await x(terminal)) < (await x(launcher)))
+    .toBe(true)
+
+  // Alt+M: the Group, a third and a third, the whole screen wide, and back.
+  await page.keyboard.press("Alt+Control+ArrowLeft")
+  await page.keyboard.press("Alt+ArrowLeft")
+  await expect(thread).toHaveAttribute("data-focused", "true")
+  await page.keyboard.press("Alt+Control+ArrowLeft")
+  const wide = () =>
+    page.locator("[data-group-plate]").evaluateAll((all) => {
+      const strip = all[0].parentElement!.parentElement!
+      const style = getComputedStyle(strip)
+      const inner =
+        strip.clientWidth -
+        parseFloat(style.paddingLeft) -
+        parseFloat(style.paddingRight)
+      const widths = all.map((e) => e.parentElement!.offsetWidth)
+      return widths.reduce((sum, w) => sum + w, 0) / inner
+    })
+  await expect.poll(wide).toBeLessThan(0.7)
+  await page.keyboard.press("Alt+KeyM")
+  await expect.poll(wide).toBeGreaterThan(0.9)
+  await page.keyboard.press("Alt+KeyM")
+  await expect.poll(wide).toBeLessThan(0.7)
+  await page.keyboard.press("Alt+ArrowRight")
+
+  // At its edge, Alt+Shift+] takes the terminal out.
+  await page.keyboard.press("Alt+Shift+BracketRight")
+  await expect(plates).toHaveCount(1)
+})
+
 test("a tab in a Deck's bar carries its Pane", async () => {
   window = await startWindow()
   const { page } = window

@@ -10,6 +10,7 @@ import {
   DEFAULT_COLUMNS,
   DEFAULT_DRAWER,
   DEFAULT_OVERVIEW,
+  DEFAULT_GROUPS,
   DEFAULT_KEYS,
   DEFAULT_MOTION,
   type Look,
@@ -27,6 +28,7 @@ const look = (mode: Look["mode"], schemes: Look["schemes"]): Look => ({
   bar: DEFAULT_BAR,
   drawer: DEFAULT_DRAWER,
   overview: DEFAULT_OVERVIEW,
+  groups: DEFAULT_GROUPS,
   sources: [],
   problems: [],
   sound: {

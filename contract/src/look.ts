@@ -6,6 +6,7 @@ import type { Keys } from "./generated/look/Keys"
 import type { Look } from "./generated/look/Look"
 import type { Bar } from "./generated/look/Bar"
 import type { Drawer } from "./generated/look/Drawer"
+import type { Groups } from "./generated/look/Groups"
 import type { Overview } from "./generated/look/Overview"
 import type { Columns } from "./generated/look/Columns"
 import type { Motion } from "./generated/look/Motion"
@@ -31,6 +32,8 @@ export type { Columns } from "./generated/look/Columns"
 export type { Bar } from "./generated/look/Bar"
 export type { Setting } from "./generated/look/Setting"
 export type { Drawer } from "./generated/look/Drawer"
+export type { GroupLook } from "./generated/look/GroupLook"
+export type { Groups } from "./generated/look/Groups"
 export type { Overview } from "./generated/look/Overview"
 export type { Workspaces } from "./generated/look/Workspaces"
 export type { Center } from "./generated/look/Center"
@@ -65,6 +68,9 @@ export const DEFAULT_DRAWER: Drawer = { height: 0.6 }
 
 /** The overview, as `banda look` gives it with no files (ADR 0025). */
 export const DEFAULT_OVERVIEW: Overview = { zoom: 0.35 }
+
+/** How a Group shows, as `banda look` gives it with no files (ADR 0065). */
+export const DEFAULT_GROUPS: Groups = { look: "plate" }
 
 /** Banda's own columns, niri's: what `banda look` gives with no files. */
 export const DEFAULT_COLUMNS: Columns = {

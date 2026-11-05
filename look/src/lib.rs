@@ -93,6 +93,8 @@ pub struct Look {
     pub drawer: Drawer,
     /// The overview on Alt+O (ADR 0025, decision 7).
     pub overview: Overview,
+    /// How a Group of columns shows (ADR 0065).
+    pub groups: Groups,
     /// The layers it came from, bottom first.
     pub sources: Vec<Source>,
     /// What is wrong in the files. The look still applies: a value that
@@ -170,6 +172,13 @@ pub struct Drawer {
 pub struct Overview {
     /// How far it zooms the workspaces out, at most: 0.5 is half.
     pub zoom: f64,
+}
+
+/// How a Group of columns shows (ADR 0065).
+#[derive(Clone, Debug, PartialEq, Serialize, TS)]
+#[ts(export, export_to = "look/")]
+pub struct Groups {
+    pub look: settings::GroupLook,
 }
 
 /// A picture Banda's glass is made of (ADR 0030).
@@ -729,6 +738,9 @@ pub fn resolve(
             },
             overview: Overview {
                 zoom: all.overview.zoom.unwrap_or(0.35),
+            },
+            groups: Groups {
+                look: all.groups.look.unwrap_or(settings::GroupLook::Plate),
             },
             sources,
             problems,

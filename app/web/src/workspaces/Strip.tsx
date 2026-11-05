@@ -2,7 +2,7 @@ import { cn } from "@banda/ui/lib/utils"
 import { Component, useEffect, useLayoutEffect, useRef } from "react"
 import type { Engine, SpaceId } from "@banda/contract"
 import type { Listed, PaneState } from "@banda/ui/pane"
-import { columnsOf, moveOf, useLookColumns } from "../look"
+import { columnsOf, moveOf, useLookColumns, useLookGroups } from "../look"
 import { Choices } from "../registry"
 import type { Chime } from "@banda/ui/sound"
 import { type Entry, share, type Workspace } from "./model"
@@ -92,7 +92,9 @@ export function Strip({
   const scroller = useRef<HTMLDivElement>(null)
   const focus = workspace.columns[workspace.focus]?.id
   const look = useLookColumns()
+  const groups = useLookGroups()
   const columns = drawnColumns(workspace, look)
+  const focusedGroup = workspace.columns[workspace.focus]?.group
   // The zoomed Pane, the focused one, covers the workspace; the rest
   // hide under it, their pages too.
   const zooms = live && zoomed !== undefined
@@ -270,6 +272,8 @@ export function Strip({
       {columns.map((column, c) => {
         const here = workspace.focus === c
         const bar = column.decked && !zooms
+        const { group, ends } = column
+        const lit = group !== undefined && selected && focusedGroup === group
         return (
           <div
             key={column.id}
@@ -285,8 +289,20 @@ export function Strip({
               // included; never so narrow its Panes cannot be read.
               width: widthAt(share(column.width) ?? 0.5),
               minWidth: minWidthOf(column.min),
+              // A Group's ends stand out, for its plate (ADR 0065).
+              marginLeft: ends.pad && ends.first ? PAD : undefined,
+              marginRight: ends.pad && ends.last ? PAD : undefined,
             }}
           >
+            {group !== undefined && !zooms && (
+              <div
+                aria-hidden
+                data-group-plate={groups.look}
+                data-first={ends.first ? "" : undefined}
+                data-last={ends.last ? "" : undefined}
+                data-focused={lit ? "" : undefined}
+              />
+            )}
             {bar && (
               <Tabs
                 entries={column.entries}
@@ -326,6 +342,9 @@ export function Strip({
     </div>
   )
 }
+
+/** How far a Group's ends stand out: half a gap, as `places` counts. */
+const PAD = "var(--group-pad)"
 
 /** Calls `read` just before React changes the page, as it is still:
  * what `getSnapshotBeforeUpdate` is for, and only a class has it. */

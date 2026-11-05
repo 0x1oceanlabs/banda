@@ -9,9 +9,11 @@ import {
   type Bar,
   type Columns,
   type Drawer,
+  type Groups,
   DEFAULT_BAR,
   DEFAULT_DRAWER,
   DEFAULT_OVERVIEW,
+  DEFAULT_GROUPS,
   DEFAULT_COLUMNS,
   DEFAULT_KEYS,
   DEFAULT_MOTION,
@@ -125,6 +127,11 @@ export function useLookBar(): Bar {
 /** `[overview]`: how far it zooms out (ADR 0025, decision 7). */
 export function useLookOverview(): Overview {
   return useLook((look) => look.overview, DEFAULT_OVERVIEW)
+}
+
+/** `[groups]`: how a Group of columns shows (ADR 0065). */
+export function useLookGroups(): Groups {
+  return useLook((look) => look.groups, DEFAULT_GROUPS)
 }
 
 /** `[drawer]`: how far it drops, and its Harness (ADR 0025, decision 8). */

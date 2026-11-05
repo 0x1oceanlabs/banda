@@ -82,6 +82,10 @@
 # [overview]
 # zoom = 0.35                        # how far out, at most: 0.5 is half their size
 
+# Columns held together, on Alt+G: how they show.
+# [groups]
+# look = "plate"                     # "plate" behind them, or "halo", a glow round them
+
 # [motion]
 # off = false                        # true stills everything
 # slowdown = 1                       # 2 is twice as slow

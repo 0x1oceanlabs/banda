@@ -11,7 +11,9 @@ import { minOf } from "../registry"
 import {
   displayOf,
   drawn,
+  type Ends,
   free,
+  groupEnds,
   heightsOf,
   share,
   type Width,
@@ -79,10 +81,11 @@ export function floorOf(id: string, min: number): number {
 /** The columns of `workspace` as the look sizes them: the width each is
  * drawn at, and the least, in rem. */
 export function sized(workspace: Workspace, look: Look) {
-  return workspace.columns.map((column) => ({
+  return workspace.columns.map((column, c) => ({
     ...column,
     width: widthIn(workspace, column, look),
     min: minOf(column, look.min),
+    ends: groupEnds(workspace, c),
   }))
 }
 
@@ -174,9 +177,11 @@ export function roomLeft(
  */
 export function places(
   strip: HTMLElement,
-  columns: readonly { id: string; width: Width; min: number }[]
+  columns: readonly { id: string; width: Width; min: number; ends?: Ends }[]
 ): Place[] {
   const { pad, gap, inner } = room(strip)
+  // A Group's ends stand out half a gap, as `--group-pad` says.
+  const out = (end: boolean | undefined) => (end ? gap / 2 : 0)
   let left = pad
   return columns.map((column) => {
     const at = drawn(
@@ -184,8 +189,10 @@ export function places(
       floorIn({ gap, inner }, column.min)
     )
     const width = at * (inner + gap) - gap
+    const { ends } = column
+    left += out(ends?.pad && ends.first)
     const place = { id: column.id, left, right: left + width }
-    left += width + gap
+    left += width + gap + out(ends?.pad && ends.last)
     return place
   })
 }

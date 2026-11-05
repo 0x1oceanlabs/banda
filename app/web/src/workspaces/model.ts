@@ -80,6 +80,9 @@ export type Column = {
   full?: true
   /** How it shows its Panes; left out, as the look's `display` says. */
   display?: Display
+  /** The Group it is in, with the columns beside it that name it too
+   * (ADR 0065). */
+  group?: string
 }
 
 export type Workspace = {
@@ -87,6 +90,9 @@ export type Workspace = {
   columns: Column[]
   /** The column that has the focus. */
   focus: number
+  /** The Group that takes the whole screen, its columns keeping their
+   * shares of it (`Alt+M`, ADR 0065). */
+  filled?: string
 }
 
 export type Workspaces = {
@@ -131,6 +137,66 @@ export function widthIn(
   column: Column,
   sizes: Sizes = SIZES
 ): Width {
+  const c = workspace.columns.indexOf(column)
+  if (!column.full && filledAt(workspace, c)) {
+    // Of the screen, the share it has of its Group's.
+    const { start, end } = runOf(workspace.columns, c)
+    const of = (c: Column) => share(ownWidth(workspace, c, sizes)) ?? 0.5
+    const group = workspace.columns.slice(start, end)
+    const all = group.reduce((sum, c) => sum + of(c), 0)
+    return free(of(column) / all)
+  }
+  return ownWidth(workspace, column, sizes)
+}
+
+/** The columns of the Group the one at `c` is in, from `start` to before
+ * `end`: it alone when it is in none. A Group's columns stand side by
+ * side, as the engine keeps them (ADR 0065). */
+export function runOf(
+  columns: readonly Column[],
+  c: number
+): { start: number; end: number } {
+  const group = columns[c]?.group
+  let start = c
+  let end = c + 1
+  if (group === undefined) return { start, end }
+  while (start > 0 && columns[start - 1].group === group) start--
+  while (end < columns.length && columns[end].group === group) end++
+  return { start, end }
+}
+
+/** Whether the column at `c` is in the Group that fills the screen. */
+function filledAt(workspace: Workspace, c: number): boolean {
+  const group = workspace.columns[c]?.group
+  return group !== undefined && workspace.filled === group
+}
+
+/** Where a column stands in its Group: its first, its last, and whether
+ * those ends stand out half a gap, for its plate (ADR 0065). */
+export type Ends = { first: boolean; last: boolean; pad: boolean }
+
+/** Where the column at `c` stands in its Group; a Group that fills the
+ * screen stands out into the Strip's own padding instead of the gaps. */
+export function groupEnds(workspace: Workspace, c: number): Ends {
+  const { columns } = workspace
+  const group = columns[c]?.group
+  if (group === undefined) return { first: false, last: false, pad: false }
+  return {
+    first: columns[c - 1]?.group !== group,
+    last: columns[c + 1]?.group !== group,
+    pad: !filledAt(workspace, c),
+  }
+}
+
+/** The focused column of the workspace on screen, and its place. */
+export function focusedColumn(state: Workspaces) {
+  const workspace = current(state)
+  const c = workspace.focus
+  return { workspace, c, column: workspace.columns[c] as Column | undefined }
+}
+
+/** The width a column is drawn at on its own, its Group aside. */
+function ownWidth(workspace: Workspace, column: Column, sizes: Sizes): Width {
   if (column.full) return "1"
   if (column.width !== undefined) return column.width
   return workspace.columns.length === 1 ? sizes.alone : sizes.default
@@ -515,12 +581,25 @@ export function shift(state: Workspaces, direction: Direction): Workspaces {
   const column = workspace.columns[workspace.focus]
   if (!column) return state
   if (direction === "left" || direction === "right") {
-    const to = workspace.focus + (direction === "right" ? 1 : -1)
-    if (to < 0 || to >= workspace.columns.length) return state
+    // The column, or its whole Group, past the column or the whole Group
+    // beside it (ADR 0065).
+    const { columns } = workspace
+    const { start, end } = runOf(columns, workspace.focus)
+    const right = direction === "right"
+    if (right ? end >= columns.length : start === 0) return state
+    const other = runOf(columns, right ? end : start - 1)
+    const [a, b] = right ? [start, other.end] : [other.start, end]
+    const mine = columns.slice(start, end)
+    const theirs = columns.slice(other.start, other.end)
+    const by = right ? theirs.length : -theirs.length
     return setWorkspace(state, state.current, {
       ...workspace,
-      columns: swap(workspace.columns, workspace.focus, to),
-      focus: to,
+      columns: [
+        ...columns.slice(0, a),
+        ...(right ? [...theirs, ...mine] : [...mine, ...theirs]),
+        ...columns.slice(b),
+      ],
+      focus: workspace.focus + by,
     })
   }
   const to = column.active + (direction === "down" ? 1 : -1)
@@ -685,15 +764,20 @@ export function edge(state: Workspaces, side: "first" | "last"): Workspaces {
  * focus on it, as niri's Mod+Ctrl+Home and Mod+Ctrl+End. */
 export function toEdge(state: Workspaces, side: "first" | "last"): Workspaces {
   const workspace = current(state)
-  const column = workspace.columns[workspace.focus]
-  const to = side === "first" ? 0 : workspace.columns.length - 1
-  if (!column || to === workspace.focus) return state
-  const columns = workspace.columns.filter((other) => other !== column)
-  columns.splice(to, 0, column)
+  if (!workspace.columns[workspace.focus]) return state
+  // In a Group, the whole Group goes (ADR 0065).
+  const { start, end } = runOf(workspace.columns, workspace.focus)
+  const mine = workspace.columns.slice(start, end)
+  const rest = [
+    ...workspace.columns.slice(0, start),
+    ...workspace.columns.slice(end),
+  ]
+  const at = side === "first" ? 0 : rest.length
+  if (at === start) return state
   return setWorkspace(state, state.current, {
     ...workspace,
-    columns,
-    focus: to,
+    columns: [...rest.slice(0, at), ...mine, ...rest.slice(at)],
+    focus: at + workspace.focus - start,
   })
 }
 
@@ -774,14 +858,37 @@ export function step(state: Workspaces, by: 1 | -1): Workspaces {
 
 /**
  * Sends the focused Pane to a workspace, as a column on its right, and
- * follows it there. Past the last, it goes to the empty one at the bottom.
+ * follows it there; in a Group, the whole Group goes. Past the last, it
+ * goes to the empty one at the bottom.
  */
 export function send(state: Workspaces, index: number): Workspaces {
   const entry = focused(state)
   const to = clamp(index, state.list.length)
   if (!entry || to === state.current) return state
   const target = state.list[to]
-  const width = current(state).columns[current(state).focus]?.width
+  const workspace = current(state)
+  const column = workspace.columns[workspace.focus]
+  if (column?.group !== undefined) {
+    // A Pane in a Group takes its whole Group, as one window (ADR 0065).
+    const { start, end } = runOf(workspace.columns, workspace.focus)
+    const left = setWorkspace(state, state.current, {
+      ...workspace,
+      columns: [
+        ...workspace.columns.slice(0, start),
+        ...workspace.columns.slice(end),
+      ],
+      focus: Math.max(0, start - 1),
+    })
+    const columns = workspace.columns.slice(start, end)
+    return focusEntry(
+      setWorkspace(left, to, {
+        ...target,
+        columns: [...target.columns, ...columns],
+      }),
+      entry.id
+    )
+  }
+  const width = column?.width
   const moved: Column = { id: newId(), entries: [entry], active: 0, width }
   const without = remove(state, entry.id)
   return focusEntry(

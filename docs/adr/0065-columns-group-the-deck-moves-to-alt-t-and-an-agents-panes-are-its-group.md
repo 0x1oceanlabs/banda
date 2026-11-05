@@ -83,8 +83,10 @@ for any Panes, and an Agent's Panes are simply its Group.
      column in the same Group.
    - Every action is in the Banda menu and `keys.toml` (ADR 0017), as
      `group.new`, `group.join-left`, `group.join-right`,
-     `group.move-left`, `group.move-right`, `group.column-left`,
-     `group.column-right`, `group.maximize` and `group.to-workspace-N`.
+     `group.column-left`, `group.column-right` and `group.maximize`.
+     The moves are the Pane's own actions (`pane.move-left`,
+     `column.move-first`, `pane.send-N` and the rest), which take a
+     Group whole (_built_ 2026-11-05, step 2).
 
 5. **The mouse does the same.**
    - Dragging a column's header inside the outline reorders it in the

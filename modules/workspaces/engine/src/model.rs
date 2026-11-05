@@ -6,7 +6,9 @@
 //! - a workspace is a Strip of columns, each holding its Panes, and a
 //!   column with no Pane goes;
 //! - a Pane opens once: opening one the workspaces show already names the
-//!   one shown, unless it opens `again`, as a new Thread does each time.
+//!   one shown, unless it opens `again`, as a new Thread does each time;
+//! - a Group's columns stand side by side on one workspace, and move as
+//!   one (ADR 0065).
 //!
 //! An empty workspace in the middle stays until the window tidies: the
 //! window knows which one the Person looks at, and the engine does not.
@@ -36,6 +38,11 @@ banda_kernel::id!(
     /// A Pane's ID, which it keeps as it moves.
     PaneId, export_to = "workspaces/"
 );
+banda_kernel::id!(
+    /// A Group's ID: columns side by side that move and look as one (ADR
+    /// 0065).
+    GroupId, export_to = "workspaces/"
+);
 
 /// The workspaces from the top down.
 pub type Arrangement = Vec<Workspace>;
@@ -46,6 +53,11 @@ pub struct Workspace {
     pub id: WorkspaceId,
     /// Its Strip, from the left.
     pub columns: Vec<Column>,
+    /// The Group that takes the whole screen, its columns keeping their
+    /// shares of it, as `Alt+M` (ADR 0065). Left out, none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub filled: Option<GroupId>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
@@ -66,6 +78,11 @@ pub struct Column {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub display: Option<Display>,
+    /// The Group it is in, with the columns beside it that name it too
+    /// (ADR 0065). Left out, none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub group: Option<GroupId>,
 }
 
 /// One Pane: what it shows, the Space it belongs to, and the Agent that
@@ -191,6 +208,7 @@ fn blank() -> Workspace {
     Workspace {
         id: WorkspaceId::new(),
         columns: Vec::new(),
+        filled: None,
     }
 }
 
@@ -315,6 +333,7 @@ fn new_column(pane: Pane, width: Option<String>) -> Column {
         width,
         full: false,
         display: None,
+        group: None,
     }
 }
 
@@ -324,8 +343,9 @@ fn put(list: &mut Arrangement, column: Column, place: &Place) -> Result<(), Refu
     match *place {
         Place::Column { workspace, index } => {
             let w = workspace_at(list, workspace)?;
-            let columns = &mut list[w].columns;
-            columns.insert(index.min(columns.len()), column);
+            let at = index.min(list[w].columns.len());
+            list[w].columns.insert(at, column);
+            settle(list, w, at);
         }
         Place::Stack {
             column: into,
@@ -346,6 +366,7 @@ fn put(list: &mut Arrangement, column: Column, place: &Place) -> Result<(), Refu
                 Side::Left | Side::Right => {
                     let index = at.column + usize::from(side == Side::Right);
                     columns.insert(index, column);
+                    settle(list, at.workspace, index);
                 }
             }
         }
@@ -393,6 +414,7 @@ pub fn move_pane(list: &mut Arrangement, pane: PaneId, place: &Place) -> Result<
         return Err(Refusal::invalid("A Pane moves beside another, not itself."));
     }
     let at = spot(list, pane)?;
+    let here = list[at.workspace].id;
     let from = &mut list[at.workspace].columns;
     let mut moving = from[at.column].panes.remove(at.pane);
     // Its height was of the column it leaves.
@@ -406,7 +428,23 @@ pub fn move_pane(list: &mut Arrangement, pane: PaneId, place: &Place) -> Result<
         column.panes = vec![moving];
         column
     } else {
-        new_column(moving, None)
+        // Taken out of its column to one of its own beside it, a Pane
+        // stays in the column's Group (ADR 0065, decision 4).
+        let own = &from[at.column];
+        let beside = match *place {
+            Place::Column { workspace, index } => {
+                workspace == here && (index == at.column || index == at.column + 1)
+            }
+            Place::Beside { pane, side } => {
+                matches!(side, Side::Left | Side::Right) && own.panes.iter().any(|p| p.id == pane)
+            }
+            _ => false,
+        };
+        let group = own.group.filter(|_| beside);
+        Column {
+            group,
+            ..new_column(moving, None)
+        }
     };
     put(list, column, place)?;
     normalize(list);
@@ -456,7 +494,13 @@ pub fn size(
     width: Option<String>,
 ) -> Result<(), Refusal> {
     check_width(width.as_deref())?;
-    let column = column_mut(list, column)?;
+    let (w, c) = column_at(list, column)?;
+    // A Group that filled the screen no longer does: its columns' shares
+    // change.
+    if list[w].filled.is_some() && list[w].filled == list[w].columns[c].group {
+        list[w].filled = None;
+    }
+    let column = &mut list[w].columns[c];
     column.width = width;
     column.full = false;
     Ok(())
@@ -493,6 +537,145 @@ pub fn display(
     display: Option<Display>,
 ) -> Result<(), Refusal> {
     column_mut(list, column)?.display = display;
+    Ok(())
+}
+
+/// Which way a column leaves its Group, or joins the one beside it.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+#[ts(export_to = "workspaces/")]
+pub enum Toward {
+    Left,
+    Right,
+}
+
+/// The columns of the Group the one at `c` is in, as a range of
+/// `columns`: it alone when it is in none.
+fn run(columns: &[Column], c: usize) -> std::ops::Range<usize> {
+    let Some(group) = columns[c].group else {
+        return c..c + 1;
+    };
+    let start = (columns[..c].iter())
+        .rposition(|other| other.group != Some(group))
+        .map_or(0, |i| i + 1);
+    let end = (columns[c..].iter())
+        .position(|other| other.group != Some(group))
+        .map_or(columns.len(), |i| c + i);
+    start..end
+}
+
+/// A column just put at `at` of workspace `w` joins the Group whose
+/// columns stand on both sides of it, as one put inside a Group does; and
+/// it leaves its own when that Group's other columns stand elsewhere.
+fn settle(list: &mut Arrangement, w: usize, at: usize) {
+    let columns = &list[w].columns;
+    let left = at.checked_sub(1).and_then(|i| columns[i].group);
+    let right = columns.get(at + 1).and_then(|other| other.group);
+    if left.is_some() && left == right {
+        list[w].columns[at].group = left;
+        return;
+    }
+    let Some(own) = columns[at].group else {
+        return;
+    };
+    let beside = left == Some(own) || right == Some(own);
+    let elsewhere = list.iter().enumerate().any(|(v, workspace)| {
+        (workspace.columns.iter().enumerate())
+            .any(|(i, other)| other.group == Some(own) && (v, i) != (w, at))
+    });
+    if !beside && elsewhere {
+        list[w].columns[at].group = None;
+    }
+}
+
+/// Whether `at`, a place between two columns, stands inside a Group:
+/// between two of its columns.
+fn inside(columns: &[Column], at: usize) -> bool {
+    let left = at
+        .checked_sub(1)
+        .and_then(|i| columns.get(i))
+        .and_then(|c| c.group);
+    left.is_some() && columns.get(at).and_then(|c| c.group) == left
+}
+
+/// Starts a Group of a column alone, as `Alt+G`, for others to join; one
+/// in a Group stays in it.
+pub fn group(list: &mut Arrangement, column: ColumnId) -> Result<(), Refusal> {
+    column_mut(list, column)?
+        .group
+        .get_or_insert_with(GroupId::new);
+    Ok(())
+}
+
+/// A column in a Group leaves it `toward` that side, past its Group's
+/// columns there; one in none joins the Group beside it that way, as
+/// `Alt+Shift+[` and `]` (ADR 0065).
+pub fn regroup(list: &mut Arrangement, column: ColumnId, toward: Toward) -> Result<(), Refusal> {
+    let (w, c) = column_at(list, column)?;
+    let columns = &mut list[w].columns;
+    if columns[c].group.is_some() {
+        let group = run(columns, c);
+        let mut leaving = columns.remove(c);
+        leaving.group = None;
+        let at = match toward {
+            Toward::Left => group.start,
+            Toward::Right => group.end - 1,
+        };
+        columns.insert(at, leaving);
+        return Ok(());
+    }
+    let beside = match toward {
+        Toward::Left => c.checked_sub(1),
+        Toward::Right => Some(c + 1),
+    };
+    let Some(group) = beside.and_then(|b| columns.get(b)).and_then(|o| o.group) else {
+        return Err(Refusal::invalid(
+            "No Group stands beside the column that way.",
+        ));
+    };
+    columns[c].group = Some(group);
+    Ok(())
+}
+
+/// Moves the Group a column is in, its columns all and in their order, to
+/// a workspace, `index` from the left, counted as if it had left its
+/// place; a place inside another Group is past it, as Groups don't nest.
+/// A column in none moves as `move_column` moves it.
+pub fn move_group(
+    list: &mut Arrangement,
+    column: ColumnId,
+    workspace: WorkspaceId,
+    index: usize,
+) -> Result<(), Refusal> {
+    let (w, c) = column_at(list, column)?;
+    let Some(group) = list[w].columns[c].group else {
+        return move_column(list, column, workspace, index);
+    };
+    let to = workspace_at(list, workspace)?;
+    let group_run = run(&list[w].columns, c);
+    let moving: Vec<Column> = list[w].columns.drain(group_run).collect();
+    if list[w].filled == Some(group) {
+        list[w].filled = None;
+        list[to].filled = Some(group);
+    }
+    let columns = &mut list[to].columns;
+    let mut at = index.min(columns.len());
+    if inside(columns, at) {
+        at = run(columns, at).end;
+    }
+    columns.splice(at..at, moving);
+    normalize(list);
+    Ok(())
+}
+
+/// Whether the Group a column is in takes the whole screen, its columns
+/// keeping their shares of it, as `Alt+M`; their widths stay for after.
+pub fn fill(list: &mut Arrangement, column: ColumnId, fill: bool) -> Result<(), Refusal> {
+    let (w, c) = column_at(list, column)?;
+    let Some(group) = list[w].columns[c].group else {
+        return Err(Refusal::invalid("The column is in no Group."));
+    };
+    list[w].filled = fill.then_some(group);
     Ok(())
 }
 
@@ -551,11 +734,28 @@ fn above_empty(list: &Arrangement, index: usize) -> usize {
     index.min(list.len().saturating_sub(1))
 }
 
-/// Keeps the rules: a column with no Pane goes, and the last workspace is
-/// an empty one.
+/// Keeps the rules: a column with no Pane goes, the last workspace is an
+/// empty one, and a Group's columns stand side by side on one workspace:
+/// a column of a Group that stands apart from the rest of it leaves it.
 fn normalize(list: &mut Arrangement) {
+    let mut groups = std::collections::HashSet::new();
     for workspace in list.iter_mut() {
         workspace.columns.retain(|c| !c.panes.is_empty());
+        let mut before = None;
+        for column in &mut workspace.columns {
+            if let Some(group) = column.group
+                && before != Some(group)
+                && !groups.insert(group)
+            {
+                column.group = None;
+            }
+            before = column.group;
+        }
+        if let Some(filled) = workspace.filled
+            && !workspace.columns.iter().any(|c| c.group == Some(filled))
+        {
+            workspace.filled = None;
+        }
     }
     if list.last().is_none_or(|w| !w.columns.is_empty()) {
         list.push(blank());
@@ -986,6 +1186,161 @@ mod tests {
         assert!(move_workspace(&mut list, WorkspaceId::new(), 0).is_err());
     }
 
+    /// Each workspace's columns by their Group, numbered as they first
+    /// stand, from 1; 0 for none.
+    fn grouping(list: &Arrangement) -> Vec<Vec<usize>> {
+        let mut seen: Vec<GroupId> = Vec::new();
+        list.iter()
+            .map(|w| {
+                (w.columns.iter())
+                    .map(|c| {
+                        let Some(g) = c.group else { return 0 };
+                        if !seen.contains(&g) {
+                            seen.push(g);
+                        }
+                        1 + seen.iter().position(|&s| s == g).unwrap()
+                    })
+                    .collect()
+            })
+            .collect()
+    }
+
+    /// One workspace of `n` columns, a Pane each, numbered from 1.
+    fn row(n: u32) -> (Arrangement, Vec<ColumnId>) {
+        let mut list = start();
+        let work = SpaceId::new();
+        for i in 1..=n {
+            opened(&mut list, shown(work, "a.a", i), None);
+        }
+        let ids = list[0].columns.iter().map(|c| c.id).collect();
+        (list, ids)
+    }
+
+    #[test]
+    fn a_group_starts_alone_then_columns_join_it_and_leave_it_either_way() {
+        let (mut list, c) = row(4);
+        group(&mut list, c[1]).unwrap();
+        // Again, it stays in the one it is in.
+        group(&mut list, c[1]).unwrap();
+        assert_eq!(grouping(&list)[0], [0, 1, 0, 0]);
+        regroup(&mut list, c[2], Toward::Left).unwrap();
+        regroup(&mut list, c[0], Toward::Right).unwrap();
+        assert_eq!(grouping(&list)[0], [1, 1, 1, 0]);
+        // No Group beside it that way.
+        assert!(regroup(&mut list, c[3], Toward::Right).is_err());
+        // From the middle, it leaves past its Group's columns that way.
+        regroup(&mut list, c[1], Toward::Right).unwrap();
+        assert_eq!(layout(&list)[0], [[1], [3], [2], [4]]);
+        assert_eq!(grouping(&list)[0], [1, 1, 0, 0]);
+        regroup(&mut list, c[0], Toward::Left).unwrap();
+        regroup(&mut list, c[2], Toward::Left).unwrap();
+        assert_eq!(grouping(&list)[0], [0, 0, 0, 0]);
+    }
+
+    #[test]
+    fn a_group_moves_whole_and_never_into_another() {
+        let (mut list, c) = row(5);
+        let here = list[0].id;
+        group(&mut list, c[0]).unwrap();
+        regroup(&mut list, c[1], Toward::Left).unwrap();
+        group(&mut list, c[3]).unwrap();
+        regroup(&mut list, c[4], Toward::Left).unwrap();
+        // Past the column after it.
+        move_group(&mut list, c[1], here, 1).unwrap();
+        assert_eq!(layout(&list)[0], [[3], [1], [2], [4], [5]]);
+        // Into the other Group's middle is past it.
+        move_group(&mut list, c[0], here, 2).unwrap();
+        assert_eq!(layout(&list)[0], [[3], [4], [5], [1], [2]]);
+        assert_eq!(grouping(&list)[0], [0, 1, 1, 2, 2]);
+        // To another workspace, all of it.
+        let below = list[1].id;
+        move_group(&mut list, c[4], below, 0).unwrap();
+        assert_eq!(
+            layout(&list),
+            [
+                vec![vec![3], vec![1], vec![2]],
+                vec![vec![4], vec![5]],
+                EMPTY
+            ]
+        );
+    }
+
+    #[test]
+    fn a_column_put_inside_a_group_joins_it_and_one_moved_away_leaves() {
+        let (mut list, c) = row(4);
+        let here = list[0].id;
+        group(&mut list, c[0]).unwrap();
+        regroup(&mut list, c[1], Toward::Left).unwrap();
+        regroup(&mut list, c[2], Toward::Left).unwrap();
+        // Moved inside, it stays; moved past the Group's edge, it leaves.
+        move_column(&mut list, c[2], here, 0).unwrap();
+        assert_eq!(grouping(&list)[0], [1, 1, 1, 0]);
+        move_column(&mut list, c[0], here, 3).unwrap();
+        assert_eq!(layout(&list)[0], [[3], [2], [4], [1]]);
+        assert_eq!(grouping(&list)[0], [1, 1, 0, 0]);
+        // Between two of a Group's columns, a new one joins it.
+        let first = list[0].columns[0].panes[0].id;
+        opened(
+            &mut list,
+            shown(SpaceId::new(), "a.a", 9),
+            beside(first, Side::Right),
+        );
+        assert_eq!(grouping(&list)[0], [1, 1, 1, 0, 0]);
+        // A Pane taken out of a Group's column, beside it, stays in it.
+        let second = list[0].columns[1].panes[0].id;
+        let joined = opened(
+            &mut list,
+            shown(SpaceId::new(), "a.a", 8),
+            beside(second, Side::Below),
+        );
+        move_pane(
+            &mut list,
+            joined,
+            &Place::Column {
+                workspace: here,
+                index: 2,
+            },
+        )
+        .unwrap();
+        assert_eq!(grouping(&list)[0], [1, 1, 1, 1, 0, 0]);
+        // A Group alone keeps a column that moves on its own.
+        let (mut list, c) = row(2);
+        let here = list[0].id;
+        group(&mut list, c[0]).unwrap();
+        move_column(&mut list, c[0], here, 1).unwrap();
+        assert_eq!(grouping(&list)[0], [0, 1]);
+    }
+
+    #[test]
+    fn a_group_fills_the_screen_until_a_width_is_given() {
+        let (mut list, c) = row(3);
+        assert!(fill(&mut list, c[0], true).is_err());
+        group(&mut list, c[0]).unwrap();
+        regroup(&mut list, c[1], Toward::Left).unwrap();
+        fill(&mut list, c[1], true).unwrap();
+        let group = list[0].columns[0].group;
+        assert_eq!(list[0].filled, group);
+        // It goes with the Group to another workspace.
+        let below = list[1].id;
+        move_group(&mut list, c[0], below, 0).unwrap();
+        assert_eq!((list[0].filled, list[1].filled), (None, group));
+        // A width given ends it.
+        size(&mut list, c[0], Some("1/3".into())).unwrap();
+        assert_eq!(list[1].filled, None);
+    }
+
+    #[test]
+    fn a_group_split_apart_keeps_only_its_first_run() {
+        let (mut list, _) = row(3);
+        let g = GroupId::new();
+        for column in &mut list[0].columns {
+            column.group = Some(g);
+        }
+        list[0].columns[1].group = None;
+        normalize(&mut list);
+        assert_eq!(grouping(&list)[0], [1, 0, 0]);
+    }
+
     #[test]
     fn size_maximize_and_display_keep_what_was_decided() {
         let mut list = start();
@@ -1067,10 +1422,12 @@ mod tests {
             width: Some("1/2".into()),
             full: false,
             display: None,
+            group: None,
         };
         let workspace = |columns| Workspace {
             id: WorkspaceId::new(),
             columns,
+            filled: None,
         };
         let window = vec![
             workspace(vec![column(vec![pane(1), pane(2)])]),

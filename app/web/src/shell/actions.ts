@@ -22,6 +22,12 @@ import {
   resized,
   workspaceMoved,
 } from "../workspaces/arrange"
+import {
+  filling,
+  grouping,
+  regrouping,
+  shiftingInside,
+} from "../workspaces/groups"
 import { floorOf, roomLeft } from "../workspaces/layout"
 import {
   across,
@@ -37,6 +43,7 @@ import {
   fill,
   focusEntry,
   focused,
+  focusedColumn,
   fresh,
   go,
   heighten,
@@ -138,7 +145,8 @@ function heightening(shell: Shell, by: 1 | -1, wrap = false) {
   shell.change((w) => resized(w, heighten(w, by, columnsOf(), { wrap })))
 }
 
-/** Moves the focused Pane as `how` would: sideways its whole column. */
+/** Moves the focused Pane as `how` would: sideways its whole column, or
+ * its whole Group (ADR 0065). */
 function shifting(w: Workspaces, direction: Direction): Step {
   const workspace = current(w)
   const column = workspace.columns[workspace.focus]
@@ -150,7 +158,8 @@ function shifting(w: Workspaces, direction: Direction): Step {
     : moved(next, entry.id)
 }
 
-/** Moves the focused column to the first or the last place. */
+/** Moves the focused column, or its whole Group, to the first or the last
+ * place. */
 function movedTo(w: Workspaces, side: "first" | "last"): Step {
   const workspace = current(w)
   const column = workspace.columns[workspace.focus]
@@ -158,11 +167,19 @@ function movedTo(w: Workspaces, side: "first" | "last"): Step {
   return column && next !== w ? columnMoved(next, column.id) : undefined
 }
 
-/** Moves the focused Pane where `how` puts it, and follows it. */
+/** Moves the focused Pane where `how` puts it, and follows it; one in a
+ * Group that `how` sends to another workspace takes its Group, as one
+ * window (ADR 0065). */
 function moving(w: Workspaces, how: (w: Workspaces) => Workspaces): Step {
+  const { workspace, column } = focusedColumn(w)
   const entry = focused(w)
   const next = how(w)
-  return entry && next !== w ? moved(next, entry.id) : undefined
+  if (!entry || next === w) return undefined
+  if (column?.group !== undefined && current(next).id !== workspace.id) {
+    const plan = columnMoved(next, column.id)
+    return plan && { ...plan, want: entry.id }
+  }
+  return moved(next, entry.id)
 }
 
 /** Shows a Pane of a Space and focuses it, as `how` says; a new column
@@ -430,6 +447,43 @@ export const ACTIONS: readonly Action<Shell>[] = [
     // niri's Mod+W; Alt+G starts a Group (ADR 0065).
     keys: [{ code: "KeyT", alt: true }],
     run: (shell) => shell.change((w) => resized(w, deck(w, columnsOf()))),
+  },
+  // Groups: columns held together, which move and look as one (ADR 0065).
+  {
+    id: "group.new",
+    section: "Groups",
+    title: "A Group of the column, for others to join",
+    keys: [{ code: "KeyG", alt: true }],
+    run: (shell) => shell.change(grouping),
+  },
+  ...(["left", "right"] as const).flatMap((side) => [
+    {
+      id: `group.join-${side}`,
+      section: "Groups",
+      title: `The column into the Group on the ${side}, or out of its own that way`,
+      keys: [
+        {
+          code: side === "left" ? "BracketLeft" : "BracketRight",
+          alt: true,
+          shift: true,
+        },
+      ],
+      run: (shell: Shell) => shell.change((w) => regrouping(w, side)),
+    },
+    {
+      id: `group.column-${side}`,
+      section: "Groups",
+      title: `Move the column ${side} inside its Group`,
+      keys: [{ code: ARROWS[side], alt: true, ctrl: true, shift: true }],
+      run: (shell: Shell) => shell.change((w) => shiftingInside(w, side)),
+    },
+  ]),
+  {
+    id: "group.maximize",
+    section: "Groups",
+    title: "The Group the whole screen wide, or back",
+    keys: [{ code: "KeyM", alt: true }],
+    run: (shell) => shell.change(filling),
   },
   {
     id: "pane.consume-left",

@@ -105,7 +105,7 @@ Its widgets on the bar, which `[bar]` in look.toml places by id:
 
 How this machine's Panes are arranged: workspaces one under another, each a Strip of columns.
 
-Its methods, `banda call workspaces.<method>`: `list`, `open`, `close`, `update`, `move_pane`, `move_column`, `move_workspace`, `size`, `height`, `even`, `maximize`, `display`, `tidy`, `take`, `set_aside`, `bring_back`, `panes`, `open_pane`, `move_own`, `close_own`.
+Its methods, `banda call workspaces.<method>`: `list`, `open`, `close`, `update`, `move_pane`, `move_column`, `move_workspace`, `size`, `height`, `even`, `maximize`, `display`, `group`, `regroup`, `move_group`, `fill`, `tidy`, `take`, `set_aside`, `bring_back`, `panes`, `open_pane`, `move_own`, `close_own`.
 
 What an Agent in a Thread may call as a tool of `banda mcp`:
 

@@ -5,6 +5,7 @@ import type { Bar } from "./Bar";
 import type { Columns } from "./Columns";
 import type { Desk } from "./Desk";
 import type { Drawer } from "./Drawer";
+import type { Groups } from "./Groups";
 import type { Keys } from "./Keys";
 import type { Motion } from "./Motion";
 import type { Notify } from "./Notify";
@@ -55,6 +56,10 @@ drawer: Drawer,
  * The overview on Alt+O (ADR 0025, decision 7).
  */
 overview: Overview, 
+/**
+ * How a Group of columns shows (ADR 0065).
+ */
+groups: Groups, 
 /**
  * The layers it came from, bottom first.
  */
