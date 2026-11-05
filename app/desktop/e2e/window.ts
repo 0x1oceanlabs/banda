@@ -74,6 +74,7 @@ export async function startWindow({
   sidebar = "",
   files = {} as Record<string, string>,
   asked = true,
+  deviceScaleFactor = 1,
 } = {}): Promise<Window> {
   const dir = mkdtempSync(join(tmpdir(), "banda-window-"))
   mkdirSync(join(dir, "config"))
@@ -127,6 +128,7 @@ export async function startWindow({
     chromiumSandbox: SANDBOXED,
     args: [
       desktop,
+      `--force-device-scale-factor=${deviceScaleFactor}`,
       ...(process.env.BANDA_E2E_SHOW ? [] : ["--ozone-platform=headless"]),
     ],
     env: variables,
