@@ -6,7 +6,14 @@ import { fakeEngine, type Heard } from "./testing"
 /** A watch's stream, its pieces a status. */
 const said = (heard: Heard) => heard.onPiece as (status: Status) => void
 
-const STATUS = { at: 1, repo: true, files: [], added: 0, removed: 0 }
+const STATUS = {
+  at: 1,
+  repo: true,
+  files: [],
+  changed: 0,
+  added: 0,
+  removed: 0,
+}
 
 beforeEach(() => vi.useFakeTimers())
 afterEach(() => vi.useRealTimers())

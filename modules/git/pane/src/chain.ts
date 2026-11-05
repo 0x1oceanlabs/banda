@@ -10,6 +10,7 @@
 import { type Engine, Refused, type SpaceId } from "@banda/contract"
 import type { Action, Step } from "@banda/contract/git"
 import { problem } from "@banda/ui/lib/words"
+import { afterRun, type Ended } from "./ended"
 import { NO_WRITER } from "./quick"
 
 type Run =
@@ -22,8 +23,7 @@ type Run =
       /** It can be stopped: the message is being written. */
       stops?: boolean
     }
-  | { is: "done"; title: string; detail?: string }
-  | { is: "failed"; message: string }
+  | Ended
 
 const IDLE: Run = { is: "idle" }
 
@@ -151,6 +151,12 @@ export async function run(
       since: Date.now(),
       ...(stops && { stops }),
     })
+  // How it ended, which the Thread's Agent and an unseen card hear too.
+  const thread = writer && "thread" in writer ? writer.thread : null
+  const end = (how: Ended) => {
+    set(space, how)
+    afterRun(engine, space, thread, how)
+  }
   // Stopped while the message is written, the run ends here quietly.
   const stopper = new AbortController()
   const { signal } = stopper
@@ -217,8 +223,8 @@ export async function run(
             return
           case "done": {
             ended = true
-            const done: Run = { is: "done", ...piece.done }
-            set(space, done)
+            const done: Ended = { is: "done", ...piece.done }
+            end(done)
             // ✓ stays ten seconds, then the button is back.
             setTimeout(
               () => runOf(space) === done && set(space, IDLE),
@@ -228,7 +234,7 @@ export async function run(
           }
           case "failed":
             ended = true
-            return set(space, { is: "failed", message: piece.message })
+            return end({ is: "failed", message: piece.message })
         }
       },
       (refusal) => {
@@ -240,13 +246,13 @@ export async function run(
           : refusal.code === "may_have_run"
             ? LOST
             : refusal.message
-        set(space, { is: "failed", message })
+        end({ is: "failed", message })
       },
       // Heard again after a reconnect, it would commit or push again.
       { once: true }
     )
   } catch (error) {
-    if (!signal.aborted) set(space, { is: "failed", message: problem(error) })
+    if (!signal.aborted) end({ is: "failed", message: problem(error) })
   } finally {
     if (stopping.get(space) === stopper) stopping.delete(space)
   }

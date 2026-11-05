@@ -5,6 +5,7 @@ import { askDetails } from "@banda/ui/components/thread-details"
 import { PICKER } from "./BranchPicker"
 import { changesDiff, gitDetails } from "./Details"
 import { diffPane } from "./DiffPane"
+import { keepWindow } from "./ended"
 
 /** T3 Code's Mod+D: the focused Pane's Space's Diff beside it, the one
  * shown if there is; on the Diff, it closes. */
@@ -36,4 +37,6 @@ export const git = defineModule({
   panes: [diffPane],
   actions: [toggleDiff, switchBranch],
   threadDetails: [gitDetails],
+  // What a card's run tells the Person, when no card is in sight.
+  start: keepWindow,
 })
