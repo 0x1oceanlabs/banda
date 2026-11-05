@@ -50,11 +50,11 @@ Roma, 2026-11-05: "let's think the themes through: macOS's own dark and light, t
 
 Each step is an issue and a PR.
 
-1. The glass does not change the gaps, and Hyprland's layer comes only with the `omarchy` theme (decision 3).
-2. Banda's shape: gaps 8, tiles 10, 1 px lines, solid tiles, the focus outlined (decisions 1, 3 and 5).
-3. Banda's colours, light and dark, with the blue accent (decision 4).
-4. The `macos` theme: its colours and shape, the default on a Mac (decisions 1 and 2).
-5. The Mac's accent, live (decision 6).
+1. #601 The glass does not change the gaps, and Hyprland's layer comes only with the `omarchy` theme (decision 3).
+2. #602 Banda's shape: gaps 8, tiles 10, 1 px lines, solid tiles, the focus outlined (decisions 1, 3 and 5).
+3. #603 Banda's colours, light and dark, with the blue accent (decision 4).
+4. #604 The `macos` theme: its colours and shape, the default on a Mac (decisions 1 and 2).
+5. #605 The Mac's accent, live (decision 6).
 
 ## Later
 
