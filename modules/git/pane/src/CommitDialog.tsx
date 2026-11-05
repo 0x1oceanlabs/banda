@@ -1,7 +1,7 @@
 /**
  * The Commit dialog of the git button's `▾` (ADR 0034, decision 4), as
- * T3 Code's: the branch, the files with their lines, which ones to leave
- * out behind Edit, and the message, which the Thread's Harness writes
+ * T3 Code's: the branch it commits to, the files with their lines, each
+ * with its checkbox, and the message, which the Thread's Harness writes
  * when it is left empty. It only commits; Commit on new branch names one
  * for the change first.
  */
@@ -21,25 +21,36 @@ import {
 import { DiffCounts, DiffPath } from "@banda/ui/components/diff"
 import { Textarea } from "@banda/ui/components/textarea"
 import type { Commit } from "./chain"
-import { NO_HARNESS, onDefault } from "./quick"
+import { NO_WRITER, onDefault } from "./quick"
+
+/** The dialog's title: the branch it commits to. */
+export function commitTitle(status: Status): string {
+  return status.branch
+    ? `Commit to ${status.branch}`
+    : "Commit on a detached HEAD"
+}
+
+/** Its button, by how many files are taken. */
+export function commitLabel(taken: number): string {
+  return `Commit ${taken} ${taken === 1 ? "file" : "files"}`
+}
 
 /** Drawn while it is open, so each opening starts with every file taken
  * and no message. */
 export function CommitDialog({
   status,
-  writes,
+  writer,
   onClose,
   onCommit,
 }: {
   status: Status
-  /** A Harness is there to write an empty message. */
-  writes: boolean
+  /** The name of the Harness that writes an empty message, if one is on. */
+  writer: string | null
   onClose: () => void
   onCommit: (commit: Commit) => void
 }) {
   // Paths left out.
   const [out, setOut] = useState<ReadonlySet<string>>(new Set())
-  const [editing, setEditing] = useState(false)
   const [message, setMessage] = useState("")
   const files = status.files
   const taken = files.filter((file) => !out.has(file.path))
@@ -52,8 +63,8 @@ export function CommitDialog({
   const blocked =
     taken.length === 0
       ? "Choose a file to commit."
-      : !message.trim() && !writes
-        ? NO_HARNESS
+      : !message.trim() && writer === null
+        ? NO_WRITER
         : undefined
   const commit = (feature: boolean) => {
     onClose()
@@ -68,99 +79,69 @@ export function CommitDialog({
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle>Commit changes</DialogTitle>
-          <DialogDescription>
-            Leave the message empty and the Thread’s Harness writes it.
-          </DialogDescription>
+          <DialogTitle className="break-all">{commitTitle(status)}</DialogTitle>
+          {onDefault(status) && (
+            <DialogDescription>
+              {status.branch} is the default branch.
+            </DialogDescription>
+          )}
         </DialogHeader>
-        <div className="flex flex-col gap-1.5 rounded-lg border p-2.5 text-sm">
-          <div className="flex gap-2">
-            <span className="w-14 text-muted-foreground">Branch</span>
-            <span className="truncate">
-              {status.branch ?? "(detached HEAD)"}
-            </span>
-            {onDefault(status) && (
-              <span className="ml-auto text-xs text-amber-600 dark:text-amber-400">
-                Default branch
-              </span>
-            )}
-          </div>
-          <div className="flex items-center gap-2">
-            <span className="w-14 text-muted-foreground">Files</span>
-            <span>
-              {out.size === 0
-                ? files.length
-                : `${taken.length} of ${files.length}`}
-            </span>
-            <Button
-              variant="ghost"
-              size="xs"
-              className="ml-auto"
-              onClick={() => setEditing(!editing)}
-            >
-              {editing ? "Done" : "Edit"}
-            </Button>
-          </div>
-          <ul className="max-h-44 overflow-y-auto rounded-md border font-mono text-xs">
-            {files.map((file) => {
-              const takes = !out.has(file.path)
-              return (
-                <li
-                  key={file.path}
-                  className="flex items-center gap-2 px-2 py-1.5 not-first:border-t data-[out=true]:text-muted-foreground"
-                  data-out={!takes}
-                >
-                  {editing && (
-                    <Checkbox
-                      aria-label={`Commit ${file.path}`}
-                      checked={takes}
-                      onCheckedChange={(take) => toggle(file.path, take)}
-                    />
-                  )}
+        <ul
+          aria-label="Files"
+          className="max-h-52 overflow-y-auto rounded-lg border font-mono text-xs"
+        >
+          {files.map((file) => {
+            const takes = !out.has(file.path)
+            return (
+              <li
+                key={file.path}
+                className="not-first:border-t data-[out=true]:text-muted-foreground"
+                data-out={!takes}
+              >
+                <label className="flex cursor-pointer items-center gap-2 px-2 py-1.5">
+                  <Checkbox
+                    aria-label={`Commit ${file.path}`}
+                    checked={takes}
+                    onCheckedChange={(take) => toggle(file.path, take)}
+                  />
                   <span className="flex min-w-0 flex-1" title={file.path}>
                     <DiffPath path={file.path} />
                   </span>
-                  {takes ? (
-                    <DiffCounts added={file.added} removed={file.removed} />
-                  ) : (
-                    <span className="font-sans">Left out</span>
-                  )}
-                </li>
-              )
-            })}
-          </ul>
-        </div>
+                  <DiffCounts added={file.added} removed={file.removed} />
+                </label>
+              </li>
+            )
+          })}
+        </ul>
         <label className="flex flex-col gap-1.5 text-sm font-medium">
-          Message
+          {writer === null
+            ? "Message"
+            : `Message (optional) — ${writer} writes it`}
           <Textarea
             value={message}
-            placeholder="Empty: the Harness writes it"
             className="min-h-16 font-normal"
             onChange={(event) => setMessage(event.target.value)}
           />
         </label>
-        <DialogFooter>
-          {/* A disabled button hears no hover: the reason shows here. */}
-          {blocked && (
-            <p className="mr-auto self-center text-xs text-muted-foreground">
-              {blocked}
-            </p>
-          )}
-          <DialogClose render={<Button variant="outline" />}>
-            Cancel
-          </DialogClose>
+        {/* A disabled button hears no hover: the reason shows here. */}
+        {blocked && <p className="text-xs text-muted-foreground">{blocked}</p>}
+        <DialogFooter className="flex-wrap">
           <Button
             variant="outline"
+            className="sm:mr-auto"
             disabled={blocked !== undefined}
             onClick={() => commit(true)}
           >
             Commit on new branch
           </Button>
+          <DialogClose render={<Button variant="outline" />}>
+            Cancel
+          </DialogClose>
           <Button
             disabled={blocked !== undefined}
             onClick={() => commit(false)}
           >
-            Commit
+            {commitLabel(taken.length)}
           </Button>
         </DialogFooter>
       </DialogContent>

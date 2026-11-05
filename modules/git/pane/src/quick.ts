@@ -9,6 +9,8 @@ export type Quick = {
   label: string
   /** What it runs; none when it is disabled. */
   action: Action | null
+  /** It opens the Commit dialog first, rather than run at once. */
+  asks?: boolean
   /** Why it is disabled, said on hover. */
   hint?: string
   icon: "commit" | "push" | "pull" | "info"
@@ -21,10 +23,10 @@ const off = (label: string, hint: string, icon: Quick["icon"]): Quick => ({
   icon,
 })
 
-/** Why a commit cannot have its message written: the button's, the
- * dialog's and the run's say the same. */
-export const NO_HARNESS =
-  "A new Thread has no Harness to write the message yet."
+/** Why a commit cannot have its message written: the dialog's and the
+ * run's say the same. */
+export const NO_WRITER =
+  "No agent is on to write the message. Write it yourself."
 
 const UP_TO_DATE = "Branch is up to date. No action needed."
 const DIVERGED = "Branch has diverged from upstream. Rebase or merge first."
@@ -35,11 +37,12 @@ export function onDefault(status: Status): boolean {
   return status.branch !== undefined && status.branch === status.default_branch
 }
 
-/** The button for `status`, with `writes` when a Harness is there to
- * write a commit's message: a new Thread's is not, till it starts. */
+/** The button for `status`, with `started` once the Thread has: a new
+ * Thread's Commit… opens the dialog, as nothing it said made the
+ * changes. */
 export function quickOf(
   status: Status,
-  { writes }: { writes: boolean }
+  { started }: { started: boolean }
 ): Quick {
   if (!status.repo) return off("Commit", "Git status is unavailable.", "commit")
   if (!status.branch)
@@ -52,7 +55,8 @@ export function quickOf(
   const behind = status.behind ?? 0
   const upstream = status.upstream !== undefined
   if (status.files.length > 0) {
-    if (!writes) return off("Commit", NO_HARNESS, "commit")
+    if (!started)
+      return { label: "Commit…", action: "commit", asks: true, icon: "commit" }
     // Nowhere to push, or the push would be refused: commit alone.
     if (behind > 0 || (!upstream && !status.remote))
       return { label: "Commit", action: "commit", icon: "commit" }
@@ -75,15 +79,21 @@ export function asksFirst(status: Status, action: Action): boolean {
   return (action === "push" || action === "commit_push") && onDefault(status)
 }
 
-/** What the default branch's question says, as T3 Code's. */
-export function askOf(action: Action, branch: string) {
+/** What the default branch's question says, as T3 Code's: a commit
+ * may go on a new branch, named for the change; commits made already
+ * have no change to name one for. */
+export function askOf(
+  action: Action,
+  branch: string
+): { title: string; body: string; go: string; branch?: string } {
   const commits = action === "commit_push"
   return {
-    title: commits ? `Commit & push to ${branch}?` : `Push to ${branch}?`,
+    title: `You're on ${branch}`,
     body: commits
-      ? `This commits and pushes on “${branch}”. Or make a feature branch, named for the change, and do it there.`
-      : `This pushes local commits on “${branch}”. Or make a feature branch yourself and push from it.`,
-    go: commits ? `Commit & push to ${branch}` : `Push to ${branch}`,
+      ? `Push straight to ${branch}, or put this change on a new branch first?`
+      : `Push your commits straight to ${branch}? To push them on a new branch, make it from the branch picker first.`,
+    go: `Push to ${branch}`,
+    ...(commits && { branch: "New branch & push" }),
   }
 }
 

@@ -20,6 +20,9 @@ export type DetailsProps = {
   space: SpaceId
   /** The Thread the card is in; none while a new one is written. */
   thread: string | null
+  /** The Harness the Thread runs on, or a new one starts on: its id, and
+   * its name as the Thread says it; none when no Harness is on. */
+  harness: { id: string; name: string } | null
   /** Opens a Pane beside the Thread, as the Thread's own links do. */
   open: (pane: PaneState, place?: Place) => void
   /** The part of a row a key asked the card to open, as Alt+Shift+G

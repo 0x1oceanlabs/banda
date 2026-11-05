@@ -288,6 +288,26 @@ test("a Thread's details card shows the branch and its changes, as T3 Code's, an
   await expect(changes).toContainText("+2−1")
   await page.screenshot({ path: "test-results/git-details-changes.png" })
 
+  // A new Thread's changes are none of its making: Commit… asks first,
+  // and the Harness it starts on writes the message.
+  await card.getByRole("button", { name: "Commit…" }).click()
+  const commit = page.getByRole("dialog", { name: "Commit to main" })
+  await expect(
+    commit.getByRole("textbox", {
+      name: "Message (optional) — Fake AI writes it",
+    })
+  ).toBeVisible()
+  await expect(
+    commit.getByRole("checkbox", { name: "Commit app.ts" })
+  ).toBeChecked()
+  await expect(
+    commit.getByRole("button", { name: "Commit 1 file" })
+  ).toBeEnabled()
+  await page.screenshot({ path: "test-results/git-commit-new-thread.png" })
+  await commit.getByRole("button", { name: "Cancel" }).click()
+  await expect(commit).toBeHidden()
+  await expect(card).toBeVisible()
+
   // A Thread wide enough to hold it beside the messages has it at its
   // top right, open until the Person hides it.
   await page.keyboard.press("Escape")
@@ -338,13 +358,22 @@ test("the git button commits every change with the message the Thread's Harness 
   await page.screenshot({ path: "test-results/git-button-ready.png" })
 
   // On main it asks first; a feature branch is named for the change.
+  // Its buttons fit a narrow window.
   await button.click()
-  const ask = page.getByRole("dialog", { name: "Commit & push to main?" })
-  await expect(ask).toBeVisible()
+  const ask = page.getByRole("dialog", { name: "You're on main" })
+  await expect(ask).toContainText(
+    "Push straight to main, or put this change on a new branch first?"
+  )
+  await page.setViewportSize({ width: 420, height: 800 })
+  const edge = (await ask.boundingBox())!
+  for (const name of ["Cancel", "Push to main", "New branch & push"]) {
+    const box = (await ask.getByRole("button", { name }).boundingBox())!
+    expect(box.x + box.width, name).toBeLessThanOrEqual(edge.x + edge.width)
+  }
+  await page.screenshot({ path: "test-results/git-button-main-narrow.png" })
+  await page.setViewportSize({ width: 1280, height: 800 })
   await page.screenshot({ path: "test-results/git-button-main.png" })
-  await ask
-    .getByRole("button", { name: "Check out feature branch & continue" })
-    .click()
+  await ask.getByRole("button", { name: "New branch & push" }).click()
   await expect(card).toContainText("to origin/feature/change-app")
   await expect(card).toContainText("Change the app")
   await page.screenshot({ path: "test-results/git-button-done.png" })
@@ -358,6 +387,39 @@ test("the git button commits every change with the message the Thread's Harness 
   await expect(card.getByRole("button", { name: "Commit" })).toBeDisabled()
   // The Thread never showed the message's run.
   await expect(thread.getByText("You write concise")).toBeHidden()
+})
+
+test("Stop while the Thread's Harness writes the message stops it, and nothing is committed", async () => {
+  window = await startWindow()
+  const { page, dir } = window
+  const { thread, composer } = await firstThread(page)
+  const folder = join(dir, "root", "Work")
+  git(folder, "init", "-q", "-b", "main")
+  writeFileSync(join(folder, "app.ts"), "export const a = 1\n")
+  git(folder, "add", "-A")
+  git(folder, "commit", "-qm", "First")
+  // The fake agent waits, till it is stopped, for a prompt that says so.
+  writeFileSync(join(folder, "app.ts"), "export const wait = 2\n")
+
+  await composer.fill("hello")
+  await composer.press("Enter")
+  await expect(thread.getByText("You said: hello")).toBeVisible()
+  await page.keyboard.press("Control+Shift+KeyB")
+  const card = page.getByRole("dialog", { name: "Thread details" })
+  await card.getByRole("button", { name: "Commit", exact: true }).click()
+  const writing = card.getByRole("status").filter({ hasText: "writing" })
+  await expect(writing).toContainText("Fake AI is writing the message…")
+  await expect(writing).toContainText("1s")
+  await page.screenshot({ path: "test-results/git-button-writing.png" })
+
+  await writing.getByRole("button", { name: "Stop" }).click()
+  await expect(writing).toBeHidden()
+  await expect(
+    card.getByRole("button", { name: "Commit", exact: true })
+  ).toBeEnabled()
+  await expect(card.getByRole("alert")).toHaveCount(0)
+  expect(git(folder, "log", "--format=%s")).toBe("First\n")
+  expect(git(folder, "status", "--porcelain")).toBe(" M app.ts\n")
 })
 
 test("the branch picker makes and switches branches, and ▾ commits chosen files with the Person's message and pushes", async () => {
@@ -450,15 +512,26 @@ test("the branch picker makes and switches branches, and ▾ commits chosen file
   // ▾ → Commit…: b.ts left out, the Person's message.
   await card.getByRole("button", { name: "More git actions" }).click()
   await page.getByRole("menuitem", { name: "Commit…" }).click()
-  const dialog = page.getByRole("dialog", { name: "Commit changes" })
-  await dialog.getByRole("button", { name: "Edit" }).click()
+  const dialog = page.getByRole("dialog", { name: "Commit to feature/menu" })
+  await expect(
+    dialog.getByRole("button", { name: "Commit 2 files" })
+  ).toBeEnabled()
   await dialog.getByRole("checkbox", { name: "Commit b.ts" }).click()
-  await dialog.getByRole("button", { name: "Done" }).click()
-  await expect(dialog).toContainText("1 of 2")
-  await expect(dialog).toContainText("Left out")
-  await dialog.getByRole("textbox", { name: "Message" }).fill("Change a")
+  await expect(
+    dialog.getByRole("checkbox", { name: "Commit b.ts" })
+  ).not.toBeChecked()
+  const message = dialog.getByRole("textbox", {
+    name: "Message (optional) — Fake AI writes it",
+  })
+  await message.fill("Change a")
   await page.screenshot({ path: "test-results/git-commit-dialog.png" })
-  await dialog.getByRole("button", { name: "Commit", exact: true }).click()
+  // None taken, nothing to commit.
+  await dialog.getByRole("checkbox", { name: "Commit a.ts" }).click()
+  await expect(
+    dialog.getByRole("button", { name: "Commit 0 files" })
+  ).toBeDisabled()
+  await dialog.getByRole("checkbox", { name: "Commit a.ts" }).click()
+  await dialog.getByRole("button", { name: "Commit 1 file" }).click()
   await expect(card).toContainText("Change a")
   expect(git(folder, "log", "-1", "--format=%s", "--name-only")).toBe(
     "Change a\n\na.ts\n"

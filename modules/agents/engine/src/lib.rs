@@ -216,11 +216,13 @@ banda_kernel::methods! {
         /// the files one of them changed, from its tool calls: the Diff's
         /// Turn (ADR 0034).
         call changes(ChangesAsk) -> TurnChanges, Read;
-        /// What the Thread's Harness replies to a prompt, in a short run of
-        /// its own the Thread does not show: on its model, asking before
-        /// it changes anything, and refused whatever it asks. Git asks it
-        /// for a commit's message.
-        call write(WriteAsk) -> Written, Write;
+        /// What a Thread's Harness, or a Harness a new Thread starts on,
+        /// replies to a prompt, in a short run of its own no Thread shows:
+        /// on the Thread's model at the least effort it offers, asking
+        /// before it changes anything, and refused whatever it asks. Git
+        /// asks it for a commit's message. It says one piece, the reply or
+        /// why there is none; let go before, it stops the run.
+        stream write(WriteAsk) -> Written, Write;
         /// Writes into a Thread of this Space, or starts a new Thread on a
         /// Harness. Its Agent reads that the message is from your Thread's
         /// Agent, not its Person; when the turn it asks for ends, its last
@@ -323,20 +325,30 @@ struct OneHarness {
     harness: String,
 }
 
-/// What `agents.write` is asked.
+/// What `agents.write` is asked: who writes, a Thread or a Harness, one
+/// of them, and the prompt.
 #[derive(Deserialize, TS)]
 #[ts(export, export_to = "agents/")]
 struct WriteAsk {
     /// The Thread whose Harness and model write.
-    thread: ThreadId,
+    #[serde(default)]
+    #[ts(optional)]
+    thread: Option<ThreadId>,
+    /// A Harness, as a new Thread starts on it, for a Thread not started
+    /// yet.
+    #[serde(default)]
+    #[ts(optional)]
+    harness: Option<String>,
     prompt: String,
 }
 
-/// What `agents.write` answers.
+/// What `agents.write` says, once: the reply, or why there is none.
 #[derive(Serialize, TS)]
+#[serde(tag = "kind", rename_all = "snake_case")]
 #[ts(export, export_to = "agents/")]
-struct Written {
-    text: String,
+enum Written {
+    Reply { text: String },
+    Refused { refusal: Refusal },
 }
 
 #[derive(Deserialize, TS, JsonSchema)]
@@ -688,25 +700,55 @@ impl Agents {
     async fn write(
         &self,
         call: Call,
-        WriteAsk { thread, prompt }: WriteAsk,
-    ) -> Result<Written, Refusal> {
-        let found = call
-            .space()
-            .read(move |sql| {
-                let Some(summary) = store::thread(sql, thread)? else {
-                    return Ok(None);
-                };
-                Ok(Some((summary.harness, store::settings(sql, thread)?)))
-            })
-            .await?;
-        let (harness, settings) =
-            found.ok_or_else(|| Refusal::not_found("There is no such Thread."))?;
+        WriteAsk {
+            thread,
+            harness,
+            prompt,
+        }: WriteAsk,
+    ) -> Result<banda_kernel::Stream, Refusal> {
+        let (harness, settings) = match (thread, harness) {
+            (Some(thread), None) => {
+                let found = call
+                    .space()
+                    .read(move |sql| {
+                        let Some(summary) = store::thread(sql, thread)? else {
+                            return Ok(None);
+                        };
+                        Ok(Some((summary.harness, store::settings(sql, thread)?)))
+                    })
+                    .await?;
+                found.ok_or_else(|| Refusal::not_found("There is no such Thread."))?
+            }
+            // As a new Thread on it starts.
+            (None, Some(harness)) => {
+                let start = self.new_start(&harness)?;
+                let on = harness.clone();
+                let (settings, _) = call
+                    .space()
+                    .read(move |sql| fresh(sql, &on, &start))
+                    .await?;
+                (harness, settings)
+            }
+            _ => return Err(Refusal::invalid("Name a Thread or a Harness to write.")),
+        };
         if harness.is_empty() {
             return Err(Refusal::conflict("This Thread's Harness is gone."));
         }
         let connection = self.running(call.space().id(), &harness).await?;
-        let text = aside::write(connection, &call.space().folder(), &settings, prompt).await?;
-        Ok(Written { text })
+        let folder = call.space().folder();
+        let (say, heard) = tokio::sync::mpsc::channel(1);
+        // Let go, the stream stops the run: its turn and its session.
+        tokio::spawn(async move {
+            let ran = aside::write(connection, &folder, &settings, prompt, say.closed()).await;
+            let written = match ran {
+                Ok(text) => Written::Reply { text },
+                Err(refusal) => Written::Refused { refusal },
+            };
+            if let Ok(piece) = serde_json::to_value(written) {
+                let _ = say.send(piece).await;
+            }
+        });
+        Ok(heard)
     }
 
     async fn defaults(
@@ -1030,6 +1072,15 @@ impl Module for Agents {
 
     async fn call(&self, call: Call, method: &str, params: Value) -> Result<Value, Refusal> {
         self.dispatch(call, method, params).await
+    }
+
+    async fn stream(
+        &self,
+        call: Call,
+        method: &str,
+        params: Value,
+    ) -> Result<banda_kernel::Stream, Refusal> {
+        self.dispatch_stream(call, method, params).await
     }
 
     async fn run(&self, space: ModuleSpace, effect: Effect) -> Outcome {

@@ -3804,44 +3804,142 @@ async fn told_apples_then_pears(back: impl AsyncFn(&World, &Value, &ThreadView) 
     }
 }
 
+impl World {
+    /// Opens `agents.write` with `params`: its stream, or why not.
+    async fn writing(&self, params: Value) -> Result<banda_kernel::Stream, banda_kernel::Refusal> {
+        (self.kernel)
+            .stream(self.person(), "agents.write", Some(self.space), params)
+            .await
+    }
+
+    /// What `agents.write` says to `params`: the reply's text, or why
+    /// there is none.
+    async fn written(&self, params: Value) -> Result<String, banda_kernel::Refusal> {
+        let mut heard = self.writing(params).await?;
+        let piece = tokio::time::timeout(Duration::from_secs(30), heard.recv())
+            .await
+            .expect("it writes in time")
+            .expect("it says a piece");
+        match piece["kind"].as_str() {
+            Some("reply") => Ok(piece["text"].as_str().unwrap().to_owned()),
+            _ => Err(serde_json::from_value(piece["refusal"].clone()).unwrap()),
+        }
+    }
+}
+
 #[tokio::test]
 async fn a_short_run_of_its_own_writes_on_the_threads_model_and_the_thread_never_shows_it() {
     let root = tempfile::tempdir().unwrap();
     let world = World::new(root.path()).await;
     let (thread, _) = world.finish(None, "which session").await;
     world
-        .configure(&thread, json!({ "options": { "model": "smart" } }))
+        .configure(
+            &thread,
+            json!({ "options": { "model": "smart", "effort": "high" } }),
+        )
         .await;
     let before = texts(&world.thread(&thread).await);
-    let write = |prompt: &str| {
-        world.call(
-            world.person(),
-            "agents.write",
-            json!({ "thread": thread, "prompt": prompt }),
-        )
-    };
+    let write = |prompt: &str| world.written(json!({ "thread": thread, "prompt": prompt }));
 
     let written = write("which settings").await.unwrap();
-    assert_eq!(written["text"], "Mode plan, model smart, brief false");
+    assert_eq!(written, "Mode plan, model smart, brief false");
+    // On the Thread's model, at the least effort it offers: quick.
+    assert_eq!(
+        write("which effort").await.unwrap(),
+        "Effort low, fast false"
+    );
     // What it asks is refused: the tool call is skipped, and it replies.
-    let written = write("ask").await.unwrap();
-    assert!(written["text"].as_str().is_some_and(|t| !t.is_empty()));
-    let written = write("which session").await.unwrap();
-    let own = written["text"].as_str().unwrap().to_owned();
+    assert!(!write("ask").await.unwrap().is_empty());
+    let own = write("which session").await.unwrap();
 
     assert_eq!(texts(&world.thread(&thread).await), before);
     let (_, (session, _)) = ask_session(&world, Some(&thread)).await;
     assert!(!own.contains(&session), "{own} is the Thread's {session}");
+    // The Thread's own session keeps its effort.
+    let (_, view) = world.finish(Some(&thread), "which effort").await;
+    assert!(
+        texts(&view).contains(&"message: Effort high, fast false".to_owned()),
+        "{:?}",
+        texts(&view)
+    );
 
     let refused = world
-        .call(
-            world.person(),
-            "agents.write",
-            json!({ "thread": banda_agents::model::ThreadId::new(), "prompt": "hello" }),
-        )
+        .writing(json!({ "thread": banda_agents::model::ThreadId::new(), "prompt": "hello" }))
         .await
         .unwrap_err();
     assert_eq!(refused.code, Code::NotFound);
+    let refused = world
+        .writing(json!({ "prompt": "hello" }))
+        .await
+        .unwrap_err();
+    assert_eq!(refused.code, Code::Invalid);
+}
+
+#[tokio::test]
+async fn a_new_threads_harness_writes_before_the_thread_starts() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let written = world
+        .written(json!({ "harness": "fake", "prompt": "which settings" }))
+        .await
+        .unwrap();
+    assert_eq!(written, "Mode plan, model fast, brief false");
+    assert!(world.threads().await.threads.is_empty(), "no Thread starts");
+    let refused = world
+        .writing(json!({ "harness": "nobody", "prompt": "hello" }))
+        .await
+        .unwrap_err();
+    assert_eq!(refused.code, Code::Invalid);
+}
+
+#[tokio::test]
+async fn a_write_let_go_stops_its_run_and_closes_its_session() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let (thread, _) = world.finish(None, "hello").await;
+    // How many turns run, and how many sessions were closed besides the
+    // ones these counts ran in: each is closed before it answers.
+    let counts = std::cell::Cell::new(0);
+    let count = async || {
+        let said = world
+            .written(json!({ "thread": thread, "prompt": "how many turns" }))
+            .await
+            .unwrap();
+        let (running, closed) = said
+            .strip_prefix("Turns running ")
+            .and_then(|said| said.split_once(", sessions closed "))
+            .unwrap();
+        let earlier = counts.replace(counts.get() + 1);
+        let closed: u64 = closed.parse().unwrap();
+        (running.parse::<u64>().unwrap(), closed - earlier)
+    };
+    assert_eq!(count().await, (1, 0));
+
+    // It waits until it is stopped, as a slow Harness would.
+    let heard = world
+        .writing(json!({ "thread": thread, "prompt": "wait" }))
+        .await
+        .unwrap();
+    let mut now = count().await;
+    for _ in 0..100 {
+        if now == (2, 0) {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+        now = count().await;
+    }
+    assert_eq!(now, (2, 0), "it runs beside the count");
+
+    // Let go: its turn is cancelled, and its session closed.
+    drop(heard);
+    for _ in 0..100 {
+        now = count().await;
+        if now == (1, 1) {
+            break;
+        }
+        tokio::time::sleep(Duration::from_millis(20)).await;
+    }
+    assert_eq!(now, (1, 1), "it stopped and its session closed");
 }
 
 /// Claude Code and Codex write a commit's message in a short run of
@@ -3870,6 +3968,7 @@ async fn the_real_harnesses_write_a_commits_message() {
             Rules:\n\
             - subject must be imperative, <= 72 chars, and no trailing period\n\
             - body can be empty string or short bullet points\n\
+            - no trailers: no Co-Authored-By line, no \"Generated with\" line, nothing naming who wrote it\n\
             - branch must be a short semantic git branch fragment for this change\n\
             - capture the primary user-visible or developer-visible change\n\
             - do not run tools or change files: answer from what is below\n\
@@ -3884,14 +3983,10 @@ async fn the_real_harnesses_write_a_commits_message() {
             @@ -1,2 +1,3 @@\n apples\n pears\n+plums\n";
         let started = std::time::Instant::now();
         let written = world
-            .call(
-                world.person(),
-                "agents.write",
-                json!({ "thread": thread, "prompt": prompt }),
-            )
+            .written(json!({ "thread": thread, "prompt": prompt }))
             .await;
         println!("{harness} in {:?}: {written:#?}", started.elapsed());
-        let text = written.unwrap()["text"].as_str().unwrap().to_owned();
+        let text = written.unwrap();
         let object = &text[text.find('{').unwrap()..=text.rfind('}').unwrap()];
         let reply: Value = serde_json::from_str(object).unwrap();
         let subject = reply["subject"].as_str().unwrap();
