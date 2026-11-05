@@ -22,6 +22,13 @@ import {
 import type { Problem, Workspaces } from "@banda/contract/look"
 import { useLookBar, useLookProblems } from "../look"
 import type { InBar } from "../workspaces/model"
+import type { SpaceSummary } from "@banda/contract"
+import { SpaceBadge } from "@banda/ui/components/space-badge"
+
+/** A workspace as the bar shows it: a Space's by its badge, with a dot
+ * while one of that Space's Threads calls (ADR 0065, decision 9). */
+export type BarWorkspace = InBar & { owner?: SpaceSummary; calls?: boolean }
+import { type MapColumn, WorkspaceMap } from "./Map"
 import { BarMotion } from "./motion"
 import { type Layout, moved, same, written } from "./arrange"
 import { PARTS, type Part, WORKSPACES } from "./placed"
@@ -44,6 +51,7 @@ export function Bar({
   attention = QUIET,
   workspaces,
   current,
+  map,
   sidebar,
   onSidebar,
   onPick,
@@ -58,8 +66,10 @@ export function Bar({
   attention?: Attention
   /** The workspaces it shows: those with Panes, the current one, and the
    * empty one at the bottom. */
-  workspaces: readonly InBar[]
+  workspaces: readonly BarWorkspace[]
   current: number
+  /** The current workspace's columns, small, by their Groups (ADR 0065). */
+  map?: readonly MapColumn[]
   sidebar: boolean
   onSidebar: () => void
   onPick: (index: number) => void
@@ -121,11 +131,14 @@ export function Bar({
         )}
       >
         {id === WORKSPACES ? (
-          <WorkspaceList
-            workspaces={workspaces}
-            current={current}
-            onPick={onPick}
-          />
+          <>
+            <WorkspaceList
+              workspaces={workspaces}
+              current={current}
+              onPick={onPick}
+            />
+            {map && <WorkspaceMap columns={map} />}
+          </>
         ) : (
           nodes.get(id)
         )}
@@ -352,7 +365,7 @@ function WorkspaceList({
   current,
   onPick,
 }: {
-  workspaces: readonly InBar[]
+  workspaces: readonly BarWorkspace[]
   current: number
   onPick: (index: number) => void
 }) {
@@ -386,7 +399,9 @@ function WorkspaceList({
       {workspaces.map((w) => {
         const here = w.index === current
         const number = String(w.index + 1)
-        const name = w.bottom ? "New workspace" : `Workspace ${number}`
+        const name = w.bottom
+          ? "New workspace"
+          : `${w.owner ? `${w.owner.name}, workspace` : "Workspace"} ${number}`
         const dot = here
           ? "bg-foreground"
           : w.empty
@@ -421,12 +436,20 @@ function WorkspaceList({
             ) : (
               <span
                 className={cn(
-                  "flex size-6 shrink-0 items-center justify-center rounded-md",
+                  "relative flex size-6 shrink-0 items-center justify-center rounded-md",
                   // Emptied, it goes once the Person leaves it.
                   w.empty && "border border-dashed border-muted-foreground/50"
                 )}
               >
-                {number}
+                {/* A Space's workspace shows its Space, with a dot while
+                    one of its Threads calls (ADR 0065, decision 9). */}
+                {w.owner ? <SpaceBadge space={w.owner} /> : number}
+                {w.calls && (
+                  <span
+                    aria-hidden
+                    className="absolute top-0.5 right-0.5 size-1.5 rounded-full bg-attention"
+                  />
+                )}
               </span>
             )}
           </button>

@@ -2,7 +2,7 @@ import type { SpaceId } from "@banda/contract"
 import type { Problem } from "@banda/contract/look"
 import type { Aside } from "@banda/contract/workspaces"
 import type { WidgetProps } from "@banda/ui/module"
-import type { Lists, PaneState } from "@banda/ui/pane"
+import type { Listed, Lists, PaneState } from "@banda/ui/pane"
 import { type ComponentType, type ReactNode, useMemo } from "react"
 import { useLookBar, useLookSettings } from "../look"
 import { runs, widgets } from "../registry"
@@ -22,6 +22,9 @@ export type OwnProps = WidgetProps & {
   lists: Lists
   /** Whether the sidebar shows. */
   sidebarShown: boolean
+  /** The Thread in front, an Agent's, which the counts name while the
+   * sidebar is hidden (ADR 0065, decision 9). */
+  current?: Listed
   /** Opens a Pane as a row of the sidebar does. */
   onOpen: (space: SpaceId, pane: PaneState) => void
   /** The workspaces set aside, while they are (ADR 0039, decision 2). */

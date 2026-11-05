@@ -6,7 +6,14 @@
 import type { MarkState } from "@banda/ui/components/banda-mark"
 import { works } from "@banda/ui/components/banda-mark"
 import { type Plan, columnTo } from "./arrange"
-import { focusedColumn, runOf, type Workspaces } from "./model"
+import type { Listed } from "@banda/ui/pane"
+import {
+  type Column,
+  type Entry,
+  focusedColumn,
+  runOf,
+  type Workspaces,
+} from "./model"
 
 /** `Alt+G`: a Group of the focused column alone, for others to join. It
  * only starts one. */
@@ -77,4 +84,23 @@ export function groupState(
   if (mark === "asking" || mark === "done") return mark
   if (mark === "failed" || mark === "offline") return "failed"
   return undefined
+}
+
+/** Each Group's Agent, by the first Thread in it that one works in, as
+ * its module lists it: what colours and names the Group. */
+export function agentsOf(
+  columns: readonly Column[],
+  listed: (entry: Entry) => Listed | undefined
+): Map<string, Listed> {
+  const agents = new Map<string, Listed>()
+  for (const { group, entries } of columns) {
+    if (group === undefined || agents.has(group)) continue
+    for (const entry of entries) {
+      const thread = listed(entry)
+      if (thread?.agent === undefined) continue
+      agents.set(group, thread)
+      break
+    }
+  }
+  return agents
 }

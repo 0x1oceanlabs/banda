@@ -3294,8 +3294,12 @@ test("a Space's Agents open in a row on its workspace, from wherever the Person 
   await page.getByRole("button", { name: "New workspace" }).click()
   await expect(numbers.locator("[aria-current]:not([inert])")).toHaveText("")
   await page.keyboard.press("Alt+Enter")
-  await expect(numbers.locator("[aria-current]:not([inert])")).toHaveText("1")
+  await expect(numbers.locator("[aria-current]:not([inert])")).toHaveText("WO")
   await expect(threads).toHaveCount(2)
+  // The bar shows it as the Space's: its badge, and its name to read.
+  await expect(
+    numbers.getByRole("button", { name: "Work, workspace 1" })
+  ).toBeVisible()
   const strip = page.locator("[data-strip]").first()
   await expect(
     strip.getByRole("textbox", { name: "Message to Fake AI" })

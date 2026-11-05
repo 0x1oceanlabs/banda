@@ -250,6 +250,8 @@ export type InBar = {
   empty: boolean
   /** The empty one at the bottom, which the bar shows as its `+`. */
   bottom: boolean
+  /** The Space whose Agents open here (ADR 0065, decision 9). */
+  space?: SpaceId
 }
 
 /** The workspaces the bar shows: those that hold Panes, the current one,
@@ -259,7 +261,9 @@ export function inBar(state: Workspaces): InBar[] {
   return state.list.flatMap((workspace, index) => {
     const empty = workspace.columns.length === 0
     if (empty && index !== state.current && index !== last) return []
-    return [{ id: workspace.id, index, empty, bottom: index === last }]
+    const bottom = index === last
+    const space = bottom ? undefined : workspace.space
+    return [{ id: workspace.id, index, empty, bottom, ...(space && { space }) }]
   })
 }
 

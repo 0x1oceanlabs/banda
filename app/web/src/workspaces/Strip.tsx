@@ -26,7 +26,7 @@ import {
   scrollOf,
   widthAt,
 } from "./layout"
-import { groupState } from "./groups"
+import { agentsOf, groupState } from "./groups"
 import { type Frame, PaneFrame } from "./PaneFrame"
 
 import { Tabs } from "./Tabs"
@@ -108,16 +108,7 @@ export function Strip({
   const columns = drawnColumns(workspace, look)
   const focusedGroup = workspace.columns[workspace.focus]?.group
   // Each Group's Agent, by the Thread in it: its state and its name.
-  const agents = new Map<string, Listed>()
-  for (const { group, entries } of columns) {
-    if (group === undefined || agents.has(group)) continue
-    for (const entry of entries) {
-      const thread = listed(entry)
-      if (thread?.agent === undefined) continue
-      agents.set(group, thread)
-      break
-    }
-  }
+  const agents = agentsOf(columns, listed)
   // A Group's pieces breathe as one, however late each came.
   useLayoutEffect(() => {
     const plates = scroller.current?.querySelectorAll("[data-group-plate]")
