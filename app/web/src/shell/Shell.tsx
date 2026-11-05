@@ -61,6 +61,7 @@ import {
 import { modules as known } from "../modules"
 import {
   closedOf,
+  homeOf,
   identityOf,
   minOf,
   runs,
@@ -458,10 +459,23 @@ export function Shell({
   const picked = useCallback((entry: string | void) => {
     if (entry) setReveal({ entry, how: "left" })
   }, [])
+  // What the modules list now, for what reads it later.
+  const listsNow = useRef(lists)
+  // Who hears the lists change: a module, as the browser for its tabs.
+  const listsHeard = useRef(new Set<() => void>())
+  useEffect(() => {
+    listsNow.current = lists
+    for (const listener of listsHeard.current) listener()
+  }, [lists])
+  // A Thread picked comes to the left, once its Pane is drawn.
+  const picking = useCallback(
+    (how: Change) => void changing(how).then(picked),
+    [changing, picked]
+  )
   const goToCall = useCallback(
     (thing: Thing & { pane: PaneState }) =>
-      void changing((w) => answering(w, thing)).then(picked),
-    [changing, picked]
+      picking((w) => answering(w, thing, homeOf(thing.pane))),
+    [picking]
   )
   const heard = useRef(calling)
   useEffect(() => {
@@ -479,14 +493,6 @@ export function Shell({
   useEffect(() => {
     spacesNow.current = spaces
   }, [spaces])
-  // Alt+S: the Thread in the focused Pane settles, or comes back.
-  const listsNow = useRef(lists)
-  // Who hears the lists change: a module, as the browser for its tabs.
-  const listsHeard = useRef(new Set<() => void>())
-  useEffect(() => {
-    listsNow.current = lists
-    for (const listener of listsHeard.current) listener()
-  }, [lists])
   // The Person settles a Thread, from its row's menu, the Banda menu or
   // Alt+S, or brings it back. Settled, it is put away: every Pane that
   // shows it closes, on any workspace (ADR 0008, decision 4).
@@ -682,8 +688,9 @@ export function Shell({
             {
               ...how,
               ...(at?.from ? { from: at.from } : {}),
-              // What an Agent opens goes into its Thread's Group.
-              place: at?.from ? "group" : "right",
+              // What an Agent opens goes into its Thread's Group; an
+              // Agent's Thread, to its Space's workspace.
+              place: at?.from ? "group" : homeOf(pane),
               // Not again: the one shown, as its kind names it, keeps
               // what it shows.
               ...(again ? { again } : { keep: true }),
@@ -847,10 +854,8 @@ export function Shell({
   )
   const pickPane = useCallback(
     (space: SpaceId, pane: PaneState) =>
-      void changing((w) => opening(w, space, pane, { place: "right" })).then(
-        picked
-      ),
-    [changing, picked]
+      picking((w) => opening(w, space, pane, { place: homeOf(pane) })),
+    [picking]
   )
   // Pinned, the drawer's Thread is a column of the workspace on screen.
   const pinDrawer = useCallback(() => {
@@ -1114,7 +1119,16 @@ export function Shell({
               frame={frame}
               onStep={(by) => change((w) => step(w, by))}
               onGo={goTo}
-              onStart={(pane) => parts.open(pane)}
+              onStart={(pane) =>
+                // Started on this workspace, it opens here, whatever its
+                // kind's home.
+                change((w) =>
+                  opening(w, focused(w)?.space ?? home, pane, {
+                    place: "right",
+                    again: true,
+                  })
+                )
+              }
             />
           )}
           <Toaster />

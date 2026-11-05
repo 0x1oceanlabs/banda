@@ -3280,6 +3280,47 @@ test("a Thread picked in the sidebar comes to the Strip's left, beside it", asyn
     .toBeLessThan(3)
 })
 
+test("a Space's Agents open in a row on its workspace, from wherever the Person is", async () => {
+  window = await startWindow()
+  const { page } = window
+  const { thread, composer } = await firstThread(page)
+  await composer.fill("hello")
+  await composer.press("Enter")
+  await expect(thread.getByText("You said: hello")).toBeVisible()
+  const numbers = page.getByRole("navigation", { name: "Workspaces" })
+  const threads = page.getByRole("textbox", { name: "Message to Fake AI" })
+
+  // On an empty workspace, a new Thread of the Space goes to its own.
+  await page.getByRole("button", { name: "New workspace" }).click()
+  await expect(numbers.locator("[aria-current]:not([inert])")).toHaveText("")
+  await page.keyboard.press("Alt+Enter")
+  await expect(numbers.locator("[aria-current]:not([inert])")).toHaveText("1")
+  await expect(threads).toHaveCount(2)
+  const strip = page.locator("[data-strip]").first()
+  await expect(
+    strip.getByRole("textbox", { name: "Message to Fake AI" })
+  ).toHaveCount(2)
+})
+
+test('agents.toml\'s workspaces = "off" keeps a new Thread where the Person is', async () => {
+  window = await startWindow({
+    files: { "config/agents.toml": 'workspaces = "off"\n' },
+  })
+  const { page } = window
+  const { thread, composer } = await firstThread(page)
+  await composer.fill("hello")
+  await composer.press("Enter")
+  await expect(thread.getByText("You said: hello")).toBeVisible()
+  const numbers = page.getByRole("navigation", { name: "Workspaces" })
+  await page.getByRole("button", { name: "New workspace" }).click()
+  await page.keyboard.press("Alt+Enter")
+  await expect(numbers.locator("[aria-current]:not([inert])")).toHaveText("2")
+  // Only workspace 2 shows: the new Thread alone.
+  await expect(
+    page.getByRole("textbox", { name: "Message to Fake AI" })
+  ).toHaveCount(1)
+})
+
 test("a tab in a Deck's bar carries its Pane", async () => {
   window = await startWindow()
   const { page } = window

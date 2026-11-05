@@ -168,7 +168,7 @@ mod tests {
         let look = resolved.look;
         assert_eq!(
             look.files["agents.toml"],
-            serde_json::json!({"enter": "queue"})
+            serde_json::json!({"enter": "queue", "workspaces": "space"})
         );
         assert_eq!(look.settings["agents.toml"]["enter"].from.layer, "file");
         assert!(

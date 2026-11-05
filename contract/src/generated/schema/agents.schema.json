@@ -14,6 +14,10 @@
       "additionalProperties": {
         "$ref": "#/$defs/Start"
       }
+    },
+    "workspaces": {
+      "description": "Where an Agent's Thread opens: `\"space\"`, on its Space's workspace,\nwith the Space's other Agents; `\"off\"`, beside the Pane in front.",
+      "$ref": "#/$defs/Workspaces"
     }
   },
   "additionalProperties": false,
@@ -83,6 +87,21 @@
         },
         {
           "type": "boolean"
+        }
+      ]
+    },
+    "Workspaces": {
+      "description": "Where an Agent's Thread opens (ADR 0065, decision 9).",
+      "oneOf": [
+        {
+          "description": "On its Space's workspace, in a row with the Space's other Agents.",
+          "type": "string",
+          "const": "space"
+        },
+        {
+          "description": "Where the window has it: beside the Pane in front.",
+          "type": "string",
+          "const": "off"
         }
       ]
     }

@@ -31,6 +31,18 @@ pub enum Enter {
     Queue,
 }
 
+/// Where an Agent's Thread opens (ADR 0065, decision 9).
+#[derive(Clone, Copy, Debug, Default, Deserialize, Serialize, PartialEq, Eq, JsonSchema, TS)]
+#[serde(rename_all = "lowercase")]
+#[ts(export, export_to = "agents/")]
+pub enum Workspaces {
+    /// On its Space's workspace, in a row with the Space's other Agents.
+    #[default]
+    Space,
+    /// Where the window has it: beside the Pane in front.
+    Off,
+}
+
 /// The file as Banda writes it first, every default named.
 pub const TEMPLATE: &str = include_str!("../agents.toml");
 
@@ -45,6 +57,9 @@ pub struct AgentsSettings {
     /// `[start.claude]`. The Agents section sets it from the composer's
     /// bar.
     pub start: Option<BTreeMap<String, Start>>,
+    /// Where an Agent's Thread opens: `"space"`, on its Space's workspace,
+    /// with the Space's other Agents; `"off"`, beside the Pane in front.
+    pub workspaces: Option<Workspaces>,
 }
 
 /// How messages to an Agent are sent, every key resolved.
@@ -52,6 +67,7 @@ pub struct AgentsSettings {
 #[ts(export, export_to = "agents/")]
 pub struct Agents {
     pub enter: Enter,
+    pub workspaces: Workspaces,
 }
 
 impl OneFile for AgentsSettings {
@@ -63,6 +79,7 @@ impl OneFile for AgentsSettings {
         AgentsSettings {
             enter: Some(Enter::default()),
             start: None,
+            workspaces: Some(Workspaces::default()),
         }
     }
 
@@ -70,12 +87,14 @@ impl OneFile for AgentsSettings {
         AgentsSettings {
             enter: self.enter.or(under.enter),
             start: self.start.or(under.start),
+            workspaces: self.workspaces.or(under.workspaces),
         }
     }
 
     fn resolved(self) -> Agents {
         Agents {
             enter: self.enter.unwrap_or_default(),
+            workspaces: self.workspaces.unwrap_or_default(),
         }
     }
 }

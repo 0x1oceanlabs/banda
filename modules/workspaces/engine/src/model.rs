@@ -58,6 +58,11 @@ pub struct Workspace {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub filled: Option<GroupId>,
+    /// The Space whose Agents' Threads open here, in a row (ADR 0065,
+    /// decision 9). It holds Panes of any Space still. Left out, none.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    #[ts(optional)]
+    pub space: Option<SpaceId>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
@@ -183,6 +188,11 @@ pub enum Place {
     /// one dropped between two in the overview. Never under the empty one
     /// at the bottom.
     Workspace { index: usize },
+    /// Last on a Space's workspace, where its Agents' Threads open (ADR
+    /// 0065, decision 9): the one it owns; else the top one that shows its
+    /// Panes and is no other Space's, or the empty one at the bottom,
+    /// which it owns then.
+    Space { space: SpaceId },
     /// In the Group of a Pane, as what a Thread opens goes (ADR 0065,
     /// decision 7): its column starts a Group if it is in none, and the
     /// Panes go last into the Group's column right of it, or into a new
@@ -214,6 +224,7 @@ fn blank() -> Workspace {
         id: WorkspaceId::new(),
         columns: Vec::new(),
         filled: None,
+        space: None,
     }
 }
 
@@ -315,15 +326,9 @@ pub fn open(
         let at = spot(list, other)?;
         list[at.workspace].columns[at.column].panes[at.pane] = pane;
     } else {
-        let place = place.unwrap_or_else(|| {
-            let space = pane.shows.space;
-            let w = (list.iter())
-                .position(|w| panes_of(w).any(|p| p.shows.space == space))
-                .unwrap_or(list.len() - 1);
-            Place::Column {
-                workspace: list[w].id,
-                index: usize::MAX,
-            }
+        let place = place.unwrap_or_else(|| Place::Column {
+            workspace: list[showing_space(list, pane.shows.space, |_| true)].id,
+            index: usize::MAX,
         });
         put(list, new_column(pane, width), &place, None)?;
     }
@@ -390,6 +395,23 @@ fn put(
             workspace.columns.push(column);
             list.insert(above_empty(list, index), workspace);
         }
+        Place::Space { space } => {
+            let owned = |w: &Workspace| w.space == Some(space) && !w.columns.is_empty();
+            let w = (list.iter().position(owned)).unwrap_or_else(|| {
+                showing_space(list, space, |w| w.space.is_none_or(|other| other == space))
+            });
+            list[w].space = Some(space);
+            let workspace = list[w].id;
+            put(
+                list,
+                column,
+                &Place::Column {
+                    workspace,
+                    index: usize::MAX,
+                },
+                None,
+            )?;
+        }
         Place::Group { pane } => {
             let at = spot(list, pane)?;
             let columns = &mut list[at.workspace].columns;
@@ -409,6 +431,14 @@ fn put(
         }
     }
     Ok(())
+}
+
+/// The top workspace that shows a Pane of `space` and is `free`, else the
+/// empty one at the bottom.
+fn showing_space(list: &Arrangement, space: SpaceId, free: impl Fn(&Workspace) -> bool) -> usize {
+    (list.iter())
+        .position(|w| free(w) && panes_of(w).any(|p| p.shows.space == space))
+        .unwrap_or(list.len() - 1)
 }
 
 /// Closes a Pane. Its column goes when it was the last there.
@@ -1391,6 +1421,39 @@ mod tests {
     }
 
     #[test]
+    fn a_spaces_threads_open_in_a_row_on_its_own_workspace() {
+        let mut list = start();
+        let (work, home) = (SpaceId::new(), SpaceId::new());
+        let on = |space| Some(Place::Space { space });
+        opened(&mut list, shown(work, "agents.thread", 1), on(work));
+        opened(&mut list, shown(home, "agents.thread", 2), on(home));
+        opened(&mut list, shown(work, "agents.thread", 3), on(work));
+        assert_eq!(
+            layout(&list),
+            [vec![vec![1], vec![3]], vec![vec![2]], EMPTY]
+        );
+        assert_eq!(
+            list.iter().map(|w| w.space).collect::<Vec<_>>(),
+            [Some(work), Some(home), None]
+        );
+        // A Space with none takes the top one that shows its Panes.
+        let mut other = start();
+        opened(&mut other, shown(work, "a.a", 7), None);
+        opened(&mut other, shown(work, "agents.thread", 8), on(work));
+        assert_eq!(layout(&other), [vec![vec![7], vec![8]], EMPTY]);
+        assert_eq!(other[0].space, Some(work));
+        // Emptied, it is no Space's place: the Space takes the empty one.
+        let two = list[1].columns[0].panes[0].id;
+        close(&mut list, two).unwrap();
+        tidy(&mut list, None);
+        opened(&mut list, shown(home, "agents.thread", 4), on(home));
+        assert_eq!(
+            layout(&list),
+            [vec![vec![1], vec![3]], vec![vec![4]], EMPTY]
+        );
+    }
+
+    #[test]
     fn what_a_thread_opens_goes_into_its_group_as_a_deck() {
         let mut list = start();
         let work = SpaceId::new();
@@ -1536,6 +1599,7 @@ mod tests {
             id: WorkspaceId::new(),
             columns,
             filled: None,
+            space: None,
         };
         let window = vec![
             workspace(vec![column(vec![pane(1), pane(2)])]),

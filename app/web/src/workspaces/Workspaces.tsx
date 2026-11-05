@@ -92,7 +92,23 @@ export function Workspaces({
     // and so does every one when the overview, which placed them, closes.
     if (!moving.moving) moving.to(moving.value, { kind: "off" })
     if (moving.target !== workspaces.current) {
-      moving.to(workspaces.current, moveOf("workspace"))
+      // One Space's workspace swaps for another's in place: the new one
+      // fades in, a little from the left, with no slide (ADR 0065,
+      // decision 9).
+      const from = workspaces.list[Math.round(moving.target)]?.space
+      const to = workspaces.list[workspaces.current]?.space
+      const swapping = from !== undefined && to !== undefined && from !== to
+      const move = moveOf("workspace")
+      moving.to(workspaces.current, swapping ? { kind: "off" } : move)
+      if (swapping && move.kind !== "off") {
+        stack.animate(
+          [
+            { opacity: 0.25, translate: "-10px 0" },
+            { opacity: 1, translate: "0 0" },
+          ],
+          { duration: 240, easing: "cubic-bezier(0.2, 0.8, 0.2, 1)" }
+        )
+      }
     }
   })
   useEffect(() => () => place.current?.stop(), [])

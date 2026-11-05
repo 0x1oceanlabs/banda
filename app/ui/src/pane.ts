@@ -68,11 +68,12 @@ export type PaneState = { kind: string; args: { [key: string]: JsonValue } }
 /**
  * Where a Pane opens, from the Pane that opens it: in a new column to its
  * right, below it in its column, in its own place, or in its Group, in
- * the Deck right of it, as what a Thread opens goes (ADR 0065). Left out,
- * the window shows the Pane where its workspace shows one of its kind, or
- * to the right.
+ * the Deck right of it, as what a Thread opens goes; or last on its
+ * Space's workspace, as an Agent's Thread does (ADR 0065). Left out, the
+ * window shows the Pane where its workspace shows one of its kind, or to
+ * the right.
  */
-export type Place = "right" | "below" | "here" | "group"
+export type Place = "right" | "below" | "here" | "group" | "space"
 
 /**
  * What a Pane draws. A part of it that keeps its own Esc, as a list of
@@ -130,6 +131,9 @@ export type PaneKind<A extends { [key: string]: JsonValue }> = {
   letter?: string
   /** A list that sits beside other Panes: it opens a third of the screen wide. */
   narrow?: boolean
+  /** Whether it opens last on its Space's workspace, as an Agent's Thread
+   * does where `agents.toml` says so (ADR 0065, decision 9). */
+  home?: () => boolean
   /**
    * False when the Pane draws its own header, as the browser's row of tabs
    * and address: the frame then draws none (`PaneHeader` draws one).

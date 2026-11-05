@@ -45,7 +45,8 @@ export type WindowApi = {
    * right of the Pane of the thing that Agent works in, where a
    * workspace shows one (`beside`). With `again: false` a Pane already
    * shown gets the focus instead, as a Pane's own `open`: one its kind
-   * names the same (`PaneKind.identity`), as the Space's one Diff.
+   * names the same (`PaneKind.identity`), as the Space's one Diff. One
+   * whose kind says `home` opens on its Space's workspace (ADR 0065).
    */
   open: (
     pane: PaneState,

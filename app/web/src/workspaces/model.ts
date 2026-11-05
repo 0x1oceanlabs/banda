@@ -93,6 +93,8 @@ export type Workspace = {
   /** The Group that takes the whole screen, its columns keeping their
    * shares of it (`Alt+M`, ADR 0065). */
   filled?: string
+  /** The Space whose Agents' Threads open here (ADR 0065, decision 9). */
+  space?: SpaceId
 }
 
 export type Workspaces = {

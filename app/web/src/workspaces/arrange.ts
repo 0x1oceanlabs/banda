@@ -99,6 +99,7 @@ export function resolve(
       focus: held(aimed.focus[workspace.id], columns, "before"),
     }
     if (workspace.filled !== undefined) next.filled = workspace.filled
+    if (workspace.space !== undefined) next.space = workspace.space
     return same(was.workspaces.get(workspace.id), next)
   })
   const shows = held(aimed.current, list, "stay")
@@ -293,6 +294,7 @@ export function keptOf(state: Workspaces): Kept[] {
       ...(column.group !== undefined && { group: column.group }),
     })),
     ...(workspace.filled !== undefined && { filled: workspace.filled }),
+    ...(workspace.space !== undefined && { space: workspace.space }),
   }))
 }
 
@@ -340,13 +342,14 @@ function placeIn(spot: Spot): Place {
 
 /**
  * The Pane `next` shows that `before` did not, as a command to open it
- * where `next` has it, or in the Group of the Pane `group` (ADR 0065);
- * none when it was shown already, and only the view changes.
+ * where `next` has it, or at `place`, as the engine names one the window
+ * only foresees: a Group's, a Space's workspace (ADR 0065); none when it
+ * was shown already, and only the view changes.
  */
 export function opened(
   before: Workspaces,
   next: Workspaces,
-  group?: string
+  place?: Place
 ): Plan | undefined {
   const known = new Set(entries(before).map((entry) => entry.id))
   const entry = entries(next).find((other) => !known.has(other.id))
@@ -375,7 +378,7 @@ export function opened(
       params: {
         ...shows,
         again: true,
-        place: group ? { to: "group", pane: group } : placeIn(spot),
+        place: place ?? placeIn(spot),
         ...(width !== undefined && { width }),
       },
     },
