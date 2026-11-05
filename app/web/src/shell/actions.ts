@@ -6,7 +6,7 @@
 import type { SpaceId } from "@banda/contract"
 import { toast } from "@banda/ui/components/sonner"
 import type { Action, Args, WindowApi } from "@banda/ui/module"
-import { type PaneState, paneOf } from "@banda/ui/pane"
+import { type PaneState, paneOf, type Place } from "@banda/ui/pane"
 import { RESET_KEY } from "../actions/actions"
 import { showing } from "../calls/sight"
 import { columnsOf } from "../look"
@@ -198,10 +198,18 @@ export function opening(
     ...how,
     width: widthOf(pane),
   })
-  // In a Group: the Group of the Pane it opens from (ADR 0065).
-  const group =
-    how.place === "group" ? (how.from ?? focused(workspaces)?.id) : undefined
-  const plan = opened(workspaces, next, group)
+  // In a Group: the Group of the Pane it opens from; on a Space's
+  // workspace: its Space's (ADR 0065).
+  const from = how.from ?? focused(workspaces)?.id
+  const plan = opened(
+    workspaces,
+    next,
+    how.place === "group" && from
+      ? { to: "group", pane: from }
+      : how.place === "space"
+        ? { to: "space", space }
+        : undefined
+  )
   if (!plan) return next
   return how.focus === false ? { ...plan, focus: false } : plan
 }
@@ -236,12 +244,13 @@ export function bringing(
  */
 export function answering(
   workspaces: Workspaces,
-  thing: { space: SpaceId; about: string; pane: PaneState }
+  thing: { space: SpaceId; about: string; pane: PaneState },
+  place: Place = "right"
 ): Step {
   const entry = showing(workspaces, thing, showsOf)
   return entry
     ? focusEntry(workspaces, entry.id)
-    : opening(workspaces, thing.space, thing.pane, { place: "right" })
+    : opening(workspaces, thing.space, thing.pane, { place })
 }
 
 /**

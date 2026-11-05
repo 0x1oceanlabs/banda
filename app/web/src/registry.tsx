@@ -117,6 +117,13 @@ export function showsOf(pane: PaneState): string | null {
   return told(() => kindOf(pane.kind)?.shows?.(pane.args) ?? null, null)
 }
 
+/** Where a Pane opens from the sidebar, a call or a module: last on its
+ * Space's workspace when its kind says so (`PaneKind.home`), else right
+ * of the Pane in front. */
+export function homeOf(pane: PaneState): "space" | "right" {
+  return told(() => kindOf(pane.kind)?.home?.(), false) ? "space" : "right"
+}
+
 /** A Pane as what makes it that one Pane (`PaneKind.identity`). */
 export function identityOf(pane: PaneState): PaneState {
   const identity = kindOf(pane.kind)?.identity

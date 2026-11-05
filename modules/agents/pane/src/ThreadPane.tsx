@@ -1,3 +1,5 @@
+import { AGENTS_FILE } from "@banda/contract/agents"
+import { fileNow } from "@banda/ui/lib/look"
 import { ThreadMedia } from "./ThreadMedia"
 import { MarkdownFiles } from "@banda/ui/components/markdown-file"
 import { MarkdownLinks } from "@banda/ui/components/markdown-link"
@@ -119,6 +121,8 @@ export const threadPane = definePane<ThreadArgs>({
   start: NEW_THREAD,
   // A Thread starts with its Harness.
   letter: "H",
+  // On its Space's workspace, with the Space's other Agents (ADR 0065).
+  home: () => fileNow(AGENTS_FILE).workspaces === "space",
   Pane: ThreadPane,
 })
 
