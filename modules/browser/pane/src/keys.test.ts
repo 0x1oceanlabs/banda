@@ -20,7 +20,9 @@ test("the browser's keys are Chrome's, with Ctrl", () => {
   expect(browserKey(key("KeyR", { ctrlKey: true, shiftKey: true }))).toBe(
     "reload-hard"
   )
-  expect(browserKey(key("BracketLeft", { metaKey: true }))).toBe("back")
+  expect(browserKey(key("BracketLeft", { ctrlKey: true }))).toBe("back")
+  // ⌘ does it on a Mac; elsewhere Super is not Ctrl.
+  expect(browserKey(key("BracketLeft", { metaKey: true }))).toBeUndefined()
   expect(browserKey(key("F12"))).toBe("devtools")
   expect(browserKey(key("KeyT", { ctrlKey: true }))).toBe("tab-new")
   expect(browserKey(key("KeyT", { ctrlKey: true, shiftKey: true }))).toBe(

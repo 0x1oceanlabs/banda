@@ -4,7 +4,7 @@
  * One key the Person bound: where, as a `KeyboardEvent.code` and its
  * mods, and to what.
  */
-export type Bind = { code: string, alt: boolean, shift: boolean, ctrl: boolean, 
+export type Bind = { code: string, alt: boolean, shift: boolean, ctrl: boolean, super: boolean, 
 /**
  * The action's id; none frees the key.
  */

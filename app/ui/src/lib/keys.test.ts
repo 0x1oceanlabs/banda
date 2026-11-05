@@ -1,5 +1,8 @@
 import { expect, test } from "vitest"
-import { keyCaps, keyLabel, keyText } from "./keys"
+import { holds, keyCaps, keyLabel, keyText, realKey } from "./keys"
+
+const ALT = { alt: true, ctrl: false, super: false }
+const ctrlAlt = { alt: true, ctrl: true, super: false }
 
 test("a key reads as it is pressed, as keys.toml writes it on Linux", () => {
   const key = { code: "KeyR", ctrl: true, alt: true, shift: true }
@@ -27,4 +30,43 @@ test("keys.toml writes a key the same on every system", () => {
   expect(keyText({ code: "Backslash", ctrl: true, alt: true })).toBe(
     "Ctrl+Alt+\\"
   )
+})
+
+test("a key held with the mod is made real with it, one more as its level says", () => {
+  expect(realKey({ code: "KeyR", mod: true }, ALT)).toEqual({
+    code: "KeyR",
+    alt: true,
+    ctrl: false,
+    super: false,
+  })
+  const wider = { code: "ArrowRight", mod: true, more: true }
+  expect(keyText(realKey(wider, ALT))).toBe("Ctrl+Alt+Right")
+  expect(keyText(realKey(wider, ctrlAlt))).toBe("Ctrl+Alt+Super+Right")
+  expect(
+    keyText(realKey({ code: "KeyR", mod: true, shift: true }, ctrlAlt))
+  ).toBe("Ctrl+Alt+Shift+R")
+  // A key not held with the mod is as it is written.
+  const tab = { code: "KeyT", ctrl: true }
+  expect(realKey(tab, ctrlAlt)).toBe(tab)
+})
+
+test("Super reads as Super, or ⌘ on a Mac, after Alt", () => {
+  const key = { code: "KeyR", ctrl: true, alt: true, super: true, shift: true }
+  expect(keyLabel(key, false)).toBe("Ctrl+Alt+Super+Shift+R")
+  expect(keyLabel(key, true)).toBe("⌃⌥⇧⌘R")
+  expect(keyText(key)).toBe("Ctrl+Alt+Super+Shift+R")
+})
+
+test("a press holds the mod when it holds every key of it", () => {
+  const press = { altKey: true, ctrlKey: false, metaKey: false }
+  expect(holds(press, ALT)).toBe(true)
+  expect(holds(press, ctrlAlt)).toBe(false)
+  expect(holds({ ...press, ctrlKey: true }, ctrlAlt)).toBe(true)
+})
+
+test("a primary key reads as Ctrl, or ⌘ on a Mac", () => {
+  const tab = { code: "KeyT", primary: true }
+  expect(keyLabel(tab, false)).toBe("Ctrl+T")
+  expect(keyLabel(tab, true)).toBe("⌘T")
+  expect(keyText(tab)).toBe("Ctrl+T")
 })

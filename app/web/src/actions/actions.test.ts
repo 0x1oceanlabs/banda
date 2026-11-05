@@ -2,7 +2,11 @@ import { DEFAULT_KEYS } from "@banda/contract/look"
 import { expect, test } from "vitest"
 import { ACTIONS } from "../shell/actions"
 import { keyText, matches } from "@banda/ui/lib/keys"
+import type { Mod } from "@banda/contract/look"
 import { actionFor, rebind, RESET_KEY } from "./actions"
+
+/** Banda's actions with its own keys, Alt the mod. */
+const BANDA = rebind(ACTIONS, DEFAULT_KEYS).actions
 
 const press = (code: string, mods: Partial<KeyboardEvent> = {}) => ({
   code,
@@ -22,23 +26,25 @@ test("a key matches only with exactly its mods held", () => {
   )
 })
 
-test("⌘ counts as Ctrl", () => {
-  const key = { code: "ArrowLeft", alt: true, ctrl: true }
-  expect(
-    matches(press("ArrowLeft", { altKey: true, metaKey: true }), key)
-  ).toBe(true)
+test("a primary key is Ctrl, or ⌘ too on a Mac; any other is exact", () => {
+  const tab = { code: "KeyT", primary: true }
+  const command = press("KeyT", { metaKey: true })
+  expect(matches(command, tab, true)).toBe(true)
+  expect(matches(press("KeyT", { ctrlKey: true }), tab, true)).toBe(true)
+  // Elsewhere Super is never Ctrl, and Ctrl is never ⌘.
+  expect(matches(command, tab, false)).toBe(false)
+  expect(matches(command, { code: "KeyT", ctrl: true }, true)).toBe(false)
+  expect(matches(command, { code: "KeyT", super: true }, true)).toBe(true)
 })
 
 test("every action, a module's or the window's, has its own id and key", () => {
   const ids = ACTIONS.map((action) => action.id)
   expect(new Set(ids).size).toBe(ids.length)
-  const keys = ACTIONS.flatMap((action) => (action.keys ?? []).map(keyText))
-  expect(new Set(keys).size).toBe(keys.length)
   // The reset chord is its own action's, as look/src/keys.rs names it.
   expect(keyText(RESET_KEY)).toBe("Ctrl+Alt+Shift+K")
   expect(
     actionFor(
-      ACTIONS,
+      BANDA,
       press("KeyK", { altKey: true, ctrlKey: true, shiftKey: true })
     )?.id
   ).toBe("keys.reset")
@@ -50,6 +56,7 @@ test("keys.toml binds a key to an action, frees one, and names a wrong one", () 
     alt: true,
     shift: false,
     ctrl: false,
+    super: false,
     action,
     text,
     line,
@@ -95,6 +102,7 @@ test("a bind to an action's old id runs it, and says its name now", () => {
         code: "KeyY",
         alt: true,
         shift: false,
+        super: false,
         ctrl: false,
         action: "sidebar.settle",
         text: "Alt+Y",
@@ -115,16 +123,16 @@ test("a bind to an action's old id runs it, and says its name now", () => {
 })
 
 test("a plain letter is never the window's: it belongs to the Pane", () => {
-  expect(actionFor(ACTIONS, press("KeyW"))).toBeUndefined()
-  expect(actionFor(ACTIONS, press("KeyW", { ctrlKey: true }))).toBeUndefined()
-  expect(actionFor(ACTIONS, press("KeyW", { altKey: true }))?.id).toBe(
+  expect(actionFor(BANDA, press("KeyW"))).toBeUndefined()
+  expect(actionFor(BANDA, press("KeyW", { ctrlKey: true }))).toBeUndefined()
+  expect(actionFor(BANDA, press("KeyW", { altKey: true }))?.id).toBe(
     "pane.close"
   )
 })
 
 test("New terminal has its own key, and keys.toml can replace or free it", () => {
   const enter = press("Enter", { ctrlKey: true, altKey: true })
-  expect(actionFor(ACTIONS, enter)?.id).toBe("terminal.new")
+  expect(actionFor(BANDA, enter)?.id).toBe("terminal.new")
 
   const { actions, problems } = rebind(ACTIONS, {
     ...DEFAULT_KEYS,
@@ -135,6 +143,7 @@ test("New terminal has its own key, and keys.toml can replace or free it", () =>
         ctrl: true,
         alt: true,
         shift: false,
+        super: false,
         text: "Ctrl+Alt+Return",
         line: 2,
       },
@@ -143,6 +152,7 @@ test("New terminal has its own key, and keys.toml can replace or free it", () =>
         ctrl: true,
         alt: true,
         shift: false,
+        super: false,
         text: "Ctrl+Alt+T",
         action: "terminal.new",
         line: 3,
@@ -154,4 +164,69 @@ test("New terminal has its own key, and keys.toml can replace or free it", () =>
   expect(
     actionFor(actions, press("KeyT", { ctrlKey: true, altKey: true }))?.id
   ).toBe("terminal.new")
+})
+
+test("Banda's keys move with the mod, as its levels say, and none clash", () => {
+  const keyOf = (mod: Mod, id: string) =>
+    rebind(ACTIONS, { ...DEFAULT_KEYS, mod }).actions.find(
+      (action) => action.id === id
+    )?.keys?.[0]
+  const ctrlAlt: Mod = { alt: true, ctrl: true, super: false }
+  const altSuper: Mod = { alt: true, ctrl: false, super: true }
+  expect(keyText(keyOf(ctrlAlt, "column.next-width")!)).toBe("Ctrl+Alt+R")
+  expect(keyText(keyOf(ctrlAlt, "pane.send-2")!)).toBe("Ctrl+Alt+Shift+2")
+  // One more: the first of Ctrl, Super and Alt that the mod lacks.
+  expect(keyText(keyOf(ctrlAlt, "column.wider")!)).toBe("Ctrl+Alt+Super+Right")
+  expect(keyText(keyOf(DEFAULT_KEYS.mod, "column.wider")!)).toBe(
+    "Ctrl+Alt+Right"
+  )
+  expect(keyText(keyOf(altSuper, "terminal.new")!)).toBe(
+    "Ctrl+Alt+Super+Return"
+  )
+  // The reset is no mod's.
+  expect(keyText(keyOf(ctrlAlt, "keys.reset")!)).toBe("Ctrl+Alt+Shift+K")
+  // Each mod there may be: none makes two actions share a key.
+  for (const mod of [
+    DEFAULT_KEYS.mod,
+    ctrlAlt,
+    altSuper,
+    { alt: false, ctrl: false, super: true },
+    { alt: false, ctrl: true, super: true },
+  ])
+    expect(rebind(ACTIONS, { ...DEFAULT_KEYS, mod }).problems).toEqual([])
+})
+
+test("two actions on one key with the mod are named at its line", () => {
+  const { actions, problems } = rebind(
+    [
+      {
+        id: "a.one",
+        title: "One",
+        section: "A",
+        keys: [{ code: "KeyX", mod: true }],
+        run: () => {},
+      },
+      {
+        id: "a.two",
+        title: "Two",
+        section: "A",
+        keys: [{ code: "KeyX", ctrl: true, alt: true }],
+        run: () => {},
+      },
+    ],
+    {
+      ...DEFAULT_KEYS,
+      file: "/c/keys.toml",
+      mod: { alt: true, ctrl: true, super: false },
+      modLine: 3,
+    }
+  )
+  expect(actions.map((action) => action.keys?.length)).toEqual([1, 0])
+  expect(problems).toEqual([
+    {
+      path: "/c/keys.toml",
+      line: 3,
+      message: "Ctrl+Alt+X is “One” and “Two” with this mod; “One” keeps it",
+    },
+  ])
 })

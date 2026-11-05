@@ -43,11 +43,11 @@ pub struct KeysSettings {
     pub held: Option<Spanned<String>>,
     /// Keys, such as "Alt+Shift+R", each with the id of the action it runs,
     /// as the key sheet lists them, or "none" to free the key for the
-    /// Pane. A key is Alt, Ctrl and Shift, any of them, then a letter, a
-    /// digit, F1 to F24, Left, Right, Up, Down, Return, Space, Tab, Escape,
-    /// Backspace, Delete, Insert, Home, End, PageUp, PageDown or one of
-    /// [ ] , . / ; ' - = ` \. An action keeps the window's own keys
-    /// besides.
+    /// Pane. A key is Alt, Ctrl, Super (⌘ on a Mac) and Shift, any of them,
+    /// then a letter, a digit, F1 to F24, Left, Right, Up, Down, Return,
+    /// Space, Tab, Escape, Backspace, Delete, Insert, Home, End, PageUp,
+    /// PageDown or one of [ ] , . / ; ' - = ` \. An action keeps the
+    /// window's own keys besides.
     #[schemars(with = "Option<BTreeMap<String, String>>")]
     pub binds: Option<BTreeMap<Spanned<String>, Spanned<String>>>,
 }
@@ -79,6 +79,9 @@ pub struct Bind {
     pub alt: bool,
     pub shift: bool,
     pub ctrl: bool,
+    // `super` is a word of Rust's own.
+    #[serde(rename = "super")]
+    pub sup: bool,
     /// The action's id; none frees the key.
     #[ts(optional)]
     #[serde(skip_serializing_if = "Option::is_none")]
@@ -253,30 +256,27 @@ fn parse(text: &str) -> Result<Bind, String> {
 fn chord(text: &str) -> Result<Bind, String> {
     let text = text.trim();
     let (mods, name) = text.rsplit_once('+').unwrap_or(("", text));
-    let (mut alt, mut shift, mut ctrl) = (false, false, false);
+    let (mut alt, mut shift, mut ctrl, mut sup) = (false, false, false, false);
     for one in mods.split('+').filter(|m| !m.trim().is_empty()) {
         match held(one) {
             Some(Held::Alt) => alt = true,
             Some(Held::Shift) => shift = true,
             Some(Held::Ctrl) => ctrl = true,
-            Some(Held::Super) => {
-                return Err(
-                    "Super is the desktop's: Banda's keys hold Alt, Ctrl and Shift".to_owned(),
-                );
-            }
-            None => return Err(format!("{:?} is not Alt, Ctrl or Shift", one.trim())),
+            Some(Held::Super) => sup = true,
+            None => return Err(format!("{:?} is not Alt, Ctrl, Super or Shift", one.trim())),
         }
     }
     let (code, name) =
         code_of(name.trim()).ok_or_else(|| format!("{name:?} is not a key Banda knows"))?;
-    if !alt && !ctrl && !code.starts_with('F') {
+    if !alt && !ctrl && !sup && !code.starts_with('F') {
         return Err(format!(
-            "{text:?} alone would be typed: hold Alt or Ctrl with it"
+            "{text:?} alone would be typed: hold Alt, Ctrl or Super with it"
         ));
     }
     let text = [
         ctrl.then_some("Ctrl"),
         alt.then_some("Alt"),
+        sup.then_some("Super"),
         shift.then_some("Shift"),
         Some(name.as_str()),
     ]
@@ -289,6 +289,7 @@ fn chord(text: &str) -> Result<Bind, String> {
         alt,
         shift,
         ctrl,
+        sup,
         action: None,
         text,
         line: 0,
@@ -439,7 +440,8 @@ mod tests {
         assert_eq!(ok("Alt+-"), is("Minus", "Alt+-"));
         assert_eq!(ok("Ctrl+KeyK"), is("KeyK", "Ctrl+K"));
         assert_eq!(ok("F5"), is("F5", "F5"));
-        assert!(parse("Super+R").unwrap_err().contains("desktop"));
+        assert_eq!(ok("Super+Shift+R"), is("KeyR", "Super+Shift+R"));
+        assert_eq!(ok("cmd+alt+ctrl+r"), is("KeyR", "Ctrl+Alt+Super+R"));
         assert!(parse("Hyper+R").is_err());
         assert!(parse("Alt+Banana").unwrap_err().contains("Banana"));
         assert!(parse("Shift+R").unwrap_err().contains("typed"));
@@ -458,7 +460,7 @@ mod tests {
     #[test]
     fn a_file_binds_and_frees_keys_and_names_what_is_wrong() {
         let (binds, problems) = read(
-            "[binds]\n\"Alt+M\" = \"column.maximize\"\n\"Alt+F\" = \"none\"\n\"Super+X\" = \"pane.close\"\n\"alt+m\" = \"pane.close\"\n",
+            "[binds]\n\"Alt+M\" = \"column.maximize\"\n\"Alt+F\" = \"none\"\n\"Hyper+X\" = \"pane.close\"\n\"alt+m\" = \"pane.close\"\n",
         );
         assert_eq!(binds.len(), 2);
         assert_eq!(binds[0].action.as_deref(), Some("column.maximize"));

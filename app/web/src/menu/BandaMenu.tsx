@@ -78,8 +78,7 @@ import {
   usePickFolder,
 } from "./browse"
 import { opened, useOpened, weightOf } from "./opened"
-
-const ASK: Key = { code: "Enter", alt: true }
+import { useKeyOf } from "@banda/ui/hooks/use-key-of"
 
 /**
  * The Banda menu (ADR 0017): one window in the middle that finds and runs
@@ -265,6 +264,8 @@ function Menu({
   onChoose: (row: Exclude<Choice, Branch | Own>) => void
   onAdded: (space: SpaceSummary) => void
 }) {
+  // New Thread's key in force starts one with the words.
+  const ask = useKeyOf()("thread.new")
   const { preset, presets } = useLookSidebar()
   const archived = useIsArchived()
   const uses = useOpened()
@@ -423,10 +424,8 @@ function Menu({
   const take = (event: React.KeyboardEvent, action: Action<Shell>) => {
     event.preventDefault()
     if (event.key === "Escape") return
-    const pressed = keyToBind(event)
-    if (!pressed) return
-    if ("refused" in pressed) return setNote(pressed.refused)
-    const { key } = pressed
+    const key = keyToBind(event)
+    if (!key) return
     const had = actions.find(
       (one) => one !== action && one.keys?.some((mine) => sameKey(mine, key))
     )
@@ -469,13 +468,14 @@ function Menu({
       restart(path.slice(0, -1))
       return
     }
-    if (event.key !== "Enter") return
+    const asking = ask !== undefined && matches(event, ask)
+    if (event.key !== "Enter" && !asking) return
     event.preventDefault()
     if (acting !== undefined) return choose(acts[acting].row)
-    // Alt+Enter starts a Thread with the words, whatever row is chosen;
-    // another Enter does the row's act with that key, as Shift+Enter
-    // opens a Thread beside.
-    if (event.altKey) {
+    // New Thread's key starts a Thread with the words, whatever row is
+    // chosen; another Enter does the row's act with that key, as
+    // Shift+Enter opens a Thread beside.
+    if (asking) {
       if (query)
         onChoose({
           kind: "ask",
@@ -588,9 +588,9 @@ function Menu({
           <Keys keyOf={OPEN} />
           <span>Open</span>
         </KbdGroup>
-        {at === "root" && !inside && (
+        {at === "root" && !inside && ask && (
           <KbdGroup>
-            <Keys keyOf={ASK} />
+            <Keys keyOf={ask} />
             <span>New Thread</span>
           </KbdGroup>
         )}

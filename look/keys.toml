@@ -3,10 +3,10 @@
 # binds. Alt+K lists every action with its id and its keys. Check a change
 # with: banda settings check
 #
-# A key is Alt, Ctrl and Shift, any of them, then a letter, a digit, F1 to
-# F24, Left, Right, Up, Down, Return, Space, Tab, Escape, Backspace,
-# Delete, Insert, Home, End, PageUp, PageDown or one of [ ] , . / ; ' - =
-# ` \. Super is the desktop's. An action keeps the window's own keys
+# A key is Alt, Ctrl, Super (⌘ on a Mac) and Shift, any of them, then a
+# letter, a digit, F1 to F24, Left, Right, Up, Down, Return, Space, Tab,
+# Escape, Backspace, Delete, Insert, Home, End, PageUp, PageDown or one of
+# [ ] , . / ; ' - = ` \. An action keeps the window's own keys
 # besides the ones bound here; "none" frees a key, so it goes to the Pane,
 # as Alt+F to a shell. Ctrl+Alt+Shift+K is no file's: it brings the
 # window's own keys back until this file changes.

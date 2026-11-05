@@ -9,7 +9,7 @@
       "type": "string"
     },
     "binds": {
-      "description": "Keys, such as \"Alt+Shift+R\", each with the id of the action it runs,\nas the key sheet lists them, or \"none\" to free the key for the\nPane. A key is Alt, Ctrl and Shift, any of them, then a letter, a\ndigit, F1 to F24, Left, Right, Up, Down, Return, Space, Tab, Escape,\nBackspace, Delete, Insert, Home, End, PageUp, PageDown or one of\n[ ] , . / ; ' - = ` \\. An action keeps the window's own keys\nbesides.",
+      "description": "Keys, such as \"Alt+Shift+R\", each with the id of the action it runs,\nas the key sheet lists them, or \"none\" to free the key for the\nPane. A key is Alt, Ctrl, Super (⌘ on a Mac) and Shift, any of them,\nthen a letter, a digit, F1 to F24, Left, Right, Up, Down, Return,\nSpace, Tab, Escape, Backspace, Delete, Insert, Home, End, PageUp,\nPageDown or one of [ ] , . / ; ' - = ` \\. An action keeps the\nwindow's own keys besides.",
       "type": "object",
       "additionalProperties": {
         "type": "string"

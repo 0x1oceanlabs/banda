@@ -318,7 +318,7 @@ export const ACTIONS: readonly Action<Shell>[] = [
     section: "Panes",
     family: "Focus a Pane",
     title: `Focus the Pane ${direction}`,
-    keys: PAST[direction] ? [] : [{ code: ARROWS[direction], alt: true }],
+    keys: PAST[direction] ? [] : [{ code: ARROWS[direction], mod: true }],
     run: (shell: Shell) => shell.change((w) => move(w, direction)),
   })),
   ...DIRECTIONS.map((direction) => ({
@@ -328,7 +328,7 @@ export const ACTIONS: readonly Action<Shell>[] = [
     title: `Move the Pane ${direction}`,
     keys: PAST[direction]
       ? []
-      : [{ code: ARROWS[direction], alt: true, shift: true }],
+      : [{ code: ARROWS[direction], mod: true, shift: true }],
     run: (shell: Shell) => shell.change((w) => shifting(w, direction)),
   })),
   ...UPRIGHT.map((direction) => ({
@@ -336,7 +336,7 @@ export const ACTIONS: readonly Action<Shell>[] = [
     section: "Panes",
     family: "Focus a Pane, or the workspace past it",
     title: `Focus the Pane ${direction}, or the workspace ${PAST[direction]}`,
-    keys: [{ code: ARROWS[direction], alt: true }],
+    keys: [{ code: ARROWS[direction], mod: true }],
     whenHeld: `pane.focus-${direction}`,
     run: (shell: Shell) => shell.change((w) => across(w, direction)),
   })),
@@ -345,7 +345,7 @@ export const ACTIONS: readonly Action<Shell>[] = [
     section: "Panes",
     family: "Move the Pane, or to the workspace past it",
     title: `Move the Pane ${direction}, or to the workspace ${PAST[direction]}`,
-    keys: [{ code: ARROWS[direction], alt: true, shift: true }],
+    keys: [{ code: ARROWS[direction], mod: true, shift: true }],
     whenHeld: `pane.move-${direction}`,
     run: (shell: Shell) =>
       shell.change((w) => moving(w, (w) => carry(w, direction))),
@@ -354,14 +354,14 @@ export const ACTIONS: readonly Action<Shell>[] = [
     id: "column.wider",
     section: "Columns",
     title: "Make the column wider",
-    keys: [{ code: "ArrowRight", alt: true, ctrl: true }],
+    keys: [{ code: "ArrowRight", mod: true, more: true }],
     run: (shell) => resize(shell, 1),
   },
   {
     id: "column.narrower",
     section: "Columns",
     title: "Make the column narrower",
-    keys: [{ code: "ArrowLeft", alt: true, ctrl: true }],
+    keys: [{ code: "ArrowLeft", mod: true, more: true }],
     run: (shell) => resize(shell, -1),
   },
   {
@@ -369,7 +369,7 @@ export const ACTIONS: readonly Action<Shell>[] = [
     section: "Columns",
     title: "The column's next width, round",
     // As niri's Mod+R and Mod+Shift+R.
-    keys: [{ code: "KeyR", alt: true }],
+    keys: [{ code: "KeyR", mod: true }],
     run: (shell) => resize(shell, 1, true),
   },
   {
@@ -384,7 +384,7 @@ export const ACTIONS: readonly Action<Shell>[] = [
     section: "Columns",
     title: "The column as wide as the room the others leave",
     // As niri's Mod+Ctrl+F.
-    keys: [{ code: "KeyF", alt: true, ctrl: true }],
+    keys: [{ code: "KeyF", mod: true, more: true }],
     run: (shell) =>
       shell.change((w) => {
         const width = roomLeft(current(w))
@@ -408,7 +408,7 @@ export const ACTIONS: readonly Action<Shell>[] = [
     section: "Columns",
     title: "The column in the middle of the screen",
     // As niri's Mod+C.
-    keys: [{ code: "KeyC", alt: true }],
+    keys: [{ code: "KeyC", mod: true }],
     run: (shell) => shell.center(),
   },
   // As niri's Mod+Home and End, and Mod+Ctrl+Home and End.
@@ -417,14 +417,14 @@ export const ACTIONS: readonly Action<Shell>[] = [
       id: `column.${side}`,
       section: "Columns",
       title: `Focus the ${side} column`,
-      keys: [{ code, alt: true }],
+      keys: [{ code, mod: true }],
       run: (shell: Shell) => shell.change((w) => edge(w, side)),
     },
     {
       id: `column.move-${side}`,
       section: "Columns",
       title: `Move the column to the ${side} place`,
-      keys: [{ code, alt: true, shift: true }],
+      keys: [{ code, mod: true, shift: true }],
       run: (shell: Shell) => shell.change((w) => movedTo(w, side)),
     },
   ]),
@@ -433,21 +433,21 @@ export const ACTIONS: readonly Action<Shell>[] = [
     section: "Panes",
     title: "The Pane's next height in its column, round",
     // As niri's Mod+Shift+R.
-    keys: [{ code: "KeyR", alt: true, shift: true }],
+    keys: [{ code: "KeyR", mod: true, shift: true }],
     run: (shell) => heightening(shell, 1, true),
   },
   {
     id: "pane.taller",
     section: "Panes",
     title: "Make the Pane taller",
-    keys: [{ code: "ArrowDown", alt: true, ctrl: true }],
+    keys: [{ code: "ArrowDown", mod: true, more: true }],
     run: (shell) => heightening(shell, 1),
   },
   {
     id: "pane.shorter",
     section: "Panes",
     title: "Make the Pane shorter",
-    keys: [{ code: "ArrowUp", alt: true, ctrl: true }],
+    keys: [{ code: "ArrowUp", mod: true, more: true }],
     run: (shell) => heightening(shell, -1),
   },
   {
@@ -467,7 +467,7 @@ export const ACTIONS: readonly Action<Shell>[] = [
     section: "Columns",
     title: "Every Pane of the column as high as the others",
     // As niri's Mod+Ctrl+R.
-    keys: [{ code: "KeyR", alt: true, ctrl: true }],
+    keys: [{ code: "KeyR", mod: true, more: true }],
     run: (shell) => shell.change((w) => resized(w, even(w))),
   },
   {
@@ -475,7 +475,7 @@ export const ACTIONS: readonly Action<Shell>[] = [
     section: "Panes",
     title: "The Pane over the whole window, or back",
     // As niri's Mod+Shift+F, fullscreen in the window.
-    keys: [{ code: "KeyF", alt: true, shift: true }],
+    keys: [{ code: "KeyF", mod: true, shift: true }],
     run: (shell) => shell.zoom(),
   },
   {
@@ -483,7 +483,7 @@ export const ACTIONS: readonly Action<Shell>[] = [
     section: "Columns",
     title: "The column as a Deck, one Pane at a time, or one above another",
     // niri's Mod+W; Alt+G starts a Group (ADR 0065).
-    keys: [{ code: "KeyT", alt: true }],
+    keys: [{ code: "KeyT", mod: true }],
     run: (shell) => shell.change((w) => resized(w, deck(w, columnsOf()))),
   },
   // Groups: columns held together, which move and look as one (ADR 0065).
@@ -491,7 +491,7 @@ export const ACTIONS: readonly Action<Shell>[] = [
     id: "group.new",
     section: "Groups",
     title: "A Group of the column, for others to join",
-    keys: [{ code: "KeyG", alt: true }],
+    keys: [{ code: "KeyG", mod: true }],
     run: (shell) => shell.change(grouping),
   },
   ...(["left", "right"] as const).flatMap((side) => [
@@ -502,7 +502,7 @@ export const ACTIONS: readonly Action<Shell>[] = [
       keys: [
         {
           code: side === "left" ? "BracketLeft" : "BracketRight",
-          alt: true,
+          mod: true,
           shift: true,
         },
       ],
@@ -512,7 +512,7 @@ export const ACTIONS: readonly Action<Shell>[] = [
       id: `group.column-${side}`,
       section: "Groups",
       title: `Move the column ${side} inside its Group`,
-      keys: [{ code: ARROWS[side], alt: true, ctrl: true, shift: true }],
+      keys: [{ code: ARROWS[side], mod: true, more: true, shift: true }],
       run: (shell: Shell) => shell.change((w) => shiftingInside(w, side)),
     },
   ]),
@@ -520,7 +520,7 @@ export const ACTIONS: readonly Action<Shell>[] = [
     id: "group.maximize",
     section: "Groups",
     title: "The Group the whole screen wide, or back",
-    keys: [{ code: "KeyM", alt: true }],
+    keys: [{ code: "KeyM", mod: true }],
     run: (shell) => shell.change(filling),
   },
   {
@@ -528,14 +528,14 @@ export const ACTIONS: readonly Action<Shell>[] = [
     section: "Panes",
     title: "Take the Pane into the column on the left, or out of its own",
     // As niri's Mod+[.
-    keys: [{ code: "BracketLeft", alt: true }],
+    keys: [{ code: "BracketLeft", mod: true }],
     run: (shell) => shell.change((w) => moving(w, (w) => consume(w, "left"))),
   },
   {
     id: "pane.consume-right",
     section: "Panes",
     title: "Take the Pane into the column on the right, or out of its own",
-    keys: [{ code: "BracketRight", alt: true }],
+    keys: [{ code: "BracketRight", mod: true }],
     run: (shell) => shell.change((w) => moving(w, (w) => consume(w, "right"))),
   },
   {
@@ -543,21 +543,21 @@ export const ACTIONS: readonly Action<Shell>[] = [
     section: "Columns",
     title: "The column the whole screen wide, or back",
     // As niri's Mod+F.
-    keys: [{ code: "KeyF", alt: true }],
+    keys: [{ code: "KeyF", mod: true }],
     run: (shell) => shell.change((w) => resized(w, maximize(w))),
   },
   {
     id: "pane.new",
     section: "Panes",
     title: "New Pane",
-    keys: [{ code: "KeyN", alt: true }],
+    keys: [{ code: "KeyN", mod: true }],
     run: (shell) => shell.open(paneOf(launcher, {})),
   },
   {
     id: "pane.close",
     section: "Panes",
     title: "Close the Pane",
-    keys: [{ code: "KeyW", alt: true }],
+    keys: [{ code: "KeyW", mod: true }],
     run: (shell) =>
       shell.change((w) => {
         const entry = focused(w)
@@ -575,7 +575,7 @@ export const ACTIONS: readonly Action<Shell>[] = [
     section: "Threads",
     title: "The drawer: a quick Thread over the workspace",
     // As a terminal that drops down is: the key under Esc.
-    keys: [{ code: "Backquote", alt: true }],
+    keys: [{ code: "Backquote", mod: true }],
     overDialogs: true,
     run: (shell) => shell.drawer(),
   },
@@ -583,7 +583,7 @@ export const ACTIONS: readonly Action<Shell>[] = [
     id: "overview.toggle",
     section: "Workspaces",
     title: "Overview of every window",
-    keys: [{ code: "KeyO", alt: true }],
+    keys: [{ code: "KeyO", mod: true }],
     run: (shell) => shell.toggleOverview(),
   },
   ...UPRIGHT.flatMap((direction): Action<Shell>[] => {
@@ -594,14 +594,14 @@ export const ACTIONS: readonly Action<Shell>[] = [
         id: `workspace.${direction}`,
         section: "Workspaces",
         title: `The workspace ${PAST[direction]}`,
-        keys: [{ code, alt: true }],
+        keys: [{ code, mod: true }],
         run: (shell) => shell.change((w) => step(w, by)),
       },
       {
         id: `workspace.move-${direction}`,
         section: "Workspaces",
         title: `Move the workspace ${direction}`,
-        keys: [{ code, alt: true, shift: true }],
+        keys: [{ code, mod: true, shift: true }],
         run: (shell) => shell.change((w) => workspaceMoved(w, by)),
       },
     ]
@@ -616,21 +616,21 @@ export const ACTIONS: readonly Action<Shell>[] = [
     id: "calls.answer",
     section: "Threads",
     title: "Go to what calls you",
-    keys: [{ code: "KeyU", alt: true }],
+    keys: [{ code: "KeyU", mod: true }],
     run: (shell) => shell.answer(),
   },
   {
     id: "sidebar.archive",
     section: "Threads",
     title: "Archive the Thread you look at, or bring it back",
-    keys: [{ code: "KeyS", alt: true }],
+    keys: [{ code: "KeyS", mod: true }],
     run: (shell) => shell.archive(),
   },
   {
     id: "menu.open",
     section: "Banda",
     title: "Banda menu",
-    keys: [{ code: "Space", alt: true }],
+    keys: [{ code: "Space", mod: true }],
     overDialogs: true,
     run: (shell) => shell.menu("root"),
   },
@@ -638,7 +638,7 @@ export const ACTIONS: readonly Action<Shell>[] = [
     id: "menu.keys",
     section: "Banda",
     title: "Every action and its key",
-    keys: [{ code: "KeyK", alt: true }],
+    keys: [{ code: "KeyK", mod: true }],
     overDialogs: true,
     run: (shell) => shell.menu("actions"),
   },
@@ -710,7 +710,7 @@ export const ACTIONS: readonly Action<Shell>[] = [
     id: "settings.open",
     section: "Banda",
     title: "Open the settings",
-    keys: [{ code: "Comma", alt: true }],
+    keys: [{ code: "Comma", mod: true }],
     // A Problem's toast opens it there: its `link` (ADR 0039).
     run: (shell, args) =>
       shell.settings(typeof args?.link === "string" ? args.link : undefined),
@@ -753,7 +753,7 @@ export const ACTIONS: readonly Action<Shell>[] = [
     id: "sidebar.toggle",
     section: "Threads",
     title: "Show or hide the sidebar",
-    keys: [{ code: "KeyA", alt: true }],
+    keys: [{ code: "KeyA", mod: true }],
     run: (shell) => shell.toggleSidebar(),
   },
   {
@@ -769,7 +769,7 @@ export const ACTIONS: readonly Action<Shell>[] = [
     section: "Workspaces",
     family: "Go to a workspace",
     title: `Go to workspace ${n}`,
-    keys: [{ code: `Digit${n}`, alt: true }],
+    keys: [{ code: `Digit${n}`, mod: true }],
     run: (shell: Shell) => shell.change((w) => go(w, n - 1)),
   })),
   ...NUMBERS.map((n) => ({
@@ -777,7 +777,7 @@ export const ACTIONS: readonly Action<Shell>[] = [
     section: "Panes",
     family: "Move the Pane to a workspace",
     title: `Move the Pane to workspace ${n}`,
-    keys: [{ code: `Digit${n}`, alt: true, shift: true }],
+    keys: [{ code: `Digit${n}`, mod: true, shift: true }],
     run: (shell: Shell) =>
       shell.change((w) => moving(w, (w) => send(w, n - 1))),
   })),

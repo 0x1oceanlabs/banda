@@ -28,7 +28,7 @@ import type { Key } from "@banda/ui/lib/keys"
 import { SquareMenuIcon } from "lucide-react"
 
 /** The card's key, Ctrl+Shift+B (⌘⇧B on a Mac), as T3 Code's. */
-export const DETAILS_KEY: Key = { code: "KeyB", ctrl: true, shift: true }
+export const DETAILS_KEY: Key = { code: "KeyB", primary: true, shift: true }
 
 /** Whether `pane` is wide enough to hold the card beside the messages,
  * kept current. */

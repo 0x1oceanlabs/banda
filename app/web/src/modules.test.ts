@@ -2,7 +2,8 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import type { Module } from "@banda/ui/module"
 import { expect, test } from "vitest"
-import { keyText } from "@banda/ui/lib/keys"
+import { DEFAULT_KEYS } from "@banda/contract/look"
+import { keyText, realKey } from "@banda/ui/lib/keys"
 import { modules } from "./modules"
 import {
   kindRuns,
@@ -57,7 +58,10 @@ function windowOf(module: Module) {
       id: action.id,
       title: action.title,
       section: action.section,
-      keys: (action.keys ?? []).map(keyText),
+      // As they are with Banda's own mod, Alt.
+      keys: (action.keys ?? []).map((key) =>
+        keyText(realKey(key, DEFAULT_KEYS.mod))
+      ),
       ...(action.family && { family: action.family }),
       ...(action.unlisted && { unlisted: true }),
     })),
