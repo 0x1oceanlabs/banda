@@ -4385,6 +4385,50 @@ impl World {
     }
 }
 
+impl World {
+    /// Renames `thread` to `title`, or to its first message's with none.
+    async fn rename(
+        &self,
+        thread: &Value,
+        title: Option<&str>,
+    ) -> Result<Value, banda_kernel::Refusal> {
+        let mut params = json!({ "thread": thread });
+        if let Some(title) = title {
+            params["title"] = json!(title);
+        }
+        self.call(self.person(), "agents.rename", params).await
+    }
+
+    /// The `thread.renamed` facts of `thread`, the first first.
+    async fn renamed(&self, thread: &Value) -> Vec<Value> {
+        let filter = EventFilter {
+            module: Some("agents".to_owned()),
+            subject: thread.as_str().map(str::to_owned),
+            kinds: Some(vec!["thread.renamed".to_owned()]),
+        };
+        let project = self.kernel.project(self.project).await.unwrap();
+        let events = project.events_after(0, filter, usize::MAX).await.unwrap();
+        events.into_iter().map(|e| e.payload).collect()
+    }
+
+    /// The Thread as `agents.threads` lists it.
+    async fn listed(&self, thread: &Value) -> banda_agents::model::ListedThread {
+        let threads = self.threads().await.threads;
+        let found = threads
+            .into_iter()
+            .find(|listed| json!(listed.thread.id) == *thread);
+        found.expect("the Thread is listed")
+    }
+
+    async fn suggest_title(&self, thread: &Value) -> Result<String, banda_kernel::Refusal> {
+        let asked = json!({ "thread": thread });
+        let said = self
+            .call(self.person(), "agents.suggest_title", asked)
+            .await?;
+        Ok(said.as_str().unwrap().to_owned())
+    }
+}
+
 #[tokio::test]
 async fn a_snooze_puts_a_thread_away_until_its_time_and_the_list_says_so() {
     let root = tempfile::tempdir().unwrap();
@@ -4515,4 +4559,117 @@ async fn an_agent_snoozes_only_its_own_thread() {
         .await
         .unwrap();
     assert_eq!(world.snooze_of(&mine).await.unwrap().by, agent);
+}
+
+#[tokio::test]
+async fn a_person_renames_a_thread_and_a_blank_title_brings_its_first_message_back() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let (thread, _) = world.finish(None, "hello   there").await;
+    world.finish(Some(&thread), "and more").await;
+    assert_eq!(world.listed(&thread).await.thread.was, None);
+
+    // One line, its spaces trimmed and collapsed.
+    world
+        .rename(&thread, Some("  Fix the\n list  "))
+        .await
+        .unwrap();
+    assert_eq!(world.thread(&thread).await.thread.title, "Fix the list");
+    let listed = world.listed(&thread).await;
+    assert_eq!(listed.thread.title, "Fix the list");
+    assert_eq!(listed.thread.was.as_deref(), Some("hello there"));
+    let renamed = json!({ "thread": thread, "title": "Fix the list", "was": "hello there" });
+    assert_eq!(world.renamed(&thread).await, [renamed]);
+
+    // The title it has already writes nothing.
+    world.rename(&thread, Some("Fix the list")).await.unwrap();
+    assert_eq!(world.renamed(&thread).await.len(), 1);
+
+    // None, or a blank one, gives back the first message's title.
+    world.rename(&thread, None).await.unwrap();
+    let listed = world.listed(&thread).await;
+    assert_eq!(listed.thread.title, "hello there");
+    assert_eq!(listed.thread.was.as_deref(), Some("Fix the list"));
+    world.rename(&thread, Some("Again")).await.unwrap();
+    world.rename(&thread, Some(" \n ")).await.unwrap();
+    assert_eq!(world.thread(&thread).await.thread.title, "hello there");
+    let back = json!({ "thread": thread, "title": "hello there", "was": "Again" });
+    assert_eq!(world.renamed(&thread).await.last(), Some(&back));
+    assert_eq!(world.renamed(&thread).await.len(), 4);
+
+    // Up to 120 characters; a longer one is refused, not cut.
+    let longest = "a".repeat(120);
+    world.rename(&thread, Some(&longest)).await.unwrap();
+    let refused = world
+        .rename(&thread, Some(&format!("{longest}b")))
+        .await
+        .unwrap_err();
+    assert_eq!(refused.code, Code::Invalid);
+    assert_eq!(world.listed(&thread).await.thread.title, longest);
+
+    // Only a Person renames a Thread: not its Agent.
+    let agent = Participant::Agent(world.listed(&thread).await.agent);
+    let asked = json!({ "thread": thread, "title": "By the Agent" });
+    let refused = world.call(agent, "agents.rename", asked).await.unwrap_err();
+    assert_eq!(refused.code, Code::Forbidden);
+    let nowhere = json!(banda_agents::model::ThreadId::new());
+    let refused = world.rename(&nowhere, Some("Hi")).await.unwrap_err();
+    assert_eq!(refused.code, Code::NotFound);
+}
+
+#[tokio::test]
+async fn a_threads_small_model_suggests_a_title_and_renames_nothing() {
+    // With a small model offered, on it; with none, on the Thread's.
+    for (env, said) in [
+        (
+            vec![("FAKE_AGENT_MINI", "1")],
+            "Mode plan, model mini, brief",
+        ),
+        (vec![], "Mode plan, model smart, brief"),
+    ] {
+        let root = tempfile::tempdir().unwrap();
+        let world = World::new_with(root.path(), Agents::new(harnesses_with(&env))).await;
+        let (thread, _) = world.finish(None, "hello").await;
+        world
+            .configure(
+                &thread,
+                json!({ "options": { "model": "smart", "effort": "high" } }),
+            )
+            .await;
+        // Its latest message names it.
+        let (_, view) = world.finish(Some(&thread), "which settings").await;
+        let before = texts(&view);
+
+        assert_eq!(world.suggest_title(&thread).await.unwrap(), said);
+        let view = world.thread(&thread).await;
+        assert_eq!(view.thread.title, "hello", "it renames nothing");
+        assert_eq!(texts(&view), before, "the Thread shows nothing of it");
+        assert!(world.renamed(&thread).await.is_empty());
+        // The Thread's own session keeps its model.
+        let (_, view) = world.finish(Some(&thread), "which settings").await;
+        assert_eq!(
+            last_reply(&view),
+            "message: Mode bypassPermissions, model smart, brief false"
+        );
+    }
+}
+
+#[tokio::test]
+async fn a_title_is_suggested_in_a_folder_of_the_engines_not_the_projects() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let (thread, _) = world.finish(None, "hello").await;
+    // The fake writes `made.txt` in its session's folder, as asked.
+    world.finish(Some(&thread), "on disk").await;
+    let project = world.kernel.project(world.project).await.unwrap();
+    std::fs::remove_file(project.folder().join("made.txt")).unwrap();
+
+    let said = world.suggest_title(&thread).await.unwrap();
+    assert_eq!(said, "I edited notes.md and ran a");
+    assert!(project_data(root.path()).join("titles/made.txt").exists());
+    assert!(!project.folder().join("made.txt").exists());
+
+    let nowhere = json!(banda_agents::model::ThreadId::new());
+    let refused = world.suggest_title(&nowhere).await.unwrap_err();
+    assert_eq!(refused.code, Code::NotFound);
 }

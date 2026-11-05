@@ -77,7 +77,8 @@
 //!
 //! Each session has options as Claude Code's do: a `mode` with Claude
 //! Code's modes, a `model`, an `effort`, and `fast` and `brief`, on or off,
-//! for a client that shows such options. With `FAKE_AGENT_NO_MODES` set it has no modes, as an ACP
+//! for a client that shows such options. With `FAKE_AGENT_MINI` set its
+//! models end with a small one, `mini`, as Codex's do. With `FAKE_AGENT_NO_MODES` set it has no modes, as an ACP
 //! agent other than Claude Code and Codex. With `FAKE_AGENT_NO_IMAGES` set
 //! it takes no images, and with `FAKE_AGENT_NO_STEERING` no message into a
 //! running turn.
@@ -199,7 +200,15 @@ const MODES: [(&str, &str); 5] = [
     ("auto", "Auto"),
     ("bypassPermissions", "Bypass permissions"),
 ];
-const MODELS: [(&str, &str); 2] = [("fast", "Fast"), ("smart", "Smart")];
+const MODELS: [(&str, &str); 3] = [("fast", "Fast"), ("smart", "Smart"), ("mini", "Mini")];
+
+/// Its models: the small one only with `FAKE_AGENT_MINI` set.
+fn models() -> &'static [(&'static str, &'static str)] {
+    match std::env::var_os("FAKE_AGENT_MINI") {
+        Some(_) => &MODELS,
+        None => &MODELS[..2],
+    }
+}
 const EFFORTS: [(&str, &str); 4] = [
     ("low", "Low"),
     ("medium", "Medium"),
@@ -250,7 +259,7 @@ impl Fake {
             );
         }
         options.push(
-            SessionConfigOption::select("model", "Model", setup.model, select(&MODELS))
+            SessionConfigOption::select("model", "Model", setup.model, select(models()))
                 .category(SessionConfigOptionCategory::Model),
         );
         options.push(
@@ -300,7 +309,7 @@ impl Fake {
         };
         match &*option.id.0 {
             "mode" => setup.mode = choose(&MODES, &request.value)?,
-            "model" => setup.model = choose(&MODELS, &request.value)?,
+            "model" => setup.model = choose(models(), &request.value)?,
             "effort" => setup.effort = choose(&EFFORTS, &request.value)?,
             "fast" => setup.fast = on_off(&request.value)?,
             _ => setup.brief = on_off(&request.value)?,

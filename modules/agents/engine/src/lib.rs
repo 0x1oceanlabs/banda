@@ -43,6 +43,7 @@ pub mod sending;
 mod skills;
 mod snoozes;
 mod store;
+mod titles;
 mod transcript;
 mod visual_page;
 mod visuals;
@@ -342,6 +343,14 @@ banda_kernel::methods! {
         command snooze(SnoozeAsk) -> (), Write;
         /// Brings a snoozed Thread back now. One awake stays so.
         command wake(OneThread) -> (), Write;
+        /// Renames a Thread: one line of up to 120 characters. Without a
+        /// title, or with a blank one, its first message's title comes
+        /// back. Only a Person renames a Thread (ADR 0077).
+        command rename(Rename) -> (), Write;
+        /// A title for a Thread, from what it does now, which its Harness's
+        /// small model writes in a short run no Thread shows, as `write`
+        /// runs. It renames nothing: the window renames the Thread with it.
+        command suggest_title(OneThread) -> String, Write;
     }
 }
 
@@ -583,6 +592,17 @@ pub struct ImageData {
     pub data: String,
 }
 
+/// What `agents.rename` is asked: a Thread, and its new title; none, or a
+/// blank one, gives back its first message's title.
+#[derive(Deserialize, TS)]
+#[ts(export_to = "agents/")]
+struct Rename {
+    thread: ThreadId,
+    #[serde(default)]
+    #[ts(optional)]
+    title: Option<String>,
+}
+
 #[derive(Deserialize, TS)]
 #[ts(export_to = "agents/")]
 struct Configure {
@@ -759,7 +779,9 @@ impl Agents {
         let (say, heard) = tokio::sync::mpsc::channel(1);
         // Let go, the stream stops the run: its turn and its session.
         tokio::spawn(async move {
-            let ran = aside::write(connection, &folder, &settings, prompt, say.closed()).await;
+            let model = aside::Model::Thread;
+            let ran =
+                aside::write(connection, &folder, &settings, model, prompt, say.closed()).await;
             let written = match ran {
                 Ok(text) => Written::Reply { text },
                 Err(refusal) => Written::Refused { refusal },
@@ -970,6 +992,45 @@ impl Agents {
         let author = call.participant();
         call.command(move |tx| snoozes::wake(tx, author, thread))
             .await
+    }
+
+    async fn rename(&self, call: Call, Rename { thread, title }: Rename) -> Result<(), Refusal> {
+        let author = call.participant();
+        call.command(move |tx| titles::rename(tx, author, thread, title))
+            .await
+    }
+
+    async fn suggest_title(
+        &self,
+        call: Call,
+        OneThread { thread }: OneThread,
+    ) -> Result<String, Refusal> {
+        let found = call
+            .project()
+            .read(move |sql| titles::asking(sql, thread))
+            .await?;
+        let (harness, settings, prompt) =
+            found.ok_or_else(|| Refusal::not_found("There is no such Thread."))?;
+        if harness.is_empty() {
+            return Err(Refusal::conflict("This Thread's Harness is gone."));
+        }
+        let connection = self.running(call.project().id(), &harness).await?;
+        let name = connection.process().name().to_owned();
+        let folder = titles::folder(call.project().data())
+            .await
+            .map_err(Error::from)?;
+        // A caller that goes away stops the run: its turn and its session.
+        let (_held, let_go) = tokio::sync::oneshot::channel::<()>();
+        let ran = tokio::spawn(async move {
+            let stopped = async {
+                let _ = let_go.await;
+            };
+            let small = aside::Model::Small;
+            aside::write(connection, &folder, &settings, small, prompt, stopped).await
+        });
+        let reply = ran.await.map_err(|_| Refusal::internal())??;
+        rules::title::suggested(&reply)
+            .ok_or_else(|| Refusal::conflict(format!("{name} suggested no title.")))
     }
 
     async fn answer_issue(&self, call: Call, answer: AnswerIssue) -> Result<(), Refusal> {
@@ -1500,6 +1561,7 @@ fn start_thread(
         harness,
         title,
         updated_at: tx.now(),
+        was: None,
     };
     let agent = AgentId::new();
     store::insert_thread(tx.sql(), &summary, agent, author, settings)?;

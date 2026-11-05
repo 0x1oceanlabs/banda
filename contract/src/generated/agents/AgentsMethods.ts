@@ -25,6 +25,7 @@ import type { OneTurn } from "./OneTurn";
 import type { OneVisual } from "./OneVisual";
 import type { PreviewVisual } from "./PreviewVisual";
 import type { Previewed } from "./Previewed";
+import type { Rename } from "./Rename";
 import type { Send } from "./Send";
 import type { Sent } from "./Sent";
 import type { ShowVisual } from "./ShowVisual";
@@ -213,4 +214,16 @@ snooze: CommandMethod<SnoozeAsk, null>,
 /**
  * Brings a snoozed Thread back now. One awake stays so.
  */
-wake: CommandMethod<OneThread, null>, };
+wake: CommandMethod<OneThread, null>, 
+/**
+ * Renames a Thread: one line of up to 120 characters. Without a
+ * title, or with a blank one, its first message's title comes
+ * back. Only a Person renames a Thread (ADR 0077).
+ */
+rename: CommandMethod<Rename, null>, 
+/**
+ * A title for a Thread, from what it does now, which its Harness's
+ * small model writes in a short run no Thread shows, as `write`
+ * runs. It renames nothing: the window renames the Thread with it.
+ */
+suggest_title: CommandMethod<OneThread, string>, };
