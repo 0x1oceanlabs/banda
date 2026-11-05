@@ -197,12 +197,24 @@ and behind the Extensions button when it is not.
 **Workspace**:
 One screen of Panes. It can hold Panes of any Spaces; it only lays out the
 screen, and the Space stays the boundary. Workspaces sit one under another,
-and there is always one empty workspace at the bottom.
+and there is always one empty workspace at the bottom. A Space has one
+workspace where its Agents' Groups open, in a row (ADR 0065).
 _Avoid_: Desk.
 
 **Strip**:
 How a workspace lays out its Panes: columns side by side that scroll
 sideways, each holding Panes one above another.
+
+**Deck**:
+A column that shows one of its Panes at a time, with the others' names
+in a row over it (`Alt+T`); the other way is stacked, one above another.
+_Avoid_: tabs, tabbed column (a Tab is a browser page's).
+
+**Group**:
+Columns side by side on one workspace, held together, so they move and
+look as one: a plate or a halo behind them, in the colour of their
+Agent's state (ADR 0065). `Alt+G` starts one; an Agent's Thread and the
+Panes it opens are its Group. It lays out only, and gives no access.
 
 **Zoom**:
 One Pane over the whole window, with no gaps and no sidebar, until the
