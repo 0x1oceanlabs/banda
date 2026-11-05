@@ -160,6 +160,36 @@ test("a turn's Diff is all the turn changed, its shell's work too, from git's ch
   await expect(files.getByRole("treeitem", { name: "later.md" })).toHaveCount(0)
 })
 
+test("a turn's Diff shows what it changed outside the Space's folder, from its tool calls", async () => {
+  window = await startWindow()
+  const { page, dir } = window
+  const { thread, composer } = await firstThread(page)
+  const folder = join(dir, "root", "Work")
+  git(folder, "init", "-q", "-b", "main")
+  writeFileSync(join(folder, "readme.md"), "work\n")
+  git(folder, "add", "-A")
+  git(folder, "commit", "-qm", "First")
+
+  // Its tool edits /work/notes.md, outside the folder, as an Agent edits
+  // in a worktree beside it: the turn's checkpoints change nothing.
+  await composer.fill("edit the notes")
+  await composer.press("Enter")
+  await expect(thread.getByText("I edited notes.md.")).toBeVisible()
+  const changed = thread.getByRole("region", { name: "Changed files" })
+  await changed.getByRole("button", { name: "Review" }).click()
+  const diff = page.getByRole("region", { name: "Diff" })
+  await expect(diff.getByRole("button", { name: "Scope" })).toHaveText(
+    "edit the notes"
+  )
+  await expect(diff.getByText("1 file")).toBeVisible()
+  await expect(diff.getByText("/work/notes.md")).toBeVisible()
+  // Its files open folded, as T3 Code's.
+  await diff.getByRole("button", { name: "Expand", exact: true }).click()
+  await expect(diff.getByText("two", { exact: true })).toBeVisible()
+  await expect(diff.getByText("four", { exact: true })).toBeVisible()
+  await page.screenshot({ path: "test-results/git-diff-turn-outside.png" })
+})
+
 test("the Diff stages, unstages and reverts a hunk, a file and all, as the Codex app's", async () => {
   window = await startWindow()
   const { page, dir } = window

@@ -109,7 +109,11 @@ the rest are our defaults, as T3 Code does, and stay Roma's to change.
      snapshot is taken before the Agent changes a file. In a Space that is
      no repository, or for a turn with no snapshot, Turn comes from the
      tool calls as before: the agents engine answers `agents.changes
-     { thread, turn }` with each file's text before and after.
+     { thread, turn }` with each file's text before and after. A snapshot
+     holds only the Space's folder, so the files a turn's tool calls
+     changed outside it, as in a worktree beside it, come from them too,
+     after the snapshots' diff (2026-11-05: Turn showed nothing for an
+     Agent working in a worktree).
    - **`agents.diff` goes.** "Changed files" under a turn opens `git.diff`
      on Turn, beside the Thread. A Pane kept as `agents.diff` opens as
      `git.diff` on its turn.

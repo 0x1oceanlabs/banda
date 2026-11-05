@@ -84,8 +84,9 @@ function DiffPane({ engine, space, args, update, close }: PaneProps<DiffArgs>) {
     view.ignoreWhitespace
   )
 
-  // A diff git answered loads its files and expands them from git.
-  const ask = diff && !diff.drawn ? question : null
+  // Git's files load and expand from git. A turn's files drawn from its
+  // tool calls come whole, so git is never asked for them.
+  const ask = diff ? question : null
   const files = useFiles(engine, space, ask, words, diff)
   // The files shown: tests and mocks left out when they are hidden.
   const visible = useMemo(
