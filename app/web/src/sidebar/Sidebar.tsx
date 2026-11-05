@@ -51,6 +51,7 @@ import {
 import { useLookSidebar } from "../look"
 import { Row } from "./Row"
 import { pickPreset, PRESET_WORDS, type Settings } from "./settings"
+import { type Held, held, hold, rowKey } from "./hold"
 import { settles, useIsSettled } from "./settled"
 
 /**
@@ -143,10 +144,19 @@ export function Sidebar({
   // The Person's settled Threads (ADR 0008): what they said, or three
   // quiet days.
   const settled = useIsSettled()
-  const arranged = useMemo(
+  const fresh = useMemo(
     () => arrange(lists, spaces, settings, only, toggled, settled),
     [lists, spaces, settings, only, toggled, settled]
   )
+  // Under the pointer, the rows hold still; what would move or come
+  // waits as updates, taken in by the pill or as the pointer leaves
+  // (ADR 0065, decision 8).
+  const [holding, setHolding] = useState<Held>()
+  const { arranged, updates } = useMemo(
+    () => hold(fresh, holding),
+    [fresh, holding]
+  )
+  const take = () => setHolding(held(fresh))
   const edit = () => {
     host?.sidebar.edit().catch((error: unknown) => {
       console.error("banda: sidebar.toml did not open", error)
@@ -195,6 +205,8 @@ export function Sidebar({
   return (
     <aside
       aria-label="Sidebar"
+      onPointerEnter={take}
+      onPointerLeave={() => setHolding(undefined)}
       onKeyDown={(event) => {
         // Not Esc in a menu it opened, drawn elsewhere in the page.
         if (
@@ -291,6 +303,15 @@ export function Sidebar({
           <SquarePenIcon />
         </Button>
       </div>
+      {updates > 0 && (
+        <button
+          type="button"
+          onClick={take}
+          className="absolute top-11 left-1/2 z-10 -translate-x-1/2 rounded-full bg-primary px-2.5 py-0.5 text-xs text-primary-foreground shadow-md"
+        >
+          ↑ {updates} {updates === 1 ? "update" : "updates"}
+        </button>
+      )}
       {/* Where more Threads are below, the list fades out at its foot
           instead of a line. */}
       <ScrollArea className="min-h-0 flex-1 data-overflow-y-end:mask-b-from-[calc(100%-1.5rem)]">
@@ -434,7 +455,7 @@ function SectionView({
       {!section.folded && (
         <div className="flex flex-col gap-px">
           {rows.map((row) => (
-            <ContextMenu key={`${row.space.id}:${row.listed.id}`}>
+            <ContextMenu key={rowKey(row)}>
               <ContextMenuTrigger>
                 <Row
                   row={row}

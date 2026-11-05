@@ -12,6 +12,7 @@ import { Moving } from "../motion"
 import type { Chime } from "@banda/ui/sound"
 import type { Entry, Workspaces as State } from "./model"
 import type { Frame } from "./PaneFrame"
+import type { Reveal } from "./layout"
 import { Strip } from "./Strip"
 import { useAltHeld } from "./alt"
 import { pixels, Swipe } from "./swipe"
@@ -37,7 +38,7 @@ export function Workspaces({
   marked,
   away,
   zoomed,
-  center,
+  reveal,
   listed,
   frame,
   onStep,
@@ -61,8 +62,8 @@ export function Workspaces({
   away: ReadonlySet<string>
   /** The Pane shown over the whole window, if one is. */
   zoomed: string | undefined
-  /** Counts Alt+C, for the current workspace's Strip. */
-  center: number
+  /** A column to show once, as asked: Alt+C's, or a Thread picked. */
+  reveal?: Reveal
   /** The listed thing a Pane shows, as its module lists it. */
   listed: (entry: Entry) => Listed | undefined
   frame: Frame
@@ -203,7 +204,7 @@ export function Workspaces({
               marked={marked}
               away={away}
               zoomed={zoomed}
-              center={center}
+              reveal={reveal}
               listed={listed}
               frame={frame}
               onStep={onStep}

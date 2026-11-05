@@ -2,6 +2,7 @@ import { cn } from "@banda/ui/lib/utils"
 import { GripHorizontalIcon } from "lucide-react"
 import { Component, useEffect, useLayoutEffect, useRef } from "react"
 import type { Engine, SpaceId } from "@banda/contract"
+import type { Center } from "@banda/contract/look"
 import type { Listed, PaneState } from "@banda/ui/pane"
 import { columnsOf, moveOf, useLookColumns, useLookGroups } from "../look"
 import { Choices } from "../registry"
@@ -20,12 +21,14 @@ import {
   minWidthOf,
   type Place,
   places,
+  type Reveal,
   room,
   scrollOf,
   widthAt,
 } from "./layout"
 import { groupState } from "./groups"
 import { type Frame, PaneFrame } from "./PaneFrame"
+
 import { Tabs } from "./Tabs"
 import { pixels, scrollsSideways, SWIPE_END, Swipe, type Way } from "./swipe"
 import { THRESHOLD } from "./sizing"
@@ -61,7 +64,7 @@ export function Strip({
   marked,
   away,
   zoomed,
-  center,
+  reveal: asked,
   listed,
   frame,
   onStep,
@@ -88,7 +91,8 @@ export function Strip({
   zoomed: string | undefined
   /** Counts Alt+C: each time it does, the focused column goes to the
    * middle of the screen, once. */
-  center: number
+  /** A column to show once, as asked: Alt+C's, or a Thread picked. */
+  reveal?: Reveal
   /** The listed thing a Pane shows, as its module lists it. */
   listed: (entry: Entry) => Listed | undefined
   frame: Frame
@@ -166,17 +170,27 @@ export function Strip({
     watch.observe(strip)
     return () => watch.disconnect()
   }, [])
-  // Alt+C: the focused column to the middle, once.
-  const centered = useRef(center)
+  // Alt+C: the focused column to the middle; a Thread picked: its Group's
+  // first column to the left, so every Agent comes to the same place
+  // (ADR 0065). Once each, when its Pane is drawn.
+  const revealed = useRef(asked)
   useLayoutEffect(() => {
     const strip = scroller.current
-    if (center === centered.current) return
-    centered.current = center
-    if (strip && live) {
-      const all = places(strip, now.current.columns)
-      reveal(strip, all, now.current.focus, undefined, "always")
+    if (!strip || !live || !asked || asked === revealed.current) return
+    const { columns } = now.current
+    const at = columns.findIndex((column) =>
+      column.entries.some((entry) => entry.id === asked.entry)
+    )
+    if (at < 0) return
+    revealed.current = asked
+    const all = places(strip, columns)
+    if (asked.how === "middle") {
+      reveal(strip, all, columns[at].id, undefined, "always")
+    } else {
+      const first = columns[runOf(columns, at).start].id
+      reveal(strip, all, first, undefined, "left")
     }
-  }, [center, live])
+  }, [asked, live, workspace])
   useEffect(() => {
     const strip = scroller.current
     if (!strip) return
@@ -458,7 +472,7 @@ function reveal(
   all: readonly Place[],
   id: string | undefined,
   before?: string,
-  center = columnsOf().center
+  center: Center | "left" = columnsOf().center
 ) {
   const column = all.find((place) => place.id === id)
   if (!column) return
@@ -476,6 +490,7 @@ function reveal(
   const middle = (column.left + column.right - inner) / 2 - pad
   let to = least(column.left, column.right)
   if (center === "always") to = middle
+  if (center === "left") to = column.left - pad
   const previous = all.find((place) => place.id === before)
   if (center === "on-overflow" && previous && previous !== column) {
     const left = Math.min(column.left, previous.left)

@@ -22,6 +22,12 @@ import {
   type Workspace,
 } from "./model"
 
+/** A Pane's column the Strip shows once, as asked: in the middle
+ * (`Alt+C`), or, for a Thread picked, its Group's first column at the
+ * left, beside the sidebar (ADR 0065, decision 8). A new object each
+ * time it is asked. */
+export type Reveal = { entry: string; how: "middle" | "left" }
+
 /** A column's place once every move is done, in the Strip's scroll. */
 export interface Place {
   id: string
