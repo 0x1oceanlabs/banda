@@ -1,7 +1,7 @@
 /**
  * What the window keeps between runs in its own storage on this computer
- * (in the engine's state folder, `window/`): the view, the focus and
- * whether the sidebar shows. The workspaces themselves are the engine's
+ * (in the engine's state folder, `window/`): the view, the focus,
+ * whether the sidebar shows and how wide it is. The workspaces themselves are the engine's
  * (ADR 0025, decisions 1 and 2): the arrangement the window kept before
  * moves over once.
  */
@@ -9,10 +9,12 @@ import { type Engine, Refused, type SpaceId } from "@banda/contract"
 import type { PaneState } from "@banda/ui/pane"
 import { keptOf, NO_VIEW, type View, viewOf } from "./arrange"
 import { type Entry, focused, open, parse, start, type Width } from "./model"
+import { kept, WIDTH } from "../sidebar/width"
 
 const WORKSPACES = "banda.workspaces"
 const VIEW = "banda.view"
 const SIDEBAR = "banda.sidebar"
+const SIDEBAR_WIDTH = "banda.sidebar.width"
 const LOOKED = "banda.looked"
 const DRAWER = "banda.drawer"
 
@@ -68,6 +70,16 @@ export function loadSidebar(): boolean {
 
 export function keepSidebar(shows: boolean): void {
   keep(SIDEBAR, shows ? "shown" : "hidden")
+}
+
+/** How wide the sidebar is, in rem, as the Person dragged it. */
+export function loadSidebarWidth(): number {
+  return kept(Number(read(SIDEBAR_WIDTH) ?? Number.NaN))
+}
+
+export function keepSidebarWidth(rem: number): void {
+  if (rem === WIDTH) forget(SIDEBAR_WIDTH)
+  else keep(SIDEBAR_WIDTH, String(rem))
 }
 
 /**
