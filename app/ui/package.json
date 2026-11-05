@@ -9,6 +9,7 @@
     "./globals.css": "./src/styles/globals.css",
     "./pane": "./src/pane.ts",
     "./module": "./src/module.ts",
+    "./desktop": "./src/desktop.ts",
     "./lib/*": "./src/lib/*.ts",
     "./components/*": "./src/components/*.tsx",
     "./hooks/*": "./src/hooks/*.ts",

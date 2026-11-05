@@ -4,20 +4,23 @@
   "private": true,
   "license": "Apache-2.0",
   "type": "module",
-  "description": "What a module's part in the window's main process may use of main (ADR 0028): its services, dialogs, errors and the bridge's answers.",
+  "description": "What a module's part in the window's main process may use of main (ADR 0028): its services, dialogs, errors, the bridge's answers and the byte host (ADR 0073).",
   "exports": {
     ".": "./src/index.ts"
   },
   "scripts": {
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --dir src"
   },
   "dependencies": {
     "@banda/contract": "workspace:*",
     "effect": "4.1.1"
   },
   "devDependencies": {
+    "@effect/vitest": "4.1.1",
     "@types/node": "^24",
     "electron": "45.1.0",
-    "typescript": "~6.0.2"
+    "typescript": "~6.0.2",
+    "vitest": "^5.0.5"
   }
 }

@@ -10,6 +10,7 @@ import { AGENTS_BRIDGE } from "@banda/agents-pane/desktop"
 import { BROWSER_BRIDGE, type BrowserHost } from "@banda/browser-pane/desktop"
 import { NOTIFY_BRIDGE } from "@banda/notifications-pane/desktop"
 import type { Address, ProjectId } from "@banda/contract"
+import { FILES_BRIDGE } from "@banda/ui/desktop"
 import type { Args } from "@banda/ui/module"
 import type { PaneState, Place } from "@banda/ui/pane"
 import { bridge, type HostOf, invoke, push, send } from "@banda/contract/bridge"
@@ -155,17 +156,9 @@ export const BRIDGE = bridge({
      * does: a Thread's "Copy image" (ADR 0063, decision 3). */
     copyImageAt: send<[x: number, y: number]>(),
   },
-  /** Files on the machine, as links name them. */
-  files: {
-    /** Opens the file at the full `path` in the app the system has for
-     * it; a program it only shows in its folder, so it never runs. */
-    outside: send<[path: string]>(),
-    /** Shows the file at the full `path` in its folder, in the system's
-     * file manager (ADR 0063, decision 3). */
-    show: send<[path: string]>(),
-    /** Whether a file, or a folder, is at the full `path`. */
-    exists: invoke<[path: string], boolean>(),
-  },
+  /** Files on the machine, as links name them and any Pane shows them
+   * (ADR 0073, decision 14). */
+  files: FILES_BRIDGE,
   /** What broke in Banda (ADR 0039): the engine keeps it; the desktop
    * shows where its logs are. */
   problems: {

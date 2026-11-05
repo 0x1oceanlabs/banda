@@ -121,6 +121,9 @@ importers:
         specifier: 4.1.1
         version: 4.1.1
     devDependencies:
+      '@effect/vitest':
+        specifier: 4.1.1
+        version: 4.1.1(effect@4.1.1)(vitest@5.0.5(@types/node@24.19.2)(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0)))
       '@types/node':
         specifier: ^24
         version: 24.19.2
@@ -130,6 +133,9 @@ importers:
       typescript:
         specifier: ~6.0.2
         version: 6.0.3
+      vitest:
+        specifier: ^5.0.5
+        version: 5.0.5(@types/node@24.19.2)(vite@8.3.5(@types/node@24.19.2)(esbuild@0.28.2)(jiti@2.7.0))
 
   app/ghostty:
     dependencies:

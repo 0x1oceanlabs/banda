@@ -5045,6 +5045,57 @@ test("markdown shows local images, video and audio, with an image preview and wo
   await expect(preview).toBeHidden()
 })
 
+test("a Pane gets a URL for any file the Person opens, served as what it is and never as a page; a reply's media stays media", async () => {
+  window = await startWindow()
+  const { app, page, dir } = window
+  await firstThread(page)
+  const folder = join(dir, "root", "Work")
+  writeFileSync(join(folder, "page.html"), "<script>alert(1)</script>")
+  writeFileSync(join(folder, "data.bin"), "bytes")
+  const project = (
+    JSON.parse(window.banda("call", "projects.list")) as {
+      ok: { id: string; folder: string }[]
+    }
+  ).ok.find((one) => one.folder === folder)!
+  type Desktop = {
+    files: { url: (project: string, path: string) => Promise<string | null> }
+    agents: { media: (project: string, path: string) => Promise<string | null> }
+  }
+  const ask = (leaf: "files" | "agents", path: string) =>
+    page.evaluate(
+      ([leaf, project, path]) => {
+        const { banda } = globalThis as unknown as { banda: Desktop }
+        return leaf === "files"
+          ? banda.files.url(project, path)
+          : banda.agents.media(project, path)
+      },
+      [leaf, project.id, path] as const
+    )
+  const served = (url: string) =>
+    app.evaluate(async ({ net }, url) => {
+      const response = await net.fetch(url)
+      return {
+        type: response.headers.get("content-type"),
+        sandbox: response.headers.get("content-security-policy"),
+        text: await response.text(),
+      }
+    }, url)
+  for (const [path, type, text] of [
+    ["page.html", "text/plain; charset=utf-8", "<script>alert(1)</script>"],
+    [join(folder, "data.bin"), "application/octet-stream", "bytes"],
+  ]) {
+    const url = await ask("files", path)
+    expect(url, path).toMatch(/^app:\/\/files\//)
+    expect(await served(url!), path).toEqual({
+      type,
+      sandbox: "default-src 'none'; sandbox",
+      text,
+    })
+  }
+  expect(await ask("files", "absent.txt")).toBeNull()
+  expect(await ask("agents", "page.html")).toBeNull()
+})
+
 test("markdown renders Mermaid and math in the look's light and dark, keeping code and escaped currency as text", async () => {
   window = await startWindow({ look: 'mode = "light"\n' })
   const { page } = window

@@ -1,16 +1,16 @@
+import { type Mint, useMinted } from "../hooks/use-file-url"
 import { localPath } from "../lib/file-links"
-import { createContext, useContext, useEffect, useState } from "react"
+import { createContext, useContext, useState } from "react"
 import { DialogTrigger } from "./dialog"
 import { ImagePreview } from "./image-preview"
 
 /** The desktop signs local paths; markdown never reads the filesystem. */
-export type MediaResolver = (path: string) => Promise<string | null>
-const Resolver = createContext<MediaResolver | null>(null)
+const Resolver = createContext<Mint | null>(null)
 export function MarkdownMedia({
   resolve,
   children,
 }: {
-  resolve: MediaResolver
+  resolve: Mint
   children: React.ReactNode
 }) {
   return <Resolver value={resolve}>{children}</Resolver>
@@ -54,33 +54,13 @@ export function MarkdownImage({
 function LocalMedia({ path, alt }: { path: string; alt: string }) {
   const resolve = useContext(Resolver)
   const kind = kindOf(path)
-  const [loaded, setLoaded] = useState<{ path: string; url: string | null }>()
-  useEffect(() => {
-    if (!resolve || !kind) return
-    let current = true
-    const load = () => {
-      void resolve(path).then(
-        (url) => {
-          if (current) {
-            setLoaded({ path, url })
-          }
-        },
-        () => {
-          if (current) setLoaded({ path, url: null })
-        }
-      )
-    }
-    load()
-    // Renew while mounted; a persisted reply never keeps an expired URL.
-    const timer = setInterval(load, 50 * 60 * 1000)
-    return () => {
-      current = false
-      clearInterval(timer)
-    }
-  }, [path, resolve, kind])
+  // Renewed while mounted; a persisted reply never keeps an expired URL.
+  const given = useMinted(kind ? resolve : null, path)
+  // The URL the file failed to load from, until the next.
+  const [broken, setBroken] = useState<string | null>(null)
+  const url = given === broken ? null : given
   const name = alt || path.split("/").at(-1) || path
-  const url = loaded?.path === path ? loaded.url : undefined
-  if (!kind || !resolve || url === null)
+  if (url === null)
     return (
       <a
         href={path}
@@ -91,16 +71,13 @@ function LocalMedia({ path, alt }: { path: string; alt: string }) {
         {kind && resolve ? " (unavailable)" : ""}
       </a>
     )
-  if (!url)
+  if (url === undefined)
     return (
       <span role="status" className="text-muted-foreground">
         Loading {name}…
       </span>
     )
-  const unavailable = () =>
-    setLoaded((now) =>
-      now?.path === path && now.url === url ? { path, url: null } : now
-    )
+  const unavailable = () => setBroken(url)
   if (kind === "video")
     return (
       <video

@@ -1,13 +1,34 @@
-/** Local markdown media, served only through signed, expiring URLs
- * bound to a canonical path and file identity (ADR 0037, decision 8). */
+/**
+ * The byte host, `app://files` (ADR 0037, decision 8; ADR 0073, decision
+ * 5): a file on this machine, served only through a signed URL that
+ * expires, bound to the file's canonical path, device and inode. Any
+ * module's part in main may give one out; main serves the host.
+ */
 import { createHmac, randomBytes, timingSafeEqual } from "node:crypto"
 import { constants } from "node:fs"
 import { open, realpath, stat } from "node:fs/promises"
-import { extname, isAbsolute } from "node:path"
+import { extname, isAbsolute, resolve } from "node:path"
 import { Readable } from "node:stream"
 import { Clock, Context, Effect, Layer } from "effect"
+import { Engine } from "./engine"
 
+/** Text of any kind is served as plain text, so nothing in it runs: an
+ * HTML file shows as its source. */
+const TEXT = "text/plain; charset=utf-8"
+const TEXTS = [
+  "txt md markdown mdx rst log csv tsv",
+  "json jsonc json5 jsonl yaml yml toml ini cfg conf env xml",
+  "html htm xhtml css scss sass less",
+  "js mjs cjs jsx ts mts cts tsx vue svelte",
+  "py rb rs go java kt swift c h cc cpp hpp cs php lua sql",
+  "sh bash zsh fish diff patch lock",
+]
+  .join(" ")
+  .split(" ")
+
+/** What a file is served as, by its extension; any other is bytes. */
 const TYPES: Record<string, string> = {
+  // The images, video and sound a reply shows (ADR 0037, decision 8).
   ".png": "image/png",
   ".jpg": "image/jpeg",
   ".jpeg": "image/jpeg",
@@ -27,17 +48,27 @@ const TYPES: Record<string, string> = {
   ".m4a": "audio/mp4",
   ".aac": "audio/aac",
   ".flac": "audio/flac",
+  ".pdf": "application/pdf",
+  ".woff": "font/woff",
+  ".woff2": "font/woff2",
+  ".ttf": "font/ttf",
+  ".otf": "font/otf",
+  ...Object.fromEntries(TEXTS.map((ext) => [`.${ext}`, TEXT])),
 }
+const BYTES = "application/octet-stream"
+const MEDIA = /^(image|video|audio)\//
+
+/** What the file at `path` is served as. */
+const typeOf = (path: string) => TYPES[extname(path).toLowerCase()] ?? BYTES
+
+/** Who may ask: `"media"` gives a URL only for an image, a video or a
+ * sound. */
+export type Only = "media"
+
 const HOUR = 60 * 60 * 1000
 const local = (path: string) =>
   isAbsolute(path) && !/^[/\\]{2}/.test(path) && !path.includes("\0")
-type Claim = {
-  path: string
-  dev: string
-  ino: string
-  until: number
-  type: string
-}
+type Claim = { path: string; dev: string; ino: string; until: number }
 
 /** Inclusive byte bounds; null for an invalid or unsatisfiable range. */
 export function byteRange(
@@ -70,13 +101,15 @@ export class FileLinks {
     return createHmac("sha256", this.secret).update(payload).digest()
   }
 
-  async issue(path: string, now: number): Promise<string | null> {
+  async issue(path: string, now: number, only?: Only): Promise<string | null> {
     if (!local(path)) return null
-    const type = TYPES[extname(path).toLowerCase()]
-    if (!type) return null
+    const type = typeOf(path)
+    const media = only === "media"
+    if (media && !MEDIA.test(type)) return null
     try {
       const canonical = await realpath(path)
-      if (!local(canonical) || TYPES[extname(canonical).toLowerCase()] !== type)
+      // A link may not make a picture of a file of another kind.
+      if (!local(canonical) || (media && typeOf(canonical) !== type))
         return null
       const file = await stat(canonical, { bigint: true })
       if (!file.isFile()) return null
@@ -85,7 +118,6 @@ export class FileLinks {
         dev: String(file.dev),
         ino: String(file.ino),
         until: now + HOUR,
-        type,
       }
       const payload = Buffer.from(JSON.stringify(claim)).toString("base64url")
       return `app://files/${payload}.${this.mac(payload).toString("base64url")}`
@@ -115,8 +147,7 @@ export class FileLinks {
     if (
       !local(claim.path) ||
       !Number.isFinite(claim.until) ||
-      now >= claim.until ||
-      TYPES[extname(claim.path).toLowerCase()] !== claim.type
+      now >= claim.until
     )
       return missing()
     try {
@@ -140,7 +171,7 @@ export class FileLinks {
         const range = request.headers.get("range")
         const bounds = range === null ? undefined : byteRange(range, size)
         const headers = new Headers({
-          "Content-Type": claim.type,
+          "Content-Type": typeOf(claim.path),
           "X-Content-Type-Options": "nosniff",
           "Content-Security-Policy": "default-src 'none'; sandbox",
           "Cache-Control": "no-store",
@@ -175,19 +206,25 @@ export class FileLinks {
   }
 }
 
-export class Files extends Context.Service<
-  Files,
+/** The byte host: main builds its layer and serves `app://files` with it. */
+export class FileHost extends Context.Service<
+  FileHost,
   {
-    issue: (path: string) => Effect.Effect<string | null>
-    serve: (request: Request) => Effect.Effect<Response>
+    /** A URL for the file at the whole `path`, for an hour; none for one
+     * it may not serve. */
+    readonly issue: (path: string, only?: Only) => Effect.Effect<string | null>
+    /** Answers a request to `app://files`. */
+    readonly serve: (request: Request) => Effect.Effect<Response>
   }
->()("banda/agents/Files") {
-  static layer = Layer.sync(Files, () => {
+>()("banda/FileHost") {
+  static readonly layer = Layer.sync(FileHost, () => {
     const links = new FileLinks()
     return {
-      issue: (path) =>
+      issue: (path, only) =>
         Clock.currentTimeMillis.pipe(
-          Effect.flatMap((now) => Effect.promise(() => links.issue(path, now)))
+          Effect.flatMap((now) =>
+            Effect.promise(() => links.issue(path, now, only))
+          )
         ),
       serve: (request) =>
         Clock.currentTimeMillis.pipe(
@@ -197,4 +234,18 @@ export class Files extends Context.Service<
         ),
     }
   })
+
+  /** A URL for the file at `path` in Project `project`: relative to its
+   * folder, or whole. None for a Project the engine does not know, or a
+   * path from home, on the network or with a scheme, which it refuses
+   * before it resolves. */
+  static readonly url = (project: string, path: string, only?: Only) =>
+    Effect.gen(function* () {
+      if (!path || /^(?:~|[a-z][a-z0-9+.-]*:|[/\\]{2})/i.test(path)) return null
+      const folder = yield* Engine.folderOf(project)
+      if (!folder) return null
+      return yield* FileHost.use((host) =>
+        host.issue(resolve(folder, path), only)
+      )
+    })
 }

@@ -705,7 +705,7 @@ module reaches a Harness through an adapter:
 
 ```
 app/desktop      Electron main: starts the engine, serves the page, hands it the address
-app/desktop-kit  what a module's part in main may use of main: its services, dialogs, errors, the bridge's answers
+app/desktop-kit  what a module's part in main may use of main: its services, dialogs, errors, the bridge's answers, the byte host
 app/web          the page: the bar, the sidebar, the workspaces and the overview; the actions; the Pane registry
 app/ui           shadcn/ui (preset b0, on Base UI), Banda's Mark and sounds, and the Pane contract
 app/ghostty      T3 Code's Ghostty adapter: a terminal on a canvas
@@ -979,11 +979,21 @@ Markdown in a Thread shows local images, video and audio (ADR 0037,
 step 6). The agents Pane supplies the markdown renderer a resolver for
 its Project. The agents desktop part resolves relative paths against that
 Project's folder and gives only supported media a signed `app://files`
-URL. Its signer lives in the main runtime, never on disk. A URL lasts an
-hour and names the canonical path, device and inode; serving checks the
-identity again through the opened file. Byte ranges let players seek
-without reading the whole file. Nothing plays automatically. Images
-open larger on a click; a missing or unsupported file stays a link.
+URL: a reply's paths are an Agent's to write. Nothing plays
+automatically. Images open larger on a click; a missing or unsupported
+file stays a link.
+
+The byte host behind those URLs is `FileHost` in `@banda/desktop-kit`
+(ADR 0073, decision 5), which main serves. Its signer lives in the main
+runtime, never on disk. A URL lasts an hour and names the canonical path,
+device and inode; serving checks the identity again through the opened
+file, which it opens without following a link. Byte ranges let players
+seek without reading the whole file. It serves any file, typed by its
+extension: text as plain text, so an HTML file never runs, and what it
+does not know as bytes, each never sniffed and sandboxed. A Pane the
+Person drives asks for any file through the bridge's `files.url`,
+typed in `@banda/ui/desktop`, and `useFileUrl` keeps its URL fresh. No
+frame shows the host yet.
 
 Mermaid code fences render as SVG through `@streamdown/mermaid`, with
 copy, zoom and fullscreen controls and the look's light or dark scheme.
