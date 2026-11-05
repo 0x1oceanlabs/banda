@@ -7,21 +7,23 @@ it.
 
 ## Work
 
-**Space**:
+**Project**:
 One body of work and its folder on disk: any folder, a git repository too,
 or a new one in `~/Banda/<name>/`. The folder holds the files that the
-Person and the Agents work on, and nothing of Banda's: the Space's data and
-event log are in the engine's data, `~/.local/share/banda/spaces/<id>/`
-(ADR 0026).
-_Avoid_: project, workspace (that is a screen of Panes).
+Person and the Agents work on, and nothing of Banda's: the Project's data
+and event log are in the engine's data, `~/.local/share/banda/projects/<id>/`
+(ADR 0026, ADR 0069). A Thread started without one is in **No Project**,
+in a small Project of its own under `~/Banda/scratch/` (ADR 0046).
+_Avoid_: space (its name before ADR 0069; the ADRs before it say Space),
+workspace (that is a screen of Panes).
 
 **Participant**:
-Anyone who acts in a Space: a Person or an Agent. Every record names its
+Anyone who acts in a Project: a Person or an Agent. Every record names its
 author, who is always one of the two.
 
 **Person**:
 A human Participant. On one computer, the Person is that computer's user, who
-owns every Space there.
+owns every Project there.
 _Avoid_: user (outside code that talks to the operating system).
 
 **Agent**:
@@ -60,7 +62,7 @@ Harness, never in a terminal.
 _Avoid_: console, shell (that is one program a terminal runs).
 
 **Thread**:
-One session with a Harness in a Space: starting one is all it takes. Its
+One session with a Harness in a Project: starting one is all it takes. Its
 Harness is chosen when it starts and stays with it. It shows items: messages,
 the Agent's thoughts, tool calls, its plans, Visuals, notices and Questions.
 A Harness keeps a session of its own for it, which a Thread holds as
@@ -115,12 +117,12 @@ _Avoid_: prompt, approval request.
 ## Shape
 
 **Engine**:
-The one process on a machine that owns Spaces, Threads and every module's
+The one process on a machine that owns Projects, Threads and every module's
 data. Windows and the CLI are clients of its API.
 _Avoid_: server (that is a machine), backend.
 
 **Kernel**:
-The small part of the engine that every module needs: Spaces, the event log,
+The small part of the engine that every module needs: Projects, the event log,
 the access decision, identity, the module registry and the API. It names no
 module.
 
@@ -177,7 +179,7 @@ _Avoid_: telemetry, analytics.
 ## Window
 
 **Window**:
-A client of the engine that shows Spaces as tiled Panes. The first window is
+A client of the engine that shows Projects as tiled Panes. The first window is
 the Electron app.
 
 **Pane**:
@@ -206,9 +208,9 @@ Web Store. Its button sits in every browser Pane's row when it is pinned,
 and behind the Extensions button when it is not.
 
 **Workspace**:
-One screen of Panes. It can hold Panes of any Spaces; it only lays out the
-screen, and the Space stays the boundary. Workspaces sit one under another,
-and there is always one empty workspace at the bottom. A Space has one
+One screen of Panes. It can hold Panes of any Projects; it only lays out the
+screen, and the Project stays the boundary. Workspaces sit one under another,
+and there is always one empty workspace at the bottom. A Project has one
 workspace where its Agents' Groups open, in a row (ADR 0065).
 _Avoid_: Desk.
 
@@ -241,9 +243,16 @@ and is lifted again as it was. It is in no workspace until its pin makes
 it a column of the one on screen.
 
 **Sidebar**:
-The list of every Thread of every Space, docked at the window's left edge.
+The list of every Thread of every Project, docked at the window's left edge.
 Each Thread shows its own Mark. A preset arranges it, and the Person's own
 keys change any part of it.
+
+**Archive**:
+Where the Threads the Person put away wait, folded at the sidebar's
+bottom. Only the Person archives a Thread; anything new in it brings it
+back to the list (ADR 0069). A Project is archived too, which hides it
+from the pickers until the Person brings it back (ADR 0026).
+_Avoid_: settled (its name before ADR 0069).
 
 **Banda skill**:
 What an Agent needs to know to work in Banda and to change it for its
@@ -290,7 +299,7 @@ turn settles once the Person has looked at its Thread; a Question asks until
 it is answered.
 
 **Watch**:
-What a module draws for each Space, showing nothing, to tell the window what
+What a module draws for each Project, showing nothing, to tell the window what
 its work there calls the Person for and what the sidebar lists for it. The
 bar's Mark shows the loudest, and the window tells the Person of each thing
 that starts calling.
