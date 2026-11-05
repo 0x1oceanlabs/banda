@@ -41,6 +41,7 @@ mod questions;
 mod rules;
 pub mod sending;
 mod skills;
+mod snoozes;
 mod store;
 mod transcript;
 mod visual_page;
@@ -71,6 +72,7 @@ use rules::Event;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
+use snoozes::SnoozeAsk;
 use std::fmt::Display;
 use std::path::PathBuf;
 use std::sync::Arc;
@@ -332,6 +334,14 @@ banda_kernel::methods! {
         command notify(Notify) -> String, Write, tool "notify";
         /// A Visual's page, as the window serves it.
         call visual(OneVisual) -> VisualPage, Read;
+        /// Puts a Thread away until a time, or a Thread at work until its
+        /// turn ends: it leaves its Person's list until then (ADR 0074).
+        /// It comes back early when it asks, fails or hears from its
+        /// Person. A Thread that asks cannot be snoozed, and an Agent
+        /// snoozes only its own.
+        command snooze(SnoozeAsk) -> (), Write;
+        /// Brings a snoozed Thread back now. One awake stays so.
+        command wake(OneThread) -> (), Write;
     }
 }
 
@@ -632,18 +642,14 @@ fn plain(error: impl Display) -> String {
     error.to_string()
 }
 
-/// Writes one of the module's facts about `subject`.
-fn emit(
-    tx: &mut Tx<'_>,
-    author: Participant,
-    subject: impl Display,
-    fact: &Fact,
-) -> Result<(), Error> {
+/// Writes one of the module's facts about `thread`, and wakes the Thread
+/// if it sleeps and the fact calls its Person (ADR 0074).
+fn emit(tx: &mut Tx<'_>, author: Participant, thread: ThreadId, fact: &Fact) -> Result<(), Error> {
     let mut both = serde_json::to_value(fact)?;
     let kind = both["kind"].as_str().unwrap_or_default().to_owned();
     let payload = both["payload"].take();
-    tx.emit(&kind, VERSION, Some(&subject.to_string()), author, &payload)?;
-    Ok(())
+    tx.emit(&kind, VERSION, Some(&thread.to_string()), author, &payload)?;
+    snoozes::heard(tx, author, thread, fact)
 }
 
 /// The handlers of the module's methods, one each (ADR 0014).
@@ -952,6 +958,18 @@ impl Agents {
         call.command(move |tx| notes::note(tx, agent, notify))
             .await?;
         Ok(notes::NOTED.to_owned())
+    }
+
+    async fn snooze(&self, call: Call, ask: SnoozeAsk) -> Result<(), Refusal> {
+        let author = call.participant();
+        call.command(move |tx| snoozes::snooze(tx, author, ask))
+            .await
+    }
+
+    async fn wake(&self, call: Call, OneThread { thread }: OneThread) -> Result<(), Refusal> {
+        let author = call.participant();
+        call.command(move |tx| snoozes::wake(tx, author, thread))
+            .await
     }
 
     async fn answer_issue(&self, call: Call, answer: AnswerIssue) -> Result<(), Refusal> {

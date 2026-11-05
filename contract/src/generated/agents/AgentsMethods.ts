@@ -28,6 +28,7 @@ import type { Previewed } from "./Previewed";
 import type { Send } from "./Send";
 import type { Sent } from "./Sent";
 import type { ShowVisual } from "./ShowVisual";
+import type { SnoozeAsk } from "./SnoozeAsk";
 import type { ThreadList } from "./ThreadList";
 import type { ThreadView } from "./ThreadView";
 import type { TurnChanges } from "./TurnChanges";
@@ -200,4 +201,16 @@ notify: CommandMethod<Notify, string>,
 /**
  * A Visual's page, as the window serves it.
  */
-visual: CallMethod<OneVisual, VisualPage>, };
+visual: CallMethod<OneVisual, VisualPage>, 
+/**
+ * Puts a Thread away until a time, or a Thread at work until its
+ * turn ends: it leaves its Person's list until then (ADR 0074).
+ * It comes back early when it asks, fails or hears from its
+ * Person. A Thread that asks cannot be snoozed, and an Agent
+ * snoozes only its own.
+ */
+snooze: CommandMethod<SnoozeAsk, null>, 
+/**
+ * Brings a snoozed Thread back now. One awake stays so.
+ */
+wake: CommandMethod<OneThread, null>, };

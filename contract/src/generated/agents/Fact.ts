@@ -20,6 +20,7 @@ import type { TurnId } from "./TurnId";
 import type { TurnState } from "./TurnState";
 import type { Usage } from "./Usage";
 import type { VisualId } from "./VisualId";
+import type { Wake } from "./Wake";
 
 /**
  * What the agents module publishes, version 1: each fact is an Event's
@@ -44,7 +45,7 @@ answers?: boolean, } } | { "kind": "message.steered", "payload": { item: ItemId,
 /**
  * What its Agent tells its Person, with `notify` (ADR 0057).
  */
-note?: string, } } | { "kind": "turn.queued", "payload": { turn: TurnId, message: ItemId, } } | { "kind": "thread.held", "payload": { thread: ThreadId, held: boolean, } } | { "kind": "thread.rewound", "payload": { thread: ThreadId, turn: TurnId, } } | { "kind": "thread.configured", "payload": { thread: ThreadId, settings: Settings, } } | { "kind": "thread.offered", "payload": { thread: ThreadId, offer: Offer, } } | { "kind": "reply.grew", "payload": { item: ItemId, turn: TurnId, text: string, } } | { "kind": "thought.grew", "payload": { item: ItemId, turn: TurnId, text: string, } } | { "kind": "tool.started", "payload": { item: ItemId, turn: TurnId, title: string, tool: ToolKind, status: ToolStatus, content: Array<ToolContent>, } } | { "kind": "tool.changed", "payload": { item: ItemId, title?: string, status?: ToolStatus, content?: Array<ToolContent>, 
+note?: string, } } | { "kind": "turn.queued", "payload": { turn: TurnId, message: ItemId, } } | { "kind": "thread.held", "payload": { thread: ThreadId, held: boolean, } } | { "kind": "thread.snoozed", "payload": { thread: ThreadId, until?: number, } } | { "kind": "thread.woke", "payload": { thread: ThreadId, by: Wake, } } | { "kind": "thread.rewound", "payload": { thread: ThreadId, turn: TurnId, } } | { "kind": "thread.configured", "payload": { thread: ThreadId, settings: Settings, } } | { "kind": "thread.offered", "payload": { thread: ThreadId, offer: Offer, } } | { "kind": "reply.grew", "payload": { item: ItemId, turn: TurnId, text: string, } } | { "kind": "thought.grew", "payload": { item: ItemId, turn: TurnId, text: string, } } | { "kind": "tool.started", "payload": { item: ItemId, turn: TurnId, title: string, tool: ToolKind, status: ToolStatus, content: Array<ToolContent>, } } | { "kind": "tool.changed", "payload": { item: ItemId, title?: string, status?: ToolStatus, content?: Array<ToolContent>, 
 /**
  * The command ended so.
  */

@@ -3,7 +3,7 @@
 
 use crate::model::{
     Asking, Body, Failure, Image, ImageId, Item, ItemId, LISTED_MESSAGE, LatestTurn, ListedThread,
-    Offer, Opener, QuestionState, Settings, ThreadId, ThreadSummary, ToolContent, TurnId,
+    Offer, Opener, QuestionState, Settings, Snooze, ThreadId, ThreadSummary, ToolContent, TurnId,
     TurnState, TurnView, Usage, VisualId,
 };
 use banda_kernel::{AgentId, Error, Participant, Refusal};
@@ -166,6 +166,10 @@ CREATE INDEX agents_notices_untaken ON agents_notices (thread)
 CREATE INDEX agents_notices_taken ON agents_notices (taken_by)
     WHERE taken_by IS NOT NULL;
 "#,
+    r#"
+-- The Thread's latest snooze, as JSON (ADR 0074).
+ALTER TABLE agents_threads ADD COLUMN snooze TEXT;
+"#,
 ];
 
 fn json<T: Serialize>(value: &T) -> Result<String, Error> {
@@ -276,6 +280,15 @@ pub fn offer(sql: &Connection, thread: ThreadId) -> Result<Offer, Error> {
 
 pub fn set_offer(sql: &Connection, thread: ThreadId, offer: &Offer) -> Result<(), Error> {
     set_thread_json(sql, thread, "offer", offer)
+}
+
+/// The Thread's latest snooze, asleep or woken (ADR 0074).
+pub fn snooze(sql: &Connection, thread: ThreadId) -> Result<Option<Snooze>, Error> {
+    thread_json(sql, thread, "snooze")
+}
+
+pub fn set_snooze(sql: &Connection, thread: ThreadId, snooze: &Snooze) -> Result<(), Error> {
+    set_thread_json(sql, thread, "snooze", snooze)
 }
 
 pub fn usage(sql: &Connection, thread: ThreadId) -> Result<Option<Usage>, Error> {
@@ -542,17 +555,27 @@ pub fn set_forked_from(sql: &Connection, thread: ThreadId, from: ThreadId) -> Re
 
 /// The Project's Threads, the latest first, each with where its work stands.
 pub fn threads(sql: &Connection) -> Result<Vec<ListedThread>, Error> {
-    let mut statement = sql.prepare(&format!("{THREAD} ORDER BY updated_at DESC, id DESC"))?;
-    let rows = statement.query_map([], |row| Ok((read_thread(row)?, row.get(4)?)))?;
+    // The snooze comes with each row, not by a query of its own.
+    let mut statement = sql.prepare(
+        "SELECT id, COALESCE(harness, ''), title, updated_at, agent, snooze FROM agents_threads
+         ORDER BY updated_at DESC, id DESC",
+    )?;
+    let rows = statement.query_map([], |row| {
+        let snooze: Option<String> = row.get(5)?;
+        let snooze = snooze.map(|text| serde_json::from_str(&text));
+        let snooze = snooze.transpose().map_err(|e| unreadable(5, e))?;
+        Ok((read_thread(row)?, row.get(4)?, snooze))
+    })?;
     let summaries = rows.collect::<rusqlite::Result<Vec<_>>>()?;
     summaries
         .into_iter()
-        .map(|(thread, agent)| {
+        .map(|(thread, agent, snooze)| {
             Ok(ListedThread {
                 agent,
                 latest: last_begun(sql, thread.id)?,
                 asking: asking(sql, thread.id)?,
                 message: latest_message(sql, thread.id)?,
+                snooze,
                 thread,
             })
         })

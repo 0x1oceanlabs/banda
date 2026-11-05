@@ -1,7 +1,7 @@
 import type { ThreadList } from "@banda/contract/agents"
 import { expect, test } from "vitest"
 import { applyThreads, rewound } from "./list"
-import { event, person } from "./testing"
+import { agent, event, person } from "./testing"
 
 const empty: ThreadList = { at: 0, threads: [] }
 
@@ -157,4 +157,41 @@ test("a Thread that goes back to before a message has the list read again", () =
   expect(rewound(one, back("t2"))).toBe(false)
   // Only the engine knows the message before; the list alone keeps it.
   expect(applyThreads(one, back("t1"))).toBe(one)
+})
+
+test("a Thread keeps its latest snooze, and what woke it", () => {
+  const snoozed = event(
+    "thread.snoozed",
+    { thread: "t1", until: 5000 },
+    { author: person, subject: "t1" }
+  )
+  const asleep = applyThreads(one, snoozed)
+  expect(asleep.threads[0].snooze).toEqual({
+    at: snoozed.at,
+    by: person,
+    until: 5000,
+  })
+  expect(asleep.threads[0].updated_at).toBe(one.threads[0].updated_at)
+
+  const woke = event(
+    "thread.woke",
+    { thread: "t1", by: "question" },
+    { subject: "t1" }
+  )
+  const awake = applyThreads(asleep, woke)
+  expect(awake.threads[0].snooze?.woke).toEqual({
+    at: woke.at,
+    by: "question",
+  })
+
+  // Until done, it names no time; a new snooze leaves the old waking.
+  const again = event(
+    "thread.snoozed",
+    { thread: "t1" },
+    { author: agent, subject: "t1" }
+  )
+  expect(applyThreads(awake, again).threads[0].snooze).toEqual({
+    at: again.at,
+    by: agent,
+  })
 })

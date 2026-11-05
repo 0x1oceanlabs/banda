@@ -2,6 +2,7 @@
 import type { AgentId } from "../AgentId";
 import type { Asking } from "./Asking";
 import type { LatestTurn } from "./LatestTurn";
+import type { Snooze } from "./Snooze";
 import type { ThreadId } from "./ThreadId";
 
 /**
@@ -26,7 +27,11 @@ asking: Array<Asking>,
  * The start of the latest message sent into it: what it was last asked
  * to do. A list shows its first line.
  */
-message?: string, id: ThreadId, 
+message?: string, 
+/**
+ * Its latest snooze (ADR 0074), asleep or woken.
+ */
+snooze?: Snooze, id: ThreadId, 
 /**
  * The Harness it runs on, by its ID in the Harness list; chosen when
  * it starts, it stays (ADR 0006). Empty for a Thread from before

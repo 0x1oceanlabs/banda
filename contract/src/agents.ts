@@ -82,6 +82,8 @@ const KINDS: ReadonlySet<string> = new Set(
     "message.steered": true,
     "message.edited": true,
     "thread.held": true,
+    "thread.snoozed": true,
+    "thread.woke": true,
     "thread.rewound": true,
     "thread.configured": true,
     "thread.offered": true,

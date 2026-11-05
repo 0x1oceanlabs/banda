@@ -36,6 +36,8 @@ export const THREADS_FILTER = {
     "question.asked",
     "question.answered",
     "question.closed",
+    "thread.snoozed",
+    "thread.woke",
   ] satisfies Fact["kind"][],
 } satisfies EventFilter
 
@@ -68,8 +70,8 @@ export function rewound(state: ThreadList, event: Event): boolean {
 /**
  * The list after one fact. A new Thread joins it at the top, and a Thread
  * that heard a message or ended a turn moves there. Each Thread keeps its
- * latest turn that began, its Questions that wait and the start of its
- * latest message, as the engine reads them.
+ * latest turn that began, its Questions that wait, the start of its
+ * latest message and its snooze, as the engine reads them.
  */
 export function applyThreads(state: ThreadList, event: Event): ThreadList {
   const fact = decodeFact(event)
@@ -131,6 +133,22 @@ export function applyThreads(state: ThreadList, event: Event): ThreadList {
               ...thread,
               asking: thread.asking.filter((asking) => asking.item !== item),
             }
+          : thread
+      )
+    }
+    case "thread.snoozed": {
+      const snooze = {
+        at: event.at,
+        by: event.author,
+        until: fact.payload.until,
+      }
+      return change(state, event, (thread) => ({ ...thread, snooze }))
+    }
+    case "thread.woke": {
+      const woke = { at: event.at, by: fact.payload.by }
+      return change(state, event, (thread) =>
+        thread.snooze
+          ? { ...thread, snooze: { ...thread.snooze, woke } }
           : thread
       )
     }
