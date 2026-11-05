@@ -2,22 +2,22 @@
 //! engine, so the window, the CLI and Agents change them alike (ADR 0005,
 //! decision 3; ADR 0025, decision 1).
 //!
-//! It is the machine's, not a Space's: one workspace holds Panes of every
-//! Space. Its commands carry what was decided, a place or a width; what
+//! It is the machine's, not a Project's: one workspace holds Panes of every
+//! Project. Its commands carry what was decided, a place or a width; what
 //! depends on the look or the view stays the window's. A change says the
 //! whole arrangement after it in one event, so a window that follows
 //! draws what the event holds; new args for a Pane, the change made most,
 //! say only those. A command that changes nothing says nothing.
 //!
 //! An Agent arranges through its tools alone (ADR 0032): it sees its
-//! Space's Panes, and the other Spaces' outlines when its Person lets it;
-//! it opens Panes of its Space that run nothing as the Person, and moves
+//! Project's Panes, and the other Projects' outlines when its Person lets it;
+//! it opens Panes of its Project that run nothing as the Person, and moves
 //! and closes only those it opened.
 
 pub mod model;
 
 use banda_kernel::{
-    AgentId, Call, Error, Module, ModuleSpace, Nothing, Refusal, Right, Scope, Tool, Tx, Wall,
+    AgentId, Call, Error, Module, ModuleProject, Nothing, Refusal, Right, Scope, Tool, Tx, Wall,
 };
 use banda_look::columns::Display;
 use model::{Arrangement, ColumnId, PaneId, Place, Shown, Side, Sight, Toward, WorkspaceId};
@@ -157,9 +157,9 @@ pub struct SeenColumn {
 #[ts(export_to = "workspaces/")]
 pub struct SeenPane {
     pub id: PaneId,
-    pub space: banda_kernel::SpaceId,
+    pub project: banda_kernel::ProjectId,
     pub kind: String,
-    /// Its args, for a Pane of your Space; none for another Space's.
+    /// Its args, for a Pane of your Project; none for another Project's.
     #[serde(skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub args: Option<Value>,
@@ -266,7 +266,7 @@ pub struct Open {
     #[ts(flatten)]
     pub shows: Shown,
     /// Left out, a column on the right of the top workspace that shows a
-    /// Pane of its Space, or of the empty one at the bottom.
+    /// Pane of its Project, or of the empty one at the bottom.
     #[serde(default)]
     #[ts(optional)]
     pub place: Option<Place>,
@@ -449,8 +449,8 @@ impl Module for Workspaces {
 
     /// The first arrangement, one empty workspace, made once, so its ID
     /// holds from the first read.
-    async fn opened(&self, space: ModuleSpace) -> Result<(), Error> {
-        space
+    async fn opened(&self, project: ModuleProject) -> Result<(), Error> {
+        project
             .write(|tx| {
                 tx.sql().execute(
                     "INSERT OR IGNORE INTO workspaces_arrangement (one, workspaces) VALUES (1, ?1)",
@@ -477,7 +477,7 @@ impl Module for Workspaces {
 impl Workspaces {
     async fn list(&self, call: Call, _: Nothing) -> Result<Arranged, Refusal> {
         let (at, (workspaces, aside)) = call
-            .space()
+            .project()
             .view(|sql| Ok((load(sql)?, Aside::of(&load_aside(sql)?))))
             .await?;
         Ok(Arranged {
@@ -695,12 +695,12 @@ impl Workspaces {
     async fn panes(&self, call: Call, _: Nothing) -> Result<Vec<SeenWorkspace>, Refusal> {
         let wall = call.wall();
         let me = call.participant().agent();
-        let (_, list) = call.space().view(load).await?;
+        let (_, list) = call.project().view(load).await?;
         let seen = |pane: &model::Pane| {
             let sight = model::sight(wall, pane);
             (sight != Sight::Hidden).then(|| SeenPane {
                 id: pane.id,
-                space: pane.shows.space,
+                project: pane.shows.project,
                 kind: pane.shows.kind.clone(),
                 args: (sight == Sight::Whole).then(|| pane.shows.args.clone()),
                 yours: me.is_some() && pane.by == me,
@@ -736,7 +736,7 @@ impl Workspaces {
             web_address(&open.args)?;
         }
         let shows = Shown {
-            space: wall.space,
+            project: wall.project,
             kind: open.kind,
             args: open.args,
         };

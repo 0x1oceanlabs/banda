@@ -22,7 +22,7 @@ pub fn heard() -> EventFilter {
 }
 
 /// Posts each notice git tells of in its Thread, one at a time, until the
-/// Space is gone.
+/// Project is gone.
 pub async fn follow(mut heard: Heard) {
     loop {
         let event = match heard.next().await {
@@ -33,7 +33,9 @@ pub async fn follow(mut heard: Heard) {
                 return;
             }
         };
-        let Some(space) = heard.space() else { return };
+        let Some(project) = heard.project() else {
+            return;
+        };
         let thread = event.payload["thread"]
             .as_str()
             .and_then(|t| t.parse().ok());
@@ -42,7 +44,7 @@ pub async fn follow(mut heard: Heard) {
             continue;
         };
         let by = event.author;
-        if let Err(error) = space.write(move |tx| post(tx, by, thread, &text)).await {
+        if let Err(error) = project.write(move |tx| post(tx, by, thread, &text)).await {
             tracing::warn!(%error, "a notice for the Agent was not posted");
         }
     }

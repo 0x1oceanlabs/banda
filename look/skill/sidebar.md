@@ -39,17 +39,22 @@ Banda's own:
 - `inbox`: as T3 Code's sidebar, one list, what waits for the Person
   first; below, the shelves "Working" and "Archive", folded; three lines
   a row. It is the defaults.
-- `spaces`: each Project a section, one line a row.
+- `projects`: each Project a section, one line a row.
 - `places`: a list of Projects above, a click shows one's Threads; below,
   every Thread by need, the archived ones folded; two lines a row.
 
 A preset of the Person's own is `~/.config/banda/sidebars/<name>.toml`,
 with the keys of `sidebar.toml` except `preset`. The view menu lists it.
+
+Names from before ADR 0069 still read, for one stable release: the
+preset `spaces`, `by = "space"`, the table `[spaces]`, the part
+`"space"` and the state `"settled"`. `banda look check` says each one's
+name now; write that one.
 A file named as one of Banda's presets wins over it.
 
 ## Asked for, and what to write
 
-- "Group my Threads by Project": `[group]` `by = "space"`.
+- "Group my Threads by Project": `[group]` `by = "project"`.
 - "One line per Thread": `[row]` `lines = 1`.
 - "Hide the Harness": `[row]` `hide = ["harness"]`.
 - "The working Threads in the list, not on a shelf": `[group]`

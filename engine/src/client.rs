@@ -4,7 +4,7 @@
 use crate::Failure;
 use crate::places::Places;
 use banda_kernel::api::{ClientFrame, EngineFrame};
-use banda_kernel::{CommandId, Event, EventFilter, PROTOCOL, SpaceId};
+use banda_kernel::{CommandId, Event, EventFilter, PROTOCOL, ProjectId};
 use futures::{SinkExt, StreamExt};
 use serde_json::Value;
 use tokio_tungstenite::tungstenite::Message;
@@ -79,11 +79,11 @@ impl Client {
     pub async fn call(
         &mut self,
         method: &str,
-        space: Option<SpaceId>,
+        project: Option<ProjectId>,
         command: CommandId,
         params: Value,
     ) -> Result<Value, Failure> {
-        self.ask(method, space, command, params)
+        self.ask(method, project, command, params)
             .await
             .map_err(|failure| failure.cut_short(command))
     }
@@ -92,7 +92,7 @@ impl Client {
     pub async fn ask(
         &mut self,
         method: &str,
-        space: Option<SpaceId>,
+        project: Option<ProjectId>,
         command: CommandId,
         params: Value,
     ) -> Result<Value, Failure> {
@@ -100,7 +100,7 @@ impl Client {
         self.send(&ClientFrame::Call {
             id,
             method: method.to_owned(),
-            space,
+            project,
             command: Some(command),
             params,
         })
@@ -121,11 +121,11 @@ impl Client {
         }
     }
 
-    /// Hands each event of `space` after `after` to `each`, until the
+    /// Hands each event of `project` after `after` to `each`, until the
     /// engine closes the connection.
     pub async fn follow(
         &mut self,
-        space: SpaceId,
+        project: ProjectId,
         after: i64,
         filter: EventFilter,
         mut each: impl FnMut(&Event),
@@ -133,7 +133,7 @@ impl Client {
         let id = self.next_id();
         self.send(&ClientFrame::Subscribe {
             id,
-            space,
+            project,
             after,
             filter,
         })

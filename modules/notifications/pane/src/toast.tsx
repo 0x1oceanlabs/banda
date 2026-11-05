@@ -61,13 +61,15 @@ export function toastTold(
   })
 }
 
-/** Its title, with its Space after it, dimmer. */
+/** Its title, with its Project after it, dimmer. */
 function titleOf(told: Told) {
-  if (!told.space) return told.title
+  if (!told.project) return told.title
   return (
     <>
       {told.title}{" "}
-      <span className="font-normal text-muted-foreground">· {told.space}</span>
+      <span className="font-normal text-muted-foreground">
+        · {told.project}
+      </span>
     </>
   )
 }

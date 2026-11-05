@@ -7,7 +7,7 @@
  * Thread's Commit… opens the Commit dialog.
  */
 import { type ReactNode, useState, useSyncExternalStore } from "react"
-import type { Engine, SpaceId } from "@banda/contract"
+import type { Engine, ProjectId } from "@banda/contract"
 import type { Action, Status } from "@banda/contract/git"
 import { Button } from "@banda/ui/components/button"
 import {
@@ -59,20 +59,20 @@ const ICONS: Record<Quick["icon"], typeof GitCommitIcon> = {
 
 export function GitButton({
   engine,
-  space,
+  project,
   thread,
   harness,
   status,
 }: {
   engine: Engine
-  space: SpaceId
+  project: ProjectId
   thread: string | null
   harness: { id: string; name: string } | null
   status: Status
 }) {
   const now = useSyncExternalStore(
-    (hear) => hearRun(space, hear),
-    () => runOf(space)
+    (hear) => hearRun(project, hear),
+    () => runOf(project)
   )
   // The Thread's Harness writes a commit's message; a new Thread's, the
   // one it starts on.
@@ -84,7 +84,7 @@ export function GitButton({
   const [committing, setCommitting] = useState(false)
   const go = (action: Action, feature = false) => {
     setAsking(null)
-    void run(engine, space, writer, action, { feature })
+    void run(engine, project, writer, action, { feature })
   }
   // A push on the default branch asks first.
   const press = (action: Action) =>
@@ -101,7 +101,7 @@ export function GitButton({
             <>
               <Elapsed since={now.since} />
               {now.stops && (
-                <Button variant="ghost" size="xs" onClick={() => stop(space)}>
+                <Button variant="ghost" size="xs" onClick={() => stop(project)}>
                   Stop
                 </Button>
               )}
@@ -131,7 +131,7 @@ export function GitButton({
       {now.is === "failed" && (
         <GitAlert
           className="rounded-lg bg-destructive/10 py-1 pr-1 pl-2"
-          onDismiss={() => dismiss(space)}
+          onDismiss={() => dismiss(project)}
         >
           {now.message}
         </GitAlert>
@@ -169,7 +169,7 @@ export function GitButton({
           writer={writer?.name ?? null}
           onClose={() => setCommitting(false)}
           onCommit={(commit) =>
-            void run(engine, space, writer, "commit", commit)
+            void run(engine, project, writer, "commit", commit)
           }
         />
       )}

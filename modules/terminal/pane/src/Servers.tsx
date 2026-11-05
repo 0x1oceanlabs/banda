@@ -1,4 +1,4 @@
-import type { Engine, SpaceId, SpaceSummary } from "@banda/contract"
+import type { Engine, ProjectId, ProjectSummary } from "@banda/contract"
 import type { Server } from "@banda/contract/terminal"
 import {
   DropdownMenu,
@@ -8,7 +8,7 @@ import {
   DropdownMenuLabel,
   DropdownMenuTrigger,
 } from "@banda/ui/components/dropdown-menu"
-import { SpaceBadge } from "@banda/ui/components/space-badge"
+import { ProjectBadge } from "@banda/ui/components/project-badge"
 import type { WidgetProps, WindowApi } from "@banda/ui/module"
 import { GlobeIcon, SquareIcon } from "lucide-react"
 import type { MouseEvent } from "react"
@@ -17,27 +17,37 @@ import { arrived, type Placed } from "./arrived"
 
 /**
  * The servers started in Banda, on the bar (ADR 0044, decision 5): the
- * first one's port, and how many more. A click lists every Space's; a row
- * opens its server in a browser Pane in its Space, or with Ctrl or ⌘ in
+ * first one's port, and how many more. A click lists every Project's; a row
+ * opens its server in a browser Pane in its Project, or with Ctrl or ⌘ in
  * the Person's browser, and its square stops it. It draws nothing while
- * no Space has a server.
+ * no Project has a server.
  */
-export function ServersWidget({ engine, spaces, window }: WidgetProps) {
+export function ServersWidget({ engine, projects, window }: WidgetProps) {
   const [placed, setPlaced] = useState<Placed[]>([])
   const heard = useCallback(
-    (space: SpaceId, servers: readonly Server[]) =>
-      setPlaced((before) => arrived(before, space, servers)),
+    (project: ProjectId, servers: readonly Server[]) =>
+      setPlaced((before) => arrived(before, project, servers)),
     []
   )
-  const listening = spaces.map((space) => (
-    <Listen key={space.id} engine={engine} space={space.id} heard={heard} />
+  const listening = projects.map((project) => (
+    <Listen
+      key={project.id}
+      engine={engine}
+      project={project.id}
+      heard={heard}
+    />
   ))
   // The listeners stand first, whatever follows, so none starts again.
   return (
     <>
       {listening}
       {placed.length > 0 && (
-        <List placed={placed} spaces={spaces} engine={engine} window={window} />
+        <List
+          placed={placed}
+          projects={projects}
+          engine={engine}
+          window={window}
+        />
       )}
     </>
   )
@@ -45,18 +55,18 @@ export function ServersWidget({ engine, spaces, window }: WidgetProps) {
 
 function List({
   placed,
-  spaces,
+  projects,
   engine,
   window,
 }: {
   placed: readonly Placed[]
-  spaces: readonly SpaceSummary[]
+  projects: readonly ProjectSummary[]
   engine: Engine
   window: WindowApi
 }) {
   const first = placed[0]!
   const words = placed.map(({ server }) => address(server.port)).join(" · ")
-  const named = new Map(spaces.map((space) => [space.id, space]))
+  const named = new Map(projects.map((project) => [project.id, project]))
   return (
     <DropdownMenu>
       <DropdownMenuTrigger
@@ -79,9 +89,9 @@ function List({
           <DropdownMenuLabel>Servers</DropdownMenuLabel>
           {placed.map((each) => (
             <Row
-              key={`${each.space}/${each.server.port}`}
+              key={`${each.project}/${each.server.port}`}
               placed={each}
-              space={named.get(each.space)}
+              project={named.get(each.project)}
               engine={engine}
               window={window}
             />
@@ -93,13 +103,13 @@ function List({
 }
 
 function Row({
-  placed: { space, server },
-  space: named,
+  placed: { project, server },
+  project: named,
   engine,
   window,
 }: {
   placed: Placed
-  space: SpaceSummary | undefined
+  project: ProjectSummary | undefined
   engine: Engine
   window: WindowApi
 }) {
@@ -107,11 +117,13 @@ function Row({
   const open = (event: MouseEvent) => {
     if (event.ctrlKey || event.metaKey)
       globalThis.open(url, "_blank", "noopener")
-    else window.run("browser.open", { address: url, space })
+    else window.run("browser.open", { address: url, project })
   }
   // One that ended meanwhile is gone at the next look.
   const stop = () =>
-    void engine.call("terminal.stop_server", server, { space }).catch(() => {})
+    void engine
+      .call("terminal.stop_server", server, { project })
+      .catch(() => {})
   const by = server.by === "agent" ? "Agent" : "Terminal"
   return (
     <DropdownMenuItem
@@ -129,7 +141,7 @@ function Row({
           {server.program ? `${by} · ${server.program}` : by}
         </span>
       </span>
-      {named && <SpaceBadge space={named} />}
+      {named && <ProjectBadge project={named} />}
       <button
         type="button"
         aria-label={`Stop ${address(server.port)}`}
@@ -154,29 +166,29 @@ function address(port: number): string {
   return `localhost:${port}`
 }
 
-/** Hears `space`'s servers while it is open; a Space that closes, or
+/** Hears `project`'s servers while it is open; a Project that closes, or
  * whose stream ended, has none. */
 function Listen({
   engine,
-  space,
+  project,
   heard,
 }: {
   engine: Engine
-  space: SpaceId
-  heard: (space: SpaceId, servers: readonly Server[]) => void
+  project: ProjectId
+  heard: (project: ProjectId, servers: readonly Server[]) => void
 }) {
   useEffect(() => {
     const stop = engine.stream(
-      space,
+      project,
       "terminal.ports",
       {},
-      ({ servers }) => heard(space, servers),
-      () => heard(space, [])
+      ({ servers }) => heard(project, servers),
+      () => heard(project, [])
     )
     return () => {
       stop()
-      heard(space, [])
+      heard(project, [])
     }
-  }, [engine, space, heard])
+  }, [engine, project, heard])
   return null
 }

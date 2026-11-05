@@ -13,7 +13,7 @@ use banda_kernel::Refusal;
 use std::collections::HashMap;
 
 /// The status of the repository `found` for a folder, read after the
-/// Space's event `at`: `repo: false` when none was, with why when git
+/// Project's event `at`: `repo: false` when none was, with why when git
 /// could not look, as in a repository another user owns. Its untracked
 /// files are read again only where they changed since a status of the
 /// repository counted them (`repositories`).
@@ -37,7 +37,7 @@ pub async fn read(
     })
 }
 
-/// The status of `repo`, read after the Space's event `at`.
+/// The status of `repo`, read after the Project's event `at`.
 async fn of(repo: Repo, at: i64, repositories: &Repositories) -> Result<Status, Failure> {
     let said = repo.porcelain().await?;
     let against = repo.head_or_empty(said.head.as_deref()).await?;

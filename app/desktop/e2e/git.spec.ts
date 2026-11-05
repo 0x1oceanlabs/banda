@@ -33,7 +33,7 @@ test("the Diff shows a Project's changes by scope, as T3 Code's, and reads again
   const { page, dir } = window
   await expect((await firstThread(page)).composer).toBeVisible()
 
-  // The Space's folder: a branch off main with a commit, then work not
+  // The Project's folder: a branch off main with a commit, then work not
   // yet committed, one file of it staged and one new.
   const folder = join(dir, "root", "Work")
   git(folder, "init", "-q", "-b", "main")
@@ -713,7 +713,7 @@ test("Alt+D shows the Diff beside the Thread and hides it, and Alt+Shift+G opens
   await page.keyboard.press("Escape")
   await expect(search).toBeHidden()
 
-  // Alt+D: the Space's Diff on its changes, beside the Thread; on the
+  // Alt+D: the Project's Diff on its changes, beside the Thread; on the
   // Diff, Alt+D hides it.
   await page.keyboard.press("Escape")
   await thread.composer.click()
@@ -722,7 +722,7 @@ test("Alt+D shows the Diff beside the Thread and hides it, and Alt+Shift+G opens
   const scope = diff.getByRole("button", { name: "Scope" })
   await expect(scope).toHaveText("Changes")
   await expect(diff.getByText("app.ts").first()).toBeVisible()
-  // On another scope it is still the Space's one Diff: the key goes to it.
+  // On another scope it is still the Project's one Diff: the key goes to it.
   await scope.click()
   await page.getByRole("menuitemradio", { name: /Unstaged/ }).click()
   await expect(scope).toHaveText("Unstaged")

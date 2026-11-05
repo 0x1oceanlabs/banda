@@ -1,6 +1,6 @@
 //! `agents.write`: a short run of a Thread's Harness, apart from the
 //! Thread (ADR 0034, decision 3), as T3 Code's text model writes a
-//! commit's message. It runs in a session of its own in the Space's
+//! commit's message. It runs in a session of its own in the Project's
 //! folder, on the Thread's model at the least effort the Harness offers
 //! for it, planning and asking before it changes anything; whatever it
 //! asks is refused, and nobody sees it. Only its reply comes back, and

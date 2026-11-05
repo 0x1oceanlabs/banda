@@ -1,13 +1,13 @@
 //! The servers started in Banda (ADR 0044): programs that listen on a
-//! loopback or wildcard address and carry a Space's ID in their
+//! loopback or wildcard address and carry a Project's ID in their
 //! environment, as all a terminal or a Harness starts does.
 //!
-//! One look finds every Space's, every 3 seconds while a window listens:
+//! One look finds every Project's, every 3 seconds while a window listens:
 //! `/proc` on Linux; `lsof`, `sysinfo` and `ps` on macOS. Nothing is sent
 //! to a server found: bytes it does not speak may break it.
 
 use crate::model::{Server, Servers, StartedBy};
-use banda_kernel::{SPACE_VARIABLE, SpaceId, Stream};
+use banda_kernel::{ProjectId, Stream, project_in_env};
 use rustix::process::{Pid, Signal, kill_process, kill_process_group};
 use std::collections::{HashMap, HashSet};
 use std::net::IpAddr;
@@ -26,10 +26,10 @@ const EVERY: Duration = Duration::from_secs(3);
 /// request or write its files.
 const GRACE: Duration = Duration::from_secs(3);
 
-/// A server, and the Space it carries.
+/// A server, and the Project it carries.
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub struct Found {
-    pub space: SpaceId,
+    pub project: ProjectId,
     pub server: Server,
 }
 
@@ -44,7 +44,7 @@ pub struct Row {
 /// Every process, by its number.
 pub type Table = HashMap<u32, Row>;
 
-/// Every Space's servers, looked for while one is heard.
+/// Every Project's servers, looked for while one is heard.
 #[derive(Default)]
 pub struct Scanner {
     found: watch::Sender<Arc<[Found]>>,
@@ -52,15 +52,15 @@ pub struct Scanner {
 }
 
 impl Scanner {
-    /// `space`'s servers, then their list again each time it changes.
-    pub fn stream(self: &Arc<Self>, space: SpaceId) -> Stream {
+    /// `project`'s servers, then their list again each time it changes.
+    pub fn stream(self: &Arc<Self>, project: ProjectId) -> Stream {
         let mut found = self.watch();
         // One list waits at a time; a newer one replaces it.
         let (say, heard) = mpsc::channel(1);
         tokio::spawn(async move {
             let mut told = None;
             loop {
-                let servers = of(space, &found.borrow_and_update());
+                let servers = of(project, &found.borrow_and_update());
                 if told.as_ref() != Some(&servers) {
                     let Ok(said) = serde_json::to_value(&servers) else {
                         return;
@@ -81,7 +81,7 @@ impl Scanner {
         heard
     }
 
-    /// Every Space's servers, now and as they change. It looks while one
+    /// Every Project's servers, now and as they change. It looks while one
     /// of these is held.
     fn watch(self: &Arc<Self>) -> watch::Receiver<Arc<[Found]>> {
         let mut looking = self.looking.lock().unwrap();
@@ -116,22 +116,22 @@ impl Scanner {
     }
 }
 
-/// `space`'s servers out of every Space's.
-fn of(space: SpaceId, found: &[Found]) -> Servers {
+/// `project`'s servers out of every Project's.
+fn of(project: ProjectId, found: &[Found]) -> Servers {
     Servers {
         servers: (found.iter())
-            .filter(|found| found.space == space)
+            .filter(|found| found.project == project)
             .map(|found| found.server.clone())
             .collect(),
     }
 }
 
-/// Every Space's servers now: one for each Space and port, the process
+/// Every Project's servers now: one for each Project and port, the process
 /// that holds it first, as IPv4 and IPv6 on one port are one server.
 pub async fn look() -> Vec<Found> {
     let mut found = system::look().await;
-    found.sort_by_key(|found| (found.space, found.server.port, found.server.process));
-    found.dedup_by_key(|found| (found.space, found.server.port));
+    found.sort_by_key(|found| (found.project, found.server.port, found.server.process));
+    found.dedup_by_key(|found| (found.project, found.server.port));
     found
 }
 
@@ -150,24 +150,24 @@ fn in_order(before: &[Found], now: Vec<Found>) -> Vec<Found> {
 static INHERITED: LazyLock<Option<String>> =
     LazyLock::new(|| std::env::var(TERMINAL_VARIABLE).ok());
 
-/// The Space a process's environment names, and what started it: a
+/// The Project a process's environment names, and what started it: a
 /// terminal when it names one too.
-fn carried<'a>(environ: impl IntoIterator<Item = &'a [u8]>) -> Option<(SpaceId, StartedBy)> {
-    let (mut space, mut by) = (None, StartedBy::Agent);
+fn carried<'a>(environ: impl IntoIterator<Item = &'a [u8]>) -> Option<(ProjectId, StartedBy)> {
+    let (mut project, mut by) = (None, StartedBy::Agent);
     for pair in environ {
         let Some((key, value)) = (std::str::from_utf8(pair).ok()).and_then(|p| p.split_once('='))
         else {
             continue;
         };
-        match key {
-            SPACE_VARIABLE => space = value.parse().ok(),
-            TERMINAL_VARIABLE if INHERITED.as_deref() != Some(value) => {
-                by = StartedBy::Terminal;
-            }
-            _ => {}
+        if let Some(named) = project_in_env(key, value) {
+            project = Some(named);
+            continue;
+        }
+        if key == TERMINAL_VARIABLE && INHERITED.as_deref() != Some(value) {
+            by = StartedBy::Terminal;
         }
     }
-    Some((space?, by))
+    Some((project?, by))
 }
 
 /// Whether a socket bound to `address` is served on this computer only or
@@ -330,7 +330,7 @@ mod system {
         found
     }
 
-    /// The processes that carry a Space and hold one of the `listening`
+    /// The processes that carry a Project and hold one of the `listening`
     /// sockets.
     fn held(listening: &HashMap<u64, u16>) -> Vec<Found> {
         let engine = std::process::id();
@@ -353,7 +353,7 @@ mod system {
             let Ok(environ) = fs::read(format!("/proc/{process}/environ")) else {
                 continue;
             };
-            let Some((space, by)) = carried(environ.split(|byte| *byte == 0)) else {
+            let Some((project, by)) = carried(environ.split(|byte| *byte == 0)) else {
                 continue;
             };
             let ports: Vec<u16> = sockets(process)
@@ -366,7 +366,7 @@ mod system {
                 .and_then(program_of)
                 .unwrap_or_default();
             found.extend(ports.into_iter().map(|port| Found {
-                space,
+                project,
                 server: Server {
                     port,
                     process,
@@ -569,9 +569,9 @@ mod system {
         (listening.into_iter())
             .filter_map(|(process, port)| {
                 let found = system.process(Pid::from_u32(process))?;
-                let (space, by) = carried(found.environ().iter().map(|p| p.as_encoded_bytes()))?;
+                let (project, by) = carried(found.environ().iter().map(|p| p.as_encoded_bytes()))?;
                 Some(Found {
-                    space,
+                    project,
                     server: Server {
                         port,
                         process,
@@ -600,9 +600,9 @@ mod system {
 mod tests {
     use super::*;
 
-    fn server(space: SpaceId, process: u32, by: StartedBy) -> Found {
+    fn server(project: ProjectId, process: u32, by: StartedBy) -> Found {
         Found {
-            space,
+            project,
             server: Server {
                 port: u16::try_from(process).unwrap(),
                 process,
@@ -640,29 +640,29 @@ mod tests {
     }
 
     #[test]
-    fn a_process_carries_its_space_and_whether_a_terminal_started_it() {
-        let space = SpaceId::new();
+    fn a_process_carries_its_project_and_whether_a_terminal_started_it() {
+        let project = ProjectId::new();
         let carried = |pairs: &[&str]| carried(pairs.iter().map(|p| p.as_bytes()));
-        let at = format!("BANDA_SPACE={space}");
-        let terminal = format!("BANDA_TERMINAL={}", SpaceId::new());
+        let at = format!("BANDA_PROJECT={project}");
+        let terminal = format!("BANDA_TERMINAL={}", ProjectId::new());
         assert_eq!(
             carried(&["PATH=/bin", &at, &terminal]),
-            Some((space, StartedBy::Terminal))
+            Some((project, StartedBy::Terminal))
         );
-        assert_eq!(carried(&[&at]), Some((space, StartedBy::Agent)));
-        assert_eq!(carried(&["BANDA_SPACE=nonsense"]), None);
+        assert_eq!(carried(&[&at]), Some((project, StartedBy::Agent)));
+        assert_eq!(carried(&["BANDA_PROJECT=nonsense"]), None);
         assert_eq!(carried(&["HOME=/home/me"]), None);
     }
 
     #[test]
     fn servers_keep_the_order_they_came_in() {
-        let space = SpaceId::new();
+        let project = ProjectId::new();
         let by = StartedBy::Agent;
-        let before = [server(space, 5173, by), server(space, 3000, by)];
+        let before = [server(project, 5173, by), server(project, 3000, by)];
         let now = vec![
-            server(space, 3000, by),
-            server(space, 5173, by),
-            server(space, 6006, by),
+            server(project, 3000, by),
+            server(project, 5173, by),
+            server(project, 6006, by),
         ];
         let ports: Vec<u16> = (in_order(&before, now).iter())
             .map(|f| f.server.port)
@@ -671,8 +671,8 @@ mod tests {
     }
 
     #[test]
-    fn a_space_sees_its_own_servers() {
-        let (here, there) = (SpaceId::new(), SpaceId::new());
+    fn a_project_sees_its_own_servers() {
+        let (here, there) = (ProjectId::new(), ProjectId::new());
         let by = StartedBy::Terminal;
         let found = [
             server(here, 5173, by),
@@ -711,11 +711,11 @@ mod tests {
             "one no longer under the engine"
         );
         assert!(!harness_s(999, &table, 100), "one gone");
-        let space = SpaceId::new();
+        let project = ProjectId::new();
         let mut found = vec![
-            server(space, 202, StartedBy::Agent),
-            server(space, 302, StartedBy::Agent),
-            server(space, 401, StartedBy::Terminal),
+            server(project, 202, StartedBy::Agent),
+            server(project, 302, StartedBy::Agent),
+            server(project, 401, StartedBy::Terminal),
         ];
         no_harness_s(&mut found, &table, 100);
         let left: Vec<u32> = found.iter().map(|f| f.server.process).collect();

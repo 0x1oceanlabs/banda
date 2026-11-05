@@ -115,9 +115,9 @@ export function useSizing(
 
     /** Sizes `column`'s width by how far the pointer goes from `x0`. */
     const widthPart = (column: Sized, x0: number, waits: boolean): Part => {
-      const space = room(element)
-      const scale = space.inner + space.gap
-      const floor = floorIn(space, column.min)
+      const project = room(element)
+      const scale = project.inner + project.gap
+      const floor = floorIn(project, column.min)
       // As drawn: a width let go of a moment ago may not be the Strip's yet.
       const from = drawn(
         motion.current.shareOf(column.id) ?? share(column.width) ?? 0.5,

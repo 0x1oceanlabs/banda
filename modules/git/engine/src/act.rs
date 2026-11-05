@@ -10,7 +10,7 @@
 use crate::model::{ActAsk, Acted, Action, Change, Changed, Commit, Done, Progress, Step};
 use crate::repo::{Repo, branch_refs, chosen, in_way, scratch};
 use crate::run::{Failure, Opts, Ran, Reason, git};
-use banda_kernel::{ModuleSpace, Participant, Refusal};
+use banda_kernel::{ModuleProject, Participant, Refusal};
 use serde_json::Value;
 use std::collections::HashMap;
 use std::fs::File;
@@ -26,16 +26,16 @@ const TRACED: Duration = Duration::from_millis(100);
 /// git says what changed in its fact `git.acted`, which the agents module
 /// puts before the Agent's next message.
 pub struct Card {
-    pub space: ModuleSpace,
+    pub project: ModuleProject,
     pub by: Participant,
     pub thread: String,
 }
 
 impl Card {
     /// The card of `thread`, when one asked.
-    pub fn of(space: &ModuleSpace, by: Participant, thread: Option<String>) -> Option<Card> {
+    pub fn of(project: &ModuleProject, by: Participant, thread: Option<String>) -> Option<Card> {
         Some(Card {
-            space: space.clone(),
+            project: project.clone(),
             by,
             thread: thread?,
         })
@@ -49,7 +49,7 @@ impl Card {
             notice,
         };
         let by = self.by;
-        let told = self.space.write(move |tx| {
+        let told = self.project.write(move |tx| {
             tx.emit("git.acted", 1, Some(&acted.thread), by, &acted)?;
             Ok(())
         });

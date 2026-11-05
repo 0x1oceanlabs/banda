@@ -27,7 +27,7 @@ export function General({ engine }: { engine: Engine }) {
         <ItemContent>
           <ItemTitle>Engine</ItemTitle>
           <ItemDescription className="text-xs">
-            Banda's engine, which runs the Spaces.
+            Banda's engine, which runs the Projects.
           </ItemDescription>
         </ItemContent>
         <ItemActions className="font-mono text-xs text-muted-foreground">

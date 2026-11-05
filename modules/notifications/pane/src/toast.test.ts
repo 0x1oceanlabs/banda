@@ -11,7 +11,7 @@ const call = (chime: Call["chime"], detail?: string): Call => ({
   ...(detail ? { detail } : {}),
   pane: { kind: "agents.thread", args: {} },
   key: "s:t1",
-  space: "s",
+  project: "s",
   since: 0,
 })
 
@@ -37,7 +37,7 @@ test("a call's toast says what calls, unless detail is off, and goes there", () 
         label: "Answer",
         action: GO_TO,
         args: {
-          space: "s",
+          project: "s",
           about: "t1",
           pane: { kind: "agents.thread", args: {} },
         },

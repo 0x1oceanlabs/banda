@@ -6,19 +6,19 @@
 #
 # TREE is a checkout or worktree, or the slug of one in ../banda-worktrees;
 # without it, the tree this script is in. Each tree gets a trial of its own
-# under ~/.local/state/banda-trial/<slug>: its Spaces, settings and logs,
+# under ~/.local/state/banda-trial/<slug>: its Projects, settings and logs,
 # so it never touches Banda, Banda Dev or Banda Local, and two trials run
 # at once (ADR 0033: BANDA_ROOT, BANDA_DATA, BANDA_STATE and BANDA_CONFIG
 # move each folder, and the window's lock follows the state folder).
 #
 # It runs the fake agent by default, so a trial costs no tokens. The
-# trial's Spaces and its history stay between runs. A window of the trial
+# trial's Projects and its history stay between runs. A window of the trial
 # that still runs closes first, so the new build is the one shown. The
 # window serves CDP, which scripts/drive.mjs drives: an Agent sees and
 # works what it built.
 #
 #   --real        the engine offers Claude Code and Codex, as Banda does
-#   --fresh       forget the trial's Spaces and settings first
+#   --fresh       forget the trial's Projects and settings first
 #   --no-build    start what was built last, without building
 #   --hidden      no window on the screen, nor its notices and sounds: it
 #                 draws on a screen of its own, for an Agent (Linux)

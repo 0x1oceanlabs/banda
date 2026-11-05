@@ -2,7 +2,7 @@
  * Where a reply's paths lead (ADR 0063, decision 2): each to the file it
  * names, if there is one. A path from the root or home is that file. A
  * relative one starts at the Thread's folder, and then at the root of the
- * repository each file its tools named is in: a worktree beside the Space
+ * repository each file its tools named is in: a worktree beside the Project
  * then works too (#492). Only a file is found, never a folder.
  */
 import { stat } from "node:fs/promises"

@@ -61,7 +61,7 @@ test("a command that broke off goes again with the same command ID", async () =>
     token: "s",
   })
 
-  const answer = engine.command("agents.send", { text: "hi" }, "space")
+  const answer = engine.command("agents.send", { text: "hi" }, "project")
   await flush()
   const call = first.sent[1]
   expect(call).toMatchObject({ type: "call", method: "agents.send" })
@@ -81,7 +81,7 @@ test("a command that broke off goes again with the same command ID", async () =>
 
 test("a command gives up after three tries, and says the engine is away", async () => {
   const engine = new Engine(address)
-  const answer = engine.command("agents.send", { text: "hi" }, "space")
+  const answer = engine.command("agents.send", { text: "hi" }, "project")
   answer.catch(() => {})
   for (let attempt = 0; attempt < 3; attempt++) {
     await vi.advanceTimersByTimeAsync(5_000)
@@ -100,7 +100,7 @@ test("a subscription follows on after a reconnect from the last event it heard",
   Socket.made[0].welcome()
   const heard: number[] = []
   engine.follow(
-    "space",
+    "project",
     4,
     {},
     (event) => heard.push(event.seq),

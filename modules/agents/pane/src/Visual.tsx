@@ -14,7 +14,7 @@ import {
   PlusIcon,
   XIcon,
 } from "lucide-react"
-import type { SpaceId } from "@banda/contract"
+import type { ProjectId } from "@banda/contract"
 import type { Fit, VisualId } from "@banda/contract/agents"
 import { Button } from "@banda/ui/components/button"
 import {
@@ -62,14 +62,14 @@ function lookNow(): VisualLook {
  * at `zoom`: laid out that much narrower, then drawn that much larger, as
  * a browser zooms. */
 export function VisualFrame({
-  space,
+  project,
   visual,
   title,
   height,
   heights,
   zoom = 1,
   className,
-}: VisualArgs & { space: SpaceId; zoom?: number; className?: string }) {
+}: VisualArgs & { project: ProjectId; zoom?: number; className?: string }) {
   const frame = useRef<HTMLIFrameElement>(null)
   const [fits, setFits] = useState<number>()
   /** How tall the frame is till its page says. */
@@ -77,7 +77,7 @@ export function VisualFrame({
   // The first look goes with the address; once the page is loaded, each
   // new one is posted, so it repaints without loading again.
   const [address] = useState(() =>
-    lookedAt(visualAddress(space, visual), lookNow())
+    lookedAt(visualAddress(project, visual), lookNow())
   )
   const post = () =>
     frame.current?.contentWindow?.postMessage(lookMessage(lookNow()), "*")
@@ -149,11 +149,11 @@ export function VisualFrame({
 /** A Visual in its Thread, with its title under it and, on hover, the
  * ways to open it larger in a reserved row above the page. */
 export function Visual({
-  space,
+  project,
   visual,
   onOpen,
 }: {
-  space: SpaceId
+  project: ProjectId
   visual: VisualArgs
   /** Opens it as a Pane of its own, beside the Thread. */
   onOpen: () => void
@@ -176,7 +176,7 @@ export function Visual({
         </div>
       </div>
       <VisualFrame
-        space={space}
+        project={project}
         {...visual}
         // The page's own gutter sits in the Thread's margin.
         className="-mx-2"
@@ -185,7 +185,7 @@ export function Visual({
         {visual.title}
       </figcaption>
       <VisualPreview
-        space={space}
+        project={project}
         visual={visual}
         open={previewing}
         onOpenChange={setPreviewing}
@@ -201,13 +201,13 @@ const ACTUAL = ZOOMS.indexOf(1)
 /** A Visual over the window, as wide as the window lets it be, zoomed from
  * 50 to 200 %; `Esc` closes it, as T3 Code's full screen. */
 function VisualPreview({
-  space,
+  project,
   visual,
   open,
   onOpenChange,
   onOpen,
 }: {
-  space: SpaceId
+  project: ProjectId
   visual: VisualArgs
   open: boolean
   onOpenChange: (open: boolean) => void
@@ -281,7 +281,7 @@ function VisualPreview({
           </DialogClose>
         </div>
         <div className="min-h-0 flex-1 overflow-auto px-8 py-6">
-          <VisualFrame space={space} {...visual} zoom={zoom} />
+          <VisualFrame project={project} {...visual} zoom={zoom} />
         </div>
       </DialogContent>
     </Dialog>

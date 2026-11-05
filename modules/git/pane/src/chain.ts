@@ -1,13 +1,13 @@
 /**
  * What the git button runs (ADR 0034, decisions 3 and 4): the whole
  * chain at once, a message the Thread's Harness writes (`git.prompt`,
- * `agents.write`, `git.written`), then `git.act`. A run is the Space's,
+ * `agents.write`, `git.written`), then `git.act`. A run is the Project's,
  * not a card's: a card hidden and shown again finds it where it is, and
  * a second press while it runs does nothing. While the message is
  * written, Stop ends the run quietly: `agents.write` let go stops the
  * Harness's run, and nothing is committed.
  */
-import { type Engine, Refused, type SpaceId } from "@banda/contract"
+import { type Engine, Refused, type ProjectId } from "@banda/contract"
 import type { Action, Step } from "@banda/contract/git"
 import { problem } from "@banda/ui/lib/words"
 import { afterRun, type Ended } from "./ended"
@@ -45,37 +45,37 @@ const STEPS: Record<Step, string> = {
   pulling: "Pulling…",
 }
 
-const runs = new Map<SpaceId, Run>()
-const hearing = new Map<SpaceId, Set<() => void>>()
-/** What stops each Space's run while its message is written. */
-const stopping = new Map<SpaceId, AbortController>()
+const runs = new Map<ProjectId, Run>()
+const hearing = new Map<ProjectId, Set<() => void>>()
+/** What stops each Project's run while its message is written. */
+const stopping = new Map<ProjectId, AbortController>()
 
-function set(space: SpaceId, run: Run): void {
-  runs.set(space, run)
-  for (const hear of hearing.get(space) ?? []) hear()
+function set(project: ProjectId, run: Run): void {
+  runs.set(project, run)
+  for (const hear of hearing.get(project) ?? []) hear()
 }
 
-/** The Space's run as it is now. */
-export function runOf(space: SpaceId): Run {
-  return runs.get(space) ?? IDLE
+/** The Project's run as it is now. */
+export function runOf(project: ProjectId): Run {
+  return runs.get(project) ?? IDLE
 }
 
-/** Hears each change of the Space's run; returns how to stop. */
-export function hearRun(space: SpaceId, hear: () => void): () => void {
-  const all = hearing.get(space) ?? new Set()
-  hearing.set(space, all.add(hear))
+/** Hears each change of the Project's run; returns how to stop. */
+export function hearRun(project: ProjectId, hear: () => void): () => void {
+  const all = hearing.get(project) ?? new Set()
+  hearing.set(project, all.add(hear))
   return () => all.delete(hear)
 }
 
 /** Puts a failed run's error away. */
-export function dismiss(space: SpaceId): void {
-  if (runOf(space).is === "failed") set(space, IDLE)
+export function dismiss(project: ProjectId): void {
+  if (runOf(project).is === "failed") set(project, IDLE)
 }
 
-/** Stops the Space's run while its message is written: nothing is
+/** Stops the Project's run while its message is written: nothing is
  * committed, and the button is back. */
-export function stop(space: SpaceId): void {
-  stopping.get(space)?.abort()
+export function stop(project: ProjectId): void {
+  stopping.get(project)?.abort()
 }
 
 /** Who writes a commit's message: a Thread's Harness, or the one a new
@@ -89,14 +89,14 @@ export type Writer = { name: string } & (
  * once: a reconnect never runs the writer again. */
 function written(
   engine: Engine,
-  space: SpaceId,
+  project: ProjectId,
   { name, ...who }: Writer,
   prompt: string,
   signal: AbortSignal
 ): Promise<string | null> {
   return new Promise((resolve, reject) => {
     const letGo = engine.stream(
-      space,
+      project,
       "agents.write",
       { ...who, prompt },
       (piece) =>
@@ -128,25 +128,25 @@ export type Commit = {
   message?: string
 }
 
-/** Runs `action` in `space`, its message the Person's, else written by
+/** Runs `action` in `project`, its message the Person's, else written by
  * `writer`. */
 export async function run(
   engine: Engine,
-  space: SpaceId,
+  project: ProjectId,
   writer: Writer | null,
   action: Action,
   { feature = false, files, message: own }: Commit = {}
 ): Promise<void> {
-  if (runOf(space).is === "running") return
+  if (runOf(project).is === "running") return
   const commits = action === "commit" || action === "commit_push"
   // A commit with no message of the Person's: the Harness writes it.
   const writes = commits && !own
   if (writes && writer === null)
-    return set(space, { is: "failed", message: NO_WRITER })
+    return set(project, { is: "failed", message: NO_WRITER })
   const thread = writer && "thread" in writer ? writer.thread : null
   const writing = writes ? writer : null
   const step = (label: string, stops?: true) =>
-    set(space, {
+    set(project, {
       is: "running",
       label,
       since: Date.now(),
@@ -154,21 +154,21 @@ export async function run(
     })
   // How it ended, which a Person with no card in sight hears too.
   const end = (how: Ended) => {
-    set(space, how)
-    afterRun(space, how)
+    set(project, how)
+    afterRun(project, how)
   }
   // Stopped while the message is written, the run ends here quietly.
   const stopper = new AbortController()
   const { signal } = stopper
   if (writing) {
-    stopping.set(space, stopper)
-    signal.addEventListener("abort", () => set(space, IDLE), { once: true })
+    stopping.set(project, stopper)
+    signal.addEventListener("abort", () => set(project, IDLE), { once: true })
     step(`${writing.name} is writing the message…`, true)
   } else step("Starting…")
   try {
     let message = own
     let branch: string | undefined
-    const ask = { space }
+    const ask = { project }
     if (writing) {
       const { prompt } = await engine.call(
         "git.prompt",
@@ -176,10 +176,10 @@ export async function run(
         ask
       )
       if (signal.aborted) return
-      const reply = await written(engine, space, writing, prompt, signal)
+      const reply = await written(engine, project, writing, prompt, signal)
       if (reply === null || signal.aborted) return
       // Written: from here it goes on to the end, as a commit does.
-      if (stopping.get(space) === stopper) stopping.delete(space)
+      if (stopping.get(project) === stopper) stopping.delete(project)
       step(STEPS[feature ? "branching" : "committing"])
       ;({ message, branch } = await engine.call(
         "git.written",
@@ -200,11 +200,11 @@ export async function run(
     let showing: ReturnType<typeof setTimeout> | undefined
     const showLine = () => {
       showing = undefined
-      const now = runOf(space)
-      if (now.is === "running") set(space, { ...now, line })
+      const now = runOf(project)
+      if (now.is === "running") set(project, { ...now, line })
     }
     engine.stream(
-      space,
+      project,
       "git.act",
       // The Thread's Agent hears what each step changed (`git.acted`).
       { action, message, files, branch, ...(thread && { thread }) },
@@ -228,7 +228,7 @@ export async function run(
             end(done)
             // ✓ stays ten seconds, then the button is back.
             setTimeout(
-              () => runOf(space) === done && set(space, IDLE),
+              () => runOf(project) === done && set(project, IDLE),
               DONE_FOR
             )
             return
@@ -255,6 +255,6 @@ export async function run(
   } catch (error) {
     if (!signal.aborted) end({ is: "failed", message: problem(error) })
   } finally {
-    if (stopping.get(space) === stopper) stopping.delete(space)
+    if (stopping.get(project) === stopper) stopping.delete(project)
   }
 }

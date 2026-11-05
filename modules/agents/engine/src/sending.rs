@@ -12,6 +12,7 @@
 
 use crate::model::{Mode, Offer, OptionValue, Settings};
 use banda_look::OneFile;
+use banda_look::keyed::Renamed;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -36,9 +37,11 @@ pub enum Enter {
 #[serde(rename_all = "lowercase")]
 #[ts(export, export_to = "agents/")]
 pub enum Workspaces {
-    /// On its Space's workspace, in a row with the Space's other Agents.
+    /// On its Project's workspace, in a row with the Project's other Agents.
+    /// `space` before ADR 0069 (grace).
     #[default]
-    Space,
+    #[serde(alias = "space")]
+    Project,
     /// Where the window has it: beside the Pane in front.
     Off,
 }
@@ -57,8 +60,8 @@ pub struct AgentsSettings {
     /// `[start.claude]`. The Agents section sets it from the composer's
     /// bar.
     pub start: Option<BTreeMap<String, Start>>,
-    /// Where an Agent's Thread opens: `"space"`, on its Space's workspace,
-    /// with the Space's other Agents; `"off"`, beside the Pane in front.
+    /// Where an Agent's Thread opens: `"project"`, on its Project's workspace,
+    /// with the Project's other Agents; `"off"`, beside the Pane in front.
     pub workspaces: Option<Workspaces>,
 }
 
@@ -73,6 +76,7 @@ pub struct Agents {
 impl OneFile for AgentsSettings {
     const NAME: &'static str = "agents.toml";
     const TEMPLATE: &'static str = TEMPLATE;
+    const RENAMED: &'static [Renamed] = &[Renamed::value("workspaces", "space", "project")];
     type Resolved = Agents;
 
     fn defaults() -> Self {

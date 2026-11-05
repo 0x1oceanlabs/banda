@@ -1,7 +1,7 @@
 //! The terminal module: programs a Person runs in a terminal, such as a
 //! shell or a Harness's sign-in (ADR 0004).
 //!
-//! The engine runs each program on a PTY in the Space's folder, keeps what
+//! The engine runs each program on a PTY in the Project's folder, keeps what
 //! it printed in memory, and lets windows watch it as a stream: none of it
 //! goes to the event log, which keeps the work, and a restart ends every
 //! terminal. Only a Person runs a terminal (the `Run` right): an Agent runs
@@ -15,7 +15,7 @@ mod history;
 mod servers;
 mod terminal;
 
-use banda_kernel::{Call, Module, ModuleSpace, Nothing, Refusal, Right, SpaceId, Stream};
+use banda_kernel::{Call, Module, ModuleProject, Nothing, ProjectId, Refusal, Right, Stream};
 use model::{Open, Piece, Servers, Size, TerminalId};
 use serde::Deserialize;
 use serde_json::Value;
@@ -46,12 +46,12 @@ impl Terminals {
         Self::default()
     }
 
-    fn find(&self, space: SpaceId, id: TerminalId) -> Result<Arc<Terminal>, Refusal> {
+    fn find(&self, project: ProjectId, id: TerminalId) -> Result<Arc<Terminal>, Refusal> {
         self.open
             .lock()
             .unwrap()
             .get(&id)
-            .filter(|t| t.space == space)
+            .filter(|t| t.project == project)
             .cloned()
             .ok_or_else(|| {
                 Refusal::not_found("This terminal is gone: it was closed, or Banda stopped.")
@@ -140,13 +140,13 @@ impl Module for Terminals {
         self.dispatch_stream(call, method, params).await
     }
 
-    async fn can_move(&self, space: ModuleSpace) -> Result<(), Refusal> {
+    async fn can_move(&self, project: ModuleProject) -> Result<(), Refusal> {
         if self
             .open
             .lock()
             .unwrap()
             .values()
-            .any(|terminal| terminal.space == space.id())
+            .any(|terminal| terminal.project == project.id())
         {
             return Err(Refusal::conflict(
                 "Close the open terminals in this Project before moving its folder.",
@@ -155,10 +155,10 @@ impl Module for Terminals {
         Ok(())
     }
 
-    /// A removed Space's programs stop, as `close` stops one.
-    async fn closing(&self, space: ModuleSpace) {
+    /// A removed Project's programs stop, as `close` stops one.
+    async fn closing(&self, project: ModuleProject) {
         let closed: Vec<_> = (self.open.lock().unwrap())
-            .extract_if(|_, terminal| terminal.space == space.id())
+            .extract_if(|_, terminal| terminal.project == project.id())
             .map(|(_, terminal)| terminal)
             .collect();
         for terminal in closed {
@@ -170,10 +170,10 @@ impl Module for Terminals {
 impl Terminals {
     async fn open(&self, call: Call, open: Open) -> Result<(), Refusal> {
         allowed(open.size)?;
-        let space = call.space();
+        let project = call.project();
         let mut open_now = self.open.lock().unwrap();
         let ended = match open_now.get(&open.terminal) {
-            Some(found) if found.space != space.id() => {
+            Some(found) if found.project != project.id() => {
                 return Err(Refusal::conflict(
                     "That terminal ID is taken: open a new terminal.",
                 ));
@@ -183,7 +183,7 @@ impl Terminals {
         };
         let id = open.terminal;
         let started =
-            Terminal::start(space.id(), &space.folder(), open).map_err(Refusal::invalid)?;
+            Terminal::start(project.id(), &project.folder(), open).map_err(Refusal::invalid)?;
         open_now.insert(id, started);
         drop(open_now);
         if let Some(ended) = ended {
@@ -196,19 +196,19 @@ impl Terminals {
         if data.len() > AT_ONCE {
             return Err(Refusal::invalid("Type at most 64 KB at once."));
         }
-        let terminal = self.find(call.space().id(), terminal)?;
+        let terminal = self.find(call.project().id(), terminal)?;
         terminal.write(&data).await.map_err(Refusal::conflict)
     }
 
     async fn resize(&self, call: Call, Resize { terminal, size }: Resize) -> Result<(), Refusal> {
         allowed(size)?;
-        let terminal = self.find(call.space().id(), terminal)?;
+        let terminal = self.find(call.project().id(), terminal)?;
         terminal.resize(size).await.map_err(Refusal::conflict)
     }
 
     async fn close(&self, call: Call, One { terminal }: One) -> Result<(), Refusal> {
         let closed = match self.open.lock().unwrap().entry(terminal) {
-            Entry::Occupied(found) if found.get().space == call.space().id() => {
+            Entry::Occupied(found) if found.get().project == call.project().id() => {
                 Some(found.remove())
             }
             _ => None,
@@ -220,11 +220,11 @@ impl Terminals {
     }
 
     async fn watch(&self, call: Call, One { terminal }: One) -> Result<Stream, Refusal> {
-        Ok(self.find(call.space().id(), terminal)?.watch())
+        Ok(self.find(call.project().id(), terminal)?.watch())
     }
 
     async fn ports(&self, call: Call, _: Nothing) -> Result<Stream, Refusal> {
-        Ok(self.servers.stream(call.space().id()))
+        Ok(self.servers.stream(call.project().id()))
     }
 
     async fn stop_server(
@@ -232,10 +232,10 @@ impl Terminals {
         call: Call,
         StopServer { port, process }: StopServer,
     ) -> Result<(), Refusal> {
-        let space = call.space().id();
+        let project = call.project().id();
         // It may have ended since, and its number name another process.
         let still = (servers::look().await).into_iter().any(|found| {
-            found.space == space && found.server.port == port && found.server.process == process
+            found.project == project && found.server.port == port && found.server.process == process
         });
         if !still {
             return Err(Refusal::not_found("This server is no longer running."));

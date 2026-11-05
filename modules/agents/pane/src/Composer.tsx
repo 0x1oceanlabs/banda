@@ -115,9 +115,9 @@ export function Composer({
   dropping: boolean
   /** Switches the Thread's plan mode, for `/plan` and `/default`. */
   onPlanMode: (on: boolean) => void
-  /** Finds files in the Space's folder, for `@`. */
+  /** Finds files in the Project's folder, for `@`. */
   findFiles?: FindFiles
-  /** Keeps a file in the Space for the message to name; resolves its
+  /** Keeps a file in the Project for the message to name; resolves its
    * path, or nothing if it could not be kept. */
   keep: (file: File) => Promise<string | undefined>
   /** Opens the last message that waits to edit; given while one does. */
@@ -143,7 +143,7 @@ export function Composer({
     if (focused) field.current?.focus()
   }, [focused])
   // Files dropped or pasted join the message: images as images, any other
-  // kept in the Space and named in the text, in turn, as `@` names a file.
+  // kept in the Project and named in the text, in turn, as `@` names a file.
   const take = async (given: File[], at: "caret" | "end") => {
     const pictures = imagesAmong(given)
     if (pictures.length > 0) images.add(pictures)

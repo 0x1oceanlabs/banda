@@ -8,7 +8,7 @@
 //! problems in the same list. The window only draws what it says.
 
 use crate::Problem;
-use crate::keyed::{self, Keyed, Layer};
+use crate::keyed::{self, Keyed, Layer, Renamed};
 use crate::theme::Places;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -28,6 +28,7 @@ pub enum State {
     Working,
     /// Put away by the Person, until something new happens in it
     /// (ADR 0069). Its name was `settled`, which still reads as it.
+    /// `settled` before ADR 0069 (grace).
     #[serde(alias = "settled")]
     Archived,
 }
@@ -38,8 +39,9 @@ pub enum State {
 pub enum GroupBy {
     /// Sections by what each Thread's mark says.
     State,
-    /// Each Space a section of its own.
-    Space,
+    /// Each Project a section of its own. `space` before ADR 0069 (grace).
+    #[serde(alias = "space")]
+    Project,
     /// One list.
     None,
 }
@@ -59,8 +61,8 @@ pub enum SortBy {
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Deserialize, Serialize, TS, JsonSchema)]
 #[serde(rename_all = "lowercase")]
 #[ts(export, export_to = "sidebar/")]
-pub enum SpaceOrder {
-    /// The Space with the latest change first.
+pub enum ProjectOrder {
+    /// The Project with the latest change first.
     Changed,
     /// By name, A to Z.
     Name,
@@ -85,8 +87,9 @@ pub enum Part {
     Mark,
     /// Its title.
     Title,
-    /// Its Space.
-    Space,
+    /// Its Project. `space` before ADR 0069 (grace).
+    #[serde(alias = "space")]
+    Project,
     /// Its Harness.
     Harness,
     /// What it does now, and when it last changed.
@@ -143,7 +146,7 @@ pub enum Count {
 #[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct SidebarSettings {
-    /// Banda's inbox, spaces or places, or one of yours in sidebars/.
+    /// Banda's inbox, projects or places, or one of yours in sidebars/.
     #[schemars(with = "Option<String>")]
     pub preset: Option<Spanned<String>>,
     /// How Threads fall into sections.
@@ -152,9 +155,9 @@ pub struct SidebarSettings {
     /// Their order in a section.
     #[serde(default)]
     pub sort: SortSettings,
-    /// The Spaces above the Threads.
-    #[serde(default)]
-    pub spaces: SpacesSettings,
+    /// The Projects above the Threads. `[spaces]` before ADR 0069 (grace).
+    #[serde(default, alias = "spaces")]
+    pub projects: ProjectsSettings,
     /// What a Thread's row shows.
     #[serde(default)]
     pub row: RowSettings,
@@ -166,13 +169,13 @@ pub struct SidebarSettings {
 #[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct GroupSettings {
-    /// What makes a section: a Thread's state, its Space, or nothing.
+    /// What makes a section: a Thread's state, its Project, or nothing.
     pub by: Option<GroupBy>,
     /// The sections by state, in this order.
     pub states: Option<Vec<State>>,
     /// Shelves at the bottom, each with its count.
     pub bottom: Option<Vec<State>>,
-    /// Sections, shelves or Spaces (by name) that start folded.
+    /// Sections, shelves or Projects (by name) that start folded.
     pub folded: Option<Vec<String>>,
     /// Rows a section shows before "Show more"; 0 shows all.
     pub limit: Option<u32>,
@@ -189,14 +192,14 @@ pub struct SortSettings {
 
 #[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
-pub struct SpacesSettings {
-    /// A list of Spaces above the Threads.
+pub struct ProjectsSettings {
+    /// A list of Projects above the Threads.
     pub list: Option<bool>,
     /// The order of that list.
-    pub order: Option<SpaceOrder>,
-    /// A Space shows its loudest mark and how many need you.
+    pub order: Option<ProjectOrder>,
+    /// A Project shows its loudest mark and how many need you.
     pub rollup: Option<bool>,
-    /// Each Space offers a new Thread in it.
+    /// Each Project offers a new Thread in it.
     pub new_thread: Option<bool>,
 }
 
@@ -245,7 +248,7 @@ pub struct Sidebar {
     pub presets: Vec<Preset>,
     pub group: Group,
     pub sort: Sort,
-    pub spaces: Spaces,
+    pub projects: Projects,
     pub row: Row,
     pub bar: BarCounts,
 }
@@ -278,7 +281,7 @@ pub struct Group {
     pub states: Vec<State>,
     /// Shelves at the bottom, each with its count.
     pub bottom: Vec<State>,
-    /// Sections, shelves or Spaces (by name) that start folded.
+    /// Sections, shelves or Projects (by name) that start folded.
     pub folded: Vec<String>,
     /// Rows a section shows before "Show more"; 0 shows all.
     pub limit: u32,
@@ -294,13 +297,13 @@ pub struct Sort {
 #[derive(Clone, Debug, PartialEq, Serialize, TS)]
 #[serde(rename_all = "camelCase")]
 #[ts(export, export_to = "sidebar/")]
-pub struct Spaces {
-    /// A list of Spaces above the Threads, as Herdr's.
+pub struct Projects {
+    /// A list of Projects above the Threads, as Herdr's.
     pub list: bool,
-    pub order: SpaceOrder,
-    /// A Space shows its loudest mark and how many need the Person.
+    pub order: ProjectOrder,
+    /// A Project shows its loudest mark and how many need the Person.
     pub rollup: bool,
-    /// Each Space offers a new Thread in it.
+    /// Each Project offers a new Thread in it.
     pub new_thread: bool,
 }
 
@@ -329,10 +332,26 @@ pub struct BarCounts {
     pub empty: BarEmpty,
 }
 
+/// What a sidebar file may still say as before ADR 0069 (grace): the
+/// table `[spaces]`, the preset `spaces`, `by` and a row's part `space`,
+/// and the archive's state `settled`.
+const RENAMED: &[Renamed] = &[
+    Renamed::key("", "spaces", "projects"),
+    Renamed::value("preset", "spaces", "projects"),
+    Renamed::value("group.by", "space", "project"),
+    Renamed::value("group.states", "settled", "archived"),
+    Renamed::value("group.bottom", "settled", "archived"),
+    Renamed::value("group.folded", "settled", "archived"),
+    Renamed::value("row.hide", "space", "project"),
+    Renamed::value("row.line1", "space", "project"),
+    Renamed::value("row.line2", "space", "project"),
+    Renamed::value("row.line3", "space", "project"),
+];
+
 /// Banda's presets: files in this crate, so they are examples too.
 pub const BUILT_IN: [(&str, &str); 3] = [
     ("inbox", include_str!("../sidebars/inbox.toml")),
-    ("spaces", include_str!("../sidebars/spaces.toml")),
+    ("projects", include_str!("../sidebars/projects.toml")),
     ("places", include_str!("../sidebars/places.toml")),
 ];
 
@@ -356,11 +375,11 @@ impl SidebarSettings {
             sort: SortSettings {
                 by: self.sort.by.or(under.sort.by),
             },
-            spaces: SpacesSettings {
-                list: self.spaces.list.or(under.spaces.list),
-                order: self.spaces.order.or(under.spaces.order),
-                rollup: self.spaces.rollup.or(under.spaces.rollup),
-                new_thread: self.spaces.new_thread.or(under.spaces.new_thread),
+            projects: ProjectsSettings {
+                list: self.projects.list.or(under.projects.list),
+                order: self.projects.order.or(under.projects.order),
+                rollup: self.projects.rollup.or(under.projects.rollup),
+                new_thread: self.projects.new_thread.or(under.projects.new_thread),
             },
             row: RowSettings {
                 lines: self.row.lines.or(under.row.lines),
@@ -394,9 +413,9 @@ impl SidebarSettings {
             sort: SortSettings {
                 by: Some(SortBy::Attention),
             },
-            spaces: SpacesSettings {
+            projects: ProjectsSettings {
                 list: Some(false),
-                order: Some(SpaceOrder::Changed),
+                order: Some(ProjectOrder::Changed),
                 rollup: Some(true),
                 new_thread: Some(true),
             },
@@ -432,7 +451,7 @@ impl SidebarSettings {
                 by: all.group.by.unwrap_or(GroupBy::State),
                 states: all.group.states.unwrap_or_default(),
                 bottom: all.group.bottom.unwrap_or_default(),
-                // `settled` is the archive's name before ADR 0069.
+                // `settled` is the archive's name before ADR 0069 (grace).
                 folded: (all.group.folded.unwrap_or_default().into_iter())
                     .map(|name| {
                         if name == "settled" {
@@ -448,11 +467,11 @@ impl SidebarSettings {
             sort: Sort {
                 by: all.sort.by.unwrap_or(SortBy::Attention),
             },
-            spaces: Spaces {
-                list: all.spaces.list.unwrap_or(false),
-                order: all.spaces.order.unwrap_or(SpaceOrder::Changed),
-                rollup: all.spaces.rollup.unwrap_or(true),
-                new_thread: all.spaces.new_thread.unwrap_or(true),
+            projects: Projects {
+                list: all.projects.list.unwrap_or(false),
+                order: all.projects.order.unwrap_or(ProjectOrder::Changed),
+                rollup: all.projects.rollup.unwrap_or(true),
+                new_thread: all.projects.new_thread.unwrap_or(true),
             },
             row: Row {
                 lines: all.row.lines.map_or(3, Spanned::into_inner),
@@ -478,6 +497,7 @@ pub fn read_sidebar(
     preset: bool,
     problems: &mut Vec<Problem>,
 ) -> Option<SidebarSettings> {
+    crate::say_renamed(path, text, RENAMED, problems);
     let mut settings: SidebarSettings = crate::read(path, text, problems)?;
     if preset && let Some(named) = settings.preset.take() {
         problems.push(Problem::at(
@@ -545,10 +565,11 @@ pub fn resolve(
         }
     }
 
-    let wanted = mine
-        .preset
-        .as_ref()
-        .map_or("inbox", |name| name.get_ref().as_str());
+    let wanted = match mine.preset.as_ref().map(|name| name.get_ref().as_str()) {
+        // Its name before ADR 0069 (grace), unless the Person has one so named.
+        Some("spaces") if !presets.iter().any(|p| p.name == "spaces") => "projects",
+        name => name.unwrap_or("inbox"),
+    };
     let found = presets.iter().find(|p| p.name == wanted);
     let (name, layer, preset_file) = match found {
         Some(Preset {
@@ -666,7 +687,7 @@ mod tests {
             [Count::Asking, Count::Done, Count::Working]
         );
         let names: Vec<_> = sidebar.presets.iter().map(|p| p.name.as_str()).collect();
-        assert_eq!(names, ["inbox", "spaces", "places"]);
+        assert_eq!(names, ["inbox", "projects", "places"]);
     }
 
     #[test]
@@ -674,28 +695,49 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         std::fs::write(
             dir.path().join("sidebar.toml"),
-            "preset = \"spaces\"\n[row]\nlines = 2\n",
+            "preset = \"projects\"\n[row]\nlines = 2\n",
         )
         .unwrap();
         let (sidebar, problems) = resolved(dir.path());
         assert!(problems.is_empty(), "{problems:?}");
-        assert_eq!(sidebar.preset, "spaces");
-        assert_eq!(sidebar.group.by, GroupBy::Space, "from the preset");
+        assert_eq!(sidebar.preset, "projects");
+        assert_eq!(sidebar.group.by, GroupBy::Project, "from the preset");
         assert_eq!(sidebar.row.lines, 2, "the Person's key");
     }
 
     #[test]
-    fn settled_reads_as_archived() {
+    fn names_before_adr_0069_read_as_now_and_each_says_its_name_now() {
         let dir = tempfile::tempdir().unwrap();
         std::fs::write(
             dir.path().join("sidebar.toml"),
-            "[group]\nstates = [\"active\", \"settled\"]\nbottom = []\nfolded = [\"settled\", \"banda\"]\n",
+            "preset = \"spaces\"\n\
+             [group]\nby = \"space\"\nstates = [\"active\", \"settled\"]\n\
+             folded = [\"settled\", \"banda\"]\n\
+             [spaces]\nlist = true # the list above\n\
+             [row]\nhide = [\"space\"]\n",
         )
         .unwrap();
         let (sidebar, problems) = resolved(dir.path());
-        assert!(problems.is_empty(), "{problems:?}");
+        assert_eq!(sidebar.preset, "projects");
+        assert_eq!(sidebar.group.by, GroupBy::Project);
         assert_eq!(sidebar.group.states, [State::Active, State::Archived]);
         assert_eq!(sidebar.group.folded, ["archived", "banda"]);
+        assert!(sidebar.projects.list);
+        assert_eq!(sidebar.row.hide, [Part::Project]);
+        let said: Vec<_> = (problems.iter())
+            .map(|p| (p.line.unwrap(), p.message.as_str()))
+            .collect();
+        assert_eq!(
+            said,
+            [
+                (1, "\"spaces\" is called \"projects\" now"),
+                (3, "\"space\" is called \"project\" now"),
+                (4, "\"settled\" is called \"archived\" now"),
+                (5, "\"settled\" is called \"archived\" now"),
+                (6, "spaces is called projects now"),
+                (9, "\"space\" is called \"project\" now"),
+            ]
+        );
     }
 
     #[test]

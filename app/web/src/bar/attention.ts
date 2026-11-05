@@ -1,6 +1,6 @@
 /**
  * What the bar's mark shows: the loudest of what every module's Watch says
- * every Space calls for, and how many things wait for the Person in all.
+ * every Project calls for, and how many things wait for the Person in all.
  * Pure, so plain tests cover it.
  */
 import { loudest, MARK_ORDER } from "@banda/ui/components/banda-mark"
@@ -15,7 +15,7 @@ export function combine(reports: Iterable<Attention>): Attention {
 }
 
 /**
- * A Space's list as the sidebar draws it: what a module says of another's
+ * A Project's list as the sidebar draws it: what a module says of another's
  * Thread (`Listed.on`) goes on that Thread's row, the louder mark and its
  * call with it, and has no row of its own.
  */

@@ -1,5 +1,5 @@
 import { useState } from "react"
-import type { Engine, SpaceSummary } from "@banda/contract"
+import type { Engine, ProjectSummary } from "@banda/contract"
 import { Button } from "@banda/ui/components/button"
 import { Input } from "@banda/ui/components/input"
 import {
@@ -11,23 +11,23 @@ import {
   DialogTitle,
 } from "@banda/ui/components/dialog"
 import { useAct } from "@banda/ui/hooks/use-act"
-import { updateSpace } from "@banda/ui/lib/spaces"
+import { updateProject } from "@banda/ui/lib/projects"
 
-/** Promotion keeps the Space's identity, its Thread and its history. */
-export function MakeSpace({
+/** Promotion keeps the Project's identity, its Thread and its history. */
+export function MakeProject({
   engine,
-  space,
+  project,
   onClose,
 }: {
   engine: Engine
-  space: SpaceSummary
+  project: ProjectSummary
   onClose: () => void
 }) {
   const [name, setName] = useState("")
   const [move, setMove] = useState(true)
   const { busy, problem, act } = useAct()
-  const scratchAt = space.folder.lastIndexOf("/scratch/")
-  const root = scratchAt < 0 ? "~/Banda" : space.folder.slice(0, scratchAt)
+  const scratchAt = project.folder.lastIndexOf("/scratch/")
+  const root = scratchAt < 0 ? "~/Banda" : project.folder.slice(0, scratchAt)
   const folder = `${root || "~/Banda"}/${name.trim()}`
   const plain = !name.trim().startsWith(".") && !/[\\/]/.test(name)
   const ready =
@@ -38,8 +38,8 @@ export function MakeSpace({
   const promote = async () => {
     if (!ready) return
     const made = await act(() =>
-      updateSpace(engine, {
-        space: space.id,
+      updateProject(engine, {
+        project: project.id,
         scratch: false,
         name: name.trim(),
         ...(move && { folder }),
@@ -106,7 +106,7 @@ export function MakeSpace({
               <span>
                 Keep it where it is
                 <span className="block text-xs break-all text-muted-foreground">
-                  {space.folder}
+                  {project.folder}
                 </span>
               </span>
             </label>

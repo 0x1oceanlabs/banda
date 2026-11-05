@@ -87,18 +87,18 @@ impl Places {
         (engine, stdin, serde_json::from_str(&line).unwrap())
     }
 
-    fn call(&self, method: &str, space: Option<&str>, params: Value) -> Output {
+    fn call(&self, method: &str, project: Option<&str>, params: Value) -> Output {
         let params = params.to_string();
         let mut args = vec!["call", method, "--params", &params];
-        if let Some(space) = space {
-            args.extend(["--space", space]);
+        if let Some(project) = project {
+            args.extend(["--project", project]);
         }
         self.banda(&args).output().unwrap()
     }
 
     /// Calls a method that must succeed, and returns what it answered.
-    fn ok(&self, method: &str, space: Option<&str>, params: Value) -> Value {
-        let output = self.call(method, space, params);
+    fn ok(&self, method: &str, project: Option<&str>, params: Value) -> Value {
+        let output = self.call(method, project, params);
         assert!(output.status.success(), "{method}: {output:?}");
         let answer: Value = serde_json::from_slice(&output.stdout).unwrap();
         answer["ok"].clone()
@@ -121,19 +121,19 @@ fn a_script_drives_an_agent_through_the_engine_a_window_started() {
     assert!(second.stdout.is_empty(), "the secret stays off a terminal");
     assert!(String::from_utf8_lossy(&second.stderr).contains("already runs"));
 
-    let space = places.ok("spaces.create", None, json!({ "name": "Work" }));
-    let space = text(&space["id"]);
+    let project = places.ok("projects.create", None, json!({ "name": "Work" }));
+    let project = text(&project["id"]);
 
-    let refused = places.call("agents.thread", Some(space), json!({}));
+    let refused = places.call("agents.thread", Some(project), json!({}));
     assert_eq!(refusal(&refused), "invalid");
     let nowhere = places
-        .banda(&["follow", "--space", &uuid::Uuid::now_v7().to_string()])
+        .banda(&["follow", "--project", &uuid::Uuid::now_v7().to_string()])
         .output()
         .unwrap();
     assert_eq!(refusal(&nowhere), "not_found");
 
     let mut follow = places
-        .banda(&["follow", "--space", space, "--module", "agents"])
+        .banda(&["follow", "--project", project, "--module", "agents"])
         .stdout(Stdio::piped())
         .spawn()
         .unwrap();
@@ -147,7 +147,7 @@ fn a_script_drives_an_agent_through_the_engine_a_window_started() {
 
     let sent = places.ok(
         "agents.send",
-        Some(space),
+        Some(project),
         json!({ "harness": "fake", "text": "hello" }),
     );
     let mut kinds = Vec::new();
@@ -174,7 +174,7 @@ fn a_script_drives_an_agent_through_the_engine_a_window_started() {
 
     let view = places.ok(
         "agents.thread",
-        Some(space),
+        Some(project),
         json!({ "thread": sent["thread"] }),
     );
     let last = view["items"].as_array().unwrap().last().unwrap();
@@ -187,7 +187,7 @@ fn a_script_drives_an_agent_through_the_engine_a_window_started() {
         real.replace(text(&running["secret"]), &"0".repeat(64)),
     )
     .unwrap();
-    let stranger = places.call("spaces.list", None, json!({}));
+    let stranger = places.call("projects.list", None, json!({}));
     assert_eq!(refusal(&stranger), "forbidden", "a wrong secret is refused");
     std::fs::write(&file, real).unwrap();
 
@@ -195,7 +195,7 @@ fn a_script_drives_an_agent_through_the_engine_a_window_started() {
     drop(stdin);
     assert!(engine.wait().unwrap().success());
     assert!(!places.state.join("engine.json").exists());
-    let gone = places.call("spaces.list", None, json!({}));
+    let gone = places.call("projects.list", None, json!({}));
     assert_eq!(gone.status.code(), Some(2), "{gone:?}");
 }
 
@@ -210,7 +210,7 @@ fn refusal(output: &Output) -> String {
 fn bad_params_are_refused_before_the_engine_is_reached() {
     let places = Places::new();
     let output = places
-        .banda(&["call", "spaces.list", "--params", "{not json"])
+        .banda(&["call", "projects.list", "--params", "{not json"])
         .output()
         .unwrap();
     assert_eq!(refusal(&output), "invalid");
@@ -296,7 +296,7 @@ impl Mcp {
 fn an_agent_reaches_banda_through_banda_mcp() {
     let places = Places::new();
     let (mut engine, stdin, _) = places.serve();
-    let work = places.ok("spaces.create", None, json!({ "name": "Work" }));
+    let work = places.ok("projects.create", None, json!({ "name": "Work" }));
     let work = text(&work["id"]);
     let sent = places.ok(
         "agents.send",
@@ -401,7 +401,7 @@ fn an_agent_reaches_banda_through_banda_mcp() {
     let started = serde_json::from_str::<Value>(&said).unwrap()["thread"].clone();
     assert_ne!(started, thread);
 
-    // It puts its Thread on the screen, in its Space, without the focus.
+    // It puts its Thread on the screen, in its Project, without the focus.
     let shown = json!({ "kind": "agents.thread", "args": { "thread": thread } });
     let (error, said) = mcp.call(12, "open_pane", shown);
     assert!(!error, "{said}");
@@ -410,7 +410,7 @@ fn an_agent_reaches_banda_through_banda_mcp() {
     let seen: Value = serde_json::from_str(&said).unwrap();
     let pane = &seen[0]["columns"][0]["panes"][0];
     assert_eq!(
-        (pane["space"].clone(), pane["yours"].clone()),
+        (pane["project"].clone(), pane["yours"].clone()),
         (json!(work), json!(true))
     );
     let (error, said) = mcp.call(

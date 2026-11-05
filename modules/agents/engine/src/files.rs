@@ -1,4 +1,4 @@
-//! The files in a Space's folder, for `@` in the composer (ADR 0010,
+//! The files in a Project's folder, for `@` in the composer (ADR 0010,
 //! decision 9): the ones git keeps or would, in a folder git knows, or
 //! else what a walk finds. Banda's own data is not in the folder
 //! (ADR 0026).
@@ -18,7 +18,7 @@ const SKIPPED: [&str; 2] = ["node_modules", "target"];
 /// How long one listing answers the searches a Person types after it.
 const FRESH: Duration = Duration::from_secs(5);
 
-/// A file under a Space's folder, and its path in lower case to search.
+/// A file under a Project's folder, and its path in lower case to search.
 pub struct Entry {
     path: String,
     lower: String,

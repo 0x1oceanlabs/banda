@@ -1,5 +1,5 @@
 import { type ReactNode, useCallback, useEffect, useRef, useState } from "react"
-import type { Engine, SpaceId } from "@banda/contract"
+import type { Engine, ProjectId } from "@banda/contract"
 import type { Defaults, Settings } from "@banda/contract/agents"
 import type { Account, HarnessView } from "@banda/contract/harnesses"
 import { tomlOf } from "@banda/contract/settings"
@@ -74,9 +74,9 @@ export type SettingsFile = {
 
 type Props = {
   engine: Engine
-  /** A Space, where there is one: what a new Thread starts with is
+  /** A Project, where there is one: what a new Thread starts with is
    * offered in it, and a sign-in in a terminal runs there. */
-  space?: SpaceId
+  project?: ProjectId
   open: Open
   harnesses: SettingsFile
   /** What a new Thread on each Harness starts with is here. */
@@ -87,7 +87,7 @@ type Props = {
  * The settings Pane's Agents (ADR 0016, decision 7), as T3 Code's
  * providers: a card per Harness entry with who is signed in, on or off,
  * and how it starts; adding one. The Harnesses and their accounts are the
- * machine's module `harnesses` (ADR 0040), so they show with no Space. What a message written while an Agent
+ * machine's module `harnesses` (ADR 0040), so they show with no Project. What a message written while an Agent
  * works does is `agents.toml`'s, drawn from its schema under these. The
  * engine reads `harnesses.toml` again once it changed, so the list is
  * asked again after each change, and when the window comes to the front.
@@ -144,7 +144,7 @@ function HarnessCard({
   onWritten,
   ...props
 }: HarnessProps & { lit: boolean; onWritten: () => void }) {
-  const { harness, harnesses, space } = props
+  const { harness, harnesses, project } = props
   const { refused, write } = useWrite({ onWritten, against: harness })
   const card = useRef<HTMLDivElement>(null)
   useEffect(() => {
@@ -167,8 +167,8 @@ function HarnessCard({
     ),
     starts: (
       <>
-        {harness.enabled && space && (
-          <NewThreads {...props} space={space} write={write} />
+        {harness.enabled && project && (
+          <NewThreads {...props} project={project} write={write} />
         )}
         <HowItStarts harness={harness} file={harnesses} write={write} />
       </>
@@ -298,15 +298,15 @@ function Reading({ frame, ...props }: HarnessProps & { frame: FrameProps }) {
 
 /** What a new Thread on the Harness starts with, `agents.toml`'s
  * `[start.<id>]`: the composer's own bar, over what the Harness offered in
- * this Space. */
+ * this Project. */
 function NewThreads({
   engine,
-  space,
+  project,
   harness,
   agents,
   write,
 }: HarnessProps & {
-  space: SpaceId
+  project: ProjectId
   write: (said: Promise<string[]>) => void
 }) {
   // Asked again after its own writes, and as the window comes to the
@@ -315,9 +315,10 @@ function NewThreads({
   const front = useInFront()
   const read = useRead(
     useCallback(
-      () => engine.call("agents.defaults", { harness: harness.id }, { space }),
+      () =>
+        engine.call("agents.defaults", { harness: harness.id }, { project }),
       // eslint-disable-next-line react-hooks/exhaustive-deps -- asked again on purpose
-      [engine, space, harness.id, writes, front]
+      [engine, project, harness.id, writes, front]
     )
   )
   // What it was shows while it is asked again.
@@ -620,7 +621,7 @@ function idOf(name: string): string {
 
 function AccountState({
   engine,
-  space,
+  project,
   harness,
   open,
   account,
@@ -647,7 +648,7 @@ function AccountState({
       </p>
       <Ways
         engine={engine}
-        space={space}
+        project={project}
         harness={harness.id}
         ways={account.ways}
         open={open}

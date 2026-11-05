@@ -4,7 +4,7 @@
   "private": true,
   "license": "Apache-2.0",
   "type": "module",
-  "description": "The git module's Panes: the Diff of a Space's repository, as T3 Code's.",
+  "description": "The git module's Panes: the Diff of a Project's repository, as T3 Code's.",
   "exports": {
     ".": "./src/index.ts"
   },

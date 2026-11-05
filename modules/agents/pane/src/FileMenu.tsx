@@ -1,12 +1,12 @@
 import { useCallback, useEffect, useState } from "react"
-import type { Engine, SpaceId } from "@banda/contract"
+import type { Engine, ProjectId } from "@banda/contract"
 import { nameAndFolder } from "@banda/ui/lib/paths"
 import { useMenu } from "./Menu"
 
 /** How long the typing rests before the files are asked for, in ms. */
 const WAIT = 80
 
-/** Finds the files in the Space's folder that hold the words. */
+/** Finds the files in the Project's folder that hold the words. */
 export type FindFiles = (query: string) => Promise<string[]>
 
 /**
@@ -71,17 +71,17 @@ export function useFoundFiles(
   return found
 }
 
-/** The files in the Space's folder that fit `word`, as `@` finds them. */
-export function useSpaceFiles(
+/** The files in the Project's folder that fit `word`, as `@` finds them. */
+export function useProjectFiles(
   engine: Engine,
-  space: SpaceId,
+  project: ProjectId,
   word: string | undefined
 ): { word: string; paths: string[] } | undefined {
   return useFoundFiles(
     word,
     useCallback(
-      (query: string) => engine.call("agents.files", { query }, { space }),
-      [engine, space]
+      (query: string) => engine.call("agents.files", { query }, { project }),
+      [engine, project]
     )
   )
 }

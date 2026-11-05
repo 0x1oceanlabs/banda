@@ -14,7 +14,7 @@ use crate::model::{
     TurnId, Usage,
 };
 use crate::{emit, plain, questions, store};
-use banda_kernel::{AgentId, Error, ModuleSpace, Participant, Tx};
+use banda_kernel::{AgentId, Error, ModuleProject, Participant, Tx};
 use output::{Piece, Pieces, Text};
 use std::collections::HashMap;
 use std::time::Duration;
@@ -128,7 +128,7 @@ struct Shown {
 
 /// Writes what the Harness says into the Thread.
 pub struct Transcript {
-    space: ModuleSpace,
+    project: ModuleProject,
     thread: ThreadId,
     turn: TurnId,
     agent: AgentId,
@@ -154,14 +154,14 @@ pub struct Transcript {
 
 impl Transcript {
     pub fn new(
-        space: ModuleSpace,
+        project: ModuleProject,
         turn: &store::Turn,
         harness: String,
         settings: Settings,
         running: Running,
     ) -> Transcript {
         Transcript {
-            space,
+            project,
             thread: turn.thread,
             turn: turn.id,
             agent: turn.agent,
@@ -302,7 +302,7 @@ impl Transcript {
                 };
                 run.forget(id);
                 let agent = Participant::Agent(self.agent);
-                self.space
+                self.project
                     .write(move |tx| questions::withdrawn(tx, agent, id))
                     .await
                     .map_err(plain)
@@ -338,7 +338,7 @@ impl Transcript {
                     self.resets = resets;
                 }
                 let (thread, agent) = (self.thread, Participant::Agent(self.agent));
-                self.space
+                self.project
                     .write(move |tx| used(tx, agent, thread, usage))
                     .await
                     .map_err(plain)
@@ -359,7 +359,7 @@ impl Transcript {
                 }
                 let (thread, agent, turn) =
                     (self.thread, Participant::Agent(self.agent), self.turn);
-                self.space
+                self.project
                     .write(move |tx| {
                         if planned {
                             switched(tx, agent, thread, &ran, &now)?;
@@ -391,7 +391,7 @@ impl Transcript {
             printed: output::Printed::default(),
         };
         self.tools.insert(call, shown);
-        let content = content::keep(&self.space, content).await?;
+        let content = content::keep(&self.project, content).await?;
         let started = Fact::ToolStarted {
             item: id,
             turn: self.turn,
@@ -419,10 +419,10 @@ impl Transcript {
             exit,
         } = change;
         let content = match content {
-            Some(parts) => Some(content::keep(&self.space, parts).await?),
+            Some(parts) => Some(content::keep(&self.project, parts).await?),
             None => None,
         };
-        self.space
+        self.project
             .write(move |tx| {
                 if let Some((_, mut item)) = store::item(tx.sql(), id)?
                     && let Body::Tool {
@@ -463,7 +463,7 @@ impl Transcript {
 
     async fn change_plan(&self, id: ItemId, steps: Vec<PlanStep>) -> Result<(), String> {
         let (thread, agent) = (self.thread, Participant::Agent(self.agent));
-        self.space
+        self.project
             .write(move |tx| {
                 store::set_body(
                     tx.sql(),
@@ -493,7 +493,7 @@ impl Transcript {
             return Ok(());
         }
         let (thread, agent) = (self.thread, Participant::Agent(self.agent));
-        self.space
+        self.project
             .write(move |tx| {
                 for (id, text, cut) in printed {
                     if let Some((_, mut item)) = store::item(tx.sql(), id)?
@@ -593,7 +593,7 @@ impl Transcript {
         named: Option<String>,
     ) -> Result<(), String> {
         let (thread, turn, agent) = (self.thread, self.turn, Participant::Agent(self.agent));
-        self.space
+        self.project
             .write(move |tx| {
                 let item = Item {
                     id,

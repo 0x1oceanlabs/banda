@@ -1,6 +1,6 @@
 /**
  * What a turn changed in files, from the diffs its tool calls carry, not
- * from git, so it holds in any Space (ADR 0010, decision 3). Pure, so plain
+ * from git, so it holds in any Project (ADR 0010, decision 3). Pure, so plain
  * tests cover it.
  */
 import type { Item } from "@banda/contract/agents"

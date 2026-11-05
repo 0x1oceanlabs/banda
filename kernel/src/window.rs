@@ -11,7 +11,7 @@
 //! one before stops hearing, and what it was asked and has not answered
 //! is refused. Nothing here is kept: a request lives while its asker waits.
 
-use crate::{Nothing, Participant, Refusal, Right, SpaceId, Stream};
+use crate::{Nothing, Participant, ProjectId, Refusal, Right, Stream};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::HashMap;
@@ -33,8 +33,8 @@ pub struct WindowRequest {
     pub id: u64,
     /// What is asked, under its module's name: `notes.show`.
     pub method: String,
-    /// The Space the asking call runs in.
-    pub space: SpaceId,
+    /// The Project the asking call runs in.
+    pub project: ProjectId,
     /// Who made the call that asks.
     pub by: Participant,
     #[serde(default)]
@@ -168,7 +168,7 @@ impl Window {
     pub(crate) async fn ask(
         &self,
         method: String,
-        space: SpaceId,
+        project: ProjectId,
         by: Participant,
         params: Value,
         within: Duration,
@@ -186,7 +186,7 @@ impl Window {
         let request = WindowRequest {
             id,
             method,
-            space,
+            project,
             by,
             params,
             within: u64::try_from(within.as_millis()).unwrap_or(u64::MAX),
@@ -226,7 +226,7 @@ mod tests {
         let params = json!({ "tab": "a" });
         (window.ask(
             "notes.show".into(),
-            SpaceId::new(),
+            ProjectId::new(),
             person(),
             params,
             within,

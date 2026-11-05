@@ -1,6 +1,6 @@
-//! A pool of Harness processes: one per Space and Harness entry (ADR 0003,
+//! A pool of Harness processes: one per Project and Harness entry (ADR 0003,
 //! decision 6), or per Harness on the machine, keyed by the machine's
-//! Space ID. What a host is, and when it has nothing to do, its client
+//! Project ID. What a host is, and when it has nothing to do, its client
 //! says ([`Host`]).
 //!
 //! - A host starts when it is first asked for, one start at a time.
@@ -13,7 +13,7 @@
 //!   the host is dropped; an engine that dies closes the host's stdin.
 
 use crate::Harness;
-use banda_kernel::SpaceId;
+use banda_kernel::ProjectId;
 use std::collections::HashMap;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex, Weak};
@@ -29,7 +29,7 @@ const HEALTHY: Duration = Duration::from_secs(5 * 60);
 /// How often idle hosts are looked for, at most.
 const LOOK: Duration = Duration::from_secs(60);
 
-type Key = (SpaceId, String);
+type Key = (ProjectId, String);
 
 /// When a host was last used, and how many hold it busy now: whether it
 /// is idle, for [`Host::idle_since`]. Clones share it.
@@ -96,7 +96,7 @@ pub struct Hosts<H> {
     sweeping: std::sync::Once,
 }
 
-/// A Space's place for one Harness's host.
+/// A Project's place for one Harness's host.
 struct Entry<H> {
     /// Its account changed since its host started: set without waiting
     /// for the slot, which a start holds.
@@ -157,10 +157,10 @@ impl<H: Host> Hosts<H> {
         })
     }
 
-    /// The host for `harness` in `space`, started if it is not running.
+    /// The host for `harness` in `project`, started if it is not running.
     pub async fn get(
         self: &Arc<Self>,
-        space: SpaceId,
+        project: ProjectId,
         harness: &Harness,
     ) -> Result<Arc<H>, String> {
         self.sweeping.call_once(|| {
@@ -170,7 +170,7 @@ impl<H: Host> Hosts<H> {
             .slots
             .lock()
             .unwrap()
-            .entry((space, harness.id.clone()))
+            .entry((project, harness.id.clone()))
             .or_default()
             .clone();
         let mut slot = entry.slot.lock().await;
@@ -208,13 +208,13 @@ impl<H: Host> Hosts<H> {
         }
     }
 
-    /// Lets go of the host of the Harness entry `harness` in `space`, as
+    /// Lets go of the host of the Harness entry `harness` in `project`, as
     /// its account changed. It waits for none: a host that is starting is
     /// let go the next time it is asked for. Who holds a host keeps it
     /// until they drop it.
-    pub fn let_go(&self, space: SpaceId, harness: &str) {
+    pub fn let_go(&self, project: ProjectId, harness: &str) {
         let slots = self.slots.lock().unwrap();
-        if let Some(entry) = slots.get(&(space, harness.to_owned())) {
+        if let Some(entry) = slots.get(&(project, harness.to_owned())) {
             Self::stale(entry);
         }
     }
@@ -227,11 +227,11 @@ impl<H: Host> Hosts<H> {
         }
     }
 
-    /// Forgets every host of `space`, as the Space is removed, and answers
+    /// Forgets every host of `project`, as the Project is removed, and answers
     /// them, so what they run can be stopped.
-    pub async fn forget(&self, space: SpaceId) -> Vec<Arc<H>> {
+    pub async fn forget(&self, project: ProjectId) -> Vec<Arc<H>> {
         let entries: Vec<_> = (self.slots.lock().unwrap())
-            .extract_if(|(of, _), _| *of == space)
+            .extract_if(|(of, _), _| *of == project)
             .map(|(_, entry)| entry)
             .collect();
         let mut hosts = Vec::new();
@@ -311,23 +311,23 @@ mod tests {
     async fn an_account_changed_while_a_host_starts_starts_it_again_when_next_asked() {
         let hosts = Hosts::<Counted>::new(Duration::from_secs(60));
         let known = crate::Harnesses::known();
-        let (space, harness) = (SpaceId::new(), known.find(&known.views()[0].id).unwrap());
+        let (project, harness) = (ProjectId::new(), known.find(&known.views()[0].id).unwrap());
         let starting = tokio::spawn({
             let (hosts, harness) = (hosts.clone(), harness.clone());
-            async move { hosts.get(space, &harness).await.unwrap().0 }
+            async move { hosts.get(project, &harness).await.unwrap().0 }
         });
         // Its start holds the slot: letting go does not wait for it.
         while hosts.slots.lock().unwrap().is_empty() {
             tokio::task::yield_now().await;
         }
-        hosts.let_go(space, &harness.id);
+        hosts.let_go(project, &harness.id);
         GO.add_permits(1);
         assert_eq!(starting.await.unwrap(), 1);
         GO.add_permits(1);
-        let again = hosts.get(space, &harness).await.unwrap();
+        let again = hosts.get(project, &harness).await.unwrap();
         assert_eq!(again.0, 2, "it read the account before it changed");
         assert_eq!(
-            hosts.get(space, &harness).await.unwrap().0,
+            hosts.get(project, &harness).await.unwrap().0,
             2,
             "then it stays"
         );

@@ -5,7 +5,7 @@
  * anything new in it brings it back, as a reply brings a letter back in
  * Gmail.
  */
-import type { SpaceId } from "@banda/contract"
+import type { ProjectId } from "@banda/contract"
 import { useCallback } from "react"
 import { works } from "@banda/ui/components/banda-mark"
 import { kept } from "@banda/ui/lib/kept"
@@ -99,16 +99,16 @@ export function archive(id: string, archived: boolean) {
 }
 
 /**
- * What Alt+S makes the row of `space` that is `thing`: archived, or back
+ * What Alt+S makes the row of `project` that is `thing`: archived, or back
  * if it is archived now. Nothing when it can be neither, as a Thread at
  * work.
  */
 export function toggled(
   lists: Lists,
-  space: SpaceId,
+  project: ProjectId,
   thing: string
 ): boolean | undefined {
-  const listed = lists[space]?.find((row) => row.id === thing)
+  const listed = lists[project]?.find((row) => row.id === thing)
   if (!listed) return undefined
   if (isArchived(listed, says.read()[listed.id], BEFORE)) return false
   return archivable(listed) ? true : undefined

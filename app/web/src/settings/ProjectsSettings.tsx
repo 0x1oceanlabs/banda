@@ -1,12 +1,12 @@
 /**
- * The Spaces section (ADR 0026, decision 5), in T3 Code's words: a
- * Space's name, whether it comes first, whether it is hidden, and its
+ * The Projects section (ADR 0026, decision 5), in T3 Code's words: a
+ * Project's name, whether it comes first, whether it is hidden, and its
  * removal. They are the engine's, not a file's, so the section calls the
- * engine, and tells the window a Space changed. Archived Spaces show only
+ * engine, and tells the window a Project changed. Archived Projects show only
  * here, where they can come back.
  */
 import { useState } from "react"
-import type { Engine, SpaceSummary, UpdateSpace } from "@banda/contract"
+import type { Engine, ProjectSummary, UpdateProject } from "@banda/contract"
 import { Button } from "@banda/ui/components/button"
 import {
   Dialog,
@@ -26,38 +26,38 @@ import {
 import { Spinner } from "@banda/ui/components/spinner"
 import { Switch } from "@banda/ui/components/switch"
 import { useAct } from "@banda/ui/hooks/use-act"
-import { useSpaces } from "@banda/ui/hooks/use-spaces"
-import { removeSpace, updateSpace } from "@banda/ui/lib/spaces"
+import { useProjects } from "@banda/ui/hooks/use-projects"
+import { removeProject, updateProject } from "@banda/ui/lib/projects"
 import { cn } from "@banda/ui/lib/utils"
 import { FolderSearchIcon, Trash2Icon } from "lucide-react"
 import { LOCATE, locateRoute } from "../menu/menu"
 import { AsideRow } from "../safe/AsidePill"
 import { Field, Group, RowFrame, Rows } from "./SettingRow"
 
-/** The Space a removal asks about, and how many Threads go with it, if
+/** The Project a removal asks about, and how many Threads go with it, if
  * the agents module said. */
-type Removing = { space: SpaceSummary; threads?: number }
+type Removing = { project: ProjectSummary; threads?: number }
 
 type Props = {
   engine: Engine
-  /** The Space a link names: `spaces/<id>`. */
+  /** The Project a link names: `projects/<id>`. */
   lit?: string
 }
 
-/** The Spaces, and the workspaces set aside while some are (ADR 0039). */
-export function SpacesSettings(props: Props) {
+/** The Projects, and the workspaces set aside while some are (ADR 0039). */
+export function ProjectsSettings(props: Props) {
   return (
     <>
       <AsideRow engine={props.engine} />
-      <Space {...props} />
+      <Project {...props} />
     </>
   )
 }
 
-function Space({ engine, lit }: Props) {
-  // Every Space, the archived too, as the window's other lists read them.
-  const { listed } = useSpaces(engine)
-  // The Space picked here, until a link names another.
+function Project({ engine, lit }: Props) {
+  // Every Project, the archived too, as the window's other lists read them.
+  const { listed } = useProjects(engine)
+  // The Project picked here, until a link names another.
   const [pick, setPick] = useState<{ lit?: string; id: string }>()
   const picked = pick && pick.lit === lit ? pick.id : lit
   const { busy, problem, act } = useAct()
@@ -66,27 +66,27 @@ function Space({ engine, lit }: Props) {
   if (listed.state === "loading") return <Spinner />
   if (listed.state === "refused")
     return <p className="text-sm text-destructive">{listed.refusal.message}</p>
-  const spaces = listed.value
-  const space = spaces.find((one) => one.id === picked) ?? spaces[0]
-  if (!space)
+  const projects = listed.value
+  const project = projects.find((one) => one.id === picked) ?? projects[0]
+  if (!project)
     return <p className="text-sm text-muted-foreground">No Projects yet.</p>
 
-  const change = (how: Omit<UpdateSpace, "space">) =>
-    void act(() => updateSpace(engine, { space: space.id, ...how }))
+  const change = (how: Omit<UpdateProject, "project">) =>
+    void act(() => updateProject(engine, { project: project.id, ...how }))
   // The Threads that go with it are the agents module's.
   const ask = async () => {
     const threads = await engine
-      .call("agents.threads", {}, { space: space.id })
+      .call("agents.threads", {}, { project: project.id })
       .then(
         (list) => list.threads.length,
         () => undefined
       )
-    setRemoving({ space, threads })
+    setRemoving({ project, threads })
   }
   const remove = () => {
     if (!removing) return
     setRemoving(undefined)
-    void act(() => removeSpace(engine, removing.space.id))
+    void act(() => removeProject(engine, removing.project.id))
   }
 
   return (
@@ -94,16 +94,16 @@ function Space({ engine, lit }: Props) {
       <div className="flex items-center gap-3">
         <span className="text-sm font-medium">Project</span>
         <Select
-          value={space.id}
+          value={project.id}
           onValueChange={(id) => setPick({ lit, id: id as string })}
         >
-          <SelectTrigger aria-label="Space" className="min-w-48">
+          <SelectTrigger aria-label="Project" className="min-w-48">
             <SelectValue>
-              {(id: string) => nameOf(spaces.find((one) => one.id === id))}
+              {(id: string) => nameOf(projects.find((one) => one.id === id))}
             </SelectValue>
           </SelectTrigger>
           <SelectContent>
-            {spaces.map((one) => (
+            {projects.map((one) => (
               <SelectItem key={one.id} value={one.id}>
                 {nameOf(one)}
               </SelectItem>
@@ -113,11 +113,11 @@ function Space({ engine, lit }: Props) {
         <span
           className={cn(
             "min-w-0 truncate font-mono text-xs text-muted-foreground",
-            space.missing && "text-attention line-through"
+            project.missing && "text-attention line-through"
           )}
-          title={space.folder}
+          title={project.folder}
         >
-          {space.folder}
+          {project.folder}
         </span>
       </div>
       {problem && (
@@ -126,7 +126,7 @@ function Space({ engine, lit }: Props) {
         </p>
       )}
       <Rows>
-        {space.missing && (
+        {project.missing && (
           <RowFrame
             dataKey="folder"
             title="Folder is missing"
@@ -135,7 +135,7 @@ function Space({ engine, lit }: Props) {
             <Button
               size="sm"
               variant="outline"
-              onClick={() => window.banda?.menu.open(locateRoute(space.id))}
+              onClick={() => window.banda?.menu.open(locateRoute(project.id))}
             >
               <FolderSearchIcon />
               {LOCATE}
@@ -149,7 +149,7 @@ function Space({ engine, lit }: Props) {
         >
           <Field
             label="Project name"
-            value={space.name}
+            value={project.name}
             onCommit={(name) => change({ name: name.trim() })}
           />
         </RowFrame>
@@ -160,7 +160,7 @@ function Space({ engine, lit }: Props) {
         >
           <Switch
             label="Pin Project"
-            on={space.pinned}
+            on={project.pinned}
             onChange={(pinned) => change({ pinned })}
           />
         </RowFrame>
@@ -168,7 +168,7 @@ function Space({ engine, lit }: Props) {
           dataKey="archive"
           title="Archive"
           about={
-            space.archived
+            project.archived
               ? "Hidden from Project pickers. Threads and files are kept."
               : "Hides the Project from Project pickers. Threads and files are kept."
           }
@@ -177,9 +177,9 @@ function Space({ engine, lit }: Props) {
             size="sm"
             variant="outline"
             disabled={busy}
-            onClick={() => change({ archived: !space.archived })}
+            onClick={() => change({ archived: !project.archived })}
           >
-            {space.archived ? "Unarchive" : "Archive"}
+            {project.archived ? "Unarchive" : "Archive"}
           </Button>
         </RowFrame>
       </Rows>
@@ -209,7 +209,7 @@ function Space({ engine, lit }: Props) {
             <DialogHeader>
               <DialogTitle>{questionOf(removing)}</DialogTitle>
               <DialogDescription className="font-mono text-xs break-all">
-                {removing.space.folder}
+                {removing.project.folder}
               </DialogDescription>
             </DialogHeader>
             <div className="flex flex-col gap-1 text-sm text-muted-foreground">
@@ -233,17 +233,17 @@ function Space({ engine, lit }: Props) {
   )
 }
 
-/** A Space's name in the picker; an archived one says so. */
-function nameOf(space: SpaceSummary | undefined): string {
-  if (!space) return ""
-  return space.archived ? `${space.name} (archived)` : space.name
+/** A Project's name in the picker; an archived one says so. */
+function nameOf(project: ProjectSummary | undefined): string {
+  if (!project) return ""
+  return project.archived ? `${project.name} (archived)` : project.name
 }
 
 /** What a removal asks, as T3 Code does. */
-function questionOf({ space, threads }: Removing): string {
+function questionOf({ project, threads }: Removing): string {
   const what =
     threads === undefined
       ? "its Threads"
       : `its ${threads} ${threads === 1 ? "Thread" : "Threads"}`
-  return `Remove Project "${space.name}" and delete ${what}?`
+  return `Remove Project "${project.name}" and delete ${what}?`
 }

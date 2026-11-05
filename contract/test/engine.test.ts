@@ -115,13 +115,13 @@ test("a window calls, follows and sees refusals by their code", async () => {
     ],
   })
 
-  const space = await client.command("spaces.create", {
+  const project = await client.command("projects.create", {
     name: "Work",
   })
-  expect(space.name).toBe("Work")
+  expect(project.name).toBe("Work")
   // Params the engine does not take, as the CLI may send.
   const refused = client.call("agents.thread", {} as never, {
-    space: space.id,
+    project: project.id,
   })
   await expect(refused).rejects.toBeInstanceOf(Refused)
   await expect(refused).rejects.toMatchObject({ refusal: { code: "invalid" } })
@@ -129,7 +129,7 @@ test("a window calls, follows and sees refusals by their code", async () => {
   const kinds: string[] = []
   const ended = new Promise<void>((done) =>
     client!.follow(
-      space.id,
+      project.id,
       0,
       { module: "agents" },
       (event: Event) => {
@@ -143,7 +143,7 @@ test("a window calls, follows and sees refusals by their code", async () => {
   await client.command(
     "agents.send",
     { harness: "fake", text: "hello" },
-    space.id
+    project.id
   )
   await ended
   expect(kinds).toEqual([
@@ -160,12 +160,12 @@ test("a window calls, follows and sees refusals by their code", async () => {
 test("a subscription goes on after the engine restarts, without a gap", async () => {
   await serve()
   client = new Engine(address)
-  const space = await client.command("spaces.create", {
+  const project = await client.command("projects.create", {
     name: "Work",
   })
   const heard: string[] = []
   client.follow(
-    space.id,
+    project.id,
     0,
     { module: "agents", kinds: ["thread.started"] },
     (event) => heard.push(event.kind),
@@ -174,7 +174,7 @@ test("a subscription goes on after the engine restarts, without a gap", async ()
   await client.command(
     "agents.send",
     { harness: "fake", text: "one" },
-    space.id
+    project.id
   )
 
   await stop()
@@ -185,7 +185,7 @@ test("a subscription goes on after the engine restarts, without a gap", async ()
   await client.command(
     "agents.send",
     { harness: "fake", text: "two" },
-    space.id
+    project.id
   )
   await expect.poll(() => heard).toEqual(["thread.started", "thread.started"])
 })
@@ -193,7 +193,7 @@ test("a subscription goes on after the engine restarts, without a gap", async ()
 test("a window runs a terminal and hears what it prints, until it closes", async () => {
   await serve()
   client = new Engine(address)
-  const space = await client.command("spaces.create", {
+  const project = await client.command("projects.create", {
     name: "Work",
   })
   const terminal = newId()
@@ -205,12 +205,12 @@ test("a window runs a terminal and hears what it prints, until it closes", async
       args: ["-c", 'read word; echo "got $word"; sleep 100'],
       size: { cols: 80, rows: 24 },
     },
-    { space: space.id }
+    { project: project.id }
   )
   let screen = ""
   let closed = false
   client.stream(
-    space.id,
+    project.id,
     "terminal.watch",
     { terminal },
     (piece) => {
@@ -222,17 +222,17 @@ test("a window runs a terminal and hears what it prints, until it closes", async
   await client.call(
     "terminal.write",
     { terminal, data: "hi\r" },
-    { space: space.id }
+    { project: project.id }
   )
   await expect.poll(() => screen).toContain("got hi")
-  await client.call("terminal.close", { terminal }, { space: space.id })
+  await client.call("terminal.close", { terminal }, { project: project.id })
   await expect.poll(() => closed).toBe(true)
 })
 
 test("a stream heard once ends when the connection breaks, and is not asked again", async () => {
   await serve()
   client = new Engine(address)
-  const space = await client.command("spaces.create", {
+  const project = await client.command("projects.create", {
     name: "Work",
   })
   const terminal = newId()
@@ -244,11 +244,11 @@ test("a stream heard once ends when the connection breaks, and is not asked agai
       args: ["-c", "sleep 100"],
       size: { cols: 80, rows: 24 },
     },
-    { space: space.id }
+    { project: project.id }
   )
   const ends: (string | undefined)[] = []
   client.stream(
-    space.id,
+    project.id,
     "terminal.watch",
     { terminal },
     () => {},

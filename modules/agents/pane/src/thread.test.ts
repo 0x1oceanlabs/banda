@@ -84,7 +84,7 @@ test("a message names the other Thread whose Agent wrote it, and whether it answ
   const [own, said, answer] = state.items
   expect(answer.body).toMatchObject({ kind: "message", answers: true })
   expect(own.body).not.toHaveProperty("answers")
-  // The Space's other Threads, by their Agents: never this Thread's own.
+  // The Project's other Threads, by their Agents: never this Thread's own.
   const listed = (id: string): ListedThread => ({
     id,
     agent: id,

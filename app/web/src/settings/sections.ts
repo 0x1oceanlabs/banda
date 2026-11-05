@@ -39,7 +39,7 @@ import { Keys } from "./Keys"
 import { ProblemsSettings } from "./ProblemsSettings"
 import { PlaySound, PresetPicker } from "./rows"
 import { SharingSettings } from "./SharingSettings"
-import { SpacesSettings } from "./SpacesSettings"
+import { ProjectsSettings } from "./ProjectsSettings"
 import { ThemePicker } from "./ThemePicker"
 
 /** A row a section draws itself: the value now, how to set it, and the
@@ -104,12 +104,12 @@ export const SECTIONS: Section[] = [
     Body: General,
   },
   {
-    id: "spaces",
+    id: "projects",
     title: "Projects",
     icon: FoldersIcon,
     about:
       "The folders you and your Agents work in. Banda's engine keeps them, not a file.",
-    Body: SpacesSettings,
+    Body: ProjectsSettings,
   },
   {
     id: "appearance",

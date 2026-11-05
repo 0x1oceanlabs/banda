@@ -90,7 +90,7 @@ pub enum Error {
     Io(#[from] std::io::Error),
     #[error("json: {0}")]
     Json(#[from] serde_json::Error),
-    /// The Space's database closed while a change or a read waited for it.
+    /// The Project's database closed while a change or a read waited for it.
     #[error("the Project's database has closed")]
     Closed,
     #[error(transparent)]

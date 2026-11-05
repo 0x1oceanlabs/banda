@@ -10,7 +10,7 @@ const heard = (about: string, chime: Call["chime"], detail?: string) =>
     ...(detail ? { detail } : {}),
     pane: { kind: "agents.thread", args: { thread: about } },
     key: `s:${about}`,
-    space: "s",
+    project: "s",
     since: 1,
   }) satisfies Call
 
@@ -48,7 +48,7 @@ test("with more than one Project, a call's notice and toast name its Project", (
   )
   expect(toldOfCall(heard("Tests", "done"), true, "banda")).toMatchObject({
     title: "Tests",
-    space: "banda",
+    project: "banda",
   })
-  expect(toldOfCall(heard("Tests", "done"), true).space).toBeUndefined()
+  expect(toldOfCall(heard("Tests", "done"), true).project).toBeUndefined()
 })

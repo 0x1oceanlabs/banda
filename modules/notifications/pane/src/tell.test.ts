@@ -17,7 +17,7 @@ const NOTIFY: Notify = {
 
 const call = (about: string, chime: Chime): Call => ({
   key: `s:${about}`,
-  space: "s",
+  project: "s",
   about,
   chime,
   title: about,

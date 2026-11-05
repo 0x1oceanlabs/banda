@@ -1,5 +1,5 @@
-//! The bytes of images carried by messages and tools, in the Space's data:
-//! `spaces/<id>/images/<image ID>` (ADR 0026). The Space's SQLite keeps
+//! The bytes of images carried by messages and tools, in the Project's data:
+//! `projects/<id>/images/<image ID>` (ADR 0026). The Project's SQLite keeps
 //! what each image is and which item carries it (`store`); the bytes
 //! stay out of it (ADR 0002, decision 1).
 //!
@@ -44,7 +44,7 @@ pub struct Images {
 }
 
 impl Images {
-    /// The images of the Space whose data is in `data`.
+    /// The images of the Project whose data is in `data`.
     pub fn of(data: &Path) -> Self {
         Images {
             folder: data.join("images"),
@@ -136,8 +136,8 @@ mod tests {
 
     #[tokio::test]
     async fn an_image_is_kept_read_and_let_go() {
-        let space = tempfile::tempdir().unwrap();
-        let images = Images::of(space.path());
+        let project = tempfile::tempdir().unwrap();
+        let images = Images::of(project.path());
         let (kept, gone) = (ImageId::new(), ImageId::new());
         images.keep(kept, b"one".to_vec()).await.unwrap();
         images.keep(gone, b"two".to_vec()).await.unwrap();

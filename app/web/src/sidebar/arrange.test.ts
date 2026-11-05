@@ -1,4 +1,4 @@
-import type { SpaceSummary } from "@banda/contract"
+import type { ProjectSummary } from "@banda/contract"
 import type { MarkState } from "@banda/ui/components/banda-mark"
 import type { Listed } from "@banda/ui/pane"
 import { expect, test } from "vitest"
@@ -6,7 +6,7 @@ import { arrange, type Arranged } from "./arrange"
 import { DEFAULT_SIDEBAR } from "@banda/contract/sidebar"
 import { type Settings, STATES } from "./settings"
 
-const space = (id: string, name: string, folder: string): SpaceSummary => ({
+const project = (id: string, name: string, folder: string): ProjectSummary => ({
   id,
   name,
   folder,
@@ -16,10 +16,10 @@ const space = (id: string, name: string, folder: string): SpaceSummary => ({
   scratch: false,
   missing: false,
 })
-const landing = space("s1", "Landing", "/l")
-const api = space("s2", "API", "/a")
-const quiet = space("s3", "Quiet", "/q")
-const spaces = [landing, api, quiet]
+const landing = project("s1", "Landing", "/l")
+const api = project("s2", "API", "/a")
+const quiet = project("s3", "Quiet", "/q")
+const projects = [landing, api, quiet]
 
 const listed = (id: string, mark: MarkState, changed: number): Listed => ({
   id,
@@ -50,20 +50,20 @@ type Keys = { [Group in keyof Settings]?: Partial<Settings[Group]> }
 const over = (base: Settings, keys: Keys = {}): Settings => ({
   group: { ...base.group, ...keys.group },
   sort: { ...base.sort, ...keys.sort },
-  spaces: { ...base.spaces, ...keys.spaces },
+  projects: { ...base.projects, ...keys.projects },
   row: { ...base.row, ...keys.row },
 })
 
 /** Banda's presets, as look/sidebars/*.toml set them. */
 const PRESETS = {
   inbox: {},
-  spaces: {
-    group: { by: "space", states: [...STATES], bottom: [] },
+  projects: {
+    group: { by: "project", states: [...STATES], bottom: [] },
     row: { lines: 1 },
   },
   places: {
     group: { states: [...STATES], bottom: [] },
-    spaces: { list: true },
+    projects: { list: true },
     row: { lines: 2 },
   },
 } satisfies Record<string, Keys>
@@ -78,7 +78,7 @@ const of = (
   toggled?: Set<string>,
   archived: readonly string[] = []
 ) =>
-  arrange(lists, spaces, resolve(preset, keys), only, toggled, (listed) =>
+  arrange(lists, projects, resolve(preset, keys), only, toggled, (listed) =>
     archived.includes(listed.id)
   )
 
@@ -89,7 +89,7 @@ test("inbox: one list, what waits first; the working and the archived on shelves
   ])
   expect(inbox.sections[0]?.label).toBe("")
   expect(ids(inbox, "shelves")).toEqual([["working", ["headers", "release"]]])
-  expect(inbox.spaces).toBeUndefined()
+  expect(inbox.projects).toBeUndefined()
 
   const archived = of("inbox", {}, undefined, undefined, ["logo", "letters"])
   expect(ids(archived)).toEqual([["active", ["migration", "form"]]])
@@ -108,20 +108,20 @@ test("a Thread at work is never archived", () => {
   expect(ids(working, "shelves")).toEqual([["working", ["headers", "release"]]])
 })
 
-test("spaces: each Project a section, what waits first, with its roll-up", () => {
-  const bySpace = of("spaces")
-  expect(ids(bySpace)).toEqual([
+test("projects: each Project a section, what waits first, with its roll-up", () => {
+  const byProject = of("projects")
+  expect(ids(byProject)).toEqual([
     ["s2", ["letters", "migration", "release"]],
     ["s1", ["form", "headers", "logo"]],
   ])
-  expect(bySpace.sections[0]).toMatchObject({
+  expect(byProject.sections[0]).toMatchObject({
     label: "API",
     mark: "failed",
     waiting: 2,
   })
-  expect(bySpace.shelves).toEqual([])
+  expect(byProject.shelves).toEqual([])
   // A archived Thread goes last, and waits for no one.
-  const archived = of("spaces", {}, undefined, undefined, ["letters"])
+  const archived = of("projects", {}, undefined, undefined, ["letters"])
   expect(ids(archived)[0]).toEqual(["s2", ["migration", "release", "letters"]])
   expect(archived.sections[0]?.waiting).toBe(1)
 })
@@ -129,7 +129,7 @@ test("spaces: each Project a section, what waits first, with its roll-up", () =>
 test("places: the Projects listed above, and a click on one shows its rows", () => {
   const places = of("places", {}, undefined, undefined, ["logo"])
   expect(
-    places.spaces?.map((s) => [s.space.name, s.mark, s.waiting, s.count])
+    places.projects?.map((s) => [s.project.name, s.mark, s.waiting, s.count])
   ).toEqual([
     ["API", "failed", 2, 3],
     ["Landing", "asking", 1, 3],
@@ -150,19 +150,19 @@ test("a state the settings name nowhere goes to the last section", () => {
 })
 
 test("the Person's keys win over the preset", () => {
-  const flat = of("spaces", { group: { by: "none" }, sort: { by: "title" } })
+  const flat = of("projects", { group: { by: "none" }, sort: { by: "title" } })
   expect(ids(flat)).toEqual([
     ["all", ["form", "headers", "letters", "logo", "migration", "release"]],
   ])
 })
 
 test("empty sections hide unless the settings show them", () => {
-  const none = arrange({}, spaces, resolve("inbox"))
+  const none = arrange({}, projects, resolve("inbox"))
   expect(none.sections).toEqual([])
   expect(none.shelves).toEqual([])
   const shown = arrange(
     {},
-    spaces,
+    projects,
     resolve("inbox", { group: { empty: "show" } })
   )
   expect(shown.sections.map((s) => s.key)).toEqual(["active"])
@@ -171,9 +171,9 @@ test("empty sections hide unless the settings show them", () => {
 
 test("folded comes from the settings, and the Person's toggle turns it over", () => {
   const keys: Keys = { group: { folded: ["API", "working"] } }
-  const bySpace = of("spaces", keys)
-  expect(bySpace.sections.find((s) => s.key === "s2")?.folded).toBe(true)
-  const opened = of("spaces", keys, undefined, new Set(["s2", "s1"]))
+  const byProject = of("projects", keys)
+  expect(byProject.sections.find((s) => s.key === "s2")?.folded).toBe(true)
+  const opened = of("projects", keys, undefined, new Set(["s2", "s1"]))
   expect(opened.sections.map((s) => [s.key, s.folded])).toEqual([
     ["s2", false],
     ["s1", true],
@@ -184,8 +184,8 @@ test("folded comes from the settings, and the Person's toggle turns it over", ()
 })
 
 test("scratch Threads follow grouping, sorting, shelves and filtering like other Threads", () => {
-  const scratch = { ...space("scratch", "", "/scratch"), scratch: true }
-  const allSpaces = [...spaces, scratch]
+  const scratch = { ...project("scratch", "", "/scratch"), scratch: true }
+  const allProjects = [...projects, scratch]
   const allLists = {
     ...lists,
     scratch: [
@@ -194,21 +194,21 @@ test("scratch Threads follow grouping, sorting, shelves and filtering like other
       listed("old", "rest", 0),
     ],
   }
-  for (const by of ["space", "state", "none"] as const) {
+  for (const by of ["project", "state", "none"] as const) {
     const settings = over(resolve("inbox"), {
       group: { by, bottom: ["archived"] },
-      spaces: { list: true },
+      projects: { list: true },
     })
     const result = arrange(
       allLists,
-      allSpaces,
+      allProjects,
       settings,
       undefined,
       new Set(),
       (row) => row.id === "old"
     )
-    expect(result.spaces?.some((line) => line.space.scratch)).toBe(false)
-    if (by === "space") {
+    expect(result.projects?.some((line) => line.project.scratch)).toBe(false)
+    if (by === "project") {
       expect(result.sections.at(-1)?.label).toBe("No Project")
       expect(result.sections.at(-1)?.rows.map((row) => row.listed.id)).toEqual([
         "busy",
@@ -216,9 +216,9 @@ test("scratch Threads follow grouping, sorting, shelves and filtering like other
         "old",
       ])
     } else {
-      expect(result.sections.some((s) => s.key === "no-space")).toBe(false)
+      expect(result.sections.some((s) => s.key === "no-project")).toBe(false)
       const mixed = result.sections.flatMap((s) => s.rows)
-      expect(mixed.some((row) => row.space.scratch)).toBe(true)
+      expect(mixed.some((row) => row.project.scratch)).toBe(true)
       if (by === "state")
         expect(
           result.shelves
@@ -232,11 +232,11 @@ test("scratch Threads follow grouping, sorting, shelves and filtering like other
           result.sections[0].rows.findIndex((r) => r.listed.id === "loose")
         )
     }
-    const filtered = arrange(allLists, allSpaces, settings, landing.id)
+    const filtered = arrange(allLists, allProjects, settings, landing.id)
     expect(
       [...filtered.sections, ...filtered.shelves]
         .flatMap((s) => s.rows)
-        .every((r) => r.space.id === landing.id)
+        .every((r) => r.project.id === landing.id)
     ).toBe(true)
   }
 })

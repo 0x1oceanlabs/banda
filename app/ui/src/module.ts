@@ -5,7 +5,12 @@
  * module's engine part offers, its `methods!` table says.
  */
 import type { ComponentType, ReactNode } from "react"
-import type { Engine, JsonValue, SpaceId, SpaceSummary } from "@banda/contract"
+import type {
+  Engine,
+  JsonValue,
+  ProjectId,
+  ProjectSummary,
+} from "@banda/contract"
 import type { Details } from "./components/thread-details"
 import type { Key } from "./lib/keys"
 import type { Notify } from "@banda/contract/look"
@@ -20,10 +25,10 @@ import type { SoundSettings } from "./sound/settings"
 export type Sight = "looking" | "on-screen" | "in-window" | "away"
 
 /** A thing, as a Pane shows it and the lists name it. */
-export type Thing = { space: SpaceId; about: string }
+export type Thing = { project: ProjectId; about: string }
 
 /** A Pane's args, and what an action is run with besides the window: the
- * Banda menu's words, a Space. Plain data, as `keys.toml` and the CLI will
+ * Banda menu's words, a Project. Plain data, as `keys.toml` and the CLI will
  * give it. */
 export type Args = { [key: string]: JsonValue }
 
@@ -35,26 +40,26 @@ export type AnyPaneKind = PaneKind<Args>
  * What a module needs that this lacks is added here, not reached around.
  */
 export type WindowApi = {
-  /** The Space a new Thread starts in. */
-  home: SpaceId
+  /** The Project a new Thread starts in. */
+  home: ProjectId
   /** Shows a new Pane right of the focused one, with its width, and
-   * focuses it: in `space`, else in the focused Pane's Space. It is a new
+   * focuses it: in `project`, else in the focused Pane's Project. It is a new
    * tile each time, as a browser's new window, even when another shows
    * the same Pane. With `focus: false` the focus stays where it is, as
    * for a tab an Agent opened. With `beside`, an Agent's ID, it shows
    * right of the Pane of the thing that Agent works in, where a
    * workspace shows one (`beside`). With `again: false` a Pane already
    * shown gets the focus instead, as a Pane's own `open`: one its kind
-   * names the same (`PaneKind.identity`), as the Space's one Diff. One
-   * whose kind says `home` opens on its Space's workspace (ADR 0065).
+   * names the same (`PaneKind.identity`), as the Project's one Diff. One
+   * whose kind says `home` opens on its Project's workspace (ADR 0065).
    */
   open: (
     pane: PaneState,
-    space?: SpaceId,
+    project?: ProjectId,
     how?: { focus?: boolean; beside?: string; again?: false }
   ) => void
-  /** The focused Pane and its Space; none while no Pane has the focus. */
-  focused: () => { space: SpaceId; pane: PaneState } | null
+  /** The focused Pane and its Project; none while no Pane has the focus. */
+  focused: () => { project: ProjectId; pane: PaneState } | null
   /** Where the thing `agent` works in is, as a Thread its Agent's (ADR
    * 0029, decision 4); none when no module lists one. */
   beside: (agent: string) => Beside | null
@@ -74,8 +79,8 @@ export type WindowApi = {
   /** Goes to `thing`: to the Pane that shows it, on any workspace, else
    * opens `pane` for it. */
   goTo: (thing: Thing & { pane: PaneState }) => void
-  /** The Spaces open in the window. */
-  spaces: () => readonly SpaceSummary[]
+  /** The Projects open in the window. */
+  projects: () => readonly ProjectSummary[]
   /** How the look says to tell and to sound: `[notify]` and `[sound]`. */
   look: () => { notify: Notify; sound: SoundSettings }
   /** Sets `key` in the settings' file `file` (ADR 0016), as `limits.look`
@@ -85,11 +90,11 @@ export type WindowApi = {
   writeSetting: (file: string, key: string, value: string) => Promise<string[]>
 }
 
-/** What `WindowApi.beside` finds: the thing's Space, and the Panes of
+/** What `WindowApi.beside` finds: the thing's Project, and the Panes of
  * the column right of its Pane, from the top; none when no workspace
  * shows its Pane. */
 export type Beside = {
-  space: SpaceId
+  project: ProjectId
   right: readonly PaneState[] | null
 }
 
@@ -132,7 +137,7 @@ export type MenuAct = {
 
 /** A row a module's source gives the Banda menu (ADR 0022, decision 4). */
 export type MenuRow = {
-  /** Dotted, its module's id first (`agents.file.<space>.<path>`): what
+  /** Dotted, its module's id first (`agents.file.<project>.<path>`): what
    * the menu counts as chosen often and lately. */
   id: string
   title: string
@@ -146,12 +151,12 @@ export type MenuRow = {
   acts?: readonly MenuAct[]
 }
 
-/** Where the Banda menu looks: the focused Space, or the one the Person
+/** Where the Banda menu looks: the focused Project, or the one the Person
  * went into (`entered`). */
 export type Here = {
   engine: Engine
-  space: SpaceId
-  /** The Space's folder, where it has one. */
+  project: ProjectId
+  /** The Project's folder, where it has one. */
   folder?: string
   entered: boolean
 }
@@ -183,9 +188,9 @@ export type Source = {
 /** What the window gives a widget on the bar, as it gives a Watch. */
 export type WidgetProps = {
   engine: Engine
-  spaces: readonly SpaceSummary[]
-  /** The focused Pane's Space. */
-  space: SpaceId
+  projects: readonly ProjectSummary[]
+  /** The focused Pane's Project. */
+  project: ProjectId
   window: WindowApi
 }
 
@@ -217,7 +222,7 @@ export type Module = {
   engine: boolean
   /** Its kinds of Pane, in the order the launcher offers them. */
   panes: readonly AnyPaneKind[]
-  /** What it tells the bar and the sidebar about each Space. */
+  /** What it tells the bar and the sidebar about each Project. */
   watches: readonly Watch[]
   /** What the Person can do with it, by a key or the Banda menu. */
   actions: readonly Action[]

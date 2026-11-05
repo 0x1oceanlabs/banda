@@ -1,7 +1,7 @@
-//! The git module: the Space's folder as git sees it (ADR 0034,
+//! The git module: the Project's folder as git sees it (ADR 0034,
 //! decision 3).
 //!
-//! The engine runs the `git` program in the Space's folder, as T3 Code
+//! The engine runs the `git` program in the Project's folder, as T3 Code
 //! does, with no library of its own: its branch and what changed
 //! (`status`), the diff of a scope (`diff`, `contents`), the branches to
 //! compare with (`refs`) and the branch's commits (`commits`). These only
@@ -28,7 +28,7 @@ mod stage;
 mod status;
 mod watch;
 
-use banda_kernel::{Call, Error, Module, ModuleSpace, Nothing, Refusal, Right, Stream};
+use banda_kernel::{Call, Error, Module, ModuleProject, Nothing, Refusal, Right, Stream};
 use model::{
     ActAsk, BranchAsk, ChangeAsk, Commit, CommitsAsk, Contents, ContentsAsk, Diff, DiffAsk,
     Message, Progress, PromptAsk, Prompted, Ref, RefsAsk, Status, SwitchAsk, WrittenAsk,
@@ -45,9 +45,9 @@ pub struct Git {
 }
 
 /// Each repository's [`Writes`], by its top folder as git names it, or by
-/// the folder of a Space that is no repository yet, its links followed as
+/// the folder of a Project that is no repository yet, its links followed as
 /// git follows them: a hook that runs long in one keeps no other waiting.
-/// Every Space in a repository shares its own.
+/// Every Project in a repository shares its own.
 #[derive(Clone, Default)]
 pub(crate) struct Repositories(Arc<Mutex<HashMap<PathBuf, Writes>>>);
 
@@ -183,8 +183,8 @@ impl Module for Git {
 
     /// From now on, it keeps a checkpoint as each turn begins and ends,
     /// before the turn's Harness is asked anything.
-    async fn opened(&self, space: ModuleSpace) -> Result<(), Error> {
-        let heard = space.react(space.at().await?, checkpoint::heard());
+    async fn opened(&self, project: ModuleProject) -> Result<(), Error> {
+        let heard = project.react(project.at().await?, checkpoint::heard());
         tokio::spawn(checkpoint::follow(heard));
         Ok(())
     }
@@ -202,29 +202,29 @@ impl Git {
     async fn status(&self, call: Call, _: Nothing) -> Result<Status, Refusal> {
         // Read before git is: an event after it may change what git reads,
         // and a Pane following it reads again.
-        let at = call.space().at().await?;
-        let found = Repo::find(&call.space().folder()).await;
+        let at = call.project().at().await?;
+        let found = Repo::find(&call.project().folder()).await;
         Ok(status::read(found, at, &self.writing).await?)
     }
 
     async fn diff(&self, call: Call, ask: DiffAsk) -> Result<Diff, Refusal> {
         // Read before git is: an event after it may change what git reads,
         // and a Pane following it reads again.
-        let at = call.space().at().await?;
-        let repo = Repo::open(&call.space().folder()).await?;
+        let at = call.project().at().await?;
+        let repo = Repo::open(&call.project().folder()).await?;
         diff::diff(&repo, ask, at).await
     }
 
     async fn refs(&self, call: Call, ask: RefsAsk) -> Result<Vec<Ref>, Refusal> {
-        refs::refs(&Repo::open(&call.space().folder()).await?, ask).await
+        refs::refs(&Repo::open(&call.project().folder()).await?, ask).await
     }
 
     async fn commits(&self, call: Call, ask: CommitsAsk) -> Result<Vec<Commit>, Refusal> {
-        refs::commits(&Repo::open(&call.space().folder()).await?, ask).await
+        refs::commits(&Repo::open(&call.project().folder()).await?, ask).await
     }
 
     async fn contents(&self, call: Call, ask: ContentsAsk) -> Result<Contents, Refusal> {
-        diff::contents(&Repo::open(&call.space().folder()).await?, ask).await
+        diff::contents(&Repo::open(&call.project().folder()).await?, ask).await
     }
 
     async fn stage(&self, call: Call, ask: ChangeAsk) -> Result<(), Refusal> {
@@ -240,20 +240,20 @@ impl Git {
     }
 
     async fn change(&self, call: Call, act: stage::Act, ask: ChangeAsk) -> Result<(), Refusal> {
-        let repo = Repo::open(&call.space().folder()).await?;
+        let repo = Repo::open(&call.project().folder()).await?;
         let _writing = self.writing.of(&repo.top).hold().await;
         stage::change(&repo, act, ask).await
     }
 
     async fn watch(&self, call: Call, _: Nothing) -> Result<Stream, Refusal> {
-        Ok(watch::watch(call.space().clone(), self.writing.clone()))
+        Ok(watch::watch(call.project().clone(), self.writing.clone()))
     }
 
     async fn act(&self, call: Call, ask: ActAsk) -> Result<Stream, Refusal> {
-        let repo = Repo::open(&call.space().folder()).await?;
+        let repo = Repo::open(&call.project().folder()).await?;
         let writing = self.writing.of(&repo.top);
         let (say, heard) = tokio::sync::mpsc::channel(64);
-        let card = act::Card::of(call.space(), call.participant(), ask.thread.clone());
+        let card = act::Card::of(call.project(), call.participant(), ask.thread.clone());
         // It goes on when the window lets go: a commit is not left half
         // done.
         tokio::spawn(async move {
@@ -266,35 +266,35 @@ impl Git {
     }
 
     async fn switch(&self, call: Call, ask: SwitchAsk) -> Result<(), Refusal> {
-        let repo = Repo::open(&call.space().folder()).await?;
+        let repo = Repo::open(&call.project().folder()).await?;
         let _writing = self.writing.of(&repo.top).hold().await;
         let switched = act::switch(&repo, &ask.name).await?;
-        if let Some(card) = act::Card::of(call.space(), call.participant(), ask.thread) {
+        if let Some(card) = act::Card::of(call.project(), call.participant(), ask.thread) {
             card.acted(switched).await;
         }
         Ok(())
     }
 
     async fn branch(&self, call: Call, ask: BranchAsk) -> Result<(), Refusal> {
-        let repo = Repo::open(&call.space().folder()).await?;
+        let repo = Repo::open(&call.project().folder()).await?;
         let _writing = self.writing.of(&repo.top).hold().await;
         let made = act::make_branch(&repo, &ask.name, ask.from.as_deref()).await?;
-        if let Some(card) = act::Card::of(call.space(), call.participant(), ask.thread) {
+        if let Some(card) = act::Card::of(call.project(), call.participant(), ask.thread) {
             card.acted(made).await;
         }
         Ok(())
     }
 
     async fn prompt(&self, call: Call, ask: PromptAsk) -> Result<Prompted, Refusal> {
-        message::prompt(&Repo::open(&call.space().folder()).await?, ask).await
+        message::prompt(&Repo::open(&call.project().folder()).await?, ask).await
     }
 
     async fn written(&self, call: Call, ask: WrittenAsk) -> Result<Message, Refusal> {
-        message::written(&Repo::open(&call.space().folder()).await?, ask).await
+        message::written(&Repo::open(&call.project().folder()).await?, ask).await
     }
 
     async fn init(&self, call: Call, _: Nothing) -> Result<(), Refusal> {
-        let folder = call.space().folder();
+        let folder = call.project().folder();
         let _writing = self.writing.of_folder(&folder).hold().await;
         act::init(&folder).await
     }

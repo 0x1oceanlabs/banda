@@ -135,11 +135,11 @@ test("Look into it asks an Agent in a new Thread, in the Project of Banda's chec
   window = await startWindow()
   const { page } = window
   await expect((await firstThread(page)).composer).toBeVisible()
-  // The engine runs from this checkout; a Space is it.
+  // The engine runs from this checkout; a Project is it.
   const checkout = JSON.parse(
     window.banda(
       "call",
-      "spaces.add",
+      "projects.add",
       "--params",
       JSON.stringify({
         folder: join(import.meta.dirname, "../../.."),
@@ -149,7 +149,7 @@ test("Look into it asks an Agent in a new Thread, in the Project of Banda's chec
   ) as { ok: { id: string } }
   const asked = (fingerprint: string) =>
     window
-      .banda("call", "agents.threads", "--space", checkout.ok.id)
+      .banda("call", "agents.threads", "--project", checkout.ok.id)
       .includes(`Look into Banda's Problem ${fingerprint}`)
 
   // From the toast, and from Settings → Problems.

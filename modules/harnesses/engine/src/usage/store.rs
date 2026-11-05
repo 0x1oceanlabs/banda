@@ -2,7 +2,7 @@ use super::files::{Batch, Cursor};
 use super::journal::Record;
 use super::model::{UsageRead, UsageRow, UsageTotal};
 use super::{DAY, Source, prices};
-use banda_kernel::{Error, ModuleSpace, Participant};
+use banda_kernel::{Error, ModuleProject, Participant};
 use rusqlite::{Connection, OptionalExtension};
 use std::collections::{BTreeMap, HashSet};
 
@@ -29,11 +29,11 @@ CREATE TABLE harnesses_usage_reads (
 ";
 
 pub(super) async fn cursor(
-    space: &ModuleSpace,
+    project: &ModuleProject,
     source: String,
     path: String,
 ) -> Result<Cursor, Error> {
-    space
+    project
         .read(move |sql| {
             let text: Option<String> = sql
                 .query_row(
@@ -50,14 +50,14 @@ pub(super) async fn cursor(
 }
 
 pub(super) async fn keep(
-    space: &ModuleSpace,
+    project: &ModuleProject,
     source: String,
     path: String,
     batch: Batch,
     cutoff: i64,
 ) -> Result<(), Error> {
-    let owner = Participant::Person(space.owner());
-    space.write(move |tx| {
+    let owner = Participant::Person(project.owner());
+    project.write(move |tx| {
         let sql=tx.sql();
         let mut changed=0;
         if batch.reset {
@@ -81,12 +81,12 @@ pub(super) async fn keep(
 }
 
 pub(super) async fn read_done(
-    space: &ModuleSpace,
+    project: &ModuleProject,
     source: String,
     problems: Vec<String>,
 ) -> Result<(), Error> {
-    let owner = Participant::Person(space.owner());
-    space
+    let owner = Participant::Person(project.owner());
+    project
         .write(move |tx| {
             tx.sql().execute(
                 "INSERT INTO harnesses_usage_reads(source,read_at,problems) VALUES(?1,?2,?3)
@@ -103,8 +103,8 @@ pub(super) async fn read_done(
         .await
 }
 
-pub(super) async fn prune(space: &ModuleSpace, cutoff: i64) -> Result<(), Error> {
-    space
+pub(super) async fn prune(project: &ModuleProject, cutoff: i64) -> Result<(), Error> {
+    project
         .write(move |tx| {
             tx.sql().execute(
                 "DELETE FROM harnesses_usage_records WHERE time<?1",

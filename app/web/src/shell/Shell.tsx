@@ -9,15 +9,15 @@ import {
 import {
   type Engine,
   newId,
-  type SpaceId,
-  type SpaceSummary,
+  type ProjectId,
+  type ProjectSummary,
   type Status,
 } from "@banda/contract"
 import { waits, works } from "@banda/ui/components/banda-mark"
 import { Toaster } from "@banda/ui/components/sonner"
 import { inFront, useInFront } from "@banda/ui/hooks/use-in-front"
 import { useMachine } from "@banda/ui/hooks/use-status"
-import { openSpaces, updateSpace } from "@banda/ui/lib/spaces"
+import { openProjects, updateProject } from "@banda/ui/lib/projects"
 import {
   callsOf,
   IN_PROGRAM,
@@ -230,21 +230,21 @@ export function Shell({
   engine,
   status,
   modules,
-  spaces,
+  projects,
   home,
   onCreated,
 }: {
   engine: Engine
   status: Status
   modules: readonly string[]
-  spaces: SpaceSummary[]
-  /** The Space a new Thread starts in. */
-  home: SpaceId
-  onCreated: (space: SpaceSummary) => void
+  projects: ProjectSummary[]
+  /** The Project a new Thread starts in. */
+  home: ProjectId
+  onCreated: (project: ProjectSummary) => void
 }) {
-  // A Space whose folder is missing lists nothing and starts nothing
+  // A Project whose folder is missing lists nothing and starts nothing
   // until the Person locates it (ADR 0026, decision 6).
-  const open = useMemo(() => openSpaces(spaces), [spaces])
+  const open = useMemo(() => openProjects(projects), [projects])
   const openNow = useRef(open)
   useEffect(() => {
     openNow.current = open
@@ -496,18 +496,18 @@ export function Shell({
     for (const listener of sightHeard.current) listener()
   }, [workspaces, front])
   // `banda menu ROUTE` opens the menu there (ADR 0017, decision 7).
-  const spacesNow = useRef(spaces)
+  const projectsNow = useRef(projects)
   useEffect(() => {
-    spacesNow.current = spaces
-  }, [spaces])
+    projectsNow.current = projects
+  }, [projects])
   // The Person archives a Thread, from its row's menu, the Banda menu or
   // Alt+S, or brings it back. Archived, it is put away: every Pane that
   // shows it closes, on any workspace (ADR 0008, decision 4; ADR 0069).
   const archiveThread = useCallback(
-    (space: SpaceId, thing: string, archived: boolean) => {
+    (project: ProjectId, thing: string, archived: boolean) => {
       keepArchived(thing, archived)
       if (!archived) return
-      const shown = { space, about: thing }
+      const shown = { project, about: thing }
       for (const entry of entries(seenNow.current.state))
         if (isShowing(entry, shown, showsOf))
           change((w) => closingShown(w, shown))
@@ -515,16 +515,16 @@ export function Shell({
     [change]
   )
   const toggleArchived = useCallback(
-    (space: SpaceId, thing: string) => {
-      const archived = toggled(listsNow.current, space, thing)
-      if (archived !== undefined) archiveThread(space, thing, archived)
+    (project: ProjectId, thing: string) => {
+      const archived = toggled(listsNow.current, project, thing)
+      if (archived !== undefined) archiveThread(project, thing, archived)
     },
     [archiveThread]
   )
   const archive = useCallback(() => {
     const entry = focused(seenNow.current.state)
     const thing = entry && showsOf(entry.pane)
-    if (entry && thing) toggleArchived(entry.space, thing)
+    if (entry && thing) toggleArchived(entry.project, thing)
   }, [toggleArchived])
   const toggleOverview = useCallback(
     () => setOverview((was) => (was === "open" ? "closing" : "open")),
@@ -532,7 +532,7 @@ export function Shell({
   )
   // The drawer (ADR 0025, decision 8): its Pane, kept between runs, and
   // whether it shows. Dropped with none, it gets a new Thread in the home
-  // Space, the agents module's, caught before a workspace opens it.
+  // Project, the agents module's, caught before a workspace opens it.
   const [drawer, setDrawer] = useState(loadDrawer)
   const [drawerShown, setDrawerShown] = useState(false)
   // Kept from the last run, it is drawn from its first drop in this one.
@@ -549,14 +549,14 @@ export function Shell({
         const harness = drawerLook.harness
         const catching: Parts = {
           ...parts,
-          open: (pane, space) => {
-            const entry = { id: newId(), space: space ?? home, pane }
+          open: (pane, project) => {
+            const entry = { id: newId(), project: project ?? home, pane }
             drawerNow.current = entry
             setDrawer(entry)
           },
         }
         runAction(catching, "thread.new", {
-          space: home,
+          project: home,
           ...(harness && { harness }),
         })
       }
@@ -663,17 +663,17 @@ export function Shell({
   useEffect(() => {
     saidNow.current = said
   }, [said])
-  // The settings Pane (ADR 0016), in the focused Pane's Space.
+  // The settings Pane (ADR 0016), in the focused Pane's Project.
   const settings = useCallback(
     (link?: string) =>
-      change((w) => settingsAt(w, focused(w)?.space ?? home, link)),
+      change((w) => settingsAt(w, focused(w)?.project ?? home, link)),
     [change, home]
   )
   // A settings route opens the settings there; any other, the menu.
   const route = useCallback(
     (route: string) => {
       const link = settingsLinkOf(route)
-      if (link === undefined) setMenu(openingOf(route, spacesNow.current))
+      if (link === undefined) setMenu(openingOf(route, projectsNow.current))
       else settings(link)
     },
     [settings]
@@ -688,20 +688,20 @@ export function Shell({
     const parts: Parts = {
       change,
       home,
-      open: (pane, space, { beside, again = true, ...how } = {}) =>
+      open: (pane, project, { beside, again = true, ...how } = {}) =>
         change((w) => {
           const at = beside
             ? besideOf(w, listsNow.current, beside, showsOf)
             : null
           return opening(
             w,
-            space ?? at?.space ?? focused(w)?.space ?? home,
+            project ?? at?.project ?? focused(w)?.project ?? home,
             pane,
             {
               ...how,
               ...(at?.from ? { from: at.from } : {}),
               // What an Agent opens goes into its Thread's Group; an
-              // Agent's Thread, to its Space's workspace.
+              // Agent's Thread, to its Project's workspace.
               place: at?.from ? "group" : homeOf(pane),
               // Not again: the one shown, as its kind names it, keeps
               // what it shows.
@@ -711,7 +711,7 @@ export function Shell({
         }),
       focused: () => {
         const entry = focused(seenNow.current.state)
-        return entry ? { space: entry.space, pane: entry.pane } : null
+        return entry ? { project: entry.project, pane: entry.pane } : null
       },
       beside: (agent) => {
         const at = besideOf(
@@ -720,7 +720,7 @@ export function Shell({
           agent,
           showsOf
         )
-        return at && { space: at.space, right: at.from ? at.right : null }
+        return at && { project: at.project, right: at.from ? at.right : null }
       },
       lists: () => listsNow.current,
       watchLists: (listener) => {
@@ -745,7 +745,7 @@ export function Shell({
       },
       goTo: goToCall,
       look: () => lookNow.current,
-      spaces: () => openNow.current,
+      projects: () => openNow.current,
       toggleSidebar,
       showSidebar,
       toggleOverview,
@@ -819,7 +819,7 @@ export function Shell({
       watchSight: (listener) => partsNow.current.watchSight(listener),
       goTo: (thing) => partsNow.current.goTo(thing),
       look: () => partsNow.current.look(),
-      spaces: () => partsNow.current.spaces(),
+      projects: () => partsNow.current.projects(),
       writeSetting: (...how) => partsNow.current.writeSetting(...how),
     }
     const stops = known
@@ -858,46 +858,46 @@ export function Shell({
     return () => window.removeEventListener("keydown", onKey, { capture: true })
   }, [parts, keyed])
   // A row of the sidebar or the menu opens its Pane, where a workspace
-  // shows it or in a new column; a Space gets a new Thread.
+  // shows it or in a new column; a Project gets a new Thread.
   const openPane = useCallback(
-    (space: SpaceId, pane: PaneState) =>
-      change((w) => opening(w, space, pane, { place: "right" })),
+    (project: ProjectId, pane: PaneState) =>
+      change((w) => opening(w, project, pane, { place: "right" })),
     [change]
   )
   const pickPane = useCallback(
-    (space: SpaceId, pane: PaneState) =>
-      picking((w) => opening(w, space, pane, { place: homeOf(pane) })),
+    (project: ProjectId, pane: PaneState) =>
+      picking((w) => opening(w, project, pane, { place: homeOf(pane) })),
     [picking]
   )
   // Pinned, the drawer's Thread is a column of the workspace on screen.
   const pinDrawer = useCallback(() => {
     const entry = drawerNow.current
     closeDrawer()
-    if (entry) openPane(entry.space, entry.pane)
+    if (entry) openPane(entry.project, entry.pane)
   }, [closeDrawer, openPane])
   // A new Thread is the agents module's, as its key's (`thread.new`).
   const startThread = useCallback(
-    (space: SpaceId, ask?: string) =>
-      parts.run("thread.new", { space, ...(ask && { ask }) }),
+    (project: ProjectId, ask?: string) =>
+      parts.run("thread.new", { project, ...(ask && { ask }) }),
     [parts]
   )
-  // A Space whose folder is missing finds it first (ADR 0026).
+  // A Project whose folder is missing finds it first (ADR 0026).
   const newThreadIn = useCallback(
-    (space: SpaceId, ask?: string) =>
-      spacesNow.current.find((one) => one.id === space)?.missing
-        ? route(locateRoute(space))
-        : startThread(space, ask),
+    (project: ProjectId, ask?: string) =>
+      projectsNow.current.find((one) => one.id === project)?.missing
+        ? route(locateRoute(project))
+        : startThread(project, ask),
     [startThread, route]
   )
-  // The Space the focused Pane is in: where the menu's New Thread starts.
-  const here = focused(workspaces)?.space ?? home
+  // The Project the focused Pane is in: where the menu's New Thread starts.
+  const here = focused(workspaces)?.project ?? home
   // The bar's widgets, the window's own and the modules', where the
   // look's `[bar]` puts them (ADR 0024).
   const listed = useCallback(
     (entry: Entry) => {
       const thing = showsOf(entry.pane)
       return thing
-        ? lists[entry.space]?.find((row) => row.id === thing)
+        ? lists[entry.project]?.find((row) => row.id === thing)
         : undefined
     },
     [lists]
@@ -909,8 +909,8 @@ export function Shell({
   const agentAhead = aheadRow?.agent !== undefined ? aheadRow : undefined
   const bar = useWidgets(modules, {
     engine,
-    spaces,
-    space: here,
+    projects,
+    project: here,
     window: parts,
     lists,
     sidebarShown,
@@ -950,14 +950,14 @@ export function Shell({
       switch (row.kind) {
         case "thread":
           return row.beside
-            ? change((w) => bringing(w, row.space, row.listed.pane))
-            : openPane(row.space, row.listed.pane)
+            ? change((w) => bringing(w, row.project, row.listed.pane))
+            : openPane(row.project, row.listed.pane)
         case "action":
           return row.action.run(parts)
         case "ask":
-          return newThreadIn(row.space ?? here, row.words || undefined)
+          return newThreadIn(row.project ?? here, row.words || undefined)
         case "archive":
-          return toggleArchived(row.space, row.listed.id)
+          return toggleArchived(row.project, row.listed.id)
         case "preset":
           return pickPreset(row.name)
         case "found":
@@ -977,8 +977,8 @@ export function Shell({
             ? focusEntry(w, entry)
             : undefined
         ),
-      open: (space, pane, from, place) =>
-        change((w) => opening(w, space, pane, { from, place })),
+      open: (project, pane, from, place) =>
+        change((w) => opening(w, project, pane, { from, place })),
       update,
       close: (entry) => change(() => closing(entry)),
       run: parts.run,
@@ -1017,8 +1017,8 @@ export function Shell({
     () =>
       window.banda?.popped.asked((asked) => {
         if ("open" in asked) {
-          const { space, pane, from, place } = asked.open
-          frame.open(space, pane, from, place)
+          const { project, pane, from, place } = asked.open
+          frame.open(project, pane, from, place)
         } else if ("run" in asked) {
           parts.run(asked.run.action, asked.run.args)
         }
@@ -1030,29 +1030,29 @@ export function Shell({
       calling.find((call) => isShowing(entry, call, showsOf))?.chime,
     [calling]
   )
-  const spaceName = useCallback(
-    (id: SpaceId) =>
-      spaces.find((space) => space.id === id)?.name || "No Project",
-    [spaces]
+  const projectName = useCallback(
+    (id: ProjectId) =>
+      projects.find((project) => project.id === id)?.name || "No Project",
+    [projects]
   )
 
-  // The bar's workspaces: a Space's by its name, with a dot while one of
+  // The bar's workspaces: a Project's by its name, with a dot while one of
   // its Threads calls (ADR 0065, decision 9).
   const archived = useIsArchived()
   const barWorkspaces = useMemo(
     () =>
       inBar(workspaces).map((w) =>
-        w.space
+        w.project
           ? {
               ...w,
-              owner: spaces.find((space) => space.id === w.space),
-              calls: (lists[w.space] ?? []).some(
+              owner: projects.find((project) => project.id === w.project),
+              calls: (lists[w.project] ?? []).some(
                 (row) => waits(row.mark) && !archived(row)
               ),
             }
           : w
       ),
-    [workspaces, lists, spaces, archived]
+    [workspaces, lists, projects, archived]
   )
 
   return (
@@ -1061,7 +1061,7 @@ export function Shell({
         <Watches
           engine={engine}
           modules={modules}
-          spaces={open}
+          projects={open}
           onChange={setAttention}
           onLists={setLists}
         />
@@ -1101,28 +1101,29 @@ export function Shell({
               onSettings={() => settings()}
               onKeys={() => setMenu(openingAt("actions"))}
               hiding={hiding}
-              spaces={spaces}
+              projects={projects}
               lists={lists}
               home={home}
-              isCurrent={(space, pane) => {
+              isCurrent={(project, pane) => {
                 const entry = focused(workspaces)
                 return (
                   entry !== undefined &&
-                  samePane(entry, { space, pane }, identityOf)
+                  samePane(entry, { project, pane }, identityOf)
                 )
               }}
               onOpen={pickPane}
               onNewThread={newThreadIn}
-              onNoSpace={() => machine && startThread(machine)}
+              onNoProject={() => machine && startThread(machine)}
               onArchive={archiveThread}
-              onAddSpace={() => parts.run("space.add")}
-              onPin={(space, pinned) =>
-                updateSpace(engine, { space, pinned }).catch((error: unknown) =>
-                  console.error("banda: the Project was not pinned", error)
+              onAddProject={() => parts.run("project.add")}
+              onPin={(project, pinned) =>
+                updateProject(engine, { project, pinned }).catch(
+                  (error: unknown) =>
+                    console.error("banda: the Project was not pinned", error)
                 )
               }
-              onSpaceSettings={(space) => settings(`spaces/${space}`)}
-              onLocate={(space) => route(locateRoute(space))}
+              onProjectSettings={(project) => settings(`projects/${project}`)}
+              onLocate={(project) => route(locateRoute(project))}
             />
           )}
           {sidebarShown && !narrow && (
@@ -1146,7 +1147,7 @@ export function Shell({
                 overview={overview}
                 engine={engine}
                 modules={modules}
-                spaceName={spaceName}
+                projectName={projectName}
                 called={called}
                 marked={marked}
                 away={away}
@@ -1160,7 +1161,7 @@ export function Shell({
                   // Started on this workspace, it opens here, whatever its
                   // kind's home.
                   change((w) =>
-                    opening(w, focused(w)?.space ?? home, pane, {
+                    opening(w, focused(w)?.project ?? home, pane, {
                       place: "right",
                       again: true,
                     })
@@ -1173,16 +1174,16 @@ export function Shell({
               opening={menu}
               onClose={closeMenu}
               onChoose={choose}
-              onAdded={(space) => {
+              onAdded={(project) => {
                 // As the engine answered it: the list may not know it yet.
-                onCreated(space)
-                startThread(space.id)
+                onCreated(project)
+                startThread(project.id)
               }}
               engine={engine}
               modules={modules}
-              space={here}
+              project={here}
               lists={lists}
-              spaces={spaces.filter((space) => !space.scratch)}
+              projects={projects.filter((project) => !project.scratch)}
               actions={keyed.actions}
               binds={inForce.binds}
             />
@@ -1194,7 +1195,7 @@ export function Shell({
                 engine={engine}
                 modules={modules}
                 listed={listed(drawer)}
-                spaceName={spaceName}
+                projectName={projectName}
                 frame={frame}
                 onLift={liftDrawer}
                 onPin={pinDrawer}
@@ -1207,7 +1208,7 @@ export function Shell({
                 open={overviewState === "open"}
                 onExited={leftOverview}
                 workspaces={workspaces}
-                spaceName={spaceName}
+                projectName={projectName}
                 listed={listed}
                 called={called}
                 frame={frame}

@@ -1,14 +1,14 @@
 /** A Thread as a Pane follows it: loaded once, then each of its events. */
 import { useMemo } from "react"
-import type { Engine, SpaceId } from "@banda/contract"
+import type { Engine, ProjectId } from "@banda/contract"
 import type { ThreadId } from "@banda/contract/agents"
 import { useLive } from "@banda/ui/hooks/use-live"
 import { apply, fromView } from "./thread"
 
-/** The Thread `thread` of `space`, live; none to follow without one. */
+/** The Thread `thread` of `project`, live; none to follow without one. */
 export function useThread(
   engine: Engine,
-  space: SpaceId,
+  project: ProjectId,
   thread: ThreadId | null
 ) {
   const source = useMemo(
@@ -18,12 +18,12 @@ export function useThread(
         : {
             read: async () =>
               fromView(
-                await engine.call("agents.thread", { thread }, { space })
+                await engine.call("agents.thread", { thread }, { project })
               ),
             filter: { module: "agents", subject: thread },
             apply,
           },
-    [engine, space, thread]
+    [engine, project, thread]
   )
-  return useLive(engine, space, source)
+  return useLive(engine, project, source)
 }

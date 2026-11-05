@@ -11,8 +11,8 @@ export type { Group } from "./generated/sidebar/Group"
 export type { GroupBy } from "./generated/sidebar/GroupBy"
 export type { Sort } from "./generated/sidebar/Sort"
 export type { SortBy } from "./generated/sidebar/SortBy"
-export type { Spaces } from "./generated/sidebar/Spaces"
-export type { SpaceOrder } from "./generated/sidebar/SpaceOrder"
+export type { Projects } from "./generated/sidebar/Projects"
+export type { ProjectOrder } from "./generated/sidebar/ProjectOrder"
 export type { Row } from "./generated/sidebar/Row"
 export type { Part } from "./generated/sidebar/Part"
 export type { State } from "./generated/sidebar/State"
@@ -31,7 +31,7 @@ export const DEFAULT_SIDEBAR: Sidebar = {
   preset: "inbox",
   presets: [
     { name: "inbox", origin: "banda" },
-    { name: "spaces", origin: "banda" },
+    { name: "projects", origin: "banda" },
     { name: "places", origin: "banda" },
   ],
   group: {
@@ -43,7 +43,7 @@ export const DEFAULT_SIDEBAR: Sidebar = {
     empty: "hide",
   },
   sort: { by: "attention" },
-  spaces: { list: false, order: "changed", rollup: true, newThread: true },
+  projects: { list: false, order: "changed", rollup: true, newThread: true },
   row: { lines: 3, hide: [] },
   bar: {
     show: "closed",

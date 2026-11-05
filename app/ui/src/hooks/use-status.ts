@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react"
-import type { Engine, SpaceId, Status } from "@banda/contract"
+import type { Engine, ProjectId, Status } from "@banda/contract"
 
 /** The engine connection's status, kept current. */
 export function useStatus(engine: Engine): Status {
@@ -32,8 +32,8 @@ export function useModules(engine: Engine): readonly string[] {
  * The ID this machine's modules are followed by, from when the engine
  * first named it; a connection that breaks keeps it, as the modules.
  */
-export function useMachine(engine: Engine): SpaceId | undefined {
-  const [machine, setMachine] = useState<SpaceId>()
+export function useMachine(engine: Engine): ProjectId | undefined {
+  const [machine, setMachine] = useState<ProjectId>()
   useEffect(
     () =>
       engine.watch((status) => {

@@ -2,11 +2,11 @@
 import type { Changed } from "./Changed";
 
 /**
- * The Space's folder as git sees it, as `git.status` answers.
+ * The Project's folder as git sees it, as `git.status` answers.
  */
 export type Status = { 
 /**
- * The Space's event position as this was read: a Pane follows the
+ * The Project's event position as this was read: a Pane follows the
  * events after it, and reads this again after a turn ends.
  */
 at: number, 

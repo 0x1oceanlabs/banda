@@ -6,7 +6,7 @@ import { besideOf, first, type Shows, showing, sightOf } from "./sight"
 
 const call = (about: string, chime: Chime, since = 0): Call => ({
   key: `s:${about}`,
-  space: "s",
+  project: "s",
   about,
   chime,
   title: about,
@@ -22,24 +22,28 @@ test("the Person looks at the focused Pane of the window in front", () => {
     call("t2", "done").pane,
     { place: "right" }
   )
-  expect(sightOf(w, { space: "s", about: "t2" }, true, shows)).toBe("looking")
-  expect(sightOf(w, { space: "s", about: "t1" }, true, shows)).toBe("on-screen")
-  expect(sightOf(w, { space: "s", about: "t3" }, true, shows)).toBe("in-window")
-  expect(sightOf(w, { space: "other", about: "t2" }, true, shows)).toBe(
+  expect(sightOf(w, { project: "s", about: "t2" }, true, shows)).toBe("looking")
+  expect(sightOf(w, { project: "s", about: "t1" }, true, shows)).toBe(
+    "on-screen"
+  )
+  expect(sightOf(w, { project: "s", about: "t3" }, true, shows)).toBe(
     "in-window"
   )
-  expect(sightOf(w, { space: "s", about: "t2" }, false, shows)).toBe("away")
-  expect(showing(w, { space: "s", about: "t1" }, shows)?.pane.args).toEqual({
+  expect(sightOf(w, { project: "other", about: "t2" }, true, shows)).toBe(
+    "in-window"
+  )
+  expect(sightOf(w, { project: "s", about: "t2" }, false, shows)).toBe("away")
+  expect(showing(w, { project: "s", about: "t1" }, shows)?.pane.args).toEqual({
     thread: "t1",
   })
   // In one column as a Deck, the Thread behind the shown Pane is out of sight.
   const grouped = consume(w, "left")
-  expect(sightOf(grouped, { space: "s", about: "t1" }, true, shows)).toBe(
+  expect(sightOf(grouped, { project: "s", about: "t1" }, true, shows)).toBe(
     "on-screen"
   )
   const decked = { display: "deck" as const }
   expect(
-    sightOf(grouped, { space: "s", about: "t1" }, true, shows, decked)
+    sightOf(grouped, { project: "s", about: "t1" }, true, shows, decked)
   ).toBe("in-window")
 })
 
@@ -59,17 +63,20 @@ test("what an Agent opens goes beside the Pane of the Thread it works in", () =>
   let w = open(start(), "s", call("t1", "done").pane)
   w = open(w, "s", browser, { place: "right" })
   w = open(w, "s", call("t2", "done").pane, { place: "right" })
-  const t1 = showing(w, { space: "s", about: "t1" }, shows)!
+  const t1 = showing(w, { project: "s", about: "t1" }, shows)!
   expect(besideOf(w, lists, "a1", shows)).toEqual({
-    space: "s",
+    project: "s",
     from: t1.id,
     right: [browser],
   })
   // The last column has none right of it.
   expect(besideOf(w, lists, "a2", shows)?.right).toEqual([])
-  // A Thread no Pane shows has its Space alone; no Thread, nothing.
+  // A Thread no Pane shows has its Project alone; no Thread, nothing.
   const gone = open(start(), "s", browser)
-  expect(besideOf(gone, lists, "a1", shows)).toEqual({ space: "s", right: [] })
+  expect(besideOf(gone, lists, "a1", shows)).toEqual({
+    project: "s",
+    right: [],
+  })
   expect(besideOf(w, lists, "a3", shows)).toBeNull()
 })
 

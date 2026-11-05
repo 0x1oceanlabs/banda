@@ -120,7 +120,7 @@ export function RowFrame({
   lit?: boolean
   title: ReactNode
   about?: string
-  /** Its file; none for a row of the engine's, as a Space's name. */
+  /** Its file; none for a row of the engine's, as a Project's name. */
   file?: string
   from?: From
   /** Takes the Person's line out; shown when the value is theirs. */

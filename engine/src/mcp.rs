@@ -3,13 +3,13 @@
 //! server, with two variables:
 //!
 //! - `BANDA_TOKEN`: the session's pass. The engine knows from it which
-//!   Thread's Agent calls, and keeps it in that Thread's Space: a call
-//!   names no Space, and runs there.
+//!   Thread's Agent calls, and keeps it in that Thread's Project: a call
+//!   names no Project, and runs there.
 //! - `BANDA_ENGINE`: where the engine's API listens.
 //!
 //! It is a pipe: MCP on stdio, one JSON-RPC message per line, and the
 //! engine's API on the other side. Its tools are the engine's
-//! (`spaces.tools`, from the methods marked `tool`), read once as it
+//! (`projects.tools`, from the methods marked `tool`), read once as it
 //! connects, and `skill`, which it answers itself from the Banda skill, as
 //! `banda skill` does.
 //!
@@ -121,7 +121,7 @@ impl Mcp {
             None => {
                 let mut client = Client::connect_to(&self.engine, self.token.clone()).await?;
                 let tools = client
-                    .ask("spaces.tools", None, CommandId::new(), Value::Null)
+                    .ask("projects.tools", None, CommandId::new(), Value::Null)
                     .await?;
                 let tools = serde_json::from_value(tools).map_err(Failure::broken)?;
                 Connected { client, tools }
@@ -139,7 +139,7 @@ impl Mcp {
         Ok(listed.chain([skill_tool()]).collect())
     }
 
-    /// Runs one tool in the Space of the pass.
+    /// Runs one tool in the Project of the pass.
     async fn call(&mut self, params: &Value) -> Result<Value, Error> {
         let name = params["name"].as_str().unwrap_or_default();
         let arguments = params.get("arguments").cloned().unwrap_or(json!({}));

@@ -13,7 +13,7 @@ states: Array<State>,
  */
 bottom: Array<State>, 
 /**
- * Sections, shelves or Spaces (by name) that start folded.
+ * Sections, shelves or Projects (by name) that start folded.
  */
 folded: Array<string>, 
 /**

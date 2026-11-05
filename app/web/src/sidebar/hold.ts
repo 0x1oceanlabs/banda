@@ -12,9 +12,9 @@ import type { Arranged, Row, Section } from "./arrange"
  * by key, in their order. */
 export type Held = ReadonlyMap<string, ReadonlyMap<string, number>>
 
-/** A row's key: its Space's and its own. */
+/** A row's key: its Project's and its own. */
 export function rowKey(row: Row): string {
-  return `${row.space.id}:${row.listed.id}`
+  return `${row.project.id}:${row.listed.id}`
 }
 
 /** What `arranged` draws now, held as it stands. */

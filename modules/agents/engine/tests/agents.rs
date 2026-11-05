@@ -8,7 +8,7 @@ use banda_agents::model::{
 };
 use banda_harnesses::{Cli, Harness, Harnesses, HarnessesModule, account_changed};
 use banda_kernel::{
-    AgentId, Caller, Code, CommandId, EventFilter, Kernel, Participant, PersonId, SpaceId,
+    AgentId, Caller, Code, CommandId, EventFilter, Kernel, Participant, PersonId, ProjectId,
 };
 use base64::Engine as _;
 use base64::engine::general_purpose::STANDARD as BASE64;
@@ -96,7 +96,7 @@ impl banda_kernel::Module for Git {
 struct World {
     kernel: Arc<Kernel>,
     owner: PersonId,
-    space: SpaceId,
+    project: ProjectId,
     /// What a new Thread starts on.
     harness: String,
 }
@@ -127,31 +127,31 @@ impl World {
         World::new_on(root, agents, "fake").await
     }
 
-    /// A Space whose new Threads start on `harness`.
+    /// A Project whose new Threads start on `harness`.
     async fn new_on(root: &Path, agents: Agents, harness: &str) -> World {
         let owner = PersonId::new();
         let kernel = World::open_with(root, owner, agents).await;
-        World::in_a_space(kernel, owner, harness).await
+        World::in_a_project(kernel, owner, harness).await
     }
 
-    /// A new Space of `kernel`, whose new Threads start on `harness`.
-    async fn in_a_space(kernel: Arc<Kernel>, owner: PersonId, harness: &str) -> World {
+    /// A new Project of `kernel`, whose new Threads start on `harness`.
+    async fn in_a_project(kernel: Arc<Kernel>, owner: PersonId, harness: &str) -> World {
         let person = Participant::Person(owner);
-        let space = kernel
+        let project = kernel
             .call(
                 person,
-                "spaces.create",
+                "projects.create",
                 None,
                 Some(CommandId::new()),
                 json!({ "name": "Work" }),
             )
             .await
             .unwrap();
-        let space: SpaceId = serde_json::from_value(space["id"].clone()).unwrap();
+        let project: ProjectId = serde_json::from_value(project["id"].clone()).unwrap();
         World {
             kernel,
             owner,
-            space,
+            project,
             harness: harness.to_owned(),
         }
     }
@@ -172,19 +172,21 @@ impl World {
         method: &str,
         params: Value,
     ) -> Result<Value, banda_kernel::Refusal> {
-        self.call_in(Some(self.space), who, method, params).await
+        self.call_in(Some(self.project), who, method, params).await
     }
 
-    /// Calls `method` in `space`, or on the machine.
+    /// Calls `method` in `project`, or on the machine.
     async fn call_in(
         &self,
-        space: Option<SpaceId>,
+        project: Option<ProjectId>,
         who: Participant,
         method: &str,
         params: Value,
     ) -> Result<Value, banda_kernel::Refusal> {
         let command = Some(CommandId::new());
-        self.kernel.call(who, method, space, command, params).await
+        self.kernel
+            .call(who, method, project, command, params)
+            .await
     }
 
     async fn send(&self, thread: Option<&Value>, text: &str) -> Value {
@@ -204,7 +206,7 @@ impl World {
             .call(
                 self.person(),
                 "agents.thread",
-                Some(self.space),
+                Some(self.project),
                 None,
                 json!({ "thread": thread }),
             )
@@ -242,8 +244,8 @@ impl World {
             subject: Some(thread.clone()),
             kinds: None,
         };
-        let space = self.kernel.space(self.space).await.unwrap();
-        let events: Vec<_> = space
+        let project = self.kernel.project(self.project).await.unwrap();
+        let events: Vec<_> = project
             .events_after(start.at, filter, usize::MAX)
             .await
             .unwrap()
@@ -261,7 +263,7 @@ impl World {
             .call(
                 self.person(),
                 "agents.threads",
-                Some(self.space),
+                Some(self.project),
                 None,
                 json!({}),
             )
@@ -305,9 +307,9 @@ fn state(view: &ThreadView, turn: &Value) -> Option<TurnState> {
 }
 
 /// Who opened `turn`, and from which other Thread, as the module keeps it
-/// in the Space's database: the window does not read it.
+/// in the Project's database: the window does not read it.
 fn opened(root: &Path, turn: &Value) -> (String, Option<String>) {
-    let sql = rusqlite::Connection::open(space_data(root).join("space.sqlite3")).unwrap();
+    let sql = rusqlite::Connection::open(project_data(root).join("project.sqlite3")).unwrap();
     sql.query_row(
         "SELECT opener, from_thread FROM agents_turns WHERE id = ?1",
         [turn.as_str().unwrap()],
@@ -357,8 +359,8 @@ async fn ask_session(world: &World, thread: Option<&Value>) -> (Value, (String, 
     (sent["thread"].clone(), session_of(&view))
 }
 
-/// A session may read the files Banda keeps for the Space's messages,
-/// which are in the Space's data, not its folder (ADR 0026).
+/// A session may read the files Banda keeps for the Project's messages,
+/// which are in the Project's data, not its folder (ADR 0026).
 #[tokio::test]
 async fn a_session_may_read_the_files_kept_for_its_messages() {
     let root = tempfile::tempdir().unwrap();
@@ -370,7 +372,7 @@ async fn a_session_may_read_the_files_kept_for_its_messages() {
     let world = World::new_with(root.path(), agents).await;
     ask_session(&world, None).await;
     let given: Vec<PathBuf> = serde_json::from_slice(&std::fs::read(&roots).unwrap()).unwrap();
-    assert_eq!(given, [space_data(root.path()).join("files")]);
+    assert_eq!(given, [project_data(root.path()).join("files")]);
 }
 
 #[tokio::test]
@@ -394,8 +396,8 @@ async fn a_message_gets_the_agents_reply() {
     );
     assert!(matches!(view.items[2].author, Participant::Agent(_)));
 
-    let space = world.kernel.space(world.space).await.unwrap();
-    let kinds: Vec<String> = space
+    let project = world.kernel.project(world.project).await.unwrap();
+    let kinds: Vec<String> = project
         .events_after(0, Default::default(), 100)
         .await
         .unwrap()
@@ -620,7 +622,7 @@ fn a_thread_on_a_harness_this_computer_lacks_fails_plainly() {
     let root = tempfile::tempdir().unwrap();
     let runtime = || tokio::runtime::Runtime::new().unwrap();
     let first = runtime();
-    let (owner, space, thread) = first.block_on(async {
+    let (owner, project, thread) = first.block_on(async {
         let world = World::new(root.path()).await;
         let params = json!({ "harness": "elsewhere", "text": "hello" });
         let refused = world
@@ -632,7 +634,7 @@ fn a_thread_on_a_harness_this_computer_lacks_fails_plainly() {
             "This computer has no Harness named \"elsewhere\"."
         );
         let (thread, _) = world.finish(None, "hello").await;
-        (world.owner, world.space, thread)
+        (world.owner, world.project, thread)
     });
     first.shutdown_timeout(Duration::from_secs(5));
     runtime().block_on(async {
@@ -642,7 +644,7 @@ fn a_thread_on_a_harness_this_computer_lacks_fails_plainly() {
         let world = World {
             kernel,
             owner,
-            space,
+            project,
             harness: "fake".to_owned(),
         };
         let sent = world.send(Some(&thread), "again").await;
@@ -664,7 +666,7 @@ fn a_restart_interrupts_the_turn_it_cut_short_and_closes_its_question() {
     let runtime = || tokio::runtime::Runtime::new().unwrap();
 
     let before = runtime();
-    let (owner, space, thread, turn) = before.block_on(async {
+    let (owner, project, thread, turn) = before.block_on(async {
         let world = World::new(root.path()).await;
         let sent = world.send(None, "ask before you check").await;
         world
@@ -676,7 +678,7 @@ fn a_restart_interrupts_the_turn_it_cut_short_and_closes_its_question() {
             .await;
         (
             world.owner,
-            world.space,
+            world.project,
             sent["thread"].clone(),
             sent["turn"].clone(),
         )
@@ -690,7 +692,7 @@ fn a_restart_interrupts_the_turn_it_cut_short_and_closes_its_question() {
             .call(
                 Participant::Person(owner),
                 "agents.thread",
-                Some(space),
+                Some(project),
                 None,
                 json!({ "thread": thread }),
             )
@@ -752,10 +754,10 @@ fn across_a_restart<T>(
 ) {
     let runtime = || tokio::runtime::Runtime::new().unwrap();
     let first = runtime();
-    let (owner, space, harness, kept) = first.block_on(async {
+    let (owner, project, harness, kept) = first.block_on(async {
         let world = World::new_with(root, agents()).await;
         let kept = before(&world).await;
-        (world.owner, world.space, world.harness.clone(), kept)
+        (world.owner, world.project, world.harness.clone(), kept)
     });
     first.shutdown_timeout(Duration::from_secs(5));
     runtime().block_on(async {
@@ -763,7 +765,7 @@ fn across_a_restart<T>(
         let world = World {
             kernel,
             owner,
-            space,
+            project,
             harness,
         };
         after(&world, kept).await;
@@ -1129,7 +1131,7 @@ async fn a_terminals_sign_in_tries_the_turn_that_needed_it_again_once() {
     std::fs::write(home.path().join("signed-in"), "yes").unwrap();
 
     // A terminal Pane sends these once its program ended well: the sign-in
-    // on the machine, then the retry in its Space (ADR 0040, decision 5).
+    // on the machine, then the retry in its Project (ADR 0040, decision 5).
     // Another window, or the same one after a reload, sends the same ones.
     let (signing, retrying) = (CommandId::new(), CommandId::new());
     let way = json!({ "harness": "fake", "way": "fake-sign-in" });
@@ -1139,9 +1141,9 @@ async fn a_terminals_sign_in_tries_the_turn_that_needed_it_again_once() {
         let method = "harnesses.sign_in";
         let signed = kernel.call(who, method, None, Some(signing), way.clone());
         assert_eq!(signed.await.unwrap(), Value::Null);
-        let (space, method) = (Some(world.space), "agents.retry");
+        let (project, method) = (Some(world.project), "agents.retry");
         kernel
-            .call(who, method, space, Some(retrying), turn.clone())
+            .call(who, method, project, Some(retrying), turn.clone())
             .await
     };
     let again = done().await.unwrap();
@@ -1208,7 +1210,7 @@ async fn a_harness_says_who_is_signed_in_and_signs_out() {
 }
 
 #[tokio::test]
-async fn a_sign_in_on_the_machine_starts_each_spaces_harness_again() {
+async fn a_sign_in_on_the_machine_starts_each_projects_harness_again() {
     let (root, home) = (tempfile::tempdir().unwrap(), tempfile::tempdir().unwrap());
     let world = signed_out(root.path(), home.path()).await;
     let list = world.on_machine(world.person(), "list", json!({})).await;
@@ -1760,7 +1762,7 @@ async fn the_diff_s_turn_is_what_the_turn_s_tool_calls_changed() {
         .call(
             world.person(),
             "agents.changes",
-            json!({ "thread": banda_kernel::SpaceId::new() }),
+            json!({ "thread": banda_kernel::ProjectId::new() }),
         )
         .await;
     assert_eq!(gone.unwrap_err().code, Code::NotFound);
@@ -1931,8 +1933,8 @@ async fn the_slash_commands_and_skills_a_harness_says_on_opening_reach_its_threa
 async fn a_slash_command_with_a_skill_file_is_a_skill_that_runs_named_anywhere() {
     let root = tempfile::tempdir().unwrap();
     let world = World::new(root.path()).await;
-    let space = world.kernel.space(world.space).await.unwrap();
-    let skill = space.folder().join(".claude/skills/review");
+    let project = world.kernel.project(world.project).await.unwrap();
+    let skill = project.folder().join(".claude/skills/review");
     std::fs::create_dir_all(&skill).unwrap();
     std::fs::write(skill.join("SKILL.md"), "---\nname: review\n---\n").unwrap();
     let (thread, view) = world.finish(None, "please $review the blocks").await;
@@ -1967,19 +1969,19 @@ async fn a_slash_command_learned_mid_reply_leaves_the_reply_whole() {
 /// The start of a PNG file, as `agents.attach` checks it.
 const PNG: &[u8] = b"\x89PNG\r\n\x1a\n a picture";
 
-/// Where the Space keeps an image's bytes.
+/// Where the Project keeps an image's bytes.
 fn image_file(root: &Path, image: &Value) -> PathBuf {
     let id = image["id"].as_str().unwrap();
-    space_data(root).join("images").join(id)
+    project_data(root).join("images").join(id)
 }
 
-/// The data of the one Space under `root`, which the tests keep in
+/// The data of the one Project under `root`, which the tests keep in
 /// `root/.data` (ADR 0026).
-fn space_data(root: &Path) -> PathBuf {
-    let mut spaces = std::fs::read_dir(root.join(".data/spaces")).unwrap();
-    let space = spaces.next().unwrap().unwrap().path();
-    assert!(spaces.next().is_none(), "one Project");
-    space
+fn project_data(root: &Path) -> PathBuf {
+    let mut projects = std::fs::read_dir(root.join(".data/projects")).unwrap();
+    let project = projects.next().unwrap().unwrap().path();
+    assert!(projects.next().is_none(), "one Project");
+    project
 }
 
 impl World {
@@ -2023,7 +2025,7 @@ async fn a_message_carries_its_images_to_the_harness() {
         .await
         .unwrap();
     assert_eq!(shot["size"], PNG.len());
-    // Its bytes are a file in the Space, not a row in its database.
+    // Its bytes are a file in the Project, not a row in its database.
     assert_eq!(std::fs::read(image_file(root.path(), &shot)).unwrap(), PNG);
     let sent = world.send_images("what is this", &[&shot]).await;
     let view = world.ended(&sent).await;
@@ -2056,7 +2058,7 @@ async fn a_message_carries_its_images_to_the_harness() {
 }
 
 #[tokio::test]
-async fn a_file_is_kept_in_the_space_for_a_message_to_point_at() {
+async fn a_file_is_kept_in_the_project_for_a_message_to_point_at() {
     let root = tempfile::tempdir().unwrap();
     let world = World::new(root.path()).await;
     let data = BASE64.encode("a long text");
@@ -2066,7 +2068,7 @@ async fn a_file_is_kept_in_the_space_for_a_message_to_point_at() {
         .await
         .unwrap();
     let path = kept["path"].as_str().unwrap();
-    assert!(Path::new(path).starts_with(space_data(root.path()).join("files")));
+    assert!(Path::new(path).starts_with(project_data(root.path()).join("files")));
     assert!(path.ends_with("/pasted-text.txt"));
     let file = PathBuf::from(path);
     assert_eq!(std::fs::read_to_string(file).unwrap(), "a long text");
@@ -2810,8 +2812,8 @@ async fn claude_asks_to_carry_out_its_plan_with_the_plan() {
     let agents = Agents::new(Harnesses::new(vec![known.find("claude").unwrap().clone()]));
     let root = tempfile::tempdir().unwrap();
     let world = World::new_on(root.path(), agents, "claude").await;
-    let space = world.kernel.space(world.space).await.unwrap();
-    std::fs::write(space.folder().join("notes.txt"), "apples\n").unwrap();
+    let project = world.kernel.project(world.project).await.unwrap();
+    std::fs::write(project.folder().join("notes.txt"), "apples\n").unwrap();
     let params = json!({
         "harness": "claude",
         "text": "Plan how to add a line \"pears\" to notes.txt, in two steps at most.",
@@ -2922,8 +2924,8 @@ impl World {
     /// supervised Thread, allowing each Question once, and waits up to
     /// `limit` for each step.
     async fn edit(&self, limit: Duration) -> ThreadView {
-        let space = self.kernel.space(self.space).await.unwrap();
-        std::fs::write(space.folder().join("notes.txt"), "apples\n").unwrap();
+        let project = self.kernel.project(self.project).await.unwrap();
+        std::fs::write(project.folder().join("notes.txt"), "apples\n").unwrap();
         let params = json!({
             "harness": self.harness,
             "text": EDIT,
@@ -2981,12 +2983,12 @@ fn replaying(harness: &str) -> Agents {
 
 impl World {
     /// [`edit`](World::edit) as the recording of `harness` says it went,
-    /// and the Space's folder.
+    /// and the Project's folder.
     async fn replay_edit(root: &Path, harness: &str) -> (World, ThreadView, PathBuf) {
         let world = World::new_with(root, replaying(harness)).await;
         let view = world.edit(Duration::from_secs(10)).await;
-        let space = world.kernel.space(world.space).await.unwrap();
-        let folder = space.folder().to_owned();
+        let project = world.kernel.project(world.project).await.unwrap();
+        let folder = project.folder().to_owned();
         (world, view, folder)
     }
 }
@@ -3119,7 +3121,7 @@ async fn threads_one_thread_send_show_visual_and_preview_visual_are_an_agents_to
     let kernel = World::open(root.path(), owner).await;
     let agent = Participant::Agent(AgentId::new());
     let mut tools = kernel
-        .call(agent, "spaces.tools", None, None, Value::Null)
+        .call(agent, "projects.tools", None, None, Value::Null)
         .await
         .unwrap();
     // The machine's module `harnesses` comes first, with its own.
@@ -3262,8 +3264,8 @@ impl World {
             subject: thread.as_str().map(str::to_owned),
             kinds: Some(vec!["message.posted".to_owned()]),
         };
-        let space = self.kernel.space(self.space).await.unwrap();
-        let events = space.events_after(0, filter, usize::MAX).await.unwrap();
+        let project = self.kernel.project(self.project).await.unwrap();
+        let events = project.events_after(0, filter, usize::MAX).await.unwrap();
         events
             .into_iter()
             .map(|e| e.payload["answers"].clone())
@@ -3405,9 +3407,9 @@ async fn an_agent_shows_its_person_a_visual_in_its_own_turn() {
     world.until(&thread, |v| !ongoing(v, &sent["turn"])).await;
     let late = show(agent, "Late", 300).await.unwrap_err();
     assert_eq!(late.message, "A Visual shows in a turn that runs.");
-    let kept = std::fs::read_dir(root.path().join(".data/spaces"))
+    let kept = std::fs::read_dir(root.path().join(".data/projects"))
         .unwrap()
-        .flat_map(|space| std::fs::read_dir(space.unwrap().path().join("visuals")).unwrap())
+        .flat_map(|project| std::fs::read_dir(project.unwrap().path().join("visuals")).unwrap())
         .count();
     assert_eq!(kept, 2, "only the Visuals that showed keep their pages");
 }
@@ -3569,7 +3571,7 @@ async fn an_agent_writes_neither_to_its_own_thread_nor_in_a_circle() {
 }
 
 #[tokio::test]
-async fn an_agent_writes_neither_over_a_persons_question_nor_into_another_space() {
+async fn an_agent_writes_neither_over_a_persons_question_nor_into_another_project() {
     let root = tempfile::tempdir().unwrap();
     let world = World::new(root.path()).await;
     let (_, view) = world.finish(None, "hello").await;
@@ -3581,39 +3583,39 @@ async fn an_agent_writes_neither_over_a_persons_question_nor_into_another_space(
         .await;
     assert_eq!(refused.unwrap_err().code, Code::Conflict);
 
-    // A pass keeps its Agent in its own Space, whatever it calls.
+    // A pass keeps its Agent in its own Project, whatever it calls.
     let walled = Caller {
         participant: agent,
-        only: Some(SpaceId::new()),
+        only: Some(ProjectId::new()),
     };
     let params = json!({ "harness": "fake", "text": "elsewhere" });
     let command = Some(CommandId::new());
     let refused = world
         .kernel
-        .call(walled, "agents.send", Some(world.space), command, params)
+        .call(walled, "agents.send", Some(world.project), command, params)
         .await
         .unwrap_err();
     assert_eq!(refused.code, Code::Forbidden);
 }
 
 #[tokio::test]
-async fn a_removed_space_stops_its_turns_before_its_data_goes() {
+async fn a_removed_project_stops_its_turns_before_its_data_goes() {
     let root = tempfile::tempdir().unwrap();
     let world = World::new(root.path()).await;
     world.waiting(None).await;
-    let params = json!({ "space": world.space });
+    let params = json!({ "project": world.project });
     let removed = world.kernel.call(
         world.person(),
-        "spaces.remove",
+        "projects.remove",
         None,
         Some(CommandId::new()),
         params,
     );
     removed.await.unwrap();
     // A turn that kept running would hold the data until it ended.
-    let spaces = root.path().join(".data/spaces");
+    let projects = root.path().join(".data/projects");
     let since = std::time::Instant::now();
-    while spaces.read_dir().unwrap().next().is_some() {
+    while projects.read_dir().unwrap().next().is_some() {
         assert!(
             since.elapsed() < Duration::from_secs(5),
             "the turn never stopped"
@@ -3844,8 +3846,8 @@ async fn claude_runs_a_skill_named_with_a_dollar_mid_message() {
     let agents = Agents::new(Harnesses::new(vec![known.find("claude").unwrap().clone()]));
     let root = tempfile::tempdir().unwrap();
     let world = World::new_on(root.path(), agents, "claude").await;
-    let space = world.kernel.space(world.space).await.unwrap();
-    let skill = space.folder().join(".claude/skills/banda-echo");
+    let project = world.kernel.project(world.project).await.unwrap();
+    let skill = project.folder().join(".claude/skills/banda-echo");
     std::fs::create_dir_all(&skill).unwrap();
     std::fs::write(
         skill.join("SKILL.md"),
@@ -3905,7 +3907,7 @@ impl World {
     /// Opens `agents.write` with `params`: its stream, or why not.
     async fn writing(&self, params: Value) -> Result<banda_kernel::Stream, banda_kernel::Refusal> {
         (self.kernel)
-            .stream(self.person(), "agents.write", Some(self.space), params)
+            .stream(self.person(), "agents.write", Some(self.project), params)
             .await
     }
 
@@ -4053,8 +4055,8 @@ async fn the_real_harnesses_write_a_commits_message() {
         let agents = Agents::new(Harnesses::new(vec![known.find(harness).unwrap().clone()]));
         let root = tempfile::tempdir().unwrap();
         let world = World::new_on(root.path(), agents, harness).await;
-        let space = world.kernel.space(world.space).await.unwrap();
-        let notes = space.folder().join("notes.txt");
+        let project = world.kernel.project(world.project).await.unwrap();
+        let notes = project.folder().join("notes.txt");
         std::fs::write(&notes, "apples\npears\n").unwrap();
         let (thread, _) = world
             .finish_real(None, "Do not use any tools. Reply with only: OK")

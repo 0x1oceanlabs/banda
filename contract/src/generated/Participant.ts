@@ -3,6 +3,6 @@ import type { AgentId } from "./AgentId";
 import type { PersonId } from "./PersonId";
 
 /**
- * Anyone who acts in a Space: a Person or an Agent.
+ * Anyone who acts in a Project: a Person or an Agent.
  */
 export type Participant = { "kind": "person", "id": PersonId } | { "kind": "agent", "id": AgentId };

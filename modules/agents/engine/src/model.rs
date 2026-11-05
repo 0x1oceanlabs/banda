@@ -34,7 +34,7 @@ banda_kernel::id!(
 );
 
 /// An image in a message or tool result. Its bytes are kept apart, in
-/// the Space's data, `spaces/<id>/images/`, and read with `agents.image`.
+/// the Project's data, `projects/<id>/images/`, and read with `agents.image`.
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "agents/")]
 pub struct Image {
@@ -495,7 +495,7 @@ pub enum QuestionState {
 #[serde(tag = "kind", rename_all = "snake_case")]
 #[ts(export, export_to = "agents/")]
 pub enum ToolContent {
-    /// The bytes are kept in the Space's images folder, as for messages.
+    /// The bytes are kept in the Project's images folder, as for messages.
     Image {
         image: Image,
     },
@@ -887,7 +887,7 @@ pub enum Fact {
     ThreadHeld { thread: ThreadId, held: bool },
     /// The Thread went back to before `turn`'s message, to edit it (ADR
     /// 0027): that turn and every turn after it leave it, with their
-    /// items. The Space's log keeps what they said.
+    /// items. The Project's log keeps what they said.
     #[serde(rename = "thread.rewound")]
     ThreadRewound { thread: ThreadId, turn: TurnId },
     /// The Thread's settings changed, by a Person or by the Harness.

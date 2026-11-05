@@ -11,7 +11,7 @@ import {
 } from "react"
 import { GripHorizontalIcon, PlusIcon, XIcon } from "lucide-react"
 import { Button } from "@banda/ui/components/button"
-import type { SpaceId } from "@banda/contract"
+import type { ProjectId } from "@banda/contract"
 import { DEFAULT_OVERVIEW } from "@banda/contract/look"
 import type { Listed } from "@banda/ui/pane"
 import type { Chime } from "@banda/ui/sound"
@@ -123,7 +123,7 @@ export function Overview({
   open,
   onExited,
   workspaces,
-  spaceName,
+  projectName,
   listed,
   called,
   frame,
@@ -136,7 +136,7 @@ export function Overview({
   open: boolean
   onExited: () => void
   workspaces: Workspaces
-  spaceName: (space: SpaceId) => string
+  projectName: (project: ProjectId) => string
   /** The Thread a Pane shows, as its module lists it, if it shows one. */
   listed: (entry: Entry) => Listed | undefined
   /** How the Thread a Pane shows calls the Person, if it does. */
@@ -625,7 +625,7 @@ export function Overview({
                       width={shown}
                       zoom={zoom}
                       screen={screen}
-                      spaceName={spaceName}
+                      projectName={projectName}
                       listed={listed}
                       called={called}
                       onClosePane={frame.close}
@@ -681,7 +681,7 @@ function Row({
   width,
   zoom,
   screen,
-  spaceName,
+  projectName,
   listed,
   called,
   onPick,
@@ -699,7 +699,7 @@ function Row({
   /** The zoom of an empty one. */
   zoom: number
   screen: Screen
-  spaceName: (space: SpaceId) => string
+  projectName: (project: ProjectId) => string
   listed: (entry: Entry) => Listed | undefined
   called: (entry: Entry) => Chime | undefined
   onPick: (entry: string) => void
@@ -749,7 +749,7 @@ function Row({
           >
             {column.entries.map((entry, e) => {
               const { title } = labelOf(entry.pane, said.get(entry.id))
-              const space = spaceName(entry.space)
+              const project = projectName(entry.project)
               const active = column.active === e
               const thread = listed(entry)
               const call = called(entry)
@@ -760,7 +760,7 @@ function Row({
                   data-tile={entry.id}
                   data-handle=""
                   data-called={call ? "" : undefined}
-                  aria-label={`${title} in ${space}`}
+                  aria-label={`${title} in ${project}`}
                   aria-current={entry.id === picked || undefined}
                   hidden={column.decked && !active}
                   // Clear: the Pane itself shows under it, zoomed out.

@@ -19,7 +19,7 @@
 //! rules. A refused change may leave it half done: the module keeps it
 //! only when the change is done.
 
-use banda_kernel::{AgentId, Refusal, SpaceId, Wall};
+use banda_kernel::{AgentId, ProjectId, Refusal, Wall};
 use banda_look::columns::{Display, share};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -58,11 +58,12 @@ pub struct Workspace {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[ts(optional)]
     pub filled: Option<GroupId>,
-    /// The Space whose Agents' Threads open here, in a row (ADR 0065,
-    /// decision 9). It holds Panes of any Space still. Left out, none.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
+    /// The Project whose Agents' Threads open here, in a row (ADR 0065,
+    /// decision 9). It holds Panes of any Project still. Left out, none.
+    /// Kept as `space` before ADR 0069 (for good).
+    #[serde(default, skip_serializing_if = "Option::is_none", alias = "space")]
     #[ts(optional)]
-    pub space: Option<SpaceId>,
+    pub project: Option<ProjectId>,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
@@ -90,7 +91,7 @@ pub struct Column {
     pub group: Option<GroupId>,
 }
 
-/// One Pane: what it shows, the Space it belongs to, and the Agent that
+/// One Pane: what it shows, the Project it belongs to, and the Agent that
 /// opened it, if one did.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 #[ts(export_to = "workspaces/")]
@@ -115,10 +116,10 @@ pub struct Pane {
 /// How much of a Pane a caller sees (ADR 0032).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Sight {
-    /// All of it: the owner, or an Agent of its Space.
+    /// All of it: the owner, or an Agent of its Project.
     Whole,
     /// Where it is and what it is, not its args: an Agent of another
-    /// Space whose Person lets it see the others.
+    /// Project whose Person lets it see the others.
     Outline,
     /// Nothing: behind the wall.
     Hidden,
@@ -128,7 +129,7 @@ pub enum Sight {
 pub fn sight(wall: Option<Wall>, pane: &Pane) -> Sight {
     match wall {
         None => Sight::Whole,
-        Some(wall) if wall.space == pane.shows.space => Sight::Whole,
+        Some(wall) if wall.project == pane.shows.project => Sight::Whole,
         Some(wall) if wall.sees_others => Sight::Outline,
         Some(_) => Sight::Hidden,
     }
@@ -146,7 +147,9 @@ pub fn seen(list: &Arrangement, wall: Wall, pane: PaneId) -> Result<&Pane, Refus
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, TS)]
 #[ts(export_to = "workspaces/")]
 pub struct Shown {
-    pub space: SpaceId,
+    /// Kept as `space` before ADR 0069 (for good).
+    #[serde(alias = "space")]
+    pub project: ProjectId,
     /// Its kind, `<module>.<pane>`.
     pub kind: String,
     /// The kind's own: an object.
@@ -188,11 +191,16 @@ pub enum Place {
     /// one dropped between two in the overview. Never under the empty one
     /// at the bottom.
     Workspace { index: usize },
-    /// Last on a Space's workspace, where its Agents' Threads open (ADR
+    /// Last on a Project's workspace, where its Agents' Threads open (ADR
     /// 0065, decision 9): the one it owns; else the top one that shows its
-    /// Panes and is no other Space's, or the empty one at the bottom,
-    /// which it owns then.
-    Space { space: SpaceId },
+    /// Panes and is no other Project's, or the empty one at the bottom,
+    /// which it owns then. `{"to": "space", "space": …}` before ADR 0069
+    /// (grace).
+    #[serde(alias = "space")]
+    Project {
+        #[serde(alias = "space")]
+        project: ProjectId,
+    },
     /// In the Group of a Pane, as what a Thread opens goes (ADR 0065,
     /// decision 7): its column starts a Group if it is in none, and the
     /// Panes go last into the Group's column right of it, or into a new
@@ -224,7 +232,7 @@ fn blank() -> Workspace {
         id: WorkspaceId::new(),
         columns: Vec::new(),
         filled: None,
-        space: None,
+        project: None,
     }
 }
 
@@ -294,7 +302,7 @@ pub fn showing<'a>(list: &'a Arrangement, shown: &Shown) -> Option<&'a Pane> {
 /// names it. One the workspaces show already stays where it is, and is
 /// named, unless it opens `again` or `instead`. Left with neither, it
 /// opens as a column on the right of the top workspace that shows a Pane
-/// of its Space, or else on the empty one at the bottom. `width` is a new
+/// of its Project, or else on the empty one at the bottom. `width` is a new
 /// column's; `by`, the Agent that opens a new one.
 pub fn open(
     list: &mut Arrangement,
@@ -327,7 +335,7 @@ pub fn open(
         list[at.workspace].columns[at.column].panes[at.pane] = pane;
     } else {
         let place = place.unwrap_or_else(|| Place::Column {
-            workspace: list[showing_space(list, pane.shows.space, |_| true)].id,
+            workspace: list[showing_project(list, pane.shows.project, |_| true)].id,
             index: usize::MAX,
         });
         put(list, new_column(pane, width), &place, None)?;
@@ -395,12 +403,14 @@ fn put(
             workspace.columns.push(column);
             list.insert(above_empty(list, index), workspace);
         }
-        Place::Space { space } => {
-            let owned = |w: &Workspace| w.space == Some(space) && !w.columns.is_empty();
+        Place::Project { project } => {
+            let owned = |w: &Workspace| w.project == Some(project) && !w.columns.is_empty();
             let w = (list.iter().position(owned)).unwrap_or_else(|| {
-                showing_space(list, space, |w| w.space.is_none_or(|other| other == space))
+                showing_project(list, project, |w| {
+                    w.project.is_none_or(|other| other == project)
+                })
             });
-            list[w].space = Some(space);
+            list[w].project = Some(project);
             let workspace = list[w].id;
             put(
                 list,
@@ -433,11 +443,15 @@ fn put(
     Ok(())
 }
 
-/// The top workspace that shows a Pane of `space` and is `free`, else the
+/// The top workspace that shows a Pane of `project` and is `free`, else the
 /// empty one at the bottom.
-fn showing_space(list: &Arrangement, space: SpaceId, free: impl Fn(&Workspace) -> bool) -> usize {
+fn showing_project(
+    list: &Arrangement,
+    project: ProjectId,
+    free: impl Fn(&Workspace) -> bool,
+) -> usize {
     (list.iter())
-        .position(|w| free(w) && panes_of(w).any(|p| p.shows.space == space))
+        .position(|w| free(w) && panes_of(w).any(|p| p.shows.project == project))
         .unwrap_or(list.len() - 1)
 }
 
@@ -881,9 +895,9 @@ mod tests {
 
     #[test]
     fn a_turn_s_changes_kept_from_before_open_as_the_diff_on_that_turn() {
-        let space = SpaceId::new();
+        let project = ProjectId::new();
         let mut old = Shown {
-            space,
+            project,
             kind: "agents.diff".into(),
             args: json!({ "thread": "t", "turn": "u", "path": "a.ts", "title": "Fix" }),
         };
@@ -895,14 +909,31 @@ mod tests {
                 "scope": { "kind": "turn", "thread": "t", "turn": "u", "title": "Fix" },
             })
         );
-        let mut other = shown(space, "browser.browser", 1);
+        let mut other = shown(project, "browser.browser", 1);
         other.upgrade();
-        assert_eq!(other, shown(space, "browser.browser", 1));
+        assert_eq!(other, shown(project, "browser.browser", 1));
     }
 
-    fn shown(space: SpaceId, kind: &str, n: u32) -> Shown {
+    #[test]
+    fn an_arrangement_kept_before_adr_0069_reads_its_spaces_as_projects() {
+        let project = ProjectId::new();
+        let pane = PaneId::new();
+        let kept = json!([{
+            "id": WorkspaceId::new(),
+            "columns": [{
+                "id": ColumnId::new(),
+                "panes": [{ "id": pane, "space": project, "kind": "agents.thread", "args": {} }],
+            }],
+            "space": project,
+        }]);
+        let list: Arrangement = serde_json::from_value(kept).unwrap();
+        assert_eq!(list[0].project, Some(project));
+        assert_eq!(list[0].columns[0].panes[0].shows.project, project);
+    }
+
+    fn shown(project: ProjectId, kind: &str, n: u32) -> Shown {
         Shown {
-            space,
+            project,
             kind: kind.to_owned(),
             args: json!({ "n": n }),
         }
@@ -938,7 +969,7 @@ mod tests {
     #[test]
     fn a_pane_keeps_its_height_in_its_column_until_it_leaves_or_all_are_even() {
         let mut list = start();
-        let work = SpaceId::new();
+        let work = ProjectId::new();
         let one = opened(&mut list, shown(work, "a.a", 1), None);
         let two = opened(&mut list, shown(work, "a.a", 2), beside(one, Side::Below));
         let three = opened(&mut list, shown(work, "a.a", 3), beside(two, Side::Below));
@@ -968,7 +999,7 @@ mod tests {
         let bottom = list[0].id;
         opened(
             &mut list,
-            shown(SpaceId::new(), "terminal.terminal", 1),
+            shown(ProjectId::new(), "terminal.terminal", 1),
             None,
         );
         assert_eq!(layout(&list), [vec![vec![1]], vec![]]);
@@ -978,7 +1009,7 @@ mod tests {
     #[test]
     fn a_pane_shown_already_is_named_and_nothing_changes() {
         let mut list = start();
-        let work = SpaceId::new();
+        let work = ProjectId::new();
         let first = opened(&mut list, shown(work, "terminal.terminal", 1), None);
         let before = list.clone();
         assert_eq!(
@@ -986,19 +1017,19 @@ mod tests {
             first
         );
         assert_eq!(list, before);
-        // Another Space's is another Pane.
+        // Another Project's is another Pane.
         opened(
             &mut list,
-            shown(SpaceId::new(), "terminal.terminal", 1),
+            shown(ProjectId::new(), "terminal.terminal", 1),
             None,
         );
         assert_eq!(layout(&list), [vec![vec![1]], vec![vec![1]], vec![]]);
     }
 
     #[test]
-    fn with_no_place_a_pane_joins_the_workspace_of_its_space() {
+    fn with_no_place_a_pane_joins_the_workspace_of_its_project() {
         let mut list = start();
-        let (work, home) = (SpaceId::new(), SpaceId::new());
+        let (work, home) = (ProjectId::new(), ProjectId::new());
         opened(&mut list, shown(work, "a.a", 1), None);
         opened(&mut list, shown(home, "a.a", 2), None);
         opened(&mut list, shown(work, "a.a", 3), None);
@@ -1011,7 +1042,7 @@ mod tests {
     #[test]
     fn a_pane_opens_beside_another_or_instead_of_it() {
         let mut list = start();
-        let work = SpaceId::new();
+        let work = ProjectId::new();
         let one = opened(&mut list, shown(work, "a.a", 1), None);
         opened(&mut list, shown(work, "a.a", 2), beside(one, Side::Right));
         opened(&mut list, shown(work, "a.a", 3), beside(one, Side::Left));
@@ -1050,7 +1081,7 @@ mod tests {
     #[test]
     fn a_pane_shown_already_is_named_unless_it_opens_again() {
         let mut list = start();
-        let work = SpaceId::new();
+        let work = ProjectId::new();
         let one = opened(&mut list, shown(work, "a.a", 1), None);
         assert_eq!(opened(&mut list, shown(work, "a.a", 1), None), one);
         let two = open(
@@ -1070,7 +1101,7 @@ mod tests {
     #[test]
     fn a_new_column_takes_its_width_and_a_bad_pane_is_refused() {
         let mut list = start();
-        let work = SpaceId::new();
+        let work = ProjectId::new();
         open(
             &mut list,
             shown(work, "a.a", 1),
@@ -1116,7 +1147,7 @@ mod tests {
     #[test]
     fn closing_the_last_pane_takes_its_column_and_tidying_its_workspace() {
         let mut list = start();
-        let work = SpaceId::new();
+        let work = ProjectId::new();
         let one = opened(&mut list, shown(work, "a.a", 1), None);
         let two = opened(&mut list, shown(work, "a.a", 2), beside(one, Side::Right));
         close(&mut list, one).unwrap();
@@ -1138,7 +1169,7 @@ mod tests {
     #[test]
     fn a_pane_alone_moves_with_its_column_and_one_in_a_stack_alone() {
         let mut list = start();
-        let work = SpaceId::new();
+        let work = ProjectId::new();
         let one = opened(&mut list, shown(work, "a.a", 1), None);
         let two = opened(&mut list, shown(work, "a.a", 2), beside(one, Side::Right));
         let three = opened(&mut list, shown(work, "a.a", 3), beside(two, Side::Below));
@@ -1188,7 +1219,7 @@ mod tests {
     #[test]
     fn a_pane_sent_to_the_bottom_workspace_brings_a_new_empty_one() {
         let mut list = start();
-        let work = SpaceId::new();
+        let work = ProjectId::new();
         let one = opened(&mut list, shown(work, "a.a", 1), None);
         opened(&mut list, shown(work, "a.a", 2), beside(one, Side::Right));
         let bottom = Place::Column {
@@ -1202,7 +1233,7 @@ mod tests {
     #[test]
     fn a_pane_dropped_between_workspaces_makes_one_there() {
         let mut list = start();
-        let work = SpaceId::new();
+        let work = ProjectId::new();
         let one = opened(&mut list, shown(work, "a.a", 1), None);
         let two = opened(&mut list, shown(work, "a.a", 2), beside(one, Side::Right));
         let three = opened(&mut list, shown(work, "a.a", 3), beside(two, Side::Below));
@@ -1229,7 +1260,7 @@ mod tests {
     #[test]
     fn a_column_moves_whole_counted_as_if_it_had_left() {
         let mut list = start();
-        let work = SpaceId::new();
+        let work = ProjectId::new();
         let one = opened(&mut list, shown(work, "a.a", 1), None);
         opened(&mut list, shown(work, "a.a", 2), beside(one, Side::Right));
         opened(&mut list, shown(work, "a.a", 3), beside(one, Side::Below));
@@ -1245,7 +1276,7 @@ mod tests {
     fn a_workspace_moves_whole_but_never_under_the_empty_one() {
         let mut list = start();
         for n in 1..=3 {
-            opened(&mut list, shown(SpaceId::new(), "agents.thread", n), None);
+            opened(&mut list, shown(ProjectId::new(), "agents.thread", n), None);
         }
         let ids: Vec<WorkspaceId> = list.iter().map(|w| w.id).collect();
 
@@ -1289,7 +1320,7 @@ mod tests {
     /// One workspace of `n` columns, a Pane each, numbered from 1.
     fn row(n: u32) -> (Arrangement, Vec<ColumnId>) {
         let mut list = start();
-        let work = SpaceId::new();
+        let work = ProjectId::new();
         for i in 1..=n {
             opened(&mut list, shown(work, "a.a", i), None);
         }
@@ -1363,7 +1394,7 @@ mod tests {
         let first = list[0].columns[0].panes[0].id;
         opened(
             &mut list,
-            shown(SpaceId::new(), "a.a", 9),
+            shown(ProjectId::new(), "a.a", 9),
             beside(first, Side::Right),
         );
         assert_eq!(grouping(&list)[0], [1, 1, 1, 0, 0]);
@@ -1371,7 +1402,7 @@ mod tests {
         let second = list[0].columns[1].panes[0].id;
         let joined = opened(
             &mut list,
-            shown(SpaceId::new(), "a.a", 8),
+            shown(ProjectId::new(), "a.a", 8),
             beside(second, Side::Below),
         );
         move_pane(
@@ -1421,10 +1452,10 @@ mod tests {
     }
 
     #[test]
-    fn a_spaces_threads_open_in_a_row_on_its_own_workspace() {
+    fn a_projects_threads_open_in_a_row_on_its_own_workspace() {
         let mut list = start();
-        let (work, home) = (SpaceId::new(), SpaceId::new());
-        let on = |space| Some(Place::Space { space });
+        let (work, home) = (ProjectId::new(), ProjectId::new());
+        let on = |project| Some(Place::Project { project });
         opened(&mut list, shown(work, "agents.thread", 1), on(work));
         opened(&mut list, shown(home, "agents.thread", 2), on(home));
         opened(&mut list, shown(work, "agents.thread", 3), on(work));
@@ -1433,16 +1464,16 @@ mod tests {
             [vec![vec![1], vec![3]], vec![vec![2]], EMPTY]
         );
         assert_eq!(
-            list.iter().map(|w| w.space).collect::<Vec<_>>(),
+            list.iter().map(|w| w.project).collect::<Vec<_>>(),
             [Some(work), Some(home), None]
         );
-        // A Space with none takes the top one that shows its Panes.
+        // A Project with none takes the top one that shows its Panes.
         let mut other = start();
         opened(&mut other, shown(work, "a.a", 7), None);
         opened(&mut other, shown(work, "agents.thread", 8), on(work));
         assert_eq!(layout(&other), [vec![vec![7], vec![8]], EMPTY]);
-        assert_eq!(other[0].space, Some(work));
-        // Emptied, it is no Space's place: the Space takes the empty one.
+        assert_eq!(other[0].project, Some(work));
+        // Emptied, it is no Project's place: the Project takes the empty one.
         let two = list[1].columns[0].panes[0].id;
         close(&mut list, two).unwrap();
         tidy(&mut list, None);
@@ -1456,7 +1487,7 @@ mod tests {
     #[test]
     fn what_a_thread_opens_goes_into_its_group_as_a_deck() {
         let mut list = start();
-        let work = SpaceId::new();
+        let work = ProjectId::new();
         let thread = opened(&mut list, shown(work, "agents.thread", 1), None);
         opened(&mut list, shown(work, "a.a", 2), None);
         let group = Place::Group { pane: thread };
@@ -1515,7 +1546,7 @@ mod tests {
     #[test]
     fn size_maximize_and_display_keep_what_was_decided() {
         let mut list = start();
-        opened(&mut list, shown(SpaceId::new(), "a.a", 1), None);
+        opened(&mut list, shown(ProjectId::new(), "a.a", 1), None);
         let column = list[0].columns[0].id;
         size(&mut list, column, Some("2/3".into())).unwrap();
         maximize(&mut list, column, true).unwrap();
@@ -1535,13 +1566,13 @@ mod tests {
     }
 
     #[test]
-    fn a_wall_shows_its_space_whole_and_the_others_only_when_let() {
+    fn a_wall_shows_its_project_whole_and_the_others_only_when_let() {
         let mut list = start();
-        let (mine, other) = (SpaceId::new(), SpaceId::new());
+        let (mine, other) = (ProjectId::new(), ProjectId::new());
         let a = opened(&mut list, shown(mine, "a.a", 1), None);
         let b = opened(&mut list, shown(other, "a.a", 2), None);
         let walled = Wall {
-            space: mine,
+            project: mine,
             sees_others: false,
         };
         let let_see = Wall {
@@ -1571,7 +1602,7 @@ mod tests {
     #[test]
     fn update_keeps_new_args_in_place() {
         let mut list = start();
-        let one = opened(&mut list, shown(SpaceId::new(), "a.a", 1), None);
+        let one = opened(&mut list, shown(ProjectId::new(), "a.a", 1), None);
         update(&mut list, one, json!({ "n": 7 })).unwrap();
         assert_eq!(layout(&list), [vec![vec![7]], vec![]]);
         assert_eq!(args_of(&list, one), Some(&json!({ "n": 7 })));
@@ -1580,7 +1611,7 @@ mod tests {
 
     #[test]
     fn a_windows_arrangement_goes_over_the_engines_with_each_pane_once() {
-        let work = SpaceId::new();
+        let work = ProjectId::new();
         let pane = |n: u32| Pane {
             id: PaneId::new(),
             shows: shown(work, "a.a", n),
@@ -1599,7 +1630,7 @@ mod tests {
             id: WorkspaceId::new(),
             columns,
             filled: None,
-            space: None,
+            project: None,
         };
         let window = vec![
             workspace(vec![column(vec![pane(1), pane(2)])]),

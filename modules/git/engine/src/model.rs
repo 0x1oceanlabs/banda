@@ -4,11 +4,11 @@ use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use ts_rs::TS;
 
-/// The Space's folder as git sees it, as `git.status` answers.
+/// The Project's folder as git sees it, as `git.status` answers.
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "git/")]
 pub struct Status {
-    /// The Space's event position as this was read: a Pane follows the
+    /// The Project's event position as this was read: a Pane follows the
     /// events after it, and reads this again after a turn ends.
     #[ts(type = "number")]
     pub at: i64,
@@ -157,7 +157,7 @@ pub struct DiffAsk {
 #[derive(Clone, Debug, Default, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "git/")]
 pub struct Diff {
-    /// The Space's event position as this was read: a Pane follows the
+    /// The Project's event position as this was read: a Pane follows the
     /// events after it, and reads this again after a turn ends.
     #[ts(type = "number")]
     pub at: i64,

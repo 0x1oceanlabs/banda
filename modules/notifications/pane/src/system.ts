@@ -27,20 +27,24 @@ const ANSWER: Record<Chime, string> = {
   failed: "Open",
 }
 
-/** A notice of one call, `space` the name of its Space when the window
+/** A notice of one call, `project` the name of its Project when the window
  * has more than one. One that waits for the Person stays. */
-export function noticeOf(call: Call, detail: boolean, space?: string): Notice {
+export function noticeOf(
+  call: Call,
+  detail: boolean,
+  project?: string
+): Notice {
   const said = MARK_WORDS[call.chime]
   return {
     key: call.key,
-    title: space ? `${call.title} · ${space}` : call.title,
+    title: project ? `${call.title} · ${project}` : call.title,
     body: detail && call.detail ? `${said} · ${call.detail}` : said,
     answer: ANSWER[call.chime],
     lasts: call.chime !== "done",
   }
 }
 
-/** The action that goes to a call's thing: `{ space, about, pane }`. */
+/** The action that goes to a call's thing: `{ project, about, pane }`. */
 export const GO_TO = "notifications.go-to"
 
 /**
@@ -50,17 +54,17 @@ export const GO_TO = "notifications.go-to"
 export function toldOfCall(
   call: Call,
   detail: boolean,
-  spaceName?: string
+  projectName?: string
 ): Told {
   const { key, body, answer } = noticeOf(call, detail)
-  const { space, about, pane, title } = call
+  const { project, about, pane, title } = call
   return {
     key,
     kind: call.chime,
     title,
-    ...(spaceName ? { space: spaceName } : {}),
+    ...(projectName ? { project: projectName } : {}),
     ...(body ? { body } : {}),
-    buttons: [{ label: answer, action: GO_TO, args: { space, about, pane } }],
+    buttons: [{ label: answer, action: GO_TO, args: { project, about, pane } }],
   }
 }
 

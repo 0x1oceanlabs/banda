@@ -1,6 +1,6 @@
 [package]
 name = "banda-git"
-description = "The git module: the Space's folder as git sees it, in the engine."
+description = "The git module: the Project's folder as git sees it, in the engine."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

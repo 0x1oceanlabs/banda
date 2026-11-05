@@ -24,5 +24,5 @@ before you change Banda's look, sidebar, keys or settings, add a Project,
 open the Banda menu for the Person, or drive the browser's tabs.
 
 Never touch credentials, a Harness's own configuration, or a Project's data
-in `~/.local/share/banda/spaces/`; the files a message keeps there are
+in `~/.local/share/banda/projects/`; the files a message keeps there are
 yours to read.

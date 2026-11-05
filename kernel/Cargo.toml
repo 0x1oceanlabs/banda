@@ -1,6 +1,6 @@
 [package]
 name = "banda-kernel"
-description = "The kernel: Spaces, the event log, receipts, the outbox, the access decision, the module registry and the API."
+description = "The kernel: Projects, the event log, receipts, the outbox, the access decision, the module registry and the API."
 version.workspace = true
 edition.workspace = true
 rust-version.workspace = true

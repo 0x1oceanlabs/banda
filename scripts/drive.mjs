@@ -16,7 +16,7 @@
 //                       where it is
 //   snapshot [SELECTOR] what the page shows, as its accessibility tree
 //   click TARGET        TARGET is a Playwright selector, as
-//                       'role=button[name="Settings"]' or 'text=No Space',
+//                       'role=button[name="Settings"]' or 'text=No Project',
 //                       or X,Y in the page; --right, --double
 //   hover TARGET
 //   drag FROM TO        from one TARGET to another, as a mouse does

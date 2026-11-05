@@ -3,13 +3,13 @@
 //! 1. The client's first frame is `hello`, with the protocol version and a
 //!    token. The [`Identity`] port says which Participant the token names,
 //!    or the token is a pass: an Agent, which works only in its pass's
-//!    Space ([`crate::access::within`]), and calls there when it names
+//!    Project ([`crate::access::within`]), and calls there when it names
 //!    none. A wrong version or an unknown token gets
 //!    `goodbye`. `welcome` lists the engine's modules, so a window shows
 //!    only what the engine has (ADR 0002, decision 8), and the ID this
 //!    machine's modules are followed by (ADR 0025).
 //! 2. `call` runs a method and gets one `result` with the same `id`.
-//! 3. `subscribe` follows a Space's events after a position. The window first
+//! 3. `subscribe` follows a Project's events after a position. The window first
 //!    reads a view with its position, then subscribes after it (ADR 0002,
 //!    decision 5). The log is replayed a page at a time, then live events
 //!    follow; a subscriber that falls behind catches up from the log.
@@ -19,7 +19,7 @@
 //!    terminal's output: `piece` after `piece`, until `ended` says the
 //!    module ended it. Heard again after a reconnect, it starts again.
 //!    `unsubscribe` stops a stream as it stops a subscription. A stream
-//!    of this machine's names no Space: `window.requests`, where the window
+//!    of this machine's names no Project: `window.requests`, where the window
 //!    hears what modules ask it (ADR 0029), or a module of the machine's.
 //!
 //! Unknown fields are ignored on both sides, so either side can be newer.
@@ -27,7 +27,7 @@
 use crate::access::Caller;
 use crate::events::{Event, EventFilter};
 use crate::module::Stream;
-use crate::{Code, CommandId, Kernel, PROTOCOL, Participant, PersonId, Refusal, SpaceId};
+use crate::{Code, CommandId, Kernel, PROTOCOL, Participant, PersonId, ProjectId, Refusal};
 use axum::Router;
 use axum::extract::State;
 use axum::extract::ws::{Message, Utf8Bytes, WebSocket, WebSocketUpgrade};
@@ -60,7 +60,7 @@ pub enum ClientFrame {
         method: String,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         #[ts(optional)]
-        space: Option<SpaceId>,
+        project: Option<ProjectId>,
         /// Makes a command run once (ADR 0002, decision 2).
         #[serde(default, skip_serializing_if = "Option::is_none")]
         #[ts(optional)]
@@ -71,7 +71,7 @@ pub enum ClientFrame {
     Subscribe {
         #[ts(type = "number")]
         id: u64,
-        space: SpaceId,
+        project: ProjectId,
         #[ts(type = "number")]
         after: i64,
         #[serde(default)]
@@ -90,7 +90,7 @@ pub enum ClientFrame {
         /// module of the machine's.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         #[ts(optional)]
-        space: Option<SpaceId>,
+        project: Option<ProjectId>,
         method: String,
         #[serde(default)]
         params: Value,
@@ -107,10 +107,10 @@ pub enum EngineFrame {
         /// The modules this engine runs.
         modules: Vec<String>,
         /// What this machine's modules are followed and streamed by, as a
-        /// Space is (ADR 0025, decision 1); none while no module is.
+        /// Project is (ADR 0025, decision 1); none while no module is.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         #[ts(optional)]
-        machine: Option<SpaceId>,
+        machine: Option<ProjectId>,
     },
     Result {
         #[ts(type = "number")]
@@ -224,15 +224,15 @@ fn origin_allowed(origin: Option<&str>) -> bool {
     }
 }
 
-/// Who a `hello`'s token names, and the one Space a pass keeps it in.
+/// Who a `hello`'s token names, and the one Project a pass keeps it in.
 fn identify(api: &Api, token: &str) -> Option<Caller> {
     if let Some(participant) = api.identity.identify(token) {
         return Some(participant.into());
     }
-    let (agent, space) = api.kernel.holder(token)?;
+    let (agent, project) = api.kernel.holder(token)?;
     Some(Caller {
         participant: Participant::Agent(agent),
-        only: Some(space),
+        only: Some(project),
     })
 }
 
@@ -364,29 +364,30 @@ async fn serve(api: Arc<Api>, socket: WebSocket) {
             ClientFrame::Call {
                 id,
                 method,
-                space,
+                project,
                 command,
                 params,
             } => {
                 let kernel = api.kernel.clone();
                 let out = out.clone();
                 tokio::spawn(async move {
-                    let answer = kernel.call(caller, &method, space, command, params).await;
+                    let answer = kernel.call(caller, &method, project, command, params).await;
                     let _ = out.send(result(id, answer)).await;
                 });
             }
             ClientFrame::Subscribe {
                 id,
-                space,
+                project,
                 after,
                 filter,
             } => {
-                match api.kernel.follow(caller, space).await {
-                    Ok(space) => {
+                match api.kernel.follow(caller, project).await {
+                    Ok(project) => {
                         // The answer goes out before the first event.
                         let ok = serde_json::json!({ "subscription": id });
                         let _ = out.send(result(id, Ok(ok))).await;
-                        let follower = tokio::spawn(follow(space, id, after, filter, out.clone()));
+                        let follower =
+                            tokio::spawn(follow(project, id, after, filter, out.clone()));
                         if let Some(old) = subscriptions.insert(id, follower) {
                             old.abort();
                         }
@@ -398,11 +399,11 @@ async fn serve(api: Arc<Api>, socket: WebSocket) {
             }
             ClientFrame::Stream {
                 id,
-                space,
+                project,
                 method,
                 params,
             } => {
-                match api.kernel.stream(caller, &method, space, params).await {
+                match api.kernel.stream(caller, &method, project, params).await {
                     Ok(pieces) => {
                         // The answer goes out before the first piece.
                         let ok = serde_json::json!({ "stream": id });
@@ -450,15 +451,15 @@ async fn hear(stream: u64, mut pieces: Stream, out: mpsc::Sender<Outgoing>) {
 /// Replays the stored events after `after`, then forwards live ones, with no
 /// gap and no repeat (see [`crate::Heard`]).
 async fn follow(
-    space: Arc<crate::Space>,
+    project: Arc<crate::Project>,
     subscription: u64,
     after: i64,
     filter: EventFilter,
     out: mpsc::Sender<Outgoing>,
 ) {
-    let mut heard = space.hear(after, filter, None);
-    // It holds the Space only while it reads the log.
-    drop(space);
+    let mut heard = project.hear(after, filter, None);
+    // It holds the Project only while it reads the log.
+    drop(project);
     loop {
         let event = match heard.next().await {
             Ok(Some(event)) => event,

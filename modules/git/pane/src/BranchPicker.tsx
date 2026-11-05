@@ -9,7 +9,7 @@
  * T3 Code's Mod+Shift+G.
  */
 import { useEffect, useId, useMemo, useState } from "react"
-import type { Engine, SpaceId } from "@banda/contract"
+import type { Engine, ProjectId } from "@banda/contract"
 import type { Ref, Status } from "@banda/contract/git"
 import {
   ContextMenu,
@@ -40,14 +40,14 @@ export const PICKER = "git.branch"
 
 export function BranchPicker({
   engine,
-  space,
+  project,
   thread,
   status,
   asked,
   onOpened,
 }: {
   engine: Engine
-  space: SpaceId
+  project: ProjectId
   /** The card's Thread, whose Agent hears of a switch (`git.acted`). */
   thread: string | null
   status: Status
@@ -95,7 +95,7 @@ export function BranchPicker({
       <PopoverContent align="start" className="w-72 gap-0 p-1">
         <Branches
           engine={engine}
-          space={space}
+          project={project}
           thread={thread}
           menu={menu}
           onMenu={setMenu}
@@ -115,14 +115,14 @@ const LISTED = 100
  * open. The keys move the choice from the field, as the Banda menu's. */
 function Branches({
   engine,
-  space,
+  project,
   thread,
   menu,
   onMenu,
   onDone,
 }: {
   engine: Engine
-  space: SpaceId
+  project: ProjectId
   /** Whose Agent hears of a switch (`git.acted`). */
   thread: string | null
   /** The branch whose context menu is open, by its key. */
@@ -141,13 +141,13 @@ function Branches({
   useEffect(() => {
     let current = true
     void engine
-      .call("git.refs", {}, { space })
+      .call("git.refs", {}, { project })
       .then((refs) => current && setAll(refs))
       .catch((error: unknown) => current && setUnread(problem(error)))
     return () => {
       current = false
     }
-  }, [engine, space])
+  }, [engine, project])
   const full =
     all !== undefined &&
     (all.filter((ref) => !ref.remote).length >= LISTED ||
@@ -157,7 +157,7 @@ function Branches({
     let current = true
     const asking = setTimeout(() => {
       void engine
-        .call("git.refs", { query: words }, { space })
+        .call("git.refs", { query: words }, { project })
         .then((refs) => current && setFound({ words, refs }))
         .catch(() => undefined)
     }, 150)
@@ -165,7 +165,7 @@ function Branches({
       current = false
       clearTimeout(asking)
     }
-  }, [engine, space, full, words])
+  }, [engine, project, full, words])
 
   const searched = found?.words === words
   const made = branchName(words)
@@ -190,13 +190,13 @@ function Branches({
     if (ref.current) onDone()
     else
       void act(() =>
-        engine.call("git.switch", { name: ref.name, ...card }, { space })
+        engine.call("git.switch", { name: ref.name, ...card }, { project })
       )
   }
   const create = () => {
     if (!acting.busy)
       void act(() =>
-        engine.call("git.branch", { name: made, ...card }, { space })
+        engine.call("git.branch", { name: made, ...card }, { project })
       )
   }
   const choose = (at: number) => {

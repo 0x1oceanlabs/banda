@@ -8,7 +8,7 @@ import type { Sidebar, State } from "@banda/contract/sidebar"
 export type { Part, State } from "@banda/contract/sidebar"
 
 /** What arranging needs of the sidebar: its keys, not where they came from. */
-export type Settings = Pick<Sidebar, "group" | "sort" | "spaces" | "row">
+export type Settings = Pick<Sidebar, "group" | "sort" | "projects" | "row">
 
 export const STATES: readonly State[] = ["active", "working", "archived"]
 
@@ -23,6 +23,6 @@ export function pickPreset(name: string): void {
 
 export const PRESET_WORDS: Readonly<Record<string, string>> = {
   inbox: "What needs you first",
-  spaces: "Threads under their Projects",
+  projects: "Threads under their Projects",
   places: "Projects above, Threads by need",
 }

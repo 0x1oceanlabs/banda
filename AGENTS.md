@@ -56,7 +56,7 @@ scripts/drive.mjs press Alt+Space
 scripts/try.sh --stop
 ```
 
-The trial is your worktree's alone: its Spaces, settings and logs in
+The trial is your worktree's alone: its Projects, settings and logs in
 `~/.local/state/banda-trial/<slug>`, with the fake agent for its Harness.
 `state/logs/window.log` has main's console and the page's warnings and
 errors, `engine.log` the engine's. `--detach` comes back once the start

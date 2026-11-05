@@ -37,8 +37,8 @@ import {
   type Workspaces,
 } from "./model"
 
-const A = "space-a"
-const B = "space-b"
+const A = "project-a"
+const B = "project-b"
 
 /** The widths the focused workspace's columns are drawn at. */
 function widths(state: Workspaces, sizes = SIZES): Width[] {

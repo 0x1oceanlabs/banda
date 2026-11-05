@@ -286,7 +286,7 @@ pub fn set_usage(sql: &Connection, thread: ThreadId, usage: &Usage) -> Result<()
     set_thread_json(sql, thread, "usage", usage)
 }
 
-/// What a Harness last offered, in any Thread of the Space.
+/// What a Harness last offered, in any Thread of the Project.
 pub fn latest_offer(sql: &Connection, harness: &str) -> Result<Option<Offer>, Error> {
     let text: Option<String> = sql
         .query_row(
@@ -340,14 +340,14 @@ pub fn drop_unsent_images(sql: &Connection, before: i64) -> Result<Vec<ImageId>,
     Ok(ids.collect::<Result<_, _>>()?)
 }
 
-/// Every image the Space keeps.
+/// Every image the Project keeps.
 pub fn image_ids(sql: &Connection) -> Result<HashSet<ImageId>, Error> {
     let mut all = sql.prepare("SELECT id FROM agents_images")?;
     let ids = all.query_map([], |row| row.get(0))?;
     Ok(ids.collect::<Result<_, _>>()?)
 }
 
-/// Every Visual an item of the Space names (ADR 0037).
+/// Every Visual an item of the Project names (ADR 0037).
 pub fn visual_ids(sql: &Connection) -> Result<HashSet<VisualId>, Error> {
     let mut named = sql.prepare(
         "SELECT json_extract(body, '$.visual') FROM agents_items \
@@ -433,7 +433,7 @@ pub fn tool_images(
     Ok(())
 }
 
-/// An image's kind, if the Space keeps it.
+/// An image's kind, if the Project keeps it.
 pub fn image_kind(sql: &Connection, id: ImageId) -> Result<Option<String>, Error> {
     Ok(sql
         .query_row(
@@ -540,7 +540,7 @@ pub fn set_forked_from(sql: &Connection, thread: ThreadId, from: ThreadId) -> Re
     Ok(())
 }
 
-/// The Space's Threads, the latest first, each with where its work stands.
+/// The Project's Threads, the latest first, each with where its work stands.
 pub fn threads(sql: &Connection) -> Result<Vec<ListedThread>, Error> {
     let mut statement = sql.prepare(&format!("{THREAD} ORDER BY updated_at DESC, id DESC"))?;
     let rows = statement.query_map([], |row| Ok((read_thread(row)?, row.get(4)?)))?;

@@ -10,10 +10,10 @@
 # mode = "auto"
 # model = "opus"
 
-# Where an Agent's Thread opens: "space", on its Space's workspace, in a
-# row with the Space's other Agents (ADR 0065), or "off", beside the Pane
+# Where an Agent's Thread opens: "project", on its Project's workspace, in a
+# row with the Project's other Agents (ADR 0065), or "off", beside the Pane
 # in front.
-# workspaces = "space"
+# workspaces = "project"
 
 # What Enter does with a message written while the Agent works: "steer",
 # into the turn, so the Agent reads it as it works, or "queue", so it

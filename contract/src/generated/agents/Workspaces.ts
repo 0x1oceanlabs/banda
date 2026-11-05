@@ -3,4 +3,4 @@
 /**
  * Where an Agent's Thread opens (ADR 0065, decision 9).
  */
-export type Workspaces = "space" | "off";
+export type Workspaces = "project" | "off";

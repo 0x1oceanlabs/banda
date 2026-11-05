@@ -4,7 +4,7 @@
  * them a turn's files drawn from its tool calls, as they came.
  */
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react"
-import type { Engine, SpaceId } from "@banda/contract"
+import type { Engine, ProjectId } from "@banda/contract"
 import type { DiffAsk } from "@banda/contract/git"
 import {
   filesOf,
@@ -32,7 +32,7 @@ function hashOf(text: string): string {
  */
 export function useFiles(
   engine: Engine,
-  space: SpaceId,
+  project: ProjectId,
   ask: DiffAsk | null,
   words: string,
   diff: Drawn | undefined
@@ -67,7 +67,7 @@ export function useFiles(
     if (!ask || loading || paths.length === 0) return
     setLoading(true)
     engine
-      .call("git.diff", { ...ask, files: paths }, { space })
+      .call("git.diff", { ...ask, files: paths }, { project })
       .then((more) => {
         const files = filesOf(more.patch, `${basis}:${paths.join("\0")}`)
         setLoaded((was) => ({
@@ -91,7 +91,7 @@ export function useFiles(
             path: pathOf(file),
             ...(file.prevName ? { old_path: file.prevName } : {}),
           },
-          { space }
+          { project }
         )
         if (contents.too_large)
           throw new Error("The file is too large to expand.")
@@ -103,7 +103,7 @@ export function useFiles(
           newFile: { name: pathOf(file), contents: contents.new ?? "" },
         }
       }),
-    [engine, space, ask]
+    [engine, project, ask]
   )
 
   return { byPath, missing, loading, load, whole }

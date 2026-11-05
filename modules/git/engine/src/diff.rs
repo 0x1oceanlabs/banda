@@ -147,7 +147,7 @@ impl Sides {
     }
 }
 
-/// What `ask` compares, read after the Space's event `at`.
+/// What `ask` compares, read after the Project's event `at`.
 pub async fn diff(repo: &Repo, ask: DiffAsk, at: i64) -> Result<Diff, Refusal> {
     let head = repo.head().await?;
     // The work tree has the untracked files too, as added.

@@ -12,7 +12,7 @@ use crate::front::Front;
 use crate::history::{Decoder, History, Since};
 use crate::model::{Ended, Open, Piece, Size, Title};
 use crate::servers::TERMINAL_VARIABLE;
-use banda_kernel::{SPACE_VARIABLE, SpaceId, Stream};
+use banda_kernel::{ProjectId, Stream, project_env};
 use pty_process::{OwnedReadPty, OwnedWritePty};
 use rustix::process::{Pid, Signal, kill_process_group};
 use std::os::unix::process::ExitStatusExt;
@@ -36,7 +36,7 @@ const TYPING: Duration = Duration::from_secs(5);
 const LOOKS: [Duration; 2] = [Duration::from_millis(250), Duration::from_secs(1)];
 
 pub struct Terminal {
-    pub space: SpaceId,
+    pub project: ProjectId,
     group: Option<Pid>,
     input: tokio::sync::Mutex<OwnedWritePty>,
     now: Mutex<Now>,
@@ -55,7 +55,7 @@ struct Now {
 
 impl Terminal {
     /// Starts `open.program`, or the Person's shell, in `folder`.
-    pub fn start(space: SpaceId, folder: &Path, open: Open) -> Result<Arc<Terminal>, String> {
+    pub fn start(project: ProjectId, folder: &Path, open: Open) -> Result<Arc<Terminal>, String> {
         let (pty, pts) = pty_process::open().map_err(plain)?;
         pty.resize(open.size.pty()).map_err(plain)?;
         let program = open.program.clone().unwrap_or_else(shell);
@@ -73,7 +73,7 @@ impl Terminal {
         // What it carries tells its servers (ADR 0044, decision 2).
         let child = command
             .envs(&open.env)
-            .env(SPACE_VARIABLE, space.to_string())
+            .envs(project_env(project))
             .env(TERMINAL_VARIABLE, open.terminal.to_string())
             .spawn(pts)
             .map_err(|e| format!("{program} could not start: {e}."))?;
@@ -89,7 +89,7 @@ impl Terminal {
         };
         let (output, input) = pty.into_split();
         let terminal = Arc::new(Terminal {
-            space,
+            project,
             group,
             input: tokio::sync::Mutex::new(input),
             now: Mutex::new(Now {

@@ -6,11 +6,11 @@ import {
   type EventFilter,
   Refused,
   type Refusal,
-  type SpaceId,
+  type ProjectId,
 } from "@banda/contract"
 
 /**
- * A view a Pane reads once and then keeps current from the Space's log.
+ * A view a Pane reads once and then keeps current from the Project's log.
  * Keep it in `useMemo`: a new source reads the view again.
  */
 export type Source<S extends { at: number }> = {
@@ -38,7 +38,7 @@ const LOADING = { state: "loading" } as const
 const AGAIN = 500
 
 /**
- * Reads a view, then follows the Space's events after it (ADR 0002,
+ * Reads a view, then follows the Project's events after it (ADR 0002,
  * decision 5). The view stays current across reconnects; when the engine
  * asks for a fresh read, it reads again. Events that arrive within one
  * frame render once. A new `round` reads again too, the view kept until
@@ -46,7 +46,7 @@ const AGAIN = 500
  */
 export function useLive<S extends { at: number }>(
   engine: Engine,
-  space: SpaceId,
+  project: ProjectId,
   source: Source<S> | null,
   round = 0
 ): Live<S> {
@@ -97,7 +97,7 @@ export function useLive<S extends { at: number }>(
       if (stale()) return
       hold({ state: "ready", view })
       unfollow = engine.follow(
-        space,
+        project,
         view.at,
         source.filter,
         (event) => {
@@ -129,13 +129,13 @@ export function useLive<S extends { at: number }>(
       cancelAnimationFrame(frame)
       unfollow()
     }
-  }, [engine, space, source])
+  }, [engine, project, source])
 
   return held.source === source ? held.live : LOADING
 }
 
 /**
- * A view of the machine's own log, as `useLive` keeps a Space's: it reads
+ * A view of the machine's own log, as `useLive` keeps a Project's: it reads
  * once the engine says which log is the machine's. Keep `source` in
  * `useMemo`.
  */

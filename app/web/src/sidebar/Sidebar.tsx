@@ -1,7 +1,7 @@
-import { MakeSpace } from "./MakeSpace"
+import { MakeProject } from "./MakeProject"
 import { Fragment, type ReactElement, useMemo, useState } from "react"
-import type { Engine, SpaceId, SpaceSummary } from "@banda/contract"
-import { SpaceBadge } from "@banda/ui/components/space-badge"
+import type { Engine, ProjectId, ProjectSummary } from "@banda/contract"
+import { ProjectBadge } from "@banda/ui/components/project-badge"
 import { BandaMark, MARK_WORDS } from "@banda/ui/components/banda-mark"
 import { Button } from "@banda/ui/components/button"
 import {
@@ -45,7 +45,7 @@ import {
   arrange,
   type Row as Arranged,
   type Section,
-  type SpaceLine,
+  type ProjectLine,
 } from "./arrange"
 import { useLookSidebar } from "../look"
 import { Row } from "./Row"
@@ -67,8 +67,8 @@ function MenuKey() {
 
 /**
  * The sidebar, docked at the window's left edge (ADR 0005, decision 8):
- * every Thread of every Space, arranged as `sidebar.toml` says (ADR 0008).
- * The modules list what each Space has; the sidebar only arranges and
+ * every Thread of every Project, arranged as `sidebar.toml` says (ADR 0008).
+ * The modules list what each Project has; the sidebar only arranges and
  * draws it. Its view menu writes the preset into the file, through the
  * desktop, and the new arrangement comes back with the look.
  */
@@ -86,12 +86,12 @@ export function Sidebar({
   over?: boolean
   onDismiss?: () => void
   engine: Engine
-  spaces: SpaceSummary[]
+  projects: ProjectSummary[]
   lists: Lists
-  /** The Space a new Thread from the header starts in. */
-  home: SpaceId
+  /** The Project a new Thread from the header starts in. */
+  home: ProjectId
   /** Whether a Pane is the one that has the focus. */
-  isCurrent: (space: SpaceId, pane: PaneState) => boolean
+  isCurrent: (project: ProjectId, pane: PaneState) => boolean
   /** Opens the Banda menu, as Alt+Space does (ADR 0017). */
   onMenu: () => void
   /** Opens the settings, as Alt+, does (ADR 0016). */
@@ -104,26 +104,26 @@ export function Sidebar({
    * Opens a Pane a row stands for: where a workspace shows it, or in a new
    * column of the current one.
    */
-  onOpen: (space: SpaceId, pane: PaneState) => void
-  onNewThread: (space: SpaceId) => void
-  onNoSpace: () => void
+  onOpen: (project: ProjectId, pane: PaneState) => void
+  onNewThread: (project: ProjectId) => void
+  onNoProject: () => void
   /**
    * Archives a row's Thread, which closes the Panes that show it, or
    * brings it back (ADR 0008, decision 4; ADR 0069).
    */
-  onArchive: (space: SpaceId, thing: string, archived: boolean) => void
-  /** Opens "Add Space" in the Banda menu (ADR 0026). */
-  onAddSpace: () => void
-  /** Pins the Space, so it comes first, or unpins it (ADR 0026). */
-  onPin: (space: SpaceId, pinned: boolean) => void
-  /** Opens the settings at the Space's own (ADR 0026). */
-  onSpaceSettings: (space: SpaceId) => void
-  /** Finds the folder of a Space whose folder is missing (ADR 0026). */
-  onLocate: (space: SpaceId) => void
+  onArchive: (project: ProjectId, thing: string, archived: boolean) => void
+  /** Opens "Add Project" in the Banda menu (ADR 0026). */
+  onAddProject: () => void
+  /** Pins the Project, so it comes first, or unpins it (ADR 0026). */
+  onPin: (project: ProjectId, pinned: boolean) => void
+  /** Opens the settings at the Project's own (ADR 0026). */
+  onProjectSettings: (project: ProjectId) => void
+  /** Finds the folder of a Project whose folder is missing (ADR 0026). */
+  onLocate: (project: ProjectId) => void
 }) {
   const keyFor = useKeyLabel()
-  const { spaces, lists, home, isCurrent, onPin } = props
-  const [making, setMaking] = useState<SpaceSummary>()
+  const { projects, lists, home, isCurrent, onPin } = props
+  const [making, setMaking] = useState<ProjectSummary>()
   const done =
     <A extends unknown[]>(act: (...args: A) => void) =>
     (...args: A) => {
@@ -135,14 +135,14 @@ export function Sidebar({
   const onKeys = done(props.onKeys)
   const onOpen = done(props.onOpen)
   const onNewThread = done(props.onNewThread)
-  const onNoSpace = done(props.onNoSpace)
-  const onAddSpace = done(props.onAddSpace)
-  const onSpaceSettings = done(props.onSpaceSettings)
+  const onNoProject = done(props.onNoProject)
+  const onAddProject = done(props.onAddProject)
+  const onProjectSettings = done(props.onProjectSettings)
   const onLocate = done(props.onLocate)
   const settings = useLookSidebar()
   const { preset, presets } = settings
   const host = window.banda
-  const [only, setOnly] = useState<SpaceId>()
+  const [only, setOnly] = useState<ProjectId>()
   const [toggled, setToggled] = useState<ReadonlySet<string>>(new Set())
   const [more, setMore] = useState<ReadonlySet<string>>(new Set())
   // Another preset starts afresh: no filter, nothing folded by hand.
@@ -156,8 +156,8 @@ export function Sidebar({
   // The Threads the Person archived (ADR 0069).
   const archived = useIsArchived()
   const fresh = useMemo(
-    () => arrange(lists, spaces, settings, only, toggled, archived),
-    [lists, spaces, settings, only, toggled, archived]
+    () => arrange(lists, projects, settings, only, toggled, archived),
+    [lists, projects, settings, only, toggled, archived]
   )
   // Under the pointer, the rows hold still; what would move or come
   // waits as updates, taken in by the pill or as the pointer leaves
@@ -173,17 +173,17 @@ export function Sidebar({
       console.error("banda: sidebar.toml did not open", error)
     })
   }
-  // A Space's row, wherever it shows, has its right-click menu.
-  const withMenu: WithMenu = (space, row) => (
-    <SpaceMenu
-      space={space}
+  // A Project's row, wherever it shows, has its right-click menu.
+  const withMenu: WithMenu = (project, row) => (
+    <ProjectMenu
+      project={project}
       onNewThread={onNewThread}
       onPin={onPin}
-      onSettings={onSpaceSettings}
+      onSettings={onProjectSettings}
       onLocate={onLocate}
     >
       {row}
-    </SpaceMenu>
+    </ProjectMenu>
   )
   const flip = (set: ReadonlySet<string>, key: string) => {
     const next = new Set(set)
@@ -201,10 +201,10 @@ export function Sidebar({
       onMore={() => setMore((set) => flip(set, section.key))}
       onOpen={onOpen}
       onArchive={(row) =>
-        props.onArchive(row.space.id, row.listed.id, row.state !== "archived")
+        props.onArchive(row.project.id, row.listed.id, row.state !== "archived")
       }
-      onNoSpace={onNoSpace}
-      onMakeSpace={setMaking}
+      onNoProject={onNoProject}
+      onMakeProject={setMaking}
       onNewThread={onNewThread}
       withMenu={withMenu}
     />
@@ -268,13 +268,13 @@ export function Sidebar({
           instead of a line. */}
       <ScrollArea className="min-h-0 flex-1 data-overflow-y-end:mask-b-from-[calc(100%-1.5rem)]">
         <div className="flex flex-col gap-1 px-1.5 pb-2">
-          {arranged.spaces && (
-            <SpacesList
-              lines={arranged.spaces}
+          {arranged.projects && (
+            <ProjectsList
+              lines={arranged.projects}
               settings={settings}
               only={only}
-              onPick={(space) =>
-                setOnly((was) => (was === space ? undefined : space))
+              onPick={(project) =>
+                setOnly((was) => (was === project ? undefined : project))
               }
               onLocate={onLocate}
               onNewThread={onNewThread}
@@ -372,15 +372,15 @@ export function Sidebar({
           className="text-muted-foreground"
           aria-label="Add Project"
           title="Add Project"
-          onClick={onAddSpace}
+          onClick={onAddProject}
         >
           <FolderPlusIcon />
         </Button>
       </div>
       {making && (
-        <MakeSpace
+        <MakeProject
           engine={props.engine}
-          space={making}
+          project={making}
           onClose={() => setMaking(undefined)}
         />
       )}
@@ -398,23 +398,23 @@ function SectionView({
   onMore,
   onOpen,
   onArchive,
-  onMakeSpace,
-  onNoSpace,
+  onMakeProject,
+  onNoProject,
   onNewThread,
   withMenu,
 }: {
   section: Section
   settings: Settings
   more: boolean
-  isCurrent: (space: SpaceId, pane: PaneState) => boolean
+  isCurrent: (project: ProjectId, pane: PaneState) => boolean
   onToggle: () => void
   onMore: () => void
-  onOpen: (space: SpaceId, pane: PaneState) => void
+  onOpen: (project: ProjectId, pane: PaneState) => void
   /** Archives the row, or brings it back. */
   onArchive: (row: Arranged) => void
-  onMakeSpace: (space: SpaceSummary) => void
-  onNoSpace: () => void
-  onNewThread: (space: SpaceId) => void
+  onMakeProject: (project: ProjectSummary) => void
+  onNoProject: () => void
+  onNewThread: (project: ProjectId) => void
   withMenu: WithMenu
 }) {
   const archiveKey = useKeyLabel()("sidebar.archive")
@@ -422,7 +422,7 @@ function SectionView({
   const rows = limit > 0 && !more ? section.rows.slice(0, limit) : section.rows
   const hidden = section.rows.length - rows.length
   const Chevron = section.folded ? ChevronRightIcon : ChevronDownIcon
-  const { space } = section
+  const { project } = section
   const header = section.label && (
     <div className="group/head flex items-center">
       <button
@@ -430,41 +430,41 @@ function SectionView({
         aria-expanded={!section.folded}
         className={cn(
           "flex min-w-0 flex-1 items-center gap-1.5 rounded-md px-2 pt-2 pb-1 text-xs outline-none focus-visible:ring-3 focus-visible:ring-ring/50",
-          space ? "font-medium text-foreground" : "text-muted-foreground"
+          project ? "font-medium text-foreground" : "text-muted-foreground"
         )}
         onClick={onToggle}
       >
         <Chevron className="size-3 shrink-0 text-muted-foreground" />
-        {space && <SpaceBadge space={space} />}
-        <span className="min-w-0 truncate" title={space?.folder}>
+        {project && <ProjectBadge project={project} />}
+        <span className="min-w-0 truncate" title={project?.folder}>
           {section.label}
         </span>
         <span className="ml-auto flex items-center gap-1 text-muted-foreground tabular-nums">
-          {section.folded && settings.spaces.rollup && (
+          {section.folded && settings.projects.rollup && (
             <Rollup mark={section.mark} waiting={section.waiting} />
           )}
           {section.rows.length}
         </span>
       </button>
-      {section.key === "no-space" && (
+      {section.key === "no-project" && (
         <Button
           variant="ghost"
           size="icon-xs"
           aria-label="New Thread in No Project"
           title="New Thread"
-          onClick={onNoSpace}
+          onClick={onNoProject}
         >
           <SquarePenIcon />
         </Button>
       )}
-      {space && settings.spaces.newThread && (
-        <NewThreadIn space={space} onNewThread={onNewThread} />
+      {project && settings.projects.newThread && (
+        <NewThreadIn project={project} onNewThread={onNewThread} />
       )}
     </div>
   )
   return (
     <div role="group" aria-label={section.label || "Threads"}>
-      {header && (space ? withMenu(space, header) : header)}
+      {header && (project ? withMenu(project, header) : header)}
       {!section.folded && (
         <div className="flex flex-col gap-px">
           {rows.map((row) => (
@@ -473,14 +473,14 @@ function SectionView({
                 <Row
                   row={row}
                   settings={settings}
-                  inSpace={space !== undefined || row.space.scratch}
-                  current={isCurrent(row.space.id, row.listed.pane)}
-                  onOpen={() => onOpen(row.space.id, row.listed.pane)}
+                  inProject={project !== undefined || row.project.scratch}
+                  current={isCurrent(row.project.id, row.listed.pane)}
+                  onOpen={() => onOpen(row.project.id, row.listed.pane)}
                 />
               </ContextMenuTrigger>
               <ContextMenuContent>
-                {row.space.scratch && (
-                  <DropdownMenuItem onClick={() => onMakeSpace(row.space)}>
+                {row.project.scratch && (
+                  <DropdownMenuItem onClick={() => onMakeProject(row.project)}>
                     Make a Project from it…
                   </DropdownMenuItem>
                 )}
@@ -511,8 +511,8 @@ function SectionView({
   )
 }
 
-/** The list of Spaces, as Herdr's: a click shows only that Space's rows. */
-function SpacesList({
+/** The list of Projects, as Herdr's: a click shows only that Project's rows. */
+function ProjectsList({
   lines,
   settings,
   only,
@@ -521,12 +521,12 @@ function SpacesList({
   onLocate,
   withMenu,
 }: {
-  lines: SpaceLine[]
+  lines: ProjectLine[]
   settings: Settings
-  only?: SpaceId
-  onPick: (space: SpaceId) => void
-  onNewThread: (space: SpaceId) => void
-  onLocate: (space: SpaceId) => void
+  only?: ProjectId
+  onPick: (project: ProjectId) => void
+  onNewThread: (project: ProjectId) => void
+  onLocate: (project: ProjectId) => void
   withMenu: WithMenu
 }) {
   return (
@@ -538,40 +538,40 @@ function SpacesList({
       <div className="px-2 pt-2 pb-1 text-xs text-muted-foreground">
         Projects
       </div>
-      {lines.map(({ space, mark, waiting }) => (
-        <Fragment key={space.id}>
+      {lines.map(({ project, mark, waiting }) => (
+        <Fragment key={project.id}>
           {withMenu(
-            space,
+            project,
             <div className="group/head flex items-center">
               <button
                 type="button"
-                aria-pressed={only === space.id}
+                aria-pressed={only === project.id}
                 title={
-                  space.missing
-                    ? `The folder ${space.folder} is missing`
-                    : space.folder
+                  project.missing
+                    ? `The folder ${project.folder} is missing`
+                    : project.folder
                 }
                 className={cn(
                   "flex min-w-0 flex-1 items-center gap-2 rounded-lg border border-transparent px-2 py-1 text-left text-sm outline-none hover:bg-foreground/5 focus-visible:ring-3 focus-visible:ring-ring/50",
-                  only === space.id && "border-border bg-tile shadow-xs"
+                  only === project.id && "border-border bg-tile shadow-xs"
                 )}
                 onClick={() =>
-                  space.missing ? onLocate(space.id) : onPick(space.id)
+                  project.missing ? onLocate(project.id) : onPick(project.id)
                 }
               >
-                <SpaceBadge space={space} />
-                <span className="min-w-0 flex-1 truncate">{space.name}</span>
-                {space.missing && (
+                <ProjectBadge project={project} />
+                <span className="min-w-0 flex-1 truncate">{project.name}</span>
+                {project.missing && (
                   <span className="shrink-0 text-xs text-attention">
                     Missing
                   </span>
                 )}
-                {settings.spaces.rollup && (
+                {settings.projects.rollup && (
                   <Rollup mark={mark} waiting={waiting} />
                 )}
               </button>
-              {settings.spaces.newThread && !space.missing && (
-                <NewThreadIn space={space} onNewThread={onNewThread} />
+              {settings.projects.newThread && !project.missing && (
+                <NewThreadIn project={project} onNewThread={onNewThread} />
               )}
             </div>
           )}
@@ -604,71 +604,71 @@ function Rollup({ mark, waiting }: { mark: Section["mark"]; waiting: number }) {
 }
 
 function NewThreadIn({
-  space,
+  project,
   onNewThread,
 }: {
-  space: SpaceSummary
-  onNewThread: (space: SpaceId) => void
+  project: ProjectSummary
+  onNewThread: (project: ProjectId) => void
 }) {
   return (
     <Button
       variant="ghost"
       size="icon-xs"
-      aria-label={`New Thread in ${space.name}`}
+      aria-label={`New Thread in ${project.name}`}
       title="New Thread"
       className="opacity-0 group-hover/head:opacity-100 focus-visible:opacity-100"
-      onClick={() => onNewThread(space.id)}
+      onClick={() => onNewThread(project.id)}
     >
       <SquarePenIcon />
     </Button>
   )
 }
 
-/** A Space's row with its right-click menu around it. */
-type WithMenu = (space: SpaceSummary, row: ReactElement) => ReactElement
+/** A Project's row with its right-click menu around it. */
+type WithMenu = (project: ProjectSummary, row: ReactElement) => ReactElement
 
-/** A Space's right-click menu, in T3 Code's words (ADR 0026, decision 5). */
-function SpaceMenu({
-  space,
+/** A Project's right-click menu, in T3 Code's words (ADR 0026, decision 5). */
+function ProjectMenu({
+  project,
   onNewThread,
   onPin,
   onSettings,
   onLocate,
   children,
 }: {
-  space: SpaceSummary
-  onNewThread: (space: SpaceId) => void
-  onPin: (space: SpaceId, pinned: boolean) => void
-  onSettings: (space: SpaceId) => void
-  onLocate: (space: SpaceId) => void
+  project: ProjectSummary
+  onNewThread: (project: ProjectId) => void
+  onPin: (project: ProjectId, pinned: boolean) => void
+  onSettings: (project: ProjectId) => void
+  onLocate: (project: ProjectId) => void
   children: ReactElement
 }) {
   return (
     <ContextMenu>
       <ContextMenuTrigger>{children}</ContextMenuTrigger>
       <ContextMenuContent>
-        {space.missing ? (
-          <DropdownMenuItem onClick={() => onLocate(space.id)}>
+        {project.missing ? (
+          <DropdownMenuItem onClick={() => onLocate(project.id)}>
             <FolderSearchIcon />
             {LOCATE}
           </DropdownMenuItem>
         ) : (
-          <DropdownMenuItem onClick={() => onNewThread(space.id)}>
+          <DropdownMenuItem onClick={() => onNewThread(project.id)}>
             <SquarePenIcon />
             New Thread
           </DropdownMenuItem>
         )}
         <DropdownMenuItem
-          onClick={() => void navigator.clipboard.writeText(space.folder)}
+          onClick={() => void navigator.clipboard.writeText(project.folder)}
         >
           <CopyIcon />
           Copy path
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => onPin(space.id, !space.pinned)}>
-          {space.pinned ? <PinOffIcon /> : <PinIcon />}
-          {space.pinned ? "Unpin Project" : "Pin Project"}
+        <DropdownMenuItem onClick={() => onPin(project.id, !project.pinned)}>
+          {project.pinned ? <PinOffIcon /> : <PinIcon />}
+          {project.pinned ? "Unpin Project" : "Pin Project"}
         </DropdownMenuItem>
-        <DropdownMenuItem onClick={() => onSettings(space.id)}>
+        <DropdownMenuItem onClick={() => onSettings(project.id)}>
           <SettingsIcon />
           Project settings
         </DropdownMenuItem>

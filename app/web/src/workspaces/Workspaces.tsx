@@ -1,6 +1,6 @@
 import { cn } from "@banda/ui/lib/utils"
 import { useEffect, useLayoutEffect, useRef } from "react"
-import type { Engine, SpaceId } from "@banda/contract"
+import type { Engine, ProjectId } from "@banda/contract"
 import {
   holderOf,
   type Listed,
@@ -33,7 +33,7 @@ export function Workspaces({
   overview,
   engine,
   modules,
-  spaceName,
+  projectName,
   called,
   marked,
   away,
@@ -53,7 +53,7 @@ export function Workspaces({
   overview: boolean
   engine: Engine
   modules: readonly string[]
-  spaceName: (space: SpaceId) => string
+  projectName: (project: ProjectId) => string
   /** How the Thread a Pane shows calls the Person, if it does. */
   called: (entry: Entry) => Chime | undefined
   /** An Agent opened it, and the Person has not looked at it yet. */
@@ -92,11 +92,11 @@ export function Workspaces({
     // and so does every one when the overview, which placed them, closes.
     if (!moving.moving) moving.to(moving.value, { kind: "off" })
     if (moving.target !== workspaces.current) {
-      // One Space's workspace swaps for another's in place: the new one
+      // One Project's workspace swaps for another's in place: the new one
       // fades in, a little from the left, with no slide (ADR 0065,
       // decision 9).
-      const from = workspaces.list[Math.round(moving.target)]?.space
-      const to = workspaces.list[workspaces.current]?.space
+      const from = workspaces.list[Math.round(moving.target)]?.project
+      const to = workspaces.list[workspaces.current]?.project
       const swapping = from !== undefined && to !== undefined && from !== to
       const move = moveOf("workspace")
       moving.to(workspaces.current, swapping ? { kind: "off" } : move)
@@ -215,7 +215,7 @@ export function Workspaces({
               selected={current && (overview || live)}
               engine={engine}
               modules={modules}
-              spaceName={spaceName}
+              projectName={projectName}
               called={called}
               marked={marked}
               away={away}

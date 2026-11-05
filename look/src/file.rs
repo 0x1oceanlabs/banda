@@ -120,6 +120,8 @@ pub trait OneFile: Default + Serialize + DeserializeOwned + JsonSchema {
     const NAME: &'static str;
     /// The file as Banda writes it first, every default named.
     const TEMPLATE: &'static str;
+    /// Names it may still say from before a rename (ADR 0069 grace).
+    const RENAMED: &'static [crate::keyed::Renamed] = &[];
     /// What the window gets, every key resolved.
     type Resolved: Serialize;
     /// Banda's own, every key said.
@@ -137,6 +139,7 @@ pub trait OneFile: Default + Serialize + DeserializeOwned + JsonSchema {
 /// file, then checks it: a wrong key is named in `problems` and left
 /// out, and the rest still reads. The engine reads a module's file so too.
 pub fn read<T: OneFile>(path: &Path, text: &str, problems: &mut Vec<Problem>) -> Option<T> {
+    crate::say_renamed(path, text, T::RENAMED, problems);
     let mut settings: T = crate::read(path, text, problems)?;
     settings.check(path, text, problems);
     Some(settings)

@@ -1,5 +1,5 @@
 import { describe, expect, test } from "vitest"
-import type { SpaceSummary } from "@banda/contract"
+import type { ProjectSummary } from "@banda/contract"
 import type { Listed } from "@banda/ui/pane"
 import type { Action, MenuAct, MenuRow } from "@banda/ui/module"
 import type { Shell } from "../shell/actions"
@@ -34,9 +34,9 @@ const lists = {
     thread("t3", "slow hello", { changed: 2, mark: "done" }),
   ],
 }
-const spaces = [
+const projects = [
   { id: "s1", name: "banda", folder: "/home/r/banda" },
-] as unknown as SpaceSummary[]
+] as unknown as ProjectSummary[]
 const action = (
   id: string,
   title: string,
@@ -50,9 +50,9 @@ const actions = [
 
 const sources: Sources = {
   lists,
-  spaces,
+  projects,
   actions,
-  presets: { names: ["inbox", "spaces", "places"], current: "inbox" },
+  presets: { names: ["inbox", "projects", "places"], current: "inbox" },
   archived: (listed) => listed.id === "t3",
   found: [],
   weight: () => 0,
@@ -95,14 +95,14 @@ function nameOf(row: Choice): string {
   switch (row.kind) {
     case "thread":
       return row.listed.title
-    case "space":
-      return row.space.name
+    case "project":
+      return row.project.name
     case "views":
       return "Sidebar view"
     case "action":
       return row.action.title
     case "ask":
-      return ["ask:", row.words, row.space && `in ${row.space}`]
+      return ["ask:", row.words, row.project && `in ${row.project}`]
         .filter(Boolean)
         .join(" ")
     case "preset":
@@ -141,7 +141,7 @@ const sourcesFor = (
   ...sources,
   found: foundFor(
     words,
-    inside?.kind === "space" ? inside.space.id : undefined
+    inside?.kind === "project" ? inside.project.id : undefined
   ),
   ...more,
 })
@@ -304,13 +304,17 @@ describe("the Banda menu", () => {
 })
 
 describe("its branches and acts", () => {
-  const space: Branch = { kind: "space", id: "space:s1", space: spaces[0] }
+  const project: Branch = {
+    kind: "project",
+    id: "project:s1",
+    project: projects[0],
+  }
   test("a Project holds a new Thread there, then its Threads", () => {
-    expect(labels("", "root", space)).toEqual([
+    expect(labels("", "root", project)).toEqual([
       ["", ["ask here"]],
       ["Threads", ["slow hello", "hello from claude", "Fix the login form"]],
     ])
-    expect(labels("form", "root", space)).toEqual([
+    expect(labels("form", "root", project)).toEqual([
       ["", ["ask: form"]],
       ["Threads", ["Fix the login form"]],
     ])
@@ -318,7 +322,7 @@ describe("its branches and acts", () => {
 
   test("Tab on a Project opens it, or starts a new Thread there", () => {
     expect(
-      actsOf(space, sources).map((act) => [act.title, nameOf(act.row)])
+      actsOf(project, sources).map((act) => [act.title, nameOf(act.row)])
     ).toEqual([
       ["Open", "banda"],
       ["New Thread here", "ask: in s1"],
@@ -329,7 +333,7 @@ describe("its branches and acts", () => {
     expect(labels("view")[0]).toEqual(["Actions", ["Sidebar view"]])
     const views: Branch = { kind: "views", id: "views" }
     expect(labels("", "root", views)).toEqual([
-      ["", ["inbox ✓", "spaces", "places"]],
+      ["", ["inbox ✓", "projects", "places"]],
     ])
   })
 
@@ -353,10 +357,10 @@ describe("its branches and acts", () => {
 })
 
 describe("Add Project (ADR 0026)", () => {
-  const add: Branch = { kind: "add", id: "space.add" }
+  const add: Branch = { kind: "add", id: "project.add" }
   const way = (source: "new" | "folder"): Branch => ({
     kind: "source",
-    id: `space.add.${source}`,
+    id: `project.add.${source}`,
     source,
   })
   const browsed = (
@@ -407,21 +411,21 @@ describe("Add Project (ADR 0026)", () => {
 
   test("a missing Project's folder is located from where it was, once the path is a folder", () => {
     const gone = {
-      ...spaces[0],
+      ...projects[0],
       id: "s2",
       name: "old",
       folder: "/home/r/old",
       missing: true,
     }
-    expect(labels("ol", "root", undefined, { spaces: [gone] })[0]).toEqual([
+    expect(labels("ol", "root", undefined, { projects: [gone] })[0]).toEqual([
       "Projects",
       ["Locate folder"],
     ])
-    expect(openingOf("space.locate.s2", [gone]).words).toBe("/home/r/")
+    expect(openingOf("project.locate.s2", [gone]).words).toBe("/home/r/")
     const locate: Branch = {
       kind: "locate",
-      id: "space.locate.s2",
-      space: gone,
+      id: "project.locate.s2",
+      project: gone,
     }
     const moved = browsed("/home/r/new", "/home/r", true, "new")
     expect(labels("/home/r/new", "root", locate, { browsed: moved })).toEqual([
@@ -476,37 +480,37 @@ describe("ranking", () => {
 
 describe("banda menu ROUTE", () => {
   const where = (route: string) => {
-    const { at, path, words } = openingOf(route, spaces)
+    const { at, path, words } = openingOf(route, projects)
     return [at, path.map((branch) => branch.id), words]
   }
   test("opens at the root, the Actions, the sidebar's view or a Project", () => {
     expect(where("")).toEqual(["root", [], ""])
     expect(where("actions")).toEqual(["actions", [], ""])
     expect(where("views")).toEqual(["root", ["views"], ""])
-    expect(where("space.Banda")).toEqual(["root", ["space:s1"], ""])
-    expect(where("space.s1")).toEqual(["root", ["space:s1"], ""])
+    expect(where("project.Banda")).toEqual(["root", ["project:s1"], ""])
+    expect(where("project.s1")).toEqual(["root", ["project:s1"], ""])
   })
-  test("space.add opens Add Project, or one of its ways", () => {
-    expect(where("space.add")).toEqual(["root", ["space.add"], ""])
-    expect(where("space.add.folder")).toEqual([
+  test("project.add opens Add Project, or one of its ways", () => {
+    expect(where("project.add")).toEqual(["root", ["project.add"], ""])
+    expect(where("project.add.folder")).toEqual([
       "root",
-      ["space.add", "space.add.folder"],
+      ["project.add", "project.add.folder"],
       "~/",
     ])
-    expect(where("space.add.new")).toEqual([
+    expect(where("project.add.new")).toEqual([
       "root",
-      ["space.add", "space.add.new"],
+      ["project.add", "project.add.new"],
       "",
     ])
   })
   test("other words, and a Project there is not, are typed in", () => {
     expect(where(" fix the login ")).toEqual(["root", [], "fix the login"])
-    expect(where("space.nope")).toEqual(["root", [], "space.nope"])
+    expect(where("project.nope")).toEqual(["root", [], "project.nope"])
   })
   test("a settings route is the settings Pane's link, not the menu's", () => {
     expect(settingsLinkOf("settings")).toBe("")
     expect(settingsLinkOf(" settings.agents.codex ")).toBe("agents/codex")
-    expect(settingsLinkOf("space.settings")).toBeUndefined()
+    expect(settingsLinkOf("project.settings")).toBeUndefined()
     expect(settingsLinkOf("fix the settings")).toBeUndefined()
   })
 })

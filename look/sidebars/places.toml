@@ -1,4 +1,4 @@
-# Banda's "places" preset, as Herdr's: the Spaces listed above, a click
+# Banda's "places" preset, as Herdr's: the Projects listed above, a click
 # shows only one's Threads; below, every Thread by what needs you, the
 # archived ones folded. Two lines a row.
 
@@ -6,7 +6,7 @@
 states = ["active", "working", "archived"]
 bottom = []
 
-[spaces]
+[projects]
 list = true
 
 [row]

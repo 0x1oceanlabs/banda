@@ -394,11 +394,11 @@ test("the Banda menu opens an address, and a file of the focused Project, in a b
   const { app, page, dir } = window
   const { thread } = await firstThread(page)
   await expect(thread).toBeVisible()
-  // A file of the Space's, there before the menu first lists the files:
+  // A file of the Project's, there before the menu first lists the files:
   // the engine keeps a listing a few seconds.
-  const space = join(dir, "root", "Work")
-  mkdirSync(join(space, "notes"), { recursive: true })
-  writeFileSync(join(space, "notes", "plan.html"), "<title>The plan</title>")
+  const project = join(dir, "root", "Work")
+  mkdirSync(join(project, "notes"), { recursive: true })
+  writeFileSync(join(project, "notes", "plan.html"), "<title>The plan</title>")
   const menu = page.getByRole("dialog", { name: "Banda menu" })
   const search = menu.getByRole("combobox", { name: "Search" })
 
@@ -423,7 +423,7 @@ test("the Banda menu opens an address, and a file of the focused Project, in a b
     menu.getByRole("option", { name: "Search the web: “two words”" })
   ).toBeVisible()
 
-  // The focused Space's files, as @ finds them; Enter opens one.
+  // The focused Project's files, as @ finds them; Enter opens one.
   await search.fill("plan.ht")
   const files = menu.getByRole("group", { name: "Files" })
   await expect(files.getByRole("option")).toHaveText(/plan\.html\s*notes/)

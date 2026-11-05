@@ -45,7 +45,7 @@ pub fn porcelain(out: &[u8]) -> Porcelain {
         let (kind, rest) = record.split_at(1);
         let rest = rest.strip_prefix(' ').unwrap_or(rest);
         // How many fields a record has, its path the last, which may hold
-        // spaces:
+        // projects:
         // 1 XY sub mH mI mW hH hI path
         // 2 XY sub mH mI mW hH hI Xscore path, then its old path
         // u XY sub m1 m2 m3 mW h1 h2 h3 path

@@ -1,8 +1,8 @@
 /**
- * A Space's Threads, as the sidebar holds them: the list it read, then
+ * A Project's Threads, as the sidebar holds them: the list it read, then
  * each fact applied. Pure, so plain tests cover it.
  */
-import type { Engine, Event, EventFilter, SpaceId } from "@banda/contract"
+import type { Engine, Event, EventFilter, ProjectId } from "@banda/contract"
 import {
   decodeFact,
   type Fact,
@@ -16,9 +16,9 @@ export const LISTED_MESSAGE = 200
 
 export async function readThreads(
   engine: Engine,
-  space: SpaceId
+  project: ProjectId
 ): Promise<ThreadList> {
-  return engine.call("agents.threads", {}, { space })
+  return engine.call("agents.threads", {}, { project })
 }
 
 /**
@@ -39,13 +39,13 @@ export const THREADS_FILTER = {
   ] satisfies Fact["kind"][],
 } satisfies EventFilter
 
-/** A Space's Threads, read and then followed. Keep it in `useMemo`. */
+/** A Project's Threads, read and then followed. Keep it in `useMemo`. */
 export function threadsSource(
   engine: Engine,
-  space: SpaceId
+  project: ProjectId
 ): Source<ThreadList> {
   return {
-    read: () => readThreads(engine, space),
+    read: () => readThreads(engine, project),
     filter: THREADS_FILTER,
     apply: (state, event) =>
       rewound(state, event) ? READ_AGAIN : applyThreads(state, event),

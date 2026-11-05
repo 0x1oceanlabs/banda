@@ -1,4 +1,4 @@
-import type { SpaceId, SpaceSummary } from "@banda/contract"
+import type { ProjectId, ProjectSummary } from "@banda/contract"
 import type { Count } from "@banda/contract/sidebar"
 import { BandaMark, type MarkState } from "@banda/ui/components/banda-mark"
 import {
@@ -10,7 +10,7 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@banda/ui/components/dropdown-menu"
-import { SpaceBadge } from "@banda/ui/components/space-badge"
+import { ProjectBadge } from "@banda/ui/components/project-badge"
 import { cn } from "@banda/ui/lib/utils"
 import type { Listed, Lists, PaneState } from "@banda/ui/pane"
 import { useMemo, useState } from "react"
@@ -34,7 +34,7 @@ function colourOf(mark: MarkState, color: boolean): string {
   return (color && toneOf(mark)) || "text-foreground"
 }
 
-type Open = (space: SpaceId, pane: PaneState) => void
+type Open = (project: ProjectId, pane: PaneState) => void
 
 /**
  * The sidebar's counts in the bar's middle (ADR 0035): who waits for the
@@ -43,13 +43,13 @@ type Open = (space: SpaceId, pane: PaneState) => void
  */
 export function Counts({
   lists,
-  spaces,
+  projects,
   sidebarShown,
   current,
   onOpen,
 }: {
   lists: Lists
-  spaces: readonly SpaceSummary[]
+  projects: readonly ProjectSummary[]
   /** Whether the sidebar shows, and with it the same. */
   sidebarShown: boolean
   /** The Agent's Thread in front, named while the sidebar is hidden: the
@@ -125,7 +125,7 @@ export function Counts({
         ))}
       </DropdownMenuTrigger>
       <DropdownMenuContent align="center" className="w-96">
-        <List tallies={tallies} spaces={spaces} onOpen={onOpen} />
+        <List tallies={tallies} projects={projects} onOpen={onOpen} />
       </DropdownMenuContent>
     </DropdownMenu>
   )
@@ -134,27 +134,27 @@ export function Counts({
 /** What the counts count, drawn only while the list is open. */
 function List({
   tallies,
-  spaces,
+  projects,
   onOpen,
 }: {
   tallies: readonly Tally[]
-  spaces: readonly SpaceSummary[]
+  projects: readonly ProjectSummary[]
   onOpen: Open
 }) {
   const { waiting, working } = inOrder(tallies)
-  const named = new Map(spaces.map((space) => [space.id, space]))
+  const named = new Map(projects.map((project) => [project.id, project]))
   const rows = (things: Counted[]) =>
-    things.map(({ space, listed }) => {
-      const where = named.get(space)
+    things.map(({ project, listed }) => {
+      const where = named.get(project)
       return (
         <DropdownMenuItem
           key={listed.id}
           className="gap-2 py-1.5"
-          onClick={() => onOpen(space, listed.pane)}
+          onClick={() => onOpen(project, listed.pane)}
         >
           <ThreadMark listed={listed} news={false} />
           <span className="min-w-0 flex-1 truncate">{listed.title}</span>
-          {where && <SpaceBadge space={where} />}
+          {where && <ProjectBadge project={where} />}
           <Status listed={listed} />
         </DropdownMenuItem>
       )

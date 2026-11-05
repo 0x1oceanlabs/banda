@@ -73,7 +73,7 @@ async fn only_a_person_runs_a_terminal() {
     let agent = Participant::Agent(AgentId::new());
     let refused = world
         .kernel
-        .call(agent, "terminal.open", Some(world.space), None, open)
+        .call(agent, "terminal.open", Some(world.project), None, open)
         .await
         .unwrap_err();
     assert_eq!(refused.code, Code::Forbidden);
@@ -183,10 +183,10 @@ async fn opening_a_terminal_whose_program_ended_runs_it_again() {
 }
 
 #[tokio::test]
-async fn a_terminal_belongs_to_its_space() {
+async fn a_terminal_belongs_to_its_project() {
     let world = World::new().await;
     let terminal = world.run("echo started; sleep 100").await;
-    let other = world.another_space().await;
+    let other = world.another_project().await;
     let closing = json!({ "terminal": terminal });
     world
         .call_in(other, "terminal.close", closing.clone())
@@ -198,7 +198,7 @@ async fn a_terminal_belongs_to_its_space() {
         .await
         .unwrap_err();
     assert_eq!(taken.code, Code::Conflict);
-    // It still runs in its own Space.
+    // It still runs in its own Project.
     let typed = json!({ "terminal": terminal, "data": "x" });
     world.call("terminal.write", typed).await.unwrap();
     world.call("terminal.close", closing).await.unwrap();

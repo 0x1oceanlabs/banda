@@ -1,4 +1,4 @@
-import type { SpaceId } from "@banda/contract"
+import type { ProjectId } from "@banda/contract"
 import type { PaneState } from "@banda/ui/pane"
 import { describe, expect, test } from "vitest"
 import { columnMoved, opened } from "./arrange"
@@ -31,7 +31,7 @@ function strip(names: string, groups: string, focus: number): Workspaces {
     entries: [
       {
         id: `${name}1`,
-        space: "s" as SpaceId,
+        project: "s" as ProjectId,
         pane: { kind: "a.a", args: {} } as PaneState,
       },
     ],
@@ -152,7 +152,7 @@ describe("a Group", () => {
 
   test("what a Thread opens goes into its Group, in the Deck right of it", () => {
     const before = strip("ab", "..", 0)
-    const next = open(before, "s" as SpaceId, pane("git.diff"), {
+    const next = open(before, "s" as ProjectId, pane("git.diff"), {
       from: "a1",
       place: "group",
     })

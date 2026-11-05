@@ -13,7 +13,7 @@ Pane of Banda's window.
 
 - **Project**: one body of work and its folder, any folder on this machine.
   Banda keeps its data and log outside it, in
-  `~/.local/share/banda/spaces/<id>/`.
+  `~/.local/share/banda/projects/<id>/`.
 - **Thread**: one session with a Harness in a Project. Each Thread has its
   own Agent.
 - **Harness**: the agent program a Thread runs on, such as Claude Code or
@@ -54,16 +54,16 @@ The window applies each save at once. A broken file leaves the last good
 state in force, and the bar names the file and the line.
 
 Never touch credentials, a Harness's own configuration, or a Project's data
-in `~/.local/share/banda/spaces/`; the files a message keeps there are
+in `~/.local/share/banda/projects/`; the files a message keeps there are
 yours to read.
 
 ## Opening the Banda menu for the Person
 
 `banda menu [route]` opens the Banda menu in the window, as Alt+Space
 does: `banda menu actions` at its Actions, each with its key;
-`banda menu space.<name>` in a Project, its Threads and a new one there;
-`banda menu space.add` at "Add Project" (`space.add.folder` at its path
-field, `space.add.new` at a new Project's name);
+`banda menu project.<name>` in a Project, its Threads and a new one there;
+`banda menu project.add` at "Add Project" (`project.add.folder` at its path
+field, `project.add.new` at a new Project's name);
 `banda menu views` at the sidebar's presets; `banda menu
 settings.<section>.<row>` opens the settings Pane there. Other words
 open it with them typed in, as a search. It exits 2 when the window is
@@ -71,18 +71,18 @@ not open.
 
 ## Adding a folder as a Project
 
-When the Person asks for a folder to become a Project, `banda space add
-<path>` adds it and prints the Space as JSON; `--name` names it, and
+When the Person asks for a folder to become a Project, `banda project add
+<path>` adds it and prints the Project as JSON; `--name` names it, and
 `--create` makes the folder first. A folder that already is a Project
 prints that Project. The folder is not changed: Banda keeps the Project's
 data elsewhere.
 
 A Project's name, pin and archive, and its removal, are the Person's: they
-change them in the settings, which `banda menu settings.spaces.<id>`
+change them in the settings, which `banda menu settings.projects.<id>`
 opens at that Project, or from the Project's menu in the sidebar.
 A Project whose folder is gone is listed `missing`, and every call into it
 is refused until the Person locates the folder: `banda menu
-space.locate.<id>` opens "Locate folder" for them.
+project.locate.<id>` opens "Locate folder" for them.
 
 ## Driving the browser's tabs
 

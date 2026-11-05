@@ -6,7 +6,7 @@
  *   the Person leaves it.
  * - A workspace is a Strip: columns side by side that scroll sideways, each
  *   holding Panes one above another.
- * - A Pane belongs to a Space; one workspace can mix Panes of any Spaces.
+ * - A Pane belongs to a Project; one workspace can mix Panes of any Projects.
  *
  * Every change is a pure function from one state to the next, so plain
  * tests cover the rules; the window only draws the state.
@@ -15,7 +15,7 @@ import {
   type AgentId,
   type JsonValue,
   newId,
-  type SpaceId,
+  type ProjectId,
 } from "@banda/contract"
 import {
   type Columns,
@@ -25,13 +25,13 @@ import {
 import type { PaneState, Place } from "@banda/ui/pane"
 
 /**
- * One Pane on a workspace: what it shows, the Space it belongs to, the
+ * One Pane on a workspace: what it shows, the Project it belongs to, the
  * Agent that opened it, if one did (ADR 0032), and the share of its
  * column's height the Person gave it (ADR 0025, decision 4).
  */
 export type Entry = {
   id: string
-  space: SpaceId
+  project: ProjectId
   pane: PaneState
   by?: AgentId
   /** Left out, it shares evenly what the Panes given one leave. */
@@ -93,8 +93,8 @@ export type Workspace = {
   /** The Group that takes the whole screen, its columns keeping their
    * shares of it (`Alt+M`, ADR 0065). */
   filled?: string
-  /** The Space whose Agents' Threads open here (ADR 0065, decision 9). */
-  space?: SpaceId
+  /** The Project whose Agents' Threads open here (ADR 0065, decision 9). */
+  project?: ProjectId
 }
 
 export type Workspaces = {
@@ -250,8 +250,8 @@ export type InBar = {
   empty: boolean
   /** The empty one at the bottom, which the bar shows as its `+`. */
   bottom: boolean
-  /** The Space whose Agents open here (ADR 0065, decision 9). */
-  space?: SpaceId
+  /** The Project whose Agents open here (ADR 0065, decision 9). */
+  project?: ProjectId
 }
 
 /** The workspaces the bar shows: those that hold Panes, the current one,
@@ -262,8 +262,10 @@ export function inBar(state: Workspaces): InBar[] {
     const empty = workspace.columns.length === 0
     if (empty && index !== state.current && index !== last) return []
     const bottom = index === last
-    const space = bottom ? undefined : workspace.space
-    return [{ id: workspace.id, index, empty, bottom, ...(space && { space }) }]
+    const project = bottom ? undefined : workspace.project
+    return [
+      { id: workspace.id, index, empty, bottom, ...(project && { project }) },
+    ]
   })
 }
 
@@ -286,15 +288,15 @@ export type Identity = (pane: PaneState) => PaneState
 
 const WHOLE: Identity = (pane) => pane
 
-/** Two entries show the same Pane when their Space, kind and args are,
+/** Two entries show the same Pane when their Project, kind and args are,
  * the args as `identity` takes them. */
 export function samePane(
-  a: { space: SpaceId; pane: PaneState },
-  b: { space: SpaceId; pane: PaneState },
+  a: { project: ProjectId; pane: PaneState },
+  b: { project: ProjectId; pane: PaneState },
   identity: Identity = WHOLE
 ): boolean {
   return (
-    a.space === b.space &&
+    a.project === b.project &&
     a.pane.kind === b.pane.kind &&
     canonical(identity(a.pane).args) === canonical(identity(b.pane).args)
   )
@@ -358,7 +360,7 @@ export type Opening = {
    * as a browser's new window. */
   again?: true
   /** What makes a Pane the one shown, as its kind says: one so shown
-   * shows these args and gets the focus, as the Space's one Diff takes
+   * shows these args and gets the focus, as the Project's one Diff takes
    * another scope. Its args whole, when left out. */
   identity?: Identity
   /** One so shown keeps its own args: it only gets the focus. */
@@ -366,7 +368,7 @@ export type Opening = {
 }
 
 /**
- * Shows a Pane of a Space and focuses it.
+ * Shows a Pane of a Project and focuses it.
  *
  * - An entry already showing the same Pane gets the focus instead, on
  *   whichever workspace it is, unless it opens `again` or `here`; one
@@ -379,23 +381,23 @@ export type Opening = {
  */
 export function open(
   state: Workspaces,
-  space: SpaceId,
+  project: ProjectId,
   pane: PaneState,
   opening: Opening = {}
 ): Workspaces {
-  const next = placed(state, space, pane, opening)
+  const next = placed(state, project, pane, opening)
   const was = opening.focus === false && focused(state)
   return was ? focusEntry(next, was.id) : next
 }
 
 function placed(
   state: Workspaces,
-  space: SpaceId,
+  project: ProjectId,
   pane: PaneState,
   opening: Opening
 ): Workspaces {
   const place = opening.place
-  const wanted = { space, pane }
+  const wanted = { project, pane }
   const showing =
     !opening.again &&
     place !== "here" &&
@@ -411,7 +413,7 @@ function placed(
   const from = (opening.from && find(state, opening.from)) || focusedSpot(state)
   const w = from?.workspace ?? state.current
   const workspace = state.list[w]
-  const entry: Entry = { id: newId(), space, pane }
+  const entry: Entry = { id: newId(), project, pane }
 
   if (from && place === "here") {
     return showIn(state, from, entry)
@@ -501,18 +503,18 @@ function showIn(state: Workspaces, spot: Spot, entry: Entry): Workspaces {
  */
 export function bring(
   state: Workspaces,
-  space: SpaceId,
+  project: ProjectId,
   pane: PaneState,
   opening: Opening = {}
 ): Workspaces {
   const away = entries(state).find(
     (entry) =>
-      samePane(entry, { space, pane }, opening.identity) &&
+      samePane(entry, { project, pane }, opening.identity) &&
       find(state, entry.id)?.workspace !== state.current
   )
   return away
-    ? normalize(open(remove(state, away.id), space, pane, opening))
-    : open(state, space, pane, opening)
+    ? normalize(open(remove(state, away.id), project, pane, opening))
+    : open(state, project, pane, opening)
 }
 
 /**
@@ -1051,7 +1053,7 @@ function isEntry(value: unknown): value is Entry {
   return (
     isObject(value) &&
     typeof value.id === "string" &&
-    typeof value.space === "string" &&
+    typeof value.project === "string" &&
     isObject(value.pane) &&
     typeof value.pane.kind === "string" &&
     isObject(value.pane.args)

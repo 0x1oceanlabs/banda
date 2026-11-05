@@ -18,7 +18,7 @@ use banda_kernel::{AgentId, Error, Participant, Refusal, Tx};
 use rusqlite::Connection;
 
 /// The kind of [`Fact::TurnEnded`]: what waits for a turn to be written
-/// as ended follows it (`ModuleSpace::committed`).
+/// as ended follows it (`ModuleProject::committed`).
 pub const ENDED: &str = "turn.ended";
 
 /// Makes `turn`, new and waiting, and gives it `event`: [`Event::Queue`]

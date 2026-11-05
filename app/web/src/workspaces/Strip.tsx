@@ -1,7 +1,7 @@
 import { cn } from "@banda/ui/lib/utils"
 import { GripHorizontalIcon } from "lucide-react"
 import { Component, useEffect, useLayoutEffect, useRef } from "react"
-import type { Engine, SpaceId } from "@banda/contract"
+import type { Engine, ProjectId } from "@banda/contract"
 import type { Center } from "@banda/contract/look"
 import type { Listed, PaneState } from "@banda/ui/pane"
 import { columnsOf, moveOf, useLookColumns, useLookGroups } from "../look"
@@ -59,7 +59,7 @@ export function Strip({
   selected,
   engine,
   modules,
-  spaceName,
+  projectName,
   called,
   marked,
   away,
@@ -80,7 +80,7 @@ export function Strip({
   selected: boolean
   engine: Engine
   modules: readonly string[]
-  spaceName: (space: SpaceId) => string
+  projectName: (project: ProjectId) => string
   /** How the Thread a Pane shows calls the Person, if it does. */
   called: (entry: Entry) => Chime | undefined
   /** An Agent opened it, and the Person has not looked at it yet. */
@@ -294,10 +294,10 @@ export function Strip({
     }
   }
 
-  const spaces = new Set(
-    workspace.columns.flatMap((column) => column.entries.map((e) => e.space))
+  const projects = new Set(
+    workspace.columns.flatMap((column) => column.entries.map((e) => e.project))
   )
-  const mixed = spaces.size > 1
+  const mixed = projects.size > 1
   return (
     <div
       ref={scroller}
@@ -386,7 +386,7 @@ export function Strip({
                 zoomed={entry.id === zoomed}
                 height={column.decked ? undefined : column.heights[e]}
                 listed={listed(entry)}
-                spaceName={spaceName(entry.space)}
+                projectName={projectName(entry.project)}
                 mixed={mixed}
                 frame={frame}
                 hidden={

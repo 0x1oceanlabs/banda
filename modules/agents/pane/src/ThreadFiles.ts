@@ -16,19 +16,19 @@ const WORKED = 24
 type Run = NonNullable<PaneProps<ThreadArgs>["run"]>
 
 /**
- * The paths of a Thread in `space`, for its Markdown and its menu; none
+ * The paths of a Thread in `project`, for its Markdown and its menu; none
  * where no window looks at files. `items` say where its tools worked;
  * `run` opens a file.
  */
 export function useThreadFiles(
-  space: string,
+  project: string,
   items: readonly Item[] | undefined,
   run: Run | undefined
 ): ThreadFiles | null {
   const files = useMemo(() => {
     const bridge = agentsHost()
-    return bridge ? new ThreadFiles(bridge, space) : null
-  }, [space])
+    return bridge ? new ThreadFiles(bridge, project) : null
+  }, [project])
   useLayoutEffect(() => files?.follow(items ?? [], run), [files, items, run])
   return files
 }
@@ -39,11 +39,11 @@ class ThreadFiles implements FilesHost {
   private items: readonly Item[] = []
   private run: Run | undefined
   private readonly bridge: AgentsHost
-  private readonly space: string
+  private readonly project: string
 
-  constructor(bridge: AgentsHost, space: string) {
+  constructor(bridge: AgentsHost, project: string) {
     this.bridge = bridge
-    this.space = space
+    this.project = project
   }
 
   /** The Thread as it is now: where its tools worked, and how it runs
@@ -54,13 +54,13 @@ class ThreadFiles implements FilesHost {
   }
 
   find(paths: string[]): Promise<Array<FoundFile | null>> {
-    return this.bridge.paths(this.space, paths, workedOf(this.items))
+    return this.bridge.paths(this.project, paths, workedOf(this.items))
   }
 
   open(at: FileAt, outside: boolean): void {
     this.run?.(outside ? "file.outside" : "file.open", {
       file: at.file,
-      space: this.space,
+      project: this.project,
     })
   }
 

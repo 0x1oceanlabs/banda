@@ -1,6 +1,6 @@
 //! What a Thread's turns changed in files, from the diffs their tool calls
 //! carry, not from git (ADR 0034, decision 2): the Diff's Turn scope reads
-//! it, in any Space.
+//! it, in any Project.
 
 use std::collections::HashMap;
 
@@ -24,7 +24,7 @@ pub struct ChangesAsk {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, TS)]
 #[ts(export, export_to = "agents/")]
 pub struct TurnChanges {
-    /// Where the Space's log stood: the Pane follows its events after.
+    /// Where the Project's log stood: the Pane follows its events after.
     #[ts(type = "number")]
     pub at: i64,
     /// The turns that changed files, the latest first.

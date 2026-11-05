@@ -13,9 +13,9 @@ test.afterEach(async () => {
 test("a reply's paths link to their files, which a click opens and the menu acts on", async () => {
   window = await startWindow()
   const { app, page, dir } = window
-  const space = join(dir, "root", "Work")
-  const notes = join(space, "docs", "notes.md")
-  const code = join(space, "src", "app.js")
+  const project = join(dir, "root", "Work")
+  const notes = join(project, "docs", "notes.md")
+  const code = join(project, "src", "app.js")
   // What the system would open, or show in its folder.
   await app.evaluate(({ shell }) => {
     const done: string[] = []
@@ -40,12 +40,12 @@ test("a reply's paths link to their files, which a click opens and the menu acts
     )
 
   const { thread, composer } = await firstThread(page)
-  // In the Space it made.
-  mkdirSync(join(space, "docs"))
-  mkdirSync(join(space, "src"))
+  // In the Project it made.
+  mkdirSync(join(project, "docs"))
+  mkdirSync(join(project, "src"))
   writeFileSync(notes, "one\ntwo\nthree\n")
   writeFileSync(code, "export {}\n")
-  writeFileSync(join(space, "docs", "My notes.md"), "spaced\n")
+  writeFileSync(join(project, "docs", "My notes.md"), "spaced\n")
   await composer.fill(
     `See \`docs/notes.md:3\` and \`docs/gone.md\`, also src/app.js in prose, [the notes](docs/notes.md#L2), [spaced](<docs/My notes.md>) and [by URL](${pathToFileURL(code).href}).`
   )

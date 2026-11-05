@@ -2,9 +2,9 @@ use crate::access::{self, Caller, Right};
 use crate::methods::{Asks, Nothing, Tool};
 use crate::module::{Call, Module, Scope, Stream, Wall};
 use crate::passes::Passes;
-use crate::space::{self, GONE, Manifest, Shared, Space, UNFINISHED};
+use crate::project::{self, GONE, Manifest, Project, Shared, UNFINISHED};
 use crate::window::Window;
-use crate::{AgentId, CommandId, Error, Participant, PersonId, Refusal, SpaceId};
+use crate::{AgentId, CommandId, Error, Participant, PersonId, ProjectId, Refusal};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use std::collections::{BTreeMap, HashMap};
@@ -13,39 +13,39 @@ use std::sync::Arc;
 use tokio::sync::RwLock;
 use ts_rs::TS;
 
-/// The Spaces of this machine and the modules that serve them.
+/// The Projects of this machine and the modules that serve them.
 pub struct Kernel {
     root: PathBuf,
-    /// `spaces/` in the engine's data: one folder per Space.
-    spaces_data: PathBuf,
+    /// `projects/` in the engine's data: one folder per Project.
+    projects_data: PathBuf,
     owner: PersonId,
     /// This boot of the engine. Outbox rows claimed under another boot were
     /// cut short by a restart.
     boot: String,
     modules: Arc<[Arc<dyn Module>]>,
-    /// The modules each Space runs: those of the Space's scope.
-    in_spaces: Arc<[Arc<dyn Module>]>,
-    spaces: Spaces,
-    /// Held while a Space is added, so one folder never becomes two.
+    /// The modules each Project runs: those of the Project's scope.
+    in_projects: Arc<[Arc<dyn Module>]>,
+    projects: Projects,
+    /// Held while a Project is added, so one folder never becomes two.
     adding: tokio::sync::Mutex<()>,
     /// This machine's scope (ADR 0025, decision 1): a store and a log like
-    /// a Space's, for the modules of the machine. None while no module is.
-    machine: Option<Arc<Space>>,
+    /// a Project's, for the modules of the machine. None while no module is.
+    machine: Option<Arc<Project>>,
     passes: Arc<Passes>,
     /// The road from a module to the window (ADR 0029).
     window: Arc<Window>,
-    /// The tools of the modules in Spaces, made once as it opens.
+    /// The tools of the modules in Projects, made once as it opens.
     tools: Vec<Tool>,
 }
 
-/// Every Space the engine knows. The machine's own scope holds them too,
+/// Every Project the engine knows. The machine's own scope holds them too,
 /// so a module of the machine can count them (ADR 0040, decision 3).
-pub(crate) type Spaces = Arc<RwLock<BTreeMap<SpaceId, Entry>>>;
+pub(crate) type Projects = Arc<RwLock<BTreeMap<ProjectId, Entry>>>;
 
-/// A Space the engine knows: open, or waiting for its folder.
+/// A Project the engine knows: open, or waiting for its folder.
 #[derive(Clone)]
 pub(crate) enum Entry {
-    Open(Arc<Space>),
+    Open(Arc<Project>),
     /// Its folder was gone as the engine started (ADR 0026, decision 6):
     /// listed, `missing`, but not open, until the Person locates it.
     Missing {
@@ -55,23 +55,23 @@ pub(crate) enum Entry {
 }
 
 impl Entry {
-    fn summary(&self) -> SpaceSummary {
+    fn summary(&self) -> ProjectSummary {
         match self {
-            Entry::Open(space) => space.summary(),
+            Entry::Open(project) => project.summary(),
             Entry::Missing { manifest, .. } => manifest.summary(true),
         }
     }
 
     fn scratch(&self) -> bool {
         match self {
-            Entry::Open(space) => space.scratch(),
+            Entry::Open(project) => project.scratch(),
             Entry::Missing { manifest, .. } => manifest.scratch,
         }
     }
 
     fn folder(&self) -> PathBuf {
         match self {
-            Entry::Open(space) => space.folder(),
+            Entry::Open(project) => project.folder(),
             Entry::Missing { manifest, .. } => manifest.folder.clone(),
         }
     }
@@ -79,23 +79,23 @@ impl Entry {
 
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export)]
-pub struct SpaceSummary {
-    pub id: SpaceId,
+pub struct ProjectSummary {
+    pub id: ProjectId,
     pub name: String,
-    /// Where the Space's folder is on this machine.
+    /// Where the Project's folder is on this machine.
     pub folder: String,
-    /// Pinned Spaces come first in the Space pickers.
+    /// Pinned Projects come first in the Project pickers.
     pub pinned: bool,
-    /// Hidden from the Space pickers; its Threads and files are kept.
+    /// Hidden from the Project pickers; its Threads and files are kept.
     pub archived: bool,
-    /// Its Agents see the other Spaces' Panes (ADR 0032). Only the Person
+    /// Its Agents see the other Projects' Panes (ADR 0032). Only the Person
     /// sets it.
     pub sees_others: bool,
-    /// One Thread's Space, in No Space (ADR 0046): its name is empty, and
-    /// the Space pickers leave it out.
+    /// One Thread's Project, in No Project (ADR 0046): its name is empty, and
+    /// the Project pickers leave it out.
     pub scratch: bool,
     /// Its folder was gone as the engine started: none of its Threads
-    /// open until the Person locates it (`spaces.locate`).
+    /// open until the Person locates it (`projects.locate`).
     pub missing: bool,
 }
 
@@ -120,8 +120,8 @@ impl KernelBuilder {
         self
     }
 
-    /// Opens every Space the data holds, once the old Spaces under the root
-    /// have moved theirs out (ADR 0026). A Space that fails to open is
+    /// Opens every Project the data holds, once the old Projects under the root
+    /// have moved theirs out (ADR 0026). A Project that fails to open is
     /// logged and left closed, so it cannot keep the others shut.
     pub async fn open(self) -> Result<Arc<Kernel>, Error> {
         for (index, module) in self.modules.iter().enumerate() {
@@ -137,15 +137,16 @@ impl KernelBuilder {
             }
         }
         std::fs::create_dir_all(&self.root)?;
-        let spaces_data = self.data.join("spaces");
-        std::fs::create_dir_all(&spaces_data)?;
-        crate::old::move_out(&self.root, &spaces_data);
-        let (of_machine, in_spaces): (Vec<_>, Vec<_>) =
+        let projects_data = self.data.join("projects");
+        crate::old::from_spaces(&self.data, &projects_data, self.machine.as_deref());
+        std::fs::create_dir_all(&projects_data)?;
+        crate::old::move_out(&self.root, &projects_data);
+        let (of_machine, in_projects): (Vec<_>, Vec<_>) =
             (self.modules.iter().cloned()).partition(|module| module.scope() == Scope::Machine);
         let boot = uuid::Uuid::now_v7().to_string();
         let passes = Arc::<Passes>::default();
         let window = Arc::<Window>::default();
-        let spaces = Spaces::default();
+        let projects = Projects::default();
         let machine = if of_machine.is_empty() {
             None
         } else {
@@ -169,25 +170,25 @@ impl KernelBuilder {
                 passes: passes.clone(),
                 window: window.clone(),
                 machine: None,
-                spaces: Some(Arc::downgrade(&spaces)),
+                projects: Some(Arc::downgrade(&projects)),
             };
-            Some(Space::open(data, manifest, modules, engine, &boot).await?)
+            Some(Project::open(data, manifest, modules, engine, &boot).await?)
         };
         let kernel = Arc::new(Kernel {
             root: self.root,
-            spaces_data,
+            projects_data,
             owner: self.owner,
             boot,
             tools: self.modules.iter().flat_map(|m| m.tools()).collect(),
             modules: self.modules.into(),
-            in_spaces: in_spaces.into(),
-            spaces,
+            in_projects: in_projects.into(),
+            projects,
             adding: Default::default(),
             machine,
             passes,
             window,
         });
-        let mut found: Vec<PathBuf> = std::fs::read_dir(&kernel.spaces_data)?
+        let mut found: Vec<PathBuf> = std::fs::read_dir(&kernel.projects_data)?
             .filter_map(|entry| entry.ok().map(|e| e.path()))
             .collect();
         found.sort();
@@ -195,18 +196,21 @@ impl KernelBuilder {
         for data in found {
             let name = data.file_name().unwrap_or_default().to_string_lossy();
             if name.ends_with(UNFINISHED) || name.ends_with(GONE) {
-                // Cut short while it was written, it never was a Space; or
+                // Cut short while it was written, it never was a Project; or
                 // it was removed before its data was all gone.
                 let _ = std::fs::remove_dir_all(&data);
                 continue;
             }
-            let manifest = match Manifest::read(&data) {
-                Ok(manifest) => manifest,
-                Err(error) => {
-                    tracing::error!(data = %data.display(), %error, "a Project did not open");
-                    continue;
-                }
-            };
+            // A Space's files take their names first; left as they were, the
+            // Project waits for the next start (ADR 0069, for good).
+            let manifest =
+                match crate::old::rename_files(&data).and_then(|()| Manifest::read(&data)) {
+                    Ok(manifest) => manifest,
+                    Err(error) => {
+                        tracing::error!(data = %data.display(), %error, "a Project did not open");
+                        continue;
+                    }
+                };
             if let Some(kept) = folders.get(&manifest.folder) {
                 tracing::warn!(
                     folder = %manifest.folder.display(),
@@ -224,13 +228,17 @@ impl KernelBuilder {
                 );
                 let id = manifest.id;
                 let missing = Entry::Missing { data, manifest };
-                kernel.spaces.write().await.insert(id, missing);
+                kernel.projects.write().await.insert(id, missing);
                 continue;
             }
-            match kernel.open_space(data.clone(), manifest).await {
-                Ok(space) => {
-                    let id = space.id();
-                    kernel.spaces.write().await.insert(id, Entry::Open(space));
+            match kernel.open_project(data.clone(), manifest).await {
+                Ok(project) => {
+                    let id = project.id();
+                    kernel
+                        .projects
+                        .write()
+                        .await
+                        .insert(id, Entry::Open(project));
                 }
                 Err(error) => {
                     tracing::error!(data = %data.display(), %error, "a Project did not open")
@@ -242,28 +250,28 @@ impl KernelBuilder {
 }
 
 crate::methods! {
-    Kernel(Own<'_>) as "SpacesMethods" in "./" {
+    Kernel(Own<'_>) as "ProjectsMethods" in "./" {
         /// This computer's Projects.
-        call list(Nothing) -> Vec<SpaceSummary>, Read;
+        call list(Nothing) -> Vec<ProjectSummary>, Read;
         /// Makes a Project: a new folder under the root, by its name. A
         /// scratch one, for a Thread in No Project, takes no name: its folder
         /// is new under `scratch/`.
-        command create(CreateSpace) -> SpaceSummary, Manage;
+        command create(CreateProject) -> ProjectSummary, Manage;
         /// Adds a folder as a Project. A folder that already is one answers
         /// that Project, back from the archive if it was there.
-        command add(AddSpace) -> SpaceSummary, Manage;
+        command add(AddProject) -> ProjectSummary, Manage;
         /// The folders that match a path as it is typed, for the field
         /// that picks a Project's folder. Only the owner browses.
         call browse(Browse) -> Browsed, Manage;
         /// Renames, pins or archives a Project, lets its Agents see the
         /// other Projects' Panes, or makes a Project of a scratch one, named.
-        command update(UpdateSpace) -> SpaceSummary, Manage;
+        command update(UpdateProject) -> ProjectSummary, Manage;
         /// Names the folder a missing Project's work is in now, and opens
         /// the Project there.
-        command locate(LocateSpace) -> SpaceSummary, Manage;
+        command locate(LocateProject) -> ProjectSummary, Manage;
         /// Forgets a Project and deletes its Threads; its folder and the
         /// files in it stay as they are.
-        command remove(OneSpace) -> (), Manage;
+        command remove(OneProject) -> (), Manage;
         /// The tools an Agent may call, from the methods of the modules.
         call tools(Nothing) -> Vec<Tool>, Read;
     }
@@ -273,7 +281,7 @@ crate::methods! {
 struct Own<'a> {
     participant: Participant,
     method: &'a str,
-    only: Option<SpaceId>,
+    only: Option<ProjectId>,
     command: Option<CommandId>,
 }
 
@@ -289,19 +297,19 @@ impl Asks for Own<'_> {
 }
 
 #[derive(Deserialize, TS)]
-struct CreateSpace {
-    /// The Space's name, and its folder's. None for a scratch Space.
+struct CreateProject {
+    /// The Project's name, and its folder's. None for a scratch Project.
     #[serde(default)]
     #[ts(optional)]
     name: Option<String>,
-    /// A Space for one Thread in No Space (ADR 0046).
+    /// A Project for one Thread in No Project (ADR 0046).
     #[serde(default)]
     #[ts(optional)]
     scratch: Option<bool>,
 }
 
 #[derive(Deserialize, TS)]
-struct AddSpace {
+struct AddProject {
     /// Absolute, or from the home folder: `~/code/app`.
     folder: String,
     /// The folder's name when none is given.
@@ -343,8 +351,8 @@ pub struct BrowsedFolder {
 }
 
 #[derive(Deserialize, TS)]
-struct UpdateSpace {
-    space: SpaceId,
+struct UpdateProject {
+    project: ProjectId,
     #[serde(default)]
     #[ts(optional)]
     name: Option<String>,
@@ -357,54 +365,54 @@ struct UpdateSpace {
     #[serde(default)]
     #[ts(optional)]
     sees_others: Option<bool>,
-    /// `false` makes a Space of a scratch one, which needs a name then.
-    /// No Space takes no Space back.
+    /// `false` makes a Project of a scratch one, which needs a name then.
+    /// No Project takes no Project back.
     #[serde(default)]
     #[ts(optional)]
     scratch: Option<bool>,
-    /// Move a scratch Space's folder here when promoting it. Omit to keep it.
+    /// Move a scratch Project's folder here when promoting it. Omit to keep it.
     #[serde(default)]
     #[ts(optional)]
     folder: Option<String>,
 }
 
 #[derive(Deserialize, TS)]
-struct LocateSpace {
-    space: SpaceId,
+struct LocateProject {
+    project: ProjectId,
     /// Where its folder is now: absolute, or from the home folder.
     folder: String,
 }
 
 #[derive(Deserialize, TS)]
-struct OneSpace {
-    space: SpaceId,
+struct OneProject {
+    project: ProjectId,
 }
 
-/// The most folders `spaces.browse` answers.
+/// The most folders `projects.browse` answers.
 const BROWSED: usize = 200;
 
-/// Where the scratch Spaces' folders go, under the root (ADR 0046).
+/// Where the scratch Projects' folders go, under the root (ADR 0046).
 const SCRATCH: &str = "scratch";
 
-/// A pass is for its Space, so it stops at this machine's scope but for
+/// A pass is for its Project, so it stops at this machine's scope but for
 /// the tools (ADR 0032).
 fn outside_machine() -> Refusal {
     Refusal::forbidden("An Agent's pass is for its Project, not this machine.")
 }
 
 /// The prefixes of the kernel's own methods, which no module takes:
-/// `spaces.*`, and the window's road (ADR 0029, decision 2).
-const OWN: [&str; 2] = ["spaces", "window"];
+/// `projects.*`, and the window's road (ADR 0029, decision 2).
+const OWN: [&str; 2] = ["projects", "window"];
 
 fn no_method(method: &str) -> Refusal {
     Refusal::invalid(format!("There is no method \"{method}\"."))
 }
 
 impl Kernel {
-    /// `root` is where a new Space's folder goes (`~/Banda` by default),
-    /// and `data` where Banda keeps the Spaces' own data
+    /// `root` is where a new Project's folder goes (`~/Banda` by default),
+    /// and `data` where Banda keeps the Projects' own data
     /// (`~/.local/share/banda`, ADR 0026). `owner` is the Person who owns
-    /// this computer's Spaces.
+    /// this computer's Projects.
     pub fn builder(
         root: impl Into<PathBuf>,
         data: impl Into<PathBuf>,
@@ -428,20 +436,20 @@ impl Kernel {
         self.modules.iter().map(|m| m.name()).collect()
     }
 
-    /// The Agent a pass names and the Space it works in, or `None`.
-    pub fn holder(&self, pass: &str) -> Option<(AgentId, SpaceId)> {
+    /// The Agent a pass names and the Project it works in, or `None`.
+    pub fn holder(&self, pass: &str) -> Option<(AgentId, ProjectId)> {
         self.passes.holder(pass)
     }
 
-    /// Routes a call: `spaces.*` to the kernel, `<module>.*` to that module
-    /// in the given Space. Every method passes the Space wall and the
-    /// access decision first. A caller with a pass that names no Space
+    /// Routes a call: `projects.*` to the kernel, `<module>.*` to that module
+    /// in the given Project. Every method passes the Project wall and the
+    /// access decision first. A caller with a pass that names no Project
     /// calls in its own.
     pub async fn call(
         &self,
         caller: impl Into<Caller>,
         method: &str,
-        space: Option<SpaceId>,
+        project: Option<ProjectId>,
         command: Option<CommandId>,
         params: Value,
     ) -> Result<Value, Refusal> {
@@ -452,10 +460,12 @@ impl Kernel {
             access::decide(&participant, right, self.owner)?;
             return self.window.call(participant, own, params).await;
         }
-        if let Some(own) = method.strip_prefix("spaces.")
+        // `spaces.*` is their name before ADR 0069 (grace).
+        if let Some(own) =
+            (method.strip_prefix("projects.")).or_else(|| method.strip_prefix("spaces."))
             && let Some(right) = Self::method_right(own)
         {
-            access::within(only, space.or(only))?;
+            access::within(only, project.or(only))?;
             access::decide(&participant, right, self.owner)?;
             let ask = Own {
                 participant,
@@ -466,19 +476,19 @@ impl Kernel {
             return self.dispatch(ask, own, params).await;
         }
         let (module, rest, right) = self.method(method)?;
-        let (space, wall) = self.place(&**module, method, space, only).await?;
-        let _moving = space.moving.read().await;
-        let scope = space.module(module.name());
+        let (project, wall) = self.place(&**module, method, project, only).await?;
+        let _moving = project.moving.read().await;
+        let scope = project.module(module.name());
         // A read is not a command: it keeps no receipt, so its ID is free.
         let command = command.filter(|_| right != Right::Read);
         let receipt = command.map(|command| scope.receipt(command, method, participant));
         if let Some(receipt) = &receipt {
-            let earlier = space.store().answered(receipt.clone()).await?;
+            let earlier = project.store().answered(receipt.clone()).await?;
             if let Some(answer) = earlier {
                 return answer;
             }
         }
-        let answer = match access::decide(&participant, right, space.owner()) {
+        let answer = match access::decide(&participant, right, project.owner()) {
             Ok(()) => {
                 let call = Call::new(participant, scope, method.to_owned(), command, wall);
                 module.call(call, rest, params).await
@@ -488,19 +498,19 @@ impl Kernel {
         // A refusal made before the command ran is its answer too (ADR
         // 0002, decision 2). The store keeps it only if nothing answered.
         if let (Some(receipt), Err(refusal)) = (receipt, &answer) {
-            space.store().refused(receipt, refusal.clone()).await?;
+            project.store().refused(receipt, refusal.clone()).await?;
         }
         answer
     }
 
-    /// Opens a module's stream in a Space, or this machine's for a module
+    /// Opens a module's stream in a Project, or this machine's for a module
     /// of the machine, which names none, once the access decision allows
     /// it. `window.requests` names none either.
     pub async fn stream(
         &self,
         caller: impl Into<Caller>,
         method: &str,
-        space: Option<SpaceId>,
+        project: Option<ProjectId>,
         params: Value,
     ) -> Result<Stream, Refusal> {
         let Caller { participant, only } = caller.into();
@@ -511,11 +521,11 @@ impl Kernel {
             return self.window.stream(participant, own, params).await;
         }
         let (module, rest, right) = self.method(method)?;
-        let (space, wall) = self.place(&**module, method, space, only).await?;
-        access::decide(&participant, right, space.owner())?;
+        let (project, wall) = self.place(&**module, method, project, only).await?;
+        access::decide(&participant, right, project.owner())?;
         let call = Call::new(
             participant,
-            space.module(module.name()),
+            project.module(module.name()),
             method.to_owned(),
             None,
             wall,
@@ -536,56 +546,56 @@ impl Kernel {
         Ok((module, rest, right))
     }
 
-    /// The Space `caller` follows, once the Space wall and the access
+    /// The Project `caller` follows, once the Project wall and the access
     /// decision allow it.
     pub async fn follow(
         &self,
         caller: impl Into<Caller>,
-        space: SpaceId,
-    ) -> Result<Arc<Space>, Refusal> {
+        project: ProjectId,
+    ) -> Result<Arc<Project>, Refusal> {
         let Caller { participant, only } = caller.into();
-        let space = match &self.machine {
-            Some(machine) if machine.id() == space => {
-                // Its log holds every Space's Panes: no pass follows it.
+        let project = match &self.machine {
+            Some(machine) if machine.id() == project => {
+                // Its log holds every Project's Panes: no pass follows it.
                 if only.is_some() {
                     return Err(outside_machine());
                 }
                 machine.clone()
             }
             _ => {
-                access::within(only, Some(space))?;
-                self.space(space).await?
+                access::within(only, Some(project))?;
+                self.project(project).await?
             }
         };
-        access::decide(&participant, Right::Read, space.owner())?;
-        Ok(space)
+        access::decide(&participant, Right::Read, project.owner())?;
+        Ok(project)
     }
 
-    /// The ID a window follows this machine's modules by, as a Space's;
+    /// The ID a window follows this machine's modules by, as a Project's;
     /// none while no module is the machine's. Their streams name it, or
-    /// no Space at all.
-    pub fn machine(&self) -> Option<SpaceId> {
+    /// no Project at all.
+    pub fn machine(&self) -> Option<ProjectId> {
         self.machine.as_ref().map(|machine| machine.id())
     }
 
     /// Where a method of `module` runs. A module of the machine runs in
-    /// this machine's scope, and its method names no Space, or the
-    /// machine's own ID, as a stream does. Any other runs in the Space it
-    /// names, or its caller's pass names, behind the Space wall. A pass
+    /// this machine's scope, and its method names no Project, or the
+    /// machine's own ID, as a stream does. Any other runs in the Project it
+    /// names, or its caller's pass names, behind the Project wall. A pass
     /// reaches the machine only through its tools, which are handed the
     /// wall they see behind (ADR 0032).
     async fn place(
         &self,
         module: &dyn Module,
         method: &str,
-        named: Option<SpaceId>,
-        only: Option<SpaceId>,
-    ) -> Result<(Arc<Space>, Option<Wall>), Refusal> {
-        if module.scope() == Scope::Space {
+        named: Option<ProjectId>,
+        only: Option<ProjectId>,
+    ) -> Result<(Arc<Project>, Option<Wall>), Refusal> {
+        if module.scope() == Scope::Project {
             let id = named.or(only);
             access::within(only, id)?;
             let id = id.ok_or_else(|| Refusal::invalid(format!("{method} needs a Project.")))?;
-            return Ok((self.space(id).await?, None));
+            return Ok((self.project(id).await?, None));
         }
         let machine = (self.machine.as_ref())
             .ok_or_else(|| Refusal::not_found("This engine has no machine's scope."))?;
@@ -596,61 +606,64 @@ impl Kernel {
         }
         let wall = match only {
             None => None,
-            Some(space) if self.tools.iter().any(|tool| tool.method == method) => {
-                let sees_others = self.space(space).await?.sees_others();
-                Some(Wall { space, sees_others })
+            Some(project) if self.tools.iter().any(|tool| tool.method == method) => {
+                let sees_others = self.project(project).await?.sees_others();
+                Some(Wall {
+                    project,
+                    sees_others,
+                })
             }
             Some(_) => return Err(outside_machine()),
         };
         Ok((machine.clone(), wall))
     }
 
-    pub async fn space(&self, id: SpaceId) -> Result<Arc<Space>, Refusal> {
-        match self.spaces.read().await.get(&id) {
-            Some(Entry::Open(space)) => Ok(space.clone()),
+    pub async fn project(&self, id: ProjectId) -> Result<Arc<Project>, Refusal> {
+        match self.projects.read().await.get(&id) {
+            Some(Entry::Open(project)) => Ok(project.clone()),
             Some(Entry::Missing { manifest, .. }) => Err(Refusal::not_found(format!(
                 "The folder of the Project \"{}\", {}, is gone: locate it first.",
                 manifest.name,
                 manifest.folder.display()
             ))),
-            None => Err(no_space()),
+            None => Err(no_project()),
         }
     }
 
-    /// Every Space, the missing too.
-    pub async fn spaces(&self) -> Vec<SpaceSummary> {
-        let spaces = self.spaces.read().await;
-        spaces.values().map(Entry::summary).collect()
+    /// Every Project, the missing too.
+    pub async fn projects(&self) -> Vec<ProjectSummary> {
+        let projects = self.projects.read().await;
+        projects.values().map(Entry::summary).collect()
     }
 
-    async fn open_space(&self, data: PathBuf, manifest: Manifest) -> Result<Arc<Space>, Error> {
+    async fn open_project(&self, data: PathBuf, manifest: Manifest) -> Result<Arc<Project>, Error> {
         let engine = Shared {
             owner: self.owner,
             passes: self.passes.clone(),
             window: self.window.clone(),
             machine: self.machine.clone(),
-            spaces: None,
+            projects: None,
         };
-        let modules = self.in_spaces.clone();
-        Space::open(data, manifest, modules, engine, &self.boot).await
+        let modules = self.in_projects.clone();
+        Project::open(data, manifest, modules, engine, &self.boot).await
     }
 
-    async fn list(&self, ask: Own<'_>, _: Nothing) -> Result<Vec<SpaceSummary>, Refusal> {
-        let mut spaces = self.spaces().await;
-        // A pass sees only its own Space (ADR 0019, decision 2).
-        spaces.retain(|summary| access::within(ask.only, Some(summary.id)).is_ok());
-        Ok(spaces)
+    async fn list(&self, ask: Own<'_>, _: Nothing) -> Result<Vec<ProjectSummary>, Refusal> {
+        let mut projects = self.projects().await;
+        // A pass sees only its own Project (ADR 0019, decision 2).
+        projects.retain(|summary| access::within(ask.only, Some(summary.id)).is_ok());
+        Ok(projects)
     }
 
     async fn tools(&self, _: Own<'_>, _: Nothing) -> Result<Vec<Tool>, Refusal> {
         Ok(self.tools.clone())
     }
 
-    async fn create(&self, ask: Own<'_>, create: CreateSpace) -> Result<SpaceSummary, Refusal> {
+    async fn create(&self, ask: Own<'_>, create: CreateProject) -> Result<ProjectSummary, Refusal> {
         let (author, command) = (ask.participant, ask.command_id()?);
         match (create.name, create.scratch == Some(true)) {
             (None, true) => self.create_scratch(author, command).await,
-            (Some(name), false) => self.create_space(&name, author, command).await,
+            (Some(name), false) => self.create_project(&name, author, command).await,
             (Some(_), true) => Err(Refusal::invalid(
                 "A scratch Project has no name until it becomes a Project.",
             )),
@@ -658,21 +671,21 @@ impl Kernel {
         }
     }
 
-    /// A Space for one Thread in No Space: a new folder
+    /// A Project for one Thread in No Project: a new folder
     /// `scratch/<date>-<id8>` under the root, by the command, and no name. The same command
-    /// again gets the Space it made.
+    /// again gets the Project it made.
     async fn create_scratch(
         &self,
         author: Participant,
         command: CommandId,
-    ) -> Result<SpaceSummary, Refusal> {
+    ) -> Result<ProjectSummary, Refusal> {
         let _adding = self.adding.lock().await;
-        let spaces = self.spaces.read().await;
-        let made = spaces.values().find_map(|entry| match entry {
-            Entry::Open(space) if space.command() == command => Some(space.summary()),
+        let projects = self.projects.read().await;
+        let made = projects.values().find_map(|entry| match entry {
+            Entry::Open(project) if project.command() == command => Some(project.summary()),
             _ => None,
         });
-        drop(spaces);
+        drop(projects);
         if let Some(made) = made {
             return Ok(made);
         }
@@ -684,7 +697,7 @@ impl Kernel {
         let placed = async {
             let mut manifest = Manifest::new(&folder_found(&folder)?, "", author, command);
             manifest.scratch = true;
-            self.place_space(manifest).await
+            self.place_project(manifest).await
         }
         .await;
         if placed.is_err() {
@@ -693,15 +706,15 @@ impl Kernel {
         placed
     }
 
-    /// `spaces.add` of a new folder `~/Banda/<name>`; one already there
-    /// is refused, unless this command made its Space.
-    async fn create_space(
+    /// `projects.add` of a new folder `~/Banda/<name>`; one already there
+    /// is refused, unless this command made its Project.
+    async fn create_project(
         &self,
         name: &str,
         author: Participant,
         command: CommandId,
-    ) -> Result<SpaceSummary, Refusal> {
-        let name = Space::plain_name(name)?;
+    ) -> Result<ProjectSummary, Refusal> {
+        let name = Project::plain_name(name)?;
         let folder = self.root.join(name);
         if let Ok(canonical) = std::fs::canonicalize(&folder) {
             return match self.at(&canonical).await {
@@ -715,7 +728,7 @@ impl Kernel {
             .await
     }
 
-    async fn add(&self, ask: Own<'_>, add: AddSpace) -> Result<SpaceSummary, Refusal> {
+    async fn add(&self, ask: Own<'_>, add: AddProject) -> Result<ProjectSummary, Refusal> {
         let command = ask.command_id()?;
         let folder = from_home(&add.folder)?;
         let create = add.create == Some(true);
@@ -729,9 +742,9 @@ impl Kernel {
         .await
     }
 
-    /// Adds `folder` as a Space, made first if `create` says so; the
-    /// Space it already is comes back from the archive instead. A folder
-    /// this call made is taken back when the Space is not.
+    /// Adds `folder` as a Project, made first if `create` says so; the
+    /// Project it already is comes back from the archive instead. A folder
+    /// this call made is taken back when the Project is not.
     async fn add_at(
         &self,
         folder: &Path,
@@ -739,7 +752,7 @@ impl Kernel {
         create: bool,
         author: Participant,
         command: CommandId,
-    ) -> Result<SpaceSummary, Refusal> {
+    ) -> Result<ProjectSummary, Refusal> {
         let _adding = self.adding.lock().await;
         let made = create && !folder.exists();
         if made {
@@ -748,13 +761,13 @@ impl Kernel {
         let added = async {
             let canonical = folder_found(folder)?;
             match self.at(&canonical).await {
-                Some(Entry::Open(space)) => {
-                    return match space.summary().archived {
-                        true => Ok(space.change(|manifest| manifest.archived = false)?),
-                        false => Ok(space.summary()),
+                Some(Entry::Open(project)) => {
+                    return match project.summary().archived {
+                        true => Ok(project.change(|manifest| manifest.archived = false)?),
+                        false => Ok(project.summary()),
                     };
                 }
-                // Its missing folder is back: the Space opens there again.
+                // Its missing folder is back: the Project opens there again.
                 Some(Entry::Missing { manifest, .. }) => {
                     return self.open_missing(manifest.id, &canonical).await;
                 }
@@ -766,8 +779,8 @@ impl Kernel {
                 (None, Some(named)) => named,
                 (None, None) => "/",
             };
-            let name = Space::name_of(name)?;
-            (self.place_space(Manifest::new(&canonical, name, author, command))).await
+            let name = Project::name_of(name)?;
+            (self.place_project(Manifest::new(&canonical, name, author, command))).await
         }
         .await;
         if made && added.is_err() {
@@ -776,57 +789,57 @@ impl Kernel {
         added
     }
 
-    /// The Space whose folder is `folder`, absolute and resolved: open, or
+    /// The Project whose folder is `folder`, absolute and resolved: open, or
     /// missing it.
     async fn at(&self, folder: &Path) -> Option<Entry> {
-        let spaces = self.spaces.read().await;
-        spaces.values().find(|s| s.folder() == folder).cloned()
+        let projects = self.projects.read().await;
+        projects.values().find(|s| s.folder() == folder).cloned()
     }
 
-    /// Makes the data of a new Space, whose folder exists, opens it and
+    /// Makes the data of a new Project, whose folder exists, opens it and
     /// lists it.
-    async fn place_space(&self, manifest: Manifest) -> Result<SpaceSummary, Refusal> {
-        let data = space::place(&self.spaces_data, &manifest, |_| Ok(()))?;
-        let space = match self.open_space(data.clone(), manifest).await {
-            Ok(space) => space,
+    async fn place_project(&self, manifest: Manifest) -> Result<ProjectSummary, Refusal> {
+        let data = project::place(&self.projects_data, &manifest, |_| Ok(()))?;
+        let project = match self.open_project(data.clone(), manifest).await {
+            Ok(project) => project,
             Err(error) => {
                 let _ = std::fs::remove_dir_all(&data);
                 return Err(error.into());
             }
         };
-        let summary = space.summary();
-        self.spaces
+        let summary = project.summary();
+        self.projects
             .write()
             .await
-            .insert(space.id(), Entry::Open(space));
+            .insert(project.id(), Entry::Open(project));
         Ok(summary)
     }
 
-    /// Opens the missing Space `id` at `folder`, written into its
-    /// `space.json`; as it was if it does not open.
-    async fn open_missing(&self, id: SpaceId, folder: &Path) -> Result<SpaceSummary, Refusal> {
-        let entry = self.spaces.read().await.get(&id).cloned();
+    /// Opens the missing Project `id` at `folder`, written into its
+    /// `project.json`; as it was if it does not open.
+    async fn open_missing(&self, id: ProjectId, folder: &Path) -> Result<ProjectSummary, Refusal> {
+        let entry = self.projects.read().await.get(&id).cloned();
         let Some(Entry::Missing { data, manifest }) = entry else {
-            self.space(id).await?;
+            self.project(id).await?;
             return Err(Refusal::conflict("The Project's folder is not missing."));
         };
         let mut found = manifest.clone();
         found.folder = folder.to_owned();
         found.write(&data)?;
-        let space = match self.open_space(data.clone(), found).await {
-            Ok(space) => space,
+        let project = match self.open_project(data.clone(), found).await {
+            Ok(project) => project,
             Err(error) => {
                 let _ = manifest.write(&data);
                 return Err(error.into());
             }
         };
-        let summary = space.summary();
-        let mut spaces = self.spaces.write().await;
+        let summary = project.summary();
+        let mut projects = self.projects.write().await;
         // Removed while it opened: it stays removed.
-        if !matches!(spaces.get(&id), Some(Entry::Missing { .. })) {
-            return Err(no_space());
+        if !matches!(projects.get(&id), Some(Entry::Missing { .. })) {
+            return Err(no_project());
         }
-        spaces.insert(id, Entry::Open(space));
+        projects.insert(id, Entry::Open(project));
         Ok(summary)
     }
 
@@ -852,15 +865,15 @@ impl Kernel {
         })
     }
 
-    async fn update(&self, _: Own<'_>, update: UpdateSpace) -> Result<SpaceSummary, Refusal> {
+    async fn update(&self, _: Own<'_>, update: UpdateProject) -> Result<ProjectSummary, Refusal> {
         let _adding = self.adding.lock().await;
-        let name = update.name.as_deref().map(Space::name_of).transpose()?;
+        let name = update.name.as_deref().map(Project::name_of).transpose()?;
         let target = update.folder.as_deref().map(from_home).transpose()?;
-        let mut spaces = self.spaces.write().await;
-        let Some(entry) = spaces.get_mut(&update.space) else {
-            return Err(no_space());
+        let mut projects = self.projects.write().await;
+        let Some(entry) = projects.get_mut(&update.project) else {
+            return Err(no_project());
         };
-        // A scratch Space has no name; a Space has one.
+        // A scratch Project has no name; a Project has one.
         let was = entry.scratch();
         match (was, update.scratch.unwrap_or(was), name.is_some()) {
             (false, true, _) => {
@@ -886,11 +899,11 @@ impl Kernel {
             ));
         }
         let opened = match entry {
-            Entry::Open(space) => Some(space.clone()),
+            Entry::Open(project) => Some(project.clone()),
             _ => None,
         };
         let _moving = match (&opened, &target) {
-            (Some(space), Some(_)) => Some(space.moving.try_write().map_err(|_| {
+            (Some(project), Some(_)) => Some(project.moving.try_write().map_err(|_| {
                 Refusal::conflict(
                     "Another operation is using this Project. Try moving it again when it finishes.",
                 )
@@ -922,11 +935,11 @@ impl Kernel {
                     "The destination already exists. Choose a new folder.",
                 ));
             }
-            let space = opened
+            let project = opened
                 .as_ref()
                 .ok_or_else(|| Refusal::conflict("Locate the missing folder before moving it."))?;
-            for module in space.modules() {
-                module.can_move(space.module(module.name())).await?;
+            for module in project.modules() {
+                module.can_move(project.module(module.name())).await?;
             }
         }
         let change = |manifest: &mut Manifest| {
@@ -949,34 +962,34 @@ impl Kernel {
                 manifest.scratch = scratch;
             }
         };
-        // A missing Space keeps its name, pin and archive too.
+        // A missing Project keeps its name, pin and archive too.
         let result = match entry {
-            Entry::Open(space) => match relocating {
-                Some(target) => space.move_to(target, change),
-                None => space.change(change),
+            Entry::Open(project) => match relocating {
+                Some(target) => project.move_to(target, change),
+                None => project.change(change),
             },
             Entry::Missing { data, manifest } => manifest
                 .change_in(data, change)
                 .map(|()| manifest.summary(true)),
         };
-        if let Some(space) = opened.as_ref()
-            && space.folder() != old
+        if let Some(project) = opened.as_ref()
+            && project.folder() != old
         {
-            for module in space.modules() {
-                module.moved(space.module(module.name())).await;
+            for module in project.modules() {
+                module.moved(project.module(module.name())).await;
             }
         }
         Ok(result?)
     }
 
-    /// Opens a missing Space at the folder its work is in now, written
-    /// into its `space.json`. A folder that already is another Space is
+    /// Opens a missing Project at the folder its work is in now, written
+    /// into its `project.json`. A folder that already is another Project is
     /// refused.
-    async fn locate(&self, _: Own<'_>, locate: LocateSpace) -> Result<SpaceSummary, Refusal> {
+    async fn locate(&self, _: Own<'_>, locate: LocateProject) -> Result<ProjectSummary, Refusal> {
         let _adding = self.adding.lock().await;
         let folder = folder_found(&from_home(&locate.folder)?)?;
         if let Some(other) = self.at(&folder).await
-            && other.summary().id != locate.space
+            && other.summary().id != locate.project
         {
             let name = other.summary().name;
             return Err(Refusal::conflict(format!(
@@ -984,20 +997,20 @@ impl Kernel {
                 folder.display()
             )));
         }
-        self.open_missing(locate.space, &folder).await
+        self.open_missing(locate.project, &folder).await
     }
 
-    /// Takes the Space out of the list at once, and its data out of the
-    /// engine's sight: `<id>.gone`, deleted once nothing holds the Space,
+    /// Takes the Project out of the list at once, and its data out of the
+    /// engine's sight: `<id>.gone`, deleted once nothing holds the Project,
     /// or else on the next start. Its modules stop what runs there first.
-    /// A Space that is already gone is what was asked for.
-    async fn remove(&self, _: Own<'_>, OneSpace { space }: OneSpace) -> Result<(), Refusal> {
-        let Some(entry) = self.spaces.write().await.remove(&space) else {
+    /// A Project that is already gone is what was asked for.
+    async fn remove(&self, _: Own<'_>, OneProject { project }: OneProject) -> Result<(), Refusal> {
+        let Some(entry) = self.projects.write().await.remove(&project) else {
             return Ok(());
         };
-        let gone = self.spaces_data.join(format!("{space}{GONE}"));
-        let space = match entry {
-            Entry::Open(space) => space,
+        let gone = self.projects_data.join(format!("{project}{GONE}"));
+        let project = match entry {
+            Entry::Open(project) => project,
             // Nothing of it is open: its data goes now.
             Entry::Missing { data, .. } => {
                 let away = put_away(&data, gone);
@@ -1005,19 +1018,19 @@ impl Kernel {
                 return Ok(());
             }
         };
-        space.delete_when_closed(put_away(space.data(), gone));
-        for module in space.modules() {
-            module.closing(space.module(module.name())).await;
+        project.delete_when_closed(put_away(project.data(), gone));
+        for module in project.modules() {
+            module.closing(project.module(module.name())).await;
         }
         Ok(())
     }
 }
 
-fn no_space() -> Refusal {
+fn no_project() -> Refusal {
     Refusal::not_found("There is no such Project on this computer.")
 }
 
-/// Moves a removed Space's `data` out of the engine's sight, to `gone`;
+/// Moves a removed Project's `data` out of the engine's sight, to `gone`;
 /// answers where it is now, in place if it would not move.
 fn put_away(data: &Path, gone: PathBuf) -> PathBuf {
     match std::fs::rename(data, &gone) {

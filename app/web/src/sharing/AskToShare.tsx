@@ -51,7 +51,7 @@ day         { "day": "2026-11-03", "version": "0.2.0", "channel": "stable",
               "os": "linux", "locale": "ru_UA", "country": "UA",
               "threads": { "claude": 4 }, "turns": 31,
               "panes": { "agents.thread": 6, "terminal.terminal": 3 },
-              "spaces": 2, "workspaces": 3 }`
+              "projects": 2, "workspaces": 3 }`
 
 const CHOICES: { key: keyof Shares; title: string; about: string }[] = [
   {

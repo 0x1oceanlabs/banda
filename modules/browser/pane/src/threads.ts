@@ -3,7 +3,7 @@
  * them (ADR 0029, decision 4): the title a driven page's pill shows, the
  * way to its Thread, and the end of its turn, which ends its drive.
  */
-import type { Engine, SpaceId } from "@banda/contract"
+import type { Engine, ProjectId } from "@banda/contract"
 import type { WindowApi } from "@banda/ui/module"
 import {
   type Listed,
@@ -25,10 +25,10 @@ const watchLists = (listener: () => void) => {
   return () => void listening.delete(listener)
 }
 
-/** The Thread of `agent` as the window lists it, and its Space. */
+/** The Thread of `agent` as the window lists it, and its Project. */
 export function threadOf(
   agent: string
-): { space: SpaceId; listed: Listed } | null {
+): { project: ProjectId; listed: Listed } | null {
   return shell && listedOf(shell.lists(), agent)
 }
 
@@ -138,7 +138,7 @@ async function tell(
       settings: null,
       steer: false,
     },
-    thread.space
+    thread.project
   )
 }
 
@@ -166,21 +166,21 @@ function callOf(wait: Wait): string {
 }
 
 /**
- * The Threads of a Space that wait for the Person on a tab, as their rows
+ * The Threads of a Project that wait for the Person on a tab, as their rows
  * show it (ADR 0029, decision 6): a Thread the Person stopped asks them
  * once it calls there again, and the window calls them as for a
  * Harness's Question. Stopping it calls nobody: the Person did.
  */
 export const waitsWatch: Watch = { Watch: WaitsWatch }
 
-function WaitsWatch({ space, report }: WatchProps) {
+function WaitsWatch({ project, report }: WatchProps) {
   useEffect(() => {
     let was: string | undefined
     const check = () => {
       const listed = asking().flatMap(({ contents, wait, asked }): Listed[] => {
         const { agent } = wait
         const thread = threadOf(agent)
-        if (thread?.space !== space) return []
+        if (thread?.project !== project) return []
         return [
           {
             id: `browser:${contents}:${agent}`,
@@ -200,11 +200,11 @@ function WaitsWatch({ space, report }: WatchProps) {
       report({ mark, waiting: listed.length, listed })
     }
     check()
-    // A Thread's title and Space are the lists'; the rest, the waits'.
+    // A Thread's title and Project are the lists'; the rest, the waits'.
     const stops = [watchLists(check), watchWaits(check)]
     return () => {
       for (const stop of stops) stop()
     }
-  }, [space, report])
+  }, [project, report])
   return null
 }

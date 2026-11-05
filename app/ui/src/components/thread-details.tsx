@@ -11,13 +11,13 @@ import {
   type ReactNode,
   useContext,
 } from "react"
-import type { Engine, SpaceId } from "@banda/contract"
+import type { Engine, ProjectId } from "@banda/contract"
 import { cn } from "../lib/utils"
 import type { PaneState, Place } from "../pane"
 
 export type DetailsProps = {
   engine: Engine
-  space: SpaceId
+  project: ProjectId
   /** The Thread the card is in; none while a new one is written. */
   thread: string | null
   /** The Harness the Thread runs on, or a new one starts on: its id, and
@@ -50,25 +50,28 @@ export const DETAILS_WIDE = MESSAGES + 2 * (DETAILS_CARD + DETAILS_GAP)
 
 const Given = createContext<readonly Details[]>([])
 
-/** The cards drawn now, by Space: each one's Thread, none for a new one. */
-const drawn = new Map<SpaceId, Map<symbol, string | null>>()
+/** The cards drawn now, by Project: each one's Thread, none for a new one. */
+const drawn = new Map<ProjectId, Map<symbol, string | null>>()
 
-/** Says the card of `thread` in `space` is drawn, as the Thread Pane does
+/** Says the card of `thread` in `project` is drawn, as the Thread Pane does
  * while it shows it; returns how to say it is not. */
-export function showDetails(space: SpaceId, thread: string | null): () => void {
-  const one = Symbol(space)
-  const cards = drawn.get(space) ?? new Map<symbol, string | null>()
-  drawn.set(space, cards.set(one, thread))
+export function showDetails(
+  project: ProjectId,
+  thread: string | null
+): () => void {
+  const one = Symbol(project)
+  const cards = drawn.get(project) ?? new Map<symbol, string | null>()
+  drawn.set(project, cards.set(one, thread))
   return () => {
     cards.delete(one)
-    if (cards.size === 0 && drawn.get(space) === cards) drawn.delete(space)
+    if (cards.size === 0 && drawn.get(project) === cards) drawn.delete(project)
   }
 }
 
-/** The Threads of `space` whose card is drawn now, none for a new
+/** The Threads of `project` whose card is drawn now, none for a new
  * Thread's: what a module's rows say there is seen, when its Thread is. */
-export function detailsShown(space: SpaceId): (string | null)[] {
-  return [...(drawn.get(space)?.values() ?? [])]
+export function detailsShown(project: ProjectId): (string | null)[] {
+  return [...(drawn.get(project)?.values() ?? [])]
 }
 
 const hearing = new Set<(id: string) => void>()

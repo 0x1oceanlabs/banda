@@ -33,7 +33,7 @@ Every key, with its default:
 - "Other heights for Alt+Shift+R": `[columns]` `heights = ["1/4", "1/2", "3/4"]`.
 - "Dragged sizes stick too much", "not at all": `[columns]` `snap = 4`, or
   `snap = 0`; the presets and heights are where they stick.
-- "More space between the windows": `[gaps]` `inner = 16`, `outer = 16`.
+- "More project between the windows": `[gaps]` `inner = 16`, `outer = 16`.
 - "More glass", "see the wallpaper more": `[desk]` `opacity = 0.25`;
   "glassier windows": `[tile]` `opacity = 0.75`. Solid: `[desk]`
   `glass = false`.

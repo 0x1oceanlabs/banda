@@ -1,7 +1,7 @@
 /** The browser's window part: its Pane, its actions and what the Banda
  * menu finds of it (ADR 0013, ADR 0022). It has no engine part, so it is
  * always on. */
-import type { SpaceId } from "@banda/contract"
+import type { ProjectId } from "@banda/contract"
 import { defineModule } from "@banda/ui/module"
 import { paneOf, type PaneState } from "@banda/ui/pane"
 import { fileAddress, searchNow } from "./address"
@@ -33,7 +33,7 @@ export const browser = defineModule({
       section: "Panes",
       unlisted: true,
       run: (window, args = {}) => {
-        const { address, file, words, space } = args
+        const { address, file, words, project } = args
         const url =
           typeof file === "string"
             ? fileAddress(file)
@@ -44,7 +44,7 @@ export const browser = defineModule({
                 : ""
         window.open(
           paneOf(browserPane, browserAt(url)),
-          typeof space === "string" ? (space as SpaceId) : undefined
+          typeof project === "string" ? (project as ProjectId) : undefined
         )
       },
     },
@@ -53,7 +53,7 @@ export const browser = defineModule({
   watches: [waitsWatch],
   // A tab an Agent opens goes beside its Thread (ADR 0029, decision 4):
   // to the browser of the column right of the Thread's Pane, or a new
-  // one there; with the Thread not shown, to its Space's browser the
+  // one there; with the Thread not shown, to its Project's browser the
   // Person was in last, or a new one. An extension's goes to the browser
   // the Person was in last. The Person's Pane keeps the focus. A Thread
   // drives its tabs until its turn ends (`followThreads`).
@@ -61,10 +61,10 @@ export const browser = defineModule({
     const following = followThreads(window)
     const opening = openWith((url, agent) => {
       const at = agent ? window.beside(agent) : null
-      const holder = at?.right ? browserIn(at.right) : frontHolder(at?.space)
+      const holder = at?.right ? browserIn(at.right) : frontHolder(at?.project)
       if (holder) return holder.open(url)
       const args = browserAt(url)
-      window.open(paneOf(browserPane, args), at?.space, {
+      window.open(paneOf(browserPane, args), at?.project, {
         focus: false,
         ...(agent ? { beside: agent } : {}),
       })

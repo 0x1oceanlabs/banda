@@ -27,7 +27,7 @@ export function fakeEngine(answers: Record<string, unknown> = {}): {
       return Promise.resolve(answers[method])
     },
     stream: (
-      _space: string,
+      _project: string,
       method: string,
       params: unknown,
       onPiece: (piece: never) => void,
