@@ -5,6 +5,7 @@
  * the Person will notice it: a toast, or a system notification. A call
  * that stops, or that the Person looks at, takes them back.
  */
+import type { SpaceId } from "@banda/contract"
 import { toast } from "@banda/ui/components/sonner"
 import type { Thing, WindowApi } from "@banda/ui/module"
 import { type Call, callsOf, type Lists, type PaneState } from "@banda/ui/pane"
@@ -71,14 +72,18 @@ export function startTelling(
     last = { chime, at }
     player.play(chime, window.look().sound)
   }
-  const told = async (told: Told) => {
+  const told = async (said: Told) => {
     const { notify } = window.look()
-    const place = placeOf(
-      window.sight(),
-      notify,
-      await quietNow(notify, desktop)
-    )
+    const of = said.in as SpaceId | undefined
+    const thing =
+      of && said.about ? { space: of, about: said.about } : undefined
+    const sight = window.sight(thing)
+    // What it tells of is in sight: it says it there itself.
+    if (sight === "on-screen") return
+    const place = placeOf(sight, notify, await quietNow(notify, desktop))
     if (!place) return
+    const named = of && !said.space ? spaceNameOf(of) : undefined
+    const told = named ? { ...said, space: named } : said
     if (!told.silent) sounds(told.kind)
     // Kept, wherever it is told, so the bell shows it again (ADR 0056,
     // decision 2).
@@ -94,11 +99,11 @@ export function startTelling(
       lasts: told.kind === "asking",
     })
   }
-  // The Space a call is of, by name, when the window has more than one.
-  const spaceNameOf = (call: Call) => {
+  // The Space a thing is of, by name, when the window has more than one.
+  const spaceNameOf = (space: SpaceId) => {
     const spaces = window.spaces()
     if (spaces.length < 2) return undefined
-    return spaces.find((space) => space.id === call.space)?.name || undefined
+    return spaces.find((each) => each.id === space)?.name || undefined
   }
   const answer = (thing: Thing & { pane: PaneState }) => {
     window.goTo(thing)
@@ -116,7 +121,7 @@ export function startTelling(
     for (const call of news.values()) {
       const telling = tell(call.chime, window.sight(call), notify, quiet)
       if (telling.sound) chimes.push(call.chime)
-      const told = toldOfCall(call, notify.detail, spaceNameOf(call))
+      const told = toldOfCall(call, notify.detail, spaceNameOf(call.space))
       if (telling.toast || telling.system) keep(told)
       if (telling.toast) {
         toasted.add(call.key)
@@ -137,7 +142,7 @@ export function startTelling(
       noticed.add(call.key)
       const icon = await iconOf(call.chime)
       desktop.show({
-        ...noticeOf(call, notify.detail, spaceNameOf(call)),
+        ...noticeOf(call, notify.detail, spaceNameOf(call.space)),
         ...(icon ? { icon } : {}),
       })
     }

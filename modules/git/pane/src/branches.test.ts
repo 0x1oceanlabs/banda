@@ -2,14 +2,7 @@ import type { Ref } from "@banda/contract/git"
 import { readFileSync } from "node:fs"
 import { join } from "node:path"
 import { expect, test } from "vitest"
-import {
-  branchName,
-  finds,
-  listedOf,
-  madeOf,
-  switchedOf,
-  taken,
-} from "./branches"
+import { branchName, finds, listedOf, taken } from "./branches"
 
 const ref = (name: string, more: Partial<Ref> = {}): Ref => ({
   name,
@@ -52,16 +45,4 @@ test("a name a remote's branch has is taken too", () => {
   // A folder of a name, and a name of a folder, are in each other's way.
   expect(taken(refs, "feature")).toBe(true)
   expect(taken(refs, "main/x")).toBe(true)
-})
-
-test("a switch from the card says the Agent where the work is now", () => {
-  expect(switchedOf(ref("other"))).toBe(
-    "Switched to the branch other; the changes went along."
-  )
-  expect(switchedOf(ref("origin/release", { remote: true }))).toBe(
-    "Switched to the branch release, which follows origin/release; the changes went along."
-  )
-  expect(madeOf("feature/menu")).toBe(
-    "Made the branch feature/menu and switched to it; the changes went along."
-  )
 })

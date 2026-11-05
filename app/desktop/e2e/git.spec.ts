@@ -405,10 +405,16 @@ test("the git button commits every change with the message the Thread's Harness 
   await expect(thread.getByText("You write concise")).toBeHidden()
   // It shows what the card did, which its Agent reads with its next
   // message.
-  const notice = thread.getByText(
-    /^Made the branch feature\/change-app, and committed 1 file on it: “Change the app” \(\w+\), and pushed it to origin\/feature\/change-app\.$/
-  )
-  await expect(notice).toBeVisible()
+  await expect(
+    thread.getByText(
+      /^Made the branch feature\/change-app, and committed 1 file on it: “Change the app” \(\w+\)\.$/
+    )
+  ).toBeVisible()
+  await expect(
+    thread.getByText(
+      /^Pushed feature\/change-app to origin\/feature\/change-app, up to \w+ “Change the app”\.$/
+    )
+  ).toBeVisible()
   await page.keyboard.press("Escape")
   await expect(card).toBeHidden()
   await page.screenshot({ path: "test-results/git-notice.png" })
@@ -567,7 +573,9 @@ test("the branch picker makes and switches branches, and ▾ commits chosen file
   await expect(card.getByRole("button", { name: /^other/ })).toBeVisible()
   expect(git(folder, "branch", "--show-current")).toBe("other\n")
   await expect(
-    thread.getByText("Switched to the branch other; the changes went along.")
+    thread.getByText(
+      "Switched to the branch other; the changes not committed went along."
+    )
   ).toBeVisible()
   // Words no branch has make one of the name they make, the choice Enter
   // takes when nothing is listed, and switch to it, the changes along.

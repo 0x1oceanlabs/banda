@@ -32,15 +32,7 @@ import { DetailsRow } from "@banda/ui/components/thread-details"
 import { useAct } from "@banda/ui/hooks/use-act"
 import { problem } from "@banda/ui/lib/words"
 import { ChevronDownIcon, GitBranchIcon, PlusIcon } from "lucide-react"
-import {
-  branchName,
-  finds,
-  listedOf,
-  madeOf,
-  switchedOf,
-  taken,
-} from "./branches"
-import { tellAgent } from "./ended"
+import { branchName, finds, listedOf, taken } from "./branches"
 import { GitAlert } from "./GitAlert"
 
 /** What Alt+Shift+G asks the focused Thread's card to open. */
@@ -56,7 +48,7 @@ export function BranchPicker({
 }: {
   engine: Engine
   space: SpaceId
-  /** The card's Thread, whose Agent hears of a switch. */
+  /** The card's Thread, whose Agent hears of a switch (`git.acted`). */
   thread: string | null
   status: Status
   /** Alt+Shift+G asked for it: open until it closes, then `onOpened`. */
@@ -104,12 +96,10 @@ export function BranchPicker({
         <Branches
           engine={engine}
           space={space}
+          thread={thread}
           menu={menu}
           onMenu={setMenu}
-          onDone={(notice) => {
-            setOpen(false)
-            tellAgent(engine, space, thread, notice)
-          }}
+          onDone={() => setOpen(false)}
         />
       </PopoverContent>
     </Popover>
@@ -126,17 +116,19 @@ const LISTED = 100
 function Branches({
   engine,
   space,
+  thread,
   menu,
   onMenu,
   onDone,
 }: {
   engine: Engine
   space: SpaceId
+  /** Whose Agent hears of a switch (`git.acted`). */
+  thread: string | null
   /** The branch whose context menu is open, by its key. */
   menu: string | null
   onMenu: (key: string | null) => void
-  /** It closes; with what changed, when it switched. */
-  onDone: (notice?: string) => void
+  onDone: () => void
 }) {
   const [query, setQuery] = useState("")
   const words = query.trim()
@@ -189,23 +181,22 @@ function Branches({
   // Enter picks the first branch listed; Create when none is.
   const choices = listed.length + (creates ? 1 : 0)
   const at = chosen.words === words ? chosen.at : 0
-  const act = async (run: () => Promise<unknown>, notice: string) => {
-    if ((await acting.act(run)) !== undefined) onDone(notice)
+  const act = async (run: () => Promise<unknown>) => {
+    if ((await acting.act(run)) !== undefined) onDone()
   }
+  const card = thread === null ? {} : { thread }
   const pick = (ref: Ref) => {
     if (acting.busy) return
     if (ref.current) onDone()
     else
-      void act(
-        () => engine.call("git.switch", { name: ref.name }, { space }),
-        switchedOf(ref)
+      void act(() =>
+        engine.call("git.switch", { name: ref.name, ...card }, { space })
       )
   }
   const create = () => {
     if (!acting.busy)
-      void act(
-        () => engine.call("git.branch", { name: made }, { space }),
-        madeOf(made)
+      void act(() =>
+        engine.call("git.branch", { name: made, ...card }, { space })
       )
   }
   const choose = (at: number) => {

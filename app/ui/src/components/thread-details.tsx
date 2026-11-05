@@ -39,7 +39,37 @@ export type Details = {
   Rows: ComponentType<DetailsProps>
 }
 
+/** How wide the card is, and the room it keeps from the Pane's edge. */
+export const DETAILS_CARD = 280
+export const DETAILS_GAP = 12
+/** The messages' column, `max-w-3xl`. */
+const MESSAGES = 768
+/** How wide a Pane holds the card beside its centred messages: what a
+ * Pane beside the Thread can take as wide too. */
+export const DETAILS_WIDE = MESSAGES + 2 * (DETAILS_CARD + DETAILS_GAP)
+
 const Given = createContext<readonly Details[]>([])
+
+/** The cards drawn now, by Space: each one's Thread, none for a new one. */
+const drawn = new Map<SpaceId, Map<symbol, string | null>>()
+
+/** Says the card of `thread` in `space` is drawn, as the Thread Pane does
+ * while it shows it; returns how to say it is not. */
+export function showDetails(space: SpaceId, thread: string | null): () => void {
+  const one = Symbol(space)
+  const cards = drawn.get(space) ?? new Map<symbol, string | null>()
+  drawn.set(space, cards.set(one, thread))
+  return () => {
+    cards.delete(one)
+    if (cards.size === 0 && drawn.get(space) === cards) drawn.delete(space)
+  }
+}
+
+/** The Threads of `space` whose card is drawn now, none for a new
+ * Thread's: what a module's rows say there is seen, when its Thread is. */
+export function detailsShown(space: SpaceId): (string | null)[] {
+  return [...(drawn.get(space)?.values() ?? [])]
+}
 
 const hearing = new Set<(id: string) => void>()
 

@@ -13,7 +13,6 @@ const STATUS: Status = {
   remote: "origin",
   default_branch: "main",
   files: [],
-  changed: 0,
   added: 0,
   removed: 0,
 }

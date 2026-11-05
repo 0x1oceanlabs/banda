@@ -1,11 +1,9 @@
 import {
-  useCallback,
   useEffect,
   useEffectEvent,
   useMemo,
   useRef,
   useState,
-  useSyncExternalStore,
   type ReactNode,
 } from "react"
 import type { ChangeAsk } from "@banda/contract/git"
@@ -24,13 +22,15 @@ import {
   EmptyTitle,
 } from "@banda/ui/components/empty"
 import { ChangedFiles, type TreeFile } from "@banda/ui/components/file-tree"
+import { DETAILS_WIDE } from "@banda/ui/components/thread-details"
 import { PaneHeader } from "@banda/ui/components/pane-header"
 import { Spinner } from "@banda/ui/components/spinner"
 import { useAct } from "@banda/ui/hooks/use-act"
+import { useWiderThan } from "@banda/ui/hooks/use-wider-than"
 import { definePane, type PaneProps } from "@banda/ui/pane"
 import { ChevronDownIcon, ChevronRightIcon, FileDiffIcon } from "lucide-react"
 import { Acts } from "./Acts"
-import { AT_ONCE, TREE_WIDE, viewOf, type View } from "./diff"
+import { AT_ONCE, viewOf, type View } from "./diff"
 import { DiffToolbar } from "./DiffToolbar"
 import { More, useFiles } from "./files"
 import { useFolds } from "./folds"
@@ -38,6 +38,7 @@ import { useDiffRead, type Drawn } from "./read"
 import { BaseMenu, ScopeMenu } from "./ScopeMenu"
 import { CHANGES, changeOf, isTest, labelOf, type Scope } from "./scope"
 import { actsOf, allOf, fileAsk, hunkAsk, type Act } from "./stage"
+import { filesOf } from "./status"
 import { GitAlert } from "./GitAlert"
 
 /**
@@ -74,8 +75,11 @@ export const diffPane = definePane<DiffArgs>({
 
 function DiffPane({ engine, space, args, update, close }: PaneProps<DiffArgs>) {
   const scope = args.scope
-  const [root, wide] = useWide()
-  const view = viewOf(args.view, wide)
+  // As wide as a Thread holds its card beside the messages, the tree has
+  // room beside the lines; narrower, as at half a screen, it would take
+  // theirs.
+  const root = useRef<HTMLDivElement>(null)
+  const view = viewOf(args.view, useWiderThan(root, DETAILS_WIDE))
   // What the Person chose alone is kept: the tree they never toggled
   // follows the Pane's width.
   const set = (next: Partial<View>) =>
@@ -210,7 +214,7 @@ function DiffPane({ engine, space, args, update, close }: PaneProps<DiffArgs>) {
         )}
         {count > 0 && (
           <span className="flex shrink-0 items-center gap-1 text-xs text-muted-foreground tabular-nums">
-            {count === 1 ? "1 file" : `${count} files`}
+            {filesOf(count)}
             {added + removed > 0 && <span aria-hidden>·</span>}
             <DiffCounts added={added} removed={removed} />
           </span>
@@ -364,24 +368,4 @@ const EMPTY: Record<Scope["kind"], string> = {
   staged: "Nothing is staged.",
   commit: "This commit changes no files.",
   turn: "This turn changed no files.",
-}
-
-/** A ref for the Pane's root, and whether it is as wide as shows the
- * tree, kept current; wide till it is drawn. */
-function useWide(): [(own: HTMLElement | null) => void, boolean] {
-  const [own, setOwn] = useState<HTMLElement | null>(null)
-  const subscribe = useCallback(
-    (hear: () => void) => {
-      if (!own) return () => {}
-      const seen = new ResizeObserver(hear)
-      seen.observe(own)
-      return () => seen.disconnect()
-    },
-    [own]
-  )
-  const wide = useSyncExternalStore(
-    subscribe,
-    () => (own?.offsetWidth ?? TREE_WIDE) >= TREE_WIDE
-  )
-  return [setOwn, wide]
 }

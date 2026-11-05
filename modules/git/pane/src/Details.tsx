@@ -7,7 +7,6 @@
  * repository, and why git will not read it when it is one git refuses.
  * They follow `git.watch`.
  */
-import { useEffect } from "react"
 import {
   type Details,
   type DetailsProps,
@@ -19,9 +18,8 @@ import { paneOf } from "@banda/ui/pane"
 import { FileDiffIcon, GitBranchPlusIcon } from "lucide-react"
 import { BranchPicker, PICKER } from "./BranchPicker"
 import { diffPane } from "./DiffPane"
-import { cardShown } from "./ended"
 import { GitButton } from "./GitButton"
-import { CHANGES } from "./scope"
+import { CHANGES, type Scope } from "./scope"
 import { filesOf, useGitStatus } from "./status"
 import { GitAlert } from "./GitAlert"
 
@@ -36,8 +34,6 @@ function GitRows({
 }: DetailsProps) {
   const status = useGitStatus(engine, space)
   const init = useAct()
-  // Drawn, the card shows how a run of its Space ends: no toast tells it.
-  useEffect(() => cardShown(space, thread), [space, thread])
   if (!status) return null
   // A repository git will not read, as another user's: why, and no
   // Initialize Git, which would make another inside it.
@@ -86,12 +82,12 @@ function GitRows({
           icon={<FileDiffIcon />}
           title="Open the Diff on what is not committed yet"
           end={<DiffCounts added={status.added} removed={status.removed} />}
-          onClick={() => open(uncommittedDiff())}
+          onClick={() => open(diffOn({ kind: "uncommitted" }))}
         >
           Changes
           <span className="text-muted-foreground">
             {" · "}
-            {filesOf(status.changed)}
+            {filesOf(status.files.length)}
           </span>
         </DetailsRow>
       )}
@@ -99,12 +95,9 @@ function GitRows({
   )
 }
 
-/** The Diff on the branch's changes: Alt+D's. */
-export const changesDiff = () =>
-  paneOf(diffPane, { scope: CHANGES, file: null })
-
-/** The Diff on what a commit would take: the Changes row's. */
-export const uncommittedDiff = () =>
-  paneOf(diffPane, { scope: { kind: "uncommitted" }, file: null })
+/** The Diff on `scope`: the branch's changes for Alt+D, what a commit
+ * would take for the Changes row. */
+export const diffOn = (scope: Scope = CHANGES) =>
+  paneOf(diffPane, { scope, file: null })
 
 export const gitDetails: Details = { id: "git.branch", Rows: GitRows }
