@@ -202,6 +202,25 @@ export function keyLabel(key: Key, mac = isMac): string {
   return keyCaps(key, mac).join(mac ? "" : "+")
 }
 
+/** Whether two mods, or a key's mods, hold the same keys. */
+export function sameMod(a: Mod, b: Mod): boolean {
+  return MORE.every((one) => a[one] === b[one])
+}
+
+/** A mod as keys.toml writes it: `Ctrl+Alt+Super`, in that order. */
+export function modText(mod: Mod): string {
+  return [mod.ctrl && "Ctrl", mod.alt && "Alt", mod.super && "Super"]
+    .filter(Boolean)
+    .join("+")
+}
+
+/** How a mod reads: `Ctrl+Alt`, or `⌃⌥` on a Mac. */
+export function modLabel(mod: Mod, mac = isMac): string {
+  return keyCaps({ code: "", ...mod }, mac)
+    .slice(0, -1)
+    .join(mac ? "" : "+")
+}
+
 /** A key as `keys.toml` writes it, on every system: `Ctrl+Alt+Shift+R`. */
 export function keyText(key: Key): string {
   return [

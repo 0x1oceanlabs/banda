@@ -6,7 +6,7 @@
  * Alt is Banda's mod key (ADR 0005, decision 10). Keys bind by their
  * physical place (`KeyboardEvent.code`), so they work on any layout.
  */
-import type { Keys, Problem } from "@banda/contract/look"
+import type { Keys, Mod, Problem } from "@banda/contract/look"
 import { tomlOf } from "@banda/contract/settings"
 import {
   type Key,
@@ -15,6 +15,8 @@ import {
   type Pressed,
   realKey,
   sameKey,
+  sameMod,
+  withMore,
 } from "@banda/ui/lib/keys"
 import type { KeysInForce } from "@banda/ui/hooks/use-key-of"
 import type { Action } from "@banda/ui/module"
@@ -91,6 +93,9 @@ export function rebind<Context>(
     }
     if (action !== bind.action)
       say(bind, `${bind.action} is called ${action} now`)
+    // A line that frees a key no action has, as one of an old mod's.
+    if (!action && !taken.has(keyText(bind)))
+      say(bind, "no Banda key is here with this mod, so it frees nothing")
     binds.push({ ...bind, action })
   }
   if (binds.length === 0) return { actions: real, problems }
@@ -106,6 +111,27 @@ export function rebind<Context>(
     })),
     problems,
   }
+}
+
+/** A line of the Person's moved with a new mod (ADR 0068, decision 5):
+ * to its new key, or out, for a `none`, whose key is no longer Banda's. */
+export type Move = { bind: Keys["binds"][number]; to?: Key }
+
+/** The Person's lines that hold the mod `from`, alone or with one key
+ * more, and where each goes with the mod `to`, at the same level. */
+export function movesOf(binds: Keys["binds"], from: Mod, to: Mod): Move[] {
+  const more = withMore(from)
+  return binds.flatMap((bind): Move[] => {
+    const level = sameMod(bind, from)
+      ? { mod: true }
+      : more && sameMod(bind, more)
+        ? { more: true }
+        : undefined
+    if (!level) return []
+    if (!bind.action) return [{ bind }]
+    const written = { code: bind.code, shift: bind.shift, ...level }
+    return [{ bind, to: realKey(written, to) }]
+  })
 }
 
 /** The keys in force for what names them (ADR 0068, decision 4): the

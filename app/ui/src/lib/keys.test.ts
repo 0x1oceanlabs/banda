@@ -5,7 +5,10 @@ import {
   keyCaps,
   keyLabel,
   keyText,
+  modLabel,
+  modText,
   realKey,
+  sameMod,
   withMore,
 } from "./keys"
 
@@ -87,4 +90,12 @@ test("one key more is the first of Ctrl, Super and Alt the mod lacks", () => {
   expect(withMore(ALT)).toEqual({ alt: true, ctrl: true, super: false })
   expect(withMore(ctrlAlt)).toEqual({ alt: true, ctrl: true, super: true })
   expect(withMore({ alt: true, ctrl: true, super: true })).toBeUndefined()
+})
+
+test("a mod reads as it is pressed, and keys.toml writes it in one order", () => {
+  expect(modLabel(ctrlAlt, false)).toBe("Ctrl+Alt")
+  expect(modLabel(ctrlAlt, true)).toBe("⌃⌥")
+  expect(modText({ alt: true, ctrl: false, super: true })).toBe("Alt+Super")
+  expect(sameMod(ctrlAlt, { ...ALT, ctrl: true })).toBe(true)
+  expect(sameMod(ctrlAlt, ALT)).toBe(false)
 })

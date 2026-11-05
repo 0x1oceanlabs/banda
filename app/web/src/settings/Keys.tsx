@@ -17,6 +17,7 @@ import { keyLabel, keyText, keyToBind } from "@banda/ui/lib/keys"
 import { KeyboardIcon } from "lucide-react"
 import { bindPath, KEYS_FILE, RESET_KEY } from "../actions/actions"
 import { useLookKeys } from "../look"
+import { ModCard } from "./Mod"
 import { RowFrame } from "./SettingRow"
 
 export function Keys({ lit }: { lit?: string }) {
@@ -25,6 +26,7 @@ export function Keys({ lit }: { lit?: string }) {
   const [asking, setAsking] = useState<string>()
   return (
     <div className="flex flex-col gap-3">
+      <ModCard />
       <div className="flex items-center gap-3 px-1">
         <p className="flex-1 text-xs text-muted-foreground">
           Choose an action in the key sheet, press Tab, then Add a key. Assign a
