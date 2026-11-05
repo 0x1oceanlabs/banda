@@ -184,15 +184,11 @@ the Electron app.
 One tile in the window that shows a module's view, such as a Thread or a
 browser page. A Pane reaches the engine only through the API.
 
-**Capsule**:
-The quiet plate at the right end of every Pane's header that holds its
-buttons: the Pane's own, then the Pane menu's and close.
-
 **Pane menu**:
 What the Person can do to a Pane and its column with the mouse, each row
 with its key: widths and heights, full width, zoom, the Deck, another
-column or workspace, its own window, close. The capsule's button and a
-right click on the header open it.
+column or workspace, its own window, close. Its button at the header's
+right end and a right click on the header open it.
 _Avoid_: window menu, layout menu.
 
 **Tab**:

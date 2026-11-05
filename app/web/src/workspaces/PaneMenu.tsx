@@ -102,8 +102,8 @@ function reach(entry: string, at: number): DOMRect | undefined {
 /**
  * The Pane menu (ADR 0066, decision 3): the look's widths and heights as
  * pictures, then what the keys do to a Pane and its column, each with its
- * key. The capsule's button and a right click on the header open it; a
- * row runs the action its key runs.
+ * key. Its button at the header's end and a right click on the header
+ * open it; a row runs the action its key runs.
  */
 export function PaneMenu({
   entry,

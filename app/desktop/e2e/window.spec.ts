@@ -4754,7 +4754,7 @@ test("the Pane menu sizes a column, and the header's right, double and middle cl
   await expect(launcher).toHaveAttribute("data-focused", "true")
   await expect.poll(() => sharesOf(page)).toEqual([50, 50])
 
-  // The capsule's button opens it; each row shows its key.
+  // Its button at the header's end opens it; each row shows its key.
   await tile.getByRole("button", { name: "Pane menu" }).click()
   const menu = page.getByRole("menu")
   await expect(
