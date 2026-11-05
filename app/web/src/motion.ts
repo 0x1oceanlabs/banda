@@ -5,6 +5,7 @@
  * as niri's do.
  */
 import type { Move, Spring } from "@banda/contract/look"
+import { afterMoves, cancelFrame, onMove } from "@banda/ui/lib/frames"
 
 /** Where a value is and how fast it goes, per second. */
 export interface State {
@@ -74,55 +75,13 @@ export interface Clock {
   now: () => number
 }
 
-/**
- * The browser's frames, shared: every move steps in one, and what draws
- * after them (`afterMoves`) runs last in it, so it reads what they wrote
- * that frame, whichever asked first.
- */
-const frames = {
-  moves: new Map<number, (now: number) => void>(),
-  after: new Map<number, (now: number) => void>(),
-  next: 0,
-  asked: 0,
-}
-
-function ask(
-  into: Map<number, (now: number) => void>,
-  run: (now: number) => void
-): number {
-  const id = ++frames.next
-  into.set(id, run)
-  frames.asked ||= requestAnimationFrame(flush)
-  return id
-}
-
-function flush(now: number) {
-  frames.asked = 0
-  // What a step asks for comes in the next frame: the maps start afresh.
-  const moves = frames.moves
-  const after = frames.after
-  frames.moves = new Map()
-  frames.after = new Map()
-  for (const run of moves.values()) run(now)
-  for (const run of after.values()) run(now)
-}
-
-function cancel(id: number) {
-  frames.moves.delete(id)
-  frames.after.delete(id)
-}
-
-/** Runs `run` in the next frame, once every move has stepped in it. */
-export function afterMoves(run: (now: number) => void): number {
-  return ask(frames.after, run)
-}
-
 /** Takes back what `afterMoves` asked for. */
-export const cancelAfterMoves = cancel
+export const cancelAfterMoves = cancelFrame
+export { afterMoves }
 
 const BROWSER: Clock = {
-  frame: (run) => ask(frames.moves, run),
-  cancel,
+  frame: onMove,
+  cancel: cancelFrame,
   now: () => performance.now(),
 }
 
