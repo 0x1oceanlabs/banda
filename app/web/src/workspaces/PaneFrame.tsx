@@ -9,6 +9,11 @@ import {
 import type { Engine, SpaceId } from "@banda/contract"
 import { Button } from "@banda/ui/components/button"
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuTrigger,
+} from "@banda/ui/components/dropdown-menu"
+import {
   Empty,
   EmptyContent,
   EmptyDescription,
@@ -16,13 +21,14 @@ import {
 import {
   HeaderSlot,
   PaneHeader,
-  TileActions,
+  TileHeader,
 } from "@banda/ui/components/pane-header"
 import { DetailsRows } from "@banda/ui/components/thread-details"
-import { cn } from "@banda/ui/lib/utils"
+import type { Key } from "@banda/ui/lib/keys"
 import { type Listed, type PaneState, type Place, within } from "@banda/ui/pane"
 import type { Args } from "@banda/ui/module"
 import {
+  LayoutPanelLeftIcon,
   Minimize2Icon,
   SquareArrowDownLeftIcon,
   SquareArrowOutUpRightIcon,
@@ -39,10 +45,12 @@ import { heightAt } from "./layout"
 import { ThreadMark } from "../sidebar/Row"
 import type { Plan } from "./arrange"
 import type { Entry } from "./model"
+import { type MenuFrame, PaneMenu, type Stand } from "./PaneMenu"
 
 /** What a framed Pane asks of the workspaces. */
 export type Frame = {
-  focus: (entry: string) => void
+  /** Done once the tile has the focus, where the window waits for it. */
+  focus: (entry: string) => void | Promise<void>
   open: (space: SpaceId, pane: PaneState, from: string, place?: Place) => void
   update: (entry: string, pane: PaneState) => void
   close: (entry: string) => void
@@ -54,6 +62,11 @@ export type Frame = {
   /** Opens the Pane in a window of its own, or brings that window to the
    * front (ADR 0025, decision 9); none where a Pane cannot pop out. */
   popOut?: (entry: string) => void
+  /** The key that runs an action now, as keys.toml binds it. */
+  keyOf?: (action: string) => Key | undefined
+  /** Where a Pane stands on its workspace, for the Pane menu (ADR 0066);
+   * none where Panes stand on no workspace, as the drawer's. */
+  stand?: (entry: string) => Stand | undefined
 }
 
 /** Says an Agent opened the Pane and the Person has not looked at it. */
@@ -146,38 +159,69 @@ export function PaneFrame({
   const take = () => {
     if (!focused) frame.focus(entry.id)
   }
-  // Out of its window, or back from its own: the frame's own button.
+  // Banda's end of the capsule (ADR 0066): the Pane menu, or in a window
+  // of its own, where nothing tiles, the way back.
   const popOut = frame.popOut
-  const own = useMemo(() => {
-    const back = alone
-      ? { Icon: SquareArrowDownLeftIcon, label: "Back in its place" }
-      : { Icon: SquareArrowOutUpRightIcon, label: "Pop out" }
-    return (
-      <>
-        {actions}
-        {popOut && (
+  const placed = !alone && frame.stand !== undefined
+  const menu: MenuFrame = useMemo(
+    () => ({
+      run: (action, args) =>
+        void Promise.resolve(frame.focus(entry.id)).then(() =>
+          frame.run(action, args)
+        ),
+      keyOf: frame.keyOf,
+      popOut: popOut !== undefined,
+    }),
+    [frame, entry.id, popOut]
+  )
+  const header = useMemo(() => {
+    const rows = placed && (
+      <Rows entry={entry.id} frame={frame} menu={menu} zoomed={zoomed} />
+    )
+    const end = alone
+      ? popOut && (
           <Button
             variant="ghost"
             size="icon-xs"
-            aria-label={back.label}
-            title={
-              alone
-                ? "Back in its place in the workspace"
-                : "In a window of its own"
-            }
-            className={cn(
-              "shrink-0",
-              !alone &&
-                "opacity-0 transition-opacity group-hover/tile:opacity-100 group-data-[selected=true]/tile:opacity-100 focus-visible:opacity-100"
-            )}
+            aria-label="Back in its place"
+            title="Back in its place in the workspace"
+            className="shrink-0"
             onClick={() => popOut(entry.id)}
           >
-            <back.Icon />
+            <SquareArrowDownLeftIcon />
           </Button>
-        )}
-      </>
-    )
-  }, [actions, popOut, alone, entry.id])
+        )
+      : placed && (
+          <DropdownMenu>
+            <DropdownMenuTrigger
+              render={
+                <Button
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label="Pane menu"
+                  title="Pane menu, or a right click on the header"
+                  className="shrink-0"
+                />
+              }
+            >
+              <LayoutPanelLeftIcon />
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-72">
+              {rows}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )
+    return {
+      actions: (
+        <>
+          {actions}
+          {end}
+        </>
+      ),
+      menu: rows || undefined,
+      onWide: placed ? () => menu.run("column.maximize") : undefined,
+    }
+  }, [actions, alone, placed, popOut, entry.id, frame, menu, zoomed])
   return (
     <section
       ref={element}
@@ -200,7 +244,7 @@ export function PaneFrame({
       {marked && (
         <AgentMark className="pointer-events-none absolute top-1.5 right-1.5 z-10" />
       )}
-      <TileActions value={own}>
+      <TileHeader value={header}>
         <HeaderSlot>
           <DetailsRows details={details}>
             {/* A stand-in draws the frame's header, as its Pane is not drawn. */}
@@ -290,9 +334,27 @@ export function PaneFrame({
             </div>
           </DetailsRows>
         </HeaderSlot>
-      </TileActions>
+      </TileHeader>
     </section>
   )
+}
+
+/** The Pane menu's rows, with where the Pane stands as the menu opens. */
+function Rows({
+  entry,
+  frame,
+  menu,
+  zoomed,
+}: {
+  entry: string
+  frame: Frame
+  menu: MenuFrame
+  zoomed: boolean
+}) {
+  const stand = frame.stand?.(entry)
+  return stand ? (
+    <PaneMenu entry={entry} stand={stand} frame={menu} zoomed={zoomed} />
+  ) : null
 }
 
 /**

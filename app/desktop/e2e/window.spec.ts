@@ -4410,10 +4410,12 @@ test("a Pane pops out into a window of its own, its place keeps a stand-in, and 
   await composer.press("Enter")
   await expect(thread.getByText("You said: hello")).toBeVisible()
   const tile = page.getByRole("region", { name: "hello" })
+  // A row of the Pane menu (ADR 0066, decision 5).
   const popOut = async () => {
+    await tile.getByRole("button", { name: "Pane menu" }).click()
     const [popped] = await Promise.all([
       app.waitForEvent("window"),
-      tile.getByRole("button", { name: "Pop out" }).click(),
+      page.getByRole("menuitem", { name: "In its own window" }).click(),
     ])
     await popped.waitForLoadState()
     return popped
@@ -4460,6 +4462,49 @@ test("a Pane pops out into a window of its own, its place keeps a stand-in, and 
     .press("Alt+KeyW")
   await expect(tile).toBeHidden()
   await expect.poll(windows).toBe(1)
+})
+
+test("the Pane menu sizes a column, and the header's right, double and middle clicks work it", async () => {
+  window = await startWindow({ look: "[columns]\nmin = 10\n" })
+  const { page } = window
+  const { thread, composer } = await firstThread(page)
+  await composer.fill("hello")
+  await composer.press("Enter")
+  await expect(thread.getByText("You said: hello")).toBeVisible()
+  const tile = page.getByRole("region", { name: "hello" })
+  await page.keyboard.press("Alt+KeyN")
+  const launcher = page.getByRole("region", { name: "New Pane" })
+  await expect(launcher).toHaveAttribute("data-focused", "true")
+  await expect.poll(() => sharesOf(page)).toEqual([50, 50])
+
+  // The capsule's button opens it; each row shows its key.
+  await tile.getByRole("button", { name: "Pane menu" }).click()
+  const menu = page.getByRole("menu")
+  await expect(
+    menu.getByRole("menuitem", { name: "Full width Alt+F" })
+  ).toBeVisible()
+  await page.screenshot({ path: "test-results/pane-menu.png" })
+  await menu.getByRole("menuitem", { name: "Width 1/3" }).click()
+  await expect(menu).toBeHidden()
+  await expect.poll(() => sharesOf(page)).toEqual([33, 50])
+  await expect(tile).toHaveAttribute("data-focused", "true")
+
+  // A right click on the header opens it where the pointer is.
+  const at = await headerOf(tile)
+  await page.mouse.click(at.x, at.y, { button: "right" })
+  await menu.getByRole("menuitem", { name: "Width 2/3" }).click()
+  await expect.poll(() => sharesOf(page)).toEqual([67, 50])
+
+  // A double click: the whole screen wide, and back.
+  await page.mouse.dblclick(at.x, at.y)
+  await expect.poll(() => sharesOf(page)).toEqual([100, 50])
+  await page.mouse.dblclick(at.x, at.y)
+  await expect.poll(() => sharesOf(page)).toEqual([67, 50])
+
+  // A middle click closes the Pane.
+  const there = await headerOf(launcher)
+  await page.mouse.click(there.x, there.y, { button: "middle" })
+  await expect(launcher).toBeHidden()
 })
 
 test("a column moved along the Strip by Alt+Shift+Arrows stays in view", async () => {

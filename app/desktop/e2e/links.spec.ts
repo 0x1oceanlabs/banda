@@ -61,9 +61,10 @@ test("Thread web links open in Banda, Ctrl+click externally, including a popped 
   expect(page.url()).toContain("app://banda")
   await expect(thread).toBeVisible()
 
+  await thread.getByRole("button", { name: "Pane menu" }).click()
   const [popped] = await Promise.all([
     app.waitForEvent("window"),
-    thread.getByRole("button", { name: "Pop out" }).click(),
+    page.getByRole("menuitem", { name: "In its own window" }).click(),
   ])
   await popped.waitForLoadState()
   const poppedLink = popped

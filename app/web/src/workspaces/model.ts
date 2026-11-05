@@ -650,6 +650,26 @@ export function heighten(
   return withFocused(state, { ...column, entries })
 }
 
+/**
+ * Gives the focused Pane `height` in its column, as a step of the Pane
+ * menu does (ADR 0066, decision 3). A Pane alone in its column, or in a
+ * Deck, has no height of its own; neither has a height that is none.
+ */
+export function heightTo(
+  state: Workspaces,
+  height: Width,
+  look: Heights = DEFAULT_COLUMNS
+): Workspaces {
+  const workspace = current(state)
+  const column = workspace.columns[workspace.focus]
+  const entry = column?.entries[column.active]
+  if (!entry || column.entries.length < 2) return state
+  if (displayOf(column, look) === "deck") return state
+  if (share(height) === undefined || entry.height === height) return state
+  const entries = replace(column.entries, column.active, { ...entry, height })
+  return withFocused(state, { ...column, entries })
+}
+
 /** Makes every Pane of the focused column as high as the others, as
  * niri's Mod+Ctrl+R. */
 export function even(state: Workspaces): Workspaces {

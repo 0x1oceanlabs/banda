@@ -55,6 +55,7 @@ import { modules as known } from "../modules"
 import {
   closedOf,
   identityOf,
+  minOf,
   runs,
   showsOf,
   startable,
@@ -75,19 +76,25 @@ import {
   viewOf,
   withAsked,
 } from "../workspaces/arrange"
+import { floorOf } from "../workspaces/layout"
 import { useArranged } from "../workspaces/useArranged"
 import {
   current,
+  displayOf,
   type Entry,
   entries,
+  find,
   focused,
   across,
   focusEntry,
   go,
+  heightsOf,
   inBar,
   left,
   samePane,
+  share,
   step,
+  widthIn,
   type Workspaces as State,
 } from "../workspaces/model"
 import { Drawer } from "../workspaces/Drawer"
@@ -895,8 +902,35 @@ export function Shell({
       run: parts.run,
       arrange: (plan) => change(() => plan),
       popOut,
+      keyOf: (action) =>
+        keyed.actions.find((each) => each.id === action)?.keys?.[0],
+      // As the window draws it now, when the menu opens.
+      stand: (entry) => {
+        const state = seenNow.current.state
+        const spot = find(state, entry)
+        if (!spot) return undefined
+        const workspace = state.list[spot.workspace]
+        const column = workspace?.columns[spot.column]
+        if (!workspace || !column) return undefined
+        const look = columnsOf()
+        return {
+          width: share(widthIn(workspace, column, look)) ?? 0.5,
+          full: column.full === true,
+          deck: displayOf(column, look) === "deck",
+          panes: column.entries.length,
+          height: heightsOf(column)[spot.entry] ?? 1,
+          left: spot.column > 0,
+          right: spot.column < workspace.columns.length - 1,
+          workspace: spot.workspace + 1,
+          workspaces: state.list.length,
+          away: awayNow.current.has(entry),
+          presets: look.presets,
+          heights: look.heights,
+          floor: floorOf(workspace.id, minOf(column, look.min)),
+        }
+      },
     }),
-    [change, update, parts, popOut]
+    [change, update, parts, popOut, keyed]
   )
   // What a Pane in its own window asks, the window does, as for its own.
   useEffect(
