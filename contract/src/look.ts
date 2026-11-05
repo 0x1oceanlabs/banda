@@ -40,6 +40,7 @@ export type { Center } from "./generated/look/Center"
 export type { Display } from "./generated/look/Display"
 export type { Bind } from "./generated/look/Bind"
 export type { Keys } from "./generated/look/Keys"
+export type { Mod } from "./generated/look/Mod"
 export type { Move } from "./generated/look/Move"
 export type { Spring } from "./generated/look/Spring"
 export type { Easing } from "./generated/look/Easing"
@@ -126,7 +127,11 @@ export const windowGround = (colour: string | undefined): string | undefined =>
   colour && /^#[0-9a-f]{6}$/i.test(colour) ? colour : undefined
 
 /** No keys of the Person's: what `banda look` gives with no keys.toml. */
-export const DEFAULT_KEYS: Keys = { file: "", binds: [] }
+export const DEFAULT_KEYS: Keys = {
+  file: "",
+  mod: { alt: true, ctrl: false, super: false },
+  binds: [],
+}
 
 /**
  * A module's settings file the look resolves into `files`: its name, and

@@ -4,6 +4,10 @@
   "description": "Banda's keys over the window's own. Every key is optional.",
   "type": "object",
   "properties": {
+    "mod": {
+      "description": "The keys held for every Banda key and the mouse's moves: Alt, or one\nor two of Alt, Ctrl and Super, as \"Ctrl+Alt\" where the desktop holds\nAlt. Super is ⌘ on a Mac. Banda's other keys hold Shift or one key\nmore with it (ADR 0068).",
+      "type": "string"
+    },
     "binds": {
       "description": "Keys, such as \"Alt+Shift+R\", each with the id of the action it runs,\nas the key sheet lists them, or \"none\" to free the key for the\nPane. A key is Alt, Ctrl and Shift, any of them, then a letter, a\ndigit, F1 to F24, Left, Right, Up, Down, Return, Space, Tab, Escape,\nBackspace, Delete, Insert, Home, End, PageUp, PageDown or one of\n[ ] , . / ; ' - = ` \\. An action keeps the window's own keys\nbesides.",
       "type": "object",
