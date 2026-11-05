@@ -4,7 +4,7 @@ import { Markdown } from "@banda/ui/components/markdown"
 import { cn } from "@banda/ui/lib/utils"
 import { ListChecksIcon } from "lucide-react"
 import { Card, CardBody, Docked } from "./Card"
-import { useClamp } from "./Messages"
+import { THREAD_ZOOM, useClamp } from "./Messages"
 
 /**
  * The plan an Agent proposed in plan mode, as a card (ADR 0010, decision
@@ -31,7 +31,7 @@ export function ProposedPlan({
         <Markdown
           // A plan starts with its heading at the card's top: the chat's
           // headings keep their margin even first.
-          className={cn("[&>:first-child]:mt-0!", clamp.className)}
+          className={cn("[&>:first-child]:mt-0!", THREAD_ZOOM, clamp.className)}
         >
           {text}
         </Markdown>

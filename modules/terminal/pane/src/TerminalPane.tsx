@@ -29,13 +29,12 @@ import { outsideOf, type Target, targetOf } from "./links"
 import { type MenuAt, TerminalMenu } from "./TerminalMenu"
 import { onThemeChange, useFile } from "@banda/ui/lib/look"
 import { cursorOf, fontOf, themeOf } from "./theme"
-import { zoomAfter } from "@banda/ui/lib/zoom"
-import { keepZoom, zoomOf } from "./zoom"
+import { ZoomBadge } from "@banda/ui/components/zoom-badge"
+import { useZoom } from "@banda/ui/hooks/use-zoom"
+import { zoomOf } from "@banda/ui/lib/zoom"
 
 /** How long a size holds before the shell hears it, in ms. */
 const SETTLE = 120
-/** How long a new zoom shows, in ms. */
-const SHOWN = 1000
 
 /**
  * A terminal: the Person's shell in the Space's folder, or a program
@@ -202,13 +201,10 @@ function Screen({
   const [menuAt, setMenuAt] = useState<MenuAt>({ link: null, selection: "" })
   // Types to the program while it runs, as the menu's Clear does.
   const typed = useRef<(data: string) => void>(() => {})
-  // The zoom shown for a moment after a key changed it.
-  const [zoomShown, setZoomShown] = useState<{ zoom: number } | null>(null)
-  useEffect(() => {
-    if (!zoomShown) return
-    const unshow = setTimeout(() => setZoomShown(null), SHOWN)
-    return () => clearTimeout(unshow)
-  }, [zoomShown])
+  // Its own zoom, kept till the window starts again; `terminal.toml`
+  // keeps its size. It takes Ctrl+− from the program, as Ghostty's and
+  // kitty's do, which readline would read as undo.
+  const { press, shown } = useZoom(terminal)
   // The newest `terminal.toml`, for a surface made, or a snapshot heard,
   // after it came.
   const writing = useFile(TERMINAL_FILE)
@@ -337,14 +333,9 @@ function Screen({
         // Ctrl with + − 0 zooms the terminal.
         beforeKey: (event) => {
           if (event.defaultPrevented) return false
-          const next = zoomAfter(event, zoomOf(terminal))
-          if (next === null) return true
+          if (!press(event)) return true
           event.preventDefault()
-          if (next !== zoomOf(terminal)) {
-            keepZoom(terminal, next)
-            refont.current()
-          }
-          setZoomShown({ zoom: next })
+          refont.current()
           return false
         },
         canActivateLink: (text) => linked(text) !== null,
@@ -393,7 +384,7 @@ function Screen({
       drawn?.dispose()
       surface.current = null
     }
-  }, [engine, space, terminal, shell])
+  }, [engine, space, terminal, shell, press])
 
   // A change to `terminal.toml` reaches a screen already drawn: its font,
   // and its cursor, over what a program asked for. A new look with the
@@ -438,15 +429,7 @@ function Screen({
           }
         />
       </ContextMenu>
-      {zoomShown !== null && (
-        <div
-          role="status"
-          aria-label="Zoom"
-          className="pointer-events-none absolute top-2 right-3 rounded-full border bg-popover px-2.5 py-1 text-xs text-popover-foreground shadow-sm"
-        >
-          {Math.round(zoomShown.zoom * 100)}%
-        </div>
-      )}
+      <ZoomBadge zoom={shown} />
       <Status
         now={now}
         problem={problem}

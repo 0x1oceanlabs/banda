@@ -1,7 +1,7 @@
 /**
  * How a Pane zooms what it shows, as a browser zooms a page: Ctrl or ⌘
  * with + − 0, through the same steps from 50 to 200 % (ADR 0037, decision
- * 6). A Visual's preview and a terminal zoom so.
+ * 6). A Visual's preview, a terminal and a Thread zoom so.
  */
 import { type Key, matches, type Pressed } from "./keys"
 
@@ -25,4 +25,19 @@ export function zoomAfter(event: Pressed, now: number): number | null {
   if (bind.by === 0) return 1
   const at = ZOOMS.indexOf(now)
   return ZOOMS[Math.min(ZOOMS.length - 1, Math.max(0, at + bind.by))]
+}
+
+const kept = new Map<string, number>()
+
+/** The zoom kept for `what`, as a terminal or a Thread: its own, as its
+ * Pane moves between workspaces or pops out, until the window starts
+ * again. */
+export function zoomOf(what: string): number {
+  return kept.get(what) ?? 1
+}
+
+/** Keeps `zoom` for `what`, till the window starts again. */
+export function keepZoom(what: string, zoom: number): void {
+  if (zoom === 1) kept.delete(what)
+  else kept.set(what, zoom)
 }

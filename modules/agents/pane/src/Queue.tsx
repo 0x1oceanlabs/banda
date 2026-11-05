@@ -3,6 +3,7 @@ import { Bubble, BubbleContent } from "@banda/ui/components/bubble"
 import { Button } from "@banda/ui/components/button"
 import { Message, MessageContent } from "@banda/ui/components/message"
 import { Textarea } from "@banda/ui/components/textarea"
+import { cn } from "@banda/ui/lib/utils"
 import {
   Trace,
   TraceIcon,
@@ -13,7 +14,7 @@ import { PauseIcon, PlayIcon } from "lucide-react"
 import { type ImageReader, MessageImages } from "./MessageImages"
 import type { ItemId, ListedThread } from "@banda/contract/agents"
 import { type Waiting, writerOf } from "./thread"
-import { Writer, type Writers } from "./Messages"
+import { THREAD_ZOOM, Writer, type Writers } from "./Messages"
 
 /** What a Person does with a message that waits, as T3 Code offers it. */
 export type QueueActions = {
@@ -160,7 +161,7 @@ function WaitingMessage({
             <Bubble
               variant="outline"
               align="end"
-              className="text-muted-foreground"
+              className={cn("text-muted-foreground", THREAD_ZOOM)}
             >
               <BubbleContent className="border-dashed whitespace-pre-wrap">
                 {body.text}
