@@ -5,7 +5,7 @@ import type { Entry } from "./model"
 import { AgentMark, type Frame } from "./PaneFrame"
 
 /**
- * A tabbed column's group bar, over its tile as Hyprland's groupbar (ADR
+ * A Deck's bar of names, over its tile as Hyprland's groupbar (ADR
  * 0005, decision 6): one segment per Pane, all as wide, the shown one
  * filled. The tile under it keeps its own header. A segment whose Thread
  * calls the Person carries its mark, so no call hides behind another tab.

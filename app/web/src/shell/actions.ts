@@ -29,6 +29,7 @@ import {
   carry,
   consume,
   current,
+  deck,
   type Direction,
   edge,
   entries,
@@ -47,7 +48,6 @@ import {
   send,
   shift,
   step,
-  tabs,
   toEdge,
   widen,
   type Workspaces,
@@ -426,10 +426,10 @@ export const ACTIONS: readonly Action<Shell>[] = [
   {
     id: "column.tabs",
     section: "Columns",
-    title: "The column's Panes as tabs, or one above another",
-    // As Omarchy's Super+G, a group; niri's Mod+W.
-    keys: [{ code: "KeyG", alt: true }],
-    run: (shell) => shell.change((w) => resized(w, tabs(w, columnsOf()))),
+    title: "The column as a Deck, one Pane at a time, or one above another",
+    // niri's Mod+W; Alt+G starts a Group (ADR 0065).
+    keys: [{ code: "KeyT", alt: true }],
+    run: (shell) => shell.change((w) => resized(w, deck(w, columnsOf()))),
   },
   {
     id: "pane.consume-left",

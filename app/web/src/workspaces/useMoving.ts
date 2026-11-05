@@ -57,7 +57,7 @@ const LAST = 1_000_000
 /** What a press on a handle takes for its own, so it carries nothing. */
 const CONTROLS = "input, textarea, select, a, [contenteditable], button"
 
-/** A tab: in a tabbed column's group bar, or in the overview's tile. */
+/** A tab: in a Deck's bar, or in the overview's tile. */
 const TAB = "[data-handle] > [data-pane]"
 
 const GHOST_LOOK =

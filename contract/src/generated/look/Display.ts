@@ -3,4 +3,4 @@
 /**
  * How a column shows its Panes.
  */
-export type Display = "stack" | "tabs";
+export type Display = "stack" | "deck";

@@ -11,11 +11,11 @@ import type { Box } from "./sizing"
 export type Rect = { left: number; top: number; width: number; height: number }
 
 /** A column as the Strip lays it out, in the window's pixels: its tiles
- * are each Pane's, one or more, when it does not show them as tabs. */
+ * are each Pane's, one or more, when it is not a Deck. */
 export type Lane = Box & {
   /** Its Panes, top down, by ID. */
   panes: readonly string[]
-  /** Its row of tabs, one per Pane, when it shows them as tabs. */
+  /** Its row of tabs, one per Pane, when it is a Deck. */
   tabs?: readonly { left: number; right: number; top: number; bottom: number }[]
 }
 
@@ -42,8 +42,8 @@ export function lying(y: number, left: number, right: number): Rect {
 /**
  * Where `moving`, carried to `x`, `y`, lands among `lanes`: a column's
  * edge, or the gap beside it, makes it a column on that side; a column's
- * middle puts it over or under the Pane there; a row of tabs, or a tabbed
- * column's page, makes it a tab. None where it would stay where it is.
+ * middle puts it over or under the Pane there; a Deck's bar, or a Deck's
+ * page, makes it a tab. None where it would stay where it is.
  */
 export function landingAt(
   lanes: readonly Lane[],

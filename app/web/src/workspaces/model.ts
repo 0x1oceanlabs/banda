@@ -136,7 +136,7 @@ export function widthIn(
   return workspace.columns.length === 1 ? sizes.alone : sizes.default
 }
 
-/** How a column shows its Panes: one above another, or as tabs. */
+/** How a column shows its Panes: one above another, or as a Deck. */
 export function displayOf(
   column: Column,
   look: Pick<Columns, "display"> = DEFAULT_COLUMNS
@@ -144,12 +144,12 @@ export function displayOf(
   return column.display ?? look.display
 }
 
-/** The entries of a column on screen: all, or in tabs the one shown. */
+/** The entries of a column on screen: all, or in a Deck the one shown. */
 export function shownIn(
   column: Column,
   look: Pick<Columns, "display"> = DEFAULT_COLUMNS
 ): Entry[] {
-  return displayOf(column, look) === "tabs"
+  return displayOf(column, look) === "deck"
     ? column.entries.slice(column.active, column.active + 1)
     : column.entries
 }
@@ -630,7 +630,7 @@ export function heightsOf(column: Column): number[] {
  * Steps the focused Pane's height to the next of the look's `heights`,
  * higher or lower, from the height it is drawn at; with `wrap`, past the
  * last to the first, as niri's Mod+Shift+R. A Pane alone in its column,
- * or one of tabs, has no height of its own.
+ * or one of a Deck, has no height of its own.
  */
 export function heighten(
   state: Workspaces,
@@ -642,7 +642,7 @@ export function heighten(
   const column = workspace.columns[workspace.focus]
   const entry = column?.entries[column.active]
   if (!entry || column.entries.length < 2) return state
-  if (displayOf(column, look) === "tabs") return state
+  if (displayOf(column, look) === "deck") return state
   const now = heightsOf(column)[column.active]
   const height = nextStep(look.heights, now, by, wrap)
   if (height === undefined) return state
@@ -707,17 +707,17 @@ function withFocused(state: Workspaces, column: Column): Workspaces {
 }
 
 /**
- * Shows the focused column's Panes as tabs, or one above another again, as
- * niri's toggle-column-tabbed-display and Hyprland's togglegroup.
+ * Shows the focused column as a Deck, one Pane at a time, or its Panes one
+ * above another again, as niri's toggle-column-tabbed-display (ADR 0065).
  */
-export function tabs(
+export function deck(
   state: Workspaces,
   look: Pick<Columns, "display"> = DEFAULT_COLUMNS
 ): Workspaces {
   const workspace = current(state)
   const column = workspace.columns[workspace.focus]
   if (!column) return state
-  const display = displayOf(column, look) === "tabs" ? "stack" : "tabs"
+  const display = displayOf(column, look) === "deck" ? "stack" : "deck"
   return withFocused(state, { ...column, display })
 }
 
@@ -860,7 +860,7 @@ export function parse(value: unknown): Workspaces | null {
       if (kept.length !== column.entries.length) return null
       const width = isWidth(column.width) ? column.width : undefined
       const full = column.full === true || undefined
-      const display = isDisplay(column.display) ? column.display : undefined
+      const display = displayIn(column.display)
       const active =
         typeof column.active === "number"
           ? clamp(column.active, kept.length)
@@ -884,8 +884,10 @@ export function parse(value: unknown): Workspaces | null {
   return normalize({ list, current: clamp(value.current, list.length) })
 }
 
-function isDisplay(value: unknown): value is Display {
-  return value === "stack" || value === "tabs"
+/** A kept display; `"tabs"` is a Deck's old name (ADR 0065). */
+function displayIn(value: unknown): Display | undefined {
+  if (value === "tabs") return "deck"
+  return value === "stack" || value === "deck" ? value : undefined
 }
 
 function isWidth(value: unknown): value is Width {

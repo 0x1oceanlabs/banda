@@ -66,7 +66,7 @@ banda_kernel::methods! {
         command even(OneColumn) -> Done, Write;
         /// Whether a column takes the whole screen.
         command maximize(Maximize) -> Done, Write;
-        /// Shows a column's Panes one above another or as tabs.
+        /// Shows a column's Panes one above another or as a Deck.
         command display(ShowAs) -> Done, Write;
         /// Lets every empty workspace go but the one the Person looks at
         /// and the last.

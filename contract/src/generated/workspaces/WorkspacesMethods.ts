@@ -72,7 +72,7 @@ even: CommandMethod<OneColumn, Done>,
  */
 maximize: CommandMethod<Maximize, Done>, 
 /**
- * Shows a column's Panes one above another or as tabs.
+ * Shows a column's Panes one above another or as a Deck.
  */
 display: CommandMethod<ShowAs, Done>, 
 /**

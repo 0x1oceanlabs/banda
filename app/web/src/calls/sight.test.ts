@@ -32,14 +32,14 @@ test("the Person looks at the focused Pane of the window in front", () => {
   expect(showing(w, { space: "s", about: "t1" }, shows)?.pane.args).toEqual({
     thread: "t1",
   })
-  // In one column as tabs, the Thread behind the shown tab is out of sight.
+  // In one column as a Deck, the Thread behind the shown Pane is out of sight.
   const grouped = consume(w, "left")
   expect(sightOf(grouped, { space: "s", about: "t1" }, true, shows)).toBe(
     "on-screen"
   )
-  const tabbed = { display: "tabs" as const }
+  const decked = { display: "deck" as const }
   expect(
-    sightOf(grouped, { space: "s", about: "t1" }, true, shows, tabbed)
+    sightOf(grouped, { space: "s", about: "t1" }, true, shows, decked)
   ).toBe("in-window")
 })
 
