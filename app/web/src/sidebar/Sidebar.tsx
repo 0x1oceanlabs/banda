@@ -40,8 +40,7 @@ import {
   SettingsIcon,
   SquarePenIcon,
 } from "lucide-react"
-import { keyName } from "../actions/actions"
-import { LOCATE, MENU_KEY } from "../menu/menu"
+import { LOCATE } from "../menu/menu"
 import {
   arrange,
   type Row as Arranged,
@@ -54,6 +53,17 @@ import { pickPreset, PRESET_WORDS, type Settings } from "./settings"
 import { type Held, held, hold, rowKey } from "./hold"
 import { archivable, useIsArchived } from "./archived"
 import { ThemeMenu } from "./ThemeMenu"
+import { useKeyLabel, useKeyOf } from "@banda/ui/hooks/use-key-of"
+import { keyCaps } from "@banda/ui/lib/keys"
+
+/** The Banda menu's key in force, as its caps, in the Search field. */
+function MenuKey() {
+  const key = useKeyOf()("menu.open")
+  if (!key) return null
+  return (
+    <Kbd className="h-4.5 px-0.5 text-[10px]">{keyCaps(key).join(" ")}</Kbd>
+  )
+}
 
 /**
  * The sidebar, docked at the window's left edge (ADR 0005, decision 8):
@@ -111,6 +121,7 @@ export function Sidebar({
   /** Finds the folder of a Space whose folder is missing (ADR 0026). */
   onLocate: (space: SpaceId) => void
 }) {
+  const keyFor = useKeyLabel()
   const { spaces, lists, home, isCurrent, onPin } = props
   const [making, setMaking] = useState<SpaceSummary>()
   const done =
@@ -231,9 +242,7 @@ export function Sidebar({
         >
           <SearchIcon className="size-3.5 shrink-0" />
           <span className="min-w-0 flex-1 truncate text-left">Search</span>
-          <Kbd className="h-4.5 px-0.5 text-[10px]">
-            {keyName(MENU_KEY).replaceAll("+", " ")}
-          </Kbd>
+          <MenuKey />
         </button>
         <Button
           variant="ghost"
@@ -294,7 +303,7 @@ export function Sidebar({
           size="icon-sm"
           className="text-muted-foreground"
           aria-label="Settings"
-          title="Settings (Alt+,)"
+          title={keyFor("settings.open", "Settings")}
           onClick={onSettings}
         >
           <SettingsIcon />
@@ -304,7 +313,7 @@ export function Sidebar({
           size="icon-sm"
           className="text-muted-foreground"
           aria-label="Every action and its key"
-          title="Every action and its key (Alt+K)"
+          title={keyFor("menu.keys", "Every action and its key")}
           onClick={onKeys}
         >
           <KeyboardIcon />
@@ -408,6 +417,7 @@ function SectionView({
   onNewThread: (space: SpaceId) => void
   withMenu: WithMenu
 }) {
+  const archiveKey = useKeyLabel()("sidebar.archive")
   const { limit } = settings.group
   const rows = limit > 0 && !more ? section.rows.slice(0, limit) : section.rows
   const hidden = section.rows.length - rows.length
@@ -481,7 +491,7 @@ function SectionView({
                   {row.state === "archived"
                     ? "Unarchive thread"
                     : "Archive thread"}
-                  <DropdownMenuShortcut>Alt+S</DropdownMenuShortcut>
+                  <DropdownMenuShortcut>{archiveKey}</DropdownMenuShortcut>
                 </DropdownMenuItem>
               </ContextMenuContent>
             </ContextMenu>

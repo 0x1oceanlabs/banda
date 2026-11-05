@@ -15,8 +15,10 @@ import {
 import { useStatus } from "@banda/ui/hooks/use-status"
 import { FolderOpenIcon } from "lucide-react"
 import { useLookConfig } from "../look"
+import { useKeyLabel } from "@banda/ui/hooks/use-key-of"
 
 export function General({ engine }: { engine: Engine }) {
+  const settingsKey = useKeyLabel()("settings.open")
   const status = useStatus(engine)
   const folder = useLookConfig()
   return (
@@ -54,8 +56,8 @@ export function General({ engine }: { engine: Engine }) {
         <ItemContent>
           <ItemTitle>These settings</ItemTitle>
           <ItemDescription className="text-xs">
-            A Pane: Alt+, opens it, from the window or the Banda menu; its ×
-            closes it.
+            A Pane, opened from the Banda menu
+            {settingsKey && ` or with ${settingsKey}`}; its × closes it.
           </ItemDescription>
         </ItemContent>
       </Item>

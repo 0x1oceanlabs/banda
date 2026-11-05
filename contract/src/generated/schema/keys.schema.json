@@ -5,7 +5,7 @@
   "type": "object",
   "properties": {
     "binds": {
-      "description": "Keys, such as \"Alt+Shift+R\", each with the id of the action it runs,\nas Alt+K lists them, or \"none\" to free the key for the Pane. A key\nis Alt, Ctrl and Shift, any of them, then a letter, a digit, F1 to\nF24, Left, Right, Up, Down, Return, Space, Tab, Escape, Backspace,\nDelete, Insert, Home, End, PageUp, PageDown or one of [ ] , . / ; '\n- = ` \\. An action keeps the window's own keys besides.",
+      "description": "Keys, such as \"Alt+Shift+R\", each with the id of the action it runs,\nas the key sheet lists them, or \"none\" to free the key for the\nPane. A key is Alt, Ctrl and Shift, any of them, then a letter, a\ndigit, F1 to F24, Left, Right, Up, Down, Return, Space, Tab, Escape,\nBackspace, Delete, Insert, Home, End, PageUp, PageDown or one of\n[ ] , . / ; ' - = ` \\. An action keeps the window's own keys\nbesides.",
       "type": "object",
       "additionalProperties": {
         "type": "string"

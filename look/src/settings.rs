@@ -47,10 +47,10 @@ pub struct Settings {
     pub focus: Focus,
     #[serde(default)]
     pub bar: Bar,
-    /// The drawer on Alt+` (ADR 0025, decision 8).
+    /// The drawer, a quick Thread over the workspace (ADR 0025, decision 8).
     #[serde(default)]
     pub drawer: Drawer,
-    /// The overview on Alt+O (ADR 0025, decision 7).
+    /// The overview of every workspace (ADR 0025, decision 7).
     #[serde(default)]
     pub overview: Overview,
     /// How a Group of columns shows (ADR 0065).

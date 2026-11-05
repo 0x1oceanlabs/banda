@@ -49,11 +49,11 @@ columns: Columns,
  */
 bar: Bar, 
 /**
- * The drawer on Alt+` (ADR 0025, decision 8).
+ * The drawer, a quick Thread over the workspace (ADR 0025, decision 8).
  */
 drawer: Drawer, 
 /**
- * The overview on Alt+O (ADR 0025, decision 7).
+ * The overview of every workspace (ADR 0025, decision 7).
  */
 overview: Overview, 
 /**

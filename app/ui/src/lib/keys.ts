@@ -71,6 +71,74 @@ export const isMac =
   typeof navigator !== "undefined" &&
   /Mac|iPhone|iPad|iPod/.test(navigator.platform)
 
+/** How a key code reads where it is not its own name, as `keys.toml`
+ * writes it (`look/src/keys.rs`). */
+const NAMES: Record<string, string> = {
+  Enter: "Return",
+  BracketLeft: "[",
+  BracketRight: "]",
+  Comma: ",",
+  Period: ".",
+  Slash: "/",
+  Semicolon: ";",
+  Quote: "'",
+  Backquote: "`",
+  Minus: "-",
+  Equal: "=",
+  Backslash: "\\",
+  IntlBackslash: "<",
+}
+
+/** How a Mac writes a key that has a sign of its own. */
+const MAC_NAMES: Record<string, string> = {
+  ArrowLeft: "←",
+  ArrowRight: "→",
+  ArrowUp: "↑",
+  ArrowDown: "↓",
+  Enter: "↩",
+  Backspace: "⌫",
+  Delete: "⌦",
+  Escape: "⎋",
+  Tab: "⇥",
+  PageUp: "⇞",
+  PageDown: "⇟",
+  Home: "↖",
+  End: "↘",
+}
+
+/** The key's own name, as `keys.toml` writes it: `R`, `5`, `Left`. */
+function nameOf(code: string): string {
+  return NAMES[code] ?? code.replace(/^(Key|Digit|Arrow)/, "")
+}
+
+/**
+ * A key's caps as they are pressed, mods first (ADR 0068, decision 4):
+ * `Ctrl`, `Alt`, `Shift`, then the key; on a Mac its signs in Apple's
+ * order, `⌃ ⌥ ⇧`, then the key, an arrow as its arrow. Banda's keys: an
+ * App's Ctrl that is ⌘ on a Mac still reads as `MOD` says.
+ */
+export function keyCaps(key: Key, mac = isMac): string[] {
+  const caps = mac
+    ? [key.ctrl && "⌃", key.alt && "⌥", key.shift && "⇧"]
+    : [key.ctrl && "Ctrl", key.alt && "Alt", key.shift && "Shift"]
+  const name = (mac && MAC_NAMES[key.code]) || nameOf(key.code)
+  return [...caps.filter((cap): cap is string => !!cap), name]
+}
+
+/** How a key reads to the Person, in a tooltip or a menu: `Alt+Shift+1`,
+ * or `⌥⇧1` on a Mac. Never "Mod": the key as it is pressed. */
+export function keyLabel(key: Key, mac = isMac): string {
+  return keyCaps(key, mac).join(mac ? "" : "+")
+}
+
+/** A key as `keys.toml` writes it, on every system: `Ctrl+Alt+Shift+R`. */
+export function keyText(key: Key): string {
+  return [key.ctrl && "Ctrl", key.alt && "Alt", key.shift && "Shift"]
+    .filter(Boolean)
+    .concat(nameOf(key.code))
+    .join("+")
+}
+
 /** How a menu writes the key held for a shortcut: ⌘ on a Mac. */
 export const MOD = isMac ? "⌘" : "Ctrl+"
 

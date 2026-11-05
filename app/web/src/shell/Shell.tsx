@@ -27,7 +27,7 @@ import {
 } from "@banda/ui/pane"
 import { DEFAULT_KEYS } from "@banda/contract/look"
 import type { Action, Args, Thing, WindowApi } from "@banda/ui/module"
-import { actionFor, rebind } from "../actions/actions"
+import { actionFor, keysOf, rebind } from "../actions/actions"
 import { Bar } from "../bar/Bar"
 import { mapOf } from "../bar/Map"
 import { tomlOf } from "@banda/contract/settings"
@@ -140,6 +140,7 @@ import {
   type Shell as Parts,
   type Step,
 } from "./actions"
+import { ActionKeys } from "@banda/ui/hooks/use-key-of"
 
 type Change = (workspaces: State) => Step
 
@@ -653,6 +654,8 @@ export function Shell({
   const [shipped, setShipped] = useState<string>()
   const inForce = shipped === said ? DEFAULT_KEYS : lookKeys
   const keyed = useMemo(() => rebind(ACTIONS, inForce), [inForce])
+  // The keys in force, for what names them (ADR 0068, decision 4).
+  const keys = useMemo(() => keysOf(keyed.actions), [keyed])
   const saidNow = useRef(said)
   useEffect(() => {
     saidNow.current = said
@@ -978,8 +981,6 @@ export function Shell({
       run: parts.run,
       arrange: (plan) => change(() => plan),
       popOut,
-      keyOf: (action) =>
-        keyed.actions.find((each) => each.id === action)?.keys?.[0],
       // As the window draws it now, when the menu opens.
       stand: (entry) => {
         const state = seenNow.current.state
@@ -1006,7 +1007,7 @@ export function Shell({
         }
       },
     }),
-    [change, update, parts, popOut, keyed]
+    [change, update, parts, popOut]
   )
   // What a Pane in its own window asks, the window does, as for its own.
   useEffect(
@@ -1052,168 +1053,170 @@ export function Shell({
   )
 
   return (
-    <div className="flex h-svh flex-col bg-desk text-foreground">
-      <Watches
-        engine={engine}
-        modules={modules}
-        spaces={open}
-        onChange={setAttention}
-        onLists={setLists}
-      />
-      <Bar
-        status={status}
-        attention={attention}
-        workspaces={barWorkspaces}
-        map={mapOf(current(workspaces), lookColumns, listed)}
-        current={workspaces.current}
-        sidebar={narrow ? over : sidebar}
-        onSidebar={toggleSidebar}
-        problems={[...keyed.problems, ...bar.problems]}
-        widgets={bar.parts}
-        listed={bar.listed}
-        onArrange={arrangeBar}
-        working={
-          Object.values(lists)
-            .flat()
-            .filter((listed) => works(listed.mark)).length
-        }
-        onPick={(index) =>
-          index === workspaces.current
-            ? toggleOverview()
-            : change((w) => go(w, index))
-        }
-      />
-      <div
-        className="relative flex min-h-0 flex-1"
-        data-sidebar-shown={(sidebarShown && !narrow) || undefined}
-      >
-        {sidebarShown && (
-          <Sidebar
-            engine={engine}
-            over={narrow}
-            onDismiss={narrow ? hideOver : undefined}
-            onMenu={() => setMenu(openingAt("root"))}
-            onSettings={() => settings()}
-            onKeys={() => setMenu(openingAt("actions"))}
-            hiding={hiding}
-            spaces={spaces}
-            lists={lists}
-            home={home}
-            isCurrent={(space, pane) => {
-              const entry = focused(workspaces)
-              return (
-                entry !== undefined &&
-                samePane(entry, { space, pane }, identityOf)
-              )
-            }}
-            onOpen={pickPane}
-            onNewThread={newThreadIn}
-            onNoSpace={() => machine && startThread(machine)}
-            onArchive={archiveThread}
-            onAddSpace={() => parts.run("space.add")}
-            onPin={(space, pinned) =>
-              updateSpace(engine, { space, pinned }).catch((error: unknown) =>
-                console.error("banda: the Space was not pinned", error)
-              )
-            }
-            onSpaceSettings={(space) => settings(`spaces/${space}`)}
-            onLocate={(space) => route(locateRoute(space))}
-          />
-        )}
-        {sidebarShown && !narrow && (
-          <Edge
-            width={sidebarWidth}
-            columnMin={columnMin}
-            onWidth={setSidebarWidth}
-            onHide={hideSidebar}
-            onHiding={setHiding}
-          />
-        )}
-        <main
-          className="relative min-h-0 min-w-0 flex-1"
-          // A click beside the sidebar over the Strip hides it.
-          onPointerDown={narrow && sidebarShown ? hideOver : undefined}
+    <ActionKeys.Provider value={keys}>
+      <div className="flex h-svh flex-col bg-desk text-foreground">
+        <Watches
+          engine={engine}
+          modules={modules}
+          spaces={open}
+          onChange={setAttention}
+          onLists={setLists}
+        />
+        <Bar
+          status={status}
+          attention={attention}
+          workspaces={barWorkspaces}
+          map={mapOf(current(workspaces), lookColumns, listed)}
+          current={workspaces.current}
+          sidebar={narrow ? over : sidebar}
+          onSidebar={toggleSidebar}
+          problems={[...keyed.problems, ...bar.problems]}
+          widgets={bar.parts}
+          listed={bar.listed}
+          onArrange={arrangeBar}
+          working={
+            Object.values(lists)
+              .flat()
+              .filter((listed) => works(listed.mark)).length
+          }
+          onPick={(index) =>
+            index === workspaces.current
+              ? toggleOverview()
+              : change((w) => go(w, index))
+          }
+        />
+        <div
+          className="relative flex min-h-0 flex-1"
+          data-sidebar-shown={(sidebarShown && !narrow) || undefined}
         >
-          {ready && (
-            <Workspaces
-              workspaces={workspaces}
-              covered={overview || drawerShown}
-              overview={overview}
+          {sidebarShown && (
+            <Sidebar
               engine={engine}
-              modules={modules}
-              spaceName={spaceName}
-              called={called}
-              marked={marked}
-              away={away}
-              zoomed={zoomed}
-              reveal={reveal}
-              listed={listed}
-              frame={frame}
-              onStep={(by) => change((w) => step(w, by))}
-              onGo={goTo}
-              onStart={(pane) =>
-                // Started on this workspace, it opens here, whatever its
-                // kind's home.
-                change((w) =>
-                  opening(w, focused(w)?.space ?? home, pane, {
-                    place: "right",
-                    again: true,
-                  })
+              over={narrow}
+              onDismiss={narrow ? hideOver : undefined}
+              onMenu={() => setMenu(openingAt("root"))}
+              onSettings={() => settings()}
+              onKeys={() => setMenu(openingAt("actions"))}
+              hiding={hiding}
+              spaces={spaces}
+              lists={lists}
+              home={home}
+              isCurrent={(space, pane) => {
+                const entry = focused(workspaces)
+                return (
+                  entry !== undefined &&
+                  samePane(entry, { space, pane }, identityOf)
+                )
+              }}
+              onOpen={pickPane}
+              onNewThread={newThreadIn}
+              onNoSpace={() => machine && startThread(machine)}
+              onArchive={archiveThread}
+              onAddSpace={() => parts.run("space.add")}
+              onPin={(space, pinned) =>
+                updateSpace(engine, { space, pinned }).catch((error: unknown) =>
+                  console.error("banda: the Space was not pinned", error)
                 )
               }
+              onSpaceSettings={(space) => settings(`spaces/${space}`)}
+              onLocate={(space) => route(locateRoute(space))}
             />
           )}
-          <Toaster />
-          <BandaMenu
-            opening={menu}
-            onClose={closeMenu}
-            onChoose={choose}
-            onAdded={(space) => {
-              // As the engine answered it: the list may not know it yet.
-              onCreated(space)
-              startThread(space.id)
-            }}
-            engine={engine}
-            modules={modules}
-            space={here}
-            lists={lists}
-            spaces={spaces.filter((space) => !space.scratch)}
-            actions={keyed.actions}
-            binds={inForce.binds}
-          />
-          {drawer && dropped && (
-            <Drawer
-              entry={drawer}
-              shown={drawerShown}
-              height={drawerLook.height}
+          {sidebarShown && !narrow && (
+            <Edge
+              width={sidebarWidth}
+              columnMin={columnMin}
+              onWidth={setSidebarWidth}
+              onHide={hideSidebar}
+              onHiding={setHiding}
+            />
+          )}
+          <main
+            className="relative min-h-0 min-w-0 flex-1"
+            // A click beside the sidebar over the Strip hides it.
+            onPointerDown={narrow && sidebarShown ? hideOver : undefined}
+          >
+            {ready && (
+              <Workspaces
+                workspaces={workspaces}
+                covered={overview || drawerShown}
+                overview={overview}
+                engine={engine}
+                modules={modules}
+                spaceName={spaceName}
+                called={called}
+                marked={marked}
+                away={away}
+                zoomed={zoomed}
+                reveal={reveal}
+                listed={listed}
+                frame={frame}
+                onStep={(by) => change((w) => step(w, by))}
+                onGo={goTo}
+                onStart={(pane) =>
+                  // Started on this workspace, it opens here, whatever its
+                  // kind's home.
+                  change((w) =>
+                    opening(w, focused(w)?.space ?? home, pane, {
+                      place: "right",
+                      again: true,
+                    })
+                  )
+                }
+              />
+            )}
+            <Toaster />
+            <BandaMenu
+              opening={menu}
+              onClose={closeMenu}
+              onChoose={choose}
+              onAdded={(space) => {
+                // As the engine answered it: the list may not know it yet.
+                onCreated(space)
+                startThread(space.id)
+              }}
               engine={engine}
               modules={modules}
-              listed={listed(drawer)}
-              spaceName={spaceName}
-              frame={frame}
-              onLift={liftDrawer}
-              onPin={pinDrawer}
-              onChange={changeDrawer}
-              onClose={closeDrawer}
+              space={here}
+              lists={lists}
+              spaces={spaces.filter((space) => !space.scratch)}
+              actions={keyed.actions}
+              binds={inForce.binds}
             />
-          )}
-          {overview && (
-            <Overview
-              open={overviewState === "open"}
-              onExited={leftOverview}
-              workspaces={workspaces}
-              spaceName={spaceName}
-              listed={listed}
-              called={called}
-              frame={frame}
-              onPick={(entry) => change((w) => focusEntry(w, entry))}
-              onArrow={(direction) => change((w) => across(w, direction))}
-              onGo={goTo}
-              onClose={closeOverview}
-            />
-          )}
-        </main>
+            {drawer && dropped && (
+              <Drawer
+                entry={drawer}
+                shown={drawerShown}
+                height={drawerLook.height}
+                engine={engine}
+                modules={modules}
+                listed={listed(drawer)}
+                spaceName={spaceName}
+                frame={frame}
+                onLift={liftDrawer}
+                onPin={pinDrawer}
+                onChange={changeDrawer}
+                onClose={closeDrawer}
+              />
+            )}
+            {overview && (
+              <Overview
+                open={overviewState === "open"}
+                onExited={leftOverview}
+                workspaces={workspaces}
+                spaceName={spaceName}
+                listed={listed}
+                called={called}
+                frame={frame}
+                onPick={(entry) => change((w) => focusEntry(w, entry))}
+                onArrow={(direction) => change((w) => across(w, direction))}
+                onGo={goTo}
+                onClose={closeOverview}
+              />
+            )}
+          </main>
+        </div>
       </div>
-    </div>
+    </ActionKeys.Provider>
   )
 }

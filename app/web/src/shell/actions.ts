@@ -10,7 +10,7 @@ import { type PaneState, paneOf, type Place } from "@banda/ui/pane"
 import { RESET_KEY } from "../actions/actions"
 import { showing } from "../calls/sight"
 import { columnsOf } from "../look"
-import { type At, MENU_KEY } from "../menu/menu"
+import type { At } from "../menu/menu"
 import { modules } from "../modules"
 import { identityOf, launcher, minOf, showsOf, widthOf } from "../registry"
 import { settingsPane } from "../settings/pane"
@@ -630,7 +630,7 @@ export const ACTIONS: readonly Action<Shell>[] = [
     id: "menu.open",
     section: "Banda",
     title: "Banda menu",
-    keys: [MENU_KEY],
+    keys: [{ code: "Space", alt: true }],
     overDialogs: true,
     run: (shell) => shell.menu("root"),
   },

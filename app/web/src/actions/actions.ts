@@ -8,7 +8,13 @@
  */
 import type { Keys, Problem } from "@banda/contract/look"
 import { tomlOf } from "@banda/contract/settings"
-import { type Key, matches, type Pressed, sameKey } from "@banda/ui/lib/keys"
+import {
+  type Key,
+  keyText,
+  matches,
+  type Pressed,
+  sameKey,
+} from "@banda/ui/lib/keys"
 import type { Action } from "@banda/ui/module"
 
 /** The action a key press runs, if any. */
@@ -52,7 +58,7 @@ export function rebind<Context>(
   for (const bind of keys.binds) {
     const action = bind.action && (RENAMED[bind.action] ?? bind.action)
     if (action && !known.has(action)) {
-      say(bind, `Banda has no action ${action}; Alt+K lists them`)
+      say(bind, `Banda has no action ${action}; the key sheet lists them`)
       continue
     }
     if (action !== bind.action)
@@ -74,29 +80,17 @@ export function rebind<Context>(
   }
 }
 
-/** How a key code reads where it is not its own name. */
-const NAMES: Record<string, string> = {
-  Enter: "Return",
-  BracketLeft: "[",
-  BracketRight: "]",
-  Comma: ",",
-  Period: ".",
-  Slash: "/",
-  Semicolon: ";",
-  Quote: "'",
-  Backquote: "`",
-  Minus: "-",
-  Equal: "=",
-  Backslash: "\\",
-  IntlBackslash: "<",
-}
-
-/** How a key reads in a tooltip: `Alt+Shift+1`. */
-export function keyName(key: Key): string {
-  const name = NAMES[key.code] ?? key.code.replace(/^(Key|Digit|Arrow)/, "")
-  return [key.ctrl && "Ctrl", key.alt && "Alt", key.shift && "Shift", name]
-    .filter(Boolean)
-    .join("+")
+/** Each action's first key, by the action's id, for what names it
+ * (ADR 0068, decision 4). */
+export function keysOf<Context>(
+  actions: readonly Action<Context>[]
+): ReadonlyMap<string, Key> {
+  return new Map(
+    actions.flatMap((action) => {
+      const key = action.keys?.[0]
+      return key ? [[action.id, key] as const] : []
+    })
+  )
 }
 
 /** The chord no file binds (ADR 0005, decision 11), as `look/src/keys.rs`
@@ -113,7 +107,7 @@ export const KEYS_FILE = "keys.toml"
 
 /** The line of keys.toml that names `key`, as `banda settings` takes it. */
 export function bindPath(key: Key): string {
-  return `binds.${JSON.stringify(keyName(key))}`
+  return `binds.${JSON.stringify(keyText(key))}`
 }
 
 /** Writes `key` to keys.toml, running `action`, or `none` to free it; what

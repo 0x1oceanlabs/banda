@@ -34,6 +34,7 @@ import { type Layout, moved, same, written } from "./arrange"
 import { PARTS, type Part, WORKSPACES } from "./placed"
 import { UpdateWidget } from "./Update"
 import type { Drawn } from "./Widgets"
+import { useKeyLabel } from "@banda/ui/hooks/use-key-of"
 
 /**
  * The bar across the window's top (ADR 0005, decision 9): the sidebar's
@@ -85,6 +86,7 @@ export function Bar({
   /** How many Threads work now, which a restart into an update stops. */
   working?: number
 }) {
+  const keyFor = useKeyLabel()
   const mark = loudest([attention.mark, markOf(status)])
   const { waiting } = attention
   const words =
@@ -161,7 +163,7 @@ export function Bar({
         size="icon-sm"
         aria-label={`Sidebar${words}`}
         aria-pressed={sidebar}
-        title={`Sidebar (Alt+A)${words}`}
+        title={`${keyFor("sidebar.toggle", "Sidebar")}${words}`}
         className="relative"
         onClick={onSidebar}
       >
@@ -369,6 +371,7 @@ function WorkspaceList({
   current: number
   onPick: (index: number) => void
 }) {
+  const keyFor = useKeyLabel()
   const style = useLookBar().workspaces
   const nav = useRef<HTMLElement>(null)
   const mark = useRef<HTMLSpanElement>(null)
@@ -416,10 +419,10 @@ function WorkspaceList({
             aria-label={name}
             title={
               here
-                ? `${whose}Overview (Alt+O)`
+                ? `${whose}${keyFor("overview.toggle", "Overview")}`
                 : w.bottom
                   ? name
-                  : `${whose}${name} (Alt+${number})`
+                  : `${whose}${keyFor(`workspace.go-${number}`, name)}`
             }
             className="relative flex h-6 shrink-0 items-center justify-center overflow-hidden rounded-md text-xs text-muted-foreground tabular-nums outline-none hover:text-foreground focus-visible:ring-3 focus-visible:ring-ring/50 aria-[current]:font-medium aria-[current]:text-foreground"
             onClick={() => onPick(w.index)}

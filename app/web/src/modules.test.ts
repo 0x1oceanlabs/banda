@@ -2,7 +2,7 @@ import { existsSync, readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
 import type { Module } from "@banda/ui/module"
 import { expect, test } from "vitest"
-import { keyName } from "./actions/actions"
+import { keyText } from "@banda/ui/lib/keys"
 import { modules } from "./modules"
 import {
   kindRuns,
@@ -57,7 +57,7 @@ function windowOf(module: Module) {
       id: action.id,
       title: action.title,
       section: action.section,
-      keys: (action.keys ?? []).map(keyName),
+      keys: (action.keys ?? []).map(keyText),
       ...(action.family && { family: action.family }),
       ...(action.unlisted && { unlisted: true }),
     })),

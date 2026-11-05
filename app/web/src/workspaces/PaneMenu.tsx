@@ -9,7 +9,6 @@ import {
   DropdownMenuSeparator,
   DropdownMenuShortcut,
 } from "@banda/ui/components/dropdown-menu"
-import type { Key } from "@banda/ui/lib/keys"
 import { cn } from "@banda/ui/lib/utils"
 import {
   AppWindowIcon,
@@ -26,8 +25,8 @@ import {
   SquareArrowDownLeftIcon,
   XIcon,
 } from "lucide-react"
-import { keyName } from "../actions/actions"
 import { drawn, share, type Width } from "./model"
+import { useKeyLabel } from "@banda/ui/hooks/use-key-of"
 
 /** Where a Pane stands on its workspace, as its menu shows it. */
 export type Stand = {
@@ -61,8 +60,6 @@ export type Stand = {
 export type MenuFrame = {
   /** Runs an action by its id for this Pane, as its key would. */
   run: (action: string, args?: Args) => void
-  /** The key that runs an action now; none without one. */
-  keyOf?: (action: string) => Key | undefined
   /** Opens it in a window of its own, or brings it back; none where a
    * Pane cannot pop out. */
   popOut?: boolean
@@ -122,10 +119,7 @@ export function PaneMenu({
   const later = useAfterMenu()
   const run = (action: string, args?: Args) =>
     later(() => frame.run(action, args))
-  const keyOf = (action: string) => {
-    const key = frame.keyOf?.(action)
-    return key && keyName(key)
-  }
+  const keyOf = useKeyLabel()
   // Where the column would end, while a width is pointed at.
   const [reaches, setReaches] = useState<DOMRect>()
   const alone = stand.panes === 1
