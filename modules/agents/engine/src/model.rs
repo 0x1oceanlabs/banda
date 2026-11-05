@@ -777,6 +777,58 @@ pub struct ListedThread {
     #[ts(optional)]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub message: Option<String>,
+    /// Its latest snooze (ADR 0074), asleep or woken.
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub snooze: Option<Snooze>,
+}
+
+/// A Thread put away by its Person, or by its own Agent, until a time or
+/// until the turn that ran ended (ADR 0074). It sleeps until `until`
+/// comes, unless `woke` says what woke it first: a reader compares
+/// `until` with now, and no fact says that the time came.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "agents/")]
+pub struct Snooze {
+    /// When it was snoozed, in milliseconds since the epoch.
+    #[ts(type = "number")]
+    pub at: i64,
+    pub by: Participant,
+    /// When it wakes, in milliseconds since the epoch; none: when the turn
+    /// that ran ends.
+    #[ts(optional, type = "number")]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub until: Option<i64>,
+    /// What woke it before its time, and when.
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub woke: Option<Woke>,
+}
+
+/// What woke a snoozed Thread before its time, and when.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "agents/")]
+pub struct Woke {
+    #[ts(type = "number")]
+    pub at: i64,
+    pub by: Wake,
+}
+
+/// Why a snoozed Thread woke before its time (ADR 0074, decision 3).
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[serde(rename_all = "snake_case")]
+#[ts(export, export_to = "agents/")]
+pub enum Wake {
+    /// It asks its Person: a Question waits.
+    Question,
+    /// A turn failed.
+    Failure,
+    /// Its Person wrote to it.
+    Message,
+    /// The turn it slept through ended.
+    Done,
+    /// Someone woke it with `agents.wake`.
+    Woken,
 }
 
 /// How much of a message a list keeps.
@@ -885,6 +937,19 @@ pub enum Fact {
     /// The Thread's queue waits for a Person, or goes on.
     #[serde(rename = "thread.held")]
     ThreadHeld { thread: ThreadId, held: bool },
+    /// The Thread is put away until `until`, or, without it, until the
+    /// turn that runs ends (ADR 0074). Its author snoozed it.
+    #[serde(rename = "thread.snoozed")]
+    ThreadSnoozed {
+        thread: ThreadId,
+        #[ts(optional, type = "number")]
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        until: Option<i64>,
+    },
+    /// A snoozed Thread woke before its time. One whose time came says
+    /// nothing.
+    #[serde(rename = "thread.woke")]
+    ThreadWoke { thread: ThreadId, by: Wake },
     /// The Thread went back to before `turn`'s message, to edit it (ADR
     /// 0027): that turn and every turn after it leave it, with their
     /// items. The Space's log keeps what they said.

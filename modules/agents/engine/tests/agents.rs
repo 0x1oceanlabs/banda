@@ -4,7 +4,7 @@
 use banda_agents::Agents;
 use banda_agents::model::{
     Body, Choice, Exit, Failure, ItemId, Mode, OptionValue, QuestionState, Settings, StepState,
-    ThreadList, ThreadView, ToolContent, ToolStatus, TurnId, TurnState,
+    ThreadList, ThreadView, ToolContent, ToolStatus, TurnId, TurnState, Wake,
 };
 use banda_harnesses::{Cli, Harness, Harnesses, HarnessesModule, account_changed};
 use banda_kernel::{
@@ -4348,4 +4348,169 @@ async fn a_tool_update_with_images_can_arrive_before_the_start_and_be_forked() {
             .await
             .is_ok()
     );
+}
+
+/// An hour from now, in milliseconds since the epoch.
+fn in_an_hour() -> i64 {
+    banda_kernel::now_ms() + 3_600_000
+}
+
+impl World {
+    /// `who` snoozes `thread` until `until`, or, without it, until done.
+    async fn snooze(
+        &self,
+        who: Participant,
+        thread: &Value,
+        until: Option<i64>,
+    ) -> Result<Value, banda_kernel::Refusal> {
+        let mut params = json!({ "thread": thread });
+        if let Some(until) = until {
+            params["until"] = json!(until);
+        }
+        self.call(who, "agents.snooze", params).await
+    }
+
+    /// The snooze the list shows for `thread`.
+    async fn snooze_of(&self, thread: &Value) -> Option<banda_agents::model::Snooze> {
+        let list = self.threads().await.threads;
+        let listed = list.into_iter().find(|t| json!(t.thread.id) == *thread);
+        listed.expect("the Thread is listed").snooze
+    }
+
+    /// What woke `thread` before its time, as the list says.
+    async fn woke(&self, thread: &Value) -> Option<Wake> {
+        self.snooze_of(thread).await?.woke.map(|woke| woke.by)
+    }
+}
+
+#[tokio::test]
+async fn a_snooze_puts_a_thread_away_until_its_time_and_the_list_says_so() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let (thread, _) = world.finish(None, "hello").await;
+    let until = in_an_hour();
+    let person = world.person();
+    world.snooze(person, &thread, Some(until)).await.unwrap();
+    let listed = world.snooze_of(&thread).await.unwrap();
+    assert_eq!(
+        (listed.until, listed.by, listed.woke),
+        (Some(until), person, None)
+    );
+    let past = world
+        .snooze(person, &thread, Some(banda_kernel::now_ms() - 1))
+        .await;
+    assert!(past.is_err(), "a time gone is refused");
+    let idle = world.snooze(person, &thread, None).await;
+    assert!(
+        idle.is_err(),
+        "only a Thread at work sleeps until it is done"
+    );
+
+    // Woken by hand, it stays awake, and waking it again does nothing.
+    let wake = json!({ "thread": thread });
+    world
+        .call(person, "agents.wake", wake.clone())
+        .await
+        .unwrap();
+    let woke = world.snooze_of(&thread).await.unwrap().woke;
+    assert_eq!(woke.map(|w| w.by), Some(Wake::Woken));
+    world.call(person, "agents.wake", wake).await.unwrap();
+    assert_eq!(world.snooze_of(&thread).await.unwrap().woke, woke);
+}
+
+#[tokio::test]
+async fn a_thread_that_asks_cannot_be_snoozed_and_a_question_wakes_one_early() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let sent = world.send(None, "please ask first").await;
+    world.until(&sent["thread"], asking).await;
+    let refused = world
+        .snooze(world.person(), &sent["thread"], Some(in_an_hour()))
+        .await;
+    assert!(refused.is_err(), "what calls its Person is never put away");
+
+    // Another Thread's Agent writes to a sleeping one, which then asks.
+    let (writer, writing) = world.finish(None, "hello").await;
+    let (sleeper, _) = world.finish(None, "hi there").await;
+    world
+        .snooze(world.person(), &sleeper, Some(in_an_hour()))
+        .await
+        .unwrap();
+    world
+        .write(agent_of(&writing), Some(&sleeper), "please ask first")
+        .await
+        .unwrap();
+    world.until(&sleeper, asking).await;
+    assert_eq!(world.woke(&sleeper).await, Some(Wake::Question));
+    assert!(world.snooze_of(&writer).await.is_none());
+}
+
+#[tokio::test]
+async fn a_thread_at_work_snoozed_until_done_wakes_when_its_turn_ends() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let sent = world.send(None, "wait for me").await;
+    let thread = &sent["thread"];
+    world
+        .until(thread, |v| {
+            state(v, &sent["turn"]) == Some(TurnState::Running)
+        })
+        .await;
+    world.snooze(world.person(), thread, None).await.unwrap();
+    assert_eq!(world.snooze_of(thread).await.unwrap().until, None);
+    world
+        .call(
+            world.person(),
+            "agents.stop",
+            json!({ "turn": sent["turn"] }),
+        )
+        .await
+        .unwrap();
+    world.until(thread, settled(1)).await;
+    assert_eq!(world.woke(thread).await, Some(Wake::Done));
+}
+
+#[tokio::test]
+async fn its_persons_message_or_a_failure_wakes_a_snoozed_thread() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let (writer, writing) = world.finish(None, "hello").await;
+    let (thread, _) = world.finish(None, "hi there").await;
+    let person = world.person();
+    world
+        .snooze(person, &thread, Some(in_an_hour()))
+        .await
+        .unwrap();
+    world.send(Some(&thread), "one more thing").await;
+    assert_eq!(world.woke(&thread).await, Some(Wake::Message));
+
+    world.until(&thread, settled(2)).await;
+    world
+        .snooze(person, &thread, Some(in_an_hour()))
+        .await
+        .unwrap();
+    assert_eq!(world.woke(&thread).await, None);
+    world
+        .write(agent_of(&writing), Some(&thread), "fail now")
+        .await
+        .unwrap();
+    world.until(&thread, settled(3)).await;
+    assert_eq!(world.woke(&thread).await, Some(Wake::Failure));
+    assert!(world.snooze_of(&writer).await.is_none());
+}
+
+#[tokio::test]
+async fn an_agent_snoozes_only_its_own_thread() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let (mine, view) = world.finish(None, "hello").await;
+    let (other, _) = world.finish(None, "hi there").await;
+    let agent = agent_of(&view);
+    let theirs = world.snooze(agent, &other, Some(in_an_hour())).await;
+    assert!(theirs.is_err(), "another Thread is its Person's to snooze");
+    world
+        .snooze(agent, &mine, Some(in_an_hour()))
+        .await
+        .unwrap();
+    assert_eq!(world.snooze_of(&mine).await.unwrap().by, agent);
 }

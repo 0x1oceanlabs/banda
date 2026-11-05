@@ -326,6 +326,10 @@ function project(state: ThreadState, event: Event): ThreadState {
     }
     case "thread.held":
       return { ...next, held: fact.payload.held }
+    // A Thread's snooze is the list's for now (ADR 0074).
+    case "thread.snoozed":
+    case "thread.woke":
+      return next
     case "thread.rewound": {
       // The turn and every one after it leave, with their messages and
       // what the Agent wrote in them.

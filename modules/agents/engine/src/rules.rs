@@ -13,6 +13,7 @@ use std::collections::HashMap;
 
 pub mod message;
 mod moves;
+pub mod snooze;
 pub mod to_thread;
 pub use moves::{Event, Step, Then, TurnFacts, next};
 
