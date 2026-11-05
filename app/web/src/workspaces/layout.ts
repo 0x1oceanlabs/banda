@@ -14,6 +14,7 @@ import {
   type Ends,
   free,
   groupEnds,
+  padded,
   heightsOf,
   share,
   type Width,
@@ -180,8 +181,7 @@ export function places(
   columns: readonly { id: string; width: Width; min: number; ends?: Ends }[]
 ): Place[] {
   const { pad, gap, inner } = room(strip)
-  // A Group's ends stand out half a gap, as `--group-pad` says.
-  const out = (end: boolean | undefined) => (end ? gap / 2 : 0)
+  const out = (side: boolean) => (side ? gap / 2 : 0)
   let left = pad
   return columns.map((column) => {
     const at = drawn(
@@ -189,10 +189,10 @@ export function places(
       floorIn({ gap, inner }, column.min)
     )
     const width = at * (inner + gap) - gap
-    const { ends } = column
-    left += out(ends?.pad && ends.first)
+    const pads = padded(column.ends)
+    left += out(pads.left)
     const place = { id: column.id, left, right: left + width }
-    left += width + gap + out(ends?.pad && ends.last)
+    left += width + gap + out(pads.right)
     return place
   })
 }

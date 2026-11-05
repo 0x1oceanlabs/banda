@@ -324,6 +324,12 @@ pub struct Update {
 pub struct MovePane {
     pub pane: PaneId,
     pub place: Place,
+    /// Beside a Pane at a Group's end, a column of its own lands inside
+    /// that Pane's Group (`true`) or outside it (`false`), as the mouse
+    /// let it go (ADR 0065, decision 5). Left out, as the place says.
+    #[serde(default)]
+    #[ts(optional)]
+    pub grouped: Option<bool>,
 }
 
 #[derive(Deserialize, TS)]
@@ -545,9 +551,13 @@ impl Workspaces {
     }
 
     async fn move_pane(&self, call: Call, moving: MovePane) -> Result<Done, Refusal> {
-        let MovePane { pane, place } = moving;
+        let MovePane {
+            pane,
+            place,
+            grouped,
+        } = moving;
         done(&call, "moved", pane, Say::Whole, move |list, _| {
-            Ok(model::move_pane(list, pane, &place)?)
+            Ok(model::move_pane(list, pane, &place, grouped)?)
         })
         .await
     }
@@ -747,7 +757,7 @@ impl Workspaces {
         done(&call, "moved", pane, Say::Whole, move |list, _| {
             own(list, wall, me, pane)?;
             let place = beside.place(list, wall)?;
-            Ok(model::move_pane(list, pane, &place)?)
+            Ok(model::move_pane(list, pane, &place, None)?)
         })
         .await
     }

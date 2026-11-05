@@ -4,4 +4,8 @@ import type { GroupLook } from "./GroupLook";
 /**
  * How a Group of columns shows (ADR 0065).
  */
-export type Groups = { look: GroupLook, };
+export type Groups = { look: GroupLook, 
+/**
+ * A handle on its top edge under the pointer, that carries it.
+ */
+handle: boolean, };

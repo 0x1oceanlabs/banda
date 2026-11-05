@@ -1,5 +1,11 @@
 import { describe, expect, test } from "vitest"
-import { edgeSpeed, type Lane, landingAt, pushed } from "./moving"
+import {
+  edgeSpeed,
+  groupLandingAt,
+  type Lane,
+  landingAt,
+  pushed,
+} from "./moving"
 
 /** Three columns 12 px apart: A alone, B over C, D alone. */
 const LANES: Lane[] = [
@@ -110,5 +116,53 @@ describe("pushed", () => {
     expect(pushed(500, 100, 1000)).toBe(0)
     expect(pushed(1100, 100, 1000)).toBe(24)
     expect(pushed(1052, 100, 1000)).toBe(6)
+  })
+
+  test("at a Group's end, inside its plate goes in, past it out", () => {
+    // B and C's column, then D, in a Group "g"; A out of it, 18 px off.
+    const lanes = LANES.map((lane, i) => ({
+      ...lane,
+      ...(i > 0 && { group: "g", left: lane.left + 6, right: lane.right + 6 }),
+    }))
+    const at = (x: number) => {
+      const landing = landingAt(lanes, x, 300, "z", 12)
+      return landing && [landing.pane, landing.side, landing.grouped]
+    }
+    // The Group's first column starts at 318; its plate at 312.
+    expect(at(314)).toEqual(["b", "left", true])
+    expect(at(309)).toEqual(["b", "left", false])
+    // Inside, between its columns, it says nothing of the Group.
+    expect(at(625)).toEqual(["d", "left", undefined])
+    // Past its last, which ends at 930: in to its plate's edge at 936.
+    expect(at(933)).toEqual(["d", "right", true])
+    expect(at(2000)).toEqual(["d", "right", false])
+  })
+
+  test("a Group by its handle lands between columns, never inside another", () => {
+    // Columns 1 and 2 a Group "g", 3 alone, then 4 and 5 a Group "h".
+    const lane = (id: string, n: number, group?: string): Lane => ({
+      id,
+      left: n * 100,
+      right: n * 100 + 90,
+      top: 0,
+      bottom: 600,
+      panes: [id],
+      tiles: [{ top: 0, bottom: 600 }],
+      ...(group && { group }),
+    })
+    const lanes = [
+      lane("1", 0, "g"),
+      lane("2", 1, "g"),
+      lane("3", 2),
+      lane("4", 3, "h"),
+      lane("5", 4, "h"),
+    ]
+    const at = (x: number) => groupLandingAt(lanes, x, "g", 10)?.index
+    // Where it stands, nothing; past 3, after it; into h, past h.
+    expect(at(50)).toBeUndefined()
+    expect(at(260)).toBe(1)
+    expect(at(360)).toBe(3)
+    expect(at(2000)).toBe(3)
+    expect(groupLandingAt(lanes, 260, "g", 10)?.hint.left).toBe(293)
   })
 })

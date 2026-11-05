@@ -16,6 +16,7 @@ import type { Place } from "@banda/contract/workspaces"
 import type { Plan } from "./arrange"
 import { room, scrollOf, stripOf } from "./layout"
 import {
+  groupLandingAt,
   type Lane,
   landingAt,
   nudge,
@@ -28,8 +29,8 @@ import type { Frame } from "./PaneFrame"
 import { THRESHOLD } from "./sizing"
 
 /** Where a carried Pane lands, and the hint that shows it; none where
- * it would stay. */
-export type Landed = { place?: Place; hint?: Rect }
+ * it would stay. At a Group's end, inside the Group or out of it. */
+export type Landed = { place?: Place; hint?: Rect; grouped?: boolean }
 
 /** What the moving reads as it goes, as the window draws now. */
 export type Carrying = {
@@ -38,8 +39,15 @@ export type Carrying = {
   frame: Pick<Frame, "arrange" | "focus">
   /** Goes to workspace `id`, as its number in the bar does. */
   go: (id: string) => void
-  /** Where `pane` lands with the pointer at `x`, `y`, over `hit`. */
-  land: (hit: Element, x: number, y: number, pane: string) => Landed
+  /** Where `pane` lands with the pointer at `x`, `y`, over `hit`; or,
+   * carried by its handle, the whole of `group`. */
+  land: (
+    hit: Element,
+    x: number,
+    y: number,
+    pane: string,
+    group?: string
+  ) => Landed
   /** Scrolls, a frame's worth, what the pointer at `x`, `y` holds
    * against its edge: whether anything moved. */
   scroll: (x: number, y: number) => boolean
@@ -60,6 +68,9 @@ const CONTROLS = "input, textarea, select, a, [contenteditable], button"
 /** A tab: in a Deck's bar, or in the overview's tile. */
 const TAB = "[data-handle] > [data-pane]"
 
+/** A Group's handle, which carries the whole Group (ADR 0065). */
+const GROUP_HANDLE = "[data-group-handle]"
+
 const GHOST_LOOK =
   "pointer-events-none fixed top-0 left-0 z-50 max-w-60 truncate rounded-md border bg-popover px-2.5 py-1.5 text-sm text-popover-foreground shadow-md"
 const HINT_LOOK =
@@ -75,6 +86,9 @@ type Press = {
   lifted: HTMLElement
   x: number
   y: number
+  /** Carried by its handle, the whole Group: its ID, and one of its
+   * columns, which names it to the engine. */
+  group?: { id: string; column: string }
 }
 
 /** A Pane carried. */
@@ -83,6 +97,7 @@ type Carry = Press & {
   hint: HTMLElement
   /** Where it lands, if let go now. */
   place?: Place
+  grouped?: boolean
   /** The workspace's number under the pointer, and the hold there. */
   drop?: { number: HTMLElement; hold: ReturnType<typeof setTimeout> }
   /** The edge's scroll, as it runs. */
@@ -112,7 +127,19 @@ export function useMoving(
       }
       const tab = target.closest<HTMLElement>(TAB)
       const tile = tab ? null : target.closest<HTMLElement>("[data-tile]")
-      if (tab?.dataset.pane) {
+      const handle = target.closest<HTMLElement>(GROUP_HANDLE)
+      const column = handle?.closest<HTMLElement>("[data-column]")
+      const group = handle?.dataset.groupHandle
+      if (handle?.dataset.pane && group && column?.dataset.column) {
+        // The Group, by a Pane of it, which the press's path names.
+        event.preventDefault()
+        press = {
+          ...at,
+          pane: handle.dataset.pane,
+          lifted: handle,
+          group: { id: group, column: column.dataset.column },
+        }
+      } else if (tab?.dataset.pane) {
         press = { ...at, pane: tab.dataset.pane, lifted: tab }
       } else if (!tile?.dataset.tile) {
         return
@@ -144,10 +171,11 @@ export function useMoving(
       from.lifted.dataset.lifted = ""
       const ghost = document.createElement("div")
       ghost.className = GHOST_LOOK
-      ghost.textContent =
-        element
-          .querySelector(`[data-tile="${from.pane}"]`)
-          ?.getAttribute("aria-label") ?? ""
+      ghost.textContent = from.group
+        ? (from.lifted.getAttribute("aria-label") ?? "")
+        : (element
+            .querySelector(`[data-tile="${from.pane}"]`)
+            ?.getAttribute("aria-label") ?? "")
       const hint = document.createElement("div")
       hint.className = cn(HINT_LOOK, carrying.current.ringed && HINT_RING)
       document.body.append(ghost, hint)
@@ -165,12 +193,13 @@ export function useMoving(
       const number = hit?.closest<HTMLElement>("[data-workspace]") ?? undefined
       dropOn(number)
       const workspace = number?.dataset.workspace
-      const { place, hint }: Landed = workspace
+      const { place, hint, grouped }: Landed = workspace
         ? { place: { to: "column", workspace, index: LAST } }
         : hit
-          ? carrying.current.land(hit, x, y, carry.pane)
+          ? carrying.current.land(hit, x, y, carry.pane, carry.group?.id)
           : {}
       carry.place = place
+      carry.grouped = grouped
       carry.hint.classList.toggle("hidden", !hint)
       if (!hint) return
       const { left, top, width, height } = hint
@@ -211,7 +240,7 @@ export function useMoving(
       window.removeEventListener("pointercancel", onCancel, true)
       if (!carry) return
       dropOn(undefined)
-      const { pane, ghost, hint, place, frame, lifted } = carry
+      const { pane, ghost, hint, place, grouped, frame, lifted, group } = carry
       carry = undefined
       cancelAnimationFrame(frame)
       ghost.remove()
@@ -222,10 +251,26 @@ export function useMoving(
       // The click the release makes is the carry's, not what it ends on.
       swallowClick()
       if (!keep || !place) return
-      const plan: Plan = {
-        command: { method: "workspaces.move_pane", params: { pane, place } },
-        want: pane,
-      }
+      // Carried by its handle, the whole Group, to a column's place.
+      const command: Plan["command"] =
+        group && place.to === "column"
+          ? {
+              method: "workspaces.move_group",
+              params: {
+                column: group.column,
+                workspace: place.workspace,
+                index: place.index,
+              },
+            }
+          : {
+              method: "workspaces.move_pane",
+              params: {
+                pane,
+                place,
+                ...(grouped !== undefined && { grouped }),
+              },
+            }
+      const plan: Plan = { command, want: pane }
       void carrying.current.frame.arrange(plan)
     }
 
@@ -276,9 +321,9 @@ export function inStrip(
 ): Pick<Carrying, "land" | "scroll"> {
   if (id === undefined) return { land: () => ({}), scroll: () => false }
   return {
-    land: (hit, x, y, pane) => {
+    land: (hit, x, y, pane, group) => {
       const strip = stripOf(id)
-      return strip?.contains(hit) ? landIn(strip, id, x, y, pane) : {}
+      return strip?.contains(hit) ? landIn(strip, id, x, y, pane, group) : {}
     },
     scroll: (x, y) => {
       const strip = stripOf(id)
@@ -297,17 +342,25 @@ export function inStrip(
  * Where `pane`, carried to `x`, `y` over `board`, the columns of
  * `workspace` as a Strip or the overview lays them out, lands, and its
  * hint: beside the Pane there, or, on an empty workspace, its first
- * column.
+ * column. Carried by its handle, the whole of `group` lands between two
+ * columns.
  */
 export function landIn(
   board: HTMLElement,
   workspace: string,
   x: number,
   y: number,
-  pane: string
+  pane: string,
+  group?: string
 ): Landed {
   const lanes = lanesOf(board)
   const { pad, gap } = room(board)
+  if (group !== undefined && lanes.length > 0) {
+    const landing = groupLandingAt(lanes, x, group, gap)
+    if (!landing) return {}
+    const { index, hint } = landing
+    return { place: { to: "column", workspace, index }, hint }
+  }
   if (lanes.length === 0) {
     const { left, top, bottom } = board.getBoundingClientRect()
     return {
@@ -317,8 +370,8 @@ export function landIn(
   }
   const landing = landingAt(lanes, x, y, pane, gap)
   if (!landing) return {}
-  const { side, hint } = landing
-  return { place: { to: "beside", pane: landing.pane, side }, hint }
+  const { side, hint, grouped } = landing
+  return { place: { to: "beside", pane: landing.pane, side }, hint, grouped }
 }
 
 /** The columns as the window draws them, for `landingAt`. */
@@ -337,6 +390,7 @@ function lanesOf(strip: HTMLElement): Lane[] {
       top,
       bottom,
       panes: tiles.map((tile) => tile.dataset.tile ?? ""),
+      ...(column.dataset.group && { group: column.dataset.group }),
       ...(tabs.length > 0
         ? { tiles: [], tabs: tabs.map((tab) => tab.getBoundingClientRect()) }
         : { tiles: tiles.map((tile) => tile.getBoundingClientRect()) }),

@@ -17,10 +17,18 @@ export type Lane = Box & {
   panes: readonly string[]
   /** Its row of tabs, one per Pane, when it is a Deck. */
   tabs?: readonly { left: number; right: number; top: number; bottom: number }[]
+  /** The Group it is in (ADR 0065). */
+  group?: string
 }
 
-/** Where the Pane lands: beside `pane`, on `side`, and the hint for it. */
-export type Landing = { pane: string; side: Side; hint: Rect }
+/** Where the Pane lands: beside `pane`, on `side`, and the hint for it;
+ * at a Group's end, inside the Group or out of it. */
+export type Landing = {
+  pane: string
+  side: Side
+  hint: Rect
+  grouped?: boolean
+}
 
 /** How wide a column's edge is to the pointer, at most, in pixels: a
  * quarter of the column, never more. */
@@ -53,20 +61,39 @@ export function landingAt(
   gap: number
 ): Landing | undefined {
   if (!lanes.length) return undefined
-  const at = lanes.findIndex((lane) => x < lane.right + gap / 2)
+  // Each column's share of the gap after it reaches its middle, however
+  // wide: a Group's ends leave more room (ADR 0065).
+  const at = lanes.findIndex((lane, i) => {
+    const next = lanes[i + 1]
+    return x < (next ? (lane.right + next.left) / 2 : lane.right + gap / 2)
+  })
   const c = at < 0 ? lanes.length - 1 : at
   const lane = lanes[c]
   const edge = Math.min((lane.right - lane.left) / 4, EDGE)
   const sideways = (side: "left" | "right"): Landing | undefined => {
-    // Its own column, alone, stays where it is beside its neighbours.
+    const left = side === "left"
+    const beside = lanes[left ? c - 1 : c + 1]
+    const middle = left ? lane.left - gap / 2 : lane.right + gap / 2
+    // At a Group's end: inside its plate, which stands half a gap out,
+    // it goes in; past it, out (ADR 0065, decision 5).
+    const end = lane.group !== undefined && beside?.group !== lane.group
+    const grouped = end ? (left ? x >= middle : x <= middle) : undefined
+    // Its own column, alone, stays where it is beside its neighbours,
+    // unless it goes into the Group there.
     const own = (l: Lane | undefined) =>
       l?.panes.length === 1 && l.panes[0] === moving
-    if (own(lane) || own(lanes[side === "left" ? c - 1 : c + 1])) {
-      return undefined
-    }
+    if (own(lane) || (own(beside) && !grouped)) return undefined
     const pane = lane.panes.find((id) => id !== moving)!
-    const middle = side === "left" ? lane.left - gap / 2 : lane.right + gap / 2
-    return { pane, side, hint: standing(middle, lane.top, lane.bottom) }
+    // In the plate, which stands half a gap out (`--group-pad`), between
+    // it and the tile; out of it, in the middle of the gap past it.
+    const out = left ? -1 : 1
+    const at = !end
+      ? middle
+      : grouped
+        ? middle - (out * gap) / 4
+        : middle + (out * gap) / 2
+    const hint = standing(at, lane.top, lane.bottom)
+    return { pane, side, hint, ...(end && { grouped }) }
   }
   if (at < 0 || x > lane.right - edge) return sideways("right")
   if (x < lane.left + edge) return sideways("left")
@@ -105,6 +132,40 @@ export function landingAt(
   if (stays(pane, side)) return undefined
   const middle = side === "above" ? tile.top - gap / 2 : tile.bottom + gap / 2
   return { pane, side, hint: lying(middle, lane.left, lane.right) }
+}
+
+/**
+ * Where Group `group`, carried by its handle to `x`, lands among `lanes`,
+ * its own columns left out: between two columns, never inside another
+ * Group, as `index` of the columns, its own not counted, as the engine
+ * counts (ADR 0065). None where it stands already.
+ */
+export function groupLandingAt(
+  lanes: readonly Lane[],
+  x: number,
+  group: string,
+  gap: number
+): { index: number; hint: Rect } | undefined {
+  const rest = lanes.filter((lane) => lane.group !== group)
+  if (!rest.length) return undefined
+  const at = rest.findIndex((lane) => x < (lane.left + lane.right) / 2)
+  let index = at < 0 ? rest.length : at
+  const inside = (i: number) =>
+    rest[i]?.group !== undefined && rest[i].group === rest[i - 1]?.group
+  while (index < rest.length && inside(index)) index++
+  if (index === lanes.findIndex((lane) => lane.group === group)) {
+    return undefined
+  }
+  const before = rest[index - 1]
+  const after = rest[index]
+  const middle =
+    before && after
+      ? (before.right + after.left) / 2
+      : before
+        ? before.right + gap / 2
+        : after!.left - gap / 2
+  const { top, bottom } = after ?? before!
+  return { index, hint: standing(middle, top, bottom) }
 }
 
 /** `found`, or the last of `list` when nothing was. */

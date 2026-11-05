@@ -2,4 +2,10 @@
 import type { PaneId } from "./PaneId";
 import type { Place } from "./Place";
 
-export type MovePane = { pane: PaneId, place: Place, };
+export type MovePane = { pane: PaneId, place: Place, 
+/**
+ * Beside a Pane at a Group's end, a column of its own lands inside
+ * that Pane's Group (`true`) or outside it (`false`), as the mouse
+ * let it go (ADR 0065, decision 5). Left out, as the place says.
+ */
+grouped?: boolean, };

@@ -85,6 +85,7 @@
 # Columns held together, on Alt+G: how they show.
 # [groups]
 # look = "plate"                     # "plate" behind them, or "halo", a glow round them
+# handle = true                      # a handle on the top edge under the pointer, that carries them
 
 # [motion]
 # off = false                        # true stills everything
