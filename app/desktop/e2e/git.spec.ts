@@ -137,7 +137,7 @@ test("a turn's Diff is all the turn changed, its shell's work too, from git's ch
     thread.getByText("I edited notes.md and ran a script.")
   ).toBeVisible()
   const changed = thread.getByRole("region", { name: "Changed files" })
-  await expect(changed).toContainText("1 file changed")
+  await expect(changed).toContainText("Edited 1 file")
   await changed.getByRole("button", { name: /notes\.md/ }).click()
   const diff = page.getByRole("region", { name: "Diff" })
   await expect(diff.getByRole("button", { name: "Scope" })).toHaveText(

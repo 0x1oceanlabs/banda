@@ -20,6 +20,7 @@ export function ChangedFiles({
 }) {
   return (
     <Card
+      region
       icon={<FileDiffIcon />}
       title={`Edited ${files.length} ${files.length === 1 ? "file" : "files"}`}
       label="Changed files"

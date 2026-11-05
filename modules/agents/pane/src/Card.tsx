@@ -5,7 +5,8 @@ import { cn } from "@banda/ui/lib/utils"
  * a block with a line round it; a header of an icon, what it is, `detail`
  * beside that and `action` at the end; then `children`, in a
  * {@link CardBody} or as rows of their own. It reads as `label`, or as
- * its title.
+ * its title; a card the Person finds the Thread by, as the turn's changes
+ * or the plan, is a region of it.
  */
 export function Card({
   icon,
@@ -13,6 +14,7 @@ export function Card({
   label,
   detail,
   action,
+  region = false,
   className,
   children,
 }: {
@@ -22,12 +24,14 @@ export function Card({
   /** Beside the title, such as how many lines changed. */
   detail?: React.ReactNode
   action?: React.ReactNode
+  /** A landmark of the Thread, rather than a group in it. */
+  region?: boolean
   className?: string
   children?: React.ReactNode
 }) {
   return (
     <div
-      role="group"
+      role={region ? "region" : "group"}
       aria-label={label ?? title}
       className={cn(
         "flex flex-col rounded-block border bg-block text-sm",

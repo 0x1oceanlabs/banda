@@ -11,6 +11,7 @@ export function Plan({ steps }: { steps: PlanStep[] }) {
   const done = steps.filter((step) => step.state === "done").length
   return (
     <Card
+      region
       icon={<ListTodoIcon />}
       title="Plan"
       action={
