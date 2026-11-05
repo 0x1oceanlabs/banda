@@ -1,5 +1,6 @@
 import {
   createContext,
+  type MouseEvent,
   type ReactNode,
   useContext,
   useMemo,
@@ -9,12 +10,27 @@ import { createPortal } from "react-dom"
 import { XIcon, type LucideIcon } from "lucide-react"
 import { cn } from "../lib/utils"
 import { Button } from "./button"
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuTrigger,
+} from "./context-menu"
 
 /**
- * Buttons the window puts in every Pane's header, its own or the frame's,
- * as the one that pops it out into a window of its own (ADR 0025).
+ * What the window gives every Pane's header, its own or the frame's (ADR
+ * 0066): Banda's buttons at the capsule's end, and the Pane menu's rows
+ * for a right click.
  */
-const TileActions = createContext<ReactNode>(null)
+type Tile = {
+  /** Banda's buttons, after the Pane's own: the Pane menu's. */
+  actions?: ReactNode
+  /** The Pane menu's rows, which a right click on the header opens. */
+  menu?: ReactNode
+  /** What a double click on the header does: its column the whole screen
+   * wide, and back. */
+  onWide?: () => void
+}
+const TileHeader = createContext<Tile>({})
 
 /** Where a Pane's own buttons go in the header the frame draws for it. */
 const Slot = createContext<{
@@ -30,18 +46,32 @@ function HeaderSlot({ children }: { children: ReactNode }) {
   return <Slot value={slot}>{children}</Slot>
 }
 
-/** A Pane's buttons, drawn in its tile's header before the window's own;
+/** A Pane's buttons, drawn in its tile's capsule before the window's own;
  * nowhere when the tile draws no header. */
 function InHeader({ children }: { children: ReactNode }) {
   const element = useContext(Slot)?.element
   return element ? createPortal(children, element) : null
 }
 
+/** What in a header answers a click itself, as the browser's row of tabs:
+ * the mouse's own gestures leave it be. */
+const CONTROLS =
+  "button, input, textarea, select, a, [contenteditable], [role=tablist]"
+
+const onControl = (event: MouseEvent) =>
+  event.target instanceof Element && event.target.closest(CONTROLS) !== null
+
 /**
  * A tile's header: one row as tall as every Pane's, with what the Pane puts
- * in it and its close button at the end. The frame draws it for most
- * Panes; a Pane that draws its own (`header: false`) draws it with this.
- * The mouse carries the Pane by it (`data-handle`).
+ * in it, then the capsule at its right end. The capsule holds every button
+ * there in one quiet plate: the Pane's own, a line, then the window's and
+ * close (ADR 0066, decision 2). It shows on every Pane, faint until the
+ * Pane has the focus or the pointer.
+ *
+ * The frame draws it for most Panes; a Pane that draws its own (`header:
+ * false`) draws it with this. The mouse carries the Pane by it
+ * (`data-handle`); a double click makes its column the whole screen wide,
+ * a middle click closes it, a right click opens the Pane menu.
  */
 function PaneHeader({
   title,
@@ -58,25 +88,50 @@ function PaneHeader({
   className?: string
   children: ReactNode
 }) {
-  return (
+  const tile = useContext(TileHeader)
+  const slot = useContext(Slot)
+  const header = (
     <header
       data-handle=""
       className={cn(
         "flex h-9 shrink-0 items-center gap-2 border-b px-2.5 text-sm",
         className
       )}
+      onDoubleClick={(event) => {
+        if (tile.onWide && !onControl(event)) tile.onWide()
+      }}
+      // A middle press would scroll the page, or paste on Linux.
+      onMouseDown={(event) => {
+        if (event.button === 1 && !onControl(event)) event.preventDefault()
+      }}
+      onAuxClick={(event) => {
+        if (event.button !== 1 || onControl(event)) return
+        event.preventDefault()
+        onClose()
+      }}
     >
       {Icon && <Icon className="size-4 shrink-0 text-muted-foreground" />}
       {children}
-      <div className="ml-auto flex shrink-0 items-center gap-1">
-        <span ref={useContext(Slot)?.set} className="contents" />
-        {useContext(TileActions)}
+      <div
+        data-slot="pane-capsule"
+        className="ml-auto flex shrink-0 items-center gap-px rounded-lg bg-foreground/3 p-px text-muted-foreground/70 ring-1 ring-transparent transition-colors group-hover/tile:bg-foreground/6 group-hover/tile:text-muted-foreground group-hover/tile:ring-foreground/8 group-data-[selected=true]/tile:bg-foreground/6 group-data-[selected=true]/tile:text-muted-foreground group-data-[selected=true]/tile:ring-foreground/8"
+      >
+        <span
+          ref={slot?.set}
+          data-own=""
+          className="flex items-center gap-px empty:hidden"
+        />
+        <span
+          aria-hidden
+          className="mx-0.5 h-3.5 w-px shrink-0 bg-foreground/10 [[data-own]:empty+&]:hidden"
+        />
+        {tile.actions}
         <Button
           variant="ghost"
           size="icon-xs"
           aria-label={`Close ${title}`}
           title="Close (Alt+W)"
-          className="shrink-0 opacity-0 transition-opacity group-hover/tile:opacity-100 group-data-[selected=true]/tile:opacity-100 focus-visible:opacity-100"
+          className="shrink-0"
           onClick={onClose}
         >
           <XIcon />
@@ -84,6 +139,15 @@ function PaneHeader({
       </div>
     </header>
   )
+  if (!tile.menu) return header
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger render={header} />
+      <ContextMenuContent aria-label="Pane menu" className="w-72">
+        {tile.menu}
+      </ContextMenuContent>
+    </ContextMenu>
+  )
 }
 
-export { HeaderSlot, InHeader, PaneHeader, TileActions }
+export { HeaderSlot, InHeader, PaneHeader, TileHeader }

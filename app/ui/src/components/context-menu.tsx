@@ -10,7 +10,9 @@ type Menu = {
   /** A press on the trigger, before it moves the focus. */
   pressed: (event: React.PointerEvent) => void
 }
-const After = createContext<Menu>({ later: (act) => act(), pressed: () => {} })
+/** Outside a context menu, an act runs at once. */
+const NOW: Menu = { later: (act) => act(), pressed: () => {} }
+const After = createContext<Menu>(NOW)
 
 /**
  * A menu a right click opens where the pointer is. Its items are the
@@ -101,14 +103,18 @@ function ContextMenuTrigger({
 }: ContextMenuPrimitive.Trigger.Props) {
   const { pressed } = useContext(After)
   return (
-    <ContextMenuPrimitive.Trigger
-      data-slot="context-menu-trigger"
-      onPointerDownCapture={(event) => {
-        pressed(event)
-        onPointerDownCapture?.(event)
-      }}
-      {...props}
-    />
+    // What the trigger holds, as a Pane header's own menus, is not this
+    // menu's: its acts run at once.
+    <After value={NOW}>
+      <ContextMenuPrimitive.Trigger
+        data-slot="context-menu-trigger"
+        onPointerDownCapture={(event) => {
+          pressed(event)
+          onPointerDownCapture?.(event)
+        }}
+        {...props}
+      />
+    </After>
   )
 }
 

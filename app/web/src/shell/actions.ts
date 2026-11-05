@@ -40,12 +40,14 @@ import {
   fresh,
   go,
   heighten,
+  heightTo,
   maximize,
   move,
   open,
   type Opening,
   samePane,
   send,
+  share,
   shift,
   step,
   toEdge,
@@ -361,6 +363,18 @@ export const ACTIONS: readonly Action<Shell>[] = [
       }),
   },
   {
+    id: "column.width",
+    section: "Columns",
+    title: "The column as wide as a step of the look's",
+    // A picture in the Pane menu (ADR 0066, decision 3): `{ width: "1/2" }`.
+    unlisted: true,
+    run: (shell, args) => {
+      const width = args?.width
+      if (typeof width !== "string" || share(width) === undefined) return
+      shell.change((w) => resized(w, fill(w, width)))
+    },
+  },
+  {
     id: "column.center",
     section: "Columns",
     title: "The column in the middle of the screen",
@@ -406,6 +420,18 @@ export const ACTIONS: readonly Action<Shell>[] = [
     title: "Make the Pane shorter",
     keys: [{ code: "ArrowUp", alt: true, ctrl: true }],
     run: (shell) => heightening(shell, -1),
+  },
+  {
+    id: "pane.height",
+    section: "Panes",
+    title: "The Pane as high in its column as a step of the look's",
+    // A picture in the Pane menu (ADR 0066, decision 3): `{ height: "1/3" }`.
+    unlisted: true,
+    run: (shell, args) => {
+      const height = args?.height
+      if (typeof height !== "string") return
+      shell.change((w) => resized(w, heightTo(w, height, columnsOf())))
+    },
   },
   {
     id: "column.even",

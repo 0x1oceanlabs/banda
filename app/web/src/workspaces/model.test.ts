@@ -18,6 +18,7 @@ import {
   go,
   heighten,
   heightsOf,
+  heightTo,
   left,
   maximize,
   move,
@@ -449,8 +450,22 @@ describe("heights, and the edges of a Strip", () => {
   test("a Pane alone or in a Deck has no height of its own", () => {
     const alone = open(start(), A, thread("t1"))
     expect(heighten(alone, 1)).toBe(alone)
+    expect(heightTo(alone, "1/2")).toBe(alone)
     const decked = deck(stacked())
     expect(heighten(decked, 1)).toBe(decked)
+    expect(heightTo(decked, "1/2")).toBe(decked)
+  })
+
+  test("the Pane menu gives a Pane a height at once", () => {
+    let state = heightTo(stacked(), "2/3")
+    expect(focused(state)?.height).toBe("2/3")
+    expect(heights(state)).toEqual([0.17, 0.17, 0.67])
+    // The same height, or none, changes nothing.
+    expect(heightTo(state, "2/3")).toBe(state)
+    expect(heightTo(state, "wide")).toBe(state)
+    state = heightTo(state, "1/3")
+    expect(heights(state)).toEqual([0.33, 0.33, 0.33])
+    expect(focused(state)?.height).toBe("1/3")
   })
 
   test("Home and End focus the edges, and with Shift move the column there", () => {
