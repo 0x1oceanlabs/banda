@@ -44,7 +44,8 @@ test("a right click in a Thread offers what is under it: a reply, a selection, a
     "Search the web",
   ])
   await menu.getByRole("menuitem", { name: /^Copy/ }).click()
-  await expect.poll(clipboard).toContain("bold word")
+  // As Markdown (ADR 0063, decision 4).
+  await expect.poll(clipboard).toContain("A **bold** word")
   await reply.getByText("bold word").click({ button: "right" })
   await menu.getByRole("menuitem", { name: "Quote in reply" }).click()
   await expect(composer).toContainText("bold word")

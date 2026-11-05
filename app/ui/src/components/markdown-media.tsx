@@ -30,8 +30,9 @@ function kindOf(src: string) {
   return null
 }
 
-/** An embedded local file. A refusal stays readable as a file link;
- * playback is always the Person's, never automatic. */
+/** An image a reply shows: a web one as it is, a local file embedded.
+ * Whatever a local one shows, Copy writes it as it was written (ADR
+ * 0063, decision 4). */
 export function MarkdownImage({
   src,
   alt = "",
@@ -39,13 +40,23 @@ export function MarkdownImage({
   src?: string | Blob
   alt?: string
 }) {
-  const resolve = useContext(Resolver)
   const path = typeof src === "string" ? src : ""
+  if (!localPath(path)) return <img src={path} alt={alt} />
+  return (
+    <span className="contents" data-media={path} data-alt={alt}>
+      <LocalMedia path={path} alt={alt} />
+    </span>
+  )
+}
+
+/** An embedded local file. A refusal stays readable as a file link;
+ * playback is always the Person's, never automatic. */
+function LocalMedia({ path, alt }: { path: string; alt: string }) {
+  const resolve = useContext(Resolver)
   const kind = kindOf(path)
   const [loaded, setLoaded] = useState<{ path: string; url: string | null }>()
-  const local = localPath(path)
   useEffect(() => {
-    if (!resolve || !local || !kind) return
+    if (!resolve || !kind) return
     let current = true
     const load = () => {
       void resolve(path).then(
@@ -66,8 +77,7 @@ export function MarkdownImage({
       current = false
       clearInterval(timer)
     }
-  }, [path, resolve, local, kind])
-  if (!local) return <img src={path} alt={alt} />
+  }, [path, resolve, kind])
   const name = alt || path.split("/").at(-1) || path
   const url = loaded?.path === path ? loaded.url : undefined
   if (!kind || !resolve || url === null)

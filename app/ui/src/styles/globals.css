@@ -608,11 +608,13 @@ a[data-file][data-kind="text"] {
 }
 
 /* A reply starts and ends flush with its row: the Thread's rhythm spaces
-   its rows, 20px apart. */
-[data-slot="markdown"] > :first-child {
+   its rows, 20px apart. A diagram's card sits in what keeps its source. */
+[data-slot="markdown"] > :first-child,
+[data-slot="markdown"] > [data-source]:first-child > * {
   margin-top: 0;
 }
-[data-slot="markdown"] > :last-child {
+[data-slot="markdown"] > :last-child,
+[data-slot="markdown"] > [data-source]:last-child > * {
   margin-bottom: 0;
 }
 

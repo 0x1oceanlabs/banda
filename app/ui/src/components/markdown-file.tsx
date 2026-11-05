@@ -119,20 +119,23 @@ export function MarkdownTextPath({ children }: { children?: ReactNode }) {
 }
 
 /** A Markdown link to a file, as a page's link is drawn, with the file's
- * name where a page shows its host; its words alone with no file there. */
+ * name where a page shows its host; its words alone with no file there.
+ * Either copies as `href`, as it was written. */
 export function MarkdownFileLink({
   at,
+  href,
   children,
 }: {
   at: Named
+  href: string
   children: ReactNode
 }) {
   const found = useFound(at.path)
-  if (!found) return children
+  if (!found) return <span data-written={href}>{children}</span>
   return (
-    <FileLink at={at} found={found} kind="named">
+    <FileLink at={at} found={found} kind="named" written={href}>
       <span className="underline underline-offset-2">{children}</span>
-      <span className="ml-1 text-xs font-normal text-muted-foreground">
+      <span className="ml-1 text-xs font-normal text-muted-foreground select-none">
         ({nameAndFolder(found.file).name})
       </span>
     </FileLink>
@@ -148,11 +151,14 @@ function FileLink({
   at,
   found,
   kind,
+  written,
   children,
 }: {
   at: Named
   found: FoundFile
   kind: "code" | "text" | "named"
+  /** A named link's href, as written. */
+  written?: string
   children: ReactNode
 }) {
   const files = useContext(Files)!
@@ -169,6 +175,7 @@ function FileLink({
       href={fileUrl(found.file)}
       data-file={found.file}
       data-kind={kind}
+      data-written={written}
       className={
         kind === "named" ? "font-medium wrap-anywhere text-primary" : undefined
       }

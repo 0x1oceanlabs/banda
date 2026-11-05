@@ -1,6 +1,7 @@
 import { Fragment, useImperativeHandle, useRef, useState } from "react"
 import type { Choice, ToolKind } from "@banda/contract/agents"
 import { Button } from "@banda/ui/components/button"
+import { FIELDS } from "@banda/ui/lib/keys"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -332,9 +333,8 @@ function modded(event: React.KeyboardEvent): boolean {
   return event.altKey || event.ctrlKey || event.metaKey || event.shiftKey
 }
 
-/** What takes Enter for itself: a field, or a control it would press. */
-const FIELDS =
-  "input,textarea,select,[contenteditable=true],[contenteditable=plaintext-only],[role=textbox],[role=combobox],[role=spinbutton]"
+/** What takes Enter for itself, beside a field: a control it would
+ * press. */
 const CONTROLS =
   "button,a[href],summary,[role=button],[role=checkbox],[role=menuitem],[role=option],[role=radio],[role=switch],[role=tab],[role=slider],[data-takes-keys]"
 
