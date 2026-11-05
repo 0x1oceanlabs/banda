@@ -23,6 +23,7 @@ import type { OneImage } from "./OneImage";
 import type { OneThread } from "./OneThread";
 import type { OneTurn } from "./OneTurn";
 import type { OneVisual } from "./OneVisual";
+import type { PostNotice } from "./PostNotice";
 import type { PreviewVisual } from "./PreviewVisual";
 import type { Previewed } from "./Previewed";
 import type { Send } from "./Send";
@@ -197,6 +198,13 @@ answer_issue: CommandMethod<AnswerIssue, null>,
  * while they look at your Thread.
  */
 notify: CommandMethod<Notify, string>, 
+/**
+ * Posts a notice in a Thread for its Agent, from the Person's
+ * window: a quiet line the Thread shows, which the Agent reads
+ * before the message of its next turn, as after a commit from
+ * the Thread's card. It starts no turn.
+ */
+notice: CommandMethod<PostNotice, null>, 
 /**
  * A Visual's page, as the window serves it.
  */

@@ -868,6 +868,46 @@ async fn a_notice_from_the_harness_joins_the_thread() {
     );
 }
 
+/// A notice the Person's window posts, as git's card after a commit from
+/// it: the Thread shows it at once, and its Agent reads it before its next
+/// message, once.
+#[tokio::test]
+async fn a_notice_for_the_agent_shows_at_once_and_goes_before_its_next_prompt() {
+    let root = tempfile::tempdir().unwrap();
+    let world = World::new(root.path()).await;
+    let (thread, _) = world.finish(None, "hello").await;
+    let committed = "Committed 1 file on main: “Add a” (abc1234).";
+    let notice = json!({ "thread": thread, "text": committed });
+    world
+        .call(world.person(), "agents.notice", notice.clone())
+        .await
+        .unwrap();
+    let view = world.thread(&thread).await;
+    assert_eq!(last_reply(&view), format!("notice: {committed}"));
+    assert_eq!(view.turns.len(), 1, "it starts no turn");
+    let agent = world.call(world.agent(), "agents.notice", notice).await;
+    assert_eq!(agent.unwrap_err().code, Code::Forbidden);
+    let two = json!({ "thread": thread, "text": "one\ntwo" });
+    let two = world.call(world.person(), "agents.notice", two).await;
+    assert_eq!(two.unwrap_err().code, Code::Invalid);
+
+    // A slash command goes as it is; the next message takes it along.
+    let (_, view) = world.finish(Some(&thread), "/compact").await;
+    assert_eq!(last_reply(&view), "message: You said: /compact");
+    let (_, view) = world.finish(Some(&thread), "go on").await;
+    let said = last_reply(&view);
+    assert!(
+        said.starts_with("message: You said: Since your last turn, your Person did this in Banda"),
+        "{said}"
+    );
+    assert!(
+        said.ends_with(&format!("\n- {committed}\n\ngo on")),
+        "{said}"
+    );
+    let (_, view) = world.finish(Some(&thread), "again").await;
+    assert_eq!(last_reply(&view), "message: You said: again", "only once");
+}
+
 #[tokio::test]
 async fn a_failed_turn_can_be_tried_again_once_it_is_the_latest() {
     let root = tempfile::tempdir().unwrap();

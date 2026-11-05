@@ -42,7 +42,7 @@ pub fn notice(
     store::put(tx.sql(), thread, &item, None)?;
     let fact = Fact::NoticePosted {
         item: item.id,
-        turn,
+        turn: Some(turn),
         text,
     };
     emit(tx, agent, thread, &fact)
@@ -311,7 +311,7 @@ impl Transcript {
                 let id = ItemId::new();
                 let posted = Fact::NoticePosted {
                     item: id,
-                    turn: self.turn,
+                    turn: Some(self.turn),
                     text: text.clone(),
                 };
                 self.put(id, Body::Notice { text }, posted, None).await

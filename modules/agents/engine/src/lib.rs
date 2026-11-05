@@ -35,6 +35,7 @@ mod kept;
 mod live;
 pub mod model;
 mod notes;
+mod notices;
 mod old_agents;
 mod questions;
 mod rules;
@@ -66,6 +67,7 @@ use model::{
     ThreadSummary, ThreadView, TurnId, TurnState, VERSION, VisualId,
 };
 use notes::Notify;
+use notices::PostNotice;
 use rules::Event;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
@@ -329,6 +331,11 @@ banda_kernel::methods! {
         /// the first. It shows nothing until the turn ends, and nothing
         /// while they look at your Thread.
         command notify(Notify) -> String, Write, tool "notify";
+        /// Posts a notice in a Thread for its Agent, from the Person's
+        /// window: a quiet line the Thread shows, which the Agent reads
+        /// before the message of its next turn, as after a commit from
+        /// the Thread's card. It starts no turn.
+        command notice(PostNotice) -> (), Write;
         /// A Visual's page, as the window serves it.
         call visual(OneVisual) -> VisualPage, Read;
     }
@@ -949,6 +956,12 @@ impl Agents {
         call.command(move |tx| notes::note(tx, agent, notify))
             .await?;
         Ok(notes::NOTED.to_owned())
+    }
+
+    async fn notice(&self, call: Call, notice: PostNotice) -> Result<(), Refusal> {
+        let author = call.participant();
+        call.command(move |tx| notices::post(tx, author, notice))
+            .await
     }
 
     async fn answer_issue(&self, call: Call, answer: AnswerIssue) -> Result<(), Refusal> {

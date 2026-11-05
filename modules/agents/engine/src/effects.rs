@@ -213,6 +213,12 @@ pub async fn start(
                 let title = title.unwrap_or_default();
                 message.text = rules::to_thread::from_agent(answers, from, &title, &message.text);
             }
+            // What the Person did meanwhile in Banda, as a commit from the
+            // card, goes before it once.
+            if crate::notices::takes(&message.text) {
+                let unsent = store::take_unsent(tx.sql(), turn.thread)?;
+                message.text = crate::notices::before(&unsent, &message.text);
+            }
             let settings = store::turn_settings(tx.sql(), &turn)?;
             Ok(Some((turn, message, settings)))
         })
