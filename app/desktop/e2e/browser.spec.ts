@@ -1621,3 +1621,93 @@ test("browser screenshots are MCP images with masked fields and live Agent setti
     .getByRole("button", { name: "OK", exact: true })
     .click()
 })
+
+test("secret fields in frames and shadow roots refuse keys and keep safe snapshot refs", async () => {
+  const address = await serve({
+    "/": `<title>Fields</title>
+      <input aria-label="Password" type="password" value="trial-password">
+      <input aria-label="Numeric card" type="number" autocomplete="cc-number" value="246813579">
+      <input aria-label="CVV" autocomplete="cc-csc" value="2">
+      <textarea aria-label="Card notes" autocomplete="cc-number">445566</textarea>
+      <input aria-label="Name"><div contenteditable="true" role="textbox" aria-label="Rich password" autocomplete="current-password">rich-secret-only</div>
+      <iframe src="/frame"></iframe><div id="shadow"></div>
+      <script>document.querySelector('#shadow').attachShadow({mode:'open'}).innerHTML='<input aria-label="Shadow password" type="password" value="shadow-secret">'</script>`,
+    "/frame":
+      '<input aria-label="Frame card" autocomplete="cc-number" value="112233445"><input aria-label="Frame password" type="password" value="frame-secret">',
+  })
+  window = await startWindow()
+  const { app, page } = window
+  const { thread, composer } = await firstThread(page)
+  await composer.fill("hello")
+  await composer.press("Enter")
+  await expect(thread.getByText("You said: hello")).toBeVisible()
+  const opened = await agentSays(window, "browser_open", { url: address })
+  const tab = Number(/^Opened tab (\d+)\./.exec(opened)?.[1])
+  const tree = await agentSays(window, "browser_snapshot", { tab })
+  for (const value of [
+    "trial-password",
+    "246813579",
+    "445566",
+    "112233445",
+    "shadow-secret",
+    "frame-secret",
+    "rich-secret-only",
+  ])
+    expect(tree).not.toContain(value)
+  expect(tree).toMatch(/spinbutton "Numeric card" \[ref=e\d+\]: "••••"/)
+  expect(tree).toMatch(/textbox "CVV" \[ref=e\d+\]: "••••"/)
+  const ref = (name: string) =>
+    new RegExp(`(?:textbox|spinbutton) "${name}" \\[ref=([^\\]]+)\\]`).exec(
+      tree
+    )![1]!
+  const refusedKey = async (key: string, target?: string) => {
+    const result = await agentCalls(window, "browser_act", {
+      tab,
+      action: "press",
+      key,
+      ...(target ? { ref: target } : {}),
+    })
+    expect(result.isError).toBe(true)
+    expect(result.content[0].text).toContain("Refused (forbidden)")
+    expect(result.content[0].text).toContain("browser_handoff")
+  }
+  await refusedKey("Shift+A", ref("Password"))
+  await refusedKey("Shift+A", ref("Rich password"))
+  await refusedKey("ArrowUp", ref("Numeric card"))
+  await refusedKey("Delete", ref("CVV"))
+  for (const name of ["Frame password", "Shadow password"]) {
+    await agentSays(window, "browser_act", {
+      tab,
+      action: "click",
+      ref: ref(name),
+    })
+    await refusedKey("Q")
+  }
+  // The same keyboard still edits a field that belongs to the task.
+  await agentSays(window, "browser_act", {
+    tab,
+    action: "fill",
+    ref: ref("Name"),
+    text: "Roma",
+  })
+  await agentSays(window, "browser_act", {
+    tab,
+    action: "press",
+    ref: ref("Name"),
+    key: "Shift+A",
+  })
+  const values = await inPages(
+    app,
+    '({name:document.querySelector("[aria-label=Name]").value,password:document.querySelector("[aria-label=Password]").value,card:document.querySelector("[aria-label=\\"Numeric card\\"]").value,cvv:document.querySelector("[aria-label=CVV]").value,frame:document.querySelector("iframe").contentDocument.querySelector("[type=password]").value,shadow:document.querySelector("#shadow").shadowRoot.querySelector("input").value})'
+  )
+  expect(values).toEqual([
+    {
+      name: "RomaA",
+      password: "trial-password",
+      card: "246813579",
+      cvv: "2",
+      frame: "frame-secret",
+      shadow: "shadow-secret",
+    },
+  ])
+})
