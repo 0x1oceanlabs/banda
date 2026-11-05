@@ -1,5 +1,5 @@
 ---
-status: proposed
+status: accepted
 date: 2026-11-06
 ---
 
@@ -230,7 +230,7 @@ stay his to change.
      in the Harness's colour, from the turn's tool calls.
    - **Follow** (the header's target) moves the selection, and the open
      `files.file`, to that file. While the Person edits, Follow waits.
-   - Follow is off by default, and kept per Pane.
+   - Follow is off by default (_decided_), and kept per Pane.
 
 10. **Files does what a Finder does with files.**
     - New file and New folder, Rename (F2, in place), Duplicate, Move (drag
