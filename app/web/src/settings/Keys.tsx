@@ -92,9 +92,8 @@ function Line({
       const pressed = keyToBind(event)
       if (!pressed) return
       ask(false)
-      if ("refused" in pressed) return write(Promise.resolve([pressed.refused]))
-      if (keyText(pressed.key) === bind.text) return
-      write(settings.rename(KEYS_FILE, bindPath(bind), keyText(pressed.key)))
+      if (keyText(pressed) === bind.text) return
+      write(settings.rename(KEYS_FILE, bindPath(bind), keyText(pressed)))
     }
     window.addEventListener("keydown", onKey, { capture: true })
     return () => window.removeEventListener("keydown", onKey, { capture: true })

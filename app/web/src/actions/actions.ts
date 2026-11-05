@@ -13,8 +13,10 @@ import {
   keyText,
   matches,
   type Pressed,
+  realKey,
   sameKey,
 } from "@banda/ui/lib/keys"
+import type { KeysInForce } from "@banda/ui/hooks/use-key-of"
 import type { Action } from "@banda/ui/module"
 
 /** The action a key press runs, if any. */
@@ -37,10 +39,13 @@ const RENAMED: Readonly<Record<string, string>> = {
 }
 
 /**
- * The actions with the Person's keys (`keys.toml`, ADR 0005, decision
- * 11): a key they bind leaves the action that had it and runs theirs, or
- * runs nothing when they free it. A bind to no action is named, at its
- * line, as the look's problems are, and so is one to an action's old id.
+ * The actions with the keys in force. Banda's keys are made real with the
+ * mod (ADR 0068, decision 2): two actions on one key is named at the
+ * `mod` line, and the first keeps it. Then the Person's keys (`keys.toml`,
+ * ADR 0005, decision 11): a key they bind leaves the action that had it
+ * and runs theirs, or runs nothing when they free it. A bind to no action
+ * is named, at its line, as the look's problems are, and so is one to an
+ * action's old id.
  */
 export function rebind<Context>(
   actions: readonly Action<Context>[],
@@ -55,6 +60,28 @@ export function rebind<Context>(
       line: bind.line,
       message: `${bind.text}: ${message}`,
     })
+  // Banda's keys with the mod; the first action to take a key keeps it.
+  const taken = new Map<string, Action<Context>>()
+  const real: Action<Context>[] = []
+  for (const action of actions) {
+    const own: Key[] = []
+    for (const key of action.keys ?? []) {
+      const pressed = realKey(key, keys.mod)
+      const text = keyText(pressed)
+      const first = taken.get(text)
+      if (first)
+        problems.push({
+          path: keys.file,
+          line: keys.modLine,
+          message: `${text} is “${first.title}” and “${action.title}” with this mod; “${first.title}” keeps it`,
+        })
+      else {
+        taken.set(text, action)
+        own.push(pressed)
+      }
+    }
+    real.push(action.keys ? { ...action, keys: own } : action)
+  }
   for (const bind of keys.binds) {
     const action = bind.action && (RENAMED[bind.action] ?? bind.action)
     if (action && !known.has(action)) {
@@ -65,9 +92,9 @@ export function rebind<Context>(
       say(bind, `${bind.action} is called ${action} now`)
     binds.push({ ...bind, action })
   }
-  if (binds.length === 0) return { actions: [...actions], problems }
+  if (binds.length === 0) return { actions: real, problems }
   return {
-    actions: actions.map((action) => ({
+    actions: real.map((action) => ({
       ...action,
       keys: [
         ...(action.keys ?? []).filter(
@@ -80,17 +107,21 @@ export function rebind<Context>(
   }
 }
 
-/** Each action's first key, by the action's id, for what names it
- * (ADR 0068, decision 4). */
-export function keysOf<Context>(
+/** The keys in force for what names them (ADR 0068, decision 4): the
+ * mod, and each action's first key by its id, from `rebind`'s actions. */
+export function keysInForce<Context>(
+  keys: Keys,
   actions: readonly Action<Context>[]
-): ReadonlyMap<string, Key> {
-  return new Map(
-    actions.flatMap((action) => {
-      const key = action.keys?.[0]
-      return key ? [[action.id, key] as const] : []
-    })
-  )
+): KeysInForce {
+  return {
+    mod: keys.mod,
+    byAction: new Map(
+      actions.flatMap((action) => {
+        const key = action.keys?.[0]
+        return key ? [[action.id, key] as const] : []
+      })
+    ),
+  }
 }
 
 /** The chord no file binds (ADR 0005, decision 11), as `look/src/keys.rs`

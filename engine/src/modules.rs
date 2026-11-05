@@ -232,7 +232,10 @@ fn topic(offers: &[Offer]) -> String {
             .filter(|a| !a.unlisted)
             .collect();
         if !actions.is_empty() {
-            text.push_str("\nIts actions, which `keys.toml` binds by id:\n\n");
+            text.push_str(
+                "\nIts actions, which `keys.toml` binds by id, with their keys \
+                 under Banda's own mod, Alt; `keys.toml`'s `mod` moves them:\n\n",
+            );
             for action in actions {
                 let keys = if action.keys.is_empty() {
                     String::new()

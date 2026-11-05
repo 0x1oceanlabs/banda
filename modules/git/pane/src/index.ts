@@ -13,7 +13,7 @@ const toggleDiff: Action = {
   id: "git.diff",
   title: "Show the Diff, or hide it",
   section: "Git",
-  keys: [{ code: "KeyD", alt: true }],
+  keys: [{ code: "KeyD", mod: true }],
   run: (window) => {
     const at = window.focused()
     if (at?.pane.kind === diffPane.kind) return window.run("pane.close")
@@ -27,7 +27,7 @@ const switchBranch: Action = {
   id: "git.branch",
   title: "Switch branch",
   section: "Git",
-  keys: [{ code: "KeyG", alt: true, shift: true }],
+  keys: [{ code: "KeyG", mod: true, shift: true }],
   run: () => askDetails(PICKER),
 }
 

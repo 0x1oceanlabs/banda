@@ -11,10 +11,10 @@ export const ZOOMS = [0.5, 0.67, 0.75, 0.9, 1, 1.1, 1.25, 1.5, 1.75, 2]
 /** The keys that zoom: `by` steps in or out, 0 back to 100 %. `+` is
  * Shift and `=` on most keyboards. */
 export const ZOOM_KEYS: readonly (Key & { by: number })[] = [
-  { code: "Equal", ctrl: true, by: 1 },
-  { code: "Equal", ctrl: true, shift: true, by: 1 },
-  { code: "Minus", ctrl: true, by: -1 },
-  { code: "Digit0", ctrl: true, by: 0 },
+  { code: "Equal", primary: true, by: 1 },
+  { code: "Equal", primary: true, shift: true, by: 1 },
+  { code: "Minus", primary: true, by: -1 },
+  { code: "Digit0", primary: true, by: 0 },
 ]
 
 /** The zoom after `event`, from `now`, one of {@link ZOOMS}; none for a

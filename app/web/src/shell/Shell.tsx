@@ -27,7 +27,7 @@ import {
 } from "@banda/ui/pane"
 import { DEFAULT_KEYS } from "@banda/contract/look"
 import type { Action, Args, Thing, WindowApi } from "@banda/ui/module"
-import { actionFor, keysOf, rebind } from "../actions/actions"
+import { actionFor, keysInForce, rebind } from "../actions/actions"
 import { Bar } from "../bar/Bar"
 import { mapOf } from "../bar/Map"
 import { tomlOf } from "@banda/contract/settings"
@@ -140,7 +140,7 @@ import {
   type Shell as Parts,
   type Step,
 } from "./actions"
-import { ActionKeys } from "@banda/ui/hooks/use-key-of"
+import { KeysInForce } from "@banda/ui/hooks/use-key-of"
 
 type Change = (workspaces: State) => Step
 
@@ -650,12 +650,15 @@ export function Shell({
   // The actions, with the Person's keys over their own (keys.toml), but
   // after the reset chord: then their own, until the file changes.
   const lookKeys = useLookKeys()
-  const said = JSON.stringify(lookKeys.binds)
+  const said = JSON.stringify([lookKeys.mod, lookKeys.binds])
   const [shipped, setShipped] = useState<string>()
   const inForce = shipped === said ? DEFAULT_KEYS : lookKeys
   const keyed = useMemo(() => rebind(ACTIONS, inForce), [inForce])
   // The keys in force, for what names them (ADR 0068, decision 4).
-  const keys = useMemo(() => keysOf(keyed.actions), [keyed])
+  const keys = useMemo(
+    () => keysInForce(inForce, keyed.actions),
+    [inForce, keyed]
+  )
   const saidNow = useRef(said)
   useEffect(() => {
     saidNow.current = said
@@ -1053,7 +1056,7 @@ export function Shell({
   )
 
   return (
-    <ActionKeys.Provider value={keys}>
+    <KeysInForce.Provider value={keys}>
       <div className="flex h-svh flex-col bg-desk text-foreground">
         <Watches
           engine={engine}
@@ -1217,6 +1220,6 @@ export function Shell({
           </main>
         </div>
       </div>
-    </ActionKeys.Provider>
+    </KeysInForce.Provider>
   )
 }

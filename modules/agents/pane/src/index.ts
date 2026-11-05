@@ -20,7 +20,7 @@ const newThread: Action = {
   id: "thread.new",
   title: "New Thread",
   section: "Threads",
-  keys: [{ code: "Enter", alt: true }],
+  keys: [{ code: "Enter", mod: true }],
   run: (window, args = {}) => {
     const { space, ask, harness } = args
     const thread = paneOf(threadPane, {

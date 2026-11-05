@@ -17,7 +17,7 @@ export const terminal = defineModule({
       id: "terminal.new",
       title: "New terminal",
       section: "Panes",
-      keys: [{ code: "Enter", ctrl: true, alt: true }],
+      keys: [{ code: "Enter", mod: true, more: true }],
       run: (window) => window.open(paneOf(terminalPane, NEW_TERMINAL)),
     },
   ],

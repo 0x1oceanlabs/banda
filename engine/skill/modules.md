@@ -15,7 +15,7 @@ Threads with Agents on their Harnesses: what each says and does, and what it ask
 
 Its settings: `agents.toml`.
 
-Its actions, which `keys.toml` binds by id:
+Its actions, which `keys.toml` binds by id, with their keys under Banda's own mod, Alt; `keys.toml`'s `mod` moves them:
 
 - New Thread (`thread.new`), Alt+Return
 
@@ -49,7 +49,7 @@ Programs the Person runs in a terminal: a shell, or a Harness's sign-in.
 
 Its settings: `terminal.toml`.
 
-Its actions, which `keys.toml` binds by id:
+Its actions, which `keys.toml` binds by id, with their keys under Banda's own mod, Alt; `keys.toml`'s `mod` moves them:
 
 - New terminal (`terminal.new`), Ctrl+Alt+Return
 
@@ -65,7 +65,7 @@ Chromium pages in the window, for the Person and every Agent: tabs, extensions, 
 
 Its settings: `browser.toml`.
 
-Its actions, which `keys.toml` binds by id:
+Its actions, which `keys.toml` binds by id, with their keys under Banda's own mod, Alt; `keys.toml`'s `mod` moves them:
 
 - New browser (`browser.new`), Alt+Shift+Return
 
@@ -86,7 +86,7 @@ What an Agent in a Thread may call as a tool of `banda mcp`:
 
 The Space's folder as git sees it: its branch, its changes, and the diff against a base, the last commit or the index; it stages, unstages and reverts them, commits, pushes and pulls, and switches and makes branches.
 
-Its actions, which `keys.toml` binds by id:
+Its actions, which `keys.toml` binds by id, with their keys under Banda's own mod, Alt; `keys.toml`'s `mod` moves them:
 
 - Show the Diff, or hide it (`git.diff`), Alt+D
 - Switch branch (`git.branch`), Alt+Shift+G

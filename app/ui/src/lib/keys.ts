@@ -4,12 +4,52 @@
  * they work on any layout.
  */
 
-/** A key and the mods held with it. ⌘ counts as Ctrl on a Mac. */
+import type { Mod } from "@banda/contract/look"
+
+/** A key and the mods held with it, matched exactly (ADR 0068, decision
+ * 3). Super is ⌘ on a Mac. */
 export type Key = {
   code: string
   alt?: boolean
   shift?: boolean
   ctrl?: boolean
+  super?: boolean
+  /** Ctrl, or ⌘ on a Mac: an App's own key written so, as the browser's
+   * `Ctrl+T`. */
+  primary?: boolean
+  /** Held with the mod (ADR 0068, decision 2), as Banda's own keys are:
+   * `realKey` makes it the mod's keys in force. */
+  mod?: boolean
+  /** With the mod, one key more: the first of Ctrl, Super and Alt the
+   * mod does not hold. */
+  more?: boolean
+}
+
+/** Whether `event` holds the mod: every key of it, others or not. */
+export function holds(
+  event: Pick<Pressed, "altKey" | "ctrlKey" | "metaKey">,
+  mod: Mod
+): boolean {
+  return (
+    (!mod.alt || event.altKey) &&
+    (!mod.ctrl || event.ctrlKey) &&
+    (!mod.super || event.metaKey)
+  )
+}
+
+/** The key one more than the mod, in this order. */
+const MORE = ["ctrl", "super", "alt"] as const
+
+/**
+ * The key as it is pressed with the mod: a key held with the mod holds
+ * its keys, and one key more besides when it says so. A key not held with
+ * the mod is as it is written.
+ */
+export function realKey(key: Key, mod: Mod): Key {
+  if (!key.mod && !key.more) return key
+  const pressed: Key = { code: key.code, shift: key.shift, ...mod }
+  const one = key.more && MORE.find((each) => !mod[each])
+  return one ? { ...pressed, [one]: true } : pressed
 }
 
 /** A key press, as the DOM tells it. */
@@ -24,17 +64,24 @@ export function sameKey(a: Key, b: Key): boolean {
     a.code === b.code &&
     !!a.alt === !!b.alt &&
     !!a.shift === !!b.shift &&
-    !!a.ctrl === !!b.ctrl
+    !!(a.ctrl || a.primary) === !!(b.ctrl || b.primary) &&
+    !!a.super === !!b.super
   )
 }
 
-/** Whether `event` presses `key`, with exactly its mods held. */
-export function matches(event: Pressed, key: Key): boolean {
+/** Whether `event` presses `key`, with exactly its mods held; a primary
+ * key takes Ctrl, or ⌘ as well on a Mac. */
+export function matches(event: Pressed, key: Key, mac = isMac): boolean {
+  const ctrl = key.primary
+    ? mac
+      ? event.ctrlKey || event.metaKey
+      : event.ctrlKey && !event.metaKey
+    : event.ctrlKey === !!key.ctrl && event.metaKey === !!key.super
   return (
     event.code === key.code &&
-    event.altKey === (key.alt ?? false) &&
-    event.shiftKey === (key.shift ?? false) &&
-    (event.ctrlKey || event.metaKey) === (key.ctrl ?? false)
+    event.altKey === !!key.alt &&
+    event.shiftKey === !!key.shift &&
+    ctrl
   )
 }
 
@@ -46,23 +93,19 @@ export function isAlt(code: string): boolean {
 /** Keys that are only mods: a key to bind comes with them, not alone. */
 const MODS = new Set(["Alt", "AltGraph", "Control", "Shift", "Meta"])
 
-/**
- * What a press gives a key waiting to be bound: the key; nothing while
- * only mods are held; or why it cannot be one. Super is the desktop's.
- */
+/** What a press gives a key waiting to be bound: the key as it is
+ * pressed, Super too; nothing while only mods are held. keys.toml says
+ * what it refuses. */
 export function keyToBind(
   event: Pressed & Pick<KeyboardEvent, "key">
-): { key: Key } | { refused: string } | undefined {
+): Key | undefined {
   if (MODS.has(event.key)) return undefined
-  if (event.metaKey)
-    return { refused: "Super is the desktop's: hold Alt or Ctrl instead" }
   return {
-    key: {
-      code: event.code,
-      alt: event.altKey,
-      shift: event.shiftKey,
-      ctrl: event.ctrlKey,
-    },
+    code: event.code,
+    alt: event.altKey,
+    shift: event.shiftKey,
+    ctrl: event.ctrlKey,
+    super: event.metaKey,
   }
 }
 
@@ -119,8 +162,18 @@ function nameOf(code: string): string {
  */
 export function keyCaps(key: Key, mac = isMac): string[] {
   const caps = mac
-    ? [key.ctrl && "⌃", key.alt && "⌥", key.shift && "⇧"]
-    : [key.ctrl && "Ctrl", key.alt && "Alt", key.shift && "Shift"]
+    ? [
+        key.ctrl && "⌃",
+        key.alt && "⌥",
+        key.shift && "⇧",
+        (key.super || key.primary) && "⌘",
+      ]
+    : [
+        (key.ctrl || key.primary) && "Ctrl",
+        key.alt && "Alt",
+        key.super && "Super",
+        key.shift && "Shift",
+      ]
   const name = (mac && MAC_NAMES[key.code]) || nameOf(key.code)
   return [...caps.filter((cap): cap is string => !!cap), name]
 }
@@ -133,7 +186,12 @@ export function keyLabel(key: Key, mac = isMac): string {
 
 /** A key as `keys.toml` writes it, on every system: `Ctrl+Alt+Shift+R`. */
 export function keyText(key: Key): string {
-  return [key.ctrl && "Ctrl", key.alt && "Alt", key.shift && "Shift"]
+  return [
+    (key.ctrl || key.primary) && "Ctrl",
+    key.alt && "Alt",
+    key.super && "Super",
+    key.shift && "Shift",
+  ]
     .filter(Boolean)
     .concat(nameOf(key.code))
     .join("+")

@@ -10,12 +10,14 @@ const press = (code: string, held: Partial<KeyboardEvent> = {}) => ({
   ...held,
 })
 
-test("Ctrl or ⌘ with + − 0 zooms in, out and back, a browser's steps", () => {
+test("Ctrl with + − 0 zooms in, out and back, a browser's steps", () => {
   expect(zoomAfter(press("Equal"), 1)).toBe(1.1)
   expect(zoomAfter(press("Equal", { shiftKey: true }), 1.1)).toBe(1.25)
-  const command = { ctrlKey: false, metaKey: true }
-  expect(zoomAfter(press("Minus", command), 1)).toBe(0.9)
+  expect(zoomAfter(press("Minus"), 1)).toBe(0.9)
   expect(zoomAfter(press("Digit0"), 1.75)).toBe(1)
+  // ⌘ does it on a Mac (keys.test.ts); elsewhere Super is not Ctrl.
+  const sup = { ctrlKey: false, metaKey: true }
+  expect(zoomAfter(press("Minus", sup), 1)).toBeNull()
 })
 
 test("a zoom stays at either end", () => {
