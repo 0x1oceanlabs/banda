@@ -145,9 +145,14 @@ the rest are our defaults, as T3 Code does, and stay Roma's to change.
      repository's style; with "Commit on new branch" it names the branch
      too. `git.prompt` says what the commit would take, as the Diff reads
      the work tree against `HEAD`; `agents.write` runs it on the Thread's Harness
-     and model in a session of its own, planning, refused whatever it
-     asks, that the Thread does not show; `git.written` reads the reply
-     into a subject of at most 72 characters, a body and a branch no
+     and model, at the least effort the Harness offers for it, in a
+     session of its own, planning, refused whatever it asks, that the
+     Thread does not show; a new Thread's, on the Harness it starts on.
+     It is a stream that says the reply once; let go, it cancels the
+     run and closes its session, so Stop stops it. `git.written` reads
+     the reply into a subject of at most 72 characters, a body with no
+     line saying who wrote it (`Co-Authored-By: …`, `Generated with …`:
+     Roma's call of 2026-11-05; the prompt says so too) and a branch no
      branch has (`feature/…`, then `-2`).
    - The status follows the folder: a stream `git.watch` reads it again
      every few seconds while a Pane follows it, and says only what
@@ -163,25 +168,32 @@ the rest are our defaults, as T3 Code does, and stay Roma's to change.
    - **The main button** follows the state, as T3 Code's eleven rules:
      `Commit`, `Commit & push`, `Commit, push & PR`, `Push`, `Push & create
      PR`, `Create PR`, `Pull`, `Publish repository`, `Initialize Git`. It
-     runs the whole chain at once, every file, the message written for it.
-     Disabled, it says why on hover. Its progress is in the button: the
-     step, a hook's last line, a timer, then ✓ for ten seconds; only an
-     error is a toast, and it stays. Until a module can show a toast, the
+     runs the whole chain at once, every file, the message written for it;
+     in a new Thread, whose changes are none of its making, it is
+     `Commit…` and opens the dialog first. Disabled, it says why on
+     hover. Its progress is in the button: the step ("Claude Code is
+     writing the message…", with Stop, which ends the run with nothing
+     committed and no error), a hook's last line, a timer, then ✓ for
+     ten seconds; only an error is a toast, and it stays. Until a module can show a toast, the
      error stays in the card, above the button, till it is closed. A run
      is the Space's, not a card's: a card shown again finds it where it
      is, and as a command of git's ends, `git.watch` reads the status
      again at once.
-   - **`▾`:** Commit (a dialog: the message, the files to leave out,
-     "Commit on new branch"), Push, Create PR. The dialog's message may
-     be the Person's; left empty, the Harness writes it, for the files
-     taken only. What cannot run says why: a menu item on hover, the
-     dialog under its buttons. The branch picker searches the list it
+   - **`▾`:** Commit (a dialog, "Commit to <branch>": each file with its
+     checkbox and `+N −M`, the message, "Commit on new branch", and
+     "Commit N files"), Push, Create PR. The dialog's message may be the
+     Person's; left empty, the Harness writes it, for the files taken
+     only, as its label says ("Message (optional) — Codex writes it").
+     What cannot run says why: a menu item on hover, the dialog above
+     its buttons. The branch picker searches the list it
      read as it opened, and asks git only when that list was full (100
      of here's or of remotes'); its keys move the choice, Enter takes it,
      and words no branch has make "Create branch …" the one Enter takes.
-   - **On the default branch** Push and PR ask first: Abort, "Push to
-     main", or "Check out feature branch & continue", the branch named for
-     it.
+   - **On the default branch** Push and PR ask first, "You're on main":
+     Cancel, "Push to main", or "New branch & push", the branch named for
+     the change (2026-11-05, Roma's words for T3 Code's Abort and "Check
+     out feature branch & continue"); commits made already have no change
+     to name one for, so their Push asks only Cancel or "Push to main".
    - **Changes `+N −M`** opens `git.diff` on Changes.
    - Roma's calls of 2026-11-03: the card is open when a Thread starts,
      as T3 Code's, and the header's button and its key hide it; an empty

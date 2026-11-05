@@ -2,6 +2,7 @@
 import type { CallMethod } from "../CallMethod";
 import type { CommandMethod } from "../CommandMethod";
 import type { Nothing } from "../Nothing";
+import type { StreamMethod } from "../StreamMethod";
 import type { Answer } from "./Answer";
 import type { AnswerIssue } from "./AnswerIssue";
 import type { Attach } from "./Attach";
@@ -57,12 +58,14 @@ defaults: CallMethod<OneHarness, Defaults>,
  */
 changes: CallMethod<ChangesAsk, TurnChanges>, 
 /**
- * What the Thread's Harness replies to a prompt, in a short run of
- * its own the Thread does not show: on its model, asking before
- * it changes anything, and refused whatever it asks. Git asks it
- * for a commit's message.
+ * What a Thread's Harness, or a Harness a new Thread starts on,
+ * replies to a prompt, in a short run of its own no Thread shows:
+ * on the Thread's model at the least effort it offers, asking
+ * before it changes anything, and refused whatever it asks. Git
+ * asks it for a commit's message. It says one piece, the reply or
+ * why there is none; let go before, it stops the run.
  */
-write: CallMethod<WriteAsk, Written>, 
+write: StreamMethod<WriteAsk, Written>, 
 /**
  * Writes into a Thread of this Space, or starts a new Thread on a
  * Harness. Its Agent reads that the message is from your Thread's

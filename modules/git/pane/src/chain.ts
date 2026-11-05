@@ -3,16 +3,25 @@
  * chain at once, a message the Thread's Harness writes (`git.prompt`,
  * `agents.write`, `git.written`), then `git.act`. A run is the Space's,
  * not a card's: a card hidden and shown again finds it where it is, and
- * a second press while it runs does nothing.
+ * a second press while it runs does nothing. While the message is
+ * written, Stop ends the run quietly: `agents.write` let go stops the
+ * Harness's run, and nothing is committed.
  */
-import type { Engine, SpaceId } from "@banda/contract"
+import { type Engine, Refused, type SpaceId } from "@banda/contract"
 import type { Action, Step } from "@banda/contract/git"
 import { problem } from "@banda/ui/lib/words"
-import { NO_HARNESS } from "./quick"
+import { NO_WRITER } from "./quick"
 
 type Run =
   | { is: "idle" }
-  | { is: "running"; label: string; line?: string; since: number }
+  | {
+      is: "running"
+      label: string
+      line?: string
+      since: number
+      /** It can be stopped: the message is being written. */
+      stops?: boolean
+    }
   | { is: "done"; title: string; detail?: string }
   | { is: "failed"; message: string }
 
@@ -38,6 +47,8 @@ const STEPS: Record<Step, string> = {
 
 const runs = new Map<SpaceId, Run>()
 const hearing = new Map<SpaceId, Set<() => void>>()
+/** How to stop each Space's run while its message is written. */
+const stopping = new Map<SpaceId, () => void>()
 
 function set(space: SpaceId, run: Run): void {
   runs.set(space, run)
@@ -61,6 +72,50 @@ export function dismiss(space: SpaceId): void {
   if (runOf(space).is === "failed") set(space, IDLE)
 }
 
+/** Stops the Space's run while its message is written: nothing is
+ * committed, and the button is back. */
+export function stop(space: SpaceId): void {
+  stopping.get(space)?.()
+}
+
+/** Who writes a commit's message: a Thread's Harness, or the one a new
+ * Thread starts on; `name` is the Harness's, as the window says it. */
+export type Writer = { name: string } & (
+  { thread: string } | { harness: string }
+)
+
+/** What `writer` replies to `prompt`, heard on `agents.write`; null once
+ * `stopped`, which lets it go and so stops the Harness's run. */
+function written(
+  engine: Engine,
+  space: SpaceId,
+  writer: Writer,
+  prompt: string,
+  stopped: (stop: () => void) => void
+): Promise<string | null> {
+  const who =
+    "thread" in writer ? { thread: writer.thread } : { harness: writer.harness }
+  return new Promise((resolve, reject) => {
+    const letGo = engine.stream(
+      space,
+      "agents.write",
+      { ...who, prompt },
+      (piece) =>
+        piece.kind === "reply"
+          ? resolve(piece.text)
+          : reject(new Refused(piece.refusal)),
+      (refusal) => {
+        const message = `${writer.name} stopped without writing the message.`
+        reject(new Refused(refusal ?? { code: "conflict", message }))
+      }
+    )
+    stopped(() => {
+      letGo()
+      resolve(null)
+    })
+  })
+}
+
 /** How a commit goes: on a new branch named for the change (`feature`),
  * of these `files` alone, with the Person's `message`. */
 export type Commit = {
@@ -70,11 +125,11 @@ export type Commit = {
 }
 
 /** Runs `action` in `space`, its message the Person's, else written by
- * `thread`'s Harness. */
+ * `writer`. */
 export async function run(
   engine: Engine,
   space: SpaceId,
-  thread: string | null,
+  writer: Writer | null,
   action: Action,
   { feature = false, files, message: own }: Commit = {}
 ): Promise<void> {
@@ -82,25 +137,48 @@ export async function run(
   const commits = action === "commit" || action === "commit_push"
   // A commit with no message of the Person's: the Harness writes it.
   const writes = commits && !own
-  if (writes && thread === null)
-    return set(space, { is: "failed", message: NO_HARNESS })
+  if (writes && writer === null)
+    return set(space, { is: "failed", message: NO_WRITER })
   const step = (label: string) =>
     set(space, { is: "running", label, since: Date.now() })
-  step(writes ? "Writing commit message…" : "Starting…")
+  // Stopped while the message is written, the run ends here quietly.
+  let stopped = false
+  let letGo = () => {}
+  const stopper = () => {
+    stopped = true
+    letGo()
+    set(space, IDLE)
+  }
+  if (writes && writer !== null) {
+    stopping.set(space, stopper)
+    set(space, {
+      is: "running",
+      label: `${writer.name} is writing the message…`,
+      since: Date.now(),
+      stops: true,
+    })
+  } else step("Starting…")
   try {
     let message = own
     let branch: string | undefined
     const ask = { space }
-    if (writes && thread !== null) {
+    if (writes && writer !== null) {
       const { prompt } = await engine.call(
         "git.prompt",
         { files, branch: feature },
         ask
       )
-      const written = await engine.call("agents.write", { thread, prompt }, ask)
+      if (stopped) return
+      const reply = await written(engine, space, writer, prompt, (stop) => {
+        letGo = stop
+      })
+      if (stopped || reply === null) return
+      // Written: from here it goes on to the end, as a commit does.
+      if (stopping.get(space) === stopper) stopping.delete(space)
+      step(STEPS[feature ? "branching" : "committing"])
       ;({ message, branch } = await engine.call(
         "git.written",
-        { reply: written.text, branch: feature },
+        { reply, branch: feature },
         ask
       ))
     } else if (commits && feature && own) {
@@ -169,6 +247,8 @@ export async function run(
       { once: true }
     )
   } catch (error) {
-    set(space, { is: "failed", message: problem(error) })
+    if (!stopped) set(space, { is: "failed", message: problem(error) })
+  } finally {
+    if (stopping.get(space) === stopper) stopping.delete(space)
   }
 }

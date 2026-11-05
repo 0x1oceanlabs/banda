@@ -25,6 +25,7 @@ function GitRows({
   engine,
   space,
   thread,
+  harness,
   open,
   opening,
   opened,
@@ -70,6 +71,7 @@ function GitRows({
         engine={engine}
         space={space}
         thread={thread}
+        harness={harness}
         status={status}
       />
       {status.files.length > 0 && (

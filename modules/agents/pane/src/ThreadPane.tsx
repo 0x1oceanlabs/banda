@@ -276,6 +276,7 @@ function ThreadContent(props: PaneProps<ThreadArgs>) {
               engine={engine}
               space={space}
               thread={thread}
+              harness={harness ? { id: harness, name } : null}
               open={open}
               focused={focused}
               wide={wide}

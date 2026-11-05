@@ -1,9 +1,10 @@
 /**
  * The git button (ADR 0034, decision 4), as T3 Code's: one press runs
  * the whole chain (`chain.ts`). Its progress is in the button: the step,
- * a hook and its last line, a timer; then ✓ for ten seconds. An error
- * stays in the card until it is closed. A push on the default branch
- * asks first.
+ * a hook and its last line, a timer; then ✓ for ten seconds. While the
+ * message is written, Stop ends the run. An error stays in the card
+ * until it is closed. A push on the default branch asks first; a new
+ * Thread's Commit… opens the Commit dialog.
  */
 import { type ReactNode, useState, useSyncExternalStore } from "react"
 import type { Engine, SpaceId } from "@banda/contract"
@@ -37,7 +38,7 @@ import {
   GitCommitIcon,
   InfoIcon,
 } from "lucide-react"
-import { dismiss, hearRun, run, runOf } from "./chain"
+import { dismiss, hearRun, run, runOf, stop, type Writer } from "./chain"
 import { CommitDialog } from "./CommitDialog"
 import {
   askOf,
@@ -60,24 +61,31 @@ export function GitButton({
   engine,
   space,
   thread,
+  harness,
   status,
 }: {
   engine: Engine
   space: SpaceId
   thread: string | null
+  harness: { id: string; name: string } | null
   status: Status
 }) {
   const now = useSyncExternalStore(
     (hear) => hearRun(space, hear),
     () => runOf(space)
   )
-  // A Harness writes a commit's message: a new Thread's has none yet.
-  const writes = thread !== null
+  // The Thread's Harness writes a commit's message; a new Thread's, the
+  // one it starts on.
+  const writer: Writer | null =
+    harness &&
+    (thread !== null
+      ? { name: harness.name, thread }
+      : { name: harness.name, harness: harness.id })
   const [asking, setAsking] = useState<Action | null>(null)
   const [committing, setCommitting] = useState(false)
   const go = (action: Action, feature = false) => {
     setAsking(null)
-    void run(engine, space, thread, action, { feature })
+    void run(engine, space, writer, action, { feature })
   }
   // A push on the default branch asks first.
   const press = (action: Action) =>
@@ -86,7 +94,21 @@ export function GitButton({
   if (now.is === "running")
     return (
       <div role="status" aria-live="polite" className="rounded-lg bg-muted/50">
-        <DetailsRow icon={<Spinner />} end={<Elapsed since={now.since} />}>
+        <DetailsRow
+          icon={<Spinner />}
+          // Who writes the message is said whole, on two lines if need be.
+          className="h-auto min-h-8 py-1.5 [&>.flex-1]:whitespace-normal"
+          end={
+            <>
+              <Elapsed since={now.since} />
+              {now.stops && (
+                <Button variant="ghost" size="xs" onClick={() => stop(space)}>
+                  Stop
+                </Button>
+              )}
+            </>
+          }
+        >
           {now.label}
         </DetailsRow>
         <Under text={now.line} />
@@ -102,7 +124,7 @@ export function GitButton({
       </div>
     )
 
-  const quick = quickOf(status, { writes })
+  const quick = quickOf(status, { started: thread !== null })
   const Icon = ICONS[quick.icon]
   const ask = asking && askOf(asking, status.branch ?? "")
   return (
@@ -126,7 +148,11 @@ export function GitButton({
             icon={<Icon />}
             disabled={quick.action === null}
             className="hover:bg-transparent dark:hover:bg-transparent"
-            onClick={() => quick.action && press(quick.action)}
+            onClick={() =>
+              quick.asks
+                ? setCommitting(true)
+                : quick.action && press(quick.action)
+            }
           >
             {quick.label}
           </DetailsRow>
@@ -141,10 +167,10 @@ export function GitButton({
       {committing && (
         <CommitDialog
           status={status}
-          writes={writes}
+          writer={writer?.name ?? null}
           onClose={() => setCommitting(false)}
           onCommit={(commit) =>
-            void run(engine, space, thread, "commit", commit)
+            void run(engine, space, writer, "commit", commit)
           }
         />
       )}
@@ -155,27 +181,25 @@ export function GitButton({
         {asking && ask && (
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>{ask.title}</DialogTitle>
+              <DialogTitle className="break-all">{ask.title}</DialogTitle>
               <DialogDescription>{ask.body}</DialogDescription>
             </DialogHeader>
-            <DialogFooter>
+            {/* A long branch's name wraps the buttons, never past the edge. */}
+            <DialogFooter className="flex-wrap">
               <DialogClose render={<Button variant="outline" />}>
-                Abort
+                Cancel
               </DialogClose>
-              <Button variant="outline" onClick={() => go(asking)}>
-                {ask.go}
-              </Button>
               <Button
-                disabled={asking !== "commit_push"}
-                title={
-                  asking === "commit_push"
-                    ? undefined
-                    : "With no changes to commit, the branch has nothing to be named for."
-                }
-                onClick={() => go(asking, true)}
+                variant={ask.branch ? "outline" : "default"}
+                className="max-w-full min-w-0"
+                title={ask.go}
+                onClick={() => go(asking)}
               >
-                Check out feature branch & continue
+                <span className="truncate">{ask.go}</span>
               </Button>
+              {ask.branch && (
+                <Button onClick={() => go(asking, true)}>{ask.branch}</Button>
+              )}
             </DialogFooter>
           </DialogContent>
         )}

@@ -31,6 +31,8 @@
 //! - `warn`: sends a notice, if the client shows them, then answers.
 //! - `crash`: exits at once, as a Harness that dies would.
 //! - `which session`: replies with the session's ID and its own process ID.
+//! - `how many turns`: replies with how many turns run now, its own
+//!   among them, and how many sessions were closed (`session/close`).
 //! - `steps`: makes a plan of three steps and does them one by one; the
 //!   context is then a quarter full. With `clear`, it clears the plan.
 //! - `clear`: clears a plan it never made.
@@ -94,21 +96,21 @@ use agent_client_protocol::schema::ProtocolVersion;
 use agent_client_protocol::schema::v1::{
     AgentAuthCapabilities, AgentCapabilities, AuthMethod, AuthMethodAgent, AuthMethodTerminal,
     AuthenticateRequest, AuthenticateResponse, AvailableCommand, AvailableCommandInput,
-    AvailableCommandsUpdate, CancelNotification, ConfigOptionUpdate, Content, ContentBlock,
-    ContentChunk, Cost, CreateElicitationRequest, Diff, ElicitationAction, ElicitationContentValue,
-    ElicitationFormMode, ElicitationSchema, ElicitationSessionScope, EnumOption,
-    ForkSessionRequest, ForkSessionResponse, ImageContent, Implementation, InitializeRequest,
-    InitializeResponse, LoadSessionRequest, LoadSessionResponse, LogoutCapabilities, LogoutRequest,
-    LogoutResponse, MessageId, NewSessionRequest, NewSessionResponse, Notice, NoticeSeverity,
-    PermissionOption, PermissionOptionKind, Plan, PlanEntry, PlanEntryPriority, PlanEntryStatus,
-    PromptCapabilities, PromptRequest, PromptResponse, RequestPermissionOutcome,
-    RequestPermissionRequest, ResumeSessionRequest, ResumeSessionResponse, SessionCapabilities,
-    SessionConfigOption, SessionConfigOptionCategory, SessionConfigOptionValue,
-    SessionConfigSelectOption, SessionForkCapabilities, SessionId, SessionNotification,
-    SessionResumeCapabilities, SessionUpdate, SetSessionConfigOptionRequest,
-    SetSessionConfigOptionResponse, StopReason, StringPropertySchema, Terminal, TextContent,
-    ToolCall, ToolCallContent, ToolCallStatus, ToolCallUpdate, ToolCallUpdateFields, ToolKind,
-    UnstructuredCommandInput, UsageUpdate,
+    AvailableCommandsUpdate, CancelNotification, CloseSessionRequest, CloseSessionResponse,
+    ConfigOptionUpdate, Content, ContentBlock, ContentChunk, Cost, CreateElicitationRequest, Diff,
+    ElicitationAction, ElicitationContentValue, ElicitationFormMode, ElicitationSchema,
+    ElicitationSessionScope, EnumOption, ForkSessionRequest, ForkSessionResponse, ImageContent,
+    Implementation, InitializeRequest, InitializeResponse, LoadSessionRequest, LoadSessionResponse,
+    LogoutCapabilities, LogoutRequest, LogoutResponse, MessageId, NewSessionRequest,
+    NewSessionResponse, Notice, NoticeSeverity, PermissionOption, PermissionOptionKind, Plan,
+    PlanEntry, PlanEntryPriority, PlanEntryStatus, PromptCapabilities, PromptRequest,
+    PromptResponse, RequestPermissionOutcome, RequestPermissionRequest, ResumeSessionRequest,
+    ResumeSessionResponse, SessionCapabilities, SessionCloseCapabilities, SessionConfigOption,
+    SessionConfigOptionCategory, SessionConfigOptionValue, SessionConfigSelectOption,
+    SessionForkCapabilities, SessionId, SessionNotification, SessionResumeCapabilities,
+    SessionUpdate, SetSessionConfigOptionRequest, SetSessionConfigOptionResponse, StopReason,
+    StringPropertySchema, Terminal, TextContent, ToolCall, ToolCallContent, ToolCallStatus,
+    ToolCallUpdate, ToolCallUpdateFields, ToolKind, UnstructuredCommandInput, UsageUpdate,
 };
 use agent_client_protocol::{Agent, Client, ConnectionTo, Error, Responder, Stdio};
 use serde::{Deserialize, Serialize};
@@ -139,6 +141,8 @@ struct SteeringResponse {
 struct Fake {
     sessions: Arc<AtomicU64>,
     cancelled: Arc<Mutex<HashSet<SessionId>>>,
+    /// How many sessions the client closed.
+    closed: Arc<AtomicU64>,
     /// The client declared that it shows notices.
     notices: Arc<AtomicBool>,
     /// The `flaky` prompts that have failed once.
@@ -478,6 +482,17 @@ async fn turn(
     if words.contains("git commit messages") {
         let reply = r#"{"subject": "Change the app", "body": "", "branch": "change-app"}"#;
         say(&cx, &session, SessionUpdate::AgentMessageChunk(text(reply)))?;
+        return Ok(StopReason::EndTurn);
+    }
+    if words.contains("how many turns") {
+        let running = fake.running.lock().unwrap().len();
+        let closed = fake.closed.load(Ordering::Relaxed);
+        let reply = format!("Turns running {running}, sessions closed {closed}");
+        say(
+            &cx,
+            &session,
+            SessionUpdate::AgentMessageChunk(text(&reply)),
+        )?;
         return Ok(StopReason::EndTurn);
     }
     if words.contains("which effort") {
@@ -1172,7 +1187,8 @@ async fn main() -> Result<(), Error> {
                         .session_capabilities(
                             SessionCapabilities::new()
                                 .resume(SessionResumeCapabilities::new())
-                                .fork(SessionForkCapabilities::new()),
+                                .fork(SessionForkCapabilities::new())
+                                .close(SessionCloseCapabilities::new()),
                         );
                     let mut ways = Vec::new();
                     let has_account = account().is_some();
@@ -1396,6 +1412,21 @@ async fn main() -> Result<(), Error> {
                     responder.respond(SteeringResponse {
                         outcome: outcome.to_owned(),
                     })
+                }
+            },
+            agent_client_protocol::on_receive_request!(),
+        )
+        .on_receive_request(
+            {
+                let fake = fake.clone();
+                async move |request: CloseSessionRequest,
+                            responder: Responder<CloseSessionResponse>,
+                            _cx: ConnectionTo<Client>| {
+                    let session = request.session_id;
+                    fake.setups.lock().unwrap().remove(&session);
+                    fake.kept.lock().unwrap().remove(&session);
+                    fake.closed.fetch_add(1, Ordering::Relaxed);
+                    responder.respond(CloseSessionResponse::new())
                 }
             },
             agent_client_protocol::on_receive_request!(),

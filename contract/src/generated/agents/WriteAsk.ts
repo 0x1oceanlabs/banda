@@ -2,10 +2,16 @@
 import type { ThreadId } from "./ThreadId";
 
 /**
- * What `agents.write` is asked.
+ * What `agents.write` is asked: who writes, a Thread or a Harness, one
+ * of them, and the prompt.
  */
 export type WriteAsk = { 
 /**
  * The Thread whose Harness and model write.
  */
-thread: ThreadId, prompt: string, };
+thread?: ThreadId, 
+/**
+ * A Harness, as a new Thread starts on it, for a Thread not started
+ * yet.
+ */
+harness?: string, prompt: string, };

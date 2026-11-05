@@ -25,7 +25,7 @@ const changed = (path: string): Changed => ({
   removed: 0,
 })
 const CHANGED: Status = { ...STATUS, files: [changed("a.ts")] }
-const NOW = { writes: true }
+const NOW = { started: true }
 const button = (status: Partial<Status>, now = NOW) =>
   quickOf({ ...STATUS, ...status }, now)
 
@@ -59,9 +59,26 @@ test("a branch never pushed pushes, and what cannot run says why", () => {
     'Add an "origin" remote before pushing.'
   )
   expect(button({ branch: undefined }).action).toBeNull()
-  // A new Thread has no Harness to write the message yet.
-  expect(quickOf(CHANGED, { writes: false }).action).toBeNull()
   expect(button({ repo: false }).action).toBeNull()
+})
+
+test("a new Thread's changes open the Commit dialog, as nothing it said made them", () => {
+  const fresh = { started: false }
+  expect(quickOf(CHANGED, fresh)).toEqual({
+    label: "Commit…",
+    action: "commit",
+    asks: true,
+    icon: "commit",
+  })
+  // Behind or with nowhere to push, it asks all the same.
+  expect(quickOf({ ...CHANGED, behind: 2 }, fresh).asks).toBe(true)
+  // With nothing to commit, it is the button a started Thread has.
+  expect(button({ ahead: 2 }, fresh)).toMatchObject({
+    label: "Push",
+    action: "push",
+  })
+  expect(button({}, fresh).action).toBeNull()
+  expect(quickOf(CHANGED, NOW).asks).toBeUndefined()
 })
 
 test("a push on the default branch asks first, a commit never", () => {
@@ -70,8 +87,16 @@ test("a push on the default branch asks first, a commit never", () => {
   expect(asksFirst(main, "push")).toBe(true)
   expect(asksFirst(main, "commit")).toBe(false)
   expect(asksFirst(STATUS, "push")).toBe(false)
-  expect(askOf("commit_push", "main").go).toBe("Commit & push to main")
-  expect(askOf("push", "main").title).toBe("Push to main?")
+  expect(askOf("commit_push", "main")).toEqual({
+    title: "You're on main",
+    body: "Push straight to main, or put this change on a new branch first?",
+    go: "Push to main",
+    branch: "New branch & push",
+  })
+  // Commits made already have no change to name a branch for.
+  const push = askOf("push", "trunk")
+  expect(push).toMatchObject({ title: "You're on trunk", go: "Push to trunk" })
+  expect(push.branch).toBeUndefined()
 })
 
 test("the ▾ menu says which of Commit, Push and Pull can run, and why not", () => {
