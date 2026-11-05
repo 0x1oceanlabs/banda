@@ -176,7 +176,11 @@ impl Module for HarnessesModule {
     }
 
     fn migrations(&self) -> &'static [&'static str] {
-        &[crate::limits::TABLE, crate::usage::TABLES]
+        &[
+            crate::limits::TABLE,
+            crate::usage::TABLES,
+            crate::usage::REREAD_CODEX,
+        ]
     }
 
     fn tools(&self) -> Vec<Tool> {

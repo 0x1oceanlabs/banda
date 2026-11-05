@@ -14,6 +14,7 @@ import {
   byModel,
   colourOf,
   daysOf,
+  changeWords,
   deltaOf,
   dollars,
   count,
@@ -134,6 +135,14 @@ test("a period asks for whole UTC days, and the one before it while kept", () =>
   expect(spanOf("90d", now).before).toBeUndefined()
   expect(deltaOf(118, 100)).toBeCloseTo(0.18)
   expect(deltaOf(5, 0)).toBeUndefined()
+})
+
+test("a change past double reads as times as much", () => {
+  expect(changeWords(0.18)).toBe("+18%")
+  expect(changeWords(-0.4)).toBe("−40%")
+  expect(changeWords(1)).toBe("×2")
+  expect(changeWords(1.44)).toBe("×2.4")
+  expect(changeWords(116.97)).toBe("×118")
 })
 
 test("values are written short", () => {
