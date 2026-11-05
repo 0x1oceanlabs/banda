@@ -124,6 +124,43 @@ test("the Diff shows a Space's changes by scope, as T3 Code's, and reads again a
   await expect(header("later.ts")).toHaveCount(0, { timeout: 10_000 })
 })
 
+test("the Diff scrolls under the wheel, as its own view, not only its file tree", async () => {
+  window = await startWindow()
+  const { page, dir } = window
+  await expect((await firstThread(page)).composer).toBeVisible()
+
+  // Changes far taller than the Pane.
+  const folder = join(dir, "root", "Work")
+  git(folder, "init", "-q", "-b", "main")
+  const body = (n: number) =>
+    Array.from({ length: 80 }, (_, i) => `export const v${i} = ${n}\n`).join("")
+  for (let f = 0; f < 6; f++) writeFileSync(join(folder, `f${f}.ts`), body(1))
+  git(folder, "add", "-A")
+  git(folder, "commit", "-qm", "First")
+  for (let f = 0; f < 6; f++) writeFileSync(join(folder, `f${f}.ts`), body(2))
+
+  await page.keyboard.press("Alt+KeyN")
+  const launcher = page.getByRole("region", { name: "New Pane" })
+  await expect(launcher.getByRole("button", { name: /Diff/ })).toBeVisible()
+  await page.keyboard.press("KeyD")
+  const diff = page.getByRole("region", { name: "Diff" })
+  await expect(diff.locator("header")).toContainText("6 files")
+  await diff.getByRole("button", { name: "Expand all files" }).click()
+
+  // The view is what scrolls: the wheel over the code moves it.
+  // (The view takes tabindex -1 as it sets itself up.)
+  const view = diff.locator("[tabindex='-1']:has(diffs-container)").first()
+  await expect(view).toHaveCSS("overflow-y", "auto")
+  const box = (await view.boundingBox())!
+  await page.mouse.move(box.x + box.width / 2, box.y + box.height / 2)
+  await expect(async () => {
+    await page.mouse.wheel(0, 400)
+    expect(await view.evaluate((element) => element.scrollTop)).toBeGreaterThan(
+      0
+    )
+  }).toPass()
+})
+
 test("a turn's Diff is all the turn changed, its shell's work too, from git's checkpoints", async () => {
   window = await startWindow()
   const { page, dir } = window
@@ -152,8 +189,13 @@ test("a turn's Diff is all the turn changed, its shell's work too, from git's ch
   const files = diff.getByRole("tree")
   for (const path of ["notes.md", "made.txt"])
     await expect(files.getByRole("treeitem", { name: path })).toBeVisible()
-  // It opens at the file it was opened on.
-  await expect(diff.getByText("2", { exact: true })).toBeVisible()
+  // It opens at the file it was opened on, its lines in sight.
+  await expect(
+    diff
+      .locator("[data-line-number-content]")
+      .getByText("2", { exact: true })
+      .first()
+  ).toBeInViewport()
   await files.getByRole("treeitem", { name: "made.txt" }).click()
   await expect(diff.getByText("by the shell")).toBeVisible()
   await page.screenshot({ path: "test-results/git-diff-turn.png" })
