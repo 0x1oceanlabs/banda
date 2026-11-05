@@ -3165,7 +3165,6 @@ test("Alt+G starts a Group, Alt+Shift+[ takes a column in, and the Group moves w
   await page.keyboard.press("Alt+Home")
   await page.keyboard.press("Alt+KeyG")
   await expect(plates).toHaveCount(1)
-  await expect(plates.first()).toHaveAttribute("data-group-plate", "plate")
   await page.keyboard.press("Alt+ArrowRight")
   await expect(terminal).toHaveAttribute("data-focused", "true")
   await page.keyboard.press("Alt+Shift+BracketLeft")

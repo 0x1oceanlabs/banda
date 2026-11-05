@@ -373,11 +373,11 @@ html[data-glass] [data-held-by] {
 }
 
 /*
- * A Group of columns (ADR 0065): a plate behind them, or a halo round
- * them, in its colour. Each column draws its piece, across the gap on its
- * right to the next column, so the pieces meet with no seam and move with
- * their columns; the Group's ends stand `--group-pad` out, which the
- * Strip leaves free (`padded` counts it as half a gap too).
+ * A Group of columns (ADR 0065): a plate behind them, in its colour.
+ * Each column draws its piece, across the gap on its right to the next
+ * column, so the pieces meet with no seam and move with their columns;
+ * the Group's ends stand `--group-pad` out, which the Strip leaves free
+ * (`padded` counts it as half a gap too).
  */
 /* Declared on the column, so a row of the overview, which scales its own
    --gap-inner, scales it too. */
@@ -394,7 +394,7 @@ html[data-glass] [data-held-by] {
   /* No Agent's state: a tint of the text, barely there. */
   --group-color: var(--foreground);
   --group-radius: calc(var(--tile-radius) + var(--group-pad));
-  --group-line: transparent;
+  --group-line: color-mix(in oklab, var(--group-color) 16%, transparent);
   --group-fill: 6%;
   position: absolute;
   inset-block: calc(-1 * var(--group-pad));
@@ -403,6 +403,14 @@ html[data-glass] [data-held-by] {
   pointer-events: none;
   border: 0 solid var(--group-line);
   border-block-width: 1px;
+  background: color-mix(
+    in oklab,
+    var(--group-color) var(--group-fill),
+    transparent
+  );
+}
+[data-group-plate][data-focused] {
+  --group-line: color-mix(in oklab, var(--group-color) 30%, transparent);
 }
 [data-group-plate][data-first] {
   left: calc(-1 * var(--group-pad));
@@ -416,49 +424,15 @@ html[data-glass] [data-held-by] {
   border-start-end-radius: var(--group-radius);
   border-end-end-radius: var(--group-radius);
 }
-[data-group-plate="plate"] {
-  --group-line: color-mix(in oklab, var(--group-color) 16%, transparent);
-  background: color-mix(
-    in oklab,
-    var(--group-color) var(--group-fill),
-    transparent
-  );
-}
-[data-group-plate="plate"][data-focused] {
-  --group-line: color-mix(in oklab, var(--group-color) 30%, transparent);
-}
 /* On glass, the tiles' material, a step clearer, catching the light at
    its top edge as the tiles do. */
-html[data-glass] [data-group-plate="plate"] {
+html[data-glass] [data-group-plate] {
   background: color-mix(
     in oklab,
     var(--group-color) calc(var(--group-fill) + 2%),
     rgb(255 255 255 / 0.03)
   );
   box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.06);
-}
-/* Blurred, the pieces sum to one glow with no seam between them. */
-[data-group-plate="halo"] {
-  --group-glow: 18%;
-}
-[data-group-plate="halo"][data-focused] {
-  --group-glow: 28%;
-}
-[data-group-plate="halo"]::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: color-mix(
-    in oklab,
-    var(--group-color) var(--group-glow),
-    transparent
-  );
-  filter: blur(calc(var(--group-pad) * 2.5));
-}
-/* A solid desk keeps a faint line, so a Group's edge is not lost. */
-html:not([data-glass]) [data-group-plate="halo"] {
-  --group-line: color-mix(in oklab, var(--group-color) 14%, transparent);
 }
 /*
  * The colour is its Agent's state (ADR 0065, decision 6), as the sidebar

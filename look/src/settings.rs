@@ -295,24 +295,14 @@ pub struct Overview {
 #[derive(Clone, Debug, Default, Deserialize, Serialize, JsonSchema)]
 #[serde(deny_unknown_fields, rename_all = "kebab-case")]
 pub struct Groups {
-    /// `"plate"`, a plate behind its columns, or `"halo"`, a glow round
-    /// them; either in the colour of its Agent's state.
-    pub look: Option<GroupLook>,
+    /// Its look, before the plate was the only one: still read, so a
+    /// `look.toml` that says it loads, and let go (ADR 0065).
+    #[serde(rename = "look", skip_serializing)]
+    #[schemars(skip)]
+    _look: Option<serde::de::IgnoredAny>,
     /// A handle on its top edge under the pointer, with its name, that
     /// carries the whole Group.
     pub handle: Option<bool>,
-}
-
-/// How a Group of columns shows: what stands behind its columns.
-#[derive(Clone, Copy, Debug, Deserialize, Serialize, PartialEq, Eq, JsonSchema, TS)]
-#[serde(rename_all = "lowercase")]
-#[ts(export, export_to = "look/")]
-pub enum GroupLook {
-    /// A plate, a little of the colour mixed into the desk, with a fine
-    /// line round it.
-    Plate,
-    /// A soft glow of the colour, with no line.
-    Halo,
 }
 
 /// How the bar shows the workspaces.
@@ -471,8 +461,8 @@ impl Settings {
                 zoom: self.overview.zoom.or(under.overview.zoom),
             },
             groups: Groups {
-                look: self.groups.look.or(under.groups.look),
                 handle: self.groups.handle.or(under.groups.handle),
+                ..Groups::default()
             },
             motion: self.motion.over(under.motion),
             columns: self.columns.over(under.columns),
@@ -533,8 +523,8 @@ impl Settings {
             },
             overview: Overview { zoom: Some(0.35) },
             groups: Groups {
-                look: Some(GroupLook::Plate),
                 handle: Some(true),
+                ..Groups::default()
             },
             motion: MotionSettings::defaults(),
             columns: ColumnsSettings::defaults(),
@@ -610,5 +600,11 @@ mod tests {
     fn a_typo_is_named() {
         let typo = toml::from_str::<Settings>("[gaps]\ninnr = 3\n").unwrap_err();
         assert!(typo.message().contains("innr"), "{typo}");
+    }
+
+    #[test]
+    fn a_groups_old_look_still_loads() {
+        let old: Settings = toml::from_str("[groups]\nlook = \"halo\"\nhandle = false\n").unwrap();
+        assert_eq!(old.groups.handle, Some(false));
     }
 }
