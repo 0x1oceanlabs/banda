@@ -264,6 +264,14 @@ back to the list (ADR 0069). A Project is archived too, which hides it
 from the pickers until the Person brings it back (ADR 0026).
 _Avoid_: settled (its name before ADR 0069).
 
+**Snooze**:
+A Thread put away until a time, until its turn ends, or until its usage
+limit resets, on its shelf above Archive. Anything that calls the Person
+wakes it early, and a Thread that asks cannot be snoozed. The engine keeps
+it, so every window, machine and Agent sees it; an Agent may snooze its
+own Thread (ADR 0074).
+_Avoid_: remind, later.
+
 **Banda skill**:
 What an Agent needs to know to work in Banda and to change it for its
 Person: a short core, read first, and topics read when needed, one per
