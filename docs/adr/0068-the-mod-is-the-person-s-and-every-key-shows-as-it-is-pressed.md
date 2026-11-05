@@ -75,9 +75,11 @@ is refused.
      widgets (ADR 0025, decision 5; ADR 0064). The page's root says
      `data-mod` while the mod is held, for a browser's page to let the
      mouse through.
-   - A browser's page and a Visual give the window every key with the
-     mod, as they gave it the Alt keys (ADR 0013, decision 5). Main
-     reads the mod from the look.
+   - A browser's page gives the window every key with the mod, or with
+     the mod and one key more, as it gave it the Alt keys (ADR 0013,
+     decision 5). The browser's Pane tells main the mod in force, so the
+     reset chord holds there too. A Visual passes Banda's keys on no
+     more than it did: none.
    - A terminal's program: one more and a Banda key hands the program
      that key without the one more (ADR 0005, decision 10). With Alt,
      `Ctrl+Alt+W` gives the shell `Alt+W`, as now; with Ctrl+Alt,
@@ -132,7 +134,7 @@ is refused.
   2. `mod` in `look/src/keys.rs` and the contract, with its Problems.
   3. Levels in the code and the manifests; the keys made real, with the
      clashes; exact modifiers.
-  4. The mouse, the pages, the Visuals and the hand-on hold the mod. An
+  4. The mouse, the pages and the hand-on hold the mod. An
      end-to-end test: with `mod = "Ctrl+Alt"`, `Ctrl+Alt+R` steps the
      column's width and `Alt+R` reaches the shell.
   5. Settings › Keys: the mod, the keys as they read, the lines moved.

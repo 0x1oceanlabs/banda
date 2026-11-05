@@ -37,10 +37,17 @@ test("the browser's keys are Chrome's, with Ctrl", () => {
   expect(browserKey(key("KeyC", { ctrlKey: true }))).toBeUndefined()
 })
 
-test("the window takes Alt keys and the browser's; the page keeps the rest", () => {
-  expect(taken(key("ArrowLeft", { altKey: true }))).toBe(true)
-  expect(taken(key("KeyR", { ctrlKey: true }))).toBe(true)
-  expect(taken(key("AltLeft", { altKey: true }))).toBe(false)
-  expect(taken(key("KeyC", { ctrlKey: true }))).toBe(false)
-  expect(taken(key("KeyA"))).toBe(false)
+test("the window takes the mod's keys and the browser's; the page keeps the rest", () => {
+  const alt = { alt: true, ctrl: false, super: false }
+  expect(taken(key("ArrowLeft", { altKey: true }), alt)).toBe(true)
+  expect(taken(key("KeyR", { ctrlKey: true }), alt)).toBe(true)
+  expect(taken(key("AltLeft", { altKey: true }), alt)).toBe(false)
+  expect(taken(key("KeyC", { ctrlKey: true }), alt)).toBe(false)
+  expect(taken(key("KeyA"), alt)).toBe(false)
+  // With Ctrl+Alt the mod, Alt alone is the page's.
+  const ctrlAlt = { alt: true, ctrl: true, super: false }
+  expect(taken(key("KeyW", { altKey: true }), ctrlAlt)).toBe(false)
+  expect(taken(key("KeyW", { altKey: true, ctrlKey: true }), ctrlAlt)).toBe(
+    true
+  )
 })

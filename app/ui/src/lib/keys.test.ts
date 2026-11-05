@@ -1,5 +1,13 @@
 import { expect, test } from "vitest"
-import { holds, keyCaps, keyLabel, keyText, realKey } from "./keys"
+import {
+  holdsAlone,
+  isModKey,
+  keyCaps,
+  keyLabel,
+  keyText,
+  realKey,
+  withMore,
+} from "./keys"
 
 const ALT = { alt: true, ctrl: false, super: false }
 const ctrlAlt = { alt: true, ctrl: true, super: false }
@@ -57,11 +65,15 @@ test("Super reads as Super, or ⌘ on a Mac, after Alt", () => {
   expect(keyText(key)).toBe("Ctrl+Alt+Super+Shift+R")
 })
 
-test("a press holds the mod when it holds every key of it", () => {
+test("the mouse holds the mod alone; one key more is the program's", () => {
   const press = { altKey: true, ctrlKey: false, metaKey: false }
-  expect(holds(press, ALT)).toBe(true)
-  expect(holds(press, ctrlAlt)).toBe(false)
-  expect(holds({ ...press, ctrlKey: true }, ctrlAlt)).toBe(true)
+  expect(holdsAlone(press, ALT)).toBe(true)
+  expect(holdsAlone(press, ctrlAlt)).toBe(false)
+  expect(holdsAlone({ ...press, ctrlKey: true }, ctrlAlt)).toBe(true)
+  expect(holdsAlone({ ...press, ctrlKey: true }, ALT)).toBe(false)
+  expect(isModKey("AltRight", ALT)).toBe(true)
+  expect(isModKey("ControlLeft", ALT)).toBe(false)
+  expect(isModKey("ControlLeft", ctrlAlt)).toBe(true)
 })
 
 test("a primary key reads as Ctrl, or ⌘ on a Mac", () => {
@@ -69,4 +81,10 @@ test("a primary key reads as Ctrl, or ⌘ on a Mac", () => {
   expect(keyLabel(tab, false)).toBe("Ctrl+T")
   expect(keyLabel(tab, true)).toBe("⌘T")
   expect(keyText(tab)).toBe("Ctrl+T")
+})
+
+test("one key more is the first of Ctrl, Super and Alt the mod lacks", () => {
+  expect(withMore(ALT)).toEqual({ alt: true, ctrl: true, super: false })
+  expect(withMore(ctrlAlt)).toEqual({ alt: true, ctrl: true, super: true })
+  expect(withMore({ alt: true, ctrl: true, super: true })).toBeUndefined()
 })

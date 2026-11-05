@@ -6,6 +6,8 @@
 
 import type { Mod } from "@banda/contract/look"
 
+export type { Mod }
+
 /** A key and the mods held with it, matched exactly (ADR 0068, decision
  * 3). Super is ⌘ on a Mac. */
 export type Key = {
@@ -25,20 +27,42 @@ export type Key = {
   more?: boolean
 }
 
-/** Whether `event` holds the mod: every key of it, others or not. */
-export function holds(
+/** The keys a mod may hold, in the order one more is taken. */
+const MORE = ["ctrl", "super", "alt"] as const
+
+/** The press's flag for each key a mod may hold. */
+const FLAGS = { alt: "altKey", ctrl: "ctrlKey", super: "metaKey" } as const
+
+/** Whether `event` holds the mod and no other of Alt, Ctrl and Super, as
+ * the mouse's moves do (ADR 0068, decision 3): one key more makes the
+ * press the Pane's program's. */
+export function holdsAlone(
   event: Pick<Pressed, "altKey" | "ctrlKey" | "metaKey">,
   mod: Mod
 ): boolean {
-  return (
-    (!mod.alt || event.altKey) &&
-    (!mod.ctrl || event.ctrlKey) &&
-    (!mod.super || event.metaKey)
+  return MORE.every((one) => event[FLAGS[one]] === mod[one])
+}
+
+/** The keys each key of a mod is, left and right. */
+const SIDES = {
+  alt: ["AltLeft", "AltRight"],
+  ctrl: ["ControlLeft", "ControlRight"],
+  super: ["MetaLeft", "MetaRight", "OSLeft", "OSRight"],
+} as const
+
+/** Whether `code` is a key the mod holds, left or right. */
+export function isModKey(code: string, mod: Mod): boolean {
+  return MORE.some(
+    (one) => mod[one] && (SIDES[one] as readonly string[]).includes(code)
   )
 }
 
-/** The key one more than the mod, in this order. */
-const MORE = ["ctrl", "super", "alt"] as const
+/** The mod with one key more (ADR 0068, decision 2): the first of Ctrl,
+ * Super and Alt it does not hold; none for a mod of all three. */
+export function withMore(mod: Mod): Mod | undefined {
+  const one = MORE.find((each) => !mod[each])
+  return one && { ...mod, [one]: true }
+}
 
 /**
  * The key as it is pressed with the mod: a key held with the mod holds
@@ -47,9 +71,8 @@ const MORE = ["ctrl", "super", "alt"] as const
  */
 export function realKey(key: Key, mod: Mod): Key {
   if (!key.mod && !key.more) return key
-  const pressed: Key = { code: key.code, shift: key.shift, ...mod }
-  const one = key.more && MORE.find((each) => !mod[each])
-  return one ? { ...pressed, [one]: true } : pressed
+  const held = (key.more && withMore(mod)) || mod
+  return { code: key.code, shift: key.shift, ...held }
 }
 
 /** A key press, as the DOM tells it. */
@@ -83,11 +106,6 @@ export function matches(event: Pressed, key: Key, mac = isMac): boolean {
     event.shiftKey === !!key.shift &&
     ctrl
   )
-}
-
-/** Whether `code` is an Alt key, left or right. */
-export function isAlt(code: string): boolean {
-  return code === "AltLeft" || code === "AltRight"
 }
 
 /** Keys that are only mods: a key to bind comes with them, not alone. */

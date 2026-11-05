@@ -14,9 +14,10 @@ import type { Entry, Workspaces as State } from "./model"
 import type { Frame } from "./PaneFrame"
 import type { Reveal } from "./layout"
 import { Strip } from "./Strip"
-import { useAltHeld } from "./alt"
+import { useModHeld } from "./held"
 import { pixels, Swipe } from "./swipe"
 import { type Carrying, inStrip, useMoving } from "./useMoving"
+import { useHoldsMod } from "@banda/ui/hooks/use-key-of"
 
 /** How far a swipe goes, in pixels, before it moves a workspace. */
 const STEP = 24
@@ -67,7 +68,7 @@ export function Workspaces({
   /** The listed thing a Pane shows, as its module lists it. */
   listed: (entry: Entry) => Listed | undefined
   frame: Frame
-  /** A swipe up or down with Alt held steps once, however long it is. */
+  /** A swipe up or down with the mod held steps once, however long it is. */
   onStep: (by: 1 | -1) => void
   /** Goes to workspace `id`, as a Pane carried and held over its number
    * in the bar does. */
@@ -149,17 +150,18 @@ export function Workspaces({
     }
   })
   useMoving(root, carrying)
-  useAltHeld()
+  useModHeld()
+  const holdsMod = useHoldsMod()
   useEffect(() => {
     const element = root.current
     if (!element) return
     const swipe = new Swipe()
     let stepped = false
-    // With Alt held the wheel is the window's: no Pane scrolls under it.
+    // With the mod held the wheel is the window's: no Pane scrolls under it.
     const onWheel = (event: WheelEvent) => {
       const { x, y } = pixels(event)
       if (swipe.add(x, y, event.timeStamp)) stepped = false
-      if (!event.altKey) return
+      if (!holdsMod(event)) return
       event.preventDefault()
       if (stepped || swipe.way !== "upright" || Math.abs(swipe.y) < STEP) {
         return

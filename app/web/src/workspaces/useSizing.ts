@@ -1,7 +1,7 @@
 /**
  * The mouse sizes a Strip's columns and Panes, as niri's (ADR 0025,
  * decision 5): the gap right of a column, dragged, sizes its width, and
- * the gap between two Panes their heights; `Alt` and the right button
+ * the gap between two Panes their heights; the mod and the right button
  * size the Pane under the pointer from anywhere, sideways the width, up
  * and down the height. A double click on a gap makes the column the whole
  * screen wide, and back, or the heights even.
@@ -23,6 +23,7 @@ import {
   THRESHOLD,
   widthFor,
 } from "./sizing"
+import { useHoldsMod } from "@banda/ui/hooks/use-key-of"
 
 /** A column as the Strip draws it. */
 export type Sized = {
@@ -81,6 +82,7 @@ export function useSizing(
   motion: RefObject<ColumnMotion>,
   sizing: RefObject<Sizing>
 ) {
+  const holdsMod = useHoldsMod()
   useEffect(() => {
     const element = strip.current
     if (!element) return
@@ -266,8 +268,8 @@ export function useSizing(
         }
         return
       }
-      // Alt and the right button; Ctrl+Alt is the program's.
-      if (event.button !== 2 || !event.altKey || event.ctrlKey) return
+      // The mod and the right button; one key more is the program's.
+      if (event.button !== 2 || !holdsMod(event)) return
       const tile = tileAt(event.target)
       const column = columns.find((c) =>
         c.entries.some((entry) => entry.id === tile)
@@ -347,9 +349,9 @@ export function useSizing(
       )
     }
 
-    // Alt and the right button size; no menu comes up under them.
+    // The mod and the right button size; no menu comes up under them.
     const onMenu = (event: MouseEvent) => {
-      if (!event.altKey || event.ctrlKey || !sizing.current.on) return
+      if (!holdsMod(event) || !sizing.current.on) return
       if (tileAt(event.target) === undefined) return
       event.preventDefault()
       event.stopPropagation()

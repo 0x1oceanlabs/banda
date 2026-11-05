@@ -3,7 +3,7 @@
  * `<webview>`s; here they are kept apart from Banda (decision 8): only the
  * browser's profile, sandboxed, with no preload and no Node. A site asks
  * the Person before it uses the camera, the location or another program;
- * downloads go to the Person's Downloads; Banda's Alt keys and the
+ * downloads go to the Person's Downloads; Banda's keys, held with the mod, and the
  * browser's own go to the window instead of the page (decision 5). The
  * Pane hears of new tabs, icons and downloads as `BrowserNews`, and the
  * switch writes `browser.toml`. The blocker follows the look's
@@ -19,11 +19,11 @@ import {
   type Download,
   PARTITION,
   type Pressed,
-  isAlt,
+  isModKey,
   taken,
 } from "@banda/browser-pane/desktop"
 import { BROWSER_FILE } from "@banda/contract/browser"
-import { fileOf } from "@banda/contract/look"
+import { DEFAULT_KEYS, fileOf, type Mod } from "@banda/contract/look"
 import { Context, Effect, FiberSet, Layer, Schema, Stream } from "effect"
 import {
   app,
@@ -166,8 +166,12 @@ export function userAgent(): string {
   return session.fromPartition(PARTITION).getUserAgent()
 }
 
-/** Banda's Alt keys and the browser's own go to the window, from a page
- * and an extension's popup alike (decision 5). */
+/** The mod in force, as the window tells it (ADR 0068): a page gives
+ * the window the keys held with it. */
+let mod: Mod = DEFAULT_KEYS.mod
+
+/** Banda's keys, held with the mod, and the browser's own go to the
+ * window, from a page and an extension's popup alike (decision 5). */
 export function keys(page: WebContents, window: WebContents): void {
   page.on("before-input-event", (event, input) => {
     const key: Pressed = {
@@ -177,10 +181,10 @@ export function keys(page: WebContents, window: WebContents): void {
       shiftKey: input.shift,
       metaKey: input.meta,
     }
-    // Alt pressed or let go stays the page's, and the window hears it too:
-    // with it held, the mouse moves and sizes Panes over a page as well
-    // (ADR 0025, decisions 5 and 6).
-    if (isAlt(input.code)) {
+    // A key of the mod pressed or let go stays the page's, and the window
+    // hears it too: with it held, the mouse moves and sizes Panes over a
+    // page as well (ADR 0025, decisions 5 and 6).
+    if (isModKey(input.code, mod)) {
       if (!input.isAutoRepeat) {
         tellPage(window, BROWSER_BRIDGE.key, {
           ...key,
@@ -190,7 +194,7 @@ export function keys(page: WebContents, window: WebContents): void {
       return
     }
     if (input.type !== "keyDown") return
-    if (!taken(key)) return
+    if (!taken(key, mod)) return
     event.preventDefault()
     tellPage(window, BROWSER_BRIDGE.key, key)
   })
@@ -477,6 +481,19 @@ export const browserAnswers: Answers<
     ([where]) => Browser.use((browser) => browser.tabs(where)),
   ],
   reveal: [text, ([path]) => Browser.use((browser) => browser.reveal(path))],
+  mod: [
+    Schema.Tuple([
+      Schema.Struct({
+        alt: Schema.Boolean,
+        ctrl: Schema.Boolean,
+        super: Schema.Boolean,
+      }),
+    ]),
+    ([held]) =>
+      Effect.sync(() => {
+        mod = held
+      }),
+  ],
   shown: [
     page,
     ([page]) =>
