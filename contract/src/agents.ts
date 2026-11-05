@@ -89,6 +89,7 @@ const KINDS: ReadonlySet<string> = new Set(
     "thread.snoozed": true,
     "thread.woke": true,
     "thread.rewound": true,
+    "thread.renamed": true,
     "thread.configured": true,
     "thread.offered": true,
     "thread.used": true,

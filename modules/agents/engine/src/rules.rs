@@ -2,10 +2,10 @@
 //! clock, randomness or Harness protocol. IDs come in from the caller.
 //!
 //! Here are a turn's rules, and [`next`] moves it; a message
-//! ([`message`]) and what an Agent writes to another Thread
-//! ([`to_thread`]) have files of their own. A Question's rules are in
-//! `questions.rs`, and what a Thread keeps of what a Harness says in
-//! `transcript/output.rs`.
+//! ([`message`]), what an Agent writes to another Thread ([`to_thread`])
+//! and a Thread's title ([`title`]) have files of their own. A Question's
+//! rules are in `questions.rs`, and what a Thread keeps of what a Harness
+//! says in `transcript/output.rs`.
 
 use crate::model::{Can, Failure, Opener, TurnId, TurnState, TurnView};
 use banda_kernel::Refusal;
@@ -14,6 +14,7 @@ use std::collections::HashMap;
 pub mod message;
 mod moves;
 pub mod snooze;
+pub mod title;
 pub mod to_thread;
 pub use moves::{Event, Step, Then, TurnFacts, next};
 

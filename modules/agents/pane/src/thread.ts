@@ -22,7 +22,7 @@ import { settledTurn } from "./marks"
 export type ThreadState = {
   /** The last position in the Project's log this state includes. */
   at: number
-  /** The start of its first message. */
+  /** The start of its first message, until its Person renames it. */
   title: string
   /** The Harness it runs on, by its ID. */
   harness: string
@@ -503,6 +503,8 @@ function project(state: ThreadState, event: Event): ThreadState {
         title: fact.payload.title,
         harness: fact.payload.harness ?? next.harness,
       }
+    case "thread.renamed":
+      return { ...next, title: fact.payload.title }
   }
 }
 

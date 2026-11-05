@@ -6,12 +6,14 @@
 //! asks is refused, and nobody sees it. Only its reply comes back, and
 //! the session is closed. Stopped, it stops at once, its turn cancelled
 //! and its session closed all the same. The Thread's own session is not
-//! touched.
+//! touched. `agents.suggest_title` runs one too, in a folder of its own,
+//! on the Harness's small model (ADR 0077, decision 4).
 
 use crate::acp::{Answer, Connection, Prompt, Said, Session};
-use crate::model::{Mode, Settings, TurnState};
+use crate::model::{Mode, OptionValue, Settings, TurnState};
 use crate::questions::refuse_once;
 use crate::rules::Ending;
+use crate::rules::title::small_model;
 use banda_kernel::Refusal;
 use std::future::Future;
 use std::path::Path;
@@ -24,12 +26,22 @@ use tokio::task::JoinHandle;
 const TIME: Duration = Duration::from_secs(120);
 const STOPPING: Duration = Duration::from_secs(5);
 
-/// What the Harness replies to `prompt`, with the Thread's `settings`,
-/// unless `stopped` comes first.
+/// The model a short run is on.
+#[derive(Clone, Copy, PartialEq, Eq)]
+pub enum Model {
+    /// The Thread's own.
+    Thread,
+    /// The Harness's small model, when it offers one; else the Thread's.
+    Small,
+}
+
+/// What the Harness replies to `prompt` in `folder`, with the Thread's
+/// `settings` on `model`, unless `stopped` comes first.
 pub async fn write(
     connection: Arc<Connection>,
     folder: &Path,
     settings: &Settings,
+    model: Model,
     prompt: String,
     stopped: impl Future<Output = ()>,
 ) -> Result<String, Refusal> {
@@ -52,7 +64,7 @@ pub async fn write(
         }
     };
     let session = opened.map_err(|ending| refused(ending, &name, "could not start"))?;
-    let ran = run(&session, settings, prompt, &name, stopped.as_mut()).await;
+    let ran = run(&session, settings, model, prompt, &name, stopped.as_mut()).await;
     session.close().await;
     ran
 }
@@ -60,14 +72,22 @@ pub async fn write(
 async fn run(
     session: &Session,
     settings: &Settings,
+    model: Model,
     prompt: String,
     name: &str,
     mut stopped: Pin<&mut impl Future<Output = ()>>,
 ) -> Result<String, Refusal> {
+    let mut options = settings.options.clone();
+    // Among the models this session offers.
+    if model == Model::Small
+        && let Some((id, small)) = small_model(&session.running().offer.options)
+    {
+        options.insert(id, OptionValue::Choice(small));
+    }
     let wanted = Settings {
         mode: Mode::Supervised,
         plan: true,
-        options: settings.options.clone(),
+        options,
     };
     // The model set first, as the levels it offers may be its own.
     let settled = async {

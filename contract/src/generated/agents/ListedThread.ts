@@ -39,6 +39,12 @@ snooze?: Snooze, id: ThreadId,
  */
 harness: string, 
 /**
- * The start of its first message.
+ * The start of its first message, until its Person renames it (ADR
+ * 0077).
  */
-title: string, updated_at: number, };
+title: string, updated_at: number, 
+/**
+ * Its title before the Person last renamed it, which "Previous
+ * title" brings back. None before a rename.
+ */
+was?: string, };

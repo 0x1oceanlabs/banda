@@ -714,10 +714,16 @@ pub struct ThreadSummary {
     /// it starts, it stays (ADR 0006). Empty for a Thread from before
     /// Threads named theirs whose Agent's file is gone.
     pub harness: String,
-    /// The start of its first message.
+    /// The start of its first message, until its Person renames it (ADR
+    /// 0077).
     pub title: String,
     #[ts(type = "number")]
     pub updated_at: i64,
+    /// Its title before the Person last renamed it, which "Previous
+    /// title" brings back. None before a rename.
+    #[ts(optional)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub was: Option<String>,
 }
 
 /// A Thread as a window first loads it. It is current at `at`; the window
@@ -955,6 +961,14 @@ pub enum Fact {
     /// items. The Project's log keeps what they said.
     #[serde(rename = "thread.rewound")]
     ThreadRewound { thread: ThreadId, turn: TurnId },
+    /// The Person renamed the Thread (ADR 0077): `title` is its title now,
+    /// `was` the one before.
+    #[serde(rename = "thread.renamed")]
+    ThreadRenamed {
+        thread: ThreadId,
+        title: String,
+        was: String,
+    },
     /// The Thread's settings changed, by a Person or by the Harness.
     #[serde(rename = "thread.configured")]
     ThreadConfigured {

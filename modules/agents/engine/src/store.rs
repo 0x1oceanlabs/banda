@@ -3,8 +3,8 @@
 
 use crate::model::{
     Asking, Body, Failure, Image, ImageId, Item, ItemId, LISTED_MESSAGE, LatestTurn, ListedThread,
-    Offer, Opener, QuestionState, Settings, Snooze, ThreadId, ThreadSummary, ToolContent, TurnId,
-    TurnState, TurnView, Usage, VisualId,
+    Offer, Opener, PlanStep, QuestionState, Settings, Snooze, ThreadId, ThreadSummary, ToolContent,
+    TurnId, TurnState, TurnView, Usage, VisualId,
 };
 use banda_kernel::{AgentId, Error, Participant, Refusal};
 use rusqlite::{Connection, OptionalExtension, Row, params};
@@ -169,6 +169,10 @@ CREATE INDEX agents_notices_taken ON agents_notices (taken_by)
     r#"
 -- The Thread's latest snooze, as JSON (ADR 0074).
 ALTER TABLE agents_threads ADD COLUMN snooze TEXT;
+"#,
+    r#"
+-- The Thread's title before its Person last renamed it (ADR 0077).
+ALTER TABLE agents_threads ADD COLUMN was_title TEXT;
 "#,
 ];
 
@@ -515,8 +519,8 @@ pub fn evidence<T: DeserializeOwned>(
 }
 
 /// A Thread's summary, then its Agent.
-const THREAD: &str =
-    "SELECT id, COALESCE(harness, ''), title, updated_at, agent FROM agents_threads";
+const THREAD: &str = "SELECT id, COALESCE(harness, ''), title, updated_at, was_title, agent
+    FROM agents_threads";
 
 fn read_thread(row: &Row<'_>) -> rusqlite::Result<ThreadSummary> {
     Ok(ThreadSummary {
@@ -524,6 +528,7 @@ fn read_thread(row: &Row<'_>) -> rusqlite::Result<ThreadSummary> {
         harness: row.get(1)?,
         title: row.get(2)?,
         updated_at: row.get(3)?,
+        was: row.get(4)?,
     })
 }
 
@@ -557,14 +562,14 @@ pub fn set_forked_from(sql: &Connection, thread: ThreadId, from: ThreadId) -> Re
 pub fn threads(sql: &Connection) -> Result<Vec<ListedThread>, Error> {
     // The snooze comes with each row, not by a query of its own.
     let mut statement = sql.prepare(
-        "SELECT id, COALESCE(harness, ''), title, updated_at, agent, snooze FROM agents_threads
-         ORDER BY updated_at DESC, id DESC",
+        "SELECT id, COALESCE(harness, ''), title, updated_at, was_title, agent, snooze
+         FROM agents_threads ORDER BY updated_at DESC, id DESC",
     )?;
     let rows = statement.query_map([], |row| {
-        let snooze: Option<String> = row.get(5)?;
+        let snooze: Option<String> = row.get(6)?;
         let snooze = snooze.map(|text| serde_json::from_str(&text));
-        let snooze = snooze.transpose().map_err(|e| unreadable(5, e))?;
-        Ok((read_thread(row)?, row.get(4)?, snooze))
+        let snooze = snooze.transpose().map_err(|e| unreadable(6, e))?;
+        Ok((read_thread(row)?, row.get(5)?, snooze))
     })?;
     let summaries = rows.collect::<rusqlite::Result<Vec<_>>>()?;
     summaries
@@ -1175,6 +1180,94 @@ pub fn title_and_agent(
         .optional()?)
 }
 
+/// Renames a Thread to `title`, keeping `was`, the title it had (ADR
+/// 0077).
+pub fn rename(sql: &Connection, thread: ThreadId, title: &str, was: &str) -> Result<(), Error> {
+    sql.execute(
+        "UPDATE agents_threads SET title = ?2, was_title = ?3 WHERE id = ?1",
+        params![thread, title, was],
+    )?;
+    Ok(())
+}
+
+/// A message item of `thread`'s that its Agent, `agent`, did not write:
+/// `?1` is the Thread and `?2` the Agent.
+const SENT_IN: &str = "thread = ?1 AND json_extract(body, '$.kind') = 'message' AND author != ?2";
+
+/// The first message sent into the Thread, its text and its images: what
+/// its title was taken from. None once a rewind took every message.
+pub fn first_message(
+    sql: &Connection,
+    thread: ThreadId,
+    agent: AgentId,
+) -> Result<Option<(String, Vec<Image>)>, Error> {
+    let agent = json(&Participant::Agent(agent))?;
+    let item = sql
+        .query_row(
+            &format!("{ITEM} WHERE {SENT_IN} ORDER BY rowid LIMIT 1"),
+            params![thread, agent],
+            read_item,
+        )
+        .optional()?;
+    Ok(item.and_then(|item| match item.body {
+        Body::Message { text, images, .. } => Some((text, images)),
+        _ => None,
+    }))
+}
+
+/// The texts of the latest `count` messages sent into the Thread, with
+/// any text, the latest first.
+pub fn latest_messages(
+    sql: &Connection,
+    thread: ThreadId,
+    agent: AgentId,
+    count: usize,
+) -> Result<Vec<String>, Error> {
+    let mut statement = sql.prepare(&format!(
+        "SELECT json_extract(body, '$.text') FROM agents_items
+         WHERE {SENT_IN} AND TRIM(COALESCE(json_extract(body, '$.text'), '')) != ''
+         ORDER BY rowid DESC LIMIT ?3"
+    ))?;
+    let agent = json(&Participant::Agent(agent))?;
+    let rows = statement.query_map(params![thread, agent, count as i64], |row| row.get(0))?;
+    Ok(rows.collect::<rusqlite::Result<_>>()?)
+}
+
+/// What the Thread's Agent, `agent`, said last, in any turn.
+pub fn latest_reply(
+    sql: &Connection,
+    thread: ThreadId,
+    agent: AgentId,
+) -> Result<Option<String>, Error> {
+    Ok(sql
+        .query_row(
+            "SELECT json_extract(body, '$.text') FROM agents_items
+             WHERE thread = ?1 AND author = ?2 AND json_extract(body, '$.kind') = 'message'
+             ORDER BY rowid DESC LIMIT 1",
+            params![thread, json(&Participant::Agent(agent))?],
+            |row| row.get(0),
+        )
+        .optional()?)
+}
+
+/// The steps of the Agent's latest plan in the Thread; none without one.
+pub fn latest_plan(sql: &Connection, thread: ThreadId) -> Result<Vec<PlanStep>, Error> {
+    let item = sql
+        .query_row(
+            &format!(
+                "{ITEM} WHERE thread = ?1 AND json_extract(body, '$.kind') = 'plan'
+                 ORDER BY rowid DESC LIMIT 1"
+            ),
+            params![thread],
+            read_item,
+        )
+        .optional()?;
+    Ok(match item.map(|item| item.body) {
+        Some(Body::Plan { steps }) => steps,
+        _ => Vec::new(),
+    })
+}
+
 /// Whether the Thread's Agent waits for its Person to answer a Question.
 pub fn asks(sql: &Connection, thread: ThreadId) -> Result<bool, Error> {
     Ok(sql.query_row(
@@ -1268,6 +1361,7 @@ mod tests {
             harness: "fake".to_owned(),
             title: "Hello".to_owned(),
             updated_at: 0,
+            was: None,
         };
         let author = Participant::Agent(agent);
         insert_thread(&sql, &summary, agent, author, &Settings::default()).unwrap();
@@ -1320,6 +1414,7 @@ mod tests {
             harness: "fake".to_owned(),
             title: "Hello".to_owned(),
             updated_at: 0,
+            was: None,
         };
         let author = Participant::Agent(agent);
         insert_thread(&sql, &summary, agent, author, &Settings::default()).unwrap();
@@ -1371,6 +1466,7 @@ mod tests {
             harness: "fake".to_owned(),
             title: "Hello".to_owned(),
             updated_at: 0,
+            was: None,
         };
         insert_thread(
             &sql,
@@ -1428,6 +1524,7 @@ mod tests {
             harness: "fake".to_owned(),
             title: "Hello".to_owned(),
             updated_at: 0,
+            was: None,
         };
         let settings = Settings::default();
         insert_thread(&sql, &summary, agent, author, &settings).unwrap();
@@ -1552,6 +1649,7 @@ mod tests {
             harness: "fake".into(),
             title: "Fork".into(),
             updated_at: 0,
+            was: None,
         };
         insert_thread(&sql, &summary, agent, author, &Settings::default()).unwrap();
         for tool in [false, true] {
@@ -1606,6 +1704,7 @@ mod tests {
             harness: "fake".into(),
             title: "Shot".into(),
             updated_at: 0,
+            was: None,
         };
         insert_thread(&sql, &summary, agent, author, &Settings::default()).unwrap();
         let image = || Image {
