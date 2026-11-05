@@ -306,11 +306,12 @@ test("a Thread's details card shows the branch and its changes, as T3 Code's, an
       name: "Message (optional) — Fake AI writes it",
     })
   ).toBeVisible()
+  for (const path of ["app.ts", "new.ts"])
+    await expect(
+      commit.getByRole("checkbox", { name: `Commit ${path}` })
+    ).toBeChecked()
   await expect(
-    commit.getByRole("checkbox", { name: "Commit app.ts" })
-  ).toBeChecked()
-  await expect(
-    commit.getByRole("button", { name: "Commit 1 file" })
+    commit.getByRole("button", { name: "Commit 2 files" })
   ).toBeEnabled()
   await page.screenshot({ path: "test-results/git-commit-new-thread.png" })
   await commit.getByRole("button", { name: "Cancel" }).click()
@@ -439,11 +440,12 @@ test("a commit that ends with the card out of sight says so in a toast", async (
   await thread.composer.click()
   await page.keyboard.press("Control+Shift+KeyB")
   const card = page.getByRole("dialog", { name: "Thread details" })
-  await card.getByRole("button", { name: "More git actions" }).click()
-  await page.getByRole("menuitem", { name: "Commit…" }).click()
-  const dialog = page.getByRole("dialog", { name: "Commit changes" })
-  await dialog.getByRole("textbox", { name: "Message" }).fill("Change a")
-  await dialog.getByRole("button", { name: "Commit", exact: true }).click()
+  await card.getByRole("button", { name: "Commit…" }).click()
+  const dialog = page.getByRole("dialog", { name: "Commit to main" })
+  await dialog
+    .getByRole("textbox", { name: "Message (optional) — Fake AI writes it" })
+    .fill("Change a")
+  await dialog.getByRole("button", { name: "Commit 1 file" }).click()
   await expect(card).toContainText("Running pre-commit…")
   await page.keyboard.press("Escape")
   await expect(card).toBeHidden()
