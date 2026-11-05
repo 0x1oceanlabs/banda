@@ -1,11 +1,14 @@
 import { existsSync, readFileSync, writeFileSync } from "node:fs"
 import { join } from "node:path"
+import type { ProjectId } from "@banda/contract"
 import type { Action, Module } from "@banda/ui/module"
 import { expect, test } from "vitest"
 import { modules } from "./modules"
 import { WINDOW_ACTIONS } from "./shell/actions"
 import { windowModule } from "./registry"
+import { samePane } from "./workspaces/model"
 import {
+  identityOf,
   kindRuns,
   kinds,
   labelOf,
@@ -131,4 +134,20 @@ test("what a Pane says it shows now names it over its kind, till it is taken bac
   expect(labelOf(pane, saidNow().get("e2")).title).toBe("Terminal")
   sayLabel("e1", null)
   expect(saidNow().has("e1")).toBe(false)
+})
+
+test("a terminal that typed its line is the same Pane, so its shell goes on (ADR 0063, decision 6)", () => {
+  const terminal = (args: { terminal: string; typed: string | null }) => ({
+    project: "s1" as ProjectId,
+    pane: {
+      kind: "terminal.terminal",
+      args: { title: "Terminal", shell: true, done: null, ...args },
+    },
+  })
+  const typing = terminal({ terminal: "t1", typed: "ls" })
+  const typed = terminal({ terminal: "t1", typed: null })
+  expect(samePane(typing, typed, identityOf)).toBe(true)
+  expect(
+    samePane(typed, terminal({ terminal: "t2", typed: null }), identityOf)
+  ).toBe(false)
 })

@@ -1159,7 +1159,8 @@ a[data-file][data-kind="text"] {
   ) {
   opacity: 1;
 }
-:is(
+/* Light, so one action's own rule wins over it. */
+:where(
     [data-streamdown$="-actions"],
     [data-streamdown="table-wrapper"] > :first-child:not(:has(table))
   )
@@ -1172,13 +1173,39 @@ a[data-file][data-kind="text"] {
   border-radius: calc(var(--radius) * 0.8);
   color: var(--muted-foreground);
 }
-:is(
+:where(
     [data-streamdown$="-actions"],
     [data-streamdown="table-wrapper"] > :first-child:not(:has(table))
   )
   button:hover {
   background: var(--raised);
   color: var(--foreground);
+}
+
+/* A code block's own actions (ADR 0063, decision 6): Wrap lines is lit
+   while on, and Run says its word. */
+[data-streamdown="code-block-actions"]
+  button[data-act="wrap"][aria-pressed="true"] {
+  background: color-mix(in oklab, var(--primary) 14%, transparent);
+  color: var(--primary);
+}
+[data-streamdown="code-block-actions"] button[data-act="run"] {
+  display: flex;
+  gap: 0.3rem;
+  width: auto;
+  padding: 0 0.5rem 0 0.375rem;
+  font-size: 0.75rem;
+}
+/* Wrapped, a long line goes on under its own number. */
+[data-streamdown="code-block-body"][data-wrap] :is(pre, code) {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+[data-streamdown="code-block-body"][data-wrap]
+  code[class*="counter-reset"]
+  > span {
+  padding-left: 2.5rem;
+  text-indent: -2.5rem;
 }
 
 /* A table: its head on the block, its rows on the ground. */

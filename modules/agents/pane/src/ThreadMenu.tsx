@@ -4,6 +4,7 @@ import {
   useAfterMenu,
 } from "@banda/ui/components/context-menu"
 import {
+  DropdownMenuCheckboxItem,
   DropdownMenuItem,
   DropdownMenuSeparator,
   DropdownMenuShortcut,
@@ -31,10 +32,12 @@ import {
   PanelRightIcon,
   SquareCodeIcon,
   PencilIcon,
+  PlayIcon,
   QuoteIcon,
   SearchIcon,
   SquareDashedIcon,
   TextIcon,
+  WrapTextIcon,
 } from "lucide-react"
 
 /** What a message offers the menu: its text and what it can do, as its
@@ -78,6 +81,13 @@ export type MenuAt =
   | { kind: "path"; file: FileAt }
   | { kind: "link"; address: string }
   | {
+      kind: "code"
+      /** The block's own buttons, which the menu presses. */
+      copy: HTMLElement
+      wrap: HTMLElement
+      run: HTMLElement | null
+    }
+  | {
       kind: "image"
       /** The button that shows it large; none on an image without. */
       preview: HTMLElement | null
@@ -89,8 +99,8 @@ export type MenuAt =
 /**
  * What a right click at `target` in the Thread shows; none where it has
  * nothing to offer (ADR 0063, decision 3). The first that is there wins:
- * the text selected in the Thread, a path, a web link, an image, a
- * message.
+ * the text selected in the Thread, a path, a web link, an image, a code
+ * block, a message.
  */
 export function menuAt(
   target: Element,
@@ -118,6 +128,13 @@ export function menuAt(
   const image = target.closest("img")
   if (image)
     return { kind: "image", preview: image.closest("button"), ...point }
+  const block = target.closest("[data-streamdown=code-block]")
+  if (block) {
+    const act = (name: string) =>
+      block.querySelector<HTMLElement>(`[data-act=${name}]`)
+    const [copy, wrap] = [act("copy"), act("wrap")]
+    if (copy && wrap) return { kind: "code", copy, wrap, run: act("run") }
+  }
   for (
     let at: Element | null = target;
     at && at !== thread;
@@ -297,6 +314,31 @@ function Items({ at, acts }: { at: MenuAt; acts: ThreadActs }) {
             <DropdownMenuItem onClick={() => acts.copyImage!(at.x, at.y)}>
               <CopyIcon />
               Copy image
+            </DropdownMenuItem>
+          )}
+        </>
+      )
+    }
+    case "code": {
+      const { copy, wrap, run } = at
+      return (
+        <>
+          <DropdownMenuItem onClick={() => copy.click()}>
+            <CopyIcon />
+            Copy code
+          </DropdownMenuItem>
+          <DropdownMenuCheckboxItem
+            closeOnClick
+            checked={wrap.getAttribute("aria-pressed") === "true"}
+            onCheckedChange={() => wrap.click()}
+          >
+            <WrapTextIcon />
+            Wrap lines
+          </DropdownMenuCheckboxItem>
+          {run && (
+            <DropdownMenuItem onClick={item(() => run.click())}>
+              <PlayIcon />
+              Run in terminal
             </DropdownMenuItem>
           )}
         </>

@@ -2,18 +2,17 @@ import { code } from "@streamdown/code"
 import { createMathPlugin } from "@streamdown/math"
 import { mermaid } from "@streamdown/mermaid"
 import { cn } from "../lib/utils"
-import { useId, useMemo, type ComponentProps } from "react"
+import { useId, useMemo } from "react"
 
 import {
   Streamdown,
-  defaultComponents,
   defaultRehypePlugins,
   defaultRemarkPlugins,
-  type ExtraProps,
   type StreamdownProps,
 } from "streamdown"
 import { useDiagramLook } from "../lib/diagram-look"
 import { fileUrls, proseFiles, TEXT_PATH } from "../lib/markdown-paths"
+import { MarkdownBlock } from "./markdown-code"
 import { MarkdownCode, MarkdownTextPath, Written } from "./markdown-file"
 import { MarkdownImage } from "./markdown-media"
 import { MarkdownLink } from "./markdown-link"
@@ -22,20 +21,6 @@ import { MarkdownInput } from "./markdown-task"
 /** Single-dollar math matches what Agents write; KaTeX leaves code alone. */
 const math = createMathPlugin({ singleDollarTextMath: true })
 const plugins = { code, math, mermaid }
-const Code = defaultComponents.code!
-
-/** A code block, as Streamdown draws it. A diagram keeps its source,
- * which its picture does not, for Copy (ADR 0063, decision 4). */
-function MarkdownBlock(props: ComponentProps<"code"> & ExtraProps) {
-  if (!/\blanguage-mermaid\b/.test(props.className ?? ""))
-    return <Code {...props} />
-  return (
-    <div className="contents" data-source={String(props.children ?? "")}>
-      <Code {...props} />
-    </div>
-  )
-}
-
 // A path in plain text is marked with a tag of Banda's own (ADR 0063,
 // decision 2). A task's box ticks where the host lets it (`MarkdownTasks`).
 const components = {
@@ -58,11 +43,11 @@ const rehypePlugins = [
   proseFiles,
 ]
 
-/** Copy on code, tables and diagrams; diagrams can open fullscreen, where
- * they zoom and pan. In the reply a diagram stays still, so the thread
- * scrolls over it (`globals.css`, the diagram card). */
+/** Copy on tables and diagrams (a code block draws its own actions,
+ * `markdown-code`); diagrams can open fullscreen, where they zoom and
+ * pan. In the reply a diagram stays still, so the thread scrolls over it
+ * (`globals.css`, the diagram card). */
 const controls = {
-  code: { copy: true, download: false },
   table: { copy: true, download: false, fullscreen: false },
   mermaid: { copy: true, download: false, fullscreen: true },
 } as const

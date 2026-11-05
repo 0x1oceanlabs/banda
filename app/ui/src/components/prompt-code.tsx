@@ -9,8 +9,8 @@ import {
 } from "@tiptap/pm/state"
 import { Decoration, DecorationSet, type EditorView } from "@tiptap/pm/view"
 import { code as shiki } from "@streamdown/code"
-import { bundledLanguagesInfo } from "shiki"
 import { kept, step } from "@banda/ui/components/prompt-blocks"
+import { ALIASES, LANGUAGES } from "@banda/ui/lib/languages"
 import { closes, openingFence, textOf } from "@banda/ui/lib/prompt"
 
 /**
@@ -96,16 +96,6 @@ export const CodeBlock = Node.create({
     return [colours()]
   },
 })
-
-/** The languages Shiki colours, by name, and each name it goes by. */
-const LANGUAGES = [...bundledLanguagesInfo].sort((a, b) =>
-  a.name.localeCompare(b.name)
-)
-const ALIASES = new Map(
-  LANGUAGES.flatMap(({ id, aliases = [] }) =>
-    [id, ...aliases].map((name) => [name, id] as const)
-  )
-)
 
 /** The language a fence's info names: its first word. */
 function languageOf(info: string): string {

@@ -16,6 +16,13 @@
       ]
     },
     {
+      "id": "terminal.run",
+      "title": "Run in a terminal",
+      "section": "Panes",
+      "keys": [],
+      "unlisted": true
+    },
+    {
       "id": "terminal.zoom-in",
       "title": "Zoom the terminal in",
       "section": "Terminal",

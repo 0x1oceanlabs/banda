@@ -1,6 +1,7 @@
 import { AGENTS_FILE } from "@banda/contract/agents"
 import { fileNow } from "@banda/ui/lib/look"
 import { ThreadMedia } from "./ThreadMedia"
+import { MarkdownShell } from "@banda/ui/components/markdown-code"
 import { MarkdownFiles } from "@banda/ui/components/markdown-file"
 import { MarkdownLinks } from "@banda/ui/components/markdown-link"
 import {
@@ -140,10 +141,19 @@ export const threadPane = definePane<ThreadArgs>({
 
 function ThreadPane(props: PaneProps<ThreadArgs>) {
   const project = props.args.scratch ?? props.project
+  const { run } = props
+  // A reply's Run (ADR 0063, decision 6), kept as it is while the Thread
+  // streams, so its code blocks draw again only when it changes.
+  const runLine = useMemo(
+    () => run && ((line: string) => run("terminal.run", { line, project })),
+    [run, project]
+  )
   return (
     <ThreadMedia project={project}>
-      <MarkdownLinks open={linkOpener(props.run, project)}>
-        <ThreadContent {...props} project={project} />
+      <MarkdownLinks open={linkOpener(run, project)}>
+        <MarkdownShell run={runLine ?? null}>
+          <ThreadContent {...props} project={project} />
+        </MarkdownShell>
       </MarkdownLinks>
     </ThreadMedia>
   )
