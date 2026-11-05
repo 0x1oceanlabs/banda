@@ -1,7 +1,7 @@
 /**
  * The files of the Diff as its view draws them: from git's patch, loaded
- * a few at a time past a cut one, or a turn's as they came, each read
- * whole to expand.
+ * a few at a time past a cut one, each read whole to expand, and beside
+ * them a turn's files drawn from its tool calls, as they came.
  */
 import { useEffect, useEffectEvent, useMemo, useRef, useState } from "react"
 import type { Engine, SpaceId } from "@banda/contract"
@@ -25,10 +25,10 @@ function hashOf(text: string): string {
 
 /**
  * The files of a diff as the view draws them, by path: those its patch
- * holds, and those it left out, loaded by name a few at a time as they
- * come into view. A diff read again with the same patch keeps them all, so
- * nothing is drawn again. `whole` reads a file's both sides for its context
- * to expand.
+ * holds and those drawn beside it, and those the patch left out, loaded by
+ * name a few at a time as they come into view. A diff read again with the
+ * same patch keeps them all, so nothing is drawn again. `whole` reads a
+ * file's both sides for its context to expand.
  */
 export function useFiles(
   engine: Engine,
@@ -42,7 +42,7 @@ export function useFiles(
   const basis = `${words}:${hashed}`
   const drawn = diff?.drawn
   const inPatch = useMemo(
-    () => drawn ?? filesOf(patch, basis),
+    () => [...filesOf(patch, basis), ...(drawn ?? [])],
     [drawn, patch, basis]
   )
   // What loaded by name belongs to one patch.

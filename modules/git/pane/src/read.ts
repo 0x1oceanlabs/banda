@@ -1,6 +1,6 @@
 /**
- * How the Diff reads what it shows, as T3 Code's: `git.diff`, or a turn's
- * changes from its tool calls where git kept no checkpoint of it. It
+ * How the Diff reads what it shows, as T3 Code's: `git.diff`, and a turn's
+ * changes from its tool calls where git kept no checkpoint of them. It
  * reads again on its button, as the window comes back, as an Agent's turn
  * ends and, while in front, as the folder's status changes; a read the
  * same as the last keeps its view, so nothing is drawn again.
@@ -25,8 +25,8 @@ import type { Scope } from "./scope"
 import { useGitStatus } from "./status"
 
 /** What the Pane draws, as git answers it; a turn's changes from its tool
- * calls come as their files already diffed. A turn's come with the
- * Thread's turns that changed files. */
+ * calls come beside git's patch as their files already diffed. A turn's
+ * come with the Thread's turns that changed files. */
 export type Drawn = Diff & { drawn?: FileDiffMetadata[]; turns?: ChangedTurn[] }
 
 /** What makes the Diff read again: an Agent's turn ending. */
@@ -57,21 +57,33 @@ function noCheckpoint(error: unknown): boolean {
   return code === "not_found" || code === "conflict"
 }
 
-/** A turn's changes as the Pane draws a diff: each file diffed from its
- * texts, whole. */
-function turnRead(changes: TurnChanges): Drawn {
-  const drawn = changes.files.map((file) =>
-    fileOf(file.path, file.old, file.new)
-  )
+/** A file `agents.changes` names from the root, not from the Space's
+ * folder: outside it, where git's checkpoints never look. */
+function outside(path: string): boolean {
+  return /^(\/|[A-Za-z]:[\\/])/.test(path)
+}
+
+/** A turn's changes as the Pane draws a diff: what git's checkpoints
+ * `kept`, and the files they could not keep from its tool calls, each
+ * diffed from its texts, whole. With no checkpoint every file is from its
+ * tool calls; with one, those outside the Space's folder, as an Agent's
+ * edits in a worktree beside it. */
+export function turnRead(kept: Diff | null, changes: TurnChanges): Drawn {
+  const unkept = kept
+    ? changes.files.filter((file) => outside(file.path))
+    : changes.files
+  const drawn = unkept.map((file) => fileOf(file.path, file.old, file.new))
+  const git = kept ?? { at: changes.at, files: [], patch: "", truncated: false }
   return {
-    at: changes.at,
-    files: changes.files.map((file, index) => ({
-      path: file.path,
-      ...countsOf(drawn[index]!),
-      binary: false,
-    })),
-    patch: "",
-    truncated: false,
+    ...git,
+    files: [
+      ...git.files,
+      ...unkept.map((file, index) => ({
+        path: file.path,
+        ...countsOf(drawn[index]!),
+        binary: false,
+      })),
+    ],
     drawn,
     turns: changes.turns,
   }
@@ -137,21 +149,17 @@ export function useDiffRead(
         filter: TURNS,
         apply: () => READ_AGAIN,
       }
-    const changes = (asked: ChangesAsk) =>
-      engine.call("agents.changes", asked, { space })
+    const asked: ChangesAsk = { thread: turn.thread, turn: turn.turn }
     return {
       read: async () => {
-        const [kept, turns] = await Promise.all([
+        const [kept, changes] = await Promise.all([
           diff().catch((error: unknown) => {
             if (!noCheckpoint(error)) throw error
             return null
           }),
-          changes({ thread: turn.thread }),
+          engine.call("agents.changes", asked, { space }),
         ])
-        if (kept) return { ...kept, turns: turns.turns }
-        // A turn git kept no checkpoint of, or in a folder that is no
-        // repository, is what its tool calls changed.
-        return turnRead(await changes({ thread: turn.thread, turn: turn.turn }))
+        return turnRead(kept, changes)
       },
       filter: {
         module: "agents",
