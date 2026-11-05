@@ -57,6 +57,41 @@ fn harnesses_with(env: &[(&str, &str)]) -> Harnesses {
     }])
 }
 
+/// The git module as the agents module hears it: `say { thread, notice }`
+/// writes its fact `git.acted`, as a step its card asked for is done.
+struct Git;
+
+#[async_trait::async_trait]
+impl banda_kernel::Module for Git {
+    fn name(&self) -> &'static str {
+        "git"
+    }
+
+    fn migrations(&self) -> &'static [&'static str] {
+        &[]
+    }
+
+    fn right(&self, _: &str) -> Option<banda_kernel::Right> {
+        Some(banda_kernel::Right::Write)
+    }
+
+    async fn call(
+        &self,
+        call: banda_kernel::Call,
+        _: &str,
+        acted: Value,
+    ) -> Result<Value, banda_kernel::Refusal> {
+        let by = call.participant();
+        call.command(move |tx| {
+            let thread = acted["thread"].as_str();
+            tx.emit("git.acted", 1, thread, by, &acted)?;
+            Ok(())
+        })
+        .await?;
+        Ok(Value::Null)
+    }
+}
+
 struct World {
     kernel: Arc<Kernel>,
     owner: PersonId,
@@ -71,12 +106,13 @@ impl World {
     }
 
     /// A kernel with the machine, its module `harnesses` on the same list
-    /// as `agents`, and `agents`.
+    /// as `agents`, `agents`, and git as it tells of its card.
     async fn open_with(root: &Path, owner: PersonId, agents: Agents) -> Arc<Kernel> {
         Kernel::builder(root, root.join(".data"), owner)
             .machine(root.join(".machine"))
             .module(HarnessesModule::new(agents.harnesses()))
             .module(agents)
+            .module(Git)
             .open()
             .await
             .unwrap()
@@ -868,40 +904,52 @@ async fn a_notice_from_the_harness_joins_the_thread() {
     );
 }
 
-/// A notice the Person's window posts, as git's card after a commit from
-/// it: the Thread shows it at once, and its Agent reads it before its next
-/// message, once.
+/// What git did from a Thread's card, as a commit: the Thread shows it at
+/// once, and its Agent reads it before its next message, and again in a
+/// turn of that message tried again.
 #[tokio::test]
-async fn a_notice_for_the_agent_shows_at_once_and_goes_before_its_next_prompt() {
+async fn what_git_did_from_the_card_shows_at_once_and_goes_before_the_next_prompt() {
     let root = tempfile::tempdir().unwrap();
     let world = World::new(root.path()).await;
     let (thread, _) = world.finish(None, "hello").await;
     let committed = "Committed 1 file on main: “Add a” (abc1234).";
-    let notice = json!({ "thread": thread, "text": committed });
-    world
-        .call(world.person(), "agents.notice", notice.clone())
-        .await
-        .unwrap();
-    let view = world.thread(&thread).await;
-    assert_eq!(last_reply(&view), format!("notice: {committed}"));
+    let acted = json!({ "thread": thread, "notice": committed });
+    world.call(world.person(), "git.say", acted).await.unwrap();
+    let view = world
+        .until(&thread, |v| last_reply(v) == format!("notice: {committed}"))
+        .await;
     assert_eq!(view.turns.len(), 1, "it starts no turn");
-    let agent = world.call(world.agent(), "agents.notice", notice).await;
-    assert_eq!(agent.unwrap_err().code, Code::Forbidden);
-    let two = json!({ "thread": thread, "text": "one\ntwo" });
-    let two = world.call(world.person(), "agents.notice", two).await;
-    assert_eq!(two.unwrap_err().code, Code::Invalid);
 
-    // A slash command goes as it is; the next message takes it along.
+    // A slash command goes as it is; the next message takes it along, and
+    // its turn tried again sends it again.
     let (_, view) = world.finish(Some(&thread), "/compact").await;
     assert_eq!(last_reply(&view), "message: You said: /compact");
-    let (_, view) = world.finish(Some(&thread), "go on").await;
+    let sent = world.send(Some(&thread), "flaky go on").await;
+    world
+        .until(&thread, |v| {
+            state(v, &sent["turn"]) == Some(TurnState::Failed)
+        })
+        .await;
+    let retried = world
+        .call(
+            world.person(),
+            "agents.retry",
+            json!({ "turn": sent["turn"] }),
+        )
+        .await
+        .unwrap();
+    let view = world
+        .until(&thread, |v| {
+            state(v, &retried["turn"]) == Some(TurnState::Done)
+        })
+        .await;
     let said = last_reply(&view);
     assert!(
         said.starts_with("message: You said: Since your last turn, your Person did this in Banda"),
         "{said}"
     );
     assert!(
-        said.ends_with(&format!("\n- {committed}\n\ngo on")),
+        said.ends_with(&format!("\n- {committed}\n\nflaky go on")),
         "{said}"
     );
     let (_, view) = world.finish(Some(&thread), "again").await;

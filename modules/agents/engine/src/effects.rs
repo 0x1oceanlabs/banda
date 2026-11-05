@@ -29,7 +29,10 @@ use crate::drive::drive;
 use crate::images::Images;
 use crate::kept;
 use crate::live::{Live, TurnRun};
-use crate::model::{Body, Fact, Failure, Image, Item, ItemId, Opener, Settings, TurnId, TurnState};
+use crate::model::{
+    Body, Fact, Failure, Image, Item, ItemId, Opener, Settings, SlashCommand, ThreadId, TurnId,
+    TurnState,
+};
 use crate::rules::{self, Ending, Event};
 use crate::transcript::{Transcript, notice, offered, used};
 use crate::{emit, plain, store, writer};
@@ -110,7 +113,7 @@ async fn notices(space: &ModuleSpace, turn: &store::Turn, texts: Vec<String>) ->
     space
         .write(move |tx| {
             for text in texts {
-                notice(tx, agent, thread, id, text)?;
+                notice(tx, agent, thread, Some(id), text)?;
             }
             Ok(())
         })
@@ -202,23 +205,10 @@ pub async fn start(
             if first == Some(turn.id) {
                 store::move_last(tx.sql(), turn.message)?;
             }
-            let mut message = Message::read(tx.sql(), turn.message)?.unwrap_or(Message {
+            let message = Message::read(tx.sql(), turn.message)?.unwrap_or(Message {
                 text: String::new(),
                 images: Vec::new(),
             });
-            // Another Thread's Agent wrote it: the Harness reads which.
-            if let Some(from) = turn.from_thread {
-                let title = store::thread(tx.sql(), from)?.map(|t| t.title);
-                let answers = turn.opener == Opener::Answered;
-                let title = title.unwrap_or_default();
-                message.text = rules::to_thread::from_agent(answers, from, &title, &message.text);
-            }
-            // What the Person did meanwhile in Banda, as a commit from the
-            // card, goes before it once.
-            if crate::notices::takes(&message.text) {
-                let unsent = store::take_unsent(tx.sql(), turn.thread)?;
-                message.text = crate::notices::before(&unsent, &message.text);
-            }
             let settings = store::turn_settings(tx.sql(), &turn)?;
             Ok(Some((turn, message, settings)))
         })
@@ -288,23 +278,67 @@ impl Message {
     }
 }
 
-/// What `message` sends `harness`, and what Banda tells the Person it
-/// left out; why nothing of it can go, if nothing can.
+/// Whose message a prompt sends: its Thread and item, and, when another
+/// Thread's Agent wrote it, that Thread and whether it answers.
+pub struct Whose {
+    pub thread: ThreadId,
+    pub item: ItemId,
+    pub from: Option<(ThreadId, bool)>,
+}
+
+impl Whose {
+    /// The message of `turn`.
+    fn of(turn: &store::Turn) -> Whose {
+        let answers = turn.opener == Opener::Answered;
+        Whose {
+            thread: turn.thread,
+            item: turn.message,
+            from: turn.from_thread.map(|from| (from, answers)),
+        }
+    }
+}
+
+/// What `message` sends `harness`, in order: who wrote it, when another
+/// Thread's Agent did; the skills it names, run as commands; and, unless
+/// the Harness runs it as a command, the notices it takes before it. And
+/// what Banda tells the Person it left out; why nothing of it can go, if
+/// nothing can.
 async fn prompt_of(
     space: &ModuleSpace,
     harness: &str,
     running: &Running,
-    Message { text, images }: Message,
+    Whose { thread, item, from }: Whose,
+    Message { mut text, images }: Message,
 ) -> Result<(Prompt, Vec<String>), String> {
+    // Another Thread's Agent wrote it: the Harness reads which.
+    if let Some((from, answers)) = from {
+        let title = space
+            .read(move |sql| Ok(store::thread(sql, from)?.map(|t| t.title)))
+            .await
+            .map_err(plain)?;
+        text = rules::to_thread::from_agent(answers, from, &title.unwrap_or_default(), &text);
+    }
+    let mut prompt = as_skill(
+        Prompt {
+            text,
+            command: None,
+            images: Vec::new(),
+        },
+        running,
+    );
+    // What the Person did meanwhile, as a commit from the Thread's card,
+    // goes before it.
+    if !runs_command(space, thread, running, &prompt).await? {
+        let notices = space
+            .write(move |tx| store::notices_of(tx.sql(), thread, item, true))
+            .await
+            .map_err(plain)?;
+        prompt.text = crate::notices::before(&notices, &prompt.text);
+    }
     let mut refused = Vec::new();
-    let mut prompt = Prompt {
-        text,
-        command: None,
-        images: Vec::new(),
-    };
     if running.offer.no_images && !images.is_empty() {
         refused.push(rules::message::without_images(harness, &prompt.text)?);
-        return Ok((as_skill(prompt, running), refused));
+        return Ok((prompt, refused));
     }
     let files = Images::of(space.data());
     for image in images {
@@ -319,7 +353,38 @@ async fn prompt_of(
             )),
         }
     }
-    Ok((as_skill(prompt, running), refused))
+    Ok((prompt, refused))
+}
+
+/// Whether the Harness runs `prompt` as a command: a skill it starts
+/// with, or `/` and a slash command the session offers, or the Thread
+/// does while the session has said none.
+async fn runs_command(
+    space: &ModuleSpace,
+    thread: ThreadId,
+    running: &Running,
+    prompt: &Prompt,
+) -> Result<bool, String> {
+    if prompt.command.is_some() && prompt.text.is_empty() {
+        return Ok(true);
+    }
+    let Some(rest) = prompt.text.strip_prefix('/') else {
+        return Ok(false);
+    };
+    let name = rest
+        .split_whitespace()
+        .next()
+        .unwrap_or_default()
+        .to_owned();
+    let runs = |commands: &[SlashCommand]| commands.iter().any(|c| c.name == name);
+    Ok(match &running.commands {
+        Some(said) => runs(&said.slash_commands),
+        None => space
+            .read(move |sql| Ok(store::offer(sql, thread)?.slash_commands))
+            .await
+            .map(|offered| runs(&offered))
+            .map_err(plain)?,
+    })
 }
 
 /// The prompt with the skills it names that are slash commands run as
@@ -389,7 +454,7 @@ pub async fn steer(live: &Live, space: ModuleSpace, effect: &Effect) -> Outcome 
                     return Ok(());
                 };
                 if writer::apply(tx, agent, &now, Event::GiveWay)?.is_ok() {
-                    notice(tx, agent, thread, id, text)?;
+                    notice(tx, agent, thread, Some(id), text)?;
                 }
                 Ok(())
             })
@@ -400,7 +465,13 @@ pub async fn steer(live: &Live, space: ModuleSpace, effect: &Effect) -> Outcome 
         return requeued();
     }
     let running = session.running();
-    let Ok((prompt, refused)) = prompt_of(&space, session.name(), &running, message).await else {
+    let whose = Whose {
+        thread: turn.thread,
+        item,
+        from: None,
+    };
+    let Ok((prompt, refused)) = prompt_of(&space, session.name(), &running, whose, message).await
+    else {
         return requeued();
     };
     if let Err(error) = notices(&space, &turn, refused).await {
@@ -499,7 +570,7 @@ async fn work(
             .write(move |tx| {
                 store::set_evidence(tx.sql(), thread, &evidence)?;
                 if lost {
-                    notice(tx, agent, thread, id, afresh)?;
+                    notice(tx, agent, thread, Some(id), afresh)?;
                 }
                 Ok(())
             })
@@ -507,7 +578,7 @@ async fn work(
             .map_err(|e| unplanned(plain(e)))?;
     }
     let (running, mut refused) = session.settle(&settings).await;
-    let (prompt, left_out) = prompt_of(space, &harness.name, &running, message)
+    let (prompt, left_out) = prompt_of(space, &harness.name, &running, Whose::of(turn), message)
         .await
         .map_err(unplanned)?;
     refused.extend(left_out);
@@ -521,7 +592,7 @@ async fn work(
                 used(tx, agent, thread, usage)?;
             }
             for text in refused {
-                notice(tx, agent, thread, id, text)?;
+                notice(tx, agent, thread, Some(id), text)?;
             }
             Ok(())
         })

@@ -152,10 +152,19 @@ ALTER TABLE agents_turns ADD COLUMN stopping INTEGER NOT NULL DEFAULT 0;
 ALTER TABLE agents_turns ADD COLUMN note TEXT;
 "#,
     r#"
--- A notice another part of Banda posted for the Thread's Agent
--- (agents.notice), which goes before its next prompt: 1 until a turn's
--- prompt took it.
-ALTER TABLE agents_items ADD COLUMN unsent INTEGER NOT NULL DEFAULT 0;
+-- The notices another module posted for the Thread's Agent, as git's
+-- after a commit from the Thread's card, and the message whose prompt
+-- took them: NULL until one did, which sends them again in each of its
+-- turns.
+CREATE TABLE agents_notices (
+    item TEXT PRIMARY KEY,
+    thread TEXT NOT NULL,
+    taken_by TEXT
+);
+CREATE INDEX agents_notices_untaken ON agents_notices (thread)
+    WHERE taken_by IS NULL;
+CREATE INDEX agents_notices_taken ON agents_notices (taken_by)
+    WHERE taken_by IS NOT NULL;
 "#,
 ];
 
@@ -805,31 +814,47 @@ pub fn insert_item(sql: &Connection, thread: ThreadId, item: &Item) -> Result<()
 
 const ITEM: &str = "SELECT id, turn, author, at, body, thread FROM agents_items";
 
-/// Marks a notice as one the Thread's Agent is still to read.
-pub fn set_unsent(sql: &Connection, item: ItemId) -> Result<(), Error> {
+/// Keeps `item`, a notice of `thread`, for the next message its Agent
+/// gets.
+pub fn keep_notice(sql: &Connection, thread: ThreadId, item: ItemId) -> Result<(), Error> {
     sql.execute(
-        "UPDATE agents_items SET unsent = 1 WHERE id = ?1",
-        params![item],
+        "INSERT INTO agents_notices (item, thread) VALUES (?1, ?2)",
+        params![item, thread],
     )?;
     Ok(())
 }
 
-/// The notices of `thread` its Agent is still to read, in the order they
-/// came, now marked read.
-pub fn take_unsent(sql: &Connection, thread: ThreadId) -> Result<Vec<String>, Error> {
-    let mut statement = sql.prepare(&format!(
-        "{ITEM} WHERE thread = ?1 AND unsent = 1 ORDER BY rowid"
-    ))?;
-    let items = statement
-        .query_map(params![thread], read_item)?
-        .collect::<rusqlite::Result<Vec<_>>>()?;
-    sql.execute(
-        "UPDATE agents_items SET unsent = 0 WHERE thread = ?1 AND unsent = 1",
-        params![thread],
+/// The notices of `thread` the message `by` sends before it, in the order
+/// they came: those it took already, as a turn of it tried again; and,
+/// when it `takes`, those no message took yet, now its.
+pub fn notices_of(
+    sql: &Connection,
+    thread: ThreadId,
+    by: ItemId,
+    takes: bool,
+) -> Result<Vec<String>, Error> {
+    let untaken = takes
+        && sql.query_row(
+            "SELECT EXISTS(SELECT 1 FROM agents_notices WHERE thread = ?1 AND taken_by IS NULL)",
+            params![thread],
+            |row| row.get::<_, bool>(0),
+        )?;
+    if untaken {
+        sql.execute(
+            "UPDATE agents_notices SET taken_by = ?2 WHERE thread = ?1 AND taken_by IS NULL",
+            params![thread, by],
+        )?;
+    }
+    let mut statement = sql.prepare(
+        "SELECT i.body FROM agents_notices n JOIN agents_items i ON i.id = n.item
+         WHERE n.taken_by = ?1 ORDER BY i.rowid",
     )?;
-    Ok(items
+    let bodies = statement
+        .query_map(params![by], |row| column::<Body>(row, 0))?
+        .collect::<rusqlite::Result<Vec<_>>>()?;
+    Ok(bodies
         .into_iter()
-        .filter_map(|item| match item.body {
+        .filter_map(|body| match body {
             Body::Notice { text } => Some(text),
             _ => None,
         })
@@ -975,6 +1000,12 @@ pub fn rewind(sql: &Connection, thread: ThreadId, turn: TurnId, now: i64) -> Res
     sql.execute(
         &format!("UPDATE agents_images SET item = NULL, added_at = ?3 WHERE item IN ({items})"),
         params![thread, turn, now],
+    )?;
+    // The session goes back to before them: the notices they took go with
+    // the next message again.
+    sql.execute(
+        &format!("UPDATE agents_notices SET taken_by = NULL WHERE taken_by IN ({items})"),
+        params![thread, turn],
     )?;
     sql.execute(
         &format!("DELETE FROM agents_items WHERE id IN ({items})"),

@@ -29,12 +29,12 @@ pub fn notice(
     tx: &mut Tx<'_>,
     agent: Participant,
     thread: ThreadId,
-    turn: TurnId,
+    turn: Option<TurnId>,
     text: String,
-) -> Result<(), Error> {
+) -> Result<ItemId, Error> {
     let item = Item {
         id: ItemId::new(),
-        turn: Some(turn),
+        turn,
         author: agent,
         at: tx.now(),
         body: Body::Notice { text: text.clone() },
@@ -42,10 +42,11 @@ pub fn notice(
     store::put(tx.sql(), thread, &item, None)?;
     let fact = Fact::NoticePosted {
         item: item.id,
-        turn: Some(turn),
+        turn,
         text,
     };
-    emit(tx, agent, thread, &fact)
+    emit(tx, agent, thread, &fact)?;
+    Ok(item.id)
 }
 
 /// Writes what the Harness offers in the Thread, when that changed. A
@@ -364,7 +365,7 @@ impl Transcript {
                             switched(tx, agent, thread, &ran, &now)?;
                         }
                         if let Some(text) = moved {
-                            notice(tx, agent, thread, turn, text)?;
+                            notice(tx, agent, thread, Some(turn), text)?;
                         }
                         offered(tx, agent, thread, &now)
                     })

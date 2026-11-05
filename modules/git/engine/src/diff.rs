@@ -27,6 +27,14 @@ const DIFF: [&str; 8] = [
 pub const PATCH: usize = 120_000;
 /// The most of one file's patch, or one side of a file, sent.
 pub const FILE: usize = 1024 * 1024;
+/// How far into a file git looks for a NUL byte to call it binary.
+pub const SNIFF: usize = 8000;
+
+/// Whether a file that begins with `head` is binary, as git tells one
+/// with no `.gitattributes` to say: a NUL in its first bytes.
+pub fn binary(head: &[u8]) -> bool {
+    head[..head.len().min(SNIFF)].contains(&0)
+}
 
 /// What a scope compares, once its refs are resolved.
 pub(crate) struct Sides {
@@ -296,7 +304,7 @@ enum Side {
 
 impl Side {
     fn of(bytes: &[u8], cut: bool) -> Side {
-        match cut || bytes.contains(&0) {
+        match cut || binary(bytes) {
             true => Side::TooLarge,
             false => Side::Text(String::from_utf8_lossy(bytes).into_owned()),
         }

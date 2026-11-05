@@ -8,4 +8,8 @@ export type BranchAsk = { name: string,
  * Where it starts; `HEAD` when none is given, the changes taken
  * along.
  */
-from?: string, };
+from?: string, 
+/**
+ * The Thread whose card asks, whose Agent hears of it (`git.acted`).
+ */
+thread?: string, };

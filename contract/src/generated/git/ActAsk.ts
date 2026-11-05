@@ -19,4 +19,9 @@ files?: Array<string>,
  * A branch made from here and switched to first, the changes taken
  * along, for the commit and the push.
  */
-branch?: string, };
+branch?: string, 
+/**
+ * The Thread whose card asks: as each step is done, its Agent hears
+ * what changed (`git.acted`).
+ */
+thread?: string, };

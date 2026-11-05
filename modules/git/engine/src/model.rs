@@ -62,9 +62,6 @@ pub struct Status {
     /// What changed against `HEAD`, in the index and the work tree, by
     /// path.
     pub files: Vec<Changed>,
-    /// How many files changed, each file of an untracked folder counted:
-    /// what a commit of every change takes, as Uncommitted shows it.
-    pub changed: u32,
     /// The lines added in all of them, an untracked file's too.
     pub added: u32,
     /// The lines removed in all of them.
@@ -75,8 +72,8 @@ pub struct Status {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
 #[ts(export, export_to = "git/")]
 pub struct Changed {
-    /// From the repository's top, with `/` between names. An untracked
-    /// folder git has not looked into ends with `/`.
+    /// From the repository's top, with `/` between names; each untracked
+    /// file of its own. A repository inside it ends with `/`.
     pub path: String,
     /// Where a renamed file was.
     #[ts(optional)]
@@ -88,9 +85,9 @@ pub struct Changed {
     #[ts(optional)]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub staged: Option<bool>,
-    /// Lines added: an untracked file's every line, an untracked folder's
-    /// those of its files; 0 for a binary file, and for an untracked one
-    /// past 1 MiB or when there are more than 5000 of them.
+    /// Lines added: an untracked file's every line; 0 for a binary file,
+    /// and for an untracked one past 1 MiB or when there are more than
+    /// 5000 of them.
     pub added: u32,
     /// Lines removed.
     pub removed: u32,
@@ -361,6 +358,23 @@ pub struct ActAsk {
     #[serde(default)]
     #[ts(optional)]
     pub branch: Option<String>,
+    /// The Thread whose card asks: as each step is done, its Agent hears
+    /// what changed (`git.acted`).
+    #[serde(default)]
+    #[ts(optional)]
+    pub thread: Option<String>,
+}
+
+/// The fact `git.acted`, about a Thread: a step its card asked for was
+/// done, as a commit, a push, a pull or a switch, which its Agent reads
+/// before its next message.
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, TS)]
+#[ts(export, export_to = "git/")]
+pub struct Acted {
+    pub thread: String,
+    /// What changed, in a sentence: `Committed 2 files on main: “Add
+    /// multiply” (a1b2c3d).`
+    pub notice: String,
 }
 
 /// What `git.act` says as it goes: a step, a hook and what it prints,
@@ -402,13 +416,6 @@ pub struct Done {
     #[ts(optional)]
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub detail: Option<String>,
-    /// What changed, in a sentence for the Thread whose card ran it, so
-    /// its Agent knows (`agents.notice`): `Committed 2 files on main:
-    /// “Add multiply” (a1b2c3d), and pushed it to origin/main.` None when
-    /// nothing changed, as a pull already up to date.
-    #[ts(optional)]
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub notice: Option<String>,
 }
 
 /// What `git.switch` is asked: a branch here, or a remote's, which a
@@ -418,6 +425,10 @@ pub struct Done {
 pub struct SwitchAsk {
     /// As `main`, or `origin/main`.
     pub name: String,
+    /// The Thread whose card asks, whose Agent hears of it (`git.acted`).
+    #[serde(default)]
+    #[ts(optional)]
+    pub thread: Option<String>,
 }
 
 /// What `git.branch` is asked: a new branch, switched to.
@@ -430,6 +441,10 @@ pub struct BranchAsk {
     #[serde(default)]
     #[ts(optional)]
     pub from: Option<String>,
+    /// The Thread whose card asks, whose Agent hears of it (`git.acted`).
+    #[serde(default)]
+    #[ts(optional)]
+    pub thread: Option<String>,
 }
 
 /// What `git.prompt` is asked: the commit a message is written for.

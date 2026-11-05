@@ -70,6 +70,8 @@ watch: StreamMethod<Nothing, Status>,
  * Commits every change or the files asked, pushes, or pulls, each
  * step after the one before succeeded, saying each and each hook
  * as it goes, then how it ended. It runs the repository's hooks.
+ * Asked from a Thread's card, it says what each step changed in
+ * its fact `git.acted` about the Thread.
  */
 act: StreamMethod<ActAsk, Progress>, 
 /**
