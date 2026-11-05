@@ -379,7 +379,11 @@ test("a sideways swipe moves the Strip and lands on a column; a scroll up and do
   await expect(
     numbers.getByRole("button", { name: "Workspace 2" })
   ).toHaveAttribute("aria-current", "true")
-  await expect(numbers.getByRole("button")).toHaveText(["1", "2", ""])
+  // Two and the empty one; a Space's shows its badge, not its number.
+  await expect(numbers.getByRole("button")).toHaveCount(3)
+  await expect(
+    numbers.getByRole("button", { name: "Workspace 1" })
+  ).toBeVisible()
 })
 
 test("the engine dies mid-work, comes back, and the Thread goes on", async () => {
@@ -3296,10 +3300,10 @@ test("a Space's Agents open in a row on its workspace, from wherever the Person 
   await page.keyboard.press("Alt+Enter")
   await expect(numbers.locator("[aria-current]:not([inert])")).toHaveText("WO")
   await expect(threads).toHaveCount(2)
-  // The bar shows it as the Space's: its badge, and its name to read.
+  // The bar shows it as the Space's: its badge, and its name on it.
   await expect(
-    numbers.getByRole("button", { name: "Work, workspace 1" })
-  ).toBeVisible()
+    numbers.getByRole("button", { name: "Workspace 1" })
+  ).toHaveAttribute("title", "Work: Overview (Alt+O)")
   const strip = page.locator("[data-strip]").first()
   await expect(
     strip.getByRole("textbox", { name: "Message to Fake AI" })
