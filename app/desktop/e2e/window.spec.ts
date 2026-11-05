@@ -2199,7 +2199,9 @@ test("Alt+K is the key sheet: sections and families, and Tab binds or frees a ke
   await acts.getByRole("option", { name: "Add a key…" }).click()
   await expect(search).toHaveAttribute("placeholder", /^Press the keys for/)
   await search.press("KeyM")
-  await expect(menu.getByRole("status")).toContainText("hold Alt or Ctrl")
+  await expect(menu.getByRole("status")).toContainText(
+    "hold Alt, Ctrl or Super"
+  )
   await search.press("Alt+KeyK")
   await expect(menu.getByRole("status")).toContainText(
     "Alt+K runs “The column the whole screen wide, or back” now, not “Every action and its key”"
